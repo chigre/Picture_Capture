@@ -7599,49 +7599,64 @@ class PictureCaptureApp(tk.Tk):
         )
         record["canvas_items"].append(item)
 
-        candidate = self._candidate_for_entry(entry)
-        ocr_menu = (
-            self._create_main_ocr_menu(entry, editor, candidate)
-            if self._main_ocr_review_option_enabled("review_main_show_ocr_choices")
-            else None
-        )
-        if ocr_menu is not None:
-            if processing_readonly:
-                ocr_menu.configure(state="disabled")
-            self.overlay_widgets.append(ocr_menu)
-            record["widgets"].append(ocr_menu)
-            editor_req_width = max(1, editor.winfo_reqwidth())
-            menu_req_width = max(1, ocr_menu.winfo_reqwidth())
-            ocr_x = editor_x + editor_req_width + 3
-            if ocr_x + menu_req_width > size[0] - 2:
-                ocr_x = max(0, size[0] - menu_req_width - 2)
-            item = self.canvas.create_window(ocr_x, editor_y, window=ocr_menu, anchor="nw")
-            record["canvas_items"].append(item)
+candidate = self._candidate_for_entry(entry)
+ocr_menu = (
+    self._create_main_ocr_menu(entry, editor, candidate)
+    if self._main_ocr_review_option_enabled("review_main_show_ocr_choices")
+    else None
+)
 
-            if (
-                self.settings.layout_writing_mode == "horizontal-tb"
-                and self.settings.layout_text_direction == "ltr"
-            ):
-                # 恢复旧版：编号位于词条横线的右端。
-                index_x = (
-                    canonical_x + geometry.column_widths[col]
-                ) * self.view_scale + 3
-                index_y = entry_v * self.view_scale
-            else:
-                # RTL / vertical 后续再按对应 reading-edge 做完整调整。
-                index_x = editor_x + 3
-                index_y = editor_y - 10
-            
-            index_item = self.canvas.create_text(
-                index_x,
-                index_y,
-                text=str(index),
-                fill="#222",
-                anchor="nw",
-                font=("Arial", 8),
-            )
-        record["canvas_items"].append(index_item)
-        record["index_item"] = index_item
+if ocr_menu is not None:
+    if processing_readonly:
+        ocr_menu.configure(state="disabled")
+
+    self.overlay_widgets.append(ocr_menu)
+    record["widgets"].append(ocr_menu)
+
+    editor_req_width = max(1, editor.winfo_reqwidth())
+    menu_req_width = max(1, ocr_menu.winfo_reqwidth())
+
+    ocr_x = editor_x + editor_req_width + 3
+
+    if ocr_x + menu_req_width > size[0] - 2:
+        ocr_x = max(0, size[0] - menu_req_width - 2)
+
+    item = self.canvas.create_window(
+        ocr_x,
+        editor_y,
+        window=ocr_menu,
+        anchor="nw",
+    )
+    record["canvas_items"].append(item)
+
+
+# 编号位置与 OCR 菜单无关，必须放在 if ocr_menu is not None 外面。
+if (
+    self.settings.layout_writing_mode == "horizontal-tb"
+    and self.settings.layout_text_direction == "ltr"
+):
+    # LTR：编号恢复到横线右端。
+    index_x = (
+        canonical_x + geometry.column_widths[col]
+    ) * self.view_scale + 3
+    index_y = entry_v * self.view_scale
+
+else:
+    # RTL / vertical 暂时沿用 transform-aware editor 位置。
+    index_x = editor_x + 3
+    index_y = editor_y - 10
+
+index_item = self.canvas.create_text(
+    index_x,
+    index_y,
+    text=str(index),
+    fill="#222",
+    anchor="nw",
+    font=("Arial", 8),
+)
+
+record["canvas_items"].append(index_item)
+record["index_item"] = index_item
 
         if self.crop_preview_var.get():
             left, top, right, bottom = line_box(entry, geometry, self.image, self.settings)
