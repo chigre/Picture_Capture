@@ -143,10 +143,10 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     project_bar_end = text.index("        self.canvas = tk.Canvas(viewer", project_bar_start)
     project_bar = text[project_bar_start:project_bar_end]
     assert project_bar.index('text="已有项目"') < project_bar.index('text="导出训练标记包"')
-    assert project_bar.index('text="项目Profile"') < project_bar.index('text="更多参数"')
-    assert project_bar.index('text="更多参数"') < project_bar.index('text="保存参数"')
-    assert project_bar.index('text="保存参数"') < project_bar.index('text="使用提示"')
-    assert 'command=self.open_project_profile' in project_bar
+    assert project_bar.index('("项目Profile", self.open_project_profile)') < project_bar.index('("更多参数", self.open_settings)')
+    assert project_bar.index('("更多参数", self.open_settings)') < project_bar.index('("保存参数", self.save_main_parameters)')
+    assert project_bar.index('("保存参数", self.save_main_parameters)') < project_bar.index('("使用提示", self.show_help_dialog)')
+    assert '("项目Profile", self.open_project_profile)' in project_bar
 
     actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
