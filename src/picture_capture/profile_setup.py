@@ -31,6 +31,7 @@ from .profile_semantics import (
     reading_choice_from_settings,
     sample_page_indices,
     page_template_analysis_image,
+    page_variant,
 )
 from .project_storage import (
     headword_filter_rules_path,
@@ -115,6 +116,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self._close_without_save)
         self._photos: list[ImageTk.PhotoImage] = []
         self._validation_photos: list[ImageTk.PhotoImage] = []
+        self._template_photos: list[ImageTk.PhotoImage] = []
         self._validation_running = False
         self._analysis_running = False
         self._analysis_suggestion: dict[str, object] = {}
@@ -344,6 +346,12 @@ class ProjectProfileWizard(tk.Toplevel):
             text="仅“外侧/内侧交替”需要 A/B：默认 A 页左侧、B 页右侧；若第一张扫描实际属于 B 页，选择 B 即可整体翻转。",
             foreground="#666666", wraplength=430,
         ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+        preview = ttk.LabelFrame(tab, text="页面模板即时预览", padding=8)
+        preview.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=(10, 0))
+        preview.columnconfigure(0, weight=1)
+        preview.columnconfigure(1, weight=1)
+        self.template_preview_frame = preview
         for variable in (
             self.columns_policy_var, self.header_mode_var,
             self.footer_mode_var, self.side_mode_var,
@@ -352,6 +360,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 "write", lambda *_args: self.after_idle(self._refresh_template_controls)
             )
         self._refresh_template_controls()
+        self.after_idle(self._refresh_template_preview)
 
     def _refresh_template_controls(self) -> None:
         """Enable only page-template controls that currently have meaning."""
@@ -370,6 +379,76 @@ class ProjectProfileWizard(tk.Toplevel):
         self.footer_percent_spin.configure(state="normal" if footer_present else "disabled")
         self.side_percent_spin.configure(state="normal" if side_present else "disabled")
         self.first_variant_combo.configure(state="readonly" if alternating else "disabled")
+        if hasattr(self, "template_preview_frame"):
+            self.after_idle(self._refresh_template_preview)
+
+    def _refresh_template_preview(self) -> None:
+        """Render A/B representative pages with the current exclusion template."""
+        if not hasattr(self, "template_preview_frame"):
+            return
+        for child in self.template_preview_frame.winfo_children():
+            child.destroy()
+        self._template_photos.clear()
+        if not self.sample_indices:
+            ttk.Label(self.template_preview_frame, text="没有可预览页面").grid(row=0, column=0)
+            return
+        try:
+            settings = self._settings_from_ui()
+        except Exception:
+            return
+        indices = list(self.sample_indices[:2])
+        if len(indices) == 1:
+            indices.append(indices[0])
+        for slot, index in enumerate(indices[:2]):
+            path = self.project.images[index]
+            try:
+                with Image.open(path) as opened:
+                    source = normalize_page_rgb(opened)
+                preview = source.copy()
+                preview.thumbnail((420, 250), Image.Resampling.LANCZOS)
+                draw = ImageDraw.Draw(preview, "RGBA")
+                w, h = preview.size
+
+                header_mode = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get(), "auto")
+                if header_mode == "present":
+                    hp = max(0.0, min(35.0, float(self.header_percent_var.get())))
+                    draw.rectangle((0, 0, w, round(h * hp / 100.0)), fill=(100, 100, 100, 80))
+                footer_mode = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get(), "none")
+                if footer_mode == "present":
+                    fp = max(0.0, min(35.0, float(self.footer_percent_var.get())))
+                    draw.rectangle((0, round(h * (1.0 - fp / 100.0)), w, h), fill=(100, 100, 100, 80))
+
+                side = excluded_source_side(settings, index)
+                if side:
+                    sp = max(0.0, min(30.0, float(self.side_percent_var.get())))
+                    margin = round(w * sp / 100.0)
+                    if side == "left":
+                        draw.rectangle((0, 0, margin, h), fill=(100, 100, 100, 80))
+                    else:
+                        draw.rectangle((w - margin, 0, w, h), fill=(100, 100, 100, 80))
+
+                if COLUMNS_POLICY_LABEL_TO_VALUE.get(self.columns_policy_var.get(), "detect") == "fixed":
+                    columns = max(1, int(self.columns_var.get()))
+                    for col in range(1, columns):
+                        x = round(w * col / columns)
+                        draw.line((x, 0, x, h), fill=(30, 120, 210, 210), width=2)
+
+                photo = ImageTk.PhotoImage(preview)
+                self._template_photos.append(photo)
+                cell = ttk.Frame(self.template_preview_frame)
+                cell.grid(row=0, column=slot, sticky="n", padx=5)
+                ttk.Label(cell, image=photo).pack()
+                variant = page_variant(settings, index)
+                side_text = excluded_source_side(settings, index) or "无页边排除"
+                ttk.Label(
+                    cell,
+                    text=f"{variant} 页 · {path.name} · 页边：{side_text}",
+                ).pack(anchor="center", pady=(4, 0))
+            except Exception as exc:
+                ttk.Label(
+                    self.template_preview_frame,
+                    text=f"{path.name}\n预览失败：{exc}",
+                ).grid(row=0, column=slot, padx=5)
 
     @staticmethod
     def _mode_row(
