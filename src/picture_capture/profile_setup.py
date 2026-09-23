@@ -241,7 +241,7 @@ class ProjectProfileWizard(tk.Toplevel):
         screen_w = max(800, int(self.winfo_screenwidth()))
         work_x, work_y, work_w, work_h = _screen_work_area(self)
         width = min(work_w, max(720, int(screen_w * 0.80)))
-        height = work_h
+        height = max(540, int(work_h * 0.90))
         x = max(work_x, work_x + work_w - width)
         y = work_y
         self._wizard_width = width
@@ -438,12 +438,18 @@ class ProjectProfileWizard(tk.Toplevel):
 
         left_panel = ttk.Frame(self.profile_paned, padding=(2, 2, 8, 2))
         right_panel = ttk.Frame(self.profile_paned, padding=(8, 2, 2, 2))
+        self.left_panel = left_panel
         left_panel.rowconfigure(3, weight=1)
         left_panel.columnconfigure(0, weight=1)
         right_panel.rowconfigure(0, weight=1)
         right_panel.columnconfigure(0, weight=1)
         self.profile_paned.add(left_panel, weight=40)
         self.profile_paned.add(right_panel, weight=60)
+        left_panel.bind(
+            "<Configure>",
+            lambda _event: self.after_idle(self._apply_left_wraps),
+            add="+",
+        )
         self.after_idle(
             lambda: self.profile_paned.sashpos(
                 0, max(320, int(self._wizard_width * 0.40))
@@ -520,6 +526,34 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Button(footer, text="确认并使用", command=self.save_and_close).pack(side="right", padx=(0, 8))
 
         self._show_right_image_page(0)
+        self.after_idle(self._apply_left_wraps)
+
+    def _apply_left_wraps(self) -> None:
+        """Keep all explanatory text in the left pane readable after resizing."""
+        root = getattr(self, "left_panel", None)
+        if root is None or not root.winfo_exists():
+            return
+
+        def visit(widget) -> None:
+            for child in widget.winfo_children():
+                if isinstance(child, (ttk.Label, tk.Label)):
+                    try:
+                        parent_width = int(child.master.winfo_width())
+                    except (tk.TclError, AttributeError):
+                        parent_width = 0
+                    wrap = max(
+                        90,
+                        (parent_width - 18)
+                        if parent_width > 120
+                        else (self._wizard_left_width - 24),
+                    )
+                    try:
+                        child.configure(wraplength=wrap, justify="left")
+                    except tk.TclError:
+                        pass
+                visit(child)
+
+        visit(root)
 
     def _build_right_image_workspace(self, parent: ttk.Frame) -> None:
         """Persistent image-only workspace shared by all Wizard steps."""
@@ -720,26 +754,37 @@ class ProjectProfileWizard(tk.Toplevel):
 
         info = ttk.LabelFrame(tab, text="词典项目详情", padding=(8, 7))
         info.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        for col in (1, 3, 5, 7):
-            info.columnconfigure(col, weight=1)
+        info.columnconfigure(1, weight=1)
+        info.columnconfigure(3, weight=1)
 
-        ttk.Label(info, text="词典名称：").grid(row=0, column=0, sticky="e", padx=(0, 3))
-        ttk.Entry(
-            info, textvariable=self.dictionary_full_name_var, width=16,
-        ).grid(row=0, column=1, sticky="ew", padx=(0, 6))
-        ttk.Label(info, text="词典简称(字母)：").grid(row=0, column=2, sticky="e", padx=(0, 3))
-        ttk.Entry(
-            info, textvariable=self.dictionary_abbreviation_var, width=9,
-        ).grid(row=0, column=3, sticky="ew", padx=(0, 6))
-        ttk.Label(info, text="ISBN：").grid(row=0, column=4, sticky="e", padx=(0, 3))
-        ttk.Entry(
-            info, textvariable=self.dictionary_isbn_var, width=13,
-        ).grid(row=0, column=5, sticky="ew", padx=(0, 6))
-        ttk.Label(info, text="正文页码：").grid(row=0, column=6, sticky="e", padx=(0, 3))
-        self.body_page_range_entry = ttk.Entry(
-            info, textvariable=self.dictionary_body_page_range_var, width=12,
+        ttk.Label(info, text="词典全称：").grid(
+            row=0, column=0, sticky="e", padx=(0, 4), pady=3
         )
-        self.body_page_range_entry.grid(row=0, column=7, sticky="ew")
+        ttk.Entry(
+            info, textvariable=self.dictionary_full_name_var, width=24,
+        ).grid(row=0, column=1, sticky="ew", padx=(0, 12), pady=3)
+        ttk.Label(info, text="词典简称(字母)：").grid(
+            row=0, column=2, sticky="e", padx=(0, 4), pady=3
+        )
+        ttk.Entry(
+            info, textvariable=self.dictionary_abbreviation_var, width=16,
+        ).grid(row=0, column=3, sticky="ew", pady=3)
+
+        ttk.Label(info, text="ISBN：").grid(
+            row=1, column=0, sticky="e", padx=(0, 4), pady=3
+        )
+        ttk.Entry(
+            info, textvariable=self.dictionary_isbn_var, width=24,
+        ).grid(row=1, column=1, sticky="ew", padx=(0, 12), pady=3)
+        ttk.Label(info, text="正文页码：").grid(
+            row=1, column=2, sticky="e", padx=(0, 4), pady=3
+        )
+        self.body_page_range_entry = ttk.Entry(
+            info, textvariable=self.dictionary_body_page_range_var, width=16,
+        )
+        self.body_page_range_entry.grid(
+            row=1, column=3, sticky="ew", pady=3
+        )
         self.body_page_range_entry.bind("<FocusOut>", self._body_page_range_changed)
         self.body_page_range_entry.bind("<Return>", self._body_page_range_changed)
 
@@ -1516,11 +1561,19 @@ class ProjectProfileWizard(tk.Toplevel):
             safe,
             profile_key,
         )
-        for stem in stems:
-            for suffix in (".png", ".jpg", ".jpeg", ".webp"):
-                candidate = root / f"{stem}{suffix}"
-                if candidate.exists():
-                    return candidate
+        # User-provided curated crops live in recommended_current/. Extended
+        # crops are a secondary fallback; root-level files still override both.
+        roots = (
+            root,
+            root / "recommended_current",
+            root / "extended",
+        )
+        for folder in roots:
+            for stem in stems:
+                for suffix in (".png", ".jpg", ".jpeg", ".webp"):
+                    candidate = folder / f"{stem}{suffix}"
+                    if candidate.exists():
+                        return candidate
         return None
 
     def _headword_example_image(
@@ -2374,7 +2427,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 return
             draw.rectangle(
                 (x0 * sx, y0 * sy, x1 * sx, y1 * sy),
-                fill=(110, 110, 110, 72),
+                fill=(255, 215, 0, 105),
             )
 
         canonical_w, canonical_h = geometry.transform.canonical_size(source.size)
