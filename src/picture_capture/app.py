@@ -1100,10 +1100,425 @@ class SettingsDialog(tk.Toplevel):
 
     OCR_LANGUAGES = ("eng", "spa", "fra", "ita", "por", "deu", "chi_sim", "chi_tra", "jpn", "ara")
 
+    # Human-facing setting metadata. Internal field names and persisted JSON stay
+    # unchanged; this layer only reorganizes the settings experience.
+    SETTING_LABELS = {
+        "analysis_threshold_mode": "墨迹判断方式",
+        "body_indent": "左缘检测宽度",
+        "character_height": "典型单行字高",
+        "row_padding": "典型行间空白",
+        "darkness_threshold": "固定黑度阈值",
+        "horizontal_tolerance": "横向微调容差",
+        "paddle_band_width_ratio": "OCR 识别带宽",
+        "paddle_left_tolerance": "词头左缘容差",
+        "paddle_rec_score_threshold": "OCR 片段最低置信度",
+        "paddle_min_candidate_score": "词头候选最低分",
+        "paddle_separator_safety_px": "横线与文字安全距离",
+        "paddle_line_merge_y_ratio": "同行碎片合并容差",
+        "paddle_height_ratio": "字高提示阈值",
+        "paddle_boldness_ratio": "粗体提示阈值",
+        "paddle_gap_ratio": "行前空白提示阈值",
+        "paddle_pos_search_chars": "词性提示搜索范围",
+        "paddle_separator_search_ratio": "横线 Y 精修搜索范围",
+        "paddle_separator_band_radius": "横线空白带平滑半径",
+        "paddle_separator_roi_width_ratio": "横线精修横向范围",
+        "paddle_separator_column_margin": "横线精修栏边余量",
+        "paddle_max_input_side": "OCR 最大输入边长",
+        "paddle_preprocessing": "OCR 图像预处理",
+        "paddle_device": "PaddleOCR 运行设备",
+        "paddle_ocr_version": "PaddleOCR 模型版本",
+        "ocr_executable": "Tesseract 程序路径",
+        "batch_interval": "自动保存间隔",
+        "wordslist_path": "参考词表文件",
+    }
+
+    SETTING_HELP = {
+        "columns": "正文实际栏数。错栏会让后续所有画线偏位；通常先用“检测版面参数”自动估计。",
+        "gutter": "相邻两栏之间的空白宽度。主要影响栏边界、切图范围和列定位。",
+        "column_width": "单栏正文宽度。通常由版面检测得到，不建议只凭肉眼频繁微调。",
+        "start_y": "正文开始的 Y 位置，用来排除页眉。若顶部误画线，优先检查这里或 Project Profile 的页眉设置。",
+        "manual_x": "第一栏左缘基准位置。自动检测稳定时通常不需要手动修改。",
+        "body_indent": "普通画线只检查每栏左侧这段宽度。太小会漏掉缩进词头；太大会把正文开头误当词头。",
+        "character_height": "典型文字行高。影响普通画线的最小词条间距，也影响横线 Y 精修的搜索尺度。",
+        "row_padding": "典型行间空白。数值过大可能把相邻词条合并；过小则更容易出现重复横线。",
+        "right_ratio": "词条单行切图向右覆盖栏宽的比例。它影响后续 OCR/切图，不决定词头是否被检测。",
+        "horizontal_tolerance": "列边或人工定位的横向容差。只有版面边缘轻微漂移时才需要调整。",
+        "analysis_threshold_mode": "普通画线识别墨迹的方式。推荐 auto/otsu；纸张发黄或亮度不均可试 adaptive；fixed 主要用于旧项目兼容。",
+        "darkness_threshold": "仅 fixed 模式生效。数值越大，越容易把灰色/污点算作墨迹，误检也会增加。",
+        "column_track_radius": "跟随弯曲/倾斜栏左缘时允许搜索的横向范围。版面正常时保持默认即可。",
+        "column_track_block_height": "列跟踪按多高的分块建立锚点。越小越灵活，但也更容易受局部噪声影响。",
+        "column_track_max_step": "相邻列跟踪锚点允许的最大横移。用于限制异常跳动。",
+        "ocr_language": "词头的主要语言。它会影响 OCR 模型、词头结构和排序预设；选错语言会明显降低识别率。",
+        "paddle_device": "建议有兼容 GPU 时使用 GPU；CPU 更通用但批量 OCR 较慢。",
+        "paddle_preprocessing": "通常用 original。扫描偏灰可试 auto_contrast；只有原图确实需要二值化时才用 binary。",
+        "paddle_max_input_side": "OCR 前允许的最大图像长边。更大可能保留小字细节，但速度和显存/内存占用更高。",
+        "paddle_band_width_ratio": "每栏左侧送入 OCR 的宽度比例。缩小可提速并减少正文干扰；太小会截断长词头、变形或词性提示。",
+        "paddle_band_left_margin": "OCR 识别带向栏左额外扩展的像素。用于保留贴近栏边或略超出栏线的字形。",
+        "paddle_left_tolerance": "词头允许离栏左缘多远。调大能保留缩进词头，但也会吸入更多正文行。",
+        "paddle_rec_score_threshold": "保留 OCR 原始文字碎片的最低置信度。降低可救回难字，但噪声会增加；普通用户建议保持默认。",
+        "paddle_line_merge_y_ratio": "把同一视觉行上的 OCR 碎片合并时允许的垂直差。过大可能把上下两行合并。",
+        "paddle_height_ratio": "词头字高相对正文的视觉提示阈值。只有词头明显更大时才值得手动调整。",
+        "paddle_boldness_ratio": "词头粗体相对正文的视觉提示阈值。扫描对比度差时不要过分依赖此项。",
+        "paddle_gap_ratio": "利用词头前空白作为结构证据的阈值。不同词典差异较大，通常交给 Profile 默认值。",
+        "paddle_min_candidate_score": "综合文字结构、位置和视觉提示后的最低词头分数。调高更严格、误检少；调低更容易补回漏检。",
+        "paddle_header_search_height": "自动寻找页眉横线时只检查页面顶部这段高度。",
+        "paddle_header_rule_ink_ratio": "判断一条横向墨迹是否像页眉横线的强度阈值。",
+        "paddle_header_rule_margin": "检测到页眉横线后，正文起点向下再留出的安全距离。",
+        "paddle_pos_search_chars": "在词头后向右搜索词性/变形提示的字符范围。长词头或词性离得远时可适当增加。",
+        "paddle_separator_search_ratio": "OCR 找到词头后，横线在局部上下搜索空白带的范围。过大可能跳到相邻行。",
+        "paddle_separator_band_radius": "横线精修时对墨迹曲线做平滑的半径。通常无需修改。",
+        "paddle_separator_safety_px": "横线和当前词头墨迹之间额外保留的空白。文字被线压到时调大；间距太大时调小。",
+        "paddle_separator_roi_width_ratio": "横线精修只看栏左侧多少范围。较小可避免右侧长释义干扰。",
+        "paddle_separator_column_margin": "横线精修时跳过栏左边线/装饰线的宽度。",
+        "paddle_tesseract_psm": "Tesseract 对照识别的版面模式。开启自动比较时通常无需手动修改。",
+        "paddle_lens_language": "Google Lens 的提示语言，仅 Lens 已启用时生效。",
+        "paddle_lens_timeout": "Lens 网络识别等待时间。网络不稳定时可适当增加。",
+        "paddle_lens_default_confidence": "Lens 未提供真实置信度时的中性默认值，不建议普通用户调整。",
+        "paddle_alignment_y_tolerance_ratio": "Paddle 与 Tesseract 候选按 Y 位置配对时允许的差异。",
+        "paddle_alignment_min_similarity": "两个 OCR 词头要多相似才视为同一候选。",
+        "paddle_conflict_review_margin": "两个 OCR 质量接近到什么程度时标记为需要人工复核。",
+        "paddle_headword_regex": "专家项：定义什么文字形态可以作为词头。普通项目应优先通过 Project Profile 调整，不直接改正则。",
+        "paddle_pos_regex": "专家项：用于识别词性提示。只有特殊词典缩写体系无法覆盖时才修改。",
+        "paddle_special_symbol_regex": "专家项：定义词头前允许的特殊符号。",
+        "ocr_executable": "Tesseract 可执行文件位置。只有启用 Tesseract 对照/补漏时需要正确配置。",
+        "paddle_ocr_version": "PaddleOCR 模型系列。项目稳定后不要随意切换，否则建议重新 OCR。",
+        "tesseract_language": "Tesseract 使用的语言包。通常跟随 OCR 语言自动设置。",
+        "batch_interval": "自动保存的时间间隔。过短会增加磁盘写入；通常 3–10 秒即可。",
+        "marker_height": "主界面词头横线的显示高度，只影响显示和点击区域，不改变识别算法。",
+        "guide_width": "栏左参考线宽度，只影响界面显示。",
+        "main_entry_font_family": "主界面词条文本框字体，仅影响显示。",
+        "main_entry_font_size": "主界面词条字号，仅影响显示。",
+        "main_entry_width_chars": "主界面词条文本框宽度，以字符数估算。",
+        "main_entry_x_ratio": "主界面词条文本框相对栏宽的横向位置。",
+        "review_entry_font_family": "校对界面原词条字体，仅影响显示。",
+        "review_entry_font_size": "校对界面原词条字号，仅影响显示。",
+        "review_entry_vertical_padding": "校对文本框上下留白，仅影响校对界面密度。",
+        "review_single_cjk_line_height": "中文单字词条的特殊行高；0 表示按默认比例自动计算。",
+        "review_zoom_percent": "校对界面切图默认缩放比例。",
+        "wordslist_path": "校对和主界面成员判断使用的参考词表。可使用项目内相对路径。",
+        "illustration_detect_padding": "自动插图识别后四周额外扩出的像素。",
+        "illustration_detect_right_padding": "插图右侧额外扩出的像素，适合跨向栏间空白的插图。",
+        "dictionary_full_name": "词典完整名称，用于项目资料和后续导出；不影响识别。",
+        "dictionary_abbreviation": "词典缩写，用于 PicDic/导出等项目元数据；不影响识别。",
+        "dictionary_isbn": "可选项目资料，不影响识别。",
+        "dictionary_index_language": "词头/索引语言的 2 位语言代号，用于后期词典元数据。",
+        "dictionary_content_language": "释义内容语言的 2 位语言代号，用于后期词典元数据。",
+        "dictionary_body_page_range": "正文页范围，例如 1-1250。Project Profile 选代表页和批量任务时会参考它。",
+        "layout_writing_mode": "专家项：页面文字书写方向。通常由 Project Profile 确认。",
+        "layout_text_direction": "专家项：文字阅读方向。通常由 Project Profile 确认。",
+        "layout_transform": "专家项：内部标准化页面方向，由书写模式自动推导，不建议手动改。",
+        "layout_columns_policy": "专家项：栏数由程序检测还是固定使用项目值。",
+        "layout_column_separator_mode": "专家项：是否存在明显中央分隔线。通常由 Project Profile 处理。",
+        "paddle_language": "PaddleOCR 后端语言代码，通常根据 OCR 语言自动选择。",
+    }
+
+    COMMON_FIELDS = (
+        "columns", "start_y", "manual_x", "column_width", "gutter",
+        "character_height", "row_padding", "ocr_language",
+    )
+    NORMAL_COMMON_FIELDS = (
+        "analysis_threshold_mode", "body_indent", "character_height", "row_padding",
+    )
+    NORMAL_ADVANCED_FIELDS = (
+        "darkness_threshold", "horizontal_tolerance",
+        "column_track_radius", "column_track_block_height", "column_track_max_step",
+    )
+    OCR_COMMON_FIELDS = (
+        "ocr_language", "paddle_device", "paddle_preprocessing",
+        "paddle_band_width_ratio", "paddle_left_tolerance",
+        "paddle_separator_safety_px",
+    )
+    OCR_ADVANCED_FIELDS = (
+        "paddle_max_input_side", "paddle_band_left_margin",
+        "paddle_rec_score_threshold", "paddle_line_merge_y_ratio",
+        "paddle_height_ratio", "paddle_boldness_ratio", "paddle_gap_ratio",
+        "paddle_min_candidate_score", "paddle_header_search_height",
+        "paddle_header_rule_ink_ratio", "paddle_header_rule_margin",
+        "paddle_pos_search_chars", "paddle_separator_search_ratio",
+        "paddle_separator_band_radius", "paddle_separator_roi_width_ratio",
+        "paddle_separator_column_margin", "paddle_tesseract_psm",
+        "paddle_alignment_y_tolerance_ratio", "paddle_alignment_min_similarity",
+        "paddle_conflict_review_margin",
+    )
+    DISPLAY_FIELDS = (
+        "marker_height", "guide_width",
+        "main_entry_font_family", "main_entry_font_size",
+        "main_entry_width_chars", "main_entry_x_ratio",
+        "review_entry_font_family", "review_entry_font_size",
+        "review_entry_vertical_padding", "review_single_cjk_line_height",
+        "review_zoom_percent", "wordslist_path",
+    )
+    PROJECT_RUNTIME_FIELDS = (
+        "batch_interval", "ocr_executable", "tesseract_language",
+        "paddle_ocr_version", "paddle_max_input_side",
+        "illustration_detect_padding", "illustration_detect_right_padding",
+    )
+    EXPERT_FIELDS = (
+        "layout_writing_mode", "layout_text_direction", "layout_transform",
+        "layout_columns_policy", "layout_column_separator_mode",
+        "paddle_language", "paddle_lens_language", "paddle_lens_timeout",
+        "paddle_lens_default_confidence",
+        "paddle_headword_regex", "paddle_pos_regex", "paddle_special_symbol_regex",
+    )
+
+    SETTING_CHOICES = {
+        "analysis_threshold_mode": {
+            "自动（推荐，等同 Otsu）": "auto",
+            "Otsu 全页阈值": "otsu",
+            "自适应（底色不均时）": "adaptive",
+            "固定阈值（旧项目/专家）": "fixed",
+        },
+        "paddle_preprocessing": {
+            "原图（推荐）": "original",
+            "灰度": "grayscale",
+            "自动对比度": "auto_contrast",
+            "二值化": "binary",
+        },
+    }
+
+    CHECK_HELP = {
+        "manual_columns": "仅在自动分栏明显失败时启用。普通项目保持关闭，让栏位置按实际页面估计。",
+        "follow_column_deformation": "扫描页有明显倾斜、弯曲或局部拉伸时启用；平直页面关闭更稳定。",
+        "paddle_use_paddleocr": "PaddleOCR 是 OCR画线的主识别引擎。除非专门测试其他引擎，否则建议保持开启。",
+        "paddle_use_textline_orientation": "识别旋转/方向不稳定的文字行时可开启；普通横排页面通常无需额外方向识别。",
+        "paddle_remove_syllable_separators": "输出词头时去除音节分隔点（如 ·）；不会删除真正的词内连字符。",
+        "paddle_auto_header_rule": "自动识别页眉横线并忽略其上方内容，可减少页眉被误判为词头。",
+        "paddle_enable_lens": "把 Google Lens 作为可选第三意见。建议仅在本地 OCR 冲突时调用。",
+        "paddle_require_visual_cue": "要求候选同时有字高、粗体、左缘等视觉证据，可减少正文误检。",
+        "paddle_require_pos_or_symbol": "要求词头附近出现词性、变形或词条符号。结构明确的拉丁词典建议开启。",
+        "paddle_refine_separator_y": "OCR 先定位词头，再把横线移动到局部空白带。通常建议开启。",
+        "paddle_compare_tesseract": "同时运行 Tesseract 作为第二意见。更稳，但速度更慢且需要安装对应语言包。",
+        "paddle_tesseract_rescue": "允许 Tesseract 补回 Paddle 漏掉的词头。双 OCR 项目可开启。",
+        "paddle_tesseract_auto_psm": "自动比较 PSM 4/6 并选择更合适的结果。通常建议开启。",
+        "paddle_dual_ocr_arbitration": "Paddle/Tesseract 冲突时按结构、置信度和位置综合决策，而不是简单覆盖。",
+        "paddle_show_candidate_checkboxes": "主界面显示 OCR 候选复选框，便于人工补回漏检或排除误检。",
+        "ocr_replace": "普通 OCR 文本识别后执行项目替换规则；不影响词头横线位置。",
+        "lowercase_ocr": "把普通 OCR 文本转成小写；只影响文本，不影响画线。",
+        "review_main_show_ocr_choices": "打开校对窗口时，主界面仍显示多个 OCR 候选按钮。",
+        "review_main_show_ocr_background": "打开校对窗口时，主界面仍按 OCR 置信度显示词框底色。",
+    }
+
+    NORMAL_CHECKS = (
+        ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
+        ("手动分栏", "manual_columns"),
+    )
+    OCR_COMMON_CHECKS = (
+        ("PaddleOCR 主识别", "paddle_use_paddleocr"),
+        ("要求结构/视觉提示", "paddle_require_visual_cue"),
+        ("要求词性/变形/词条符号", "paddle_require_pos_or_symbol"),
+        ("自动精修横线 Y", "paddle_refine_separator_y"),
+        ("同时运行 Tesseract 对照", "paddle_compare_tesseract"),
+        ("多 OCR 自动融合", "paddle_dual_ocr_arbitration"),
+    )
+    OCR_ADVANCED_CHECKS = (
+        ("启用文字行方向识别", "paddle_use_textline_orientation"),
+        ("自动忽略页眉横线以上", "paddle_auto_header_rule"),
+        ("去除词头音节分隔点", "paddle_remove_syllable_separators"),
+        ("Tesseract 可补漏 Paddle", "paddle_tesseract_rescue"),
+        ("Tesseract 自动比较 PSM 4/6", "paddle_tesseract_auto_psm"),
+        ("显示每个 OCR 候选复选框", "paddle_show_candidate_checkboxes"),
+    )
+    DISPLAY_CHECKS = (
+        ("校对时主界面显示 OCR 候选", "review_main_show_ocr_choices"),
+        ("校对时主界面显示 OCR 置信度底色", "review_main_show_ocr_background"),
+    )
+
+    def _setting_var(self, name: str) -> tk.Variable:
+        if name in self.vars:
+            return self.vars[name]
+        raw = getattr(self.parent.settings, name)
+        choices = self.SETTING_CHOICES.get(name)
+        if choices:
+            reverse = {value: label for label, value in choices.items()}
+            value = reverse.get(str(raw), str(raw))
+        else:
+            value = str(raw)
+        var = tk.StringVar(value=value)
+        self.vars[name] = var
+        return var
+
+    def _setting_widget(self, parent: ttk.Frame, name: str) -> tk.Widget:
+        var = self._setting_var(name)
+        choices = self.SETTING_CHOICES.get(name)
+        if choices:
+            return ttk.Combobox(
+                parent, textvariable=var, values=tuple(choices.keys()),
+                state="readonly", width=28,
+            )
+        if name in {"dictionary_index_language", "dictionary_content_language"}:
+            return ttk.Combobox(
+                parent, textvariable=var, values=PROJECT_LANGUAGE_CODES,
+                state="readonly", width=28,
+            )
+        if name == "ocr_language":
+            widget = ttk.Combobox(
+                parent, textvariable=var, values=self.OCR_LANGUAGES,
+                state="normal", width=28,
+            )
+            widget.bind("<<ComboboxSelected>>", lambda _e: self._refresh_sort_choices())
+            widget.bind("<FocusOut>", lambda _e: self._refresh_sort_choices())
+            return widget
+        if name in {"main_entry_font_family", "review_entry_font_family"}:
+            families = tuple(sorted(set(font.families()), key=str.casefold))
+            return ttk.Combobox(
+                parent, textvariable=var, values=families, state="normal", width=28,
+            )
+        if name == "wordslist_path":
+            box = ttk.Frame(parent)
+            box.columnconfigure(0, weight=1)
+            ttk.Entry(box, textvariable=var, width=30).grid(row=0, column=0, sticky="ew")
+            ttk.Button(
+                box, text="浏览…", command=lambda v=var: self._browse_wordslist_setting(v)
+            ).grid(row=0, column=1, padx=(5, 0))
+            return box
+        if name == "layout_writing_mode":
+            return ttk.Combobox(
+                parent, textvariable=var,
+                values=("horizontal-tb", "vertical-rl", "vertical-lr"),
+                state="readonly", width=28,
+            )
+        if name == "layout_text_direction":
+            return ttk.Combobox(
+                parent, textvariable=var, values=("ltr", "rtl"),
+                state="readonly", width=28,
+            )
+        if name == "layout_columns_policy":
+            return ttk.Combobox(
+                parent, textvariable=var, values=("detect", "fixed"),
+                state="readonly", width=28,
+            )
+        if name == "layout_column_separator_mode":
+            return ttk.Combobox(
+                parent, textvariable=var, values=("auto", "present", "absent"),
+                state="readonly", width=28,
+            )
+        if name == "layout_transform":
+            return ttk.Entry(parent, textvariable=var, width=30, state="readonly")
+        return ttk.Entry(parent, textvariable=var, width=30)
+
+    def _add_setting_group(
+        self,
+        parent: ttk.Frame,
+        title: str,
+        names: tuple[str, ...] | list[str],
+        *,
+        intro: str = "",
+    ) -> ttk.LabelFrame:
+        group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
+        group.pack(fill="x", pady=(0, 10))
+        group.columnconfigure(2, weight=1)
+        row = 0
+        if intro:
+            ttk.Label(
+                group, text=intro, foreground="#5f6670", justify="left", wraplength=820,
+            ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 8))
+            row += 1
+        for name in names:
+            label = self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])
+            ttk.Label(group, text=f"{label}：").grid(
+                row=row, column=0, sticky="ne", padx=(0, 10), pady=5
+            )
+            widget = self._setting_widget(group, name)
+            widget.grid(row=row, column=1, sticky="ew", padx=(0, 12), pady=4)
+            ttk.Label(
+                group,
+                text=self.SETTING_HELP.get(name, "专家参数；不确定时建议保持当前值。"),
+                foreground="#666666", justify="left", wraplength=520,
+            ).grid(row=row, column=2, sticky="nw", pady=5)
+            row += 1
+        return group
+
+    def _add_check_group(
+        self,
+        parent: ttk.Frame,
+        title: str,
+        checks: tuple[tuple[str, str], ...] | list[tuple[str, str]],
+        *,
+        intro: str = "",
+    ) -> ttk.LabelFrame:
+        group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
+        group.pack(fill="x", pady=(0, 10))
+        group.columnconfigure(1, weight=1)
+        row = 0
+        if intro:
+            ttk.Label(
+                group, text=intro, foreground="#5f6670", justify="left", wraplength=820,
+            ).grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 8))
+            row += 1
+        for label, name in checks:
+            if name not in self.vars:
+                self.vars[name] = tk.BooleanVar(value=bool(getattr(self.parent.settings, name)))
+            ttk.Checkbutton(group, text=label, variable=self.vars[name]).grid(
+                row=row, column=0, sticky="nw", padx=(0, 14), pady=4
+            )
+            ttk.Label(
+                group,
+                text=self.CHECK_HELP.get(name, "高级行为开关；不确定时保持默认。"),
+                foreground="#666666", justify="left", wraplength=600,
+            ).grid(row=row, column=1, sticky="nw", pady=4)
+            row += 1
+        return group
+
+    def _add_collapsible_settings(
+        self,
+        parent: ttk.Frame,
+        title: str,
+        names: tuple[str, ...] | list[str],
+        checks: tuple[tuple[str, str], ...] | list[tuple[str, str]] = (),
+    ) -> None:
+        shell = ttk.Frame(parent)
+        shell.pack(fill="x", pady=(0, 10))
+        expanded = tk.BooleanVar(value=False)
+        title_var = tk.StringVar(value=f"▸ {title}")
+        body = ttk.Frame(shell)
+
+        def toggle() -> None:
+            if expanded.get():
+                expanded.set(False)
+                body.pack_forget()
+                title_var.set(f"▸ {title}")
+            else:
+                expanded.set(True)
+                title_var.set(f"▾ {title}")
+                body.pack(fill="x", pady=(6, 0))
+
+        ttk.Button(shell, textvariable=title_var, command=toggle).pack(fill="x")
+        if names:
+            self._add_setting_group(body, "参数", names)
+        if checks:
+            self._add_check_group(body, "行为", checks)
+
+    def _scrollable_settings_page(self, tab: ttk.Frame) -> ttk.Frame:
+        host = ttk.Frame(tab)
+        host.pack(fill="both", expand=True)
+        canvas = tk.Canvas(host, highlightthickness=0, borderwidth=0)
+        scrollbar = ttk.Scrollbar(host, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        content = ttk.Frame(canvas, padding=(14, 12, 14, 18))
+        window = canvas.create_window((0, 0), window=content, anchor="nw")
+        content.bind(
+            "<Configure>",
+            lambda _e, cv=canvas: cv.configure(scrollregion=cv.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda e, cv=canvas, item=window: cv.itemconfigure(item, width=e.width),
+        )
+        self._settings_canvases[str(tab)] = canvas
+        return content
+
+    def _settings_intro(self, parent: ttk.Frame, title: str, text: str) -> None:
+        ttk.Label(parent, text=title, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
+        ttk.Label(
+            parent, text=text, foreground="#5f6670", justify="left", wraplength=900,
+        ).pack(anchor="w", pady=(3, 10))
+
     def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:
         super().__init__(parent)
         self.parent = parent
-        self.title("更多参数")
+        self.title("设置中心")
         self.update_idletasks()
         screen_w = max(900, self.winfo_screenwidth())
         screen_h = max(650, self.winfo_screenheight())
@@ -1123,180 +1538,293 @@ class SettingsDialog(tk.Toplevel):
         outer.pack(fill="both", expand=True)
         _build_modern_dialog_heading(
             outer,
-            "更多参数",
-            "项目级高级设置。常用项目配置优先在【项目 Profile】完成；这里用于精细调整、排序与过滤规则。",
+            "设置中心",
+            "按工作任务整理：第一次使用只看“常用 / 普通画线 / OCR画线”；"
+            "底层阈值、正则和后端参数集中在高级区，不确定时无需修改。",
         )
         notebook = ttk.Notebook(outer)
         self.notebook = notebook
         notebook.pack(fill="both", expand=True)
-        profile_tab = ttk.Frame(notebook)
+        self._settings_canvases: dict[str, tk.Canvas] = {}
+
+        common_tab = ttk.Frame(notebook)
+        normal_tab = ttk.Frame(notebook)
+        ocr_tab = ttk.Frame(notebook)
+        display_tab = ttk.Frame(notebook)
         project_tab = ttk.Frame(notebook)
-        params_tab = ttk.Frame(notebook)
+        advanced_tab = ttk.Frame(notebook)
         sort_tab = ttk.Frame(notebook)
         rules_tab = ttk.Frame(notebook)
-        notebook.add(profile_tab, text="Profile高级")
-        self.profile_tab = profile_tab
-        notebook.add(project_tab, text="词典项目详情")
-        notebook.add(params_tab, text="参数分区")
-        notebook.add(sort_tab, text="词头排序")
-        notebook.add(rules_tab, text="词头过滤规则")
-        if initial_tab == "profile":
-            notebook.select(profile_tab)
-        elif initial_tab == "project":
-            notebook.select(project_tab)
-        elif initial_tab == "sort":
-            notebook.select(sort_tab)
-        elif initial_tab == "rules":
-            notebook.select(rules_tab)
-        elif initial_tab == "params":
-            notebook.select(params_tab)
-        else:
-            # 【项目Profile】 owns the normal guided workflow.  【更多参数】
-            # should therefore open the detailed parameter partition directly.
-            notebook.select(params_tab)
+        for tab, label in (
+            (common_tab, "常用"),
+            (normal_tab, "普通画线"),
+            (ocr_tab, "OCR画线"),
+            (display_tab, "显示 / 校对"),
+            (project_tab, "项目 / 批量"),
+            (advanced_tab, "高级"),
+            (sort_tab, "排序"),
+            (rules_tab, "过滤规则"),
+        ):
+            notebook.add(tab, text=label)
 
-        self._build_profile_tab(profile_tab)
-        self._build_project_details_tab(project_tab)
+        selected_tab = {
+            "normal": normal_tab,
+            "ocr": ocr_tab,
+            "display": display_tab,
+            "project": project_tab,
+            "advanced": advanced_tab,
+            "profile": advanced_tab,
+            "params": common_tab,
+            "sort": sort_tab,
+            "rules": rules_tab,
+        }.get(initial_tab, common_tab)
+        notebook.select(selected_tab)
 
-        body = ttk.Frame(params_tab)
-        body.pack(fill="both", expand=True)
-        canvas = tk.Canvas(body, highlightthickness=0, borderwidth=0)
-        self.params_canvas = canvas
-        scrollbar = ttk.Scrollbar(body, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-        frame = ttk.Frame(canvas, padding=10)
-        frame_window = canvas.create_window((0, 0), window=frame, anchor="nw")
+        # SettingsDialog no longer duplicates the normal Project Profile wizard.
+        # Keep the active profile ID intact for save() while exposing a direct
+        # button to the guided wizard from the common/advanced pages.
+        self._active_profile_key = effective_project_profile_id(
+            parent.settings,
+            project_profile_path(parent.project.root) if parent.project else None,
+        )
+        self._profile_selection_changed = False
+        self._profile_label_to_key: dict[str, str] = {}
 
-        def _sync_scrollregion(_event=None) -> None:
-            bbox = canvas.bbox("all")
-            if bbox:
-                canvas.configure(scrollregion=bbox)
+        common = self._scrollable_settings_page(common_tab)
+        self._settings_intro(
+            common,
+            "先确认版面，再选择画线方式",
+            "推荐流程：项目 Profile → 检测版面参数 → 用当前页试画 → "
+            "确认无明显漏线/误线后再批量。普通画线适合词头左缘规律的词典；"
+            "OCR画线适合需要识别词头文字、粗体、词性或特殊符号的版式。",
+        )
+        workflow = ttk.Frame(common)
+        workflow.pack(fill="x", pady=(0, 10))
+        ttk.Button(
+            workflow, text="打开项目 Profile…", command=parent.open_project_profile
+        ).pack(side="left")
+        ttk.Button(
+            workflow, text="检测当前页版面参数", command=parent.detect_layout_current
+        ).pack(side="left", padx=(6, 0))
+        ttk.Button(
+            workflow, text="检测 OCR 引擎", command=self.check_ocr_engines
+        ).pack(side="left", padx=(6, 0))
 
-        def _fit_inner_width(event) -> None:
-            canvas.itemconfigure(frame_window, width=event.width)
+        mode_group = ttk.LabelFrame(common, text="默认画线方式", padding=(12, 9))
+        mode_group.pack(fill="x", pady=(0, 10))
+        mode_group.columnconfigure(1, weight=1)
+        method_var = tk.StringVar(
+            value=DETECTION_LABELS.get(
+                parent.settings.detection_method, DETECTION_LABELS["paddleocr"]
+            )
+        )
+        self.vars["detection_method"] = method_var
+        ttk.Label(mode_group, text="项目默认：").grid(
+            row=0, column=0, sticky="e", padx=(0, 10), pady=4
+        )
+        ttk.Combobox(
+            mode_group, textvariable=method_var, values=tuple(DETECTION_VALUES),
+            state="readonly", width=28,
+        ).grid(row=0, column=1, sticky="w", pady=4)
+        ttk.Label(
+            mode_group,
+            text="这只决定默认按钮/批处理方式；两种模式始终可以在主界面直接运行。",
+            foreground="#666666", wraplength=620, justify="left",
+        ).grid(row=0, column=2, sticky="w", padx=(12, 0), pady=4)
+        self._add_setting_group(
+            common,
+            "常用版面参数",
+            self.COMMON_FIELDS,
+            intro="这些值同时影响普通画线、OCR画线和后续切图。能自动检测时，优先使用检测结果。",
+        )
+
+        normal = self._scrollable_settings_page(normal_tab)
+        self._settings_intro(
+            normal,
+            "普通画线：优先用几何和栏左墨迹，速度快、不依赖 OCR",
+            "适合词头基本贴近栏左缘、释义正文有稳定缩进的词典。"
+            "本版已改为自动/自适应墨迹阈值，并按当前栏的实际墨迹密度调整触发门槛，"
+            "对发黄扫描、亮度变化和细字体比旧版更稳。",
+        )
+        self._add_setting_group(
+            normal,
+            "常用设置",
+            self.NORMAL_COMMON_FIELDS,
+            intro="第一次使用通常只需要确认这四项。墨迹判断方式建议保持“自动（推荐）”。",
+        )
+        self._add_check_group(
+            normal,
+            "版面行为",
+            self.NORMAL_CHECKS,
+            intro="只有扫描页确实弯曲/倾斜或自动分栏失败时才需要改变。",
+        )
+        self._add_collapsible_settings(
+            normal,
+            "高级设置（普通画线异常时再展开）",
+            self.NORMAL_ADVANCED_FIELDS,
+        )
+
+        ocr_page = self._scrollable_settings_page(ocr_tab)
+        self._settings_intro(
+            ocr_page,
+            "OCR画线：用文字 + 版式 + 视觉证据判断真正词头",
+            "推荐模式。PaddleOCR 负责主识别；可选 Tesseract 作为第二意见，"
+            "Google Lens 作为冲突时的第三意见。OCR 原始结果有缓存：参数只改变候选判断时无需重新跑 OCR。",
+        )
+        self._add_setting_group(
+            ocr_page,
+            "常用设置",
+            self.OCR_COMMON_FIELDS,
+            intro="先调识别范围与左缘容差；候选分数、合并阈值等放在高级区。",
+        )
+        self._add_check_group(
+            ocr_page,
+            "识别策略",
+            self.OCR_COMMON_CHECKS,
+            intro="结构/视觉提示用于减少正文误检；双 OCR 会更稳，但会增加运行时间。",
+        )
+        lens_group = ttk.LabelFrame(ocr_page, text="Google Lens（可选）", padding=(12, 9))
+        lens_group.pack(fill="x", pady=(0, 10))
+        if "paddle_enable_lens" not in self.vars:
+            self.vars["paddle_enable_lens"] = tk.BooleanVar(
+                value=bool(parent.settings.paddle_enable_lens)
+            )
+        ttk.Checkbutton(
+            lens_group, text="启用 Lens 第三意见",
+            variable=self.vars["paddle_enable_lens"],
+        ).pack(anchor="w")
+        ttk.Label(
+            lens_group,
+            text="建议只在 Paddle/Tesseract 冲突时使用，避免不必要的网络等待。",
+            foreground="#666666",
+        ).pack(anchor="w", pady=(2, 5))
+        lens_mode_var = tk.StringVar(
+            value=LENS_MODE_LABELS.get(
+                parent.settings.paddle_lens_mode, LENS_MODE_LABELS["conflict"]
+            )
+        )
+        self.vars["paddle_lens_mode"] = lens_mode_var
+        lens_row = ttk.Frame(lens_group)
+        lens_row.pack(fill="x")
+        ttk.Label(lens_row, text="运行模式：").pack(side="left")
+        ttk.Combobox(
+            lens_row, textvariable=lens_mode_var, values=tuple(LENS_MODE_VALUES),
+            state="readonly", width=34,
+        ).pack(side="left")
+        self._add_collapsible_settings(
+            ocr_page,
+            "高级设置（漏检/误检有明确模式时再展开）",
+            self.OCR_ADVANCED_FIELDS,
+            self.OCR_ADVANCED_CHECKS,
+        )
+
+        display = self._scrollable_settings_page(display_tab)
+        self._settings_intro(
+            display,
+            "显示与校对只改变工作体验，不应该被误认为识别阈值",
+            "字体、词框宽度、校对缩放和参考词表都集中在这里。"
+            "修改这些项目不会改变普通画线/OCR画线的词头判断。",
+        )
+        self._add_setting_group(display, "界面与校对", self.DISPLAY_FIELDS)
+        display_style_checks = (
+            ("主界面词条粗体", "main_entry_font_bold"),
+            ("主界面词条斜体", "main_entry_font_italic"),
+            ("校对词条粗体", "review_entry_font_bold"),
+            ("校对词条斜体", "review_entry_font_italic"),
+        )
+        for _label, _name in display_style_checks:
+            self.CHECK_HELP.setdefault(_name, "仅影响文字显示样式，不影响识别结果。")
+        self._add_check_group(
+            display,
+            "显示行为",
+            display_style_checks + self.DISPLAY_CHECKS,
+        )
+
+        project_page = self._scrollable_settings_page(project_tab)
+        self._settings_intro(
+            project_page,
+            "项目资料与运行环境",
+            "项目名称/语言等资料用于导出和词典制作；运行环境参数只在相应功能启用时生效。",
+        )
+        self._add_setting_group(
+            project_page,
+            "项目资料",
+            (
+                "dictionary_full_name", "dictionary_abbreviation", "dictionary_isbn",
+                "dictionary_index_language", "dictionary_content_language",
+                "dictionary_body_page_range",
+            ),
+        )
+        self._add_setting_group(
+            project_page,
+            "运行与性能",
+            self.PROJECT_RUNTIME_FIELDS,
+            intro="OCR 模型和 Tesseract 路径稳定后不要频繁修改；模型/语言发生变化时应重新 OCR。",
+        )
+        text_ocr_group = ttk.LabelFrame(
+            project_page, text="普通文本 OCR（不是 OCR画线）", padding=(12, 9)
+        )
+        text_ocr_group.pack(fill="x", pady=(0, 10))
+        text_ocr_group.columnconfigure(2, weight=1)
+        ocr_engine_var = tk.StringVar(
+            value=OCR_ENGINE_LABELS.get(
+                parent.settings.ocr_engine, OCR_ENGINE_LABELS["tesseract"]
+            )
+        )
+        self.vars["ocr_engine"] = ocr_engine_var
+        ttk.Label(text_ocr_group, text="OCR 引擎：").grid(
+            row=0, column=0, sticky="e", padx=(0, 10), pady=4
+        )
+        ttk.Combobox(
+            text_ocr_group, textvariable=ocr_engine_var,
+            values=tuple(OCR_ENGINE_VALUES), state="readonly", width=28,
+        ).grid(row=0, column=1, sticky="w", pady=4)
+        ttk.Label(
+            text_ocr_group,
+            text="用于“已有横线后再识别整行文本”的普通 OCR 功能；"
+                 "OCR画线使用上一个页签中的多引擎流程，两者不要混淆。",
+            foreground="#666666", wraplength=560, justify="left",
+        ).grid(row=0, column=2, sticky="w", padx=(12, 0), pady=4)
+        project_checks = (
+            ("OCR 后执行替换规则", "ocr_replace"),
+            ("普通 OCR 文本转小写", "lowercase_ocr"),
+        )
+        self._add_check_group(project_page, "普通 OCR 文本处理", project_checks)
+
+        advanced = self._scrollable_settings_page(advanced_tab)
+        self._settings_intro(
+            advanced,
+            "高级 / 专家参数",
+            "这里保留版面语义、OCR 后端和正则规则等底层控制。"
+            "如果只是想提高某本词典的识别率，请优先回到“普通画线 / OCR画线”页或 Project Profile。",
+        )
+        ttk.Button(
+            advanced, text="打开项目 Profile（推荐）…", command=parent.open_project_profile
+        ).pack(anchor="w", pady=(0, 10))
+        self._add_setting_group(advanced, "版面与后端", self.EXPERT_FIELDS)
 
         def _wheel(event) -> str | None:
-            selected_tab = notebook.select()
-            target_canvas = None
-            if selected_tab == str(params_tab):
-                target_canvas = canvas
-            elif selected_tab == str(profile_tab):
-                target_canvas = getattr(self, "profile_canvas", None)
-            if target_canvas is None:
+            selected = notebook.select()
+            target = self._settings_canvases.get(str(selected))
+            if target is None:
                 return None
             if getattr(event, "num", None) == 4:
-                target_canvas.yview_scroll(-3, "units")
+                target.yview_scroll(-3, "units")
             elif getattr(event, "num", None) == 5:
-                target_canvas.yview_scroll(3, "units")
+                target.yview_scroll(3, "units")
             else:
                 delta = getattr(event, "delta", 0)
                 if delta:
-                    target_canvas.yview_scroll(
-                        (-1 if delta > 0 else 1) * max(1, abs(int(delta / 120))) * 3,
+                    target.yview_scroll(
+                        (-1 if delta > 0 else 1)
+                        * max(1, abs(int(delta / 120))) * 3,
                         "units",
                     )
             return "break"
 
-        frame.bind("<Configure>", _sync_scrollregion)
-        canvas.bind("<Configure>", _fit_inner_width)
         self.bind("<MouseWheel>", _wheel)
         self.bind("<Button-4>", _wheel)
         self.bind("<Button-5>", _wheel)
-        frame.columnconfigure(0, weight=1)
-
-        # Clearly separated blocks replace the old flat wall of fields.
-        for group_index, (title, names) in enumerate(self.FIELD_GROUPS):
-            group = ttk.LabelFrame(frame, text=title, padding=(10, 7))
-            group.grid(row=group_index, column=0, sticky="ew", pady=(0, 8))
-            group.columnconfigure(1, weight=1)
-            group.columnconfigure(3, weight=1)
-            for index, name in enumerate(names):
-                label, _cast = self._field_meta[name]
-                row = index // 2
-                column = (index % 2) * 2
-                ttk.Label(group, text=label).grid(row=row, column=column, sticky="e", padx=(0, 7), pady=3)
-                if name not in self.vars:
-                    self.vars[name] = tk.StringVar(value=str(getattr(parent.settings, name)))
-                var = self.vars[name]
-                if name == "ocr_language":
-                    widget = ttk.Combobox(group, textvariable=var, values=self.OCR_LANGUAGES, state="normal", width=23)
-                    widget.bind("<<ComboboxSelected>>", lambda _e: self._refresh_sort_choices())
-                    widget.bind("<FocusOut>", lambda _e: self._refresh_sort_choices())
-                    var.trace_add("write", lambda *_args: self.after_idle(self._refresh_sort_choices))
-                elif name == "paddle_preprocessing":
-                    widget = ttk.Combobox(
-                        group, textvariable=var,
-                        values=("original", "grayscale", "auto_contrast", "binary"),
-                        state="readonly", width=23,
-                    )
-                elif name in {"main_entry_font_family", "review_entry_font_family"}:
-                    families = tuple(sorted(set(font.families()), key=str.casefold))
-                    widget = ttk.Combobox(group, textvariable=var, values=families, state="normal", width=23)
-                elif name == "wordslist_path":
-                    box = ttk.Frame(group)
-                    box.columnconfigure(0, weight=1)
-                    widget = ttk.Entry(box, textvariable=var, width=24)
-                    widget.grid(row=0, column=0, sticky="ew")
-                    ttk.Button(box, text="浏览…", command=lambda v=var: self._browse_wordslist_setting(v)).grid(
-                        row=0, column=1, padx=(5, 0)
-                    )
-                    box.grid(row=row, column=column + 1, sticky="ew", padx=(0, 14), pady=3)
-                    continue
-                else:
-                    widget = ttk.Entry(group, textvariable=var, width=24)
-                widget.grid(row=row, column=column + 1, sticky="ew", padx=(0, 14), pady=3)
-            if title == "主界面词条文本框":
-                style_row = (len(names) + 1) // 2
-                bold_var = tk.BooleanVar(value=bool(parent.settings.main_entry_font_bold))
-                italic_var = tk.BooleanVar(value=bool(parent.settings.main_entry_font_italic))
-                self.vars["main_entry_font_bold"] = bold_var
-                self.vars["main_entry_font_italic"] = italic_var
-                ttk.Label(group, text="字体样式").grid(row=style_row, column=0, sticky="e", padx=(0, 7), pady=3)
-                style_box = ttk.Frame(group)
-                style_box.grid(row=style_row, column=1, columnspan=3, sticky="w", pady=3)
-                ttk.Checkbutton(style_box, text="粗体", variable=bold_var).pack(side="left")
-                ttk.Checkbutton(style_box, text="斜体", variable=italic_var).pack(side="left", padx=(10, 0))
-            elif title == "词条校对文本框":
-                style_row = (len(names) + 1) // 2
-                bold_var = tk.BooleanVar(value=bool(parent.settings.review_entry_font_bold))
-                italic_var = tk.BooleanVar(value=bool(parent.settings.review_entry_font_italic))
-                self.vars["review_entry_font_bold"] = bold_var
-                self.vars["review_entry_font_italic"] = italic_var
-                ttk.Label(group, text="字体样式").grid(row=style_row, column=0, sticky="e", padx=(0, 7), pady=3)
-                style_box = ttk.Frame(group)
-                style_box.grid(row=style_row, column=1, columnspan=3, sticky="w", pady=3)
-                ttk.Checkbutton(style_box, text="粗体", variable=bold_var).pack(side="left")
-                ttk.Checkbutton(style_box, text="斜体", variable=italic_var).pack(side="left", padx=(10, 0))
-
-        combo_group = ttk.LabelFrame(frame, text="识别方式", padding=(10, 7))
-        combo_group.grid(row=len(self.FIELD_GROUPS), column=0, sticky="ew", pady=(0, 8))
-        combo_group.columnconfigure(1, weight=1); combo_group.columnconfigure(3, weight=1)
-        method_var = tk.StringVar(value=DETECTION_LABELS.get(parent.settings.detection_method, DETECTION_LABELS["left_edge"]))
-        self.vars["detection_method"] = method_var
-        ttk.Label(combo_group, text="词条行识别方式").grid(row=0, column=0, sticky="e", padx=(0, 7), pady=3)
-        ttk.Combobox(combo_group, textvariable=method_var, values=tuple(DETECTION_VALUES), state="readonly", width=26).grid(row=0, column=1, sticky="ew", padx=(0, 14), pady=3)
-        ocr_engine_var = tk.StringVar(value=OCR_ENGINE_LABELS.get(parent.settings.ocr_engine, OCR_ENGINE_LABELS["tesseract"]))
-        self.vars["ocr_engine"] = ocr_engine_var
-        ttk.Label(combo_group, text="OCR 引擎").grid(row=0, column=2, sticky="e", padx=(0, 7), pady=3)
-        ttk.Combobox(combo_group, textvariable=ocr_engine_var, values=tuple(OCR_ENGINE_VALUES), state="readonly", width=26).grid(row=0, column=3, sticky="ew", padx=(0, 14), pady=3)
-        lens_mode_var = tk.StringVar(value=LENS_MODE_LABELS.get(parent.settings.paddle_lens_mode, LENS_MODE_LABELS["conflict"]))
-        self.vars["paddle_lens_mode"] = lens_mode_var
-        ttk.Label(combo_group, text="Google Lens 模式").grid(row=1, column=0, sticky="e", padx=(0, 7), pady=3)
-        ttk.Combobox(combo_group, textvariable=lens_mode_var, values=tuple(LENS_MODE_VALUES), state="readonly", width=30).grid(row=1, column=1, sticky="ew", padx=(0, 14), pady=3)
-
-        check_start = len(self.FIELD_GROUPS) + 1
-        for offset, (title, checks) in enumerate(self.CHECK_GROUPS):
-            group = ttk.LabelFrame(frame, text=title, padding=(10, 7))
-            group.grid(row=check_start + offset, column=0, sticky="ew", pady=(0, 8))
-            for index, (label, name) in enumerate(checks):
-                var = tk.BooleanVar(value=bool(getattr(parent.settings, name)))
-                self.vars[name] = var
-                ttk.Checkbutton(group, text=label, variable=var).grid(
-                    row=index // 2, column=index % 2, sticky="w", padx=(0, 18), pady=2
-                )
-            group.columnconfigure(0, weight=1); group.columnconfigure(1, weight=1)
 
         # Language-aware collation tab.
         sort_tab.columnconfigure(0, weight=1)
@@ -1383,7 +1911,11 @@ class SettingsDialog(tk.Toplevel):
                 _var.trace_add("write", lambda *_args: self._schedule_autosave())
             except Exception:
                 pass
-        self.update_idletasks(); _sync_scrollregion()
+        self.update_idletasks()
+        for _canvas in self._settings_canvases.values():
+            _bbox = _canvas.bbox("all")
+            if _bbox:
+                _canvas.configure(scrollregion=_bbox)
         self.transient(parent); self.grab_set()
 
     def _build_project_details_tab(self, tab: ttk.Frame) -> None:
@@ -1680,7 +2212,11 @@ class SettingsDialog(tk.Toplevel):
         self._refresh_profile_status()
 
     def _current_profile_key(self) -> str:
-        return self._profile_label_to_key.get(self.profile_choice_var.get(), self._active_profile_key or DEFAULT_PROFILE_ID)
+        if hasattr(self, "profile_choice_var"):
+            return self._profile_label_to_key.get(
+                self.profile_choice_var.get(), self._active_profile_key or DEFAULT_PROFILE_ID
+            )
+        return str(self._active_profile_key or self.parent.settings.dictionary_profile_id or DEFAULT_PROFILE_ID)
 
     def _refresh_profile_summary(self) -> None:
         profile = dictionary_profile_preset(self._current_profile_key())
@@ -1943,7 +2479,11 @@ class SettingsDialog(tk.Toplevel):
             }
             for name, var in self.vars.items():
                 value = var.get()
-                if name in self._casts:
+                if name in self.SETTING_CHOICES:
+                    raw_value = self.SETTING_CHOICES[name].get(str(value), str(value))
+                    cast = self._casts.get(name, str)
+                    setattr(self.parent.settings, name, cast(raw_value))
+                elif name in self._casts:
                     setattr(self.parent.settings, name, self._casts[name](value))
                 elif name == "detection_method":
                     self.parent.settings.detection_method = DETECTION_VALUES[str(value)]
@@ -6212,7 +6752,7 @@ class PictureCaptureApp(tk.Tk):
         parameter_row.pack(fill="x", pady=(4, 0))
         for index, (label, command) in enumerate((
             ("项目Profile", self.open_project_profile),
-            ("更多参数", self.open_settings),
+            ("设置中心", self.open_settings),
             ("保存参数", self.save_main_parameters),
             ("使用提示", self.show_help_dialog),
         )):
@@ -6852,31 +7392,36 @@ class PictureCaptureApp(tk.Tk):
         add_field(normal, 1, 6, "行间空：", "row_padding", int)
         row = ttk.Frame(normal); row.grid(row=2, column=0, columnspan=8, sticky="ew", pady=(4, 0))
         ttk.Button(
-            row, text="检测引擎", command=self.check_ocr_engines, style="PC.Compact.TButton"
+            row, text="检测版面参数", command=self.detect_layout_current,
+            style="PC.Compact.TButton",
         ).pack(side="left", fill="x", expand=True)
         ttk.Button(
-            row, text="检测版面参数", command=self.detect_layout_current,
+            row, text="检测版面一致性", command=self.detect_layout_consistency_selected,
             style="PC.Compact.TButton",
         ).pack(side="left", fill="x", expand=True, padx=(5, 0))
         ttk.Button(
-            row, text="检测版面一致性", command=self.detect_layout_consistency_selected,
+            row, text="普通画线设置…",
+            command=lambda: self.open_settings(initial_tab="normal"),
             style="PC.Compact.TButton",
         ).pack(side="left", fill="x", expand=True, padx=(5, 0))
         for col in (1, 3, 5, 7): normal.columnconfigure(col, weight=1)
 
         ocr = self._section_frame(parent, "二、基于OCR画线（默认模式）", padding=5, section_key="ocr")
         ocr.pack(fill="x", pady=(4, 0))
-        self.ocr_refresh_var = tk.StringVar(value="force")
-        ttk.Label(ocr, text="方式：").grid(row=0, column=0, sticky="w")
-        ttk.Radiobutton(ocr, text="①复用缓存", variable=self.ocr_refresh_var, value="reuse").grid(row=0, column=1, sticky="w")
-        ttk.Radiobutton(ocr, text="②强制重新识别", variable=self.ocr_refresh_var, value="force").grid(row=0, column=2, columnspan=4, sticky="w")
+        self.ocr_refresh_var = tk.StringVar(value="reuse")
+        ttk.Label(ocr, text="识别策略：").grid(row=0, column=0, sticky="w")
+        ttk.Radiobutton(
+            ocr, text="使用有效缓存（推荐）",
+            variable=self.ocr_refresh_var, value="reuse",
+        ).grid(row=0, column=1, columnspan=2, sticky="w")
+        ttk.Radiobutton(
+            ocr, text="重新OCR（模型/图像改变时）",
+            variable=self.ocr_refresh_var, value="force",
+        ).grid(row=0, column=3, columnspan=3, sticky="w")
         add_field(ocr, 1, 0, "OCR语言：", "ocr_language", str, 8)
-        add_field(ocr, 1, 2, "候选带宽比例：", "paddle_band_width_ratio", int, 7)
+        add_field(ocr, 1, 2, "识别带宽%：", "paddle_band_width_ratio", int, 7)
         add_field(ocr, 1, 4, "左缘容差：", "paddle_left_tolerance", int, 7)
-        add_field(ocr, 2, 0, "候选置信度：", "paddle_rec_score_threshold", float, 8)
-        add_field(ocr, 2, 2, "最低候选分：", "paddle_min_candidate_score", float, 7)
-        ttk.Label(ocr, text="%（最大100）").grid(row=2, column=4, columnspan=2, sticky="w")
-        engine_row = ttk.Frame(ocr); engine_row.grid(row=3, column=0, columnspan=6, sticky="ew", pady=(4, 1))
+        engine_row = ttk.Frame(ocr); engine_row.grid(row=2, column=0, columnspan=6, sticky="ew", pady=(4, 1))
         ttk.Label(engine_row, text="OCR引擎：").pack(side="left")
         for text, name in (("PaddleOCR", "paddle_use_paddleocr"), ("Tesseract", "paddle_compare_tesseract"), ("Google Lens", "paddle_enable_lens")):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
@@ -6884,7 +7429,7 @@ class PictureCaptureApp(tk.Tk):
         self.lens_mode_var = tk.StringVar(
             value=LENS_MODE_LABELS.get(self.settings.paddle_lens_mode, LENS_MODE_LABELS["off"])
         )
-        lens_row = ttk.Frame(ocr); lens_row.grid(row=4, column=0, columnspan=6, sticky="ew")
+        lens_row = ttk.Frame(ocr); lens_row.grid(row=3, column=0, columnspan=6, sticky="ew")
         ttk.Label(lens_row, text="Lens模式：").pack(side="left")
         ttk.Combobox(
             lens_row, textvariable=self.lens_mode_var, values=tuple(LENS_MODE_VALUES),
@@ -6896,6 +7441,17 @@ class PictureCaptureApp(tk.Tk):
         self.quick_field_casts["paddle_separator_safety_px"] = int
         ttk.Entry(lens_row, textvariable=safety_var, width=4).pack(side="left", padx=(2, 2))
         ttk.Label(lens_row, text="px").pack(side="left")
+        ocr_tools = ttk.Frame(ocr)
+        ocr_tools.grid(row=4, column=0, columnspan=6, sticky="ew", pady=(4, 0))
+        ttk.Button(
+            ocr_tools, text="检测 OCR 引擎", command=self.check_ocr_engines,
+            style="PC.Compact.TButton",
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(
+            ocr_tools, text="OCR画线设置…",
+            command=lambda: self.open_settings(initial_tab="ocr"),
+            style="PC.Compact.TButton",
+        ).pack(side="left", fill="x", expand=True, padx=(5, 0))
         for col in (1, 3, 5): ocr.columnconfigure(col, weight=1)
 
         aux = self._section_frame(parent, "三、辅助选项及框线色块", padding=5, section_key="aux")
@@ -11089,9 +11645,10 @@ class PictureCaptureApp(tk.Tk):
         def worker(index: int, _position: int, _total: int):
             page = project.images[index]
             if normal_executor is not None:
-                return normal_executor.submit(
+                count = normal_executor.submit(
                     detect_entries_job, str(page), settings, pages_info[index], index
                 ).result()
+                return {"index": int(index), "count": int(count)}
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
             cache_path = ocr_cache_root(project.root) / f"{page.stem}.json" if method == "paddleocr" else None
@@ -11102,23 +11659,60 @@ class PictureCaptureApp(tk.Tk):
                 profile_page_index=index,
             )
             write_pdic(pdic_path(page), entries, image.width, pages_info[index])
-            return len(entries)
+            return {"index": int(index), "count": len(entries)}
 
-        def done(completed, total, stopped, _results, error):
+        def done(completed, total, stopped, results, error):
             if normal_executor is not None:
                 normal_executor.shutdown(wait=False, cancel_futures=True)
             if error is not None:
                 return
             self.load_page(self.current_index)
+            quality_text = ""
             if method == "paddleocr":
                 self._refresh_page_quality_colors()
+                quality_text = "；页面列表已按 OCR 一致性/质量状态更新"
+            else:
+                rows = [
+                    value for value in results
+                    if isinstance(value, dict)
+                    and isinstance(value.get("count"), (int, float))
+                    and int(value.get("count", -1)) >= 0
+                ]
+                counts = [int(row["count"]) for row in rows]
+                median_count = float(statistics.median(counts)) if counts else 0.0
+                suspect_rows: list[dict] = []
+                for row in rows:
+                    count = int(row["count"])
+                    if count == 0:
+                        suspect_rows.append(row)
+                    elif len(counts) >= 5 and median_count >= 8:
+                        if count < median_count * 0.45 or count > median_count * 1.80:
+                            suspect_rows.append(row)
+                if counts:
+                    quality_text = f"；每页画线数中位数 {median_count:g}"
+                if suspect_rows:
+                    names = [
+                        project.images[int(row["index"])].name
+                        for row in suspect_rows[:3]
+                        if 0 <= int(row.get("index", -1)) < len(project.images)
+                    ]
+                    more = "…" if len(suspect_rows) > 3 else ""
+                    quality_text += (
+                        f"；{len(suspect_rows)} 页画线数异常，建议优先复核"
+                        + (f"（{', '.join(names)}{more}）" if names else "")
+                    )
             suffix = "（强制重新识别）" if method == "paddleocr" and force_refresh else ""
             skipped = int(getattr(self, "_batch_skipped_count", 0))
             skip_text = f"，人工锁定跳过 {skipped} 页" if skipped else ""
             if stopped:
-                self.status_var.set(f"{label}{suffix}已停止：处理进度 {completed}/{total}{skip_text}；结果已保留")
+                self.status_var.set(
+                    f"{label}{suffix}已停止：处理进度 {completed}/{total}{skip_text}；"
+                    f"结果已保留{quality_text}"
+                )
             else:
-                self.status_var.set(f"{label}{suffix}完成：{completed}/{total}{skip_text}")
+                self.status_var.set(
+                    f"{label}{suffix}完成：{completed}/{total}{skip_text}{quality_text}"
+                )
 
         started = self._start_batch_task(
             label, indices, worker, done,
