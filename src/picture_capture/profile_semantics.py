@@ -392,6 +392,24 @@ def excluded_source_side(settings: AppSettings, page_index: int) -> str | None:
     return "right" if outer == "left" else "left"
 
 
+def excluded_source_side_percent(settings: AppSettings, page_index: int) -> float:
+    """Return the physical page-edge exclusion width for this scan variant."""
+    mode = str(getattr(settings, "profile_side_content_mode", "none") or "none")
+    if mode in {"outer", "inner"}:
+        variant = page_variant(settings, page_index)
+        name = "profile_side_percent_a" if variant == "A" else "profile_side_percent_b"
+        value = getattr(
+            settings, name,
+            getattr(settings, "profile_side_percent", 8.0),
+        )
+    else:
+        value = getattr(settings, "profile_side_percent", 8.0)
+    try:
+        return max(0.0, min(30.0, float(value)))
+    except (TypeError, ValueError):
+        return 8.0
+
+
 def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], page_index: int = 0) -> AppSettings:
     """Return a per-page copy with intuitive header/footer template applied."""
     current = replace(settings)
@@ -452,7 +470,7 @@ def page_template_analysis_image(
 
     side = excluded_source_side(settings, page_index)
     if side is not None:
-        pct = max(0.0, min(30.0, float(getattr(settings, "profile_side_percent", 8.0))))
+        pct = excluded_source_side_percent(settings, page_index)
         margin = max(0, min(width, round(width * pct / 100.0)))
         if margin > 0:
             if side == "left":
