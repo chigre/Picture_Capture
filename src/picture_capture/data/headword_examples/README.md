@@ -1,33 +1,16 @@
-# Project Profile headword example crops
+# Project Profile 经典词头局部样例包
 
-Wizard step ③ shows real, locally cropped dictionary examples in the right image pane.
+本包用于 `src/picture_capture/data/headword_examples/`。
 
-The packaged examples are stored in a compact atlas:
+## recommended_current
+这 9 个文件名与当前程序的经典样例命名完全一致，可直接复制到 `headword_examples` 目录。个别文件若与现有 atlas 同名，将优先于 atlas 显示。
 
-- `classic_headword_examples.jpg`
-- canvas: 720 × 316
-- grid: 3 columns × 3 rows
-- each cell: 360 × 158
+## extended
+从 `DICs_for_test.zip` 中进一步裁出的扩展样例，覆盖德/英/西/意/葡/阿汉以及多种 CJK 字典版式。用于后续扩展 `validated_examples` 或手动挑选替换。
 
-Atlas cells, in reading order:
+## 原则
+- 均为真实测试词典页面的局部裁切，不使用整页缩略图替代。
+- 每张保留 1–数个完整词头及少量相邻释义，使“哪里是新词条”一眼可见。
+- 自定义结构不放固定经典样例，因为它定义上就是预设无法覆盖的版式。
 
-1. `latin_regular_NewApproach`
-2. `latin_regular_LDER`
-3. `numbered_prefix_RUIGO`
-4. `cjk_visual_HZYLDZD`
-5. `cjk_visual_XDHYCD`
-6. `cjk_visual_TimesCED`
-7. `cjk_visual_shueisha`
-8. `edge_visual_regular_XAHDCD`
-9. `marker_prefixed_HanYi`
-
-These are tight local crops from the real test dictionaries, not full-page screenshots. Each crop keeps the headword and enough neighboring definition text to make the entry boundary understandable.
-
-Individual files remain supported and override the atlas when present. Lookup order is:
-
-1. `<profile_key>_<dictionary_name>.png/jpg/jpeg/webp`
-2. `<dictionary_name>.png/jpg/jpeg/webp`
-3. `<profile_key>.png/jpg/jpeg/webp`
-4. bundled atlas cell
-
-`custom` intentionally has no fixed classic example because it represents layouts not covered by the predefined structure families; users can start from the closest preset and then customize parser checkboxes.
+`contact_sheet.jpg` 用于快速总览，`manifest.csv/json` 记录分类与来源。

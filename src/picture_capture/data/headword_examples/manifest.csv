@@ -1,0 +1,27 @@
+﻿file,profile,dictionary,source,crop_box,size
+recommended_current/marker_prefixed_HanYi.jpg,marker_prefixed,marker_prefixed_HanYi,previously prepared from supplied dictionary test material,see original crop,
+recommended_current/edge_visual_regular_XAHDCD.jpg,edge_visual_regular,edge_visual_regular_XAHDCD,previously supplied XAHDCD sample set,see original crop,
+recommended_current/cjk_visual_shueisha.jpg,cjk_visual,cjk_visual_shueisha,previously prepared from supplied dictionary test material,see original crop,
+recommended_current/cjk_visual_TimesCED.jpg,cjk_visual,cjk_visual_TimesCED,previously prepared from supplied dictionary test material,see original crop,
+recommended_current/cjk_visual_XDHYCD.jpg,cjk_visual,cjk_visual_XDHYCD,previously prepared from supplied dictionary test material,see original crop,
+recommended_current/cjk_visual_HZYLDZD.jpg,cjk_visual,cjk_visual_HZYLDZD,previously prepared from supplied dictionary test material,see original crop,
+recommended_current/numbered_prefix_RUIGO.jpg,numbered_prefix,numbered_prefix_RUIGO,previously prepared from supplied dictionary test material,see original crop,
+recommended_current/latin_regular_LDER.jpg,latin_regular,latin_regular_LDER,previously prepared from supplied dictionary test material,see original crop,
+recommended_current/latin_regular_NewApproach.jpg,latin_regular,latin_regular_NewApproach,previously prepared from supplied dictionary test material,see original crop,
+extended/latin_regular_Langenscheidt.jpg,latin_regular,朗氏德汉,DE-ZH_朗氏德汉_0026.tif,"(36, 216, 882, 756)","(846, 540)"
+extended/latin_regular_RandomHouse.jpg,latin_regular,兰登书屋英汉,EN-ZH_兰登书屋英汉_0006.png,"(72, 447, 1753, 1507)","(1031, 650)"
+extended/latin_regular_FarEast.jpg,latin_regular,远东英汉,EN-ZH_远东英汉_0008.png,"(64, 384, 1568, 1296)","(1072, 650)"
+extended/latin_regular_Webster.jpg,latin_regular,韦氏高阶英汉双解,EN-ZH_韦氏高阶英汉双解_0006.png,"(41, 227, 1011, 795)","(970, 568)"
+extended/latin_regular_Spanish.jpg,latin_regular,新西汉,ES-ZH_新西汉_0012.png,"(30, 227, 741, 680)","(711, 453)"
+extended/latin_regular_Italian.jpg,latin_regular,意汉词典,IT-ZH_意汉词典_010.png,"(38, 222, 936, 777)","(898, 555)"
+extended/latin_regular_Portuguese.jpg,latin_regular,葡汉词典,PT-ZH_葡汉词典_0382.png,"(38, 217, 933, 760)","(895, 543)"
+extended/numbered_prefix_LDER.jpg,numbered_prefix,LDER（编号式）,EN-ZH_LDER_0005.png,"(0, 130, 1063, 666)","(1063, 536)"
+extended/cjk_visual_HYDZD.jpg,cjk_visual,汉语大字典,ZH-ZH_汉语大字典_0120.jpg,"(87, 2133, 2140, 5667)","(378, 650)"
+extended/cjk_visual_Sanmin.jpg,cjk_visual,三民大辞典,ZH-ZH_三民大辞典_0206.png,"(1360, 2074, 2560, 5299)","(242, 650)"
+extended/cjk_visual_GudaiHanyu.jpg,cjk_visual,古代汉语,ZH-ZH_古代汉语_0003.png,"(0, 186, 725, 1044)","(549, 650)"
+extended/cjk_visual_Ciyuan.jpg,cjk_visual,辞源,ZH-ZH_辞源_0670.tif,"(0, 5457, 2159, 7864)","(583, 650)"
+extended/cjk_visual_Guangzhou.jpg,cjk_visual,广州话正音,ZH-ZH_广州话正音_0600.png,"(0, 280, 1275, 1760)","(560, 650)"
+extended/cjk_visual_HZYLJX.jpg,cjk_visual,汉字源流精解字典,ZH-ZH_汉字源流精解字典_0002.png,"(0, 153, 875, 969)","(697, 650)"
+extended/marker_prefixed_HanYi_from_DICs.jpg,marker_prefixed,汉意大词典,ZH-IT_汉意大词典_0020.png,"(0, 166, 1292, 1775)","(522, 650)"
+extended/edge_visual_regular_Arabic.jpg,edge_visual_regular,新阿汉大词典,AR-ZH_新阿汉大词典_.png,"(950, 134, 1881, 911)","(779, 650)"
+extended/edge_visual_regular_TimesCED.jpg,edge_visual_regular,Times Chinese-English Dictionary,EN-ZH_TimesCED_0003.jpg,"(0, 1009, 885, 1863)","(674, 650)"
