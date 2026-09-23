@@ -240,7 +240,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.update_idletasks()
         screen_w = max(800, int(self.winfo_screenwidth()))
         work_x, work_y, work_w, work_h = _screen_work_area(self)
-        width = min(work_w, max(960, int(screen_w * 0.80)))
+        width = min(work_w, max(720, int(screen_w * 0.80)))
         height = work_h
         x = max(work_x, work_x + work_w - width)
         y = work_y
