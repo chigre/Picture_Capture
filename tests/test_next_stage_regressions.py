@@ -165,7 +165,7 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     assert "self.profile_canvas = profile_canvas" in profile
     assert "profile_scrollbar" in profile
     assert 'text="自定义结构名称："' in profile
-    assert 'self.open_settings(initial_tab="profile")' in text
+    assert "ProjectProfileWizard(self, new_project=new_project)" in text
 
 
 def test_binary_preview_and_font_scaling_are_display_only():
