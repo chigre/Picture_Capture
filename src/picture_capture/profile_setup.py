@@ -119,6 +119,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._validation_running = False
         self._analysis_running = False
         self._analysis_suggestion: dict[str, object] = {}
+        self._analysis_auto_apply = False
         self._analysis_queue: queue.Queue | None = None
         self._validation_queue: queue.Queue | None = None
         self.sample_indices = sample_page_indices(len(self.project.images), 6)
@@ -130,8 +131,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_language_summary()
         self._refresh_summary()
 
-        if self.new_project or int(getattr(parent.settings, "profile_setup_version", 0) or 0) < PROFILE_SETUP_VERSION:
-            self.after(350, self.analyze_representative_pages)
+        # Representative-page analysis starts after the user confirms reading
+        # direction and enters step 2. This avoids analyzing a vertical/RTL
+        # dictionary with an incorrect default transform.
 
     def _build_vars(self) -> None:
         s = self.working
@@ -472,6 +474,10 @@ class ProjectProfileWizard(tk.Toplevel):
         return self.profile_label_to_key.get(self.headword_profile_var.get(), "custom")
 
     def _reading_changed(self) -> None:
+        if hasattr(self, "analysis_suggestion_var") and self._analysis_suggestion:
+            self._analysis_suggestion = {}
+            self.analysis_suggestion_var.set("阅读方向已改变，请重新分析代表页。")
+            self.apply_analysis_button.configure(state="disabled")
         self._refresh_language_summary()
         self._refresh_summary()
 
@@ -521,16 +527,16 @@ class ProjectProfileWizard(tk.Toplevel):
     def _settings_from_ui(self) -> AppSettings:
         s = replace(self.working)
         apply_reading_choice(s, self.reading_var.get())
-        s.layout_columns_policy = self.columns_policy_var.get()
+        s.layout_columns_policy = "fixed"
         s.columns = max(1, int(self.columns_var.get()))
         s.layout_column_separator_mode = SEPARATOR_LABEL_TO_VALUE.get(
             self.separator_var.get(), "auto"
         )
-        s.profile_header_mode = HEADER_FOOTER_LABEL_TO_VALUE.get(
+        s.profile_header_mode = HEADER_LABEL_TO_VALUE.get(
             self.header_mode_var.get(), "auto"
         )
-        s.profile_footer_mode = HEADER_FOOTER_LABEL_TO_VALUE.get(
-            self.footer_mode_var.get(), "auto"
+        s.profile_footer_mode = FOOTER_LABEL_TO_VALUE.get(
+            self.footer_mode_var.get(), "none"
         )
         s.profile_side_content_mode = SIDE_LABEL_TO_VALUE.get(
             self.side_mode_var.get(), "none"
@@ -585,11 +591,14 @@ class ProjectProfileWizard(tk.Toplevel):
         current = self.notebook.index(self.notebook.select())
         target = max(0, min(len(self.tabs) - 1, current + int(delta)))
         self.notebook.select(self.tabs[target])
+        if current == 0 and target == 1 and not self._analysis_suggestion and not self._analysis_running:
+            self.analyze_representative_pages(auto_apply=True)
 
-    def analyze_representative_pages(self) -> None:
+    def analyze_representative_pages(self, auto_apply: bool = False) -> None:
         if self._analysis_running or not self.sample_indices:
             return
         self._analysis_running = True
+        self._analysis_auto_apply = bool(auto_apply)
         self.analyze_button.configure(state="disabled")
         self.analysis_suggestion_var.set("正在分析代表页版面…")
         settings = self._settings_from_ui()
