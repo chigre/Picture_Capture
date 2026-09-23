@@ -2345,46 +2345,60 @@ class ReviewWindow(tk.Toplevel):
     def _build(self) -> None:
         panes = ttk.Panedwindow(self, orient="horizontal")
         panes.pack(fill="both", expand=True)
-        left = ttk.Frame(panes)
-        right = ttk.Frame(panes, padding=(8, 6))
+        left = ttk.Frame(panes, style="PCR.Surface.TFrame")
+        right = ttk.Frame(panes, padding=(8, 6), style="PCR.Surface.TFrame")
         panes.add(left, weight=3)
         panes.add(right, weight=2)
 
         # Left: high-frequency review actions first; low-frequency helpers stay folded.
-        controls = ttk.Frame(left, padding=(6, 6, 6, 3))
+        controls = ttk.Frame(left, padding=(7, 6, 7, 4), style="PCR.Toolbar.TFrame")
         controls.pack(fill="x")
-        row1 = ttk.Frame(controls)
+        row1 = ttk.Frame(controls, style="PCR.Toolbar.TFrame")
         row1.pack(fill="x", pady=(0, 4))
-        ttk.Button(row1, text="保存", command=self.save).pack(side="left")
+        self._review_flat_button(row1, "保存", self.save, role="primary").pack(side="left")
         self._sync_autosave_label()
         ttk.Checkbutton(
             row1, textvariable=self.autosave_label_var, variable=self.parent.autosave_var,
             command=self._toggle_shared_autosave,
         ).pack(side="left", padx=(6, 0))
         ttk.Checkbutton(row1, text="数字替换映射", variable=self.replace_digits).pack(side="left", padx=(8, 0))
-        ttk.Label(row1, text="文本左边距：").pack(side="left", padx=(10, 2))
+        ttk.Label(
+            row1, text="文本左边距：", style="PCR.Toolbar.TLabel"
+        ).pack(side="left", padx=(10, 2))
         self.review_left_padding_spin = ttk.Spinbox(
-            row1, from_=0, to=80, increment=1, width=4, textvariable=self.review_left_padding_var
+            row1, from_=0, to=80, increment=1, width=4,
+            textvariable=self.review_left_padding_var, style="PCR.Compact.TSpinbox",
         )
         self.review_left_padding_spin.pack(side="left")
-        ttk.Label(row1, text="px").pack(side="left", padx=(2, 0))
-        ttk.Label(row1, text="上下边距：").pack(side="left", padx=(10, 2))
+        ttk.Label(row1, text="px", style="PCR.Toolbar.TLabel").pack(side="left", padx=(2, 0))
+        ttk.Label(
+            row1, text="上下边距：", style="PCR.Toolbar.TLabel"
+        ).pack(side="left", padx=(10, 2))
         self.review_vertical_padding_spin = ttk.Spinbox(
-            row1, from_=0, to=30, increment=1, width=4, textvariable=self.review_vertical_padding_var
+            row1, from_=0, to=30, increment=1, width=4,
+            textvariable=self.review_vertical_padding_var, style="PCR.Compact.TSpinbox",
         )
         self.review_vertical_padding_spin.pack(side="left")
-        ttk.Label(row1, text="px").pack(side="left", padx=(2, 0))
+        ttk.Label(row1, text="px", style="PCR.Toolbar.TLabel").pack(side="left", padx=(2, 0))
 
-        row2 = ttk.Frame(controls)
+        row2 = ttk.Frame(controls, style="PCR.Toolbar.TFrame")
         row2.pack(fill="x")
-        ttk.Button(row2, text="排序规则", command=self.open_sort_rules).pack(side="left")
+        ttk.Button(
+            row2, text="排序规则", command=self.open_sort_rules, style="PCR.Compact.TButton"
+        ).pack(side="left")
         ttk.Radiobutton(row2, text="当前页", variable=self.order_scope_var, value="current").pack(side="left", padx=(8, 0))
         ttk.Radiobutton(row2, text="所有页", variable=self.order_scope_var, value="all").pack(side="left", padx=(4, 0))
-        ttk.Button(row2, text="排序检查", width=7, command=self.run_order_check).pack(side="left", padx=(5, 0))
-        ttk.Label(row2, text="与OCR比较：").pack(side="left", padx=(10, 2))
+        ttk.Button(
+            row2, text="排序检查", width=7, command=self.run_order_check,
+            style="PCR.Compact.TButton",
+        ).pack(side="left", padx=(5, 0))
+        ttk.Label(
+            row2, text="与OCR比较：", style="PCR.Toolbar.TLabel"
+        ).pack(side="left", padx=(10, 2))
         self.review_ocr_compare_combo = ttk.Combobox(
             row2, textvariable=self.review_ocr_compare_var,
             values=tuple(self.OCR_COMPARE_LABEL_TO_KEY), state="readonly", width=10,
+            style="PCR.Compact.TCombobox",
         )
         self.review_ocr_compare_combo.pack(side="left")
         self.review_ocr_compare_combo.bind("<<ComboboxSelected>>", self._change_review_ocr_compare_source)
@@ -2392,16 +2406,27 @@ class ReviewWindow(tk.Toplevel):
             row2, text="简化", variable=self.review_show_simplified_var,
             command=self._toggle_review_simplified,
         ).pack(side="left", padx=(8, 0))
+        ttk.Separator(controls, orient="horizontal").pack(fill="x", pady=(5, 0))
 
         # Default-collapsed numeric map.
-        self.digit_panel = ttk.Frame(left, padding=(6, 0, 6, 2))
+        self.digit_panel = ttk.Frame(
+            left, padding=(7, 1, 7, 2), style="PCR.Surface.TFrame"
+        )
         self.digit_panel.pack(fill="x")
-        self.digit_panel_title = tk.StringVar(value="▶ 数字替换映射")
-        ttk.Button(
-            self.digit_panel, textvariable=self.digit_panel_title,
-            command=lambda: self._toggle_review_panel("digit")
-        ).pack(fill="x")
-        self.digit_panel_body = ttk.Frame(self.digit_panel, padding=(5, 3))
+        self.digit_panel_title = tk.StringVar(value="▸ 数字替换映射")
+        self.digit_panel_toggle = ttk.Label(
+            self.digit_panel,
+            textvariable=self.digit_panel_title,
+            style="PCR.SectionTitle.TLabel",
+            cursor="hand2",
+        )
+        self.digit_panel_toggle.pack(fill="x")
+        self.digit_panel_toggle.bind(
+            "<Button-1>", lambda _event: self._toggle_review_panel("digit")
+        )
+        self.digit_panel_body = ttk.Frame(
+            self.digit_panel, padding=(5, 3), style="PCR.Surface.TFrame"
+        )
         for index, digit in enumerate(self.DIGIT_KEYS):
             row = index // 5
             col = (index % 5) * 2
@@ -2411,14 +2436,24 @@ class ReviewWindow(tk.Toplevel):
             ).grid(row=row, column=col + 1, padx=(0, 6), pady=1, sticky="w")
 
         # Default-collapsed grouped character palette.
-        self.accent_panel = ttk.Frame(left, padding=(6, 0, 6, 4))
+        self.accent_panel = ttk.Frame(
+            left, padding=(7, 0, 7, 4), style="PCR.Surface.TFrame"
+        )
         self.accent_panel.pack(fill="x")
-        self.accent_panel_title = tk.StringVar(value="▶ 变音字符")
-        ttk.Button(
-            self.accent_panel, textvariable=self.accent_panel_title,
-            command=lambda: self._toggle_review_panel("accent")
-        ).pack(fill="x")
-        self.accent_panel_body = ttk.Frame(self.accent_panel, padding=(5, 3))
+        self.accent_panel_title = tk.StringVar(value="▸ 变音字符")
+        self.accent_panel_toggle = ttk.Label(
+            self.accent_panel,
+            textvariable=self.accent_panel_title,
+            style="PCR.SectionTitle.TLabel",
+            cursor="hand2",
+        )
+        self.accent_panel_toggle.pack(fill="x")
+        self.accent_panel_toggle.bind(
+            "<Button-1>", lambda _event: self._toggle_review_panel("accent")
+        )
+        self.accent_panel_body = ttk.Frame(
+            self.accent_panel, padding=(5, 3), style="PCR.Surface.TFrame"
+        )
         for group_index, (label, chars) in enumerate(self.ACCENT_GROUPS):
             row = group_index // 2
             base_col = (group_index % 2) * 7
