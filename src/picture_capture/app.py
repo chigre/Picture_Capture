@@ -10364,6 +10364,10 @@ class PictureCaptureApp(tk.Tk):
         if not self.project:
             messagebox.showinfo("尚未打开", "请先打开或新建词典项目。", parent=self)
             return
+        # Keep the wizard's working copy aligned with any unsaved/debounced
+        # quick-panel edits made immediately before opening Project Profile.
+        if not self.apply_quick_settings(show_status=False, persist=False, silent_errors=True):
+            return
         existing = self.__dict__.get("_project_profile_wizard")
         if existing is not None:
             try:
