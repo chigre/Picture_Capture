@@ -211,16 +211,40 @@ class ProjectProfileWizard(tk.Toplevel):
         self.notebook = ttk.Notebook(outer)
         self.notebook.grid(row=2, column=0, sticky="nsew")
         self.tabs: list[ttk.Frame] = []
+        self.tab_contents: list[ttk.Frame] = []
+        self.tab_canvases: list[tk.Canvas] = []
         for label in ("1 阅读方式", "2 页面模板", "3 词头结构", "4 语言与 OCR", "5 测试与确认"):
-            frame = ttk.Frame(self.notebook, padding=12)
-            self.notebook.add(frame, text=label)
-            self.tabs.append(frame)
+            host = ttk.Frame(self.notebook)
+            host.rowconfigure(0, weight=1)
+            host.columnconfigure(0, weight=1)
+            canvas = tk.Canvas(host, highlightthickness=0, borderwidth=0)
+            scrollbar = ttk.Scrollbar(host, orient="vertical", command=canvas.yview)
+            canvas.configure(yscrollcommand=scrollbar.set)
+            canvas.grid(row=0, column=0, sticky="nsew")
+            scrollbar.grid(row=0, column=1, sticky="ns")
+            content = ttk.Frame(canvas, padding=12)
+            window = canvas.create_window((0, 0), window=content, anchor="nw")
+            content.bind(
+                "<Configure>",
+                lambda _event, cv=canvas: cv.configure(scrollregion=cv.bbox("all")),
+            )
+            canvas.bind(
+                "<Configure>",
+                lambda event, cv=canvas, item=window: cv.itemconfigure(item, width=event.width),
+            )
+            self.notebook.add(host, text=label)
+            self.tabs.append(host)
+            self.tab_contents.append(content)
+            self.tab_canvases.append(canvas)
 
-        self._build_reading_tab(self.tabs[0])
-        self._build_template_tab(self.tabs[1])
-        self._build_headword_tab(self.tabs[2])
-        self._build_language_tab(self.tabs[3])
-        self._build_validation_tab(self.tabs[4])
+        self._build_reading_tab(self.tab_contents[0])
+        self._build_template_tab(self.tab_contents[1])
+        self._build_headword_tab(self.tab_contents[2])
+        self._build_language_tab(self.tab_contents[3])
+        self._build_validation_tab(self.tab_contents[4])
+        self.bind("<MouseWheel>", self._wizard_mousewheel, add="+")
+        self.bind("<Button-4>", lambda event: self._wizard_linux_wheel(event, -1), add="+")
+        self.bind("<Button-5>", lambda event: self._wizard_linux_wheel(event, 1), add="+")
 
         summary_box = ttk.LabelFrame(outer, text="当前 Project Profile", padding=(8, 5))
         summary_box.grid(row=3, column=0, sticky="ew", pady=(8, 0))
@@ -233,6 +257,34 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Button(footer, text="下一步", command=lambda: self._move_step(1)).pack(side="left", padx=(6, 0))
         ttk.Button(footer, text="取消", command=self._close_without_save).pack(side="right")
         ttk.Button(footer, text="确认并使用", command=self.save_and_close).pack(side="right", padx=(0, 8))
+
+    def _active_tab_canvas(self) -> tk.Canvas | None:
+        try:
+            index = self.notebook.index(self.notebook.select())
+            return self.tab_canvases[index]
+        except (tk.TclError, ValueError, IndexError):
+            return None
+
+    def _wizard_mousewheel(self, event) -> str | None:
+        if isinstance(event.widget, (tk.Spinbox, ttk.Combobox)):
+            return None
+        canvas = self._active_tab_canvas()
+        if canvas is None:
+            return None
+        delta = int(getattr(event, "delta", 0) or 0)
+        if not delta:
+            return None
+        canvas.yview_scroll((-1 if delta > 0 else 1) * 3, "units")
+        return "break"
+
+    def _wizard_linux_wheel(self, event, direction: int) -> str | None:
+        if isinstance(event.widget, (tk.Spinbox, ttk.Combobox)):
+            return None
+        canvas = self._active_tab_canvas()
+        if canvas is None:
+            return None
+        canvas.yview_scroll(int(direction) * 3, "units")
+        return "break"
 
     def _build_reading_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=1)
