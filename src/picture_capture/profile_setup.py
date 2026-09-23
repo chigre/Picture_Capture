@@ -43,6 +43,35 @@ COMMON_OCR_LANGUAGES = (
     "eng", "chi_sim", "chi_tra", "jpn", "ara", "deu", "spa", "ita", "por", "fra",
 )
 
+SEPARATOR_LABEL_TO_VALUE = {
+    "自动判断": "auto",
+    "有中央分隔线": "present",
+    "无中央分隔线": "absent",
+}
+HEADER_FOOTER_LABEL_TO_VALUE = {
+    "自动检测": "auto",
+    "没有": "none",
+    "有，排除固定区域": "present",
+}
+SIDE_LABEL_TO_VALUE = {
+    "无页边占位内容": "none",
+    "左侧固定": "left",
+    "右侧固定": "right",
+    "A/B 页外侧交替": "outer",
+    "A/B 页内侧交替": "inner",
+}
+PAIR_LABEL_TO_VALUE = {
+    "所有页面相同": "same",
+    "A/B 页交替": "alternate",
+}
+
+
+def _label_for_value(mapping: dict[str, str], value: str, fallback: str) -> str:
+    for label, mapped in mapping.items():
+        if mapped == value:
+            return label
+    return fallback
+
 
 class ProjectProfileWizard(tk.Toplevel):
     """User-facing, composable Project Profile workflow.
@@ -90,11 +119,29 @@ class ProjectProfileWizard(tk.Toplevel):
         self.reading_var = tk.StringVar(value=reading_choice_from_settings(s))
         self.columns_policy_var = tk.StringVar(value=str(s.layout_columns_policy or "detect"))
         self.columns_var = tk.IntVar(value=max(1, int(s.columns)))
-        self.separator_var = tk.StringVar(value=str(s.layout_column_separator_mode or "auto"))
-        self.header_mode_var = tk.StringVar(value=str(getattr(s, "profile_header_mode", "auto") or "auto"))
-        self.footer_mode_var = tk.StringVar(value=str(getattr(s, "profile_footer_mode", "auto") or "auto"))
-        self.side_mode_var = tk.StringVar(value=str(getattr(s, "profile_side_content_mode", "none") or "none"))
-        self.page_pair_var = tk.StringVar(value=str(getattr(s, "profile_page_pair_mode", "same") or "same"))
+        self.separator_var = tk.StringVar(value=_label_for_value(
+            SEPARATOR_LABEL_TO_VALUE, str(s.layout_column_separator_mode or "auto"), "自动判断",
+        ))
+        self.header_mode_var = tk.StringVar(value=_label_for_value(
+            HEADER_FOOTER_LABEL_TO_VALUE,
+            str(getattr(s, "profile_header_mode", "auto") or "auto"),
+            "自动检测",
+        ))
+        self.footer_mode_var = tk.StringVar(value=_label_for_value(
+            HEADER_FOOTER_LABEL_TO_VALUE,
+            str(getattr(s, "profile_footer_mode", "auto") or "auto"),
+            "自动检测",
+        ))
+        self.side_mode_var = tk.StringVar(value=_label_for_value(
+            SIDE_LABEL_TO_VALUE,
+            str(getattr(s, "profile_side_content_mode", "none") or "none"),
+            "无页边占位内容",
+        ))
+        self.page_pair_var = tk.StringVar(value=_label_for_value(
+            PAIR_LABEL_TO_VALUE,
+            str(getattr(s, "profile_page_pair_mode", "same") or "same"),
+            "所有页面相同",
+        ))
         self.first_variant_var = tk.StringVar(value=str(getattr(s, "profile_first_page_variant", "A") or "A"))
         self.header_percent_var = tk.DoubleVar(value=float(getattr(s, "profile_header_percent", 6.0)))
         self.footer_percent_var = tk.DoubleVar(value=float(getattr(s, "profile_footer_percent", 5.0)))
@@ -157,10 +204,6 @@ class ProjectProfileWizard(tk.Toplevel):
         footer.grid(row=4, column=0, sticky="ew", pady=(10, 0))
         ttk.Button(footer, text="上一步", command=lambda: self._move_step(-1)).pack(side="left")
         ttk.Button(footer, text="下一步", command=lambda: self._move_step(1)).pack(side="left", padx=(6, 0))
-        ttk.Button(
-            footer, text="Profile高级…",
-            command=lambda: self.parent.open_settings(initial_tab="profile"),
-        ).pack(side="left", padx=(14, 0))
         ttk.Button(footer, text="取消", command=self._close_without_save).pack(side="right")
         ttk.Button(footer, text="确认并使用", command=self.save_and_close).pack(side="right", padx=(0, 8))
 
@@ -218,7 +261,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Label(left, text="中央分隔线：").grid(row=2, column=0, sticky="e", pady=5)
         ttk.Combobox(
             left, textvariable=self.separator_var, state="readonly", width=18,
-            values=("auto", "present", "absent"),
+            values=tuple(SEPARATOR_LABEL_TO_VALUE.keys()),
         ).grid(row=2, column=1, sticky="w", pady=5)
 
         self.analysis_suggestion_var = tk.StringVar(value="尚未分析代表页")
@@ -249,7 +292,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Label(right, text="页边内容：").grid(row=4, column=0, sticky="e", pady=5)
         ttk.Combobox(
             right, textvariable=self.side_mode_var, state="readonly", width=22,
-            values=("none", "left", "right", "outer", "inner"),
+            values=tuple(SIDE_LABEL_TO_VALUE.keys()),
         ).grid(row=4, column=1, sticky="w", pady=5)
         ttk.Label(right, text="页边排除宽度%").grid(row=5, column=0, sticky="e")
         tk.Spinbox(right, from_=0, to=30, increment=0.5, width=6, textvariable=self.side_percent_var).grid(
@@ -258,7 +301,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Label(right, text="页面模板：").grid(row=6, column=0, sticky="e", pady=(10, 4))
         ttk.Combobox(
             right, textvariable=self.page_pair_var, state="readonly", width=22,
-            values=("same", "alternate"),
+            values=tuple(PAIR_LABEL_TO_VALUE.keys()),
         ).grid(row=6, column=1, sticky="w", pady=(10, 4))
         ttk.Label(right, text="项目第一张图：").grid(row=7, column=0, sticky="e")
         ttk.Combobox(
@@ -275,7 +318,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="e", pady=5)
         ttk.Combobox(
             parent, textvariable=variable, state="readonly", width=22,
-            values=("auto", "none", "present"),
+            values=tuple(HEADER_FOOTER_LABEL_TO_VALUE.keys()),
         ).grid(row=row, column=1, sticky="w", pady=5)
 
     def _build_headword_tab(self, tab: ttk.Frame) -> None:
@@ -451,11 +494,21 @@ class ProjectProfileWizard(tk.Toplevel):
         apply_reading_choice(s, self.reading_var.get())
         s.layout_columns_policy = self.columns_policy_var.get()
         s.columns = max(1, int(self.columns_var.get()))
-        s.layout_column_separator_mode = self.separator_var.get()
-        s.profile_header_mode = self.header_mode_var.get()
-        s.profile_footer_mode = self.footer_mode_var.get()
-        s.profile_side_content_mode = self.side_mode_var.get()
-        s.profile_page_pair_mode = self.page_pair_var.get()
+        s.layout_column_separator_mode = SEPARATOR_LABEL_TO_VALUE.get(
+            self.separator_var.get(), "auto"
+        )
+        s.profile_header_mode = HEADER_FOOTER_LABEL_TO_VALUE.get(
+            self.header_mode_var.get(), "auto"
+        )
+        s.profile_footer_mode = HEADER_FOOTER_LABEL_TO_VALUE.get(
+            self.footer_mode_var.get(), "auto"
+        )
+        s.profile_side_content_mode = SIDE_LABEL_TO_VALUE.get(
+            self.side_mode_var.get(), "none"
+        )
+        s.profile_page_pair_mode = PAIR_LABEL_TO_VALUE.get(
+            self.page_pair_var.get(), "same"
+        )
         s.profile_first_page_variant = self.first_variant_var.get()
         s.profile_header_percent = max(0.0, min(35.0, float(self.header_percent_var.get())))
         s.profile_footer_percent = max(0.0, min(35.0, float(self.footer_percent_var.get())))
@@ -493,8 +546,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 cell = ttk.Frame(self.sample_frame)
                 cell.grid(row=slot // 3, column=slot % 3, padx=5, pady=5, sticky="n")
                 ttk.Label(cell, image=photo).pack()
-                variant = "A" if index % 2 == 0 else "B"
-                ttk.Label(cell, text=f"{path.name}  ·  {variant}").pack(anchor="center")
+                ttk.Label(cell, text=path.name).pack(anchor="center")
             except Exception as exc:
                 ttk.Label(self.sample_frame, text=f"{path.name}\n{exc}").grid(
                     row=slot // 3, column=slot % 3, padx=5, pady=5
@@ -571,7 +623,10 @@ class ProjectProfileWizard(tk.Toplevel):
             return
         self.columns_policy_var.set("fixed")
         self.columns_var.set(int(self._analysis_suggestion.get("columns", self.columns_var.get())))
-        self.separator_var.set(str(self._analysis_suggestion.get("separator", self.separator_var.get())))
+        separator_value = str(self._analysis_suggestion.get("separator", "auto"))
+        self.separator_var.set(_label_for_value(
+            SEPARATOR_LABEL_TO_VALUE, separator_value, "自动判断",
+        ))
 
     def validate_profile(self) -> None:
         if self._validation_running:
