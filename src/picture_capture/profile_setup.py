@@ -274,27 +274,23 @@ class ProjectProfileWizard(tk.Toplevel):
         right = ttk.LabelFrame(tab, text="页眉 / 页尾 / 页边", padding=10)
         right.grid(row=2, column=1, sticky="nsew", padx=(5, 0))
 
-        ttk.Radiobutton(left, text="栏数自动分析", variable=self.columns_policy_var, value="detect").grid(
-            row=0, column=0, columnspan=2, sticky="w", pady=3
+        ttk.Label(left, text="正文栏数：").grid(row=0, column=0, sticky="e", pady=5)
+        self.columns_spin = tk.Spinbox(
+            left, from_=1, to=8, width=5, textvariable=self.columns_var,
         )
-        ttk.Radiobutton(left, text="固定栏数", variable=self.columns_policy_var, value="fixed").grid(
-            row=1, column=0, sticky="w", pady=3
-        )
-        tk.Spinbox(left, from_=1, to=8, width=5, textvariable=self.columns_var).grid(
-            row=1, column=1, sticky="w", pady=3
-        )
-        ttk.Label(left, text="中央分隔线：").grid(row=2, column=0, sticky="e", pady=5)
+        self.columns_spin.grid(row=0, column=1, sticky="w", pady=5)
+        ttk.Label(left, text="中央分隔线：").grid(row=1, column=0, sticky="e", pady=5)
         ttk.Combobox(
             left, textvariable=self.separator_var, state="readonly", width=18,
             values=tuple(SEPARATOR_LABEL_TO_VALUE.keys()),
-        ).grid(row=2, column=1, sticky="w", pady=5)
+        ).grid(row=1, column=1, sticky="w", pady=5)
 
-        self.analysis_suggestion_var = tk.StringVar(value="尚未分析代表页")
+        self.analysis_suggestion_var = tk.StringVar(value="进入本步骤时会分析代表页，也可随时重新分析。")
         ttk.Label(left, textvariable=self.analysis_suggestion_var, wraplength=430).grid(
-            row=3, column=0, columnspan=2, sticky="w", pady=(12, 4)
+            row=2, column=0, columnspan=2, sticky="w", pady=(12, 4)
         )
         analysis_buttons = ttk.Frame(left)
-        analysis_buttons.grid(row=4, column=0, columnspan=2, sticky="w")
+        analysis_buttons.grid(row=3, column=0, columnspan=2, sticky="w")
         self.analyze_button = ttk.Button(
             analysis_buttons, text="重新分析代表页", command=self.analyze_representative_pages,
         )
@@ -304,12 +300,18 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         self.apply_analysis_button.pack(side="left", padx=(6, 0))
 
-        self._mode_row(right, 0, "页眉：", self.header_mode_var)
+        self._mode_row(
+            right, 0, "页眉：", self.header_mode_var,
+            tuple(HEADER_LABEL_TO_VALUE.keys()),
+        )
         ttk.Label(right, text="排除高度%").grid(row=1, column=0, sticky="e")
         tk.Spinbox(right, from_=0, to=35, increment=0.5, width=6, textvariable=self.header_percent_var).grid(
             row=1, column=1, sticky="w"
         )
-        self._mode_row(right, 2, "页尾：", self.footer_mode_var)
+        self._mode_row(
+            right, 2, "页尾：", self.footer_mode_var,
+            tuple(FOOTER_LABEL_TO_VALUE.keys()),
+        )
         ttk.Label(right, text="排除高度%").grid(row=3, column=0, sticky="e")
         tk.Spinbox(right, from_=0, to=35, increment=0.5, width=6, textvariable=self.footer_percent_var).grid(
             row=3, column=1, sticky="w"
@@ -334,16 +336,18 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=7, column=1, sticky="w")
         ttk.Label(
             right,
-            text="outer：A 页左侧 / B 页右侧；inner 相反。若第一张扫描实际属于 B 页，选择 B 即可整体翻转。",
+            text="“外侧交替”默认 A 页排除左侧、B 页排除右侧；“内侧交替”相反。若项目第一张扫描实际属于 B 页，选择 B 即可整体翻转。",
             foreground="#666666", wraplength=430,
         ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
     @staticmethod
-    def _mode_row(parent, row: int, label: str, variable: tk.StringVar) -> None:
+    def _mode_row(
+        parent, row: int, label: str, variable: tk.StringVar, values: tuple[str, ...],
+    ) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="e", pady=5)
         ttk.Combobox(
             parent, textvariable=variable, state="readonly", width=22,
-            values=tuple(HEADER_FOOTER_LABEL_TO_VALUE.keys()),
+            values=values,
         ).grid(row=row, column=1, sticky="w", pady=5)
 
     def _build_headword_tab(self, tab: ttk.Frame) -> None:
@@ -433,7 +437,7 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         ttk.Label(
             tab,
-            text="测试只处理代表页，不写 PDIC。预览中的红线是当前 Profile 检出的词头锚点。",
+            text="测试只处理代表页，不写 PDIC。红线=检出的词头；半透明灰区=当前页眉/页尾/页边排除区域。",
             foreground="#666666",
         ).grid(row=1, column=0, sticky="w", pady=(2, 8))
         bar = ttk.Frame(tab)
