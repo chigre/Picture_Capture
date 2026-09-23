@@ -21,6 +21,7 @@ from picture_capture.profile_semantics import (
     entry_allowed_by_page_template, excluded_source_side, ordered_headword_profiles,
     page_template_analysis_image, probable_body_page_indices, READING_LABELS,
     reading_choice_from_settings, representative_page_indices, sample_page_indices,
+    suggested_body_page_range,
 )
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
@@ -434,6 +435,19 @@ def test_project_profile_configured_body_range_has_priority():
     assert configured_body_page_indices(len(images), "10-800") == []
 
 
+
+def test_project_profile_suggests_zero_padded_body_range():
+    images = [
+        Path("0000_cover.png"),
+        Path("0001_title.png"),
+        Path("0002.png"),
+        Path("0003.png"),
+        Path("0004.png"),
+        Path("appendix_0005.png"),
+    ]
+    assert suggested_body_page_range(images) == "0003-0005"
+
+
 def test_project_profile_representatives_avoid_obvious_front_and_back_matter():
     images = [Path("0000_cover.png")]
     images += [Path(f"{number:04d}_body.png") for number in range(1, 31)]
@@ -581,6 +595,17 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
+
+    assert 'for label in ("1 词典信息与阅读方式", "2 页面模板"' in text
+    assert 'text="词典项目详情"' in text
+    assert 'text="词典完整名称："' in text
+    assert 'text="词典缩写名称："' in text
+    assert 'text="ISBN："' in text
+    assert 'text="正文页码范围："' in text
+    assert "suggested_body_page_range(self.project.images)" in text
+    assert "s.dictionary_full_name = self.dictionary_full_name_var.get().strip()" in text
+    assert "s.dictionary_body_page_range = self.dictionary_body_page_range_var.get().strip()" in text
+    assert "def _body_page_range_changed" in text
 
     assert "每一张都可以手动更换" in text
     assert 'text="更换…"' in text
