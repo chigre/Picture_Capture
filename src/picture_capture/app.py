@@ -42,7 +42,8 @@ from .collation import (
     parse_custom_order, profile_label,
 )
 from .dictionary_profile import (
-    DEFAULT_PROFILE_ID, PROFILE_FILENAME, dictionary_profile_labels, dictionary_profile_preset,
+    DEFAULT_PROFILE_ID, PROFILE_FILENAME, available_dictionary_profiles,
+    dictionary_profile_labels, dictionary_profile_preset,
     effective_project_profile_id,
     language_effective_settings, managed_profile_setting_names, profile_effective_settings, profile_preview_path,
     profile_layout_summary, write_project_profile,
@@ -916,6 +917,7 @@ class SettingsDialog(tk.Toplevel):
         ("索引语言", "dictionary_index_language", str),
         ("内容语言", "dictionary_content_language", str),
         ("正文页码范围", "dictionary_body_page_range", str),
+        ("自定义 Profile 名称", "dictionary_custom_profile_name", str),
         ("词典分栏", "columns", int), ("两栏中隔", "gutter", int),
         ("单栏宽距", "column_width", int), ("起始点 Y", "start_y", int),
         ("首栏 X", "manual_x", int),
@@ -1089,6 +1091,7 @@ class SettingsDialog(tk.Toplevel):
         outer = ttk.Frame(self)
         outer.pack(fill="both", expand=True)
         notebook = ttk.Notebook(outer)
+        self.notebook = notebook
         notebook.pack(fill="both", expand=True)
         profile_tab = ttk.Frame(notebook)
         project_tab = ttk.Frame(notebook)
@@ -1096,11 +1099,14 @@ class SettingsDialog(tk.Toplevel):
         sort_tab = ttk.Frame(notebook)
         rules_tab = ttk.Frame(notebook)
         notebook.add(profile_tab, text="Profile")
+        self.profile_tab = profile_tab
         notebook.add(project_tab, text="词典项目详情")
         notebook.add(params_tab, text="参数分区")
         notebook.add(sort_tab, text="词头排序")
         notebook.add(rules_tab, text="词头过滤规则")
-        if initial_tab == "project":
+        if initial_tab == "profile":
+            notebook.select(profile_tab)
+        elif initial_tab == "project":
             notebook.select(project_tab)
         elif initial_tab == "sort":
             notebook.select(sort_tab)
@@ -1117,6 +1123,7 @@ class SettingsDialog(tk.Toplevel):
         body = ttk.Frame(params_tab)
         body.pack(fill="both", expand=True)
         canvas = tk.Canvas(body, highlightthickness=0, borderwidth=0)
+        self.params_canvas = canvas
         scrollbar = ttk.Scrollbar(body, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
@@ -1133,16 +1140,25 @@ class SettingsDialog(tk.Toplevel):
             canvas.itemconfigure(frame_window, width=event.width)
 
         def _wheel(event) -> str | None:
-            if notebook.select() != str(params_tab):
+            selected_tab = notebook.select()
+            target_canvas = None
+            if selected_tab == str(params_tab):
+                target_canvas = canvas
+            elif selected_tab == str(profile_tab):
+                target_canvas = getattr(self, "profile_canvas", None)
+            if target_canvas is None:
                 return None
             if getattr(event, "num", None) == 4:
-                canvas.yview_scroll(-3, "units")
+                target_canvas.yview_scroll(-3, "units")
             elif getattr(event, "num", None) == 5:
-                canvas.yview_scroll(3, "units")
+                target_canvas.yview_scroll(3, "units")
             else:
                 delta = getattr(event, "delta", 0)
                 if delta:
-                    canvas.yview_scroll((-1 if delta > 0 else 1) * max(1, abs(int(delta / 120))) * 3, "units")
+                    target_canvas.yview_scroll(
+                        (-1 if delta > 0 else 1) * max(1, abs(int(delta / 120))) * 3,
+                        "units",
+                    )
             return "break"
 
         frame.bind("<Configure>", _sync_scrollregion)
