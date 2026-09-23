@@ -30,6 +30,7 @@ from .profile_semantics import (
     profile_summary_tags,
     reading_choice_from_settings,
     sample_page_indices,
+    page_template_analysis_image,
 )
 from .project_storage import (
     headword_filter_rules_path,
@@ -50,6 +51,11 @@ OCR_LANGUAGE_LABEL_TO_VALUE = {
     "意大利语 (ita)": "ita",
     "葡萄牙语 (por)": "por",
     "法语 (fra)": "fra",
+}
+
+COLUMNS_POLICY_LABEL_TO_VALUE = {
+    "每页自动检测栏数": "detect",
+    "固定栏数": "fixed",
 }
 
 SEPARATOR_LABEL_TO_VALUE = {
@@ -131,6 +137,11 @@ class ProjectProfileWizard(tk.Toplevel):
     def _build_vars(self) -> None:
         s = self.working
         self.reading_var = tk.StringVar(value=reading_choice_from_settings(s))
+        self.columns_policy_var = tk.StringVar(value=_label_for_value(
+            COLUMNS_POLICY_LABEL_TO_VALUE,
+            str(getattr(s, "layout_columns_policy", "detect") or "detect"),
+            "每页自动检测栏数",
+        ))
         self.columns_var = tk.IntVar(value=max(1, int(s.columns)))
         self.separator_var = tk.StringVar(value=_label_for_value(
             SEPARATOR_LABEL_TO_VALUE, str(s.layout_column_separator_mode or "auto"), "自动判断",
@@ -167,14 +178,14 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_profile_var = tk.StringVar(value=self._profile_label_for_key(s.dictionary_profile_id))
 
         traced = (
-            self.reading_var, self.columns_var, self.separator_var,
+            self.reading_var, self.columns_policy_var, self.columns_var, self.separator_var,
             self.header_mode_var, self.footer_mode_var, self.side_mode_var,
             self.first_variant_var, self.header_percent_var,
             self.footer_percent_var, self.side_percent_var, self.ocr_language_var,
             self.index_language_var, self.content_language_var,
         )
         for var in traced:
-            var.trace_add("write", lambda *_args: self.after_idle(self._refresh_summary))
+            var.trace_add("write", lambda *_args: self.after_idle(self._profile_input_changed))
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self, padding=12)
@@ -260,23 +271,29 @@ class ProjectProfileWizard(tk.Toplevel):
         right = ttk.LabelFrame(tab, text="页眉 / 页尾 / 页边", padding=10)
         right.grid(row=2, column=1, sticky="nsew", padx=(5, 0))
 
-        ttk.Label(left, text="正文栏数：").grid(row=0, column=0, sticky="e", pady=5)
+        ttk.Label(left, text="栏数策略：").grid(row=0, column=0, sticky="e", pady=5)
+        self.columns_policy_combo = ttk.Combobox(
+            left, textvariable=self.columns_policy_var, state="readonly", width=18,
+            values=tuple(COLUMNS_POLICY_LABEL_TO_VALUE.keys()),
+        )
+        self.columns_policy_combo.grid(row=0, column=1, sticky="w", pady=5)
+        ttk.Label(left, text="正文栏数：").grid(row=1, column=0, sticky="e", pady=5)
         self.columns_spin = tk.Spinbox(
             left, from_=1, to=8, width=5, textvariable=self.columns_var,
         )
-        self.columns_spin.grid(row=0, column=1, sticky="w", pady=5)
-        ttk.Label(left, text="中央分隔线：").grid(row=1, column=0, sticky="e", pady=5)
+        self.columns_spin.grid(row=1, column=1, sticky="w", pady=5)
+        ttk.Label(left, text="中央分隔线：").grid(row=2, column=0, sticky="e", pady=5)
         ttk.Combobox(
             left, textvariable=self.separator_var, state="readonly", width=18,
             values=tuple(SEPARATOR_LABEL_TO_VALUE.keys()),
-        ).grid(row=1, column=1, sticky="w", pady=5)
+        ).grid(row=2, column=1, sticky="w", pady=5)
 
         self.analysis_suggestion_var = tk.StringVar(value="进入本步骤时会分析代表页，也可随时重新分析。")
         ttk.Label(left, textvariable=self.analysis_suggestion_var, wraplength=430).grid(
-            row=2, column=0, columnspan=2, sticky="w", pady=(12, 4)
+            row=3, column=0, columnspan=2, sticky="w", pady=(12, 4)
         )
         analysis_buttons = ttk.Frame(left)
-        analysis_buttons.grid(row=3, column=0, columnspan=2, sticky="w")
+        analysis_buttons.grid(row=4, column=0, columnspan=2, sticky="w")
         self.analyze_button = ttk.Button(
             analysis_buttons, text="重新分析代表页", command=self.analyze_representative_pages,
         )
@@ -327,7 +344,10 @@ class ProjectProfileWizard(tk.Toplevel):
             text="仅“外侧/内侧交替”需要 A/B：默认 A 页左侧、B 页右侧；若第一张扫描实际属于 B 页，选择 B 即可整体翻转。",
             foreground="#666666", wraplength=430,
         ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(8, 0))
-        for variable in (self.header_mode_var, self.footer_mode_var, self.side_mode_var):
+        for variable in (
+            self.columns_policy_var, self.header_mode_var,
+            self.footer_mode_var, self.side_mode_var,
+        ):
             variable.trace_add(
                 "write", lambda *_args: self.after_idle(self._refresh_template_controls)
             )
@@ -342,6 +362,10 @@ class ProjectProfileWizard(tk.Toplevel):
         side_value = SIDE_LABEL_TO_VALUE.get(self.side_mode_var.get(), "none")
         side_present = side_value != "none"
         alternating = side_value in {"outer", "inner"}
+        fixed_columns = COLUMNS_POLICY_LABEL_TO_VALUE.get(
+            self.columns_policy_var.get(), "detect"
+        ) == "fixed"
+        self.columns_spin.configure(state="normal" if fixed_columns else "disabled")
         self.header_percent_spin.configure(state="normal" if header_present else "disabled")
         self.footer_percent_spin.configure(state="normal" if footer_present else "disabled")
         self.side_percent_spin.configure(state="normal" if side_present else "disabled")
@@ -530,7 +554,9 @@ class ProjectProfileWizard(tk.Toplevel):
     def _settings_from_ui(self) -> AppSettings:
         s = replace(self.working)
         apply_reading_choice(s, self.reading_var.get())
-        s.layout_columns_policy = "fixed"
+        s.layout_columns_policy = COLUMNS_POLICY_LABEL_TO_VALUE.get(
+            self.columns_policy_var.get(), "detect"
+        )
         s.columns = max(1, int(self.columns_var.get()))
         s.layout_column_separator_mode = SEPARATOR_LABEL_TO_VALUE.get(
             self.separator_var.get(), "auto"
