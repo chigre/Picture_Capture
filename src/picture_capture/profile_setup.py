@@ -14,7 +14,7 @@ from .dictionary_profile import (
     language_effective_settings,
     write_project_profile,
 )
-from .headword_filter_rules import HEADWORD_FILTER_RULES_FILENAME
+from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from .image_utils import normalize_page_rgb
 from .layout_detection import aggregate_layout_estimates, detect_layout_parameters
 from .models import AppSettings
