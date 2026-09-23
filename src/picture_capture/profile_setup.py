@@ -969,18 +969,23 @@ class ProjectProfileWizard(tk.Toplevel):
             ).pack(anchor="center", pady=(3, 0))
 
     def _choose_sample_page(self, slot: int) -> None:
-        if not self.sample_candidates:
+        all_indices = list(range(len(self.project.images)))
+        if not all_indices:
             return
+        auto_candidates = set(self.sample_candidates)
         picker = tk.Toplevel(self)
         picker.title("更换代表页")
-        picker.geometry("620x520")
+        picker.geometry("680x540")
         picker.transient(self)
         picker.grab_set()
 
         ttk.Label(
             picker,
-            text="选择一张正文代表页。列表已优先排除 0000_*、目录、附录等明显非正文页。",
-            wraplength=580,
+            text=(
+                "自动抽样会避开 0000_*、目录、附录等明显非正文页；"
+                "手动更换时仍可从项目全部页面中选择。"
+            ),
+            wraplength=640,
         ).pack(anchor="w", padx=10, pady=(10, 6))
         body = ttk.Frame(picker)
         body.pack(fill="both", expand=True, padx=10)
@@ -991,21 +996,21 @@ class ProjectProfileWizard(tk.Toplevel):
         scrollbar.pack(side="right", fill="y")
 
         current = self.sample_indices[slot]
-        selected_row = 0
-        for row, index in enumerate(self.sample_candidates):
+        selected_row = current
+        for row, index in enumerate(all_indices):
             path = self.project.images[index]
-            listing.insert("end", f"{index + 1:05d}    {path.name}")
+            status = "正文候选" if index in auto_candidates else "自动略过 · 手动可选"
+            listing.insert("end", f"{index + 1:05d}    [{status}]    {path.name}")
             if index == current:
                 selected_row = row
-        if self.sample_candidates:
-            listing.selection_set(selected_row)
-            listing.see(selected_row)
+        listing.selection_set(selected_row)
+        listing.see(selected_row)
 
         def apply_choice(_event=None) -> None:
             selection = listing.curselection()
             if not selection:
                 return
-            index = self.sample_candidates[int(selection[0])]
+            index = all_indices[int(selection[0])]
             if index in self.sample_indices and index != self.sample_indices[slot]:
                 messagebox.showinfo("代表页已使用", "这张页面已经在代表页中，请选择另一张。", parent=picker)
                 return
