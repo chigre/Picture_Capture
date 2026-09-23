@@ -446,15 +446,19 @@ def _review_crop_settings(image: Image.Image, settings: AppSettings, viewer_widt
     return local
 
 
-def _review_crop_context(image: Image.Image, settings: AppSettings, viewer_width: int):
-    """Return review-only vertical settings plus the project's true page geometry.
-
-    The review image may use a fitted width to keep one-line crop height stable,
-    but horizontal column positions must remain in the same coordinate system as
-    the main page.  Re-deriving columns from the fitted review width causes a
-    cumulative horizontal shift in columns 2, 3, ... .
-    """
-    return _review_crop_settings(image, settings, viewer_width), derive_geometry(image, settings)
+def _review_crop_context(
+    image: Image.Image,
+    settings: AppSettings,
+    viewer_width: int,
+    page_index: int = 0,
+):
+    """Return review crop settings plus the same per-page Profile geometry as detection."""
+    effective = effective_page_settings(settings, image.size, page_index)
+    analysis_image = page_template_analysis_image(image, effective, page_index)
+    return (
+        _review_crop_settings(image, effective, viewer_width),
+        derive_geometry(analysis_image, effective),
+    )
 
 
 def _is_single_cjk_review_headword(value: object) -> bool:
@@ -3802,7 +3806,8 @@ class ReviewWindow(tk.Toplevel):
         if not self.parent.image:
             return
         review_settings, geometry = _review_crop_context(
-            self.parent.image, self.parent.settings, self.parent.canvas.winfo_width()
+            self.parent.image, self.parent.settings, self.parent.canvas.winfo_width(),
+            self.parent.current_index,
         )
         ordered = self.parent._ordered_entries_reading_order()
         words = self.parent._project_words if self.parent.project else set()
@@ -4471,7 +4476,13 @@ class ReviewWindow(tk.Toplevel):
                     with Image.open(page_path) as opened:
                         image = normalize_page_rgb(opened)
                     entries = read_pdic(pdic_path(page_path))
-                    geometry = derive_geometry(image, local_settings)
+                    effective_settings = effective_page_settings(
+                        local_settings, image.size, page_index,
+                    )
+                    analysis_image = page_template_analysis_image(
+                        image, effective_settings, page_index,
+                    )
+                    geometry = derive_geometry(analysis_image, effective_settings)
                     entries = sort_entries_reading_order(entries, geometry)
                     ppp_path = self.parent._ppp_read_path(page_path)
                     polygons = read_ppp(ppp_path)
@@ -4486,7 +4497,7 @@ class ReviewWindow(tk.Toplevel):
                             ocr_payload = {}
 
                     review_settings, review_geometry = _review_crop_context(
-                        image, local_settings, local_viewer_width
+                        image, local_settings, local_viewer_width, page_index
                     )
                     review_crops: list[Image.Image] = []
                     for row, entry in enumerate(entries):
@@ -10768,7 +10779,11 @@ class PictureCaptureApp(tk.Tk):
             entries = read_pdic(pdic_path(page))
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
-            entries = sort_entries_reading_order(entries, derive_geometry(image, settings))
+            effective_settings = effective_page_settings(settings, image.size, index)
+            analysis_image = page_template_analysis_image(image, effective_settings, index)
+            entries = sort_entries_reading_order(
+                entries, derive_geometry(analysis_image, effective_settings)
+            )
             texts = ocr_entries(image, entries, settings, rules)
             for entry, text in zip(entries, texts): entry.word = text
             export_ocred(qt_root(project.root) / f"{page.stem}.OCRed", texts)
