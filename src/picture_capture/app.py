@@ -1116,7 +1116,9 @@ class SettingsDialog(tk.Toplevel):
         elif initial_tab == "params":
             notebook.select(params_tab)
         else:
-            notebook.select(profile_tab)
+            # 【项目Profile】 owns the normal guided workflow.  【更多参数】
+            # should therefore open the detailed parameter partition directly.
+            notebook.select(params_tab)
 
         self._build_profile_tab(profile_tab)
         self._build_project_details_tab(project_tab)
