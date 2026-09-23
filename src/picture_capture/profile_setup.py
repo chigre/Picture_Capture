@@ -539,7 +539,7 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         ttk.Label(
             tab,
-            text="测试只处理代表页，不写 PDIC。红线=检出的词头；半透明灰区=当前页眉/页尾/页边排除区域。",
+            text="测试只处理代表页，不写 PDIC。红线=检出的词头；半透明灰区=当前 Profile 不参与正文识别的区域。",
             foreground="#666666",
         ).grid(row=1, column=0, sticky="w", pady=(2, 8))
         bar = ttk.Frame(tab)
@@ -898,6 +898,15 @@ class ProjectProfileWizard(tk.Toplevel):
                     source.size,
                 )
             )
+        if str(getattr(settings, "profile_header_mode", "auto") or "auto") == "present":
+            pct = max(0.0, min(35.0, float(getattr(settings, "profile_header_percent", 6.0))))
+            margin = round(source.height * pct / 100.0)
+            shade_source_box((0, 0, source.width, margin))
+        if str(getattr(settings, "profile_footer_mode", "auto") or "auto") == "present":
+            pct = max(0.0, min(35.0, float(getattr(settings, "profile_footer_percent", 5.0))))
+            margin = round(source.height * pct / 100.0)
+            shade_source_box((0, max(0, source.height - margin), source.width, source.height))
+
         side = excluded_source_side(settings, page_index)
         if side:
             margin = round(source.width * max(
