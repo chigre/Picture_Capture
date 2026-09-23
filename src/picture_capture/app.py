@@ -1255,6 +1255,246 @@ class SettingsDialog(tk.Toplevel):
         "paddle_headword_regex", "paddle_pos_regex", "paddle_special_symbol_regex",
     )
 
+    SETTING_CHOICES = {
+        "analysis_threshold_mode": {
+            "自动（推荐，等同 Otsu）": "auto",
+            "Otsu 全页阈值": "otsu",
+            "自适应（底色不均时）": "adaptive",
+            "固定阈值（旧项目/专家）": "fixed",
+        },
+        "paddle_preprocessing": {
+            "原图（推荐）": "original",
+            "灰度": "grayscale",
+            "自动对比度": "auto_contrast",
+            "二值化": "binary",
+        },
+    }
+
+    CHECK_HELP = {
+        "manual_columns": "仅在自动分栏明显失败时启用。普通项目保持关闭，让栏位置按实际页面估计。",
+        "follow_column_deformation": "扫描页有明显倾斜、弯曲或局部拉伸时启用；平直页面关闭更稳定。",
+        "paddle_require_visual_cue": "要求候选同时有字高、粗体、左缘等视觉证据，可减少正文误检。",
+        "paddle_require_pos_or_symbol": "要求词头附近出现词性、变形或词条符号。结构明确的拉丁词典建议开启。",
+        "paddle_refine_separator_y": "OCR 先定位词头，再把横线移动到局部空白带。通常建议开启。",
+        "paddle_compare_tesseract": "同时运行 Tesseract 作为第二意见。更稳，但速度更慢且需要安装对应语言包。",
+        "paddle_tesseract_rescue": "允许 Tesseract 补回 Paddle 漏掉的词头。双 OCR 项目可开启。",
+        "paddle_tesseract_auto_psm": "自动比较 PSM 4/6 并选择更合适的结果。通常建议开启。",
+        "paddle_dual_ocr_arbitration": "Paddle/Tesseract 冲突时按结构、置信度和位置综合决策，而不是简单覆盖。",
+        "paddle_show_candidate_checkboxes": "主界面显示 OCR 候选复选框，便于人工补回漏检或排除误检。",
+        "ocr_replace": "普通 OCR 文本识别后执行项目替换规则；不影响词头横线位置。",
+        "lowercase_ocr": "把普通 OCR 文本转成小写；只影响文本，不影响画线。",
+        "review_main_show_ocr_choices": "打开校对窗口时，主界面仍显示多个 OCR 候选按钮。",
+        "review_main_show_ocr_background": "打开校对窗口时，主界面仍按 OCR 置信度显示词框底色。",
+    }
+
+    NORMAL_CHECKS = (
+        ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
+        ("手动分栏", "manual_columns"),
+    )
+    OCR_COMMON_CHECKS = (
+        ("要求结构/视觉提示", "paddle_require_visual_cue"),
+        ("要求词性/变形/词条符号", "paddle_require_pos_or_symbol"),
+        ("自动精修横线 Y", "paddle_refine_separator_y"),
+        ("同时运行 Tesseract 对照", "paddle_compare_tesseract"),
+        ("多 OCR 自动融合", "paddle_dual_ocr_arbitration"),
+    )
+    OCR_ADVANCED_CHECKS = (
+        ("Tesseract 可补漏 Paddle", "paddle_tesseract_rescue"),
+        ("Tesseract 自动比较 PSM 4/6", "paddle_tesseract_auto_psm"),
+        ("显示每个 OCR 候选复选框", "paddle_show_candidate_checkboxes"),
+    )
+    DISPLAY_CHECKS = (
+        ("校对时主界面显示 OCR 候选", "review_main_show_ocr_choices"),
+        ("校对时主界面显示 OCR 置信度底色", "review_main_show_ocr_background"),
+    )
+
+    def _setting_var(self, name: str) -> tk.Variable:
+        if name in self.vars:
+            return self.vars[name]
+        raw = getattr(self.parent.settings, name)
+        choices = self.SETTING_CHOICES.get(name)
+        if choices:
+            reverse = {value: label for label, value in choices.items()}
+            value = reverse.get(str(raw), str(raw))
+        else:
+            value = str(raw)
+        var = tk.StringVar(value=value)
+        self.vars[name] = var
+        return var
+
+    def _setting_widget(self, parent: ttk.Frame, name: str) -> tk.Widget:
+        var = self._setting_var(name)
+        choices = self.SETTING_CHOICES.get(name)
+        if choices:
+            return ttk.Combobox(
+                parent, textvariable=var, values=tuple(choices.keys()),
+                state="readonly", width=28,
+            )
+        if name == "ocr_language":
+            widget = ttk.Combobox(
+                parent, textvariable=var, values=self.OCR_LANGUAGES,
+                state="normal", width=28,
+            )
+            widget.bind("<<ComboboxSelected>>", lambda _e: self._refresh_sort_choices())
+            widget.bind("<FocusOut>", lambda _e: self._refresh_sort_choices())
+            return widget
+        if name in {"main_entry_font_family", "review_entry_font_family"}:
+            families = tuple(sorted(set(font.families()), key=str.casefold))
+            return ttk.Combobox(
+                parent, textvariable=var, values=families, state="normal", width=28,
+            )
+        if name == "wordslist_path":
+            box = ttk.Frame(parent)
+            box.columnconfigure(0, weight=1)
+            ttk.Entry(box, textvariable=var, width=30).grid(row=0, column=0, sticky="ew")
+            ttk.Button(
+                box, text="浏览…", command=lambda v=var: self._browse_wordslist_setting(v)
+            ).grid(row=0, column=1, padx=(5, 0))
+            return box
+        if name == "layout_writing_mode":
+            return ttk.Combobox(
+                parent, textvariable=var,
+                values=("horizontal-tb", "vertical-rl", "vertical-lr"),
+                state="readonly", width=28,
+            )
+        if name == "layout_text_direction":
+            return ttk.Combobox(
+                parent, textvariable=var, values=("ltr", "rtl"),
+                state="readonly", width=28,
+            )
+        if name == "layout_columns_policy":
+            return ttk.Combobox(
+                parent, textvariable=var, values=("detect", "fixed"),
+                state="readonly", width=28,
+            )
+        if name == "layout_column_separator_mode":
+            return ttk.Combobox(
+                parent, textvariable=var, values=("auto", "present", "absent"),
+                state="readonly", width=28,
+            )
+        if name == "layout_transform":
+            return ttk.Entry(parent, textvariable=var, width=30, state="readonly")
+        return ttk.Entry(parent, textvariable=var, width=30)
+
+    def _add_setting_group(
+        self,
+        parent: ttk.Frame,
+        title: str,
+        names: tuple[str, ...] | list[str],
+        *,
+        intro: str = "",
+    ) -> ttk.LabelFrame:
+        group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
+        group.pack(fill="x", pady=(0, 10))
+        group.columnconfigure(2, weight=1)
+        row = 0
+        if intro:
+            ttk.Label(
+                group, text=intro, foreground="#5f6670", justify="left", wraplength=820,
+            ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 8))
+            row += 1
+        for name in names:
+            label = self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])
+            ttk.Label(group, text=f"{label}：").grid(
+                row=row, column=0, sticky="ne", padx=(0, 10), pady=5
+            )
+            widget = self._setting_widget(group, name)
+            widget.grid(row=row, column=1, sticky="ew", padx=(0, 12), pady=4)
+            ttk.Label(
+                group,
+                text=self.SETTING_HELP.get(name, "专家参数；不确定时建议保持当前值。"),
+                foreground="#666666", justify="left", wraplength=520,
+            ).grid(row=row, column=2, sticky="nw", pady=5)
+            row += 1
+        return group
+
+    def _add_check_group(
+        self,
+        parent: ttk.Frame,
+        title: str,
+        checks: tuple[tuple[str, str], ...] | list[tuple[str, str]],
+        *,
+        intro: str = "",
+    ) -> ttk.LabelFrame:
+        group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
+        group.pack(fill="x", pady=(0, 10))
+        group.columnconfigure(1, weight=1)
+        row = 0
+        if intro:
+            ttk.Label(
+                group, text=intro, foreground="#5f6670", justify="left", wraplength=820,
+            ).grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 8))
+            row += 1
+        for label, name in checks:
+            if name not in self.vars:
+                self.vars[name] = tk.BooleanVar(value=bool(getattr(self.parent.settings, name)))
+            ttk.Checkbutton(group, text=label, variable=self.vars[name]).grid(
+                row=row, column=0, sticky="nw", padx=(0, 14), pady=4
+            )
+            ttk.Label(
+                group,
+                text=self.CHECK_HELP.get(name, "高级行为开关；不确定时保持默认。"),
+                foreground="#666666", justify="left", wraplength=600,
+            ).grid(row=row, column=1, sticky="nw", pady=4)
+            row += 1
+        return group
+
+    def _add_collapsible_settings(
+        self,
+        parent: ttk.Frame,
+        title: str,
+        names: tuple[str, ...] | list[str],
+        checks: tuple[tuple[str, str], ...] | list[tuple[str, str]] = (),
+    ) -> None:
+        shell = ttk.Frame(parent)
+        shell.pack(fill="x", pady=(0, 10))
+        expanded = tk.BooleanVar(value=False)
+        title_var = tk.StringVar(value=f"▸ {title}")
+        body = ttk.Frame(shell)
+
+        def toggle() -> None:
+            if expanded.get():
+                expanded.set(False)
+                body.pack_forget()
+                title_var.set(f"▸ {title}")
+            else:
+                expanded.set(True)
+                title_var.set(f"▾ {title}")
+                body.pack(fill="x", pady=(6, 0))
+
+        ttk.Button(shell, textvariable=title_var, command=toggle).pack(fill="x")
+        if names:
+            self._add_setting_group(body, "参数", names)
+        if checks:
+            self._add_check_group(body, "行为", checks)
+
+    def _scrollable_settings_page(self, tab: ttk.Frame) -> ttk.Frame:
+        host = ttk.Frame(tab)
+        host.pack(fill="both", expand=True)
+        canvas = tk.Canvas(host, highlightthickness=0, borderwidth=0)
+        scrollbar = ttk.Scrollbar(host, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        content = ttk.Frame(canvas, padding=(14, 12, 14, 18))
+        window = canvas.create_window((0, 0), window=content, anchor="nw")
+        content.bind(
+            "<Configure>",
+            lambda _e, cv=canvas: cv.configure(scrollregion=cv.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda e, cv=canvas, item=window: cv.itemconfigure(item, width=e.width),
+        )
+        self._settings_canvases[str(tab)] = canvas
+        return content
+
+    def _settings_intro(self, parent: ttk.Frame, title: str, text: str) -> None:
+        ttk.Label(parent, text=title, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
+        ttk.Label(
+            parent, text=text, foreground="#5f6670", justify="left", wraplength=900,
+        ).pack(anchor="w", pady=(3, 10))
+
     def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:
         super().__init__(parent)
         self.parent = parent
