@@ -7,37 +7,40 @@ import re
 
 
 IMAGE_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp"}
-PROJECT_COVER_STEM = "_project_cover"
+PROJECT_COVER_STEMS = ("_cover", "_project_cover")
 PROJECT_COVER_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 
 
 def is_project_cover_image(path: Path) -> bool:
-    """Return True for the reserved project-card cover asset."""
+    """Return True for a reserved project-card cover asset."""
     return (
         path.is_file()
-        and path.stem.casefold() == PROJECT_COVER_STEM.casefold()
+        and path.stem.casefold() in {stem.casefold() for stem in PROJECT_COVER_STEMS}
         and path.suffix.casefold() in PROJECT_COVER_EXTENSIONS
     )
 
 
 def project_cover_path(root: Path) -> Path | None:
-    """Find the reserved cover without treating it as a scanned dictionary page."""
+    """Find the preferred project cover without treating it as a scanned page."""
     root = Path(root)
-    for suffix in PROJECT_COVER_EXTENSIONS:
-        candidate = root / f"{PROJECT_COVER_STEM}{suffix}"
-        if candidate.is_file():
-            return candidate
-        # Preserve case-insensitive behavior even on case-sensitive file systems.
-        try:
-            for item in root.iterdir():
+    # _cover.* is the simple current convention. _project_cover.* remains a
+    # compatibility fallback for projects that used the earlier name.
+    try:
+        items = tuple(root.iterdir())
+    except OSError:
+        return None
+    for stem in PROJECT_COVER_STEMS:
+        for suffix in PROJECT_COVER_EXTENSIONS:
+            candidate = root / f"{stem}{suffix}"
+            if candidate.is_file():
+                return candidate
+            for item in items:
                 if (
                     item.is_file()
-                    and item.stem.casefold() == PROJECT_COVER_STEM.casefold()
+                    and item.stem.casefold() == stem.casefold()
                     and item.suffix.casefold() == suffix
                 ):
                     return item
-        except OSError:
-            return None
     return None
 
 
