@@ -349,6 +349,18 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_tuning_level_var = tk.IntVar(
             value=max(-2, min(2, int(getattr(s, "profile_headword_tuning_level", 0) or 0)))
         )
+        self.headword_left_tolerance_var = tk.IntVar(
+            value=max(4, int(getattr(s, "paddle_left_tolerance", 34) or 34))
+        )
+        self.headword_height_ratio_var = tk.DoubleVar(
+            value=max(0.5, float(getattr(s, "paddle_height_ratio", 1.08) or 1.08))
+        )
+        self.headword_boldness_ratio_var = tk.DoubleVar(
+            value=max(0.5, float(getattr(s, "paddle_boldness_ratio", 1.12) or 1.12))
+        )
+        self.headword_min_score_var = tk.DoubleVar(
+            value=max(0.0, float(getattr(s, "paddle_min_candidate_score", 1.0) or 1.0))
+        )
 
         self.profile_choices = ordered_headword_profiles(self.custom_name_var.get())
         self.profile_label_to_key = dict(self.profile_choices)
@@ -404,6 +416,16 @@ class ProjectProfileWizard(tk.Toplevel):
             self.dictionary_isbn_var, self.index_language_var, self.content_language_var,
         ):
             var.trace_add("write", lambda *_args: self.after_idle(self._refresh_summary))
+
+        for var in (
+            self.headword_left_tolerance_var,
+            self.headword_height_ratio_var,
+            self.headword_boldness_ratio_var,
+            self.headword_min_score_var,
+        ):
+            var.trace_add(
+                "write", lambda *_args: self.after_idle(self._headword_specificity_changed)
+            )
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self, padding=10)
@@ -1133,21 +1155,10 @@ class ProjectProfileWizard(tk.Toplevel):
             wraplength=self._wizard_content_width, justify="left",
         ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 4))
 
-        ttk.Label(
-            tab,
-            text="右侧显示与当前词头结构匹配的经典局部裁切样例。",
-            foreground="#666666", wraplength=self._wizard_left_width,
-        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(6, 0))
-        ttk.Label(
-            tab, textvariable=self.headword_examples_var,
-            wraplength=self._wizard_left_width, justify="left",
-            foreground="#555555",
-        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(3, 0))
-
         structures = ttk.LabelFrame(
             tab, text="允许的词头结构（决定哪些 parser 通道开放）", padding=10,
         )
-        structures.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        structures.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         structures.columnconfigure(0, weight=1)
         self.headword_structure_frame = structures
         for row, (label, variable) in enumerate((
@@ -1172,32 +1183,67 @@ class ProjectProfileWizard(tk.Toplevel):
             foreground="#555555", wraplength=self._wizard_content_width,
         ).grid(row=6, column=0, sticky="w", pady=(4, 0))
 
-        specificity = ttk.LabelFrame(tab, text="词头专属性（决定候选要满足多强的证据）", padding=10)
-        specificity.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(12, 0))
-        specificity.columnconfigure(0, weight=1)
+        specificity = ttk.LabelFrame(
+            tab, text="词头专属性（当前结构的视觉证据）", padding=10,
+        )
+        specificity.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        specificity.columnconfigure(1, weight=1)
         self.headword_specificity_frame = specificity
+        self.headword_specificity_hint_var = tk.StringVar(value="")
+        ttk.Label(
+            specificity, textvariable=self.headword_specificity_hint_var,
+            foreground="#666666", wraplength=self._wizard_left_width,
+        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 7))
+
+        ttk.Label(specificity, text="栏左缘容差：").grid(row=1, column=0, sticky="e", pady=3)
+        tk.Spinbox(
+            specificity, from_=4, to=120, increment=1, width=7,
+            textvariable=self.headword_left_tolerance_var,
+        ).grid(row=1, column=1, sticky="w", pady=3)
+        ttk.Label(specificity, text="px").grid(row=1, column=2, sticky="w")
+
+        ttk.Label(specificity, text="文字大小倍率 ≥").grid(row=2, column=0, sticky="e", pady=3)
+        tk.Spinbox(
+            specificity, from_=0.5, to=3.0, increment=0.02, width=7,
+            textvariable=self.headword_height_ratio_var, format="%.2f",
+        ).grid(row=2, column=1, sticky="w", pady=3)
+
+        ttk.Label(specificity, text="粗体倍率 ≥").grid(row=3, column=0, sticky="e", pady=3)
+        tk.Spinbox(
+            specificity, from_=0.5, to=3.0, increment=0.02, width=7,
+            textvariable=self.headword_boldness_ratio_var, format="%.2f",
+        ).grid(row=3, column=1, sticky="w", pady=3)
+
+        ttk.Label(specificity, text="候选强度 ≥").grid(row=4, column=0, sticky="e", pady=3)
+        tk.Spinbox(
+            specificity, from_=0.0, to=12.0, increment=0.25, width=7,
+            textvariable=self.headword_min_score_var, format="%.2f",
+        ).grid(row=4, column=1, sticky="w", pady=3)
+
+        self.cjk_specificity_frame = ttk.LabelFrame(
+            specificity, text="CJK 单字 / 括号词附加条件", padding=7,
+        )
+        self.cjk_specificity_frame.grid(
+            row=5, column=0, columnspan=3, sticky="ew", pady=(8, 0)
+        )
         for row, (label, variable) in enumerate((
             ("必须靠近栏左缘", self.cjk_require_left_edge_var),
             ("释义正文中也经常出现【括号词】", self.cjk_brackets_in_body_var),
             ("只有视觉明显突出时才把单字/括号词当词头", self.cjk_require_visual_var),
         )):
             ttk.Checkbutton(
-                specificity, text=label, variable=variable,
+                self.cjk_specificity_frame, text=label, variable=variable,
                 command=self._headword_specificity_changed,
             ).grid(row=row, column=0, sticky="w", pady=2)
-        ttk.Label(
-            specificity,
-            text="这组条件只在勾选了【括号词】或“大字单字”时显示；用于收紧证据，不需要理解 score、boldness ratio 等内部参数。",
-            foreground="#666666", wraplength=self._wizard_content_width,
-        ).grid(row=3, column=0, sticky="w", pady=(6, 0))
+
         self.headword_tuning_status_var = tk.StringVar(value="")
         ttk.Label(
             specificity, textvariable=self.headword_tuning_status_var,
             foreground="#555555",
-        ).grid(row=4, column=0, sticky="w", pady=(4, 0))
+        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(6, 0))
 
         help_box = ttk.LabelFrame(tab, text="理解方式", padding=10)
-        help_box.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(14, 0))
+        help_box.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(14, 0))
         help_box.columnconfigure(0, weight=1)
         self.headword_help_frame = help_box
 
@@ -1331,11 +1377,36 @@ class ProjectProfileWizard(tk.Toplevel):
         self.marker_prefix_var.set(defaults["marker_prefix"])
         self.numbered_prefix_var.set(defaults["numbered_prefix"])
 
+    def _specificity_defaults_for_profile(self, key: str) -> tuple[int, float, float, float]:
+        temp = replace(self.working)
+        temp.ocr_language = _ocr_language_code(self.ocr_language_var.get())
+        apply_headword_profile(temp, key)
+        for name, value in language_effective_settings(
+            temp.ocr_language, temp.layout_writing_mode
+        ).items():
+            if hasattr(temp, name):
+                setattr(temp, name, value)
+        return (
+            int(getattr(temp, "paddle_left_tolerance", 34)),
+            float(getattr(temp, "paddle_height_ratio", 1.08)),
+            float(getattr(temp, "paddle_boldness_ratio", 1.12)),
+            float(getattr(temp, "paddle_min_candidate_score", 1.0)),
+        )
+
+    def _reset_specificity_for_profile(self, key: str) -> None:
+        left, height, bold, score = self._specificity_defaults_for_profile(key)
+        self.headword_left_tolerance_var.set(left)
+        self.headword_height_ratio_var.set(round(height, 2))
+        self.headword_boldness_ratio_var.set(round(bold, 2))
+        self.headword_min_score_var.set(round(score, 2))
+
     def _headword_changed(self) -> None:
         # Selecting a structure preset seeds human-readable parser checkboxes;
         # users may then customize them without opening advanced parameters.
         self.headword_tuning_level_var.set(0)
-        self._set_structure_defaults_for_profile(self._current_profile_key())
+        key = self._current_profile_key()
+        self._set_structure_defaults_for_profile(key)
+        self._reset_specificity_for_profile(key)
         self._profile_revision += 1
         self._mark_validation_stale()
         self._refresh_headword_description()
@@ -1375,10 +1446,15 @@ class ProjectProfileWizard(tk.Toplevel):
     def _refresh_headword_specificity_visibility(self) -> None:
         if not hasattr(self, "headword_specificity_frame"):
             return
-        if self.cjk_allow_bracketed_var.get() or self.cjk_allow_single_var.get():
-            self.headword_specificity_frame.grid()
-        else:
-            self.headword_specificity_frame.grid_remove()
+        self.headword_specificity_frame.grid()
+        show_cjk = bool(
+            self.cjk_allow_bracketed_var.get() or self.cjk_allow_single_var.get()
+        )
+        if hasattr(self, "cjk_specificity_frame"):
+            if show_cjk:
+                self.cjk_specificity_frame.grid()
+            else:
+                self.cjk_specificity_frame.grid_remove()
 
     def _refresh_headword_tuning_status(self) -> None:
         if not hasattr(self, "headword_tuning_status_var"):
@@ -1458,6 +1534,18 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_description_var.set(profile.description)
         self._refresh_headword_structure_summary()
         self._refresh_headword_specificity_visibility()
+        hints = {
+            "latin_regular": "拉丁常规：左缘、字号/粗体、词性或变形共同判断；下面四项都直接影响画线。",
+            "edge_visual_regular": "边缘/视觉型：没有稳定语法标记，字号、粗体和左缘尤其重要。",
+            "numbered_prefix": "编号型：编号前缀是主证据；字号/粗体属于辅助证据，通常不必设得很高。",
+            "marker_prefixed": "符号型：○ / ● / ◆ 等固定符号是主证据；字号/粗体属于辅助证据。",
+            "cjk_visual": "CJK：大小与粗体控制视觉突出程度；下方另有单字/括号词专用条件。",
+            "custom": "自定义：这四项作为基础视觉门槛，可配合上方 parser 勾选逐页测试。",
+        }
+        if hasattr(self, "headword_specificity_hint_var"):
+            self.headword_specificity_hint_var.set(
+                hints.get(key, "当前结构的左缘、字号、粗体与候选强度门槛。")
+            )
         self._refresh_headword_tuning_status()
 
         for child in self.headword_examples_frame.winfo_children():
@@ -1603,6 +1691,20 @@ class ProjectProfileWizard(tk.Toplevel):
             if hasattr(s, name):
                 setattr(s, name, value)
         apply_headword_tuning(s, profile_key, s.profile_headword_tuning_level)
+        # Wizard specificity values are explicit project overrides and therefore
+        # take precedence over preset/tuning defaults.
+        s.paddle_left_tolerance = max(
+            4, min(120, int(self.headword_left_tolerance_var.get()))
+        )
+        s.paddle_height_ratio = max(
+            0.5, min(3.0, float(self.headword_height_ratio_var.get()))
+        )
+        s.paddle_boldness_ratio = max(
+            0.5, min(3.0, float(self.headword_boldness_ratio_var.get()))
+        )
+        s.paddle_min_candidate_score = max(
+            0.0, min(12.0, float(self.headword_min_score_var.get()))
+        )
         s.profile_setup_version = PROFILE_SETUP_VERSION
         return s
 
