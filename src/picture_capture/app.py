@@ -49,7 +49,9 @@ from .dictionary_profile import (
     profile_layout_summary, write_project_profile,
 )
 from .profile_setup import ProjectProfileWizard
-from .profile_semantics import effective_page_settings, page_template_analysis_image
+from .profile_semantics import (
+    effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
+)
 from .picdic import build_picdic_package
 from .image_utils import normalize_page_rgb
 from .reference_index import contains_cjk, reference_sort_key
@@ -9140,8 +9142,17 @@ class PictureCaptureApp(tk.Tk):
             self.new_polygon.append((x, y))
             self.redraw()
             return
+        effective = self._current_effective_profile_settings()
+        if not entry_allowed_by_page_template(
+            x, y, self.image.size, effective, max(0, int(self.current_index)),
+        ):
+            self.status_var.set("该位置属于 Project Profile 的页边排除区，不添加词条。")
+            return
         geometry = self._get_cached_display_geometry()
         canonical_x, canonical_y = geometry.source_to_canonical(x, y)
+        if canonical_y < geometry.top or canonical_y >= geometry.bottom:
+            self.status_var.set("该位置位于正文区域之外，不添加词条。")
+            return
         col = column_index_for_click(x, geometry, y)
         source_x, source_y = geometry.canonical_to_source(geometry.column_starts[col], canonical_y)
         self.entries.append(WordEntry("", source_x, source_y))
