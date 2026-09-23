@@ -2264,12 +2264,6 @@ class ReviewWindow(tk.Toplevel):
         style.configure("PCR.Toolbar.TFrame", background=colors["toolbar"])
         style.configure("PCR.Panel.TFrame", background=colors["panel"])
         style.configure(
-            "PCR.Section.TLabelframe",
-            background=colors["surface"],
-            borderwidth=0,
-            relief="flat",
-        )
-        style.configure(
             "PCR.SectionTitle.TLabel",
             background=colors["surface"],
             foreground=colors["text"],
