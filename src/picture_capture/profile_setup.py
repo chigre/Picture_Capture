@@ -842,10 +842,17 @@ class ProjectProfileWizard(tk.Toplevel):
             f"自动建议：{aggregate['columns']}栏 · {sep_text} · {consistency}{error_text}"
         )
         self.apply_analysis_button.configure(state="normal")
-        if self._analysis_auto_apply:
+        total_samples = len(estimates) + len(errors)
+        enough_for_auto = len(estimates) >= max(2, (total_samples + 1) // 2)
+        if self._analysis_auto_apply and enough_for_auto:
             self.apply_analysis_suggestion()
             self.analysis_suggestion_var.set(
                 f"已采用代表页建议：{aggregate['columns']}栏 · {sep_text} · {consistency}{error_text}；可直接修改。"
+            )
+        elif self._analysis_auto_apply and not enough_for_auto:
+            self.analysis_suggestion_var.set(
+                f"自动建议：{aggregate['columns']}栏 · {sep_text} · {consistency}{error_text}；"
+                "成功样本不足，未自动应用，请检查代表页后手动决定。"
             )
         self._analysis_auto_apply = False
 
