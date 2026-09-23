@@ -95,20 +95,57 @@ _NON_BODY_PAGE_TOKENS = (
 )
 
 
-def probable_body_page_indices(images: Iterable[object]) -> list[int]:
+def configured_body_page_indices(total: int, value: str | None) -> list[int]:
+    """Resolve a 1-based project body-page range such as 12-980.
+
+    The project-details field is used only when it resolves cleanly inside the
+    current image sequence. Invalid/stale metadata is ignored instead of
+    silently clipping to a different range.
+    """
+    total = max(0, int(total))
+    text = str(value or "").strip()
+    if not text or total <= 0:
+        return []
+    match = re.fullmatch(r"\s*(\d+)\s*(?:-|–|—|~|～|至|到)\s*(\d+)\s*", text)
+    if not match:
+        return []
+    first, last = (int(match.group(1)), int(match.group(2)))
+    if first < 1 or last < first or last > total:
+        return []
+    return list(range(first - 1, last))
+
+
+def probable_body_page_indices(
+    images: Iterable[object],
+    allowed_indices: Iterable[int] | None = None,
+) -> list[int]:
     """Return likely body-page indexes for Profile sampling.
 
-    This is deliberately conservative: obvious front/back matter names and
-    0000_* pre-body scan names are excluded, while ordinary numeric body scans
-    remain eligible. When filenames carry no useful signal, callers still get
-    a broad fallback pool rather than an empty wizard.
+    A valid project body-page range may be supplied as allowed_indices so
+    front matter and appendices outside that range never enter automatic
+    sampling. Filename filtering then removes obvious non-body pages inside
+    the candidate range as a second line of defense.
     """
     items = list(images)
     if not items:
         return []
 
+    if allowed_indices is None:
+        pool = list(range(len(items)))
+    else:
+        pool = []
+        seen: set[int] = set()
+        for raw_index in allowed_indices:
+            index = int(raw_index)
+            if 0 <= index < len(items) and index not in seen:
+                seen.add(index)
+                pool.append(index)
+        if not pool:
+            pool = list(range(len(items)))
+
     candidates: list[int] = []
-    for index, item in enumerate(items):
+    for index in pool:
+        item = items[index]
         name = str(getattr(item, "name", item) or "")
         stem = name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].rsplit(".", 1)[0].lower()
         if re.match(r"^0{4}(?:[_\-\s]|$)", stem):
@@ -118,24 +155,25 @@ def probable_body_page_indices(images: Iterable[object]) -> list[int]:
         candidates.append(index)
 
     # If naming is unusually aggressive, only keep the explicit 0000_* guard
-    # and let the user replace any imperfect automatic choices in the wizard.
-    if len(candidates) < min(3, len(items)):
+    # inside the already-approved pool. Manual replacement remains unrestricted.
+    if len(candidates) < min(3, len(pool)):
         candidates = []
-        for index, item in enumerate(items):
+        for index in pool:
+            item = items[index]
             name = str(getattr(item, "name", item) or "")
             stem = name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].rsplit(".", 1)[0].lower()
             if not re.match(r"^0{4}(?:[_\-\s]|$)", stem):
                 candidates.append(index)
-    return candidates or list(range(len(items)))
+    return candidates or pool
 
 
-def representative_page_indices(images: Iterable[object], target: int = 6) -> list[int]:
-    """Pick editable front/middle/back body representatives.
-
-    Unlike the numeric sample helper, this works from actual filenames and
-    samples inside the likely body instead of the absolute first/last scan.
-    """
-    pool = probable_body_page_indices(images)
+def representative_page_indices(
+    images: Iterable[object],
+    target: int = 6,
+    allowed_indices: Iterable[int] | None = None,
+) -> list[int]:
+    """Pick editable front/middle/back body representatives."""
+    pool = probable_body_page_indices(images, allowed_indices)
     target = max(1, int(target))
     if len(pool) <= target:
         return list(pool)
@@ -174,7 +212,6 @@ def representative_page_indices(images: Iterable[object], target: int = 6) -> li
             if len(selected) >= target:
                 break
     return sorted(selected[:target])
-
 
 def reading_choice_from_settings(settings: AppSettings) -> str:
     writing = str(getattr(settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb")
