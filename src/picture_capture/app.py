@@ -2213,6 +2213,9 @@ class ReviewWindow(tk.Toplevel):
         self._prefetched_pages: dict[int, dict] = {}
         self._prefetch_inflight: set[int] = set()
         self._prefetch_closed = False
+        self.review_section_title_font = font.nametofont("TkDefaultFont").copy()
+        self.review_section_title_font.configure(weight="bold")
+        self._configure_review_styles()
         self._build()
         self.protocol("WM_DELETE_WINDOW", self._close_review)
         self._update_title()
@@ -2234,6 +2237,110 @@ class ReviewWindow(tk.Toplevel):
         self.review_single_cjk_line_height_var.trace_add("write", lambda *_args: self._schedule_review_single_cjk_height_apply())
         for _var in self.digit_map_vars:
             _var.trace_add("write", lambda *_args: self._save_digit_map())
+
+    def _configure_review_styles(self) -> None:
+        """Configure dense, opt-in styles for the proofreading workspace only."""
+        style = ttk.Style(self)
+        native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
+        colors = {
+            "surface": native_background,
+            "toolbar": "#f3f4f6",
+            "panel": "#f7f8fa",
+            "border": "#d8dde5",
+            "text": "#30343b",
+            "muted": "#68707b",
+            "button": "#eceff3",
+            "button_hover": "#e1e5ea",
+            "primary": "#5e9f69",
+            "primary_hover": "#4f8e5c",
+            "danger": "#9b3a3a",
+            "danger_hover": "#f4d9d9",
+            "selection": "#dce8f7",
+            "neutral_entry": "#f4f4f4",
+        }
+        self._review_ui_colors = colors
+
+        style.configure("PCR.Surface.TFrame", background=colors["surface"])
+        style.configure("PCR.Toolbar.TFrame", background=colors["toolbar"])
+        style.configure("PCR.Panel.TFrame", background=colors["panel"])
+        style.configure(
+            "PCR.Section.TLabelframe",
+            background=colors["surface"],
+            borderwidth=0,
+            relief="flat",
+        )
+        style.configure(
+            "PCR.SectionTitle.TLabel",
+            background=colors["surface"],
+            foreground=colors["text"],
+            font=self.review_section_title_font,
+            padding=(0, 2, 0, 1),
+        )
+        style.configure(
+            "PCR.Toolbar.TLabel",
+            background=colors["toolbar"],
+            foreground=colors["text"],
+        )
+        style.configure(
+            "PCR.Muted.TLabel",
+            background=colors["surface"],
+            foreground=colors["muted"],
+        )
+        style.configure(
+            "PCR.Header.TLabel",
+            background=colors["surface"],
+            foreground=colors["text"],
+            font=self.review_section_title_font,
+        )
+        style.configure("PCR.Compact.TButton", padding=(7, 3))
+        style.configure("PCR.Tool.TButton", padding=(4, 2))
+        style.configure("PCR.Compact.TEntry", padding=(4, 2))
+        style.configure("PCR.Compact.TSpinbox", padding=(3, 2))
+        style.configure("PCR.Compact.TCombobox", padding=(3, 2))
+        style.configure("PCR.Crop.TLabel", background=colors["surface"])
+
+    def _review_flat_button(
+        self, parent: tk.Misc, text: str, command, *, role: str = "neutral",
+        width: int | None = None, anchor: str = "center",
+    ) -> tk.Button:
+        """Create one flat review-workspace button without changing global Tk styling."""
+        colors = self._review_ui_colors
+        palette = {
+            "neutral": (colors["button"], colors["button_hover"], colors["text"]),
+            "primary": (colors["primary"], colors["primary_hover"], "#ffffff"),
+            "danger": ("#f3eeee", colors["danger_hover"], colors["danger"]),
+        }
+        background, active_background, foreground = palette.get(role, palette["neutral"])
+        options = {
+            "text": text,
+            "command": command,
+            "bg": background,
+            "fg": foreground,
+            "activebackground": active_background,
+            "activeforeground": foreground,
+            "relief": "flat",
+            "bd": 0,
+            "highlightthickness": 0,
+            "padx": 8,
+            "pady": 4,
+            "cursor": "hand2",
+            "anchor": anchor,
+        }
+        if width is not None:
+            options["width"] = width
+        return tk.Button(parent, **options)
+
+    def _review_section_frame(
+        self, parent: tk.Misc, title: str, *, padding: int = 6
+    ) -> ttk.LabelFrame:
+        """Return a flat titled section for secondary review tools."""
+        label = ttk.Label(parent, text=title, style="PCR.SectionTitle.TLabel")
+        return ttk.LabelFrame(
+            parent,
+            labelwidget=label,
+            padding=padding,
+            style="PCR.Section.TLabelframe",
+        )
 
     def _build(self) -> None:
         panes = ttk.Panedwindow(self, orient="horizontal")
