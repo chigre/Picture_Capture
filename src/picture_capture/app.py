@@ -1279,6 +1279,11 @@ class SettingsDialog(tk.Toplevel):
     CHECK_HELP = {
         "manual_columns": "仅在自动分栏明显失败时启用。普通项目保持关闭，让栏位置按实际页面估计。",
         "follow_column_deformation": "扫描页有明显倾斜、弯曲或局部拉伸时启用；平直页面关闭更稳定。",
+        "paddle_use_paddleocr": "PaddleOCR 是 OCR画线的主识别引擎。除非专门测试其他引擎，否则建议保持开启。",
+        "paddle_use_textline_orientation": "识别旋转/方向不稳定的文字行时可开启；普通横排页面通常无需额外方向识别。",
+        "paddle_remove_syllable_separators": "输出词头时去除音节分隔点（如 ·）；不会删除真正的词内连字符。",
+        "paddle_auto_header_rule": "自动识别页眉横线并忽略其上方内容，可减少页眉被误判为词头。",
+        "paddle_enable_lens": "把 Google Lens 作为可选第三意见。建议仅在本地 OCR 冲突时调用。",
         "paddle_require_visual_cue": "要求候选同时有字高、粗体、左缘等视觉证据，可减少正文误检。",
         "paddle_require_pos_or_symbol": "要求词头附近出现词性、变形或词条符号。结构明确的拉丁词典建议开启。",
         "paddle_refine_separator_y": "OCR 先定位词头，再把横线移动到局部空白带。通常建议开启。",
@@ -1298,6 +1303,7 @@ class SettingsDialog(tk.Toplevel):
         ("手动分栏", "manual_columns"),
     )
     OCR_COMMON_CHECKS = (
+        ("PaddleOCR 主识别", "paddle_use_paddleocr"),
         ("要求结构/视觉提示", "paddle_require_visual_cue"),
         ("要求词性/变形/词条符号", "paddle_require_pos_or_symbol"),
         ("自动精修横线 Y", "paddle_refine_separator_y"),
@@ -1305,6 +1311,9 @@ class SettingsDialog(tk.Toplevel):
         ("多 OCR 自动融合", "paddle_dual_ocr_arbitration"),
     )
     OCR_ADVANCED_CHECKS = (
+        ("启用文字行方向识别", "paddle_use_textline_orientation"),
+        ("自动忽略页眉横线以上", "paddle_auto_header_rule"),
+        ("去除词头音节分隔点", "paddle_remove_syllable_separators"),
         ("Tesseract 可补漏 Paddle", "paddle_tesseract_rescue"),
         ("Tesseract 自动比较 PSM 4/6", "paddle_tesseract_auto_psm"),
         ("显示每个 OCR 候选复选框", "paddle_show_candidate_checkboxes"),
@@ -1752,6 +1761,30 @@ class SettingsDialog(tk.Toplevel):
             self.PROJECT_RUNTIME_FIELDS,
             intro="OCR 模型和 Tesseract 路径稳定后不要频繁修改；模型/语言发生变化时应重新 OCR。",
         )
+        text_ocr_group = ttk.LabelFrame(
+            project_page, text="普通文本 OCR（不是 OCR画线）", padding=(12, 9)
+        )
+        text_ocr_group.pack(fill="x", pady=(0, 10))
+        text_ocr_group.columnconfigure(2, weight=1)
+        ocr_engine_var = tk.StringVar(
+            value=OCR_ENGINE_LABELS.get(
+                parent.settings.ocr_engine, OCR_ENGINE_LABELS["tesseract"]
+            )
+        )
+        self.vars["ocr_engine"] = ocr_engine_var
+        ttk.Label(text_ocr_group, text="OCR 引擎：").grid(
+            row=0, column=0, sticky="e", padx=(0, 10), pady=4
+        )
+        ttk.Combobox(
+            text_ocr_group, textvariable=ocr_engine_var,
+            values=tuple(OCR_ENGINE_VALUES), state="readonly", width=28,
+        ).grid(row=0, column=1, sticky="w", pady=4)
+        ttk.Label(
+            text_ocr_group,
+            text="用于“已有横线后再识别整行文本”的普通 OCR 功能；"
+                 "OCR画线使用上一个页签中的多引擎流程，两者不要混淆。",
+            foreground="#666666", wraplength=560, justify="left",
+        ).grid(row=0, column=2, sticky="w", padx=(12, 0), pady=4)
         project_checks = (
             ("OCR 后执行替换规则", "ocr_replace"),
             ("普通 OCR 文本转小写", "lowercase_ocr"),
