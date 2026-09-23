@@ -114,7 +114,10 @@ def test_recent_project_details_expose_requested_columns(tmp_path):
 
 
 def test_recent_projects_dialog_uses_modern_card_information_hierarchy():
-    source = (SRC / "app.py").read_text(encoding="utf-8")
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
     start = source.index("    def open_recent_project(self) -> None:")
     end = source.index("\n    @staticmethod", start)
     text = source[start:end]
