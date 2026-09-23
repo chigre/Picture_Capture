@@ -5080,10 +5080,15 @@ class OldNewComparisonWindow(tk.Toplevel):
         source = Path(str(payload.get("source") or ""))
         missing_pages = list(payload.get("missing_old_pages") or [])
 
-        outer = ttk.Frame(self, padding=10)
+        outer = ttk.Frame(self, padding=(18, 14, 18, 12))
         outer.pack(fill="both", expand=True)
+        _build_modern_dialog_heading(
+            outer,
+            "新旧比较",
+            "将当前 PDIC 合集与旧词表按页面对齐比较。先确认比较来源，再查看差异、保存快照或导出报告。",
+        )
 
-        top = ttk.Frame(outer)
+        top = ttk.LabelFrame(outer, text="比较来源", padding=(10, 7))
         top.pack(fill="x")
         ttk.Label(top, text="旧词表：").pack(side="left")
         self.source_var = tk.StringVar(value=str(source))
@@ -5100,7 +5105,11 @@ class OldNewComparisonWindow(tk.Toplevel):
             f"差异 {diff_total}：新增 {int(counts.get('新增', 0) or 0)}，"
             f"删除 {int(counts.get('删除', 0) or 0)}，修改 {int(counts.get('修改', 0) or 0)}"
         )
-        ttk.Label(outer, text=summary, anchor="w").pack(fill="x", pady=(8, 2))
+        summary_box = ttk.LabelFrame(
+            outer, text="比较摘要", padding=(10, 7),
+        )
+        summary_box.pack(fill="x", pady=(10, 6))
+        ttk.Label(summary_box, text=summary, anchor="w").pack(fill="x")
         if missing_pages:
             preview = "、".join(missing_pages[:12])
             suffix = f" 等 {len(missing_pages)} 页" if len(missing_pages) > 12 else ""
@@ -5114,7 +5123,7 @@ class OldNewComparisonWindow(tk.Toplevel):
             ttk.Label(outer, text="所选范围内文本完全一致。", foreground="#2d6a4f").pack(fill="x", pady=(0, 6))
 
         filter_row = ttk.Frame(outer)
-        filter_row.pack(fill="x", pady=(2, 6))
+        filter_row.pack(fill="x", pady=(4, 8))
         ttk.Label(filter_row, text="显示：").pack(side="left")
         self.filter_var = tk.StringVar(value="全部差异")
         combo = ttk.Combobox(filter_row, textvariable=self.filter_var, values=self.FILTERS, state="readonly", width=12)
@@ -5157,9 +5166,15 @@ class OldNewComparisonWindow(tk.Toplevel):
         self._add_text_tab(notebook, "旧 wordslist 片段", str(payload.get("old_text") or ""))
 
         bottom = ttk.Frame(outer)
-        bottom.pack(fill="x", pady=(8, 0))
-        ttk.Button(bottom, text="保存 PDIC 合集…", command=self._save_new_snapshot).pack(side="left")
-        ttk.Button(bottom, text="保存差异报告…", command=self._save_diff_report).pack(side="left", padx=(6, 0))
+        bottom.pack(fill="x", pady=(10, 0))
+        ttk.Button(
+            bottom, text="保存当前 PDIC 快照…",
+            command=self._save_new_snapshot,
+        ).pack(side="left")
+        ttk.Button(
+            bottom, text="导出差异报告…",
+            command=self._save_diff_report,
+        ).pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="关闭", command=self._close).pack(side="right")
 
         self._refresh_tree()
