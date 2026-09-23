@@ -80,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
                 entries, _ = detect_entries(
                     image, project.settings, paddle_cache_path=cache_path,
                     paddle_filter_rules_path=headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME),
+                    profile_page_index=project.images.index(page),
                 )
                 write_pdic(pdic_path(page), entries, image.width, _neighbors(project, page))
                 print(f"[{number}/{len(pages)}] {page.name}: {len(entries)} 个标记")
