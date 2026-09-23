@@ -49,6 +49,7 @@ from .dictionary_profile import (
     profile_layout_summary, write_project_profile,
 )
 from .profile_setup import ProjectProfileWizard
+from .profile_semantics import effective_page_settings, page_template_analysis_image
 from .picdic import build_picdic_package
 from .image_utils import normalize_page_rgb
 from .reference_index import contains_cjk, reference_sort_key
@@ -8089,26 +8090,49 @@ class PictureCaptureApp(tk.Tk):
         self._display_photo_cache_key = None
         self.redraw()
 
+    def _current_effective_profile_settings(self) -> AppSettings:
+        """Resolve the current page's Project Profile template without mutating project settings."""
+        if self.image is None:
+            return self.settings
+        return effective_page_settings(
+            self.settings, self.image.size, max(0, int(self.current_index)),
+        )
+
     def _display_geometry_key(self) -> tuple:
         if self.image is None:
             return ()
         s = self.settings
         return (
-            id(self.image), int(s.parameter_display_width), int(s.columns),
+            id(self.image), int(self.current_index),
+            int(s.parameter_display_width), int(s.columns),
+            str(s.layout_columns_policy), str(s.layout_column_separator_mode),
+            str(s.analysis_threshold_mode),
             float(s.manual_x), float(s.gutter), float(s.column_width),
             float(s.start_y), bool(s.crop_to_bottom_y), float(s.bottom_y),
             bool(s.follow_column_deformation), float(s.column_track_block_height),
             float(s.column_track_radius), float(s.body_indent),
             float(s.column_track_max_step), str(s.layout_transform),
+            str(getattr(s, "profile_header_mode", "auto")),
+            str(getattr(s, "profile_footer_mode", "auto")),
+            str(getattr(s, "profile_side_content_mode", "none")),
+            str(getattr(s, "profile_page_pair_mode", "same")),
+            str(getattr(s, "profile_first_page_variant", "A")),
+            float(getattr(s, "profile_header_percent", 6.0)),
+            float(getattr(s, "profile_footer_percent", 5.0)),
+            float(getattr(s, "profile_side_percent", 8.0)),
         )
 
     def _get_cached_display_geometry(self):
-        """Reuse source-coordinate page geometry until page/layout settings change."""
+        """Reuse the same per-page Profile geometry used by detection."""
         if self.image is None:
             raise RuntimeError("没有可显示的页面图像")
         key = self._display_geometry_key()
         if self._display_geometry_cache is None or self._display_geometry_cache_key != key:
-            self._display_geometry_cache = derive_geometry(self.image, self.settings)
+            effective = self._current_effective_profile_settings()
+            analysis_image = page_template_analysis_image(
+                self.image, effective, max(0, int(self.current_index)),
+            )
+            self._display_geometry_cache = derive_geometry(analysis_image, effective)
             self._display_geometry_cache_key = key
         return self._display_geometry_cache
 
@@ -9105,7 +9129,7 @@ class PictureCaptureApp(tk.Tk):
             self.new_polygon.append((x, y))
             self.redraw()
             return
-        geometry = derive_geometry(self.image, self.settings)
+        geometry = self._get_cached_display_geometry()
         canonical_x, canonical_y = geometry.source_to_canonical(x, y)
         col = column_index_for_click(x, geometry, y)
         source_x, source_y = geometry.canonical_to_source(geometry.column_starts[col], canonical_y)
@@ -9691,7 +9715,7 @@ class PictureCaptureApp(tk.Tk):
         total = max(1.0, self.image.height * self.view_scale)
         self.canvas.yview_moveto(min(1.0, target / total))
         self.canvas.delete("review-highlight")
-        geometry = derive_geometry(self.image, self.settings)
+        geometry = self._get_cached_display_geometry()
         col = max(0, min(len(geometry.column_starts) - 1, int(cand.get("column", 0))))
         x_source = int(cand.get("source_x", 0))
         _u, v = geometry.source_to_canonical(x_source, y)
@@ -10219,7 +10243,7 @@ class PictureCaptureApp(tk.Tk):
         settings = self.__dict__.get("settings")
         if image is None or settings is None or not entries:
             return entries
-        return sort_entries_reading_order(entries, derive_geometry(image, settings))
+        return sort_entries_reading_order(entries, self._get_cached_display_geometry())
 
     def _sort_entries_reading_order(self) -> None:
         """Keep manual and OCR entries in one geometry-based reading order."""
