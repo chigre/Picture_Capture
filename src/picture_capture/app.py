@@ -7724,7 +7724,9 @@ class PictureCaptureApp(tk.Tk):
             lambda event: canvas.itemconfigure(cards_window, width=event.width),
         )
 
-        state: dict[str, object] = {"rows": [], "details": []}
+        state: dict[str, object] = {
+            "rows": [], "details": [], "cover_photos": [],
+        }
 
         def open_selected(root: Path, row: dict[str, object]) -> None:
             if not root.is_dir():
@@ -7799,6 +7801,7 @@ class PictureCaptureApp(tk.Tk):
         def rebuild(*_args) -> None:
             for child in cards.winfo_children():
                 child.destroy()
+            state["cover_photos"] = []
 
             rows = load_recent_projects()
             details = [recent_project_details(row) for row in rows]
@@ -7861,16 +7864,62 @@ class PictureCaptureApp(tk.Tk):
                 full_name = str(detail["full_name"] or root.name)
                 abbreviation = str(detail["abbreviation"] or "").strip()
                 tile_text = (abbreviation or full_name or "?")[:2].upper()
+                preview_path = Path(str(detail.get("preview_path") or ""))
+                cover_source = str(detail.get("cover_source") or "none")
                 tile = tk.Label(
                     card,
-                    text=tile_text,
-                    width=5,
-                    height=2,
-                    bg="#eaf0fb" if exists else "#f2f2f2",
+                    width=76,
+                    height=96,
+                    bg="#f4f6f8" if exists else "#f2f2f2",
                     fg="#315a97" if exists else "#777777",
                     font=card_title_font,
+                    bd=0,
+                    relief="flat",
+                    compound="center",
                 )
+                cover_loaded = False
+                if exists and preview_path.is_file():
+                    try:
+                        with Image.open(preview_path) as opened:
+                            cover_image = normalize_page_rgb(opened)
+                        cover_image.thumbnail(
+                            (72, 92), Image.Resampling.LANCZOS,
+                        )
+                        backdrop = Image.new("RGB", (76, 96), "#f4f6f8")
+                        px = (backdrop.width - cover_image.width) // 2
+                        py = (backdrop.height - cover_image.height) // 2
+                        backdrop.paste(cover_image, (px, py))
+                        cover_photo = ImageTk.PhotoImage(backdrop)
+                        state["cover_photos"].append(cover_photo)
+                        tile.configure(image=cover_photo)
+                        cover_loaded = True
+                    except Exception:
+                        cover_loaded = False
+                if not cover_loaded:
+                    tile.configure(
+                        text=tile_text,
+                        bg="#eaf0fb" if exists else "#f2f2f2",
+                    )
                 tile.grid(row=0, column=0, rowspan=3, sticky="n", padx=(0, 12))
+
+                if cover_source == "cover":
+                    cover_tip = (
+                        "项目封面。可替换项目图片文件夹中的 _project_cover.jpg"
+                        "（也支持 PNG/JPEG/WebP）；该文件不会计入正文图片。"
+                    )
+                elif cover_source == "first_page":
+                    cover_tip = (
+                        "当前用项目第一张图片作为预览。可在项目图片文件夹放置 "
+                        "_project_cover.jpg（也支持 PNG/JPEG/WebP）作为项目封面；"
+                        "该文件不会计入正文图片。"
+                    )
+                else:
+                    cover_tip = (
+                        "暂无封面预览。可在项目图片文件夹放置 _project_cover.jpg"
+                        "（也支持 PNG/JPEG/WebP）作为项目封面；"
+                        "该文件不会计入正文图片。"
+                    )
+                self._attach_tooltip(tile, cover_tip)
 
                 content = ttk.Frame(card)
                 content.grid(row=0, column=1, rowspan=3, sticky="nsew")
