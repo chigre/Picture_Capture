@@ -40,9 +40,18 @@ from .project_storage import (
 )
 
 
-COMMON_OCR_LANGUAGES = (
-    "eng", "chi_sim", "chi_tra", "jpn", "ara", "deu", "spa", "ita", "por", "fra",
-)
+OCR_LANGUAGE_LABEL_TO_VALUE = {
+    "英语 (eng)": "eng",
+    "中文简体 (chi_sim)": "chi_sim",
+    "中文繁体 (chi_tra)": "chi_tra",
+    "日语 (jpn)": "jpn",
+    "阿拉伯语 (ara)": "ara",
+    "德语 (deu)": "deu",
+    "西班牙语 (spa)": "spa",
+    "意大利语 (ita)": "ita",
+    "葡萄牙语 (por)": "por",
+    "法语 (fra)": "fra",
+}
 
 SEPARATOR_LABEL_TO_VALUE = {
     "自动判断": "auto",
@@ -72,6 +81,11 @@ def _label_for_value(mapping: dict[str, str], value: str, fallback: str) -> str:
         if mapped == value:
             return label
     return fallback
+
+
+def _ocr_language_code(value: str) -> str:
+    text = str(value or "").strip()
+    return OCR_LANGUAGE_LABEL_TO_VALUE.get(text, text or "eng")
 
 
 class ProjectProfileWizard(tk.Toplevel):
@@ -147,7 +161,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self.header_percent_var = tk.DoubleVar(value=float(getattr(s, "profile_header_percent", 6.0)))
         self.footer_percent_var = tk.DoubleVar(value=float(getattr(s, "profile_footer_percent", 5.0)))
         self.side_percent_var = tk.DoubleVar(value=float(getattr(s, "profile_side_percent", 8.0)))
-        self.ocr_language_var = tk.StringVar(value=str(s.ocr_language or "eng"))
+        self.ocr_language_var = tk.StringVar(value=_label_for_value(
+            OCR_LANGUAGE_LABEL_TO_VALUE, str(s.ocr_language or "eng"), str(s.ocr_language or "eng"),
+        ))
         self.index_language_var = tk.StringVar(value=str(s.dictionary_index_language or ""))
         self.content_language_var = tk.StringVar(value=str(s.dictionary_content_language or ""))
         self.custom_name_var = tk.StringVar(value=str(getattr(s, "dictionary_custom_profile_name", "") or ""))
@@ -383,7 +399,7 @@ class ProjectProfileWizard(tk.Toplevel):
 
         ttk.Label(tab, text="OCR 语言：").grid(row=2, column=0, sticky="e", padx=(0, 8), pady=5)
         combo = ttk.Combobox(
-            tab, textvariable=self.ocr_language_var, values=COMMON_OCR_LANGUAGES,
+            tab, textvariable=self.ocr_language_var, values=tuple(OCR_LANGUAGE_LABEL_TO_VALUE.keys()),
             state="normal", width=26,
         )
         combo.grid(row=2, column=1, sticky="w", pady=5)
@@ -476,7 +492,7 @@ class ProjectProfileWizard(tk.Toplevel):
             self.headword_examples_var.set("经典样例：通用兼容型（无固定词典绑定）")
 
     def _refresh_language_summary(self) -> None:
-        language = self.ocr_language_var.get().strip() or "eng"
+        language = _ocr_language_code(self.ocr_language_var.get())
         temp = replace(self.working)
         temp.ocr_language = language
         apply_reading_choice(temp, self.reading_var.get())
@@ -515,7 +531,7 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_footer_percent = max(0.0, min(35.0, float(self.footer_percent_var.get())))
         s.profile_side_percent = max(0.0, min(30.0, float(self.side_percent_var.get())))
         s.dictionary_custom_profile_name = self.custom_name_var.get().strip()
-        s.ocr_language = self.ocr_language_var.get().strip() or "eng"
+        s.ocr_language = _ocr_language_code(self.ocr_language_var.get())
         s.dictionary_index_language = self.index_language_var.get().strip()
         s.dictionary_content_language = self.content_language_var.get().strip()
         apply_headword_profile(s, self._current_profile_key())
