@@ -232,7 +232,6 @@ class ProjectProfileWizard(tk.Toplevel):
         self._build_vars()
         self._build_ui()
         self._show_sample_loading_state()
-        self._refresh_headword_description()
         self._refresh_language_summary()
         self._refresh_summary()
         # Let Tk paint the complete Wizard frame before any representative
@@ -371,6 +370,8 @@ class ProjectProfileWizard(tk.Toplevel):
             return
         if index == 1:
             self.after_idle(self._refresh_template_preview)
+        elif index == 2:
+            self.after_idle(self._refresh_headword_description)
         elif index == 4 and self._validation_results:
             self.after_idle(self._render_validation_result)
 
