@@ -611,6 +611,19 @@ def test_project_profile_feedback_tuning_is_profile_aware():
     assert marker.paddle_min_candidate_score == base_score
 
 
+def test_project_profile_classic_headword_atlas_is_packaged():
+    from PIL import Image
+
+    atlas = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "data" / "headword_examples"
+        / "classic_headword_examples.jpg"
+    )
+    assert atlas.exists()
+    with Image.open(atlas) as image:
+        assert image.size == (720, 316)
+
+
 def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
     text = source.read_text(encoding="utf-8")
@@ -634,7 +647,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "s.dictionary_body_page_range = self.dictionary_body_page_range_var.get().strip()" in text
     assert "def _body_page_range_changed" in text
 
-    assert "每一张都可以手动更换" in text
+    assert "每一张都可在右侧手动更换" in text
     assert 'text="更换…"' in text
     assert '"页面模板即时预览"' in text
     assert 'text="◀ 上一张"' in text and 'text="下一张 ▶"' in text
