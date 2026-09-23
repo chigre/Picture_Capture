@@ -1119,8 +1119,13 @@ class SettingsDialog(tk.Toplevel):
         self._field_meta = {name: (label, cast) for label, name, cast in self.FIELDS}
         self._sort_label_to_value: dict[str, str] = {}
 
-        outer = ttk.Frame(self)
+        outer = ttk.Frame(self, padding=(18, 14, 18, 12))
         outer.pack(fill="both", expand=True)
+        _build_modern_dialog_heading(
+            outer,
+            "更多参数",
+            "项目级高级设置。常用项目配置优先在【项目 Profile】完成；这里用于精细调整、排序与过滤规则。",
+        )
         notebook = ttk.Notebook(outer)
         self.notebook = notebook
         notebook.pack(fill="both", expand=True)
@@ -1356,12 +1361,18 @@ class SettingsDialog(tk.Toplevel):
         self.load_rules_editor()
 
         ttk.Separator(outer, orient="horizontal").pack(fill="x")
-        footer = ttk.Frame(outer, padding=(12, 9, 12, 12))
+        footer = ttk.Frame(outer, padding=(0, 10, 0, 0))
         footer.pack(fill="x")
-        ttk.Label(footer, text="参数改动会自动应用并保存；“保存参数”用于立即校验/关闭").pack(side="left")
-        ttk.Button(footer, text="取消", command=self.destroy).pack(side="right", padx=(6, 0))
-        ttk.Button(footer, text="保存参数", command=self.save).pack(side="right")
-        ttk.Button(footer, text="检测OCR引擎", command=self.check_ocr_engines).pack(side="right", padx=(0, 8))
+        ttk.Label(
+            footer,
+            text="改动会自动保存；“保存并关闭”会立即校验当前参数。",
+            foreground="#666666",
+        ).pack(side="left")
+        ttk.Button(footer, text="关闭", command=self.destroy).pack(side="right", padx=(6, 0))
+        ttk.Button(footer, text="保存并关闭", command=self.save).pack(side="right")
+        ttk.Button(
+            footer, text="检测 OCR 引擎", command=self.check_ocr_engines
+        ).pack(side="right", padx=(0, 8))
         self.bind("<Control-s>", lambda _event: self.save())
         self.bind("<Escape>", lambda _event: self.destroy())
         self.protocol("WM_DELETE_WINDOW", self.destroy)
