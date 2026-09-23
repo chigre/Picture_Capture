@@ -2612,66 +2612,99 @@ class ReviewWindow(tk.Toplevel):
         self.ocr_options = ttk.Frame(ocr_row, style="PCR.Surface.TFrame")
         self.ocr_options.pack(side="left", fill="x", expand=True)
 
-        network_box = ttk.LabelFrame(right, text="网络词汇核验（免费，无需 Token）", padding=6)
+        network_box = self._review_section_frame(
+            right, "网络词汇核验（免费，无需 Token）", padding=6
+        )
         network_box.pack(fill="x", pady=(0, 6))
-        network_actions = ttk.Frame(network_box)
+        network_actions = ttk.Frame(network_box, style="PCR.Surface.TFrame")
         network_actions.pack(fill="x")
         ttk.Checkbutton(
             network_actions, text="自动检查", variable=self.network_lookup_enabled_var,
             command=self._toggle_network_lookup,
         ).pack(side="left")
         ttk.Button(
-            network_actions, text="立即", width=5, command=lambda: self._schedule_network_lookup(force=True)
+            network_actions, text="立即", width=5,
+            command=lambda: self._schedule_network_lookup(force=True),
+            style="PCR.Compact.TButton",
         ).pack(side="left", padx=(5, 0))
         self.cc_cedict_lookup_button = ttk.Button(
-            network_actions, textvariable=self.cc_cedict_lookup_var, width=15, command=self.manage_cc_cedict
+            network_actions, textvariable=self.cc_cedict_lookup_var, width=15,
+            command=self.manage_cc_cedict, style="PCR.Compact.TButton",
         )
         self.cc_cedict_lookup_button.pack(side="left", padx=(5, 0))
         self.cc_simplified_compare_button = ttk.Button(
             network_actions, textvariable=self.cc_simplified_compare_var, width=14,
-            command=self.show_cc_simplified_comparison,
+            command=self.show_cc_simplified_comparison, style="PCR.Compact.TButton",
         )
         self.cc_simplified_compare_button.pack(side="left", padx=(5, 0))
         ttk.Button(
             network_actions, textvariable=self.moedict_lookup_var, width=7,
-            command=lambda: self.open_lookup_source("萌典"),
+            command=lambda: self.open_lookup_source("萌典"), style="PCR.Compact.TButton",
         ).pack(side="left", padx=(5, 0))
         ttk.Button(
             network_actions, textvariable=self.wiktionary_lookup_var, width=8,
-            command=lambda: self.open_lookup_source("维基词典"),
+            command=lambda: self.open_lookup_source("维基词典"), style="PCR.Compact.TButton",
         ).pack(side="left", padx=(5, 0))
-        ttk.Button(network_actions, text="网络搜索", width=8, command=self.open_network_web_search).pack(side="left", padx=(5, 0))
+        ttk.Button(
+            network_actions, text="网络搜索", width=8, command=self.open_network_web_search,
+            style="PCR.Compact.TButton",
+        ).pack(side="left", padx=(5, 0))
         self.network_status_label = tk.Label(
             network_box, textvariable=self.network_lookup_status_var, anchor="w", justify="left",
-            wraplength=430, fg="#555555",
+            wraplength=430, fg="#555555", bg=self._review_ui_colors["surface"],
         )
         self.network_status_label.pack(fill="x", pady=(4, 0))
         self._refresh_cc_cedict_button_idle()
 
-        ref_box = ttk.LabelFrame(right, text="参考词表", padding=6)
+        ref_box = self._review_section_frame(right, "参考词表", padding=6)
         ref_box.pack(fill="both", expand=True)
-        ref_actions = ttk.Frame(ref_box)
+        ref_actions = ttk.Frame(ref_box, style="PCR.Surface.TFrame")
         ref_actions.pack(fill="x", pady=(0, 3))
-        ttk.Button(ref_actions, text="选择文件", command=self.choose_wordslist_file).pack(side="left")
+        ttk.Button(
+            ref_actions, text="选择文件", command=self.choose_wordslist_file,
+            style="PCR.Compact.TButton",
+        ).pack(side="left")
         ttk.Label(ref_actions, text="定位：").pack(side="left", padx=(8, 2))
         self.wordslist_locator_combo = ttk.Combobox(
             ref_actions, textvariable=self.wordslist_locator_var,
             values=tuple(self.WORDSLIST_LOCATOR_LABEL_TO_KEY), state="readonly", width=18,
+            style="PCR.Compact.TCombobox",
         )
         self.wordslist_locator_combo.pack(side="left")
         self.wordslist_locator_combo.bind("<<ComboboxSelected>>", self._change_wordslist_locator_mode)
         ttk.Button(
-            ref_actions, text="从所选词开始填充至本页结束", command=self.fill_words
+            ref_actions, text="从所选词开始填充至本页结束", command=self.fill_words,
+            style="PCR.Compact.TButton",
         ).pack(side="left", padx=(6, 0))
         self.wordslist_label_var = tk.StringVar(value="wordslist 参考词表")
-        ttk.Label(ref_box, textvariable=self.wordslist_label_var, wraplength=430).pack(anchor="w")
-        word_nav = ttk.Frame(ref_box)
+        ttk.Label(
+            ref_box, textvariable=self.wordslist_label_var, wraplength=430,
+            style="PCR.Muted.TLabel",
+        ).pack(anchor="w")
+        word_nav = ttk.Frame(ref_box, style="PCR.Surface.TFrame")
         word_nav.pack(fill="x", pady=(2, 0))
         self.word_window_var = tk.StringVar(value="")
         ttk.Label(word_nav, textvariable=self.word_window_var).pack(side="left", fill="x", expand=True)
-        ttk.Button(word_nav, text="前500", width=7, command=lambda: self.shift_wordslist_window(-1)).pack(side="right", padx=(4, 0))
-        ttk.Button(word_nav, text="后500", width=7, command=lambda: self.shift_wordslist_window(1)).pack(side="right")
-        self.word_list = tk.Listbox(ref_box, exportselection=False, font=("Cambria", 14))
+        ttk.Button(
+            word_nav, text="前500", width=7, command=lambda: self.shift_wordslist_window(-1),
+            style="PCR.Tool.TButton",
+        ).pack(side="right", padx=(4, 0))
+        ttk.Button(
+            word_nav, text="后500", width=7, command=lambda: self.shift_wordslist_window(1),
+            style="PCR.Tool.TButton",
+        ).pack(side="right")
+        self.word_list = tk.Listbox(
+            ref_box,
+            exportselection=False,
+            font=("Cambria", 14),
+            relief="flat",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=self._review_ui_colors["border"],
+            highlightcolor=self._review_ui_colors["border"],
+            selectbackground=self._review_ui_colors["selection"],
+            selectforeground=self._review_ui_colors["text"],
+        )
         self.word_list.pack(fill="both", expand=True, pady=(4, 0))
         self.word_list_default_bg = str(self.word_list.cget("background"))
         self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)
@@ -2682,7 +2715,7 @@ class ReviewWindow(tk.Toplevel):
         if panel == "digit":
             expanded = not self.digit_map_expanded.get()
             self.digit_map_expanded.set(expanded)
-            self.digit_panel_title.set(("▼ " if expanded else "▶ ") + "数字替换映射")
+            self.digit_panel_title.set(("▾ " if expanded else "▸ ") + "数字替换映射")
             if expanded:
                 self.digit_panel_body.pack(fill="x")
             else:
@@ -2690,7 +2723,7 @@ class ReviewWindow(tk.Toplevel):
             return
         expanded = not self.accent_panel_expanded.get()
         self.accent_panel_expanded.set(expanded)
-        self.accent_panel_title.set(("▼ " if expanded else "▶ ") + "变音字符")
+        self.accent_panel_title.set(("▾ " if expanded else "▸ ") + "变音字符")
         if expanded:
             self.accent_panel_body.pack(fill="x")
         else:
