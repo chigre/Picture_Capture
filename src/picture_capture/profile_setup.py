@@ -621,7 +621,6 @@ class ProjectProfileWizard(tk.Toplevel):
             self.template_preview_caption_var.set(path.name)
 
     @staticmethod
-    def _mode_row    @staticmethod
     def _mode_row(
         parent, row: int, label: str, variable: tk.StringVar, values: tuple[str, ...],
     ) -> None:
