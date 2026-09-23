@@ -580,14 +580,32 @@ class ProjectProfileWizard(tk.Toplevel):
         except (tk.TclError, ValueError, IndexError):
             return None
 
+    @staticmethod
+    def _is_widget_descendant(widget, ancestor) -> bool:
+        current = widget
+        while current is not None:
+            if current == ancestor:
+                return True
+            try:
+                parent_name = current.winfo_parent()
+                current = current._nametowidget(parent_name) if parent_name else None
+            except (tk.TclError, KeyError):
+                return False
+        return False
+
     def _wizard_mousewheel(self, event) -> str | None:
         if isinstance(event.widget, (tk.Spinbox, ttk.Combobox)):
             return None
-        canvas = self._active_tab_canvas()
-        if canvas is None:
-            return None
         delta = int(getattr(event, "delta", 0) or 0)
         if not delta:
+            return None
+        if hasattr(self, "right_canvas") and self._is_widget_descendant(
+            event.widget, self.right_content
+        ):
+            self.right_canvas.yview_scroll((-1 if delta > 0 else 1) * 3, "units")
+            return "break"
+        canvas = self._active_tab_canvas()
+        if canvas is None:
             return None
         canvas.yview_scroll((-1 if delta > 0 else 1) * 3, "units")
         return "break"
@@ -595,6 +613,11 @@ class ProjectProfileWizard(tk.Toplevel):
     def _wizard_linux_wheel(self, event, direction: int) -> str | None:
         if isinstance(event.widget, (tk.Spinbox, ttk.Combobox)):
             return None
+        if hasattr(self, "right_canvas") and self._is_widget_descendant(
+            event.widget, self.right_content
+        ):
+            self.right_canvas.yview_scroll(int(direction) * 3, "units")
+            return "break"
         canvas = self._active_tab_canvas()
         if canvas is None:
             return None
@@ -741,23 +764,20 @@ class ProjectProfileWizard(tk.Toplevel):
 
 
     def _build_template_tab(self, tab: ttk.Frame) -> None:
-        tab.columnconfigure(0, weight=0)
-        tab.columnconfigure(1, weight=1)
-        ttk.Label(tab, text="② 正文在哪里？", font=("TkDefaultFont", 12, "bold")).grid(
-            row=0, column=0, columnspan=2, sticky="w"
-        )
+        tab.columnconfigure(0, weight=1)
+        ttk.Label(
+            tab, text="② 正文在哪里？",
+            font=("TkDefaultFont", 12, "bold"),
+        ).grid(row=0, column=0, sticky="w")
         ttk.Label(
             tab,
-            text="左侧定义正文与排除区域；右侧始终用一张真实代表页即时预览。A/B 表示相邻扫描页，不强行等同书籍奇偶页。",
-            foreground="#666666",
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 8))
+            text="左侧定义正文与排除区域；右侧始终用一张真实代表页即时预览。A/B 表示相邻扫描页。",
+            foreground="#666666", wraplength=self._wizard_left_width,
+        ).grid(row=1, column=0, sticky="w", pady=(2, 8))
 
-        left_stack = ttk.Frame(tab)
-        left_stack.grid(row=2, column=0, sticky="nw", padx=(0, 10))
-        left_stack.columnconfigure(0, weight=1)
-
-        body = ttk.LabelFrame(left_stack, text="正文与分栏", padding=10)
-        body.grid(row=0, column=0, sticky="ew")
+        body = ttk.LabelFrame(tab, text="正文与分栏", padding=9)
+        body.grid(row=2, column=0, sticky="ew")
+        body.columnconfigure(1, weight=1)
         ttk.Label(body, text="正文栏数：").grid(row=0, column=0, sticky="e", pady=5)
         self.columns_spin = tk.Spinbox(
             body, from_=1, to=8, width=5, textvariable=self.columns_var,
@@ -766,7 +786,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Label(
             body,
             text="代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。",
-            foreground="#666666", wraplength=390,
+            foreground="#666666", wraplength=self._wizard_left_width,
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 5))
         ttk.Label(body, text="中央分隔线：").grid(row=2, column=0, sticky="e", pady=5)
         ttk.Combobox(
@@ -774,23 +794,29 @@ class ProjectProfileWizard(tk.Toplevel):
             values=tuple(SEPARATOR_LABEL_TO_VALUE.keys()),
         ).grid(row=2, column=1, sticky="w", pady=5)
 
-        self.analysis_suggestion_var = tk.StringVar(value="进入本步骤时会分析当前代表页，也可随时重新分析。")
-        ttk.Label(body, textvariable=self.analysis_suggestion_var, wraplength=390).grid(
-            row=3, column=0, columnspan=2, sticky="w", pady=(12, 4)
+        self.analysis_suggestion_var = tk.StringVar(
+            value="进入本步骤时会分析当前代表页，也可随时重新分析。"
         )
+        ttk.Label(
+            body, textvariable=self.analysis_suggestion_var,
+            wraplength=self._wizard_left_width,
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(10, 4))
         analysis_buttons = ttk.Frame(body)
         analysis_buttons.grid(row=4, column=0, columnspan=2, sticky="w")
         self.analyze_button = ttk.Button(
-            analysis_buttons, text="重新分析代表页", command=self.analyze_representative_pages,
+            analysis_buttons, text="重新分析代表页",
+            command=self.analyze_representative_pages,
         )
         self.analyze_button.pack(side="left")
         self.apply_analysis_button = ttk.Button(
-            analysis_buttons, text="应用建议", command=self.apply_analysis_suggestion, state="disabled",
+            analysis_buttons, text="应用建议",
+            command=self.apply_analysis_suggestion, state="disabled",
         )
         self.apply_analysis_button.pack(side="left", padx=(6, 0))
 
-        edges = ttk.LabelFrame(left_stack, text="页眉 / 页尾 / 页边", padding=10)
-        edges.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        edges = ttk.LabelFrame(tab, text="页眉 / 页尾 / 页边", padding=9)
+        edges.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        edges.columnconfigure(1, weight=1)
         self._mode_row(
             edges, 0, "页眉：", self.header_mode_var,
             tuple(HEADER_LABEL_TO_VALUE.keys()),
@@ -822,30 +848,19 @@ class ProjectProfileWizard(tk.Toplevel):
             textvariable=self.side_percent_var,
         )
         self.side_percent_spin.grid(row=5, column=1, sticky="w")
-        ttk.Label(edges, text="A/B 起始页：").grid(row=6, column=0, sticky="e", pady=(10, 4))
+        ttk.Label(edges, text="A/B 起始页：").grid(
+            row=6, column=0, sticky="e", pady=(10, 4)
+        )
         self.first_variant_combo = ttk.Combobox(
-            edges, textvariable=self.first_variant_var, state="readonly", width=8, values=("A", "B"),
+            edges, textvariable=self.first_variant_var,
+            state="readonly", width=8, values=("A", "B"),
         )
         self.first_variant_combo.grid(row=6, column=1, sticky="w", pady=(10, 4))
         ttk.Label(
             edges,
             text="仅“外侧/内侧交替”需要 A/B：默认 A 页左侧、B 页右侧；若第一张扫描实际属于 B 页，选择 B 即可整体翻转。",
-            foreground="#666666", wraplength=390,
+            foreground="#666666", wraplength=self._wizard_left_width,
         ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(8, 0))
-
-        preview = ttk.LabelFrame(tab, text="页面模板即时预览", padding=8)
-        preview.grid(row=2, column=1, sticky="nsew")
-        preview.columnconfigure(0, weight=1)
-        preview.rowconfigure(1, weight=1)
-        nav = ttk.Frame(preview)
-        nav.grid(row=0, column=0, sticky="ew", pady=(0, 6))
-        ttk.Button(nav, text="◀ 上一张", command=lambda: self._move_template_preview(-1)).pack(side="left")
-        ttk.Button(nav, text="下一张 ▶", command=lambda: self._move_template_preview(1)).pack(side="right")
-        self.template_preview_caption_var = tk.StringVar(value="")
-        ttk.Label(nav, textvariable=self.template_preview_caption_var).pack(side="left", expand=True)
-        self.template_preview_frame = ttk.Frame(preview)
-        self.template_preview_frame.grid(row=1, column=0, sticky="nsew")
-        self.template_preview_frame.columnconfigure(0, weight=1)
 
         for variable in (
             self.header_mode_var, self.footer_mode_var, self.side_mode_var,
@@ -854,6 +869,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 "write", lambda *_args: self.after_idle(self._refresh_template_controls)
             )
         self._refresh_template_controls()
+
 
     def _refresh_template_controls(self) -> None:
         """Enable only page-template controls that currently have meaning."""
@@ -1002,22 +1018,21 @@ class ProjectProfileWizard(tk.Toplevel):
             wraplength=self._wizard_content_width, justify="left",
         ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 4))
 
-        examples = ttk.LabelFrame(tab, text="经典样例（局部裁切）", padding=8)
-        examples.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(8, 0))
-        examples.columnconfigure(0, weight=1)
-        examples.columnconfigure(1, weight=1)
-        examples.columnconfigure(2, weight=1)
-        self.headword_examples_frame = examples
+        ttk.Label(
+            tab,
+            text="右侧显示与当前词头结构匹配的经典局部裁切样例。",
+            foreground="#666666", wraplength=self._wizard_left_width,
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(6, 0))
         ttk.Label(
             tab, textvariable=self.headword_examples_var,
-            wraplength=self._wizard_content_width, justify="left",
+            wraplength=self._wizard_left_width, justify="left",
             foreground="#555555",
-        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(3, 0))
 
         structures = ttk.LabelFrame(
             tab, text="允许的词头结构（决定哪些 parser 通道开放）", padding=10,
         )
-        structures.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        structures.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         structures.columnconfigure(0, weight=1)
         self.headword_structure_frame = structures
         for row, (label, variable) in enumerate((
@@ -2123,11 +2138,11 @@ class ProjectProfileWizard(tk.Toplevel):
                 if not messagebox.askyesno(
                     "Profile 尚未完整验证",
                     "当前设置尚未通过全部代表页测试，或测试后又修改了设置。\n\n"
-                    "建议先到【5 测试与确认】运行“测试当前 Profile”。"
+                    "建议先到【4 测试与确认】运行“测试当前 Profile”。"
                     "是否仍然保存并使用当前设置？",
                     parent=self,
                 ):
-                    self.notebook.select(self.tabs[4])
+                    self.notebook.select(self.tabs[3])
                     return
             settings = self._settings_from_ui()
             if self.working.profile_last_validated_pages:
