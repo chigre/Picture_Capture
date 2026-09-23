@@ -54,11 +54,6 @@ OCR_LANGUAGE_LABEL_TO_VALUE = {
     "法语 (fra)": "fra",
 }
 
-COLUMNS_POLICY_LABEL_TO_VALUE = {
-    "每页自动检测栏数": "detect",
-    "固定栏数": "fixed",
-}
-
 SEPARATOR_LABEL_TO_VALUE = {
     "自动判断": "auto",
     "有中央分隔线": "present",
@@ -140,11 +135,6 @@ class ProjectProfileWizard(tk.Toplevel):
     def _build_vars(self) -> None:
         s = self.working
         self.reading_var = tk.StringVar(value=reading_choice_from_settings(s))
-        self.columns_policy_var = tk.StringVar(value=_label_for_value(
-            COLUMNS_POLICY_LABEL_TO_VALUE,
-            str(getattr(s, "layout_columns_policy", "detect") or "detect"),
-            "每页自动检测栏数",
-        ))
         self.columns_var = tk.IntVar(value=max(1, int(s.columns)))
         self.separator_var = tk.StringVar(value=_label_for_value(
             SEPARATOR_LABEL_TO_VALUE, str(s.layout_column_separator_mode or "auto"), "自动判断",
@@ -179,7 +169,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_profile_var = tk.StringVar(value=self._profile_label_for_key(s.dictionary_profile_id))
 
         traced = (
-            self.reading_var, self.columns_policy_var, self.columns_var, self.separator_var,
+            self.reading_var, self.columns_var, self.separator_var,
             self.header_mode_var, self.footer_mode_var, self.side_mode_var,
             self.first_variant_var, self.header_percent_var,
             self.footer_percent_var, self.side_percent_var, self.ocr_language_var,
@@ -272,17 +262,16 @@ class ProjectProfileWizard(tk.Toplevel):
         right = ttk.LabelFrame(tab, text="页眉 / 页尾 / 页边", padding=10)
         right.grid(row=2, column=1, sticky="nsew", padx=(5, 0))
 
-        ttk.Label(left, text="栏数策略：").grid(row=0, column=0, sticky="e", pady=5)
-        self.columns_policy_combo = ttk.Combobox(
-            left, textvariable=self.columns_policy_var, state="readonly", width=18,
-            values=tuple(COLUMNS_POLICY_LABEL_TO_VALUE.keys()),
-        )
-        self.columns_policy_combo.grid(row=0, column=1, sticky="w", pady=5)
-        ttk.Label(left, text="正文栏数：").grid(row=1, column=0, sticky="e", pady=5)
+        ttk.Label(left, text="正文栏数：").grid(row=0, column=0, sticky="e", pady=5)
         self.columns_spin = tk.Spinbox(
             left, from_=1, to=8, width=5, textvariable=self.columns_var,
         )
-        self.columns_spin.grid(row=1, column=1, sticky="w", pady=5)
+        self.columns_spin.grid(row=0, column=1, sticky="w", pady=5)
+        ttk.Label(
+            left,
+            text="代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。",
+            foreground="#666666", wraplength=360,
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 5))
         ttk.Label(left, text="中央分隔线：").grid(row=2, column=0, sticky="e", pady=5)
         ttk.Combobox(
             left, textvariable=self.separator_var, state="readonly", width=18,
@@ -352,8 +341,7 @@ class ProjectProfileWizard(tk.Toplevel):
         preview.columnconfigure(1, weight=1)
         self.template_preview_frame = preview
         for variable in (
-            self.columns_policy_var, self.header_mode_var,
-            self.footer_mode_var, self.side_mode_var,
+            self.header_mode_var, self.footer_mode_var, self.side_mode_var,
         ):
             variable.trace_add(
                 "write", lambda *_args: self.after_idle(self._refresh_template_controls)
@@ -370,10 +358,7 @@ class ProjectProfileWizard(tk.Toplevel):
         side_value = SIDE_LABEL_TO_VALUE.get(self.side_mode_var.get(), "none")
         side_present = side_value != "none"
         alternating = side_value in {"outer", "inner"}
-        fixed_columns = COLUMNS_POLICY_LABEL_TO_VALUE.get(
-            self.columns_policy_var.get(), "detect"
-        ) == "fixed"
-        self.columns_spin.configure(state="normal" if fixed_columns else "disabled")
+        self.columns_spin.configure(state="normal")
         self.header_percent_spin.configure(state="normal" if header_present else "disabled")
         self.footer_percent_spin.configure(state="normal" if footer_present else "disabled")
         self.side_percent_spin.configure(state="normal" if side_present else "disabled")
@@ -426,11 +411,10 @@ class ProjectProfileWizard(tk.Toplevel):
                     else:
                         draw.rectangle((w - margin, 0, w, h), fill=(100, 100, 100, 80))
 
-                if COLUMNS_POLICY_LABEL_TO_VALUE.get(self.columns_policy_var.get(), "detect") == "fixed":
-                    columns = max(1, int(self.columns_var.get()))
-                    for col in range(1, columns):
-                        x = round(w * col / columns)
-                        draw.line((x, 0, x, h), fill=(30, 120, 210, 210), width=2)
+                columns = max(1, int(self.columns_var.get()))
+                for col in range(1, columns):
+                    x = round(w * col / columns)
+                    draw.line((x, 0, x, h), fill=(30, 120, 210, 210), width=2)
 
                 photo = ImageTk.PhotoImage(preview)
                 self._template_photos.append(photo)
@@ -648,9 +632,9 @@ class ProjectProfileWizard(tk.Toplevel):
     def _settings_from_ui(self) -> AppSettings:
         s = replace(self.working)
         apply_reading_choice(s, self.reading_var.get())
-        s.layout_columns_policy = COLUMNS_POLICY_LABEL_TO_VALUE.get(
-            self.columns_policy_var.get(), "detect"
-        )
+        # Runtime geometry uses the project-confirmed column count. Automatic
+        # analysis above is a setup aid, not a hidden per-page detector.
+        s.layout_columns_policy = "fixed"
         s.columns = max(1, int(self.columns_var.get()))
         s.layout_column_separator_mode = SEPARATOR_LABEL_TO_VALUE.get(
             self.separator_var.get(), "auto"
