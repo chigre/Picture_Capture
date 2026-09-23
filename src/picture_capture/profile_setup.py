@@ -785,7 +785,8 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_description_var = tk.StringVar(value="")
         self.headword_examples_var = tk.StringVar(value="")
         ttk.Label(
-            tab, textvariable=self.headword_description_var, wraplength=900, justify="left",
+            tab, textvariable=self.headword_description_var,
+            wraplength=self._wizard_content_width, justify="left",
         ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 4))
 
         examples = ttk.LabelFrame(tab, text="经典样例（局部裁切）", padding=8)
@@ -795,12 +796,37 @@ class ProjectProfileWizard(tk.Toplevel):
         examples.columnconfigure(2, weight=1)
         self.headword_examples_frame = examples
         ttk.Label(
-            tab, textvariable=self.headword_examples_var, wraplength=900, justify="left",
+            tab, textvariable=self.headword_examples_var,
+            wraplength=self._wizard_content_width, justify="left",
             foreground="#555555",
         ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
+        specificity = ttk.LabelFrame(tab, text="词头专属性", padding=10)
+        specificity.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        specificity.columnconfigure(0, weight=1)
+        self.headword_specificity_frame = specificity
+        self.cjk_specificity_widgets: list[ttk.Checkbutton] = []
+        for row, (label, variable) in enumerate((
+            ("大字单字可作为词头", self.cjk_allow_single_var),
+            ("【括号词】可作为词头", self.cjk_allow_bracketed_var),
+            ("必须靠近栏左缘", self.cjk_require_left_edge_var),
+            ("释义正文中也经常出现【括号词】", self.cjk_brackets_in_body_var),
+            ("只有视觉明显突出时才把单字/括号词当词头", self.cjk_require_visual_var),
+        )):
+            widget = ttk.Checkbutton(
+                specificity, text=label, variable=variable,
+                command=self._headword_specificity_changed,
+            )
+            widget.grid(row=row, column=0, sticky="w", pady=2)
+            self.cjk_specificity_widgets.append(widget)
+        ttk.Label(
+            specificity,
+            text="这些选项只在“CJK 大字/括号词头”结构下生效；目的是表达版式事实，而不是让你手调 OCR 阈值。",
+            foreground="#666666", wraplength=self._wizard_content_width,
+        ).grid(row=5, column=0, sticky="w", pady=(6, 0))
+
         help_box = ttk.LabelFrame(tab, text="理解方式", padding=10)
-        help_box.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(14, 0))
+        help_box.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(14, 0))
         help_box.columnconfigure(0, weight=1)
         self.headword_help_frame = help_box
 
