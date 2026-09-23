@@ -3141,7 +3141,10 @@ def filter_headword_records(
     # compounds with oversized single-character heads.  Recover the latter from
     # a left-strip visual projection even when OCR merged the glyph with nearby
     # pronunciation/variant text or shifted its box slightly to the right.
-    if _is_chinese_ocr(settings):
+    if _is_chinese_ocr(settings) and (
+        getattr(active_profile, "key", "") != "cjk_visual"
+        or bool(getattr(settings, "profile_cjk_allow_single_headword", True))
+    ):
         zone_width, visual_runs = _cjk_visual_projection_runs(gray, header_cutoff, settings, ratio)
         for run_start, run_end in visual_runs:
             word, confidence, matched_record = _cjk_word_for_visual_run(records, (run_start, run_end), zone_width, settings)
