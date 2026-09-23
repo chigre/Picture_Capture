@@ -590,7 +590,21 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "样例区只显示局部裁切图，不回退为整页预览。" in text
     assert "索引语言（2 位）" in text
     assert "indices = list(self.sample_indices)" in text
-    assert "thumb.thumbnail((500, 360)" in text
+
+    # The window skeleton is built first; representative image decoding begins
+    # later on a worker thread instead of blocking the button click.
+    assert "self._show_sample_loading_state()" in text
+    assert "self.after(20, self._start_sample_thumbnail_load)" in text
+    assert "threading.Thread(target=worker, daemon=True).start()" in text
+    assert "elif index == 2:" in text and "self._refresh_headword_description" in text
+
+    # Multi-page validation is presented one page at a time with the same
+    # previous/next navigation language as the page-template preview.
+    assert "self._validation_results = list(results)" in text
+    assert "def _move_validation_preview" in text
+    assert "def _render_validation_result" in text
+    assert "thumb.thumbnail((650, 500)" in text
+    assert "fill=(255, 0, 0, 255), width=1" in text
 
 
 def test_project_profile_wizard_is_the_normal_entry_path():
@@ -604,6 +618,20 @@ def test_project_profile_wizard_is_the_normal_entry_path():
     end = text.index("    def open_project_details(", start)
     assert 'self.open_settings(initial_tab="profile")' not in text[start:end]
 
+
+
+def test_main_ocr_drawing_defaults_to_force_refresh_and_paddle_only():
+    app_source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    app_text = app_source.read_text(encoding="utf-8")
+    assert 'self.ocr_refresh_var = tk.StringVar(value="force")' in app_text
+    assert "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启" in app_text
+    assert 'LENS_MODE_LABELS["off"]' in app_text
+
+    settings = AppSettings()
+    assert settings.paddle_use_paddleocr is True
+    assert settings.paddle_compare_tesseract is False
+    assert settings.paddle_enable_lens is False
+    assert settings.paddle_lens_mode == "off"
 
 def test_analysis_threshold_modes_are_effective():
     import numpy as np
