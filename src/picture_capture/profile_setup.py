@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import queue
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -70,6 +71,8 @@ class ProjectProfileWizard(tk.Toplevel):
         self._validation_running = False
         self._analysis_running = False
         self._analysis_suggestion: dict[str, object] = {}
+        self._analysis_queue: queue.Queue | None = None
+        self._validation_queue: queue.Queue | None = None
         self.sample_indices = sample_page_indices(len(self.project.images), 6)
 
         self._build_vars()
@@ -523,9 +526,24 @@ class ProjectProfileWizard(tk.Toplevel):
                     estimates.append(detect_layout_parameters(image, page_settings))
                 except Exception as exc:
                     errors.append(f"{path.name}: {exc}")
-            self.after(0, lambda: self._finish_analysis(estimates, errors))
+            assert self._analysis_queue is not None
+            self._analysis_queue.put((estimates, errors))
 
+        self._analysis_queue = queue.Queue(maxsize=1)
         threading.Thread(target=worker, daemon=True).start()
+        self.after(100, self._poll_analysis_queue)
+
+    def _poll_analysis_queue(self) -> None:
+        if self._analysis_queue is None:
+            return
+        try:
+            estimates, errors = self._analysis_queue.get_nowait()
+        except queue.Empty:
+            if self.winfo_exists() and self._analysis_running:
+                self.after(100, self._poll_analysis_queue)
+            return
+        self._analysis_queue = None
+        self._finish_analysis(estimates, errors)
 
     def _finish_analysis(self, estimates, errors: list[str]) -> None:
         self._analysis_running = False
@@ -590,9 +608,24 @@ class ProjectProfileWizard(tk.Toplevel):
                     results.append((index, path.name, len(entries), len(geometry.column_starts), preview, None))
                 except Exception as exc:
                     results.append((index, path.name, 0, 0, None, str(exc)))
-            self.after(0, lambda: self._finish_validation(results))
+            assert self._validation_queue is not None
+            self._validation_queue.put(results)
 
+        self._validation_queue = queue.Queue(maxsize=1)
         threading.Thread(target=worker, daemon=True).start()
+        self.after(100, self._poll_validation_queue)
+
+    def _poll_validation_queue(self) -> None:
+        if self._validation_queue is None:
+            return
+        try:
+            results = self._validation_queue.get_nowait()
+        except queue.Empty:
+            if self.winfo_exists() and self._validation_running:
+                self.after(100, self._poll_validation_queue)
+            return
+        self._validation_queue = None
+        self._finish_validation(results)
 
     @staticmethod
     def _marker_preview(image: Image.Image, entries, geometry) -> Image.Image:
