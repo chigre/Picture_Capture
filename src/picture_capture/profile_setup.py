@@ -33,6 +33,7 @@ from .profile_semantics import (
     reading_choice_from_settings,
     probable_body_page_indices,
     representative_page_indices,
+    suggested_body_page_range,
     page_template_analysis_image,
     page_variant,
 )
@@ -214,6 +215,8 @@ class ProjectProfileWizard(tk.Toplevel):
         self._analysis_auto_apply = False
         self._analysis_queue: queue.Queue | None = None
         self._validation_queue: queue.Queue | None = None
+        if not str(getattr(self.working, "dictionary_body_page_range", "") or "").strip():
+            self.working.dictionary_body_page_range = suggested_body_page_range(self.project.images)
         configured_body = configured_body_page_indices(
             len(self.project.images),
             getattr(self.working, "dictionary_body_page_range", ""),
@@ -245,6 +248,10 @@ class ProjectProfileWizard(tk.Toplevel):
 
     def _build_vars(self) -> None:
         s = self.working
+        self.dictionary_full_name_var = tk.StringVar(value=str(s.dictionary_full_name or ""))
+        self.dictionary_abbreviation_var = tk.StringVar(value=str(s.dictionary_abbreviation or ""))
+        self.dictionary_isbn_var = tk.StringVar(value=str(s.dictionary_isbn or ""))
+        self.dictionary_body_page_range_var = tk.StringVar(value=str(s.dictionary_body_page_range or ""))
         self.reading_var = tk.StringVar(value=reading_choice_from_settings(s))
         self.columns_var = tk.IntVar(value=max(1, int(s.columns)))
         self.separator_var = tk.StringVar(value=_label_for_value(
@@ -292,7 +299,10 @@ class ProjectProfileWizard(tk.Toplevel):
             var.trace_add("write", lambda *_args: self.after_idle(self._profile_input_changed))
         # Project metadata changes the summary only; it does not invalidate a
         # successful recognition test.
-        for var in (self.index_language_var, self.content_language_var):
+        for var in (
+            self.dictionary_full_name_var, self.dictionary_abbreviation_var,
+            self.dictionary_isbn_var, self.index_language_var, self.content_language_var,
+        ):
             var.trace_add("write", lambda *_args: self.after_idle(self._refresh_summary))
 
     def _build_ui(self) -> None:
@@ -316,7 +326,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.tabs: list[ttk.Frame] = []
         self.tab_contents: list[ttk.Frame] = []
         self.tab_canvases: list[tk.Canvas] = []
-        for label in ("1 阅读方式", "2 页面模板", "3 词头结构", "4 语言与 OCR", "5 测试与确认"):
+        for label in ("1 词典信息与阅读方式", "2 页面模板", "3 词头结构", "4 语言与 OCR", "5 测试与确认"):
             host = ttk.Frame(self.notebook)
             host.rowconfigure(0, weight=1)
             host.columnconfigure(0, weight=1)
@@ -405,19 +415,48 @@ class ProjectProfileWizard(tk.Toplevel):
 
     def _build_reading_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=1)
+
+        info = ttk.LabelFrame(tab, text="词典项目详情", padding=(10, 8))
+        info.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        for col in (1, 3, 5, 7):
+            info.columnconfigure(col, weight=1)
+
+        ttk.Label(info, text="词典完整名称：").grid(row=0, column=0, sticky="e", padx=(0, 4))
+        ttk.Entry(
+            info, textvariable=self.dictionary_full_name_var, width=20,
+        ).grid(row=0, column=1, sticky="ew", padx=(0, 10))
+
+        ttk.Label(info, text="词典缩写名称：").grid(row=0, column=2, sticky="e", padx=(0, 4))
+        ttk.Entry(
+            info, textvariable=self.dictionary_abbreviation_var, width=11,
+        ).grid(row=0, column=3, sticky="ew", padx=(0, 10))
+
+        ttk.Label(info, text="ISBN：").grid(row=0, column=4, sticky="e", padx=(0, 4))
+        ttk.Entry(
+            info, textvariable=self.dictionary_isbn_var, width=16,
+        ).grid(row=0, column=5, sticky="ew", padx=(0, 10))
+
+        ttk.Label(info, text="正文页码范围：").grid(row=0, column=6, sticky="e", padx=(0, 4))
+        self.body_page_range_entry = ttk.Entry(
+            info, textvariable=self.dictionary_body_page_range_var, width=13,
+        )
+        self.body_page_range_entry.grid(row=0, column=7, sticky="ew")
+        self.body_page_range_entry.bind("<FocusOut>", self._body_page_range_changed)
+        self.body_page_range_entry.bind("<Return>", self._body_page_range_changed)
+
         ttk.Label(
             tab,
             text="① 页面怎么读？",
             font=("TkDefaultFont", 12, "bold"),
-        ).grid(row=0, column=0, sticky="w")
+        ).grid(row=1, column=0, sticky="w")
         ttk.Label(
             tab,
-            text="这里只确认实际页面的阅读方向；需要的镜像或旋转由软件自动处理。",
+            text="这里只确认实际页面的阅读方向；需要的镜像或旋转由软件自动处理。正文页码范围首次自动填充，之后可直接修改。",
             foreground="#666666",
-        ).grid(row=1, column=0, sticky="w", pady=(2, 8))
+        ).grid(row=2, column=0, sticky="w", pady=(2, 8))
 
         choices = ttk.Frame(tab)
-        choices.grid(row=2, column=0, sticky="w")
+        choices.grid(row=3, column=0, sticky="w")
         for column, key in enumerate(("horizontal-ltr", "horizontal-rtl", "vertical-rl", "vertical-lr")):
             ttk.Radiobutton(
                 choices, text=READING_LABELS[key], variable=self.reading_var, value=key,
@@ -426,15 +465,46 @@ class ProjectProfileWizard(tk.Toplevel):
 
         ttk.Label(
             tab,
-            text="代表页优先使用【项目详情】中的正文页范围；未填写时再从疑似正文的前部 / 中部 / 后部抽取，并避开 0000_*、目录、附录等明显非正文页；每一张都可以手动更换。",
+            text="代表页优先使用上方正文页码范围；未填写或无效时再从疑似正文的前部 / 中部 / 后部抽取，并避开 0000_*、目录、附录等明显非正文页；每一张都可以手动更换。",
             foreground="#666666", wraplength=980,
-        ).grid(row=3, column=0, sticky="w", pady=(10, 4))
+        ).grid(row=4, column=0, sticky="w", pady=(10, 4))
         samples = ttk.LabelFrame(tab, text="代表页（前部 / 中部 / 后部）", padding=8)
-        samples.grid(row=4, column=0, sticky="nsew", pady=(4, 0))
+        samples.grid(row=5, column=0, sticky="nsew", pady=(4, 0))
         samples.columnconfigure(0, weight=1)
         samples.columnconfigure(1, weight=1)
         samples.columnconfigure(2, weight=1)
         self.sample_frame = samples
+
+    def _body_page_range_changed(self, _event=None) -> None:
+        """Re-sample representatives after the user edits the body-page range."""
+        raw = self.dictionary_body_page_range_var.get().strip()
+        configured = configured_body_page_indices(len(self.project.images), raw)
+        self.working.dictionary_body_page_range = raw
+        self.sample_candidates = probable_body_page_indices(
+            self.project.images, configured or None,
+        )
+        new_indices = representative_page_indices(
+            self.project.images, 6, configured or None,
+        )
+        if new_indices == self.sample_indices:
+            return
+        self.sample_indices = new_indices
+        self.template_preview_slot = 0
+        self.validation_preview_slot = 0
+        self._profile_revision += 1
+        self._mark_validation_stale()
+        self._analysis_suggestion = {}
+        if hasattr(self, "analysis_suggestion_var"):
+            self.analysis_suggestion_var.set("正文页码范围已改变，请重新分析当前代表页。")
+            self.apply_analysis_button.configure(state="disabled")
+        self._start_sample_thumbnail_load()
+        if hasattr(self, "notebook"):
+            try:
+                if self.notebook.index(self.notebook.select()) == 1:
+                    self._refresh_template_preview()
+            except (tk.TclError, ValueError):
+                pass
+
 
     def _build_template_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=0)
@@ -943,6 +1013,10 @@ class ProjectProfileWizard(tk.Toplevel):
 
     def _settings_from_ui(self) -> AppSettings:
         s = replace(self.working)
+        s.dictionary_full_name = self.dictionary_full_name_var.get().strip()
+        s.dictionary_abbreviation = self.dictionary_abbreviation_var.get().strip()
+        s.dictionary_isbn = self.dictionary_isbn_var.get().strip()
+        s.dictionary_body_page_range = self.dictionary_body_page_range_var.get().strip()
         apply_reading_choice(s, self.reading_var.get())
         # Runtime geometry uses the project-confirmed column count. Automatic
         # analysis above is a setup aid, not a hidden per-page detector.
