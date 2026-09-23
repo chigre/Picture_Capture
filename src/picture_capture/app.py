@@ -11660,21 +11660,54 @@ class PictureCaptureApp(tk.Tk):
             write_pdic(pdic_path(page), entries, image.width, pages_info[index])
             return len(entries)
 
-        def done(completed, total, stopped, _results, error):
+        def done(completed, total, stopped, results, error):
             if normal_executor is not None:
                 normal_executor.shutdown(wait=False, cancel_futures=True)
             if error is not None:
                 return
             self.load_page(self.current_index)
+            quality_text = ""
             if method == "paddleocr":
                 self._refresh_page_quality_colors()
+                quality_text = "；页面列表已按 OCR 一致性/质量状态更新"
+            else:
+                counts = [
+                    int(value) for value in results
+                    if isinstance(value, (int, float)) and int(value) >= 0
+                ]
+                suspect_positions: list[int] = []
+                median_count = float(statistics.median(counts)) if counts else 0.0
+                for position, count in enumerate(counts):
+                    if count == 0:
+                        suspect_positions.append(position)
+                    elif len(counts) >= 5 and median_count >= 8:
+                        if count < median_count * 0.45 or count > median_count * 1.80:
+                            suspect_positions.append(position)
+                if counts:
+                    quality_text = f"；每页画线数中位数 {median_count:g}"
+                if suspect_positions:
+                    names = [
+                        project.images[indices[position]].name
+                        for position in suspect_positions[:3]
+                        if position < len(indices)
+                    ]
+                    more = "…" if len(suspect_positions) > 3 else ""
+                    quality_text += (
+                        f"；{len(suspect_positions)} 页画线数异常，建议优先复核"
+                        + (f"（{', '.join(names)}{more}）" if names else "")
+                    )
             suffix = "（强制重新识别）" if method == "paddleocr" and force_refresh else ""
             skipped = int(getattr(self, "_batch_skipped_count", 0))
             skip_text = f"，人工锁定跳过 {skipped} 页" if skipped else ""
             if stopped:
-                self.status_var.set(f"{label}{suffix}已停止：处理进度 {completed}/{total}{skip_text}；结果已保留")
+                self.status_var.set(
+                    f"{label}{suffix}已停止：处理进度 {completed}/{total}{skip_text}；"
+                    f"结果已保留{quality_text}"
+                )
             else:
-                self.status_var.set(f"{label}{suffix}完成：{completed}/{total}{skip_text}")
+                self.status_var.set(
+                    f"{label}{suffix}完成：{completed}/{total}{skip_text}{quality_text}"
+                )
 
         started = self._start_batch_task(
             label, indices, worker, done,
