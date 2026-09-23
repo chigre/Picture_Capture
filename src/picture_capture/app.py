@@ -7655,12 +7655,12 @@ class PictureCaptureApp(tk.Tk):
 
         screen_w = max(900, int(dialog.winfo_screenwidth()))
         screen_h = max(650, int(dialog.winfo_screenheight()))
-        width = min(screen_w - 80, max(900, int(screen_w * 0.68)))
+        width = min(screen_w - 80, max(780, int(screen_w * 0.58)))
         height = min(screen_h - 100, max(520, int(screen_h * 0.68)))
         x = max(0, (screen_w - width) // 2)
         y = max(0, (screen_h - height) // 2)
         dialog.geometry(f"{width}x{height}+{x}+{y}")
-        dialog.minsize(min(820, width), min(460, height))
+        dialog.minsize(min(760, width), min(460, height))
 
         default_font = font.nametofont("TkDefaultFont").copy()
         title_font = default_font.copy()
@@ -7674,7 +7674,7 @@ class PictureCaptureApp(tk.Tk):
         host = ttk.Frame(dialog, padding=(20, 16, 20, 18))
         host.pack(fill="both", expand=True)
         host.columnconfigure(0, weight=1)
-        host.rowconfigure(2, weight=1)
+        host.rowconfigure(3, weight=1)
 
         header = ttk.Frame(host)
         header.grid(row=0, column=0, sticky="ew")
@@ -7686,25 +7686,27 @@ class PictureCaptureApp(tk.Tk):
             header,
             text="继续上次工作；最近打开的项目排在最前。路径失效的记录可从列表清理，不会删除项目文件。",
             foreground="#666666",
+            wraplength=max(520, width - 80),
         ).grid(row=1, column=0, sticky="w", pady=(3, 0))
 
         tools = ttk.Frame(host)
-        tools.grid(row=0, column=1, rowspan=2, sticky="e")
+        tools.grid(row=1, column=0, sticky="ew", pady=(14, 8))
+        tools.columnconfigure(1, weight=1)
         search_var = tk.StringVar(value="")
-        ttk.Label(tools, text="搜索：").pack(side="left")
-        search_entry = ttk.Entry(tools, textvariable=search_var, width=28)
-        search_entry.pack(side="left", padx=(0, 8))
+        ttk.Label(tools, text="搜索项目").grid(row=0, column=0, sticky="w")
+        search_entry = ttk.Entry(tools, textvariable=search_var)
+        search_entry.grid(row=0, column=1, sticky="ew", padx=(8, 10))
         count_var = tk.StringVar(value="")
-        ttk.Label(tools, textvariable=count_var, foreground="#666666").pack(
-            side="left", padx=(4, 0)
+        ttk.Label(tools, textvariable=count_var, foreground="#666666").grid(
+            row=0, column=2, sticky="e"
         )
 
         ttk.Separator(host, orient="horizontal").grid(
-            row=1, column=0, sticky="ew", pady=(14, 10)
+            row=2, column=0, sticky="ew", pady=(0, 10)
         )
 
         list_host = ttk.Frame(host)
-        list_host.grid(row=2, column=0, sticky="nsew")
+        list_host.grid(row=3, column=0, sticky="nsew")
         list_host.columnconfigure(0, weight=1)
         list_host.rowconfigure(0, weight=1)
         canvas = tk.Canvas(list_host, highlightthickness=0, borderwidth=0)
@@ -7776,7 +7778,7 @@ class PictureCaptureApp(tk.Tk):
         cleanup_button = ttk.Button(
             tools, text="清理失效项", command=remove_missing, state="disabled"
         )
-        cleanup_button.pack(side="left", padx=(10, 0))
+        cleanup_button.grid(row=0, column=3, sticky="e", padx=(10, 0))
 
         def bind_open(widget, root: Path, row: dict[str, object]) -> None:
             try:
@@ -7914,19 +7916,19 @@ class PictureCaptureApp(tk.Tk):
 
                 if cover_source == "cover":
                     cover_tip = (
-                        "项目封面。可替换项目图片文件夹中的 _project_cover.jpg"
-                        "（也支持 PNG/JPEG/WebP）；该文件不会计入正文图片。"
+                        "项目封面。可替换项目图片文件夹中的 _cover.jpg"
+                        "（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）；该文件不会计入正文图片。"
                     )
                 elif cover_source == "first_page":
                     cover_tip = (
                         "当前用项目第一张图片作为预览。可在项目图片文件夹放置 "
-                        "_project_cover.jpg（也支持 PNG/JPEG/WebP）作为项目封面；"
+                        "_cover.jpg（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）作为项目封面；"
                         "该文件不会计入正文图片。"
                     )
                 else:
                     cover_tip = (
-                        "暂无封面预览。可在项目图片文件夹放置 _project_cover.jpg"
-                        "（也支持 PNG/JPEG/WebP）作为项目封面；"
+                        "暂无封面预览。可在项目图片文件夹放置 _cover.jpg"
+                        "（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）作为项目封面；"
                         "该文件不会计入正文图片。"
                     )
                 self._attach_tooltip(tile_holder, cover_tip)
