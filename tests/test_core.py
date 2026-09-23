@@ -4634,7 +4634,7 @@ def test_v21117_review_layout_matches_compact_workflow():
     start = text.index("class ReviewWindow")
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
-    assert 'text="保存"' in review
+    assert 'self._review_flat_button(row1, "保存", self.save, role="primary")' in review
     assert 'textvariable=self.autosave_label_var' in review
     assert 'text="数字替换映射"' in review
     assert 'text="排序规则"' in review
@@ -4644,7 +4644,7 @@ def test_v21117_review_layout_matches_compact_workflow():
     assert 'text="上\\n一\\n页"' in review and 'text="下\\n一\\n页"' in review
     assert 'text="词条切图显示大小："' in review
     assert 'text="OCR结果："' in review
-    assert 'text="参考词表"' in review
+    assert 'self._review_section_frame(right, "参考词表", padding=6)' in review
     assert 'text="选择文件"' in review
     assert 'text="从所选词开始填充至本页结束"' in review
     assert 'self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)' in review
