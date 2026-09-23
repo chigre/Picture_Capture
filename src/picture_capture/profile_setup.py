@@ -619,8 +619,24 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Label(nav, textvariable=self.validation_caption_var).pack(
             side="left", expand=True
         )
+        fitbar = ttk.Frame(validation_page)
+        fitbar.grid(row=1, column=0, sticky="ew", pady=(0, 6))
+        self.validation_fit_mode = "height"
+        ttk.Button(
+            fitbar, text="适合高度",
+            command=lambda: self._set_validation_fit("height"),
+        ).pack(side="left")
+        ttk.Button(
+            fitbar, text="适合宽度",
+            command=lambda: self._set_validation_fit("width"),
+        ).pack(side="left", padx=(6, 0))
+        ttk.Label(
+            fitbar,
+            text="默认适合高度；适合宽度时图片横向占满，纵向可滚动。",
+            foreground="#666666",
+        ).pack(side="left", padx=(10, 0))
         self.validation_frame = ttk.Frame(validation_page)
-        self.validation_frame.grid(row=1, column=0, sticky="ew")
+        self.validation_frame.grid(row=2, column=0, sticky="ew")
         self.validation_frame.columnconfigure(0, weight=1)
 
     def _show_right_image_page(self, index: int) -> None:
@@ -1080,6 +1096,29 @@ class ProjectProfileWizard(tk.Toplevel):
             geometry = derive_geometry(analysis_image, effective)
             sx = w / max(1, source.width)
             sy = h / max(1, source.height)
+
+            # Keep step 2 and validation overlays semantically identical:
+            # explicit modes show the configured percentages; AUTO shows the
+            # geometry-detected region.
+            canonical_w, canonical_h = geometry.transform.canonical_size(source.size)
+            if header_mode == "auto" and geometry.top > 0:
+                x0, y0, x1, y1 = geometry.transform.canonical_box_to_source(
+                    (0, 0, canonical_w, min(canonical_h, geometry.top)),
+                    source.size,
+                )
+                draw.rectangle(
+                    (x0 * sx, y0 * sy, x1 * sx, y1 * sy),
+                    fill=(100, 100, 100, 80),
+                )
+            if footer_mode == "auto" and geometry.bottom < canonical_h:
+                x0, y0, x1, y1 = geometry.transform.canonical_box_to_source(
+                    (0, max(0, geometry.bottom), canonical_w, canonical_h),
+                    source.size,
+                )
+                draw.rectangle(
+                    (x0 * sx, y0 * sy, x1 * sx, y1 * sy),
+                    fill=(100, 100, 100, 80),
+                )
             for path_points in geometry.column_paths:
                 points = [
                     geometry.canonical_to_source(x, y)
@@ -2129,16 +2168,46 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_tuning_level_var.set(new_level)
 
         key = self._current_profile_key()
-        if key == "cjk_visual":
-            if result == "too_many":
-                # CJK false positives are best controlled by demanding a real
-                # column-edge start plus visual prominence for bracketed heads.
-                self.cjk_require_left_edge_var.set(True)
-                self.cjk_require_visual_var.set(True)
-            elif result == "too_few":
-                # Loosening should first remove the extra visual gate; factual
-                # choices such as "正文中也有括号词" remain user-controlled.
-                self.cjk_require_visual_var.set(False)
+        if new_level != old_level:
+            if key == "cjk_visual":
+                self.headword_left_tolerance_var.set(max(
+                    4, int(self.headword_left_tolerance_var.get()) - 4 * delta
+                ))
+                self.headword_height_ratio_var.set(max(
+                    0.5, round(float(self.headword_height_ratio_var.get()) + 0.04 * delta, 2)
+                ))
+                self.headword_boldness_ratio_var.set(max(
+                    0.5, round(float(self.headword_boldness_ratio_var.get()) + 0.05 * delta, 2)
+                ))
+                self.headword_min_score_var.set(max(
+                    0.0, round(float(self.headword_min_score_var.get()) + 0.25 * delta, 2)
+                ))
+                if result == "too_many":
+                    # Keep real CJK big-character recall: tighten left-edge and
+                    # visible numeric thresholds, but do not silently enable the
+                    # extra strong-visual gate that previously dropped true heads.
+                    self.cjk_require_left_edge_var.set(True)
+            elif key in {"latin_regular", "edge_visual_regular", "legacy_spanish_structured"}:
+                self.headword_left_tolerance_var.set(max(
+                    4, int(self.headword_left_tolerance_var.get()) - 4 * delta
+                ))
+                self.headword_boldness_ratio_var.set(max(
+                    0.5, round(float(self.headword_boldness_ratio_var.get()) + 0.06 * delta, 2)
+                ))
+                self.headword_min_score_var.set(max(
+                    0.0, round(float(self.headword_min_score_var.get()) + 0.50 * delta, 2)
+                ))
+            elif key in {"numbered_prefix", "marker_prefixed"}:
+                self.headword_left_tolerance_var.set(max(
+                    4, int(self.headword_left_tolerance_var.get()) - 3 * delta
+                ))
+            else:
+                self.headword_left_tolerance_var.set(max(
+                    4, int(self.headword_left_tolerance_var.get()) - 3 * delta
+                ))
+                self.headword_min_score_var.set(max(
+                    0.0, round(float(self.headword_min_score_var.get()) + 0.35 * delta, 2)
+                ))
 
         self._profile_revision += 1
         self._mark_validation_stale()
@@ -2273,28 +2342,37 @@ class ProjectProfileWizard(tk.Toplevel):
             )
 
         canonical_w, canonical_h = geometry.transform.canonical_size(source.size)
-        if geometry.top > 0:
+        header_mode = str(getattr(settings, "profile_header_mode", "auto") or "auto")
+        footer_mode = str(getattr(settings, "profile_footer_mode", "auto") or "auto")
+        if header_mode == "auto" and geometry.top > 0:
             shade_source_box(
                 geometry.transform.canonical_box_to_source(
                     (0, 0, canonical_w, min(canonical_h, geometry.top)),
                     source.size,
                 )
             )
-        if geometry.bottom < canonical_h:
+        elif header_mode == "present":
+            pct = max(0.0, min(
+                35.0, float(getattr(settings, "profile_header_percent", 6.0))
+            ))
+            margin = round(source.height * pct / 100.0)
+            shade_source_box((0, 0, source.width, margin))
+
+        if footer_mode == "auto" and geometry.bottom < canonical_h:
             shade_source_box(
                 geometry.transform.canonical_box_to_source(
                     (0, max(0, geometry.bottom), canonical_w, canonical_h),
                     source.size,
                 )
             )
-        if str(getattr(settings, "profile_header_mode", "auto") or "auto") == "present":
-            pct = max(0.0, min(35.0, float(getattr(settings, "profile_header_percent", 6.0))))
+        elif footer_mode == "present":
+            pct = max(0.0, min(
+                35.0, float(getattr(settings, "profile_footer_percent", 5.0))
+            ))
             margin = round(source.height * pct / 100.0)
-            shade_source_box((0, 0, source.width, margin))
-        if str(getattr(settings, "profile_footer_mode", "auto") or "auto") == "present":
-            pct = max(0.0, min(35.0, float(getattr(settings, "profile_footer_percent", 5.0))))
-            margin = round(source.height * pct / 100.0)
-            shade_source_box((0, max(0, source.height - margin), source.width, source.height))
+            shade_source_box(
+                (0, max(0, source.height - margin), source.width, source.height)
+            )
 
         side = excluded_source_side(settings, page_index)
         if side:
@@ -2328,6 +2406,15 @@ class ProjectProfileWizard(tk.Toplevel):
                 x, y = round(entry.x * sx), round(entry.y * sy)
                 draw.point((x, y), fill=(255, 0, 0, 255))
         return thumb.convert("RGB")
+
+    def _set_validation_fit(self, mode: str) -> None:
+        self.validation_fit_mode = "width" if mode == "width" else "height"
+        if self._validation_results:
+            self._render_validation_result()
+        try:
+            self.right_canvas.yview_moveto(0.0)
+        except tk.TclError:
+            pass
 
     def _move_validation_preview(self, delta: int) -> None:
         if not self._validation_results:
@@ -2367,9 +2454,31 @@ class ProjectProfileWizard(tk.Toplevel):
         cell.grid(row=0, column=0, sticky="ew")
         cell.columnconfigure(0, weight=1)
         if preview is not None:
-            photo = ImageTk.PhotoImage(preview)
+            display = preview.copy()
+            self.update_idletasks()
+            right_w = int(getattr(self, "right_canvas", self).winfo_width())
+            right_h = int(getattr(self, "right_canvas", self).winfo_height())
+            available_w = max(
+                360,
+                (right_w - 24) if right_w > 100 else self._wizard_image_width - 24,
+            )
+            available_h = max(
+                360,
+                (right_h - 120) if right_h > 200 else self._wizard_height - 160,
+            )
+            if getattr(self, "validation_fit_mode", "height") == "width":
+                scale = available_w / max(1, display.width)
+            else:
+                scale = available_h / max(1, display.height)
+            target = (
+                max(1, round(display.width * scale)),
+                max(1, round(display.height * scale)),
+            )
+            if target != display.size:
+                display = display.resize(target, Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(display)
             self._validation_photos.append(photo)
-            ttk.Label(cell, image=photo).pack()
+            ttk.Label(cell, image=photo, anchor="n").pack(anchor="n")
             ttk.Label(
                 cell, text=f"检出 {count} 个词头 · {columns} 栏",
             ).pack(anchor="w", pady=(4, 0))
