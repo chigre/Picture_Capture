@@ -6,7 +6,6 @@ from typing import Iterable
 from PIL import Image, ImageDraw
 
 from .dictionary_profile import available_dictionary_profiles, dictionary_profile_preset, language_effective_settings, profile_effective_settings
-from .layout_transform import LayoutTransform
 from .models import AppSettings
 
 PROFILE_SETUP_VERSION = 1
@@ -158,10 +157,10 @@ def excluded_source_side(settings: AppSettings, page_index: int) -> str | None:
 def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], page_index: int = 0) -> AppSettings:
     """Return a per-page copy with intuitive header/footer template applied."""
     current = replace(settings)
-    transform = LayoutTransform(str(current.layout_transform or "identity"))
-    canonical_width, canonical_height = transform.canonical_size(image_size)
-    parameter_width = current.parameter_display_width or min(1400, canonical_width)
-    scale = parameter_width / max(1, canonical_width)
+    # image_size remains part of this helper's API because the per-page template
+    # is resolved alongside an actual page; physical masks are applied later to
+    # source pixels and canonical geometry stays in its own coordinate system.
+    _ = image_size
 
     header_mode = str(getattr(current, "profile_header_mode", "auto") or "auto")
     # Page-template header/footer are physical SOURCE-page regions. They are
