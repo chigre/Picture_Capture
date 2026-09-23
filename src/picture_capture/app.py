@@ -1911,7 +1911,11 @@ class SettingsDialog(tk.Toplevel):
                 _var.trace_add("write", lambda *_args: self._schedule_autosave())
             except Exception:
                 pass
-        self.update_idletasks(); _sync_scrollregion()
+        self.update_idletasks()
+        for _canvas in self._settings_canvases.values():
+            _bbox = _canvas.bbox("all")
+            if _bbox:
+                _canvas.configure(scrollregion=_bbox)
         self.transient(parent); self.grab_set()
 
     def _build_project_details_tab(self, tab: ttk.Frame) -> None:
