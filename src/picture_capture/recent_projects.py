@@ -75,6 +75,11 @@ def remove_recent_project(root: Path, path: Path | None = None) -> list[dict[str
 def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool]:
     """Read display metadata without initializing or modifying the project."""
     root = Path(str(row.get("path") or "")).expanduser()
+    last_page = str(row.get("last_page") or "").strip()
+    try:
+        last_page_index = int(row.get("last_page_index")) if row.get("last_page_index") is not None else -1
+    except (TypeError, ValueError):
+        last_page_index = -1
     details: dict[str, str | int | bool] = {
         "full_name": str(row.get("name") or root.name),
         "abbreviation": "",
@@ -82,6 +87,10 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         "last_edited": str(row.get("opened_at") or ""),
         "path": str(root),
         "exists": root.is_dir(),
+        "last_page": last_page,
+        "last_page_index": last_page_index,
+        "resume_text": last_page or "—",
+        "position_text": "—",
     }
     if not root.is_dir():
         return details
@@ -90,6 +99,12 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
             1 for item in root.iterdir()
             if item.is_file() and item.suffix.lower() in IMAGE_EXTENSIONS
         )
+        image_count = int(details["image_count"])
+        if last_page_index >= 0 and image_count > 0:
+            page_number = min(image_count, last_page_index + 1)
+            details["position_text"] = f"第 {page_number:,} / {image_count:,} 页"
+        elif last_page:
+            details["position_text"] = last_page
     except OSError:
         details["exists"] = False
         return details
