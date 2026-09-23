@@ -5,7 +5,7 @@ Wizard step ③ shows real, locally cropped dictionary examples in the right ima
 The packaged examples are stored in a compact atlas:
 
 - `classic_headword_examples.jpg`
-- canvas: 1080 × 474
+- canvas: 720 × 316
 - grid: 3 columns × 3 rows
 - each cell: 360 × 158
 
