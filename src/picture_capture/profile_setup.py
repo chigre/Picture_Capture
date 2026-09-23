@@ -560,16 +560,17 @@ class ProjectProfileWizard(tk.Toplevel):
 
 
     def _on_wizard_tab_changed(self, _event=None) -> None:
-        """Load image-backed content only when its tab becomes visible."""
+        """Switch the persistent right image pane with the selected step."""
         try:
             index = self.notebook.index(self.notebook.select())
         except (tk.TclError, ValueError):
             return
+        self._show_right_image_page(index)
         if index == 1:
             self.after_idle(self._refresh_template_preview)
         elif index == 2:
             self.after_idle(self._refresh_headword_description)
-        elif index == 4 and self._validation_results:
+        elif index == 3 and self._validation_results:
             self.after_idle(self._render_validation_result)
 
     def _active_tab_canvas(self) -> tk.Canvas | None:
@@ -603,64 +604,110 @@ class ProjectProfileWizard(tk.Toplevel):
     def _build_reading_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=1)
 
-        info = ttk.LabelFrame(tab, text="词典项目详情", padding=(10, 8))
+        info = ttk.LabelFrame(tab, text="词典项目详情", padding=(8, 7))
         info.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         for col in (1, 3, 5, 7):
             info.columnconfigure(col, weight=1)
 
-        ttk.Label(info, text="词典完整名称：").grid(row=0, column=0, sticky="e", padx=(0, 4))
+        ttk.Label(info, text="词典完整名称：").grid(row=0, column=0, sticky="e", padx=(0, 3))
         ttk.Entry(
-            info, textvariable=self.dictionary_full_name_var, width=20,
-        ).grid(row=0, column=1, sticky="ew", padx=(0, 10))
-
-        ttk.Label(info, text="词典缩写名称：").grid(row=0, column=2, sticky="e", padx=(0, 4))
+            info, textvariable=self.dictionary_full_name_var, width=16,
+        ).grid(row=0, column=1, sticky="ew", padx=(0, 6))
+        ttk.Label(info, text="词典缩写名称：").grid(row=0, column=2, sticky="e", padx=(0, 3))
         ttk.Entry(
-            info, textvariable=self.dictionary_abbreviation_var, width=11,
-        ).grid(row=0, column=3, sticky="ew", padx=(0, 10))
-
-        ttk.Label(info, text="ISBN：").grid(row=0, column=4, sticky="e", padx=(0, 4))
+            info, textvariable=self.dictionary_abbreviation_var, width=9,
+        ).grid(row=0, column=3, sticky="ew", padx=(0, 6))
+        ttk.Label(info, text="ISBN：").grid(row=0, column=4, sticky="e", padx=(0, 3))
         ttk.Entry(
-            info, textvariable=self.dictionary_isbn_var, width=16,
-        ).grid(row=0, column=5, sticky="ew", padx=(0, 10))
-
-        ttk.Label(info, text="正文页码范围：").grid(row=0, column=6, sticky="e", padx=(0, 4))
+            info, textvariable=self.dictionary_isbn_var, width=13,
+        ).grid(row=0, column=5, sticky="ew", padx=(0, 6))
+        ttk.Label(info, text="正文页码范围：").grid(row=0, column=6, sticky="e", padx=(0, 3))
         self.body_page_range_entry = ttk.Entry(
-            info, textvariable=self.dictionary_body_page_range_var, width=13,
+            info, textvariable=self.dictionary_body_page_range_var, width=12,
         )
         self.body_page_range_entry.grid(row=0, column=7, sticky="ew")
         self.body_page_range_entry.bind("<FocusOut>", self._body_page_range_changed)
         self.body_page_range_entry.bind("<Return>", self._body_page_range_changed)
 
         ttk.Label(
-            tab,
-            text="阅读方式：页面怎么读？",
+            tab, text="阅读方式：页面怎么读？",
             font=("TkDefaultFont", 12, "bold"),
         ).grid(row=1, column=0, sticky="w")
         ttk.Label(
             tab,
-            text="这里只确认实际页面的阅读方向；需要的镜像或旋转由软件自动处理。正文页码范围首次自动填充，之后可直接修改。",
-            foreground="#666666",
-        ).grid(row=2, column=0, sticky="w", pady=(2, 8))
+            text="这里只确认实际页面的阅读方向；镜像或旋转由软件自动处理。",
+            foreground="#666666", wraplength=self._wizard_left_width,
+        ).grid(row=2, column=0, sticky="w", pady=(2, 6))
 
         choices = ttk.Frame(tab)
         choices.grid(row=3, column=0, sticky="w")
-        for column, key in enumerate(("horizontal-ltr", "horizontal-rtl", "vertical-rl", "vertical-lr")):
+        for column, key in enumerate(
+            ("horizontal-ltr", "horizontal-rtl", "vertical-rl", "vertical-lr")
+        ):
             ttk.Radiobutton(
-                choices, text=READING_LABELS[key], variable=self.reading_var, value=key,
+                choices, text=READING_LABELS[key],
+                variable=self.reading_var, value=key,
                 command=self._reading_changed,
-            ).grid(row=0, column=column, sticky="w", padx=(0, 18), pady=4)
+            ).grid(row=0, column=column, sticky="w", padx=(0, 10), pady=3)
+
+        self._build_language_section(tab, row=4)
 
         ttk.Label(
             tab,
-            text="代表页优先使用上方正文页码范围；未填写或无效时再从疑似正文的前部 / 中部 / 后部抽取，并避开 0000_*、目录、附录等明显非正文页；每一张都可以手动更换。",
-            foreground="#666666", wraplength=980,
-        ).grid(row=4, column=0, sticky="w", pady=(10, 4))
-        samples = ttk.LabelFrame(tab, text="代表页（前部 / 中部 / 后部）", padding=8)
-        samples.grid(row=5, column=0, sticky="nsew", pady=(4, 0))
-        samples.columnconfigure(0, weight=1)
-        samples.columnconfigure(1, weight=1)
-        samples.columnconfigure(2, weight=1)
-        self.sample_frame = samples
+            text="右侧代表页优先使用正文页码范围；未填写或无效时再从疑似正文的前部 / 中部 / 后部抽取。每一张都可在右侧手动更换。",
+            foreground="#666666", wraplength=self._wizard_left_width,
+        ).grid(row=5, column=0, sticky="w", pady=(10, 0))
+
+    def _build_language_section(self, parent: ttk.Frame, *, row: int) -> None:
+        box = ttk.LabelFrame(parent, text="语言与 OCR", padding=8)
+        box.grid(row=row, column=0, sticky="ew", pady=(12, 0))
+        box.columnconfigure(1, weight=1)
+
+        ttk.Label(
+            box,
+            text="常用语言置前；选择 OCR 语言时自动建议 2 位索引语言，但仍可手动覆盖。",
+            foreground="#666666", wraplength=self._wizard_left_width,
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 7))
+
+        ttk.Label(box, text="OCR 语言：").grid(row=1, column=0, sticky="e", padx=(0, 8), pady=4)
+        combo = ttk.Combobox(
+            box, textvariable=self.ocr_language_var,
+            values=tuple(OCR_LANGUAGE_LABEL_TO_VALUE.keys()),
+            state="normal", width=28,
+        )
+        combo.grid(row=1, column=1, sticky="ew", pady=4)
+        combo.bind("<<ComboboxSelected>>", lambda _e: self._ocr_language_changed())
+        combo.bind("<FocusOut>", lambda _e: self._ocr_language_changed())
+        self.ocr_language_var.trace_add(
+            "write", lambda *_args: self.after_idle(self._refresh_language_summary)
+        )
+
+        ttk.Label(box, text="索引语言（2 位）：").grid(
+            row=2, column=0, sticky="e", padx=(0, 8), pady=4
+        )
+        ttk.Entry(
+            box, textvariable=self.index_language_var, width=12,
+        ).grid(row=2, column=1, sticky="w", pady=4)
+        ttk.Label(
+            box,
+            text="例如 en / zh / ja / fr；自动值只是建议。",
+            foreground="#666666",
+        ).grid(row=3, column=1, sticky="w")
+        ttk.Label(box, text="内容语言：").grid(
+            row=4, column=0, sticky="e", padx=(0, 8), pady=4
+        )
+        ttk.Entry(
+            box, textvariable=self.content_language_var, width=26,
+        ).grid(row=4, column=1, sticky="ew", pady=4)
+
+        backend = ttk.LabelFrame(box, text="自动派生的 OCR 后端设置", padding=7)
+        backend.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        self.backend_summary_var = tk.StringVar(value="")
+        ttk.Label(
+            backend, textvariable=self.backend_summary_var,
+            justify="left", wraplength=self._wizard_left_width,
+        ).pack(anchor="w")
+
 
     def _body_page_range_changed(self, _event=None) -> None:
         """Re-sample representatives after the user edits the body-page range."""
@@ -1025,71 +1072,34 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_help_frame = help_box
 
     def _build_language_tab(self, tab: ttk.Frame) -> None:
-        tab.columnconfigure(1, weight=1)
-        ttk.Label(tab, text="④ 语言与 OCR", font=("TkDefaultFont", 12, "bold")).grid(
-            row=0, column=0, columnspan=2, sticky="w"
-        )
-        ttk.Label(
-            tab,
-            text="常用语言置前；选择 OCR 语言时会自动填写 2 位索引语言代号，但索引语言输入框仍可随时手动修改。",
-            foreground="#666666",
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 10))
+        """Compatibility wrapper; language/OCR now lives in step 1."""
+        tab.columnconfigure(0, weight=1)
+        self._build_language_section(tab, row=0)
 
-        ttk.Label(tab, text="OCR 语言：").grid(row=2, column=0, sticky="e", padx=(0, 8), pady=5)
-        combo = ttk.Combobox(
-            tab, textvariable=self.ocr_language_var, values=tuple(OCR_LANGUAGE_LABEL_TO_VALUE.keys()),
-            state="normal", width=30,
-        )
-        combo.grid(row=2, column=1, sticky="w", pady=5)
-        combo.bind("<<ComboboxSelected>>", lambda _e: self._ocr_language_changed())
-        combo.bind("<FocusOut>", lambda _e: self._ocr_language_changed())
-        self.ocr_language_var.trace_add("write", lambda *_args: self.after_idle(self._refresh_language_summary))
-
-        ttk.Label(tab, text="索引语言（2 位）：").grid(row=3, column=0, sticky="e", padx=(0, 8), pady=5)
-        ttk.Entry(tab, textvariable=self.index_language_var, width=12).grid(row=3, column=1, sticky="w", pady=5)
-        ttk.Label(
-            tab,
-            text="例如 en / zh / ja / fr；自动值只是建议，你可以直接覆盖。",
-            foreground="#666666",
-        ).grid(row=4, column=1, sticky="w")
-        ttk.Label(tab, text="内容语言：").grid(row=5, column=0, sticky="e", padx=(0, 8), pady=5)
-        ttk.Entry(tab, textvariable=self.content_language_var, width=28).grid(row=5, column=1, sticky="w", pady=5)
-
-        backend = ttk.LabelFrame(tab, text="自动派生的 OCR 后端设置", padding=10)
-        backend.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(14, 0))
-        self.backend_summary_var = tk.StringVar(value="")
-        ttk.Label(backend, textvariable=self.backend_summary_var, justify="left").pack(anchor="w")
 
     def _build_validation_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=1)
-        tab.rowconfigure(6, weight=1)
-        ttk.Label(tab, text="⑤ 多页测试后再确认", font=("TkDefaultFont", 12, "bold")).grid(
-            row=0, column=0, sticky="w"
-        )
+        ttk.Label(
+            tab, text="④ 多页测试后再确认",
+            font=("TkDefaultFont", 12, "bold"),
+        ).grid(row=0, column=0, sticky="w")
         ttk.Label(
             tab,
-            text="测试只处理代表页，不写 PDIC；PaddleOCR 会强制重新识别，不复用旧 OCR 缓存。红线=检出的词头；半透明灰区=当前 Profile 不参与正文识别的区域。测试结果一次显示一页，可左右翻页。",
-            foreground="#666666", wraplength=self._wizard_content_width,
+            text="测试只处理代表页，不写 PDIC；PaddleOCR 强制重新识别，不复用旧 OCR 缓存。右侧一次显示一页，可左右翻页。",
+            foreground="#666666", wraplength=self._wizard_left_width,
         ).grid(row=1, column=0, sticky="w", pady=(2, 8))
+
         bar = ttk.Frame(tab)
         bar.grid(row=2, column=0, sticky="ew")
-        self.validate_button = ttk.Button(bar, text="测试当前 Profile", command=self.validate_profile)
+        self.validate_button = ttk.Button(
+            bar, text="测试当前 Profile", command=self.validate_profile,
+        )
         self.validate_button.pack(side="left")
         self.validation_status_var = tk.StringVar(value="尚未测试")
-        ttk.Label(bar, textvariable=self.validation_status_var).pack(side="left", padx=(10, 0))
-
-        nav = ttk.Frame(tab)
-        nav.grid(row=3, column=0, sticky="ew", pady=(10, 0))
-        self.validation_prev_button = ttk.Button(
-            nav, text="◀ 上一张", command=lambda: self._move_validation_preview(-1), state="disabled",
-        )
-        self.validation_prev_button.pack(side="left")
-        self.validation_next_button = ttk.Button(
-            nav, text="下一张 ▶", command=lambda: self._move_validation_preview(1), state="disabled",
-        )
-        self.validation_next_button.pack(side="right")
-        self.validation_caption_var = tk.StringVar(value="")
-        ttk.Label(nav, textvariable=self.validation_caption_var).pack(side="left", expand=True)
+        ttk.Label(
+            bar, textvariable=self.validation_status_var,
+            wraplength=max(260, self._wizard_left_width - 160),
+        ).pack(side="left", padx=(10, 0))
 
         self.validation_diagnostic_var = tk.StringVar(
             value="测试方式：PaddleOCR（强制重新识别）｜尚未运行测试"
@@ -1097,41 +1107,40 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Label(
             tab, textvariable=self.validation_diagnostic_var,
             foreground="#555555", justify="left",
-            wraplength=self._wizard_content_width,
-        ).grid(row=4, column=0, sticky="ew", pady=(6, 0))
+            wraplength=self._wizard_left_width,
+        ).grid(row=3, column=0, sticky="ew", pady=(8, 0))
 
-        feedback = ttk.LabelFrame(tab, text="结果是否合适？", padding=(8, 5))
-        feedback.grid(row=5, column=0, sticky="ew", pady=(8, 0))
-        feedback.columnconfigure(4, weight=1)
+        feedback = ttk.LabelFrame(tab, text="结果是否合适？", padding=(8, 6))
+        feedback.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        feedback.columnconfigure(3, weight=1)
         ttk.Label(
             feedback,
-            text="偏多会按当前词头类型收紧规则；偏少会放宽。调整后重新测试，直到结果合适。",
-            foreground="#666666", wraplength=self._wizard_content_width,
-        ).grid(row=0, column=0, columnspan=5, sticky="w", pady=(0, 4))
+            text="偏多会按当前词头类型收紧；偏少会放宽。调整后重新测试，直到右侧画线结果合适。",
+            foreground="#666666", wraplength=self._wizard_left_width,
+        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 5))
         self.feedback_too_many_button = ttk.Button(
-            feedback, text="偏多", command=lambda: self._apply_validation_feedback("too_many"),
+            feedback, text="偏多",
+            command=lambda: self._apply_validation_feedback("too_many"),
             state="disabled",
         )
         self.feedback_too_many_button.grid(row=1, column=0, padx=(0, 4))
         self.feedback_good_button = ttk.Button(
-            feedback, text="合适", command=lambda: self._apply_validation_feedback("good"),
+            feedback, text="合适",
+            command=lambda: self._apply_validation_feedback("good"),
             state="disabled",
         )
         self.feedback_good_button.grid(row=1, column=1, padx=4)
         self.feedback_too_few_button = ttk.Button(
-            feedback, text="偏少", command=lambda: self._apply_validation_feedback("too_few"),
+            feedback, text="偏少",
+            command=lambda: self._apply_validation_feedback("too_few"),
             state="disabled",
         )
         self.feedback_too_few_button.grid(row=1, column=2, padx=4)
         self.validation_feedback_var = tk.StringVar(value="")
         ttk.Label(
             feedback, textvariable=self.validation_feedback_var,
-            wraplength=max(320, self._wizard_content_width - 270),
-        ).grid(row=1, column=4, sticky="w", padx=(10, 0))
-
-        self.validation_frame = ttk.Frame(tab)
-        self.validation_frame.grid(row=6, column=0, sticky="nsew", pady=(6, 0))
-        self.validation_frame.columnconfigure(0, weight=1)
+            wraplength=max(260, self._wizard_left_width - 260),
+        ).grid(row=1, column=3, sticky="w", padx=(10, 0))
 
 
     def _profile_label_for_key(self, key: str) -> str:
