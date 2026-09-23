@@ -2213,6 +2213,9 @@ class ReviewWindow(tk.Toplevel):
         self._prefetched_pages: dict[int, dict] = {}
         self._prefetch_inflight: set[int] = set()
         self._prefetch_closed = False
+        self.review_section_title_font = font.nametofont("TkDefaultFont").copy()
+        self.review_section_title_font.configure(weight="bold")
+        self._configure_review_styles()
         self._build()
         self.protocol("WM_DELETE_WINDOW", self._close_review)
         self._update_title()
@@ -2235,49 +2238,167 @@ class ReviewWindow(tk.Toplevel):
         for _var in self.digit_map_vars:
             _var.trace_add("write", lambda *_args: self._save_digit_map())
 
+    def _configure_review_styles(self) -> None:
+        """Configure dense, opt-in styles for the proofreading workspace only."""
+        style = ttk.Style(self)
+        native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
+        colors = {
+            "surface": native_background,
+            "toolbar": "#f3f4f6",
+            "panel": "#f7f8fa",
+            "border": "#d8dde5",
+            "text": "#30343b",
+            "muted": "#68707b",
+            "button": "#eceff3",
+            "button_hover": "#e1e5ea",
+            "primary": "#5e9f69",
+            "primary_hover": "#4f8e5c",
+            "danger": "#9b3a3a",
+            "danger_hover": "#f4d9d9",
+            "selection": "#dce8f7",
+            "neutral_entry": "#f4f4f4",
+        }
+        self._review_ui_colors = colors
+
+        style.configure("PCR.Surface.TFrame", background=colors["surface"])
+        style.configure("PCR.Toolbar.TFrame", background=colors["toolbar"])
+        style.configure("PCR.Panel.TFrame", background=colors["panel"])
+        style.configure(
+            "PCR.Section.TLabelframe",
+            background=colors["surface"],
+            borderwidth=0,
+            relief="flat",
+        )
+        style.configure(
+            "PCR.SectionTitle.TLabel",
+            background=colors["surface"],
+            foreground=colors["text"],
+            font=self.review_section_title_font,
+            padding=(0, 2, 0, 1),
+        )
+        style.configure(
+            "PCR.Toolbar.TLabel",
+            background=colors["toolbar"],
+            foreground=colors["text"],
+        )
+        style.configure(
+            "PCR.Muted.TLabel",
+            background=colors["surface"],
+            foreground=colors["muted"],
+        )
+        style.configure(
+            "PCR.Header.TLabel",
+            background=colors["surface"],
+            foreground=colors["text"],
+            font=self.review_section_title_font,
+        )
+        style.configure("PCR.Compact.TButton", padding=(7, 3))
+        style.configure("PCR.Tool.TButton", padding=(4, 2))
+        style.configure("PCR.Compact.TEntry", padding=(4, 2))
+        style.configure("PCR.Compact.TSpinbox", padding=(3, 2))
+        style.configure("PCR.Compact.TCombobox", padding=(3, 2))
+        style.configure("PCR.Crop.TLabel", background=colors["surface"])
+
+    def _review_flat_button(
+        self, parent: tk.Misc, text: str, command, *, role: str = "neutral",
+        width: int | None = None, anchor: str = "center",
+    ) -> tk.Button:
+        """Create one flat review-workspace button without changing global Tk styling."""
+        colors = self._review_ui_colors
+        palette = {
+            "neutral": (colors["button"], colors["button_hover"], colors["text"]),
+            "primary": (colors["primary"], colors["primary_hover"], "#ffffff"),
+            "danger": ("#f3eeee", colors["danger_hover"], colors["danger"]),
+        }
+        background, active_background, foreground = palette.get(role, palette["neutral"])
+        options = {
+            "text": text,
+            "command": command,
+            "bg": background,
+            "fg": foreground,
+            "activebackground": active_background,
+            "activeforeground": foreground,
+            "relief": "flat",
+            "bd": 0,
+            "highlightthickness": 0,
+            "padx": 8,
+            "pady": 4,
+            "cursor": "hand2",
+            "anchor": anchor,
+        }
+        if width is not None:
+            options["width"] = width
+        return tk.Button(parent, **options)
+
+    def _review_section_frame(
+        self, parent: tk.Misc, title: str, *, padding: int = 6
+    ) -> ttk.LabelFrame:
+        """Return a flat titled section for secondary review tools."""
+        label = ttk.Label(parent, text=title, style="PCR.SectionTitle.TLabel")
+        return ttk.LabelFrame(
+            parent,
+            labelwidget=label,
+            padding=padding,
+            style="PCR.Section.TLabelframe",
+        )
+
     def _build(self) -> None:
         panes = ttk.Panedwindow(self, orient="horizontal")
         panes.pack(fill="both", expand=True)
-        left = ttk.Frame(panes)
-        right = ttk.Frame(panes, padding=(8, 6))
+        left = ttk.Frame(panes, style="PCR.Surface.TFrame")
+        right = ttk.Frame(panes, padding=(8, 6), style="PCR.Surface.TFrame")
         panes.add(left, weight=3)
         panes.add(right, weight=2)
 
         # Left: high-frequency review actions first; low-frequency helpers stay folded.
-        controls = ttk.Frame(left, padding=(6, 6, 6, 3))
+        controls = ttk.Frame(left, padding=(7, 6, 7, 4), style="PCR.Toolbar.TFrame")
         controls.pack(fill="x")
-        row1 = ttk.Frame(controls)
+        row1 = ttk.Frame(controls, style="PCR.Toolbar.TFrame")
         row1.pack(fill="x", pady=(0, 4))
-        ttk.Button(row1, text="保存", command=self.save).pack(side="left")
+        self._review_flat_button(row1, "保存", self.save, role="primary").pack(side="left")
         self._sync_autosave_label()
         ttk.Checkbutton(
             row1, textvariable=self.autosave_label_var, variable=self.parent.autosave_var,
             command=self._toggle_shared_autosave,
         ).pack(side="left", padx=(6, 0))
         ttk.Checkbutton(row1, text="数字替换映射", variable=self.replace_digits).pack(side="left", padx=(8, 0))
-        ttk.Label(row1, text="文本左边距：").pack(side="left", padx=(10, 2))
+        ttk.Label(
+            row1, text="文本左边距：", style="PCR.Toolbar.TLabel"
+        ).pack(side="left", padx=(10, 2))
         self.review_left_padding_spin = ttk.Spinbox(
-            row1, from_=0, to=80, increment=1, width=4, textvariable=self.review_left_padding_var
+            row1, from_=0, to=80, increment=1, width=4,
+            textvariable=self.review_left_padding_var, style="PCR.Compact.TSpinbox",
         )
         self.review_left_padding_spin.pack(side="left")
-        ttk.Label(row1, text="px").pack(side="left", padx=(2, 0))
-        ttk.Label(row1, text="上下边距：").pack(side="left", padx=(10, 2))
+        ttk.Label(row1, text="px", style="PCR.Toolbar.TLabel").pack(side="left", padx=(2, 0))
+        ttk.Label(
+            row1, text="上下边距：", style="PCR.Toolbar.TLabel"
+        ).pack(side="left", padx=(10, 2))
         self.review_vertical_padding_spin = ttk.Spinbox(
-            row1, from_=0, to=30, increment=1, width=4, textvariable=self.review_vertical_padding_var
+            row1, from_=0, to=30, increment=1, width=4,
+            textvariable=self.review_vertical_padding_var, style="PCR.Compact.TSpinbox",
         )
         self.review_vertical_padding_spin.pack(side="left")
-        ttk.Label(row1, text="px").pack(side="left", padx=(2, 0))
+        ttk.Label(row1, text="px", style="PCR.Toolbar.TLabel").pack(side="left", padx=(2, 0))
 
-        row2 = ttk.Frame(controls)
+        row2 = ttk.Frame(controls, style="PCR.Toolbar.TFrame")
         row2.pack(fill="x")
-        ttk.Button(row2, text="排序规则", command=self.open_sort_rules).pack(side="left")
+        ttk.Button(
+            row2, text="排序规则", command=self.open_sort_rules, style="PCR.Compact.TButton"
+        ).pack(side="left")
         ttk.Radiobutton(row2, text="当前页", variable=self.order_scope_var, value="current").pack(side="left", padx=(8, 0))
         ttk.Radiobutton(row2, text="所有页", variable=self.order_scope_var, value="all").pack(side="left", padx=(4, 0))
-        ttk.Button(row2, text="排序检查", width=7, command=self.run_order_check).pack(side="left", padx=(5, 0))
-        ttk.Label(row2, text="与OCR比较：").pack(side="left", padx=(10, 2))
+        ttk.Button(
+            row2, text="排序检查", width=7, command=self.run_order_check,
+            style="PCR.Compact.TButton",
+        ).pack(side="left", padx=(5, 0))
+        ttk.Label(
+            row2, text="与OCR比较：", style="PCR.Toolbar.TLabel"
+        ).pack(side="left", padx=(10, 2))
         self.review_ocr_compare_combo = ttk.Combobox(
             row2, textvariable=self.review_ocr_compare_var,
             values=tuple(self.OCR_COMPARE_LABEL_TO_KEY), state="readonly", width=10,
+            style="PCR.Compact.TCombobox",
         )
         self.review_ocr_compare_combo.pack(side="left")
         self.review_ocr_compare_combo.bind("<<ComboboxSelected>>", self._change_review_ocr_compare_source)
@@ -2285,16 +2406,27 @@ class ReviewWindow(tk.Toplevel):
             row2, text="简化", variable=self.review_show_simplified_var,
             command=self._toggle_review_simplified,
         ).pack(side="left", padx=(8, 0))
+        ttk.Separator(controls, orient="horizontal").pack(fill="x", pady=(5, 0))
 
         # Default-collapsed numeric map.
-        self.digit_panel = ttk.Frame(left, padding=(6, 0, 6, 2))
+        self.digit_panel = ttk.Frame(
+            left, padding=(7, 1, 7, 2), style="PCR.Surface.TFrame"
+        )
         self.digit_panel.pack(fill="x")
-        self.digit_panel_title = tk.StringVar(value="▶ 数字替换映射")
-        ttk.Button(
-            self.digit_panel, textvariable=self.digit_panel_title,
-            command=lambda: self._toggle_review_panel("digit")
-        ).pack(fill="x")
-        self.digit_panel_body = ttk.Frame(self.digit_panel, padding=(5, 3))
+        self.digit_panel_title = tk.StringVar(value="▸ 数字替换映射")
+        self.digit_panel_toggle = ttk.Label(
+            self.digit_panel,
+            textvariable=self.digit_panel_title,
+            style="PCR.SectionTitle.TLabel",
+            cursor="hand2",
+        )
+        self.digit_panel_toggle.pack(fill="x")
+        self.digit_panel_toggle.bind(
+            "<Button-1>", lambda _event: self._toggle_review_panel("digit")
+        )
+        self.digit_panel_body = ttk.Frame(
+            self.digit_panel, padding=(5, 3), style="PCR.Surface.TFrame"
+        )
         for index, digit in enumerate(self.DIGIT_KEYS):
             row = index // 5
             col = (index % 5) * 2
@@ -2304,14 +2436,24 @@ class ReviewWindow(tk.Toplevel):
             ).grid(row=row, column=col + 1, padx=(0, 6), pady=1, sticky="w")
 
         # Default-collapsed grouped character palette.
-        self.accent_panel = ttk.Frame(left, padding=(6, 0, 6, 4))
+        self.accent_panel = ttk.Frame(
+            left, padding=(7, 0, 7, 4), style="PCR.Surface.TFrame"
+        )
         self.accent_panel.pack(fill="x")
-        self.accent_panel_title = tk.StringVar(value="▶ 变音字符")
-        ttk.Button(
-            self.accent_panel, textvariable=self.accent_panel_title,
-            command=lambda: self._toggle_review_panel("accent")
-        ).pack(fill="x")
-        self.accent_panel_body = ttk.Frame(self.accent_panel, padding=(5, 3))
+        self.accent_panel_title = tk.StringVar(value="▸ 变音字符")
+        self.accent_panel_toggle = ttk.Label(
+            self.accent_panel,
+            textvariable=self.accent_panel_title,
+            style="PCR.SectionTitle.TLabel",
+            cursor="hand2",
+        )
+        self.accent_panel_toggle.pack(fill="x")
+        self.accent_panel_toggle.bind(
+            "<Button-1>", lambda _event: self._toggle_review_panel("accent")
+        )
+        self.accent_panel_body = ttk.Frame(
+            self.accent_panel, padding=(5, 3), style="PCR.Surface.TFrame"
+        )
         for group_index, (label, chars) in enumerate(self.ACCENT_GROUPS):
             row = group_index // 2
             base_col = (group_index % 2) * 7
@@ -2324,7 +2466,7 @@ class ReviewWindow(tk.Toplevel):
                 ).grid(row=row, column=base_col + offset, padx=1, pady=1, sticky="w")
 
         # Main review strip: vertical previous/next buttons flank the scrollable rows.
-        strip = ttk.Frame(left)
+        strip = ttk.Frame(left, style="PCR.Surface.TFrame")
         strip.pack(fill="both", expand=True, padx=(4, 4), pady=(0, 4))
         # Page navigation is intentionally a little darker than ordinary
         # controls so it remains easy to find while proofreading without
@@ -2334,22 +2476,29 @@ class ReviewWindow(tk.Toplevel):
         self.prev_page_button = tk.Button(
             strip, text="上\n一\n页", width=3, command=lambda: self.change_page(-1),
             bg=review_nav_bg, activebackground=review_nav_active_bg,
+            relief="flat", bd=0, highlightthickness=0, cursor="hand2",
         )
         self.prev_page_button.pack(side="left", fill="y", padx=(0, 4))
-        editor_area = ttk.Frame(strip)
+        editor_area = ttk.Frame(strip, style="PCR.Surface.TFrame")
         editor_area.pack(side="left", fill="both", expand=True)
         self.next_page_button = tk.Button(
             strip, text="下\n一\n页", width=3, command=lambda: self.change_page(1),
             bg=review_nav_bg, activebackground=review_nav_active_bg,
+            relief="flat", bd=0, highlightthickness=0, cursor="hand2",
         )
         self.next_page_button.pack(side="right", fill="y", padx=(4, 0))
 
-        self.canvas = tk.Canvas(editor_area, highlightthickness=0)
+        self.canvas = tk.Canvas(
+            editor_area,
+            highlightthickness=0,
+            borderwidth=0,
+            bg=self._review_ui_colors["surface"],
+        )
         scroll = ttk.Scrollbar(editor_area, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=scroll.set)
         scroll.pack(side="right", fill="y")
         self.canvas.pack(fill="both", expand=True)
-        self.rows = ttk.Frame(self.canvas)
+        self.rows = ttk.Frame(self.canvas, style="PCR.Surface.TFrame")
         self.rows_window = self.canvas.create_window((0, 0), window=self.rows, anchor="nw")
         self.rows.bind("<Configure>", lambda _e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self.rows_window, width=e.width))
@@ -2359,75 +2508,92 @@ class ReviewWindow(tk.Toplevel):
             widget.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))
 
         # Right: display controls, OCR choices, then the reference word list.
-        review_info = ttk.Frame(right)
+        review_info = ttk.Frame(right, style="PCR.Surface.TFrame")
         review_info.pack(fill="x", pady=(0, 6))
 
-        height_row = ttk.Frame(review_info)
+        height_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         height_row.pack(fill="x")
         ttk.Label(height_row, text="单行高：").pack(side="left")
         self.review_line_height_spin = ttk.Spinbox(
-            height_row, from_=1, to=500, increment=1, width=5, textvariable=self.review_line_height_var
+            height_row, from_=1, to=500, increment=1, width=5,
+            textvariable=self.review_line_height_var, style="PCR.Compact.TSpinbox",
         )
         self.review_line_height_spin.pack(side="left")
         ttk.Label(height_row, text="px").pack(side="left", padx=(2, 7))
         ttk.Label(height_row, text="行间空：").pack(side="left")
         ttk.Spinbox(
             height_row, from_=0, to=200, increment=1, width=4,
-            textvariable=self.review_row_padding_var,
+            textvariable=self.review_row_padding_var, style="PCR.Compact.TSpinbox",
         ).pack(side="left")
         ttk.Label(height_row, text="px").pack(side="left", padx=(2, 7))
         ttk.Label(height_row, text="普通词条行切图高：").pack(side="left")
         ttk.Spinbox(
             height_row, from_=1, to=500, increment=1, width=5,
-            textvariable=self.review_regular_crop_height_var,
+            textvariable=self.review_regular_crop_height_var, style="PCR.Compact.TSpinbox",
         ).pack(side="left")
         ttk.Label(height_row, text="px").pack(side="left", padx=(2, 9))
         ttk.Label(height_row, text="单字行高：").pack(side="left")
         self.review_single_cjk_line_height_spin = ttk.Spinbox(
-            height_row, from_=1, to=500, increment=1, width=5, textvariable=self.review_single_cjk_line_height_var
+            height_row, from_=1, to=500, increment=1, width=5,
+            textvariable=self.review_single_cjk_line_height_var, style="PCR.Compact.TSpinbox",
         )
         self.review_single_cjk_line_height_spin.pack(side="left")
         ttk.Label(height_row, text="px").pack(side="left", padx=(2, 0))
 
-        zoom_row = ttk.Frame(review_info)
+        zoom_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         zoom_row.pack(fill="x")
         ttk.Label(zoom_row, text="词条切图显示大小：").pack(side="left")
-        ttk.Button(zoom_row, text="−", width=3, command=lambda: self.change_review_zoom(0.8)).pack(side="left")
-        review_zoom_entry = ttk.Entry(zoom_row, textvariable=self.review_zoom_var, width=6, justify="center")
+        ttk.Button(
+            zoom_row, text="−", width=3, command=lambda: self.change_review_zoom(0.8),
+            style="PCR.Tool.TButton",
+        ).pack(side="left")
+        review_zoom_entry = ttk.Entry(
+            zoom_row, textvariable=self.review_zoom_var, width=6, justify="center",
+            style="PCR.Compact.TEntry",
+        )
         review_zoom_entry.pack(side="left", padx=2)
         review_zoom_entry.bind("<Return>", self.apply_review_zoom_text)
         review_zoom_entry.bind("<FocusOut>", self.apply_review_zoom_text)
-        ttk.Button(zoom_row, text="+", width=3, command=lambda: self.change_review_zoom(1.25)).pack(side="left")
-        ttk.Button(zoom_row, text="100%", width=5, command=self.reset_review_zoom).pack(side="left", padx=(4, 0))
+        ttk.Button(
+            zoom_row, text="+", width=3, command=lambda: self.change_review_zoom(1.25),
+            style="PCR.Tool.TButton",
+        ).pack(side="left")
+        ttk.Button(
+            zoom_row, text="100%", width=5, command=self.reset_review_zoom,
+            style="PCR.Compact.TButton",
+        ).pack(side="left", padx=(4, 0))
 
-        font_row = ttk.Frame(review_info)
+        font_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         font_row.pack(fill="x", pady=(5, 0))
         ttk.Label(font_row, text="词条字体：").pack(side="left")
         review_families = tuple(sorted(set(font.families()), key=str.casefold))
         self.review_font_combo = ttk.Combobox(
-            font_row, textvariable=self.review_font_family_var, values=review_families, state="normal", width=15
+            font_row, textvariable=self.review_font_family_var, values=review_families,
+            state="normal", width=15, style="PCR.Compact.TCombobox",
         )
         self.review_font_combo.pack(side="left")
         ttk.Label(font_row, text="字号：").pack(side="left", padx=(7, 2))
         self.review_font_size_spin = ttk.Spinbox(
-            font_row, from_=6, to=96, increment=1, width=4, textvariable=self.review_font_size_var
+            font_row, from_=6, to=96, increment=1, width=4,
+            textvariable=self.review_font_size_var, style="PCR.Compact.TSpinbox",
         )
         self.review_font_size_spin.pack(side="left")
         ttk.Checkbutton(font_row, text="粗体", variable=self.review_font_bold_var).pack(side="left", padx=(7, 0))
         ttk.Checkbutton(font_row, text="斜体", variable=self.review_font_italic_var).pack(side="left", padx=(5, 0))
 
-        simplified_font_row = ttk.Frame(review_info)
+        simplified_font_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         simplified_font_row.pack(fill="x", pady=(4, 0))
         ttk.Label(simplified_font_row, text="简体字体：").pack(side="left")
         self.review_simplified_font_combo = ttk.Combobox(
             simplified_font_row, textvariable=self.review_simplified_font_family_var,
             values=review_families, state="normal", width=15,
+            style="PCR.Compact.TCombobox",
         )
         self.review_simplified_font_combo.pack(side="left")
         ttk.Label(simplified_font_row, text="字号：").pack(side="left", padx=(7, 2))
         self.review_simplified_font_size_spin = ttk.Spinbox(
             simplified_font_row, from_=6, to=96, increment=1, width=4,
-            textvariable=self.review_simplified_font_size_var,
+            textvariable=self.review_simplified_font_size_var, style="PCR.Compact.TSpinbox",
         )
         self.review_simplified_font_size_spin.pack(side="left")
         ttk.Checkbutton(
@@ -2439,72 +2605,106 @@ class ReviewWindow(tk.Toplevel):
 
         # Keep the four OCR sources on a single compact line.  Each available
         # result remains clickable, preserving the previous quick-fill workflow.
-        ocr_row = ttk.Frame(right)
+        ttk.Separator(right, orient="horizontal").pack(fill="x", pady=(1, 5))
+        ocr_row = ttk.Frame(right, style="PCR.Surface.TFrame")
         ocr_row.pack(fill="x", pady=(0, 6))
-        ttk.Label(ocr_row, text="OCR结果：").pack(side="left")
-        self.ocr_options = ttk.Frame(ocr_row)
+        ttk.Label(ocr_row, text="OCR结果：", style="PCR.Header.TLabel").pack(side="left")
+        self.ocr_options = ttk.Frame(ocr_row, style="PCR.Surface.TFrame")
         self.ocr_options.pack(side="left", fill="x", expand=True)
 
-        network_box = ttk.LabelFrame(right, text="网络词汇核验（免费，无需 Token）", padding=6)
+        network_box = self._review_section_frame(
+            right, "网络词汇核验（免费，无需 Token）", padding=6
+        )
         network_box.pack(fill="x", pady=(0, 6))
-        network_actions = ttk.Frame(network_box)
+        network_actions = ttk.Frame(network_box, style="PCR.Surface.TFrame")
         network_actions.pack(fill="x")
         ttk.Checkbutton(
             network_actions, text="自动检查", variable=self.network_lookup_enabled_var,
             command=self._toggle_network_lookup,
         ).pack(side="left")
         ttk.Button(
-            network_actions, text="立即", width=5, command=lambda: self._schedule_network_lookup(force=True)
+            network_actions, text="立即", width=5,
+            command=lambda: self._schedule_network_lookup(force=True),
+            style="PCR.Compact.TButton",
         ).pack(side="left", padx=(5, 0))
         self.cc_cedict_lookup_button = ttk.Button(
-            network_actions, textvariable=self.cc_cedict_lookup_var, width=15, command=self.manage_cc_cedict
+            network_actions, textvariable=self.cc_cedict_lookup_var, width=15,
+            command=self.manage_cc_cedict, style="PCR.Compact.TButton",
         )
         self.cc_cedict_lookup_button.pack(side="left", padx=(5, 0))
         self.cc_simplified_compare_button = ttk.Button(
             network_actions, textvariable=self.cc_simplified_compare_var, width=14,
-            command=self.show_cc_simplified_comparison,
+            command=self.show_cc_simplified_comparison, style="PCR.Compact.TButton",
         )
         self.cc_simplified_compare_button.pack(side="left", padx=(5, 0))
         ttk.Button(
             network_actions, textvariable=self.moedict_lookup_var, width=7,
-            command=lambda: self.open_lookup_source("萌典"),
+            command=lambda: self.open_lookup_source("萌典"), style="PCR.Compact.TButton",
         ).pack(side="left", padx=(5, 0))
         ttk.Button(
             network_actions, textvariable=self.wiktionary_lookup_var, width=8,
-            command=lambda: self.open_lookup_source("维基词典"),
+            command=lambda: self.open_lookup_source("维基词典"), style="PCR.Compact.TButton",
         ).pack(side="left", padx=(5, 0))
-        ttk.Button(network_actions, text="网络搜索", width=8, command=self.open_network_web_search).pack(side="left", padx=(5, 0))
+        ttk.Button(
+            network_actions, text="网络搜索", width=8, command=self.open_network_web_search,
+            style="PCR.Compact.TButton",
+        ).pack(side="left", padx=(5, 0))
         self.network_status_label = tk.Label(
             network_box, textvariable=self.network_lookup_status_var, anchor="w", justify="left",
-            wraplength=430, fg="#555555",
+            wraplength=430, fg="#555555", bg=self._review_ui_colors["surface"],
         )
         self.network_status_label.pack(fill="x", pady=(4, 0))
         self._refresh_cc_cedict_button_idle()
 
-        ref_box = ttk.LabelFrame(right, text="参考词表", padding=6)
+        ref_box = self._review_section_frame(right, "参考词表", padding=6)
         ref_box.pack(fill="both", expand=True)
-        ref_actions = ttk.Frame(ref_box)
+        ref_actions = ttk.Frame(ref_box, style="PCR.Surface.TFrame")
         ref_actions.pack(fill="x", pady=(0, 3))
-        ttk.Button(ref_actions, text="选择文件", command=self.choose_wordslist_file).pack(side="left")
+        ttk.Button(
+            ref_actions, text="选择文件", command=self.choose_wordslist_file,
+            style="PCR.Compact.TButton",
+        ).pack(side="left")
         ttk.Label(ref_actions, text="定位：").pack(side="left", padx=(8, 2))
         self.wordslist_locator_combo = ttk.Combobox(
             ref_actions, textvariable=self.wordslist_locator_var,
             values=tuple(self.WORDSLIST_LOCATOR_LABEL_TO_KEY), state="readonly", width=18,
+            style="PCR.Compact.TCombobox",
         )
         self.wordslist_locator_combo.pack(side="left")
         self.wordslist_locator_combo.bind("<<ComboboxSelected>>", self._change_wordslist_locator_mode)
         ttk.Button(
-            ref_actions, text="从所选词开始填充至本页结束", command=self.fill_words
+            ref_actions, text="从所选词开始填充至本页结束", command=self.fill_words,
+            style="PCR.Compact.TButton",
         ).pack(side="left", padx=(6, 0))
         self.wordslist_label_var = tk.StringVar(value="wordslist 参考词表")
-        ttk.Label(ref_box, textvariable=self.wordslist_label_var, wraplength=430).pack(anchor="w")
-        word_nav = ttk.Frame(ref_box)
+        ttk.Label(
+            ref_box, textvariable=self.wordslist_label_var, wraplength=430,
+            style="PCR.Muted.TLabel",
+        ).pack(anchor="w")
+        word_nav = ttk.Frame(ref_box, style="PCR.Surface.TFrame")
         word_nav.pack(fill="x", pady=(2, 0))
         self.word_window_var = tk.StringVar(value="")
         ttk.Label(word_nav, textvariable=self.word_window_var).pack(side="left", fill="x", expand=True)
-        ttk.Button(word_nav, text="前500", width=7, command=lambda: self.shift_wordslist_window(-1)).pack(side="right", padx=(4, 0))
-        ttk.Button(word_nav, text="后500", width=7, command=lambda: self.shift_wordslist_window(1)).pack(side="right")
-        self.word_list = tk.Listbox(ref_box, exportselection=False, font=("Cambria", 14))
+        ttk.Button(
+            word_nav, text="前500", width=7, command=lambda: self.shift_wordslist_window(-1),
+            style="PCR.Tool.TButton",
+        ).pack(side="right", padx=(4, 0))
+        ttk.Button(
+            word_nav, text="后500", width=7, command=lambda: self.shift_wordslist_window(1),
+            style="PCR.Tool.TButton",
+        ).pack(side="right")
+        self.word_list = tk.Listbox(
+            ref_box,
+            exportselection=False,
+            font=("Cambria", 14),
+            relief="flat",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=self._review_ui_colors["border"],
+            highlightcolor=self._review_ui_colors["border"],
+            selectbackground=self._review_ui_colors["selection"],
+            selectforeground=self._review_ui_colors["text"],
+        )
         self.word_list.pack(fill="both", expand=True, pady=(4, 0))
         self.word_list_default_bg = str(self.word_list.cget("background"))
         self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)
@@ -2515,7 +2715,7 @@ class ReviewWindow(tk.Toplevel):
         if panel == "digit":
             expanded = not self.digit_map_expanded.get()
             self.digit_map_expanded.set(expanded)
-            self.digit_panel_title.set(("▼ " if expanded else "▶ ") + "数字替换映射")
+            self.digit_panel_title.set(("▾ " if expanded else "▸ ") + "数字替换映射")
             if expanded:
                 self.digit_panel_body.pack(fill="x")
             else:
@@ -2523,7 +2723,7 @@ class ReviewWindow(tk.Toplevel):
             return
         expanded = not self.accent_panel_expanded.get()
         self.accent_panel_expanded.set(expanded)
-        self.accent_panel_title.set(("▼ " if expanded else "▶ ") + "变音字符")
+        self.accent_panel_title.set(("▾ " if expanded else "▸ ") + "变音字符")
         if expanded:
             self.accent_panel_body.pack(fill="x")
         else:
@@ -3865,7 +4065,7 @@ class ReviewWindow(tk.Toplevel):
             photo = ImageTk.PhotoImage(crop)
             self.thumbnails.append(photo)
             self.editor_crop_widths.append(crop.width)
-            picture = ttk.Label(self.rows, image=photo)
+            picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
             picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
             var = tk.StringVar(value=entry.word)
             # Review zoom changes only the cropped line image.  Text-entry font
@@ -3885,13 +4085,18 @@ class ReviewWindow(tk.Toplevel):
             editor_width_chars = max(8, min(140, round(crop.width / char_px)))
             editor_bg = "#b3fddd" if entry.word in words else "#fce5e8"
             editor_frame = tk.Frame(
-                self.rows, bg=editor_bg, bd=1, relief="sunken",
-                highlightthickness=2, highlightbackground=editor_bg, highlightcolor=editor_bg,
+                self.rows,
+                bg=editor_bg,
+                bd=0,
+                relief="flat",
+                highlightthickness=1,
+                highlightbackground=editor_bg,
+                highlightcolor=editor_bg,
             )
             delete_button = tk.Button(
                 editor_frame, text="[X]", width=3, takefocus=False,
                 relief="flat", bd=0, padx=1, pady=0, cursor="hand2",
-                fg="#8b1a1a", bg="#f2f2f2", activebackground="#ffd9d9",
+                fg="#8b1a1a", bg="#f3eeee", activebackground="#f4d9d9",
                 command=lambda i=index: self.delete_review_entry(i),
             )
             delete_button.grid(row=0, column=0, sticky="nsw", padx=(0, 2))
@@ -3939,6 +4144,7 @@ class ReviewWindow(tk.Toplevel):
             simplified_search_button = tk.Button(
                 editor_frame, text="网查", width=4, takefocus=False,
                 relief="flat", bd=0, padx=2, pady=0, cursor="hand2",
+                bg="#eceff3", activebackground="#e1e5ea", foreground="#30343b",
                 command=lambda i=index: self.lookup_simplified_online(i),
             )
             simplified_search_button.grid(row=0, column=3, sticky="ns", padx=(4, 0))
@@ -4105,7 +4311,11 @@ class ReviewWindow(tk.Toplevel):
             normal_bg = str(frame.cget("bg"))
             border = "#d32f2f" if mismatch else normal_bg
             try:
-                frame.configure(highlightthickness=2, highlightbackground=border, highlightcolor=border)
+                frame.configure(
+                    highlightthickness=(2 if mismatch else 1),
+                    highlightbackground=border,
+                    highlightcolor=border,
+                )
             except tk.TclError:
                 pass
 
@@ -4133,16 +4343,19 @@ class ReviewWindow(tk.Toplevel):
                 button = tk.Button(
                     self.ocr_options, text=f"{short_label}: {word}",
                     command=lambda value=word: self.use_ocr_word(value),
-                    anchor="w", justify="left", relief="groove", bd=1, padx=4, pady=1,
+                    anchor="w", justify="left", relief="flat", bd=0, padx=5, pady=2,
                     bg=bg, activebackground=bg, foreground="#202020",
+                    highlightthickness=1, highlightbackground=bg,
                 )
                 button.grid(row=0, column=slot_index, sticky="ew", padx=((0 if slot_index == 0 else 3), 0))
                 self.ocr_result_buttons.append((button, word))
             else:
                 button = tk.Button(
                     self.ocr_options, text=f"{short_label}: -", state="disabled",
-                    anchor="w", justify="left", relief="groove", bd=1, padx=4, pady=1,
-                    disabledforeground="#777777",
+                    anchor="w", justify="left", relief="flat", bd=0, padx=5, pady=2,
+                    bg="#f1f2f4", activebackground="#f1f2f4",
+                    disabledforeground="#777777", highlightthickness=1,
+                    highlightbackground="#e1e4e8",
                 )
                 button.grid(row=0, column=slot_index, sticky="ew", padx=((0 if slot_index == 0 else 3), 0))
             self.ocr_options.columnconfigure(slot_index, weight=1)
