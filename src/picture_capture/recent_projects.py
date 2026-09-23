@@ -16,7 +16,7 @@ def default_recent_projects_path() -> Path:
     return root / "PictureCapture" / "recent_projects.json" if base else root / "recent_projects.json"
 
 
-def load_recent_projects(path: Path | None = None) -> list[dict[str, str]]:
+def load_recent_projects(path: Path | None = None) -> list[dict[str, object]]:
     target = path or default_recent_projects_path()
     try:
         value = json.loads(target.read_text(encoding="utf-8"))
@@ -25,7 +25,7 @@ def load_recent_projects(path: Path | None = None) -> list[dict[str, str]]:
         return []
 
 
-def save_recent_projects(rows: list[dict[str, str]], path: Path | None = None) -> None:
+def save_recent_projects(rows: list[dict[str, object]], path: Path | None = None) -> None:
     target = path or default_recent_projects_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     temp = target.with_suffix(".tmp")
@@ -33,15 +33,38 @@ def save_recent_projects(rows: list[dict[str, str]], path: Path | None = None) -
     os.replace(temp, target)
 
 
-def touch_recent_project(root: Path, path: Path | None = None) -> list[dict[str, str]]:
+def touch_recent_project(
+    root: Path,
+    path: Path | None = None,
+    *,
+    last_page: str | None = None,
+    last_page_index: int | None = None,
+) -> list[dict[str, object]]:
+    """Move a project to the front while preserving its per-project resume state."""
     resolved = root.expanduser().resolve()
-    rows = [row for row in load_recent_projects(path) if Path(str(row["path"])).expanduser() != resolved]
-    rows.insert(0, {"name": resolved.name, "path": str(resolved), "opened_at": datetime.now(timezone.utc).isoformat()})
-    save_recent_projects(rows[:30], path)
-    return rows[:30]
+    existing: dict[str, object] = {}
+    remaining: list[dict[str, object]] = []
+    for row in load_recent_projects(path):
+        if Path(str(row["path"])).expanduser() == resolved:
+            existing = dict(row)
+        else:
+            remaining.append(row)
+    row: dict[str, object] = {
+        **existing,
+        "name": resolved.name,
+        "path": str(resolved),
+        "opened_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if last_page is not None:
+        row["last_page"] = str(last_page)
+    if last_page_index is not None:
+        row["last_page_index"] = int(last_page_index)
+    rows = [row, *remaining][:30]
+    save_recent_projects(rows, path)
+    return rows
 
 
-def remove_recent_project(root: Path, path: Path | None = None) -> list[dict[str, str]]:
+def remove_recent_project(root: Path, path: Path | None = None) -> list[dict[str, object]]:
     """Remove only the registry row. No project path is ever unlinked."""
     resolved = root.expanduser().resolve()
     rows = [row for row in load_recent_projects(path) if Path(str(row["path"])).expanduser() != resolved]
@@ -49,7 +72,7 @@ def remove_recent_project(root: Path, path: Path | None = None) -> list[dict[str
     return rows
 
 
-def recent_project_details(row: dict[str, str]) -> dict[str, str | int | bool]:
+def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool]:
     """Read display metadata without initializing or modifying the project."""
     root = Path(str(row.get("path") or "")).expanduser()
     details: dict[str, str | int | bool] = {

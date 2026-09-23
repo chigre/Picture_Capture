@@ -3773,6 +3773,10 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     assert 'text="↔"' in text
     assert 'text="↕"' in text
     assert text.index('text="↕"') < text.index('text="上一页"') < text.index('text="下一页"')
+    assert 'text="页面大小："' not in text
+    assert 'text="已有项目"' in text
+    assert "self.after_idle(self._maximize_main_window)" in text
+    assert "self.after_idle(self._ensure_sidebar_navigation_width)" in text
     assert '"lined": "画线"' in text
     assert 'if len(indices) < 2:' in text
     assert '至少需要选择 2 页' in text
@@ -4972,7 +4976,7 @@ def test_v21122_hotfix3_main_actions_put_old_new_compare_after_review():
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope))'
+    row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope))'
     assert row in text
     assert "class OldNewComparisonWindow" in text
     assert 'notebook.add(diff_tab, text="差异")' in text

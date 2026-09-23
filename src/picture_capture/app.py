@@ -97,6 +97,7 @@ from .processing import (
     entry_crop_column_boxes,
     entry_crop_piece_filename,
     resolve_crop_worker_count,
+    refine_existing_entries,
     split_whole_entries_job,
     split_illustrations_job,
     detect_illustrations_job,
@@ -5165,7 +5166,40 @@ class PictureCaptureApp(tk.Tk):
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.toggle_autosave()
+        self.after_idle(self._maximize_main_window)
+        self.after_idle(self._ensure_sidebar_navigation_width)
         self.after_idle(self.restore_last_session)
+
+    def _maximize_main_window(self) -> None:
+        """Start the main window maximized, with cross-platform fallbacks."""
+        try:
+            self.state("zoomed")
+            return
+        except tk.TclError:
+            pass
+        try:
+            self.attributes("-zoomed", True)
+        except tk.TclError:
+            try:
+                self.geometry(
+                    f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0"
+                )
+            except tk.TclError:
+                pass
+
+    def _ensure_sidebar_navigation_width(self) -> None:
+        """Keep the left pane wide enough to show the complete page-nav row."""
+        paned = self.__dict__.get("main_paned")
+        row = self.__dict__.get("page_size_row")
+        if paned is None or row is None:
+            return
+        try:
+            self.update_idletasks()
+            required = max(520, int(row.winfo_reqwidth()) + 28)
+            available = max(0, int(self.winfo_width()) - 420)
+            paned.sashpos(0, min(required, available) if available else required)
+        except (tk.TclError, ValueError):
+            return
 
     def _section_frame(
         self, parent: tk.Misc, title: str, padding: int = 5, *, section_key: str | None = None
@@ -5370,6 +5404,7 @@ class PictureCaptureApp(tk.Tk):
 
         # v2.3 intentionally has no menu bar or separate top toolbar.
         body = ttk.Panedwindow(self, orient="horizontal")
+        self.main_paned = body
         body.pack(fill="both", expand=True)
         sidebar_host = ttk.Frame(body)
         # Project actions are outside the scrollable/collapsible sidebar so
@@ -5421,12 +5456,12 @@ class PictureCaptureApp(tk.Tk):
         ttk.Button(range_row, text="跳到", command=self.jump_to_page_spec).pack(side="left", padx=(4, 0))
 
         size_row = ttk.Frame(page_panel)
+        self.page_size_row = size_row
         size_row.grid(row=1, column=0, sticky="ew", pady=(0, 4))
         ttk.Checkbutton(
             size_row, text="◧", width=3, variable=self.binary_preview_var,
             command=self._toggle_binary_preview,
         ).pack(side="left", padx=(0, 3))
-        ttk.Label(size_row, text="页面大小：").pack(side="left")
         ttk.Button(size_row, text="−", width=3, command=lambda: self.zoom(0.87)).pack(side="left")
         view_zoom_entry = ttk.Entry(size_row, textvariable=self.view_zoom_var, width=6, justify="center")
         view_zoom_entry.pack(side="left", padx=2)
@@ -5479,7 +5514,7 @@ class PictureCaptureApp(tk.Tk):
 
         bottom_row = self.project_action_bar
         ttk.Button(bottom_row, text="新建项目", command=self.open_project).pack(side="left", fill="x", expand=True)
-        ttk.Button(bottom_row, text="打开既往项目", command=self.open_recent_project).pack(side="left", fill="x", expand=True, padx=(4, 0))
+        ttk.Button(bottom_row, text="已有项目", command=self.open_recent_project).pack(side="left", fill="x", expand=True, padx=(4, 0))
         ttk.Label(bottom_row, text="图片后缀：").pack(side="left", padx=(8, 2))
         self.image_suffix_var = tk.StringVar(value=self.settings.image_suffix)
         ttk.Entry(bottom_row, textvariable=self.image_suffix_var, width=7).pack(side="left")
@@ -6261,7 +6296,7 @@ class PictureCaptureApp(tk.Tk):
         rows = [
             (("更多参数", self.open_settings), ("保存参数", self.save_main_parameters), ("使用提示", self.show_help_dialog)),
             (("运行普通画线", self.run_normal_draw_action), ("运行OCR画线", self.run_ocr_draw_action)),
-            (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope)),
+            (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充既有词条", self.fill_existing_headwords), ("修复PDIC排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("从PDIC备份恢复", self.restore_from_pdic_backup)),
             (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("导出训练标记包", self.export_training_package), ("保存当前页", self.save_current_page)),
         ]
@@ -7457,7 +7492,7 @@ class PictureCaptureApp(tk.Tk):
     def open_recent_project(self) -> None:
         """Show the user-level project history; removal never touches files."""
         dialog = tk.Toplevel(self)
-        dialog.title("打开既往项目")
+        dialog.title("已有项目")
         dialog.transient(self)
         dialog.geometry("760x360")
         host = ttk.Frame(dialog, padding=10)
@@ -7477,12 +7512,16 @@ class PictureCaptureApp(tk.Tk):
         path_size = int(path_font.cget("size"))
         path_font.configure(size=max(5, round(abs(path_size) * 0.6)) * (-1 if path_size < 0 else 1))
 
-        def open_selected(root: Path) -> None:
+        def open_selected(root: Path, row: dict[str, object]) -> None:
             if not root.is_dir():
                 messagebox.showerror("无法打开项目", f"项目路径不存在：\n{root}", parent=dialog)
                 return
             try:
-                self._load_project(root)
+                self._load_project(
+                    root,
+                    target_page=str(row.get("last_page") or "").strip() or None,
+                    target_index=row.get("last_page_index"),
+                )
             except Exception as exc:
                 messagebox.showerror("无法打开项目", str(exc), parent=dialog)
                 return
@@ -7525,7 +7564,7 @@ class PictureCaptureApp(tk.Tk):
                         cursor="hand2", padding=(3, 3),
                     )
                     label.grid(row=row_index, column=column_index, sticky="ew")
-                    label.bind("<Button-1>", lambda _event, p=root: open_selected(p))
+                    label.bind("<Button-1>", lambda _event, p=root, r=dict(row): open_selected(p, r))
 
         column_menu = tk.Menu(dialog, tearoff=False)
         for key, label in columns:
@@ -7842,6 +7881,14 @@ class PictureCaptureApp(tk.Tk):
         quality = self._current_page_quality_text()
         suffix = f"｜{quality}" if quality else ""
         self.status_var.set(f"{self.current_page.name}｜{self.image.width}×{self.image.height}｜{len(self.entries)} 个词条{suffix}")
+        try:
+            touch_recent_project(
+                self.project.root,
+                last_page=self.current_page.name,
+                last_page_index=self.current_index,
+            )
+        except (OSError, ValueError, TypeError):
+            pass
         self._save_session_state()
 
     def change_page(
@@ -9822,6 +9869,100 @@ class PictureCaptureApp(tk.Tk):
         self.sync_quick_settings()
         self.save_settings()
         self.auto_detect_current(force_paddle_refresh=force_refresh)
+
+    def refine_lines_selected_scope(self) -> None:
+        """Re-run only Y refinement for existing PDIC markers in the selected range.
+
+        This operation never detects new headwords and never deletes rows.  Each
+        existing marker is treated as the coarse position and may move only
+        within the refiner's local search radius, which is the hard safety bound.
+        """
+        if not self.guard() or not self.apply_quick_settings(show_status=False):
+            return
+        if self._batch_active:
+            self.status_var.set("已有批量任务正在运行，请结束后再精修画线。")
+            return
+        try:
+            indices = self.selected_page_indices()
+        except Exception as exc:
+            self.show_error("页面范围无效", exc)
+            return
+        if not indices:
+            return
+
+        first = self.project.images[indices[0]].name
+        last = self.project.images[indices[-1]].name
+        if not messagebox.askyesno(
+            "精修画线",
+            f"将重新调用现有 Y 精修逻辑处理所选 {len(indices)} 页：\n"
+            f"{first}" + (f" → {last}" if len(indices) > 1 else "") +
+            "\n\n只允许移动已有画线，不会新增或删除任何画线；"
+            "每条线的 Y 移动量不会超过当前精修搜索半径。是否继续？",
+            parent=self,
+        ):
+            return
+
+        try:
+            self._flush_deferred_page_save()
+            self._sync_entry_editor_texts()
+            self.save_pdic(silent=True, sync_editors=False)
+        except Exception as exc:
+            self.show_error("精修画线准备失败", exc)
+            return
+
+        project = self.project
+        pages = list(project.images)
+        settings = replace(self.settings)
+        # The explicit button means "run refinement now" even if automatic
+        # refinement was disabled for normal detection.
+        settings.paddle_refine_separator_y = True
+        pages_info = {i: self.pages_tuple(i) for i in indices}
+
+        def worker(index: int, _position: int, _total: int):
+            page = pages[index]
+            entries = read_pdic(pdic_path(page))
+            original_count = len(entries)
+            original_words = [entry.word for entry in entries]
+            with Image.open(page) as opened:
+                image = normalize_page_rgb(opened)
+            refined, stats = refine_existing_entries(image, entries, settings)
+            if len(refined) != original_count:
+                raise RuntimeError(
+                    f"{page.name} 精修前后画线数变化：{original_count} → {len(refined)}"
+                )
+            if [entry.word for entry in refined] != original_words:
+                raise RuntimeError(f"{page.name} 精修意外修改了词条文本")
+            write_pdic(pdic_path(page), refined, image.width, pages_info[index])
+            return {
+                "index": index,
+                "page": page.name,
+                **stats,
+            }
+
+        def done(completed, total, stopped, results, error) -> None:
+            if error is not None:
+                return
+            moved = sum(int((row or {}).get("moved", 0)) for row in results)
+            limited = sum(int((row or {}).get("limited", 0)) for row in results)
+            max_delta = max(
+                [int((row or {}).get("max_delta", 0)) for row in results] or [0]
+            )
+            if self.current_index in indices:
+                self.load_page(self.current_index, skip_current_save=True)
+            suffix = f"，{limited} 条触及安全界限" if limited else ""
+            stopped_text = f"（提前停止：{completed}/{total} 页）" if stopped else ""
+            self.status_var.set(
+                f"精修画线完成{stopped_text}：移动 {moved} 条；"
+                f"单条最大安全 Y 差值 {max_delta}px{suffix}"
+            )
+
+        self._start_batch_task(
+            "精修画线",
+            indices,
+            worker,
+            done,
+            item_label=lambda i: pages[i].name,
+        )
 
     def run_ocr_draw_action(self) -> None:
         if not self.guard() or not self.apply_quick_settings(show_status=False): return

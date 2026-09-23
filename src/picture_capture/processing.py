@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
 import os
@@ -547,6 +547,72 @@ def detect_entries(
             filter_rules_path=paddle_filter_rules_path,
         ), geometry
     return _detect_entries_left_edge(image, settings)
+
+
+def refine_existing_entries(
+    image: Image.Image,
+    entries: list[Entry],
+    settings: AppSettings,
+) -> tuple[list[Entry], dict[str, int]]:
+    """Refine only existing marker positions without adding or removing rows.
+
+    The current PDIC markers are treated as the coarse localization.  The same
+    local ink-valley refiner used by automatic drawing is called again in
+    canonical layout space.  Each marker is constrained to the refiner's own
+    local search radius, which acts as a hard safety bound on canonical Y
+    movement.  Entry text/order/count and every non-coordinate field are kept.
+    """
+    source = normalize_page_rgb(image)
+    geometry = derive_geometry(source, settings)
+    canonical = geometry.transform.canonical_image_for_analysis(source)
+    gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
+
+    from .paddle_headwords import refine_separator_y
+
+    display_per_source = parameter_scale(canonical, settings)
+    source_per_display = 1.0 / max(1e-9, display_per_source)
+    line_height = max(2, round(settings.character_height * source_per_display))
+    search_ratio = max(0.05, min(0.80, float(settings.paddle_separator_search_ratio)))
+    max_delta = max(2, round(line_height * search_ratio))
+
+    refined_entries: list[Entry] = []
+    moved = 0
+    limited = 0
+    for entry in entries:
+        canonical_u, canonical_v = geometry.source_to_canonical(entry.x, entry.y)
+        col = column_index(entry.x, geometry, entry.y)
+        column_x = max(0, round(geometry.x_at(col, canonical_v)))
+        column_right = min(
+            gray.shape[1],
+            column_x + max(10, int(geometry.column_widths[col])),
+        )
+        new_v = int(canonical_v)
+        if column_right > column_x:
+            candidate_v, _details = refine_separator_y(
+                gray[:, column_x:column_right],
+                int(canonical_v),
+                line_height,
+                settings,
+                source_per_display_pixel=source_per_display,
+                lower_bound=max(0, int(geometry.top)),
+            )
+            delta = int(candidate_v) - int(canonical_v)
+            if abs(delta) > max_delta:
+                limited += 1
+                delta = max(-max_delta, min(max_delta, delta))
+            new_v = int(canonical_v) + delta
+
+        if new_v != int(canonical_v):
+            moved += 1
+        new_x, new_y = geometry.canonical_to_source(int(canonical_u), int(new_v))
+        refined_entries.append(replace(entry, x=int(new_x), y=int(new_y)))
+
+    return refined_entries, {
+        "total": len(entries),
+        "moved": moved,
+        "limited": limited,
+        "max_delta": int(max_delta),
+    }
 
 
 def detect_entries_job(
