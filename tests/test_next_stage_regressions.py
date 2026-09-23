@@ -15,6 +15,11 @@ from picture_capture.models import AppSettings, Entry, ProjectState
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import refine_existing_entries
+from picture_capture.profile_semantics import (
+    apply_headword_profile, apply_reading_choice, effective_page_settings,
+    entry_allowed_by_page_template, excluded_source_side, ordered_headword_profiles,
+    page_template_analysis_image, reading_choice_from_settings, sample_page_indices,
+)
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
     _repair_multiline_headword_state_machine, parse_headword_text,
@@ -160,7 +165,7 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     assert "self.profile_canvas = profile_canvas" in profile
     assert "profile_scrollbar" in profile
     assert 'text="自定义结构名称："' in profile
-    assert 'self.open_settings(initial_tab="profile")' in text
+    assert "ProjectProfileWizard(self, new_project=new_project)" in text
 
 
 def test_binary_preview_and_font_scaling_are_display_only():
@@ -376,6 +381,8 @@ def test_raw_ocr_cache_signature_tracks_pixels_and_inference_settings():
     geometry = SimpleNamespace(
         transform=SimpleNamespace(kind="identity"),
         column_paths=[PathStub()],
+        top=20,
+        bottom=200,
     )
     image = Image.new("RGB", (64, 64), "white")
     base = AppSettings(
@@ -387,6 +394,13 @@ def test_raw_ocr_cache_signature_tracks_pixels_and_inference_settings():
     assert _cache_signature(image, geometry, replace(base, paddle_preprocessing="binary")) != sig
     assert _cache_signature(image, geometry, replace(base, paddle_max_input_side=1400)) != sig
     assert _cache_signature(image, geometry, replace(base, paddle_use_textline_orientation=True)) != sig
+    moved_body = SimpleNamespace(
+        transform=geometry.transform,
+        column_paths=geometry.column_paths,
+        top=30,
+        bottom=200,
+    )
+    assert _cache_signature(image, moved_body, base) != sig
 
     changed = image.copy()
     changed.putpixel((32, 32), (0, 0, 0))
@@ -395,6 +409,146 @@ def test_raw_ocr_cache_signature_tracks_pixels_and_inference_settings():
     # Candidate/parser-only settings deliberately do not invalidate raw OCR.
     assert _cache_signature(image, geometry, replace(base, paddle_min_candidate_score=9.0)) == sig
     assert _cache_signature(image, geometry, replace(base, paddle_headword_regex=r"^foo")) == sig
+
+
+def test_project_profile_samples_front_middle_back_and_keeps_pairs():
+    assert sample_page_indices(24, 6) == [0, 1, 11, 12, 22, 23]
+    assert sample_page_indices(24, 4) == [0, 1, 12, 23]
+    assert sample_page_indices(4, 6) == [0, 1, 2, 3]
+
+
+def test_project_profile_reading_dimension_is_independent():
+    settings = AppSettings(
+        layout_writing_mode="horizontal-tb",
+        layout_text_direction="ltr",
+        layout_transform="identity",
+        ocr_language="ara",
+    )
+    apply_reading_choice(settings, "horizontal-rtl")
+    assert reading_choice_from_settings(settings) == "horizontal-rtl"
+    assert settings.layout_transform == "mirror_x"
+
+    apply_reading_choice(settings, "vertical-rl")
+    assert settings.layout_writing_mode == "vertical-rl"
+    assert settings.layout_transform == "rotate_ccw90"
+
+
+def test_headword_profile_does_not_override_confirmed_layout_or_language():
+    settings = AppSettings(
+        layout_writing_mode="vertical-rl",
+        layout_text_direction="rtl",
+        layout_transform="rotate_ccw90",
+        layout_columns_policy="fixed",
+        columns=3,
+        layout_column_separator_mode="absent",
+        ocr_language="jpn",
+    )
+    apply_headword_profile(settings, "latin_regular")
+    assert settings.dictionary_profile_id == "latin_regular"
+    assert settings.layout_writing_mode == "vertical-rl"
+    assert settings.layout_text_direction == "rtl"
+    assert settings.layout_transform == "rotate_ccw90"
+    assert settings.columns == 3
+    assert settings.layout_column_separator_mode == "absent"
+    assert settings.ocr_language == "jpn"
+
+
+def test_numbered_headword_profile_choices_keep_custom_last():
+    choices = ordered_headword_profiles("古汉语单字结构")
+    labels = [label for label, _key in choices]
+    keys = [key for _label, key in choices]
+    assert keys[-1] == "custom"
+    assert labels[-1].endswith("古汉语单字结构（自定义）")
+    assert all(label.startswith(f"{index}. ") for index, label in enumerate(labels, start=1))
+
+
+def test_page_template_masks_side_content_before_geometry_without_mutating_source():
+    image = Image.new("RGB", (100, 60), "white")
+    for x in range(0, 12):
+        for y in range(0, 60):
+            image.putpixel((x, y), (0, 0, 0))
+    settings = AppSettings(
+        profile_side_content_mode="left",
+        profile_side_percent=12,
+    )
+    masked = page_template_analysis_image(image, settings, 0)
+    assert image.getpixel((5, 20)) == (0, 0, 0)
+    assert masked.getpixel((5, 20)) == (255, 255, 255)
+    assert masked.size == image.size
+
+
+def test_page_template_auto_footer_uses_learned_body_bottom():
+    settings = AppSettings(
+        parameter_display_width=1000,
+        bottom_y=1800,
+        profile_footer_mode="auto",
+    )
+    effective = effective_page_settings(settings, (1000, 2000), 0)
+    assert effective.crop_to_bottom_y is True
+    assert effective.bottom_y == 1800
+
+    empty = replace(settings, bottom_y=0)
+    effective_empty = effective_page_settings(empty, (1000, 2000), 0)
+    assert effective_empty.crop_to_bottom_y is False
+
+
+def test_page_template_applies_header_footer_and_ab_side_exclusion():
+    settings = AppSettings(
+        parameter_display_width=1000,
+        profile_header_mode="present",
+        profile_header_percent=10,
+        profile_footer_mode="present",
+        profile_footer_percent=5,
+        profile_side_content_mode="outer",
+        profile_side_percent=8,
+        profile_page_pair_mode="alternate",
+        profile_first_page_variant="A",
+    )
+    effective = effective_page_settings(settings, (1000, 2000), 0)
+    # Header/footer are physical source-page exclusions, not canonical Y bounds.
+    assert effective.start_y == settings.start_y
+    assert effective.bottom_y == settings.bottom_y
+
+    assert excluded_source_side(settings, 0) == "left"
+    assert excluded_source_side(settings, 1) == "right"
+    assert not entry_allowed_by_page_template(500, 100, (1000, 2000), settings, 0)
+    assert not entry_allowed_by_page_template(500, 1950, (1000, 2000), settings, 0)
+    assert not entry_allowed_by_page_template(50, 500, (1000, 2000), settings, 0)
+    assert entry_allowed_by_page_template(950, 500, (1000, 2000), settings, 0)
+    assert not entry_allowed_by_page_template(950, 500, (1000, 2000), settings, 1)
+
+    vertical = replace(
+        settings,
+        layout_writing_mode="vertical-rl",
+        layout_text_direction="rtl",
+        layout_transform="rotate_ccw90",
+    )
+    masked = page_template_analysis_image(
+        Image.new("RGB", (1000, 2000), "black"), vertical, 0,
+    )
+    # Even for vertical writing, page header/footer remain physical top/bottom.
+    assert masked.getpixel((500, 50)) == (255, 255, 255)
+    assert masked.getpixel((500, 1950)) == (255, 255, 255)
+
+
+def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
+    text = source.read_text(encoding="utf-8")
+    assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
+    assert 's.layout_columns_policy = "fixed"' in text
+    assert "设置已修改，需要重新测试" in text
+
+
+def test_project_profile_wizard_is_the_normal_entry_path():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    assert "ProjectProfileWizard(self, new_project=new_project)" in text
+    assert "launch_profile_setup=not existing_project" in text
+    assert 'notebook.add(profile_tab, text="Profile高级")' in text
+    assert "notebook.select(params_tab)" in text
+    start = text.index("    def open_project_profile(")
+    end = text.index("    def open_project_details(", start)
+    assert 'self.open_settings(initial_tab="profile")' not in text[start:end]
 
 
 def test_analysis_threshold_modes_are_effective():

@@ -15,6 +15,9 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 from .models import AppSettings, Entry, PolygonRegion, read_noncomment_lines, resolved_tesseract_language
 from .image_utils import normalize_page_rgb
 from .layout_transform import LayoutTransform
+from .profile_semantics import (
+    effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
+)
 from .ocr_engines import find_tesseract
 from .formats import read_pdic, read_ppp, write_pdic, write_ppp
 from .project_storage import crop_log_path, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
@@ -533,20 +536,32 @@ def detect_entries(
     paddle_cache_path: Path | None = None,
     force_paddle_refresh: bool = False,
     paddle_filter_rules_path: Path | None = None,
+    profile_page_index: int = 0,
 ) -> tuple[list[Entry], Geometry]:
-    """Detect markers with the restored left-edge rule or PaddleOCR."""
-    method = settings.detection_method.strip().lower()
+    """Detect markers with the active Project Profile page template applied."""
+    source = normalize_page_rgb(image)
+    effective = effective_page_settings(settings, source.size, profile_page_index)
+    analysis_source = page_template_analysis_image(source, effective, profile_page_index)
+    method = effective.detection_method.strip().lower()
     if method == "paddleocr":
-        source = normalize_page_rgb(image)
-        geometry = derive_geometry(source, settings)
+        geometry = derive_geometry(analysis_source, effective)
         from .paddle_headwords import detect_paddle_headwords
-        return detect_paddle_headwords(
-            source, geometry, settings,
+        entries = detect_paddle_headwords(
+            analysis_source, geometry, effective,
             cache_path=paddle_cache_path,
             force_refresh=force_paddle_refresh,
             filter_rules_path=paddle_filter_rules_path,
-        ), geometry
-    return _detect_entries_left_edge(image, settings)
+        )
+    else:
+        entries, geometry = _detect_entries_left_edge(analysis_source, effective)
+
+    entries = [
+        entry for entry in entries
+        if entry_allowed_by_page_template(
+            entry.x, entry.y, source.size, effective, profile_page_index,
+        )
+    ]
+    return sort_entries_reading_order(entries, geometry), geometry
 
 
 def refine_existing_entries(
@@ -616,14 +631,19 @@ def refine_existing_entries(
 
 
 def detect_entries_job(
-    image_path: str, settings: AppSettings, pages: tuple[str, str, str]
+    image_path: str,
+    settings: AppSettings,
+    pages: tuple[str, str, str],
+    profile_page_index: int = 0,
 ) -> int:
     """Spawn-safe ordinary-line detection job that commits one PDIC page."""
     page = Path(image_path)
     with Image.open(page) as opened:
         image = normalize_page_rgb(opened)
     settings.detection_method = "left_edge"
-    entries, _geometry = detect_entries(image, settings)
+    entries, _geometry = detect_entries(
+        image, settings, profile_page_index=profile_page_index,
+    )
     write_pdic(pdic_path_for_image(page), entries, image.width, pages)
     return len(entries)
 

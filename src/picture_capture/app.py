@@ -48,6 +48,10 @@ from .dictionary_profile import (
     language_effective_settings, managed_profile_setting_names, profile_effective_settings, profile_preview_path,
     profile_layout_summary, write_project_profile,
 )
+from .profile_setup import ProjectProfileWizard
+from .profile_semantics import (
+    effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
+)
 from .picdic import build_picdic_package
 from .image_utils import normalize_page_rgb
 from .reference_index import contains_cjk, reference_sort_key
@@ -444,15 +448,19 @@ def _review_crop_settings(image: Image.Image, settings: AppSettings, viewer_widt
     return local
 
 
-def _review_crop_context(image: Image.Image, settings: AppSettings, viewer_width: int):
-    """Return review-only vertical settings plus the project's true page geometry.
-
-    The review image may use a fitted width to keep one-line crop height stable,
-    but horizontal column positions must remain in the same coordinate system as
-    the main page.  Re-deriving columns from the fitted review width causes a
-    cumulative horizontal shift in columns 2, 3, ... .
-    """
-    return _review_crop_settings(image, settings, viewer_width), derive_geometry(image, settings)
+def _review_crop_context(
+    image: Image.Image,
+    settings: AppSettings,
+    viewer_width: int,
+    page_index: int = 0,
+):
+    """Return review crop settings plus the same per-page Profile geometry as detection."""
+    effective = effective_page_settings(settings, image.size, page_index)
+    analysis_image = page_template_analysis_image(image, effective, page_index)
+    return (
+        _review_crop_settings(image, effective, viewer_width),
+        derive_geometry(analysis_image, effective),
+    )
 
 
 def _is_single_cjk_review_headword(value: object) -> bool:
@@ -1098,7 +1106,7 @@ class SettingsDialog(tk.Toplevel):
         params_tab = ttk.Frame(notebook)
         sort_tab = ttk.Frame(notebook)
         rules_tab = ttk.Frame(notebook)
-        notebook.add(profile_tab, text="Profile")
+        notebook.add(profile_tab, text="Profile高级")
         self.profile_tab = profile_tab
         notebook.add(project_tab, text="词典项目详情")
         notebook.add(params_tab, text="参数分区")
@@ -1115,7 +1123,9 @@ class SettingsDialog(tk.Toplevel):
         elif initial_tab == "params":
             notebook.select(params_tab)
         else:
-            notebook.select(profile_tab)
+            # 【项目Profile】 owns the normal guided workflow.  【更多参数】
+            # should therefore open the detailed parameter partition directly.
+            notebook.select(params_tab)
 
         self._build_profile_tab(profile_tab)
         self._build_project_details_tab(project_tab)
@@ -3798,7 +3808,8 @@ class ReviewWindow(tk.Toplevel):
         if not self.parent.image:
             return
         review_settings, geometry = _review_crop_context(
-            self.parent.image, self.parent.settings, self.parent.canvas.winfo_width()
+            self.parent.image, self.parent.settings, self.parent.canvas.winfo_width(),
+            self.parent.current_index,
         )
         ordered = self.parent._ordered_entries_reading_order()
         words = self.parent._project_words if self.parent.project else set()
@@ -4467,7 +4478,13 @@ class ReviewWindow(tk.Toplevel):
                     with Image.open(page_path) as opened:
                         image = normalize_page_rgb(opened)
                     entries = read_pdic(pdic_path(page_path))
-                    geometry = derive_geometry(image, local_settings)
+                    effective_settings = effective_page_settings(
+                        local_settings, image.size, page_index,
+                    )
+                    analysis_image = page_template_analysis_image(
+                        image, effective_settings, page_index,
+                    )
+                    geometry = derive_geometry(analysis_image, effective_settings)
                     entries = sort_entries_reading_order(entries, geometry)
                     ppp_path = self.parent._ppp_read_path(page_path)
                     polygons = read_ppp(ppp_path)
@@ -4482,7 +4499,7 @@ class ReviewWindow(tk.Toplevel):
                             ocr_payload = {}
 
                     review_settings, review_geometry = _review_crop_context(
-                        image, local_settings, local_viewer_width
+                        image, local_settings, local_viewer_width, page_index
                     )
                     review_crops: list[Image.Image] = []
                     for row, entry in enumerate(entries):
@@ -7753,7 +7770,11 @@ class PictureCaptureApp(tk.Tk):
             requested_suffix = None
             if not existing_project and hasattr(self, "image_suffix_var"):
                 requested_suffix = self._normalize_suffix(self.image_suffix_var.get())
-            self._load_project(root, requested_suffix=requested_suffix)
+            self._load_project(
+                root,
+                requested_suffix=requested_suffix,
+                launch_profile_setup=not existing_project,
+            )
         except Exception as exc:
             self.show_error("无法打开项目", exc)
 
@@ -7761,6 +7782,7 @@ class PictureCaptureApp(tk.Tk):
         self, root: Path, *, requested_suffix: str | None = None,
         target_page: str | None = None, target_index: object = None,
         target_view_scale: float | None = None,
+        launch_profile_setup: bool = False,
     ) -> None:
         self._flush_deferred_page_save()
         # These callbacks close over page/project-specific state.  Cancel them
@@ -7933,6 +7955,8 @@ class PictureCaptureApp(tk.Tk):
         self.status_var.set(
             f"已打开 {project.root}｜{len(project.images)} 页｜图片后缀 {self.settings.image_suffix}｜词表 {len(project.words)} 条{storage_hint}"
         )
+        if launch_profile_setup:
+            self.after_idle(lambda: self.open_project_profile(new_project=True))
 
     def on_page_select(self, _event: tk.Event) -> None:
         if getattr(self, "_batch_active", False) and not self._batch_foreground_pages:
@@ -8079,26 +8103,50 @@ class PictureCaptureApp(tk.Tk):
         self._display_photo_cache_key = None
         self.redraw()
 
+    def _current_effective_profile_settings(self) -> AppSettings:
+        """Resolve the current page's Project Profile template without mutating project settings."""
+        if self.image is None:
+            return self.settings
+        return effective_page_settings(
+            self.settings, self.image.size,
+            max(0, int(self.__dict__.get("current_index", 0) or 0)),
+        )
+
     def _display_geometry_key(self) -> tuple:
         if self.image is None:
             return ()
         s = self.settings
         return (
-            id(self.image), int(s.parameter_display_width), int(s.columns),
+            id(self.image), int(self.__dict__.get("current_index", 0) or 0),
+            int(s.parameter_display_width), int(s.columns),
+            str(s.layout_columns_policy), str(s.layout_column_separator_mode),
+            str(s.analysis_threshold_mode),
             float(s.manual_x), float(s.gutter), float(s.column_width),
             float(s.start_y), bool(s.crop_to_bottom_y), float(s.bottom_y),
             bool(s.follow_column_deformation), float(s.column_track_block_height),
             float(s.column_track_radius), float(s.body_indent),
             float(s.column_track_max_step), str(s.layout_transform),
+            str(getattr(s, "profile_header_mode", "auto")),
+            str(getattr(s, "profile_footer_mode", "auto")),
+            str(getattr(s, "profile_side_content_mode", "none")),
+            str(getattr(s, "profile_page_pair_mode", "same")),
+            str(getattr(s, "profile_first_page_variant", "A")),
+            float(getattr(s, "profile_header_percent", 6.0)),
+            float(getattr(s, "profile_footer_percent", 5.0)),
+            float(getattr(s, "profile_side_percent", 8.0)),
         )
 
     def _get_cached_display_geometry(self):
-        """Reuse source-coordinate page geometry until page/layout settings change."""
+        """Reuse the same per-page Profile geometry used by detection."""
         if self.image is None:
             raise RuntimeError("没有可显示的页面图像")
         key = self._display_geometry_key()
         if self._display_geometry_cache is None or self._display_geometry_cache_key != key:
-            self._display_geometry_cache = derive_geometry(self.image, self.settings)
+            effective = self._current_effective_profile_settings()
+            analysis_image = page_template_analysis_image(
+                self.image, effective, max(0, int(self.current_index)),
+            )
+            self._display_geometry_cache = derive_geometry(analysis_image, effective)
             self._display_geometry_cache_key = key
         return self._display_geometry_cache
 
@@ -9095,8 +9143,17 @@ class PictureCaptureApp(tk.Tk):
             self.new_polygon.append((x, y))
             self.redraw()
             return
-        geometry = derive_geometry(self.image, self.settings)
+        effective = self._current_effective_profile_settings()
+        if not entry_allowed_by_page_template(
+            x, y, self.image.size, effective, max(0, int(self.current_index)),
+        ):
+            self.status_var.set("该位置属于 Project Profile 的页边排除区，不添加词条。")
+            return
+        geometry = self._get_cached_display_geometry()
         canonical_x, canonical_y = geometry.source_to_canonical(x, y)
+        if canonical_y < geometry.top or canonical_y >= geometry.bottom:
+            self.status_var.set("该位置位于正文区域之外，不添加词条。")
+            return
         col = column_index_for_click(x, geometry, y)
         source_x, source_y = geometry.canonical_to_source(geometry.column_starts[col], canonical_y)
         self.entries.append(WordEntry("", source_x, source_y))
@@ -9681,7 +9738,7 @@ class PictureCaptureApp(tk.Tk):
         total = max(1.0, self.image.height * self.view_scale)
         self.canvas.yview_moveto(min(1.0, target / total))
         self.canvas.delete("review-highlight")
-        geometry = derive_geometry(self.image, self.settings)
+        geometry = self._get_cached_display_geometry()
         col = max(0, min(len(geometry.column_starts) - 1, int(cand.get("column", 0))))
         x_source = int(cand.get("source_x", 0))
         _u, v = geometry.source_to_canonical(x_source, y)
@@ -10155,7 +10212,7 @@ class PictureCaptureApp(tk.Tk):
             page = project.images[index]
             if normal_executor is not None:
                 return normal_executor.submit(
-                    detect_entries_job, str(page), settings, pages_info[index]
+                    detect_entries_job, str(page), settings, pages_info[index], index
                 ).result()
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
@@ -10164,6 +10221,7 @@ class PictureCaptureApp(tk.Tk):
                 image, settings, paddle_cache_path=cache_path,
                 force_paddle_refresh=force_refresh,
                 paddle_filter_rules_path=filter_path,
+                profile_page_index=index,
             )
             write_pdic(pdic_path(page), entries, image.width, pages_info[index])
             return len(entries)
@@ -10208,7 +10266,7 @@ class PictureCaptureApp(tk.Tk):
         settings = self.__dict__.get("settings")
         if image is None or settings is None or not entries:
             return entries
-        return sort_entries_reading_order(entries, derive_geometry(image, settings))
+        return sort_entries_reading_order(entries, self._get_cached_display_geometry())
 
     def _sort_entries_reading_order(self) -> None:
         """Keep manual and OCR entries in one geometry-based reading order."""
@@ -10314,8 +10372,32 @@ class PictureCaptureApp(tk.Tk):
             return
         SettingsDialog(self, initial_tab=initial_tab)
 
-    def open_project_profile(self) -> None:
-        self.open_settings(initial_tab="profile")
+    def open_project_profile(self, new_project: bool = False) -> None:
+        if not self.project:
+            messagebox.showinfo("尚未打开", "请先打开或新建词典项目。", parent=self)
+            return
+        # Keep the wizard's working copy aligned with any unsaved/debounced
+        # quick-panel edits made immediately before opening Project Profile.
+        if not self.apply_quick_settings(show_status=False, persist=False, silent_errors=True):
+            return
+        existing = self.__dict__.get("_project_profile_wizard")
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.deiconify()
+                    existing.lift()
+                    existing.focus_force()
+                    return
+            except tk.TclError:
+                pass
+        wizard = ProjectProfileWizard(self, new_project=new_project)
+        self._project_profile_wizard = wizard
+        wizard.bind(
+            "<Destroy>",
+            lambda event, w=wizard: self.__dict__.pop("_project_profile_wizard", None)
+            if event.widget is w else None,
+            add="+",
+        )
 
     def open_project_details(self) -> None:
         self.open_settings(initial_tab="project")
@@ -10713,7 +10795,11 @@ class PictureCaptureApp(tk.Tk):
             entries = read_pdic(pdic_path(page))
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
-            entries = sort_entries_reading_order(entries, derive_geometry(image, settings))
+            effective_settings = effective_page_settings(settings, image.size, index)
+            analysis_image = page_template_analysis_image(image, effective_settings, index)
+            entries = sort_entries_reading_order(
+                entries, derive_geometry(analysis_image, effective_settings)
+            )
             texts = ocr_entries(image, entries, settings, rules)
             for entry, text in zip(entries, texts): entry.word = text
             export_ocred(qt_root(project.root) / f"{page.stem}.OCRed", texts)
