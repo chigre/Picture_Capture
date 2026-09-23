@@ -214,6 +214,18 @@ class AppSettings:
     # profile. The profile key remains "custom"; only the human-facing label is
     # renamed so saved parser/layout semantics stay compatible.
     dictionary_custom_profile_name: str = ""
+    # User-facing Project Profile setup. These fields describe the page template
+    # independently from the reusable headword structure preset.
+    profile_setup_version: int = 0
+    profile_header_mode: str = "auto"          # auto / none / present
+    profile_footer_mode: str = "auto"          # auto / none / present
+    profile_side_content_mode: str = "none"    # none / left / right / outer / inner
+    profile_page_pair_mode: str = "same"       # same / alternate
+    profile_first_page_variant: str = "A"      # A / B
+    profile_header_percent: float = 6.0
+    profile_footer_percent: float = 5.0
+    profile_side_percent: float = 8.0
+    profile_last_validated_pages: list[str] = field(default_factory=list)
     # Dictionary collation used by the headword-order checker. ``auto`` follows
     # the selected OCR language; custom mode accepts arbitrary alphabet units
     # (including multi-character letters such as ch / ll).
