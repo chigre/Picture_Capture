@@ -224,11 +224,21 @@ class AppSettings:
     profile_first_page_variant: str = "A"      # A / B
     profile_header_percent: float = 6.0
     profile_footer_percent: float = 5.0
+    # Fixed left/right page-edge mode keeps one shared percentage. Alternating
+    # A/B outer/inner modes may use different widths on the two scan variants.
     profile_side_percent: float = 8.0
+    profile_side_percent_a: float = 8.0
+    profile_side_percent_b: float = 8.0
     profile_last_validated_pages: list[str] = field(default_factory=list)
     # Wizard-only headword specificity controls. They are intentionally
     # semantic instead of exposing parser scores/thresholds to ordinary users.
     profile_headword_tuning_level: int = 0       # -2 loose .. 0 balanced .. +2 strict
+    # Parser controls are version-gated so older projects keep historical
+    # parser behavior until they explicitly save a Wizard profile.
+    profile_parser_controls_version: int = 0
+    profile_allow_ordinary_left_edge: bool = True
+    profile_allow_numbered_prefix: bool = False
+    profile_allow_marker_prefix: bool = False
     profile_cjk_allow_single_headword: bool = True
     profile_cjk_allow_bracketed_headword: bool = True
     profile_cjk_require_left_edge: bool = True
@@ -480,6 +490,13 @@ class AppSettings:
             raw["manual_columns"] = False
             raw["follow_column_deformation"] = False
             raw["layout_behavior_defaults_version"] = 1
+
+        # Project Profile A/B page-edge widths were split after the original
+        # single profile_side_percent setting. Existing projects inherit their
+        # established width for both variants on first load.
+        legacy_side_percent = raw.get("profile_side_percent", cls().profile_side_percent)
+        raw.setdefault("profile_side_percent_a", legacy_side_percent)
+        raw.setdefault("profile_side_percent_b", legacy_side_percent)
 
         known = cls.__dataclass_fields__
         return cls(**{key: value for key, value in raw.items() if key in known})

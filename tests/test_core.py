@@ -1661,6 +1661,65 @@ def test_v280_chinese_bracketed_headwords_are_structural_candidates():
         assert parsed.descriptor_text == "chinese_bracketed_headword"
 
 
+def test_wizard_parser_controls_gate_human_selected_structures():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import parse_headword_text
+
+    latin = load_dictionary_profile(preset="latin_regular", language="eng")
+    settings = AppSettings()
+    settings.ocr_language = "eng"
+    settings.profile_parser_controls_version = 1
+    settings.profile_allow_ordinary_left_edge = False
+    settings.profile_allow_numbered_prefix = False
+    settings.profile_allow_marker_prefix = False
+    settings.profile_cjk_allow_bracketed_headword = False
+    settings.profile_cjk_allow_single_headword = False
+
+    # Ordinary lemma parsing is completely closed when its checkbox is off.
+    assert parse_headword_text("apple n. fruit", settings, profile=latin) is None
+    settings.profile_allow_ordinary_left_edge = True
+    parsed = parse_headword_text("apple n. fruit", settings, profile=latin)
+    assert parsed is not None
+    assert parsed.normalized.casefold() == "apple"
+
+    # Numbered structure can be enabled independently from ordinary lemmas.
+    settings.profile_allow_ordinary_left_edge = False
+    settings.profile_allow_numbered_prefix = True
+    numbered = parse_headword_text("1. apple n. fruit", settings, profile=latin)
+    assert numbered is not None
+    assert numbered.normalized.casefold() == "apple"
+
+
+def test_wizard_parser_controls_gate_cjk_bracket_and_marker_structures():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import parse_headword_text
+
+    profile = load_dictionary_profile(preset="cjk_visual", language="chi_tra")
+    settings = AppSettings()
+    settings.ocr_language = "chi_tra"
+    settings.profile_parser_controls_version = 1
+    settings.profile_allow_ordinary_left_edge = False
+    settings.profile_allow_numbered_prefix = False
+    settings.profile_allow_marker_prefix = False
+    settings.profile_cjk_allow_single_headword = False
+    settings.profile_cjk_allow_bracketed_headword = True
+
+    bracketed = parse_headword_text("【同室】共同居住。", settings, profile=profile)
+    assert bracketed is not None
+    assert bracketed.normalized == "同室"
+
+    settings.profile_cjk_allow_bracketed_headword = False
+    assert parse_headword_text("【同室】共同居住。", settings, profile=profile) is None
+
+    # Fixed-marker parsing is a separate checkbox with stable marker semantics.
+    settings.profile_allow_marker_prefix = True
+    marker = parse_headword_text("○同義 同樣的意思。", settings, profile=profile)
+    assert marker is not None
+    assert marker.normalized == "同義"
+
+
 def test_v280_cjk_bracket_body_option_requires_extra_visual_evidence():
     from PIL import Image
     from picture_capture.dictionary_profile import load_dictionary_profile

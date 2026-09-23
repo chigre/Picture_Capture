@@ -288,9 +288,19 @@ def _parse_cjk_marker_pinyin_headword(
     if not _is_chinese_ocr(settings):
         return None
     parse_text, repairs = _repair_headword_ocr(text)
-    markers = tuple(sorted((m for m in profile.entry_leading_symbols if m), key=len, reverse=True))
-    if not markers:
-        markers = ("○", "●", "◦", "•", "〓")
+    if int(getattr(settings, "profile_parser_controls_version", 0) or 0) >= 1:
+        generic_markers = ("○", "●", "◦", "•", "〓", "◆", "◇", "►", "▶")
+        profile_markers = (
+            tuple(m for m in profile.entry_leading_symbols if m)
+            if profile.uses_parser("cjk_marker_pinyin") else ()
+        )
+        markers = tuple(
+            sorted(dict.fromkeys(generic_markers + profile_markers), key=len, reverse=True)
+        )
+    else:
+        markers = tuple(sorted((m for m in profile.entry_leading_symbols if m), key=len, reverse=True))
+        if not markers:
+            markers = ("○", "●", "◦", "•", "〓")
     marker_pattern = "|".join(re.escape(m) for m in markers)
     match = re.match(
         rf"^\s*(?P<marker>{marker_pattern})\s*(?P<lemma>[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]{{1,24}})",
@@ -1624,49 +1634,84 @@ def parse_headword_text(
     what recovers the large family of `lemma, da adj.` misses seen on pp.55-70.
     """
     active_profile = profile or _BUNDLED_PROFILE
-    if active_profile.uses_parser("numbered_headword_prefix"):
-        prefix_pattern = active_profile.prefix_regex or r"^\s*\d{1,4}\s*[.．]\s*"
+    parser_controls = int(
+        getattr(settings, "profile_parser_controls_version", 0) or 0
+    ) >= 1
+    allow_numbered = (
+        bool(getattr(settings, "profile_allow_numbered_prefix", False))
+        if parser_controls else active_profile.uses_parser("numbered_headword_prefix")
+    )
+    allow_marker = (
+        bool(getattr(settings, "profile_allow_marker_prefix", False))
+        if parser_controls else active_profile.uses_parser("cjk_marker_pinyin")
+    )
+    allow_bracketed = (
+        bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True))
+        if parser_controls else active_profile.uses_parser("cjk_bracketed")
+    )
+    allow_single = (
+        bool(getattr(settings, "profile_cjk_allow_single_headword", True))
+        if parser_controls else active_profile.uses_parser("cjk_single_visual")
+    )
+    allow_ordinary = (
+        bool(getattr(settings, "profile_allow_ordinary_left_edge", True))
+        if parser_controls else True
+    )
+
+    numbered_prefix_matched = False
+    if allow_numbered:
+        prefix_pattern = active_profile.prefix_regex or r"^\s*\d{1,4}(?:\s*[.．]\s*|\s+)"
         try:
             prefix = re.match(prefix_pattern, text, flags=re.UNICODE)
         except re.error:
             prefix = None
-        if prefix is None:
-            if active_profile.prefix_required:
-                return None
-        else:
+        if prefix is not None:
+            numbered_prefix_matched = True
             text = text[prefix.end():]
-            # Legacy profiles matched only the digits. Treat the customary dot
-            # as part of the numbered prefix rather than as lemma punctuation.
             text = re.sub(r"^\s*[.．]\s*", "", text, count=1)
-            bracketed = _parse_chinese_bracketed_headword(text, settings, enforce_chinese_language=False)
+            bracketed = _parse_chinese_bracketed_headword(
+                text, settings, enforce_chinese_language=False,
+            )
             if bracketed is not None:
                 return bracketed
+        elif not parser_controls and active_profile.prefix_required:
+            return None
+
     # Direct parser calls made by older code/tests remain language-driven. The
-    # full OCR pipeline now passes an explicit v2 profile, which gates CJK
-    # structural parsers so a Latin dictionary with Chinese definitions does
-    # not accidentally promote bracketed definition text to headwords.
-    legacy_language_driven_cjk = profile is None and _is_chinese_ocr(settings)
+    # full OCR pipeline now passes an explicit profile and, after Wizard setup,
+    # the user-facing structure checkboxes become authoritative.
+    legacy_language_driven_cjk = (
+        not parser_controls and profile is None and _is_chinese_ocr(settings)
+    )
     features = set(active_profile.headword_features)
-    if "pinyin_after_headword" in features:
+    if allow_single and "pinyin_after_headword" in features:
         cjk_pinyin = _parse_cjk_single_with_pinyin(text, settings)
         if cjk_pinyin is not None:
             return cjk_pinyin
-    if active_profile.uses_parser("cjk_marker_pinyin"):
+    if allow_marker:
         cjk_marker = _parse_cjk_marker_pinyin_headword(text, settings, active_profile)
         if cjk_marker is not None:
             return cjk_marker
     if legacy_language_driven_cjk or (
-        active_profile.uses_parser("cjk_bracketed") and "bracketed_compound" in features
+        allow_bracketed
+        and (parser_controls or "bracketed_compound" in features)
     ):
         chinese = _parse_chinese_bracketed_headword(text, settings)
         if chinese is not None:
             return chinese
     if legacy_language_driven_cjk or (
-        active_profile.uses_parser("cjk_single_visual") and "large_single_character" in features
+        allow_single
+        and (parser_controls or "large_single_character" in features)
     ):
         chinese_single = _parse_chinese_single_character_headword(text, settings)
         if chinese_single is not None:
             return chinese_single
+
+    # The generic lemma parser is the "普通左缘短词" structure. A numbered
+    # prefix is also allowed to continue through it because the prefix itself
+    # already supplied the strong structural cue.
+    if parser_controls and not allow_ordinary and not numbered_prefix_matched:
+        return None
     compile_profile = None if legacy_language_driven_cjk and profile is None else active_profile
     headword_pattern, _special_pattern, pos_pattern = patterns or _compile_patterns(settings, compile_profile)
     parse_text, repairs = _repair_headword_ocr(text)
@@ -2801,7 +2846,12 @@ def filter_headword_records(
             and _is_single_cjk_ideograph(parsed.normalized)
             and parsed.descriptor_text != "chinese_bracketed_headword"
         )
-        cjk_profile_active = bool(getattr(active_profile, "key", "") == "cjk_visual")
+        parser_controls = int(
+            getattr(settings, "profile_parser_controls_version", 0) or 0
+        ) >= 1
+        cjk_profile_active = bool(
+            getattr(active_profile, "key", "") == "cjk_visual" or parser_controls
+        )
         cjk_bracketed = bool(
             cjk_profile_active
             and parsed
@@ -2884,11 +2934,15 @@ def filter_headword_records(
             and boldness_ratio >= max(1.25, settings.paddle_boldness_ratio * 1.08)
             and height_ratio >= 0.92
         )
-        position_ok = (
-            (cjk_at_left if cjk_single_visual else at_left)
-            if (not cjk_profile_active or cjk_require_left_edge)
-            else True
-        )
+        # "普通左缘短词" always means left-edge. The optional
+        # relaxation applies only to the explicitly CJK structural channels.
+        if cjk_single_visual or cjk_bracketed:
+            position_ok = (
+                (cjk_at_left if cjk_single_visual else at_left)
+                if cjk_require_left_edge else True
+            )
+        else:
+            position_ok = at_left
         base_eligible = bool(
             parsed and parsed.normalized and below_header and position_ok
         )
@@ -3141,8 +3195,11 @@ def filter_headword_records(
     # compounds with oversized single-character heads.  Recover the latter from
     # a left-strip visual projection even when OCR merged the glyph with nearby
     # pronunciation/variant text or shifted its box slightly to the right.
+    parser_controls = int(
+        getattr(settings, "profile_parser_controls_version", 0) or 0
+    ) >= 1
     if _is_chinese_ocr(settings) and (
-        getattr(active_profile, "key", "") != "cjk_visual"
+        not parser_controls
         or bool(getattr(settings, "profile_cjk_allow_single_headword", True))
     ):
         zone_width, visual_runs = _cjk_visual_projection_runs(gray, header_cutoff, settings, ratio)

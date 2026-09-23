@@ -265,6 +265,30 @@ def ordered_headword_profiles(custom_name: str = "") -> list[tuple[str, str]]:
     return result
 
 
+def recommended_headword_structures(profile_key: str) -> dict[str, bool]:
+    """Return human-facing parser defaults for one structure preset."""
+    key = str(profile_key or "custom")
+    defaults = {
+        "ordinary_left_edge": False,
+        "cjk_bracketed": False,
+        "cjk_single_visual": False,
+        "numbered_prefix": False,
+        "marker_prefix": False,
+    }
+    if key in {"latin_regular", "edge_visual_regular", "legacy_spanish_structured", "custom"}:
+        defaults["ordinary_left_edge"] = True
+    elif key == "cjk_visual":
+        defaults["cjk_bracketed"] = True
+        defaults["cjk_single_visual"] = True
+    elif key == "numbered_prefix":
+        defaults["numbered_prefix"] = True
+    elif key == "marker_prefixed":
+        defaults["marker_prefix"] = True
+    else:
+        defaults["ordinary_left_edge"] = True
+    return defaults
+
+
 def apply_headword_profile(settings: AppSettings, profile_key: str) -> None:
     """Apply only the headword-recognition dimension of a generic preset."""
     defaults = profile_effective_settings(profile_key, current_language=settings.ocr_language)
@@ -368,6 +392,24 @@ def excluded_source_side(settings: AppSettings, page_index: int) -> str | None:
     return "right" if outer == "left" else "left"
 
 
+def excluded_source_side_percent(settings: AppSettings, page_index: int) -> float:
+    """Return the physical page-edge exclusion width for this scan variant."""
+    mode = str(getattr(settings, "profile_side_content_mode", "none") or "none")
+    if mode in {"outer", "inner"}:
+        variant = page_variant(settings, page_index)
+        name = "profile_side_percent_a" if variant == "A" else "profile_side_percent_b"
+        value = getattr(
+            settings, name,
+            getattr(settings, "profile_side_percent", 8.0),
+        )
+    else:
+        value = getattr(settings, "profile_side_percent", 8.0)
+    try:
+        return max(0.0, min(30.0, float(value)))
+    except (TypeError, ValueError):
+        return 8.0
+
+
 def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], page_index: int = 0) -> AppSettings:
     """Return a per-page copy with intuitive header/footer template applied."""
     current = replace(settings)
@@ -428,7 +470,7 @@ def page_template_analysis_image(
 
     side = excluded_source_side(settings, page_index)
     if side is not None:
-        pct = max(0.0, min(30.0, float(getattr(settings, "profile_side_percent", 8.0))))
+        pct = excluded_source_side_percent(settings, page_index)
         margin = max(0, min(width, round(width * pct / 100.0)))
         if margin > 0:
             if side == "left":
@@ -460,7 +502,7 @@ def entry_allowed_by_page_template(
     side = excluded_source_side(settings, page_index)
     if side is None:
         return True
-    pct = max(0.0, min(30.0, float(getattr(settings, "profile_side_percent", 8.0))))
+    pct = excluded_source_side_percent(settings, page_index)
     boundary = width * pct / 100.0
     if side == "left":
         return source_x >= boundary

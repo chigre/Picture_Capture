@@ -18,7 +18,8 @@ from picture_capture.processing import refine_existing_entries
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
     effective_page_settings,
-    entry_allowed_by_page_template, excluded_source_side, ordered_headword_profiles,
+    entry_allowed_by_page_template, excluded_source_side, excluded_source_side_percent,
+    ordered_headword_profiles,
     page_template_analysis_image, probable_body_page_indices, READING_LABELS,
     reading_choice_from_settings, representative_page_indices, sample_page_indices,
     suggested_body_page_range,
@@ -535,6 +536,33 @@ def test_page_template_masks_side_content_before_geometry_without_mutating_sourc
     assert masked.size == image.size
 
 
+def test_page_template_alternating_ab_side_widths_are_independent():
+    image = Image.new("RGB", (100, 60), "black")
+    settings = AppSettings(
+        profile_side_content_mode="outer",
+        profile_page_pair_mode="alternate",
+        profile_first_page_variant="A",
+        profile_side_percent=8,
+        profile_side_percent_a=6,
+        profile_side_percent_b=14,
+    )
+    assert excluded_source_side(settings, 0) == "left"
+    assert excluded_source_side(settings, 1) == "right"
+    assert excluded_source_side_percent(settings, 0) == 6
+    assert excluded_source_side_percent(settings, 1) == 14
+
+    masked_a = page_template_analysis_image(image, settings, 0)
+    masked_b = page_template_analysis_image(image, settings, 1)
+    assert masked_a.getpixel((5, 30)) == (255, 255, 255)
+    assert masked_a.getpixel((8, 30)) == (0, 0, 0)
+    assert masked_b.getpixel((90, 30)) == (255, 255, 255)
+    assert masked_b.getpixel((84, 30)) == (0, 0, 0)
+    assert not entry_allowed_by_page_template(5, 30, image.size, settings, 0)
+    assert entry_allowed_by_page_template(7, 30, image.size, settings, 0)
+    assert not entry_allowed_by_page_template(90, 30, image.size, settings, 1)
+    assert entry_allowed_by_page_template(84, 30, image.size, settings, 1)
+
+
 def test_page_template_auto_footer_uses_learned_body_bottom():
     settings = AppSettings(
         parameter_display_width=1000,
@@ -611,6 +639,42 @@ def test_project_profile_feedback_tuning_is_profile_aware():
     assert marker.paddle_min_candidate_score == base_score
 
 
+def test_project_profile_classic_headword_atlas_is_packaged():
+    from PIL import Image
+
+    root = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "data" / "headword_examples"
+    )
+    atlas = root / "classic_headword_examples.jpg"
+    assert atlas.exists()
+    with Image.open(atlas) as image:
+        assert image.size == (720, 316)
+
+    # Curated user-uploaded files live in this subfolder and must be found
+    # before falling back to the atlas.
+    recommended = root / "recommended_current"
+    expected = {
+        "latin_regular_NewApproach.jpg",
+        "latin_regular_LDER.jpg",
+        "numbered_prefix_RUIGO.jpg",
+        "cjk_visual_HZYLDZD.jpg",
+        "cjk_visual_XDHYCD.jpg",
+        "cjk_visual_TimesCED.jpg",
+        "cjk_visual_shueisha.jpg",
+        "edge_visual_regular_XAHDCD.jpg",
+        "marker_prefixed_HanYi.jpg",
+    }
+    assert expected <= {path.name for path in recommended.glob("*.jpg")}
+
+    pyproject = (
+        Path(__file__).resolve().parents[1] / "pyproject.toml"
+    ).read_text(encoding="utf-8")
+    assert "data/headword_examples/recommended_current/*.jpg" in pyproject
+    assert "data/headword_examples/extended/*.jpg" in pyproject
+
+
+
 def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
     text = source.read_text(encoding="utf-8")
@@ -618,25 +682,64 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
 
-    assert 'for label in ("1 词典信息与阅读方式", "2 页面模板"' in text
+    assert '"1 词典信息与阅读方式"' in text
+    assert '"2 页面模板"' in text
+    assert '"3 词头结构"' in text
+    assert '"4 测试与确认"' in text
+    assert '"4 语言与 OCR"' not in text
+    assert "self._build_language_section(tab, row=4)" in text
     assert 'text="词典项目详情"' in text
-    assert 'text="词典完整名称："' in text
-    assert 'text="词典缩写名称："' in text
+    assert 'text="词典全称："' in text
+    assert 'text="词典简称(字母)："'.strip() in text
     assert 'text="ISBN："' in text
-    assert 'text="正文页码范围："' in text
+    assert 'text="正文页码："' in text
+    assert 'row=0, column=0' in text
+    assert 'row=0, column=2' in text
+    assert 'row=1, column=0' in text
+    assert 'row=1, column=2' in text
     assert "suggested_body_page_range(self.project.images)" in text
     assert "s.dictionary_full_name = self.dictionary_full_name_var.get().strip()" in text
     assert "s.dictionary_body_page_range = self.dictionary_body_page_range_var.get().strip()" in text
     assert "def _body_page_range_changed" in text
 
-    assert "每一张都可以手动更换" in text
+    assert "每一张都可在右侧手动更换" in text
     assert 'text="更换…"' in text
-    assert 'text="页面模板即时预览"' in text
+    assert '"页面模板即时预览"' in text
     assert 'text="◀ 上一张"' in text and 'text="下一张 ▶"' in text
-    assert 'text="经典样例（局部裁切）"' in text
-    assert "样例区只显示局部裁切图，不回退为整页预览。" in text
+    assert '"经典词头局部样例"' in text
+    assert "self._build_right_image_workspace(right_panel)" in text
+    assert 'ttk.Panedwindow(outer, orient="horizontal")' in text
+    assert "self.profile_paned.add(left_panel, weight=40)" in text
+    assert "self.profile_paned.add(right_panel, weight=60)" in text
+    assert "def _apply_initial_pane_split" in text
+    assert "round(pane_width * 0.40)" in text
+    assert "self.after_idle(self._apply_initial_pane_split)" in text
+    assert "self.profile_paned.sashpos" in text
+    assert "def _apply_left_wraps" in text
+    assert 'left_panel.bind(' in text
+    assert 'child.configure(wraplength=wrap, justify="left")' in text
+    assert "ProfileYellow.TLabelframe" not in text
+    assert "fill=(255, 215, 0, 105)" in text
+    marker_start = text.index("    def _marker_preview(")
+    marker_end = text.index("    def _set_validation_fit(", marker_start)
+    assert "fill=(255, 215, 0, 105)" in text[marker_start:marker_end]
+    assert 'text="A 页排除宽度%"' in text
+    assert 'text="B 页排除宽度%"' in text
+    assert "s.profile_side_percent_a" in text
+    assert "s.profile_side_percent_b" in text
+    assert 'text="◀ 上一页"' in text
+    assert 'text="适合高度"' in text
+    assert 'text="适合宽度"' in text
+    assert 'text="下一页 ▶"' in text
+    assert "默认适合高度；适合宽度时图片横向占满" not in text
+    assert 'self.validation_fit_mode = "height"' in text
+    assert "def _set_validation_fit" in text
     assert "索引语言（2 位）" in text
     assert "indices = list(self.sample_indices)" in text
+    assert 'uniform="sample"' in text
+    assert 'uniform="sample_row"' in text
+    assert "thumb_w = max(180, (available_w - 54) // 3)" in text
+    assert "thumb_h = max(220, (available_h - 150) // 2 - 42)" in text
 
     # The window skeleton is built first; representative image decoding begins
     # later on a worker thread instead of blocking the button click.
@@ -650,19 +753,58 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "self._validation_results = list(results)" in text
     assert "def _move_validation_preview" in text
     assert "def _render_validation_result" in text
-    assert "width = max(720, int(screen_w * 0.60))" in text
-    assert "height = screen_h" in text
+    assert "width = min(work_w, max(720, int(screen_w * 0.80)))" in text
+    assert "SPI_GETWORKAREA" in text
+    assert "height = max(1, int(work_h * 0.90))" in text
+    assert "x = max(work_x, work_x + work_w - width)" in text
+    assert "y = work_y" in text
+    assert "self._wizard_left_width = max(400, int(width * 0.40) - 36)" in text
+    assert "self._wizard_image_width = max(560, int(width * 0.60) - 36)" in text
     assert "target_width = max(320, int(preview_width))" in text
     assert "source.resize(" in text
+    assert "right_width = int(getattr(self, \"right_canvas\", self).winfo_width())" in text
+    assert "HEADWORD_EXAMPLE_ATLAS_CROPS" in text
+    assert '"classic_headword_examples.jpg"' in text
+    assert 'root / "recommended_current"' in text
+    assert 'root / "extended"' in text
     assert "fill=(255, 0, 0, 255), width=1" in text
-    assert 'text="词头专属性"' in text
-    assert "大字单字可作为词头" in text
-    assert "【括号词】可作为词头" in text
+    assert "允许的词头结构（决定哪些 parser 通道开放）" in text
+    assert "普通左缘短词可以作为词头" in text
+    assert "【括号词】可以作为词头" in text
+    assert "大字单字可以作为词头" in text
+    assert "固定符号开头（○ / ● / ◆ …）可以作为词头" in text
+    assert "编号开头（1. / 2. / …）可以作为词头" in text
+    assert "词头专属性（当前结构的视觉证据）" in text
+    assert 'text="栏左缘容差："' in text
+    assert "允许词头起点偏离栏左边界的最大距离；越小越严格" in text
+    assert 'text="文字大小倍率 ≥"' in text
+    assert 'text="粗体倍率 ≥"' in text
+    assert 'text="候选强度 ≥"' in text
+    assert "CJK 单字 / 括号词附加条件" in text
+    assert "右侧显示与当前词头结构匹配的经典局部裁切样例。" not in text
     assert "必须靠近栏左缘" in text
     assert "释义正文中也经常出现【括号词】" in text
     assert "只有视觉明显突出时才把单字/括号词当词头" in text
     assert 'text="偏多"' in text and 'text="合适"' in text and 'text="偏少"' in text
     assert "def _apply_validation_feedback" in text
+    assert "def _headword_structure_changed" in text
+    assert "recommended_headword_structures" in text
+    assert "s.profile_parser_controls_version = 1" in text
+    assert "s.profile_allow_ordinary_left_edge" in text
+    assert "s.profile_allow_numbered_prefix" in text
+    assert "s.profile_allow_marker_prefix" in text
+    assert "s.paddle_left_tolerance = max(" in text
+    assert "s.paddle_height_ratio = max(" in text
+    assert "s.paddle_boldness_ratio = max(" in text
+    assert "s.paddle_min_candidate_score = max(" in text
+    assert "def _persist_current_profile" in text
+    assert "def _save_profile_progress" in text
+    assert "if not self._save_profile_progress():" in text
+    assert 'text="关闭"' in text
+    assert "当前内容已经保存。项目 Profile 尚未完整确认" in text
+    assert "settings.profile_setup_version = int(" in text
+    assert 'header_mode == "auto" and geometry.top > 0' in text
+    assert 'elif header_mode == "present"' in text
     validate_start = text.index("    def validate_profile(")
     validate_end = text.index("    def _poll_validation_queue(", validate_start)
     validate_text = text[validate_start:validate_end]
