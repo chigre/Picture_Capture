@@ -618,7 +618,12 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
 
-    assert 'for label in ("1 词典信息与阅读方式", "2 页面模板"' in text
+    assert '"1 词典信息与阅读方式"' in text
+    assert '"2 页面模板"' in text
+    assert '"3 词头结构"' in text
+    assert '"4 测试与确认"' in text
+    assert '"4 语言与 OCR"' not in text
+    assert "self._build_language_section(tab, row=4)" in text
     assert 'text="词典项目详情"' in text
     assert 'text="词典完整名称："' in text
     assert 'text="词典缩写名称："' in text
@@ -631,10 +636,14 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
 
     assert "每一张都可以手动更换" in text
     assert 'text="更换…"' in text
-    assert 'text="页面模板即时预览"' in text
+    assert '"页面模板即时预览"' in text
     assert 'text="◀ 上一张"' in text and 'text="下一张 ▶"' in text
-    assert 'text="经典样例（局部裁切）"' in text
-    assert "样例区只显示局部裁切图，不回退为整页预览。" in text
+    assert '"经典词头局部样例"' in text
+    assert "self._build_right_image_workspace(right_panel)" in text
+    assert 'ttk.Panedwindow(outer, orient="horizontal")' in text
+    assert "self.profile_paned.add(left_panel, weight=45)" in text
+    assert "self.profile_paned.add(right_panel, weight=55)" in text
+    assert "self.profile_paned.sashpos" in text
     assert "索引语言（2 位）" in text
     assert "indices = list(self.sample_indices)" in text
 
@@ -650,10 +659,17 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "self._validation_results = list(results)" in text
     assert "def _move_validation_preview" in text
     assert "def _render_validation_result" in text
-    assert "width = max(720, int(screen_w * 0.60))" in text
-    assert "height = screen_h" in text
+    assert "width = max(960, int(screen_w * 0.80))" in text
+    assert "height = max(640, int(screen_h * 0.80))" in text
+    assert "x = max(0, screen_w - width)" in text
+    assert "y = 0" in text
+    assert "self._wizard_left_width = max(420, int(width * 0.45) - 36)" in text
+    assert "self._wizard_image_width = max(520, int(width * 0.55) - 36)" in text
     assert "target_width = max(320, int(preview_width))" in text
     assert "source.resize(" in text
+    assert "right_width = int(getattr(self, \"right_canvas\", self).winfo_width())" in text
+    assert "HEADWORD_EXAMPLE_ATLAS_CROPS" in text
+    assert '"classic_headword_examples.jpg"' in text
     assert "fill=(255, 0, 0, 255), width=1" in text
     assert "允许的词头结构（决定哪些 parser 通道开放）" in text
     assert "普通左缘短词可以作为词头" in text
