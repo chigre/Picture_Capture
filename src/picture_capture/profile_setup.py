@@ -192,13 +192,17 @@ class ProjectProfileWizard(tk.Toplevel):
         self.update_idletasks()
         screen_w = max(800, int(self.winfo_screenwidth()))
         screen_h = max(600, int(self.winfo_screenheight()))
-        width = max(720, int(screen_w * 0.60))
-        height = screen_h
-        x = max(0, (screen_w - width) // 2)
+        width = max(960, int(screen_w * 0.80))
+        height = max(640, int(screen_h * 0.80))
+        x = max(0, screen_w - width)
         y = 0
-        self._wizard_content_width = max(560, width - 70)
+        self._wizard_width = width
+        self._wizard_height = height
+        self._wizard_left_width = max(420, int(width * 0.45) - 36)
+        self._wizard_image_width = max(520, int(width * 0.55) - 36)
+        self._wizard_content_width = self._wizard_left_width
         self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(min(720, width), min(650, height))
+        self.minsize(min(960, width), min(640, height))
         self.transient(parent)
         self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self._close_without_save)
@@ -346,27 +350,49 @@ class ProjectProfileWizard(tk.Toplevel):
             var.trace_add("write", lambda *_args: self.after_idle(self._refresh_summary))
 
     def _build_ui(self) -> None:
-        outer = ttk.Frame(self, padding=12)
+        outer = ttk.Frame(self, padding=10)
         outer.pack(fill="both", expand=True)
-        outer.rowconfigure(2, weight=1)
+        outer.rowconfigure(0, weight=1)
         outer.columnconfigure(0, weight=1)
 
-        title = "依次确认词典信息、阅读方式、页面模板、词头结构和 OCR。"
-        ttk.Label(outer, text=title, font=("TkDefaultFont", 12, "bold")).grid(
+        self.profile_paned = ttk.Panedwindow(outer, orient="horizontal")
+        self.profile_paned.grid(row=0, column=0, sticky="nsew")
+
+        left_panel = ttk.Frame(self.profile_paned, padding=(2, 2, 8, 2))
+        right_panel = ttk.Frame(self.profile_paned, padding=(8, 2, 2, 2))
+        left_panel.rowconfigure(3, weight=1)
+        left_panel.columnconfigure(0, weight=1)
+        right_panel.rowconfigure(0, weight=1)
+        right_panel.columnconfigure(0, weight=1)
+        self.profile_paned.add(left_panel, weight=45)
+        self.profile_paned.add(right_panel, weight=55)
+        self.after_idle(
+            lambda: self.profile_paned.sashpos(
+                0, max(320, int(self._wizard_width * 0.45))
+            )
+        )
+
+        title = "依次确认词典信息与 OCR、阅读方式、页面模板、词头结构，再用多页测试确认。"
+        ttk.Label(left_panel, text=title, font=("TkDefaultFont", 12, "bold")).grid(
             row=0, column=0, sticky="w"
         )
         ttk.Label(
-            outer,
-            text="软件会抽取前/中/后代表页进行分析；高级阈值仍保留在【更多参数 → Profile高级】中。",
-            foreground="#666666",
+            left_panel,
+            text="左侧只放设置；右侧始终显示当前步骤的图片。中间分隔条可以拖动。",
+            foreground="#666666", wraplength=self._wizard_left_width,
         ).grid(row=1, column=0, sticky="w", pady=(2, 8))
 
-        self.notebook = ttk.Notebook(outer)
-        self.notebook.grid(row=2, column=0, sticky="nsew")
+        self.notebook = ttk.Notebook(left_panel)
+        self.notebook.grid(row=3, column=0, sticky="nsew")
         self.tabs: list[ttk.Frame] = []
         self.tab_contents: list[ttk.Frame] = []
         self.tab_canvases: list[tk.Canvas] = []
-        for label in ("1 词典信息与阅读方式", "2 页面模板", "3 词头结构", "4 语言与 OCR", "5 测试与确认"):
+        for label in (
+            "1 词典信息与阅读方式",
+            "2 页面模板",
+            "3 词头结构",
+            "4 测试与确认",
+        ):
             host = ttk.Frame(self.notebook)
             host.rowconfigure(0, weight=1)
             host.columnconfigure(0, weight=1)
@@ -375,7 +401,7 @@ class ProjectProfileWizard(tk.Toplevel):
             canvas.configure(yscrollcommand=scrollbar.set)
             canvas.grid(row=0, column=0, sticky="nsew")
             scrollbar.grid(row=0, column=1, sticky="ns")
-            content = ttk.Frame(canvas, padding=12)
+            content = ttk.Frame(canvas, padding=10)
             window = canvas.create_window((0, 0), window=content, anchor="nw")
             content.bind(
                 "<Configure>",
@@ -390,27 +416,148 @@ class ProjectProfileWizard(tk.Toplevel):
             self.tab_contents.append(content)
             self.tab_canvases.append(canvas)
 
+        self._build_right_image_workspace(right_panel)
         self._build_reading_tab(self.tab_contents[0])
         self._build_template_tab(self.tab_contents[1])
         self._build_headword_tab(self.tab_contents[2])
-        self._build_language_tab(self.tab_contents[3])
-        self._build_validation_tab(self.tab_contents[4])
+        self._build_validation_tab(self.tab_contents[3])
         self.notebook.bind("<<NotebookTabChanged>>", self._on_wizard_tab_changed, add="+")
         self.bind("<MouseWheel>", self._wizard_mousewheel, add="+")
         self.bind("<Button-4>", lambda event: self._wizard_linux_wheel(event, -1), add="+")
         self.bind("<Button-5>", lambda event: self._wizard_linux_wheel(event, 1), add="+")
 
-        summary_box = ttk.LabelFrame(outer, text="当前 Project Profile", padding=(8, 5))
-        summary_box.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        summary_box = ttk.LabelFrame(left_panel, text="当前 Project Profile", padding=(8, 5))
+        summary_box.grid(row=4, column=0, sticky="ew", pady=(8, 0))
         self.summary_var = tk.StringVar(value="")
-        ttk.Label(summary_box, textvariable=self.summary_var, wraplength=1020).pack(anchor="w")
+        ttk.Label(
+            summary_box, textvariable=self.summary_var,
+            wraplength=self._wizard_left_width,
+        ).pack(anchor="w")
 
-        footer = ttk.Frame(outer)
-        footer.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        footer = ttk.Frame(left_panel)
+        footer.grid(row=5, column=0, sticky="ew", pady=(8, 0))
         ttk.Button(footer, text="上一步", command=lambda: self._move_step(-1)).pack(side="left")
         ttk.Button(footer, text="下一步", command=lambda: self._move_step(1)).pack(side="left", padx=(6, 0))
         ttk.Button(footer, text="取消", command=self._close_without_save).pack(side="right")
         ttk.Button(footer, text="确认并使用", command=self.save_and_close).pack(side="right", padx=(0, 8))
+
+        self._show_right_image_page(0)
+
+    def _build_right_image_workspace(self, parent: ttk.Frame) -> None:
+        """Persistent image-only workspace shared by all Wizard steps."""
+        host = ttk.LabelFrame(parent, text="图片预览", padding=6)
+        host.grid(row=0, column=0, sticky="nsew")
+        host.rowconfigure(1, weight=1)
+        host.columnconfigure(0, weight=1)
+
+        self.right_heading_var = tk.StringVar(value="代表页（前部 / 中部 / 后部）")
+        ttk.Label(
+            host, textvariable=self.right_heading_var,
+            font=("TkDefaultFont", 11, "bold"),
+        ).grid(row=0, column=0, sticky="w", pady=(0, 5))
+
+        canvas = tk.Canvas(host, highlightthickness=0, borderwidth=0)
+        scrollbar = ttk.Scrollbar(host, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.grid(row=1, column=0, sticky="nsew")
+        scrollbar.grid(row=1, column=1, sticky="ns")
+        self.right_canvas = canvas
+
+        content = ttk.Frame(canvas, padding=(2, 2, 6, 6))
+        self.right_content = content
+        self._right_window = canvas.create_window((0, 0), window=content, anchor="nw")
+        content.columnconfigure(0, weight=1)
+        content.bind(
+            "<Configure>",
+            lambda _e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda e: canvas.itemconfigure(self._right_window, width=e.width),
+        )
+        self.right_image_pages: list[ttk.Frame] = []
+        for _ in range(4):
+            page = ttk.Frame(content)
+            page.grid(row=0, column=0, sticky="nsew")
+            page.columnconfigure(0, weight=1)
+            self.right_image_pages.append(page)
+
+        # Step 1: six editable representative pages.
+        sample_page = self.right_image_pages[0]
+        self.sample_frame = ttk.Frame(sample_page)
+        self.sample_frame.grid(row=0, column=0, sticky="ew")
+
+        # Step 2: one live page-template preview at a time.
+        template_page = self.right_image_pages[1]
+        template_nav = ttk.Frame(template_page)
+        template_nav.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        ttk.Button(
+            template_nav, text="◀ 上一张",
+            command=lambda: self._move_template_preview(-1),
+        ).pack(side="left")
+        ttk.Button(
+            template_nav, text="下一张 ▶",
+            command=lambda: self._move_template_preview(1),
+        ).pack(side="right")
+        self.template_preview_caption_var = tk.StringVar(value="")
+        ttk.Label(
+            template_nav, textvariable=self.template_preview_caption_var,
+        ).pack(side="left", expand=True)
+        self.template_preview_frame = ttk.Frame(template_page)
+        self.template_preview_frame.grid(row=1, column=0, sticky="nsew")
+        self.template_preview_frame.columnconfigure(0, weight=1)
+
+        # Step 3: locally cropped classic headword examples only.
+        examples_page = self.right_image_pages[2]
+        self.headword_examples_frame = ttk.Frame(examples_page)
+        self.headword_examples_frame.grid(row=0, column=0, sticky="ew")
+        self.headword_examples_frame.columnconfigure(0, weight=1)
+        self.headword_examples_frame.columnconfigure(1, weight=1)
+
+        # Step 4: one full-width validation page at a time.
+        validation_page = self.right_image_pages[3]
+        nav = ttk.Frame(validation_page)
+        nav.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        self.validation_prev_button = ttk.Button(
+            nav, text="◀ 上一张",
+            command=lambda: self._move_validation_preview(-1), state="disabled",
+        )
+        self.validation_prev_button.pack(side="left")
+        self.validation_next_button = ttk.Button(
+            nav, text="下一张 ▶",
+            command=lambda: self._move_validation_preview(1), state="disabled",
+        )
+        self.validation_next_button.pack(side="right")
+        self.validation_caption_var = tk.StringVar(value="")
+        ttk.Label(nav, textvariable=self.validation_caption_var).pack(
+            side="left", expand=True
+        )
+        self.validation_frame = ttk.Frame(validation_page)
+        self.validation_frame.grid(row=1, column=0, sticky="ew")
+        self.validation_frame.columnconfigure(0, weight=1)
+
+    def _show_right_image_page(self, index: int) -> None:
+        if not getattr(self, "right_image_pages", None):
+            return
+        index = max(0, min(len(self.right_image_pages) - 1, int(index)))
+        for slot, page in enumerate(self.right_image_pages):
+            if slot == index:
+                page.grid()
+                page.tkraise()
+            else:
+                page.grid_remove()
+        headings = (
+            "代表页（前部 / 中部 / 后部）",
+            "页面模板即时预览",
+            "经典词头局部样例",
+            "多页测试结果",
+        )
+        self.right_heading_var.set(headings[index])
+        try:
+            self.right_canvas.yview_moveto(0.0)
+        except tk.TclError:
+            pass
+
 
     def _on_wizard_tab_changed(self, _event=None) -> None:
         """Load image-backed content only when its tab becomes visible."""
