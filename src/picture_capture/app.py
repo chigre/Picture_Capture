@@ -7933,6 +7933,7 @@ class PictureCaptureApp(tk.Tk):
             geometry.source_size,
         )
 
+        marker_line_width = max(2, round(self.settings.marker_height * overlay_scale))
         show_markers = (
             self.quick_bool_vars.get("show_headword_markers").get()
             if hasattr(self, "quick_bool_vars") and "show_headword_markers" in self.quick_bool_vars
@@ -7945,7 +7946,7 @@ class PictureCaptureApp(tk.Tk):
                 marker_end[0] * self.view_scale,
                 marker_end[1] * self.view_scale,
                 fill=self.settings.headword_marker_color,
-                width=max(2, round(self.settings.marker_height * overlay_scale)),
+                width=marker_line_width,
             )
             record["canvas_items"].append(item)
 
@@ -8040,10 +8041,10 @@ class PictureCaptureApp(tk.Tk):
         vertical_index: tuple[float, float] | None = None
         vertical_index_anchor_name = "nw"
         if vertical:
-            marker_gap = max(
-                3,
-                round(max(2, self.settings.marker_height * overlay_scale) / 2) + 1,
-            )
+            # Touch the visible marker stroke with no empty gap.  editor_x is
+            # the marker centreline, so offset by exactly half the painted line
+            # width to place the widget border against the marker edge.
+            marker_gap = max(1, (marker_line_width + 1) // 2)
             (
                 vertical_box,
                 vertical_window,
