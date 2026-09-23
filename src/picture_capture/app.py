@@ -1577,6 +1577,64 @@ class SettingsDialog(tk.Toplevel):
         self._refresh_profile_summary()
         self.after_idle(self._refresh_profile_status)
 
+    def _build_profile_choice_labels(self) -> dict[str, str]:
+        """Return numbered Profile labels, always keeping custom as the last item."""
+        profiles = list(available_dictionary_profiles())
+        profiles.sort(key=lambda profile: profile.key == "custom")
+        custom_name = str(
+            getattr(self, "custom_profile_name_var", tk.StringVar(value="")).get()
+            if hasattr(self, "custom_profile_name_var") else ""
+        ).strip()
+        labels: dict[str, str] = {}
+        for index, profile in enumerate(profiles, start=1):
+            display_name = profile.display_name
+            if profile.key == "custom" and custom_name:
+                display_name = f"{custom_name}（自定义）"
+            labels[f"{index}. {display_name}"] = profile.key
+        return labels
+
+    def _profile_label_for_key(self, key: str) -> str:
+        for label, value in self._profile_label_to_key.items():
+            if value == key:
+                return label
+        # Compatibility aliases use the display name of their visible base
+        # profile; map them back to that numbered visible choice.
+        try:
+            wanted_name = dictionary_profile_preset(key).display_name
+        except Exception:
+            wanted_name = ""
+        for label, value in self._profile_label_to_key.items():
+            try:
+                if dictionary_profile_preset(value).display_name == wanted_name:
+                    return label
+            except Exception:
+                continue
+        return next(iter(self._profile_label_to_key), "")
+
+    def _profile_display_name(self, key: str) -> str:
+        if key == "custom":
+            custom_name = str(self.custom_profile_name_var.get()).strip()
+            if custom_name:
+                return f"{custom_name}（自定义）"
+        return dictionary_profile_preset(key).display_name
+
+    def _sync_custom_profile_name_state(self) -> None:
+        if not hasattr(self, "custom_profile_name_entry"):
+            return
+        state = "normal" if self._current_profile_key() == "custom" else "disabled"
+        self.custom_profile_name_entry.configure(state=state)
+
+    def _on_custom_profile_name_changed(self) -> None:
+        if not hasattr(self, "profile_combo"):
+            return
+        current_key = self._current_profile_key()
+        self._profile_label_to_key = self._build_profile_choice_labels()
+        self.profile_combo.configure(values=tuple(self._profile_label_to_key.keys()))
+        self.profile_choice_var.set(self._profile_label_for_key(current_key))
+        self._sync_custom_profile_name_state()
+        self._refresh_profile_summary()
+        self._refresh_profile_status()
+
     def _current_profile_key(self) -> str:
         return self._profile_label_to_key.get(self.profile_choice_var.get(), self._active_profile_key or DEFAULT_PROFILE_ID)
 
@@ -1595,7 +1653,9 @@ class SettingsDialog(tk.Toplevel):
             "column_separator": str(self.vars.get("layout_column_separator_mode").get()) if self.vars.get("layout_column_separator_mode") else "auto",
         }
         language = str(self.vars.get("ocr_language").get()) if self.vars.get("ocr_language") else ""
-        self.profile_layout_summary_var.set(f"{language} · {profile.display_name} · {profile_layout_summary(profile, layout)}")
+        self.profile_layout_summary_var.set(
+            f"{language} · {self._profile_display_name(profile.key)} · {profile_layout_summary(profile, layout)}"
+        )
         if profile.examples:
             names = "；".join(example.dictionary for example in profile.examples)
             self.profile_examples_var.set(f"经典样例：{names}")
@@ -1628,7 +1688,7 @@ class SettingsDialog(tk.Toplevel):
             if self._coerce_profile_var(name) != expected:
                 changed.append(name)
         suffix = "（使用预设默认值）" if not changed else f"（项目调整 {len(changed)} 项）"
-        self.profile_status_var.set(f"{dictionary_profile_preset(key).display_name} {suffix}")
+        self.profile_status_var.set(f"{self._profile_display_name(key)} {suffix}")
 
     def _apply_profile_defaults_to_vars(self, key: str, *, keep_supported_language: bool = True) -> None:
         current_language = ""
@@ -1647,6 +1707,7 @@ class SettingsDialog(tk.Toplevel):
     def _on_profile_selected(self, _event=None) -> None:
         key = self._current_profile_key()
         self._profile_selection_changed = True
+        self._sync_custom_profile_name_state()
         self._apply_profile_defaults_to_vars(key, keep_supported_language=True)
 
     def restore_profile_defaults(self) -> None:
@@ -1679,14 +1740,15 @@ class SettingsDialog(tk.Toplevel):
     def preview_profile_examples(self) -> None:
         profile = dictionary_profile_preset(self._current_profile_key())
         popup = tk.Toplevel(self)
-        popup.title(f"Profile 预览 — {profile.display_name}")
+        display_name = self._profile_display_name(profile.key)
+        popup.title(f"Profile 预览 — {display_name}")
         screen_w = max(900, popup.winfo_screenwidth())
         screen_h = max(650, popup.winfo_screenheight())
         popup.geometry(f"{min(980, int(screen_w * 0.76))}x{min(820, int(screen_h * 0.84))}")
         popup.minsize(620, 520)
         header = ttk.Frame(popup, padding=(12, 10))
         header.pack(fill="x")
-        ttk.Label(header, text=profile.display_name, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
+        ttk.Label(header, text=display_name, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
         ttk.Label(header, text=profile.description, justify="left", wraplength=900).pack(anchor="w", pady=(4, 0))
         if not profile.examples:
             ttk.Label(popup, text="此通用兼容 Profile 暂无内置经典样页。", padding=24).pack(fill="both", expand=True)
