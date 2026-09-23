@@ -167,7 +167,7 @@ OCR_REFRESH_VALUES = {label: value for value, label in OCR_REFRESH_LABELS.items(
 OCR_USAGE_HELP = (
     "主界面分为普通版面参数、OCR画线、辅助显示、画线与校对、后期词典制作和页面列表六部分。\n\n"
     "检测版面：仅调用 PaddleOCR 文本检测，依据整页文本框自动估计分栏数、页眉Y、单栏宽和栏间空，不做文字识别。\n"
-    "OCR画线：默认 PaddleOCR + Tesseract；可选 Google Lens。候选带宽比例 100 表示使用原候选带宽。\n"
+    "OCR画线：默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启。候选带宽比例 100 表示使用原候选带宽。\n"
     "页面范围：当前页、当前页至末页，或用 12~18,23,31 形式指定。画线和切图均使用这里的范围。\n\n"
     "蓝色虚线：鼠标定位辅助线；左键：添加词条线；非插图绘制模式下右键：下一页。\n"
     "插图识别：按页面列表上方所选范围自动检测插图并写入 PPP；保留人工多边形，再次识别只替换 AUTO 区域。\n编辑插图：PPP 名称框可改名；名称与词头一致时视为关联。编辑模式可新增插图并拖动现有顶点/矩形边。\n"
@@ -6301,7 +6301,7 @@ class PictureCaptureApp(tk.Tk):
 
         ocr = self._section_frame(parent, "二、基于OCR画线（默认模式）", padding=5, section_key="ocr")
         ocr.pack(fill="x", pady=(4, 0))
-        self.ocr_refresh_var = tk.StringVar(value="reuse")
+        self.ocr_refresh_var = tk.StringVar(value="force")
         ttk.Label(ocr, text="方式：").grid(row=0, column=0, sticky="w")
         ttk.Radiobutton(ocr, text="①复用缓存", variable=self.ocr_refresh_var, value="reuse").grid(row=0, column=1, sticky="w")
         ttk.Radiobutton(ocr, text="②强制重新识别", variable=self.ocr_refresh_var, value="force").grid(row=0, column=2, columnspan=4, sticky="w")
@@ -6317,7 +6317,7 @@ class PictureCaptureApp(tk.Tk):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(engine_row, text=text, variable=var).pack(side="left", padx=(0, 5))
         self.lens_mode_var = tk.StringVar(
-            value=LENS_MODE_LABELS.get(self.settings.paddle_lens_mode, LENS_MODE_LABELS["conflict"])
+            value=LENS_MODE_LABELS.get(self.settings.paddle_lens_mode, LENS_MODE_LABELS["off"])
         )
         lens_row = ttk.Frame(ocr); lens_row.grid(row=4, column=0, columnspan=6, sticky="ew")
         ttk.Label(lens_row, text="Lens模式：").pack(side="left")
@@ -6568,7 +6568,7 @@ class PictureCaptureApp(tk.Tk):
                 button = getattr(self, "quick_color_buttons", {}).get(name)
                 if button is not None: self._style_color_button(button, value)
         if hasattr(self, "lens_mode_var"):
-            self.lens_mode_var.set(LENS_MODE_LABELS.get(self.settings.paddle_lens_mode, LENS_MODE_LABELS["conflict"]))
+            self.lens_mode_var.set(LENS_MODE_LABELS.get(self.settings.paddle_lens_mode, LENS_MODE_LABELS["off"]))
         if hasattr(self, "image_suffix_var"): self.image_suffix_var.set(self.settings.image_suffix)
 
     def apply_quick_settings(self, show_status: bool = True, persist: bool = False, silent_errors: bool = False) -> bool:
