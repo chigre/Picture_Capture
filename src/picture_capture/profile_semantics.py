@@ -274,6 +274,74 @@ def apply_headword_profile(settings: AppSettings, profile_key: str) -> None:
     settings.dictionary_profile_id = profile_key
 
 
+def apply_headword_tuning(
+    settings: AppSettings, profile_key: str, level: int | None = None,
+) -> None:
+    """Apply small profile-aware precision/recall shifts after preset defaults.
+
+    The Wizard exposes "偏多 / 合适 / 偏少" instead of raw OCR/parser
+    thresholds. Positive levels tighten recognition; negative levels loosen it.
+    The adjustment is deliberately profile-specific so a marker/prefix dictionary
+    is not tuned the same way as a visual CJK or Latin dictionary.
+    """
+    try:
+        key = dictionary_profile_preset(profile_key).key
+    except Exception:
+        key = str(profile_key or "custom")
+    try:
+        amount = int(
+            getattr(settings, "profile_headword_tuning_level", 0)
+            if level is None else level
+        )
+    except (TypeError, ValueError):
+        amount = 0
+    amount = max(-2, min(2, amount))
+    settings.profile_headword_tuning_level = amount
+    if amount == 0:
+        return
+
+    if key == "cjk_visual":
+        # Bracketed entries and large single-character heads rely on visual
+        # prominence much more than POS grammar. Tightening therefore narrows
+        # the left-edge zone and strengthens typography evidence.
+        settings.paddle_left_tolerance = max(
+            10, int(settings.paddle_left_tolerance) - 4 * amount,
+        )
+        settings.paddle_height_ratio = max(
+            1.00, float(settings.paddle_height_ratio) + 0.04 * amount,
+        )
+        settings.paddle_boldness_ratio = max(
+            1.00, float(settings.paddle_boldness_ratio) + 0.05 * amount,
+        )
+        settings.paddle_min_candidate_score = max(
+            0.5, float(settings.paddle_min_candidate_score) + 0.25 * amount,
+        )
+    elif key in {"latin_regular", "edge_visual_regular", "legacy_spanish_structured"}:
+        settings.paddle_left_tolerance = max(
+            10, int(settings.paddle_left_tolerance) - 4 * amount,
+        )
+        settings.paddle_boldness_ratio = max(
+            1.00, float(settings.paddle_boldness_ratio) + 0.06 * amount,
+        )
+        settings.paddle_min_candidate_score = max(
+            0.5, float(settings.paddle_min_candidate_score) + 0.50 * amount,
+        )
+    elif key in {"numbered_prefix", "marker_prefixed"}:
+        # Explicit number/marker structure is already strong evidence. Avoid
+        # weakening that grammar; only change how far from the column edge a
+        # candidate may drift.
+        settings.paddle_left_tolerance = max(
+            8, int(settings.paddle_left_tolerance) - 3 * amount,
+        )
+    else:
+        settings.paddle_left_tolerance = max(
+            10, int(settings.paddle_left_tolerance) - 3 * amount,
+        )
+        settings.paddle_min_candidate_score = max(
+            0.5, float(settings.paddle_min_candidate_score) + 0.35 * amount,
+        )
+
+
 def page_variant(settings: AppSettings, page_index: int) -> str:
     if str(getattr(settings, "profile_page_pair_mode", "same")) != "alternate":
         return "A"

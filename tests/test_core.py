@@ -1661,6 +1661,44 @@ def test_v280_chinese_bracketed_headwords_are_structural_candidates():
         assert parsed.descriptor_text == "chinese_bracketed_headword"
 
 
+def test_v280_cjk_bracket_body_option_requires_extra_visual_evidence():
+    from PIL import Image
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import OCRRecord, filter_headword_records
+
+    settings = AppSettings()
+    settings.ocr_language = "chi_tra"
+    settings.paddle_band_width = 200
+    settings.paddle_band_width_ratio = 100
+    settings.paddle_band_left_margin = 0
+    settings.paddle_left_tolerance = 12
+    settings.paddle_rec_score_threshold = 0.1
+    settings.paddle_auto_header_rule = False
+    settings.paddle_refine_separator_y = False
+    settings.paddle_require_pos_or_symbol = False
+    settings.paddle_require_visual_cue = False
+    settings.character_height = 16
+    settings.row_padding = 4
+    profile = load_dictionary_profile(preset="cjk_visual", language="chi_tra")
+
+    band = Image.new("RGB", (200, 120), "white")
+    records = [OCRRecord("【測試】正文解釋", 0.99, (2, 20, 130, 40))]
+
+    entries, diagnostics = filter_headword_records(
+        records, band, 0, 0, settings, profile=profile,
+    )
+    assert [entry.word for entry in entries] == ["測試"]
+
+    settings.profile_cjk_brackets_in_body = True
+    entries, diagnostics = filter_headword_records(
+        records, band, 0, 0, settings, profile=profile,
+    )
+    assert entries == []
+    row = next(item for item in diagnostics if item.get("text"))
+    assert row["reject_reason"] == "cjk_bracket_needs_visual_evidence"
+
+
 def test_v280_chinese_bracket_parser_is_language_driven():
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import parse_headword_text

@@ -24,6 +24,7 @@ from .profile_semantics import (
     PROFILE_SETUP_VERSION,
     READING_LABELS,
     apply_headword_profile,
+    apply_headword_tuning,
     apply_reading_choice,
     configured_body_page_indices,
     copy_settings,
@@ -190,12 +191,13 @@ class ProjectProfileWizard(tk.Toplevel):
         self.update_idletasks()
         screen_w = max(800, int(self.winfo_screenwidth()))
         screen_h = max(600, int(self.winfo_screenheight()))
-        width = min(1120, max(780, int(screen_w * 0.90)))
-        height = min(820, max(540, int(screen_h * 0.88)))
+        width = max(720, int(screen_w * 0.60))
+        height = screen_h
         x = max(0, (screen_w - width) // 2)
-        y = max(0, (screen_h - height) // 2)
+        y = 0
+        self._wizard_content_width = max(560, width - 70)
         self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(min(900, width), min(650, height))
+        self.minsize(min(720, width), min(650, height))
         self.transient(parent)
         self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self._close_without_save)
@@ -285,6 +287,24 @@ class ProjectProfileWizard(tk.Toplevel):
         self.index_language_var = tk.StringVar(value=initial_index)
         self.content_language_var = tk.StringVar(value=str(s.dictionary_content_language or ""))
         self.custom_name_var = tk.StringVar(value=str(getattr(s, "dictionary_custom_profile_name", "") or ""))
+        self.headword_tuning_level_var = tk.IntVar(
+            value=max(-2, min(2, int(getattr(s, "profile_headword_tuning_level", 0) or 0)))
+        )
+        self.cjk_allow_single_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_allow_single_headword", True))
+        )
+        self.cjk_allow_bracketed_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_allow_bracketed_headword", True))
+        )
+        self.cjk_require_left_edge_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_require_left_edge", True))
+        )
+        self.cjk_brackets_in_body_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_brackets_in_body", False))
+        )
+        self.cjk_require_visual_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_require_visual_evidence", False))
+        )
 
         self.profile_choices = ordered_headword_profiles(self.custom_name_var.get())
         self.profile_label_to_key = dict(self.profile_choices)
@@ -765,7 +785,8 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_description_var = tk.StringVar(value="")
         self.headword_examples_var = tk.StringVar(value="")
         ttk.Label(
-            tab, textvariable=self.headword_description_var, wraplength=900, justify="left",
+            tab, textvariable=self.headword_description_var,
+            wraplength=self._wizard_content_width, justify="left",
         ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 4))
 
         examples = ttk.LabelFrame(tab, text="经典样例（局部裁切）", padding=8)
@@ -775,12 +796,42 @@ class ProjectProfileWizard(tk.Toplevel):
         examples.columnconfigure(2, weight=1)
         self.headword_examples_frame = examples
         ttk.Label(
-            tab, textvariable=self.headword_examples_var, wraplength=900, justify="left",
+            tab, textvariable=self.headword_examples_var,
+            wraplength=self._wizard_content_width, justify="left",
             foreground="#555555",
         ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
+        specificity = ttk.LabelFrame(tab, text="词头专属性", padding=10)
+        specificity.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        specificity.columnconfigure(0, weight=1)
+        self.headword_specificity_frame = specificity
+        self.cjk_specificity_widgets: list[ttk.Checkbutton] = []
+        for row, (label, variable) in enumerate((
+            ("大字单字可作为词头", self.cjk_allow_single_var),
+            ("【括号词】可作为词头", self.cjk_allow_bracketed_var),
+            ("必须靠近栏左缘", self.cjk_require_left_edge_var),
+            ("释义正文中也经常出现【括号词】", self.cjk_brackets_in_body_var),
+            ("只有视觉明显突出时才把单字/括号词当词头", self.cjk_require_visual_var),
+        )):
+            widget = ttk.Checkbutton(
+                specificity, text=label, variable=variable,
+                command=self._headword_specificity_changed,
+            )
+            widget.grid(row=row, column=0, sticky="w", pady=2)
+            self.cjk_specificity_widgets.append(widget)
+        ttk.Label(
+            specificity,
+            text="这些选项只在“CJK 大字/括号词头”结构下生效；目的是表达版式事实，而不是让你手调 OCR 阈值。",
+            foreground="#666666", wraplength=self._wizard_content_width,
+        ).grid(row=5, column=0, sticky="w", pady=(6, 0))
+        self.headword_tuning_status_var = tk.StringVar(value="")
+        ttk.Label(
+            specificity, textvariable=self.headword_tuning_status_var,
+            foreground="#555555",
+        ).grid(row=6, column=0, sticky="w", pady=(4, 0))
+
         help_box = ttk.LabelFrame(tab, text="理解方式", padding=10)
-        help_box.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(14, 0))
+        help_box.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(14, 0))
         help_box.columnconfigure(0, weight=1)
         self.headword_help_frame = help_box
 
@@ -822,14 +873,14 @@ class ProjectProfileWizard(tk.Toplevel):
 
     def _build_validation_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=1)
-        tab.rowconfigure(5, weight=1)
+        tab.rowconfigure(6, weight=1)
         ttk.Label(tab, text="⑤ 多页测试后再确认", font=("TkDefaultFont", 12, "bold")).grid(
             row=0, column=0, sticky="w"
         )
         ttk.Label(
             tab,
             text="测试只处理代表页，不写 PDIC；PaddleOCR 会强制重新识别，不复用旧 OCR 缓存。红线=检出的词头；半透明灰区=当前 Profile 不参与正文识别的区域。测试结果一次显示一页，可左右翻页。",
-            foreground="#666666",
+            foreground="#666666", wraplength=self._wizard_content_width,
         ).grid(row=1, column=0, sticky="w", pady=(2, 8))
         bar = ttk.Frame(tab)
         bar.grid(row=2, column=0, sticky="ew")
@@ -856,12 +907,43 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         ttk.Label(
             tab, textvariable=self.validation_diagnostic_var,
-            foreground="#555555", justify="left", wraplength=900,
+            foreground="#555555", justify="left",
+            wraplength=self._wizard_content_width,
         ).grid(row=4, column=0, sticky="ew", pady=(6, 0))
 
+        feedback = ttk.LabelFrame(tab, text="结果是否合适？", padding=(8, 5))
+        feedback.grid(row=5, column=0, sticky="ew", pady=(8, 0))
+        feedback.columnconfigure(4, weight=1)
+        ttk.Label(
+            feedback,
+            text="偏多会按当前词头类型收紧规则；偏少会放宽。调整后重新测试，直到结果合适。",
+            foreground="#666666", wraplength=self._wizard_content_width,
+        ).grid(row=0, column=0, columnspan=5, sticky="w", pady=(0, 4))
+        self.feedback_too_many_button = ttk.Button(
+            feedback, text="偏多", command=lambda: self._apply_validation_feedback("too_many"),
+            state="disabled",
+        )
+        self.feedback_too_many_button.grid(row=1, column=0, padx=(0, 4))
+        self.feedback_good_button = ttk.Button(
+            feedback, text="合适", command=lambda: self._apply_validation_feedback("good"),
+            state="disabled",
+        )
+        self.feedback_good_button.grid(row=1, column=1, padx=4)
+        self.feedback_too_few_button = ttk.Button(
+            feedback, text="偏少", command=lambda: self._apply_validation_feedback("too_few"),
+            state="disabled",
+        )
+        self.feedback_too_few_button.grid(row=1, column=2, padx=4)
+        self.validation_feedback_var = tk.StringVar(value="")
+        ttk.Label(
+            feedback, textvariable=self.validation_feedback_var,
+            wraplength=max(320, self._wizard_content_width - 270),
+        ).grid(row=1, column=4, sticky="w", padx=(10, 0))
+
         self.validation_frame = ttk.Frame(tab)
-        self.validation_frame.grid(row=5, column=0, sticky="nsew", pady=(6, 0))
+        self.validation_frame.grid(row=6, column=0, sticky="nsew", pady=(6, 0))
         self.validation_frame.columnconfigure(0, weight=1)
+
 
     def _profile_label_for_key(self, key: str) -> str:
         for label, value in self.profile_choices:
@@ -888,6 +970,13 @@ class ProjectProfileWizard(tk.Toplevel):
             self.working.profile_last_validated_pages = []
         if hasattr(self, "validation_status_var") and not self._validation_running:
             self.validation_status_var.set("设置已修改，需要重新测试")
+        if hasattr(self, "feedback_too_many_button"):
+            for button in (
+                self.feedback_too_many_button,
+                self.feedback_good_button,
+                self.feedback_too_few_button,
+            ):
+                button.configure(state="disabled")
 
     def _profile_input_changed(self) -> None:
         self._profile_revision += 1
@@ -907,10 +996,32 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_summary()
 
     def _headword_changed(self) -> None:
+        # A different structure starts from its own balanced defaults; any
+        # earlier "偏多/偏少" tuning belonged to the previous structure.
+        self.headword_tuning_level_var.set(0)
         self._profile_revision += 1
         self._mark_validation_stale()
         self._refresh_headword_description()
         self._refresh_summary()
+
+    def _headword_specificity_changed(self) -> None:
+        self._profile_revision += 1
+        self._mark_validation_stale()
+        self._refresh_headword_tuning_status()
+        self._refresh_summary()
+
+    def _refresh_headword_tuning_status(self) -> None:
+        if not hasattr(self, "headword_tuning_status_var"):
+            return
+        level = max(-2, min(2, int(self.headword_tuning_level_var.get())))
+        labels = {
+            -2: "当前自动调节：明显放宽（-2）",
+            -1: "当前自动调节：轻度放宽（-1）",
+            0: "当前自动调节：标准（0）",
+            1: "当前自动调节：轻度收紧（+1）",
+            2: "当前自动调节：明显收紧（+2）",
+        }
+        self.headword_tuning_status_var.set(labels[level])
 
     def _custom_name_changed(self) -> None:
         # Renaming the custom structure is presentation metadata; recognition
@@ -946,6 +1057,12 @@ class ProjectProfileWizard(tk.Toplevel):
             return
         self.custom_name_entry.configure(state="normal" if key == "custom" else "disabled")
         self.headword_description_var.set(profile.description)
+        if hasattr(self, "headword_specificity_frame"):
+            if key == "cjk_visual":
+                self.headword_specificity_frame.grid()
+            else:
+                self.headword_specificity_frame.grid_remove()
+        self._refresh_headword_tuning_status()
 
         for child in self.headword_examples_frame.winfo_children():
             child.destroy()
@@ -964,7 +1081,7 @@ class ProjectProfileWizard(tk.Toplevel):
                         image.thumbnail((270, 150), Image.Resampling.LANCZOS)
                         photo = ImageTk.PhotoImage(image)
                         self._headword_example_photos.append(photo)
-                        ttk.Label(cell, image=photo).pack()
+                        ttk.Label(cell, image=photo).pack(fill="x")
                     except Exception:
                         ttk.Label(cell, text="样例图片读取失败", anchor="center").pack(fill="x", ipady=28)
                 else:
@@ -994,7 +1111,7 @@ class ProjectProfileWizard(tk.Toplevel):
         for row, line in enumerate(lines):
             ttk.Label(
                 self.headword_help_frame,
-                text=line, wraplength=900, justify="left",
+                text=line, wraplength=self._wizard_content_width, justify="left",
             ).grid(row=row, column=0, sticky="w", pady=3)
 
     def _ocr_language_changed(self) -> None:
@@ -1054,10 +1171,20 @@ class ProjectProfileWizard(tk.Toplevel):
         s.ocr_language = _ocr_language_code(self.ocr_language_var.get())
         s.dictionary_index_language = self.index_language_var.get().strip()
         s.dictionary_content_language = self.content_language_var.get().strip()
-        apply_headword_profile(s, self._current_profile_key())
+        s.profile_headword_tuning_level = max(
+            -2, min(2, int(self.headword_tuning_level_var.get()))
+        )
+        s.profile_cjk_allow_single_headword = bool(self.cjk_allow_single_var.get())
+        s.profile_cjk_allow_bracketed_headword = bool(self.cjk_allow_bracketed_var.get())
+        s.profile_cjk_require_left_edge = bool(self.cjk_require_left_edge_var.get())
+        s.profile_cjk_brackets_in_body = bool(self.cjk_brackets_in_body_var.get())
+        s.profile_cjk_require_visual_evidence = bool(self.cjk_require_visual_var.get())
+        profile_key = self._current_profile_key()
+        apply_headword_profile(s, profile_key)
         for name, value in language_effective_settings(s.ocr_language, s.layout_writing_mode).items():
             if hasattr(s, name):
                 setattr(s, name, value)
+        apply_headword_tuning(s, profile_key, s.profile_headword_tuning_level)
         s.profile_setup_version = PROFILE_SETUP_VERSION
         return s
 
@@ -1444,6 +1571,57 @@ class ProjectProfileWizard(tk.Toplevel):
         return "\n".join(parts)
 
 
+    def _set_feedback_buttons(self, state: str) -> None:
+        if not hasattr(self, "feedback_too_many_button"):
+            return
+        for button in (
+            self.feedback_too_many_button,
+            self.feedback_good_button,
+            self.feedback_too_few_button,
+        ):
+            button.configure(state=state)
+
+    def _apply_validation_feedback(self, result: str) -> None:
+        if not self._validation_results:
+            return
+        if result == "good":
+            self.validation_feedback_var.set("已确认当前结果合适，可保存 Profile。")
+            self.validation_status_var.set("当前多页测试结果已确认合适")
+            return
+
+        old_level = max(-2, min(2, int(self.headword_tuning_level_var.get())))
+        delta = 1 if result == "too_many" else -1
+        new_level = max(-2, min(2, old_level + delta))
+        self.headword_tuning_level_var.set(new_level)
+
+        key = self._current_profile_key()
+        if key == "cjk_visual":
+            if result == "too_many":
+                # CJK false positives are best controlled by demanding a real
+                # column-edge start plus visual prominence for bracketed heads.
+                self.cjk_require_left_edge_var.set(True)
+                self.cjk_require_visual_var.set(True)
+            elif result == "too_few":
+                # Loosening should first remove the extra visual gate; factual
+                # choices such as "正文中也有括号词" remain user-controlled.
+                self.cjk_require_visual_var.set(False)
+
+        self._profile_revision += 1
+        self._mark_validation_stale()
+        self._refresh_headword_tuning_status()
+        self._refresh_summary()
+        direction = "收紧" if result == "too_many" else "放宽"
+        if new_level == old_level:
+            self.validation_feedback_var.set(
+                f"已经达到{direction}上限（{new_level:+d}）；可在第③步进一步修改词头专属性。"
+            )
+        else:
+            self.validation_feedback_var.set(
+                f"已按当前词头类型{direction}到 {new_level:+d} 级；请重新测试。"
+            )
+        self.validation_status_var.set("识别规则已调整，需要重新测试")
+        self._set_feedback_buttons("disabled")
+
     def validate_profile(self) -> None:
         if self._validation_running:
             return
@@ -1457,6 +1635,13 @@ class ProjectProfileWizard(tk.Toplevel):
         indices = list(self.sample_indices)
         if not indices:
             return
+        self.update_idletasks()
+        frame_width = int(self.validation_frame.winfo_width())
+        preview_width = max(
+            480,
+            (frame_width - 20) if frame_width > 100
+            else (int(self._wizard_content_width) - 8),
+        )
         self._validation_running = True
         self._validation_revision_started = self._profile_revision
         self.validate_button.configure(state="disabled")
@@ -1469,6 +1654,8 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         self.validation_prev_button.configure(state="disabled")
         self.validation_next_button.configure(state="disabled")
+        self._set_feedback_buttons("disabled")
+        self.validation_feedback_var.set("")
         for child in self.validation_frame.winfo_children():
             child.destroy()
         ttk.Label(self.validation_frame, text="正在生成测试结果…").grid(
@@ -1494,7 +1681,9 @@ class ProjectProfileWizard(tk.Toplevel):
                         paddle_filter_rules_path=filter_path,
                         profile_page_index=index,
                     )
-                    preview = self._marker_preview(image, entries, geometry, settings, index)
+                    preview = self._marker_preview(
+                        image, entries, geometry, settings, index, preview_width,
+                    )
                     coverage = self._validation_coverage_summary(
                         cache_path, entries, geometry, settings,
                     )
@@ -1524,11 +1713,18 @@ class ProjectProfileWizard(tk.Toplevel):
         self._finish_validation(results)
 
     @staticmethod
-    def _marker_preview(image: Image.Image, entries, geometry, settings: AppSettings, page_index: int) -> Image.Image:
+    def _marker_preview(
+        image: Image.Image, entries, geometry, settings: AppSettings,
+        page_index: int, preview_width: int,
+    ) -> Image.Image:
         source = image.copy()
-        thumb = source.copy()
-        thumb.thumbnail((650, 500), Image.Resampling.LANCZOS)
-        thumb = thumb.convert("RGBA")
+        target_width = max(320, int(preview_width))
+        target_height = max(
+            1, round(source.height * target_width / max(1, source.width)),
+        )
+        thumb = source.resize(
+            (target_width, target_height), Image.Resampling.LANCZOS,
+        ).convert("RGBA")
         sx = thumb.width / max(1, source.width)
         sy = thumb.height / max(1, source.height)
         draw = ImageDraw.Draw(thumb, "RGBA")
@@ -1632,7 +1828,8 @@ class ProjectProfileWizard(tk.Toplevel):
         self.validation_next_button.configure(state=state)
 
         cell = ttk.LabelFrame(self.validation_frame, text=name, padding=8)
-        cell.grid(row=0, column=0, sticky="n")
+        cell.grid(row=0, column=0, sticky="ew")
+        cell.columnconfigure(0, weight=1)
         if preview is not None:
             photo = ImageTk.PhotoImage(preview)
             self._validation_photos.append(photo)
@@ -1675,6 +1872,8 @@ class ProjectProfileWizard(tk.Toplevel):
             self.validation_status_var.set(
                 f"完成：{len(results)} 页均已测试；可用左右按钮逐页检查"
             )
+        if results and not revision_changed:
+            self._set_feedback_buttons("normal")
         self._render_validation_result()
 
     def save_and_close(self) -> None:
