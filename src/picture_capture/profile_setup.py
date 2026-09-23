@@ -58,10 +58,14 @@ SEPARATOR_LABEL_TO_VALUE = {
     "有中央分隔线": "present",
     "无中央分隔线": "absent",
 }
-HEADER_FOOTER_LABEL_TO_VALUE = {
-    "自动检测": "auto",
-    "没有": "none",
-    "有，排除固定区域": "present",
+HEADER_LABEL_TO_VALUE = {
+    "自动检测页眉": "auto",
+    "没有页眉": "none",
+    "有页眉，排除固定区域": "present",
+}
+FOOTER_LABEL_TO_VALUE = {
+    "不排除页尾": "none",
+    "有页尾，排除固定区域": "present",
 }
 SIDE_LABEL_TO_VALUE = {
     "无页边占位内容": "none",
@@ -132,20 +136,24 @@ class ProjectProfileWizard(tk.Toplevel):
     def _build_vars(self) -> None:
         s = self.working
         self.reading_var = tk.StringVar(value=reading_choice_from_settings(s))
-        self.columns_policy_var = tk.StringVar(value=str(s.layout_columns_policy or "detect"))
+        # The guided workflow turns representative-page analysis into one
+        # concrete project geometry. Per-page experimentation remains in
+        # Profile高级 rather than exposing an internal "detect/fixed" switch.
+        self.columns_policy_var = tk.StringVar(value="fixed")
         self.columns_var = tk.IntVar(value=max(1, int(s.columns)))
         self.separator_var = tk.StringVar(value=_label_for_value(
             SEPARATOR_LABEL_TO_VALUE, str(s.layout_column_separator_mode or "auto"), "自动判断",
         ))
         self.header_mode_var = tk.StringVar(value=_label_for_value(
-            HEADER_FOOTER_LABEL_TO_VALUE,
+            HEADER_LABEL_TO_VALUE,
             str(getattr(s, "profile_header_mode", "auto") or "auto"),
-            "自动检测",
+            "自动检测页眉",
         ))
+        footer_value = str(getattr(s, "profile_footer_mode", "auto") or "auto")
+        if footer_value == "auto":
+            footer_value = "none"
         self.footer_mode_var = tk.StringVar(value=_label_for_value(
-            HEADER_FOOTER_LABEL_TO_VALUE,
-            str(getattr(s, "profile_footer_mode", "auto") or "auto"),
-            "自动检测",
+            FOOTER_LABEL_TO_VALUE, footer_value, "不排除页尾",
         ))
         self.side_mode_var = tk.StringVar(value=_label_for_value(
             SIDE_LABEL_TO_VALUE,
@@ -173,7 +181,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_profile_var = tk.StringVar(value=self._profile_label_for_key(s.dictionary_profile_id))
 
         traced = (
-            self.reading_var, self.columns_policy_var, self.columns_var, self.separator_var,
+            self.reading_var, self.columns_var, self.separator_var,
             self.header_mode_var, self.footer_mode_var, self.side_mode_var,
             self.page_pair_var, self.first_variant_var, self.header_percent_var,
             self.footer_percent_var, self.side_percent_var, self.ocr_language_var,
