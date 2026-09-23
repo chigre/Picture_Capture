@@ -33,6 +33,7 @@ from .profile_semantics import (
     reading_choice_from_settings,
     probable_body_page_indices,
     representative_page_indices,
+    suggested_body_page_range,
     page_template_analysis_image,
     page_variant,
 )
@@ -200,6 +201,10 @@ class ProjectProfileWizard(tk.Toplevel):
         self._photos: list[ImageTk.PhotoImage] = []
         self._validation_photos: list[ImageTk.PhotoImage] = []
         self._template_photos: list[ImageTk.PhotoImage] = []
+        self._thumbnail_queue: queue.Queue | None = None
+        self._thumbnail_load_generation = 0
+        self._validation_results: list[tuple] = []
+        self.validation_preview_slot = 0
         self._headword_example_photos: list[ImageTk.PhotoImage] = []
         self._validation_running = False
         self._analysis_running = False
@@ -210,6 +215,8 @@ class ProjectProfileWizard(tk.Toplevel):
         self._analysis_auto_apply = False
         self._analysis_queue: queue.Queue | None = None
         self._validation_queue: queue.Queue | None = None
+        if not str(getattr(self.working, "dictionary_body_page_range", "") or "").strip():
+            self.working.dictionary_body_page_range = suggested_body_page_range(self.project.images)
         configured_body = configured_body_page_indices(
             len(self.project.images),
             getattr(self.working, "dictionary_body_page_range", ""),
@@ -227,10 +234,13 @@ class ProjectProfileWizard(tk.Toplevel):
 
         self._build_vars()
         self._build_ui()
-        self._load_sample_thumbnails()
-        self._refresh_headword_description()
+        self._show_sample_loading_state()
         self._refresh_language_summary()
         self._refresh_summary()
+        # Let Tk paint the complete Wizard frame before any representative
+        # image files are opened. Thumbnail decoding then happens off the UI
+        # thread so clicking Project Profile never feels like a frozen window.
+        self.after(20, self._start_sample_thumbnail_load)
 
         # Representative-page analysis starts after the user confirms reading
         # direction and enters step 2. This avoids analyzing a vertical/RTL
@@ -238,6 +248,10 @@ class ProjectProfileWizard(tk.Toplevel):
 
     def _build_vars(self) -> None:
         s = self.working
+        self.dictionary_full_name_var = tk.StringVar(value=str(s.dictionary_full_name or ""))
+        self.dictionary_abbreviation_var = tk.StringVar(value=str(s.dictionary_abbreviation or ""))
+        self.dictionary_isbn_var = tk.StringVar(value=str(s.dictionary_isbn or ""))
+        self.dictionary_body_page_range_var = tk.StringVar(value=str(s.dictionary_body_page_range or ""))
         self.reading_var = tk.StringVar(value=reading_choice_from_settings(s))
         self.columns_var = tk.IntVar(value=max(1, int(s.columns)))
         self.separator_var = tk.StringVar(value=_label_for_value(
@@ -285,7 +299,10 @@ class ProjectProfileWizard(tk.Toplevel):
             var.trace_add("write", lambda *_args: self.after_idle(self._profile_input_changed))
         # Project metadata changes the summary only; it does not invalidate a
         # successful recognition test.
-        for var in (self.index_language_var, self.content_language_var):
+        for var in (
+            self.dictionary_full_name_var, self.dictionary_abbreviation_var,
+            self.dictionary_isbn_var, self.index_language_var, self.content_language_var,
+        ):
             var.trace_add("write", lambda *_args: self.after_idle(self._refresh_summary))
 
     def _build_ui(self) -> None:
@@ -294,7 +311,7 @@ class ProjectProfileWizard(tk.Toplevel):
         outer.rowconfigure(2, weight=1)
         outer.columnconfigure(0, weight=1)
 
-        title = "第一次只确认 4 件事：页面怎么读、正文在哪里、什么算词头、用什么 OCR。"
+        title = "依次确认词典信息、阅读方式、页面模板、词头结构和 OCR。"
         ttk.Label(outer, text=title, font=("TkDefaultFont", 12, "bold")).grid(
             row=0, column=0, sticky="w"
         )
@@ -309,7 +326,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.tabs: list[ttk.Frame] = []
         self.tab_contents: list[ttk.Frame] = []
         self.tab_canvases: list[tk.Canvas] = []
-        for label in ("1 阅读方式", "2 页面模板", "3 词头结构", "4 语言与 OCR", "5 测试与确认"):
+        for label in ("1 词典信息与阅读方式", "2 页面模板", "3 词头结构", "4 语言与 OCR", "5 测试与确认"):
             host = ttk.Frame(self.notebook)
             host.rowconfigure(0, weight=1)
             host.columnconfigure(0, weight=1)
@@ -338,6 +355,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._build_headword_tab(self.tab_contents[2])
         self._build_language_tab(self.tab_contents[3])
         self._build_validation_tab(self.tab_contents[4])
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_wizard_tab_changed, add="+")
         self.bind("<MouseWheel>", self._wizard_mousewheel, add="+")
         self.bind("<Button-4>", lambda event: self._wizard_linux_wheel(event, -1), add="+")
         self.bind("<Button-5>", lambda event: self._wizard_linux_wheel(event, 1), add="+")
@@ -353,6 +371,19 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Button(footer, text="下一步", command=lambda: self._move_step(1)).pack(side="left", padx=(6, 0))
         ttk.Button(footer, text="取消", command=self._close_without_save).pack(side="right")
         ttk.Button(footer, text="确认并使用", command=self.save_and_close).pack(side="right", padx=(0, 8))
+
+    def _on_wizard_tab_changed(self, _event=None) -> None:
+        """Load image-backed content only when its tab becomes visible."""
+        try:
+            index = self.notebook.index(self.notebook.select())
+        except (tk.TclError, ValueError):
+            return
+        if index == 1:
+            self.after_idle(self._refresh_template_preview)
+        elif index == 2:
+            self.after_idle(self._refresh_headword_description)
+        elif index == 4 and self._validation_results:
+            self.after_idle(self._render_validation_result)
 
     def _active_tab_canvas(self) -> tk.Canvas | None:
         try:
@@ -384,19 +415,48 @@ class ProjectProfileWizard(tk.Toplevel):
 
     def _build_reading_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=1)
+
+        info = ttk.LabelFrame(tab, text="词典项目详情", padding=(10, 8))
+        info.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        for col in (1, 3, 5, 7):
+            info.columnconfigure(col, weight=1)
+
+        ttk.Label(info, text="词典完整名称：").grid(row=0, column=0, sticky="e", padx=(0, 4))
+        ttk.Entry(
+            info, textvariable=self.dictionary_full_name_var, width=20,
+        ).grid(row=0, column=1, sticky="ew", padx=(0, 10))
+
+        ttk.Label(info, text="词典缩写名称：").grid(row=0, column=2, sticky="e", padx=(0, 4))
+        ttk.Entry(
+            info, textvariable=self.dictionary_abbreviation_var, width=11,
+        ).grid(row=0, column=3, sticky="ew", padx=(0, 10))
+
+        ttk.Label(info, text="ISBN：").grid(row=0, column=4, sticky="e", padx=(0, 4))
+        ttk.Entry(
+            info, textvariable=self.dictionary_isbn_var, width=16,
+        ).grid(row=0, column=5, sticky="ew", padx=(0, 10))
+
+        ttk.Label(info, text="正文页码范围：").grid(row=0, column=6, sticky="e", padx=(0, 4))
+        self.body_page_range_entry = ttk.Entry(
+            info, textvariable=self.dictionary_body_page_range_var, width=13,
+        )
+        self.body_page_range_entry.grid(row=0, column=7, sticky="ew")
+        self.body_page_range_entry.bind("<FocusOut>", self._body_page_range_changed)
+        self.body_page_range_entry.bind("<Return>", self._body_page_range_changed)
+
         ttk.Label(
             tab,
-            text="① 页面怎么读？",
+            text="阅读方式：页面怎么读？",
             font=("TkDefaultFont", 12, "bold"),
-        ).grid(row=0, column=0, sticky="w")
+        ).grid(row=1, column=0, sticky="w")
         ttk.Label(
             tab,
-            text="这里只确认实际页面的阅读方向；需要的镜像或旋转由软件自动处理。",
+            text="这里只确认实际页面的阅读方向；需要的镜像或旋转由软件自动处理。正文页码范围首次自动填充，之后可直接修改。",
             foreground="#666666",
-        ).grid(row=1, column=0, sticky="w", pady=(2, 8))
+        ).grid(row=2, column=0, sticky="w", pady=(2, 8))
 
         choices = ttk.Frame(tab)
-        choices.grid(row=2, column=0, sticky="w")
+        choices.grid(row=3, column=0, sticky="w")
         for column, key in enumerate(("horizontal-ltr", "horizontal-rtl", "vertical-rl", "vertical-lr")):
             ttk.Radiobutton(
                 choices, text=READING_LABELS[key], variable=self.reading_var, value=key,
@@ -405,15 +465,46 @@ class ProjectProfileWizard(tk.Toplevel):
 
         ttk.Label(
             tab,
-            text="代表页优先使用【项目详情】中的正文页范围；未填写时再从疑似正文的前部 / 中部 / 后部抽取，并避开 0000_*、目录、附录等明显非正文页；每一张都可以手动更换。",
+            text="代表页优先使用上方正文页码范围；未填写或无效时再从疑似正文的前部 / 中部 / 后部抽取，并避开 0000_*、目录、附录等明显非正文页；每一张都可以手动更换。",
             foreground="#666666", wraplength=980,
-        ).grid(row=3, column=0, sticky="w", pady=(10, 4))
+        ).grid(row=4, column=0, sticky="w", pady=(10, 4))
         samples = ttk.LabelFrame(tab, text="代表页（前部 / 中部 / 后部）", padding=8)
-        samples.grid(row=4, column=0, sticky="nsew", pady=(4, 0))
+        samples.grid(row=5, column=0, sticky="nsew", pady=(4, 0))
         samples.columnconfigure(0, weight=1)
         samples.columnconfigure(1, weight=1)
         samples.columnconfigure(2, weight=1)
         self.sample_frame = samples
+
+    def _body_page_range_changed(self, _event=None) -> None:
+        """Re-sample representatives after the user edits the body-page range."""
+        raw = self.dictionary_body_page_range_var.get().strip()
+        configured = configured_body_page_indices(len(self.project.images), raw)
+        self.working.dictionary_body_page_range = raw
+        self.sample_candidates = probable_body_page_indices(
+            self.project.images, configured or None,
+        )
+        new_indices = representative_page_indices(
+            self.project.images, 6, configured or None,
+        )
+        if new_indices == self.sample_indices:
+            return
+        self.sample_indices = new_indices
+        self.template_preview_slot = 0
+        self.validation_preview_slot = 0
+        self._profile_revision += 1
+        self._mark_validation_stale()
+        self._analysis_suggestion = {}
+        if hasattr(self, "analysis_suggestion_var"):
+            self.analysis_suggestion_var.set("正文页码范围已改变，请重新分析当前代表页。")
+            self.apply_analysis_button.configure(state="disabled")
+        self._start_sample_thumbnail_load()
+        if hasattr(self, "notebook"):
+            try:
+                if self.notebook.index(self.notebook.select()) == 1:
+                    self._refresh_template_preview()
+            except (tk.TclError, ValueError):
+                pass
+
 
     def _build_template_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=0)
@@ -529,7 +620,6 @@ class ProjectProfileWizard(tk.Toplevel):
                 "write", lambda *_args: self.after_idle(self._refresh_template_controls)
             )
         self._refresh_template_controls()
-        self.after_idle(self._refresh_template_preview)
 
     def _refresh_template_controls(self) -> None:
         """Enable only page-template controls that currently have meaning."""
@@ -545,8 +635,13 @@ class ProjectProfileWizard(tk.Toplevel):
         self.footer_percent_spin.configure(state="normal" if footer_present else "disabled")
         self.side_percent_spin.configure(state="normal" if side_present else "disabled")
         self.first_variant_combo.configure(state="readonly" if alternating else "disabled")
-        if hasattr(self, "template_preview_frame"):
-            self.after_idle(self._refresh_template_preview)
+        if hasattr(self, "template_preview_frame") and hasattr(self, "notebook"):
+            try:
+                preview_visible = self.notebook.index(self.notebook.select()) == 1
+            except (tk.TclError, ValueError):
+                preview_visible = False
+            if preview_visible:
+                self.after_idle(self._refresh_template_preview)
 
     def _move_template_preview(self, delta: int) -> None:
         if not self.sample_indices:
@@ -726,13 +821,13 @@ class ProjectProfileWizard(tk.Toplevel):
 
     def _build_validation_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=1)
-        tab.rowconfigure(3, weight=1)
+        tab.rowconfigure(4, weight=1)
         ttk.Label(tab, text="⑤ 多页测试后再确认", font=("TkDefaultFont", 12, "bold")).grid(
             row=0, column=0, sticky="w"
         )
         ttk.Label(
             tab,
-            text="测试只处理代表页，不写 PDIC。红线=检出的词头；半透明灰区=当前 Profile 不参与正文识别的区域。",
+            text="测试只处理代表页，不写 PDIC。红线=检出的词头；半透明灰区=当前 Profile 不参与正文识别的区域。测试结果一次显示一页，可左右翻页。",
             foreground="#666666",
         ).grid(row=1, column=0, sticky="w", pady=(2, 8))
         bar = ttk.Frame(tab)
@@ -742,10 +837,22 @@ class ProjectProfileWizard(tk.Toplevel):
         self.validation_status_var = tk.StringVar(value="尚未测试")
         ttk.Label(bar, textvariable=self.validation_status_var).pack(side="left", padx=(10, 0))
 
+        nav = ttk.Frame(tab)
+        nav.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        self.validation_prev_button = ttk.Button(
+            nav, text="◀ 上一张", command=lambda: self._move_validation_preview(-1), state="disabled",
+        )
+        self.validation_prev_button.pack(side="left")
+        self.validation_next_button = ttk.Button(
+            nav, text="下一张 ▶", command=lambda: self._move_validation_preview(1), state="disabled",
+        )
+        self.validation_next_button.pack(side="right")
+        self.validation_caption_var = tk.StringVar(value="")
+        ttk.Label(nav, textvariable=self.validation_caption_var).pack(side="left", expand=True)
+
         self.validation_frame = ttk.Frame(tab)
-        self.validation_frame.grid(row=3, column=0, sticky="nsew", pady=(10, 0))
+        self.validation_frame.grid(row=4, column=0, sticky="nsew", pady=(6, 0))
         self.validation_frame.columnconfigure(0, weight=1)
-        self.validation_frame.columnconfigure(1, weight=1)
 
     def _profile_label_for_key(self, key: str) -> str:
         for label, value in self.profile_choices:
@@ -906,6 +1013,10 @@ class ProjectProfileWizard(tk.Toplevel):
 
     def _settings_from_ui(self) -> AppSettings:
         s = replace(self.working)
+        s.dictionary_full_name = self.dictionary_full_name_var.get().strip()
+        s.dictionary_abbreviation = self.dictionary_abbreviation_var.get().strip()
+        s.dictionary_isbn = self.dictionary_isbn_var.get().strip()
+        s.dictionary_body_page_range = self.dictionary_body_page_range_var.get().strip()
         apply_reading_choice(s, self.reading_var.get())
         # Runtime geometry uses the project-confirmed column count. Automatic
         # analysis above is a setup aid, not a hidden per-page detector.
@@ -948,10 +1059,9 @@ class ProjectProfileWizard(tk.Toplevel):
         except Exception:
             return
 
-    def _load_sample_thumbnails(self) -> None:
+    def _sample_groups(self) -> list[ttk.LabelFrame]:
         for child in self.sample_frame.winfo_children():
             child.destroy()
-        self._photos.clear()
         region_titles = ("前部", "中部", "后部")
         groups: list[ttk.LabelFrame] = []
         for column, title in enumerate(region_titles):
@@ -959,23 +1069,82 @@ class ProjectProfileWizard(tk.Toplevel):
             group.grid(row=0, column=column, sticky="nsew", padx=4, pady=2)
             group.columnconfigure(0, weight=1)
             groups.append(group)
+        return groups
 
+    def _show_sample_loading_state(self) -> None:
+        groups = self._sample_groups()
+        self._photos.clear()
         for slot, index in enumerate(self.sample_indices):
             path = self.project.images[index]
             group = groups[min(2, slot // 2)]
-            local_row = slot % 2
             cell = ttk.Frame(group)
-            cell.grid(row=local_row, column=0, sticky="ew", pady=4)
-            try:
-                with Image.open(path) as opened:
-                    image = normalize_page_rgb(opened)
-                image.thumbnail((250, 155), Image.Resampling.LANCZOS)
+            cell.grid(row=slot % 2, column=0, sticky="ew", pady=4)
+            ttk.Label(
+                cell, text="正在加载代表页…", anchor="center",
+            ).pack(fill="x", ipady=24)
+            ttk.Label(cell, text=path.name, wraplength=260).pack(anchor="center", pady=(3, 0))
+            ttk.Button(
+                cell, text="更换…", command=lambda s=slot: self._choose_sample_page(s),
+            ).pack(anchor="center", pady=(3, 0))
+
+    def _start_sample_thumbnail_load(self) -> None:
+        if not self.winfo_exists():
+            return
+        self._thumbnail_load_generation += 1
+        generation = self._thumbnail_load_generation
+        indices = list(self.sample_indices)
+        paths = [self.project.images[index] for index in indices]
+        self._show_sample_loading_state()
+        result_queue: queue.Queue = queue.Queue(maxsize=1)
+        self._thumbnail_queue = result_queue
+
+        def worker() -> None:
+            results = []
+            for slot, (index, path) in enumerate(zip(indices, paths)):
+                try:
+                    with Image.open(path) as opened:
+                        image = normalize_page_rgb(opened)
+                    image.thumbnail((250, 155), Image.Resampling.LANCZOS)
+                    results.append((slot, index, path.name, image, None))
+                except Exception as exc:
+                    results.append((slot, index, path.name, None, str(exc)))
+            result_queue.put((generation, results))
+
+        threading.Thread(target=worker, daemon=True).start()
+        self.after(50, self._poll_sample_thumbnail_load)
+
+    def _poll_sample_thumbnail_load(self) -> None:
+        if self._thumbnail_queue is None:
+            return
+        try:
+            generation, results = self._thumbnail_queue.get_nowait()
+        except queue.Empty:
+            if self.winfo_exists():
+                self.after(50, self._poll_sample_thumbnail_load)
+            return
+        self._thumbnail_queue = None
+        if generation != self._thumbnail_load_generation:
+            return
+        self._finish_sample_thumbnail_load(results)
+
+    def _finish_sample_thumbnail_load(self, results) -> None:
+        groups = self._sample_groups()
+        self._photos.clear()
+        for slot, index, name, image, error in results:
+            if slot >= len(self.sample_indices) or self.sample_indices[slot] != index:
+                continue
+            group = groups[min(2, slot // 2)]
+            cell = ttk.Frame(group)
+            cell.grid(row=slot % 2, column=0, sticky="ew", pady=4)
+            if image is not None:
                 photo = ImageTk.PhotoImage(image)
                 self._photos.append(photo)
                 ttk.Label(cell, image=photo).pack()
-            except Exception as exc:
-                ttk.Label(cell, text=f"缩略图失败：{exc}", wraplength=250).pack()
-            ttk.Label(cell, text=path.name, wraplength=260).pack(anchor="center", pady=(3, 0))
+            else:
+                ttk.Label(
+                    cell, text=f"缩略图失败：{error}", wraplength=250,
+                ).pack(fill="x", ipady=20)
+            ttk.Label(cell, text=name, wraplength=260).pack(anchor="center", pady=(3, 0))
             ttk.Button(
                 cell, text="更换…", command=lambda s=slot: self._choose_sample_page(s),
             ).pack(anchor="center", pady=(3, 0))
@@ -1034,7 +1203,7 @@ class ProjectProfileWizard(tk.Toplevel):
             if hasattr(self, "analysis_suggestion_var"):
                 self.analysis_suggestion_var.set("代表页已更换，请重新分析当前代表页。")
                 self.apply_analysis_button.configure(state="disabled")
-            self._load_sample_thumbnails()
+            self._start_sample_thumbnail_load()
             self._refresh_template_preview()
             picker.destroy()
 
@@ -1162,8 +1331,16 @@ class ProjectProfileWizard(tk.Toplevel):
         self._validation_revision_started = self._profile_revision
         self.validate_button.configure(state="disabled")
         self.validation_status_var.set("正在测试代表页…")
+        self._validation_results = []
+        self.validation_preview_slot = 0
+        self.validation_caption_var.set("")
+        self.validation_prev_button.configure(state="disabled")
+        self.validation_next_button.configure(state="disabled")
         for child in self.validation_frame.winfo_children():
             child.destroy()
+        ttk.Label(self.validation_frame, text="正在生成测试结果…").grid(
+            row=0, column=0, sticky="n", pady=30,
+        )
         filter_path = headword_filter_rules_path(self.project.root, HEADWORD_FILTER_RULES_FILENAME)
 
         def worker() -> None:
@@ -1210,7 +1387,7 @@ class ProjectProfileWizard(tk.Toplevel):
     def _marker_preview(image: Image.Image, entries, geometry, settings: AppSettings, page_index: int) -> Image.Image:
         source = image.copy()
         thumb = source.copy()
-        thumb.thumbnail((500, 360), Image.Resampling.LANCZOS)
+        thumb.thumbnail((650, 500), Image.Resampling.LANCZOS)
         thumb = thumb.convert("RGBA")
         sx = thumb.width / max(1, source.width)
         sy = thumb.height / max(1, source.height)
@@ -1273,35 +1450,67 @@ class ProjectProfileWizard(tk.Toplevel):
                 )
                 draw.line(
                     (start[0] * sx, start[1] * sy, end[0] * sx, end[1] * sy),
-                    fill=(255, 0, 0, 255), width=2,
+                    fill=(255, 0, 0, 255), width=1,
                 )
             except Exception:
-                x, y = entry.x * sx, entry.y * sy
-                draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=(255, 0, 0, 255))
+                x, y = round(entry.x * sx), round(entry.y * sy)
+                draw.point((x, y), fill=(255, 0, 0, 255))
         return thumb.convert("RGB")
+
+    def _move_validation_preview(self, delta: int) -> None:
+        if not self._validation_results:
+            return
+        self.validation_preview_slot = (
+            int(self.validation_preview_slot) + int(delta)
+        ) % len(self._validation_results)
+        self._render_validation_result()
+
+    def _render_validation_result(self) -> None:
+        for child in self.validation_frame.winfo_children():
+            child.destroy()
+        self._validation_photos.clear()
+        if not self._validation_results:
+            self.validation_caption_var.set("")
+            self.validation_prev_button.configure(state="disabled")
+            self.validation_next_button.configure(state="disabled")
+            return
+
+        self.validation_preview_slot %= len(self._validation_results)
+        _index, name, count, columns, preview, error = self._validation_results[self.validation_preview_slot]
+        total = len(self._validation_results)
+        self.validation_caption_var.set(
+            f"{self.validation_preview_slot + 1}/{total} · {name}"
+        )
+        state = "normal" if total > 1 else "disabled"
+        self.validation_prev_button.configure(state=state)
+        self.validation_next_button.configure(state=state)
+
+        cell = ttk.LabelFrame(self.validation_frame, text=name, padding=8)
+        cell.grid(row=0, column=0, sticky="n")
+        if preview is not None:
+            photo = ImageTk.PhotoImage(preview)
+            self._validation_photos.append(photo)
+            ttk.Label(cell, image=photo).pack()
+            ttk.Label(
+                cell, text=f"检出 {count} 个词头 · {columns} 栏",
+            ).pack(anchor="w", pady=(4, 0))
+        else:
+            ttk.Label(
+                cell, text=f"测试失败：{error}", wraplength=620,
+            ).pack(anchor="w", padx=10, pady=30)
 
     def _finish_validation(self, results) -> None:
         self._validation_running = False
         self.validate_button.configure(state="normal")
         revision_changed = self._validation_revision_started != self._profile_revision
-        self._validation_photos.clear()
-        failures = 0
-        validated_pages: list[str] = []
-        for slot, (_index, name, count, columns, preview, error) in enumerate(results):
-            cell = ttk.LabelFrame(self.validation_frame, text=name, padding=6)
-            cell.grid(row=slot // 2, column=slot % 2, sticky="nsew", padx=6, pady=6)
-            if preview is not None:
-                photo = ImageTk.PhotoImage(preview)
-                self._validation_photos.append(photo)
-                ttk.Label(cell, image=photo).pack()
-                ttk.Label(cell, text=f"检出 {count} 个词头 · {columns} 栏").pack(anchor="w", pady=(4, 0))
-                validated_pages.append(name)
-            else:
-                failures += 1
-                ttk.Label(cell, text=f"测试失败：{error}", wraplength=430).pack(anchor="w")
-        # Treat the Profile as validated only when every representative page
-        # completed successfully. Partial success is useful diagnostically but
-        # must not survive as a misleading "validated" state.
+        self._validation_results = list(results)
+        self.validation_preview_slot = 0
+
+        failures = sum(1 for _index, _name, _count, _columns, preview, _error in results if preview is None)
+        validated_pages = [
+            name for _index, name, _count, _columns, preview, _error in results
+            if preview is not None
+        ]
         self.working.profile_last_validated_pages = (
             validated_pages if failures == 0 and not revision_changed else []
         )
@@ -1311,10 +1520,13 @@ class ProjectProfileWizard(tk.Toplevel):
             )
         elif failures:
             self.validation_status_var.set(
-                f"完成：{len(results)-failures}/{len(results)} 页成功；请检查失败页后重新测试"
+                f"完成：{len(results)-failures}/{len(results)} 页成功；请逐页检查失败页后重新测试"
             )
         else:
-            self.validation_status_var.set(f"完成：{len(results)} 页均已测试，可确认或返回调整")
+            self.validation_status_var.set(
+                f"完成：{len(results)} 页均已测试；可用左右按钮逐页检查"
+            )
+        self._render_validation_result()
 
     def save_and_close(self) -> None:
         try:

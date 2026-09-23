@@ -339,12 +339,13 @@ class FormatTests(unittest.TestCase):
         self.assertTrue(settings.main_entry_font_bold)
         self.assertTrue(settings.review_entry_font_italic)
 
-    def test_v22_ocr_fusion_is_the_default_headword_mode(self) -> None:
+    def test_default_headword_ocr_uses_paddle_only(self) -> None:
         settings = AppSettings()
         self.assertEqual(settings.detection_method, "paddleocr")
-        self.assertTrue(settings.paddle_compare_tesseract)
-        self.assertTrue(settings.paddle_dual_ocr_arbitration)
-        self.assertEqual(settings.paddle_lens_mode, "conflict")
+        self.assertTrue(settings.paddle_use_paddleocr)
+        self.assertFalse(settings.paddle_compare_tesseract)
+        self.assertFalse(settings.paddle_enable_lens)
+        self.assertEqual(settings.paddle_lens_mode, "off")
 
     def test_legacy_settings_import(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

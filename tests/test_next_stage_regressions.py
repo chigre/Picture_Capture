@@ -21,6 +21,7 @@ from picture_capture.profile_semantics import (
     entry_allowed_by_page_template, excluded_source_side, ordered_headword_profiles,
     page_template_analysis_image, probable_body_page_indices, READING_LABELS,
     reading_choice_from_settings, representative_page_indices, sample_page_indices,
+    suggested_body_page_range,
 )
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
@@ -434,6 +435,19 @@ def test_project_profile_configured_body_range_has_priority():
     assert configured_body_page_indices(len(images), "10-800") == []
 
 
+
+def test_project_profile_suggests_zero_padded_body_range():
+    images = [
+        Path("0000_cover.png"),
+        Path("0001_title.png"),
+        Path("0002.png"),
+        Path("0003.png"),
+        Path("0004.png"),
+        Path("appendix_0005.png"),
+    ]
+    assert suggested_body_page_range(images) == "0003-0005"
+
+
 def test_project_profile_representatives_avoid_obvious_front_and_back_matter():
     images = [Path("0000_cover.png")]
     images += [Path(f"{number:04d}_body.png") for number in range(1, 31)]
@@ -582,6 +596,17 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
 
+    assert 'for label in ("1 词典信息与阅读方式", "2 页面模板"' in text
+    assert 'text="词典项目详情"' in text
+    assert 'text="词典完整名称："' in text
+    assert 'text="词典缩写名称："' in text
+    assert 'text="ISBN："' in text
+    assert 'text="正文页码范围："' in text
+    assert "suggested_body_page_range(self.project.images)" in text
+    assert "s.dictionary_full_name = self.dictionary_full_name_var.get().strip()" in text
+    assert "s.dictionary_body_page_range = self.dictionary_body_page_range_var.get().strip()" in text
+    assert "def _body_page_range_changed" in text
+
     assert "每一张都可以手动更换" in text
     assert 'text="更换…"' in text
     assert 'text="页面模板即时预览"' in text
@@ -590,7 +615,21 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "样例区只显示局部裁切图，不回退为整页预览。" in text
     assert "索引语言（2 位）" in text
     assert "indices = list(self.sample_indices)" in text
-    assert "thumb.thumbnail((500, 360)" in text
+
+    # The window skeleton is built first; representative image decoding begins
+    # later on a worker thread instead of blocking the button click.
+    assert "self._show_sample_loading_state()" in text
+    assert "self.after(20, self._start_sample_thumbnail_load)" in text
+    assert "threading.Thread(target=worker, daemon=True).start()" in text
+    assert "elif index == 2:" in text and "self._refresh_headword_description" in text
+
+    # Multi-page validation is presented one page at a time with the same
+    # previous/next navigation language as the page-template preview.
+    assert "self._validation_results = list(results)" in text
+    assert "def _move_validation_preview" in text
+    assert "def _render_validation_result" in text
+    assert "thumb.thumbnail((650, 500)" in text
+    assert "fill=(255, 0, 0, 255), width=1" in text
 
 
 def test_project_profile_wizard_is_the_normal_entry_path():
@@ -604,6 +643,20 @@ def test_project_profile_wizard_is_the_normal_entry_path():
     end = text.index("    def open_project_details(", start)
     assert 'self.open_settings(initial_tab="profile")' not in text[start:end]
 
+
+
+def test_main_ocr_drawing_defaults_to_force_refresh_and_paddle_only():
+    app_source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    app_text = app_source.read_text(encoding="utf-8")
+    assert 'self.ocr_refresh_var = tk.StringVar(value="force")' in app_text
+    assert "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启" in app_text
+    assert 'LENS_MODE_LABELS["off"]' in app_text
+
+    settings = AppSettings()
+    assert settings.paddle_use_paddleocr is True
+    assert settings.paddle_compare_tesseract is False
+    assert settings.paddle_enable_lens is False
+    assert settings.paddle_lens_mode == "off"
 
 def test_analysis_threshold_modes_are_effective():
     import numpy as np
