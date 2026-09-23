@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import re
 from typing import Iterable
 
 from PIL import Image, ImageDraw
@@ -18,10 +19,10 @@ READING_CHOICES = {
 }
 
 READING_LABELS = {
-    "horizontal-ltr": "横排 · 左 → 右",
-    "horizontal-rtl": "横排 · 右 → 左",
-    "vertical-rl": "纵排 · 右 → 左",
-    "vertical-lr": "纵排 · 左 → 右",
+    "horizontal-ltr": "横排：左→右",
+    "horizontal-rtl": "横排：右→左",
+    "vertical-rl": "纵排：右→左",
+    "vertical-lr": "纵排：左→右",
 }
 
 # Selecting a headword structure in the wizard must never silently replace the
@@ -84,6 +85,95 @@ def sample_page_indices(total: int, target: int = 6) -> list[int]:
             if len(seen) >= target:
                 break
     return sorted(seen[:target])
+
+
+
+_NON_BODY_PAGE_TOKENS = (
+    "cover", "title", "copyright", "contents", "toc", "preface", "foreword",
+    "appendix", "appendices", "supplement", "supplements", "backmatter",
+    "封面", "扉页", "版权", "目录", "前言", "序言", "附录", "附表", "后记",
+)
+
+
+def probable_body_page_indices(images: Iterable[object]) -> list[int]:
+    """Return likely body-page indexes for Profile sampling.
+
+    This is deliberately conservative: obvious front/back matter names and
+    0000_* pre-body scan names are excluded, while ordinary numeric body scans
+    remain eligible. When filenames carry no useful signal, callers still get
+    a broad fallback pool rather than an empty wizard.
+    """
+    items = list(images)
+    if not items:
+        return []
+
+    candidates: list[int] = []
+    for index, item in enumerate(items):
+        name = str(getattr(item, "name", item) or "")
+        stem = name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].rsplit(".", 1)[0].lower()
+        if re.match(r"^0{4}(?:[_\-\s]|$)", stem):
+            continue
+        if any(token in stem for token in _NON_BODY_PAGE_TOKENS):
+            continue
+        candidates.append(index)
+
+    # If naming is unusually aggressive, only keep the explicit 0000_* guard
+    # and let the user replace any imperfect automatic choices in the wizard.
+    if len(candidates) < min(3, len(items)):
+        candidates = []
+        for index, item in enumerate(items):
+            name = str(getattr(item, "name", item) or "")
+            stem = name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].rsplit(".", 1)[0].lower()
+            if not re.match(r"^0{4}(?:[_\-\s]|$)", stem):
+                candidates.append(index)
+    return candidates or list(range(len(items)))
+
+
+def representative_page_indices(images: Iterable[object], target: int = 6) -> list[int]:
+    """Pick editable front/middle/back body representatives.
+
+    Unlike the numeric sample helper, this works from actual filenames and
+    samples inside the likely body instead of the absolute first/last scan.
+    """
+    pool = probable_body_page_indices(images)
+    target = max(1, int(target))
+    if len(pool) <= target:
+        return list(pool)
+
+    anchors = (0.12, 0.50, 0.82)
+    base, remainder = divmod(target, len(anchors))
+    quotas = [base] * len(anchors)
+    # Extra samples are most useful around the middle, then front, then back.
+    for slot in (1, 0, 2)[:remainder]:
+        quotas[slot] += 1
+
+    selected: list[int] = []
+    used_positions: set[int] = set()
+    last_pos = len(pool) - 1
+    for anchor, quota in zip(anchors, quotas):
+        center = round(last_pos * anchor)
+        offsets = [0]
+        for distance in range(1, len(pool)):
+            offsets.extend((-distance, distance))
+        taken = 0
+        for offset in offsets:
+            pos = center + offset
+            if pos < 0 or pos > last_pos or pos in used_positions:
+                continue
+            used_positions.add(pos)
+            selected.append(pool[pos])
+            taken += 1
+            if taken >= quota:
+                break
+
+    if len(selected) < target:
+        for pos, index in enumerate(pool):
+            if pos in used_positions:
+                continue
+            selected.append(index)
+            if len(selected) >= target:
+                break
+    return sorted(selected[:target])
 
 
 def reading_choice_from_settings(settings: AppSettings) -> str:
