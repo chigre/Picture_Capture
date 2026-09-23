@@ -4667,7 +4667,7 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
     styles = review[styles_start:styles_end]
     assert "theme_use(" not in styles
     assert '"PCR.Surface.TFrame"' in styles
-    assert '"PCR.Section.TLabelframe"' in styles
+    assert '"PCR.Section.TLabelframe"' not in styles
     assert '"PCR.Compact.TButton"' in styles
 
     build_start = review.index("    def _build(self) -> None:")
@@ -4688,6 +4688,40 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
     assert 'relief="flat"' in render
     assert 'highlightthickness=1' in render
     assert 'text="[X]"' in render
+
+
+def test_review_screenshot_polish_prevents_right_pane_clipping():
+    from pathlib import Path
+    import inspect
+    import picture_capture.app as app_module
+
+    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    start = text.index("class ReviewWindow")
+    end = text.index("class OCRConflictReviewDialog", start)
+    review = text[start:end]
+
+    section_start = review.index("    def _review_section_frame(")
+    section_end = review.index("    def _build(self) -> None:", section_start)
+    section = review[section_start:section_end]
+    assert "ttk.LabelFrame(" not in section
+    assert "ttk.Separator(frame, orient=\"horizontal\")" in section
+
+    build_start = review.index("    def _build(self) -> None:")
+    build_end = review.index("    def _toggle_review_panel(", build_start)
+    build = review[build_start:build_end]
+    assert "crop_height_row = ttk.Frame(" in build
+    assert 'text="普通词条行切图高："' in build
+    assert 'text="单字行高："' in build
+    assert "ref_fill_row = ttk.Frame(" in build
+    assert 'ref_fill_row, text="从所选词开始填充至本页结束"' in build
+
+    network_start = build.index("        network_actions = ttk.Frame(")
+    network_end = build.index("        self.network_status_label", network_start)
+    network = build[network_start:network_end]
+    assert "width=15" not in network
+    assert "width=14" not in network
+    assert "width=8" not in network
+    assert 'style="PCR.Tool.TButton"' in network
 
 
 def test_v21117_review_title_contains_page_and_progress():
