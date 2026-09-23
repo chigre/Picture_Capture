@@ -7,7 +7,8 @@ from PIL import Image
 from picture_capture.app import (
     PictureCaptureApp, binary_preview_image, effective_main_overlay_font_size,
     ReviewWindow, VerticalWordText, horizontal_ocr_menu_layout, horizontal_overlay_layout,
-    transformed_entry_anchor, vertical_ocr_menu_layout, vertical_overlay_layout,
+    transformed_entry_anchor, vertical_marker_contact_gap, vertical_ocr_menu_layout,
+    vertical_overlay_layout,
 )
 from picture_capture.dictionary_profile import effective_project_profile_id, load_dictionary_profile
 from picture_capture.models import AppSettings, Entry, ProjectState
@@ -93,6 +94,25 @@ def test_vertical_overlay_anchor_uses_canonical_offset():
     assert editor == (599.5, 200)
     assert VerticalWordText._entry_index(0) == "1.0"
     assert VerticalWordText._entry_index("end") == "end-1c"
+
+
+def test_vertical_editor_border_touches_marker_stroke():
+    # A 2 px marker paints 1 px to either side of its centreline, so the
+    # editor edge should be exactly 1 px away from the centreline.
+    assert vertical_marker_contact_gap(2) == 1
+    assert vertical_marker_contact_gap(3) == 2
+    assert vertical_marker_contact_gap(4) == 2
+
+    rl_box, *_ = vertical_overlay_layout(
+        600, 200, editor_width=28, editor_height=180,
+        writing_mode="vertical-rl", gap=vertical_marker_contact_gap(2),
+    )
+    lr_box, *_ = vertical_overlay_layout(
+        600, 200, editor_width=28, editor_height=180,
+        writing_mode="vertical-lr", gap=vertical_marker_contact_gap(2),
+    )
+    assert rl_box[2] == 599
+    assert lr_box[0] == 601
 
 
 def test_vertical_entry_boxes_have_fixed_length_and_mirror_marker_side():
