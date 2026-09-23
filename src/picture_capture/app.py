@@ -8108,7 +8108,8 @@ class PictureCaptureApp(tk.Tk):
         if self.image is None:
             return self.settings
         return effective_page_settings(
-            self.settings, self.image.size, max(0, int(self.current_index)),
+            self.settings, self.image.size,
+            max(0, int(self.__dict__.get("current_index", 0) or 0)),
         )
 
     def _display_geometry_key(self) -> tuple:
@@ -8116,7 +8117,7 @@ class PictureCaptureApp(tk.Tk):
             return ()
         s = self.settings
         return (
-            id(self.image), int(self.current_index),
+            id(self.image), int(self.__dict__.get("current_index", 0) or 0),
             int(s.parameter_display_width), int(s.columns),
             str(s.layout_columns_policy), str(s.layout_column_separator_mode),
             str(s.analysis_threshold_mode),
