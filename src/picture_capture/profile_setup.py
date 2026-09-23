@@ -26,6 +26,7 @@ from .profile_semantics import (
     apply_reading_choice,
     copy_settings,
     effective_page_settings,
+    excluded_source_side,
     ordered_headword_profiles,
     profile_summary_tags,
     reading_choice_from_settings,
@@ -659,7 +660,7 @@ class ProjectProfileWizard(tk.Toplevel):
                         paddle_filter_rules_path=filter_path,
                         profile_page_index=index,
                     )
-                    preview = self._marker_preview(image, entries, geometry)
+                    preview = self._marker_preview(image, entries, geometry, settings, index)
                     results.append((index, path.name, len(entries), len(geometry.column_starts), preview, None))
                 except Exception as exc:
                     results.append((index, path.name, 0, 0, None, str(exc)))
@@ -683,13 +684,49 @@ class ProjectProfileWizard(tk.Toplevel):
         self._finish_validation(results)
 
     @staticmethod
-    def _marker_preview(image: Image.Image, entries, geometry) -> Image.Image:
+    def _marker_preview(image: Image.Image, entries, geometry, settings: AppSettings, page_index: int) -> Image.Image:
         source = image.copy()
         thumb = source.copy()
         thumb.thumbnail((480, 330), Image.Resampling.LANCZOS)
+        thumb = thumb.convert("RGBA")
         sx = thumb.width / max(1, source.width)
         sy = thumb.height / max(1, source.height)
-        draw = ImageDraw.Draw(thumb)
+        draw = ImageDraw.Draw(thumb, "RGBA")
+
+        def shade_source_box(box: tuple[int, int, int, int]) -> None:
+            x0, y0, x1, y1 = box
+            if x1 <= x0 or y1 <= y0:
+                return
+            draw.rectangle(
+                (x0 * sx, y0 * sy, x1 * sx, y1 * sy),
+                fill=(110, 110, 110, 72),
+            )
+
+        canonical_w, canonical_h = geometry.transform.canonical_size(source.size)
+        if geometry.top > 0:
+            shade_source_box(
+                geometry.transform.canonical_box_to_source(
+                    (0, 0, canonical_w, min(canonical_h, geometry.top)),
+                    source.size,
+                )
+            )
+        if geometry.bottom < canonical_h:
+            shade_source_box(
+                geometry.transform.canonical_box_to_source(
+                    (0, max(0, geometry.bottom), canonical_w, canonical_h),
+                    source.size,
+                )
+            )
+        side = excluded_source_side(settings, page_index)
+        if side:
+            margin = round(source.width * max(
+                0.0, min(30.0, float(getattr(settings, "profile_side_percent", 8.0)))
+            ) / 100.0)
+            if side == "left":
+                shade_source_box((0, 0, margin, source.height))
+            else:
+                shade_source_box((source.width - margin, 0, source.width, source.height))
+
         for entry in entries:
             u, v = geometry.source_to_canonical(entry.x, entry.y)
             try:
@@ -704,12 +741,12 @@ class ProjectProfileWizard(tk.Toplevel):
                 )
                 draw.line(
                     (start[0] * sx, start[1] * sy, end[0] * sx, end[1] * sy),
-                    fill="#ff0000", width=2,
+                    fill=(255, 0, 0, 255), width=2,
                 )
             except Exception:
                 x, y = entry.x * sx, entry.y * sy
-                draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill="#ff0000")
-        return thumb
+                draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=(255, 0, 0, 255))
+        return thumb.convert("RGB")
 
     def _finish_validation(self, results) -> None:
         self._validation_running = False
