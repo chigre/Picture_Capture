@@ -502,7 +502,7 @@ def entry_allowed_by_page_template(
     side = excluded_source_side(settings, page_index)
     if side is None:
         return True
-    pct = max(0.0, min(30.0, float(getattr(settings, "profile_side_percent", 8.0))))
+    pct = excluded_source_side_percent(settings, page_index)
     boundary = width * pct / 100.0
     if side == "left":
         return source_x >= boundary
