@@ -14,6 +14,7 @@ from picture_capture.dictionary_profile import effective_project_profile_id, loa
 from picture_capture.models import AppSettings, Entry, ProjectState
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
+from picture_capture.processing import refine_existing_entries
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
     _repair_multiline_headword_state_machine, parse_headword_text,
@@ -63,6 +64,19 @@ def test_recent_removal_only_changes_registry(tmp_path):
     assert (project / "user.jpg").read_bytes() == b"user"
 
 
+def test_recent_project_keeps_per_project_last_page(tmp_path):
+    project, registry = tmp_path / "scan", tmp_path / "recent.json"
+    project.mkdir()
+    touch_recent_project(
+        project, registry, last_page="page10.jpg", last_page_index=9,
+    )
+    # Re-touching a project without a page update must not erase its resume point.
+    touch_recent_project(project, registry)
+    row = load_recent_projects(registry)[0]
+    assert row["last_page"] == "page10.jpg"
+    assert row["last_page_index"] == 9
+
+
 def test_recent_project_details_expose_requested_columns(tmp_path):
     project = tmp_path / "scan"
     _project(project, dictionary_full_name="完整词典", dictionary_abbreviation="缩写")
@@ -72,6 +86,36 @@ def test_recent_project_details_expose_requested_columns(tmp_path):
     assert detail["image_count"] == 3
     assert detail["path"] == str(project)
     assert detail["last_edited"] != "old"
+
+
+def test_refine_existing_entries_never_changes_count_or_exceeds_safe_delta(monkeypatch):
+    import picture_capture.paddle_headwords as paddle_headwords
+
+    def far_refiner(_gray, coarse_y, _line_height, _settings, **_kwargs):
+        return coarse_y + 999, {"reason": "test"}
+
+    monkeypatch.setattr(paddle_headwords, "refine_separator_y", far_refiner)
+    image = Image.new("RGB", (120, 160), "white")
+    settings = AppSettings(
+        columns=1,
+        manual_columns=True,
+        manual_x=10,
+        column_width=100,
+        gutter=0,
+        start_y=0,
+        bottom_y=160,
+        parameter_display_width=120,
+        character_height=10,
+        paddle_separator_search_ratio=0.30,
+        paddle_refine_separator_y=True,
+    )
+    entries = [Entry("alpha", 10, 30), Entry("beta", 10, 70)]
+    refined, stats = refine_existing_entries(image, entries, settings)
+
+    assert len(refined) == len(entries) == stats["total"]
+    assert [entry.word for entry in refined] == ["alpha", "beta"]
+    assert stats["max_delta"] == 3
+    assert all(abs(new.y - old.y) <= stats["max_delta"] for old, new in zip(entries, refined))
 
 
 def test_binary_preview_and_font_scaling_are_display_only():
