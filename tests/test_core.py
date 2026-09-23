@@ -4428,7 +4428,8 @@ def test_sidebar_has_collapsed_postproduction_section_and_project_details():
     second_row = '(("项目详情", self.open_project_details), ("导出PicDic索引", self.export_picdic_index), ("PicDic制作", self.build_picdic))'
     assert first_row in app_text
     assert second_row in app_text
-    assert 'notebook.add(project_tab, text="词典项目详情")' in app_text
+    assert '(project_tab, "项目 / 批量")' in app_text
+    assert '"项目资料"' in app_text
     assert 'self.open_settings(initial_tab="project")' in app_text
 
 
