@@ -226,6 +226,14 @@ class AppSettings:
     profile_footer_percent: float = 5.0
     profile_side_percent: float = 8.0
     profile_last_validated_pages: list[str] = field(default_factory=list)
+    # Wizard-only headword specificity controls. They are intentionally
+    # semantic instead of exposing parser scores/thresholds to ordinary users.
+    profile_headword_tuning_level: int = 0       # -2 loose .. 0 balanced .. +2 strict
+    profile_cjk_allow_single_headword: bool = True
+    profile_cjk_allow_bracketed_headword: bool = True
+    profile_cjk_require_left_edge: bool = True
+    profile_cjk_brackets_in_body: bool = False
+    profile_cjk_require_visual_evidence: bool = False
     # Dictionary collation used by the headword-order checker. ``auto`` follows
     # the selected OCR language; custom mode accepts arbitrary alphabet units
     # (including multi-character letters such as ch / ll).
