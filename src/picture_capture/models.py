@@ -229,6 +229,12 @@ class AppSettings:
     # Wizard-only headword specificity controls. They are intentionally
     # semantic instead of exposing parser scores/thresholds to ordinary users.
     profile_headword_tuning_level: int = 0       # -2 loose .. 0 balanced .. +2 strict
+    # Parser controls are version-gated so older projects keep historical
+    # parser behavior until they explicitly save a Wizard profile.
+    profile_parser_controls_version: int = 0
+    profile_allow_ordinary_left_edge: bool = True
+    profile_allow_numbered_prefix: bool = False
+    profile_allow_marker_prefix: bool = False
     profile_cjk_allow_single_headword: bool = True
     profile_cjk_allow_bracketed_headword: bool = True
     profile_cjk_require_left_edge: bool = True
