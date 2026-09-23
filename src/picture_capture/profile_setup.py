@@ -1238,12 +1238,6 @@ class ProjectProfileWizard(tk.Toplevel):
         self.analyze_button.configure(state="disabled")
         self.analysis_suggestion_var.set("正在分析代表页版面…")
         settings = self._settings_from_ui()
-        # Project Profile validates the normal OCR-based workflow even when an
-        # old project last saved "普通画线" as its active detection method.
-        # This is a temporary validation copy and does not overwrite that saved
-        # project preference.
-        settings.detection_method = "paddleocr"
-        settings.paddle_use_paddleocr = True
         indices = list(self.sample_indices)
 
         def worker() -> None:
@@ -1454,6 +1448,12 @@ class ProjectProfileWizard(tk.Toplevel):
         if self._validation_running:
             return
         settings = self._settings_from_ui()
+        # Project Profile validates the normal OCR-based workflow even when an
+        # old project last saved "普通画线" as its active detection method.
+        # This is a temporary validation copy and does not overwrite that saved
+        # project preference.
+        settings.detection_method = "paddleocr"
+        settings.paddle_use_paddleocr = True
         indices = list(self.sample_indices)
         if not indices:
             return
