@@ -15,7 +15,7 @@
         "paddle_height_ratio": 1.05,
         "paddle_boldness_ratio": 1.12,
         "paddle_gap_ratio": 0.7,
-        "paddle_min_candidate_score": 1.0,
+        "paddle_min_candidate_score": 1,
         "paddle_require_pos_or_symbol": true,
         "paddle_remove_syllable_separators": true,
         "paddle_auto_header_rule": true,
@@ -333,7 +333,7 @@
         "paddle_height_ratio": 1.12,
         "paddle_boldness_ratio": 1.05,
         "paddle_gap_ratio": 0.7,
-        "paddle_min_candidate_score": 1.0,
+        "paddle_min_candidate_score": 1,
         "paddle_require_pos_or_symbol": false,
         "paddle_remove_syllable_separators": false,
         "paddle_auto_header_rule": true,
@@ -390,7 +390,7 @@
         "paddle_height_ratio": 1.1,
         "paddle_boldness_ratio": 1.05,
         "paddle_gap_ratio": 0.7,
-        "paddle_min_candidate_score": 1.0,
+        "paddle_min_candidate_score": 1,
         "paddle_require_pos_or_symbol": false,
         "paddle_remove_syllable_separators": false,
         "paddle_auto_header_rule": true,
@@ -440,7 +440,7 @@
         "paddle_height_ratio": 1.08,
         "paddle_boldness_ratio": 1.12,
         "paddle_gap_ratio": 0.7,
-        "paddle_min_candidate_score": 1.0,
+        "paddle_min_candidate_score": 1,
         "paddle_require_pos_or_symbol": true,
         "paddle_remove_syllable_separators": true,
         "paddle_auto_header_rule": true,
@@ -475,7 +475,7 @@
         "paddle_height_ratio": 1.05,
         "paddle_boldness_ratio": 1.12,
         "paddle_gap_ratio": 0.7,
-        "paddle_min_candidate_score": 1.0,
+        "paddle_min_candidate_score": 1,
         "paddle_require_pos_or_symbol": true,
         "paddle_remove_syllable_separators": true,
         "paddle_auto_header_rule": true,
@@ -514,7 +514,7 @@
         "paddle_height_ratio": 1.08,
         "paddle_boldness_ratio": 1.12,
         "paddle_gap_ratio": 0.7,
-        "paddle_min_candidate_score": 1.0,
+        "paddle_min_candidate_score": 1,
         "paddle_require_pos_or_symbol": true,
         "paddle_remove_syllable_separators": true,
         "paddle_auto_header_rule": true,
@@ -692,6 +692,138 @@
       "paddle_language": "ar",
       "tesseract_language": "ara",
       "paddle_capability_check": true
+    },
+    "fra": {
+      "display_name": "Français",
+      "semantic_language": "fra",
+      "paddle_language": "fr",
+      "tesseract_language": "fra"
+    },
+    "deu": {
+      "display_name": "Deutsch",
+      "semantic_language": "deu",
+      "paddle_language": "de",
+      "tesseract_language": "deu"
+    },
+    "nld": {
+      "display_name": "Nederlands",
+      "semantic_language": "nld",
+      "paddle_language": "nl",
+      "tesseract_language": "nld"
+    },
+    "pol": {
+      "display_name": "Polski",
+      "semantic_language": "pol",
+      "paddle_language": "pl",
+      "tesseract_language": "pol"
+    },
+    "tur": {
+      "display_name": "Türkçe",
+      "semantic_language": "tur",
+      "paddle_language": "tr",
+      "tesseract_language": "tur"
+    },
+    "vie": {
+      "display_name": "Tiếng Việt",
+      "semantic_language": "vie",
+      "paddle_language": "vi",
+      "tesseract_language": "vie"
+    },
+    "ces": {
+      "display_name": "Čeština",
+      "semantic_language": "ces",
+      "paddle_language": "cs",
+      "tesseract_language": "ces"
+    },
+    "dan": {
+      "display_name": "Dansk",
+      "semantic_language": "dan",
+      "paddle_language": "da",
+      "tesseract_language": "dan"
+    },
+    "nor": {
+      "display_name": "Norsk",
+      "semantic_language": "nor",
+      "paddle_language": "no",
+      "tesseract_language": "nor"
+    },
+    "swe": {
+      "display_name": "Svenska",
+      "semantic_language": "swe",
+      "paddle_language": "sv",
+      "tesseract_language": "swe"
+    },
+    "fin": {
+      "display_name": "Suomi",
+      "semantic_language": "fin",
+      "paddle_language": "fi",
+      "tesseract_language": "fin"
+    },
+    "ron": {
+      "display_name": "Română",
+      "semantic_language": "ron",
+      "paddle_language": "ro",
+      "tesseract_language": "ron"
+    },
+    "hun": {
+      "display_name": "Magyar",
+      "semantic_language": "hun",
+      "paddle_language": "hu",
+      "tesseract_language": "hun"
+    },
+    "ind": {
+      "display_name": "Bahasa Indonesia",
+      "semantic_language": "ind",
+      "paddle_language": "id",
+      "tesseract_language": "ind"
+    },
+    "msa": {
+      "display_name": "Bahasa Melayu",
+      "semantic_language": "msa",
+      "paddle_language": "ms",
+      "tesseract_language": "msa"
+    },
+    "hrv": {
+      "display_name": "Hrvatski",
+      "semantic_language": "hrv",
+      "paddle_language": "hr",
+      "tesseract_language": "hrv"
+    },
+    "slk": {
+      "display_name": "Slovenčina",
+      "semantic_language": "slk",
+      "paddle_language": "sk",
+      "tesseract_language": "slk"
+    },
+    "slv": {
+      "display_name": "Slovenščina",
+      "semantic_language": "slv",
+      "paddle_language": "sl",
+      "tesseract_language": "slv"
+    },
+    "cat": {
+      "display_name": "Català",
+      "semantic_language": "cat",
+      "paddle_language": "ca",
+      "tesseract_language": "cat"
+    },
+    "eus": {
+      "display_name": "Euskara",
+      "semantic_language": "eus",
+      "paddle_language": "eu",
+      "tesseract_language": "eus"
+    },
+    "glg": {
+      "display_name": "Galego",
+      "semantic_language": "glg",
+      "paddle_language": "gl",
+      "tesseract_language": "glg"
+    },
+    "lat": {
+      "display_name": "Latina",
+      "semantic_language": "lat",
+      "paddle_language": "la",
+      "tesseract_language": "lat"
     }
   },
   "validated_examples": {
