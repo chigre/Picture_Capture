@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Iterable
 
+from PIL import Image, ImageDraw
+
 from .dictionary_profile import available_dictionary_profiles, dictionary_profile_preset, language_effective_settings, profile_effective_settings
 from .layout_transform import LayoutTransform
 from .models import AppSettings
@@ -42,23 +44,42 @@ HEADWORD_PROFILE_SETTING_NAMES = (
 
 
 def sample_page_indices(total: int, target: int = 6) -> list[int]:
-    """Choose representative pages while keeping at least one adjacent A/B pair."""
+    """Choose front/middle/back pages while preserving an adjacent A/B sample.
+
+    The four-page validation path must still include the back of the book rather
+    than truncating the six-page analysis candidate list before the final pages.
+    Six-page analysis keeps adjacent pairs at front/middle/back.
+    """
     total = max(0, int(total))
     target = max(1, int(target))
     if total <= target:
         return list(range(total))
+    last = total - 1
+    middle = total // 2
+
+    if target == 1:
+        return [middle]
+    if target == 2:
+        return [0, last]
+    if target == 3:
+        return sorted({0, middle, last})
+    if target == 4:
+        return sorted({0, 1, middle, last})
+    if target == 5:
+        return sorted({0, 1, middle, max(0, last - 1), last})
+
     candidates = [
         0, 1,
-        max(0, total // 2 - 1), min(total - 1, total // 2),
-        max(0, total - 2), total - 1,
+        max(0, middle - 1), min(last, middle),
+        max(0, last - 1), last,
     ]
     seen: list[int] = []
     for index in candidates:
         if index not in seen:
             seen.append(index)
     if len(seen) < target:
-        for step in range(1, total):
-            index = round(step * (total - 1) / max(1, target - 1))
+        for step in range(1, target + 1):
+            index = round(step * last / max(1, target + 1))
             if index not in seen:
                 seen.append(index)
             if len(seen) >= target:
@@ -164,6 +185,35 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
         current.crop_to_bottom_y = False
 
     return current
+
+
+def page_template_analysis_image(
+    image: Image.Image,
+    settings: AppSettings,
+    page_index: int = 0,
+) -> Image.Image:
+    """Return a same-size analysis copy with configured physical page-edge noise removed.
+
+    Page-edge indexes/tabs can otherwise be mistaken for a text column and shift
+    layout/OCR geometry before the later entry-level filter gets a chance to
+    reject them. Only the disposable analysis copy is whitened; source pixels,
+    saved coordinates, crops and exports are untouched.
+    """
+    side = excluded_source_side(settings, page_index)
+    if side is None:
+        return image.copy()
+    result = image.copy()
+    width, height = result.size
+    pct = max(0.0, min(30.0, float(getattr(settings, "profile_side_percent", 8.0))))
+    margin = max(0, min(width, round(width * pct / 100.0)))
+    if margin <= 0:
+        return result
+    draw = ImageDraw.Draw(result)
+    if side == "left":
+        draw.rectangle((0, 0, margin, height), fill="white")
+    else:
+        draw.rectangle((max(0, width - margin), 0, width, height), fill="white")
+    return result
 
 
 def entry_allowed_by_page_template(
