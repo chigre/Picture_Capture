@@ -18,7 +18,8 @@ from picture_capture.processing import refine_existing_entries
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_reading_choice, effective_page_settings,
     entry_allowed_by_page_template, excluded_source_side, ordered_headword_profiles,
-    page_template_analysis_image, reading_choice_from_settings, sample_page_indices,
+    page_template_analysis_image, probable_body_page_indices, READING_LABELS,
+    reading_choice_from_settings, representative_page_indices, sample_page_indices,
 )
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
@@ -417,6 +418,34 @@ def test_project_profile_samples_front_middle_back_and_keeps_pairs():
     assert sample_page_indices(4, 6) == [0, 1, 2, 3]
 
 
+
+def test_project_profile_representatives_avoid_obvious_front_and_back_matter():
+    images = [Path("0000_cover.png")]
+    images += [Path(f"{number:04d}_body.png") for number in range(1, 31)]
+    images += [Path("appendix_01.png"), Path("附录_02.png")]
+    candidates = probable_body_page_indices(images)
+    assert 0 not in candidates
+    assert len(images) - 1 not in candidates
+    assert len(images) - 2 not in candidates
+
+    samples = representative_page_indices(images, 6)
+    assert len(samples) == 6
+    assert all(index in candidates for index in samples)
+    assert samples == sorted(samples)
+    # Sampling stays inside the body rather than pinning to its absolute edges.
+    assert samples[0] > candidates[0]
+    assert samples[-1] < candidates[-1]
+
+
+def test_project_profile_reading_labels_match_wizard_wording():
+    assert READING_LABELS == {
+        "horizontal-ltr": "横排：左→右",
+        "horizontal-rtl": "横排：右→左",
+        "vertical-rl": "纵排：右→左",
+        "vertical-lr": "纵排：左→右",
+    }
+
+
 def test_project_profile_reading_dimension_is_independent():
     settings = AppSettings(
         layout_writing_mode="horizontal-tb",
@@ -537,6 +566,16 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
+
+    assert "每一张都可以手动更换" in text
+    assert 'text="更换…"' in text
+    assert 'text="页面模板即时预览"' in text
+    assert 'text="◀ 上一张"' in text and 'text="下一张 ▶"' in text
+    assert 'text="经典样例（局部裁切）"' in text
+    assert "样例区只显示局部裁切图，不回退为整页预览。" in text
+    assert "索引语言（2 位）" in text
+    assert "indices = list(self.sample_indices)" in text
+    assert "thumb.thumbnail((500, 360)" in text
 
 
 def test_project_profile_wizard_is_the_normal_entry_path():
