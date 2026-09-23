@@ -822,7 +822,7 @@ class ProjectProfileWizard(tk.Toplevel):
 
     def _build_validation_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=1)
-        tab.rowconfigure(4, weight=1)
+        tab.rowconfigure(5, weight=1)
         ttk.Label(tab, text="⑤ 多页测试后再确认", font=("TkDefaultFont", 12, "bold")).grid(
             row=0, column=0, sticky="w"
         )
@@ -851,8 +851,16 @@ class ProjectProfileWizard(tk.Toplevel):
         self.validation_caption_var = tk.StringVar(value="")
         ttk.Label(nav, textvariable=self.validation_caption_var).pack(side="left", expand=True)
 
+        self.validation_diagnostic_var = tk.StringVar(
+            value="测试方式：PaddleOCR（强制重新识别）｜尚未运行测试"
+        )
+        ttk.Label(
+            tab, textvariable=self.validation_diagnostic_var,
+            foreground="#555555", justify="left", wraplength=900,
+        ).grid(row=4, column=0, sticky="ew", pady=(6, 0))
+
         self.validation_frame = ttk.Frame(tab)
-        self.validation_frame.grid(row=4, column=0, sticky="nsew", pady=(6, 0))
+        self.validation_frame.grid(row=5, column=0, sticky="nsew", pady=(6, 0))
         self.validation_frame.columnconfigure(0, weight=1)
 
     def _profile_label_for_key(self, key: str) -> str:
@@ -1322,15 +1330,21 @@ class ProjectProfileWizard(tk.Toplevel):
         ))
 
     @staticmethod
-    def _validation_coverage_summary(cache_path: Path | None, entries, geometry) -> str:
-        """Explain whether a missing region comes from raw OCR or headword filtering."""
+    def _validation_coverage_summary(
+        cache_path: Path | None, entries, geometry, settings: AppSettings,
+    ) -> str:
+        """Show raw OCR coverage, final-headword coverage and rejection clues."""
+        prefix = (
+            "测试方式：PaddleOCR（强制重新识别）"
+            f"｜列跟踪：{'开' if bool(getattr(settings, 'follow_column_deformation', False)) else '关'}"
+        )
         if cache_path is None or not cache_path.exists() or not geometry.column_starts:
-            return ""
+            return prefix + "\n诊断缓存未生成；请重新运行【测试当前 Profile】。"
         try:
             payload = json.loads(cache_path.read_text(encoding="utf-8"))
             columns = list(payload.get("columns") or [])
-        except (OSError, ValueError, TypeError):
-            return ""
+        except (OSError, ValueError, TypeError) as exc:
+            return prefix + f"\n诊断缓存读取失败：{exc}"
 
         selected_by_column: dict[int, list[float]] = {
             index: [] for index in range(len(geometry.column_starts))
@@ -1349,9 +1363,12 @@ class ProjectProfileWizard(tk.Toplevel):
             except Exception:
                 continue
 
-        parts: list[str] = []
+        parts: list[str] = [prefix]
         for index in range(len(geometry.column_starts)):
             raw_pct = 0
+            lower_total = 0
+            lower_accepted = 0
+            reject_counts: dict[str, int] = {}
             if index < len(columns):
                 column = columns[index] or {}
                 band_size = list(column.get("band_size") or [])
@@ -1365,15 +1382,78 @@ class ProjectProfileWizard(tk.Toplevel):
                         except (TypeError, ValueError):
                             pass
                 raw_pct = max(0, min(100, round(raw_bottom * 100 / band_height)))
+
+                for row in column.get("candidates", []) or []:
+                    if not isinstance(row, dict) or "meta" in row:
+                        continue
+                    box = row.get("box")
+                    if not isinstance(box, (list, tuple)) or len(box) != 4:
+                        continue
+                    try:
+                        center_y = (float(box[1]) + float(box[3])) / 2.0
+                    except (TypeError, ValueError):
+                        continue
+                    if center_y < band_height * 0.50:
+                        continue
+                    lower_total += 1
+                    if bool(row.get("accepted")):
+                        lower_accepted += 1
+                    else:
+                        reason = str(row.get("reject_reason") or "candidate_rejected")
+                        reject_counts[reason] = reject_counts.get(reason, 0) + 1
+
             selected_rows = selected_by_column.get(index) or []
-            selected_pct = max(0, min(100, round(max(selected_rows) * 100))) if selected_rows else 0
-            parts.append(f"{index + 1}栏 原始OCR至{raw_pct}% / 词头至{selected_pct}%")
-        return "；".join(parts)
+            selected_pct = (
+                max(0, min(100, round(max(selected_rows) * 100)))
+                if selected_rows else 0
+            )
+
+            nominal_x = int(geometry.column_starts[index])
+            path = (
+                geometry.column_paths[index]
+                if index < len(getattr(geometry, "column_paths", []))
+                else None
+            )
+            drift = 0
+            if path is not None:
+                try:
+                    drift = max(
+                        [abs(int(x) - nominal_x) for _y, x in path.points] or [0]
+                    )
+                except Exception:
+                    drift = 0
+
+            if reject_counts:
+                top_reasons = sorted(
+                    reject_counts.items(), key=lambda item: (-item[1], item[0])
+                )[:2]
+                reason_text = "、".join(
+                    f"{reason}×{count}" for reason, count in top_reasons
+                )
+            else:
+                reason_text = "无"
+
+            warning = ""
+            if raw_pct >= 85 and selected_pct <= 65:
+                warning = " ⚠原始OCR完整但词头在中途停止"
+            parts.append(
+                f"{index + 1}栏：原始OCR至{raw_pct}%｜词头至{selected_pct}%｜"
+                f"下半页候选{lower_total}（通过{lower_accepted}；拒绝主因：{reason_text}）｜"
+                f"左缘最大漂移{drift}px{warning}"
+            )
+        return "\n".join(parts)
+
 
     def validate_profile(self) -> None:
         if self._validation_running:
             return
         settings = self._settings_from_ui()
+        # Project Profile validates the normal OCR-based workflow even when an
+        # old project last saved "普通画线" as its active detection method.
+        # This is a temporary validation copy and does not overwrite that saved
+        # project preference.
+        settings.detection_method = "paddleocr"
+        settings.paddle_use_paddleocr = True
         indices = list(self.sample_indices)
         if not indices:
             return
@@ -1384,6 +1464,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self._validation_results = []
         self.validation_preview_slot = 0
         self.validation_caption_var.set("")
+        self.validation_diagnostic_var.set(
+            "测试方式：PaddleOCR（强制重新识别）｜正在生成逐栏诊断…"
+        )
         self.validation_prev_button.configure(state="disabled")
         self.validation_next_button.configure(state="disabled")
         for child in self.validation_frame.winfo_children():
@@ -1407,12 +1490,14 @@ class ProjectProfileWizard(tk.Toplevel):
                     entries, geometry = detect_entries(
                         image, settings,
                         paddle_cache_path=cache_path,
-                        force_paddle_refresh=(settings.detection_method == "paddleocr"),
+                        force_paddle_refresh=True,
                         paddle_filter_rules_path=filter_path,
                         profile_page_index=index,
                     )
                     preview = self._marker_preview(image, entries, geometry, settings, index)
-                    coverage = self._validation_coverage_summary(cache_path, entries, geometry)
+                    coverage = self._validation_coverage_summary(
+                        cache_path, entries, geometry, settings,
+                    )
                     results.append((
                         index, path.name, len(entries), len(geometry.column_starts),
                         preview, coverage, None,
@@ -1526,6 +1611,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self._validation_photos.clear()
         if not self._validation_results:
             self.validation_caption_var.set("")
+            self.validation_diagnostic_var.set(
+                "测试方式：PaddleOCR（强制重新识别）｜尚无测试结果"
+            )
             self.validation_prev_button.configure(state="disabled")
             self.validation_next_button.configure(state="disabled")
             return
@@ -1535,6 +1623,9 @@ class ProjectProfileWizard(tk.Toplevel):
         total = len(self._validation_results)
         self.validation_caption_var.set(
             f"{self.validation_preview_slot + 1}/{total} · {name}"
+        )
+        self.validation_diagnostic_var.set(
+            coverage or "测试方式：PaddleOCR（强制重新识别）\n诊断信息未生成"
         )
         state = "normal" if total > 1 else "disabled"
         self.validation_prev_button.configure(state=state)
@@ -1549,11 +1640,6 @@ class ProjectProfileWizard(tk.Toplevel):
             ttk.Label(
                 cell, text=f"检出 {count} 个词头 · {columns} 栏",
             ).pack(anchor="w", pady=(4, 0))
-            if coverage:
-                ttk.Label(
-                    cell, text=f"覆盖诊断：{coverage}",
-                    foreground="#666666", wraplength=650,
-                ).pack(anchor="w", pady=(2, 0))
         else:
             ttk.Label(
                 cell, text=f"测试失败：{error}", wraplength=620,

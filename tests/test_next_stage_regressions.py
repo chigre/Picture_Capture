@@ -630,10 +630,18 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "def _render_validation_result" in text
     assert "thumb.thumbnail((650, 500)" in text
     assert "fill=(255, 0, 0, 255), width=1" in text
-    assert 'force_paddle_refresh=(settings.detection_method == "paddleocr")' in text
+    validate_start = text.index("    def validate_profile(")
+    validate_end = text.index("    def _poll_validation_queue(", validate_start)
+    validate_text = text[validate_start:validate_end]
+    assert 'settings.detection_method = "paddleocr"' in validate_text
+    assert "settings.paddle_use_paddleocr = True" in validate_text
+    assert "force_paddle_refresh=True" in validate_text
     assert "正在强制重新识别并测试代表页" in text
     assert "def _validation_coverage_summary" in text
-    assert "覆盖诊断：" in text
+    assert "self.validation_diagnostic_var" in text
+    assert "下半页候选" in text
+    assert "左缘最大漂移" in text
+    assert "原始OCR完整但词头在中途停止" in text
 
 
 def test_project_profile_wizard_is_the_normal_entry_path():
