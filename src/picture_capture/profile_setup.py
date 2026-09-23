@@ -311,7 +311,7 @@ class ProjectProfileWizard(tk.Toplevel):
         outer.rowconfigure(2, weight=1)
         outer.columnconfigure(0, weight=1)
 
-        title = "第一次只确认 4 件事：页面怎么读、正文在哪里、什么算词头、用什么 OCR。"
+        title = "依次确认词典信息、阅读方式、页面模板、词头结构和 OCR。"
         ttk.Label(outer, text=title, font=("TkDefaultFont", 12, "bold")).grid(
             row=0, column=0, sticky="w"
         )
@@ -446,7 +446,7 @@ class ProjectProfileWizard(tk.Toplevel):
 
         ttk.Label(
             tab,
-            text="① 页面怎么读？",
+            text="阅读方式：页面怎么读？",
             font=("TkDefaultFont", 12, "bold"),
         ).grid(row=1, column=0, sticky="w")
         ttk.Label(
