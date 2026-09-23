@@ -4848,7 +4848,7 @@ class CropSettingsDialog(tk.Toplevel):
         _build_modern_dialog_heading(
             outer,
             "切图设置",
-            "统一控制词条切图与插图切图。常规页面使用通用规则，只有确实不同的页面才放到“特殊页面覆盖”。",
+            "完整切图设置（词条切图 / 插图切图共用）。常规页面使用通用规则，只有确实不同的页面才放到“特殊页面覆盖”。",
         )
 
         general = ttk.LabelFrame(
