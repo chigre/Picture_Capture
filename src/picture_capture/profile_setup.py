@@ -516,7 +516,7 @@ class ProjectProfileWizard(tk.Toplevel):
         footer.grid(row=5, column=0, sticky="ew", pady=(8, 0))
         ttk.Button(footer, text="上一步", command=lambda: self._move_step(-1)).pack(side="left")
         ttk.Button(footer, text="下一步", command=lambda: self._move_step(1)).pack(side="left", padx=(6, 0))
-        ttk.Button(footer, text="取消", command=self._close_without_save).pack(side="right")
+        ttk.Button(footer, text="关闭", command=self._close_without_save).pack(side="right")
         ttk.Button(footer, text="确认并使用", command=self.save_and_close).pack(side="right", padx=(0, 8))
 
         self._show_right_image_page(0)
@@ -1911,7 +1911,54 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Button(footer, text="取消", command=picker.destroy).pack(side="right")
         ttk.Button(footer, text="使用此页", command=apply_choice).pack(side="right", padx=(0, 8))
 
+    def _persist_current_profile(
+        self, *, finalize: bool = False, apply_runtime: bool = False,
+    ) -> AppSettings:
+        """Write current Wizard fields so navigation/closing cannot lose work."""
+        settings = self._settings_from_ui()
+        if not finalize:
+            # A partial Wizard save is a recoverable draft, not proof that a
+            # new-project Profile has completed the full setup workflow.
+            settings.profile_setup_version = int(
+                getattr(self.working, "profile_setup_version", 0) or 0
+            )
+        settings.profile_last_validated_pages = list(
+            getattr(self.working, "profile_last_validated_pages", []) or []
+        )
+        copy_settings(self.parent.settings, settings)
+        self.parent.settings.to_json(settings_path(self.project.root))
+        write_project_profile(
+            project_profile_path(self.project.root),
+            self.parent.settings,
+            self.parent.settings.dictionary_profile_id,
+            force=True,
+        )
+        self.working = replace(settings)
+        self.parent.sync_quick_settings()
+        if apply_runtime:
+            self.parent.redraw()
+        return settings
+
+    def _save_profile_progress(
+        self, *, finalize: bool = False, apply_runtime: bool = False,
+        status: str = "Project Profile 当前内容已保存",
+    ) -> bool:
+        try:
+            self._persist_current_profile(
+                finalize=finalize, apply_runtime=apply_runtime,
+            )
+            self.parent.status_var.set(status)
+            return True
+        except Exception as exc:
+            messagebox.showerror(
+                "Project Profile 保存失败", str(exc), parent=self,
+            )
+            return False
+
     def _move_step(self, delta: int) -> None:
+        # 上一步 / 下一步 are explicit save points.
+        if not self._save_profile_progress():
+            return
         current = self.notebook.index(self.notebook.select())
         target = max(0, min(len(self.tabs) - 1, current + int(delta)))
         self.notebook.select(self.tabs[target])
@@ -2511,6 +2558,13 @@ class ProjectProfileWizard(tk.Toplevel):
         self._render_validation_result()
 
     def save_and_close(self) -> None:
+        # The confirmation button saves immediately, even if the user chooses
+        # to go back to validation instead of closing the Wizard.
+        if not self._save_profile_progress(
+            finalize=False,
+            status="Project Profile 当前内容已保存",
+        ):
+            return
         try:
             if not self.working.profile_last_validated_pages:
                 if not messagebox.askyesno(
@@ -2522,29 +2576,31 @@ class ProjectProfileWizard(tk.Toplevel):
                 ):
                     self.notebook.select(self.tabs[3])
                     return
-            settings = self._settings_from_ui()
-            if self.working.profile_last_validated_pages:
-                settings.profile_last_validated_pages = list(self.working.profile_last_validated_pages)
-            copy_settings(self.parent.settings, settings)
-            self.parent.settings.to_json(settings_path(self.project.root))
-            write_project_profile(
-                project_profile_path(self.project.root),
-                self.parent.settings,
-                self.parent.settings.dictionary_profile_id,
-                force=True,
-            )
-            self.parent.sync_quick_settings()
-            self.parent.redraw()
-            self.parent.status_var.set("Project Profile 已保存并应用")
+            if not self._save_profile_progress(
+                finalize=True,
+                apply_runtime=True,
+                status="Project Profile 已保存并应用",
+            ):
+                return
             self.destroy()
         except Exception as exc:
             messagebox.showerror("Project Profile 保存失败", str(exc), parent=self)
 
     def _close_without_save(self) -> None:
-        if self.new_project and int(getattr(self.parent.settings, "profile_setup_version", 0) or 0) < PROFILE_SETUP_VERSION:
+        # 关闭也先保存当前页；因此误关窗口不会丢掉尚未切页的输入。
+        if not self._save_profile_progress(
+            finalize=False,
+            apply_runtime=True,
+            status="Project Profile 当前内容已保存",
+        ):
+            return
+        if self.new_project and int(
+            getattr(self.parent.settings, "profile_setup_version", 0) or 0
+        ) < PROFILE_SETUP_VERSION:
             if not messagebox.askyesno(
                 "尚未完成 Project Profile",
-                "当前项目尚未完成 Profile 设置。确定先关闭向导吗？以后可从【项目Profile】继续。",
+                "当前内容已经保存。项目 Profile 尚未完整确认，确定先关闭吗？"
+                "以后可从【项目Profile】继续。",
                 parent=self,
             ):
                 return
