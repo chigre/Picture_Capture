@@ -167,6 +167,25 @@ def probable_body_page_indices(
     return candidates or pool
 
 
+def suggested_body_page_range(images: Iterable[object]) -> str:
+    """Suggest a 1-based, zero-padded body-page range for Project Profile.
+
+    The suggestion uses the same conservative filename filtering as automatic
+    representative-page sampling. Existing user-entered metadata should always
+    take precedence over this initial suggestion.
+    """
+    items = list(images)
+    if not items:
+        return ""
+    candidates = probable_body_page_indices(items)
+    if not candidates:
+        return ""
+    width = max(4, len(str(len(items))))
+    first = min(candidates) + 1
+    last = max(candidates) + 1
+    return f"{first:0{width}d}-{last:0{width}d}"
+
+
 def representative_page_indices(
     images: Iterable[object],
     target: int = 6,
