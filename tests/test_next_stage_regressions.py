@@ -685,13 +685,17 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "self.profile_paned.add(left_panel, weight=40)" in text
     assert "self.profile_paned.add(right_panel, weight=60)" in text
     assert "self.profile_paned.sashpos" in text
-    assert "ProfileYellow.TLabelframe" in text
+    assert "ProfileYellow.TLabelframe" not in text
+    assert "fill=(255, 215, 0, 105)" in text
     assert 'text="A 页排除宽度%"' in text
     assert 'text="B 页排除宽度%"' in text
     assert "s.profile_side_percent_a" in text
     assert "s.profile_side_percent_b" in text
+    assert 'text="◀ 上一页"' in text
     assert 'text="适合高度"' in text
     assert 'text="适合宽度"' in text
+    assert 'text="下一页 ▶"' in text
+    assert "默认适合高度；适合宽度时图片横向占满" not in text
     assert 'self.validation_fit_mode = "height"' in text
     assert "def _set_validation_fit" in text
     assert "索引语言（2 位）" in text
@@ -734,6 +738,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "编号开头（1. / 2. / …）可以作为词头" in text
     assert "词头专属性（当前结构的视觉证据）" in text
     assert 'text="栏左缘容差："' in text
+    assert "允许词头起点偏离栏左边界的最大距离；越小越严格" in text
     assert 'text="文字大小倍率 ≥"' in text
     assert 'text="粗体倍率 ≥"' in text
     assert 'text="候选强度 ≥"' in text
@@ -754,6 +759,12 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "s.paddle_height_ratio = max(" in text
     assert "s.paddle_boldness_ratio = max(" in text
     assert "s.paddle_min_candidate_score = max(" in text
+    assert "def _persist_current_profile" in text
+    assert "def _save_profile_progress" in text
+    assert "if not self._save_profile_progress():" in text
+    assert 'text="关闭"' in text
+    assert "当前内容已经保存。项目 Profile 尚未完整确认" in text
+    assert "settings.profile_setup_version = int(" in text
     assert 'header_mode == "auto" and geometry.top > 0' in text
     assert 'elif header_mode == "present"' in text
     validate_start = text.index("    def validate_profile(")
