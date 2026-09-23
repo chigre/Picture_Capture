@@ -16,7 +16,8 @@ from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import refine_existing_entries
 from picture_capture.profile_semantics import (
-    apply_headword_profile, apply_reading_choice, effective_page_settings,
+    apply_headword_profile, apply_reading_choice, configured_body_page_indices,
+    effective_page_settings,
     entry_allowed_by_page_template, excluded_source_side, ordered_headword_profiles,
     page_template_analysis_image, probable_body_page_indices, READING_LABELS,
     reading_choice_from_settings, representative_page_indices, sample_page_indices,
@@ -417,6 +418,20 @@ def test_project_profile_samples_front_middle_back_and_keeps_pairs():
     assert sample_page_indices(24, 4) == [0, 1, 12, 23]
     assert sample_page_indices(4, 6) == [0, 1, 2, 3]
 
+
+
+def test_project_profile_configured_body_range_has_priority():
+    images = [Path(f"{number:04d}.png") for number in range(1, 101)]
+    allowed = configured_body_page_indices(len(images), "10-80")
+    assert allowed[0] == 9
+    assert allowed[-1] == 79
+    samples = representative_page_indices(images, 6, allowed)
+    assert len(samples) == 6
+    assert min(samples) >= 9
+    assert max(samples) <= 79
+
+    assert configured_body_page_indices(len(images), "10至80") == allowed
+    assert configured_body_page_indices(len(images), "10-800") == []
 
 
 def test_project_profile_representatives_avoid_obvious_front_and_back_matter():
