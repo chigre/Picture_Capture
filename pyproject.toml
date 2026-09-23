@@ -45,7 +45,22 @@ required-version = ">=0.11"
 where = ["src"]
 
 [tool.setuptools.package-data]
-picture_capture = ["data/*.json", "data/profile_previews/*.jpg", "data/headword_examples/*.jpg"]
+picture_capture = [
+    "data/*.json",
+    "data/profile_previews/*.jpg",
+    "data/headword_examples/*.jpg",
+    "data/headword_examples/*.png",
+    "data/headword_examples/*.jpeg",
+    "data/headword_examples/*.webp",
+    "data/headword_examples/recommended_current/*.jpg",
+    "data/headword_examples/recommended_current/*.png",
+    "data/headword_examples/recommended_current/*.jpeg",
+    "data/headword_examples/recommended_current/*.webp",
+    "data/headword_examples/extended/*.jpg",
+    "data/headword_examples/extended/*.png",
+    "data/headword_examples/extended/*.jpeg",
+    "data/headword_examples/extended/*.webp",
+]
 
 [tool.ruff]
 target-version = "py310"
