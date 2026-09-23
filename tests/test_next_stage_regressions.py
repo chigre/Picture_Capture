@@ -101,6 +101,13 @@ def test_recent_project_details_expose_requested_columns(tmp_path):
     assert detail["image_count"] == 3
     assert detail["path"] == str(project)
     assert detail["last_edited"] != "old"
+    missing = recent_project_details({
+        "name": "missing",
+        "path": str(tmp_path / "missing"),
+        "opened_at": "2026-09-23T08:11:05.111954+00:00",
+    })
+    assert "T" not in str(missing["last_edited"])
+    assert len(str(missing["last_edited"])) == 16
     assert detail["last_page"] == "page2.png"
     assert detail["last_page_index"] == 1
     assert detail["position_text"] == "第 2 / 3 页"
@@ -121,7 +128,7 @@ def test_recent_projects_dialog_uses_modern_card_information_hierarchy():
     assert '"可用" if exists else "路径失效"' in text
     assert "张图片" in text
     assert "上次停留：" in text
-    assert "最后编辑：" in text
+    assert "最近活动：" in text
     assert "复制项目路径" in text
     assert "从最近项目移除（不删除文件）" in text
     assert "显示列" not in text
