@@ -4601,7 +4601,7 @@ def test_v21116_review_ui_exposes_editable_digit_map_and_grouped_vowels():
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
     assert 'text="数字替换映射"' in review
-    assert 'self.accent_panel_title = tk.StringVar(value="▶ 变音字符")' in review
+    assert 'self.accent_panel_title = tk.StringVar(value="▸ 变音字符")' in review
     assert 'DIGIT_KEYS = "1234567890"' in review
     assert '("´", ("á", "é", "í", "ó", "ú"))' in review
     assert '("`", ("à", "è", "ì", "ò", "ù"))' in review
@@ -4648,8 +4648,46 @@ def test_v21117_review_layout_matches_compact_workflow():
     assert 'text="选择文件"' in review
     assert 'text="从所选词开始填充至本页结束"' in review
     assert 'self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)' in review
-    assert 'self.digit_panel_title = tk.StringVar(value="▶ 数字替换映射")' in review
-    assert 'self.accent_panel_title = tk.StringVar(value="▶ 变音字符")' in review
+    assert 'self.digit_panel_title = tk.StringVar(value="▸ 数字替换映射")' in review
+    assert 'self.accent_panel_title = tk.StringVar(value="▸ 变音字符")' in review
+
+
+def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
+    from pathlib import Path
+    import inspect
+    import picture_capture.app as app_module
+
+    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    start = text.index("class ReviewWindow")
+    end = text.index("class OCRConflictReviewDialog", start)
+    review = text[start:end]
+
+    styles_start = review.index("    def _configure_review_styles(")
+    styles_end = review.index("    def _review_flat_button(", styles_start)
+    styles = review[styles_start:styles_end]
+    assert "theme_use(" not in styles
+    assert '"PCR.Surface.TFrame"' in styles
+    assert '"PCR.Section.TLabelframe"' in styles
+    assert '"PCR.Compact.TButton"' in styles
+
+    build_start = review.index("    def _build(self) -> None:")
+    build_end = review.index("    def _toggle_review_panel(", build_start)
+    build = review[build_start:build_end]
+    assert 'panes.add(left, weight=3)' in build
+    assert 'panes.add(right, weight=2)' in build
+    assert 'text="上\\n一\\n页"' in build and 'text="下\\n一\\n页"' in build
+    assert 'self._review_section_frame(' in build
+    assert 'style="PCR.Header.TLabel"' in build
+    assert 'relief="sunken"' not in build
+    assert 'relief="groove"' not in build
+
+    render_start = review.index("    def render_rows(")
+    render_end = review.index("    def _candidate_for_entry(", render_start)
+    render = review[render_start:render_end]
+    assert 'editor_bg = "#b3fddd" if entry.word in words else "#fce5e8"' in render
+    assert 'relief="flat"' in render
+    assert 'highlightthickness=1' in render
+    assert 'text="[X]"' in render
 
 
 def test_v21117_review_title_contains_page_and_progress():
