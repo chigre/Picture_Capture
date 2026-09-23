@@ -288,9 +288,19 @@ def _parse_cjk_marker_pinyin_headword(
     if not _is_chinese_ocr(settings):
         return None
     parse_text, repairs = _repair_headword_ocr(text)
-    markers = tuple(sorted((m for m in profile.entry_leading_symbols if m), key=len, reverse=True))
-    if not markers:
-        markers = ("○", "●", "◦", "•", "〓")
+    if int(getattr(settings, "profile_parser_controls_version", 0) or 0) >= 1:
+        generic_markers = ("○", "●", "◦", "•", "〓", "◆", "◇", "►", "▶")
+        profile_markers = (
+            tuple(m for m in profile.entry_leading_symbols if m)
+            if profile.uses_parser("cjk_marker_pinyin") else ()
+        )
+        markers = tuple(
+            sorted(dict.fromkeys(generic_markers + profile_markers), key=len, reverse=True)
+        )
+    else:
+        markers = tuple(sorted((m for m in profile.entry_leading_symbols if m), key=len, reverse=True))
+        if not markers:
+            markers = ("○", "●", "◦", "•", "〓")
     marker_pattern = "|".join(re.escape(m) for m in markers)
     match = re.match(
         rf"^\s*(?P<marker>{marker_pattern})\s*(?P<lemma>[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]{{1,24}})",
