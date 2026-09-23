@@ -139,17 +139,18 @@ HEADWORD_HELP_LINES = {
 
 # One compact atlas keeps the packaged classic examples small while still
 # showing real, locally cropped dictionary material in the Wizard.
-# Atlas canvas: 1080 x 474; each crop is 360 x 158.
+# Atlas canvas: 900 x 395. Cells are ~300 x 132, optimized for the
+# right-hand preview pane rather than for full-page viewing.
 HEADWORD_EXAMPLE_ATLAS_CROPS = {
-    "latin_regular_NewApproach": (0, 0, 360, 158),
-    "latin_regular_LDER": (360, 0, 720, 158),
-    "numbered_prefix_RUIGO": (720, 0, 1080, 158),
-    "cjk_visual_HZYLDZD": (0, 158, 360, 316),
-    "cjk_visual_XDHYCD": (360, 158, 720, 316),
-    "cjk_visual_TimesCED": (720, 158, 1080, 316),
-    "cjk_visual_shueisha": (0, 316, 360, 474),
-    "edge_visual_regular_XAHDCD": (360, 316, 720, 474),
-    "marker_prefixed_HanYi": (720, 316, 1080, 474),
+    "latin_regular_NewApproach": (0, 0, 300, 132),
+    "latin_regular_LDER": (300, 0, 600, 132),
+    "numbered_prefix_RUIGO": (600, 0, 900, 132),
+    "cjk_visual_HZYLDZD": (0, 132, 300, 263),
+    "cjk_visual_XDHYCD": (300, 132, 600, 263),
+    "cjk_visual_TimesCED": (600, 132, 900, 263),
+    "cjk_visual_shueisha": (0, 263, 300, 395),
+    "edge_visual_regular_XAHDCD": (300, 263, 600, 395),
+    "marker_prefixed_HanYi": (600, 263, 900, 395),
 }
 
 
