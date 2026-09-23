@@ -858,14 +858,29 @@ class ProjectProfileWizard(tk.Toplevel):
             else:
                 failures += 1
                 ttk.Label(cell, text=f"测试失败：{error}", wraplength=430).pack(anchor="w")
-        self.working.profile_last_validated_pages = validated_pages
+        # Treat the Profile as validated only when every representative page
+        # completed successfully. Partial success is useful diagnostically but
+        # must not survive as a misleading "validated" state.
+        self.working.profile_last_validated_pages = validated_pages if failures == 0 else []
         if failures:
-            self.validation_status_var.set(f"完成：{len(results)-failures}/{len(results)} 页成功；请检查失败页")
+            self.validation_status_var.set(
+                f"完成：{len(results)-failures}/{len(results)} 页成功；请检查失败页后重新测试"
+            )
         else:
             self.validation_status_var.set(f"完成：{len(results)} 页均已测试，可确认或返回调整")
 
     def save_and_close(self) -> None:
         try:
+            if not self.working.profile_last_validated_pages:
+                if not messagebox.askyesno(
+                    "Profile 尚未完整验证",
+                    "当前设置尚未通过全部代表页测试，或测试后又修改了设置。\n\n"
+                    "建议先到【5 测试与确认】运行“测试当前 Profile”。"
+                    "是否仍然保存并使用当前设置？",
+                    parent=self,
+                ):
+                    self.notebook.select(self.tabs[4])
+                    return
             settings = self._settings_from_ui()
             if self.working.profile_last_validated_pages:
                 settings.profile_last_validated_pages = list(self.working.profile_last_validated_pages)
