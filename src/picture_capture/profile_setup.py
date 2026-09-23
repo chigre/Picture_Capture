@@ -179,15 +179,18 @@ class ProjectProfileWizard(tk.Toplevel):
         self.profile_label_to_key = dict(self.profile_choices)
         self.headword_profile_var = tk.StringVar(value=self._profile_label_for_key(s.dictionary_profile_id))
 
-        traced = (
+        detection_vars = (
             self.reading_var, self.columns_var, self.separator_var,
             self.header_mode_var, self.footer_mode_var, self.side_mode_var,
             self.first_variant_var, self.header_percent_var,
             self.footer_percent_var, self.side_percent_var, self.ocr_language_var,
-            self.index_language_var, self.content_language_var,
         )
-        for var in traced:
+        for var in detection_vars:
             var.trace_add("write", lambda *_args: self.after_idle(self._profile_input_changed))
+        # Project metadata changes the summary only; it does not invalidate a
+        # successful recognition test.
+        for var in (self.index_language_var, self.content_language_var):
+            var.trace_add("write", lambda *_args: self.after_idle(self._refresh_summary))
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self, padding=12)
@@ -604,8 +607,8 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_summary()
 
     def _custom_name_changed(self) -> None:
-        self._profile_revision += 1
-        self._mark_validation_stale()
+        # Renaming the custom structure is presentation metadata; recognition
+        # settings are unchanged, so a completed Profile test remains valid.
         current = self._current_profile_key()
         self.profile_choices = ordered_headword_profiles(self.custom_name_var.get())
         self.profile_label_to_key = dict(self.profile_choices)
