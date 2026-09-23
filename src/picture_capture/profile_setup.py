@@ -3,7 +3,6 @@ from __future__ import annotations
 import queue
 import threading
 from dataclasses import replace
-from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -18,7 +17,7 @@ from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from .image_utils import normalize_page_rgb
 from .layout_detection import aggregate_layout_estimates, detect_layout_parameters
 from .models import AppSettings
-from .processing import column_index, detect_entries
+from .processing import detect_entries
 from .profile_semantics import (
     PROFILE_SETUP_VERSION,
     READING_LABELS,
