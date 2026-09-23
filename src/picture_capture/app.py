@@ -4065,7 +4065,7 @@ class ReviewWindow(tk.Toplevel):
             photo = ImageTk.PhotoImage(crop)
             self.thumbnails.append(photo)
             self.editor_crop_widths.append(crop.width)
-            picture = ttk.Label(self.rows, image=photo)
+            picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
             picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
             var = tk.StringVar(value=entry.word)
             # Review zoom changes only the cropped line image.  Text-entry font
@@ -4085,13 +4085,18 @@ class ReviewWindow(tk.Toplevel):
             editor_width_chars = max(8, min(140, round(crop.width / char_px)))
             editor_bg = "#b3fddd" if entry.word in words else "#fce5e8"
             editor_frame = tk.Frame(
-                self.rows, bg=editor_bg, bd=1, relief="sunken",
-                highlightthickness=2, highlightbackground=editor_bg, highlightcolor=editor_bg,
+                self.rows,
+                bg=editor_bg,
+                bd=0,
+                relief="flat",
+                highlightthickness=1,
+                highlightbackground=editor_bg,
+                highlightcolor=editor_bg,
             )
             delete_button = tk.Button(
                 editor_frame, text="[X]", width=3, takefocus=False,
                 relief="flat", bd=0, padx=1, pady=0, cursor="hand2",
-                fg="#8b1a1a", bg="#f2f2f2", activebackground="#ffd9d9",
+                fg="#8b1a1a", bg="#f3eeee", activebackground="#f4d9d9",
                 command=lambda i=index: self.delete_review_entry(i),
             )
             delete_button.grid(row=0, column=0, sticky="nsw", padx=(0, 2))
@@ -4139,6 +4144,7 @@ class ReviewWindow(tk.Toplevel):
             simplified_search_button = tk.Button(
                 editor_frame, text="网查", width=4, takefocus=False,
                 relief="flat", bd=0, padx=2, pady=0, cursor="hand2",
+                bg="#eceff3", activebackground="#e1e5ea", foreground="#30343b",
                 command=lambda i=index: self.lookup_simplified_online(i),
             )
             simplified_search_button.grid(row=0, column=3, sticky="ns", padx=(4, 0))
@@ -4305,7 +4311,11 @@ class ReviewWindow(tk.Toplevel):
             normal_bg = str(frame.cget("bg"))
             border = "#d32f2f" if mismatch else normal_bg
             try:
-                frame.configure(highlightthickness=2, highlightbackground=border, highlightcolor=border)
+                frame.configure(
+                    highlightthickness=(2 if mismatch else 1),
+                    highlightbackground=border,
+                    highlightcolor=border,
+                )
             except tk.TclError:
                 pass
 
@@ -4333,16 +4343,19 @@ class ReviewWindow(tk.Toplevel):
                 button = tk.Button(
                     self.ocr_options, text=f"{short_label}: {word}",
                     command=lambda value=word: self.use_ocr_word(value),
-                    anchor="w", justify="left", relief="groove", bd=1, padx=4, pady=1,
+                    anchor="w", justify="left", relief="flat", bd=0, padx=5, pady=2,
                     bg=bg, activebackground=bg, foreground="#202020",
+                    highlightthickness=1, highlightbackground=bg,
                 )
                 button.grid(row=0, column=slot_index, sticky="ew", padx=((0 if slot_index == 0 else 3), 0))
                 self.ocr_result_buttons.append((button, word))
             else:
                 button = tk.Button(
                     self.ocr_options, text=f"{short_label}: -", state="disabled",
-                    anchor="w", justify="left", relief="groove", bd=1, padx=4, pady=1,
-                    disabledforeground="#777777",
+                    anchor="w", justify="left", relief="flat", bd=0, padx=5, pady=2,
+                    bg="#f1f2f4", activebackground="#f1f2f4",
+                    disabledforeground="#777777", highlightthickness=1,
+                    highlightbackground="#e1e4e8",
                 )
                 button.grid(row=0, column=slot_index, sticky="ew", padx=((0 if slot_index == 0 else 3), 0))
             self.ocr_options.columnconfigure(slot_index, weight=1)
