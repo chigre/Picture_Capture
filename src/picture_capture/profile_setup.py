@@ -73,12 +73,6 @@ SIDE_LABEL_TO_VALUE = {
     "A/B 页外侧交替": "outer",
     "A/B 页内侧交替": "inner",
 }
-PAIR_LABEL_TO_VALUE = {
-    "所有页面相同": "same",
-    "A/B 页交替": "alternate",
-}
-
-
 def _label_for_value(mapping: dict[str, str], value: str, fallback: str) -> str:
     for label, mapped in mapping.items():
         if mapped == value:
@@ -161,11 +155,6 @@ class ProjectProfileWizard(tk.Toplevel):
             str(getattr(s, "profile_side_content_mode", "none") or "none"),
             "无页边占位内容",
         ))
-        self.page_pair_var = tk.StringVar(value=_label_for_value(
-            PAIR_LABEL_TO_VALUE,
-            str(getattr(s, "profile_page_pair_mode", "same") or "same"),
-            "所有页面相同",
-        ))
         self.first_variant_var = tk.StringVar(value=str(getattr(s, "profile_first_page_variant", "A") or "A"))
         self.header_percent_var = tk.DoubleVar(value=float(getattr(s, "profile_header_percent", 6.0)))
         self.footer_percent_var = tk.DoubleVar(value=float(getattr(s, "profile_footer_percent", 5.0)))
@@ -184,7 +173,7 @@ class ProjectProfileWizard(tk.Toplevel):
         traced = (
             self.reading_var, self.columns_var, self.separator_var,
             self.header_mode_var, self.footer_mode_var, self.side_mode_var,
-            self.page_pair_var, self.first_variant_var, self.header_percent_var,
+            self.first_variant_var, self.header_percent_var,
             self.footer_percent_var, self.side_percent_var, self.ocr_language_var,
             self.index_language_var, self.content_language_var,
         )
@@ -326,20 +315,16 @@ class ProjectProfileWizard(tk.Toplevel):
         tk.Spinbox(right, from_=0, to=30, increment=0.5, width=6, textvariable=self.side_percent_var).grid(
             row=5, column=1, sticky="w"
         )
-        ttk.Label(right, text="页面模板：").grid(row=6, column=0, sticky="e", pady=(10, 4))
-        ttk.Combobox(
-            right, textvariable=self.page_pair_var, state="readonly", width=22,
-            values=tuple(PAIR_LABEL_TO_VALUE.keys()),
-        ).grid(row=6, column=1, sticky="w", pady=(10, 4))
-        ttk.Label(right, text="项目第一张图：").grid(row=7, column=0, sticky="e")
-        ttk.Combobox(
+        ttk.Label(right, text="A/B 起始页：").grid(row=6, column=0, sticky="e", pady=(10, 4))
+        self.first_variant_combo = ttk.Combobox(
             right, textvariable=self.first_variant_var, state="readonly", width=8, values=("A", "B"),
-        ).grid(row=7, column=1, sticky="w")
+        )
+        self.first_variant_combo.grid(row=6, column=1, sticky="w", pady=(10, 4))
         ttk.Label(
             right,
-            text="“外侧交替”默认 A 页排除左侧、B 页排除右侧；“内侧交替”相反。若项目第一张扫描实际属于 B 页，选择 B 即可整体翻转。",
+            text="仅“外侧/内侧交替”需要 A/B：默认 A 页左侧、B 页右侧；若第一张扫描实际属于 B 页，选择 B 即可整体翻转。",
             foreground="#666666", wraplength=430,
-        ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
     @staticmethod
     def _mode_row(
@@ -540,8 +525,8 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_side_content_mode = SIDE_LABEL_TO_VALUE.get(
             self.side_mode_var.get(), "none"
         )
-        s.profile_page_pair_mode = PAIR_LABEL_TO_VALUE.get(
-            self.page_pair_var.get(), "same"
+        s.profile_page_pair_mode = (
+            "alternate" if s.profile_side_content_mode in {"outer", "inner"} else "same"
         )
         s.profile_first_page_variant = self.first_variant_var.get()
         s.profile_header_percent = max(0.0, min(35.0, float(self.header_percent_var.get())))
