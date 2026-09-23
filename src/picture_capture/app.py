@@ -273,6 +273,11 @@ class VerticalWordText(tk.Text):
         self.tag_add("sel", self._entry_index(start), self._entry_index(end))
 
 
+def vertical_marker_contact_gap(marker_line_width: int) -> int:
+    """Offset from marker centreline so the editor border touches its painted edge."""
+    return max(1, (max(1, int(marker_line_width)) + 1) // 2)
+
+
 def vertical_overlay_layout(
     marker_x: float,
     marker_y: float,
@@ -8044,7 +8049,7 @@ class PictureCaptureApp(tk.Tk):
             # Touch the visible marker stroke with no empty gap.  editor_x is
             # the marker centreline, so offset by exactly half the painted line
             # width to place the widget border against the marker edge.
-            marker_gap = max(1, (marker_line_width + 1) // 2)
+            marker_gap = vertical_marker_contact_gap(marker_line_width)
             (
                 vertical_box,
                 vertical_window,
