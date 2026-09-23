@@ -820,37 +820,60 @@ class ProjectProfileWizard(tk.Toplevel):
             foreground="#555555",
         ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
-        specificity = ttk.LabelFrame(tab, text="词头专属性", padding=10)
-        specificity.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        structures = ttk.LabelFrame(
+            tab, text="允许的词头结构（决定哪些 parser 通道开放）", padding=10,
+        )
+        structures.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        structures.columnconfigure(0, weight=1)
+        self.headword_structure_frame = structures
+        for row, (label, variable) in enumerate((
+            ("普通左缘短词可以作为词头", self.ordinary_left_edge_var),
+            ("【括号词】可以作为词头", self.cjk_allow_bracketed_var),
+            ("大字单字可以作为词头", self.cjk_allow_single_var),
+            ("固定符号开头（○ / ● / ◆ …）可以作为词头", self.marker_prefix_var),
+            ("编号开头（1. / 2. / …）可以作为词头", self.numbered_prefix_var),
+        )):
+            ttk.Checkbutton(
+                structures, text=label, variable=variable,
+                command=self._headword_structure_changed,
+            ).grid(row=row, column=0, sticky="w", pady=2)
+        ttk.Label(
+            structures,
+            text="这里决定“谁有资格成为候选”。取消某一项后，该结构不会再靠后续阈值被误救回来。",
+            foreground="#666666", wraplength=self._wizard_content_width,
+        ).grid(row=5, column=0, sticky="w", pady=(6, 0))
+        self.headword_structure_summary_var = tk.StringVar(value="")
+        ttk.Label(
+            structures, textvariable=self.headword_structure_summary_var,
+            foreground="#555555", wraplength=self._wizard_content_width,
+        ).grid(row=6, column=0, sticky="w", pady=(4, 0))
+
+        specificity = ttk.LabelFrame(tab, text="词头专属性（决定候选要满足多强的证据）", padding=10)
+        specificity.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(12, 0))
         specificity.columnconfigure(0, weight=1)
         self.headword_specificity_frame = specificity
-        self.cjk_specificity_widgets: list[ttk.Checkbutton] = []
         for row, (label, variable) in enumerate((
-            ("大字单字可作为词头", self.cjk_allow_single_var),
-            ("【括号词】可作为词头", self.cjk_allow_bracketed_var),
             ("必须靠近栏左缘", self.cjk_require_left_edge_var),
             ("释义正文中也经常出现【括号词】", self.cjk_brackets_in_body_var),
             ("只有视觉明显突出时才把单字/括号词当词头", self.cjk_require_visual_var),
         )):
-            widget = ttk.Checkbutton(
+            ttk.Checkbutton(
                 specificity, text=label, variable=variable,
                 command=self._headword_specificity_changed,
-            )
-            widget.grid(row=row, column=0, sticky="w", pady=2)
-            self.cjk_specificity_widgets.append(widget)
+            ).grid(row=row, column=0, sticky="w", pady=2)
         ttk.Label(
             specificity,
-            text="这些选项只在“CJK 大字/括号词头”结构下生效；目的是表达版式事实，而不是让你手调 OCR 阈值。",
+            text="这组条件只在勾选了【括号词】或“大字单字”时显示；用于收紧证据，不需要理解 score、boldness ratio 等内部参数。",
             foreground="#666666", wraplength=self._wizard_content_width,
-        ).grid(row=5, column=0, sticky="w", pady=(6, 0))
+        ).grid(row=3, column=0, sticky="w", pady=(6, 0))
         self.headword_tuning_status_var = tk.StringVar(value="")
         ttk.Label(
             specificity, textvariable=self.headword_tuning_status_var,
             foreground="#555555",
-        ).grid(row=6, column=0, sticky="w", pady=(4, 0))
+        ).grid(row=4, column=0, sticky="w", pady=(4, 0))
 
         help_box = ttk.LabelFrame(tab, text="理解方式", padding=10)
-        help_box.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(14, 0))
+        help_box.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(14, 0))
         help_box.columnconfigure(0, weight=1)
         self.headword_help_frame = help_box
 
@@ -1014,13 +1037,29 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_language_summary()
         self._refresh_summary()
 
+    def _set_structure_defaults_for_profile(self, key: str) -> None:
+        defaults = recommended_headword_structures(key)
+        self.ordinary_left_edge_var.set(defaults["ordinary_left_edge"])
+        self.cjk_allow_bracketed_var.set(defaults["cjk_bracketed"])
+        self.cjk_allow_single_var.set(defaults["cjk_single_visual"])
+        self.marker_prefix_var.set(defaults["marker_prefix"])
+        self.numbered_prefix_var.set(defaults["numbered_prefix"])
+
     def _headword_changed(self) -> None:
-        # A different structure starts from its own balanced defaults; any
-        # earlier "偏多/偏少" tuning belonged to the previous structure.
+        # Selecting a structure preset seeds human-readable parser checkboxes;
+        # users may then customize them without opening advanced parameters.
         self.headword_tuning_level_var.set(0)
+        self._set_structure_defaults_for_profile(self._current_profile_key())
         self._profile_revision += 1
         self._mark_validation_stale()
         self._refresh_headword_description()
+        self._refresh_summary()
+
+    def _headword_structure_changed(self) -> None:
+        self._profile_revision += 1
+        self._mark_validation_stale()
+        self._refresh_headword_structure_summary()
+        self._refresh_headword_specificity_visibility()
         self._refresh_summary()
 
     def _headword_specificity_changed(self) -> None:
@@ -1028,6 +1067,32 @@ class ProjectProfileWizard(tk.Toplevel):
         self._mark_validation_stale()
         self._refresh_headword_tuning_status()
         self._refresh_summary()
+
+    def _refresh_headword_structure_summary(self) -> None:
+        if not hasattr(self, "headword_structure_summary_var"):
+            return
+        active: list[str] = []
+        if self.ordinary_left_edge_var.get():
+            active.append("普通左缘短词")
+        if self.cjk_allow_bracketed_var.get():
+            active.append("【括号词】")
+        if self.cjk_allow_single_var.get():
+            active.append("大字单字")
+        if self.marker_prefix_var.get():
+            active.append("固定符号")
+        if self.numbered_prefix_var.get():
+            active.append("编号前缀")
+        self.headword_structure_summary_var.set(
+            "当前允许：" + ("、".join(active) if active else "无（不会自动生成词头）")
+        )
+
+    def _refresh_headword_specificity_visibility(self) -> None:
+        if not hasattr(self, "headword_specificity_frame"):
+            return
+        if self.cjk_allow_bracketed_var.get() or self.cjk_allow_single_var.get():
+            self.headword_specificity_frame.grid()
+        else:
+            self.headword_specificity_frame.grid_remove()
 
     def _refresh_headword_tuning_status(self) -> None:
         if not hasattr(self, "headword_tuning_status_var"):
@@ -1076,11 +1141,8 @@ class ProjectProfileWizard(tk.Toplevel):
             return
         self.custom_name_entry.configure(state="normal" if key == "custom" else "disabled")
         self.headword_description_var.set(profile.description)
-        if hasattr(self, "headword_specificity_frame"):
-            if key == "cjk_visual":
-                self.headword_specificity_frame.grid()
-            else:
-                self.headword_specificity_frame.grid_remove()
+        self._refresh_headword_structure_summary()
+        self._refresh_headword_specificity_visibility()
         self._refresh_headword_tuning_status()
 
         for child in self.headword_examples_frame.winfo_children():
@@ -1636,7 +1698,7 @@ class ProjectProfileWizard(tk.Toplevel):
         direction = "收紧" if result == "too_many" else "放宽"
         if new_level == old_level:
             self.validation_feedback_var.set(
-                f"已经达到{direction}上限（{new_level:+d}）；可在第③步进一步修改词头专属性。"
+                f"已经达到自动{direction}上限（{new_level:+d}）；请在第③步直接勾选/取消不属于本词典的词头结构。"
             )
         else:
             self.validation_feedback_var.set(
