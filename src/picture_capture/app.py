@@ -7866,10 +7866,17 @@ class PictureCaptureApp(tk.Tk):
                 tile_text = (abbreviation or full_name or "?")[:2].upper()
                 preview_path = Path(str(detail.get("preview_path") or ""))
                 cover_source = str(detail.get("cover_source") or "none")
-                tile = tk.Label(
+                tile_holder = tk.Frame(
                     card,
                     width=76,
                     height=96,
+                    bg="#f4f6f8" if exists else "#f2f2f2",
+                    bd=0,
+                    relief="flat",
+                )
+                tile_holder.grid_propagate(False)
+                tile = tk.Label(
+                    tile_holder,
                     bg="#f4f6f8" if exists else "#f2f2f2",
                     fg="#315a97" if exists else "#777777",
                     font=card_title_font,
@@ -7877,6 +7884,7 @@ class PictureCaptureApp(tk.Tk):
                     relief="flat",
                     compound="center",
                 )
+                tile.place(x=0, y=0, relwidth=1, relheight=1)
                 cover_loaded = False
                 if exists and preview_path.is_file():
                     try:
@@ -7900,7 +7908,9 @@ class PictureCaptureApp(tk.Tk):
                         text=tile_text,
                         bg="#eaf0fb" if exists else "#f2f2f2",
                     )
-                tile.grid(row=0, column=0, rowspan=3, sticky="n", padx=(0, 12))
+                tile_holder.grid(
+                    row=0, column=0, rowspan=3, sticky="n", padx=(0, 12)
+                )
 
                 if cover_source == "cover":
                     cover_tip = (
@@ -7919,6 +7929,7 @@ class PictureCaptureApp(tk.Tk):
                         "（也支持 PNG/JPEG/WebP）作为项目封面；"
                         "该文件不会计入正文图片。"
                     )
+                self._attach_tooltip(tile_holder, cover_tip)
                 self._attach_tooltip(tile, cover_tip)
 
                 content = ttk.Frame(card)
@@ -7991,7 +8002,7 @@ class PictureCaptureApp(tk.Tk):
 
                 if exists:
                     for widget in (
-                        card, tile, content, title_row, name_label,
+                        card, tile_holder, tile, content, title_row, name_label,
                         meta_label, path_label,
                     ):
                         bind_open(widget, root, row)
