@@ -70,6 +70,7 @@ HEADER_LABEL_TO_VALUE = {
     "有页眉，排除固定区域": "present",
 }
 FOOTER_LABEL_TO_VALUE = {
+    "自动检测页尾": "auto",
     "不排除页尾": "none",
     "有页尾，排除固定区域": "present",
 }
@@ -154,10 +155,8 @@ class ProjectProfileWizard(tk.Toplevel):
             "自动检测页眉",
         ))
         footer_value = str(getattr(s, "profile_footer_mode", "auto") or "auto")
-        if footer_value == "auto":
-            footer_value = "none"
         self.footer_mode_var = tk.StringVar(value=_label_for_value(
-            FOOTER_LABEL_TO_VALUE, footer_value, "不排除页尾",
+            FOOTER_LABEL_TO_VALUE, footer_value, "自动检测页尾",
         ))
         self.side_mode_var = tk.StringVar(value=_label_for_value(
             SIDE_LABEL_TO_VALUE,
@@ -660,7 +659,7 @@ class ProjectProfileWizard(tk.Toplevel):
             self.header_mode_var.get(), "auto"
         )
         s.profile_footer_mode = FOOTER_LABEL_TO_VALUE.get(
-            self.footer_mode_var.get(), "none"
+            self.footer_mode_var.get(), "auto"
         )
         s.profile_side_content_mode = SIDE_LABEL_TO_VALUE.get(
             self.side_mode_var.get(), "none"
