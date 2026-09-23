@@ -646,7 +646,7 @@ class ProjectProfileWizard(tk.Toplevel):
         separators = sum(1 for estimate in estimates if getattr(estimate, "separator_x", None) is not None)
         separator = "present" if separators > len(estimates) / 2 else "absent"
         self._analysis_suggestion = {
-            "columns": int(aggregate["columns"]),
+            **{name: int(value) for name, value in aggregate.items()},
             "separator": separator,
         }
         sep_text = "有中央分隔线" if separator == "present" else "无明确中央分隔线"
@@ -655,12 +655,23 @@ class ProjectProfileWizard(tk.Toplevel):
             f"自动建议：{aggregate['columns']}栏 · {sep_text} · {consistency}{error_text}"
         )
         self.apply_analysis_button.configure(state="normal")
+        if self._analysis_auto_apply:
+            self.apply_analysis_suggestion()
+            self.analysis_suggestion_var.set(
+                f"已采用代表页建议：{aggregate['columns']}栏 · {sep_text} · {consistency}{error_text}；可直接修改。"
+            )
+        self._analysis_auto_apply = False
 
     def apply_analysis_suggestion(self) -> None:
         if not self._analysis_suggestion:
             return
-        self.columns_policy_var.set("fixed")
         self.columns_var.set(int(self._analysis_suggestion.get("columns", self.columns_var.get())))
+        for name in (
+            "start_y", "bottom_y", "manual_x", "column_width", "gutter",
+            "character_height", "row_padding",
+        ):
+            if name in self._analysis_suggestion:
+                setattr(self.working, name, int(self._analysis_suggestion[name]))
         separator_value = str(self._analysis_suggestion.get("separator", "auto"))
         self.separator_var.set(_label_for_value(
             SEPARATOR_LABEL_TO_VALUE, separator_value, "自动判断",
