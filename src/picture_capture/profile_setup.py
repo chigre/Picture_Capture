@@ -433,11 +433,6 @@ class ProjectProfileWizard(tk.Toplevel):
         outer.rowconfigure(0, weight=1)
         outer.columnconfigure(0, weight=1)
 
-        style = ttk.Style(self)
-        style.configure("ProfileYellow.TLabelframe", background="#fff6cc")
-        style.configure("ProfileYellow.TLabelframe.Label", background="#fff6cc")
-        style.configure("ProfileYellow.TLabel", background="#fff6cc")
-
         self.profile_paned = ttk.Panedwindow(outer, orient="horizontal")
         self.profile_paned.grid(row=0, column=0, sticky="nsew")
 
@@ -606,37 +601,30 @@ class ProjectProfileWizard(tk.Toplevel):
         nav = ttk.Frame(validation_page)
         nav.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         self.validation_prev_button = ttk.Button(
-            nav, text="◀ 上一张",
+            nav, text="◀ 上一页",
             command=lambda: self._move_validation_preview(-1), state="disabled",
         )
         self.validation_prev_button.pack(side="left")
-        self.validation_next_button = ttk.Button(
-            nav, text="下一张 ▶",
-            command=lambda: self._move_validation_preview(1), state="disabled",
-        )
-        self.validation_next_button.pack(side="right")
+        self.validation_fit_mode = "height"
+        ttk.Button(
+            nav, text="适合高度",
+            command=lambda: self._set_validation_fit("height"),
+        ).pack(side="left", padx=(6, 0))
+        ttk.Button(
+            nav, text="适合宽度",
+            command=lambda: self._set_validation_fit("width"),
+        ).pack(side="left", padx=(6, 0))
         self.validation_caption_var = tk.StringVar(value="")
         ttk.Label(nav, textvariable=self.validation_caption_var).pack(
             side="left", expand=True
         )
-        fitbar = ttk.Frame(validation_page)
-        fitbar.grid(row=1, column=0, sticky="ew", pady=(0, 6))
-        self.validation_fit_mode = "height"
-        ttk.Button(
-            fitbar, text="适合高度",
-            command=lambda: self._set_validation_fit("height"),
-        ).pack(side="left")
-        ttk.Button(
-            fitbar, text="适合宽度",
-            command=lambda: self._set_validation_fit("width"),
-        ).pack(side="left", padx=(6, 0))
-        ttk.Label(
-            fitbar,
-            text="默认适合高度；适合宽度时图片横向占满，纵向可滚动。",
-            foreground="#666666",
-        ).pack(side="left", padx=(10, 0))
+        self.validation_next_button = ttk.Button(
+            nav, text="下一页 ▶",
+            command=lambda: self._move_validation_preview(1), state="disabled",
+        )
+        self.validation_next_button.pack(side="right")
         self.validation_frame = ttk.Frame(validation_page)
-        self.validation_frame.grid(row=2, column=0, sticky="ew")
+        self.validation_frame.grid(row=1, column=0, sticky="ew")
         self.validation_frame.columnconfigure(0, weight=1)
 
     def _show_right_image_page(self, index: int) -> None:
@@ -919,17 +907,15 @@ class ProjectProfileWizard(tk.Toplevel):
 
         edges = ttk.LabelFrame(
             tab, text="页眉 / 页尾 / 页边", padding=9,
-            style="ProfileYellow.TLabelframe",
         )
         edges.grid(row=3, column=0, sticky="ew", pady=(10, 0))
         edges.columnconfigure(1, weight=1)
         self._mode_row(
             edges, 0, "页眉：", self.header_mode_var,
             tuple(HEADER_LABEL_TO_VALUE.keys()),
-            label_style="ProfileYellow.TLabel",
         )
         ttk.Label(
-            edges, text="排除高度%", style="ProfileYellow.TLabel",
+            edges, text="排除高度%",
         ).grid(row=1, column=0, sticky="e")
         self.header_percent_spin = tk.Spinbox(
             edges, from_=0, to=35, increment=0.5, width=6,
@@ -939,10 +925,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self._mode_row(
             edges, 2, "页尾：", self.footer_mode_var,
             tuple(FOOTER_LABEL_TO_VALUE.keys()),
-            label_style="ProfileYellow.TLabel",
         )
         ttk.Label(
-            edges, text="排除高度%", style="ProfileYellow.TLabel",
+            edges, text="排除高度%",
         ).grid(row=3, column=0, sticky="e")
         self.footer_percent_spin = tk.Spinbox(
             edges, from_=0, to=35, increment=0.5, width=6,
@@ -950,7 +935,7 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         self.footer_percent_spin.grid(row=3, column=1, sticky="w")
         ttk.Label(
-            edges, text="页边内容：", style="ProfileYellow.TLabel",
+            edges, text="页边内容：",
         ).grid(row=4, column=0, sticky="e", pady=5)
         ttk.Combobox(
             edges, textvariable=self.side_mode_var, state="readonly", width=22,
@@ -958,7 +943,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=4, column=1, sticky="w", pady=5)
 
         ttk.Label(
-            edges, text="固定页边宽度%", style="ProfileYellow.TLabel",
+            edges, text="固定页边宽度%",
         ).grid(row=5, column=0, sticky="e")
         self.side_percent_spin = tk.Spinbox(
             edges, from_=0, to=30, increment=0.5, width=6,
@@ -967,7 +952,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.side_percent_spin.grid(row=5, column=1, sticky="w")
 
         ttk.Label(
-            edges, text="A 页排除宽度%", style="ProfileYellow.TLabel",
+            edges, text="A 页排除宽度%",
         ).grid(row=6, column=0, sticky="e", pady=(4, 0))
         self.side_percent_a_spin = tk.Spinbox(
             edges, from_=0, to=30, increment=0.5, width=6,
@@ -975,7 +960,7 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         self.side_percent_a_spin.grid(row=6, column=1, sticky="w", pady=(4, 0))
         ttk.Label(
-            edges, text="B 页排除宽度%", style="ProfileYellow.TLabel",
+            edges, text="B 页排除宽度%",
         ).grid(row=7, column=0, sticky="e", pady=(4, 0))
         self.side_percent_b_spin = tk.Spinbox(
             edges, from_=0, to=30, increment=0.5, width=6,
@@ -984,7 +969,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.side_percent_b_spin.grid(row=7, column=1, sticky="w", pady=(4, 0))
 
         ttk.Label(
-            edges, text="A/B 起始页：", style="ProfileYellow.TLabel",
+            edges, text="A/B 起始页：",
         ).grid(row=8, column=0, sticky="e", pady=(10, 4))
         self.first_variant_combo = ttk.Combobox(
             edges, textvariable=self.first_variant_var,
@@ -997,7 +982,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 "选“外侧/内侧交替”时，A 与 B 的页边宽度分别控制，"
                 "不要求两边比例一致；第一张扫描若属于 B 页，可在这里整体翻转。"
             ),
-            foreground="#665500", background="#fff6cc",
+            foreground="#666666",
             wraplength=self._wizard_left_width,
         ).grid(row=9, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
@@ -1076,20 +1061,20 @@ class ProjectProfileWizard(tk.Toplevel):
             header_mode = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get(), "auto")
             if header_mode == "present":
                 hp = max(0.0, min(35.0, float(self.header_percent_var.get())))
-                draw.rectangle((0, 0, w, round(h * hp / 100.0)), fill=(100, 100, 100, 80))
+                draw.rectangle((0, 0, w, round(h * hp / 100.0)), fill=(255, 215, 0, 105))
             footer_mode = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get(), "none")
             if footer_mode == "present":
                 fp = max(0.0, min(35.0, float(self.footer_percent_var.get())))
-                draw.rectangle((0, round(h * (1.0 - fp / 100.0)), w, h), fill=(100, 100, 100, 80))
+                draw.rectangle((0, round(h * (1.0 - fp / 100.0)), w, h), fill=(255, 215, 0, 105))
 
             side = excluded_source_side(settings, index)
             if side:
                 sp = excluded_source_side_percent(settings, index)
                 margin = round(w * sp / 100.0)
                 if side == "left":
-                    draw.rectangle((0, 0, margin, h), fill=(100, 100, 100, 80))
+                    draw.rectangle((0, 0, margin, h), fill=(255, 215, 0, 105))
                 else:
-                    draw.rectangle((w - margin, 0, w, h), fill=(100, 100, 100, 80))
+                    draw.rectangle((w - margin, 0, w, h), fill=(255, 215, 0, 105))
 
             effective = effective_page_settings(settings, source.size, index)
             analysis_image = page_template_analysis_image(source, effective, index)
@@ -1108,7 +1093,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 )
                 draw.rectangle(
                     (x0 * sx, y0 * sy, x1 * sx, y1 * sy),
-                    fill=(100, 100, 100, 80),
+                    fill=(255, 215, 0, 105),
                 )
             if footer_mode == "auto" and geometry.bottom < canonical_h:
                 x0, y0, x1, y1 = geometry.transform.canonical_box_to_source(
@@ -1117,7 +1102,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 )
                 draw.rectangle(
                     (x0 * sx, y0 * sy, x1 * sx, y1 * sy),
-                    fill=(100, 100, 100, 80),
+                    fill=(255, 215, 0, 105),
                 )
             for path_points in geometry.column_paths:
                 points = [
@@ -1239,7 +1224,11 @@ class ProjectProfileWizard(tk.Toplevel):
             specificity, from_=4, to=120, increment=1, width=7,
             textvariable=self.headword_left_tolerance_var,
         ).grid(row=1, column=1, sticky="w", pady=3)
-        ttk.Label(specificity, text="px").grid(row=1, column=2, sticky="w")
+        ttk.Label(
+            specificity,
+            text="px（允许词头起点偏离栏左边界的最大距离；越小越严格）",
+            foreground="#666666",
+        ).grid(row=1, column=2, sticky="w")
 
         ttk.Label(specificity, text="文字大小倍率 ≥").grid(row=2, column=0, sticky="e", pady=3)
         tk.Spinbox(
