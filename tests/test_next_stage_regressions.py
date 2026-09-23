@@ -11,7 +11,9 @@ from picture_capture.app import (
     vertical_overlay_layout,
 )
 from picture_capture.dictionary_profile import effective_project_profile_id, load_dictionary_profile
-from picture_capture.models import AppSettings, Entry, ProjectState
+from picture_capture.models import (
+    AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
+)
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import refine_existing_entries
@@ -86,6 +88,28 @@ def test_recent_project_keeps_per_project_last_page(tmp_path):
     assert row["last_page_index"] == 9
 
 
+def test_project_cover_is_preferred_but_never_counted_as_a_page(tmp_path):
+    project = tmp_path / "scan"
+    _project(project)
+    cover = project / "_project_cover.jpg"
+    Image.new("RGB", (60, 90), "blue").save(cover)
+
+    assert project_cover_path(project) == cover
+    assert [path.name for path in project_page_images(project)] == [
+        "page1.jpg", "page2.jpg", "page10.jpg",
+    ]
+    state = ProjectState.open(project)
+    assert [path.name for path in state.images] == [
+        "page1.jpg", "page2.jpg", "page10.jpg",
+    ]
+
+    detail = recent_project_details({"name": "scan", "path": str(project)})
+    assert detail["image_count"] == 3
+    assert detail["cover_source"] == "cover"
+    assert detail["cover_path"] == str(cover)
+    assert detail["preview_path"] == str(cover)
+
+
 def test_recent_project_details_expose_requested_columns(tmp_path):
     project = tmp_path / "scan"
     _project(project, dictionary_full_name="完整词典", dictionary_abbreviation="缩写")
@@ -134,6 +158,12 @@ def test_recent_projects_dialog_uses_modern_card_information_hierarchy():
     assert "最近活动：" in text
     assert "复制项目路径" in text
     assert "从最近项目移除（不删除文件）" in text
+    assert "_project_cover.jpg" in text
+    assert "该文件不会计入正文图片" in text
+    assert 'cover_source == "cover"' in text
+    assert 'cover_source == "first_page"' in text
+    assert "ImageTk.PhotoImage" in text
+    assert "width=76" in text and "height=96" in text
     assert "显示列" not in text
     assert "词典完整名称" not in text
     assert "从列表删除" not in text
