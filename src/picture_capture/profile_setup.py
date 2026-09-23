@@ -34,6 +34,7 @@ from .profile_semantics import (
     profile_summary_tags,
     reading_choice_from_settings,
     probable_body_page_indices,
+    recommended_headword_structures,
     representative_page_indices,
     suggested_body_page_range,
     page_template_analysis_image,
@@ -290,12 +291,34 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_tuning_level_var = tk.IntVar(
             value=max(-2, min(2, int(getattr(s, "profile_headword_tuning_level", 0) or 0)))
         )
-        self.cjk_allow_single_var = tk.BooleanVar(
-            value=bool(getattr(s, "profile_cjk_allow_single_headword", True))
-        )
-        self.cjk_allow_bracketed_var = tk.BooleanVar(
-            value=bool(getattr(s, "profile_cjk_allow_bracketed_headword", True))
-        )
+
+        self.profile_choices = ordered_headword_profiles(self.custom_name_var.get())
+        self.profile_label_to_key = dict(self.profile_choices)
+        self.headword_profile_var = tk.StringVar(value=self._profile_label_for_key(s.dictionary_profile_id))
+        structure_defaults = recommended_headword_structures(s.dictionary_profile_id)
+        parser_controls_saved = int(
+            getattr(s, "profile_parser_controls_version", 0) or 0
+        ) >= 1
+        self.ordinary_left_edge_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_allow_ordinary_left_edge", True))
+            if parser_controls_saved else structure_defaults["ordinary_left_edge"]
+        ))
+        self.numbered_prefix_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_allow_numbered_prefix", False))
+            if parser_controls_saved else structure_defaults["numbered_prefix"]
+        ))
+        self.marker_prefix_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_allow_marker_prefix", False))
+            if parser_controls_saved else structure_defaults["marker_prefix"]
+        ))
+        self.cjk_allow_single_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_cjk_allow_single_headword", True))
+            if parser_controls_saved else structure_defaults["cjk_single_visual"]
+        ))
+        self.cjk_allow_bracketed_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_cjk_allow_bracketed_headword", True))
+            if parser_controls_saved else structure_defaults["cjk_bracketed"]
+        ))
         self.cjk_require_left_edge_var = tk.BooleanVar(
             value=bool(getattr(s, "profile_cjk_require_left_edge", True))
         )
@@ -305,10 +328,6 @@ class ProjectProfileWizard(tk.Toplevel):
         self.cjk_require_visual_var = tk.BooleanVar(
             value=bool(getattr(s, "profile_cjk_require_visual_evidence", False))
         )
-
-        self.profile_choices = ordered_headword_profiles(self.custom_name_var.get())
-        self.profile_label_to_key = dict(self.profile_choices)
-        self.headword_profile_var = tk.StringVar(value=self._profile_label_for_key(s.dictionary_profile_id))
 
         detection_vars = (
             self.reading_var, self.columns_var, self.separator_var,
@@ -1174,6 +1193,10 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_headword_tuning_level = max(
             -2, min(2, int(self.headword_tuning_level_var.get()))
         )
+        s.profile_parser_controls_version = 1
+        s.profile_allow_ordinary_left_edge = bool(self.ordinary_left_edge_var.get())
+        s.profile_allow_numbered_prefix = bool(self.numbered_prefix_var.get())
+        s.profile_allow_marker_prefix = bool(self.marker_prefix_var.get())
         s.profile_cjk_allow_single_headword = bool(self.cjk_allow_single_var.get())
         s.profile_cjk_allow_bracketed_headword = bool(self.cjk_allow_bracketed_var.get())
         s.profile_cjk_require_left_edge = bool(self.cjk_require_left_edge_var.get())
