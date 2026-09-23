@@ -17,7 +17,7 @@ from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from .image_utils import normalize_page_rgb
 from .layout_detection import aggregate_layout_estimates, detect_layout_parameters
 from .models import AppSettings
-from .processing import detect_entries
+from .processing import derive_geometry, detect_entries
 from .profile_semantics import (
     PROFILE_SETUP_VERSION,
     READING_LABELS,
@@ -477,10 +477,25 @@ class ProjectProfileWizard(tk.Toplevel):
                     else:
                         draw.rectangle((w - margin, 0, w, h), fill=(100, 100, 100, 80))
 
-                columns = max(1, int(self.columns_var.get()))
-                for col in range(1, columns):
-                    x = round(w * col / columns)
-                    draw.line((x, 0, x, h), fill=(30, 120, 210, 210), width=2)
+                # Draw the same source-space column guides that the main
+                # editor will use, not evenly spaced illustrative dividers.
+                effective = effective_page_settings(settings, source.size, index)
+                analysis_image = page_template_analysis_image(source, effective, index)
+                geometry = derive_geometry(analysis_image, effective)
+                sx = w / max(1, source.width)
+                sy = h / max(1, source.height)
+                for path_points in geometry.column_paths:
+                    points = [
+                        geometry.canonical_to_source(x, y)
+                        for y, x in path_points.points
+                    ]
+                    coords = [
+                        coordinate
+                        for px, py in points
+                        for coordinate in (px * sx, py * sy)
+                    ]
+                    if len(coords) >= 4:
+                        draw.line(coords, fill=(30, 120, 210, 210), width=2)
 
                 photo = ImageTk.PhotoImage(preview)
                 self._template_photos.append(photo)
