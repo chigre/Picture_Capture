@@ -6715,7 +6715,7 @@ class PictureCaptureApp(tk.Tk):
         parameter_row.pack(fill="x", pady=(4, 0))
         for index, (label, command) in enumerate((
             ("项目Profile", self.open_project_profile),
-            ("更多参数", self.open_settings),
+            ("设置中心", self.open_settings),
             ("保存参数", self.save_main_parameters),
             ("使用提示", self.show_help_dialog),
         )):
@@ -7355,31 +7355,36 @@ class PictureCaptureApp(tk.Tk):
         add_field(normal, 1, 6, "行间空：", "row_padding", int)
         row = ttk.Frame(normal); row.grid(row=2, column=0, columnspan=8, sticky="ew", pady=(4, 0))
         ttk.Button(
-            row, text="检测引擎", command=self.check_ocr_engines, style="PC.Compact.TButton"
+            row, text="检测版面参数", command=self.detect_layout_current,
+            style="PC.Compact.TButton",
         ).pack(side="left", fill="x", expand=True)
         ttk.Button(
-            row, text="检测版面参数", command=self.detect_layout_current,
+            row, text="检测版面一致性", command=self.detect_layout_consistency_selected,
             style="PC.Compact.TButton",
         ).pack(side="left", fill="x", expand=True, padx=(5, 0))
         ttk.Button(
-            row, text="检测版面一致性", command=self.detect_layout_consistency_selected,
+            row, text="普通画线设置…",
+            command=lambda: self.open_settings(initial_tab="normal"),
             style="PC.Compact.TButton",
         ).pack(side="left", fill="x", expand=True, padx=(5, 0))
         for col in (1, 3, 5, 7): normal.columnconfigure(col, weight=1)
 
         ocr = self._section_frame(parent, "二、基于OCR画线（默认模式）", padding=5, section_key="ocr")
         ocr.pack(fill="x", pady=(4, 0))
-        self.ocr_refresh_var = tk.StringVar(value="force")
-        ttk.Label(ocr, text="方式：").grid(row=0, column=0, sticky="w")
-        ttk.Radiobutton(ocr, text="①复用缓存", variable=self.ocr_refresh_var, value="reuse").grid(row=0, column=1, sticky="w")
-        ttk.Radiobutton(ocr, text="②强制重新识别", variable=self.ocr_refresh_var, value="force").grid(row=0, column=2, columnspan=4, sticky="w")
+        self.ocr_refresh_var = tk.StringVar(value="reuse")
+        ttk.Label(ocr, text="识别策略：").grid(row=0, column=0, sticky="w")
+        ttk.Radiobutton(
+            ocr, text="使用有效缓存（推荐）",
+            variable=self.ocr_refresh_var, value="reuse",
+        ).grid(row=0, column=1, columnspan=2, sticky="w")
+        ttk.Radiobutton(
+            ocr, text="重新OCR（模型/图像改变时）",
+            variable=self.ocr_refresh_var, value="force",
+        ).grid(row=0, column=3, columnspan=3, sticky="w")
         add_field(ocr, 1, 0, "OCR语言：", "ocr_language", str, 8)
-        add_field(ocr, 1, 2, "候选带宽比例：", "paddle_band_width_ratio", int, 7)
+        add_field(ocr, 1, 2, "识别带宽%：", "paddle_band_width_ratio", int, 7)
         add_field(ocr, 1, 4, "左缘容差：", "paddle_left_tolerance", int, 7)
-        add_field(ocr, 2, 0, "候选置信度：", "paddle_rec_score_threshold", float, 8)
-        add_field(ocr, 2, 2, "最低候选分：", "paddle_min_candidate_score", float, 7)
-        ttk.Label(ocr, text="%（最大100）").grid(row=2, column=4, columnspan=2, sticky="w")
-        engine_row = ttk.Frame(ocr); engine_row.grid(row=3, column=0, columnspan=6, sticky="ew", pady=(4, 1))
+        engine_row = ttk.Frame(ocr); engine_row.grid(row=2, column=0, columnspan=6, sticky="ew", pady=(4, 1))
         ttk.Label(engine_row, text="OCR引擎：").pack(side="left")
         for text, name in (("PaddleOCR", "paddle_use_paddleocr"), ("Tesseract", "paddle_compare_tesseract"), ("Google Lens", "paddle_enable_lens")):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
@@ -7387,7 +7392,7 @@ class PictureCaptureApp(tk.Tk):
         self.lens_mode_var = tk.StringVar(
             value=LENS_MODE_LABELS.get(self.settings.paddle_lens_mode, LENS_MODE_LABELS["off"])
         )
-        lens_row = ttk.Frame(ocr); lens_row.grid(row=4, column=0, columnspan=6, sticky="ew")
+        lens_row = ttk.Frame(ocr); lens_row.grid(row=3, column=0, columnspan=6, sticky="ew")
         ttk.Label(lens_row, text="Lens模式：").pack(side="left")
         ttk.Combobox(
             lens_row, textvariable=self.lens_mode_var, values=tuple(LENS_MODE_VALUES),
@@ -7399,6 +7404,17 @@ class PictureCaptureApp(tk.Tk):
         self.quick_field_casts["paddle_separator_safety_px"] = int
         ttk.Entry(lens_row, textvariable=safety_var, width=4).pack(side="left", padx=(2, 2))
         ttk.Label(lens_row, text="px").pack(side="left")
+        ocr_tools = ttk.Frame(ocr)
+        ocr_tools.grid(row=4, column=0, columnspan=6, sticky="ew", pady=(4, 0))
+        ttk.Button(
+            ocr_tools, text="检测 OCR 引擎", command=self.check_ocr_engines,
+            style="PC.Compact.TButton",
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(
+            ocr_tools, text="OCR画线设置…",
+            command=lambda: self.open_settings(initial_tab="ocr"),
+            style="PC.Compact.TButton",
+        ).pack(side="left", fill="x", expand=True, padx=(5, 0))
         for col in (1, 3, 5): ocr.columnconfigure(col, weight=1)
 
         aux = self._section_frame(parent, "三、辅助选项及框线色块", padding=5, section_key="aux")
