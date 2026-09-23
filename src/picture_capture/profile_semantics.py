@@ -181,6 +181,10 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
         pct = max(0.0, min(35.0, float(getattr(current, "profile_footer_percent", 5.0))))
         current.bottom_y = round(canonical_height * (1.0 - pct / 100.0) * scale)
         current.crop_to_bottom_y = True
+    elif footer_mode == "auto":
+        # Representative-page analysis learns a robust body bottom. Reuse that
+        # value when available; otherwise remain uncropped until analysis runs.
+        current.crop_to_bottom_y = int(getattr(current, "bottom_y", 0) or 0) > 0
     elif footer_mode == "none":
         current.crop_to_bottom_y = False
 
