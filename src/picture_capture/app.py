@@ -11645,9 +11645,10 @@ class PictureCaptureApp(tk.Tk):
         def worker(index: int, _position: int, _total: int):
             page = project.images[index]
             if normal_executor is not None:
-                return normal_executor.submit(
+                count = normal_executor.submit(
                     detect_entries_job, str(page), settings, pages_info[index], index
                 ).result()
+                return {"index": int(index), "count": int(count)}
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
             cache_path = ocr_cache_root(project.root) / f"{page.stem}.json" if method == "paddleocr" else None
@@ -11658,7 +11659,7 @@ class PictureCaptureApp(tk.Tk):
                 profile_page_index=index,
             )
             write_pdic(pdic_path(page), entries, image.width, pages_info[index])
-            return len(entries)
+            return {"index": int(index), "count": len(entries)}
 
         def done(completed, total, stopped, results, error):
             if normal_executor is not None:
@@ -11671,29 +11672,33 @@ class PictureCaptureApp(tk.Tk):
                 self._refresh_page_quality_colors()
                 quality_text = "；页面列表已按 OCR 一致性/质量状态更新"
             else:
-                counts = [
-                    int(value) for value in results
-                    if isinstance(value, (int, float)) and int(value) >= 0
+                rows = [
+                    value for value in results
+                    if isinstance(value, dict)
+                    and isinstance(value.get("count"), (int, float))
+                    and int(value.get("count", -1)) >= 0
                 ]
-                suspect_positions: list[int] = []
+                counts = [int(row["count"]) for row in rows]
                 median_count = float(statistics.median(counts)) if counts else 0.0
-                for position, count in enumerate(counts):
+                suspect_rows: list[dict] = []
+                for row in rows:
+                    count = int(row["count"])
                     if count == 0:
-                        suspect_positions.append(position)
+                        suspect_rows.append(row)
                     elif len(counts) >= 5 and median_count >= 8:
                         if count < median_count * 0.45 or count > median_count * 1.80:
-                            suspect_positions.append(position)
+                            suspect_rows.append(row)
                 if counts:
                     quality_text = f"；每页画线数中位数 {median_count:g}"
-                if suspect_positions:
+                if suspect_rows:
                     names = [
-                        project.images[indices[position]].name
-                        for position in suspect_positions[:3]
-                        if position < len(indices)
+                        project.images[int(row["index"])].name
+                        for row in suspect_rows[:3]
+                        if 0 <= int(row.get("index", -1)) < len(project.images)
                     ]
-                    more = "…" if len(suspect_positions) > 3 else ""
+                    more = "…" if len(suspect_rows) > 3 else ""
                     quality_text += (
-                        f"；{len(suspect_positions)} 页画线数异常，建议优先复核"
+                        f"；{len(suspect_rows)} 页画线数异常，建议优先复核"
                         + (f"（{', '.join(names)}{more}）" if names else "")
                     )
             suffix = "（强制重新识别）" if method == "paddleocr" and force_refresh else ""
