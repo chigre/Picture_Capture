@@ -265,6 +265,30 @@ def ordered_headword_profiles(custom_name: str = "") -> list[tuple[str, str]]:
     return result
 
 
+def recommended_headword_structures(profile_key: str) -> dict[str, bool]:
+    """Return human-facing parser defaults for one structure preset."""
+    key = str(profile_key or "custom")
+    defaults = {
+        "ordinary_left_edge": False,
+        "cjk_bracketed": False,
+        "cjk_single_visual": False,
+        "numbered_prefix": False,
+        "marker_prefix": False,
+    }
+    if key in {"latin_regular", "edge_visual_regular", "legacy_spanish_structured", "custom"}:
+        defaults["ordinary_left_edge"] = True
+    elif key == "cjk_visual":
+        defaults["cjk_bracketed"] = True
+        defaults["cjk_single_visual"] = True
+    elif key == "numbered_prefix":
+        defaults["numbered_prefix"] = True
+    elif key == "marker_prefixed":
+        defaults["marker_prefix"] = True
+    else:
+        defaults["ordinary_left_edge"] = True
+    return defaults
+
+
 def apply_headword_profile(settings: AppSettings, profile_key: str) -> None:
     """Apply only the headword-recognition dimension of a generic preset."""
     defaults = profile_effective_settings(profile_key, current_language=settings.ocr_language)
