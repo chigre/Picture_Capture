@@ -713,7 +713,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "self._validation_results = list(results)" in text
     assert "def _move_validation_preview" in text
     assert "def _render_validation_result" in text
-    assert "width = min(work_w, max(960, int(screen_w * 0.80)))" in text
+    assert "width = min(work_w, max(720, int(screen_w * 0.80)))" in text
     assert "SPI_GETWORKAREA" in text
     assert "height = work_h" in text
     assert "x = max(work_x, work_x + work_w - width)" in text
