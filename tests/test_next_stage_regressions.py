@@ -655,14 +655,24 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "target_width = max(320, int(preview_width))" in text
     assert "source.resize(" in text
     assert "fill=(255, 0, 0, 255), width=1" in text
-    assert 'text="词头专属性"' in text
-    assert "大字单字可作为词头" in text
-    assert "【括号词】可作为词头" in text
+    assert "允许的词头结构（决定哪些 parser 通道开放）" in text
+    assert "普通左缘短词可以作为词头" in text
+    assert "【括号词】可以作为词头" in text
+    assert "大字单字可以作为词头" in text
+    assert "固定符号开头（○ / ● / ◆ …）可以作为词头" in text
+    assert "编号开头（1. / 2. / …）可以作为词头" in text
+    assert "词头专属性（决定候选要满足多强的证据）" in text
     assert "必须靠近栏左缘" in text
     assert "释义正文中也经常出现【括号词】" in text
     assert "只有视觉明显突出时才把单字/括号词当词头" in text
     assert 'text="偏多"' in text and 'text="合适"' in text and 'text="偏少"' in text
     assert "def _apply_validation_feedback" in text
+    assert "def _headword_structure_changed" in text
+    assert "recommended_headword_structures" in text
+    assert "s.profile_parser_controls_version = 1" in text
+    assert "s.profile_allow_ordinary_left_edge" in text
+    assert "s.profile_allow_numbered_prefix" in text
+    assert "s.profile_allow_marker_prefix" in text
     validate_start = text.index("    def validate_profile(")
     validate_end = text.index("    def _poll_validation_queue(", validate_start)
     validate_text = text[validate_start:validate_end]
