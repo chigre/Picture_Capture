@@ -2942,11 +2942,15 @@ def filter_headword_records(
             and boldness_ratio >= max(1.25, settings.paddle_boldness_ratio * 1.08)
             and height_ratio >= 0.92
         )
-        position_ok = (
-            (cjk_at_left if cjk_single_visual else at_left)
-            if (not cjk_profile_active or cjk_require_left_edge)
-            else True
-        )
+        # "普通左缘短词" always means left-edge. The optional
+        # relaxation applies only to the explicitly CJK structural channels.
+        if cjk_single_visual or cjk_bracketed:
+            position_ok = (
+                (cjk_at_left if cjk_single_visual else at_left)
+                if cjk_require_left_edge else True
+            )
+        else:
+            position_ok = at_left
         base_eligible = bool(
             parsed and parsed.normalized and below_header and position_ok
         )
