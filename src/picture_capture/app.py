@@ -43,7 +43,7 @@ from .collation import (
 )
 from .dictionary_profile import (
     DEFAULT_PROFILE_ID, PROFILE_FILENAME, available_dictionary_profiles,
-    dictionary_profile_labels, dictionary_profile_preset,
+    dictionary_profile_preset,
     effective_project_profile_id,
     language_effective_settings, managed_profile_setting_names, profile_effective_settings, profile_preview_path,
     profile_layout_summary, write_project_profile,
@@ -1581,10 +1581,10 @@ class SettingsDialog(tk.Toplevel):
         """Return numbered Profile labels, always keeping custom as the last item."""
         profiles = list(available_dictionary_profiles())
         profiles.sort(key=lambda profile: profile.key == "custom")
-        custom_name = str(
-            getattr(self, "custom_profile_name_var", tk.StringVar(value="")).get()
+        custom_name = (
+            str(self.custom_profile_name_var.get()).strip()
             if hasattr(self, "custom_profile_name_var") else ""
-        ).strip()
+        )
         labels: dict[str, str] = {}
         for index, profile in enumerate(profiles, start=1):
             display_name = profile.display_name
