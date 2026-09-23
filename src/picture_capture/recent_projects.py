@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from .models import IMAGE_EXTENSIONS
+from .models import project_cover_path, project_page_images
 from .project_storage import settings_path
 
 
@@ -102,14 +102,23 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         "last_page_index": last_page_index,
         "resume_text": last_page or "—",
         "position_text": "—",
+        "cover_path": "",
+        "preview_path": "",
+        "cover_source": "none",
     }
     if not root.is_dir():
         return details
     try:
-        details["image_count"] = sum(
-            1 for item in root.iterdir()
-            if item.is_file() and item.suffix.lower() in IMAGE_EXTENSIONS
-        )
+        pages = project_page_images(root)
+        details["image_count"] = len(pages)
+        cover = project_cover_path(root)
+        if cover is not None:
+            details["cover_path"] = str(cover)
+            details["preview_path"] = str(cover)
+            details["cover_source"] = "cover"
+        elif pages:
+            details["preview_path"] = str(pages[0])
+            details["cover_source"] = "first_page"
         image_count = int(details["image_count"])
         if last_page_index >= 0 and image_count > 0:
             page_number = min(image_count, last_page_index + 1)
