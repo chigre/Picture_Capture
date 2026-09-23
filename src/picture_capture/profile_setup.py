@@ -500,7 +500,19 @@ class ProjectProfileWizard(tk.Toplevel):
     def _current_profile_key(self) -> str:
         return self.profile_label_to_key.get(self.headword_profile_var.get(), "custom")
 
+    def _mark_validation_stale(self) -> None:
+        """A saved validation result is meaningful only for the exact current settings."""
+        if getattr(self.working, "profile_last_validated_pages", None):
+            self.working.profile_last_validated_pages = []
+        if hasattr(self, "validation_status_var") and not self._validation_running:
+            self.validation_status_var.set("设置已修改，需要重新测试")
+
+    def _profile_input_changed(self) -> None:
+        self._mark_validation_stale()
+        self._refresh_summary()
+
     def _reading_changed(self) -> None:
+        self._mark_validation_stale()
         if hasattr(self, "analysis_suggestion_var") and self._analysis_suggestion:
             self._analysis_suggestion = {}
             self.analysis_suggestion_var.set("阅读方向已改变，请重新分析代表页。")
@@ -509,10 +521,12 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_summary()
 
     def _headword_changed(self) -> None:
+        self._mark_validation_stale()
         self._refresh_headword_description()
         self._refresh_summary()
 
     def _custom_name_changed(self) -> None:
+        self._mark_validation_stale()
         current = self._current_profile_key()
         self.profile_choices = ordered_headword_profiles(self.custom_name_var.get())
         self.profile_label_to_key = dict(self.profile_choices)
@@ -642,7 +656,8 @@ class ProjectProfileWizard(tk.Toplevel):
                     with Image.open(path) as opened:
                         image = normalize_page_rgb(opened)
                     page_settings = effective_page_settings(settings, image.size, index)
-                    estimates.append(detect_layout_parameters(image, page_settings))
+                    analysis_image = page_template_analysis_image(image, page_settings, index)
+                    estimates.append(detect_layout_parameters(analysis_image, page_settings))
                 except Exception as exc:
                     errors.append(f"{path.name}: {exc}")
             assert self._analysis_queue is not None
