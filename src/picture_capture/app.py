@@ -42,7 +42,8 @@ from .collation import (
     parse_custom_order, profile_label,
 )
 from .dictionary_profile import (
-    DEFAULT_PROFILE_ID, PROFILE_FILENAME, dictionary_profile_labels, dictionary_profile_preset,
+    DEFAULT_PROFILE_ID, PROFILE_FILENAME, available_dictionary_profiles,
+    dictionary_profile_preset,
     effective_project_profile_id,
     language_effective_settings, managed_profile_setting_names, profile_effective_settings, profile_preview_path,
     profile_layout_summary, write_project_profile,
@@ -916,6 +917,7 @@ class SettingsDialog(tk.Toplevel):
         ("索引语言", "dictionary_index_language", str),
         ("内容语言", "dictionary_content_language", str),
         ("正文页码范围", "dictionary_body_page_range", str),
+        ("自定义 Profile 名称", "dictionary_custom_profile_name", str),
         ("词典分栏", "columns", int), ("两栏中隔", "gutter", int),
         ("单栏宽距", "column_width", int), ("起始点 Y", "start_y", int),
         ("首栏 X", "manual_x", int),
@@ -1089,6 +1091,7 @@ class SettingsDialog(tk.Toplevel):
         outer = ttk.Frame(self)
         outer.pack(fill="both", expand=True)
         notebook = ttk.Notebook(outer)
+        self.notebook = notebook
         notebook.pack(fill="both", expand=True)
         profile_tab = ttk.Frame(notebook)
         project_tab = ttk.Frame(notebook)
@@ -1096,11 +1099,14 @@ class SettingsDialog(tk.Toplevel):
         sort_tab = ttk.Frame(notebook)
         rules_tab = ttk.Frame(notebook)
         notebook.add(profile_tab, text="Profile")
+        self.profile_tab = profile_tab
         notebook.add(project_tab, text="词典项目详情")
         notebook.add(params_tab, text="参数分区")
         notebook.add(sort_tab, text="词头排序")
         notebook.add(rules_tab, text="词头过滤规则")
-        if initial_tab == "project":
+        if initial_tab == "profile":
+            notebook.select(profile_tab)
+        elif initial_tab == "project":
             notebook.select(project_tab)
         elif initial_tab == "sort":
             notebook.select(sort_tab)
@@ -1117,6 +1123,7 @@ class SettingsDialog(tk.Toplevel):
         body = ttk.Frame(params_tab)
         body.pack(fill="both", expand=True)
         canvas = tk.Canvas(body, highlightthickness=0, borderwidth=0)
+        self.params_canvas = canvas
         scrollbar = ttk.Scrollbar(body, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
@@ -1133,16 +1140,25 @@ class SettingsDialog(tk.Toplevel):
             canvas.itemconfigure(frame_window, width=event.width)
 
         def _wheel(event) -> str | None:
-            if notebook.select() != str(params_tab):
+            selected_tab = notebook.select()
+            target_canvas = None
+            if selected_tab == str(params_tab):
+                target_canvas = canvas
+            elif selected_tab == str(profile_tab):
+                target_canvas = getattr(self, "profile_canvas", None)
+            if target_canvas is None:
                 return None
             if getattr(event, "num", None) == 4:
-                canvas.yview_scroll(-3, "units")
+                target_canvas.yview_scroll(-3, "units")
             elif getattr(event, "num", None) == 5:
-                canvas.yview_scroll(3, "units")
+                target_canvas.yview_scroll(3, "units")
             else:
                 delta = getattr(event, "delta", 0)
                 if delta:
-                    canvas.yview_scroll((-1 if delta > 0 else 1) * max(1, abs(int(delta / 120))) * 3, "units")
+                    target_canvas.yview_scroll(
+                        (-1 if delta > 0 else 1) * max(1, abs(int(delta / 120))) * 3,
+                        "units",
+                    )
             return "break"
 
         frame.bind("<Configure>", _sync_scrollregion)
@@ -1409,7 +1425,6 @@ class SettingsDialog(tk.Toplevel):
         top.grid(row=0, column=0, sticky="ew")
         top.columnconfigure(1, weight=1)
 
-        self._profile_label_to_key = dictionary_profile_labels()
         selected_key = effective_project_profile_id(
             self.parent.settings,
             project_profile_path(self.parent.project.root) if self.parent.project else None,
@@ -1421,7 +1436,12 @@ class SettingsDialog(tk.Toplevel):
             selected_key = selected.key
         self._active_profile_key = selected_key
         self._profile_selection_changed = False
-        self.profile_choice_var = tk.StringVar(value=selected.display_name)
+        self.custom_profile_name_var = tk.StringVar(
+            value=str(getattr(self.parent.settings, "dictionary_custom_profile_name", "") or "")
+        )
+        self.vars["dictionary_custom_profile_name"] = self.custom_profile_name_var
+        self._profile_label_to_key = self._build_profile_choice_labels()
+        self.profile_choice_var = tk.StringVar(value=self._profile_label_for_key(selected_key))
         ttk.Label(top, text="词头类型：").grid(row=0, column=0, sticky="e", padx=(0, 8), pady=4)
         self.profile_combo = ttk.Combobox(
             top, textvariable=self.profile_choice_var,
@@ -1436,22 +1456,62 @@ class SettingsDialog(tk.Toplevel):
             row=0, column=3, padx=(8, 0), pady=4
         )
 
+        ttk.Label(top, text="自定义结构名称：").grid(
+            row=1, column=0, sticky="e", padx=(0, 8), pady=4
+        )
+        self.custom_profile_name_entry = ttk.Entry(
+            top, textvariable=self.custom_profile_name_var, width=32,
+        )
+        self.custom_profile_name_entry.grid(row=1, column=1, sticky="ew", pady=4)
+        ttk.Label(
+            top,
+            text="仅修改当前项目中“自定义结构”的显示名称；底层 Profile key 仍为 custom。",
+            foreground="#666666",
+        ).grid(row=1, column=2, columnspan=2, sticky="w", padx=(10, 0), pady=4)
+        self.custom_profile_name_var.trace_add(
+            "write", lambda *_args: self.after_idle(self._on_custom_profile_name_changed)
+        )
+
         self.profile_description_var = tk.StringVar(value="")
         self.profile_examples_var = tk.StringVar(value="")
         self.profile_layout_summary_var = tk.StringVar(value="")
         ttk.Label(top, textvariable=self.profile_description_var, justify="left", wraplength=880).grid(
-            row=1, column=0, columnspan=4, sticky="w", pady=(8, 2)
+            row=2, column=0, columnspan=4, sticky="w", pady=(8, 2)
         )
         ttk.Label(top, textvariable=self.profile_examples_var, justify="left", wraplength=880).grid(
-            row=2, column=0, columnspan=4, sticky="w", pady=(2, 0)
+            row=3, column=0, columnspan=4, sticky="w", pady=(2, 0)
         )
         ttk.Label(
             top, textvariable=self.profile_layout_summary_var,
             font=("TkDefaultFont", 10, "bold"), foreground="#245a86",
-        ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(5, 0))
+        ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(5, 0))
+        self._sync_custom_profile_name_state()
 
-        body = ttk.Frame(tab, padding=(14, 0, 14, 10))
-        body.grid(row=1, column=0, sticky="nsew")
+        profile_scroll_host = ttk.Frame(tab)
+        profile_scroll_host.grid(row=1, column=0, sticky="nsew")
+        profile_scroll_host.rowconfigure(0, weight=1)
+        profile_scroll_host.columnconfigure(0, weight=1)
+        profile_canvas = tk.Canvas(profile_scroll_host, highlightthickness=0, borderwidth=0)
+        self.profile_canvas = profile_canvas
+        profile_scrollbar = ttk.Scrollbar(
+            profile_scroll_host, orient="vertical", command=profile_canvas.yview,
+        )
+        profile_canvas.configure(yscrollcommand=profile_scrollbar.set)
+        profile_canvas.grid(row=0, column=0, sticky="nsew")
+        profile_scrollbar.grid(row=0, column=1, sticky="ns")
+        body = ttk.Frame(profile_canvas, padding=(14, 0, 14, 10))
+        profile_window = profile_canvas.create_window((0, 0), window=body, anchor="nw")
+
+        def _profile_sync_scrollregion(_event=None) -> None:
+            bbox = profile_canvas.bbox("all")
+            if bbox:
+                profile_canvas.configure(scrollregion=bbox)
+
+        def _profile_fit_width(event) -> None:
+            profile_canvas.itemconfigure(profile_window, width=event.width)
+
+        body.bind("<Configure>", _profile_sync_scrollregion)
+        profile_canvas.bind("<Configure>", _profile_fit_width)
         body.columnconfigure(0, weight=1)
         body.columnconfigure(1, weight=1)
         field_meta = self._field_meta
@@ -1517,6 +1577,64 @@ class SettingsDialog(tk.Toplevel):
         self._refresh_profile_summary()
         self.after_idle(self._refresh_profile_status)
 
+    def _build_profile_choice_labels(self) -> dict[str, str]:
+        """Return numbered Profile labels, always keeping custom as the last item."""
+        profiles = list(available_dictionary_profiles())
+        profiles.sort(key=lambda profile: profile.key == "custom")
+        custom_name = (
+            str(self.custom_profile_name_var.get()).strip()
+            if hasattr(self, "custom_profile_name_var") else ""
+        )
+        labels: dict[str, str] = {}
+        for index, profile in enumerate(profiles, start=1):
+            display_name = profile.display_name
+            if profile.key == "custom" and custom_name:
+                display_name = f"{custom_name}（自定义）"
+            labels[f"{index}. {display_name}"] = profile.key
+        return labels
+
+    def _profile_label_for_key(self, key: str) -> str:
+        for label, value in self._profile_label_to_key.items():
+            if value == key:
+                return label
+        # Compatibility aliases use the display name of their visible base
+        # profile; map them back to that numbered visible choice.
+        try:
+            wanted_name = dictionary_profile_preset(key).display_name
+        except Exception:
+            wanted_name = ""
+        for label, value in self._profile_label_to_key.items():
+            try:
+                if dictionary_profile_preset(value).display_name == wanted_name:
+                    return label
+            except Exception:
+                continue
+        return next(iter(self._profile_label_to_key), "")
+
+    def _profile_display_name(self, key: str) -> str:
+        if key == "custom":
+            custom_name = str(self.custom_profile_name_var.get()).strip()
+            if custom_name:
+                return f"{custom_name}（自定义）"
+        return dictionary_profile_preset(key).display_name
+
+    def _sync_custom_profile_name_state(self) -> None:
+        if not hasattr(self, "custom_profile_name_entry"):
+            return
+        state = "normal" if self._current_profile_key() == "custom" else "disabled"
+        self.custom_profile_name_entry.configure(state=state)
+
+    def _on_custom_profile_name_changed(self) -> None:
+        if not hasattr(self, "profile_combo"):
+            return
+        current_key = self._current_profile_key()
+        self._profile_label_to_key = self._build_profile_choice_labels()
+        self.profile_combo.configure(values=tuple(self._profile_label_to_key.keys()))
+        self.profile_choice_var.set(self._profile_label_for_key(current_key))
+        self._sync_custom_profile_name_state()
+        self._refresh_profile_summary()
+        self._refresh_profile_status()
+
     def _current_profile_key(self) -> str:
         return self._profile_label_to_key.get(self.profile_choice_var.get(), self._active_profile_key or DEFAULT_PROFILE_ID)
 
@@ -1535,7 +1653,9 @@ class SettingsDialog(tk.Toplevel):
             "column_separator": str(self.vars.get("layout_column_separator_mode").get()) if self.vars.get("layout_column_separator_mode") else "auto",
         }
         language = str(self.vars.get("ocr_language").get()) if self.vars.get("ocr_language") else ""
-        self.profile_layout_summary_var.set(f"{language} · {profile.display_name} · {profile_layout_summary(profile, layout)}")
+        self.profile_layout_summary_var.set(
+            f"{language} · {self._profile_display_name(profile.key)} · {profile_layout_summary(profile, layout)}"
+        )
         if profile.examples:
             names = "；".join(example.dictionary for example in profile.examples)
             self.profile_examples_var.set(f"经典样例：{names}")
@@ -1568,7 +1688,7 @@ class SettingsDialog(tk.Toplevel):
             if self._coerce_profile_var(name) != expected:
                 changed.append(name)
         suffix = "（使用预设默认值）" if not changed else f"（项目调整 {len(changed)} 项）"
-        self.profile_status_var.set(f"{dictionary_profile_preset(key).display_name} {suffix}")
+        self.profile_status_var.set(f"{self._profile_display_name(key)} {suffix}")
 
     def _apply_profile_defaults_to_vars(self, key: str, *, keep_supported_language: bool = True) -> None:
         current_language = ""
@@ -1587,6 +1707,7 @@ class SettingsDialog(tk.Toplevel):
     def _on_profile_selected(self, _event=None) -> None:
         key = self._current_profile_key()
         self._profile_selection_changed = True
+        self._sync_custom_profile_name_state()
         self._apply_profile_defaults_to_vars(key, keep_supported_language=True)
 
     def restore_profile_defaults(self) -> None:
@@ -1619,14 +1740,15 @@ class SettingsDialog(tk.Toplevel):
     def preview_profile_examples(self) -> None:
         profile = dictionary_profile_preset(self._current_profile_key())
         popup = tk.Toplevel(self)
-        popup.title(f"Profile 预览 — {profile.display_name}")
+        display_name = self._profile_display_name(profile.key)
+        popup.title(f"Profile 预览 — {display_name}")
         screen_w = max(900, popup.winfo_screenwidth())
         screen_h = max(650, popup.winfo_screenheight())
         popup.geometry(f"{min(980, int(screen_w * 0.76))}x{min(820, int(screen_h * 0.84))}")
         popup.minsize(620, 520)
         header = ttk.Frame(popup, padding=(12, 10))
         header.pack(fill="x")
-        ttk.Label(header, text=profile.display_name, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
+        ttk.Label(header, text=display_name, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
         ttk.Label(header, text=profile.description, justify="left", wraplength=900).pack(anchor="w", pady=(4, 0))
         if not profile.examples:
             ttk.Label(popup, text="此通用兼容 Profile 暂无内置经典样页。", padding=24).pack(fill="both", expand=True)
@@ -5512,13 +5634,33 @@ class PictureCaptureApp(tk.Tk):
         }
         self._apply_page_list_display_columns(save=False)
 
-        bottom_row = self.project_action_bar
-        ttk.Button(bottom_row, text="新建项目", command=self.open_project).pack(side="left", fill="x", expand=True)
-        ttk.Button(bottom_row, text="已有项目", command=self.open_recent_project).pack(side="left", fill="x", expand=True, padx=(4, 0))
-        ttk.Label(bottom_row, text="图片后缀：").pack(side="left", padx=(8, 2))
+        project_row = ttk.Frame(self.project_action_bar)
+        project_row.pack(fill="x")
+        ttk.Button(project_row, text="新建项目", command=self.open_project).pack(
+            side="left", fill="x", expand=True,
+        )
+        ttk.Button(project_row, text="已有项目", command=self.open_recent_project).pack(
+            side="left", fill="x", expand=True, padx=(4, 0),
+        )
+        ttk.Button(project_row, text="导出训练标记包", command=self.export_training_package).pack(
+            side="left", fill="x", expand=True, padx=(4, 0),
+        )
+        ttk.Label(project_row, text="图片后缀：").pack(side="left", padx=(8, 2))
         self.image_suffix_var = tk.StringVar(value=self.settings.image_suffix)
-        ttk.Entry(bottom_row, textvariable=self.image_suffix_var, width=7).pack(side="left")
+        ttk.Entry(project_row, textvariable=self.image_suffix_var, width=7).pack(side="left")
         self.image_suffix_var.trace_add("write", lambda *_args: self._quick_parameter_changed())
+
+        parameter_row = ttk.Frame(self.project_action_bar)
+        parameter_row.pack(fill="x", pady=(4, 0))
+        for index, (label, command) in enumerate((
+            ("项目Profile", self.open_project_profile),
+            ("更多参数", self.open_settings),
+            ("保存参数", self.save_main_parameters),
+            ("使用提示", self.show_help_dialog),
+        )):
+            ttk.Button(parameter_row, text=label, command=command).pack(
+                side="left", fill="x", expand=True, padx=(0 if index == 0 else 4, 0),
+            )
 
         self.canvas = tk.Canvas(viewer, bg="#30343b", highlightthickness=0)
         hbar = ttk.Scrollbar(viewer, orient="horizontal", command=self.canvas.xview)
@@ -6294,11 +6436,10 @@ class PictureCaptureApp(tk.Tk):
         actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
         actions.pack(fill="x", pady=(4, 0))
         rows = [
-            (("更多参数", self.open_settings), ("保存参数", self.save_main_parameters), ("使用提示", self.show_help_dialog)),
             (("运行普通画线", self.run_normal_draw_action), ("运行OCR画线", self.run_ocr_draw_action)),
             (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充既有词条", self.fill_existing_headwords), ("修复PDIC排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("从PDIC备份恢复", self.restore_from_pdic_backup)),
-            (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("导出训练标记包", self.export_training_package), ("保存当前页", self.save_current_page)),
+            (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
         ]
         for ri, specs in enumerate(rows):
             row = ttk.Frame(actions); row.grid(row=ri, column=0, sticky="ew", pady=(0 if ri == 0 else 3, 0))
@@ -10172,6 +10313,9 @@ class PictureCaptureApp(tk.Tk):
         if not self.apply_quick_settings(show_status=False, persist=False):
             return
         SettingsDialog(self, initial_tab=initial_tab)
+
+    def open_project_profile(self) -> None:
+        self.open_settings(initial_tab="profile")
 
     def open_project_details(self) -> None:
         self.open_settings(initial_tab="project")
