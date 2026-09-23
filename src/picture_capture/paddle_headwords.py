@@ -3277,6 +3277,8 @@ def _cache_signature(image: Image.Image, geometry: "Geometry", settings: AppSett
         "layout_transform": geometry.transform.kind,
         "parameter_display_width": settings.parameter_display_width,
         "paths": [path.points for path in geometry.column_paths],
+        "geometry_top": int(geometry.top),
+        "geometry_bottom": int(geometry.bottom),
         "band_width": settings.paddle_band_width,
         "band_width_ratio": max(1, min(100, int(getattr(settings, "paddle_band_width_ratio", 100)))),
         "band_left_margin": settings.paddle_band_left_margin,
