@@ -2332,15 +2332,12 @@ class ReviewWindow(tk.Toplevel):
 
     def _review_section_frame(
         self, parent: tk.Misc, title: str, *, padding: int = 6
-    ) -> ttk.LabelFrame:
-        """Return a flat titled section for secondary review tools."""
-        label = ttk.Label(parent, text=title, style="PCR.SectionTitle.TLabel")
-        return ttk.LabelFrame(
-            parent,
-            labelwidget=label,
-            padding=padding,
-            style="PCR.Section.TLabelframe",
-        )
+    ) -> ttk.Frame:
+        """Return a truly flat titled section independent of native LabelFrame chrome."""
+        frame = ttk.Frame(parent, padding=padding, style="PCR.Surface.TFrame")
+        ttk.Label(frame, text=title, style="PCR.Header.TLabel").pack(anchor="w")
+        ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=(3, 5))
+        return frame
 
     def _build(self) -> None:
         panes = ttk.Panedwindow(self, orient="horizontal")
@@ -2519,26 +2516,29 @@ class ReviewWindow(tk.Toplevel):
             textvariable=self.review_line_height_var, style="PCR.Compact.TSpinbox",
         )
         self.review_line_height_spin.pack(side="left")
-        ttk.Label(height_row, text="px").pack(side="left", padx=(2, 7))
+        ttk.Label(height_row, text="px").pack(side="left", padx=(2, 9))
         ttk.Label(height_row, text="行间空：").pack(side="left")
         ttk.Spinbox(
             height_row, from_=0, to=200, increment=1, width=4,
             textvariable=self.review_row_padding_var, style="PCR.Compact.TSpinbox",
         ).pack(side="left")
-        ttk.Label(height_row, text="px").pack(side="left", padx=(2, 7))
-        ttk.Label(height_row, text="普通词条行切图高：").pack(side="left")
+        ttk.Label(height_row, text="px").pack(side="left", padx=(2, 0))
+
+        crop_height_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
+        crop_height_row.pack(fill="x", pady=(3, 0))
+        ttk.Label(crop_height_row, text="普通词条行切图高：").pack(side="left")
         ttk.Spinbox(
-            height_row, from_=1, to=500, increment=1, width=5,
+            crop_height_row, from_=1, to=500, increment=1, width=5,
             textvariable=self.review_regular_crop_height_var, style="PCR.Compact.TSpinbox",
         ).pack(side="left")
-        ttk.Label(height_row, text="px").pack(side="left", padx=(2, 9))
-        ttk.Label(height_row, text="单字行高：").pack(side="left")
+        ttk.Label(crop_height_row, text="px").pack(side="left", padx=(2, 9))
+        ttk.Label(crop_height_row, text="单字行高：").pack(side="left")
         self.review_single_cjk_line_height_spin = ttk.Spinbox(
-            height_row, from_=1, to=500, increment=1, width=5,
+            crop_height_row, from_=1, to=500, increment=1, width=5,
             textvariable=self.review_single_cjk_line_height_var, style="PCR.Compact.TSpinbox",
         )
         self.review_single_cjk_line_height_spin.pack(side="left")
-        ttk.Label(height_row, text="px").pack(side="left", padx=(2, 0))
+        ttk.Label(crop_height_row, text="px").pack(side="left", padx=(2, 0))
 
         zoom_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         zoom_row.pack(fill="x")
@@ -2623,31 +2623,31 @@ class ReviewWindow(tk.Toplevel):
             command=self._toggle_network_lookup,
         ).pack(side="left")
         ttk.Button(
-            network_actions, text="立即", width=5,
+            network_actions, text="立即",
             command=lambda: self._schedule_network_lookup(force=True),
             style="PCR.Compact.TButton",
         ).pack(side="left", padx=(5, 0))
         self.cc_cedict_lookup_button = ttk.Button(
-            network_actions, textvariable=self.cc_cedict_lookup_var, width=15,
-            command=self.manage_cc_cedict, style="PCR.Compact.TButton",
+            network_actions, textvariable=self.cc_cedict_lookup_var,
+            command=self.manage_cc_cedict, style="PCR.Tool.TButton",
         )
         self.cc_cedict_lookup_button.pack(side="left", padx=(5, 0))
         self.cc_simplified_compare_button = ttk.Button(
-            network_actions, textvariable=self.cc_simplified_compare_var, width=14,
-            command=self.show_cc_simplified_comparison, style="PCR.Compact.TButton",
+            network_actions, textvariable=self.cc_simplified_compare_var,
+            command=self.show_cc_simplified_comparison, style="PCR.Tool.TButton",
         )
         self.cc_simplified_compare_button.pack(side="left", padx=(5, 0))
         ttk.Button(
-            network_actions, textvariable=self.moedict_lookup_var, width=7,
-            command=lambda: self.open_lookup_source("萌典"), style="PCR.Compact.TButton",
+            network_actions, textvariable=self.moedict_lookup_var,
+            command=lambda: self.open_lookup_source("萌典"), style="PCR.Tool.TButton",
         ).pack(side="left", padx=(5, 0))
         ttk.Button(
-            network_actions, textvariable=self.wiktionary_lookup_var, width=8,
-            command=lambda: self.open_lookup_source("维基词典"), style="PCR.Compact.TButton",
+            network_actions, textvariable=self.wiktionary_lookup_var,
+            command=lambda: self.open_lookup_source("维基词典"), style="PCR.Tool.TButton",
         ).pack(side="left", padx=(5, 0))
         ttk.Button(
-            network_actions, text="网络搜索", width=8, command=self.open_network_web_search,
-            style="PCR.Compact.TButton",
+            network_actions, text="网络搜索", command=self.open_network_web_search,
+            style="PCR.Tool.TButton",
         ).pack(side="left", padx=(5, 0))
         self.network_status_label = tk.Label(
             network_box, textvariable=self.network_lookup_status_var, anchor="w", justify="left",
@@ -2672,10 +2672,13 @@ class ReviewWindow(tk.Toplevel):
         )
         self.wordslist_locator_combo.pack(side="left")
         self.wordslist_locator_combo.bind("<<ComboboxSelected>>", self._change_wordslist_locator_mode)
+
+        ref_fill_row = ttk.Frame(ref_box, style="PCR.Surface.TFrame")
+        ref_fill_row.pack(fill="x", pady=(0, 3))
         ttk.Button(
-            ref_actions, text="从所选词开始填充至本页结束", command=self.fill_words,
+            ref_fill_row, text="从所选词开始填充至本页结束", command=self.fill_words,
             style="PCR.Compact.TButton",
-        ).pack(side="left", padx=(6, 0))
+        ).pack(side="left")
         self.wordslist_label_var = tk.StringVar(value="wordslist 参考词表")
         ttk.Label(
             ref_box, textvariable=self.wordslist_label_var, wraplength=430,
@@ -5783,6 +5786,7 @@ class PictureCaptureApp(tk.Tk):
             "success": (colors["success"], colors["success_hover"], "#ffffff"),
         }
         background, active_background, foreground = palette.get(role, palette["neutral"])
+        is_neutral = role == "neutral"
         return tk.Button(
             parent,
             text=text,
@@ -5793,9 +5797,11 @@ class PictureCaptureApp(tk.Tk):
             activeforeground=foreground,
             relief="flat",
             bd=0,
-            highlightthickness=0,
-            padx=8,
-            pady=4,
+            highlightthickness=(1 if is_neutral else 0),
+            highlightbackground=colors["border"],
+            highlightcolor=colors["border"],
+            padx=(7 if is_neutral else 8),
+            pady=(3 if is_neutral else 4),
             cursor="hand2",
         )
 
