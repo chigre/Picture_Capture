@@ -137,6 +137,22 @@ HEADWORD_HELP_LINES = {
 }
 
 
+# One compact atlas keeps the packaged classic examples small while still
+# showing real, locally cropped dictionary material in the Wizard.
+# Atlas canvas: 1080 x 474; each crop is 360 x 158.
+HEADWORD_EXAMPLE_ATLAS_CROPS = {
+    "latin_regular_NewApproach": (0, 0, 360, 158),
+    "latin_regular_LDER": (360, 0, 720, 158),
+    "numbered_prefix_RUIGO": (720, 0, 1080, 158),
+    "cjk_visual_HZYLDZD": (0, 158, 360, 316),
+    "cjk_visual_XDHYCD": (360, 158, 720, 316),
+    "cjk_visual_TimesCED": (720, 158, 1080, 316),
+    "cjk_visual_shueisha": (0, 316, 360, 474),
+    "edge_visual_regular_XAHDCD": (360, 316, 720, 474),
+    "marker_prefixed_HanYi": (720, 316, 1080, 474),
+}
+
+
 SEPARATOR_LABEL_TO_VALUE = {
     "自动判断": "auto",
     "有中央分隔线": "present",
@@ -1312,6 +1328,35 @@ class ProjectProfileWizard(tk.Toplevel):
                     return candidate
         return None
 
+    def _headword_example_image(
+        self, profile_key: str, dictionary_name: str,
+    ) -> Image.Image | None:
+        """Load an individual crop or extract its cell from the bundled atlas."""
+        root = Path(__file__).resolve().parent / "data" / "headword_examples"
+        asset = self._headword_example_asset(profile_key, dictionary_name)
+        if asset is not None:
+            try:
+                with Image.open(asset) as opened:
+                    return normalize_page_rgb(opened)
+            except Exception:
+                return None
+
+        safe = "".join(
+            ch for ch in dictionary_name if ch.isalnum() or ch in {"-", "_"}
+        )
+        crop_box = HEADWORD_EXAMPLE_ATLAS_CROPS.get(
+            f"{profile_key}_{safe}"
+        )
+        atlas = root / "classic_headword_examples.jpg"
+        if crop_box is None or not atlas.exists():
+            return None
+        try:
+            with Image.open(atlas) as opened:
+                image = normalize_page_rgb(opened)
+                return image.crop(crop_box)
+        except Exception:
+            return None
+
     def _refresh_headword_description(self) -> None:
         key = self._current_profile_key()
         try:
@@ -1345,21 +1390,14 @@ class ProjectProfileWizard(tk.Toplevel):
                 cell.grid(
                     row=row, column=column, sticky="nsew", padx=5, pady=5,
                 )
-                asset = self._headword_example_asset(key, example.dictionary)
-                if asset is not None:
-                    try:
-                        with Image.open(asset) as opened:
-                            image = normalize_page_rgb(opened)
-                        image.thumbnail(
-                            (example_width, 315), Image.Resampling.LANCZOS,
-                        )
-                        photo = ImageTk.PhotoImage(image)
-                        self._headword_example_photos.append(photo)
-                        ttk.Label(cell, image=photo).pack(anchor="center")
-                    except Exception:
-                        ttk.Label(
-                            cell, text="样例图片读取失败", anchor="center",
-                        ).pack(fill="x", ipady=35)
+                image = self._headword_example_image(key, example.dictionary)
+                if image is not None:
+                    image.thumbnail(
+                        (example_width, 315), Image.Resampling.LANCZOS,
+                    )
+                    photo = ImageTk.PhotoImage(image)
+                    self._headword_example_photos.append(photo)
+                    ttk.Label(cell, image=photo).pack(anchor="center")
                 else:
                     ttk.Label(
                         cell,
