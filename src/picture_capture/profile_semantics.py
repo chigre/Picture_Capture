@@ -164,26 +164,20 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
     scale = parameter_width / max(1, canonical_width)
 
     header_mode = str(getattr(current, "profile_header_mode", "auto") or "auto")
-    if header_mode == "auto":
+    # Page-template header/footer are physical SOURCE-page regions. They are
+    # masked before canonical rotation/mirroring below, so never reinterpret
+    # their percentages as canonical start_y/bottom_y. The historical automatic
+    # horizontal header-rule detector remains useful for horizontal pages only.
+    if header_mode == "auto" and current.layout_writing_mode == "horizontal-tb":
         current.paddle_auto_header_rule = True
-    elif header_mode == "none":
-        # "No running header" does not mean body ink starts at pixel 0. Keep
-        # the representative-page body top learned by the Profile analysis,
-        # but disable the extra running-header rule detector.
-        current.paddle_auto_header_rule = False
     else:
         current.paddle_auto_header_rule = False
-        pct = max(0.0, min(35.0, float(getattr(current, "profile_header_percent", 6.0))))
-        current.start_y = round(canonical_height * pct / 100.0 * scale)
 
     footer_mode = str(getattr(current, "profile_footer_mode", "auto") or "auto")
-    if footer_mode == "present":
-        pct = max(0.0, min(35.0, float(getattr(current, "profile_footer_percent", 5.0))))
-        current.bottom_y = round(canonical_height * (1.0 - pct / 100.0) * scale)
-        current.crop_to_bottom_y = True
-    elif footer_mode == "auto":
-        # Representative-page analysis learns a robust body bottom. Reuse that
-        # value when available; otherwise remain uncropped until analysis runs.
+    # bottom_y is a canonical reading-axis body bound learned during Profile
+    # analysis. Reuse it for automatic mode; an explicit physical footer is
+    # independently masked in source space and therefore must not overwrite it.
+    if footer_mode == "auto":
         current.crop_to_bottom_y = int(getattr(current, "bottom_y", 0) or 0) > 0
     elif footer_mode == "none":
         current.crop_to_bottom_y = False
@@ -203,20 +197,31 @@ def page_template_analysis_image(
     reject them. Only the disposable analysis copy is whitened; source pixels,
     saved coordinates, crops and exports are untouched.
     """
-    side = excluded_source_side(settings, page_index)
-    if side is None:
-        return image.copy()
     result = image.copy()
     width, height = result.size
-    pct = max(0.0, min(30.0, float(getattr(settings, "profile_side_percent", 8.0))))
-    margin = max(0, min(width, round(width * pct / 100.0)))
-    if margin <= 0:
-        return result
     draw = ImageDraw.Draw(result)
-    if side == "left":
-        draw.rectangle((0, 0, margin, height), fill="white")
-    else:
-        draw.rectangle((max(0, width - margin), 0, width, height), fill="white")
+
+    if str(getattr(settings, "profile_header_mode", "auto") or "auto") == "present":
+        pct = max(0.0, min(35.0, float(getattr(settings, "profile_header_percent", 6.0))))
+        margin = max(0, min(height, round(height * pct / 100.0)))
+        if margin > 0:
+            draw.rectangle((0, 0, width, margin), fill="white")
+
+    if str(getattr(settings, "profile_footer_mode", "auto") or "auto") == "present":
+        pct = max(0.0, min(35.0, float(getattr(settings, "profile_footer_percent", 5.0))))
+        margin = max(0, min(height, round(height * pct / 100.0)))
+        if margin > 0:
+            draw.rectangle((0, max(0, height - margin), width, height), fill="white")
+
+    side = excluded_source_side(settings, page_index)
+    if side is not None:
+        pct = max(0.0, min(30.0, float(getattr(settings, "profile_side_percent", 8.0))))
+        margin = max(0, min(width, round(width * pct / 100.0)))
+        if margin > 0:
+            if side == "left":
+                draw.rectangle((0, 0, margin, height), fill="white")
+            else:
+                draw.rectangle((max(0, width - margin), 0, width, height), fill="white")
     return result
 
 
@@ -228,10 +233,20 @@ def entry_allowed_by_page_template(
     page_index: int = 0,
 ) -> bool:
     """Reject entries inside a configured physical left/right page-edge exclusion."""
+    width, height = source_size
+
+    if str(getattr(settings, "profile_header_mode", "auto") or "auto") == "present":
+        pct = max(0.0, min(35.0, float(getattr(settings, "profile_header_percent", 6.0))))
+        if source_y < height * pct / 100.0:
+            return False
+    if str(getattr(settings, "profile_footer_mode", "auto") or "auto") == "present":
+        pct = max(0.0, min(35.0, float(getattr(settings, "profile_footer_percent", 5.0))))
+        if source_y > height * (1.0 - pct / 100.0):
+            return False
+
     side = excluded_source_side(settings, page_index)
     if side is None:
         return True
-    width, _height = source_size
     pct = max(0.0, min(30.0, float(getattr(settings, "profile_side_percent", 8.0))))
     boundary = width * pct / 100.0
     if side == "left":
