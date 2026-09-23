@@ -423,7 +423,9 @@
       "display_name": "符号前缀词头",
       "description": "以 ○、●、◆ 等明确符号作为强词条提示。",
       "family": "marker_prefixed",
-      "validated_examples": [],
+      "validated_examples": [
+        "HanYi"
+      ],
       "features": [
         "explicit_entry_marker"
       ]
