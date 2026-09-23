@@ -4619,40 +4619,100 @@ class OCRConflictReviewDialog(tk.Toplevel):
         super().__init__(parent)
         self.parent = parent
         self.title("OCR词头冲突复核")
-        self.geometry("1180x650")
-        self.minsize(860, 480)
+        self.geometry("1180x680")
+        self.minsize(900, 520)
         self.only_issues = tk.BooleanVar(value=True)
         self.status_var = tk.StringVar(value="")
         self._row_ids: list[str] = []
 
-        top = ttk.Frame(self, padding=8); top.pack(fill="x")
-        ttk.Checkbutton(top, text="只显示需要关注的候选", variable=self.only_issues, command=self.refresh).pack(side="left")
-        ttk.Button(top, text="刷新", command=self.refresh).pack(side="left", padx=6)
-        ttk.Button(top, text="采用 Paddle", command=lambda: self.choose_engine("paddle")).pack(side="right", padx=3)
-        ttk.Button(top, text="采用 Tesseract", command=lambda: self.choose_engine("tesseract")).pack(side="right", padx=3)
-        ttk.Button(top, text="采用 Lens", command=lambda: self.choose_engine("lens")).pack(side="right", padx=3)
-        ttk.Button(top, text="手工词头…", command=self.choose_manual).pack(side="right", padx=3)
-        ttk.Button(top, text="选择/取消", command=self.toggle_selected).pack(side="right", padx=3)
+        outer = ttk.Frame(self, padding=(18, 14, 18, 14))
+        outer.pack(fill="both", expand=True)
+        _build_modern_dialog_heading(
+            outer,
+            "OCR 词头冲突复核",
+            "集中检查多 OCR 引擎意见不一致或需要人工确认的候选。先选中一行，再决定采用哪个结果。",
+        )
 
-        frame = ttk.Frame(self); frame.pack(fill="both", expand=True, padx=8)
-        cols = ("selected", "column", "y", "issues", "paddle", "tesseract", "lens", "final", "engine", "reason")
-        self.tree = ttk.Treeview(frame, columns=cols, show="headings", selectmode="browse")
+        filter_bar = ttk.Frame(outer)
+        filter_bar.pack(fill="x", pady=(0, 8))
+        ttk.Checkbutton(
+            filter_bar,
+            text="只显示需要关注的候选",
+            variable=self.only_issues,
+            command=self.refresh,
+        ).pack(side="left")
+        ttk.Button(filter_bar, text="刷新", command=self.refresh).pack(
+            side="left", padx=(8, 0)
+        )
+
+        action_bar = ttk.LabelFrame(
+            outer, text="所选候选", padding=(10, 7),
+        )
+        action_bar.pack(fill="x", pady=(0, 10))
+        ttk.Button(
+            action_bar, text="选择 / 取消",
+            command=self.toggle_selected,
+        ).pack(side="left")
+        ttk.Button(
+            action_bar, text="手工词头…",
+            command=self.choose_manual,
+        ).pack(side="left", padx=(6, 0))
+        ttk.Separator(action_bar, orient="vertical").pack(
+            side="left", fill="y", padx=10
+        )
+        ttk.Button(
+            action_bar, text="采用 Paddle",
+            command=lambda: self.choose_engine("paddle"),
+        ).pack(side="left")
+        ttk.Button(
+            action_bar, text="采用 Tesseract",
+            command=lambda: self.choose_engine("tesseract"),
+        ).pack(side="left", padx=(6, 0))
+        ttk.Button(
+            action_bar, text="采用 Lens",
+            command=lambda: self.choose_engine("lens"),
+        ).pack(side="left", padx=(6, 0))
+
+        frame = ttk.Frame(outer)
+        frame.pack(fill="both", expand=True)
+        cols = (
+            "selected", "column", "y", "issues", "paddle", "tesseract",
+            "lens", "final", "engine", "reason",
+        )
+        self.tree = ttk.Treeview(
+            frame, columns=cols, show="headings", selectmode="browse"
+        )
         labels = {
             "selected": "选中", "column": "栏", "y": "Y", "issues": "问题",
-            "paddle": "Paddle", "tesseract": "Tesseract", "lens": "Google Lens", "final": "最终词头",
+            "paddle": "Paddle", "tesseract": "Tesseract",
+            "lens": "Google Lens", "final": "最终词头",
             "engine": "采用", "reason": "决策原因",
         }
-        widths = {"selected": 55, "column": 45, "y": 70, "issues": 210, "paddle": 150,
-                  "tesseract": 150, "lens": 150, "final": 150, "engine": 90, "reason": 190}
-        for c in cols:
-            self.tree.heading(c, text=labels[c]); self.tree.column(c, width=widths[c], anchor="w")
+        widths = {
+            "selected": 55, "column": 45, "y": 70, "issues": 190,
+            "paddle": 145, "tesseract": 145, "lens": 145,
+            "final": 145, "engine": 85, "reason": 180,
+        }
+        for key in cols:
+            self.tree.heading(key, text=labels[key])
+            self.tree.column(key, width=widths[key], anchor="w")
         ybar = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
         xbar = ttk.Scrollbar(frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=ybar.set, xscrollcommand=xbar.set)
-        self.tree.grid(row=0, column=0, sticky="nsew"); ybar.grid(row=0, column=1, sticky="ns"); xbar.grid(row=1, column=0, sticky="ew")
-        frame.rowconfigure(0, weight=1); frame.columnconfigure(0, weight=1)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        ybar.grid(row=0, column=1, sticky="ns")
+        xbar.grid(row=1, column=0, sticky="ew")
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
         self.tree.bind("<Double-1>", self.on_double_click)
-        ttk.Label(self, textvariable=self.status_var, anchor="w", padding=6).pack(fill="x")
+
+        status_bar = ttk.Frame(outer)
+        status_bar.pack(fill="x", pady=(8, 0))
+        ttk.Label(
+            status_bar, textvariable=self.status_var,
+            foreground="#666666", anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(status_bar, text="关闭", command=self.destroy).pack(side="right")
         self.refresh()
 
     def _selected_candidate(self) -> dict | None:
