@@ -441,6 +441,46 @@ def derive_geometry(image: Image.Image, settings: AppSettings) -> Geometry:
     return geometry
 
 
+def _left_edge_otsu_threshold(gray: np.ndarray) -> int:
+    """Return a stable Otsu threshold for ordinary left-edge detection."""
+    hist = np.bincount(gray.ravel(), minlength=256).astype(np.float64)
+    total = float(hist.sum())
+    if total <= 0:
+        return 127
+    probability = hist / total
+    omega = np.cumsum(probability)
+    means = np.cumsum(probability * np.arange(256, dtype=np.float64))
+    global_mean = means[-1]
+    denominator = omega * (1.0 - omega)
+    score = np.zeros(256, dtype=np.float64)
+    valid = denominator > 1e-12
+    score[valid] = ((global_mean * omega[valid] - means[valid]) ** 2) / denominator[valid]
+    return int(min(235, max(40, int(np.argmax(score)))))
+
+
+def _left_edge_ink_mask(gray: np.ndarray, settings: AppSettings) -> np.ndarray:
+    """Build the ordinary-drawing foreground mask from the shared threshold policy.
+
+    Ordinary drawing historically always used the legacy fixed RGB-sum threshold.
+    That made otherwise identical layouts behave differently when paper tone,
+    scan exposure, or yellowing changed.  The ordinary mode now follows the same
+    user-facing threshold policy as layout analysis: automatic/Otsu by default,
+    adaptive for uneven backgrounds, and fixed only for compatibility/tuning.
+    """
+    mode = str(getattr(settings, "analysis_threshold_mode", "auto") or "auto").strip().lower()
+    if mode == "fixed":
+        threshold = int(round(float(getattr(settings, "darkness_threshold", 600)) / 3.0))
+        return gray < min(255, max(0, threshold))
+    if mode == "adaptive":
+        radius = max(3, round(min(gray.shape[:2]) * 0.008))
+        local = np.asarray(
+            Image.fromarray(gray, mode="L").filter(ImageFilter.BoxBlur(radius=radius)),
+            dtype=np.int16,
+        )
+        return gray.astype(np.int16) < (local - 10)
+    return gray < _left_edge_otsu_threshold(gray)
+
+
 def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tuple[list[Entry], Geometry]:
     """Detect dictionary headword rows near each column's left edge.
 
@@ -454,8 +494,7 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
     analysis, scale = _analysis_image(canonical)
     parameter_to_analysis = scale / parameter_scale(canonical, settings)
     gray = np.asarray(ImageOps.grayscale(analysis), dtype=np.uint8)
-    threshold = max(0, min(255, settings.darkness_threshold / 3.0))
-    dark = gray < threshold
+    dark = _left_edge_ink_mask(gray, settings)
     top = round(geometry.top * scale)
     bottom = min(gray.shape[0], round(geometry.bottom * scale))
     strip_width = max(3, round(settings.body_indent * parameter_to_analysis))
@@ -475,9 +514,25 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
             if x1 > x0:
                 counts[offset] = int(dark[y_analysis, x0:x1].sum())
                 actual_widths[offset] = x1 - x0
-        # A single speck must not become a marker, but narrow typefaces still
-        # need to be detected. The threshold grows gently with strip width.
-        active = counts >= np.maximum(2, np.rint(actual_widths * 0.10).astype(np.int32))
+        # A single speck must not become a marker.  Derive the row-density
+        # floor from this column instead of hard-coding 10% for every scan/font.
+        # Thin type stays detectable, while dark/noisy scans still require a
+        # meaningful amount of left-edge ink.
+        density = np.divide(
+            counts.astype(np.float64),
+            np.maximum(1, actual_widths),
+            out=np.zeros_like(counts, dtype=np.float64),
+            where=actual_widths > 0,
+        )
+        positive = density[density > 0]
+        if positive.size:
+            q35 = float(np.percentile(positive, 35))
+            density_floor = min(0.12, max(0.035, q35 * 0.55))
+        else:
+            density_floor = 0.10
+        active = counts >= np.maximum(
+            2, np.rint(actual_widths * density_floor).astype(np.int32)
+        )
         # Close tiny vertical gaps inside letters/diacritics.
         if active.size >= 3:
             active = np.convolve(active.astype(np.uint8), np.ones(3, dtype=np.uint8), mode="same") > 0
