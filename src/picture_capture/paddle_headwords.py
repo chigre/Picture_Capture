@@ -2801,6 +2801,27 @@ def filter_headword_records(
             and _is_single_cjk_ideograph(parsed.normalized)
             and parsed.descriptor_text != "chinese_bracketed_headword"
         )
+        cjk_profile_active = bool(getattr(active_profile, "key", "") == "cjk_visual")
+        cjk_bracketed = bool(
+            cjk_profile_active
+            and parsed
+            and parsed.descriptor_text == "chinese_bracketed_headword"
+        )
+        cjk_allow_single = bool(
+            getattr(settings, "profile_cjk_allow_single_headword", True)
+        )
+        cjk_allow_bracketed = bool(
+            getattr(settings, "profile_cjk_allow_bracketed_headword", True)
+        )
+        cjk_require_left_edge = bool(
+            getattr(settings, "profile_cjk_require_left_edge", True)
+        )
+        cjk_brackets_in_body = bool(
+            getattr(settings, "profile_cjk_brackets_in_body", False)
+        )
+        cjk_require_visual_evidence = bool(
+            getattr(settings, "profile_cjk_require_visual_evidence", False)
+        )
         # OCR sometimes merges a large single-character head with a small
         # pronunciation/variant fragment. The generic parser may still extract
         # a one-Han lemma from that merged line; treat it as the same visual
@@ -2863,13 +2884,27 @@ def filter_headword_records(
             and boldness_ratio >= max(1.25, settings.paddle_boldness_ratio * 1.08)
             and height_ratio >= 0.92
         )
+        position_ok = (
+            (cjk_at_left if cjk_single_visual else at_left)
+            if (not cjk_profile_active or cjk_require_left_edge)
+            else True
+        )
         base_eligible = bool(
-            parsed and parsed.normalized and below_header
-            and (cjk_at_left if cjk_single_visual else at_left)
+            parsed and parsed.normalized and below_header and position_ok
+        )
+        cjk_bracket_visual_supported = bool(large or bold)
+        cjk_bracket_extra_required = bool(
+            cjk_bracketed
+            and (cjk_brackets_in_body or cjk_require_visual_evidence)
         )
         ordinary_accept = bool(
             base_eligible
             and not cjk_single_visual
+            and (not cjk_bracketed or cjk_allow_bracketed)
+            and (
+                not cjk_bracket_extra_required
+                or cjk_bracket_visual_supported
+            )
             and not looks_like_continuation
             and not marker_noise
             and score >= settings.paddle_min_candidate_score
@@ -2879,6 +2914,7 @@ def filter_headword_records(
         cjk_single_accept = bool(
             base_eligible
             and cjk_single_visual
+            and (not cjk_profile_active or cjk_allow_single)
             and cjk_single_prominent
             and not looks_like_continuation
             and not marker_noise
@@ -2907,7 +2943,13 @@ def filter_headword_records(
             reject_reason = "user_reject_rule"
         elif not parsed:
             reject_reason = "lemma_parse_failed"
-        elif not (cjk_at_left if cjk_single_visual else at_left):
+        elif cjk_profile_active and cjk_single_visual and not cjk_allow_single:
+            reject_reason = "cjk_single_headword_disabled"
+        elif cjk_bracketed and not cjk_allow_bracketed:
+            reject_reason = "cjk_bracketed_headword_disabled"
+        elif cjk_bracket_extra_required and not cjk_bracket_visual_supported:
+            reject_reason = "cjk_bracket_needs_visual_evidence"
+        elif not position_ok:
             reject_reason = "not_at_column_left"
         elif not below_header:
             reject_reason = "above_header_cutoff"
@@ -3038,6 +3080,12 @@ def filter_headword_records(
                 "cjk_at_left": cjk_at_left,
                 "cjk_single_prominent": cjk_single_prominent,
                 "cjk_single_accept": cjk_single_accept,
+                "cjk_bracketed": cjk_bracketed,
+                "cjk_bracket_visual_supported": cjk_bracket_visual_supported,
+                "cjk_bracket_extra_required": cjk_bracket_extra_required,
+                "cjk_allow_single": cjk_allow_single,
+                "cjk_allow_bracketed": cjk_allow_bracketed,
+                "cjk_require_left_edge": cjk_require_left_edge,
                 "strong_visual_fallback": strong_visual,
                 "image_boundary_supported": bool(image_boundary is not None),
                 "marker_noise": marker_noise,
