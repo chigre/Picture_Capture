@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import queue
+import sys
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -30,6 +31,7 @@ from .profile_semantics import (
     copy_settings,
     effective_page_settings,
     excluded_source_side,
+    excluded_source_side_percent,
     ordered_headword_profiles,
     profile_summary_tags,
     reading_choice_from_settings,
@@ -188,6 +190,35 @@ def _ocr_language_code(value: str) -> str:
     return OCR_LANGUAGE_LABEL_TO_VALUE.get(text, text or "eng")
 
 
+def _screen_work_area(widget: tk.Misc) -> tuple[int, int, int, int]:
+    """Return usable desktop x/y/width/height, excluding the Windows taskbar."""
+    screen_w = max(800, int(widget.winfo_screenwidth()))
+    screen_h = max(600, int(widget.winfo_screenheight()))
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+
+            class RECT(ctypes.Structure):
+                _fields_ = [
+                    ("left", ctypes.c_long),
+                    ("top", ctypes.c_long),
+                    ("right", ctypes.c_long),
+                    ("bottom", ctypes.c_long),
+                ]
+
+            rect = RECT()
+            # SPI_GETWORKAREA excludes the taskbar and other app bars.
+            if ctypes.windll.user32.SystemParametersInfoW(
+                0x0030, 0, ctypes.byref(rect), 0
+            ):
+                width = max(1, int(rect.right - rect.left))
+                height = max(1, int(rect.bottom - rect.top))
+                return int(rect.left), int(rect.top), width, height
+        except Exception:
+            pass
+    return 0, 0, screen_w, screen_h
+
+
 class ProjectProfileWizard(tk.Toplevel):
     """User-facing, composable Project Profile workflow.
 
@@ -208,15 +239,15 @@ class ProjectProfileWizard(tk.Toplevel):
         self.title("建立项目 Profile" if self.new_project else "项目 Profile")
         self.update_idletasks()
         screen_w = max(800, int(self.winfo_screenwidth()))
-        screen_h = max(600, int(self.winfo_screenheight()))
-        width = max(960, int(screen_w * 0.80))
-        height = max(640, int(screen_h * 0.80))
-        x = max(0, screen_w - width)
-        y = 0
+        work_x, work_y, work_w, work_h = _screen_work_area(self)
+        width = min(work_w, max(960, int(screen_w * 0.80)))
+        height = max(640, work_h)
+        x = max(work_x, work_x + work_w - width)
+        y = work_y
         self._wizard_width = width
         self._wizard_height = height
-        self._wizard_left_width = max(420, int(width * 0.45) - 36)
-        self._wizard_image_width = max(520, int(width * 0.55) - 36)
+        self._wizard_left_width = max(400, int(width * 0.40) - 36)
+        self._wizard_image_width = max(560, int(width * 0.60) - 36)
         self._wizard_content_width = self._wizard_left_width
         self.geometry(f"{width}x{height}+{x}+{y}")
         self.minsize(min(960, width), min(640, height))
@@ -381,11 +412,11 @@ class ProjectProfileWizard(tk.Toplevel):
         left_panel.columnconfigure(0, weight=1)
         right_panel.rowconfigure(0, weight=1)
         right_panel.columnconfigure(0, weight=1)
-        self.profile_paned.add(left_panel, weight=45)
-        self.profile_paned.add(right_panel, weight=55)
+        self.profile_paned.add(left_panel, weight=40)
+        self.profile_paned.add(right_panel, weight=60)
         self.after_idle(
             lambda: self.profile_paned.sashpos(
-                0, max(320, int(self._wizard_width * 0.45))
+                0, max(320, int(self._wizard_width * 0.40))
             )
         )
 
@@ -649,11 +680,11 @@ class ProjectProfileWizard(tk.Toplevel):
         for col in (1, 3, 5, 7):
             info.columnconfigure(col, weight=1)
 
-        ttk.Label(info, text="词典完整名称：").grid(row=0, column=0, sticky="e", padx=(0, 3))
+        ttk.Label(info, text="词典名称：").grid(row=0, column=0, sticky="e", padx=(0, 3))
         ttk.Entry(
             info, textvariable=self.dictionary_full_name_var, width=16,
         ).grid(row=0, column=1, sticky="ew", padx=(0, 6))
-        ttk.Label(info, text="词典缩写名称：").grid(row=0, column=2, sticky="e", padx=(0, 3))
+        ttk.Label(info, text="词典简称(字母)：").grid(row=0, column=2, sticky="e", padx=(0, 3))
         ttk.Entry(
             info, textvariable=self.dictionary_abbreviation_var, width=9,
         ).grid(row=0, column=3, sticky="ew", padx=(0, 6))
@@ -661,7 +692,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Entry(
             info, textvariable=self.dictionary_isbn_var, width=13,
         ).grid(row=0, column=5, sticky="ew", padx=(0, 6))
-        ttk.Label(info, text="正文页码范围：").grid(row=0, column=6, sticky="e", padx=(0, 3))
+        ttk.Label(info, text="正文页码：").grid(row=0, column=6, sticky="e", padx=(0, 3))
         self.body_page_range_entry = ttk.Entry(
             info, textvariable=self.dictionary_body_page_range_var, width=12,
         )
