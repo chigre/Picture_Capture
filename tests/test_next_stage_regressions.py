@@ -630,6 +630,10 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "def _render_validation_result" in text
     assert "thumb.thumbnail((650, 500)" in text
     assert "fill=(255, 0, 0, 255), width=1" in text
+    assert 'force_paddle_refresh=(settings.detection_method == "paddleocr")' in text
+    assert "正在强制重新识别并测试代表页" in text
+    assert "def _validation_coverage_summary" in text
+    assert "覆盖诊断：" in text
 
 
 def test_project_profile_wizard_is_the_normal_entry_path():
