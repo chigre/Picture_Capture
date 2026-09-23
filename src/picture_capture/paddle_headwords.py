@@ -1694,22 +1694,14 @@ def parse_headword_text(
             return cjk_marker
     if legacy_language_driven_cjk or (
         allow_bracketed
-        and (
-            parser_controls
-            or "bracketed_compound" in features
-            or active_profile.uses_parser("cjk_bracketed")
-        )
+        and (parser_controls or "bracketed_compound" in features)
     ):
         chinese = _parse_chinese_bracketed_headword(text, settings)
         if chinese is not None:
             return chinese
     if legacy_language_driven_cjk or (
         allow_single
-        and (
-            parser_controls
-            or "large_single_character" in features
-            or active_profile.uses_parser("cjk_single_visual")
-        )
+        and (parser_controls or "large_single_character" in features)
     ):
         chinese_single = _parse_chinese_single_character_headword(text, settings)
         if chinese_single is not None:
