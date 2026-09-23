@@ -2911,11 +2911,27 @@ def filter_headword_records(
             and (structural_cue or not settings.paddle_require_pos_or_symbol)
             and (fallback_cue or not settings.paddle_require_visual_cue)
         )
+        cjk_single_strong_visual = bool(
+            cjk_single_prominent
+            and (
+                leading_record_height_ratio >= 1.55
+                or (
+                    leading_record_height_ratio >= 1.35
+                    and boldness_ratio >= max(1.12, settings.paddle_boldness_ratio)
+                    and separated
+                )
+            )
+        )
         cjk_single_accept = bool(
             base_eligible
             and cjk_single_visual
             and (not cjk_profile_active or cjk_allow_single)
             and cjk_single_prominent
+            and (
+                not cjk_profile_active
+                or not cjk_require_visual_evidence
+                or cjk_single_strong_visual
+            )
             and not looks_like_continuation
             and not marker_noise
         )
@@ -2949,6 +2965,14 @@ def filter_headword_records(
             reject_reason = "cjk_bracketed_headword_disabled"
         elif cjk_bracket_extra_required and not cjk_bracket_visual_supported:
             reject_reason = "cjk_bracket_needs_visual_evidence"
+        elif (
+            cjk_profile_active
+            and cjk_single_visual
+            and cjk_require_visual_evidence
+            and cjk_single_prominent
+            and not cjk_single_strong_visual
+        ):
+            reject_reason = "cjk_single_needs_stronger_visual_evidence"
         elif not position_ok:
             reject_reason = "not_at_column_left"
         elif not below_header:
@@ -3080,6 +3104,7 @@ def filter_headword_records(
                 "cjk_at_left": cjk_at_left,
                 "cjk_single_prominent": cjk_single_prominent,
                 "cjk_single_accept": cjk_single_accept,
+                "cjk_single_strong_visual": cjk_single_strong_visual,
                 "cjk_bracketed": cjk_bracketed,
                 "cjk_bracket_visual_supported": cjk_bracket_visual_supported,
                 "cjk_bracket_extra_required": cjk_bracket_extra_required,
