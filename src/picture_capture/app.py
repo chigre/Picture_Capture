@@ -917,6 +917,29 @@ def _compare_page_word_mappings(
     return changes, counts
 
 
+def _build_modern_dialog_heading(
+    parent: tk.Misc, title: str, subtitle: str,
+) -> ttk.Frame:
+    """Shared heading block for secondary work windows."""
+    block = ttk.Frame(parent)
+    block.pack(fill="x", pady=(0, 12))
+    base = font.nametofont("TkDefaultFont").copy()
+    heading_font = base.copy()
+    heading_font.configure(
+        size=max(13, abs(int(base.cget("size"))) + 4),
+        weight="bold",
+    )
+    ttk.Label(block, text=title, font=heading_font).pack(anchor="w")
+    ttk.Label(
+        block,
+        text=subtitle,
+        foreground="#666666",
+        justify="left",
+        wraplength=900,
+    ).pack(anchor="w", pady=(3, 0))
+    return block
+
+
 class SettingsDialog(tk.Toplevel):
     FIELDS = [
         ("词典完整名称", "dictionary_full_name", str),
@@ -1096,8 +1119,13 @@ class SettingsDialog(tk.Toplevel):
         self._field_meta = {name: (label, cast) for label, name, cast in self.FIELDS}
         self._sort_label_to_value: dict[str, str] = {}
 
-        outer = ttk.Frame(self)
+        outer = ttk.Frame(self, padding=(18, 14, 18, 12))
         outer.pack(fill="both", expand=True)
+        _build_modern_dialog_heading(
+            outer,
+            "更多参数",
+            "项目级高级设置。常用项目配置优先在【项目 Profile】完成；这里用于精细调整、排序与过滤规则。",
+        )
         notebook = ttk.Notebook(outer)
         self.notebook = notebook
         notebook.pack(fill="both", expand=True)
@@ -1333,12 +1361,18 @@ class SettingsDialog(tk.Toplevel):
         self.load_rules_editor()
 
         ttk.Separator(outer, orient="horizontal").pack(fill="x")
-        footer = ttk.Frame(outer, padding=(12, 9, 12, 12))
+        footer = ttk.Frame(outer, padding=(0, 10, 0, 0))
         footer.pack(fill="x")
-        ttk.Label(footer, text="参数改动会自动应用并保存；“保存参数”用于立即校验/关闭").pack(side="left")
-        ttk.Button(footer, text="取消", command=self.destroy).pack(side="right", padx=(6, 0))
-        ttk.Button(footer, text="保存参数", command=self.save).pack(side="right")
-        ttk.Button(footer, text="检测OCR引擎", command=self.check_ocr_engines).pack(side="right", padx=(0, 8))
+        ttk.Label(
+            footer,
+            text="改动会自动保存；“保存并关闭”会立即校验当前参数。",
+            foreground="#666666",
+        ).pack(side="left")
+        ttk.Button(footer, text="关闭", command=self.destroy).pack(side="right", padx=(6, 0))
+        ttk.Button(footer, text="保存并关闭", command=self.save).pack(side="right")
+        ttk.Button(
+            footer, text="检测 OCR 引擎", command=self.check_ocr_engines
+        ).pack(side="right", padx=(0, 8))
         self.bind("<Control-s>", lambda _event: self.save())
         self.bind("<Escape>", lambda _event: self.destroy())
         self.protocol("WM_DELETE_WINDOW", self.destroy)
@@ -4585,40 +4619,100 @@ class OCRConflictReviewDialog(tk.Toplevel):
         super().__init__(parent)
         self.parent = parent
         self.title("OCR词头冲突复核")
-        self.geometry("1180x650")
-        self.minsize(860, 480)
+        self.geometry("1180x680")
+        self.minsize(900, 520)
         self.only_issues = tk.BooleanVar(value=True)
         self.status_var = tk.StringVar(value="")
         self._row_ids: list[str] = []
 
-        top = ttk.Frame(self, padding=8); top.pack(fill="x")
-        ttk.Checkbutton(top, text="只显示需要关注的候选", variable=self.only_issues, command=self.refresh).pack(side="left")
-        ttk.Button(top, text="刷新", command=self.refresh).pack(side="left", padx=6)
-        ttk.Button(top, text="采用 Paddle", command=lambda: self.choose_engine("paddle")).pack(side="right", padx=3)
-        ttk.Button(top, text="采用 Tesseract", command=lambda: self.choose_engine("tesseract")).pack(side="right", padx=3)
-        ttk.Button(top, text="采用 Lens", command=lambda: self.choose_engine("lens")).pack(side="right", padx=3)
-        ttk.Button(top, text="手工词头…", command=self.choose_manual).pack(side="right", padx=3)
-        ttk.Button(top, text="选择/取消", command=self.toggle_selected).pack(side="right", padx=3)
+        outer = ttk.Frame(self, padding=(18, 14, 18, 14))
+        outer.pack(fill="both", expand=True)
+        _build_modern_dialog_heading(
+            outer,
+            "OCR 词头冲突复核",
+            "集中检查多 OCR 引擎意见不一致或需要人工确认的候选。先选中一行，再决定采用哪个结果。",
+        )
 
-        frame = ttk.Frame(self); frame.pack(fill="both", expand=True, padx=8)
-        cols = ("selected", "column", "y", "issues", "paddle", "tesseract", "lens", "final", "engine", "reason")
-        self.tree = ttk.Treeview(frame, columns=cols, show="headings", selectmode="browse")
+        filter_bar = ttk.Frame(outer)
+        filter_bar.pack(fill="x", pady=(0, 8))
+        ttk.Checkbutton(
+            filter_bar,
+            text="只显示需要关注的候选",
+            variable=self.only_issues,
+            command=self.refresh,
+        ).pack(side="left")
+        ttk.Button(filter_bar, text="刷新", command=self.refresh).pack(
+            side="left", padx=(8, 0)
+        )
+
+        action_bar = ttk.LabelFrame(
+            outer, text="所选候选", padding=(10, 7),
+        )
+        action_bar.pack(fill="x", pady=(0, 10))
+        ttk.Button(
+            action_bar, text="选择 / 取消",
+            command=self.toggle_selected,
+        ).pack(side="left")
+        ttk.Button(
+            action_bar, text="手工词头…",
+            command=self.choose_manual,
+        ).pack(side="left", padx=(6, 0))
+        ttk.Separator(action_bar, orient="vertical").pack(
+            side="left", fill="y", padx=10
+        )
+        ttk.Button(
+            action_bar, text="采用 Paddle",
+            command=lambda: self.choose_engine("paddle"),
+        ).pack(side="left")
+        ttk.Button(
+            action_bar, text="采用 Tesseract",
+            command=lambda: self.choose_engine("tesseract"),
+        ).pack(side="left", padx=(6, 0))
+        ttk.Button(
+            action_bar, text="采用 Lens",
+            command=lambda: self.choose_engine("lens"),
+        ).pack(side="left", padx=(6, 0))
+
+        frame = ttk.Frame(outer)
+        frame.pack(fill="both", expand=True)
+        cols = (
+            "selected", "column", "y", "issues", "paddle", "tesseract",
+            "lens", "final", "engine", "reason",
+        )
+        self.tree = ttk.Treeview(
+            frame, columns=cols, show="headings", selectmode="browse"
+        )
         labels = {
             "selected": "选中", "column": "栏", "y": "Y", "issues": "问题",
-            "paddle": "Paddle", "tesseract": "Tesseract", "lens": "Google Lens", "final": "最终词头",
+            "paddle": "Paddle", "tesseract": "Tesseract",
+            "lens": "Google Lens", "final": "最终词头",
             "engine": "采用", "reason": "决策原因",
         }
-        widths = {"selected": 55, "column": 45, "y": 70, "issues": 210, "paddle": 150,
-                  "tesseract": 150, "lens": 150, "final": 150, "engine": 90, "reason": 190}
-        for c in cols:
-            self.tree.heading(c, text=labels[c]); self.tree.column(c, width=widths[c], anchor="w")
+        widths = {
+            "selected": 55, "column": 45, "y": 70, "issues": 190,
+            "paddle": 145, "tesseract": 145, "lens": 145,
+            "final": 145, "engine": 85, "reason": 180,
+        }
+        for key in cols:
+            self.tree.heading(key, text=labels[key])
+            self.tree.column(key, width=widths[key], anchor="w")
         ybar = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
         xbar = ttk.Scrollbar(frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=ybar.set, xscrollcommand=xbar.set)
-        self.tree.grid(row=0, column=0, sticky="nsew"); ybar.grid(row=0, column=1, sticky="ns"); xbar.grid(row=1, column=0, sticky="ew")
-        frame.rowconfigure(0, weight=1); frame.columnconfigure(0, weight=1)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        ybar.grid(row=0, column=1, sticky="ns")
+        xbar.grid(row=1, column=0, sticky="ew")
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
         self.tree.bind("<Double-1>", self.on_double_click)
-        ttk.Label(self, textvariable=self.status_var, anchor="w", padding=6).pack(fill="x")
+
+        status_bar = ttk.Frame(outer)
+        status_bar.pack(fill="x", pady=(8, 0))
+        ttk.Label(
+            status_bar, textvariable=self.status_var,
+            foreground="#666666", anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(status_bar, text="关闭", command=self.destroy).pack(side="right")
         self.refresh()
 
     def _selected_candidate(self) -> dict | None:
@@ -4749,10 +4843,17 @@ class CropSettingsDialog(tk.Toplevel):
             self.special_page_var.set(self.parent.current_page.stem)
 
     def _build(self) -> None:
-        outer = ttk.Frame(self, padding=10)
+        outer = ttk.Frame(self, padding=(18, 14, 18, 12))
         outer.pack(fill="both", expand=True)
+        _build_modern_dialog_heading(
+            outer,
+            "切图设置",
+            "完整切图设置（词条切图 / 插图切图共用）。常规页面使用通用规则，只有确实不同的页面才放到“特殊页面覆盖”。",
+        )
 
-        general = ttk.LabelFrame(outer, text="完整切图设置（词条切图 / 插图切图共用）", padding=10)
+        general = ttk.LabelFrame(
+            outer, text="通用切图规则", padding=(12, 10),
+        )
         general.pack(fill="x")
         ttk.Label(general, text="主界面页面范围：").grid(row=0, column=0, sticky="w")
         scope = f"{len(self.indices)} 页"
@@ -4795,7 +4896,9 @@ class CropSettingsDialog(tk.Toplevel):
         ttk.Entry(general, textvariable=self.workers_var, width=10).grid(row=7, column=1, sticky="w", pady=2)
         ttk.Label(general, text="0 = 自动；词条/插图切图共用").grid(row=7, column=2, columnspan=3, sticky="w", pady=2)
 
-        special = ttk.LabelFrame(outer, text="特殊页面切图上下边界", padding=10)
+        special = ttk.LabelFrame(
+            outer, text="特殊页面覆盖", padding=(12, 10),
+        )
         special.pack(fill="both", expand=True, pady=(10, 0))
         form = ttk.Frame(special)
         form.pack(fill="x")
@@ -4828,11 +4931,16 @@ class CropSettingsDialog(tk.Toplevel):
             if isinstance(values, dict):
                 self.special_tree.insert("", "end", iid=str(page), values=(page, values.get("top_y", ""), values.get("bottom_y", 0)))
 
-        bottom = ttk.Frame(self, padding=(10, 0, 10, 10))
+        bottom = ttk.Frame(self, padding=(18, 0, 18, 12))
         bottom.pack(fill="x")
-        ttk.Label(bottom, textvariable=self.status_var, anchor="w").pack(side="left", fill="x", expand=True)
+        ttk.Label(
+            bottom, textvariable=self.status_var,
+            anchor="w", foreground="#666666",
+        ).pack(side="left", fill="x", expand=True)
         ttk.Button(bottom, text="关闭", command=self.destroy).pack(side="right")
-        ttk.Button(bottom, text="保存设置", command=self.save_settings).pack(side="right", padx=(0, 6))
+        ttk.Button(
+            bottom, text="保存并关闭", command=self.save_settings
+        ).pack(side="right", padx=(0, 6))
 
     def _known_page_stem(self, token: str) -> str:
         if not self.parent.project:
@@ -4972,10 +5080,15 @@ class OldNewComparisonWindow(tk.Toplevel):
         source = Path(str(payload.get("source") or ""))
         missing_pages = list(payload.get("missing_old_pages") or [])
 
-        outer = ttk.Frame(self, padding=10)
+        outer = ttk.Frame(self, padding=(18, 14, 18, 12))
         outer.pack(fill="both", expand=True)
+        _build_modern_dialog_heading(
+            outer,
+            "新旧比较",
+            "将当前 PDIC 合集与旧词表按页面对齐比较。先确认比较来源，再查看差异、保存快照或导出报告。",
+        )
 
-        top = ttk.Frame(outer)
+        top = ttk.LabelFrame(outer, text="比较来源", padding=(10, 7))
         top.pack(fill="x")
         ttk.Label(top, text="旧词表：").pack(side="left")
         self.source_var = tk.StringVar(value=str(source))
@@ -4992,7 +5105,11 @@ class OldNewComparisonWindow(tk.Toplevel):
             f"差异 {diff_total}：新增 {int(counts.get('新增', 0) or 0)}，"
             f"删除 {int(counts.get('删除', 0) or 0)}，修改 {int(counts.get('修改', 0) or 0)}"
         )
-        ttk.Label(outer, text=summary, anchor="w").pack(fill="x", pady=(8, 2))
+        summary_box = ttk.LabelFrame(
+            outer, text="比较摘要", padding=(10, 7),
+        )
+        summary_box.pack(fill="x", pady=(10, 6))
+        ttk.Label(summary_box, text=summary, anchor="w").pack(fill="x")
         if missing_pages:
             preview = "、".join(missing_pages[:12])
             suffix = f" 等 {len(missing_pages)} 页" if len(missing_pages) > 12 else ""
@@ -5006,7 +5123,7 @@ class OldNewComparisonWindow(tk.Toplevel):
             ttk.Label(outer, text="所选范围内文本完全一致。", foreground="#2d6a4f").pack(fill="x", pady=(0, 6))
 
         filter_row = ttk.Frame(outer)
-        filter_row.pack(fill="x", pady=(2, 6))
+        filter_row.pack(fill="x", pady=(4, 8))
         ttk.Label(filter_row, text="显示：").pack(side="left")
         self.filter_var = tk.StringVar(value="全部差异")
         combo = ttk.Combobox(filter_row, textvariable=self.filter_var, values=self.FILTERS, state="readonly", width=12)
@@ -5049,9 +5166,15 @@ class OldNewComparisonWindow(tk.Toplevel):
         self._add_text_tab(notebook, "旧 wordslist 片段", str(payload.get("old_text") or ""))
 
         bottom = ttk.Frame(outer)
-        bottom.pack(fill="x", pady=(8, 0))
-        ttk.Button(bottom, text="保存 PDIC 合集…", command=self._save_new_snapshot).pack(side="left")
-        ttk.Button(bottom, text="保存差异报告…", command=self._save_diff_report).pack(side="left", padx=(6, 0))
+        bottom.pack(fill="x", pady=(10, 0))
+        ttk.Button(
+            bottom, text="保存当前 PDIC 快照…",
+            command=self._save_new_snapshot,
+        ).pack(side="left")
+        ttk.Button(
+            bottom, text="导出差异报告…",
+            command=self._save_diff_report,
+        ).pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="关闭", command=self._close).pack(side="right")
 
         self._refresh_tree()
@@ -7648,31 +7771,93 @@ class PictureCaptureApp(tk.Tk):
         return path, len(words)
 
     def open_recent_project(self) -> None:
-        """Show the user-level project history; removal never touches files."""
+        """Show recent projects as a modern, information-focused card list."""
         dialog = tk.Toplevel(self)
         dialog.title("已有项目")
         dialog.transient(self)
-        dialog.geometry("760x360")
-        host = ttk.Frame(dialog, padding=10)
+
+        screen_w = max(900, int(dialog.winfo_screenwidth()))
+        screen_h = max(650, int(dialog.winfo_screenheight()))
+        width = min(screen_w - 80, max(780, int(screen_w * 0.58)))
+        height = min(screen_h - 100, max(520, int(screen_h * 0.68)))
+        x = max(0, (screen_w - width) // 2)
+        y = max(0, (screen_h - height) // 2)
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
+        dialog.minsize(min(760, width), min(460, height))
+
+        default_font = font.nametofont("TkDefaultFont").copy()
+        title_font = default_font.copy()
+        title_font.configure(size=max(14, abs(int(default_font.cget("size"))) + 6), weight="bold")
+        card_title_font = default_font.copy()
+        card_title_font.configure(size=max(11, abs(int(default_font.cget("size"))) + 2), weight="bold")
+        meta_font = default_font.copy()
+        meta_size = int(default_font.cget("size"))
+        meta_font.configure(size=max(8, abs(meta_size) - 1) * (-1 if meta_size < 0 else 1))
+
+        host = ttk.Frame(dialog, padding=(20, 16, 20, 18))
         host.pack(fill="both", expand=True)
-        columns = (
-            ("full_name", "词典完整名称"), ("abbreviation", "词典缩写名称"),
-            ("image_count", "图片数量"), ("last_edited", "最后编辑时间"),
-            ("path", "路径"), ("delete", "从列表删除"),
+        host.columnconfigure(0, weight=1)
+        host.rowconfigure(3, weight=1)
+
+        header = ttk.Frame(host)
+        header.grid(row=0, column=0, sticky="ew")
+        header.columnconfigure(0, weight=1)
+        ttk.Label(header, text="最近项目", font=title_font).grid(
+            row=0, column=0, sticky="w"
         )
-        visible = {key: tk.BooleanVar(value=True) for key, _label in columns}
-        toolbar = ttk.Frame(host)
-        toolbar.pack(fill="x", pady=(0, 6))
-        ttk.Label(toolbar, text="单击项目行即可打开").pack(side="left")
-        table = ttk.Frame(host)
-        table.pack(fill="both", expand=True)
-        path_font = font.nametofont("TkDefaultFont").copy()
-        path_size = int(path_font.cget("size"))
-        path_font.configure(size=max(5, round(abs(path_size) * 0.6)) * (-1 if path_size < 0 else 1))
+        ttk.Label(
+            header,
+            text="继续上次工作；最近打开的项目排在最前。路径失效的记录可从列表清理，不会删除项目文件。",
+            foreground="#666666",
+            wraplength=max(520, width - 80),
+        ).grid(row=1, column=0, sticky="w", pady=(3, 0))
+
+        tools = ttk.Frame(host)
+        tools.grid(row=1, column=0, sticky="ew", pady=(14, 8))
+        tools.columnconfigure(1, weight=1)
+        search_var = tk.StringVar(value="")
+        ttk.Label(tools, text="搜索项目").grid(row=0, column=0, sticky="w")
+        search_entry = ttk.Entry(tools, textvariable=search_var)
+        search_entry.grid(row=0, column=1, sticky="ew", padx=(8, 10))
+        count_var = tk.StringVar(value="")
+        ttk.Label(tools, textvariable=count_var, foreground="#666666").grid(
+            row=0, column=2, sticky="e"
+        )
+
+        ttk.Separator(host, orient="horizontal").grid(
+            row=2, column=0, sticky="ew", pady=(0, 10)
+        )
+
+        list_host = ttk.Frame(host)
+        list_host.grid(row=3, column=0, sticky="nsew")
+        list_host.columnconfigure(0, weight=1)
+        list_host.rowconfigure(0, weight=1)
+        canvas = tk.Canvas(list_host, highlightthickness=0, borderwidth=0)
+        scrollbar = ttk.Scrollbar(list_host, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        cards = ttk.Frame(canvas)
+        cards.columnconfigure(0, weight=1)
+        cards_window = canvas.create_window((0, 0), window=cards, anchor="nw")
+        cards.bind(
+            "<Configure>",
+            lambda _event: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda event: canvas.itemconfigure(cards_window, width=event.width),
+        )
+
+        state: dict[str, object] = {
+            "rows": [], "details": [], "cover_photos": [],
+        }
 
         def open_selected(root: Path, row: dict[str, object]) -> None:
             if not root.is_dir():
-                messagebox.showerror("无法打开项目", f"项目路径不存在：\n{root}", parent=dialog)
+                messagebox.showerror(
+                    "无法打开项目", f"项目路径不存在：\n{root}", parent=dialog
+                )
                 return
             try:
                 self._load_project(
@@ -7685,53 +7870,304 @@ class PictureCaptureApp(tk.Tk):
                 return
             dialog.destroy()
 
-        def rebuild() -> None:
-            for child in table.winfo_children():
-                child.destroy()
-            rows = load_recent_projects()
-            if not rows:
-                ttk.Label(table, text="尚无最近项目").grid(row=0, column=0, sticky="w")
-                return
-            shown = [(key, label) for key, label in columns if visible[key].get()]
-            for column_index, (_key, label) in enumerate(shown):
-                ttk.Label(table, text=label, font=self.section_title_font).grid(
-                    row=0, column=column_index, sticky="ew", padx=3, pady=(0, 4),
-                )
-                table.columnconfigure(column_index, weight=1 if _key in {"full_name", "path"} else 0)
-            for row_index, row in enumerate(rows, start=1):
-                detail = recent_project_details(row)
-                root = Path(str(detail["path"]))
-                path_text = str(root) + ("（路径不存在）" if not detail["exists"] else "")
-                values = {
-                    "full_name": detail["full_name"], "abbreviation": detail["abbreviation"],
-                    "image_count": detail["image_count"], "last_edited": detail["last_edited"],
-                    "path": path_text,
-                }
-                for column_index, (key, _label) in enumerate(shown):
-                    if key == "delete":
-                        remove = ttk.Button(
-                            table, text="×", width=3,
-                            command=lambda p=root: (remove_recent_project(p), rebuild()),
-                        )
-                        remove.grid(row=row_index, column=column_index, padx=3, pady=2)
-                        self._attach_tooltip(remove, "仅从列表清除，不删除项目文件。")
-                        continue
-                    label = ttk.Label(
-                        table, text=str(values[key]),
-                        font=path_font if key == "path" else None,
-                        cursor="hand2", padding=(3, 3),
-                    )
-                    label.grid(row=row_index, column=column_index, sticky="ew")
-                    label.bind("<Button-1>", lambda _event, p=root, r=dict(row): open_selected(p, r))
+        def copy_path(root: Path) -> None:
+            dialog.clipboard_clear()
+            dialog.clipboard_append(str(root))
+            self.status_var.set("项目路径已复制")
 
-        column_menu = tk.Menu(dialog, tearoff=False)
-        for key, label in columns:
-            column_menu.add_checkbutton(label=label, variable=visible[key], command=rebuild)
-        ttk.Button(toolbar, text="显示列", command=lambda: column_menu.tk_popup(
-            toolbar.winfo_pointerx(), toolbar.winfo_pointery()
-        )).pack(side="right")
+        def remove_one(root: Path) -> None:
+            remove_recent_project(root)
+            rebuild()
+
+        def remove_missing() -> None:
+            missing = [
+                Path(str(detail["path"]))
+                for detail in state.get("details", [])
+                if not bool(detail["exists"])
+            ]
+            if not missing:
+                return
+            if not messagebox.askyesno(
+                "清理失效项目",
+                f"从最近项目列表移除 {len(missing)} 个路径失效的记录？\n\n"
+                "只清理列表记录，不会删除任何项目文件。",
+                parent=dialog,
+            ):
+                return
+            for root in missing:
+                remove_recent_project(root)
+            rebuild()
+
+        cleanup_button = ttk.Button(
+            tools, text="清理失效项", command=remove_missing, state="disabled"
+        )
+        cleanup_button.grid(row=0, column=3, sticky="e", padx=(10, 0))
+
+        def bind_open(widget, root: Path, row: dict[str, object]) -> None:
+            try:
+                widget.configure(cursor="hand2")
+            except tk.TclError:
+                pass
+            widget.bind(
+                "<Button-1>",
+                lambda _event, p=root, r=dict(row): open_selected(p, r),
+            )
+
+        def card_menu(button: ttk.Button, root: Path) -> None:
+            menu = tk.Menu(dialog, tearoff=False)
+            menu.add_command(label="复制项目路径", command=lambda: copy_path(root))
+            menu.add_separator()
+            menu.add_command(
+                label="从最近项目移除（不删除文件）",
+                command=lambda: remove_one(root),
+            )
+            menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())
+
+        def rebuild(*_args) -> None:
+            for child in cards.winfo_children():
+                child.destroy()
+            state["cover_photos"] = []
+
+            rows = load_recent_projects()
+            details = [recent_project_details(row) for row in rows]
+            state["rows"] = rows
+            state["details"] = details
+            query = search_var.get().strip().casefold()
+
+            paired = []
+            for row, detail in zip(rows, details):
+                haystack = " ".join((
+                    str(detail["full_name"]),
+                    str(detail["abbreviation"]),
+                    str(detail["path"]),
+                    str(detail.get("last_page") or ""),
+                )).casefold()
+                if query and query not in haystack:
+                    continue
+                paired.append((row, detail))
+
+            missing_count = sum(1 for detail in details if not bool(detail["exists"]))
+            count_var.set(
+                f"{len(paired)} 个项目"
+                + (f" · {missing_count} 个路径失效" if missing_count else "")
+            )
+            cleanup_button.configure(
+                state="normal" if missing_count else "disabled"
+            )
+
+            if not paired:
+                empty = ttk.Frame(cards, padding=(18, 50))
+                empty.grid(row=0, column=0, sticky="ew")
+                ttk.Label(
+                    empty,
+                    text="没有匹配的项目" if query else "还没有最近项目",
+                    font=card_title_font,
+                ).pack()
+                ttk.Label(
+                    empty,
+                    text=(
+                        "换一个关键词试试。"
+                        if query
+                        else "打开或新建项目后，它会出现在这里。"
+                    ),
+                    foreground="#777777",
+                ).pack(pady=(6, 0))
+                return
+
+            for row_index, (row, detail) in enumerate(paired):
+                root = Path(str(detail["path"]))
+                exists = bool(detail["exists"])
+                card = ttk.Frame(
+                    cards, padding=(14, 11), relief="solid", borderwidth=1,
+                )
+                card.grid(
+                    row=row_index, column=0, sticky="ew",
+                    padx=(2, 8), pady=(0, 9),
+                )
+                card.columnconfigure(1, weight=1)
+
+                full_name = str(detail["full_name"] or root.name)
+                abbreviation = str(detail["abbreviation"] or "").strip()
+                tile_text = (abbreviation or full_name or "?")[:2].upper()
+                preview_path = Path(str(detail.get("preview_path") or ""))
+                cover_source = str(detail.get("cover_source") or "none")
+                tile_holder = tk.Frame(
+                    card,
+                    width=76,
+                    height=96,
+                    bg="#f4f6f8" if exists else "#f2f2f2",
+                    bd=0,
+                    relief="flat",
+                )
+                tile_holder.grid_propagate(False)
+                tile = tk.Label(
+                    tile_holder,
+                    bg="#f4f6f8" if exists else "#f2f2f2",
+                    fg="#315a97" if exists else "#777777",
+                    font=card_title_font,
+                    bd=0,
+                    relief="flat",
+                    compound="center",
+                )
+                tile.place(x=0, y=0, relwidth=1, relheight=1)
+                cover_loaded = False
+                if exists and preview_path.is_file():
+                    try:
+                        with Image.open(preview_path) as opened:
+                            cover_image = normalize_page_rgb(opened)
+                        cover_image.thumbnail(
+                            (72, 92), Image.Resampling.LANCZOS,
+                        )
+                        backdrop = Image.new("RGB", (76, 96), "#f4f6f8")
+                        px = (backdrop.width - cover_image.width) // 2
+                        py = (backdrop.height - cover_image.height) // 2
+                        backdrop.paste(cover_image, (px, py))
+                        cover_photo = ImageTk.PhotoImage(backdrop)
+                        state["cover_photos"].append(cover_photo)
+                        tile.configure(image=cover_photo)
+                        cover_loaded = True
+                    except Exception:
+                        cover_loaded = False
+                if not cover_loaded:
+                    tile.configure(
+                        text=tile_text,
+                        bg="#eaf0fb" if exists else "#f2f2f2",
+                    )
+                tile_holder.grid(
+                    row=0, column=0, rowspan=3, sticky="n", padx=(0, 12)
+                )
+
+                if cover_source == "cover":
+                    cover_tip = (
+                        "项目封面。可替换项目图片文件夹中的 _cover.jpg"
+                        "（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）；该文件不会计入正文图片。"
+                    )
+                elif cover_source == "first_page":
+                    cover_tip = (
+                        "当前用项目第一张图片作为预览。可在项目图片文件夹放置 "
+                        "_cover.jpg（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）作为项目封面；"
+                        "该文件不会计入正文图片。"
+                    )
+                else:
+                    cover_tip = (
+                        "暂无封面预览。可在项目图片文件夹放置 _cover.jpg"
+                        "（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）作为项目封面；"
+                        "该文件不会计入正文图片。"
+                    )
+                self._attach_tooltip(tile_holder, cover_tip)
+                self._attach_tooltip(tile, cover_tip)
+
+                content = ttk.Frame(card)
+                content.grid(row=0, column=1, rowspan=3, sticky="nsew")
+                content.columnconfigure(0, weight=1)
+
+                title_row = ttk.Frame(content)
+                title_row.grid(row=0, column=0, sticky="ew")
+                name_label = ttk.Label(
+                    title_row, text=full_name, font=card_title_font,
+                )
+                name_label.pack(side="left")
+                if abbreviation:
+                    ttk.Label(
+                        title_row, text=f"  ·  {abbreviation}",
+                        foreground="#666666",
+                    ).pack(side="left")
+
+                status = tk.Label(
+                    title_row,
+                    text="可用" if exists else "路径失效",
+                    padx=8, pady=2,
+                    bg="#e9f6ee" if exists else "#fff0ee",
+                    fg="#247245" if exists else "#b42318",
+                    font=meta_font,
+                )
+                status.pack(side="left", padx=(10, 0))
+
+                image_count = int(detail["image_count"])
+                position_text = str(detail.get("position_text") or "—")
+                last_page = str(detail.get("last_page") or "").strip()
+                resume = (
+                    f"{last_page} · {position_text}"
+                    if last_page and position_text != last_page
+                    else position_text
+                )
+                meta_text = (
+                    f"{image_count:,} 张图片"
+                    f"    ·    上次停留：{resume}"
+                    f"    ·    最近活动：{detail['last_edited'] or '—'}"
+                )
+                meta_label = ttk.Label(
+                    content, text=meta_text, foreground="#555555",
+                )
+                meta_label.grid(row=1, column=0, sticky="w", pady=(5, 0))
+
+                path_label = ttk.Label(
+                    content,
+                    text=str(root),
+                    foreground="#888888" if exists else "#b42318",
+                    font=meta_font,
+                )
+                path_label.grid(row=2, column=0, sticky="ew", pady=(5, 0))
+
+                actions = ttk.Frame(card)
+                actions.grid(row=0, column=2, rowspan=3, sticky="ne", padx=(12, 0))
+                open_button = ttk.Button(
+                    actions,
+                    text="打开",
+                    command=lambda p=root, r=dict(row): open_selected(p, r),
+                    state="normal" if exists else "disabled",
+                    width=8,
+                )
+                open_button.pack(side="left")
+                more_button = ttk.Button(actions, text="⋯", width=3)
+                more_button.configure(
+                    command=lambda b=more_button, p=root: card_menu(b, p)
+                )
+                more_button.pack(side="left", padx=(5, 0))
+
+                if exists:
+                    for widget in (
+                        card, tile_holder, tile, content, title_row, name_label,
+                        meta_label, path_label,
+                    ):
+                        bind_open(widget, root, row)
+
+                def update_wrap(_event=None, label=path_label, owner=content) -> None:
+                    try:
+                        label.configure(
+                            wraplength=max(240, owner.winfo_width() - 10)
+                        )
+                    except tk.TclError:
+                        pass
+
+                content.bind("<Configure>", update_wrap, add="+")
+                self._attach_tooltip(
+                    path_label,
+                    "项目路径；单击打开项目。" if exists else "该路径当前不存在。",
+                )
+
+            canvas.yview_moveto(0.0)
+
+        search_var.trace_add("write", rebuild)
+        search_entry.bind("<Escape>", lambda _event: search_var.set(""))
+        dialog.bind(
+            "<MouseWheel>",
+            lambda event: canvas.yview_scroll(
+                (-1 if int(getattr(event, "delta", 0) or 0) > 0 else 1) * 3,
+                "units",
+            ),
+            add="+",
+        )
+        dialog.bind(
+            "<Button-4>", lambda _event: canvas.yview_scroll(-3, "units"), add="+"
+        )
+        dialog.bind(
+            "<Button-5>", lambda _event: canvas.yview_scroll(3, "units"), add="+"
+        )
 
         rebuild()
+        search_entry.focus_set()
+
 
     @staticmethod
     def _attach_tooltip(widget: tk.Widget, message: str) -> None:

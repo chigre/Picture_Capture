@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from .models import IMAGE_EXTENSIONS
+from .models import project_cover_path, project_page_images
 from .project_storage import settings_path
 
 
@@ -72,24 +72,59 @@ def remove_recent_project(root: Path, path: Path | None = None) -> list[dict[str
     return rows
 
 
+def _display_recent_timestamp(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed.astimezone().strftime("%Y-%m-%d %H:%M")
+    except (ValueError, TypeError):
+        return text[:16] if len(text) >= 16 else text
+
+
 def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool]:
     """Read display metadata without initializing or modifying the project."""
     root = Path(str(row.get("path") or "")).expanduser()
+    last_page = str(row.get("last_page") or "").strip()
+    try:
+        last_page_index = int(row.get("last_page_index")) if row.get("last_page_index") is not None else -1
+    except (TypeError, ValueError):
+        last_page_index = -1
     details: dict[str, str | int | bool] = {
         "full_name": str(row.get("name") or root.name),
         "abbreviation": "",
         "image_count": 0,
-        "last_edited": str(row.get("opened_at") or ""),
+        "last_edited": _display_recent_timestamp(row.get("opened_at")),
         "path": str(root),
         "exists": root.is_dir(),
+        "last_page": last_page,
+        "last_page_index": last_page_index,
+        "resume_text": last_page or "—",
+        "position_text": "—",
+        "cover_path": "",
+        "preview_path": "",
+        "cover_source": "none",
     }
     if not root.is_dir():
         return details
     try:
-        details["image_count"] = sum(
-            1 for item in root.iterdir()
-            if item.is_file() and item.suffix.lower() in IMAGE_EXTENSIONS
-        )
+        pages = project_page_images(root)
+        details["image_count"] = len(pages)
+        cover = project_cover_path(root)
+        if cover is not None:
+            details["cover_path"] = str(cover)
+            details["preview_path"] = str(cover)
+            details["cover_source"] = "cover"
+        elif pages:
+            details["preview_path"] = str(pages[0])
+            details["cover_source"] = "first_page"
+        image_count = int(details["image_count"])
+        if last_page_index >= 0 and image_count > 0:
+            page_number = min(image_count, last_page_index + 1)
+            details["position_text"] = f"第 {page_number:,} / {image_count:,} 页"
+        elif last_page:
+            details["position_text"] = last_page
     except OSError:
         details["exists"] = False
         return details

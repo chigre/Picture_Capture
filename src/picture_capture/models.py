@@ -7,6 +7,58 @@ import re
 
 
 IMAGE_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp"}
+PROJECT_COVER_STEMS = ("_cover", "_project_cover")
+PROJECT_COVER_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def is_project_cover_image(path: Path) -> bool:
+    """Return True for a reserved project-card cover asset."""
+    return (
+        path.is_file()
+        and path.stem.casefold() in {stem.casefold() for stem in PROJECT_COVER_STEMS}
+        and path.suffix.casefold() in PROJECT_COVER_EXTENSIONS
+    )
+
+
+def project_cover_path(root: Path) -> Path | None:
+    """Find the preferred project cover without treating it as a scanned page."""
+    root = Path(root)
+    # _cover.* is the simple current convention. _project_cover.* remains a
+    # compatibility fallback for projects that used the earlier name.
+    try:
+        items = tuple(root.iterdir())
+    except OSError:
+        return None
+    for stem in PROJECT_COVER_STEMS:
+        for suffix in PROJECT_COVER_EXTENSIONS:
+            candidate = root / f"{stem}{suffix}"
+            if candidate.is_file():
+                return candidate
+            for item in items:
+                if (
+                    item.is_file()
+                    and item.stem.casefold() == stem.casefold()
+                    and item.suffix.casefold() == suffix
+                ):
+                    return item
+    return None
+
+
+def project_page_images(root: Path) -> list[Path]:
+    """Return actual scanned pages, excluding the reserved project cover."""
+    root = Path(root)
+    try:
+        pages = [
+            path for path in root.iterdir()
+            if (
+                path.is_file()
+                and path.suffix.lower() in IMAGE_EXTENSIONS
+                and not is_project_cover_image(path)
+            )
+        ]
+    except OSError:
+        return []
+    return sorted(pages, key=lambda p: natural_text_key(p.name))
 
 
 def natural_text_key(value: object) -> tuple:
@@ -553,10 +605,7 @@ class ProjectState:
         if not root.is_dir():
             raise NotADirectoryError(root)
 
-        images = sorted(
-            (path for path in root.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS),
-            key=lambda p: natural_text_key(p.name),
-        )
+        images = project_page_images(root)
 
         # Storage v2: a clean/new scan folder gets exactly one software-owned
         # child directory. Existing legacy projects remain readable until the GUI

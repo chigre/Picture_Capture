@@ -11,7 +11,9 @@ from picture_capture.app import (
     vertical_overlay_layout,
 )
 from picture_capture.dictionary_profile import effective_project_profile_id, load_dictionary_profile
-from picture_capture.models import AppSettings, Entry, ProjectState
+from picture_capture.models import (
+    AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
+)
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import refine_existing_entries
@@ -86,15 +88,91 @@ def test_recent_project_keeps_per_project_last_page(tmp_path):
     assert row["last_page_index"] == 9
 
 
+def test_project_cover_is_preferred_but_never_counted_as_a_page(tmp_path):
+    project = tmp_path / "scan"
+    _project(project)
+    legacy_cover = project / "_project_cover.jpg"
+    Image.new("RGB", (60, 90), "red").save(legacy_cover)
+    cover = project / "_cover.jpg"
+    Image.new("RGB", (60, 90), "blue").save(cover)
+
+    assert project_cover_path(project) == cover
+    assert [path.name for path in project_page_images(project)] == [
+        "page1.jpg", "page2.jpg", "page10.jpg",
+    ]
+    state = ProjectState.open(project)
+    assert [path.name for path in state.images] == [
+        "page1.jpg", "page2.jpg", "page10.jpg",
+    ]
+
+    detail = recent_project_details({"name": "scan", "path": str(project)})
+    assert detail["image_count"] == 3
+    assert detail["cover_source"] == "cover"
+    assert detail["cover_path"] == str(cover)
+    assert detail["preview_path"] == str(cover)
+
+
 def test_recent_project_details_expose_requested_columns(tmp_path):
     project = tmp_path / "scan"
     _project(project, dictionary_full_name="完整词典", dictionary_abbreviation="缩写")
-    detail = recent_project_details({"name": "scan", "path": str(project), "opened_at": "old"})
+    detail = recent_project_details({
+        "name": "scan",
+        "path": str(project),
+        "opened_at": "old",
+        "last_page": "page2.png",
+        "last_page_index": 1,
+    })
     assert detail["full_name"] == "完整词典"
     assert detail["abbreviation"] == "缩写"
     assert detail["image_count"] == 3
     assert detail["path"] == str(project)
     assert detail["last_edited"] != "old"
+    missing = recent_project_details({
+        "name": "missing",
+        "path": str(tmp_path / "missing"),
+        "opened_at": "2026-09-23T08:11:05.111954+00:00",
+    })
+    assert "T" not in str(missing["last_edited"])
+    assert len(str(missing["last_edited"])) == 16
+    assert detail["last_page"] == "page2.png"
+    assert detail["last_page_index"] == 1
+    assert detail["position_text"] == "第 2 / 3 页"
+
+
+def test_recent_projects_dialog_uses_modern_card_information_hierarchy():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    start = source.index("    def open_recent_project(self) -> None:")
+    end = source.index("\n    @staticmethod", start)
+    text = source[start:end]
+
+    assert 'dialog.title("已有项目")' in text
+    assert 'text="最近项目"' in text
+    assert 'text="搜索项目"' in text
+    assert 'text="清理失效项"' in text
+    assert 'text="打开"' in text
+    assert 'text="⋯"' in text
+    assert '"可用" if exists else "路径失效"' in text
+    assert "张图片" in text
+    assert "上次停留：" in text
+    assert "最近活动：" in text
+    assert "复制项目路径" in text
+    assert "从最近项目移除（不删除文件）" in text
+    assert "_cover.jpg" in text
+    assert "_project_cover.*" in text
+    assert "该文件不会计入正文图片" in text
+    assert 'cover_source == "cover"' in text
+    assert 'cover_source == "first_page"' in text
+    assert "ImageTk.PhotoImage" in text
+    assert "width=76" in text and "height=96" in text
+    assert "int(screen_w * 0.58)" in text
+    assert 'tools.grid(row=1, column=0' in text
+    assert 'list_host.grid(row=3, column=0' in text
+    assert "显示列" not in text
+    assert "词典完整名称" not in text
+    assert "从列表删除" not in text
 
 
 def test_refine_existing_entries_never_changes_count_or_exceeds_safe_delta(monkeypatch):
@@ -142,6 +220,49 @@ def test_custom_profile_name_persists_and_numbered_choices_keep_custom_last(tmp_
     assert keys[-1] == "custom"
     assert visible[-1].endswith("古汉语单字结构（自定义）")
     assert all(label.startswith(f"{index}. ") for index, label in enumerate(visible, start=1))
+
+
+def test_secondary_windows_share_modern_shell_without_changing_review_window():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+
+    settings_start = source.index("class SettingsDialog")
+    settings_end = source.index("class ReviewWindow", settings_start)
+    settings = source[settings_start:settings_end]
+    assert '_build_modern_dialog_heading(' in settings
+    assert '"更多参数"' in settings
+    assert 'text="保存并关闭"' in settings
+    assert 'text="检测 OCR 引擎"' in settings
+
+    review_start = source.index("class ReviewWindow")
+    review_end = source.index("class OCRConflictReviewDialog", review_start)
+    review = source[review_start:review_end]
+    assert '_build_modern_dialog_heading(' not in review
+
+    conflict_start = source.index("class OCRConflictReviewDialog")
+    conflict_end = source.index("class CropSettingsDialog", conflict_start)
+    conflict = source[conflict_start:conflict_end]
+    assert '"OCR 词头冲突复核"' in conflict
+    assert 'text="所选候选"' in conflict
+    assert 'text="关闭"' in conflict
+
+    crop_start = source.index("class CropSettingsDialog")
+    crop_end = source.index("class OldNewComparisonWindow", crop_start)
+    crop = source[crop_start:crop_end]
+    assert '"通用切图规则"' in crop
+    assert '"特殊页面覆盖"' in crop
+    assert 'text="保存并关闭"' in crop
+
+    compare_start = source.index("class OldNewComparisonWindow")
+    compare_end = source.index("class PictureCaptureApp", compare_start)
+    compare = source[compare_start:compare_end]
+    assert '"新旧比较"' in compare
+    assert 'text="比较来源"' in compare
+    assert 'text="比较摘要"' in compare
+    assert 'text="保存当前 PDIC 快照…"' in compare
+    assert 'text="导出差异报告…"' in compare
 
 
 def test_project_toolbar_and_profile_scroll_layout_are_wired():
