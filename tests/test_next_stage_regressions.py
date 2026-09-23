@@ -16,7 +16,7 @@ from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import refine_existing_entries
 from picture_capture.profile_semantics import (
-    apply_headword_profile, apply_reading_choice, configured_body_page_indices,
+    apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
     effective_page_settings,
     entry_allowed_by_page_template, excluded_source_side, ordered_headword_profiles,
     page_template_analysis_image, probable_body_page_indices, READING_LABELS,
@@ -589,6 +589,28 @@ def test_page_template_applies_header_footer_and_ab_side_exclusion():
     assert masked.getpixel((500, 1950)) == (255, 255, 255)
 
 
+def test_project_profile_feedback_tuning_is_profile_aware():
+    cjk = AppSettings(ocr_language="chi_tra")
+    apply_headword_profile(cjk, "cjk_visual")
+    base_cjk = (
+        cjk.paddle_left_tolerance,
+        cjk.paddle_height_ratio,
+        cjk.paddle_boldness_ratio,
+    )
+    apply_headword_tuning(cjk, "cjk_visual", 1)
+    assert cjk.paddle_left_tolerance < base_cjk[0]
+    assert cjk.paddle_height_ratio > base_cjk[1]
+    assert cjk.paddle_boldness_ratio > base_cjk[2]
+
+    marker = AppSettings(ocr_language="chi_sim")
+    apply_headword_profile(marker, "marker_prefixed")
+    base_score = marker.paddle_min_candidate_score
+    base_left = marker.paddle_left_tolerance
+    apply_headword_tuning(marker, "marker_prefixed", 1)
+    assert marker.paddle_left_tolerance < base_left
+    assert marker.paddle_min_candidate_score == base_score
+
+
 def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
     text = source.read_text(encoding="utf-8")
@@ -628,8 +650,19 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "self._validation_results = list(results)" in text
     assert "def _move_validation_preview" in text
     assert "def _render_validation_result" in text
-    assert "thumb.thumbnail((650, 500)" in text
+    assert "width = max(720, int(screen_w * 0.60))" in text
+    assert "height = screen_h" in text
+    assert "target_width = max(320, int(preview_width))" in text
+    assert "source.resize(" in text
     assert "fill=(255, 0, 0, 255), width=1" in text
+    assert 'text="词头专属性"' in text
+    assert "大字单字可作为词头" in text
+    assert "【括号词】可作为词头" in text
+    assert "必须靠近栏左缘" in text
+    assert "释义正文中也经常出现【括号词】" in text
+    assert "只有视觉明显突出时才把单字/括号词当词头" in text
+    assert 'text="偏多"' in text and 'text="合适"' in text and 'text="偏少"' in text
+    assert "def _apply_validation_feedback" in text
     validate_start = text.index("    def validate_profile(")
     validate_end = text.index("    def _poll_validation_queue(", validate_start)
     validate_text = text[validate_start:validate_end]
