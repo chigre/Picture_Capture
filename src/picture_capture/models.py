@@ -291,7 +291,7 @@ class AppSettings:
     # Optional second OCR pass for diagnostics / conservative rescue.  It uses
     # the same straightened candidate band and the existing Tesseract language/path.
     paddle_use_paddleocr: bool = True
-    paddle_compare_tesseract: bool = True
+    paddle_compare_tesseract: bool = False
     paddle_tesseract_rescue: bool = False
     paddle_tesseract_psm: int = 6
     paddle_tesseract_auto_psm: bool = True
@@ -307,7 +307,7 @@ class AppSettings:
     # failed; ``diagnostic`` and ``full`` run it for every column, while only
     # ``full`` may influence otherwise non-conflicting decisions.
     paddle_enable_lens: bool = False
-    paddle_lens_mode: str = "conflict"
+    paddle_lens_mode: str = "off"
     paddle_lens_language: str = "es"
     paddle_lens_timeout: int = 60
     paddle_lens_default_confidence: float = 0.82
