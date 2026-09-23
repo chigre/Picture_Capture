@@ -7909,7 +7909,7 @@ class PictureCaptureApp(tk.Tk):
                 meta_text = (
                     f"{image_count:,} 张图片"
                     f"    ·    上次停留：{resume}"
-                    f"    ·    最后编辑：{detail['last_edited'] or '—'}"
+                    f"    ·    最近活动：{detail['last_edited'] or '—'}"
                 )
                 meta_label = ttk.Label(
                     content, text=meta_text, foreground="#555555",
@@ -7965,15 +7965,20 @@ class PictureCaptureApp(tk.Tk):
 
         search_var.trace_add("write", rebuild)
         search_entry.bind("<Escape>", lambda _event: search_var.set(""))
-        canvas.bind(
+        dialog.bind(
             "<MouseWheel>",
             lambda event: canvas.yview_scroll(
                 (-1 if int(getattr(event, "delta", 0) or 0) > 0 else 1) * 3,
                 "units",
             ),
+            add="+",
         )
-        canvas.bind("<Button-4>", lambda _event: canvas.yview_scroll(-3, "units"))
-        canvas.bind("<Button-5>", lambda _event: canvas.yview_scroll(3, "units"))
+        dialog.bind(
+            "<Button-4>", lambda _event: canvas.yview_scroll(-3, "units"), add="+"
+        )
+        dialog.bind(
+            "<Button-5>", lambda _event: canvas.yview_scroll(3, "units"), add="+"
+        )
 
         rebuild()
         search_entry.focus_set()
