@@ -89,12 +89,44 @@ def test_recent_project_keeps_per_project_last_page(tmp_path):
 def test_recent_project_details_expose_requested_columns(tmp_path):
     project = tmp_path / "scan"
     _project(project, dictionary_full_name="完整词典", dictionary_abbreviation="缩写")
-    detail = recent_project_details({"name": "scan", "path": str(project), "opened_at": "old"})
+    detail = recent_project_details({
+        "name": "scan",
+        "path": str(project),
+        "opened_at": "old",
+        "last_page": "page2.png",
+        "last_page_index": 1,
+    })
     assert detail["full_name"] == "完整词典"
     assert detail["abbreviation"] == "缩写"
     assert detail["image_count"] == 3
     assert detail["path"] == str(project)
     assert detail["last_edited"] != "old"
+    assert detail["last_page"] == "page2.png"
+    assert detail["last_page_index"] == 1
+    assert detail["position_text"] == "第 2 / 3 页"
+
+
+def test_recent_projects_dialog_uses_modern_card_information_hierarchy():
+    source = (SRC / "app.py").read_text(encoding="utf-8")
+    start = source.index("    def open_recent_project(self) -> None:")
+    end = source.index("\n    @staticmethod", start)
+    text = source[start:end]
+
+    assert 'dialog.title("已有项目")' in text
+    assert 'text="最近项目"' in text
+    assert 'text="搜索："' in text
+    assert 'text="清理失效项"' in text
+    assert 'text="打开"' in text
+    assert 'text="⋯"' in text
+    assert '"可用" if exists else "路径失效"' in text
+    assert "张图片" in text
+    assert "上次停留：" in text
+    assert "最后编辑：" in text
+    assert "复制项目路径" in text
+    assert "从最近项目移除（不删除文件）" in text
+    assert "显示列" not in text
+    assert "词典完整名称" not in text
+    assert "从列表删除" not in text
 
 
 def test_refine_existing_entries_never_changes_count_or_exceeds_safe_delta(monkeypatch):
