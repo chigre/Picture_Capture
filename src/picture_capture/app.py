@@ -97,6 +97,7 @@ from .processing import (
     entry_crop_column_boxes,
     entry_crop_piece_filename,
     resolve_crop_worker_count,
+    refine_existing_entries,
     split_whole_entries_job,
     split_illustrations_job,
     detect_illustrations_job,
@@ -5165,7 +5166,40 @@ class PictureCaptureApp(tk.Tk):
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.toggle_autosave()
+        self.after_idle(self._maximize_main_window)
+        self.after_idle(self._ensure_sidebar_navigation_width)
         self.after_idle(self.restore_last_session)
+
+    def _maximize_main_window(self) -> None:
+        """Start the main window maximized, with cross-platform fallbacks."""
+        try:
+            self.state("zoomed")
+            return
+        except tk.TclError:
+            pass
+        try:
+            self.attributes("-zoomed", True)
+        except tk.TclError:
+            try:
+                self.geometry(
+                    f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0"
+                )
+            except tk.TclError:
+                pass
+
+    def _ensure_sidebar_navigation_width(self) -> None:
+        """Keep the left pane wide enough to show the complete page-nav row."""
+        paned = self.__dict__.get("main_paned")
+        row = self.__dict__.get("page_size_row")
+        if paned is None or row is None:
+            return
+        try:
+            self.update_idletasks()
+            required = max(520, int(row.winfo_reqwidth()) + 28)
+            available = max(0, int(self.winfo_width()) - 420)
+            paned.sashpos(0, min(required, available) if available else required)
+        except (tk.TclError, ValueError):
+            return
 
     def _section_frame(
         self, parent: tk.Misc, title: str, padding: int = 5, *, section_key: str | None = None
@@ -5370,6 +5404,7 @@ class PictureCaptureApp(tk.Tk):
 
         # v2.3 intentionally has no menu bar or separate top toolbar.
         body = ttk.Panedwindow(self, orient="horizontal")
+        self.main_paned = body
         body.pack(fill="both", expand=True)
         sidebar_host = ttk.Frame(body)
         # Project actions are outside the scrollable/collapsible sidebar so
@@ -5421,12 +5456,12 @@ class PictureCaptureApp(tk.Tk):
         ttk.Button(range_row, text="跳到", command=self.jump_to_page_spec).pack(side="left", padx=(4, 0))
 
         size_row = ttk.Frame(page_panel)
+        self.page_size_row = size_row
         size_row.grid(row=1, column=0, sticky="ew", pady=(0, 4))
         ttk.Checkbutton(
             size_row, text="◧", width=3, variable=self.binary_preview_var,
             command=self._toggle_binary_preview,
         ).pack(side="left", padx=(0, 3))
-        ttk.Label(size_row, text="页面大小：").pack(side="left")
         ttk.Button(size_row, text="−", width=3, command=lambda: self.zoom(0.87)).pack(side="left")
         view_zoom_entry = ttk.Entry(size_row, textvariable=self.view_zoom_var, width=6, justify="center")
         view_zoom_entry.pack(side="left", padx=2)
@@ -5479,7 +5514,7 @@ class PictureCaptureApp(tk.Tk):
 
         bottom_row = self.project_action_bar
         ttk.Button(bottom_row, text="新建项目", command=self.open_project).pack(side="left", fill="x", expand=True)
-        ttk.Button(bottom_row, text="打开既往项目", command=self.open_recent_project).pack(side="left", fill="x", expand=True, padx=(4, 0))
+        ttk.Button(bottom_row, text="已有项目", command=self.open_recent_project).pack(side="left", fill="x", expand=True, padx=(4, 0))
         ttk.Label(bottom_row, text="图片后缀：").pack(side="left", padx=(8, 2))
         self.image_suffix_var = tk.StringVar(value=self.settings.image_suffix)
         ttk.Entry(bottom_row, textvariable=self.image_suffix_var, width=7).pack(side="left")
@@ -6261,7 +6296,7 @@ class PictureCaptureApp(tk.Tk):
         rows = [
             (("更多参数", self.open_settings), ("保存参数", self.save_main_parameters), ("使用提示", self.show_help_dialog)),
             (("运行普通画线", self.run_normal_draw_action), ("运行OCR画线", self.run_ocr_draw_action)),
-            (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope)),
+            (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充既有词条", self.fill_existing_headwords), ("修复PDIC排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("从PDIC备份恢复", self.restore_from_pdic_backup)),
             (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("导出训练标记包", self.export_training_package), ("保存当前页", self.save_current_page)),
         ]
@@ -7457,7 +7492,7 @@ class PictureCaptureApp(tk.Tk):
     def open_recent_project(self) -> None:
         """Show the user-level project history; removal never touches files."""
         dialog = tk.Toplevel(self)
-        dialog.title("打开既往项目")
+        dialog.title("已有项目")
         dialog.transient(self)
         dialog.geometry("760x360")
         host = ttk.Frame(dialog, padding=10)
@@ -7477,12 +7512,16 @@ class PictureCaptureApp(tk.Tk):
         path_size = int(path_font.cget("size"))
         path_font.configure(size=max(5, round(abs(path_size) * 0.6)) * (-1 if path_size < 0 else 1))
 
-        def open_selected(root: Path) -> None:
+        def open_selected(root: Path, row: dict[str, object]) -> None:
             if not root.is_dir():
                 messagebox.showerror("无法打开项目", f"项目路径不存在：\n{root}", parent=dialog)
                 return
             try:
-                self._load_project(root)
+                self._load_project(
+                    root,
+                    target_page=str(row.get("last_page") or "").strip() or None,
+                    target_index=row.get("last_page_index"),
+                )
             except Exception as exc:
                 messagebox.showerror("无法打开项目", str(exc), parent=dialog)
                 return
@@ -7525,7 +7564,7 @@ class PictureCaptureApp(tk.Tk):
                         cursor="hand2", padding=(3, 3),
                     )
                     label.grid(row=row_index, column=column_index, sticky="ew")
-                    label.bind("<Button-1>", lambda _event, p=root: open_selected(p))
+                    label.bind("<Button-1>", lambda _event, p=root, r=dict(row): open_selected(p, r))
 
         column_menu = tk.Menu(dialog, tearoff=False)
         for key, label in columns:
@@ -7842,6 +7881,14 @@ class PictureCaptureApp(tk.Tk):
         quality = self._current_page_quality_text()
         suffix = f"｜{quality}" if quality else ""
         self.status_var.set(f"{self.current_page.name}｜{self.image.width}×{self.image.height}｜{len(self.entries)} 个词条{suffix}")
+        try:
+            touch_recent_project(
+                self.project.root,
+                last_page=self.current_page.name,
+                last_page_index=self.current_index,
+            )
+        except (OSError, ValueError, TypeError):
+            pass
         self._save_session_state()
 
     def change_page(
