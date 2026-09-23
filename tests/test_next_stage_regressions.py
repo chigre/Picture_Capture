@@ -477,6 +477,21 @@ def test_page_template_masks_side_content_before_geometry_without_mutating_sourc
     assert masked.size == image.size
 
 
+def test_page_template_auto_footer_uses_learned_body_bottom():
+    settings = AppSettings(
+        parameter_display_width=1000,
+        bottom_y=1800,
+        profile_footer_mode="auto",
+    )
+    effective = effective_page_settings(settings, (1000, 2000), 0)
+    assert effective.crop_to_bottom_y is True
+    assert effective.bottom_y == 1800
+
+    empty = replace(settings, bottom_y=0)
+    effective_empty = effective_page_settings(empty, (1000, 2000), 0)
+    assert effective_empty.crop_to_bottom_y is False
+
+
 def test_page_template_applies_header_footer_and_ab_side_exclusion():
     settings = AppSettings(
         parameter_display_width=1000,
