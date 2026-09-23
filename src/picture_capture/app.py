@@ -48,6 +48,7 @@ from .dictionary_profile import (
     language_effective_settings, managed_profile_setting_names, profile_effective_settings, profile_preview_path,
     profile_layout_summary, write_project_profile,
 )
+from .profile_setup import ProjectProfileWizard
 from .picdic import build_picdic_package
 from .image_utils import normalize_page_rgb
 from .reference_index import contains_cjk, reference_sort_key
@@ -1098,7 +1099,7 @@ class SettingsDialog(tk.Toplevel):
         params_tab = ttk.Frame(notebook)
         sort_tab = ttk.Frame(notebook)
         rules_tab = ttk.Frame(notebook)
-        notebook.add(profile_tab, text="Profile")
+        notebook.add(profile_tab, text="Profile高级")
         self.profile_tab = profile_tab
         notebook.add(project_tab, text="词典项目详情")
         notebook.add(params_tab, text="参数分区")
@@ -7753,7 +7754,11 @@ class PictureCaptureApp(tk.Tk):
             requested_suffix = None
             if not existing_project and hasattr(self, "image_suffix_var"):
                 requested_suffix = self._normalize_suffix(self.image_suffix_var.get())
-            self._load_project(root, requested_suffix=requested_suffix)
+            self._load_project(
+                root,
+                requested_suffix=requested_suffix,
+                launch_profile_setup=not existing_project,
+            )
         except Exception as exc:
             self.show_error("无法打开项目", exc)
 
@@ -7761,6 +7766,7 @@ class PictureCaptureApp(tk.Tk):
         self, root: Path, *, requested_suffix: str | None = None,
         target_page: str | None = None, target_index: object = None,
         target_view_scale: float | None = None,
+        launch_profile_setup: bool = False,
     ) -> None:
         self._flush_deferred_page_save()
         # These callbacks close over page/project-specific state.  Cancel them
@@ -7933,6 +7939,8 @@ class PictureCaptureApp(tk.Tk):
         self.status_var.set(
             f"已打开 {project.root}｜{len(project.images)} 页｜图片后缀 {self.settings.image_suffix}｜词表 {len(project.words)} 条{storage_hint}"
         )
+        if launch_profile_setup:
+            self.after_idle(lambda: self.open_project_profile(new_project=True))
 
     def on_page_select(self, _event: tk.Event) -> None:
         if getattr(self, "_batch_active", False) and not self._batch_foreground_pages:
@@ -10155,7 +10163,7 @@ class PictureCaptureApp(tk.Tk):
             page = project.images[index]
             if normal_executor is not None:
                 return normal_executor.submit(
-                    detect_entries_job, str(page), settings, pages_info[index]
+                    detect_entries_job, str(page), settings, pages_info[index], index
                 ).result()
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
@@ -10164,6 +10172,7 @@ class PictureCaptureApp(tk.Tk):
                 image, settings, paddle_cache_path=cache_path,
                 force_paddle_refresh=force_refresh,
                 paddle_filter_rules_path=filter_path,
+                profile_page_index=index,
             )
             write_pdic(pdic_path(page), entries, image.width, pages_info[index])
             return len(entries)
@@ -10314,8 +10323,28 @@ class PictureCaptureApp(tk.Tk):
             return
         SettingsDialog(self, initial_tab=initial_tab)
 
-    def open_project_profile(self) -> None:
-        self.open_settings(initial_tab="profile")
+    def open_project_profile(self, new_project: bool = False) -> None:
+        if not self.project:
+            messagebox.showinfo("尚未打开", "请先打开或新建词典项目。", parent=self)
+            return
+        existing = self.__dict__.get("_project_profile_wizard")
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.deiconify()
+                    existing.lift()
+                    existing.focus_force()
+                    return
+            except tk.TclError:
+                pass
+        wizard = ProjectProfileWizard(self, new_project=new_project)
+        self._project_profile_wizard = wizard
+        wizard.bind(
+            "<Destroy>",
+            lambda event, w=wizard: self.__dict__.pop("_project_profile_wizard", None)
+            if event.widget is w else None,
+            add="+",
+        )
 
     def open_project_details(self) -> None:
         self.open_settings(initial_tab="project")
