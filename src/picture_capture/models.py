@@ -7,6 +7,55 @@ import re
 
 
 IMAGE_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp"}
+PROJECT_COVER_STEM = "_project_cover"
+PROJECT_COVER_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def is_project_cover_image(path: Path) -> bool:
+    """Return True for the reserved project-card cover asset."""
+    return (
+        path.is_file()
+        and path.stem.casefold() == PROJECT_COVER_STEM.casefold()
+        and path.suffix.casefold() in PROJECT_COVER_EXTENSIONS
+    )
+
+
+def project_cover_path(root: Path) -> Path | None:
+    """Find the reserved cover without treating it as a scanned dictionary page."""
+    root = Path(root)
+    for suffix in PROJECT_COVER_EXTENSIONS:
+        candidate = root / f"{PROJECT_COVER_STEM}{suffix}"
+        if candidate.is_file():
+            return candidate
+        # Preserve case-insensitive behavior even on case-sensitive file systems.
+        try:
+            for item in root.iterdir():
+                if (
+                    item.is_file()
+                    and item.stem.casefold() == PROJECT_COVER_STEM.casefold()
+                    and item.suffix.casefold() == suffix
+                ):
+                    return item
+        except OSError:
+            return None
+    return None
+
+
+def project_page_images(root: Path) -> list[Path]:
+    """Return actual scanned pages, excluding the reserved project cover."""
+    root = Path(root)
+    try:
+        pages = [
+            path for path in root.iterdir()
+            if (
+                path.is_file()
+                and path.suffix.lower() in IMAGE_EXTENSIONS
+                and not is_project_cover_image(path)
+            )
+        ]
+    except OSError:
+        return []
+    return sorted(pages, key=lambda p: natural_text_key(p.name))
 
 
 def natural_text_key(value: object) -> tuple:
@@ -553,10 +602,7 @@ class ProjectState:
         if not root.is_dir():
             raise NotADirectoryError(root)
 
-        images = sorted(
-            (path for path in root.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS),
-            key=lambda p: natural_text_key(p.name),
-        )
+        images = project_page_images(root)
 
         # Storage v2: a clean/new scan folder gets exactly one software-owned
         # child directory. Existing legacy projects remain readable until the GUI
