@@ -532,8 +532,12 @@ class ProjectProfileWizard(tk.Toplevel):
 
         # Step 1: six editable representative pages.
         sample_page = self.right_image_pages[0]
+        sample_page.rowconfigure(0, weight=1)
         self.sample_frame = ttk.Frame(sample_page)
-        self.sample_frame.grid(row=0, column=0, sticky="ew")
+        self.sample_frame.grid(row=0, column=0, sticky="nsew")
+        self.sample_frame.rowconfigure(0, weight=1)
+        for column in range(3):
+            self.sample_frame.columnconfigure(column, weight=1, uniform="sample")
 
         # Step 2: one live page-template preview at a time.
         template_page = self.right_image_pages[1]
@@ -1554,9 +1558,11 @@ class ProjectProfileWizard(tk.Toplevel):
         region_titles = ("前部", "中部", "后部")
         groups: list[ttk.LabelFrame] = []
         for column, title in enumerate(region_titles):
-            group = ttk.LabelFrame(self.sample_frame, text=title, padding=6)
-            group.grid(row=0, column=column, sticky="nsew", padx=4, pady=2)
+            group = ttk.LabelFrame(self.sample_frame, text=title, padding=5)
+            group.grid(row=0, column=column, sticky="nsew", padx=3, pady=2)
             group.columnconfigure(0, weight=1)
+            group.rowconfigure(0, weight=1, uniform="sample_row")
+            group.rowconfigure(1, weight=1, uniform="sample_row")
             groups.append(group)
         return groups
 
@@ -1567,7 +1573,9 @@ class ProjectProfileWizard(tk.Toplevel):
             path = self.project.images[index]
             group = groups[min(2, slot // 2)]
             cell = ttk.Frame(group)
-            cell.grid(row=slot % 2, column=0, sticky="ew", pady=4)
+            cell.grid(row=slot % 2, column=0, sticky="nsew", pady=3)
+            cell.columnconfigure(0, weight=1)
+            cell.rowconfigure(0, weight=1)
             ttk.Label(
                 cell, text="正在加载代表页…", anchor="center",
             ).pack(fill="x", ipady=24)
@@ -1584,6 +1592,14 @@ class ProjectProfileWizard(tk.Toplevel):
         indices = list(self.sample_indices)
         paths = [self.project.images[index] for index in indices]
         self._show_sample_loading_state()
+        self.update_idletasks()
+        right_w = int(getattr(self, "right_canvas", self).winfo_width())
+        right_h = int(getattr(self, "right_canvas", self).winfo_height())
+        available_w = right_w if right_w > 200 else self._wizard_image_width
+        available_h = right_h if right_h > 300 else self._wizard_height
+        thumb_w = max(180, (available_w - 54) // 3)
+        thumb_h = max(220, (available_h - 150) // 2 - 42)
+
         result_queue: queue.Queue = queue.Queue(maxsize=1)
         self._thumbnail_queue = result_queue
 
@@ -1593,7 +1609,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 try:
                     with Image.open(path) as opened:
                         image = normalize_page_rgb(opened)
-                    image.thumbnail((250, 155), Image.Resampling.LANCZOS)
+                    image.thumbnail((thumb_w, thumb_h), Image.Resampling.LANCZOS)
                     results.append((slot, index, path.name, image, None))
                 except Exception as exc:
                     results.append((slot, index, path.name, None, str(exc)))
@@ -1624,11 +1640,13 @@ class ProjectProfileWizard(tk.Toplevel):
                 continue
             group = groups[min(2, slot // 2)]
             cell = ttk.Frame(group)
-            cell.grid(row=slot % 2, column=0, sticky="ew", pady=4)
+            cell.grid(row=slot % 2, column=0, sticky="nsew", pady=3)
+            cell.columnconfigure(0, weight=1)
+            cell.rowconfigure(0, weight=1)
             if image is not None:
                 photo = ImageTk.PhotoImage(image)
                 self._photos.append(photo)
-                ttk.Label(cell, image=photo).pack(fill="x", expand=True)
+                ttk.Label(cell, image=photo, anchor="center").pack(fill="both", expand=True)
             else:
                 ttk.Label(
                     cell, text=f"缩略图失败：{error}", wraplength=250,
