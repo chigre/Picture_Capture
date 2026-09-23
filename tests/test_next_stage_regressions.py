@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from PIL import Image
 
 from picture_capture.app import (
-    PictureCaptureApp, binary_preview_image, effective_main_overlay_font_size,
+    PictureCaptureApp, SettingsDialog, binary_preview_image, effective_main_overlay_font_size,
     ReviewWindow, VerticalWordText, horizontal_ocr_menu_layout, horizontal_overlay_layout,
     transformed_entry_anchor, vertical_marker_contact_gap, vertical_ocr_menu_layout,
     vertical_overlay_layout,
@@ -116,6 +116,51 @@ def test_refine_existing_entries_never_changes_count_or_exceeds_safe_delta(monke
     assert [entry.word for entry in refined] == ["alpha", "beta"]
     assert stats["max_delta"] == 3
     assert all(abs(new.y - old.y) <= stats["max_delta"] for old, new in zip(entries, refined))
+
+
+def test_custom_profile_name_persists_and_numbered_choices_keep_custom_last(tmp_path):
+    path = tmp_path / "settings.json"
+    AppSettings(dictionary_custom_profile_name="古汉语单字结构").to_json(path)
+    reopened = AppSettings.from_json(path)
+    assert reopened.dictionary_custom_profile_name == "古汉语单字结构"
+
+    fake = SimpleNamespace(
+        custom_profile_name_var=SimpleNamespace(get=lambda: "古汉语单字结构"),
+    )
+    labels = SettingsDialog._build_profile_choice_labels(fake)
+    keys = list(labels.values())
+    visible = list(labels.keys())
+    assert keys[-1] == "custom"
+    assert visible[-1].endswith("古汉语单字结构（自定义）")
+    assert all(label.startswith(f"{index}. ") for index, label in enumerate(visible, start=1))
+
+
+def test_project_toolbar_and_profile_scroll_layout_are_wired():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+
+    project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar)")
+    project_bar_end = text.index("        self.canvas = tk.Canvas(viewer", project_bar_start)
+    project_bar = text[project_bar_start:project_bar_end]
+    assert project_bar.index('text="已有项目"') < project_bar.index('text="导出训练标记包"')
+    assert project_bar.index('text="项目Profile"') < project_bar.index('text="更多参数"')
+    assert project_bar.index('text="更多参数"') < project_bar.index('text="保存参数"')
+    assert project_bar.index('text="保存参数"') < project_bar.index('text="使用提示"')
+    assert 'command=self.open_project_profile' in project_bar
+
+    actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
+    actions_end = text.index("        postproduction = self._section_frame(", actions_start)
+    actions = text[actions_start:actions_end]
+    assert '("更多参数", self.open_settings)' not in actions
+    assert '("导出训练标记包", self.export_training_package)' not in actions
+
+    profile_start = text.index("    def _build_profile_tab(")
+    profile_end = text.index("    def _build_profile_choice_labels(", profile_start)
+    profile = text[profile_start:profile_end]
+    assert "self.profile_canvas = profile_canvas" in profile
+    assert "profile_scrollbar" in profile
+    assert 'text="自定义结构名称："' in profile
+    assert 'self.open_settings(initial_tab="profile")' in text
 
 
 def test_binary_preview_and_font_scaling_are_display_only():
