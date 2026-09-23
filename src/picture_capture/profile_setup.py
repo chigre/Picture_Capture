@@ -445,15 +445,11 @@ class ProjectProfileWizard(tk.Toplevel):
         right_panel.columnconfigure(0, weight=1)
         self.profile_paned.add(left_panel, weight=40)
         self.profile_paned.add(right_panel, weight=60)
+        self._initial_pane_split_done = False
         left_panel.bind(
             "<Configure>",
             lambda _event: self.after_idle(self._apply_left_wraps),
             add="+",
-        )
-        self.after_idle(
-            lambda: self.profile_paned.sashpos(
-                0, max(320, int(self._wizard_width * 0.40))
-            )
         )
 
         title = "依次确认词典信息与 OCR、阅读方式、页面模板、词头结构，再用多页测试确认。"
@@ -526,6 +522,23 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Button(footer, text="确认并使用", command=self.save_and_close).pack(side="right", padx=(0, 8))
 
         self._show_right_image_page(0)
+        self.after_idle(self._apply_initial_pane_split)
+        self.after_idle(self._apply_left_wraps)
+
+    def _apply_initial_pane_split(self) -> None:
+        """Place the startup sash at exactly 40% of the realized pane width."""
+        if getattr(self, "_initial_pane_split_done", False):
+            return
+        try:
+            self.update_idletasks()
+            pane_width = int(self.profile_paned.winfo_width())
+        except tk.TclError:
+            return
+        if pane_width <= 200:
+            self.after(20, self._apply_initial_pane_split)
+            return
+        self.profile_paned.sashpos(0, round(pane_width * 0.40))
+        self._initial_pane_split_done = True
         self.after_idle(self._apply_left_wraps)
 
     def _apply_left_wraps(self) -> None:
