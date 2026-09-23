@@ -1425,7 +1425,6 @@ class SettingsDialog(tk.Toplevel):
         top.grid(row=0, column=0, sticky="ew")
         top.columnconfigure(1, weight=1)
 
-        self._profile_label_to_key = dictionary_profile_labels()
         selected_key = effective_project_profile_id(
             self.parent.settings,
             project_profile_path(self.parent.project.root) if self.parent.project else None,
@@ -1437,7 +1436,12 @@ class SettingsDialog(tk.Toplevel):
             selected_key = selected.key
         self._active_profile_key = selected_key
         self._profile_selection_changed = False
-        self.profile_choice_var = tk.StringVar(value=selected.display_name)
+        self.custom_profile_name_var = tk.StringVar(
+            value=str(getattr(self.parent.settings, "dictionary_custom_profile_name", "") or "")
+        )
+        self.vars["dictionary_custom_profile_name"] = self.custom_profile_name_var
+        self._profile_label_to_key = self._build_profile_choice_labels()
+        self.profile_choice_var = tk.StringVar(value=self._profile_label_for_key(selected_key))
         ttk.Label(top, text="词头类型：").grid(row=0, column=0, sticky="e", padx=(0, 8), pady=4)
         self.profile_combo = ttk.Combobox(
             top, textvariable=self.profile_choice_var,
@@ -1452,22 +1456,62 @@ class SettingsDialog(tk.Toplevel):
             row=0, column=3, padx=(8, 0), pady=4
         )
 
+        ttk.Label(top, text="自定义结构名称：").grid(
+            row=1, column=0, sticky="e", padx=(0, 8), pady=4
+        )
+        self.custom_profile_name_entry = ttk.Entry(
+            top, textvariable=self.custom_profile_name_var, width=32,
+        )
+        self.custom_profile_name_entry.grid(row=1, column=1, sticky="ew", pady=4)
+        ttk.Label(
+            top,
+            text="仅修改当前项目中“自定义结构”的显示名称；底层 Profile key 仍为 custom。",
+            foreground="#666666",
+        ).grid(row=1, column=2, columnspan=2, sticky="w", padx=(10, 0), pady=4)
+        self.custom_profile_name_var.trace_add(
+            "write", lambda *_args: self.after_idle(self._on_custom_profile_name_changed)
+        )
+
         self.profile_description_var = tk.StringVar(value="")
         self.profile_examples_var = tk.StringVar(value="")
         self.profile_layout_summary_var = tk.StringVar(value="")
         ttk.Label(top, textvariable=self.profile_description_var, justify="left", wraplength=880).grid(
-            row=1, column=0, columnspan=4, sticky="w", pady=(8, 2)
+            row=2, column=0, columnspan=4, sticky="w", pady=(8, 2)
         )
         ttk.Label(top, textvariable=self.profile_examples_var, justify="left", wraplength=880).grid(
-            row=2, column=0, columnspan=4, sticky="w", pady=(2, 0)
+            row=3, column=0, columnspan=4, sticky="w", pady=(2, 0)
         )
         ttk.Label(
             top, textvariable=self.profile_layout_summary_var,
             font=("TkDefaultFont", 10, "bold"), foreground="#245a86",
-        ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(5, 0))
+        ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(5, 0))
+        self._sync_custom_profile_name_state()
 
-        body = ttk.Frame(tab, padding=(14, 0, 14, 10))
-        body.grid(row=1, column=0, sticky="nsew")
+        profile_scroll_host = ttk.Frame(tab)
+        profile_scroll_host.grid(row=1, column=0, sticky="nsew")
+        profile_scroll_host.rowconfigure(0, weight=1)
+        profile_scroll_host.columnconfigure(0, weight=1)
+        profile_canvas = tk.Canvas(profile_scroll_host, highlightthickness=0, borderwidth=0)
+        self.profile_canvas = profile_canvas
+        profile_scrollbar = ttk.Scrollbar(
+            profile_scroll_host, orient="vertical", command=profile_canvas.yview,
+        )
+        profile_canvas.configure(yscrollcommand=profile_scrollbar.set)
+        profile_canvas.grid(row=0, column=0, sticky="nsew")
+        profile_scrollbar.grid(row=0, column=1, sticky="ns")
+        body = ttk.Frame(profile_canvas, padding=(14, 0, 14, 10))
+        profile_window = profile_canvas.create_window((0, 0), window=body, anchor="nw")
+
+        def _profile_sync_scrollregion(_event=None) -> None:
+            bbox = profile_canvas.bbox("all")
+            if bbox:
+                profile_canvas.configure(scrollregion=bbox)
+
+        def _profile_fit_width(event) -> None:
+            profile_canvas.itemconfigure(profile_window, width=event.width)
+
+        body.bind("<Configure>", _profile_sync_scrollregion)
+        profile_canvas.bind("<Configure>", _profile_fit_width)
         body.columnconfigure(0, weight=1)
         body.columnconfigure(1, weight=1)
         field_meta = self._field_meta
