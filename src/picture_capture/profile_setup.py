@@ -589,6 +589,8 @@ class ProjectProfileWizard(tk.Toplevel):
     def _profile_input_changed(self) -> None:
         self._mark_validation_stale()
         self._refresh_summary()
+        if hasattr(self, "template_preview_frame"):
+            self.after_idle(self._refresh_template_preview)
 
     def _reading_changed(self) -> None:
         self._mark_validation_stale()
