@@ -1198,6 +1198,12 @@ class SettingsDialog(tk.Toplevel):
         "wordslist_path": "校对和主界面成员判断使用的参考词表。可使用项目内相对路径。",
         "illustration_detect_padding": "自动插图识别后四周额外扩出的像素。",
         "illustration_detect_right_padding": "插图右侧额外扩出的像素，适合跨向栏间空白的插图。",
+        "dictionary_full_name": "词典完整名称，用于项目资料和后续导出；不影响识别。",
+        "dictionary_abbreviation": "词典缩写，用于 PicDic/导出等项目元数据；不影响识别。",
+        "dictionary_isbn": "可选项目资料，不影响识别。",
+        "dictionary_index_language": "词头/索引语言的 2 位语言代号，用于后期词典元数据。",
+        "dictionary_content_language": "释义内容语言的 2 位语言代号，用于后期词典元数据。",
+        "dictionary_body_page_range": "正文页范围，例如 1-1250。Project Profile 选代表页和批量任务时会参考它。",
         "layout_writing_mode": "专家项：页面文字书写方向。通常由 Project Profile 确认。",
         "layout_text_direction": "专家项：文字阅读方向。通常由 Project Profile 确认。",
         "layout_transform": "专家项：内部标准化页面方向，由书写模式自动推导，不建议手动改。",
@@ -1328,6 +1334,11 @@ class SettingsDialog(tk.Toplevel):
         if choices:
             return ttk.Combobox(
                 parent, textvariable=var, values=tuple(choices.keys()),
+                state="readonly", width=28,
+            )
+        if name in {"dictionary_index_language", "dictionary_content_language"}:
+            return ttk.Combobox(
+                parent, textvariable=var, values=PROJECT_LANGUAGE_CODES,
                 state="readonly", width=28,
             )
         if name == "ocr_language":
@@ -1498,7 +1509,7 @@ class SettingsDialog(tk.Toplevel):
     def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:
         super().__init__(parent)
         self.parent = parent
-        self.title("更多参数")
+        self.title("设置中心")
         self.update_idletasks()
         screen_w = max(900, self.winfo_screenwidth())
         screen_h = max(650, self.winfo_screenheight())
@@ -2164,7 +2175,11 @@ class SettingsDialog(tk.Toplevel):
         self._refresh_profile_status()
 
     def _current_profile_key(self) -> str:
-        return self._profile_label_to_key.get(self.profile_choice_var.get(), self._active_profile_key or DEFAULT_PROFILE_ID)
+        if hasattr(self, "profile_choice_var"):
+            return self._profile_label_to_key.get(
+                self.profile_choice_var.get(), self._active_profile_key or DEFAULT_PROFILE_ID
+            )
+        return str(self._active_profile_key or self.parent.settings.dictionary_profile_id or DEFAULT_PROFILE_ID)
 
     def _refresh_profile_summary(self) -> None:
         profile = dictionary_profile_preset(self._current_profile_key())
@@ -2427,7 +2442,11 @@ class SettingsDialog(tk.Toplevel):
             }
             for name, var in self.vars.items():
                 value = var.get()
-                if name in self._casts:
+                if name in self.SETTING_CHOICES:
+                    raw_value = self.SETTING_CHOICES[name].get(str(value), str(value))
+                    cast = self._casts.get(name, str)
+                    setattr(self.parent.settings, name, cast(raw_value))
+                elif name in self._casts:
                     setattr(self.parent.settings, name, self._casts[name](value))
                 elif name == "detection_method":
                     self.parent.settings.detection_method = DETECTION_VALUES[str(value)]
