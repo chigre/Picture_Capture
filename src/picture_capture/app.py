@@ -917,6 +917,29 @@ def _compare_page_word_mappings(
     return changes, counts
 
 
+def _build_modern_dialog_heading(
+    parent: tk.Misc, title: str, subtitle: str,
+) -> ttk.Frame:
+    """Shared heading block for secondary work windows."""
+    block = ttk.Frame(parent)
+    block.pack(fill="x", pady=(0, 12))
+    base = font.nametofont("TkDefaultFont").copy()
+    heading_font = base.copy()
+    heading_font.configure(
+        size=max(13, abs(int(base.cget("size"))) + 4),
+        weight="bold",
+    )
+    ttk.Label(block, text=title, font=heading_font).pack(anchor="w")
+    ttk.Label(
+        block,
+        text=subtitle,
+        foreground="#666666",
+        justify="left",
+        wraplength=900,
+    ).pack(anchor="w", pady=(3, 0))
+    return block
+
+
 class SettingsDialog(tk.Toplevel):
     FIELDS = [
         ("词典完整名称", "dictionary_full_name", str),
