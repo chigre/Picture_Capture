@@ -5472,8 +5472,9 @@ class PictureCaptureApp(tk.Tk):
         below is opt-in through a PC.* style name.
         """
         style = ttk.Style(self)
+        native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
         colors = {
-            "sidebar": "#f6f7f9",
+            "sidebar": native_background,
             "footer": "#f1f3f6",
             "status": "#f6f7f9",
             "batch": "#eef2f6",
