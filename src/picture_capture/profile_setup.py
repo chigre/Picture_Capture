@@ -24,6 +24,7 @@ from .profile_semantics import (
     READING_LABELS,
     apply_headword_profile,
     apply_reading_choice,
+    configured_body_page_indices,
     copy_settings,
     effective_page_settings,
     excluded_source_side,
@@ -209,8 +210,19 @@ class ProjectProfileWizard(tk.Toplevel):
         self._analysis_auto_apply = False
         self._analysis_queue: queue.Queue | None = None
         self._validation_queue: queue.Queue | None = None
-        self.sample_candidates = probable_body_page_indices(self.project.images)
-        self.sample_indices = representative_page_indices(self.project.images, 6)
+        configured_body = configured_body_page_indices(
+            len(self.project.images),
+            getattr(self.working, "dictionary_body_page_range", ""),
+        )
+        self.sample_candidates = probable_body_page_indices(
+            self.project.images,
+            configured_body or None,
+        )
+        self.sample_indices = representative_page_indices(
+            self.project.images,
+            6,
+            configured_body or None,
+        )
         self.template_preview_slot = 0
 
         self._build_vars()
@@ -393,7 +405,7 @@ class ProjectProfileWizard(tk.Toplevel):
 
         ttk.Label(
             tab,
-            text="代表页会优先从疑似正文范围的前部 / 中部 / 后部抽取，并避开 0000_*、目录、附录等明显非正文页；每一张都可以手动更换。",
+            text="代表页优先使用【项目详情】中的正文页范围；未填写时再从疑似正文的前部 / 中部 / 后部抽取，并避开 0000_*、目录、附录等明显非正文页；每一张都可以手动更换。",
             foreground="#666666", wraplength=980,
         ).grid(row=3, column=0, sticky="w", pady=(10, 4))
         samples = ttk.LabelFrame(tab, text="代表页（前部 / 中部 / 后部）", padding=8)
