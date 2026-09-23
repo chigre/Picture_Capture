@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import queue
 import threading
 from dataclasses import replace
@@ -1320,6 +1321,55 @@ class ProjectProfileWizard(tk.Toplevel):
             SEPARATOR_LABEL_TO_VALUE, separator_value, "自动判断",
         ))
 
+    @staticmethod
+    def _validation_coverage_summary(cache_path: Path | None, entries, geometry) -> str:
+        """Explain whether a missing region comes from raw OCR or headword filtering."""
+        if cache_path is None or not cache_path.exists() or not geometry.column_starts:
+            return ""
+        try:
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
+            columns = list(payload.get("columns") or [])
+        except (OSError, ValueError, TypeError):
+            return ""
+
+        selected_by_column: dict[int, list[float]] = {
+            index: [] for index in range(len(geometry.column_starts))
+        }
+        span = max(1, int(geometry.bottom) - int(geometry.top))
+        for entry in entries:
+            try:
+                u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
+                col = min(
+                    range(len(geometry.column_starts)),
+                    key=lambda idx: abs(geometry.x_at(idx, v) - u),
+                )
+                selected_by_column[col].append(
+                    max(0.0, min(1.0, (float(v) - float(geometry.top)) / span))
+                )
+            except Exception:
+                continue
+
+        parts: list[str] = []
+        for index in range(len(geometry.column_starts)):
+            raw_pct = 0
+            if index < len(columns):
+                column = columns[index] or {}
+                band_size = list(column.get("band_size") or [])
+                band_height = max(1, int(band_size[1])) if len(band_size) >= 2 else span
+                raw_bottom = 0
+                for record in column.get("ocr_records", []) or []:
+                    box = record.get("box") if isinstance(record, dict) else None
+                    if isinstance(box, (list, tuple)) and len(box) == 4:
+                        try:
+                            raw_bottom = max(raw_bottom, int(box[3]))
+                        except (TypeError, ValueError):
+                            pass
+                raw_pct = max(0, min(100, round(raw_bottom * 100 / band_height)))
+            selected_rows = selected_by_column.get(index) or []
+            selected_pct = max(0, min(100, round(max(selected_rows) * 100))) if selected_rows else 0
+            parts.append(f"{index + 1}栏 原始OCR至{raw_pct}% / 词头至{selected_pct}%")
+        return "；".join(parts)
+
     def validate_profile(self) -> None:
         if self._validation_running:
             return
@@ -1362,9 +1412,13 @@ class ProjectProfileWizard(tk.Toplevel):
                         profile_page_index=index,
                     )
                     preview = self._marker_preview(image, entries, geometry, settings, index)
-                    results.append((index, path.name, len(entries), len(geometry.column_starts), preview, None))
+                    coverage = self._validation_coverage_summary(cache_path, entries, geometry)
+                    results.append((
+                        index, path.name, len(entries), len(geometry.column_starts),
+                        preview, coverage, None,
+                    ))
                 except Exception as exc:
-                    results.append((index, path.name, 0, 0, None, str(exc)))
+                    results.append((index, path.name, 0, 0, None, "", str(exc)))
             assert self._validation_queue is not None
             self._validation_queue.put(results)
 
@@ -1477,7 +1531,7 @@ class ProjectProfileWizard(tk.Toplevel):
             return
 
         self.validation_preview_slot %= len(self._validation_results)
-        _index, name, count, columns, preview, error = self._validation_results[self.validation_preview_slot]
+        _index, name, count, columns, preview, coverage, error = self._validation_results[self.validation_preview_slot]
         total = len(self._validation_results)
         self.validation_caption_var.set(
             f"{self.validation_preview_slot + 1}/{total} · {name}"
@@ -1495,6 +1549,11 @@ class ProjectProfileWizard(tk.Toplevel):
             ttk.Label(
                 cell, text=f"检出 {count} 个词头 · {columns} 栏",
             ).pack(anchor="w", pady=(4, 0))
+            if coverage:
+                ttk.Label(
+                    cell, text=f"覆盖诊断：{coverage}",
+                    foreground="#666666", wraplength=650,
+                ).pack(anchor="w", pady=(2, 0))
         else:
             ttk.Label(
                 cell, text=f"测试失败：{error}", wraplength=620,
@@ -1507,9 +1566,12 @@ class ProjectProfileWizard(tk.Toplevel):
         self._validation_results = list(results)
         self.validation_preview_slot = 0
 
-        failures = sum(1 for _index, _name, _count, _columns, preview, _error in results if preview is None)
+        failures = sum(
+            1 for _index, _name, _count, _columns, preview, _coverage, _error in results
+            if preview is None
+        )
         validated_pages = [
-            name for _index, name, _count, _columns, preview, _error in results
+            name for _index, name, _count, _columns, preview, _coverage, _error in results
             if preview is not None
         ]
         self.working.profile_last_validated_pages = (
