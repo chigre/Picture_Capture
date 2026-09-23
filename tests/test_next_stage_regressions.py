@@ -18,7 +18,8 @@ from picture_capture.processing import refine_existing_entries
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
     effective_page_settings,
-    entry_allowed_by_page_template, excluded_source_side, ordered_headword_profiles,
+    entry_allowed_by_page_template, excluded_source_side, excluded_source_side_percent,
+    ordered_headword_profiles,
     page_template_analysis_image, probable_body_page_indices, READING_LABELS,
     reading_choice_from_settings, representative_page_indices, sample_page_indices,
     suggested_body_page_range,
@@ -535,6 +536,28 @@ def test_page_template_masks_side_content_before_geometry_without_mutating_sourc
     assert masked.size == image.size
 
 
+def test_page_template_alternating_ab_side_widths_are_independent():
+    image = Image.new("RGB", (100, 60), "black")
+    settings = AppSettings(
+        profile_side_content_mode="outer",
+        profile_first_page_variant="A",
+        profile_side_percent=8,
+        profile_side_percent_a=6,
+        profile_side_percent_b=14,
+    )
+    assert excluded_source_side(settings, 0) == "left"
+    assert excluded_source_side(settings, 1) == "right"
+    assert excluded_source_side_percent(settings, 0) == 6
+    assert excluded_source_side_percent(settings, 1) == 14
+
+    masked_a = page_template_analysis_image(image, settings, 0)
+    masked_b = page_template_analysis_image(image, settings, 1)
+    assert masked_a.getpixel((5, 30)) == (255, 255, 255)
+    assert masked_a.getpixel((8, 30)) == (0, 0, 0)
+    assert masked_b.getpixel((90, 30)) == (255, 255, 255)
+    assert masked_b.getpixel((84, 30)) == (0, 0, 0)
+
+
 def test_page_template_auto_footer_uses_learned_body_bottom():
     settings = AppSettings(
         parameter_display_width=1000,
@@ -638,10 +661,11 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert '"4 语言与 OCR"' not in text
     assert "self._build_language_section(tab, row=4)" in text
     assert 'text="词典项目详情"' in text
-    assert 'text="词典完整名称："' in text
-    assert 'text="词典缩写名称："' in text
+    assert 'text="词典名称："' in text
+    assert 'text="词典简称(字母)：" ' not in text
+    assert 'text="词典简称(字母)："'.strip() in text
     assert 'text="ISBN："' in text
-    assert 'text="正文页码范围："' in text
+    assert 'text="正文页码："' in text
     assert "suggested_body_page_range(self.project.images)" in text
     assert "s.dictionary_full_name = self.dictionary_full_name_var.get().strip()" in text
     assert "s.dictionary_body_page_range = self.dictionary_body_page_range_var.get().strip()" in text
@@ -654,11 +678,24 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert '"经典词头局部样例"' in text
     assert "self._build_right_image_workspace(right_panel)" in text
     assert 'ttk.Panedwindow(outer, orient="horizontal")' in text
-    assert "self.profile_paned.add(left_panel, weight=45)" in text
-    assert "self.profile_paned.add(right_panel, weight=55)" in text
+    assert "self.profile_paned.add(left_panel, weight=40)" in text
+    assert "self.profile_paned.add(right_panel, weight=60)" in text
     assert "self.profile_paned.sashpos" in text
+    assert "ProfileYellow.TLabelframe" in text
+    assert 'text="A 页排除宽度%"' in text
+    assert 'text="B 页排除宽度%"' in text
+    assert "s.profile_side_percent_a" in text
+    assert "s.profile_side_percent_b" in text
+    assert 'text="适合高度"' in text
+    assert 'text="适合宽度"' in text
+    assert 'self.validation_fit_mode = "height"' in text
+    assert "def _set_validation_fit" in text
     assert "索引语言（2 位）" in text
     assert "indices = list(self.sample_indices)" in text
+    assert 'uniform="sample"' in text
+    assert 'uniform="sample_row"' in text
+    assert "thumb_w = max(180, (available_w - 54) // 3)" in text
+    assert "thumb_h = max(220, (available_h - 150) // 2 - 42)" in text
 
     # The window skeleton is built first; representative image decoding begins
     # later on a worker thread instead of blocking the button click.
@@ -672,12 +709,13 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "self._validation_results = list(results)" in text
     assert "def _move_validation_preview" in text
     assert "def _render_validation_result" in text
-    assert "width = max(960, int(screen_w * 0.80))" in text
-    assert "height = max(640, int(screen_h * 0.80))" in text
-    assert "x = max(0, screen_w - width)" in text
-    assert "y = 0" in text
-    assert "self._wizard_left_width = max(420, int(width * 0.45) - 36)" in text
-    assert "self._wizard_image_width = max(520, int(width * 0.55) - 36)" in text
+    assert "width = min(work_w, max(960, int(screen_w * 0.80)))" in text
+    assert "SPI_GETWORKAREA" in text
+    assert "height = work_h" in text
+    assert "x = max(work_x, work_x + work_w - width)" in text
+    assert "y = work_y" in text
+    assert "self._wizard_left_width = max(400, int(width * 0.40) - 36)" in text
+    assert "self._wizard_image_width = max(560, int(width * 0.60) - 36)" in text
     assert "target_width = max(320, int(preview_width))" in text
     assert "source.resize(" in text
     assert "right_width = int(getattr(self, \"right_canvas\", self).winfo_width())" in text
@@ -690,7 +728,13 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "大字单字可以作为词头" in text
     assert "固定符号开头（○ / ● / ◆ …）可以作为词头" in text
     assert "编号开头（1. / 2. / …）可以作为词头" in text
-    assert "词头专属性（决定候选要满足多强的证据）" in text
+    assert "词头专属性（当前结构的视觉证据）" in text
+    assert 'text="栏左缘容差："' in text
+    assert 'text="文字大小倍率 ≥"' in text
+    assert 'text="粗体倍率 ≥"' in text
+    assert 'text="候选强度 ≥"' in text
+    assert "CJK 单字 / 括号词附加条件" in text
+    assert "右侧显示与当前词头结构匹配的经典局部裁切样例。" not in text
     assert "必须靠近栏左缘" in text
     assert "释义正文中也经常出现【括号词】" in text
     assert "只有视觉明显突出时才把单字/括号词当词头" in text
@@ -702,6 +746,12 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "s.profile_allow_ordinary_left_edge" in text
     assert "s.profile_allow_numbered_prefix" in text
     assert "s.profile_allow_marker_prefix" in text
+    assert "s.paddle_left_tolerance = max(" in text
+    assert "s.paddle_height_ratio = max(" in text
+    assert "s.paddle_boldness_ratio = max(" in text
+    assert "s.paddle_min_candidate_score = max(" in text
+    assert 'header_mode == "auto" and geometry.top > 0' in text
+    assert 'elif header_mode == "present"' in text
     validate_start = text.index("    def validate_profile(")
     validate_end = text.index("    def _poll_validation_queue(", validate_start)
     validate_text = text[validate_start:validate_end]
