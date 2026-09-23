@@ -557,6 +557,10 @@ def test_page_template_alternating_ab_side_widths_are_independent():
     assert masked_a.getpixel((8, 30)) == (0, 0, 0)
     assert masked_b.getpixel((90, 30)) == (255, 255, 255)
     assert masked_b.getpixel((84, 30)) == (0, 0, 0)
+    assert not entry_allowed_by_page_template(5, 30, image.size, settings, 0)
+    assert entry_allowed_by_page_template(7, 30, image.size, settings, 0)
+    assert not entry_allowed_by_page_template(90, 30, image.size, settings, 1)
+    assert entry_allowed_by_page_template(84, 30, image.size, settings, 1)
 
 
 def test_page_template_auto_footer_uses_learned_body_bottom():
