@@ -711,6 +711,9 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert 'ttk.Panedwindow(outer, orient="horizontal")' in text
     assert "self.profile_paned.add(left_panel, weight=40)" in text
     assert "self.profile_paned.add(right_panel, weight=60)" in text
+    assert "def _apply_initial_pane_split" in text
+    assert "round(pane_width * 0.40)" in text
+    assert "self.after_idle(self._apply_initial_pane_split)" in text
     assert "self.profile_paned.sashpos" in text
     assert "def _apply_left_wraps" in text
     assert 'left_panel.bind(' in text
