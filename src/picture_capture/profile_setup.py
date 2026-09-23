@@ -564,8 +564,13 @@ class ProjectProfileWizard(tk.Toplevel):
         self.footer_percent_spin.configure(state="normal" if footer_present else "disabled")
         self.side_percent_spin.configure(state="normal" if side_present else "disabled")
         self.first_variant_combo.configure(state="readonly" if alternating else "disabled")
-        if hasattr(self, "template_preview_frame"):
-            self.after_idle(self._refresh_template_preview)
+        if hasattr(self, "template_preview_frame") and hasattr(self, "notebook"):
+            try:
+                preview_visible = self.notebook.index(self.notebook.select()) == 1
+            except (tk.TclError, ValueError):
+                preview_visible = False
+            if preview_visible:
+                self.after_idle(self._refresh_template_preview)
 
     def _move_template_preview(self, delta: int) -> None:
         if not self.sample_indices:
@@ -1015,7 +1020,8 @@ class ProjectProfileWizard(tk.Toplevel):
         indices = list(self.sample_indices)
         paths = [self.project.images[index] for index in indices]
         self._show_sample_loading_state()
-        self._thumbnail_queue = queue.Queue(maxsize=1)
+        result_queue: queue.Queue = queue.Queue(maxsize=1)
+        self._thumbnail_queue = result_queue
 
         def worker() -> None:
             results = []
@@ -1027,8 +1033,7 @@ class ProjectProfileWizard(tk.Toplevel):
                     results.append((slot, index, path.name, image, None))
                 except Exception as exc:
                     results.append((slot, index, path.name, None, str(exc)))
-            assert self._thumbnail_queue is not None
-            self._thumbnail_queue.put((generation, results))
+            result_queue.put((generation, results))
 
         threading.Thread(target=worker, daemon=True).start()
         self.after(50, self._poll_sample_thumbnail_load)
