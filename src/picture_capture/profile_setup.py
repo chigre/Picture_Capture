@@ -287,6 +287,24 @@ class ProjectProfileWizard(tk.Toplevel):
         self.index_language_var = tk.StringVar(value=initial_index)
         self.content_language_var = tk.StringVar(value=str(s.dictionary_content_language or ""))
         self.custom_name_var = tk.StringVar(value=str(getattr(s, "dictionary_custom_profile_name", "") or ""))
+        self.headword_tuning_level_var = tk.IntVar(
+            value=max(-2, min(2, int(getattr(s, "profile_headword_tuning_level", 0) or 0)))
+        )
+        self.cjk_allow_single_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_allow_single_headword", True))
+        )
+        self.cjk_allow_bracketed_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_allow_bracketed_headword", True))
+        )
+        self.cjk_require_left_edge_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_require_left_edge", True))
+        )
+        self.cjk_brackets_in_body_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_brackets_in_body", False))
+        )
+        self.cjk_require_visual_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_require_visual_evidence", False))
+        )
 
         self.profile_choices = ordered_headword_profiles(self.custom_name_var.get())
         self.profile_label_to_key = dict(self.profile_choices)
