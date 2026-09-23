@@ -1100,6 +1100,161 @@ class SettingsDialog(tk.Toplevel):
 
     OCR_LANGUAGES = ("eng", "spa", "fra", "ita", "por", "deu", "chi_sim", "chi_tra", "jpn", "ara")
 
+    # Human-facing setting metadata. Internal field names and persisted JSON stay
+    # unchanged; this layer only reorganizes the settings experience.
+    SETTING_LABELS = {
+        "analysis_threshold_mode": "墨迹判断方式",
+        "body_indent": "左缘检测宽度",
+        "character_height": "典型单行字高",
+        "row_padding": "典型行间空白",
+        "darkness_threshold": "固定黑度阈值",
+        "horizontal_tolerance": "横向微调容差",
+        "paddle_band_width_ratio": "OCR 识别带宽",
+        "paddle_left_tolerance": "词头左缘容差",
+        "paddle_rec_score_threshold": "OCR 片段最低置信度",
+        "paddle_min_candidate_score": "词头候选最低分",
+        "paddle_separator_safety_px": "横线与文字安全距离",
+        "paddle_line_merge_y_ratio": "同行碎片合并容差",
+        "paddle_height_ratio": "字高提示阈值",
+        "paddle_boldness_ratio": "粗体提示阈值",
+        "paddle_gap_ratio": "行前空白提示阈值",
+        "paddle_pos_search_chars": "词性提示搜索范围",
+        "paddle_separator_search_ratio": "横线 Y 精修搜索范围",
+        "paddle_separator_band_radius": "横线空白带平滑半径",
+        "paddle_separator_roi_width_ratio": "横线精修横向范围",
+        "paddle_separator_column_margin": "横线精修栏边余量",
+        "paddle_max_input_side": "OCR 最大输入边长",
+        "paddle_preprocessing": "OCR 图像预处理",
+        "paddle_device": "PaddleOCR 运行设备",
+        "paddle_ocr_version": "PaddleOCR 模型版本",
+        "ocr_executable": "Tesseract 程序路径",
+        "batch_interval": "自动保存间隔",
+        "wordslist_path": "参考词表文件",
+    }
+
+    SETTING_HELP = {
+        "columns": "正文实际栏数。错栏会让后续所有画线偏位；通常先用“检测版面参数”自动估计。",
+        "gutter": "相邻两栏之间的空白宽度。主要影响栏边界、切图范围和列定位。",
+        "column_width": "单栏正文宽度。通常由版面检测得到，不建议只凭肉眼频繁微调。",
+        "start_y": "正文开始的 Y 位置，用来排除页眉。若顶部误画线，优先检查这里或 Project Profile 的页眉设置。",
+        "manual_x": "第一栏左缘基准位置。自动检测稳定时通常不需要手动修改。",
+        "body_indent": "普通画线只检查每栏左侧这段宽度。太小会漏掉缩进词头；太大会把正文开头误当词头。",
+        "character_height": "典型文字行高。影响普通画线的最小词条间距，也影响横线 Y 精修的搜索尺度。",
+        "row_padding": "典型行间空白。数值过大可能把相邻词条合并；过小则更容易出现重复横线。",
+        "right_ratio": "词条单行切图向右覆盖栏宽的比例。它影响后续 OCR/切图，不决定词头是否被检测。",
+        "horizontal_tolerance": "列边或人工定位的横向容差。只有版面边缘轻微漂移时才需要调整。",
+        "analysis_threshold_mode": "普通画线识别墨迹的方式。推荐 auto/otsu；纸张发黄或亮度不均可试 adaptive；fixed 主要用于旧项目兼容。",
+        "darkness_threshold": "仅 fixed 模式生效。数值越大，越容易把灰色/污点算作墨迹，误检也会增加。",
+        "column_track_radius": "跟随弯曲/倾斜栏左缘时允许搜索的横向范围。版面正常时保持默认即可。",
+        "column_track_block_height": "列跟踪按多高的分块建立锚点。越小越灵活，但也更容易受局部噪声影响。",
+        "column_track_max_step": "相邻列跟踪锚点允许的最大横移。用于限制异常跳动。",
+        "ocr_language": "词头的主要语言。它会影响 OCR 模型、词头结构和排序预设；选错语言会明显降低识别率。",
+        "paddle_device": "建议有兼容 GPU 时使用 GPU；CPU 更通用但批量 OCR 较慢。",
+        "paddle_preprocessing": "通常用 original。扫描偏灰可试 auto_contrast；只有原图确实需要二值化时才用 binary。",
+        "paddle_max_input_side": "OCR 前允许的最大图像长边。更大可能保留小字细节，但速度和显存/内存占用更高。",
+        "paddle_band_width_ratio": "每栏左侧送入 OCR 的宽度比例。缩小可提速并减少正文干扰；太小会截断长词头、变形或词性提示。",
+        "paddle_band_left_margin": "OCR 识别带向栏左额外扩展的像素。用于保留贴近栏边或略超出栏线的字形。",
+        "paddle_left_tolerance": "词头允许离栏左缘多远。调大能保留缩进词头，但也会吸入更多正文行。",
+        "paddle_rec_score_threshold": "保留 OCR 原始文字碎片的最低置信度。降低可救回难字，但噪声会增加；普通用户建议保持默认。",
+        "paddle_line_merge_y_ratio": "把同一视觉行上的 OCR 碎片合并时允许的垂直差。过大可能把上下两行合并。",
+        "paddle_height_ratio": "词头字高相对正文的视觉提示阈值。只有词头明显更大时才值得手动调整。",
+        "paddle_boldness_ratio": "词头粗体相对正文的视觉提示阈值。扫描对比度差时不要过分依赖此项。",
+        "paddle_gap_ratio": "利用词头前空白作为结构证据的阈值。不同词典差异较大，通常交给 Profile 默认值。",
+        "paddle_min_candidate_score": "综合文字结构、位置和视觉提示后的最低词头分数。调高更严格、误检少；调低更容易补回漏检。",
+        "paddle_header_search_height": "自动寻找页眉横线时只检查页面顶部这段高度。",
+        "paddle_header_rule_ink_ratio": "判断一条横向墨迹是否像页眉横线的强度阈值。",
+        "paddle_header_rule_margin": "检测到页眉横线后，正文起点向下再留出的安全距离。",
+        "paddle_pos_search_chars": "在词头后向右搜索词性/变形提示的字符范围。长词头或词性离得远时可适当增加。",
+        "paddle_separator_search_ratio": "OCR 找到词头后，横线在局部上下搜索空白带的范围。过大可能跳到相邻行。",
+        "paddle_separator_band_radius": "横线精修时对墨迹曲线做平滑的半径。通常无需修改。",
+        "paddle_separator_safety_px": "横线和当前词头墨迹之间额外保留的空白。文字被线压到时调大；间距太大时调小。",
+        "paddle_separator_roi_width_ratio": "横线精修只看栏左侧多少范围。较小可避免右侧长释义干扰。",
+        "paddle_separator_column_margin": "横线精修时跳过栏左边线/装饰线的宽度。",
+        "paddle_tesseract_psm": "Tesseract 对照识别的版面模式。开启自动比较时通常无需手动修改。",
+        "paddle_lens_language": "Google Lens 的提示语言，仅 Lens 已启用时生效。",
+        "paddle_lens_timeout": "Lens 网络识别等待时间。网络不稳定时可适当增加。",
+        "paddle_lens_default_confidence": "Lens 未提供真实置信度时的中性默认值，不建议普通用户调整。",
+        "paddle_alignment_y_tolerance_ratio": "Paddle 与 Tesseract 候选按 Y 位置配对时允许的差异。",
+        "paddle_alignment_min_similarity": "两个 OCR 词头要多相似才视为同一候选。",
+        "paddle_conflict_review_margin": "两个 OCR 质量接近到什么程度时标记为需要人工复核。",
+        "paddle_headword_regex": "专家项：定义什么文字形态可以作为词头。普通项目应优先通过 Project Profile 调整，不直接改正则。",
+        "paddle_pos_regex": "专家项：用于识别词性提示。只有特殊词典缩写体系无法覆盖时才修改。",
+        "paddle_special_symbol_regex": "专家项：定义词头前允许的特殊符号。",
+        "ocr_executable": "Tesseract 可执行文件位置。只有启用 Tesseract 对照/补漏时需要正确配置。",
+        "paddle_ocr_version": "PaddleOCR 模型系列。项目稳定后不要随意切换，否则建议重新 OCR。",
+        "tesseract_language": "Tesseract 使用的语言包。通常跟随 OCR 语言自动设置。",
+        "batch_interval": "自动保存的时间间隔。过短会增加磁盘写入；通常 3–10 秒即可。",
+        "marker_height": "主界面词头横线的显示高度，只影响显示和点击区域，不改变识别算法。",
+        "guide_width": "栏左参考线宽度，只影响界面显示。",
+        "main_entry_font_family": "主界面词条文本框字体，仅影响显示。",
+        "main_entry_font_size": "主界面词条字号，仅影响显示。",
+        "main_entry_width_chars": "主界面词条文本框宽度，以字符数估算。",
+        "main_entry_x_ratio": "主界面词条文本框相对栏宽的横向位置。",
+        "review_entry_font_family": "校对界面原词条字体，仅影响显示。",
+        "review_entry_font_size": "校对界面原词条字号，仅影响显示。",
+        "review_entry_vertical_padding": "校对文本框上下留白，仅影响校对界面密度。",
+        "review_single_cjk_line_height": "中文单字词条的特殊行高；0 表示按默认比例自动计算。",
+        "review_zoom_percent": "校对界面切图默认缩放比例。",
+        "wordslist_path": "校对和主界面成员判断使用的参考词表。可使用项目内相对路径。",
+        "illustration_detect_padding": "自动插图识别后四周额外扩出的像素。",
+        "illustration_detect_right_padding": "插图右侧额外扩出的像素，适合跨向栏间空白的插图。",
+        "layout_writing_mode": "专家项：页面文字书写方向。通常由 Project Profile 确认。",
+        "layout_text_direction": "专家项：文字阅读方向。通常由 Project Profile 确认。",
+        "layout_transform": "专家项：内部标准化页面方向，由书写模式自动推导，不建议手动改。",
+        "layout_columns_policy": "专家项：栏数由程序检测还是固定使用项目值。",
+        "layout_column_separator_mode": "专家项：是否存在明显中央分隔线。通常由 Project Profile 处理。",
+        "paddle_language": "PaddleOCR 后端语言代码，通常根据 OCR 语言自动选择。",
+    }
+
+    COMMON_FIELDS = (
+        "columns", "start_y", "manual_x", "column_width", "gutter",
+        "character_height", "row_padding", "ocr_language",
+    )
+    NORMAL_COMMON_FIELDS = (
+        "analysis_threshold_mode", "body_indent", "character_height", "row_padding",
+    )
+    NORMAL_ADVANCED_FIELDS = (
+        "darkness_threshold", "horizontal_tolerance",
+        "column_track_radius", "column_track_block_height", "column_track_max_step",
+    )
+    OCR_COMMON_FIELDS = (
+        "ocr_language", "paddle_device", "paddle_preprocessing",
+        "paddle_band_width_ratio", "paddle_left_tolerance",
+        "paddle_separator_safety_px",
+    )
+    OCR_ADVANCED_FIELDS = (
+        "paddle_max_input_side", "paddle_band_left_margin",
+        "paddle_rec_score_threshold", "paddle_line_merge_y_ratio",
+        "paddle_height_ratio", "paddle_boldness_ratio", "paddle_gap_ratio",
+        "paddle_min_candidate_score", "paddle_header_search_height",
+        "paddle_header_rule_ink_ratio", "paddle_header_rule_margin",
+        "paddle_pos_search_chars", "paddle_separator_search_ratio",
+        "paddle_separator_band_radius", "paddle_separator_roi_width_ratio",
+        "paddle_separator_column_margin", "paddle_tesseract_psm",
+        "paddle_alignment_y_tolerance_ratio", "paddle_alignment_min_similarity",
+        "paddle_conflict_review_margin",
+    )
+    DISPLAY_FIELDS = (
+        "marker_height", "guide_width",
+        "main_entry_font_family", "main_entry_font_size",
+        "main_entry_width_chars", "main_entry_x_ratio",
+        "review_entry_font_family", "review_entry_font_size",
+        "review_entry_vertical_padding", "review_single_cjk_line_height",
+        "review_zoom_percent", "wordslist_path",
+    )
+    PROJECT_RUNTIME_FIELDS = (
+        "batch_interval", "ocr_executable", "tesseract_language",
+        "paddle_ocr_version", "paddle_max_input_side",
+        "illustration_detect_padding", "illustration_detect_right_padding",
+    )
+    EXPERT_FIELDS = (
+        "layout_writing_mode", "layout_text_direction", "layout_transform",
+        "layout_columns_policy", "layout_column_separator_mode",
+        "paddle_language", "paddle_lens_language", "paddle_lens_timeout",
+        "paddle_lens_default_confidence",
+        "paddle_headword_regex", "paddle_pos_regex", "paddle_special_symbol_regex",
+    )
+
     def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:
         super().__init__(parent)
         self.parent = parent
