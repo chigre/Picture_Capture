@@ -505,15 +505,30 @@ def test_page_template_applies_header_footer_and_ab_side_exclusion():
         profile_first_page_variant="A",
     )
     effective = effective_page_settings(settings, (1000, 2000), 0)
-    assert effective.start_y == 200
-    assert effective.bottom_y == 1900
-    assert effective.crop_to_bottom_y is True
+    # Header/footer are physical source-page exclusions, not canonical Y bounds.
+    assert effective.start_y == settings.start_y
+    assert effective.bottom_y == settings.bottom_y
 
     assert excluded_source_side(settings, 0) == "left"
     assert excluded_source_side(settings, 1) == "right"
+    assert not entry_allowed_by_page_template(500, 100, (1000, 2000), settings, 0)
+    assert not entry_allowed_by_page_template(500, 1950, (1000, 2000), settings, 0)
     assert not entry_allowed_by_page_template(50, 500, (1000, 2000), settings, 0)
     assert entry_allowed_by_page_template(950, 500, (1000, 2000), settings, 0)
     assert not entry_allowed_by_page_template(950, 500, (1000, 2000), settings, 1)
+
+    vertical = replace(
+        settings,
+        layout_writing_mode="vertical-rl",
+        layout_text_direction="rtl",
+        layout_transform="rotate_ccw90",
+    )
+    masked = page_template_analysis_image(
+        Image.new("RGB", (1000, 2000), "black"), vertical, 0,
+    )
+    # Even for vertical writing, page header/footer remain physical top/bottom.
+    assert masked.getpixel((500, 50)) == (255, 255, 255)
+    assert masked.getpixel((500, 1950)) == (255, 255, 255)
 
 
 def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns():
