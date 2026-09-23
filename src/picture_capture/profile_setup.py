@@ -913,30 +913,32 @@ class ProjectProfileWizard(tk.Toplevel):
 
         feedback = ttk.LabelFrame(tab, text="结果是否合适？", padding=(8, 5))
         feedback.grid(row=5, column=0, sticky="ew", pady=(8, 0))
+        feedback.columnconfigure(4, weight=1)
         ttk.Label(
             feedback,
             text="偏多会按当前词头类型收紧规则；偏少会放宽。调整后重新测试，直到结果合适。",
-            foreground="#666666",
-        ).pack(side="left", padx=(0, 10))
+            foreground="#666666", wraplength=self._wizard_content_width,
+        ).grid(row=0, column=0, columnspan=5, sticky="w", pady=(0, 4))
         self.feedback_too_many_button = ttk.Button(
             feedback, text="偏多", command=lambda: self._apply_validation_feedback("too_many"),
             state="disabled",
         )
-        self.feedback_too_many_button.pack(side="left", padx=3)
+        self.feedback_too_many_button.grid(row=1, column=0, padx=(0, 4))
         self.feedback_good_button = ttk.Button(
             feedback, text="合适", command=lambda: self._apply_validation_feedback("good"),
             state="disabled",
         )
-        self.feedback_good_button.pack(side="left", padx=3)
+        self.feedback_good_button.grid(row=1, column=1, padx=4)
         self.feedback_too_few_button = ttk.Button(
             feedback, text="偏少", command=lambda: self._apply_validation_feedback("too_few"),
             state="disabled",
         )
-        self.feedback_too_few_button.pack(side="left", padx=3)
+        self.feedback_too_few_button.grid(row=1, column=2, padx=4)
         self.validation_feedback_var = tk.StringVar(value="")
-        ttk.Label(feedback, textvariable=self.validation_feedback_var).pack(
-            side="left", padx=(10, 0)
-        )
+        ttk.Label(
+            feedback, textvariable=self.validation_feedback_var,
+            wraplength=max(320, self._wizard_content_width - 270),
+        ).grid(row=1, column=4, sticky="w", padx=(10, 0))
 
         self.validation_frame = ttk.Frame(tab)
         self.validation_frame.grid(row=6, column=0, sticky="nsew", pady=(6, 0))
