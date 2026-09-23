@@ -331,6 +331,12 @@ class ProjectProfileWizard(tk.Toplevel):
         self.header_percent_var = tk.DoubleVar(value=float(getattr(s, "profile_header_percent", 6.0)))
         self.footer_percent_var = tk.DoubleVar(value=float(getattr(s, "profile_footer_percent", 5.0)))
         self.side_percent_var = tk.DoubleVar(value=float(getattr(s, "profile_side_percent", 8.0)))
+        self.side_percent_a_var = tk.DoubleVar(value=float(
+            getattr(s, "profile_side_percent_a", getattr(s, "profile_side_percent", 8.0))
+        ))
+        self.side_percent_b_var = tk.DoubleVar(value=float(
+            getattr(s, "profile_side_percent_b", getattr(s, "profile_side_percent", 8.0))
+        ))
         self.ocr_language_var = tk.StringVar(value=_label_for_value(
             OCR_LANGUAGE_LABEL_TO_VALUE, str(s.ocr_language or "eng"), str(s.ocr_language or "eng"),
         ))
@@ -385,7 +391,9 @@ class ProjectProfileWizard(tk.Toplevel):
             self.reading_var, self.columns_var, self.separator_var,
             self.header_mode_var, self.footer_mode_var, self.side_mode_var,
             self.first_variant_var, self.header_percent_var,
-            self.footer_percent_var, self.side_percent_var, self.ocr_language_var,
+            self.footer_percent_var, self.side_percent_var,
+            self.side_percent_a_var, self.side_percent_b_var,
+            self.ocr_language_var,
         )
         for var in detection_vars:
             var.trace_add("write", lambda *_args: self.after_idle(self._profile_input_changed))
@@ -402,6 +410,11 @@ class ProjectProfileWizard(tk.Toplevel):
         outer.pack(fill="both", expand=True)
         outer.rowconfigure(0, weight=1)
         outer.columnconfigure(0, weight=1)
+
+        style = ttk.Style(self)
+        style.configure("ProfileYellow.TLabelframe", background="#fff6cc")
+        style.configure("ProfileYellow.TLabelframe.Label", background="#fff6cc")
+        style.configure("ProfileYellow.TLabel", background="#fff6cc")
 
         self.profile_paned = ttk.Panedwindow(outer, orient="horizontal")
         self.profile_paned.grid(row=0, column=0, sticky="nsew")
@@ -866,14 +879,20 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         self.apply_analysis_button.pack(side="left", padx=(6, 0))
 
-        edges = ttk.LabelFrame(tab, text="页眉 / 页尾 / 页边", padding=9)
+        edges = ttk.LabelFrame(
+            tab, text="页眉 / 页尾 / 页边", padding=9,
+            style="ProfileYellow.TLabelframe",
+        )
         edges.grid(row=3, column=0, sticky="ew", pady=(10, 0))
         edges.columnconfigure(1, weight=1)
         self._mode_row(
             edges, 0, "页眉：", self.header_mode_var,
             tuple(HEADER_LABEL_TO_VALUE.keys()),
+            label_style="ProfileYellow.TLabel",
         )
-        ttk.Label(edges, text="排除高度%").grid(row=1, column=0, sticky="e")
+        ttk.Label(
+            edges, text="排除高度%", style="ProfileYellow.TLabel",
+        ).grid(row=1, column=0, sticky="e")
         self.header_percent_spin = tk.Spinbox(
             edges, from_=0, to=35, increment=0.5, width=6,
             textvariable=self.header_percent_var,
@@ -882,37 +901,67 @@ class ProjectProfileWizard(tk.Toplevel):
         self._mode_row(
             edges, 2, "页尾：", self.footer_mode_var,
             tuple(FOOTER_LABEL_TO_VALUE.keys()),
+            label_style="ProfileYellow.TLabel",
         )
-        ttk.Label(edges, text="排除高度%").grid(row=3, column=0, sticky="e")
+        ttk.Label(
+            edges, text="排除高度%", style="ProfileYellow.TLabel",
+        ).grid(row=3, column=0, sticky="e")
         self.footer_percent_spin = tk.Spinbox(
             edges, from_=0, to=35, increment=0.5, width=6,
             textvariable=self.footer_percent_var,
         )
         self.footer_percent_spin.grid(row=3, column=1, sticky="w")
-        ttk.Label(edges, text="页边内容：").grid(row=4, column=0, sticky="e", pady=5)
+        ttk.Label(
+            edges, text="页边内容：", style="ProfileYellow.TLabel",
+        ).grid(row=4, column=0, sticky="e", pady=5)
         ttk.Combobox(
             edges, textvariable=self.side_mode_var, state="readonly", width=22,
             values=tuple(SIDE_LABEL_TO_VALUE.keys()),
         ).grid(row=4, column=1, sticky="w", pady=5)
-        ttk.Label(edges, text="页边排除宽度%").grid(row=5, column=0, sticky="e")
+
+        ttk.Label(
+            edges, text="固定页边宽度%", style="ProfileYellow.TLabel",
+        ).grid(row=5, column=0, sticky="e")
         self.side_percent_spin = tk.Spinbox(
             edges, from_=0, to=30, increment=0.5, width=6,
             textvariable=self.side_percent_var,
         )
         self.side_percent_spin.grid(row=5, column=1, sticky="w")
-        ttk.Label(edges, text="A/B 起始页：").grid(
-            row=6, column=0, sticky="e", pady=(10, 4)
+
+        ttk.Label(
+            edges, text="A 页排除宽度%", style="ProfileYellow.TLabel",
+        ).grid(row=6, column=0, sticky="e", pady=(4, 0))
+        self.side_percent_a_spin = tk.Spinbox(
+            edges, from_=0, to=30, increment=0.5, width=6,
+            textvariable=self.side_percent_a_var,
         )
+        self.side_percent_a_spin.grid(row=6, column=1, sticky="w", pady=(4, 0))
+        ttk.Label(
+            edges, text="B 页排除宽度%", style="ProfileYellow.TLabel",
+        ).grid(row=7, column=0, sticky="e", pady=(4, 0))
+        self.side_percent_b_spin = tk.Spinbox(
+            edges, from_=0, to=30, increment=0.5, width=6,
+            textvariable=self.side_percent_b_var,
+        )
+        self.side_percent_b_spin.grid(row=7, column=1, sticky="w", pady=(4, 0))
+
+        ttk.Label(
+            edges, text="A/B 起始页：", style="ProfileYellow.TLabel",
+        ).grid(row=8, column=0, sticky="e", pady=(10, 4))
         self.first_variant_combo = ttk.Combobox(
             edges, textvariable=self.first_variant_var,
             state="readonly", width=8, values=("A", "B"),
         )
-        self.first_variant_combo.grid(row=6, column=1, sticky="w", pady=(10, 4))
+        self.first_variant_combo.grid(row=8, column=1, sticky="w", pady=(10, 4))
         ttk.Label(
             edges,
-            text="仅“外侧/内侧交替”需要 A/B：默认 A 页左侧、B 页右侧；若第一张扫描实际属于 B 页，选择 B 即可整体翻转。",
-            foreground="#666666", wraplength=self._wizard_left_width,
-        ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(8, 0))
+            text=(
+                "选“外侧/内侧交替”时，A 与 B 的页边宽度分别控制，"
+                "不要求两边比例一致；第一张扫描若属于 B 页，可在这里整体翻转。"
+            ),
+            foreground="#665500", background="#fff6cc",
+            wraplength=self._wizard_left_width,
+        ).grid(row=9, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         for variable in (
             self.header_mode_var, self.footer_mode_var, self.side_mode_var,
@@ -930,12 +979,14 @@ class ProjectProfileWizard(tk.Toplevel):
         header_present = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get()) == "present"
         footer_present = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get()) == "present"
         side_value = SIDE_LABEL_TO_VALUE.get(self.side_mode_var.get(), "none")
-        side_present = side_value != "none"
+        fixed_side = side_value in {"left", "right"}
         alternating = side_value in {"outer", "inner"}
         self.columns_spin.configure(state="normal")
         self.header_percent_spin.configure(state="normal" if header_present else "disabled")
         self.footer_percent_spin.configure(state="normal" if footer_present else "disabled")
-        self.side_percent_spin.configure(state="normal" if side_present else "disabled")
+        self.side_percent_spin.configure(state="normal" if fixed_side else "disabled")
+        self.side_percent_a_spin.configure(state="normal" if alternating else "disabled")
+        self.side_percent_b_spin.configure(state="normal" if alternating else "disabled")
         self.first_variant_combo.configure(state="readonly" if alternating else "disabled")
         if hasattr(self, "template_preview_frame") and hasattr(self, "notebook"):
             try:
@@ -995,7 +1046,7 @@ class ProjectProfileWizard(tk.Toplevel):
 
             side = excluded_source_side(settings, index)
             if side:
-                sp = max(0.0, min(30.0, float(self.side_percent_var.get())))
+                sp = excluded_source_side_percent(settings, index)
                 margin = round(w * sp / 100.0)
                 if side == "left":
                     draw.rectangle((0, 0, margin, h), fill=(100, 100, 100, 80))
@@ -1040,8 +1091,12 @@ class ProjectProfileWizard(tk.Toplevel):
     @staticmethod
     def _mode_row(
         parent, row: int, label: str, variable: tk.StringVar, values: tuple[str, ...],
+        *, label_style: str | None = None,
     ) -> None:
-        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="e", pady=5)
+        kwargs = {"style": label_style} if label_style else {}
+        ttk.Label(parent, text=label, **kwargs).grid(
+            row=row, column=0, sticky="e", pady=5
+        )
         ttk.Combobox(
             parent, textvariable=variable, state="readonly", width=22,
             values=values,
@@ -1520,6 +1575,12 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_header_percent = max(0.0, min(35.0, float(self.header_percent_var.get())))
         s.profile_footer_percent = max(0.0, min(35.0, float(self.footer_percent_var.get())))
         s.profile_side_percent = max(0.0, min(30.0, float(self.side_percent_var.get())))
+        s.profile_side_percent_a = max(
+            0.0, min(30.0, float(self.side_percent_a_var.get()))
+        )
+        s.profile_side_percent_b = max(
+            0.0, min(30.0, float(self.side_percent_b_var.get()))
+        )
         s.dictionary_custom_profile_name = self.custom_name_var.get().strip()
         s.ocr_language = _ocr_language_code(self.ocr_language_var.get())
         s.dictionary_index_language = self.index_language_var.get().strip()
@@ -2135,9 +2196,11 @@ class ProjectProfileWizard(tk.Toplevel):
 
         side = excluded_source_side(settings, page_index)
         if side:
-            margin = round(source.width * max(
-                0.0, min(30.0, float(getattr(settings, "profile_side_percent", 8.0)))
-            ) / 100.0)
+            margin = round(
+                source.width
+                * excluded_source_side_percent(settings, page_index)
+                / 100.0
+            )
             if side == "left":
                 shade_source_box((0, 0, margin, source.height))
             else:
