@@ -827,7 +827,7 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         ttk.Label(
             tab,
-            text="测试只处理代表页，不写 PDIC。红线=检出的词头；半透明灰区=当前 Profile 不参与正文识别的区域。测试结果一次显示一页，可左右翻页。",
+            text="测试只处理代表页，不写 PDIC；PaddleOCR 会强制重新识别，不复用旧 OCR 缓存。红线=检出的词头；半透明灰区=当前 Profile 不参与正文识别的区域。测试结果一次显示一页，可左右翻页。",
             foreground="#666666",
         ).grid(row=1, column=0, sticky="w", pady=(2, 8))
         bar = ttk.Frame(tab)
@@ -1330,7 +1330,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._validation_running = True
         self._validation_revision_started = self._profile_revision
         self.validate_button.configure(state="disabled")
-        self.validation_status_var.set("正在测试代表页…")
+        self.validation_status_var.set("正在强制重新识别并测试代表页…")
         self._validation_results = []
         self.validation_preview_slot = 0
         self.validation_caption_var.set("")
@@ -1357,6 +1357,7 @@ class ProjectProfileWizard(tk.Toplevel):
                     entries, geometry = detect_entries(
                         image, settings,
                         paddle_cache_path=cache_path,
+                        force_paddle_refresh=(settings.detection_method == "paddleocr"),
                         paddle_filter_rules_path=filter_path,
                         profile_page_index=index,
                     )
