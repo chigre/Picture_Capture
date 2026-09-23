@@ -24,6 +24,7 @@ from .profile_semantics import (
     PROFILE_SETUP_VERSION,
     READING_LABELS,
     apply_headword_profile,
+    apply_headword_tuning,
     apply_reading_choice,
     configured_body_page_indices,
     copy_settings,
@@ -190,12 +191,13 @@ class ProjectProfileWizard(tk.Toplevel):
         self.update_idletasks()
         screen_w = max(800, int(self.winfo_screenwidth()))
         screen_h = max(600, int(self.winfo_screenheight()))
-        width = min(1120, max(780, int(screen_w * 0.90)))
-        height = min(820, max(540, int(screen_h * 0.88)))
+        width = max(720, int(screen_w * 0.60))
+        height = screen_h
         x = max(0, (screen_w - width) // 2)
-        y = max(0, (screen_h - height) // 2)
+        y = 0
+        self._wizard_content_width = max(560, width - 70)
         self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(min(900, width), min(650, height))
+        self.minsize(min(720, width), min(650, height))
         self.transient(parent)
         self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self._close_without_save)
