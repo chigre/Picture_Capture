@@ -968,6 +968,13 @@ class ProjectProfileWizard(tk.Toplevel):
             self.working.profile_last_validated_pages = []
         if hasattr(self, "validation_status_var") and not self._validation_running:
             self.validation_status_var.set("设置已修改，需要重新测试")
+        if hasattr(self, "feedback_too_many_button"):
+            for button in (
+                self.feedback_too_many_button,
+                self.feedback_good_button,
+                self.feedback_too_few_button,
+            ):
+                button.configure(state="disabled")
 
     def _profile_input_changed(self) -> None:
         self._profile_revision += 1
@@ -1072,7 +1079,7 @@ class ProjectProfileWizard(tk.Toplevel):
                         image.thumbnail((270, 150), Image.Resampling.LANCZOS)
                         photo = ImageTk.PhotoImage(image)
                         self._headword_example_photos.append(photo)
-                        ttk.Label(cell, image=photo).pack()
+                        ttk.Label(cell, image=photo).pack(fill="x")
                     except Exception:
                         ttk.Label(cell, text="样例图片读取失败", anchor="center").pack(fill="x", ipady=28)
                 else:
@@ -1562,6 +1569,57 @@ class ProjectProfileWizard(tk.Toplevel):
         return "\n".join(parts)
 
 
+    def _set_feedback_buttons(self, state: str) -> None:
+        if not hasattr(self, "feedback_too_many_button"):
+            return
+        for button in (
+            self.feedback_too_many_button,
+            self.feedback_good_button,
+            self.feedback_too_few_button,
+        ):
+            button.configure(state=state)
+
+    def _apply_validation_feedback(self, result: str) -> None:
+        if not self._validation_results:
+            return
+        if result == "good":
+            self.validation_feedback_var.set("已确认当前结果合适，可保存 Profile。")
+            self.validation_status_var.set("当前多页测试结果已确认合适")
+            return
+
+        old_level = max(-2, min(2, int(self.headword_tuning_level_var.get())))
+        delta = 1 if result == "too_many" else -1
+        new_level = max(-2, min(2, old_level + delta))
+        self.headword_tuning_level_var.set(new_level)
+
+        key = self._current_profile_key()
+        if key == "cjk_visual":
+            if result == "too_many":
+                # CJK false positives are best controlled by demanding a real
+                # column-edge start plus visual prominence for bracketed heads.
+                self.cjk_require_left_edge_var.set(True)
+                self.cjk_require_visual_var.set(True)
+            elif result == "too_few":
+                # Loosening should first remove the extra visual gate; factual
+                # choices such as "正文中也有括号词" remain user-controlled.
+                self.cjk_require_visual_var.set(False)
+
+        self._profile_revision += 1
+        self._mark_validation_stale()
+        self._refresh_headword_tuning_status()
+        self._refresh_summary()
+        direction = "收紧" if result == "too_many" else "放宽"
+        if new_level == old_level:
+            self.validation_feedback_var.set(
+                f"已经达到{direction}上限（{new_level:+d}）；可在第③步进一步修改词头专属性。"
+            )
+        else:
+            self.validation_feedback_var.set(
+                f"已按当前词头类型{direction}到 {new_level:+d} 级；请重新测试。"
+            )
+        self.validation_status_var.set("识别规则已调整，需要重新测试")
+        self._set_feedback_buttons("disabled")
+
     def validate_profile(self) -> None:
         if self._validation_running:
             return
@@ -1575,6 +1633,8 @@ class ProjectProfileWizard(tk.Toplevel):
         indices = list(self.sample_indices)
         if not indices:
             return
+        self.update_idletasks()
+        preview_width = max(480, int(self._wizard_content_width) - 8)
         self._validation_running = True
         self._validation_revision_started = self._profile_revision
         self.validate_button.configure(state="disabled")
@@ -1587,6 +1647,8 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         self.validation_prev_button.configure(state="disabled")
         self.validation_next_button.configure(state="disabled")
+        self._set_feedback_buttons("disabled")
+        self.validation_feedback_var.set("")
         for child in self.validation_frame.winfo_children():
             child.destroy()
         ttk.Label(self.validation_frame, text="正在生成测试结果…").grid(
@@ -1612,7 +1674,9 @@ class ProjectProfileWizard(tk.Toplevel):
                         paddle_filter_rules_path=filter_path,
                         profile_page_index=index,
                     )
-                    preview = self._marker_preview(image, entries, geometry, settings, index)
+                    preview = self._marker_preview(
+                        image, entries, geometry, settings, index, preview_width,
+                    )
                     coverage = self._validation_coverage_summary(
                         cache_path, entries, geometry, settings,
                     )
@@ -1642,11 +1706,18 @@ class ProjectProfileWizard(tk.Toplevel):
         self._finish_validation(results)
 
     @staticmethod
-    def _marker_preview(image: Image.Image, entries, geometry, settings: AppSettings, page_index: int) -> Image.Image:
+    def _marker_preview(
+        image: Image.Image, entries, geometry, settings: AppSettings,
+        page_index: int, preview_width: int,
+    ) -> Image.Image:
         source = image.copy()
-        thumb = source.copy()
-        thumb.thumbnail((650, 500), Image.Resampling.LANCZOS)
-        thumb = thumb.convert("RGBA")
+        target_width = max(320, int(preview_width))
+        target_height = max(
+            1, round(source.height * target_width / max(1, source.width)),
+        )
+        thumb = source.resize(
+            (target_width, target_height), Image.Resampling.LANCZOS,
+        ).convert("RGBA")
         sx = thumb.width / max(1, source.width)
         sy = thumb.height / max(1, source.height)
         draw = ImageDraw.Draw(thumb, "RGBA")
@@ -1750,7 +1821,8 @@ class ProjectProfileWizard(tk.Toplevel):
         self.validation_next_button.configure(state=state)
 
         cell = ttk.LabelFrame(self.validation_frame, text=name, padding=8)
-        cell.grid(row=0, column=0, sticky="n")
+        cell.grid(row=0, column=0, sticky="ew")
+        cell.columnconfigure(0, weight=1)
         if preview is not None:
             photo = ImageTk.PhotoImage(preview)
             self._validation_photos.append(photo)
@@ -1793,6 +1865,8 @@ class ProjectProfileWizard(tk.Toplevel):
             self.validation_status_var.set(
                 f"完成：{len(results)} 页均已测试；可用左右按钮逐页检查"
             )
+        if results and not revision_changed:
+            self._set_feedback_buttons("normal")
         self._render_validation_result()
 
     def save_and_close(self) -> None:
