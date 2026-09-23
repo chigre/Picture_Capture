@@ -920,7 +920,15 @@ class ProjectProfileWizard(tk.Toplevel):
             with Image.open(path) as opened:
                 source = normalize_page_rgb(opened)
             preview = source.copy()
-            preview.thumbnail((540, 560), Image.Resampling.LANCZOS)
+            self.update_idletasks()
+            right_width = int(getattr(self, "right_canvas", self).winfo_width())
+            target_width = max(
+                420,
+                (right_width - 24) if right_width > 100
+                else (self._wizard_image_width - 24),
+            )
+            target_height = max(420, int(self._wizard_height * 0.72))
+            preview.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
             draw = ImageDraw.Draw(preview, "RGBA")
             w, h = preview.size
 
@@ -1321,44 +1329,63 @@ class ProjectProfileWizard(tk.Toplevel):
         self._headword_example_photos.clear()
         if profile.examples:
             names = []
-            for slot, example in enumerate(profile.examples[:3]):
+            self.update_idletasks()
+            right_width = int(getattr(self, "right_canvas", self).winfo_width())
+            available = (
+                right_width if right_width > 100 else self._wizard_image_width
+            )
+            example_width = max(300, (available - 36) // 2)
+            for slot, example in enumerate(profile.examples):
                 names.append(example.dictionary)
-                cell = ttk.Frame(self.headword_examples_frame)
-                cell.grid(row=0, column=slot, sticky="nsew", padx=5, pady=3)
+                row, column = divmod(slot, 2)
+                cell = ttk.LabelFrame(
+                    self.headword_examples_frame,
+                    text=example.dictionary, padding=5,
+                )
+                cell.grid(
+                    row=row, column=column, sticky="nsew", padx=5, pady=5,
+                )
                 asset = self._headword_example_asset(key, example.dictionary)
                 if asset is not None:
                     try:
                         with Image.open(asset) as opened:
                             image = normalize_page_rgb(opened)
-                        image.thumbnail((270, 150), Image.Resampling.LANCZOS)
+                        image.thumbnail(
+                            (example_width, 315), Image.Resampling.LANCZOS,
+                        )
                         photo = ImageTk.PhotoImage(image)
                         self._headword_example_photos.append(photo)
-                        ttk.Label(cell, image=photo).pack(fill="x")
+                        ttk.Label(cell, image=photo).pack(anchor="center")
                     except Exception:
-                        ttk.Label(cell, text="样例图片读取失败", anchor="center").pack(fill="x", ipady=28)
+                        ttk.Label(
+                            cell, text="样例图片读取失败", anchor="center",
+                        ).pack(fill="x", ipady=35)
                 else:
                     ttk.Label(
                         cell,
-                        text=f"待放入局部样例\n{example.dictionary}",
+                        text=f"缺少局部样例：{example.dictionary}",
                         anchor="center", justify="center",
-                    ).pack(fill="x", ipady=28)
-                ttk.Label(cell, text=example.dictionary).pack(anchor="center", pady=(4, 0))
+                    ).pack(fill="x", ipady=35)
             self.headword_examples_var.set(
-                "经典样例：" + "；".join(names) + "。样例区只显示局部裁切图，不回退为整页预览。"
+                "经典局部样例：" + "；".join(names) + "。均来自测试词典的真实页面裁切。"
             )
         else:
             ttk.Label(
                 self.headword_examples_frame,
-                text="此结构暂无固定经典词典样例；可使用当前项目的局部词头截图作为自定义参考。",
-                anchor="center",
-            ).grid(row=0, column=0, columnspan=3, sticky="ew", pady=18)
-            self.headword_examples_var.set("")
+                text=(
+                    "自定义结构没有固定“经典样例”；因为它本身就是给未被预设覆盖的版式使用。"
+                    "可先选择最接近的预设参考，再自定义 parser 勾选。"
+                ),
+                anchor="center", justify="center",
+                wraplength=self._wizard_image_width,
+            ).grid(row=0, column=0, columnspan=2, sticky="ew", pady=30)
+            self.headword_examples_var.set("自定义结构：无固定经典样例。")
 
         for child in self.headword_help_frame.winfo_children():
             child.destroy()
         lines = HEADWORD_HELP_LINES.get(key) or (
             "识别对象：按当前结构预设判断词条起始。",
-            "建议：结合经典样例和第 ⑤ 步多页测试确认是否稳定。",
+            "建议：结合经典样例和第 ④ 步多页测试确认是否稳定。",
         )
         for row, line in enumerate(lines):
             ttk.Label(
@@ -1531,7 +1558,7 @@ class ProjectProfileWizard(tk.Toplevel):
             if image is not None:
                 photo = ImageTk.PhotoImage(image)
                 self._photos.append(photo)
-                ttk.Label(cell, image=photo).pack()
+                ttk.Label(cell, image=photo).pack(fill="x", expand=True)
             else:
                 ttk.Label(
                     cell, text=f"缩略图失败：{error}", wraplength=250,
@@ -1896,7 +1923,7 @@ class ProjectProfileWizard(tk.Toplevel):
         preview_width = max(
             480,
             (frame_width - 20) if frame_width > 100
-            else (int(self._wizard_content_width) - 8),
+            else (int(self._wizard_image_width) - 8),
         )
         self._validation_running = True
         self._validation_revision_started = self._profile_revision
