@@ -16,7 +16,7 @@ from picture_capture.models import (
 )
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
-from picture_capture.processing import refine_existing_entries
+from picture_capture.processing import _left_edge_ink_mask, refine_existing_entries
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
     effective_page_settings,
@@ -232,7 +232,7 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     settings_end = source.index("class ReviewWindow", settings_start)
     settings = source[settings_start:settings_end]
     assert '_build_modern_dialog_heading(' in settings
-    assert '"更多参数"' in settings
+    assert '"设置中心"' in settings
     assert 'text="保存并关闭"' in settings
     assert 'text="检测 OCR 引擎"' in settings
 
@@ -273,15 +273,15 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
     project_bar = text[project_bar_start:project_bar_end]
     assert project_bar.index('text="已有项目"') < project_bar.index('text="导出训练标记包"')
-    assert project_bar.index('("项目Profile", self.open_project_profile)') < project_bar.index('("更多参数", self.open_settings)')
-    assert project_bar.index('("更多参数", self.open_settings)') < project_bar.index('("保存参数", self.save_main_parameters)')
+    assert project_bar.index('("项目Profile", self.open_project_profile)') < project_bar.index('("设置中心", self.open_settings)')
+    assert project_bar.index('("设置中心", self.open_settings)') < project_bar.index('("保存参数", self.save_main_parameters)')
     assert project_bar.index('("保存参数", self.save_main_parameters)') < project_bar.index('("使用提示", self.show_help_dialog)')
     assert '("项目Profile", self.open_project_profile)' in project_bar
 
     actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
     actions = text[actions_start:actions_end]
-    assert '("更多参数", self.open_settings)' not in actions
+    assert '("设置中心", self.open_settings)' not in actions
     assert '("导出训练标记包", self.export_training_package)' not in actions
 
     profile_start = text.index("    def _build_profile_tab(")
@@ -974,18 +974,22 @@ def test_project_profile_wizard_is_the_normal_entry_path():
     text = source.read_text(encoding="utf-8")
     assert "ProjectProfileWizard(self, new_project=new_project)" in text
     assert "launch_profile_setup=not existing_project" in text
-    assert 'notebook.add(profile_tab, text="Profile高级")' in text
-    assert "notebook.select(params_tab)" in text
+    assert '(common_tab, "常用")' in text
+    assert '(normal_tab, "普通画线")' in text
+    assert '(ocr_tab, "OCR画线")' in text
+    assert '(advanced_tab, "高级")' in text
+    assert '"profile": advanced_tab' in text
     start = text.index("    def open_project_profile(")
     end = text.index("    def open_project_details(", start)
     assert 'self.open_settings(initial_tab="profile")' not in text[start:end]
 
 
-
-def test_main_ocr_drawing_defaults_to_force_refresh_and_paddle_only():
+def test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only():
     app_source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     app_text = app_source.read_text(encoding="utf-8")
-    assert 'self.ocr_refresh_var = tk.StringVar(value="force")' in app_text
+    assert 'self.ocr_refresh_var = tk.StringVar(value="reuse")' in app_text
+    assert "使用有效缓存（推荐）" in app_text
+    assert "重新OCR（模型/图像改变时）" in app_text
     assert "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启" in app_text
     assert 'LENS_MODE_LABELS["off"]' in app_text
 
@@ -994,6 +998,34 @@ def test_main_ocr_drawing_defaults_to_force_refresh_and_paddle_only():
     assert settings.paddle_compare_tesseract is False
     assert settings.paddle_enable_lens is False
     assert settings.paddle_lens_mode == "off"
+
+def test_ordinary_drawing_uses_shared_threshold_policy():
+    import numpy as np
+
+    gray = np.array([
+        [30, 90, 150, 230],
+        [40, 100, 160, 240],
+        [50, 110, 170, 250],
+        [60, 120, 180, 245],
+    ], dtype=np.uint8)
+    fixed = _left_edge_ink_mask(
+        gray, AppSettings(analysis_threshold_mode="fixed", darkness_threshold=300)
+    )
+    assert fixed.dtype == bool and fixed.shape == gray.shape
+    assert fixed[0, 0] and fixed[0, 1]
+    assert not fixed[1, 1] and not fixed[0, 2]
+
+    auto = _left_edge_ink_mask(gray, AppSettings(analysis_threshold_mode="auto"))
+    adaptive = _left_edge_ink_mask(gray, AppSettings(analysis_threshold_mode="adaptive"))
+    assert auto.dtype == bool and adaptive.dtype == bool
+    processing_source = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "processing.py"
+    ).read_text(encoding="utf-8")
+    start = processing_source.index("def _detect_entries_left_edge(")
+    end = processing_source.index("\ndef detect_entries(", start)
+    assert "dark = _left_edge_ink_mask(gray, settings)" in processing_source[start:end]
+    assert "density_floor" in processing_source[start:end]
+
 
 def test_analysis_threshold_modes_are_effective():
     import numpy as np
