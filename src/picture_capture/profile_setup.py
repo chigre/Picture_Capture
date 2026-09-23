@@ -3,6 +3,7 @@ from __future__ import annotations
 import queue
 import threading
 from dataclasses import replace
+from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -29,7 +30,8 @@ from .profile_semantics import (
     ordered_headword_profiles,
     profile_summary_tags,
     reading_choice_from_settings,
-    sample_page_indices,
+    probable_body_page_indices,
+    representative_page_indices,
     page_template_analysis_image,
     page_variant,
 )
@@ -46,13 +48,89 @@ OCR_LANGUAGE_LABEL_TO_VALUE = {
     "中文简体 (chi_sim)": "chi_sim",
     "中文繁体 (chi_tra)": "chi_tra",
     "日语 (jpn)": "jpn",
-    "阿拉伯语 (ara)": "ara",
+    "法语 (fra)": "fra",
     "德语 (deu)": "deu",
     "西班牙语 (spa)": "spa",
     "意大利语 (ita)": "ita",
     "葡萄牙语 (por)": "por",
-    "法语 (fra)": "fra",
+    "阿拉伯语 (ara)": "ara",
+    "荷兰语 (nld)": "nld",
+    "波兰语 (pol)": "pol",
+    "土耳其语 (tur)": "tur",
+    "越南语 (vie)": "vie",
+    "捷克语 (ces)": "ces",
+    "丹麦语 (dan)": "dan",
+    "挪威语 (nor)": "nor",
+    "瑞典语 (swe)": "swe",
+    "芬兰语 (fin)": "fin",
+    "罗马尼亚语 (ron)": "ron",
+    "匈牙利语 (hun)": "hun",
+    "印度尼西亚语 (ind)": "ind",
+    "马来语 (msa)": "msa",
+    "克罗地亚语 (hrv)": "hrv",
+    "斯洛伐克语 (slk)": "slk",
+    "斯洛文尼亚语 (slv)": "slv",
+    "加泰罗尼亚语 (cat)": "cat",
+    "巴斯克语 (eus)": "eus",
+    "加利西亚语 (glg)": "glg",
+    "拉丁语 (lat)": "lat",
 }
+
+OCR_TO_INDEX_LANGUAGE = {
+    "eng": "en", "chi_sim": "zh", "chi_tra": "zh", "jpn": "ja",
+    "fra": "fr", "deu": "de", "spa": "es", "ita": "it", "por": "pt",
+    "ara": "ar", "nld": "nl", "pol": "pl", "tur": "tr", "vie": "vi",
+    "ces": "cs", "dan": "da", "nor": "no", "swe": "sv", "fin": "fi",
+    "ron": "ro", "hun": "hu", "ind": "id", "msa": "ms", "hrv": "hr",
+    "slk": "sk", "slv": "sl", "cat": "ca", "eus": "eu", "glg": "gl",
+    "lat": "la",
+}
+
+HEADWORD_HELP_LINES = {
+    "latin_regular": (
+        "识别对象：普通拉丁字母词典中，排在释义前、视觉上更醒目的词头。",
+        "主要依据：左缘位置、粗体/字号、词头后的音标、词性或变形等结构线索综合判断，不要求固定编号。",
+        "适合：英、法、德、西、意、葡等常规字母词典，以及版式相近的双语词典。",
+        "通常不算新词条：例句中的加粗词、释义内部的小标题、同一词条中的派生形式，除非它们同时满足词头结构线索。",
+        "选择后仍可在【Profile高级】调整视觉阈值；这里不会改变你已经确认的阅读方向、分栏或 OCR 语言。",
+    ),
+    "numbered_prefix": (
+        "识别对象：每个新词条前都有明确数字编号的词典，例如“1. word”或“1 word”。",
+        "主要依据：行首 1–4 位数字 + 点号/空格作为强提示；编号本身比粗体或字号更重要。",
+        "适合：日文类语词典、编号式术语表，以及每条记录都有稳定序号的参考书。",
+        "通常不算新词条：释义内部的例句序号、义项编号或页码；它们若不位于词条起始位置，应由位置/结构规则排除。",
+        "如果编号格式非常特殊，可先选这一类，再到【Profile高级】调整前缀规则。",
+    ),
+    "cjk_visual": (
+        "识别对象：中文、日文等 CJK 词典中，以大字单字、括号词或明显视觉强调作为词头的条目。",
+        "主要依据：单字/短词的字号、粗细、边缘位置，以及【】〔〕等括号结构；不依赖拉丁词性缩写。",
+        "适合：汉字字典、汉语词典、日文汉和辞典，以及“大字词头 + 小字释义”的版式。",
+        "通常不算新词条：正文中的普通大字、例句中的括号内容、栏内装饰字符；需要同时满足词条起始位置与视觉结构。",
+        "若词头只有一个汉字且行距很紧，后续可结合单行高/字符高度参数微调。",
+    ),
+    "marker_prefixed": (
+        "识别对象：每个新词条前有固定符号的词典，例如 ○、●、◆ 等。",
+        "主要依据：词条起始位置的固定符号是强提示，字号或粗体只作为辅助信息。",
+        "适合：百科、术语辞典、专题词典中以项目符号分隔条目的版式。",
+        "通常不算新词条：释义内部的项目符号、示例列表或装饰符号；它们若不处在词条起始边，应被排除。",
+        "如果你的符号不在预设集合中，可在高级规则中补充，而无需更改其他 Profile 维度。",
+    ),
+    "edge_visual_regular": (
+        "识别对象：没有稳定词性语法，但词头总是在栏边、并通过粗体/字号/留白与正文区分的词典。",
+        "主要依据：词条起始边 + 视觉突出程度 + 前后空白结构，不假定具体语言。",
+        "适合：多语种、专名、地名、人名、专业名词等“视觉规则稳定、语法标记不稳定”的词典。",
+        "通常不算新词条：栏中部的粗体强调、正文小标题和交叉引用，除非同时满足起始边结构。",
+        "这是比“拉丁字母常规词头”更脚本中立的选项。",
+    ),
+    "custom": (
+        "识别对象：无法被现有结构稳定描述，或你已经在高级参数中人工调好规则的词典。",
+        "主要依据：完全沿用当前项目的高级识别参数，不强行套用预设。",
+        "适合：特殊古籍、混排词典、实验性版式或高度定制的词头规则。",
+        "建议：先给自定义结构起一个项目内名称，再用多页测试验证不同位置、不同页面上的稳定性。",
+        "自定义结构同样只负责“什么算词头”，不会覆盖阅读方向、页面模板或 OCR 语言。",
+    ),
+}
+
 
 SEPARATOR_LABEL_TO_VALUE = {
     "自动判断": "auto",
@@ -121,6 +199,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._photos: list[ImageTk.PhotoImage] = []
         self._validation_photos: list[ImageTk.PhotoImage] = []
         self._template_photos: list[ImageTk.PhotoImage] = []
+        self._headword_example_photos: list[ImageTk.PhotoImage] = []
         self._validation_running = False
         self._analysis_running = False
         self._profile_revision = 0
@@ -130,7 +209,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self._analysis_auto_apply = False
         self._analysis_queue: queue.Queue | None = None
         self._validation_queue: queue.Queue | None = None
-        self.sample_indices = sample_page_indices(len(self.project.images), 6)
+        self.sample_candidates = probable_body_page_indices(self.project.images)
+        self.sample_indices = representative_page_indices(self.project.images, 6)
+        self.template_preview_slot = 0
 
         self._build_vars()
         self._build_ui()
@@ -171,7 +252,10 @@ class ProjectProfileWizard(tk.Toplevel):
         self.ocr_language_var = tk.StringVar(value=_label_for_value(
             OCR_LANGUAGE_LABEL_TO_VALUE, str(s.ocr_language or "eng"), str(s.ocr_language or "eng"),
         ))
-        self.index_language_var = tk.StringVar(value=str(s.dictionary_index_language or ""))
+        initial_index = str(s.dictionary_index_language or "").strip()
+        if not initial_index:
+            initial_index = OCR_TO_INDEX_LANGUAGE.get(_ocr_language_code(self.ocr_language_var.get()), "")
+        self.index_language_var = tk.StringVar(value=initial_index)
         self.content_language_var = tk.StringVar(value=str(s.dictionary_content_language or ""))
         self.custom_name_var = tk.StringVar(value=str(getattr(s, "dictionary_custom_profile_name", "") or ""))
 
@@ -301,54 +385,63 @@ class ProjectProfileWizard(tk.Toplevel):
 
         choices = ttk.Frame(tab)
         choices.grid(row=2, column=0, sticky="w")
-        for row, key in enumerate(("horizontal-ltr", "horizontal-rtl", "vertical-rl", "vertical-lr")):
+        for column, key in enumerate(("horizontal-ltr", "horizontal-rtl", "vertical-rl", "vertical-lr")):
             ttk.Radiobutton(
                 choices, text=READING_LABELS[key], variable=self.reading_var, value=key,
                 command=self._reading_changed,
-            ).grid(row=row, column=0, sticky="w", pady=4)
+            ).grid(row=0, column=column, sticky="w", padx=(0, 18), pady=4)
 
+        ttk.Label(
+            tab,
+            text="代表页会优先从疑似正文范围的前部 / 中部 / 后部抽取，并避开 0000_*、目录、附录等明显非正文页；每一张都可以手动更换。",
+            foreground="#666666", wraplength=980,
+        ).grid(row=3, column=0, sticky="w", pady=(10, 4))
         samples = ttk.LabelFrame(tab, text="代表页（前部 / 中部 / 后部）", padding=8)
-        samples.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        samples.grid(row=4, column=0, sticky="nsew", pady=(4, 0))
+        samples.columnconfigure(0, weight=1)
+        samples.columnconfigure(1, weight=1)
+        samples.columnconfigure(2, weight=1)
         self.sample_frame = samples
 
     def _build_template_tab(self, tab: ttk.Frame) -> None:
-        tab.columnconfigure(0, weight=1)
+        tab.columnconfigure(0, weight=0)
         tab.columnconfigure(1, weight=1)
         ttk.Label(tab, text="② 正文在哪里？", font=("TkDefaultFont", 12, "bold")).grid(
             row=0, column=0, columnspan=2, sticky="w"
         )
         ttk.Label(
             tab,
-            text="页面模板负责分栏、页眉/页尾和页边占位内容；A/B 表示相邻扫描页，不强行等同书籍奇偶页。",
+            text="左侧定义正文与排除区域；右侧始终用一张真实代表页即时预览。A/B 表示相邻扫描页，不强行等同书籍奇偶页。",
             foreground="#666666",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 8))
 
-        left = ttk.LabelFrame(tab, text="正文与分栏", padding=10)
-        left.grid(row=2, column=0, sticky="nsew", padx=(0, 5))
-        right = ttk.LabelFrame(tab, text="页眉 / 页尾 / 页边", padding=10)
-        right.grid(row=2, column=1, sticky="nsew", padx=(5, 0))
+        left_stack = ttk.Frame(tab)
+        left_stack.grid(row=2, column=0, sticky="nw", padx=(0, 10))
+        left_stack.columnconfigure(0, weight=1)
 
-        ttk.Label(left, text="正文栏数：").grid(row=0, column=0, sticky="e", pady=5)
+        body = ttk.LabelFrame(left_stack, text="正文与分栏", padding=10)
+        body.grid(row=0, column=0, sticky="ew")
+        ttk.Label(body, text="正文栏数：").grid(row=0, column=0, sticky="e", pady=5)
         self.columns_spin = tk.Spinbox(
-            left, from_=1, to=8, width=5, textvariable=self.columns_var,
+            body, from_=1, to=8, width=5, textvariable=self.columns_var,
         )
         self.columns_spin.grid(row=0, column=1, sticky="w", pady=5)
         ttk.Label(
-            left,
+            body,
             text="代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。",
-            foreground="#666666", wraplength=360,
+            foreground="#666666", wraplength=390,
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 5))
-        ttk.Label(left, text="中央分隔线：").grid(row=2, column=0, sticky="e", pady=5)
+        ttk.Label(body, text="中央分隔线：").grid(row=2, column=0, sticky="e", pady=5)
         ttk.Combobox(
-            left, textvariable=self.separator_var, state="readonly", width=18,
+            body, textvariable=self.separator_var, state="readonly", width=18,
             values=tuple(SEPARATOR_LABEL_TO_VALUE.keys()),
         ).grid(row=2, column=1, sticky="w", pady=5)
 
-        self.analysis_suggestion_var = tk.StringVar(value="进入本步骤时会分析代表页，也可随时重新分析。")
-        ttk.Label(left, textvariable=self.analysis_suggestion_var, wraplength=430).grid(
+        self.analysis_suggestion_var = tk.StringVar(value="进入本步骤时会分析当前代表页，也可随时重新分析。")
+        ttk.Label(body, textvariable=self.analysis_suggestion_var, wraplength=390).grid(
             row=3, column=0, columnspan=2, sticky="w", pady=(12, 4)
         )
-        analysis_buttons = ttk.Frame(left)
+        analysis_buttons = ttk.Frame(body)
         analysis_buttons.grid(row=4, column=0, columnspan=2, sticky="w")
         self.analyze_button = ttk.Button(
             analysis_buttons, text="重新分析代表页", command=self.analyze_representative_pages,
@@ -359,53 +452,64 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         self.apply_analysis_button.pack(side="left", padx=(6, 0))
 
+        edges = ttk.LabelFrame(left_stack, text="页眉 / 页尾 / 页边", padding=10)
+        edges.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         self._mode_row(
-            right, 0, "页眉：", self.header_mode_var,
+            edges, 0, "页眉：", self.header_mode_var,
             tuple(HEADER_LABEL_TO_VALUE.keys()),
         )
-        ttk.Label(right, text="排除高度%").grid(row=1, column=0, sticky="e")
+        ttk.Label(edges, text="排除高度%").grid(row=1, column=0, sticky="e")
         self.header_percent_spin = tk.Spinbox(
-            right, from_=0, to=35, increment=0.5, width=6,
+            edges, from_=0, to=35, increment=0.5, width=6,
             textvariable=self.header_percent_var,
         )
         self.header_percent_spin.grid(row=1, column=1, sticky="w")
         self._mode_row(
-            right, 2, "页尾：", self.footer_mode_var,
+            edges, 2, "页尾：", self.footer_mode_var,
             tuple(FOOTER_LABEL_TO_VALUE.keys()),
         )
-        ttk.Label(right, text="排除高度%").grid(row=3, column=0, sticky="e")
+        ttk.Label(edges, text="排除高度%").grid(row=3, column=0, sticky="e")
         self.footer_percent_spin = tk.Spinbox(
-            right, from_=0, to=35, increment=0.5, width=6,
+            edges, from_=0, to=35, increment=0.5, width=6,
             textvariable=self.footer_percent_var,
         )
         self.footer_percent_spin.grid(row=3, column=1, sticky="w")
-        ttk.Label(right, text="页边内容：").grid(row=4, column=0, sticky="e", pady=5)
+        ttk.Label(edges, text="页边内容：").grid(row=4, column=0, sticky="e", pady=5)
         ttk.Combobox(
-            right, textvariable=self.side_mode_var, state="readonly", width=22,
+            edges, textvariable=self.side_mode_var, state="readonly", width=22,
             values=tuple(SIDE_LABEL_TO_VALUE.keys()),
         ).grid(row=4, column=1, sticky="w", pady=5)
-        ttk.Label(right, text="页边排除宽度%").grid(row=5, column=0, sticky="e")
+        ttk.Label(edges, text="页边排除宽度%").grid(row=5, column=0, sticky="e")
         self.side_percent_spin = tk.Spinbox(
-            right, from_=0, to=30, increment=0.5, width=6,
+            edges, from_=0, to=30, increment=0.5, width=6,
             textvariable=self.side_percent_var,
         )
         self.side_percent_spin.grid(row=5, column=1, sticky="w")
-        ttk.Label(right, text="A/B 起始页：").grid(row=6, column=0, sticky="e", pady=(10, 4))
+        ttk.Label(edges, text="A/B 起始页：").grid(row=6, column=0, sticky="e", pady=(10, 4))
         self.first_variant_combo = ttk.Combobox(
-            right, textvariable=self.first_variant_var, state="readonly", width=8, values=("A", "B"),
+            edges, textvariable=self.first_variant_var, state="readonly", width=8, values=("A", "B"),
         )
         self.first_variant_combo.grid(row=6, column=1, sticky="w", pady=(10, 4))
         ttk.Label(
-            right,
+            edges,
             text="仅“外侧/内侧交替”需要 A/B：默认 A 页左侧、B 页右侧；若第一张扫描实际属于 B 页，选择 B 即可整体翻转。",
-            foreground="#666666", wraplength=430,
+            foreground="#666666", wraplength=390,
         ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         preview = ttk.LabelFrame(tab, text="页面模板即时预览", padding=8)
-        preview.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=(10, 0))
+        preview.grid(row=2, column=1, sticky="nsew")
         preview.columnconfigure(0, weight=1)
-        preview.columnconfigure(1, weight=1)
-        self.template_preview_frame = preview
+        preview.rowconfigure(1, weight=1)
+        nav = ttk.Frame(preview)
+        nav.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        ttk.Button(nav, text="◀ 上一张", command=lambda: self._move_template_preview(-1)).pack(side="left")
+        ttk.Button(nav, text="下一张 ▶", command=lambda: self._move_template_preview(1)).pack(side="right")
+        self.template_preview_caption_var = tk.StringVar(value="")
+        ttk.Label(nav, textvariable=self.template_preview_caption_var).pack(side="left", expand=True)
+        self.template_preview_frame = ttk.Frame(preview)
+        self.template_preview_frame.grid(row=1, column=0, sticky="nsew")
+        self.template_preview_frame.columnconfigure(0, weight=1)
+
         for variable in (
             self.header_mode_var, self.footer_mode_var, self.side_mode_var,
         ):
@@ -432,8 +536,16 @@ class ProjectProfileWizard(tk.Toplevel):
         if hasattr(self, "template_preview_frame"):
             self.after_idle(self._refresh_template_preview)
 
+    def _move_template_preview(self, delta: int) -> None:
+        if not self.sample_indices:
+            return
+        self.template_preview_slot = (
+            int(self.template_preview_slot) + int(delta)
+        ) % len(self.sample_indices)
+        self._refresh_template_preview()
+
     def _refresh_template_preview(self) -> None:
-        """Render A/B representative pages with the current exclusion template."""
+        """Render one representative page with the current exclusion template."""
         if not hasattr(self, "template_preview_frame"):
             return
         for child in self.template_preview_frame.winfo_children():
@@ -441,80 +553,75 @@ class ProjectProfileWizard(tk.Toplevel):
         self._template_photos.clear()
         if not self.sample_indices:
             ttk.Label(self.template_preview_frame, text="没有可预览页面").grid(row=0, column=0)
+            self.template_preview_caption_var.set("")
             return
+        self.template_preview_slot %= len(self.sample_indices)
+        index = self.sample_indices[self.template_preview_slot]
+        path = self.project.images[index]
         try:
             settings = self._settings_from_ui()
-        except Exception:
-            return
-        indices = list(self.sample_indices[:2])
-        if len(indices) == 1:
-            indices.append(indices[0])
-        for slot, index in enumerate(indices[:2]):
-            path = self.project.images[index]
-            try:
-                with Image.open(path) as opened:
-                    source = normalize_page_rgb(opened)
-                preview = source.copy()
-                preview.thumbnail((420, 250), Image.Resampling.LANCZOS)
-                draw = ImageDraw.Draw(preview, "RGBA")
-                w, h = preview.size
+            with Image.open(path) as opened:
+                source = normalize_page_rgb(opened)
+            preview = source.copy()
+            preview.thumbnail((540, 560), Image.Resampling.LANCZOS)
+            draw = ImageDraw.Draw(preview, "RGBA")
+            w, h = preview.size
 
-                header_mode = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get(), "auto")
-                if header_mode == "present":
-                    hp = max(0.0, min(35.0, float(self.header_percent_var.get())))
-                    draw.rectangle((0, 0, w, round(h * hp / 100.0)), fill=(100, 100, 100, 80))
-                footer_mode = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get(), "none")
-                if footer_mode == "present":
-                    fp = max(0.0, min(35.0, float(self.footer_percent_var.get())))
-                    draw.rectangle((0, round(h * (1.0 - fp / 100.0)), w, h), fill=(100, 100, 100, 80))
+            header_mode = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get(), "auto")
+            if header_mode == "present":
+                hp = max(0.0, min(35.0, float(self.header_percent_var.get())))
+                draw.rectangle((0, 0, w, round(h * hp / 100.0)), fill=(100, 100, 100, 80))
+            footer_mode = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get(), "none")
+            if footer_mode == "present":
+                fp = max(0.0, min(35.0, float(self.footer_percent_var.get())))
+                draw.rectangle((0, round(h * (1.0 - fp / 100.0)), w, h), fill=(100, 100, 100, 80))
 
-                side = excluded_source_side(settings, index)
-                if side:
-                    sp = max(0.0, min(30.0, float(self.side_percent_var.get())))
-                    margin = round(w * sp / 100.0)
-                    if side == "left":
-                        draw.rectangle((0, 0, margin, h), fill=(100, 100, 100, 80))
-                    else:
-                        draw.rectangle((w - margin, 0, w, h), fill=(100, 100, 100, 80))
+            side = excluded_source_side(settings, index)
+            if side:
+                sp = max(0.0, min(30.0, float(self.side_percent_var.get())))
+                margin = round(w * sp / 100.0)
+                if side == "left":
+                    draw.rectangle((0, 0, margin, h), fill=(100, 100, 100, 80))
+                else:
+                    draw.rectangle((w - margin, 0, w, h), fill=(100, 100, 100, 80))
 
-                # Draw the same source-space column guides that the main
-                # editor will use, not evenly spaced illustrative dividers.
-                effective = effective_page_settings(settings, source.size, index)
-                analysis_image = page_template_analysis_image(source, effective, index)
-                geometry = derive_geometry(analysis_image, effective)
-                sx = w / max(1, source.width)
-                sy = h / max(1, source.height)
-                for path_points in geometry.column_paths:
-                    points = [
-                        geometry.canonical_to_source(x, y)
-                        for y, x in path_points.points
-                    ]
-                    coords = [
-                        coordinate
-                        for px, py in points
-                        for coordinate in (px * sx, py * sy)
-                    ]
-                    if len(coords) >= 4:
-                        draw.line(coords, fill=(30, 120, 210, 210), width=2)
+            effective = effective_page_settings(settings, source.size, index)
+            analysis_image = page_template_analysis_image(source, effective, index)
+            geometry = derive_geometry(analysis_image, effective)
+            sx = w / max(1, source.width)
+            sy = h / max(1, source.height)
+            for path_points in geometry.column_paths:
+                points = [
+                    geometry.canonical_to_source(x, y)
+                    for y, x in path_points.points
+                ]
+                coords = [
+                    coordinate
+                    for px, py in points
+                    for coordinate in (px * sx, py * sy)
+                ]
+                if len(coords) >= 4:
+                    draw.line(coords, fill=(30, 120, 210, 210), width=2)
 
-                photo = ImageTk.PhotoImage(preview)
-                self._template_photos.append(photo)
-                cell = ttk.Frame(self.template_preview_frame)
-                cell.grid(row=0, column=slot, sticky="n", padx=5)
-                ttk.Label(cell, image=photo).pack()
-                variant = page_variant(settings, index)
-                side_text = excluded_source_side(settings, index) or "无页边排除"
-                ttk.Label(
-                    cell,
-                    text=f"{variant} 页 · {path.name} · 页边：{side_text}",
-                ).pack(anchor="center", pady=(4, 0))
-            except Exception as exc:
-                ttk.Label(
-                    self.template_preview_frame,
-                    text=f"{path.name}\n预览失败：{exc}",
-                ).grid(row=0, column=slot, padx=5)
+            photo = ImageTk.PhotoImage(preview)
+            self._template_photos.append(photo)
+            ttk.Label(self.template_preview_frame, image=photo).grid(row=0, column=0, sticky="n")
+            variant = page_variant(settings, index)
+            side_text = excluded_source_side(settings, index) or "无页边排除"
+            region = ("前部", "中部", "后部")[min(2, self.template_preview_slot // 2)]
+            self.template_preview_caption_var.set(
+                f"{region} · {self.template_preview_slot + 1}/{len(self.sample_indices)} · "
+                f"{variant} 页 · {path.name} · 页边：{side_text}"
+            )
+        except Exception as exc:
+            ttk.Label(
+                self.template_preview_frame,
+                text=f"{path.name}\n预览失败：{exc}",
+            ).grid(row=0, column=0)
+            self.template_preview_caption_var.set(path.name)
 
     @staticmethod
+    def _mode_row    @staticmethod
     def _mode_row(
         parent, row: int, label: str, variable: tk.StringVar, values: tuple[str, ...],
     ) -> None:
@@ -551,24 +658,24 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_description_var = tk.StringVar(value="")
         self.headword_examples_var = tk.StringVar(value="")
         ttk.Label(
-            tab, textvariable=self.headword_description_var, wraplength=820, justify="left",
-        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(14, 4))
+            tab, textvariable=self.headword_description_var, wraplength=900, justify="left",
+        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 4))
+
+        examples = ttk.LabelFrame(tab, text="经典样例（局部裁切）", padding=8)
+        examples.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        examples.columnconfigure(0, weight=1)
+        examples.columnconfigure(1, weight=1)
+        examples.columnconfigure(2, weight=1)
+        self.headword_examples_frame = examples
         ttk.Label(
-            tab, textvariable=self.headword_examples_var, wraplength=820, justify="left",
+            tab, textvariable=self.headword_examples_var, wraplength=900, justify="left",
             foreground="#555555",
-        ).grid(row=5, column=0, columnspan=2, sticky="w")
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
         help_box = ttk.LabelFrame(tab, text="理解方式", padding=10)
-        help_box.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(16, 0))
-        ttk.Label(
-            help_box,
-            text=(
-                "常规文字词头：粗体/左缘/结构线索为主；  编号前缀：如 1. word 或 1 word；\n"
-                "CJK 大字/括号：如 亜、七、【案件】；  符号前缀：词头前有固定符号；\n"
-                "自定义结构：保留你为当前词典调好的规则，并可起项目内名称。"
-            ),
-            justify="left",
-        ).pack(anchor="w")
+        help_box.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(14, 0))
+        help_box.columnconfigure(0, weight=1)
+        self.headword_help_frame = help_box
 
     def _build_language_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(1, weight=1)
@@ -577,27 +684,32 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         ttk.Label(
             tab,
-            text="这里只选语义语言；Paddle/Tesseract 语言、PSM 与方向识别由语言 + 阅读方向自动推导。",
+            text="常用语言置前；选择 OCR 语言时会自动填写 2 位索引语言代号，但索引语言输入框仍可随时手动修改。",
             foreground="#666666",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 10))
 
         ttk.Label(tab, text="OCR 语言：").grid(row=2, column=0, sticky="e", padx=(0, 8), pady=5)
         combo = ttk.Combobox(
             tab, textvariable=self.ocr_language_var, values=tuple(OCR_LANGUAGE_LABEL_TO_VALUE.keys()),
-            state="normal", width=26,
+            state="normal", width=30,
         )
         combo.grid(row=2, column=1, sticky="w", pady=5)
-        combo.bind("<<ComboboxSelected>>", lambda _e: self._refresh_language_summary())
-        combo.bind("<FocusOut>", lambda _e: self._refresh_language_summary())
+        combo.bind("<<ComboboxSelected>>", lambda _e: self._ocr_language_changed())
+        combo.bind("<FocusOut>", lambda _e: self._ocr_language_changed())
         self.ocr_language_var.trace_add("write", lambda *_args: self.after_idle(self._refresh_language_summary))
 
-        ttk.Label(tab, text="索引语言：").grid(row=3, column=0, sticky="e", padx=(0, 8), pady=5)
-        ttk.Entry(tab, textvariable=self.index_language_var, width=28).grid(row=3, column=1, sticky="w", pady=5)
-        ttk.Label(tab, text="内容语言：").grid(row=4, column=0, sticky="e", padx=(0, 8), pady=5)
-        ttk.Entry(tab, textvariable=self.content_language_var, width=28).grid(row=4, column=1, sticky="w", pady=5)
+        ttk.Label(tab, text="索引语言（2 位）：").grid(row=3, column=0, sticky="e", padx=(0, 8), pady=5)
+        ttk.Entry(tab, textvariable=self.index_language_var, width=12).grid(row=3, column=1, sticky="w", pady=5)
+        ttk.Label(
+            tab,
+            text="例如 en / zh / ja / fr；自动值只是建议，你可以直接覆盖。",
+            foreground="#666666",
+        ).grid(row=4, column=1, sticky="w")
+        ttk.Label(tab, text="内容语言：").grid(row=5, column=0, sticky="e", padx=(0, 8), pady=5)
+        ttk.Entry(tab, textvariable=self.content_language_var, width=28).grid(row=5, column=1, sticky="w", pady=5)
 
         backend = ttk.LabelFrame(tab, text="自动派生的 OCR 后端设置", padding=10)
-        backend.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(14, 0))
+        backend.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(14, 0))
         self.backend_summary_var = tk.StringVar(value="")
         ttk.Label(backend, textvariable=self.backend_summary_var, justify="left").pack(anchor="w")
 
@@ -684,6 +796,21 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_headword_description()
         self._refresh_summary()
 
+    def _headword_example_asset(self, profile_key: str, dictionary_name: str) -> Path | None:
+        root = Path(__file__).resolve().parent / "data" / "headword_examples"
+        safe = "".join(ch for ch in dictionary_name if ch.isalnum() or ch in {"-", "_"})
+        stems = (
+            f"{profile_key}_{safe}",
+            safe,
+            profile_key,
+        )
+        for stem in stems:
+            for suffix in (".png", ".jpg", ".jpeg", ".webp"):
+                candidate = root / f"{stem}{suffix}"
+                if candidate.exists():
+                    return candidate
+        return None
+
     def _refresh_headword_description(self) -> None:
         key = self._current_profile_key()
         try:
@@ -692,12 +819,64 @@ class ProjectProfileWizard(tk.Toplevel):
             return
         self.custom_name_entry.configure(state="normal" if key == "custom" else "disabled")
         self.headword_description_var.set(profile.description)
+
+        for child in self.headword_examples_frame.winfo_children():
+            child.destroy()
+        self._headword_example_photos.clear()
         if profile.examples:
+            names = []
+            for slot, example in enumerate(profile.examples[:3]):
+                names.append(example.dictionary)
+                cell = ttk.Frame(self.headword_examples_frame)
+                cell.grid(row=0, column=slot, sticky="nsew", padx=5, pady=3)
+                asset = self._headword_example_asset(key, example.dictionary)
+                if asset is not None:
+                    try:
+                        with Image.open(asset) as opened:
+                            image = normalize_page_rgb(opened)
+                        image.thumbnail((270, 150), Image.Resampling.LANCZOS)
+                        photo = ImageTk.PhotoImage(image)
+                        self._headword_example_photos.append(photo)
+                        ttk.Label(cell, image=photo).pack()
+                    except Exception:
+                        ttk.Label(cell, text="样例图片读取失败", anchor="center").pack(fill="x", ipady=28)
+                else:
+                    ttk.Label(
+                        cell,
+                        text=f"待放入局部样例\n{example.dictionary}",
+                        anchor="center", justify="center",
+                    ).pack(fill="x", ipady=28)
+                ttk.Label(cell, text=example.dictionary).pack(anchor="center", pady=(4, 0))
             self.headword_examples_var.set(
-                "经典样例：" + "；".join(example.dictionary for example in profile.examples)
+                "经典样例：" + "；".join(names) + "。样例区只显示局部裁切图，不回退为整页预览。"
             )
         else:
-            self.headword_examples_var.set("经典样例：通用兼容型（无固定词典绑定）")
+            ttk.Label(
+                self.headword_examples_frame,
+                text="此结构暂无固定经典词典样例；可使用当前项目的局部词头截图作为自定义参考。",
+                anchor="center",
+            ).grid(row=0, column=0, columnspan=3, sticky="ew", pady=18)
+            self.headword_examples_var.set("")
+
+        for child in self.headword_help_frame.winfo_children():
+            child.destroy()
+        lines = HEADWORD_HELP_LINES.get(key) or (
+            "识别对象：按当前结构预设判断词条起始。",
+            "建议：结合经典样例和第 ⑤ 步多页测试确认是否稳定。",
+        )
+        for row, line in enumerate(lines):
+            ttk.Label(
+                self.headword_help_frame,
+                text=line, wraplength=900, justify="left",
+            ).grid(row=row, column=0, sticky="w", pady=3)
+
+    def _ocr_language_changed(self) -> None:
+        language = _ocr_language_code(self.ocr_language_var.get())
+        auto_index = OCR_TO_INDEX_LANGUAGE.get(language)
+        if auto_index:
+            self.index_language_var.set(auto_index)
+        self._refresh_language_summary()
+        self._refresh_summary()
 
     def _refresh_language_summary(self) -> None:
         language = _ocr_language_code(self.ocr_language_var.get())
@@ -762,22 +941,92 @@ class ProjectProfileWizard(tk.Toplevel):
         for child in self.sample_frame.winfo_children():
             child.destroy()
         self._photos.clear()
+        region_titles = ("前部", "中部", "后部")
+        groups: list[ttk.LabelFrame] = []
+        for column, title in enumerate(region_titles):
+            group = ttk.LabelFrame(self.sample_frame, text=title, padding=6)
+            group.grid(row=0, column=column, sticky="nsew", padx=4, pady=2)
+            group.columnconfigure(0, weight=1)
+            groups.append(group)
+
         for slot, index in enumerate(self.sample_indices):
             path = self.project.images[index]
+            group = groups[min(2, slot // 2)]
+            local_row = slot % 2
+            cell = ttk.Frame(group)
+            cell.grid(row=local_row, column=0, sticky="ew", pady=4)
             try:
                 with Image.open(path) as opened:
                     image = normalize_page_rgb(opened)
-                image.thumbnail((280, 175), Image.Resampling.LANCZOS)
+                image.thumbnail((250, 155), Image.Resampling.LANCZOS)
                 photo = ImageTk.PhotoImage(image)
                 self._photos.append(photo)
-                cell = ttk.Frame(self.sample_frame)
-                cell.grid(row=slot // 3, column=slot % 3, padx=5, pady=5, sticky="n")
                 ttk.Label(cell, image=photo).pack()
-                ttk.Label(cell, text=path.name).pack(anchor="center")
             except Exception as exc:
-                ttk.Label(self.sample_frame, text=f"{path.name}\n{exc}").grid(
-                    row=slot // 3, column=slot % 3, padx=5, pady=5
-                )
+                ttk.Label(cell, text=f"缩略图失败：{exc}", wraplength=250).pack()
+            ttk.Label(cell, text=path.name, wraplength=260).pack(anchor="center", pady=(3, 0))
+            ttk.Button(
+                cell, text="更换…", command=lambda s=slot: self._choose_sample_page(s),
+            ).pack(anchor="center", pady=(3, 0))
+
+    def _choose_sample_page(self, slot: int) -> None:
+        if not self.sample_candidates:
+            return
+        picker = tk.Toplevel(self)
+        picker.title("更换代表页")
+        picker.geometry("620x520")
+        picker.transient(self)
+        picker.grab_set()
+
+        ttk.Label(
+            picker,
+            text="选择一张正文代表页。列表已优先排除 0000_*、目录、附录等明显非正文页。",
+            wraplength=580,
+        ).pack(anchor="w", padx=10, pady=(10, 6))
+        body = ttk.Frame(picker)
+        body.pack(fill="both", expand=True, padx=10)
+        scrollbar = ttk.Scrollbar(body, orient="vertical")
+        listing = tk.Listbox(body, yscrollcommand=scrollbar.set, exportselection=False)
+        scrollbar.configure(command=listing.yview)
+        listing.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        current = self.sample_indices[slot]
+        selected_row = 0
+        for row, index in enumerate(self.sample_candidates):
+            path = self.project.images[index]
+            listing.insert("end", f"{index + 1:05d}    {path.name}")
+            if index == current:
+                selected_row = row
+        if self.sample_candidates:
+            listing.selection_set(selected_row)
+            listing.see(selected_row)
+
+        def apply_choice(_event=None) -> None:
+            selection = listing.curselection()
+            if not selection:
+                return
+            index = self.sample_candidates[int(selection[0])]
+            if index in self.sample_indices and index != self.sample_indices[slot]:
+                messagebox.showinfo("代表页已使用", "这张页面已经在代表页中，请选择另一张。", parent=picker)
+                return
+            self.sample_indices[slot] = index
+            self.template_preview_slot = min(self.template_preview_slot, len(self.sample_indices) - 1)
+            self._profile_revision += 1
+            self._mark_validation_stale()
+            self._analysis_suggestion = {}
+            if hasattr(self, "analysis_suggestion_var"):
+                self.analysis_suggestion_var.set("代表页已更换，请重新分析当前代表页。")
+                self.apply_analysis_button.configure(state="disabled")
+            self._load_sample_thumbnails()
+            self._refresh_template_preview()
+            picker.destroy()
+
+        listing.bind("<Double-Button-1>", apply_choice)
+        footer = ttk.Frame(picker)
+        footer.pack(fill="x", padx=10, pady=10)
+        ttk.Button(footer, text="取消", command=picker.destroy).pack(side="right")
+        ttk.Button(footer, text="使用此页", command=apply_choice).pack(side="right", padx=(0, 8))
 
     def _move_step(self, delta: int) -> None:
         current = self.notebook.index(self.notebook.select())
@@ -890,7 +1139,7 @@ class ProjectProfileWizard(tk.Toplevel):
         if self._validation_running:
             return
         settings = self._settings_from_ui()
-        indices = sample_page_indices(len(self.project.images), 4)
+        indices = list(self.sample_indices)
         if not indices:
             return
         self._validation_running = True
@@ -945,7 +1194,7 @@ class ProjectProfileWizard(tk.Toplevel):
     def _marker_preview(image: Image.Image, entries, geometry, settings: AppSettings, page_index: int) -> Image.Image:
         source = image.copy()
         thumb = source.copy()
-        thumb.thumbnail((400, 250), Image.Resampling.LANCZOS)
+        thumb.thumbnail((500, 360), Image.Resampling.LANCZOS)
         thumb = thumb.convert("RGBA")
         sx = thumb.width / max(1, source.width)
         sy = thumb.height / max(1, source.height)
@@ -1024,7 +1273,7 @@ class ProjectProfileWizard(tk.Toplevel):
         validated_pages: list[str] = []
         for slot, (_index, name, count, columns, preview, error) in enumerate(results):
             cell = ttk.LabelFrame(self.validation_frame, text=name, padding=6)
-            cell.grid(row=slot // 2, column=slot % 2, sticky="nsew", padx=5, pady=5)
+            cell.grid(row=slot // 2, column=slot % 2, sticky="nsew", padx=6, pady=6)
             if preview is not None:
                 photo = ImageTk.PhotoImage(preview)
                 self._validation_photos.append(photo)
