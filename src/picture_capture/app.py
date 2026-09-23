@@ -5425,6 +5425,7 @@ class PictureCaptureApp(tk.Tk):
         self._collapsible_sections: dict[str, ttk.LabelFrame] = {}
         self.section_title_font = font.nametofont("TkDefaultFont").copy()
         self.section_title_font.configure(weight="bold")
+        self._configure_main_workspace_styles()
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.toggle_autosave()
@@ -5463,6 +5464,128 @@ class PictureCaptureApp(tk.Tk):
         except (tk.TclError, ValueError):
             return
 
+    def _configure_main_workspace_styles(self) -> None:
+        """Configure a scoped, dense visual system for the main workspace only.
+
+        Do not switch the global ttk theme here. Secondary windows, especially
+        proofreading, intentionally keep their existing appearance; every style
+        below is opt-in through a PC.* style name.
+        """
+        style = ttk.Style(self)
+        native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
+        colors = {
+            "sidebar": native_background,
+            "footer": "#f1f3f6",
+            "status": "#f6f7f9",
+            "batch": "#eef2f6",
+            "border": "#d8dde5",
+            "text": "#30343b",
+            "muted": "#68707b",
+            "button": "#eceff3",
+            "button_hover": "#e1e5ea",
+            "primary": "#e58a2b",
+            "primary_hover": "#d77b20",
+            "success": "#5e9f69",
+            "success_hover": "#4f8e5c",
+            "tree_selected": "#dce8f7",
+            "canvas": "#30343b",
+        }
+        self._main_ui_colors = colors
+
+        style.configure("PC.Sidebar.TFrame", background=colors["sidebar"])
+        style.configure("PC.Footer.TFrame", background=colors["footer"])
+        style.configure("PC.Status.TFrame", background=colors["status"])
+        style.configure("PC.Batch.TFrame", background=colors["batch"])
+        style.configure("PC.SectionBody.TFrame", background=colors["sidebar"])
+
+        style.configure(
+            "PC.Section.TLabelframe",
+            background=colors["sidebar"],
+            borderwidth=0,
+            relief="flat",
+        )
+        style.configure(
+            "PC.SectionTitle.TLabel",
+            background=colors["sidebar"],
+            foreground=colors["text"],
+            font=self.section_title_font,
+            padding=(0, 2, 0, 1),
+        )
+        style.configure(
+            "PC.FieldLabel.TLabel",
+            background=colors["sidebar"],
+            foreground=colors["text"],
+        )
+        style.configure(
+            "PC.Footer.TLabel",
+            background=colors["footer"],
+            foreground=colors["muted"],
+        )
+        style.configure(
+            "PC.Status.TLabel",
+            background=colors["status"],
+            foreground=colors["muted"],
+        )
+        style.configure(
+            "PC.Batch.TLabel",
+            background=colors["batch"],
+            foreground=colors["text"],
+        )
+
+        style.configure("PC.Compact.TButton", padding=(7, 3))
+        style.configure("PC.Tool.TButton", padding=(4, 2))
+        style.configure("PC.Footer.TButton", padding=(7, 3))
+        style.configure("PC.Compact.TEntry", padding=(4, 2))
+        style.configure("PC.Footer.TEntry", padding=(4, 2))
+
+        style.configure(
+            "PC.Treeview",
+            rowheight=26,
+            borderwidth=0,
+            relief="flat",
+            background="#ffffff",
+            fieldbackground="#ffffff",
+            foreground=colors["text"],
+        )
+        style.configure(
+            "PC.Treeview.Heading",
+            padding=(6, 5),
+            relief="flat",
+            font=self.section_title_font,
+        )
+        style.map(
+            "PC.Treeview",
+            background=[("selected", colors["tree_selected"])],
+            foreground=[("selected", colors["text"])],
+        )
+
+    def _sidebar_action_button(
+        self, parent: tk.Misc, text: str, command, *, role: str = "neutral"
+    ) -> tk.Button:
+        """Return one dense flat button used by main-sidebar action groups."""
+        colors = self._main_ui_colors
+        palette = {
+            "neutral": (colors["button"], colors["button_hover"], colors["text"]),
+            "primary": (colors["primary"], colors["primary_hover"], "#ffffff"),
+            "success": (colors["success"], colors["success_hover"], "#ffffff"),
+        }
+        background, active_background, foreground = palette.get(role, palette["neutral"])
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=background,
+            fg=foreground,
+            activebackground=active_background,
+            activeforeground=foreground,
+            relief="flat",
+            bd=0,
+            highlightthickness=0,
+            padx=8,
+            pady=4,
+            cursor="hand2",
+        )
+
     def _section_frame(
         self, parent: tk.Misc, title: str, padding: int = 5, *, section_key: str | None = None
     ) -> ttk.LabelFrame:
@@ -5474,9 +5597,19 @@ class PictureCaptureApp(tk.Tk):
         """
         key = section_key or title
         expanded = bool(self.section_expanded.get(key, True))
-        title_var = tk.StringVar(value=("▼ " if expanded else "▶ ") + title)
-        label = ttk.Label(parent, textvariable=title_var, font=self.section_title_font, cursor="hand2")
-        frame = ttk.LabelFrame(parent, labelwidget=label, padding=padding)
+        title_var = tk.StringVar(value=("▾ " if expanded else "▸ ") + title)
+        label = ttk.Label(
+            parent,
+            textvariable=title_var,
+            style="PC.SectionTitle.TLabel",
+            cursor="hand2",
+        )
+        frame = ttk.LabelFrame(
+            parent,
+            labelwidget=label,
+            padding=(padding, max(3, padding - 1), padding, padding),
+            style="PC.Section.TLabelframe",
+        )
         frame._collapse_key = key  # type: ignore[attr-defined]
         frame._collapse_title = title  # type: ignore[attr-defined]
         frame._collapse_title_var = title_var  # type: ignore[attr-defined]
@@ -5490,7 +5623,7 @@ class PictureCaptureApp(tk.Tk):
         title = str(getattr(section, "_collapse_title", key))
         title_var = getattr(section, "_collapse_title_var", None)
         if isinstance(title_var, tk.StringVar):
-            title_var.set(("▼ " if expanded else "▶ ") + title)
+            title_var.set(("▾ " if expanded else "▸ ") + title)
 
         # Every direct content child in the five sidebar groups is grid-managed.
         # Merely calling grid_remove() is not enough for a ttk.LabelFrame: Tk keeps
@@ -5635,52 +5768,81 @@ class PictureCaptureApp(tk.Tk):
         # below the visible client area.  General messages and mouse coordinates
         # use separate variables so moving the mouse no longer overwrites an
         # operation result/error message.
-        self.bottom_stack = ttk.Frame(self)
+        self.bottom_stack = ttk.Frame(self, style="PC.Status.TFrame")
         self.bottom_stack.pack(side="bottom", fill="x")
 
         # Batch task bar is normally hidden. It appears above the permanent
         # status bar while a multi-page operation is running.
-        self.batch_bar = ttk.Frame(self.bottom_stack, padding=(6, 4), relief="ridge", borderwidth=1)
+        self.batch_bar = ttk.Frame(self.bottom_stack, padding=(8, 5), style="PC.Batch.TFrame")
         self.batch_text_var = tk.StringVar(value="")
         self.batch_progress_var = tk.DoubleVar(value=0.0)
-        ttk.Label(self.batch_bar, textvariable=self.batch_text_var, anchor="w").pack(side="left", padx=(0, 8))
+        ttk.Label(
+            self.batch_bar, textvariable=self.batch_text_var, anchor="w", style="PC.Batch.TLabel"
+        ).pack(side="left", padx=(0, 8))
         self.batch_progress = ttk.Progressbar(
             self.batch_bar, variable=self.batch_progress_var, maximum=100.0, length=280, mode="determinate"
         )
         self.batch_progress.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        self.batch_pause_button = ttk.Button(self.batch_bar, text="暂停", width=8, command=self._toggle_batch_pause)
+        self.batch_pause_button = ttk.Button(
+            self.batch_bar, text="暂停", width=8, command=self._toggle_batch_pause,
+            style="PC.Compact.TButton",
+        )
         self.batch_pause_button.pack(side="left", padx=(0, 5))
-        self.batch_stop_button = ttk.Button(self.batch_bar, text="停止", width=8, command=self._request_batch_stop)
+        self.batch_stop_button = ttk.Button(
+            self.batch_bar, text="停止", width=8, command=self._request_batch_stop,
+            style="PC.Compact.TButton",
+        )
         self.batch_stop_button.pack(side="left")
 
-        self.status_bar = ttk.Frame(self.bottom_stack, relief="sunken", borderwidth=1)
+        self.status_bar = ttk.Frame(self.bottom_stack, style="PC.Status.TFrame")
         self.status_bar.pack(side="bottom", fill="x")
         status_bar = self.status_bar
-        ttk.Label(status_bar, textvariable=self.status_var, anchor="w", padding=(6, 3)).pack(
-            side="left", fill="x", expand=True
-        )
-        ttk.Label(status_bar, textvariable=self.cursor_status_var, anchor="e", padding=(6, 3)).pack(
-            side="right"
-        )
+        ttk.Separator(status_bar, orient="horizontal").pack(side="top", fill="x")
+        ttk.Label(
+            status_bar,
+            textvariable=self.status_var,
+            anchor="w",
+            padding=(8, 4),
+            style="PC.Status.TLabel",
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Label(
+            status_bar,
+            textvariable=self.cursor_status_var,
+            anchor="e",
+            padding=(8, 4),
+            style="PC.Status.TLabel",
+        ).pack(side="right")
         ttk.Separator(status_bar, orient="vertical").pack(side="right", fill="y", padx=2)
 
         # v2.3 intentionally has no menu bar or separate top toolbar.
         body = ttk.Panedwindow(self, orient="horizontal")
         self.main_paned = body
         body.pack(fill="both", expand=True)
-        sidebar_host = ttk.Frame(body)
+        sidebar_host = ttk.Frame(body, style="PC.Sidebar.TFrame")
         # Project actions are outside the scrollable/collapsible sidebar so
         # they remain fixed and visible at the bottom of the left pane.
-        self.project_action_bar = ttk.Frame(sidebar_host, padding=(6, 4, 5, 6))
+        self.project_action_bar = ttk.Frame(
+            sidebar_host, padding=(6, 5, 5, 6), style="PC.Footer.TFrame"
+        )
         self.project_action_bar.pack(side="bottom", fill="x")
-        self.sidebar_canvas = tk.Canvas(sidebar_host, highlightthickness=0, borderwidth=0)
+        ttk.Separator(self.project_action_bar, orient="horizontal").pack(
+            side="top", fill="x", pady=(0, 6)
+        )
+        self.sidebar_canvas = tk.Canvas(
+            sidebar_host,
+            highlightthickness=0,
+            borderwidth=0,
+            bg=self._main_ui_colors["sidebar"],
+        )
         self.sidebar_scrollbar = ttk.Scrollbar(
             sidebar_host, orient="vertical", command=self.sidebar_canvas.yview
         )
         self.sidebar_canvas.configure(yscrollcommand=self.sidebar_scrollbar.set)
         self.sidebar_scrollbar.pack(side="right", fill="y")
         self.sidebar_canvas.pack(side="left", fill="both", expand=True)
-        sidebar = ttk.Frame(self.sidebar_canvas, padding=(6, 6, 5, 4))
+        sidebar = ttk.Frame(
+            self.sidebar_canvas, padding=(7, 7, 6, 5), style="PC.Sidebar.TFrame"
+        )
         self._sidebar_window = self.sidebar_canvas.create_window((0, 0), window=sidebar, anchor="nw")
         sidebar.bind("<Configure>", self._resize_sidebar_content)
         self.sidebar_canvas.bind("<Configure>", self._resize_sidebar_content)
@@ -5694,7 +5856,7 @@ class PictureCaptureApp(tk.Tk):
         sidebar.columnconfigure(0, weight=1)
         sidebar.rowconfigure(1, weight=1)
 
-        controls = ttk.Frame(sidebar)
+        controls = ttk.Frame(sidebar, style="PC.Sidebar.TFrame")
         controls.grid(row=0, column=0, sticky="ew")
         self._build_quick_settings(controls)
 
@@ -5708,40 +5870,78 @@ class PictureCaptureApp(tk.Tk):
         self.page_range_spec_var = tk.StringVar(value="")
         self.view_zoom_var = tk.StringVar(value="100%")
 
-        range_row = ttk.Frame(page_panel)
+        range_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
         range_row.grid(row=0, column=0, sticky="ew", pady=(0, 3))
         ttk.Label(range_row, text="页面范围：").pack(side="left")
         ttk.Radiobutton(range_row, text="当前页", variable=self.page_range_var, value="current").pack(side="left")
         ttk.Radiobutton(range_row, text="当前至末页", variable=self.page_range_var, value="to_end").pack(side="left", padx=(4, 0))
         ttk.Radiobutton(range_row, text="指定：", variable=self.page_range_var, value="specified").pack(side="left", padx=(4, 0))
         ttk.Entry(range_row, textvariable=self.page_range_spec_var, width=14).pack(side="left", fill="x", expand=True)
-        ttk.Button(range_row, text="跳到", command=self.jump_to_page_spec).pack(side="left", padx=(4, 0))
+        ttk.Button(
+            range_row, text="跳到", command=self.jump_to_page_spec, style="PC.Compact.TButton"
+        ).pack(side="left", padx=(4, 0))
 
-        size_row = ttk.Frame(page_panel)
+        size_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
         self.page_size_row = size_row
-        size_row.grid(row=1, column=0, sticky="ew", pady=(0, 4))
+        size_row.grid(row=1, column=0, sticky="ew", pady=(0, 5))
         ttk.Checkbutton(
             size_row, text="◧", width=3, variable=self.binary_preview_var,
             command=self._toggle_binary_preview,
-        ).pack(side="left", padx=(0, 3))
-        ttk.Button(size_row, text="−", width=3, command=lambda: self.zoom(0.87)).pack(side="left")
-        view_zoom_entry = ttk.Entry(size_row, textvariable=self.view_zoom_var, width=6, justify="center")
+        ).pack(side="left", padx=(0, 2))
+        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=3, pady=3)
+
+        ttk.Button(
+            size_row, text="−", width=3, command=lambda: self.zoom(0.87), style="PC.Tool.TButton"
+        ).pack(side="left")
+        view_zoom_entry = ttk.Entry(
+            size_row, textvariable=self.view_zoom_var, width=6, justify="center",
+            style="PC.Compact.TEntry",
+        )
         view_zoom_entry.pack(side="left", padx=2)
         view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)
         view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)
-        ttk.Button(size_row, text="+", width=3, command=lambda: self.zoom(1.15)).pack(side="left")
-        ttk.Button(size_row, text="↔", width=3, command=self.fit_page_width).pack(side="left", padx=(7, 3))
-        ttk.Button(size_row, text="↕", width=3, command=self.fit_page_height).pack(side="left")
-        ttk.Button(size_row, text="⨇", width=3, command=lambda: self.jump_to_bookmark(-1)).pack(side="left", padx=(7, 2))
-        ttk.Button(size_row, text="⨈", width=3, command=lambda: self.jump_to_bookmark(1)).pack(side="left", padx=(0, 3))
-        ttk.Button(size_row, text="上一页", command=lambda: self.change_page(-1)).pack(side="left", padx=(7, 3))
-        ttk.Button(size_row, text="下一页", command=lambda: self.change_page(1)).pack(side="left")
+        ttk.Button(
+            size_row, text="+", width=3, command=lambda: self.zoom(1.15), style="PC.Tool.TButton"
+        ).pack(side="left")
+        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
+
+        ttk.Button(
+            size_row, text="↔", width=3, command=self.fit_page_width, style="PC.Tool.TButton"
+        ).pack(side="left", padx=(0, 2))
+        ttk.Button(
+            size_row, text="↕", width=3, command=self.fit_page_height, style="PC.Tool.TButton"
+        ).pack(side="left")
+        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
+
+        ttk.Button(
+            size_row, text="⨇", width=3, command=lambda: self.jump_to_bookmark(-1),
+            style="PC.Tool.TButton",
+        ).pack(side="left", padx=(0, 2))
+        ttk.Button(
+            size_row, text="⨈", width=3, command=lambda: self.jump_to_bookmark(1),
+            style="PC.Tool.TButton",
+        ).pack(side="left")
+        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
+
+        ttk.Button(
+            size_row, text="上一页", command=lambda: self.change_page(-1), style="PC.Compact.TButton"
+        ).pack(side="left", padx=(0, 3))
+        ttk.Button(
+            size_row, text="下一页", command=lambda: self.change_page(1), style="PC.Compact.TButton"
+        ).pack(side="left")
 
         list_frame = ttk.Frame(page_panel)
         list_frame.grid(row=2, column=0, sticky="nsew")
         list_frame.columnconfigure(0, weight=1); list_frame.rowconfigure(0, weight=1)
         columns = ("bookmark", "page", "lined", "fill_status", "illustrations")
-        self.page_list = ttk.Treeview(list_frame, columns=columns, show="headings", selectmode="browse", height=12)
+        self.page_list = ttk.Treeview(
+            list_frame,
+            columns=columns,
+            show="headings",
+            selectmode="browse",
+            height=12,
+            style="PC.Treeview",
+        )
         self._page_list_heading_labels = {"bookmark": "书签", "page": "页面", "lined": "画线", "fill_status": "填充状态", "illustrations": "插图"}
         self.page_list.heading("bookmark", text="书签")
         self.page_list.heading("page", text="页面")
@@ -5774,23 +5974,28 @@ class PictureCaptureApp(tk.Tk):
         }
         self._apply_page_list_display_columns(save=False)
 
-        project_row = ttk.Frame(self.project_action_bar)
+        project_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
         project_row.pack(fill="x")
-        ttk.Button(project_row, text="新建项目", command=self.open_project).pack(
-            side="left", fill="x", expand=True,
+        ttk.Button(
+            project_row, text="新建项目", command=self.open_project, style="PC.Footer.TButton"
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(
+            project_row, text="已有项目", command=self.open_recent_project, style="PC.Footer.TButton"
+        ).pack(side="left", fill="x", expand=True, padx=(4, 0))
+        ttk.Button(
+            project_row, text="导出训练标记包", command=self.export_training_package,
+            style="PC.Footer.TButton",
+        ).pack(side="left", fill="x", expand=True, padx=(4, 0))
+        ttk.Label(project_row, text="图片后缀：", style="PC.Footer.TLabel").pack(
+            side="left", padx=(8, 2)
         )
-        ttk.Button(project_row, text="已有项目", command=self.open_recent_project).pack(
-            side="left", fill="x", expand=True, padx=(4, 0),
-        )
-        ttk.Button(project_row, text="导出训练标记包", command=self.export_training_package).pack(
-            side="left", fill="x", expand=True, padx=(4, 0),
-        )
-        ttk.Label(project_row, text="图片后缀：").pack(side="left", padx=(8, 2))
         self.image_suffix_var = tk.StringVar(value=self.settings.image_suffix)
-        ttk.Entry(project_row, textvariable=self.image_suffix_var, width=7).pack(side="left")
+        ttk.Entry(
+            project_row, textvariable=self.image_suffix_var, width=7, style="PC.Footer.TEntry"
+        ).pack(side="left")
         self.image_suffix_var.trace_add("write", lambda *_args: self._quick_parameter_changed())
 
-        parameter_row = ttk.Frame(self.project_action_bar)
+        parameter_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
         parameter_row.pack(fill="x", pady=(4, 0))
         for index, (label, command) in enumerate((
             ("项目Profile", self.open_project_profile),
@@ -5798,11 +6003,15 @@ class PictureCaptureApp(tk.Tk):
             ("保存参数", self.save_main_parameters),
             ("使用提示", self.show_help_dialog),
         )):
-            ttk.Button(parameter_row, text=label, command=command).pack(
+            ttk.Button(
+                parameter_row, text=label, command=command, style="PC.Footer.TButton"
+            ).pack(
                 side="left", fill="x", expand=True, padx=(0 if index == 0 else 4, 0),
             )
 
-        self.canvas = tk.Canvas(viewer, bg="#30343b", highlightthickness=0)
+        self.canvas = tk.Canvas(
+            viewer, bg=self._main_ui_colors["canvas"], highlightthickness=0
+        )
         hbar = ttk.Scrollbar(viewer, orient="horizontal", command=self.canvas.xview)
         vbar = ttk.Scrollbar(viewer, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
@@ -6400,11 +6609,23 @@ class PictureCaptureApp(tk.Tk):
         self.quick_bool_vars: dict[str, tk.BooleanVar] = {}
         self.quick_field_casts: dict[str, type] = {}
 
-        def add_field(panel: ttk.Frame, row: int, col: int, label: str, name: str, cast: type, width: int = 7) -> None:
-            ttk.Label(panel, text=label).grid(row=row, column=col, sticky="w", padx=(0, 3), pady=1)
+        def add_field(
+            panel: ttk.Frame, row: int, col: int, label: str, name: str, cast: type,
+            width: int = 7,
+        ) -> None:
+            ttk.Label(panel, text=label, style="PC.FieldLabel.TLabel").grid(
+                row=row, column=col, sticky="e", padx=(0, 3), pady=1
+            )
             var = tk.StringVar(value=str(getattr(self.settings, name)))
-            self.quick_vars[name] = var; self.quick_field_casts[name] = cast
-            ttk.Entry(panel, textvariable=var, width=width).grid(row=row, column=col + 1, sticky="ew", padx=(0, 6), pady=1)
+            self.quick_vars[name] = var
+            self.quick_field_casts[name] = cast
+            ttk.Entry(
+                panel,
+                textvariable=var,
+                width=width,
+                justify="right" if cast in {int, float} else "left",
+                style="PC.Compact.TEntry",
+            ).grid(row=row, column=col + 1, sticky="ew", padx=(0, 6), pady=1)
 
         normal = self._section_frame(parent, "一、普通版面参数", padding=5, section_key="normal")
         normal.pack(fill="x")
@@ -6417,9 +6638,17 @@ class PictureCaptureApp(tk.Tk):
         add_field(normal, 1, 4, "单行高：", "character_height", int)
         add_field(normal, 1, 6, "行间空：", "row_padding", int)
         row = ttk.Frame(normal); row.grid(row=2, column=0, columnspan=8, sticky="ew", pady=(4, 0))
-        ttk.Button(row, text="检测引擎", command=self.check_ocr_engines).pack(side="left", fill="x", expand=True)
-        ttk.Button(row, text="检测版面参数", command=self.detect_layout_current).pack(side="left", fill="x", expand=True, padx=(5, 0))
-        ttk.Button(row, text="检测版面一致性", command=self.detect_layout_consistency_selected).pack(side="left", fill="x", expand=True, padx=(5, 0))
+        ttk.Button(
+            row, text="检测引擎", command=self.check_ocr_engines, style="PC.Compact.TButton"
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(
+            row, text="检测版面参数", command=self.detect_layout_current,
+            style="PC.Compact.TButton",
+        ).pack(side="left", fill="x", expand=True, padx=(5, 0))
+        ttk.Button(
+            row, text="检测版面一致性", command=self.detect_layout_consistency_selected,
+            style="PC.Compact.TButton",
+        ).pack(side="left", fill="x", expand=True, padx=(5, 0))
         for col in (1, 3, 5, 7): normal.columnconfigure(col, weight=1)
 
         ocr = self._section_frame(parent, "二、基于OCR画线（默认模式）", padding=5, section_key="ocr")
@@ -6585,14 +6814,14 @@ class PictureCaptureApp(tk.Tk):
             row = ttk.Frame(actions); row.grid(row=ri, column=0, sticky="ew", pady=(0 if ri == 0 else 3, 0))
             for bi, (text, command) in enumerate(specs):
                 padx = (0 if bi == 0 else 4, 0)
-                if text == "运行OCR画线":
-                    button = tk.Button(row, text=text, command=command, bg="#f4a261", activebackground="#e8954f")
-                elif text == "保存当前页":
-                    button = tk.Button(row, text=text, command=command, bg="#78c679", activebackground="#67b568")
-                elif text == "编辑插图":
-                    button = tk.Button(row, text=text, command=command); self.polygon_draw_button = button
-                else:
-                    button = ttk.Button(row, text=text, command=command)
+                role = (
+                    "primary" if text == "运行OCR画线"
+                    else "success" if text == "保存当前页"
+                    else "neutral"
+                )
+                button = self._sidebar_action_button(row, text, command, role=role)
+                if text == "编辑插图":
+                    self.polygon_draw_button = button
                 button.pack(side="left", fill="x", expand=True, padx=padx)
         actions.columnconfigure(0, weight=1)
 
@@ -6608,7 +6837,7 @@ class PictureCaptureApp(tk.Tk):
             row = ttk.Frame(postproduction)
             row.grid(row=ri, column=0, sticky="ew", pady=(0 if ri == 0 else 3, 0))
             for bi, (text, command) in enumerate(specs):
-                ttk.Button(row, text=text, command=command).pack(
+                self._sidebar_action_button(row, text, command).pack(
                     side="left", fill="x", expand=True, padx=(0 if bi == 0 else 4, 0)
                 )
         postproduction.columnconfigure(0, weight=1)

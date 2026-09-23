@@ -269,8 +269,8 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
 
-    project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar)")
-    project_bar_end = text.index("        self.canvas = tk.Canvas(viewer", project_bar_start)
+    project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
+    project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
     project_bar = text[project_bar_start:project_bar_end]
     assert project_bar.index('text="已有项目"') < project_bar.index('text="导出训练标记包"')
     assert project_bar.index('("项目Profile", self.open_project_profile)') < project_bar.index('("更多参数", self.open_settings)')
@@ -291,6 +291,35 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     assert "profile_scrollbar" in profile
     assert 'text="自定义结构名称："' in profile
     assert "ProjectProfileWizard(self, new_project=new_project)" in text
+
+
+def test_main_workspace_modern_styles_are_scoped_and_dense():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+
+    styles_start = text.index("    def _configure_main_workspace_styles(")
+    styles_end = text.index("    def _sidebar_action_button(", styles_start)
+    styles = text[styles_start:styles_end]
+    assert "theme_use(" not in styles
+    assert '"PC.Section.TLabelframe"' in styles
+    assert '"PC.Treeview"' in styles
+    assert '"PC.Footer.TFrame"' in styles
+
+    ui_start = text.index("    def _build_ui(self) -> None:")
+    ui_end = text.index("    def _pointer_over_sidebar(", ui_start)
+    ui = text[ui_start:ui_end]
+    assert 'style="PC.Treeview"' in ui
+    assert 'style="PC.Footer.TFrame"' in ui
+    assert 'ttk.Separator(size_row, orient="vertical")' in ui
+    assert 'relief="sunken"' not in ui
+    assert 'relief="ridge"' not in ui
+
+    actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
+    actions_end = text.index("        postproduction = self._section_frame(", actions_start)
+    actions = text[actions_start:actions_end]
+    assert 'self._sidebar_action_button(row, text, command, role=role)' in actions
+    assert '"primary" if text == "运行OCR画线"' in actions
+    assert '"success" if text == "保存当前页"' in actions
 
 
 def test_binary_preview_and_font_scaling_are_display_only():
