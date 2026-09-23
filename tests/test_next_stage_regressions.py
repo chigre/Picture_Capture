@@ -18,7 +18,7 @@ from picture_capture.processing import refine_existing_entries
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_reading_choice, effective_page_settings,
     entry_allowed_by_page_template, excluded_source_side, ordered_headword_profiles,
-    reading_choice_from_settings, sample_page_indices,
+    page_template_analysis_image, reading_choice_from_settings, sample_page_indices,
 )
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
@@ -413,6 +413,7 @@ def test_raw_ocr_cache_signature_tracks_pixels_and_inference_settings():
 
 def test_project_profile_samples_front_middle_back_and_keeps_pairs():
     assert sample_page_indices(24, 6) == [0, 1, 11, 12, 22, 23]
+    assert sample_page_indices(24, 4) == [0, 1, 12, 23]
     assert sample_page_indices(4, 6) == [0, 1, 2, 3]
 
 
@@ -461,6 +462,21 @@ def test_numbered_headword_profile_choices_keep_custom_last():
     assert all(label.startswith(f"{index}. ") for index, label in enumerate(labels, start=1))
 
 
+def test_page_template_masks_side_content_before_geometry_without_mutating_source():
+    image = Image.new("RGB", (100, 60), "white")
+    for x in range(0, 12):
+        for y in range(0, 60):
+            image.putpixel((x, y), (0, 0, 0))
+    settings = AppSettings(
+        profile_side_content_mode="left",
+        profile_side_percent=12,
+    )
+    masked = page_template_analysis_image(image, settings, 0)
+    assert image.getpixel((5, 20)) == (0, 0, 0)
+    assert masked.getpixel((5, 20)) == (255, 255, 255)
+    assert masked.size == image.size
+
+
 def test_page_template_applies_header_footer_and_ab_side_exclusion():
     settings = AppSettings(
         parameter_display_width=1000,
@@ -483,6 +499,15 @@ def test_page_template_applies_header_footer_and_ab_side_exclusion():
     assert not entry_allowed_by_page_template(50, 500, (1000, 2000), settings, 0)
     assert entry_allowed_by_page_template(950, 500, (1000, 2000), settings, 0)
     assert not entry_allowed_by_page_template(950, 500, (1000, 2000), settings, 1)
+
+
+def test_project_profile_wizard_preserves_auto_column_policy_in_source():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
+    text = source.read_text(encoding="utf-8")
+    assert '"每页自动检测栏数": "detect"' in text
+    assert "s.layout_columns_policy = COLUMNS_POLICY_LABEL_TO_VALUE.get(" in text
+    assert 's.layout_columns_policy = "fixed"' not in text
+    assert "设置已修改，需要重新测试" in text
 
 
 def test_project_profile_wizard_is_the_normal_entry_path():
