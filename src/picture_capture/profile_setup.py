@@ -123,6 +123,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self._template_photos: list[ImageTk.PhotoImage] = []
         self._validation_running = False
         self._analysis_running = False
+        self._profile_revision = 0
+        self._analysis_revision_started = -1
+        self._validation_revision_started = -1
         self._analysis_suggestion: dict[str, object] = {}
         self._analysis_auto_apply = False
         self._analysis_queue: queue.Queue | None = None
@@ -578,12 +581,14 @@ class ProjectProfileWizard(tk.Toplevel):
             self.validation_status_var.set("设置已修改，需要重新测试")
 
     def _profile_input_changed(self) -> None:
+        self._profile_revision += 1
         self._mark_validation_stale()
         self._refresh_summary()
         if hasattr(self, "template_preview_frame"):
             self.after_idle(self._refresh_template_preview)
 
     def _reading_changed(self) -> None:
+        self._profile_revision += 1
         self._mark_validation_stale()
         if hasattr(self, "analysis_suggestion_var") and self._analysis_suggestion:
             self._analysis_suggestion = {}
@@ -593,11 +598,13 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_summary()
 
     def _headword_changed(self) -> None:
+        self._profile_revision += 1
         self._mark_validation_stale()
         self._refresh_headword_description()
         self._refresh_summary()
 
     def _custom_name_changed(self) -> None:
+        self._profile_revision += 1
         self._mark_validation_stale()
         current = self._current_profile_key()
         self.profile_choices = ordered_headword_profiles(self.custom_name_var.get())
@@ -713,6 +720,7 @@ class ProjectProfileWizard(tk.Toplevel):
         if self._analysis_running or not self.sample_indices:
             return
         self._analysis_running = True
+        self._analysis_revision_started = self._profile_revision
         self._analysis_auto_apply = bool(auto_apply)
         self.analyze_button.configure(state="disabled")
         self.analysis_suggestion_var.set("正在分析代表页版面…")
@@ -754,6 +762,14 @@ class ProjectProfileWizard(tk.Toplevel):
     def _finish_analysis(self, estimates, errors: list[str]) -> None:
         self._analysis_running = False
         self.analyze_button.configure(state="normal")
+        if self._analysis_revision_started != self._profile_revision:
+            self._analysis_suggestion = {}
+            self._analysis_auto_apply = False
+            self.analysis_suggestion_var.set(
+                "分析期间 Profile 设置已改变；旧分析结果已丢弃，请重新分析代表页。"
+            )
+            self.apply_analysis_button.configure(state="disabled")
+            return
         if not estimates:
             self.analysis_suggestion_var.set("代表页分析失败；可直接人工选择页面模板。")
             self.apply_analysis_button.configure(state="disabled")
@@ -801,6 +817,7 @@ class ProjectProfileWizard(tk.Toplevel):
         if not indices:
             return
         self._validation_running = True
+        self._validation_revision_started = self._profile_revision
         self.validate_button.configure(state="disabled")
         self.validation_status_var.set("正在测试代表页…")
         for child in self.validation_frame.winfo_children():
@@ -915,6 +932,7 @@ class ProjectProfileWizard(tk.Toplevel):
     def _finish_validation(self, results) -> None:
         self._validation_running = False
         self.validate_button.configure(state="normal")
+        revision_changed = self._validation_revision_started != self._profile_revision
         self._validation_photos.clear()
         failures = 0
         validated_pages: list[str] = []
@@ -933,8 +951,14 @@ class ProjectProfileWizard(tk.Toplevel):
         # Treat the Profile as validated only when every representative page
         # completed successfully. Partial success is useful diagnostically but
         # must not survive as a misleading "validated" state.
-        self.working.profile_last_validated_pages = validated_pages if failures == 0 else []
-        if failures:
+        self.working.profile_last_validated_pages = (
+            validated_pages if failures == 0 and not revision_changed else []
+        )
+        if revision_changed:
+            self.validation_status_var.set(
+                "测试期间设置已改变；本次结果仅供参考，请按当前设置重新测试"
+            )
+        elif failures:
             self.validation_status_var.set(
                 f"完成：{len(results)-failures}/{len(results)} 页成功；请检查失败页后重新测试"
             )
