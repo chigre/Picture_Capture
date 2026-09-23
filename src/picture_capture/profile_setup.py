@@ -131,10 +131,6 @@ class ProjectProfileWizard(tk.Toplevel):
     def _build_vars(self) -> None:
         s = self.working
         self.reading_var = tk.StringVar(value=reading_choice_from_settings(s))
-        # The guided workflow turns representative-page analysis into one
-        # concrete project geometry. Per-page experimentation remains in
-        # Profile高级 rather than exposing an internal "detect/fixed" switch.
-        self.columns_policy_var = tk.StringVar(value="fixed")
         self.columns_var = tk.IntVar(value=max(1, int(s.columns)))
         self.separator_var = tk.StringVar(value=_label_for_value(
             SEPARATOR_LABEL_TO_VALUE, str(s.layout_column_separator_mode or "auto"), "自动判断",
@@ -231,7 +227,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=0, column=0, sticky="w")
         ttk.Label(
             tab,
-            text="这里只描述阅读方向。镜像/旋转等 canonical 变换由软件自动推导，不要求用户理解。",
+            text="这里只确认实际页面的阅读方向；需要的镜像或旋转由软件自动处理。",
             foreground="#666666",
         ).grid(row=1, column=0, sticky="w", pady=(2, 8))
 
@@ -295,26 +291,32 @@ class ProjectProfileWizard(tk.Toplevel):
             tuple(HEADER_LABEL_TO_VALUE.keys()),
         )
         ttk.Label(right, text="排除高度%").grid(row=1, column=0, sticky="e")
-        tk.Spinbox(right, from_=0, to=35, increment=0.5, width=6, textvariable=self.header_percent_var).grid(
-            row=1, column=1, sticky="w"
+        self.header_percent_spin = tk.Spinbox(
+            right, from_=0, to=35, increment=0.5, width=6,
+            textvariable=self.header_percent_var,
         )
+        self.header_percent_spin.grid(row=1, column=1, sticky="w")
         self._mode_row(
             right, 2, "页尾：", self.footer_mode_var,
             tuple(FOOTER_LABEL_TO_VALUE.keys()),
         )
         ttk.Label(right, text="排除高度%").grid(row=3, column=0, sticky="e")
-        tk.Spinbox(right, from_=0, to=35, increment=0.5, width=6, textvariable=self.footer_percent_var).grid(
-            row=3, column=1, sticky="w"
+        self.footer_percent_spin = tk.Spinbox(
+            right, from_=0, to=35, increment=0.5, width=6,
+            textvariable=self.footer_percent_var,
         )
+        self.footer_percent_spin.grid(row=3, column=1, sticky="w")
         ttk.Label(right, text="页边内容：").grid(row=4, column=0, sticky="e", pady=5)
         ttk.Combobox(
             right, textvariable=self.side_mode_var, state="readonly", width=22,
             values=tuple(SIDE_LABEL_TO_VALUE.keys()),
         ).grid(row=4, column=1, sticky="w", pady=5)
         ttk.Label(right, text="页边排除宽度%").grid(row=5, column=0, sticky="e")
-        tk.Spinbox(right, from_=0, to=30, increment=0.5, width=6, textvariable=self.side_percent_var).grid(
-            row=5, column=1, sticky="w"
+        self.side_percent_spin = tk.Spinbox(
+            right, from_=0, to=30, increment=0.5, width=6,
+            textvariable=self.side_percent_var,
         )
+        self.side_percent_spin.grid(row=5, column=1, sticky="w")
         ttk.Label(right, text="A/B 起始页：").grid(row=6, column=0, sticky="e", pady=(10, 4))
         self.first_variant_combo = ttk.Combobox(
             right, textvariable=self.first_variant_var, state="readonly", width=8, values=("A", "B"),
@@ -325,6 +327,25 @@ class ProjectProfileWizard(tk.Toplevel):
             text="仅“外侧/内侧交替”需要 A/B：默认 A 页左侧、B 页右侧；若第一张扫描实际属于 B 页，选择 B 即可整体翻转。",
             foreground="#666666", wraplength=430,
         ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        for variable in (self.header_mode_var, self.footer_mode_var, self.side_mode_var):
+            variable.trace_add(
+                "write", lambda *_args: self.after_idle(self._refresh_template_controls)
+            )
+        self._refresh_template_controls()
+
+    def _refresh_template_controls(self) -> None:
+        """Enable only page-template controls that currently have meaning."""
+        if not hasattr(self, "header_percent_spin"):
+            return
+        header_present = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get()) == "present"
+        footer_present = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get()) == "present"
+        side_value = SIDE_LABEL_TO_VALUE.get(self.side_mode_var.get(), "none")
+        side_present = side_value != "none"
+        alternating = side_value in {"outer", "inner"}
+        self.header_percent_spin.configure(state="normal" if header_present else "disabled")
+        self.footer_percent_spin.configure(state="normal" if footer_present else "disabled")
+        self.side_percent_spin.configure(state="normal" if side_present else "disabled")
+        self.first_variant_combo.configure(state="readonly" if alternating else "disabled")
 
     @staticmethod
     def _mode_row(
@@ -370,10 +391,8 @@ class ProjectProfileWizard(tk.Toplevel):
             foreground="#555555",
         ).grid(row=5, column=0, columnspan=2, sticky="w")
 
-        ttk.LabelFrame(tab, text="理解方式", padding=10).grid(
-            row=6, column=0, columnspan=2, sticky="ew", pady=(16, 0)
-        )
-        help_box = tab.grid_slaves(row=6, column=0)[0]
+        help_box = ttk.LabelFrame(tab, text="理解方式", padding=10)
+        help_box.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(16, 0))
         ttk.Label(
             help_box,
             text=(
@@ -719,7 +738,7 @@ class ProjectProfileWizard(tk.Toplevel):
     def _marker_preview(image: Image.Image, entries, geometry, settings: AppSettings, page_index: int) -> Image.Image:
         source = image.copy()
         thumb = source.copy()
-        thumb.thumbnail((480, 330), Image.Resampling.LANCZOS)
+        thumb.thumbnail((400, 250), Image.Resampling.LANCZOS)
         thumb = thumb.convert("RGBA")
         sx = thumb.width / max(1, source.width)
         sy = thumb.height / max(1, source.height)
