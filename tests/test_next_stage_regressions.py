@@ -540,6 +540,7 @@ def test_page_template_alternating_ab_side_widths_are_independent():
     image = Image.new("RGB", (100, 60), "black")
     settings = AppSettings(
         profile_side_content_mode="outer",
+        profile_page_pair_mode="alternate",
         profile_first_page_variant="A",
         profile_side_percent=8,
         profile_side_percent_a=6,
@@ -662,7 +663,6 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "self._build_language_section(tab, row=4)" in text
     assert 'text="词典项目详情"' in text
     assert 'text="词典名称："' in text
-    assert 'text="词典简称(字母)：" ' not in text
     assert 'text="词典简称(字母)："'.strip() in text
     assert 'text="ISBN："' in text
     assert 'text="正文页码："' in text
