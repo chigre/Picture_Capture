@@ -1636,7 +1636,12 @@ class ProjectProfileWizard(tk.Toplevel):
         if not indices:
             return
         self.update_idletasks()
-        preview_width = max(480, int(self._wizard_content_width) - 8)
+        frame_width = int(self.validation_frame.winfo_width())
+        preview_width = max(
+            480,
+            (frame_width - 20) if frame_width > 100
+            else (int(self._wizard_content_width) - 8),
+        )
         self._validation_running = True
         self._validation_revision_started = self._profile_revision
         self.validate_button.configure(state="disabled")
