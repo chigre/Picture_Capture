@@ -516,12 +516,11 @@ def test_page_template_applies_header_footer_and_ab_side_exclusion():
     assert not entry_allowed_by_page_template(950, 500, (1000, 2000), settings, 1)
 
 
-def test_project_profile_wizard_preserves_auto_column_policy_in_source():
+def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
     text = source.read_text(encoding="utf-8")
-    assert '"每页自动检测栏数": "detect"' in text
-    assert "s.layout_columns_policy = COLUMNS_POLICY_LABEL_TO_VALUE.get(" in text
-    assert 's.layout_columns_policy = "fixed"' not in text
+    assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
+    assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
 
 
