@@ -642,14 +642,37 @@ def test_project_profile_feedback_tuning_is_profile_aware():
 def test_project_profile_classic_headword_atlas_is_packaged():
     from PIL import Image
 
-    atlas = (
+    root = (
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "data" / "headword_examples"
-        / "classic_headword_examples.jpg"
     )
+    atlas = root / "classic_headword_examples.jpg"
     assert atlas.exists()
     with Image.open(atlas) as image:
         assert image.size == (720, 316)
+
+    # Curated user-uploaded files live in this subfolder and must be found
+    # before falling back to the atlas.
+    recommended = root / "recommended_current"
+    expected = {
+        "latin_regular_NewApproach.jpg",
+        "latin_regular_LDER.jpg",
+        "numbered_prefix_RUIGO.jpg",
+        "cjk_visual_HZYLDZD.jpg",
+        "cjk_visual_XDHYCD.jpg",
+        "cjk_visual_TimesCED.jpg",
+        "cjk_visual_shueisha.jpg",
+        "edge_visual_regular_XAHDCD.jpg",
+        "marker_prefixed_HanYi.jpg",
+    }
+    assert expected <= {path.name for path in recommended.glob("*.jpg")}
+
+    pyproject = (
+        Path(__file__).resolve().parents[1] / "pyproject.toml"
+    ).read_text(encoding="utf-8")
+    assert "data/headword_examples/recommended_current/*.jpg" in pyproject
+    assert "data/headword_examples/extended/*.jpg" in pyproject
+
 
 
 def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns():
@@ -666,10 +689,14 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert '"4 语言与 OCR"' not in text
     assert "self._build_language_section(tab, row=4)" in text
     assert 'text="词典项目详情"' in text
-    assert 'text="词典名称："' in text
+    assert 'text="词典全称："' in text
     assert 'text="词典简称(字母)："'.strip() in text
     assert 'text="ISBN："' in text
     assert 'text="正文页码："' in text
+    assert 'row=0, column=0' in text
+    assert 'row=0, column=2' in text
+    assert 'row=1, column=0' in text
+    assert 'row=1, column=2' in text
     assert "suggested_body_page_range(self.project.images)" in text
     assert "s.dictionary_full_name = self.dictionary_full_name_var.get().strip()" in text
     assert "s.dictionary_body_page_range = self.dictionary_body_page_range_var.get().strip()" in text
@@ -685,8 +712,14 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "self.profile_paned.add(left_panel, weight=40)" in text
     assert "self.profile_paned.add(right_panel, weight=60)" in text
     assert "self.profile_paned.sashpos" in text
+    assert "def _apply_left_wraps" in text
+    assert 'left_panel.bind(' in text
+    assert 'child.configure(wraplength=wrap, justify="left")' in text
     assert "ProfileYellow.TLabelframe" not in text
     assert "fill=(255, 215, 0, 105)" in text
+    marker_start = text.index("    def _marker_preview(")
+    marker_end = text.index("    def _set_validation_fit(", marker_start)
+    assert "fill=(255, 215, 0, 105)" in text[marker_start:marker_end]
     assert 'text="A 页排除宽度%"' in text
     assert 'text="B 页排除宽度%"' in text
     assert "s.profile_side_percent_a" in text
@@ -719,7 +752,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "def _render_validation_result" in text
     assert "width = min(work_w, max(720, int(screen_w * 0.80)))" in text
     assert "SPI_GETWORKAREA" in text
-    assert "height = work_h" in text
+    assert "height = max(1, int(work_h * 0.90))" in text
     assert "x = max(work_x, work_x + work_w - width)" in text
     assert "y = work_y" in text
     assert "self._wizard_left_width = max(400, int(width * 0.40) - 36)" in text
@@ -729,6 +762,8 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "right_width = int(getattr(self, \"right_canvas\", self).winfo_width())" in text
     assert "HEADWORD_EXAMPLE_ATLAS_CROPS" in text
     assert '"classic_headword_examples.jpg"' in text
+    assert 'root / "recommended_current"' in text
+    assert 'root / "extended"' in text
     assert "fill=(255, 0, 0, 255), width=1" in text
     assert "允许的词头结构（决定哪些 parser 通道开放）" in text
     assert "普通左缘短词可以作为词头" in text
