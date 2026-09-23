@@ -5634,13 +5634,33 @@ class PictureCaptureApp(tk.Tk):
         }
         self._apply_page_list_display_columns(save=False)
 
-        bottom_row = self.project_action_bar
-        ttk.Button(bottom_row, text="新建项目", command=self.open_project).pack(side="left", fill="x", expand=True)
-        ttk.Button(bottom_row, text="已有项目", command=self.open_recent_project).pack(side="left", fill="x", expand=True, padx=(4, 0))
-        ttk.Label(bottom_row, text="图片后缀：").pack(side="left", padx=(8, 2))
+        project_row = ttk.Frame(self.project_action_bar)
+        project_row.pack(fill="x")
+        ttk.Button(project_row, text="新建项目", command=self.open_project).pack(
+            side="left", fill="x", expand=True,
+        )
+        ttk.Button(project_row, text="已有项目", command=self.open_recent_project).pack(
+            side="left", fill="x", expand=True, padx=(4, 0),
+        )
+        ttk.Button(project_row, text="导出训练标记包", command=self.export_training_package).pack(
+            side="left", fill="x", expand=True, padx=(4, 0),
+        )
+        ttk.Label(project_row, text="图片后缀：").pack(side="left", padx=(8, 2))
         self.image_suffix_var = tk.StringVar(value=self.settings.image_suffix)
-        ttk.Entry(bottom_row, textvariable=self.image_suffix_var, width=7).pack(side="left")
+        ttk.Entry(project_row, textvariable=self.image_suffix_var, width=7).pack(side="left")
         self.image_suffix_var.trace_add("write", lambda *_args: self._quick_parameter_changed())
+
+        parameter_row = ttk.Frame(self.project_action_bar)
+        parameter_row.pack(fill="x", pady=(4, 0))
+        for index, (label, command) in enumerate((
+            ("项目Profile", self.open_project_profile),
+            ("更多参数", self.open_settings),
+            ("保存参数", self.save_main_parameters),
+            ("使用提示", self.show_help_dialog),
+        )):
+            ttk.Button(parameter_row, text=label, command=command).pack(
+                side="left", fill="x", expand=True, padx=(0 if index == 0 else 4, 0),
+            )
 
         self.canvas = tk.Canvas(viewer, bg="#30343b", highlightthickness=0)
         hbar = ttk.Scrollbar(viewer, orient="horizontal", command=self.canvas.xview)
@@ -6416,11 +6436,10 @@ class PictureCaptureApp(tk.Tk):
         actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
         actions.pack(fill="x", pady=(4, 0))
         rows = [
-            (("更多参数", self.open_settings), ("保存参数", self.save_main_parameters), ("使用提示", self.show_help_dialog)),
             (("运行普通画线", self.run_normal_draw_action), ("运行OCR画线", self.run_ocr_draw_action)),
             (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充既有词条", self.fill_existing_headwords), ("修复PDIC排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("从PDIC备份恢复", self.restore_from_pdic_backup)),
-            (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("导出训练标记包", self.export_training_package), ("保存当前页", self.save_current_page)),
+            (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
         ]
         for ri, specs in enumerate(rows):
             row = ttk.Frame(actions); row.grid(row=ri, column=0, sticky="ew", pady=(0 if ri == 0 else 3, 0))
@@ -10294,6 +10313,9 @@ class PictureCaptureApp(tk.Tk):
         if not self.apply_quick_settings(show_status=False, persist=False):
             return
         SettingsDialog(self, initial_tab=initial_tab)
+
+    def open_project_profile(self) -> None:
+        self.open_settings(initial_tab="profile")
 
     def open_project_details(self) -> None:
         self.open_settings(initial_tab="project")
