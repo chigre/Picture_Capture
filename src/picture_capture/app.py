@@ -4843,10 +4843,17 @@ class CropSettingsDialog(tk.Toplevel):
             self.special_page_var.set(self.parent.current_page.stem)
 
     def _build(self) -> None:
-        outer = ttk.Frame(self, padding=10)
+        outer = ttk.Frame(self, padding=(18, 14, 18, 12))
         outer.pack(fill="both", expand=True)
+        _build_modern_dialog_heading(
+            outer,
+            "切图设置",
+            "统一控制词条切图与插图切图。常规页面使用通用规则，只有确实不同的页面才放到“特殊页面覆盖”。",
+        )
 
-        general = ttk.LabelFrame(outer, text="完整切图设置（词条切图 / 插图切图共用）", padding=10)
+        general = ttk.LabelFrame(
+            outer, text="通用切图规则", padding=(12, 10),
+        )
         general.pack(fill="x")
         ttk.Label(general, text="主界面页面范围：").grid(row=0, column=0, sticky="w")
         scope = f"{len(self.indices)} 页"
@@ -4889,7 +4896,9 @@ class CropSettingsDialog(tk.Toplevel):
         ttk.Entry(general, textvariable=self.workers_var, width=10).grid(row=7, column=1, sticky="w", pady=2)
         ttk.Label(general, text="0 = 自动；词条/插图切图共用").grid(row=7, column=2, columnspan=3, sticky="w", pady=2)
 
-        special = ttk.LabelFrame(outer, text="特殊页面切图上下边界", padding=10)
+        special = ttk.LabelFrame(
+            outer, text="特殊页面覆盖", padding=(12, 10),
+        )
         special.pack(fill="both", expand=True, pady=(10, 0))
         form = ttk.Frame(special)
         form.pack(fill="x")
@@ -4922,11 +4931,16 @@ class CropSettingsDialog(tk.Toplevel):
             if isinstance(values, dict):
                 self.special_tree.insert("", "end", iid=str(page), values=(page, values.get("top_y", ""), values.get("bottom_y", 0)))
 
-        bottom = ttk.Frame(self, padding=(10, 0, 10, 10))
+        bottom = ttk.Frame(self, padding=(18, 0, 18, 12))
         bottom.pack(fill="x")
-        ttk.Label(bottom, textvariable=self.status_var, anchor="w").pack(side="left", fill="x", expand=True)
+        ttk.Label(
+            bottom, textvariable=self.status_var,
+            anchor="w", foreground="#666666",
+        ).pack(side="left", fill="x", expand=True)
         ttk.Button(bottom, text="关闭", command=self.destroy).pack(side="right")
-        ttk.Button(bottom, text="保存设置", command=self.save_settings).pack(side="right", padx=(0, 6))
+        ttk.Button(
+            bottom, text="保存并关闭", command=self.save_settings
+        ).pack(side="right", padx=(0, 6))
 
     def _known_page_stem(self, token: str) -> str:
         if not self.parent.project:
