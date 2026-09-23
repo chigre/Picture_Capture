@@ -210,6 +210,10 @@ class AppSettings:
     # v2.10 dictionary detection profile. Stable IDs describe layout families,
     # while project-specific numeric edits are persisted as overrides.
     dictionary_profile_id: str = "latin_structured_symbols"
+    # Project-specific display name for the built-in stable "custom" headword
+    # profile. The profile key remains "custom"; only the human-facing label is
+    # renamed so saved parser/layout semantics stay compatible.
+    dictionary_custom_profile_name: str = ""
     # Dictionary collation used by the headword-order checker. ``auto`` follows
     # the selected OCR language; custom mode accepts arbitrary alphabet units
     # (including multi-character letters such as ch / ll).
