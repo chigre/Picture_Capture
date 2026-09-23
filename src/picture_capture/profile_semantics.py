@@ -146,8 +146,10 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
     if header_mode == "auto":
         current.paddle_auto_header_rule = True
     elif header_mode == "none":
+        # "No running header" does not mean body ink starts at pixel 0. Keep
+        # the representative-page body top learned by the Profile analysis,
+        # but disable the extra running-header rule detector.
         current.paddle_auto_header_rule = False
-        current.start_y = 0
     else:
         current.paddle_auto_header_rule = False
         pct = max(0.0, min(35.0, float(getattr(current, "profile_header_percent", 6.0))))
