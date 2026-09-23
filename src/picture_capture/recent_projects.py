@@ -72,6 +72,17 @@ def remove_recent_project(root: Path, path: Path | None = None) -> list[dict[str
     return rows
 
 
+def _display_recent_timestamp(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed.astimezone().strftime("%Y-%m-%d %H:%M")
+    except (ValueError, TypeError):
+        return text[:16] if len(text) >= 16 else text
+
+
 def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool]:
     """Read display metadata without initializing or modifying the project."""
     root = Path(str(row.get("path") or "")).expanduser()
@@ -84,7 +95,7 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         "full_name": str(row.get("name") or root.name),
         "abbreviation": "",
         "image_count": 0,
-        "last_edited": str(row.get("opened_at") or ""),
+        "last_edited": _display_recent_timestamp(row.get("opened_at")),
         "path": str(root),
         "exists": root.is_dir(),
         "last_page": last_page,
