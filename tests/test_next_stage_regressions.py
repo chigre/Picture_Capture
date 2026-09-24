@@ -361,7 +361,7 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
     project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
     project_bar = text[project_bar_start:project_bar_end]
-    assert project_bar.index('text="已有项目"') < project_bar.index('text="导出训练标记包"')
+    assert project_bar.index('("已有项目", self.open_recent_project)') < project_bar.index('("导出训练标记包", self.export_training_package)')
     assert project_bar.index('("项目Profile", self.open_project_profile, "profile")') < project_bar.index('("设置中心", self.open_settings, "settings")')
     assert project_bar.index('("设置中心", self.open_settings, "settings")') < project_bar.index('("保存参数", self.save_main_parameters, "save")')
     assert project_bar.index('("保存参数", self.save_main_parameters, "save")') < project_bar.index('("使用提示", self.show_help_dialog, "help")')
