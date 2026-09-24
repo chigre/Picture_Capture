@@ -16,12 +16,14 @@ install_ocr_windows.bat
 | --- | --- | --- |
 | CPU | `ocr-cpu` | PaddleOCR + PaddlePaddle CPU 3.3.0 + Google Lens |
 | GPU CUDA 11.8 | `ocr-gpu-cu118` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens |
-| GPU CUDA 12.6 | `ocr-gpu-cu126` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens |
-| GPU CUDA 12.9 | `ocr-gpu-cu129` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens |
+| GPU CUDA 12.6 | `ocr-gpu-cu126` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens + Windows cuDNN 9 |
+| GPU CUDA 12.9 | `ocr-gpu-cu129` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens + Windows cuDNN 9 |
 | Lens only | `lens` | Google Lens / chrome-lens-py |
 | Core only | 无 | 删除可选 OCR profile，仅保留核心环境 |
 
 GPU 模式下，`paddlepaddle-gpu==3.3.0` 与 CUDA 11.8 / 12.6 / 12.9 对应的 PaddlePaddle 官方索引都直接声明在 `pyproject.toml` 中。CPU/GPU profile 在 uv 中声明为互斥，安装器只执行标准的锁定同步，不再手工卸载 runtime、拼接下载 URL 或运行 `uv pip install`。
+
+Windows 上 Paddle 3.3.0 的 CUDA 12.6/12.9 wheel 需要 cuDNN 9 DLL，但其 wheel 元数据不会像 Linux 一样自动声明 NVIDIA cuDNN runtime。因此这两个 profile 显式加入 Windows `nvidia-cudnn-cu12`。Picture Capture 在导入 PaddleOCR 前会自动发现 `.venv\Lib\site-packages\nvidia\*\bin` 并加入当前进程 DLL 搜索路径，不要求用户修改系统 PATH。
 
 ## profile 持久化
 
@@ -59,7 +61,9 @@ GPU 模式会检查：
 - Google Lens / chrome-lens-py 是否可导入；
 - 是否只存在一个 Paddle runtime；
 - Paddle 是否为 CUDA build；
-- 当前 Paddle 设备信息。
+- 当前 Paddle 设备信息；
+- Windows 项目内 NVIDIA DLL 目录是否可发现；
+- 实际运行一次 GPU `conv2d`，确保 cuDNN DLL 能被加载。
 
 也可在软件内点击【OCR / 简化环境状态】再次确认。
 
