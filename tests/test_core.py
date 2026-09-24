@@ -3895,7 +3895,7 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     assert 'text="跳转"' in text
     assert text.index('text="↕"') < text.index('text="跳转"') < text.index('text="上一页"') < text.index('text="下一页"')
     assert 'text="页面大小："' not in text
-    assert '("已有项目", self.open_recent_project)' in text
+    assert '("已有项目", self.open_recent_project, "project")' in text
     assert "self.after_idle(self._maximize_main_window)" in text
     assert "self.after_idle(self._ensure_sidebar_navigation_width)" in text
     assert '"lined": "画线"' in text
