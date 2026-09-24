@@ -283,7 +283,8 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert "def _show_setting_help(" in settings
     assert 'text="设置说明"' in settings
     assert "程序取第 1 个捕获组作为原始词头" in settings
-    assert "实际 POS 正则由该 Profile 的 pos_labels 动态生成" in settings
+    assert "实际 POS 正则由该 " in settings
+    assert "Profile 的 pos_labels 动态生成" in settings
     assert "可作为新词条结构证据" in settings
     assert "不会因为命中符号就无条件把该行接受为词头" in settings
     assert 'text="ⓘ"' in settings
