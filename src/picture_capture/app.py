@@ -37,6 +37,15 @@ from .paddle_headwords import (
 )
 from .ocr_engines import lens_status, tesseract_status
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
+from .coordinate_space import (
+    CANONICAL_COORDINATE_SPACE,
+    REFERENCE_CANONICAL_WIDTH,
+    SOURCE_COORDINATE_SPACE,
+    coordinate_contract,
+    geometry_uses_canonical_pixels,
+    legacy_parameter_scale,
+    stored_geometry_to_canonical,
+)
 from .collation import (
     LATIN_ORDER, available_profile_labels, collation_key, display_key,
     parse_custom_order, profile_label,
@@ -93,7 +102,6 @@ from .processing import (
     line_box,
     load_replace_rules,
     ocr_entries,
-    parameter_scale,
     split_single_lines,
     split_whole_entries,
     split_illustrations,
@@ -8496,14 +8504,19 @@ class PictureCaptureApp(tk.Tk):
         self.quick_vars: dict[str, tk.Variable] = {}
         self.quick_bool_vars: dict[str, tk.BooleanVar] = {}
         self.quick_field_casts: dict[str, type] = {}
+        self.quick_field_labels: dict[str, ttk.Label] = {}
 
         def add_field(
             panel: ttk.Frame, row: int, col: int, label: str, name: str, cast: type,
             width: int = 7,
         ) -> None:
-            ttk.Label(panel, text=label, style="PC.FieldLabel.TLabel").grid(
+            label_widget = ttk.Label(
+                panel, text=label, style="PC.FieldLabel.TLabel"
+            )
+            label_widget.grid(
                 row=row, column=col, sticky="e", padx=(0, 3), pady=1
             )
+            self.quick_field_labels[name] = label_widget
             var = tk.StringVar(value=str(getattr(self.settings, name)))
             self.quick_vars[name] = var
             self.quick_field_casts[name] = cast
@@ -8515,12 +8528,17 @@ class PictureCaptureApp(tk.Tk):
                 style="PC.Compact.TEntry",
             ).grid(row=row, column=col + 1, sticky="ew", padx=(0, 6), pady=1)
 
-        normal = self._section_frame(parent, "一、版面参数（两种画线共用）", padding=5, section_key="normal")
+        normal = self._section_frame(
+            parent,
+            "一、版面参数（规范全分辨率坐标；横排 U/X、V/Y 与原图一致）",
+            padding=5,
+            section_key="normal",
+        )
         normal.pack(fill="x")
         add_field(normal, 0, 0, "分栏数：", "columns", int)
-        add_field(normal, 0, 2, "页眉Y：", "start_y", int)
-        add_field(normal, 0, 4, "页尾Y：", "bottom_y", int)
-        add_field(normal, 0, 6, "首栏X：", "manual_x", int)
+        add_field(normal, 0, 2, "页眉Y(原图)：", "start_y", int)
+        add_field(normal, 0, 4, "页尾Y(原图)：", "bottom_y", int)
+        add_field(normal, 0, 6, "首栏U：", "manual_x", int)
         add_field(normal, 1, 0, "单栏宽：", "column_width", int)
         add_field(normal, 1, 2, "栏间空：", "gutter", int)
         add_field(normal, 1, 4, "单行高：", "character_height", int)
@@ -8577,7 +8595,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Entry(
             lens_row, textvariable=safety_var, width=4, justify="left"
         ).pack(side="left", padx=(2, 2))
-        ttk.Label(lens_row, text="px").pack(side="left")
+        ttk.Label(lens_row, text="参考px@1400").pack(side="left")
         ocr_tools = ttk.Frame(ocr)
         ocr_tools.grid(row=4, column=0, columnspan=6, sticky="ew", pady=(4, 0))
         ttk.Button(
@@ -8818,6 +8836,8 @@ class PictureCaptureApp(tk.Tk):
     def _quick_parameter_changed(self, *_args, immediate: bool = False) -> None:
         if not getattr(self, "_quick_trace_ready", False):
             return
+        if getattr(self, "_quick_syncing", False):
+            return
         if self._quick_autosave_job is not None:
             try:
                 self.after_cancel(self._quick_autosave_job)
@@ -8847,24 +8867,90 @@ class PictureCaptureApp(tk.Tk):
         # the explicit 保存参数 button still reports an error immediately.
         self.apply_quick_settings(show_status=False, persist=True, silent_errors=True)
 
+    def _quick_geometry_value(self, name: str) -> int:
+        """Return one main-panel layout value in the public coordinate contract."""
+        raw = int(getattr(self.settings, name, 0) or 0)
+        if self.image is None:
+            return raw
+        transform = LayoutTransform(
+            str(getattr(self.settings, "layout_transform", "identity") or "identity")
+        )
+        canonical_width, _canonical_height = transform.canonical_size(self.image.size)
+
+        if name == "start_y" and str(
+            getattr(self.settings, "profile_header_mode", "auto") or "auto"
+        ) == "present":
+            return round(
+                self.image.height
+                * float(getattr(self.settings, "profile_header_percent", 0.0) or 0.0)
+                / 100.0
+            )
+        if name == "bottom_y" and str(
+            getattr(self.settings, "profile_footer_mode", "auto") or "auto"
+        ) == "present":
+            return round(
+                self.image.height
+                * (
+                    1.0
+                    - float(getattr(self.settings, "profile_footer_percent", 0.0) or 0.0)
+                    / 100.0
+                )
+            )
+        return stored_geometry_to_canonical(raw, canonical_width, self.settings)
+
+    def _refresh_quick_coordinate_labels(self) -> None:
+        if not hasattr(self, "quick_field_labels"):
+            return
+        vertical = str(
+            getattr(self.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
+        ).startswith("vertical")
+        labels = {
+            "start_y": "正文起始V：" if vertical else "页眉Y(原图)：",
+            "bottom_y": "正文结束V：" if vertical else "页尾Y(原图)：",
+            "manual_x": "首栏U：",
+        }
+        for name, label in labels.items():
+            widget = self.quick_field_labels.get(name)
+            if widget is not None:
+                widget.configure(text=label)
+
     def sync_quick_settings(self) -> None:
         if not hasattr(self, "quick_vars"):
             return
-        for name, var in self.quick_vars.items():
-            if hasattr(self.settings, name):
-                value = getattr(self.settings, name)
-                if name == "main_entry_x_ratio": value = round(float(value) * 100)
-                var.set(str(value))
-        for name, var in getattr(self, "quick_bool_vars", {}).items():
-            if hasattr(self.settings, name): var.set(bool(getattr(self.settings, name)))
-        for name, var in getattr(self, "quick_color_vars", {}).items():
-            if hasattr(self.settings, name):
-                value = str(getattr(self.settings, name)); var.set(value)
-                button = getattr(self, "quick_color_buttons", {}).get(name)
-                if button is not None: self._style_color_button(button, value)
-        if hasattr(self, "lens_mode_var"):
-            self.lens_mode_var.set(LENS_MODE_LABELS.get(self.settings.paddle_lens_mode, LENS_MODE_LABELS["off"]))
-        if hasattr(self, "image_suffix_var"): self.image_suffix_var.set(self.settings.image_suffix)
+        self._quick_syncing = True
+        try:
+            self._refresh_quick_coordinate_labels()
+            for name, var in self.quick_vars.items():
+                if hasattr(self.settings, name):
+                    value = getattr(self.settings, name)
+                    if name in {
+                        "start_y", "bottom_y", "manual_x", "column_width",
+                        "gutter", "character_height", "row_padding",
+                    }:
+                        value = self._quick_geometry_value(name)
+                    if name == "main_entry_x_ratio":
+                        value = round(float(value) * 100)
+                    var.set(str(value))
+            for name, var in getattr(self, "quick_bool_vars", {}).items():
+                if hasattr(self.settings, name):
+                    var.set(bool(getattr(self.settings, name)))
+            for name, var in getattr(self, "quick_color_vars", {}).items():
+                if hasattr(self.settings, name):
+                    value = str(getattr(self.settings, name))
+                    var.set(value)
+                    button = getattr(self, "quick_color_buttons", {}).get(name)
+                    if button is not None:
+                        self._style_color_button(button, value)
+            if hasattr(self, "lens_mode_var"):
+                self.lens_mode_var.set(
+                    LENS_MODE_LABELS.get(
+                        self.settings.paddle_lens_mode, LENS_MODE_LABELS["off"]
+                    )
+                )
+            if hasattr(self, "image_suffix_var"):
+                self.image_suffix_var.set(self.settings.image_suffix)
+        finally:
+            self._quick_syncing = False
 
     def apply_quick_settings(self, show_status: bool = True, persist: bool = False, silent_errors: bool = False) -> bool:
         if getattr(self, "_batch_active", False):
@@ -8872,8 +8958,48 @@ class PictureCaptureApp(tk.Tk):
             return False
         try:
             previous_ocr_language = str(getattr(self.settings, "ocr_language", "") or "")
+            original_geometry = {
+                name: self._quick_geometry_value(name)
+                for name in (
+                    "start_y", "bottom_y", "manual_x", "column_width",
+                    "gutter", "character_height", "row_padding",
+                )
+                if name in self.quick_vars
+            }
             for name, var in self.quick_vars.items():
                 value = self.quick_field_casts[name](var.get())
+                if name in original_geometry:
+                    value = int(value)
+                    if value < 0:
+                        raise ValueError(f"{name} 不能小于 0。")
+                    changed = value != original_geometry[name]
+                    if self.image is not None and name == "start_y" and str(
+                        getattr(self.settings, "profile_header_mode", "auto") or "auto"
+                    ) == "present":
+                        if value > self.image.height:
+                            raise ValueError(f"页眉Y必须在原图 0–{self.image.height} 之间。")
+                        if changed:
+                            percent = value * 100.0 / max(1, self.image.height)
+                            if percent > 35.0:
+                                raise ValueError("页眉不能超过原图高度的 35%。")
+                            self.settings.profile_header_percent = round(percent, 6)
+                    elif self.image is not None and name == "bottom_y" and str(
+                        getattr(self.settings, "profile_footer_mode", "auto") or "auto"
+                    ) == "present":
+                        if value > self.image.height:
+                            raise ValueError(f"页尾Y必须在原图 0–{self.image.height} 之间。")
+                        if changed:
+                            percent = (
+                                (self.image.height - value)
+                                * 100.0
+                                / max(1, self.image.height)
+                            )
+                            if not 0.0 <= percent <= 35.0:
+                                raise ValueError("页尾必须位于原图底部 35% 范围内。")
+                            self.settings.profile_footer_percent = round(percent, 6)
+                    # Modern geometry is persisted directly in full-resolution
+                    # canonical pixels. A legacy project is migrated on open.
+                    value = int(value)
                 if name == "paddle_band_width_ratio" and not 1 <= int(value) <= 100:
                     raise ValueError("候选带宽比例必须在 1–100 之间；100 即原候选带宽。")
                 if name == "paddle_separator_safety_px" and not 0 <= int(value) <= 50:
