@@ -1515,9 +1515,10 @@ class SettingsDialog(tk.Toplevel):
 
             control = ttk.Frame(group)
             control.grid(row=row, column=1, sticky="ew", pady=4)
-            control.columnconfigure(0, weight=1)
+            stretch = name == "wordslist_path"
+            control.columnconfigure(0, weight=(1 if stretch else 0))
             widget = self._setting_widget(control, name)
-            widget.grid(row=0, column=0, sticky="ew")
+            widget.grid(row=0, column=0, sticky=("ew" if stretch else "w"))
             unit = self.SETTING_UNITS.get(name, "")
             if unit:
                 ttk.Label(control, text=unit, foreground="#70757d").grid(
