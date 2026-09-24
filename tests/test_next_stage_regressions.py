@@ -299,8 +299,8 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert "self.transient(parent); self.grab_set()" not in settings
     assert "def select_tab(self, key: str | None)" in settings
 
-    assert 'text="普通画线（左缘规则）"' in settings
-    assert 'text="OCR画线（识别词头）"' in settings
+    assert 'text="OCR画线（推荐）"' in settings
+    assert 'text="普通画线（备用）"' in settings
     assert 'value=DETECTION_LABELS["left_edge"]' in settings
     assert 'value=DETECTION_LABELS["paddleocr"]' in settings
 
@@ -434,6 +434,9 @@ def test_usage_help_is_a_modern_task_oriented_guide():
     assert '"检测版面参数"' in guide
     assert '"检测 OCR 引擎"' in guide
     assert '"设置中心"' in guide
+    assert "OCR画线是默认推荐模式" in guide
+    assert "普通画线降为备用" in guide
+    assert "默认先用 OCR画线验证代表页" in guide
     assert "wraplength=158" in guide
     assert 'self.bind("<Escape>", lambda _event: self.destroy())' in guide
 
@@ -465,6 +468,9 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     ui = text[ui_start:ui_end]
     assert 'style="PC.Treeview"' in ui
     assert 'style="PC.Footer.TFrame"' in ui
+    assert '"一、版面参数（两种画线共用）"' in text
+    assert '"二、OCR画线（推荐默认）"' in text
+    assert 'text="普通画线设置（备用）…"' in text
     assert 'ttk.Separator(size_row, orient="vertical")' in ui
     assert 'relief="sunken"' not in ui
     assert 'relief="ridge"' not in ui
@@ -473,7 +479,10 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
     actions = text[actions_start:actions_end]
     assert 'self._sidebar_action_button(row, text, command, role=role)' in actions
-    assert '"primary" if text == "运行OCR画线"' in actions
+    assert '"primary" if text == "运行OCR画线（推荐）"' in actions
+    assert '("运行OCR画线（推荐）", self.run_ocr_draw_action)' in actions
+    assert '("运行普通画线（备用）", self.run_normal_draw_action)' in actions
+    assert actions.index('("运行OCR画线（推荐）", self.run_ocr_draw_action)') < actions.index('("运行普通画线（备用）", self.run_normal_draw_action)')
     assert '"success" if text == "保存当前页"' in actions
     assert '"primary" if text == "词条校对"' in actions
     assert '"danger_soft"' not in actions
@@ -1170,8 +1179,9 @@ def test_project_profile_wizard_is_the_normal_entry_path():
     assert "ProjectProfileWizard(self, new_project=new_project)" in text
     assert "launch_profile_setup=not existing_project" in text
     assert '(common_tab, "常用")' in text
-    assert '(normal_tab, "普通画线")' in text
-    assert '(ocr_tab, "OCR画线")' in text
+    assert '(ocr_tab, "OCR画线（推荐）")' in text
+    assert '(normal_tab, "普通画线（备用）")' in text
+    assert text.index('(ocr_tab, "OCR画线（推荐）")') < text.index('(normal_tab, "普通画线（备用）")')
     assert '(advanced_tab, "高级")' in text
     assert '"profile": advanced_tab' in text
     start = text.index("    def open_project_profile(")
