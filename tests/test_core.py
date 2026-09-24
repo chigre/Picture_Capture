@@ -3902,6 +3902,17 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     assert 'text="跳转", command=self.jump_to_page_spec, style="PC.PageNav.TButton"' in page_toolbar
     assert 'text="上一页", command=lambda: self.change_page(-1), style="PC.PageNav.TButton"' in page_toolbar
     assert 'text="下一页", command=lambda: self.change_page(1), style="PC.PageNav.TButton"' in page_toolbar
+    for tooltip in (
+        "缩小显示",
+        "放大显示",
+        "适合宽度显示",
+        "适合高度显示",
+        "跳转到上一书签",
+        "跳转到下一书签",
+        "跳转到指定页面的第一个有效页面",
+    ):
+        assert f'self._attach_tooltip(' in page_toolbar
+        assert f'"{tooltip}"' in page_toolbar
     assert 'text="页面大小："' not in text
     assert '("已有项目", self.open_recent_project, "project")' in text
     assert "self.after_idle(self._maximize_main_window)" in text
