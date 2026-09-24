@@ -6751,13 +6751,10 @@ class PictureCaptureApp(tk.Tk):
             "button": "#f4f5f7",
             "button_hover": "#e7eaee",
             "button_border": "#d3d8df",
-            "review_soft": "#dceeff",
-            "review_soft_hover": "#c7e1f8",
-            "review_soft_text": "#245b86",
-            "primary": "#e58a2b",
-            "primary_hover": "#d77b20",
-            "success": "#5e9f69",
-            "success_hover": "#4f8e5c",
+            "primary": "#4F7CAC",
+            "primary_hover": "#416A94",
+            "success": "#69A875",
+            "success_hover": "#588F64",
             "tree_selected": "#dce8f7",
             "canvas": "#30343b",
         }
@@ -6866,10 +6863,6 @@ class PictureCaptureApp(tk.Tk):
             "success": (
                 colors["success"], colors["success_hover"], "#ffffff",
             ),
-            "review_soft": (
-                colors["review_soft"], colors["review_soft_hover"],
-                colors["review_soft_text"],
-            ),
         }
         background, active_background, foreground = palette.get(
             role, palette["primary"]
@@ -6899,9 +6892,10 @@ class PictureCaptureApp(tk.Tk):
         """Create one emphasized bottom-bar action with a functional color."""
         colors = self._main_ui_colors
         palette = {
-            # Match the exact color treatment used by `保存当前页`.
+            # Scheme A: project/config entry points share the same green
+            # treatment as `保存当前页`.
             "project": (colors["success"], colors["success_hover"], "#ffffff"),
-            "config": ("#dceeff", "#c7e1f8", "#245b86"),
+            "config": (colors["success"], colors["success_hover"], "#ffffff"),
         }
         background, active_background, foreground = palette[role]
         border = colors["button_border"]
@@ -8231,7 +8225,7 @@ class PictureCaptureApp(tk.Tk):
                 role = (
                     "primary" if text == "运行OCR画线"
                     else "success" if text == "保存当前页"
-                    else "review_soft" if text == "词条校对"
+                    else "primary" if text == "词条校对"
                     else "neutral"
                 )
                 button = self._sidebar_action_button(row, text, command, role=role)
