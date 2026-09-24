@@ -3196,7 +3196,7 @@ class ReviewWindow(tk.Toplevel):
         self.network_lookup_enabled_var = tk.BooleanVar(
             value=bool(getattr(parent.settings, "review_network_lookup_enabled", True))
         )
-        self.network_lookup_status_var = tk.StringVar(value="网络词汇核验：等待选择词条")
+        self.network_lookup_status_var = tk.StringVar(value="网络词汇核验\n等待选择词条")
         self.cc_cedict_lookup_var = tk.StringVar(value="CC-CEDICT(?)")
         self.cc_simplified_compare_var = tk.StringVar(value="CC简(?)")
         self.moedict_lookup_var = tk.StringVar(value="萌(?)")
@@ -3701,8 +3701,14 @@ class ReviewWindow(tk.Toplevel):
             style="PCR.Tool.TButton",
         ).pack(side="left", padx=(5, 0))
         self.network_status_label = tk.Label(
-            network_box, textvariable=self.network_lookup_status_var, anchor="w", justify="left",
-            wraplength=430, fg="#555555", bg=self._review_ui_colors["surface"],
+            network_box,
+            textvariable=self.network_lookup_status_var,
+            anchor="w",
+            justify="left",
+            height=2,
+            wraplength=430,
+            fg="#555555",
+            bg=self._review_ui_colors["surface"],
         )
         self.network_status_label.pack(fill="x", pady=(4, 0))
         self._refresh_cc_cedict_button_idle()
@@ -4096,7 +4102,7 @@ class ReviewWindow(tk.Toplevel):
                 except tk.TclError:
                     pass
                 self._network_lookup_job = None
-            self.network_lookup_status_var.set("网络词汇核验：自动检查已关闭")
+            self.network_lookup_status_var.set("网络词汇核验\n自动检查已关闭")
             try:
                 self.network_status_label.configure(fg="#666666")
             except tk.TclError:
@@ -4122,7 +4128,7 @@ class ReviewWindow(tk.Toplevel):
                 pass
             self._network_lookup_job = None
         if not value:
-            self.network_lookup_status_var.set("网络词汇核验：当前词条为空")
+            self.network_lookup_status_var.set("网络词汇核验\n当前词条为空")
             try:
                 self.network_status_label.configure(fg="#666666")
             except tk.TclError:
@@ -4134,7 +4140,7 @@ class ReviewWindow(tk.Toplevel):
         if cached is not None:
             self._apply_network_lookup_result(serial, value, cached)
             return
-        self.network_lookup_status_var.set(f"网络词汇核验：正在查询“{value}”…")
+        self.network_lookup_status_var.set(f"网络词汇核验\n正在查询“{value}”…")
         self._network_source_urls.clear()
         self._set_lookup_source_states(pending=True)
         try:
@@ -4182,7 +4188,9 @@ class ReviewWindow(tk.Toplevel):
         if serial != self._network_lookup_serial or word != self._network_lookup_word:
             return
         if result is None:
-            self.network_lookup_status_var.set("⚠ 网络词汇核验暂时失败；可点“网络搜索”手工确认。")
+            self.network_lookup_status_var.set(
+                "⚠ 网络词汇核验暂时失败\n可点“网络搜索”手工确认。"
+            )
             try:
                 self.network_status_label.configure(fg="#9a6700")
             except tk.TclError:
@@ -4215,13 +4223,19 @@ class ReviewWindow(tk.Toplevel):
 
         found_names = [item.name for item in result.sources if item.found is True]
         if result.found is True:
-            self.network_lookup_status_var.set("✓ 有词典收录：" + "、".join(found_names))
+            self.network_lookup_status_var.set(
+                "✓ 有词典收录\n" + "、".join(found_names)
+            )
             status_color = "#1b7f3a"
         elif result.found is False:
-            self.network_lookup_status_var.set("○ 各可用词典均未检出精确词条（不代表该词不存在）")
+            self.network_lookup_status_var.set(
+                "○ 各可用词典均未检出精确词条\n不代表该词不存在"
+            )
             status_color = "#8a5a00"
         else:
-            self.network_lookup_status_var.set("⚠ 部分词典未安装或网络来源暂不可用；可继续网络搜索。")
+            self.network_lookup_status_var.set(
+                "⚠ 部分词典未安装或网络来源暂不可用\n可继续网络搜索。"
+            )
             status_color = "#9a6700"
         try:
             self.network_status_label.configure(fg=status_color)
@@ -4234,7 +4248,7 @@ class ReviewWindow(tk.Toplevel):
         # simplified companion rather than the original headword.
         word = (self._network_lookup_word or self._active_review_word()).strip()
         if not word:
-            self.network_lookup_status_var.set("网络词汇核验：当前词条为空")
+            self.network_lookup_status_var.set("网络词汇核验\n当前词条为空")
             return
         try:
             webbrowser.open(web_search_url(word))
