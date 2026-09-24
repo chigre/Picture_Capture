@@ -1,5 +1,15 @@
 ## v2.13.3
 
+### Windows 分发彻底移除 shell 包装器
+
+- 在合并上一轮 BAT 降风险后，Windows 对最新 `main` ZIP 仍出现下载阶段病毒/启发式告警；因此不再继续微调 BAT 内容，而是从源码仓库和正式 Release 中彻底移除 `.bat`、`.cmd`、`.ps1`、`.vbs`、`.pyw` Windows 包装器。
+- 删除 `run_windows.bat` 与 `install_ocr_windows.bat`；Windows 首次环境建立改为用户在终端显式运行 `uv sync --locked --no-dev`，OCR 配置改为 `.venv\\Scripts\\python.exe scripts\\windows_ocr_setup.py`，日常启动改为 `.venv\\Scripts\\python.exe run.py`。
+- 新增 `WINDOWS_SETUP.txt`，让 Release ZIP 内仍有一份无需执行权限、可直接审阅复制的 Windows 安装/启动说明。
+- 修复 Release workflow 漏打包 `scripts/` 的问题；此前若直接按 v2.13.3 草案打包，OCR 配置脚本会缺失。现在正式 Release 明确包含 `scripts/`。
+- 新增回归测试，要求仓库中不存在上述 Windows shell 包装器，并检查 Release ZIP 只包含 Python 配置路径而不重新引入 BAT。
+- `SHA256SUMS.txt` 继续随正式 Release 生成，用于核对 ZIP / wheel 完整性。
+
+
 ### 坐标体系统一与旧项目迁移
 
 - 新增统一坐标契约：PDIC/PPP/最终 OCR 词头/切图框与对外训练标注使用原图像素；版式运行几何使用 canonical 全分辨率；项目级版式参数使用带参考宽度的 canonical reference 坐标；analysis/OCR-band 坐标仅限内部。
