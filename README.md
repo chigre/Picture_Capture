@@ -131,25 +131,17 @@ Picture Capture 仍然可以启动；如果系统已经安装 Tesseract，也可
 
 ## 4. 启动程序
 
-安装完成后，日常只需双击：
-
-```text
-Picture_Capture.pyw
-```
-
-它以无控制台窗口的方式启动。首次启动（尚未生成 `.venv`）时会自动打开可见窗口，以便看到 uv 安装环境的进度；后台运行时的输出与错误会写入：
-
-```text
-%LOCALAPPDATA%\Picture_Capture\launcher.log
-```
-
-如果需要实时查看命令行输出或排查启动问题，仍可双击：
+安装完成后，双击：
 
 ```text
 run_windows.bat
 ```
 
-它会保留可见窗口，并在启动失败时暂停显示错误信息。
+该入口会保持控制台可见，并在启动失败时暂停显示错误信息。
+
+> **诊断分支说明：** 本分支暂时移除了 `Picture_Capture.pyw` 静默启动器以及
+> `CREATE_NO_WINDOW` / `pythonw.exe` 后台重启逻辑，专门用于验证 Windows Defender
+> 对 GitHub “Download ZIP” 的病毒提示是否由静默启动行为触发。
 
 安装器会在程序目录生成本机配置：
 
