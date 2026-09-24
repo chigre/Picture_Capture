@@ -48,7 +48,7 @@ from .dictionary_profile import (
     language_effective_settings, managed_profile_setting_names, profile_effective_settings,
     profile_layout_summary, write_project_profile,
 )
-from .profile_setup import ProjectProfileWizard
+from .profile_setup import ProjectProfileWizard, _screen_work_area
 from .profile_semantics import (
     effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
 )
@@ -1145,9 +1145,12 @@ class UsageGuideWindow(tk.Toplevel):
         self.title("Picture Capture · 使用指南")
         screen_w = max(900, self.winfo_screenwidth())
         screen_h = max(650, self.winfo_screenheight())
-        width = min(1040, int(screen_w * 0.82))
-        height = min(780, int(screen_h * 0.86))
-        self.geometry(f"{width}x{height}")
+        work_x, work_y, work_w, work_h = _screen_work_area(self)
+        width = min(work_w, 1040, int(screen_w * 0.82))
+        height = min(work_h, 780, int(screen_h * 0.86))
+        x = work_x + max(0, (work_w - width) // 2)
+        y = work_y + max(0, (work_h - height) // 2)
+        self.geometry(f"{width}x{height}+{x}+{y}")
         self.minsize(min(820, width), min(600, height))
         self.transient(parent)
         self.configure(bg="#f5f7fb")
@@ -7878,7 +7881,7 @@ class PictureCaptureApp(tk.Tk):
             ("项目Profile", self.open_project_profile, "config"),
             ("设置中心", self.open_settings, "config"),
             ("保存参数", self.save_main_parameters, None),
-            ("使用提示", self.show_help_dialog, None),
+            ("使用指南", self.show_help_dialog, None),
         )):
             button = (
                 self._footer_action_button(parameter_row, label, command, role=role)
@@ -7891,7 +7894,7 @@ class PictureCaptureApp(tk.Tk):
                 row=0, column=col, sticky="ew",
                 padx=(0 if col == 0 else 4, 0),
             )
-            if label == "使用提示":
+            if label == "使用指南":
                 self._attach_tooltip(button, "打开使用指南：推荐流程、各功能用途、快捷操作与常见排错。")
 
         self.canvas = tk.Canvas(

@@ -364,7 +364,7 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     assert project_bar.index('("已有项目", self.open_recent_project, "project")') < project_bar.index('("导出训练标记包", self.export_training_package, None)')
     assert project_bar.index('("项目Profile", self.open_project_profile, "config")') < project_bar.index('("设置中心", self.open_settings, "config")')
     assert project_bar.index('("设置中心", self.open_settings, "config")') < project_bar.index('("保存参数", self.save_main_parameters, None)')
-    assert project_bar.index('("保存参数", self.save_main_parameters, None)') < project_bar.index('("使用提示", self.show_help_dialog, None)')
+    assert project_bar.index('("保存参数", self.save_main_parameters, None)') < project_bar.index('("使用指南", self.show_help_dialog, None)')
     assert '("项目Profile", self.open_project_profile, "config")' in project_bar
     assert 'uniform="project-footer-columns"' in project_bar
     assert 'project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
@@ -411,10 +411,10 @@ def test_bottom_important_actions_follow_scheme_a_groups():
     assert '("项目Profile", self.open_project_profile, "config")' in project_bar
     assert '("设置中心", self.open_settings, "config")' in project_bar
     assert '("保存参数", self.save_main_parameters, None)' in project_bar
-    assert '("使用提示", self.show_help_dialog, None)' in project_bar
+    assert '("使用指南", self.show_help_dialog, None)' in project_bar
 
 
-def test_usage_help_is_a_modern_task_oriented_guide():
+def test_usage_guide_is_modern_task_oriented_and_centered():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
 
@@ -423,6 +423,11 @@ def test_usage_help_is_a_modern_task_oriented_guide():
     guide = text[guide_start:guide_end]
 
     assert '"快速开始"' in guide
+    assert 'self.title("Picture Capture · 使用指南")' in guide
+    assert "work_x, work_y, work_w, work_h = _screen_work_area(self)" in guide
+    assert "x = work_x + max(0, (work_w - width) // 2)" in guide
+    assert "y = work_y + max(0, (work_h - height) // 2)" in guide
+    assert 'self.geometry(f"{width}x{height}+{x}+{y}")' in guide
     assert '"画线与 OCR"' in guide
     assert '"校对与词表"' in guide
     assert '"插图与切图"' in guide
