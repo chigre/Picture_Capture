@@ -9451,7 +9451,7 @@ class PictureCaptureApp(tk.Tk):
             return
         if not messagebox.askyesno(
             "检测版面一致性",
-            f"将快速扫描当前所选 {len(indices)} 页，检测页眉横线 Y 和正文最左文本框 X。\n\n"
+            f"将快速扫描当前所选 {len(indices)} 页，检测规范坐标中的页眉横线 V 和正文最左 U。\n\n"
             "此任务使用灰度投影而非 PaddleVL/OCR，以便高效处理数千页。是否继续？",
             parent=self,
         ):
@@ -9462,8 +9462,17 @@ class PictureCaptureApp(tk.Tk):
 
         def worker(index: int, _position: int, _total: int):
             with Image.open(pages[index]) as opened:
+                image_size = opened.size
                 estimate = detect_layout_consistency(opened, settings)
-            return pages[index].name, estimate.header_rule_y, estimate.body_left_x, estimate.is_blank
+            return (
+                pages[index].name,
+                estimate.header_rule_y,
+                estimate.body_left_x,
+                estimate.is_blank,
+                estimate.coordinate_space,
+                str(getattr(settings, "layout_transform", "identity") or "identity"),
+                image_size,
+            )
 
         def done(_completed, _total, stopped, results, error) -> None:
             if error or not results: return
@@ -9472,8 +9481,19 @@ class PictureCaptureApp(tk.Tk):
             report = exports_root(self.project.root) / f"{base}_report.txt"
             target.parent.mkdir(parents=True, exist_ok=True)
             with target.open("w", encoding="utf-8-sig", newline="") as handle:
-                writer = csv.writer(handle); writer.writerow(("page", "header_rule_y", "body_left_x", "status"))
-                writer.writerows((name, y, x, "blank_skipped" if blank else "analyzed") for name, y, x, blank in results)
+                writer = csv.writer(handle)
+                writer.writerow((
+                    "page",
+                    "header_rule_v_canonical",
+                    "body_left_u_canonical",
+                    "coordinate_space",
+                    "layout_transform",
+                    "status",
+                ))
+                writer.writerows((
+                    row[0], row[1], row[2], row[4], row[5],
+                    "blank_skipped" if row[3] else "analyzed",
+                ) for row in results)
             analyzed = [row for row in results if not row[3]]
             blanks = [row[0] for row in results if row[3]]
             header_values = [row[1] for row in analyzed if row[1] is not None]
@@ -9490,15 +9510,16 @@ class PictureCaptureApp(tk.Tk):
             report_text = (
                 f"页面范围：{range_name}\n总页数：{len(results)}\n有效分析：{len(analyzed)}\n"
                 f"空白页跳过：{len(blanks)}（{', '.join(blanks) or '无'}）\n"
-                f"页眉横线 Y：{summary(header_values)}\n正文起始 X：{summary(left_values)}\n"
+                f"页眉横线 V（规范px）：{summary(header_values)}\n正文起始 U（规范px）：{summary(left_values)}\n"
                 f"异常页面：{', '.join(abnormal) or '无'}\n"
             )
             report.write_text(report_text, encoding="utf-8-sig")
             messagebox.showinfo(
                 "版面一致性统计",
                 f"完成 {len(results)} 页，有效 {len(analyzed)} 页，跳过空白页 {len(blanks)} 页"
-                f"{'（提前停止）' if stopped else ''}\n页眉横线 Y：{summary(header_values)}\n"
-                f"正文起始 X：{summary(left_values)}\n异常页面：{', '.join(abnormal) or '无'}\n\n结果：{target}\n报告：{report}",
+                f"{'（提前停止）' if stopped else ''}\n页眉横线 V（规范px）：{summary(header_values)}\n"
+                f"正文起始 U（规范px）：{summary(left_values)}\n异常页面：{', '.join(abnormal) or '无'}\n\n"
+                f"CSV 已明确记录 coordinate_space 与 layout_transform。\n结果：{target}\n报告：{report}",
                 parent=self,
             )
             self.status_var.set(f"版面一致性检测完成：{target.name}")
