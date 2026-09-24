@@ -564,10 +564,9 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
     dark ink inside a narrow strip at the left of a dictionary column. Runs are
     consolidated and filtered using the configured character height.
     """
-    source, effective, analysis_source, geometry = _page_geometry_context(
-        image, settings, profile_page_index,
-    )
-    canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
+    source = normalize_page_rgb(image)
+    geometry = derive_geometry(source, settings)
+    canonical = geometry.transform.canonical_image_for_analysis(source)
     analysis, scale = _analysis_image(canonical)
     canonical_width = canonical.width
     body_indent = stored_geometry_to_canonical(
@@ -723,9 +722,10 @@ def refine_existing_entries(
     local search radius, which acts as a hard safety bound on canonical Y
     movement.  Entry text/order/count and every non-coordinate field are kept.
     """
-    source = normalize_page_rgb(image)
-    geometry = derive_geometry(source, settings)
-    canonical = geometry.transform.canonical_image_for_analysis(source)
+    source, effective, analysis_source, geometry = _page_geometry_context(
+        image, settings, profile_page_index,
+    )
+    canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
     gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
 
     from .paddle_headwords import refine_separator_y
