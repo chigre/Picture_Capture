@@ -438,7 +438,7 @@ def test_usage_help_is_a_modern_task_oriented_guide():
     assert 'self.bind("<Escape>", lambda _event: self.destroy())' in guide
 
     show_start = text.index("    def show_help_dialog(self) -> None:")
-    show_end = text.index("    @staticmethod\\n    def _distribution_version", show_start)
+    show_end = text.index("    @staticmethod\n    def _distribution_version", show_start)
     show = text[show_start:show_end]
     assert "UsageGuideWindow(self)" in show
     assert "_usage_guide_window" in show
