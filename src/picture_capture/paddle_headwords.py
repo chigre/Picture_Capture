@@ -5097,44 +5097,6 @@ def _update_project_quality_summary(cache_path: Path, summary: dict[str, Any], r
     path.write_text("\n".join(output) + "\n", encoding="utf-8")
 
 
-def _conservative_tesseract_rescue(
-    paddle_entries: list[Entry],
-    tess_entries: list[Entry],
-    tess_diagnostics: list[dict[str, Any]],
-    settings: AppSettings,
-    ratio: float,
-) -> tuple[list[Entry], list[Entry]]:
-    """Add only structurally strong Tesseract entries missing from Paddle.
-
-    Tesseract is a secondary opinion, not an equal-vote detector.  A rescue must
-    have a POS/inflection/descriptor (or an explicit user force-accept) and must
-    be vertically distinct from every Paddle hit.  This keeps dual OCR useful for
-    recall without turning OCR disagreement into a flood of false markers.
-    """
-    strong_y: list[int] = []
-    for diag in tess_diagnostics:
-        if not diag.get("accepted"):
-            continue
-        features = diag.get("features", {}) or {}
-        if features.get("structural_cue") or features.get("forced_accept"):
-            try:
-                strong_y.append(int(diag.get("source_y")))
-            except (TypeError, ValueError):
-                pass
-    tolerance = max(2, round(settings.character_height * ratio * 0.60))
-    merged = list(paddle_entries)
-    rescued: list[Entry] = []
-    for entry in tess_entries:
-        if not any(abs(entry.y - y) <= tolerance for y in strong_y):
-            continue
-        if any(abs(entry.y - item.y) <= tolerance for item in merged):
-            continue
-        merged.append(entry)
-        rescued.append(entry)
-    merged.sort(key=lambda item: item.y)
-    return merged, rescued
-
-
 def detect_paddle_headwords(
     image: Image.Image,
     geometry: "Geometry",
