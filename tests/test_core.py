@@ -4360,15 +4360,22 @@ def test_v2119_crop_controls_live_only_in_crop_settings_dialog():
     assert '完整切图设置（词条切图 / 插图切图共用）' in crop_class
 
 
-def test_v2119_crop_settings_config_is_v5_and_layout_header_remains_separate():
+def test_crop_settings_v6_declares_reference_coordinate_space():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     crop_class = text.split("class CropSettingsDialog", 1)[1].split("class PictureCaptureApp", 1)[0]
-    assert '"version": 5' in crop_class
-    assert '这里的上下边界只控制切图，不改变版面检测的页眉Y' in crop_class
-    # start_y remains a layout/detection parameter and is intentionally not removed.
+    assert '"version": CROP_SETTINGS_VERSION' in crop_class
+    assert '"coordinate_space": CANONICAL_REFERENCE_SPACE' in crop_class
+    assert '"geometry_reference_width"' in crop_class
+    assert '"general_top_v"' in crop_class
+    assert '"general_bottom_v"' in crop_class
+    assert '"entry_left_padding_u"' in crop_class
+    assert '"entry_right_padding_u"' in crop_class
+    assert "参考页规范像素" in crop_class
+    # start_y remains persisted layout geometry; the Settings Center labels its
+    # coordinate space explicitly instead of presenting it as an unqualified Y.
     settings_class = text.split("class SettingsDialog", 1)[1].split("class CropSettingsDialog", 1)[0]
-    assert '("起始点 Y", "start_y", int)' in settings_class
+    assert '"start_y": "正文起始 V（参考页规范坐标）"' in settings_class
 
 
 def test_v21110_backup_pdic_is_background_and_streaming():
@@ -6495,3 +6502,105 @@ def test_coordinate_contract_parameter_display_width_is_legacy_only_in_core_runt
     assert "parameter_display_width" not in paddle_text
     assert "parameter_display_width" not in profile_text
     assert "parameter_display_width" not in training_text
+
+
+def test_crop_settings_v5_migrates_to_reference_page_pixels():
+    from picture_capture.app import _normalize_crop_settings_payload
+    from picture_capture.coordinate_space import CANONICAL_REFERENCE_SPACE
+    from picture_capture.models import AppSettings
+
+    settings = AppSettings(
+        geometry_coordinate_version=2,
+        geometry_coordinate_space=CANONICAL_REFERENCE_SPACE,
+        geometry_reference_width=2000,
+        parameter_display_width=1000,
+        start_y=100,
+        bottom_y=1800,
+        crop_to_bottom_y=True,
+    )
+    legacy = {
+        "version": 5,
+        "general_top_y": 50,
+        "general_bottom_y": 900,
+        "entry_left_padding": 12,
+        "entry_right_padding": 18,
+        "polygon_margin": 8,
+        "special_pages": {
+            "0010": {"top_y": 60, "bottom_y": 880},
+        },
+    }
+    migrated = _normalize_crop_settings_payload(legacy, settings)
+    assert migrated["version"] == 6
+    assert migrated["coordinate_space"] == CANONICAL_REFERENCE_SPACE
+    assert migrated["geometry_reference_width"] == 2000
+    assert migrated["general_top_v"] == 100
+    assert migrated["general_bottom_v"] == 1800
+    assert migrated["entry_left_padding_u"] == 24
+    assert migrated["entry_right_padding_u"] == 36
+    assert migrated["polygon_margin"] == 16
+    assert migrated["special_pages"]["0010"] == {"top_v": 120, "bottom_v": 1760}
+
+
+def test_crop_settings_v6_rescales_when_reference_page_changes():
+    from picture_capture.app import _normalize_crop_settings_payload
+    from picture_capture.coordinate_space import CANONICAL_REFERENCE_SPACE
+    from picture_capture.models import AppSettings
+
+    settings = AppSettings(
+        geometry_reference_width=3000,
+        geometry_coordinate_space=CANONICAL_REFERENCE_SPACE,
+    )
+    saved = {
+        "version": 6,
+        "coordinate_space": CANONICAL_REFERENCE_SPACE,
+        "geometry_reference_width": 2000,
+        "general_top_v": 100,
+        "general_bottom_v": 1800,
+        "entry_left_padding_u": 20,
+        "entry_right_padding_u": 30,
+        "polygon_margin": 10,
+        "special_pages": {"p": {"top_v": 120, "bottom_v": 1750}},
+    }
+    normalized = _normalize_crop_settings_payload(saved, settings)
+    assert normalized["geometry_reference_width"] == 3000
+    assert normalized["general_top_v"] == 150
+    assert normalized["general_bottom_v"] == 2700
+    assert normalized["entry_left_padding_u"] == 30
+    assert normalized["entry_right_padding_u"] == 45
+    assert normalized["polygon_margin"] == 15
+    assert normalized["special_pages"]["p"] == {"top_v": 180, "bottom_v": 2625}
+
+
+def test_crop_bounds_scale_reference_values_to_current_page():
+    from PIL import Image
+    from picture_capture.coordinate_space import CANONICAL_REFERENCE_SPACE
+    from picture_capture.models import AppSettings
+    from picture_capture.processing import entry_crop_bounds, illustration_crop_bounds
+
+    settings = AppSettings(
+        geometry_coordinate_space=CANONICAL_REFERENCE_SPACE,
+        geometry_reference_width=2000,
+        columns=1,
+        manual_x=100,
+        column_width=1600,
+        start_y=100,
+        bottom_y=1800,
+        crop_to_bottom_y=True,
+    )
+    image = Image.new("RGB", (3000, 2700), "white")
+    top, bottom = entry_crop_bounds(image, settings, top_y=100, bottom_y=1800)
+    assert (top, bottom) == (150, 2700)
+    ill_top, ill_bottom, margin = illustration_crop_bounds(
+        image, settings, top_y=100, bottom_y=1600, margin=20,
+    )
+    assert (ill_top, ill_bottom, margin) == (150, 2400, 30)
+
+
+def test_page_crop_plan_declares_source_coordinate_space():
+    from picture_capture.coordinate_space import SOURCE_COORDINATE_SPACE
+    from picture_capture.processing import PageCropPlan, page_crop_plan_dict
+
+    payload = page_crop_plan_dict(PageCropPlan([], [], True))
+    assert payload["version"] == 3
+    assert payload["coordinate_space"] == SOURCE_COORDINATE_SPACE
+    assert payload["box_format"] == "source_xyxy"
