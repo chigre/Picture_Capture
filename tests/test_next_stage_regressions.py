@@ -386,14 +386,14 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     assert "ProjectProfileWizard(self, new_project=new_project)" in text
 
 
-def test_bottom_important_actions_use_two_soft_color_groups():
+def test_bottom_important_actions_follow_scheme_a_groups():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     start = text.index("    def _footer_action_button(")
     end = text.index("    def _section_frame(", start)
     helper = text[start:end]
     assert '"project": (colors["success"], colors["success_hover"], "#ffffff")' in helper
-    assert '"config": ("#dceeff", "#c7e1f8", "#245b86")' in helper
+    assert '"config": (colors["success"], colors["success_hover"], "#ffffff")' in helper
     assert 'border = colors["button_border"]' in helper
     assert '"profile":' not in helper
     assert '"settings":' not in helper
@@ -441,12 +441,16 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert 'self._sidebar_action_button(row, text, command, role=role)' in actions
     assert '"primary" if text == "运行OCR画线"' in actions
     assert '"success" if text == "保存当前页"' in actions
-    assert '"review_soft" if text == "词条校对"' in actions
+    assert '"primary" if text == "词条校对"' in actions
     assert '"danger_soft"' not in actions
     assert '"refine_soft"' not in actions
     assert '"compare_soft"' not in actions
     assert '("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)' in actions
-    assert '"review_soft": "#dceeff"' in styles
+    assert '"primary": "#4F7CAC"' in styles
+    assert '"primary_hover": "#416A94"' in styles
+    assert '"success": "#69A875"' in styles
+    assert '"success_hover": "#588F64"' in styles
+    assert '"review_soft"' not in styles
     assert '"button_border": "#d3d8df"' in styles
 
     button_start = text.index("    def _sidebar_action_button(")
