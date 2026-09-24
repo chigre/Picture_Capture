@@ -7859,6 +7859,7 @@ class PictureCaptureApp(tk.Tk):
                 target_view_scale = min(3.0, max(0.08, float(zoom_value) / 100.0)) if zoom_value is not None else None
             except (TypeError, ValueError):
                 target_view_scale = None
+            self.status_var.set(f"正在后台恢复上次项目：{root}")
             self._load_project(
                 root,
                 requested_suffix=str(state.get("image_suffix") or "").strip() or None,
@@ -7866,7 +7867,6 @@ class PictureCaptureApp(tk.Tk):
                 target_index=state.get("last_page_index"),
                 target_view_scale=target_view_scale,
             )
-            self.status_var.set(f"已恢复上次项目：{root}｜{self.current_page.name if self.current_page else ''}")
         except Exception as exc:
             self.status_var.set(f"无法恢复上次项目：{exc}")
 
@@ -10845,9 +10845,8 @@ class PictureCaptureApp(tk.Tk):
         target_view_scale: float | None = None,
         launch_profile_setup: bool = False,
     ) -> None:
+        """Prepare project files off-thread and commit the prepared state on Tk."""
         self._flush_deferred_page_save()
-        # These callbacks close over page/project-specific state.  Cancel them
-        # before loading settings so an old project can never update the new UI.
         for job_name in ("_page_meta_job", "_page_list_sort_job"):
             job = getattr(self, job_name, None)
             if job is not None:
@@ -10857,9 +10856,6 @@ class PictureCaptureApp(tk.Tk):
                     pass
                 setattr(self, job_name, None)
         self._page_meta_generation = int(getattr(self, "_page_meta_generation", 0)) + 1
-        # Commit/cancel the old project's debounced quick-panel edit before
-        # replacing ``self.settings``. Otherwise its delayed callback can run
-        # against the newly opened project and overwrite that project's layout.
         pending_quick_job = getattr(self, "_quick_autosave_job", None)
         if pending_quick_job is not None:
             try:
@@ -10875,122 +10871,51 @@ class PictureCaptureApp(tk.Tk):
             self.settings.to_json(settings_path(self.project.root))
 
         root = root.expanduser().resolve()
-        # Existing projects from <=2.11 keep working, but the new default is a
-        # clean project root with all program-owned files inside _PictureCapture.
-        # Migration is explicit and transactional: copy+verify first, then remove
-        # the old software files only after the managed store is published.
+        migrate = False
         if has_legacy_project_data(root) and not is_managed_project(root):
             migrate = messagebox.askyesno(
                 "整理旧版项目",
                 "检测到旧版 Picture Capture 项目结构。\n\n"
                 f"建议把软件生成的数据集中整理到 {STORAGE_DIRNAME} 文件夹。"
                 "原始扫描图片和 wordslist.txt 等用户文件不会移动。\n\n"
-                "选择“是”立即安全整理；选择“否”则本次继续使用旧目录结构。",
+                "选择“是”将在后台安全整理；选择“否”则本次继续使用旧目录结构。",
                 parent=self,
             )
+        canvas_available = max(500, int(self.canvas.winfo_width()) - 24)
+        self.status_var.set(f"正在后台打开项目：{root}")
+
+        def worker():
+            migration_detail = ""
             if migrate:
                 from . import __version__
                 report = migrate_legacy_project(root, __version__)
-                detail = f"已整理 {report.files_copied} 个文件到 {STORAGE_DIRNAME}"
+                migration_detail = f"已整理 {report.files_copied} 个文件到 {STORAGE_DIRNAME}"
                 if report.warnings:
-                    detail += f"；{len(report.warnings)} 项旧文件未能清理，可稍后手工检查"
-                self.status_var.set(detail)
+                    migration_detail += f"；{len(report.warnings)} 项旧文件未能清理，可稍后手工检查"
+            project = ProjectState.open(root)
+            if not project.images:
+                raise ValueError("目录中没有 tif/tiff/png/jpg/jpeg/bmp 图片")
+            suffix = self._normalize_suffix(requested_suffix) if requested_suffix else self._normalize_suffix(project.settings.image_suffix)
+            matching = [page for page in project.images if page.suffix.lower() == suffix]
+            if matching:
+                project.images = matching
+                project.settings.image_suffix = suffix
+            else:
+                project.settings.image_suffix = project.images[0].suffix.lower()
 
-        project = ProjectState.open(root)
-        if not project.images:
-            raise ValueError("目录中没有 tif/tiff/png/jpg/jpeg/bmp 图片")
-
-        suffix = self._normalize_suffix(requested_suffix) if requested_suffix else self._normalize_suffix(project.settings.image_suffix)
-        matching = [page for page in project.images if page.suffix.lower() == suffix]
-        if matching:
-            project.images = matching
-            project.settings.image_suffix = suffix
-        else:
-            project.settings.image_suffix = project.images[0].suffix.lower()
-
-        self.current_page = None; self.image = None; self.entries = []; self.polygons = []; self.current_index = -1
-        self.ocr_review_candidates = []
-        self.candidate_check_vars = {}
-        self._display_photo_cache_key = None
-        self._display_geometry_cache = None
-        self._display_geometry_cache_key = None
-        self.project = project; self._project_words = set(project.words); self.settings = project.settings
-        try:
-            touch_recent_project(project.root)
-        except (OSError, ValueError, TypeError) as exc:
-            # Recent history is application convenience data. A read-only/full
-            # profile directory must never prevent a valid project transition.
-            self._recent_projects_warning = str(exc)
-        if hasattr(self, "_page_column_vars"):
-            self._page_column_vars["lined"].set(bool(getattr(self.settings, "page_list_show_lined", True)))
-            self._page_column_vars["fill_status"].set(bool(getattr(self.settings, "page_list_show_fill_status", True)))
-            self._page_column_vars["illustrations"].set(bool(getattr(self.settings, "page_list_show_illustrations", True)))
-            self._apply_page_list_display_columns(save=False)
-        self.hide_var.set(bool(self.settings.hide_overlays)); self.polygon_var.set(bool(self.settings.polygon_mode))
-        self.polygon_draw_var.set(False)
-        if self.polygon_draw_button is not None:
-            self.polygon_draw_button.configure(
-                text="编辑插图", style="PC.Compact.TButton"
-            )
-        trace_was_ready = self._quick_trace_ready
-        self._quick_trace_ready = False
-        try:
-            self.sync_quick_settings()
-        finally:
-            self._quick_trace_ready = trace_was_ready
-        self._display_geometry_cache = None
-        self._display_geometry_cache_key = None
-        self._page_meta_generation += 1
-        generation = self._page_meta_generation
-        if self._page_meta_job:
-            try:
-                self.after_cancel(self._page_meta_job)
-            except tk.TclError:
-                pass
-            self._page_meta_job = None
-        self._word_fill_mismatch_pages.clear()
-        self._word_fill_check_status = {}
-        # A word-fill source is tied to the current project's page identifiers.
-        # Never carry a parsed mapping into another project.
-        self._word_fill_source_path = None
-        self._old_new_compare_source_path = None
-        old_compare = self.old_new_compare_window
-        if old_compare is not None:
-            try:
-                if old_compare.winfo_exists():
-                    old_compare.destroy()
-            except tk.TclError:
-                pass
-            self.old_new_compare_window = None
-        self._word_fill_source_signature = None
-        self._word_fill_source_mapping = None
-        self._word_fill_source_present_pages = None
-        self._load_word_fill_status()
-        self._clear_lined_cell_overlays()
-        for item in self.page_list.get_children():
-            self.page_list.delete(item)
-        for index, page in enumerate(project.images):
-            self.page_list.insert(
-                "", "end", iid=str(index), values=(
-                    "●" if page.stem in self._bookmark_stems() else "",
-                    page.name, "", self._word_fill_status_text(index), "",
-                )
-            )
-        # Preserve the user's active list sort across project reloads.
-        if self._page_list_sort_column:
-            self._apply_page_list_sort(ensure_current_visible=False)
-        else:
-            self._update_page_list_sort_headings()
-        # Show page names immediately; the lightweight PDIC state is filled lazily.
-        self.update_idletasks()
-        self._page_meta_job = self.after_idle(lambda g=generation: self._refresh_page_metadata_step(g, 0))
-
-        selected_index = 0
-        if target_page:
-            for index, page in enumerate(project.images):
-                if page.name == target_page or page.stem == Path(target_page).stem:
-                    selected_index = index
-                    break
+            selected_index = 0
+            if target_page:
+                for index, page in enumerate(project.images):
+                    if page.name == target_page or page.stem == Path(target_page).stem:
+                        selected_index = index
+                        break
+                else:
+                    try:
+                        numeric = int(target_index)
+                        if 0 <= numeric < len(project.images):
+                            selected_index = numeric
+                    except (TypeError, ValueError):
+                        pass
             else:
                 try:
                     numeric = int(target_index)
@@ -10998,26 +10923,130 @@ class PictureCaptureApp(tk.Tk):
                         selected_index = numeric
                 except (TypeError, ValueError):
                     pass
-        else:
-            try:
-                numeric = int(target_index)
-                if 0 <= numeric < len(project.images):
-                    selected_index = numeric
-            except (TypeError, ValueError):
-                pass
 
-        self.current_index = -1
-        if target_view_scale is not None:
-            self.view_scale = min(3.0, max(0.08, float(target_view_scale)))
-        self._set_page_list_selection(selected_index, ensure_visible=True)
-        self.load_page(selected_index, reset_zoom=(target_view_scale is None))
-        self._save_session_state()
-        storage_hint = f"｜数据目录 {STORAGE_DIRNAME}" if is_managed_project(project.root) else "｜旧版目录结构"
-        self.status_var.set(
-            f"已打开 {project.root}｜{len(project.images)} 页｜图片后缀 {self.settings.image_suffix}｜词表 {len(project.words)} 条{storage_hint}"
-        )
-        if launch_profile_setup:
-            self.after_idle(lambda: self.open_project_profile(new_project=True))
+            page = project.images[selected_index]
+            with Image.open(page) as opened:
+                image = normalize_page_rgb(opened)
+            entries = read_pdic(pdic_path(page))
+            polygons = read_ppp(ppp_read_path_for_image(page))
+            cache_path = ocr_cache_root(project.root) / f"{page.stem}.json"
+            ocr_payload: dict = {}
+            if cache_path.exists():
+                try:
+                    loaded = json.loads(cache_path.read_text(encoding="utf-8"))
+                    if isinstance(loaded, dict):
+                        ocr_payload = loaded
+                except Exception:
+                    ocr_payload = {}
+            if target_view_scale is None:
+                view_scale = min(1.0, canvas_available / max(1, image.width))
+            else:
+                view_scale = min(3.0, max(0.08, float(target_view_scale)))
+            display_size = (
+                max(1, round(image.width * view_scale)),
+                max(1, round(image.height * view_scale)),
+            )
+            display_image = image.resize(display_size, Image.Resampling.LANCZOS)
+            payload = {
+                "project_root": str(project.root), "index": selected_index, "image": image,
+                "entries": entries, "polygons": polygons, "ocr_payload": ocr_payload,
+                "display_size": display_size, "display_image": display_image,
+                "view_scale": view_scale,
+            }
+            try:
+                touch_recent_project(project.root)
+                recent_warning = ""
+            except (OSError, ValueError, TypeError) as exc:
+                recent_warning = str(exc)
+            return project, selected_index, payload, view_scale, migration_detail, recent_warning
+
+        def done(result) -> None:
+            project, selected_index, payload, view_scale, migration_detail, recent_warning = result
+            self._invalidate_ui_worker("page-load")
+            self.current_page = None
+            self.image = None
+            self.entries = []
+            self.polygons = []
+            self.current_index = -1
+            self.ocr_review_candidates = []
+            self.candidate_check_vars = {}
+            self._display_photo_cache_key = None
+            self._display_geometry_cache = None
+            self._display_geometry_cache_key = None
+            self.project = project
+            self._project_words = set(project.words)
+            self.settings = project.settings
+            if recent_warning:
+                self._recent_projects_warning = recent_warning
+            if hasattr(self, "_page_column_vars"):
+                self._page_column_vars["lined"].set(bool(getattr(self.settings, "page_list_show_lined", True)))
+                self._page_column_vars["fill_status"].set(bool(getattr(self.settings, "page_list_show_fill_status", True)))
+                self._page_column_vars["illustrations"].set(bool(getattr(self.settings, "page_list_show_illustrations", True)))
+                self._apply_page_list_display_columns(save=False)
+            self.hide_var.set(bool(self.settings.hide_overlays))
+            self.polygon_var.set(bool(self.settings.polygon_mode))
+            self.polygon_draw_var.set(False)
+            if self.polygon_draw_button is not None:
+                self.polygon_draw_button.configure(text="编辑插图", style="PC.Compact.TButton")
+            trace_was_ready = self._quick_trace_ready
+            self._quick_trace_ready = False
+            try:
+                self.sync_quick_settings()
+            finally:
+                self._quick_trace_ready = trace_was_ready
+            self._display_geometry_cache = None
+            self._display_geometry_cache_key = None
+            self._page_meta_generation += 1
+            generation = self._page_meta_generation
+            self._word_fill_mismatch_pages.clear()
+            self._word_fill_check_status = {}
+            self._word_fill_source_path = None
+            self._old_new_compare_source_path = None
+            old_compare = self.old_new_compare_window
+            if old_compare is not None:
+                try:
+                    if old_compare.winfo_exists():
+                        old_compare.destroy()
+                except tk.TclError:
+                    pass
+                self.old_new_compare_window = None
+            self._word_fill_source_signature = None
+            self._word_fill_source_mapping = None
+            self._word_fill_source_present_pages = None
+            self._load_word_fill_status()
+            self._clear_lined_cell_overlays()
+            for item in self.page_list.get_children():
+                self.page_list.delete(item)
+            for index, page in enumerate(project.images):
+                self.page_list.insert(
+                    "", "end", iid=str(index), values=(
+                        "●" if page.stem in self._bookmark_stems() else "",
+                        page.name, "", self._word_fill_status_text(index), "",
+                    ),
+                )
+            if self._page_list_sort_column:
+                self._apply_page_list_sort(ensure_current_visible=False)
+            else:
+                self._update_page_list_sort_headings()
+            self._page_meta_job = self.after_idle(lambda g=generation: self._refresh_page_metadata_step(g, 0))
+            self.view_scale = view_scale
+            self._set_page_list_selection(selected_index, ensure_visible=True)
+            self.load_page(selected_index, preloaded=payload, skip_current_save=True)
+            self._save_session_state()
+            storage_hint = f"｜数据目录 {STORAGE_DIRNAME}" if is_managed_project(project.root) else "｜旧版目录结构"
+            prefix = f"{migration_detail}｜" if migration_detail else ""
+            self.status_var.set(
+                f"{prefix}已打开 {project.root}｜{len(project.images)} 页｜图片后缀 {self.settings.image_suffix}｜词表 {len(project.words)} 条{storage_hint}"
+            )
+            if launch_profile_setup:
+                self.after_idle(lambda: self.open_project_profile(new_project=True))
+
+        def failed(exc, detail) -> None:
+            if detail:
+                print(detail)
+            self.show_error("无法打开项目", exc)
+
+        self._start_ui_worker("project-load", worker, done, failed)
 
     def on_page_select(self, _event: tk.Event) -> None:
         if getattr(self, "_batch_active", False) and not self._batch_foreground_pages:
