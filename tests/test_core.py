@@ -3869,6 +3869,12 @@ def test_page_list_uses_display_mode_selector_for_existing_view_states():
     assert 'text="显示模式："' in text
     assert 'values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览")' in text
     assert 'display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)' in text
+    page_start = text.index('page_panel = self._section_frame(sidebar, "六、页面列表"')
+    page_end = text.index("        list_frame = ttk.Frame(page_panel)", page_start)
+    page_toolbar = text[page_start:page_end]
+    assert page_toolbar.index('text="显示模式："') < page_toolbar.index('text="页面范围："')
+    assert 'display_mode_combo = ttk.Combobox(\n            range_row,' in page_toolbar
+    assert 'display_mode_combo = ttk.Combobox(\n            size_row,' not in page_toolbar
     assert 'text="◧"' not in text
     assert '"原图+标注": (False, False, False)' in text
     assert '"二值+标注": (True, False, False)' in text
@@ -3892,6 +3898,18 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     assert '"lined": "画线"' in text
     assert 'if len(indices) < 2:' in text
     assert '至少需要选择 2 页' in text
+
+
+def test_main_quick_parameter_entries_are_left_aligned():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    def _build_quick_settings(")
+    end = text.index("\n    @staticmethod\n    def _style_color_button", start)
+    quick = text[start:end]
+    assert 'justify="right" if cast in {int, float} else "left"' not in quick
+    assert 'justify="left"' in quick
+    # Every explicit quick-panel Entry should declare left alignment.
+    assert quick.count("ttk.Entry(") == quick.count('justify="left"')
 
 
 def test_entry_default_color_and_bookmarks_persist(tmp_path):
