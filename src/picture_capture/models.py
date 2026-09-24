@@ -685,25 +685,18 @@ class ProjectState:
         if images:
             try:
                 from .coordinate_space import (
-                    CANONICAL_REFERENCE_SPACE,
-                    geometry_uses_canonical_pixels,
+                    initialize_geometry_reference,
                     migrate_legacy_geometry_settings,
                 )
                 with Image.open(images[0]) as first_page:
                     source_size = first_page.size
                 migrated = migrate_legacy_geometry_settings(settings, source_size)
-                initialized_reference = False
-                if geometry_uses_canonical_pixels(settings) and int(
-                    getattr(settings, "geometry_reference_width", 0) or 0
-                ) <= 0:
-                    transform = LayoutTransform(
-                        str(getattr(settings, "layout_transform", "identity") or "identity")
-                    )
-                    settings.geometry_reference_width = int(
-                        transform.canonical_size(source_size)[0]
-                    )
-                    settings.geometry_coordinate_space = CANONICAL_REFERENCE_SPACE
-                    initialized_reference = True
+                clean_project_defaults = not json_settings.exists() and not legacy_settings.exists()
+                initialized_reference = initialize_geometry_reference(
+                    settings,
+                    source_size,
+                    historical_1400_values=clean_project_defaults,
+                )
                 if (migrated or initialized_reference) and json_settings.exists():
                     settings.to_json(json_settings)
             except Exception:
