@@ -545,13 +545,23 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
     geometry = derive_geometry(source, settings)
     canonical = geometry.transform.canonical_image_for_analysis(source)
     analysis, scale = _analysis_image(canonical)
-    parameter_to_analysis = scale / parameter_scale(canonical, settings)
+    canonical_width = canonical.width
+    body_indent = stored_geometry_to_canonical(
+        settings.body_indent, canonical_width, settings,
+    )
+    character_height = stored_geometry_to_canonical(
+        settings.character_height, canonical_width, settings,
+    )
+    row_padding = stored_geometry_to_canonical(
+        settings.row_padding, canonical_width, settings,
+    )
+    row_height = max(1, character_height + row_padding)
     gray = np.asarray(ImageOps.grayscale(analysis), dtype=np.uint8)
     dark = _left_edge_ink_mask(gray, settings)
     top = round(geometry.top * scale)
     bottom = min(gray.shape[0], round(geometry.bottom * scale))
-    strip_width = max(3, round(settings.body_indent * parameter_to_analysis))
-    min_gap = max(3, round(settings.row_height * parameter_to_analysis * 0.55))
+    strip_width = max(3, round(body_indent * scale))
+    min_gap = max(3, round(row_height * scale * 0.55))
     entries: list[Entry] = []
 
     for col, source_x in enumerate(geometry.column_starts):
@@ -607,7 +617,7 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
                 continue
             y_analysis = max(
                 top,
-                top + run_start - max(1, round(settings.row_padding * parameter_to_analysis)),
+                top + run_start - max(1, round(row_padding * scale)),
             )
             y_source = round(y_analysis / scale)
             if settings.paddle_refine_separator_y:
@@ -615,17 +625,19 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
                 # coarse Y produced by left-edge projection. Restrict analysis
                 # to this column so neighbouring columns cannot influence it.
                 from .paddle_headwords import refine_separator_y
-                display_per_source = parameter_scale(canonical, settings)
-                source_per_display = 1.0 / max(1e-9, display_per_source)
+                reference_to_source = canonical.width / 1400.0
                 column_x = max(0, round(geometry.x_at(col, y_source)))
-                column_right = min(gray.shape[1], column_x + max(10, geometry.column_widths[col]))
+                column_right = min(
+                    gray.shape[1],
+                    column_x + max(10, geometry.column_widths[col]),
+                )
                 if column_right > column_x:
                     y_source, _refinement = refine_separator_y(
                         gray[:, column_x:column_right],
                         y_source,
-                        max(2, round(settings.character_height * source_per_display)),
+                        max(2, character_height),
                         settings,
-                        source_per_display_pixel=source_per_display,
+                        source_per_display_pixel=reference_to_source,
                         lower_bound=max(0, geometry.top),
                     )
             if y_source - last_y < round(min_gap / scale):
