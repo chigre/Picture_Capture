@@ -1001,8 +1001,8 @@ def entry_crop_bounds(
 ) -> tuple[int, int]:
     """Resolve whole-entry crop bounds in canonical full-resolution pixels.
 
-    Current Crop Settings values use the same canonical-pixel contract as page
-    layout geometry. The historical _SpecialPages.txt file remains a legacy
+    Current Crop Settings values use the same canonical reference-page contract
+    as persisted page layout geometry. The historical _SpecialPages.txt file remains a legacy
     input and is converted explicitly with the saved old display width.
     """
     geometry = derive_geometry(image, settings)
@@ -1018,9 +1018,14 @@ def entry_crop_bounds(
 
     top_value = (
         stored_geometry_to_canonical(settings.start_y, canonical_width, settings)
-        if top_y is None else max(0, int(top_y))
+        if top_y is None
+        else stored_geometry_to_canonical(max(0, int(top_y)), canonical_width, settings)
     )
-    bottom_value = 0 if bottom_y is None else max(0, int(bottom_y))
+    bottom_value = (
+        0
+        if bottom_y is None or int(bottom_y) <= 0
+        else stored_geometry_to_canonical(max(0, int(bottom_y)), canonical_width, settings)
+    )
     top = max(0, min(canonical_height - 1, int(top_value)))
     bottom = canonical_height if bottom_value <= 0 else max(
         top + 1, min(canonical_height, int(bottom_value))
@@ -1041,13 +1046,17 @@ def _entry_crop_box_for_column(
     belongs to the column on the right and the right half to the column on the
     left.  The outer page margins use half of the first-column margin.
 
-    ``extra_left``/``extra_right`` are optional user additions in canonical
-    full-resolution pixels.
+    ``extra_left``/``extra_right`` are persisted reference-page distances and
+    are resolved to the current page's canonical full-resolution pixels here.
     """
     col = max(0, min(len(geometry.column_starts) - 1, int(col)))
     canonical_width = geometry.transform.canonical_size(image.size)[0]
-    extra_left_px = max(0, int(extra_left))
-    extra_right_px = max(0, int(extra_right))
+    extra_left_px = max(
+        0, stored_geometry_to_canonical(int(extra_left), canonical_width, settings),
+    )
+    extra_right_px = max(
+        0, stored_geometry_to_canonical(int(extra_right), canonical_width, settings),
+    )
 
     # Use the robust width of the ordinary columns. derive_geometry intentionally
     # lets the final column extend to the page edge for detection, which is not
@@ -1755,17 +1764,42 @@ def illustration_crop_bounds(
     bottom_y: int = 0,
     margin: int = 0,
 ) -> tuple[int, int, int]:
-    """Resolve illustration-crop values in full-resolution image pixels.
+    """Resolve persisted crop settings to current source-image pixels.
 
-    Crop Settings v6 stores these values directly in full-resolution pixels.
-    A bottom value of 0 means the physical image bottom.
+    Crop Settings v6 stores distances in canonical reference-page pixels. For
+    ordinary horizontal pages canonical V equals source Y. For 90-degree page
+    transforms, illustration polygons are still source-space annotations, so
+    only isotropic scalar distances such as margin are reused directly;
+    transformed whole-entry cropping is handled through canonical geometry.
+    A bottom value of 0 remains the physical image-bottom sentinel.
     """
-    top = max(0, min(image.height - 1, max(0, int(top_y))))
-    if int(bottom_y) > 0:
-        bottom = max(top + 1, min(image.height, int(bottom_y)))
+    effective = settings or AppSettings()
+    transform = LayoutTransform(
+        str(getattr(effective, "layout_transform", "identity") or "identity")
+    )
+    canonical_width, _canonical_height = transform.canonical_size(image.size)
+    top_canonical = stored_geometry_to_canonical(
+        max(0, int(top_y)), canonical_width, effective,
+    )
+    bottom_canonical = (
+        stored_geometry_to_canonical(max(0, int(bottom_y)), canonical_width, effective)
+        if int(bottom_y) > 0 else 0
+    )
+    margin_px = max(
+        0, stored_geometry_to_canonical(max(0, int(margin)), canonical_width, effective),
+    )
+    # Illustration polygons are persisted in source XY. Horizontal layouts are
+    # the supported physical top/bottom crop convention; rotated layouts keep
+    # the full source-height guard rather than mislabel canonical V as source Y.
+    if transform.kind in {"identity", "mirror_x"}:
+        top = max(0, min(image.height - 1, top_canonical))
+        bottom = (
+            max(top + 1, min(image.height, bottom_canonical))
+            if bottom_canonical > 0 else image.height
+        )
     else:
+        top = 0
         bottom = image.height
-    margin_px = max(0, int(margin))
     return top, bottom, margin_px
 
 def illustration_polygon_box(
