@@ -361,11 +361,11 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
     project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
     project_bar = text[project_bar_start:project_bar_end]
-    assert project_bar.index('("已有项目", self.open_recent_project)') < project_bar.index('("导出训练标记包", self.export_training_package)')
-    assert project_bar.index('("项目Profile", self.open_project_profile, "profile")') < project_bar.index('("设置中心", self.open_settings, "settings")')
-    assert project_bar.index('("设置中心", self.open_settings, "settings")') < project_bar.index('("保存参数", self.save_main_parameters, "save")')
-    assert project_bar.index('("保存参数", self.save_main_parameters, "save")') < project_bar.index('("使用提示", self.show_help_dialog, "help")')
-    assert '("项目Profile", self.open_project_profile, "profile")' in project_bar
+    assert project_bar.index('("已有项目", self.open_recent_project, "project")') < project_bar.index('("导出训练标记包", self.export_training_package, None)')
+    assert project_bar.index('("项目Profile", self.open_project_profile, "config")') < project_bar.index('("设置中心", self.open_settings, "config")')
+    assert project_bar.index('("设置中心", self.open_settings, "config")') < project_bar.index('("保存参数", self.save_main_parameters, None)')
+    assert project_bar.index('("保存参数", self.save_main_parameters, None)') < project_bar.index('("使用提示", self.show_help_dialog, None)')
+    assert '("项目Profile", self.open_project_profile, "config")' in project_bar
     assert 'uniform="project-footer-columns"' in project_bar
     assert 'project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
     assert 'parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
@@ -386,18 +386,31 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     assert "ProjectProfileWizard(self, new_project=new_project)" in text
 
 
-def test_bottom_important_actions_have_distinct_soft_colors():
+def test_bottom_important_actions_use_two_soft_color_groups():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     start = text.index("    def _footer_action_button(")
     end = text.index("    def _section_frame(", start)
     helper = text[start:end]
-    assert '"profile": ("#eee8f8", "#dfd3f2", "#604482")' in helper
-    assert '"settings": ("#dceeff", "#c7e1f8", "#245b86")' in helper
-    assert '"save": ("#dff1e3", "#cbe7d1", "#356b42")' in helper
-    assert '"help": ("#fff0cf", "#ffe2a6", "#76520f")' in helper
+    assert '"project": ("#dff1e3", "#cbe7d1", "#356b42")' in helper
+    assert '"config": ("#dceeff", "#c7e1f8", "#245b86")' in helper
+    assert '"profile":' not in helper
+    assert '"settings":' not in helper
+    assert '"save":' not in helper
+    assert '"help":' not in helper
     assert 'highlightbackground=border' in helper
     assert 'highlightthickness=1' in helper
+
+    project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
+    project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
+    project_bar = text[project_bar_start:project_bar_end]
+    assert '("新建项目", self.open_project, "project")' in project_bar
+    assert '("已有项目", self.open_recent_project, "project")' in project_bar
+    assert '("导出训练标记包", self.export_training_package, None)' in project_bar
+    assert '("项目Profile", self.open_project_profile, "config")' in project_bar
+    assert '("设置中心", self.open_settings, "config")' in project_bar
+    assert '("保存参数", self.save_main_parameters, None)' in project_bar
+    assert '("使用提示", self.show_help_dialog, None)' in project_bar
 
 
 def test_main_workspace_modern_styles_are_scoped_and_dense():
