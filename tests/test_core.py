@@ -262,6 +262,8 @@ class FormatTests(unittest.TestCase):
                     draw.rectangle((x, y, min(x + 20, right), y + 12), fill="black")
         draw.rectangle((497, 100, 502, 1099), fill="black")
         settings = AppSettings(
+            geometry_coordinate_version=1,
+            geometry_coordinate_space="legacy_display_pixels",
             parameter_display_width=1000,
             columns=2,
             layout_columns_policy="fixed",
@@ -511,6 +513,8 @@ class ProcessingTests(unittest.TestCase):
             small = self.make_page(Path(raw) / "small.png")
             image = small.resize((2400, 1800), Image.Resampling.NEAREST)
             settings = AppSettings(
+                geometry_coordinate_version=1,
+                geometry_coordinate_space="legacy_display_pixels",
                 parameter_display_width=1200,
                 columns=2,
                 manual_x=30,
@@ -1529,11 +1533,12 @@ def test_review_crop_settings_ignores_stale_main_zoom_reference():
     settings.character_height = 26
     settings.row_padding = 3
     local = _review_crop_settings(image, settings, 1000)
-    assert local.parameter_display_width == 976
+    assert local.parameter_display_width == 450
     geometry = derive_geometry(image, local)
     box = line_box(Entry(word="test", x=100, y=500), geometry, image, local)
-    # 32 display px / (976/3000) ~= 98 source px: one printed line, not ~213 px.
-    assert 90 <= (box[3] - box[1]) <= 105
+    # Modern review crops use the persisted full-resolution canonical geometry
+    # directly; stale historical display width cannot enlarge the crop.
+    assert box[3] - box[1] == 32
     assert settings.parameter_display_width == 450
 
 
@@ -1852,8 +1857,8 @@ def test_v281_candidate_band_is_capped_to_current_column_width():
     settings.paddle_band_left_margin = 12
 
     band, _top, left_margin = unwrap_column_band(image, geometry, 0, settings)
-    assert left_margin == 12
-    assert band.width == 282
+    assert left_margin == 8
+    assert band.width == 278
 
 
 def test_v281_cjk_visual_projection_recovers_oversized_single_character_row():
@@ -4563,7 +4568,7 @@ def test_review_crop_context_keeps_true_horizontal_columns():
     true_geometry = derive_geometry(image, settings)
     assert geometry.column_starts == true_geometry.column_starts
     assert geometry.column_widths == true_geometry.column_widths
-    assert review_settings.parameter_display_width == 976
+    assert review_settings.parameter_display_width == 450
 
     # If review_display_width were incorrectly reused for horizontal geometry,
     # later columns would shift progressively.  The review crop must stay close
