@@ -7119,7 +7119,7 @@ def _annotate_alphabetical_warnings(report_columns: list[dict[str, Any]]) -> lis
                 key = _alphabetical_sort_key(lemma)
                 if key:
                     seq.append((int(col.get("column", 0)), cand, key))
-        seq.sort(key=lambda item: (item[0], int(item[1].get("source_y", 0))))
+        seq.sort(key=lambda item: (item[0], _candidate_axis_v(item[1]) or 0))
         for i, (col_idx, cand, key) in enumerate(seq):
             prev_key = seq[i - 1][2] if i > 0 else ""
             next_key = seq[i + 1][2] if i + 1 < len(seq) else ""
@@ -7135,6 +7135,8 @@ def _annotate_alphabetical_warnings(report_columns: list[dict[str, Any]]) -> lis
                 warnings.append({
                     "engine": engine,
                     "column": col_idx,
+                    "canonical_v": cand.get("canonical_v"),
+                    "source_x": cand.get("source_x"),
                     "source_y": cand.get("source_y"),
                     "lemma": cand.get("normalized_headword", ""),
                     "warning": warning,
@@ -7207,12 +7209,12 @@ def _eligible_alignment_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
         # grammar parser rejected it. Accepted candidates are always retained.
         if item.get("accepted") or features.get("at_left"):
             result.append(item)
-    return sorted(result, key=lambda x: int(x.get("source_y", 0)))
+    return sorted(result, key=lambda x: _candidate_axis_v(x) or 0)
 
 
 def _candidate_pair_score(p: dict[str, Any], t: dict[str, Any], tolerance: int) -> float:
     sim = _lemma_similarity(str(p.get("normalized_headword", "")), str(t.get("normalized_headword", "")))
-    dy = abs(int(p.get("source_y", 0)) - int(t.get("source_y", 0)))
+    dy = abs((_candidate_axis_v(p) or 0) - (_candidate_axis_v(t) or 0))
     y_score = max(0.0, 1.0 - dy / max(1.0, tolerance * 2.5))
     return 0.72 * sim + 0.28 * y_score
 
@@ -7306,8 +7308,8 @@ def _make_ocr_pair(
     t: dict[str, Any] | None,
     alignment_method: str = "",
 ) -> dict[str, Any]:
-    py = int(p.get("source_y", 0)) if p else None
-    ty = int(t.get("source_y", 0)) if t else None
+    py = _candidate_axis_v(p)
+    ty = _candidate_axis_v(t)
     pl = str(p.get("normalized_headword", "")) if p else ""
     tl = str(t.get("normalized_headword", "")) if t else ""
     sim = _lemma_similarity(pl, tl) if p and t else 0.0
@@ -7391,9 +7393,21 @@ def _make_ocr_pair(
 
 
 def _copy_candidate_to_pair(pair: dict[str, Any], prefix: str, candidate: dict[str, Any]) -> None:
-    pair[f"{prefix}_y"] = int(candidate.get("source_y", 0))
-    pair[f"{prefix}_coarse_y"] = int(candidate.get("coarse_source_y", candidate.get("source_y", 0)))
-    pair[f"{prefix}_anchor_y"] = int(candidate.get("anchor_source_y", candidate.get("coarse_source_y", candidate.get("source_y", 0))))
+    canonical_v = _candidate_axis_v(candidate)
+    if canonical_v is None:
+        canonical_v = 0
+    pair[f"{prefix}_y"] = canonical_v
+    pair[f"{prefix}_coarse_y"] = int(
+        candidate.get("coarse_canonical_v", canonical_v)
+    )
+    pair[f"{prefix}_anchor_y"] = int(
+        candidate.get(
+            "anchor_canonical_v",
+            candidate.get("coarse_canonical_v", canonical_v),
+        )
+    )
+    pair[f"{prefix}_source_x"] = candidate.get("source_x")
+    pair[f"{prefix}_source_y"] = candidate.get("source_y")
     pair[f"{prefix}_box"] = candidate.get("box")
     pair[f"{prefix}_separator_refinement"] = dict(candidate.get("separator_refinement", {}) or {})
     pair[f"{prefix}_image_boundary_match"] = dict(candidate.get("image_boundary_match", {}) or {})
@@ -7433,7 +7447,7 @@ def _pair_with_lens_candidates(
         for index, candidate in enumerate(lens_rows):
             if index in used:
                 continue
-            cy = int(candidate.get("source_y", 0))
+            cy = _candidate_axis_v(candidate) or 0
             lemma = str(candidate.get("normalized_headword", ""))
             similarity = max((_lemma_similarity(lemma, word) for word in base_words if word), default=0.0)
             dy = abs(cy - base_y)
@@ -7546,7 +7560,14 @@ def _issues_for_pair(pair: dict[str, Any], chosen: str, needs_review: bool) -> l
     return list(dict.fromkeys(issues))
 
 
-def _arbitrate_pair(pair: dict[str, Any], column: int, source_x: int, settings: AppSettings) -> dict[str, Any]:
+def _arbitrate_pair(
+    pair: dict[str, Any],
+    column: int,
+    canonical_u: int,
+    settings: AppSettings,
+    *,
+    geometry: "Geometry" | None = None,
+) -> dict[str, Any]:
     has_p = pair.get("paddle_y") is not None
     has_t = pair.get("tesseract_y") is not None
     has_l = pair.get("lens_y") is not None
@@ -7676,15 +7697,44 @@ def _arbitrate_pair(pair: dict[str, Any], column: int, source_x: int, settings: 
     issues = _issues_for_pair(pair, chosen, needs_review)
     if decision_reason == "dual_consensus_visual_rescue" and "DUAL_CONSENSUS_RESCUE" not in issues:
         issues.append("DUAL_CONSENSUS_RESCUE")
-    candidate_id = _stable_candidate_id(column, y, str(pair.get("paddle_text", "")), str(pair.get("tesseract_text", "")))
+    candidate_id = _stable_candidate_id(
+        column, y, str(pair.get("paddle_text", "")), str(pair.get("tesseract_text", ""))
+    )
+    if geometry is not None:
+        refined_u = int(geometry.x_at(column, y))
+        source_x, source_y = geometry.canonical_to_source(refined_u, y)
+        coarse_u = int(geometry.x_at(column, coarse_y))
+        coarse_source_x, coarse_source_y = geometry.canonical_to_source(
+            coarse_u, coarse_y
+        )
+        anchor_u = int(geometry.x_at(column, anchor_y))
+        anchor_source_x, anchor_source_y = geometry.canonical_to_source(
+            anchor_u, anchor_y
+        )
+    else:
+        refined_u = int(canonical_u)
+        source_x, source_y = int(canonical_u), int(y)
+        coarse_u = int(canonical_u)
+        coarse_source_x, coarse_source_y = int(canonical_u), int(coarse_y)
+        anchor_u = int(canonical_u)
+        anchor_source_x, anchor_source_y = int(canonical_u), int(anchor_y)
+
     return {
         "candidate_id": candidate_id,
         "column": column,
-        "source_x": source_x,
-        "source_y": y,
-        "refined_source_y": y,
-        "coarse_source_y": coarse_y,
-        "anchor_source_y": anchor_y,
+        "coordinate_space": "source_image_pixels",
+        "canonical_coordinate_space": "canonical_full_resolution_pixels",
+        "canonical_u": int(refined_u),
+        "canonical_v": int(y),
+        "coarse_canonical_v": int(coarse_y),
+        "anchor_canonical_v": int(anchor_y),
+        "source_x": int(source_x),
+        "source_y": int(source_y),
+        "refined_source_y": int(source_y),
+        "coarse_source_x": int(coarse_source_x),
+        "coarse_source_y": int(coarse_source_y),
+        "anchor_source_x": int(anchor_source_x),
+        "anchor_source_y": int(anchor_source_y),
         "box": box,
         "original_box": list(box) if isinstance(box, (list, tuple)) and len(box) == 4 else box,
         "separator_refinement": separator_refinement,
@@ -7704,21 +7754,33 @@ def _arbitrate_pair(pair: dict[str, Any], column: int, source_x: int, settings: 
         "alphabetical_warning": str(pair.get(f"{chosen}_alphabetical_warning", "")) if chosen else "",
         "lemma_similarity": sim,
         "paddle": {
-            "y": pair.get("paddle_y"), "box": pair.get("paddle_box"), "confidence": pair.get("paddle_conf"),
+            "canonical_v": pair.get("paddle_y"),
+            "source_x": pair.get("paddle_source_x"),
+            "source_y": pair.get("paddle_source_y"),
+            "y": pair.get("paddle_y"),
+            "box": pair.get("paddle_box"), "confidence": pair.get("paddle_conf"),
             "accepted": pair.get("paddle_accepted"), "score": pair.get("paddle_score"), "lemma": pair.get("paddle_lemma"),
             "raw": pair.get("paddle_raw"), "corrected": pair.get("paddle_corrected"), "POS": pair.get("paddle_pos"),
             "repairs": pair.get("paddle_repairs"), "text": pair.get("paddle_text"), "reason": pair.get("paddle_reject_reason"),
             "parser_trace": pair.get("paddle_parser_trace"),
         },
         "tesseract": {
-            "y": pair.get("tesseract_y"), "box": pair.get("tesseract_box"), "confidence": pair.get("tesseract_conf"),
+            "canonical_v": pair.get("tesseract_y"),
+            "source_x": pair.get("tesseract_source_x"),
+            "source_y": pair.get("tesseract_source_y"),
+            "y": pair.get("tesseract_y"),
+            "box": pair.get("tesseract_box"), "confidence": pair.get("tesseract_conf"),
             "accepted": pair.get("tesseract_accepted"), "score": pair.get("tesseract_score"), "lemma": pair.get("tesseract_lemma"),
             "raw": pair.get("tesseract_raw"), "corrected": pair.get("tesseract_corrected"), "POS": pair.get("tesseract_pos"),
             "repairs": pair.get("tesseract_repairs"), "text": pair.get("tesseract_text"), "reason": pair.get("tesseract_reject_reason"),
             "parser_trace": pair.get("tesseract_parser_trace"),
         },
         "lens": {
-            "y": pair.get("lens_y"), "box": pair.get("lens_box"), "confidence": pair.get("lens_conf"),
+            "canonical_v": pair.get("lens_y"),
+            "source_x": pair.get("lens_source_x"),
+            "source_y": pair.get("lens_source_y"),
+            "y": pair.get("lens_y"),
+            "box": pair.get("lens_box"), "confidence": pair.get("lens_conf"),
             "accepted": pair.get("lens_accepted"), "score": pair.get("lens_score"), "lemma": pair.get("lens_lemma"),
             "raw": pair.get("lens_raw"), "corrected": pair.get("lens_corrected"), "POS": pair.get("lens_pos"),
             "repairs": pair.get("lens_repairs"), "text": pair.get("lens_text"), "reason": pair.get("lens_reject_reason"),
@@ -8060,8 +8122,14 @@ def _expand_original_y_fallback_candidates(review_candidates: list[dict[str, Any
             continue
         try:
             refined_y = int(item.get("source_y", 0))
+            refined_x = int(item.get("source_x", 0))
             coarse_y = int(item.get("coarse_source_y", refined_y))
+            coarse_x = int(item.get("coarse_source_x", refined_x))
             anchor_y = int(item.get("anchor_source_y", coarse_y))
+            anchor_x = int(item.get("anchor_source_x", coarse_x))
+            refined_v = int(item.get("canonical_v", refined_y))
+            coarse_v = int(item.get("coarse_canonical_v", refined_v))
+            anchor_v = int(item.get("anchor_canonical_v", coarse_v))
         except (TypeError, ValueError):
             continue
         if refined_y <= 0 or anchor_y <= 0 or anchor_y == refined_y:
@@ -8078,10 +8146,16 @@ def _expand_original_y_fallback_candidates(review_candidates: list[dict[str, Any
 
         fallback = dict(item)
         fallback["candidate_id"] = f"{base_id}-rawy"
+        fallback["source_x"] = anchor_x
         fallback["source_y"] = anchor_y
+        fallback["canonical_v"] = anchor_v
         fallback["refined_source_y"] = refined_y
+        fallback["coarse_source_x"] = coarse_x
         fallback["coarse_source_y"] = coarse_y
+        fallback["coarse_canonical_v"] = coarse_v
+        fallback["anchor_source_x"] = anchor_x
         fallback["anchor_source_y"] = anchor_y
+        fallback["anchor_canonical_v"] = anchor_v
         fallback["position_group_id"] = group_id
         fallback["position_variant"] = "original"
         fallback["selected"] = False
@@ -8093,7 +8167,13 @@ def _expand_original_y_fallback_candidates(review_candidates: list[dict[str, Any
         additions.append(fallback)
         created += 1
     review_candidates.extend(additions)
-    review_candidates.sort(key=lambda row: (int(row.get("column", 0)), int(row.get("source_y", 0)), str(row.get("position_variant", ""))))
+    review_candidates.sort(
+        key=lambda row: (
+            int(row.get("column", 0)),
+            int(row.get("canonical_v", row.get("source_y", 0))),
+            str(row.get("position_variant", "")),
+        )
+    )
     return created
 
 
@@ -8505,7 +8585,7 @@ def _conservative_tesseract_rescue(
                 strong_y.append(int(diag.get("source_y")))
             except (TypeError, ValueError):
                 pass
-    tolerance = max(2, round(settings.character_height * ratio * 0.60))
+    tolerance = max(2, round(settings.character_height * 0.60))
     merged = list(paddle_entries)
     rescued: list[Entry] = []
     for entry in tess_entries:
