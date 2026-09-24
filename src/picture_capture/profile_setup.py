@@ -242,8 +242,8 @@ class ProjectProfileWizard(tk.Toplevel):
         work_x, work_y, work_w, work_h = _screen_work_area(self)
         width = min(work_w, max(720, int(screen_w * 0.80)))
         height = max(1, int(work_h * 0.90))
-        x = max(work_x, work_x + work_w - width)
-        y = work_y
+        x = work_x + max(0, (work_w - width) // 2)
+        y = work_y + max(0, (work_h - height) // 2)
         self._wizard_width = width
         self._wizard_height = height
         self._wizard_left_width = max(400, int(width * 0.40) - 36)

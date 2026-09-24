@@ -7775,15 +7775,18 @@ class PictureCaptureApp(tk.Tk):
         ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
 
         jump_button = ttk.Button(
-            size_row, text="跳转", command=self.jump_to_page_spec, style="PC.PageNav.TButton"
+            size_row, text="跳转", width=6,
+            command=self.jump_to_page_spec, style="PC.PageNav.TButton",
         )
         jump_button.pack(side="left", padx=(0, 3))
         self._attach_tooltip(jump_button, "跳转到指定页面的第一个有效页面")
         ttk.Button(
-            size_row, text="上一页", command=lambda: self.change_page(-1), style="PC.PageNav.TButton"
+            size_row, text="上一页", width=6,
+            command=lambda: self.change_page(-1), style="PC.PageNav.TButton",
         ).pack(side="left", padx=(0, 3))
         ttk.Button(
-            size_row, text="下一页", command=lambda: self.change_page(1), style="PC.PageNav.TButton"
+            size_row, text="下一页", width=6,
+            command=lambda: self.change_page(1), style="PC.PageNav.TButton",
         ).pack(side="left")
 
         list_frame = ttk.Frame(page_panel)
