@@ -969,15 +969,17 @@ def split_single_lines(
     return records
 
 
-def _special_bounds(root: Path, page_stem: str, geometry: Geometry, source_scale: float) -> tuple[int, int]:
+def _special_bounds(
+    root: Path, page_stem: str, geometry: Geometry, legacy_source_scale: float,
+) -> tuple[int, int]:
     path = special_pages_path(root)
     if not path.exists():
         return geometry.top, geometry.bottom
     for raw in path.read_text(encoding="utf-8-sig").splitlines():
         fields = raw.split("\t")
         if fields and fields[0] == page_stem:
-            top = round(int(fields[1]) * source_scale) if len(fields) > 1 and fields[1].strip() else geometry.top
-            bottom = round(int(fields[2]) * source_scale) if len(fields) > 2 and fields[2].strip() else geometry.bottom
+            top = round(int(fields[1]) * legacy_source_scale) if len(fields) > 1 and fields[1].strip() else geometry.top
+            bottom = round(int(fields[2]) * legacy_source_scale) if len(fields) > 2 and fields[2].strip() else geometry.bottom
             return max(0, top), max(top + 1, bottom)
     return geometry.top, geometry.bottom
 
@@ -986,26 +988,33 @@ def entry_crop_bounds(
     image: Image.Image, settings: AppSettings, *, top_y: int | None = None, bottom_y: int | None = None,
     root: Path | None = None, page_stem: str = "",
 ) -> tuple[int, int]:
-    """Resolve shared crop-settings Y bounds for whole-entry export.
+    """Resolve whole-entry crop bounds in canonical full-resolution pixels.
 
-    Explicit ``top_y``/``bottom_y`` use the same parameter-coordinate convention
-    as the GUI. Passing ``None`` retains legacy _SpecialPages.txt behaviour.
+    Current Crop Settings values use the same canonical-pixel contract as page
+    layout geometry. The historical _SpecialPages.txt file remains a legacy
+    input and is converted explicitly with the saved old display width.
     """
     geometry = derive_geometry(image, settings)
-    display_scale = parameter_scale(image, settings)
-    source_scale = 1.0 / max(display_scale, 1e-9)
+    canonical_width, canonical_height = geometry.transform.canonical_size(image.size)
     if top_y is None and bottom_y is None and root is not None:
-        top, bottom = _special_bounds(root, page_stem, geometry, source_scale)
-        return max(0, top), min(image.height, bottom)
-    top_param = settings.start_y if top_y is None else max(0, int(top_y))
-    bottom_param = 0 if bottom_y is None else max(0, int(bottom_y))
-    canonical_height = geometry.transform.canonical_size(image.size)[1]
-    top = max(0, min(canonical_height - 1, round(top_param * source_scale)))
-    bottom = canonical_height if bottom_param <= 0 else max(
-        top + 1, min(canonical_height, round(bottom_param * source_scale))
+        legacy_source_scale = 1.0 / max(
+            legacy_parameter_scale(canonical_width, settings), 1e-9,
+        )
+        top, bottom = _special_bounds(
+            root, page_stem, geometry, legacy_source_scale,
+        )
+        return max(0, top), min(canonical_height, bottom)
+
+    top_value = (
+        stored_geometry_to_canonical(settings.start_y, canonical_width, settings)
+        if top_y is None else max(0, int(top_y))
+    )
+    bottom_value = 0 if bottom_y is None else max(0, int(bottom_y))
+    top = max(0, min(canonical_height - 1, int(top_value)))
+    bottom = canonical_height if bottom_value <= 0 else max(
+        top + 1, min(canonical_height, int(bottom_value))
     )
     return top, bottom
-
 
 def _entry_crop_box_for_column(
     image: Image.Image, settings: AppSettings, geometry: Geometry, col: int, y0: int, y1: int,
@@ -1021,21 +1030,23 @@ def _entry_crop_box_for_column(
     belongs to the column on the right and the right half to the column on the
     left.  The outer page margins use half of the first-column margin.
 
-    ``extra_left``/``extra_right`` are optional user additions in the program's
-    parameter-coordinate pixels and are converted to source pixels here.
+    ``extra_left``/``extra_right`` are optional user additions in canonical
+    full-resolution pixels.
     """
     col = max(0, min(len(geometry.column_starts) - 1, int(col)))
-    display_scale = parameter_scale(image, settings)
-    source_per_parameter = 1.0 / max(display_scale, 1e-9)
-    extra_left_px = max(0, round(int(extra_left) * source_per_parameter))
-    extra_right_px = max(0, round(int(extra_right) * source_per_parameter))
+    canonical_width = geometry.transform.canonical_size(image.size)[0]
+    extra_left_px = max(0, int(extra_left))
+    extra_right_px = max(0, int(extra_right))
 
     # Use the robust width of the ordinary columns. derive_geometry intentionally
     # lets the final column extend to the page edge for detection, which is not
     # the correct width for dictionary-entry cropping.
     widths = list(geometry.column_widths[:-1]) if len(geometry.column_widths) > 1 else list(geometry.column_widths)
     nominal_width = max(1, round(float(np.median(widths or geometry.column_widths or [image.width]))))
-    gutter_px = max(0, round(float(settings.gutter) * source_per_parameter))
+    gutter_px = max(
+        0,
+        stored_geometry_to_canonical(settings.gutter, canonical_width, settings),
+    )
     half_gutter = gutter_px // 2
     outer_margin = max(0, geometry.column_starts[0] // 2)
 
@@ -1161,10 +1172,19 @@ def _base_entry_crop_pieces(
     entry_left_padding: int = 0, entry_right_padding: int = 0,
 ) -> tuple[list[Entry], list[EntryCropPiecePlan]]:
     geometry = derive_geometry(image, settings)
-    display_scale = parameter_scale(image, settings)
-    top, bottom = entry_crop_bounds(image, settings, top_y=top_y, bottom_y=bottom_y)
+    canonical_width = geometry.transform.canonical_size(image.size)[0]
+    character_height = stored_geometry_to_canonical(
+        settings.character_height, canonical_width, settings,
+    )
+    row_padding = stored_geometry_to_canonical(
+        settings.row_padding, canonical_width, settings,
+    )
+    row_height = max(1, character_height + row_padding)
+    top, bottom = entry_crop_bounds(
+        image, settings, top_y=top_y, bottom_y=bottom_y,
+    )
     ordered = sort_entries_reading_order(entries, geometry)
-    row_guard = round(settings.row_height * 0.6 / display_scale)
+    row_guard = round(row_height * 0.6)
     pieces: list[EntryCropPiecePlan] = []
     piece_counts: dict[int, int] = {}
 
@@ -1195,7 +1215,7 @@ def _base_entry_crop_pieces(
         next_entry=ordered[index+1] if index+1<len(ordered) else None
         next_v = geometry.source_to_canonical(next_entry.x, next_entry.y)[1] if next_entry else bottom
         next_col=column_index(next_entry.x,geometry,next_entry.y) if next_entry else len(geometry.column_starts)
-        y0=max(top,entry_v-round(abs(settings.row_padding)/display_scale))
+        y0=max(top,entry_v-abs(row_padding))
         y1=next_v if next_entry and next_col==col else bottom
         add(index,index,entry.word,col_box(col,y0,y1))
         if next_entry and next_col>col:
@@ -1576,11 +1596,22 @@ def detect_illustration_regions(
     try:
         geometry = derive_geometry(image, settings)
         work_image = geometry.transform.canonical_image_for_analysis(image)
-        scale_param = parameter_scale(image, settings)
-        source_margin = max(2, round(max(0, int(getattr(settings, "illustration_detect_padding", 8))) / max(scale_param, 0.01)))
+        canonical_width = geometry.transform.canonical_size(image.size)[0]
+        source_margin = max(
+            2,
+            stored_geometry_to_canonical(
+                max(0, int(getattr(settings, "illustration_detect_padding", 8))),
+                canonical_width,
+                settings,
+            ),
+        )
         source_margin_right = max(
             source_margin,
-            round(max(0, int(getattr(settings, "illustration_detect_right_padding", 16))) / max(scale_param, 0.01)),
+            stored_geometry_to_canonical(
+                max(0, int(getattr(settings, "illustration_detect_right_padding", 16))),
+                canonical_width,
+                settings,
+            ),
         )
         results: list[PolygonRegion] = []
         for column, start in enumerate(geometry.column_starts):
@@ -1713,26 +1744,18 @@ def illustration_crop_bounds(
     bottom_y: int = 0,
     margin: int = 0,
 ) -> tuple[int, int, int]:
-    """Convert illustration-crop parameters to source-image coordinates.
+    """Resolve illustration-crop values in full-resolution image pixels.
 
-    ``top_y``/``bottom_y``/``margin`` use the same parameter-coordinate convention
-    as the main window. A bottom value of 0 means the physical image bottom.
-    The helper is intentionally pure so preview and multiprocessing workers use
-    exactly the same geometry.
+    Crop Settings v6 stores these values directly in full-resolution pixels.
+    A bottom value of 0 means the physical image bottom.
     """
-    if settings is None:
-        source_scale = 1.0
-    else:
-        display_scale = parameter_scale(image, settings)
-        source_scale = 1.0 / max(display_scale, 1e-9)
-    top = max(0, min(image.height - 1, round(max(0, int(top_y)) * source_scale)))
+    top = max(0, min(image.height - 1, max(0, int(top_y))))
     if int(bottom_y) > 0:
-        bottom = max(top + 1, min(image.height, round(int(bottom_y) * source_scale)))
+        bottom = max(top + 1, min(image.height, int(bottom_y)))
     else:
         bottom = image.height
-    margin_px = max(0, round(max(0, int(margin)) * source_scale))
+    margin_px = max(0, int(margin))
     return top, bottom, margin_px
-
 
 def illustration_polygon_box(
     image: Image.Image,
