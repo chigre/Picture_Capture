@@ -95,64 +95,33 @@ OCR_TO_INDEX_LANGUAGE = {
 
 HEADWORD_HELP_LINES = {
     "latin_regular": (
-        "识别对象：普通拉丁字母词典中，排在释义前、视觉上更醒目的词头。",
-        "主要依据：左缘位置、粗体/字号、词头后的音标、词性或变形等结构线索综合判断，不要求固定编号。",
-        "适合：英、法、德、西、意、葡等常规字母词典，以及版式相近的双语词典。",
-        "通常不算新词条：例句中的加粗词、释义内部的小标题、同一词条中的派生形式，除非它们同时满足词头结构线索。",
-        "选择后仍可在【设置中心 → OCR画线 → 高级设置】调整视觉阈值；这里不会改变你已经确认的阅读方向、分栏或 OCR 语言。",
-    ),
-    "numbered_prefix": (
-        "识别对象：每个新词条前都有明确数字编号的词典，例如“1. word”或“1 word”。",
-        "主要依据：行首 1–4 位数字 + 点号/空格作为强提示；编号本身比粗体或字号更重要。",
-        "适合：日文类语词典、编号式术语表，以及每条记录都有稳定序号的参考书。",
-        "通常不算新词条：释义内部的例句序号、义项编号或页码；它们若不位于词条起始位置，应由位置/结构规则排除。",
-        "如果编号格式非常特殊，可先选这一类，再到【设置中心 → 高级】调整词头规则。",
+        "识别对象：词头位于正文栏起始边，依靠边缘位置及视觉/结构线索识别。",
+        "主要依据：栏边位置是主证据，字号、粗体及词头后的结构线索作为辅助。",
     ),
     "cjk_visual": (
-        "识别对象：中文、日文等 CJK 词典中，以大字单字、括号词或明显视觉强调作为词头的条目。",
-        "主要依据：单字/短词的字号、粗细、边缘位置，以及【】〔〕等括号结构；不依赖拉丁词性缩写。",
-        "适合：汉字字典、汉语词典、日文汉和辞典，以及“大字词头 + 小字释义”的版式。",
-        "通常不算新词条：正文中的普通大字、例句中的括号内容、栏内装饰字符；需要同时满足词条起始位置与视觉结构。",
-        "若词头只有一个汉字且行距很紧，后续可结合单行高/字符高度参数微调。",
+        "识别对象：大字单字、【】/〔〕/［］括号词等视觉上明显突出的词头。",
+        "主要依据：字号/粗体、括号结构与词条起始位置。",
+    ),
+    "numbered_prefix": (
+        "识别对象：词头前有稳定数字编号，例如“1. word”“00［词头］”。",
+        "主要依据：编号前缀是强词头提示。",
     ),
     "marker_prefixed": (
-        "识别对象：每个新词条前有固定符号的词典，例如 ○、●、◆ 等。",
-        "主要依据：词条起始位置的固定符号是强提示，字号或粗体只作为辅助信息。",
-        "适合：百科、术语辞典、专题词典中以项目符号分隔条目的版式。",
-        "通常不算新词条：释义内部的项目符号、示例列表或装饰符号；它们若不处在词条起始边，应被排除。",
-        "如果你的符号不在预设集合中，可在高级规则中补充，而无需更改其他 Profile 维度。",
-    ),
-    "edge_visual_regular": (
-        "识别对象：没有稳定词性语法，但词头总是在栏边、并通过粗体/字号/留白与正文区分的词典。",
-        "主要依据：词条起始边 + 视觉突出程度 + 前后空白结构，不假定具体语言。",
-        "适合：多语种、专名、地名、人名、专业名词等“视觉规则稳定、语法标记不稳定”的词典。",
-        "通常不算新词条：栏中部的粗体强调、正文小标题和交叉引用，除非同时满足起始边结构。",
-        "这是比“拉丁字母常规词头”更脚本中立的选项。",
+        "识别对象：词头前有稳定符号，例如 ○、●、◆。",
+        "主要依据：符号前缀是强词头提示。",
     ),
     "custom": (
-        "识别对象：无法被现有结构稳定描述，或你已经在高级参数中人工调好规则的词典。",
-        "主要依据：完全沿用当前项目的高级识别参数，不强行套用预设。",
-        "适合：特殊古籍、混排词典、实验性版式或高度定制的词头规则。",
-        "建议：先给自定义结构起一个项目内名称，再用多页测试验证不同位置、不同页面上的稳定性。",
-        "自定义结构同样只负责“什么算词头”，不会覆盖阅读方向、页面模板或 OCR 语言。",
+        "识别对象：无法由以上四类稳定描述的特殊版式。",
+        "主要依据：沿用当前项目的高级识别参数与自定义规则。",
     ),
 }
 
 
-# One compact atlas keeps the packaged classic examples small while still
-# showing real, locally cropped dictionary material in the Wizard.
-# Atlas canvas: 720 x 316. Cells are ~240 x 105, optimized for the
-# right-hand preview pane rather than for full-page viewing.
-HEADWORD_EXAMPLE_ATLAS_CROPS = {
-    "latin_regular_NewApproach": (0, 0, 240, 105),
-    "latin_regular_LDER": (240, 0, 480, 105),
-    "numbered_prefix_RUIGO": (480, 0, 720, 105),
-    "cjk_visual_HZYLDZD": (0, 105, 240, 211),
-    "cjk_visual_XDHYCD": (240, 105, 480, 211),
-    "cjk_visual_TimesCED": (480, 105, 720, 211),
-    "cjk_visual_shueisha": (0, 211, 240, 316),
-    "edge_visual_regular_XAHDCD": (240, 211, 480, 316),
-    "marker_prefixed_HanYi": (480, 211, 720, 316),
+HEADWORD_EXAMPLE_FILES = {
+    "latin_regular": "headword_example_1.png",
+    "cjk_visual": "headword_example_2.png",
+    "numbered_prefix": "headword_example_3.png",
+    "marker_prefixed": "headword_example_4.png",
 }
 
 
@@ -636,7 +605,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.template_preview_frame.grid(row=1, column=0, sticky="nsew")
         self.template_preview_frame.columnconfigure(0, weight=1)
 
-        # Step 3: locally cropped classic headword examples only.
+        # Step 3: one fixed example image for each built-in headword type.
         examples_page = self.right_image_pages[2]
         self.headword_examples_frame = ttk.Frame(examples_page)
         self.headword_examples_frame.grid(row=0, column=0, sticky="ew")
@@ -687,7 +656,7 @@ class ProjectProfileWizard(tk.Toplevel):
         headings = (
             "代表页（前部 / 中部 / 后部）",
             "页面模板即时预览",
-            "经典词头局部样例",
+            "词头类型样例",
             "多页测试结果",
         )
         self.right_heading_var.set(headings[index])
@@ -1231,7 +1200,6 @@ class ProjectProfileWizard(tk.Toplevel):
         self.custom_name_var.trace_add("write", lambda *_args: self.after_idle(self._custom_name_changed))
 
         self.headword_description_var = tk.StringVar(value="")
-        self.headword_examples_var = tk.StringVar(value="")
         ttk.Label(
             tab, textvariable=self.headword_description_var,
             wraplength=self._wizard_content_width, justify="left",
@@ -1566,54 +1534,23 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_headword_description()
         self._refresh_summary()
 
-    def _headword_example_asset(self, profile_key: str, dictionary_name: str) -> Path | None:
-        root = Path(__file__).resolve().parent / "data" / "headword_examples"
-        safe = "".join(ch for ch in dictionary_name if ch.isalnum() or ch in {"-", "_"})
-        stems = (
-            f"{profile_key}_{safe}",
-            safe,
-            profile_key,
+    def _headword_example_asset(self, profile_key: str) -> Path | None:
+        filename = HEADWORD_EXAMPLE_FILES.get(profile_key)
+        if not filename:
+            return None
+        candidate = (
+            Path(__file__).resolve().parent
+            / "data" / "headword_examples" / filename
         )
-        # Curated crops live in recommended_current/. Root-level files remain
-        # a compatibility override for older manually bundled examples.
-        roots = (
-            root,
-            root / "recommended_current",
-        )
-        for folder in roots:
-            for stem in stems:
-                for suffix in (".png", ".jpg", ".jpeg", ".webp"):
-                    candidate = folder / f"{stem}{suffix}"
-                    if candidate.exists():
-                        return candidate
-        return None
+        return candidate if candidate.exists() else None
 
-    def _headword_example_image(
-        self, profile_key: str, dictionary_name: str,
-    ) -> Image.Image | None:
-        """Load an individual crop or extract its cell from the bundled atlas."""
-        root = Path(__file__).resolve().parent / "data" / "headword_examples"
-        asset = self._headword_example_asset(profile_key, dictionary_name)
-        if asset is not None:
-            try:
-                with Image.open(asset) as opened:
-                    return normalize_page_rgb(opened)
-            except Exception:
-                return None
-
-        safe = "".join(
-            ch for ch in dictionary_name if ch.isalnum() or ch in {"-", "_"}
-        )
-        crop_box = HEADWORD_EXAMPLE_ATLAS_CROPS.get(
-            f"{profile_key}_{safe}"
-        )
-        atlas = root / "classic_headword_examples.jpg"
-        if crop_box is None or not atlas.exists():
+    def _headword_example_image(self, profile_key: str) -> Image.Image | None:
+        asset = self._headword_example_asset(profile_key)
+        if asset is None:
             return None
         try:
-            with Image.open(atlas) as opened:
-                image = normalize_page_rgb(opened)
-                return image.crop(crop_box)
+            with Image.open(asset) as opened:
+                return normalize_page_rgb(opened)
         except Exception:
             return None
 
@@ -1628,12 +1565,11 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_headword_structure_summary()
         self._refresh_headword_specificity_visibility()
         hints = {
-            "latin_regular": "拉丁常规：左缘、字号/粗体、词性或变形共同判断；下面四项都直接影响画线。",
-            "edge_visual_regular": "边缘/视觉型：没有稳定语法标记，字号、粗体和左缘尤其重要。",
-            "numbered_prefix": "编号型：编号前缀是主证据；字号/粗体属于辅助证据，通常不必设得很高。",
+            "latin_regular": "常规边缘：栏边位置是主证据；字号、粗体和词后结构辅助判断。",
+            "cjk_visual": "视觉型：大字/括号结构及视觉突出程度是主证据。",
+            "numbered_prefix": "编号型：编号前缀是主证据；字号/粗体属于辅助证据。",
             "marker_prefixed": "符号型：○ / ● / ◆ 等固定符号是主证据；字号/粗体属于辅助证据。",
-            "cjk_visual": "CJK：大小与粗体控制视觉突出程度；下方另有单字/括号词专用条件。",
-            "custom": "自定义：这四项作为基础视觉门槛，可配合上方 parser 勾选逐页测试。",
+            "custom": "自定义：基础视觉门槛可配合上方 parser 勾选逐页测试。",
         }
         if hasattr(self, "headword_specificity_hint_var"):
             self.headword_specificity_hint_var.set(
@@ -1644,58 +1580,43 @@ class ProjectProfileWizard(tk.Toplevel):
         for child in self.headword_examples_frame.winfo_children():
             child.destroy()
         self._headword_example_photos.clear()
-        if profile.examples:
-            names = []
-            self.update_idletasks()
-            right_width = int(getattr(self, "right_canvas", self).winfo_width())
-            available = (
-                right_width if right_width > 100 else self._wizard_image_width
-            )
-            example_width = max(300, (available - 36) // 2)
-            for slot, example in enumerate(profile.examples):
-                names.append(example.dictionary)
-                row, column = divmod(slot, 2)
-                cell = ttk.LabelFrame(
+
+        example_file = HEADWORD_EXAMPLE_FILES.get(key)
+        if example_file:
+            image = self._headword_example_image(key)
+            if image is not None:
+                self.update_idletasks()
+                right_width = int(getattr(self, "right_canvas", self).winfo_width())
+                available = (
+                    right_width if right_width > 100 else self._wizard_image_width
+                )
+                image.thumbnail(
+                    (max(320, available - 20), 520), Image.Resampling.LANCZOS,
+                )
+                photo = ImageTk.PhotoImage(image)
+                self._headword_example_photos.append(photo)
+                ttk.Label(
+                    self.headword_examples_frame, image=photo,
+                ).grid(row=0, column=0, columnspan=2, sticky="n", padx=5, pady=5)
+            else:
+                ttk.Label(
                     self.headword_examples_frame,
-                    text=example.dictionary, padding=5,
-                )
-                cell.grid(
-                    row=row, column=column, sticky="nsew", padx=5, pady=5,
-                )
-                image = self._headword_example_image(key, example.dictionary)
-                if image is not None:
-                    image.thumbnail(
-                        (example_width, 315), Image.Resampling.LANCZOS,
-                    )
-                    photo = ImageTk.PhotoImage(image)
-                    self._headword_example_photos.append(photo)
-                    ttk.Label(cell, image=photo).pack(anchor="center")
-                else:
-                    ttk.Label(
-                        cell,
-                        text=f"缺少局部样例：{example.dictionary}",
-                        anchor="center", justify="center",
-                    ).pack(fill="x", ipady=35)
-            self.headword_examples_var.set(
-                "经典局部样例：" + "；".join(names) + "。均来自测试词典的真实页面裁切。"
-            )
+                    text=f"缺少样例图片：{example_file}",
+                    anchor="center", justify="center",
+                ).grid(row=0, column=0, columnspan=2, sticky="ew", pady=30)
         else:
             ttk.Label(
                 self.headword_examples_frame,
-                text=(
-                    "自定义结构没有固定“经典样例”；因为它本身就是给未被预设覆盖的版式使用。"
-                    "可先选择最接近的预设参考，再自定义 parser 勾选。"
-                ),
+                text="自定义结构不绑定内置样例，请用右侧多页测试确认识别效果。",
                 anchor="center", justify="center",
                 wraplength=self._wizard_image_width,
             ).grid(row=0, column=0, columnspan=2, sticky="ew", pady=30)
-            self.headword_examples_var.set("自定义结构：无固定经典样例。")
 
         for child in self.headword_help_frame.winfo_children():
             child.destroy()
         lines = HEADWORD_HELP_LINES.get(key) or (
             "识别对象：按当前结构预设判断词条起始。",
-            "建议：结合经典样例和第 ④ 步多页测试确认是否稳定。",
+            "建议：结合第④步多页测试确认是否稳定。",
         )
         for row, line in enumerate(lines):
             ttk.Label(
