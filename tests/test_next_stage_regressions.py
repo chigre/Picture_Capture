@@ -297,6 +297,34 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert "⚠ 当前输入暂未保存" in settings
 
 
+def test_common_layout_settings_show_packaged_context_diagrams():
+    root = Path(__file__).resolve().parents[1]
+    app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    start = app_text.index("class SettingsDialog")
+    end = app_text.index("class ReviewWindow", start)
+    settings = app_text[start:end]
+
+    assert '"columns": "layout_col_number.png"' in settings
+    for field in (
+        "start_y", "bottom_y", "manual_x", "column_width",
+        "gutter", "character_height", "row_padding",
+    ):
+        assert f'"{field}": "layout_settings.png"' in settings
+    assert "help_images=True" in settings
+    assert "show_layout_image: bool = False" in settings
+    assert '/ "data"' in settings
+    assert '/ "layout_example"' in settings
+    assert "Image.Resampling.LANCZOS" in settings
+    assert "ImageTk.PhotoImage(rendered)" in settings
+
+    layout_dir = root / "src" / "picture_capture" / "data" / "layout_example"
+    assert (layout_dir / "layout_col_number.png").is_file()
+    assert (layout_dir / "layout_settings.png").is_file()
+
+    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
+    assert '"data/layout_example/*.png"' in pyproject
+
+
 def test_project_toolbar_and_profile_scroll_layout_are_wired():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
