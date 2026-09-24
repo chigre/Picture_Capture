@@ -6550,6 +6550,29 @@ def test_coordinate_contract_training_export_separates_source_and_canonical(tmp_
     assert "derived_top" not in layout
 
 
+def test_new_project_defaults_preserve_historical_1400_reference_geometry():
+    from picture_capture.coordinate_space import (
+        REFERENCE_CANONICAL_WIDTH,
+        stored_geometry_to_canonical,
+    )
+    from picture_capture.models import AppSettings
+
+    modern = AppSettings()
+    assert modern.geometry_reference_width == REFERENCE_CANONICAL_WIDTH
+    # The old untouched defaults were interpreted at a 1400px display
+    # reference. A new 3000px scan must therefore keep the same physical
+    # geometry instead of shrinking a 700px column to 700 source pixels.
+    assert stored_geometry_to_canonical(modern.column_width, 3000, modern) == 1500
+
+    legacy = AppSettings(
+        geometry_coordinate_version=1,
+        geometry_coordinate_space="legacy_display_pixels",
+        geometry_reference_width=0,
+        parameter_display_width=0,
+    )
+    assert stored_geometry_to_canonical(legacy.column_width, 3000, legacy) == 1500
+
+
 def test_coordinate_contract_parameter_display_width_is_legacy_only_in_core_runtime():
     from pathlib import Path
 
