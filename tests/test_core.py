@@ -3898,6 +3898,7 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     page_end = text.index("        list_frame = ttk.Frame(page_panel)", page_start)
     page_toolbar = text[page_start:page_end]
     assert page_toolbar.count('style="PC.PageNav.TButton"') == 3
+    assert 'style.configure("PC.PageNav.TButton", padding=(2, 2))' in text
     assert 'text="跳转", command=self.jump_to_page_spec, style="PC.PageNav.TButton"' in page_toolbar
     assert 'text="上一页", command=lambda: self.change_page(-1), style="PC.PageNav.TButton"' in page_toolbar
     assert 'text="下一页", command=lambda: self.change_page(1), style="PC.PageNav.TButton"' in page_toolbar
