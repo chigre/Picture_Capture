@@ -6168,98 +6168,16 @@ def test_v2132_windows_launcher_reuses_saved_ocr_profile():
     assert 'uv run --locked' in text
 
 
-def _load_launcher_module():
-    import importlib.util
-    import inspect
+def test_diagnostic_launcher_has_no_silent_relaunch_path():
+    from pathlib import Path
 
-    import picture_capture
-
-    root = Path(inspect.getsourcefile(picture_capture)).resolve().parents[2]
-    spec = importlib.util.spec_from_file_location("_picture_capture_launcher", root / "run.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module, root
-
-
-def test_v2133_launcher_is_noop_off_windows(monkeypatch):
-    module, _ = _load_launcher_module()
-    monkeypatch.setattr(module, "_is_windows", lambda: False)
-    monkeypatch.setattr(module, "_has_console", lambda: False)
-
-    assert module._windowed_python() is None
-    assert module._prepare_windows_launch() is False
-
-
-def test_v2133_windowed_python_prefers_venv_pythonw(tmp_path, monkeypatch):
-    module, _ = _load_launcher_module()
-    scripts = tmp_path / ".venv" / "Scripts"
-    scripts.mkdir(parents=True)
-    (scripts / "python.exe").write_text("", encoding="utf-8")
-
-    monkeypatch.setattr(module, "_is_windows", lambda: True)
-    monkeypatch.setattr(module, "_PROJECT_ROOT", tmp_path)
-    assert module._windowed_python() == scripts / "python.exe"
-
-    (scripts / "pythonw.exe").write_text("", encoding="utf-8")
-    assert module._windowed_python() == scripts / "pythonw.exe"
-
-
-def test_v2133_launcher_redirects_streams_to_log(tmp_path, monkeypatch):
-    import sys
-
-    module, _ = _load_launcher_module()
-    log = tmp_path / "launcher.log"
-    monkeypatch.setattr(module, "_has_console", lambda: False)
-    monkeypatch.setenv("PC_LOG", str(log))
-    monkeypatch.setattr(sys, "stdout", None)
-    monkeypatch.setattr(sys, "stderr", None)
-    monkeypatch.setattr(sys, "excepthook", sys.excepthook)
-
-    module._redirect_streams_to_log()
-    print("hello from launcher")
-    sys.stderr.write("boom\n")
-    stream = sys.stdout
-    stream.flush()
-    stream.close()
-
-    text = log.read_text(encoding="utf-8")
-    assert "hello from launcher" in text
-    assert "boom" in text
-
-
-def test_v2133_launcher_decides_before_redirecting_streams(tmp_path, monkeypatch):
-    import sys
-
-    module, _ = _load_launcher_module()
-    scripts = tmp_path / ".venv" / "Scripts"
-    scripts.mkdir(parents=True)
-    (scripts / "pythonw.exe").write_text("", encoding="utf-8")
-
-    monkeypatch.setattr(module, "_PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(module, "_is_windows", lambda: True)
-    monkeypatch.setattr(sys, "stdout", None)
-    monkeypatch.setattr(sys, "stderr", None)
-    monkeypatch.delenv(module._NO_RELAUNCH_ENV, raising=False)
-    monkeypatch.setenv("PC_LOG", str(tmp_path / "launcher.log"))
-    launched = []
-    monkeypatch.setattr(module, "_relaunch_windowed", lambda interpreter: launched.append(interpreter))
-
-    assert module.main() == 0
-    assert launched == [scripts / "pythonw.exe"]
-    # The parent hands off without redirecting, otherwise a later
-    # _has_console() check would wrongly report a console.
-    assert sys.stdout is None
-
-
-def test_v2133_silent_entry_point_delegates_to_run_py():
-    module, root = _load_launcher_module()
-    text = (root / "Picture_Capture.pyw").read_text(encoding="utf-8")
-
-    assert "runpy.run_path" in text
-    assert "run.py" in text
-    # The shim must start under a bare system pythonw, before the venv exists,
-    # so it may not import the application package or any third-party module.
-    assert "picture_capture" not in text
+    text = Path("run.py").read_text(encoding="utf-8")
+    assert "subprocess" not in text
+    assert "CREATE_NO_WINDOW" not in text
+    assert "pythonw.exe" not in text
+    assert "PC_NO_CONSOLE" not in text
+    assert not Path("Picture_Capture.pyw").exists()
+    assert 'from picture_capture.app import main' in text
 
 
 def test_rtl_geometry_orders_source_right_column_first_and_keeps_source_crop_pixels():
