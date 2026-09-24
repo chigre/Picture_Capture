@@ -6571,6 +6571,8 @@ class PictureCaptureApp(tk.Tk):
         self.polygon_draw_var = tk.BooleanVar(value=False)
         self.crop_preview_var = tk.BooleanVar(value=False)
         self.binary_preview_var = tk.BooleanVar(value=False)
+        self.display_mode_var = tk.StringVar(value="原图+标注")
+        self._display_mode_syncing = False
         self.polygon_draw_button: tk.Button | None = None
         # PPP label editors and vertex-drag state are rebuilt with each canvas redraw.
         self.polygon_label_bindings: list[tuple[tk.Entry, PolygonRegion]] = []
@@ -6748,6 +6750,18 @@ class PictureCaptureApp(tk.Tk):
             "muted": "#68707b",
             "button": "#eceff3",
             "button_hover": "#e1e5ea",
+            "danger_soft": "#f8e3e3",
+            "danger_soft_hover": "#f2cece",
+            "danger_soft_text": "#8a3030",
+            "refine_soft": "#fff0cf",
+            "refine_soft_hover": "#ffe2a6",
+            "refine_soft_text": "#76520f",
+            "compare_soft": "#eee8f8",
+            "compare_soft_hover": "#dfd3f2",
+            "compare_soft_text": "#604482",
+            "review_soft": "#dceeff",
+            "review_soft_hover": "#c7e1f8",
+            "review_soft_text": "#245b86",
             "primary": "#e58a2b",
             "primary_hover": "#d77b20",
             "success": "#5e9f69",
@@ -6830,12 +6844,36 @@ class PictureCaptureApp(tk.Tk):
         """Return one dense flat button used by main-sidebar action groups."""
         colors = self._main_ui_colors
         palette = {
-            "neutral": (colors["button"], colors["button_hover"], colors["text"]),
-            "primary": (colors["primary"], colors["primary_hover"], "#ffffff"),
-            "success": (colors["success"], colors["success_hover"], "#ffffff"),
+            "neutral": (
+                colors["button"], colors["button_hover"], colors["text"], colors["border"]
+            ),
+            "primary": (
+                colors["primary"], colors["primary_hover"], "#ffffff", colors["primary"]
+            ),
+            "success": (
+                colors["success"], colors["success_hover"], "#ffffff", colors["success"]
+            ),
+            "danger_soft": (
+                colors["danger_soft"], colors["danger_soft_hover"],
+                colors["danger_soft_text"], "#e7bcbc",
+            ),
+            "refine_soft": (
+                colors["refine_soft"], colors["refine_soft_hover"],
+                colors["refine_soft_text"], "#e3ca8c",
+            ),
+            "compare_soft": (
+                colors["compare_soft"], colors["compare_soft_hover"],
+                colors["compare_soft_text"], "#cdbce4",
+            ),
+            "review_soft": (
+                colors["review_soft"], colors["review_soft_hover"],
+                colors["review_soft_text"], "#aacde9",
+            ),
         }
-        background, active_background, foreground = palette.get(role, palette["neutral"])
-        is_neutral = role == "neutral"
+        background, active_background, foreground, border = palette.get(
+            role, palette["neutral"]
+        )
+        outlined = role not in {"primary", "success"}
         return tk.Button(
             parent,
             text=text,
@@ -6846,11 +6884,11 @@ class PictureCaptureApp(tk.Tk):
             activeforeground=foreground,
             relief="flat",
             bd=0,
-            highlightthickness=(1 if is_neutral else 0),
-            highlightbackground=colors["border"],
-            highlightcolor=colors["border"],
-            padx=(7 if is_neutral else 8),
-            pady=(3 if is_neutral else 4),
+            highlightthickness=(1 if outlined else 0),
+            highlightbackground=border,
+            highlightcolor=border,
+            padx=(7 if outlined else 8),
+            pady=(3 if outlined else 4),
             cursor="hand2",
         )
 
@@ -7152,10 +7190,16 @@ class PictureCaptureApp(tk.Tk):
         size_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
         self.page_size_row = size_row
         size_row.grid(row=1, column=0, sticky="ew", pady=(0, 5))
-        ttk.Checkbutton(
-            size_row, text="◧", width=3, variable=self.binary_preview_var,
-            command=self._toggle_binary_preview,
-        ).pack(side="left", padx=(0, 2))
+        ttk.Label(size_row, text="显示模式：").pack(side="left")
+        display_mode_combo = ttk.Combobox(
+            size_row,
+            textvariable=self.display_mode_var,
+            values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览"),
+            state="readonly",
+            width=10,
+        )
+        display_mode_combo.pack(side="left", padx=(0, 3))
+        display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)
         ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=3, pady=3)
 
         ttk.Button(
@@ -8074,8 +8118,14 @@ class PictureCaptureApp(tk.Tk):
                 "paddle_show_candidate_checkboxes", candidate_var,
             ),
         ).pack(side="left")
-        ttk.Checkbutton(option_row, text="显示切图预览", variable=self.crop_preview_var, command=self._toggle_crop_preview).pack(side="left", padx=(8, 0))
-        ttk.Checkbutton(option_row, text="隐藏线框(插图除外)", variable=self.hide_var, command=self.redraw).pack(side="left", padx=(8, 0))
+        ttk.Checkbutton(
+            option_row, text="显示切图预览", variable=self.crop_preview_var,
+            command=self._toggle_crop_preview,
+        ).pack(side="left", padx=(8, 0))
+        ttk.Checkbutton(
+            option_row, text="隐藏线框(插图除外)", variable=self.hide_var,
+            command=self._toggle_hide_overlays,
+        ).pack(side="left", padx=(8, 0))
         save_row = ttk.Frame(aux); save_row.grid(row=7, column=0, columnspan=4, sticky="ew")
         ttk.Checkbutton(save_row, text="自动保存", variable=self.autosave_var, command=self.toggle_autosave).pack(side="left")
         ttk.Label(save_row, text="间隔时间(秒)").pack(side="left", padx=(8, 2))
@@ -8090,7 +8140,7 @@ class PictureCaptureApp(tk.Tk):
         actions.pack(fill="x", pady=(4, 0))
         rows = [
             (("运行普通画线", self.run_normal_draw_action), ("运行OCR画线", self.run_ocr_draw_action)),
-            (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope)),
+            (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充既有词条", self.fill_existing_headwords), ("修复PDIC排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("从PDIC备份恢复", self.restore_from_pdic_backup)),
             (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
         ]
@@ -8101,6 +8151,10 @@ class PictureCaptureApp(tk.Tk):
                 role = (
                     "primary" if text == "运行OCR画线"
                     else "success" if text == "保存当前页"
+                    else "danger_soft" if text in {"清除画线", "清除文本"}
+                    else "refine_soft" if text == "精修画线"
+                    else "compare_soft" if text == "新旧比较"
+                    else "review_soft" if text == "词条校对"
                     else "neutral"
                 )
                 button = self._sidebar_action_button(row, text, command, role=role)
@@ -10046,10 +10100,65 @@ class PictureCaptureApp(tk.Tk):
             self._display_photo_cache_key = key
         return self.photo
 
+    def _display_mode_from_flags(self) -> str:
+        """Return the compact viewer mode represented by the existing flags."""
+        if self.crop_preview_var.get():
+            return "切图预览"
+        binary = bool(self.binary_preview_var.get())
+        hidden = bool(self.hide_var.get())
+        if hidden:
+            return "仅二值" if binary else "仅原图"
+        return "二值+标注" if binary else "原图+标注"
+
+    def _sync_display_mode_from_flags(self) -> None:
+        if getattr(self, "_display_mode_syncing", False):
+            return
+        try:
+            self._display_mode_syncing = True
+            self.display_mode_var.set(self._display_mode_from_flags())
+        finally:
+            self._display_mode_syncing = False
+
+    def _apply_display_mode(self, _event=None) -> None:
+        """Apply one of the practical combinations already supported by the viewer."""
+        states = {
+            "原图+标注": (False, False, False),
+            "二值+标注": (True, False, False),
+            "仅原图": (False, True, False),
+            "仅二值": (True, True, False),
+            "切图预览": (False, False, True),
+        }
+        mode = str(self.display_mode_var.get() or "原图+标注")
+        binary, hidden, crop_preview = states.get(mode, states["原图+标注"])
+        previous_binary = bool(self.binary_preview_var.get())
+        try:
+            self._display_mode_syncing = True
+            self.binary_preview_var.set(binary)
+            self.hide_var.set(hidden)
+            self.crop_preview_var.set(crop_preview)
+        finally:
+            self._display_mode_syncing = False
+        if previous_binary != binary:
+            self.photo = None
+            self._display_photo_cache_key = None
+        if crop_preview:
+            self.status_var.set(
+                "切图预览：普通编辑线框已临时隐藏；切回其他显示模式即可恢复编辑。"
+            )
+        self.redraw()
+
     def _toggle_binary_preview(self) -> None:
         """Invalidate only the canvas bitmap; source/OCR geometry stays intact."""
         self.photo = None
         self._display_photo_cache_key = None
+        self._sync_display_mode_from_flags()
+        self.redraw()
+
+    def _toggle_hide_overlays(self) -> None:
+        """Keep the legacy overlay switch and the page-toolbar mode selector aligned."""
+        if self.hide_var.get() and self.crop_preview_var.get():
+            self.crop_preview_var.set(False)
+        self._sync_display_mode_from_flags()
         self.redraw()
 
     def _current_effective_profile_settings(self) -> AppSettings:
@@ -10419,7 +10528,17 @@ class PictureCaptureApp(tk.Tk):
     def _toggle_crop_preview(self) -> None:
         """Switch between the editable overlays and the complete crop-plan preview."""
         if self.crop_preview_var.get():
-            self.status_var.set("切图预览：普通编辑线框已临时隐藏；关闭预览即可恢复编辑。")
+            # Crop-plan preview is a distinct mode; keep it on the original page
+            # background and ignore the ordinary overlay-hiding state.
+            if self.binary_preview_var.get():
+                self.binary_preview_var.set(False)
+                self.photo = None
+                self._display_photo_cache_key = None
+            self.hide_var.set(False)
+            self.status_var.set(
+                "切图预览：普通编辑线框已临时隐藏；关闭预览即可恢复编辑。"
+            )
+        self._sync_display_mode_from_flags()
         self.redraw()
 
     def _current_page_crop_plan(self):
