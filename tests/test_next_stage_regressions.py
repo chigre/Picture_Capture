@@ -392,8 +392,9 @@ def test_bottom_important_actions_use_two_soft_color_groups():
     start = text.index("    def _footer_action_button(")
     end = text.index("    def _section_frame(", start)
     helper = text[start:end]
-    assert '"project": ("#dff1e3", "#cbe7d1", "#356b42")' in helper
+    assert '"project": (colors["success"], colors["success_hover"], "#ffffff")' in helper
     assert '"config": ("#dceeff", "#c7e1f8", "#245b86")' in helper
+    assert 'border = colors["button_border"]' in helper
     assert '"profile":' not in helper
     assert '"settings":' not in helper
     assert '"save":' not in helper
