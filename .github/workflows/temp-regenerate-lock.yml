@@ -1,0 +1,25 @@
+name: Temporary lock regeneration
+
+on:
+  push:
+    branches:
+      - fix/windows-bat-defender-hardening
+
+permissions:
+  contents: read
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - name: Regenerate uv.lock
+        run: uv lock
+      - name: Upload uv.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: regenerated-uv-lock
+          path: uv.lock
