@@ -3730,7 +3730,10 @@ def _pair_ocr_candidates(
             for pi in pblock:
                 for tj in tblock:
                     score = _candidate_pair_score(paddle[pi], tess[tj], tolerance)
-                    dy = abs(int(paddle[pi].get("source_y", 0)) - int(tess[tj].get("source_y", 0)))
+                    dy = abs(
+                        int(_candidate_axis_v(paddle[pi]) or 0)
+                        - int(_candidate_axis_v(tess[tj]) or 0)
+                    )
                     sim = _lemma_similarity(
                         str(paddle[pi].get("normalized_headword", "")),
                         str(tess[tj].get("normalized_headword", "")),
@@ -4295,6 +4298,59 @@ def _arbitrate_pair(
         "alignment_method": pair.get("alignment_method", ""),
         "pair_reason": pair.get("reason", ""),
     }
+
+
+def _apply_pair_engine_position(
+    item: dict[str, Any],
+    pair: dict[str, Any],
+    prefix: str,
+    column: int,
+    canonical_u: int,
+    geometry: "Geometry" | None,
+) -> None:
+    """Apply one engine's position without mixing canonical V and source Y."""
+    raw_v = pair.get(f"{prefix}_y")
+    if raw_v is None:
+        return
+    canonical_v = int(raw_v)
+    coarse_v = int(pair.get(f"{prefix}_coarse_y") or canonical_v)
+    anchor_v = int(pair.get(f"{prefix}_anchor_y") or coarse_v)
+
+    if geometry is not None:
+        refined_u = int(geometry.x_at(column, canonical_v))
+        source_x, source_y = geometry.canonical_to_source(refined_u, canonical_v)
+        coarse_u = int(geometry.x_at(column, coarse_v))
+        coarse_source_x, coarse_source_y = geometry.canonical_to_source(
+            coarse_u, coarse_v
+        )
+        anchor_u = int(geometry.x_at(column, anchor_v))
+        anchor_source_x, anchor_source_y = geometry.canonical_to_source(
+            anchor_u, anchor_v
+        )
+    else:
+        refined_u = int(canonical_u)
+        source_x = pair.get(f"{prefix}_source_x")
+        source_y = pair.get(f"{prefix}_source_y")
+        source_x = refined_u if source_x is None else int(source_x)
+        source_y = canonical_v if source_y is None else int(source_y)
+        coarse_u = refined_u
+        coarse_source_x, coarse_source_y = source_x, coarse_v
+        anchor_u = refined_u
+        anchor_source_x, anchor_source_y = source_x, anchor_v
+
+    item.update({
+        "canonical_u": int(refined_u),
+        "canonical_v": int(canonical_v),
+        "coarse_canonical_v": int(coarse_v),
+        "anchor_canonical_v": int(anchor_v),
+        "source_x": int(source_x),
+        "source_y": int(source_y),
+        "refined_source_y": int(source_y),
+        "coarse_source_x": int(coarse_source_x),
+        "coarse_source_y": int(coarse_source_y),
+        "anchor_source_x": int(anchor_source_x),
+        "anchor_source_y": int(anchor_source_y),
+    })
 
 
 def _agreement_summary(review_candidates: list[dict[str, Any]]) -> dict[str, Any]:
@@ -5399,19 +5455,20 @@ def detect_paddle_headwords(
         else:
             # Compatibility mode: Paddle remains authoritative; optional legacy
             # Tesseract rescue can still promote structurally strong missing rows.
-            paddle_selected_y = {
-                int(c.get("source_y", 0))
+            paddle_selected_v = {
+                int(_candidate_axis_v(c) or 0)
                 for c in _candidate_rows(col.get("candidates", [])) if c.get("accepted")
             }
             for pair in pairs:
                 item = _arbitrate_pair(pair, col_index, canonical_u, settings, geometry=geometry)
                 py = pair.get("paddle_y")
-                ty = pair.get("tesseract_y")
                 if py is not None:
-                    item["selected"] = int(py) in paddle_selected_y
+                    item["selected"] = int(py) in paddle_selected_v
                     item["final_engine"] = "paddle"
                     item["word"] = str(pair.get("paddle_lemma", ""))
-                    item["source_y"] = int(py)
+                    _apply_pair_engine_position(
+                        item, pair, "paddle", col_index, canonical_u, geometry,
+                    )
                     item["confidence"] = pair.get("paddle_conf")
                     item["score"] = pair.get("paddle_score")
                     item["decision_reason"] = "compat_paddle_authoritative"
