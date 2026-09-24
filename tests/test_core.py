@@ -3894,6 +3894,13 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     assert 'text="跳到"' not in text
     assert 'text="跳转"' in text
     assert text.index('text="↕"') < text.index('text="跳转"') < text.index('text="上一页"') < text.index('text="下一页"')
+    page_start = text.index('page_panel = self._section_frame(sidebar, "六、页面列表"')
+    page_end = text.index("        list_frame = ttk.Frame(page_panel)", page_start)
+    page_toolbar = text[page_start:page_end]
+    assert page_toolbar.count('style="PC.PageNav.TButton"') == 3
+    assert 'text="跳转", command=self.jump_to_page_spec, style="PC.PageNav.TButton"' in page_toolbar
+    assert 'text="上一页", command=lambda: self.change_page(-1), style="PC.PageNav.TButton"' in page_toolbar
+    assert 'text="下一页", command=lambda: self.change_page(1), style="PC.PageNav.TButton"' in page_toolbar
     assert 'text="页面大小："' not in text
     assert '("已有项目", self.open_recent_project, "project")' in text
     assert "self.after_idle(self._maximize_main_window)" in text
