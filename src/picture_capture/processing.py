@@ -1461,10 +1461,17 @@ def split_whole_entries(
 
 
 def append_crop_log(root: Path, records: list[CropRecord]) -> None:
+    """Append crop boxes in original-image pixels with a self-describing header."""
     if not records:
         return
     log = crop_log_path(root)
+    needs_header = not log.exists() or log.stat().st_size == 0
     with log.open("a", encoding="utf-8") as handle:
+        if needs_header:
+            handle.write(
+                "# coordinate_space=source_image_pixels; "
+                "columns=page,file,source_x,source_y,width,height\n"
+            )
         for record in records:
             left, top, right, bottom = record.box
             handle.write(
