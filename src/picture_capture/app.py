@@ -42,6 +42,7 @@ from .coordinate_space import (
     CANONICAL_COORDINATE_SPACE,
     REFERENCE_CANONICAL_WIDTH,
     SOURCE_COORDINATE_SPACE,
+    canonical_geometry_to_stored,
     coordinate_contract,
     geometry_uses_canonical_pixels,
     legacy_parameter_scale,
@@ -1665,17 +1666,17 @@ class SettingsDialog(tk.Toplevel):
     # unchanged; this layer only reorganizes the settings experience.
     SETTING_LABELS = {
         "columns": "正文栏数",
-        "start_y": "正文起始 V（规范坐标）",
-        "bottom_y": "正文结束 V（规范坐标）",
-        "manual_x": "第一栏左缘 U（规范坐标）",
-        "column_width": "单栏正文宽度（规范坐标）",
-        "gutter": "栏间空白（规范坐标）",
-        "character_height": "典型行高（规范坐标）",
-        "row_padding": "典型行间空白（规范坐标）",
+        "start_y": "正文起始 V（参考页规范坐标）",
+        "bottom_y": "正文结束 V（参考页规范坐标）",
+        "manual_x": "第一栏左缘 U（参考页规范坐标）",
+        "column_width": "单栏正文宽度（参考页规范坐标）",
+        "gutter": "栏间空白（参考页规范坐标）",
+        "character_height": "典型行高（参考页规范坐标）",
+        "row_padding": "典型行间空白（参考页规范坐标）",
         "ocr_language": "词头 OCR 语言",
         "analysis_threshold_mode": "墨迹判断方式",
-        "body_indent": "左缘检测宽度（规范坐标）",
-        "character_height": "典型单行字高（规范坐标）",
+        "body_indent": "左缘检测宽度（参考页规范坐标）",
+        "character_height": "典型单行字高（参考页规范坐标）",
         "row_padding": "典型行间空白",
         "darkness_threshold": "固定黑度阈值",
         "horizontal_tolerance": "横向微调容差",
@@ -9053,9 +9054,19 @@ class PictureCaptureApp(tk.Tk):
                             if not 0.0 <= percent <= 35.0:
                                 raise ValueError("页尾必须位于原图底部 35% 范围内。")
                             self.settings.profile_footer_percent = round(percent, 6)
-                    # Modern geometry is persisted directly in full-resolution
-                    # canonical pixels. A legacy project is migrated on open.
-                    value = int(value)
+                    # Persist against the project's explicit canonical
+                    # reference page. On the reference page this is identity;
+                    # on a differently sized scan it removes current-page scaling.
+                    if self.image is not None:
+                        transform = LayoutTransform(
+                            str(getattr(self.settings, "layout_transform", "identity") or "identity")
+                        )
+                        canonical_width = transform.canonical_size(self.image.size)[0]
+                        value = canonical_geometry_to_stored(
+                            value, canonical_width, self.settings,
+                        )
+                    else:
+                        value = int(value)
                 if name == "paddle_band_width_ratio" and not 1 <= int(value) <= 100:
                     raise ValueError("候选带宽比例必须在 1–100 之间；100 即原候选带宽。")
                 if name == "paddle_separator_safety_px" and not 0 <= int(value) <= 50:
