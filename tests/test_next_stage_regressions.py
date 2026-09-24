@@ -1130,6 +1130,18 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "threading.Thread(target=worker, daemon=True).start()" in text
     assert "elif index == 2:" in text and "self._refresh_headword_description" in text
 
+    # Replacing one representative page is a slot-local operation. It must not
+    # rebuild/re-decode all six thumbnails or refresh a hidden template preview.
+    assert "def _start_sample_thumbnail_slot_load" in text
+    assert "def _render_sample_thumbnail_slot" in text
+    choose_start = text.index("    def _choose_sample_page(")
+    choose_end = text.index("    def _persist_current_profile(", choose_start)
+    choose_text = text[choose_start:choose_end]
+    assert "self._start_sample_thumbnail_slot_load(slot)" in choose_text
+    assert "self._start_sample_thumbnail_load()" not in choose_text
+    assert "preview_uses_slot = self.template_preview_slot == slot" in choose_text
+    assert "self.notebook.index(self.notebook.select()) == 1" in choose_text
+
     # Multi-page validation is presented one page at a time with the same
     # previous/next navigation language as the page-template preview.
     assert "self._validation_results = list(results)" in text
