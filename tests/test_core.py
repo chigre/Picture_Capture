@@ -5813,6 +5813,21 @@ def test_v2126_opencc_converter_uses_official_t2s_json(monkeypatch):
     assert seen == ["t2s.json"]
 
 
+def test_v2133_redraw_parameter_scale_is_bound_after_coordinate_refactor():
+    import picture_capture.app as app_module
+    import picture_capture.processing as processing_module
+    from picture_capture.models import AppSettings
+
+    image = Image.new("RGB", (1200, 1600), "white")
+    settings = AppSettings(
+        geometry_coordinate_version=2,
+        geometry_coordinate_space="canonical_reference_page_pixels",
+        geometry_reference_width=1200,
+    )
+    assert app_module.parameter_scale is processing_module.parameter_scale
+    assert app_module.parameter_scale(image, settings) == 1.0
+
+
 def test_v2133_windows_launcher_is_runtime_only_and_never_installs():
     from pathlib import Path
     import inspect

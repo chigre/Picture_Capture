@@ -1,5 +1,12 @@
 ## v2.13.3
 
+### 主界面重绘回归修复
+
+- 修复坐标体系统一后 `app.py` 遗漏导入 `processing.parameter_scale`，导致点击【项目Profile】或【设置中心】时快速设置回调触发 `redraw()` 并报 `NameError: parameter_scale is not defined`，窗口因此无法正常弹出。
+- 保留 `parameter_scale()` 作为旧项目显示参数兼容层；现代 canonical/reference 项目返回 1.0，不重新引入旧显示坐标语义。
+- CI 与 Release workflow 新增 Ruff `F821`（undefined name）检查，避免以后仅靠 `compileall` 漏掉运行时未定义名称。
+
+
 ### 坐标体系统一与旧项目迁移
 
 - 新增统一坐标契约：PDIC/PPP/最终 OCR 词头/切图框与对外训练标注使用原图像素；版式运行几何使用 canonical 全分辨率；项目级版式参数使用带参考宽度的 canonical reference 坐标；analysis/OCR-band 坐标仅限内部。

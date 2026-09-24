@@ -29,7 +29,7 @@ from .profile_semantics import (
 )
 from .ocr_engines import find_tesseract
 from .formats import read_pdic, read_ppp, write_pdic, write_ppp
-from .project_storage import crop_log_path, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
+from .project_storage import crop_log_path, pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
 
 
 _COLUMN_TRACK_ADAPTIVE_BLOCK = 19
