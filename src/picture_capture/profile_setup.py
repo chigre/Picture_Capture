@@ -1574,12 +1574,11 @@ class ProjectProfileWizard(tk.Toplevel):
             safe,
             profile_key,
         )
-        # User-provided curated crops live in recommended_current/. Extended
-        # crops are a secondary fallback; root-level files still override both.
+        # Curated crops live in recommended_current/. Root-level files remain
+        # a compatibility override for older manually bundled examples.
         roots = (
             root,
             root / "recommended_current",
-            root / "extended",
         )
         for folder in roots:
             for stem in stems:

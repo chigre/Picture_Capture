@@ -1,5 +1,11 @@
 ## Unreleased
 
+### 清理未使用的 Profile 样例资源
+
+- 移除已不再被当前 Profile 数据引用的 `data/profile_previews/`、`headword_examples/contact_sheet.jpg` 和 `headword_examples/extended/`，减少仓库与安装包中的无效图片资源。
+- 删除设置中心旧的【预览经典词典…】入口及 `profile_preview_path` 相关遗留代码；Project Profile 向导继续使用 `recommended_current/`，缺图时回退到 `classic_headword_examples.jpg`。
+- package-data、样例 manifest、README 与回归测试同步收敛到当前实际使用的 9 张经典词头局部样例。
+
 ### 设置中心常用版面参数图解
 
 - 【设置中心 → 常用 → 常用版面参数】的右侧【设置说明】支持上下文图解。
@@ -41,8 +47,10 @@
 
 - 根据 Windows 实际渲染截图，主界面画线/后期制作区的普通操作按钮增加轻量 1px 边界，避免扁平后看起来像普通文字，同时不增加按钮高度。
 - 校对窗口右上尺寸参数由一行拆为两行：单行高/行间空保持第一行，普通词条行切图高/单字行高移至第二行，避免 40% 右侧窗格中单位和控件被截断。
-- 网络词汇核验按钮取消固定字符宽度，并改用更紧凑的按钮 padding，保证 CC-CEDICT、CC简、萌典、Wiki、网络搜索都能在右侧窗格完整显示。
+- 网络词汇核验按钮取消固定字符宽度，并改用更紧凑的按钮 padding；萌典、Wiki、网络搜索移至第二行，避免右侧窗格拥挤。
+- 网络词汇核验结果与 wordslist 信息改为单行显示，不再因固定高度或 wraplength 自动拆成两行。
 - 参考词表将“从所选词开始填充至本页结束”移至独立一行，避免按钮文本在常用窗口尺寸下被截断。
+- 主界面左侧参数与区块文字统一使用纯黑色，消除黑色/灰黑色混用。
 - 网络核验和参考词表标题区不再依赖 Windows 原生 LabelFrame 边框，改为真正的扁平标题＋分隔线结构。
 
 ### 校对界面视觉升级

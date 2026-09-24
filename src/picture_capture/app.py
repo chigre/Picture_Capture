@@ -45,7 +45,7 @@ from .dictionary_profile import (
     DEFAULT_PROFILE_ID, PROFILE_FILENAME, available_dictionary_profiles,
     dictionary_profile_preset,
     effective_project_profile_id,
-    language_effective_settings, managed_profile_setting_names, profile_effective_settings, profile_preview_path,
+    language_effective_settings, managed_profile_setting_names, profile_effective_settings,
     profile_layout_summary, write_project_profile,
 )
 from .profile_setup import ProjectProfileWizard
@@ -2505,11 +2505,8 @@ class SettingsDialog(tk.Toplevel):
         )
         self.profile_combo.grid(row=0, column=1, sticky="ew", pady=4)
         self.profile_combo.bind("<<ComboboxSelected>>", self._on_profile_selected)
-        ttk.Button(top, text="预览经典词典…", command=self.preview_profile_examples).grid(
-            row=0, column=2, padx=(10, 0), pady=4
-        )
         ttk.Button(top, text="恢复 Profile 默认值", command=self.restore_profile_defaults).grid(
-            row=0, column=3, padx=(8, 0), pady=4
+            row=0, column=2, padx=(10, 0), pady=4
         )
 
         ttk.Label(top, text="自定义结构名称：").grid(
@@ -2809,48 +2806,6 @@ class SettingsDialog(tk.Toplevel):
         transform = "rotate_ccw90" if writing == "vertical-rl" else "rotate_cw90" if writing == "vertical-lr" else "mirror_x" if direction == "rtl" else "identity"
         self.vars["layout_transform"].set(transform)
         self._on_profile_language_changed()
-
-    def preview_profile_examples(self) -> None:
-        profile = dictionary_profile_preset(self._current_profile_key())
-        popup = tk.Toplevel(self)
-        display_name = self._profile_display_name(profile.key)
-        popup.title(f"Profile 预览 — {display_name}")
-        screen_w = max(900, popup.winfo_screenwidth())
-        screen_h = max(650, popup.winfo_screenheight())
-        popup.geometry(f"{min(980, int(screen_w * 0.76))}x{min(820, int(screen_h * 0.84))}")
-        popup.minsize(620, 520)
-        header = ttk.Frame(popup, padding=(12, 10))
-        header.pack(fill="x")
-        ttk.Label(header, text=display_name, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
-        ttk.Label(header, text=profile.description, justify="left", wraplength=900).pack(anchor="w", pady=(4, 0))
-        if not profile.examples:
-            ttk.Label(popup, text="此通用兼容 Profile 暂无内置经典样页。", padding=24).pack(fill="both", expand=True)
-            return
-        tabs = ttk.Notebook(popup)
-        tabs.pack(fill="both", expand=True, padx=12, pady=(0, 12))
-        popup._profile_photos = []
-        for example in profile.examples:
-            pane = ttk.Frame(tabs, padding=10)
-            tabs.add(pane, text=example.dictionary[:28])
-            ttk.Label(pane, text=example.dictionary, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
-            if example.note:
-                ttk.Label(pane, text=example.note).pack(anchor="w", pady=(2, 8))
-            if not example.image:
-                ttk.Label(pane, text="真实扫描仅用于本地集成回归，未打包进仓库。", foreground="#666666").pack(
-                    anchor="w", pady=12
-                )
-                continue
-            path = profile_preview_path(example.image)
-            try:
-                image = Image.open(path).convert("RGB")
-                image.thumbnail((760, 650), Image.Resampling.LANCZOS)
-                photo = ImageTk.PhotoImage(image)
-                popup._profile_photos.append(photo)
-                label = ttk.Label(pane, image=photo, anchor="center")
-                label.pack(fill="both", expand=True)
-            except Exception as exc:
-                ttk.Label(pane, text=f"预览图片无法读取：{exc}").pack(fill="both", expand=True)
-        popup.transient(self)
 
     def _refresh_sort_choices(self, initial: bool = False) -> None:
         if not hasattr(self, "sort_combo"):
@@ -3196,7 +3151,7 @@ class ReviewWindow(tk.Toplevel):
         self.network_lookup_enabled_var = tk.BooleanVar(
             value=bool(getattr(parent.settings, "review_network_lookup_enabled", True))
         )
-        self.network_lookup_status_var = tk.StringVar(value="网络词汇核验\n等待选择词条")
+        self.network_lookup_status_var = tk.StringVar(value="网络词汇核验：等待选择词条")
         self.cc_cedict_lookup_var = tk.StringVar(value="CC-CEDICT(?)")
         self.cc_simplified_compare_var = tk.StringVar(value="CC简(?)")
         self.moedict_lookup_var = tk.StringVar(value="萌(?)")
@@ -3688,16 +3643,19 @@ class ReviewWindow(tk.Toplevel):
             command=self.show_cc_simplified_comparison, style="PCR.Tool.TButton",
         )
         self.cc_simplified_compare_button.pack(side="left", padx=(5, 0))
+
+        network_actions_more = ttk.Frame(network_box, style="PCR.Surface.TFrame")
+        network_actions_more.pack(fill="x", pady=(4, 0))
         ttk.Button(
-            network_actions, textvariable=self.moedict_lookup_var,
+            network_actions_more, textvariable=self.moedict_lookup_var,
             command=lambda: self.open_lookup_source("萌典"), style="PCR.Tool.TButton",
-        ).pack(side="left", padx=(5, 0))
+        ).pack(side="left")
         ttk.Button(
-            network_actions, textvariable=self.wiktionary_lookup_var,
+            network_actions_more, textvariable=self.wiktionary_lookup_var,
             command=lambda: self.open_lookup_source("维基词典"), style="PCR.Tool.TButton",
         ).pack(side="left", padx=(5, 0))
         ttk.Button(
-            network_actions, text="网络搜索", command=self.open_network_web_search,
+            network_actions_more, text="网络搜索", command=self.open_network_web_search,
             style="PCR.Tool.TButton",
         ).pack(side="left", padx=(5, 0))
         self.network_status_label = tk.Label(
@@ -3705,8 +3663,6 @@ class ReviewWindow(tk.Toplevel):
             textvariable=self.network_lookup_status_var,
             anchor="w",
             justify="left",
-            height=2,
-            wraplength=430,
             fg="#555555",
             bg=self._review_ui_colors["surface"],
         )
@@ -3738,7 +3694,7 @@ class ReviewWindow(tk.Toplevel):
         ).pack(side="left")
         self.wordslist_label_var = tk.StringVar(value="wordslist 参考词表")
         ttk.Label(
-            ref_box, textvariable=self.wordslist_label_var, wraplength=430,
+            ref_box, textvariable=self.wordslist_label_var,
             style="PCR.Muted.TLabel",
         ).pack(anchor="w")
         word_nav = ttk.Frame(ref_box, style="PCR.Surface.TFrame")
@@ -4102,7 +4058,7 @@ class ReviewWindow(tk.Toplevel):
                 except tk.TclError:
                     pass
                 self._network_lookup_job = None
-            self.network_lookup_status_var.set("网络词汇核验\n自动检查已关闭")
+            self.network_lookup_status_var.set("网络词汇核验：自动检查已关闭")
             try:
                 self.network_status_label.configure(fg="#666666")
             except tk.TclError:
@@ -4128,7 +4084,7 @@ class ReviewWindow(tk.Toplevel):
                 pass
             self._network_lookup_job = None
         if not value:
-            self.network_lookup_status_var.set("网络词汇核验\n当前词条为空")
+            self.network_lookup_status_var.set("网络词汇核验：当前词条为空")
             try:
                 self.network_status_label.configure(fg="#666666")
             except tk.TclError:
@@ -4140,7 +4096,7 @@ class ReviewWindow(tk.Toplevel):
         if cached is not None:
             self._apply_network_lookup_result(serial, value, cached)
             return
-        self.network_lookup_status_var.set(f"网络词汇核验\n正在查询“{value}”…")
+        self.network_lookup_status_var.set(f"网络词汇核验：正在查询“{value}”…")
         self._network_source_urls.clear()
         self._set_lookup_source_states(pending=True)
         try:
@@ -4189,7 +4145,7 @@ class ReviewWindow(tk.Toplevel):
             return
         if result is None:
             self.network_lookup_status_var.set(
-                "⚠ 网络词汇核验暂时失败\n可点“网络搜索”手工确认。"
+                "⚠ 网络词汇核验暂时失败；可点“网络搜索”手工确认。"
             )
             try:
                 self.network_status_label.configure(fg="#9a6700")
@@ -4224,17 +4180,17 @@ class ReviewWindow(tk.Toplevel):
         found_names = [item.name for item in result.sources if item.found is True]
         if result.found is True:
             self.network_lookup_status_var.set(
-                "✓ 有词典收录\n" + "、".join(found_names)
+                "✓ 有词典收录：" + "、".join(found_names)
             )
             status_color = "#1b7f3a"
         elif result.found is False:
             self.network_lookup_status_var.set(
-                "○ 各可用词典均未检出精确词条\n不代表该词不存在"
+                "○ 各可用词典均未检出精确词条（不代表该词不存在）"
             )
             status_color = "#8a5a00"
         else:
             self.network_lookup_status_var.set(
-                "⚠ 部分词典未安装或网络来源暂不可用\n可继续网络搜索。"
+                "⚠ 部分词典未安装或网络来源暂不可用；可继续网络搜索。"
             )
             status_color = "#9a6700"
         try:
@@ -4248,7 +4204,7 @@ class ReviewWindow(tk.Toplevel):
         # simplified companion rather than the original headword.
         word = (self._network_lookup_word or self._active_review_word()).strip()
         if not word:
-            self.network_lookup_status_var.set("网络词汇核验\n当前词条为空")
+            self.network_lookup_status_var.set("网络词汇核验：当前词条为空")
             return
         try:
             webbrowser.open(web_search_url(word))
@@ -6760,7 +6716,7 @@ class PictureCaptureApp(tk.Tk):
             "status": "#f6f7f9",
             "batch": "#eef2f6",
             "border": "#d8dde5",
-            "text": "#30343b",
+            "text": "#000000",
             "muted": "#68707b",
             "button": "#f4f5f7",
             "button_hover": "#e7eaee",
