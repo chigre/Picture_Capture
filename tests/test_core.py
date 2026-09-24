@@ -3170,7 +3170,7 @@ def test_v296_existing_word_fill_runs_txt_parse_and_page_commits_in_background_b
     assert block.index("read_text_detected(txt_path)", ensure_pos) < worker_pos
     assert block.index("mapping, present_pages = ensure_mapping()", worker_pos) > worker_pos
     assert "self._start_batch_task(" in block
-    assert '"填充既有词条"' in block
+    assert '"填充词条"' in block
     assert "item_label=lambda i: pages[i].name" in block
     assert "foreground_page_edit=False" in block
     assert "进度按页面更新，可暂停或停止" in block
@@ -3196,7 +3196,7 @@ def test_v298_action_row_exposes_select_then_fill_buttons():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     assert '("备份PDIC", self.backup_pdic)' in text
-    assert '("从PDIC备份恢复", self.restore_from_pdic_backup)' in text
+    assert '("恢复PDIC", self.restore_from_pdic_backup)' in text
 
 
 def test_v296_batch_queue_polling_yields_between_large_progress_bursts():
@@ -4129,7 +4129,7 @@ def test_v2113_gui_paths_do_not_use_raw_xy_entry_sort():
 
 def test_v2113_repair_pdic_order_button_is_exposed():
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    assert '("修复PDIC排序", self.repair_pdic_order_selected_scope)' in app_text
+    assert '("修复排序", self.repair_pdic_order_selected_scope)' in app_text
 
 
 def test_v2113_canonical_reorder_preserves_word_coordinate_binding():
