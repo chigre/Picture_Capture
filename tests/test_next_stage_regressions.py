@@ -16,7 +16,7 @@ from picture_capture.models import (
 )
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
-from picture_capture.processing import _left_edge_ink_mask, refine_existing_entries
+from picture_capture.processing import _left_edge_ink_mask, derive_geometry, refine_existing_entries
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
     effective_page_settings,
@@ -950,9 +950,20 @@ def test_page_template_applies_header_footer_and_ab_side_exclusion():
         profile_first_page_variant="A",
     )
     effective = effective_page_settings(settings, (1000, 2000), 0)
-    # Header/footer are physical source-page exclusions, not canonical Y bounds.
-    assert effective.start_y == settings.start_y
-    assert effective.bottom_y == settings.bottom_y
+    # For horizontal pages, the confirmed physical header/footer are also the
+    # body/OCR geometry bounds. The blue column path must therefore begin/end
+    # exactly at the yellow exclusion boundaries.
+    assert effective.start_y == 200
+    assert effective.bottom_y == 1900
+    assert effective.crop_to_bottom_y is True
+
+    source = Image.new("RGB", (1000, 2000), "white")
+    masked_horizontal = page_template_analysis_image(source, effective, 0)
+    geometry = derive_geometry(masked_horizontal, effective)
+    assert geometry.top == 200
+    assert geometry.bottom == 1900
+    assert all(path.points[0][0] == 200 for path in geometry.column_paths)
+    assert all(path.points[-1][0] == 1900 for path in geometry.column_paths)
 
     assert excluded_source_side(settings, 0) == "left"
     assert excluded_source_side(settings, 1) == "right"
@@ -968,10 +979,14 @@ def test_page_template_applies_header_footer_and_ab_side_exclusion():
         layout_text_direction="rtl",
         layout_transform="rotate_ccw90",
     )
+    vertical_effective = effective_page_settings(vertical, (1000, 2000), 0)
+    # For vertical writing, physical top/bottom are not the canonical reading
+    # axis, so keep the learned start_y/bottom_y and apply only source masks.
+    assert vertical_effective.start_y == vertical.start_y
+    assert vertical_effective.bottom_y == vertical.bottom_y
     masked = page_template_analysis_image(
-        Image.new("RGB", (1000, 2000), "black"), vertical, 0,
+        Image.new("RGB", (1000, 2000), "black"), vertical_effective, 0,
     )
-    # Even for vertical writing, page header/footer remain physical top/bottom.
     assert masked.getpixel((500, 50)) == (255, 255, 255)
     assert masked.getpixel((500, 1950)) == (255, 255, 255)
 
