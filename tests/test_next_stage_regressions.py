@@ -32,6 +32,7 @@ from picture_capture.paddle_headwords import (
     prepare_ocr_band, run_paddle_band,
 )
 from picture_capture.project_storage import profile_path, settings_path
+from picture_capture.picdic import PicDicBuildCancelled, build_picdic_package
 from picture_capture.recent_projects import (
     load_recent_projects, recent_project_details, remove_recent_project, touch_recent_project,
 )
@@ -1400,3 +1401,80 @@ def test_vertical_main_editor_is_a_real_text_widget_not_a_canvas_proxy():
     assert "open_vertical_editor" not in block
     assert "_suppress_next_canvas_left_click" not in text
     assert 'if rtl:\n            editor.configure(justify="right")' in block
+
+
+def test_round1_blocking_ui_paths_use_background_workers():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+
+    assert "def _start_ui_worker(" in text
+    assert "self._ui_worker_queue.put(event)" in text
+    assert "def _poll_ui_worker_queue(" in text
+
+    settings_start = text.index("class SettingsDialog")
+    settings_check = text.index("    def check_ocr_engines(self) -> None:", settings_start)
+    settings_check_end = text.index("\n\ndef _review_window_dimensions", settings_check)
+    settings_block = text[settings_check:settings_check_end]
+    assert "self.parent._start_ui_worker(" in settings_block
+
+    app_start = text.index("class PictureCaptureApp")
+    main_check = text.index("    def check_ocr_engines(self) -> None:", app_start)
+    main_check_end = text.index("\n    def detect_layout_current", main_check)
+    assert 'self._start_ui_worker("ocr-environment-check"' in text[main_check:main_check_end]
+
+    page_request = text.index("    def _request_page_load(", app_start)
+    page_load = text.index("    def load_page(", page_request)
+    page_block = text[page_request:page_load]
+    assert "with Image.open(page) as opened:" in page_block
+    assert 'self._start_ui_worker("page-load"' in page_block
+    select_start = text.index("    def on_page_select(", app_start)
+    assert "self._request_page_load(index)" in text[select_start:page_request]
+
+    project_start = text.index("    def _load_project(", app_start)
+    project_end = text.index("\n    def on_page_select", project_start)
+    project_block = text[project_start:project_end]
+    worker_pos = project_block.index("        def worker():")
+    done_pos = project_block.index("        def done(result)")
+    assert worker_pos < project_block.index("migrate_legacy_project(", worker_pos) < done_pos
+    assert worker_pos < project_block.index("ProjectState.open(root)", worker_pos) < done_pos
+    assert worker_pos < project_block.index("with Image.open(page) as opened:", worker_pos) < done_pos
+    assert 'self._start_ui_worker("project-load"' in project_block
+
+    recent_start = text.index("    def open_recent_project(", app_start)
+    recent_end = text.index("\n    @staticmethod\n    def _attach_tooltip", recent_start)
+    recent_block = text[recent_start:recent_end]
+    rebuild_start = recent_block.index("        def rebuild(")
+    refresh_start = recent_block.index("        def refresh_recent_data(")
+    rebuild_block = recent_block[rebuild_start:refresh_start]
+    assert "recent_project_details(" not in rebuild_block
+    assert "Image.open(" not in rebuild_block
+    assert "recent_project_details(row)" in recent_block[refresh_start:]
+    assert "with Image.open(preview_path) as opened:" in recent_block[refresh_start:]
+
+    picdic_start = text.index("    def build_picdic(", app_start)
+    picdic_end = text.index("\n    def _order_key", picdic_start)
+    picdic_block = text[picdic_start:picdic_end]
+    assert "self._start_batch_task(" in picdic_block
+    assert "should_stop=self._batch_stop_event.is_set" in picdic_block
+
+
+def test_round1_picdic_cancel_is_atomic(tmp_path):
+    root = tmp_path / "dictionary"
+    pww = root / "_PictureCapture" / "QT" / "PWW"
+    pww.mkdir(parents=True)
+    Image.new("RGB", (8, 8), "white").save(pww / "0001_0001.png")
+    (pww / "0001.PWWords").write_text(
+        "0001|1|alpha|0001_0001.png\n", encoding="utf-8"
+    )
+
+    try:
+        build_picdic_package(root, should_stop=lambda: True)
+    except PicDicBuildCancelled:
+        pass
+    else:
+        raise AssertionError("expected cooperative PicDic cancellation")
+
+    out = root / "_PictureCapture" / "QT" / "PicDic"
+    assert not list(out.glob("*.tmp")) if out.exists() else True
+    assert not list(out.glob("*.dsl")) if out.exists() else True
+    assert not list(out.glob("*.zip")) if out.exists() else True
