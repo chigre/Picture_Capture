@@ -987,7 +987,7 @@ class UsageGuideWindow(tk.Toplevel):
                 ),
                 (
                     "B", "OCR画线：默认复用有效缓存",
-                    "【二、基于OCR画线】默认以 PaddleOCR 为主，Tesseract 与 Google Lens 按需启用。"
+                    "【二、基于OCR画线】默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启。"
                     "“使用有效缓存（推荐）”会在真正影响原始 OCR 的设置变化时自动失效，无需每次强制识别。"
                 ),
                 (
