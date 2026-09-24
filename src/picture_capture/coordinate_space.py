@@ -132,7 +132,7 @@ def migrate_legacy_geometry_settings(
     settings: Any,
     source_size: tuple[int, int],
 ) -> bool:
-    """Upgrade old display-scaled layout geometry to canonical full-resolution px.
+    """Upgrade old display-scaled layout geometry to canonical reference-page px.
 
     The conversion intentionally reproduces the old runtime interpretation using
     the saved parameter_display_width. It is idempotent and does not alter
@@ -140,7 +140,7 @@ def migrate_legacy_geometry_settings(
     """
     if geometry_uses_canonical_pixels(settings):
         if hasattr(settings, "geometry_coordinate_space"):
-            settings.geometry_coordinate_space = CANONICAL_COORDINATE_SPACE
+            settings.geometry_coordinate_space = CANONICAL_REFERENCE_SPACE
         return False
 
     transform = LayoutTransform(
