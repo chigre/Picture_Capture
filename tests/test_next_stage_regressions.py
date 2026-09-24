@@ -446,6 +446,7 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert '"refine_soft"' not in actions
     assert '"compare_soft"' not in actions
     assert '("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)' in actions
+    assert '"text": "#000000"' in styles
     assert '"primary": "#4F7CAC"' in styles
     assert '"primary_hover": "#416A94"' in styles
     assert '"success": "#69A875"' in styles
