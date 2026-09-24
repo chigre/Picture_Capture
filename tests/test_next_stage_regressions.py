@@ -1110,8 +1110,8 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "width = min(work_w, max(720, int(screen_w * 0.80)))" in text
     assert "SPI_GETWORKAREA" in text
     assert "height = max(1, int(work_h * 0.90))" in text
-    assert "x = max(work_x, work_x + work_w - width)" in text
-    assert "y = work_y" in text
+    assert "x = work_x + max(0, (work_w - width) // 2)" in text
+    assert "y = work_y + max(0, (work_h - height) // 2)" in text
     assert "self._wizard_left_width = max(400, int(width * 0.40) - 36)" in text
     assert "self._wizard_image_width = max(560, int(width * 0.60) - 36)" in text
     assert "target_width = max(320, int(preview_width))" in text
