@@ -561,6 +561,8 @@ def get_paddle_engine(settings: AppSettings) -> Any:
     # Avoid the PaddlePaddle 3.3.x CPU PIR/oneDNN incompatibility also for
     # ordinary OCR, not only the separate layout detector.
     os.environ["FLAGS_enable_pir_api"] = "0"
+    from .windows_gpu_runtime import configure_windows_nvidia_dlls
+    configure_windows_nvidia_dlls()
     try:
         from paddleocr import PaddleOCR
     except ImportError as exc:
