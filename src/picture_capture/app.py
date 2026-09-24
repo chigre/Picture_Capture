@@ -11706,7 +11706,7 @@ class PictureCaptureApp(tk.Tk):
         return round(self.canvas.canvasx(event.x) / self.view_scale), round(self.canvas.canvasy(event.y) / self.view_scale)
 
     def draw_cursor_guides(self, canvas_x: float, canvas_y: float) -> None:
-        """Draw the legacy blue dashed crosshair in displayed-image space."""
+        """Draw the blue dashed crosshair in the current canvas view."""
         self.canvas.delete("cursor-guide")
         if self.image is None:
             return
@@ -12102,15 +12102,18 @@ class PictureCaptureApp(tk.Tk):
             if 0 <= canvas_x < display_width and 0 <= canvas_y < display_height:
                 self.cursor_canvas_xy = (canvas_x, canvas_y)
                 self.draw_cursor_guides(canvas_x, canvas_y)
-                source_x = canvas_x / self.view_scale
-                source_y = canvas_y / self.view_scale
-                basis_scale = parameter_scale(self.image, self.settings)
-                parameter_x = round(source_x * basis_scale)
-                parameter_y = round(source_y * basis_scale)
+                source_x = round(canvas_x / self.view_scale)
+                source_y = round(canvas_y / self.view_scale)
+                transform = LayoutTransform(
+                    str(getattr(self.settings, "layout_transform", "identity") or "identity")
+                )
+                canonical_u, canonical_v = transform.source_to_canonical_point(
+                    source_x, source_y, self.image.size,
+                )
                 self.cursor_status_var.set(
-                    f"参数坐标 {parameter_x}, {parameter_y}｜"
-                    f"原图 {round(source_x)}, {round(source_y)}｜缩放 {round(self.view_scale * 100)}%｜"
-                    f"词条 {len(self.entries)}"
+                    f"原图 X,Y {source_x}, {source_y}｜"
+                    f"规范 U,V {canonical_u}, {canonical_v}｜"
+                    f"缩放 {round(self.view_scale * 100)}%｜词条 {len(self.entries)}"
                 )
             else:
                 self.cursor_canvas_xy = None
