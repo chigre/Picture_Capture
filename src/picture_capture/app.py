@@ -7191,17 +7191,12 @@ class PictureCaptureApp(tk.Tk):
         ttk.Separator(range_row, orient="vertical").pack(
             side="left", fill="y", padx=4, pady=3
         )
-        ttk.Label(range_row, text="页面范围：").pack(side="left")
         ttk.Radiobutton(range_row, text="当前页", variable=self.page_range_var, value="current").pack(side="left")
         ttk.Radiobutton(range_row, text="当前至末页", variable=self.page_range_var, value="to_end").pack(side="left", padx=(4, 0))
         ttk.Radiobutton(range_row, text="指定：", variable=self.page_range_var, value="specified").pack(side="left", padx=(4, 0))
         ttk.Entry(
             range_row, textvariable=self.page_range_spec_var, width=14, justify="left"
         ).pack(side="left", fill="x", expand=True)
-        ttk.Button(
-            range_row, text="跳到", command=self.jump_to_page_spec, style="PC.Compact.TButton"
-        ).pack(side="left", padx=(4, 0))
-
         size_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
         self.page_size_row = size_row
         size_row.grid(row=1, column=0, sticky="ew", pady=(0, 5))
@@ -7239,6 +7234,9 @@ class PictureCaptureApp(tk.Tk):
         ).pack(side="left")
         ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
 
+        ttk.Button(
+            size_row, text="跳转", command=self.jump_to_page_spec, style="PC.Compact.TButton"
+        ).pack(side="left", padx=(0, 3))
         ttk.Button(
             size_row, text="上一页", command=lambda: self.change_page(-1), style="PC.Compact.TButton"
         ).pack(side="left", padx=(0, 3))
@@ -8169,9 +8167,11 @@ class PictureCaptureApp(tk.Tk):
             (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
         ]
         for ri, specs in enumerate(rows):
-            row = ttk.Frame(actions); row.grid(row=ri, column=0, sticky="ew", pady=(0 if ri == 0 else 3, 0))
+            row = ttk.Frame(actions)
+            row.grid(row=ri, column=0, sticky="ew", pady=(0 if ri == 0 else 3, 0))
+            for bi in range(len(specs)):
+                row.columnconfigure(bi, weight=1, uniform=f"actions-row-{ri}")
             for bi, (text, command) in enumerate(specs):
-                padx = (0 if bi == 0 else 4, 0)
                 role = (
                     "primary" if text == "运行OCR画线"
                     else "success" if text == "保存当前页"
@@ -8181,7 +8181,10 @@ class PictureCaptureApp(tk.Tk):
                 button = self._sidebar_action_button(row, text, command, role=role)
                 if text == "编辑插图":
                     self.polygon_draw_button = button
-                button.pack(side="left", fill="x", expand=True, padx=padx)
+                button.grid(
+                    row=0, column=bi, sticky="ew",
+                    padx=(0 if bi == 0 else 4, 0),
+                )
         actions.columnconfigure(0, weight=1)
 
         postproduction = self._section_frame(
@@ -8195,9 +8198,12 @@ class PictureCaptureApp(tk.Tk):
         for ri, specs in enumerate(production_rows):
             row = ttk.Frame(postproduction)
             row.grid(row=ri, column=0, sticky="ew", pady=(0 if ri == 0 else 3, 0))
+            for bi in range(len(specs)):
+                row.columnconfigure(bi, weight=1, uniform=f"postproduction-row-{ri}")
             for bi, (text, command) in enumerate(specs):
-                self._sidebar_action_button(row, text, command).pack(
-                    side="left", fill="x", expand=True, padx=(0 if bi == 0 else 4, 0)
+                self._sidebar_action_button(row, text, command).grid(
+                    row=0, column=bi, sticky="ew",
+                    padx=(0 if bi == 0 else 4, 0),
                 )
         postproduction.columnconfigure(0, weight=1)
 
