@@ -1592,7 +1592,7 @@ class SettingsDialog(tk.Toplevel):
                 to=upper,
                 increment=increment,
                 width=18,
-                justify="right",
+                justify="left",
             )
         if name == "layout_writing_mode":
             return ttk.Combobox(
@@ -1898,7 +1898,40 @@ class SettingsDialog(tk.Toplevel):
             "按工作任务整理：第一次使用只看“常用 / 普通画线 / OCR画线”；"
             "底层阈值、正则和后端参数集中在高级区，不确定时无需修改。",
         )
-        notebook = ttk.Notebook(outer)
+        style = ttk.Style(self)
+        native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
+        style.configure(
+            "PC.Settings.TNotebook",
+            background=native_background,
+            borderwidth=0,
+            tabmargins=(0, 2, 0, 0),
+        )
+        style.configure(
+            "PC.Settings.TNotebook.Tab",
+            padding=(13, 7),
+            borderwidth=1,
+            relief="raised",
+            background="#e6eaf0",
+            foreground="#4b5563",
+        )
+        style.map(
+            "PC.Settings.TNotebook.Tab",
+            background=[
+                ("selected", native_background),
+                ("active", "#f1f3f6"),
+                ("!selected", "#e6eaf0"),
+            ],
+            foreground=[
+                ("selected", "#111827"),
+                ("active", "#1f2937"),
+                ("!selected", "#4b5563"),
+            ],
+            relief=[
+                ("selected", "sunken"),
+                ("!selected", "raised"),
+            ],
+        )
+        notebook = ttk.Notebook(outer, style="PC.Settings.TNotebook")
         self.notebook = notebook
         notebook.pack(fill="both", expand=True)
         self._settings_canvases: dict[str, tk.Canvas] = {}
@@ -1923,7 +1956,8 @@ class SettingsDialog(tk.Toplevel):
         ):
             notebook.add(tab, text=label)
 
-        selected_tab = {
+        self._settings_tabs = {
+            "common": common_tab,
             "normal": normal_tab,
             "ocr": ocr_tab,
             "display": display_tab,
@@ -1933,8 +1967,8 @@ class SettingsDialog(tk.Toplevel):
             "params": common_tab,
             "sort": sort_tab,
             "rules": rules_tab,
-        }.get(initial_tab, common_tab)
-        notebook.select(selected_tab)
+        }
+        self.select_tab(initial_tab)
         notebook.bind(
             "<<NotebookTabChanged>>",
             lambda _e: self._show_settings_help(
@@ -2349,7 +2383,20 @@ class SettingsDialog(tk.Toplevel):
             _bbox = _canvas.bbox("all")
             if _bbox:
                 _canvas.configure(scrollregion=_bbox)
-        self.transient(parent); self.grab_set()
+        # Keep Settings Center modeless: users often need to move the pointer
+        # over the main image to read coordinates while entering layout values.
+        # Do not use transient()/grab_set(), which would keep this window in
+        # front and block interaction with the main workspace.
+
+    def select_tab(self, key: str | None) -> None:
+        """Select a requested settings task when reusing the modeless window."""
+        if not hasattr(self, "notebook") or not hasattr(self, "_settings_tabs"):
+            return
+        tab = self._settings_tabs.get(key or "common", self._settings_tabs["common"])
+        try:
+            self.notebook.select(tab)
+        except tk.TclError:
+            pass
 
     def _build_project_details_tab(self, tab: ttk.Frame) -> None:
         """Build project metadata fields without mixing them into OCR controls."""
@@ -12312,7 +12359,24 @@ class PictureCaptureApp(tk.Tk):
         # object first so language-dependent options are immediately correct.
         if not self.apply_quick_settings(show_status=False, persist=False):
             return
-        SettingsDialog(self, initial_tab=initial_tab)
+        existing = self.__dict__.get("_settings_dialog")
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.select_tab(initial_tab)
+                    existing.deiconify()
+                    existing.lift()
+                    return
+            except tk.TclError:
+                pass
+        dialog = SettingsDialog(self, initial_tab=initial_tab)
+        self._settings_dialog = dialog
+        dialog.bind(
+            "<Destroy>",
+            lambda event, w=dialog: self.__dict__.pop("_settings_dialog", None)
+            if event.widget is w else None,
+            add="+",
+        )
 
     def open_project_profile(self, new_project: bool = False) -> None:
         if not self.project:
