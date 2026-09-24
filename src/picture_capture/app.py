@@ -7158,21 +7158,9 @@ class PictureCaptureApp(tk.Tk):
 
         range_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
         range_row.grid(row=0, column=0, sticky="ew", pady=(0, 3))
-        ttk.Label(range_row, text="页面范围：").pack(side="left")
-        ttk.Radiobutton(range_row, text="当前页", variable=self.page_range_var, value="current").pack(side="left")
-        ttk.Radiobutton(range_row, text="当前至末页", variable=self.page_range_var, value="to_end").pack(side="left", padx=(4, 0))
-        ttk.Radiobutton(range_row, text="指定：", variable=self.page_range_var, value="specified").pack(side="left", padx=(4, 0))
-        ttk.Entry(range_row, textvariable=self.page_range_spec_var, width=14).pack(side="left", fill="x", expand=True)
-        ttk.Button(
-            range_row, text="跳到", command=self.jump_to_page_spec, style="PC.Compact.TButton"
-        ).pack(side="left", padx=(4, 0))
-
-        size_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
-        self.page_size_row = size_row
-        size_row.grid(row=1, column=0, sticky="ew", pady=(0, 5))
-        ttk.Label(size_row, text="显示模式：").pack(side="left")
+        ttk.Label(range_row, text="显示模式：").pack(side="left")
         display_mode_combo = ttk.Combobox(
-            size_row,
+            range_row,
             textvariable=self.display_mode_var,
             values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览"),
             state="readonly",
@@ -7180,7 +7168,23 @@ class PictureCaptureApp(tk.Tk):
         )
         display_mode_combo.pack(side="left", padx=(0, 3))
         display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)
-        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=3, pady=3)
+        ttk.Separator(range_row, orient="vertical").pack(
+            side="left", fill="y", padx=4, pady=3
+        )
+        ttk.Label(range_row, text="页面范围：").pack(side="left")
+        ttk.Radiobutton(range_row, text="当前页", variable=self.page_range_var, value="current").pack(side="left")
+        ttk.Radiobutton(range_row, text="当前至末页", variable=self.page_range_var, value="to_end").pack(side="left", padx=(4, 0))
+        ttk.Radiobutton(range_row, text="指定：", variable=self.page_range_var, value="specified").pack(side="left", padx=(4, 0))
+        ttk.Entry(
+            range_row, textvariable=self.page_range_spec_var, width=14, justify="left"
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(
+            range_row, text="跳到", command=self.jump_to_page_spec, style="PC.Compact.TButton"
+        ).pack(side="left", padx=(4, 0))
+
+        size_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
+        self.page_size_row = size_row
+        size_row.grid(row=1, column=0, sticky="ew", pady=(0, 5))
 
         ttk.Button(
             size_row, text="−", width=3, command=lambda: self.zoom(0.87), style="PC.Tool.TButton"
@@ -7915,7 +7919,7 @@ class PictureCaptureApp(tk.Tk):
                 panel,
                 textvariable=var,
                 width=width,
-                justify="right" if cast in {int, float} else "left",
+                justify="left",
                 style="PC.Compact.TEntry",
             ).grid(row=row, column=col + 1, sticky="ew", padx=(0, 6), pady=1)
 
@@ -7978,7 +7982,9 @@ class PictureCaptureApp(tk.Tk):
         safety_var = tk.StringVar(value=str(self.settings.paddle_separator_safety_px))
         self.quick_vars["paddle_separator_safety_px"] = safety_var
         self.quick_field_casts["paddle_separator_safety_px"] = int
-        ttk.Entry(lens_row, textvariable=safety_var, width=4).pack(side="left", padx=(2, 2))
+        ttk.Entry(
+            lens_row, textvariable=safety_var, width=4, justify="left"
+        ).pack(side="left", padx=(2, 2))
         ttk.Label(lens_row, text="px").pack(side="left")
         ocr_tools = ttk.Frame(ocr)
         ocr_tools.grid(row=4, column=0, columnspan=6, sticky="ew", pady=(4, 0))
@@ -8023,12 +8029,16 @@ class PictureCaptureApp(tk.Tk):
         color_button(line_row, "guide_color")
         ttk.Label(line_row, text="宽度：").pack(side="left")
         guide_value = tk.StringVar(value=str(self.settings.guide_width)); self.quick_vars["guide_width"] = guide_value; self.quick_field_casts["guide_width"] = int
-        ttk.Entry(line_row, textvariable=guide_value, width=5).pack(side="left", padx=(2, 10))
+        ttk.Entry(
+            line_row, textvariable=guide_value, width=5, justify="left"
+        ).pack(side="left", padx=(2, 10))
         ttk.Checkbutton(line_row, text="插图形状：轮廓", variable=self.polygon_var, command=self.redraw).pack(side="left")
         color_button(line_row, "illustration_outline_color")
         ttk.Label(line_row, text="粗细").pack(side="left")
         outline_width_var = tk.StringVar(value=str(self.settings.illustration_outline_width)); self.quick_vars["illustration_outline_width"] = outline_width_var; self.quick_field_casts["illustration_outline_width"] = int
-        ttk.Entry(line_row, textvariable=outline_width_var, width=4).pack(side="left", padx=(2, 5))
+        ttk.Entry(
+            line_row, textvariable=outline_width_var, width=4, justify="left"
+        ).pack(side="left", padx=(2, 5))
         ttk.Label(line_row, text="背景").pack(side="left")
         color_button(line_row, "illustration_fill_color")
 
@@ -8037,14 +8047,18 @@ class PictureCaptureApp(tk.Tk):
         color_button(marker_row, "headword_marker_color")
         ttk.Label(marker_row, text="高度：").pack(side="left")
         marker_value = tk.StringVar(value=str(self.settings.marker_height)); self.quick_vars["marker_height"] = marker_value; self.quick_field_casts["marker_height"] = int
-        ttk.Entry(marker_row, textvariable=marker_value, width=5).pack(side="left", padx=(2, 10))
+        ttk.Entry(
+            marker_row, textvariable=marker_value, width=5, justify="left"
+        ).pack(side="left", padx=(2, 10))
         label_visible_var = tk.BooleanVar(value=bool(self.settings.show_illustration_labels))
         self.quick_bool_vars["show_illustration_labels"] = label_visible_var
         ttk.Checkbutton(marker_row, text="插图标签：外框", variable=label_visible_var).pack(side="left")
         color_button(marker_row, "illustration_label_border_color")
         ttk.Label(marker_row, text="粗细").pack(side="left")
         label_width_var = tk.StringVar(value=str(self.settings.illustration_label_border_width)); self.quick_vars["illustration_label_border_width"] = label_width_var; self.quick_field_casts["illustration_label_border_width"] = int
-        ttk.Entry(marker_row, textvariable=label_width_var, width=4).pack(side="left", padx=(2, 5))
+        ttk.Entry(
+            marker_row, textvariable=label_width_var, width=4, justify="left"
+        ).pack(side="left", padx=(2, 5))
         ttk.Label(marker_row, text="背景").pack(side="left")
         color_button(marker_row, "illustration_label_fill_color")
 
@@ -8054,7 +8068,9 @@ class PictureCaptureApp(tk.Tk):
             shown = getattr(self.settings, name) * 100 if name == "main_entry_x_ratio" else getattr(self.settings, name)
             var = tk.StringVar(value=str(round(shown) if name == "main_entry_x_ratio" else shown)); self.quick_vars[name] = var; self.quick_field_casts[name] = int if name.endswith("chars") else float
             if name == "main_entry_x_ratio": ttk.Label(entry_row, text="偏移%").pack(side="left", padx=(8, 2))
-            ttk.Entry(entry_row, textvariable=var, width=width).pack(side="left")
+            ttk.Entry(
+                entry_row, textvariable=var, width=width, justify="left"
+            ).pack(side="left")
         follow_var = tk.BooleanVar(value=bool(self.settings.main_entry_follow_zoom)); self.quick_bool_vars["main_entry_follow_zoom"] = follow_var
         ttk.Checkbutton(entry_row, text="跟随缩放", variable=follow_var).pack(side="left", padx=(8, 0))
         ttk.Label(entry_row, text="默认").pack(side="left", padx=(8, 0))
@@ -8066,7 +8082,9 @@ class PictureCaptureApp(tk.Tk):
         ttk.Combobox(font_row, textvariable=family_var, values=tuple(sorted(set(font.families()), key=str.casefold)), width=16).pack(side="left")
         ttk.Label(font_row, text="字号").pack(side="left", padx=(8, 2))
         size_var = tk.StringVar(value=str(self.settings.main_entry_font_size)); self.quick_vars["main_entry_font_size"] = size_var; self.quick_field_casts["main_entry_font_size"] = int
-        ttk.Entry(font_row, textvariable=size_var, width=5).pack(side="left")
+        ttk.Entry(
+            font_row, textvariable=size_var, width=5, justify="left"
+        ).pack(side="left")
         for label, name in (("粗体", "main_entry_font_bold"), ("斜体", "main_entry_font_italic")):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
@@ -8077,7 +8095,9 @@ class PictureCaptureApp(tk.Tk):
         ttk.Combobox(label_font_row, textvariable=label_family_var, values=tuple(sorted(set(font.families()), key=str.casefold)), width=16).pack(side="left")
         ttk.Label(label_font_row, text="字号").pack(side="left", padx=(8, 2))
         label_size_var = tk.StringVar(value=str(self.settings.illustration_label_font_size)); self.quick_vars["illustration_label_font_size"] = label_size_var; self.quick_field_casts["illustration_label_font_size"] = int
-        ttk.Entry(label_font_row, textvariable=label_size_var, width=5).pack(side="left")
+        ttk.Entry(
+            label_font_row, textvariable=label_size_var, width=5, justify="left"
+        ).pack(side="left")
         for label, name in (("粗体", "illustration_label_font_bold"), ("斜体", "illustration_label_font_italic")):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(label_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
@@ -8110,10 +8130,14 @@ class PictureCaptureApp(tk.Tk):
         ttk.Checkbutton(save_row, text="自动保存", variable=self.autosave_var, command=self.toggle_autosave).pack(side="left")
         ttk.Label(save_row, text="间隔时间(秒)").pack(side="left", padx=(8, 2))
         interval_var = tk.StringVar(value=str(self.settings.batch_interval)); self.quick_vars["batch_interval"] = interval_var; self.quick_field_casts["batch_interval"] = float
-        ttk.Entry(save_row, textvariable=interval_var, width=6).pack(side="left")
+        ttk.Entry(
+            save_row, textvariable=interval_var, width=6, justify="left"
+        ).pack(side="left")
         ttk.Label(save_row, text="向右比例%").pack(side="left", padx=(10, 2))
         ratio_var = tk.StringVar(value=str(self.settings.right_ratio)); self.quick_vars["right_ratio"] = ratio_var; self.quick_field_casts["right_ratio"] = float
-        ttk.Entry(save_row, textvariable=ratio_var, width=6).pack(side="left")
+        ttk.Entry(
+            save_row, textvariable=ratio_var, width=6, justify="left"
+        ).pack(side="left")
         aux.columnconfigure(1, weight=1); aux.columnconfigure(3, weight=1)
 
         actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
