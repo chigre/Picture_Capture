@@ -1789,9 +1789,9 @@ class SettingsDialog(tk.Toplevel):
         "columns": "正文实际栏数。错栏会让后续所有画线偏位；通常先用“检测版面参数”自动估计。",
         "gutter": "相邻两栏之间的空白宽度。主要影响栏边界、切图范围和列定位。",
         "column_width": "单栏正文宽度。通常由版面检测得到，不建议只凭肉眼频繁微调。",
-        "start_y": "正文在全分辨率规范坐标中的起始 V。横排页面中 V 与原图 Y 一致；若 Project Profile 明确设置页眉百分比，该百分比是页面模板的权威来源。",
-        "bottom_y": "正文在全分辨率规范坐标中的结束 V。横排页面中 V 与原图 Y 一致；它不是【切图设置】里的切图下边界。",
-        "manual_x": "第一栏在全分辨率规范坐标中的左缘 U。横排 identity 页面中 U 与原图 X 一致；镜像/竖排时以规范阅读坐标解释。",
+        "start_y": "正文在参考页规范坐标中的起始 V。运行时会按当前页规范宽度缩放；横排参考页中 V 与原图 Y 一致。若 Project Profile 明确设置页眉百分比，该百分比是页面模板的权威来源。",
+        "bottom_y": "正文在参考页规范坐标中的结束 V。运行时会按当前页规范宽度缩放；它不是【切图设置】里的切图下边界。",
+        "manual_x": "第一栏在参考页规范坐标中的左缘 U。运行时会按当前页规范宽度缩放；镜像/竖排时仍按规范阅读坐标解释。",
         "body_indent": "普通画线只检查每栏左侧这段宽度。太小会漏掉缩进词头；太大会把正文开头误当词头。",
         "character_height": "典型文字行高。影响普通画线的最小词条间距，也影响横线 Y 精修的搜索尺度。",
         "row_padding": "典型行间空白。数值过大可能把相邻词条合并；过小则更容易出现重复横线。",
@@ -1917,20 +1917,20 @@ class SettingsDialog(tk.Toplevel):
 
     SETTING_UNITS = {
         "columns": "栏",
-        "start_y": "规范px", "bottom_y": "规范px", "manual_x": "规范px",
-        "column_width": "规范px", "gutter": "规范px", "body_indent": "规范px",
-        "character_height": "规范px", "row_padding": "规范px", "horizontal_tolerance": "规范px",
-        "darkness_threshold": "RGB 和", "column_track_radius": "规范px",
-        "column_track_block_height": "规范px", "column_track_max_step": "规范px",
+        "start_y": "参考页规范px", "bottom_y": "参考页规范px", "manual_x": "参考页规范px",
+        "column_width": "参考页规范px", "gutter": "参考页规范px", "body_indent": "参考页规范px",
+        "character_height": "参考页规范px", "row_padding": "参考页规范px", "horizontal_tolerance": "参考页规范px",
+        "darkness_threshold": "RGB 和", "column_track_radius": "参考页规范px",
+        "column_track_block_height": "参考页规范px", "column_track_max_step": "参考页规范px",
         "paddle_band_width_ratio": "%", "paddle_band_left_margin": "参考px@1400",
         "paddle_left_tolerance": "参考px@1400", "paddle_max_input_side": "px",
         "paddle_separator_safety_px": "参考px@1400", "paddle_separator_band_radius": "参考px@1400",
         "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "参考px@1400",
         "paddle_header_search_height": "参考px@1400", "paddle_header_rule_margin": "参考px@1400",
-        "batch_interval": "秒", "illustration_detect_padding": "规范px",
-        "illustration_detect_right_padding": "规范px", "main_entry_font_size": "pt",
+        "batch_interval": "秒", "illustration_detect_padding": "参考页规范px",
+        "illustration_detect_right_padding": "参考页规范px", "main_entry_font_size": "pt",
         "review_entry_font_size": "pt", "review_entry_vertical_padding": "px",
-        "review_single_cjk_line_height": "规范px", "review_zoom_percent": "%",
+        "review_single_cjk_line_height": "参考页规范px", "review_zoom_percent": "%",
     }
     SETTING_SPIN = {
         "columns": (1, 12, 1),
@@ -2174,13 +2174,10 @@ class SettingsDialog(tk.Toplevel):
     def _setting_var(self, name: str) -> tk.Variable:
         if name in self.vars:
             return self.vars[name]
+        # Settings Center edits persisted project values. Layout geometry is
+        # therefore shown in canonical reference-page pixels; the main workspace
+        # separately shows current-page/source equivalents where appropriate.
         raw = getattr(self.parent.settings, name)
-        if (
-            name in {"start_y", "bottom_y"}
-            and self.parent.image is not None
-            and hasattr(self.parent, "_quick_geometry_value")
-        ):
-            raw = self.parent._quick_geometry_value(name)
         choices = self.SETTING_CHOICES.get(name)
         if choices:
             reverse = {value: label for label, value in choices.items()}
@@ -3616,15 +3613,21 @@ class SettingsDialog(tk.Toplevel):
             if self.parent.image is not None and not str(
                 getattr(self.parent.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
             ).startswith("vertical"):
+                transform = LayoutTransform(
+                    str(getattr(self.parent.settings, "layout_transform", "identity") or "identity")
+                )
+                canonical_width = transform.canonical_size(self.parent.image.size)[0]
                 if (
                     "start_y" in self.vars
                     and str(getattr(self.parent.settings, "profile_header_mode", "auto") or "auto")
                     == "present"
                 ):
-                    source_y = max(0, min(
-                        self.parent.image.height,
+                    source_y = stored_geometry_to_canonical(
                         int(self.parent.settings.start_y),
-                    ))
+                        canonical_width,
+                        self.parent.settings,
+                    )
+                    source_y = max(0, min(self.parent.image.height, source_y))
                     percent = source_y * 100.0 / max(1, self.parent.image.height)
                     if percent > 35.0:
                         raise ValueError("页眉不能超过原图高度的 35%。")
@@ -3634,10 +3637,12 @@ class SettingsDialog(tk.Toplevel):
                     and str(getattr(self.parent.settings, "profile_footer_mode", "auto") or "auto")
                     == "present"
                 ):
-                    source_y = max(0, min(
-                        self.parent.image.height,
+                    source_y = stored_geometry_to_canonical(
                         int(self.parent.settings.bottom_y),
-                    ))
+                        canonical_width,
+                        self.parent.settings,
+                    )
+                    source_y = max(0, min(self.parent.image.height, source_y))
                     percent = (
                         (self.parent.image.height - source_y)
                         * 100.0
