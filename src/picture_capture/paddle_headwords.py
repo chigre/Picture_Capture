@@ -572,7 +572,7 @@ def get_paddle_engine(settings: AppSettings) -> Any:
         from paddleocr import PaddleOCR
     except ImportError as exc:
         raise RuntimeError(
-            "尚未安装 PaddleOCR。Windows 请运行 install_ocr_windows.bat；CPU 用户也可执行：uv sync --extra ocr-cpu"
+            "尚未安装 PaddleOCR。Windows 请运行 .venv\\Scripts\\python.exe scripts\\windows_ocr_setup.py；CPU 用户也可执行：uv sync --locked --no-dev --extra ocr-cpu"
         ) from exc
     try:
         kwargs = dict(
