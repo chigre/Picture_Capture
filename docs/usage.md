@@ -56,16 +56,20 @@ v2.12.0 起，新建项目的数据统一写入项目下的 `_PictureCapture/`�
 
 项目只要求扫描图片；其他文件均为可选或由程序生成。打开旧目录后，建议先在一页上校准“分栏、栏宽、栏间隔、起始点 Y、正文缩进、字高”，确认智能画线正确后再执行批量操作。
 
-### 参数坐标与原图坐标
+### 坐标体系
 
-几何参数恢复为旧 VB 程序的含义：数值以页面载入后、适配到主显示区域的图片尺寸为准，而不是以100%原图像素为准。例如原图宽1260像素、界面中显示宽1000像素时，在参数中填写 `起始 X=30`，其原图位置约为38像素。
+Picture Capture 现在把坐标空间分开管理，避免旧版“显示图像素”与原图像素混用。完整契约见 [coordinate-system.md](coordinate-system.md)。
 
-参数栏会显示“参数基准：显示图宽 N px”。鼠标在图片上移动时，蓝色横纵虚线用于定位，底部状态栏同时显示：
+- **原图坐标（source XY）**：原点在扫描图左上角，X 向右、Y 向下，单位为原图像素。PDIC、PPP、鼠标/人工标注、最终 OCR 词头、切图框和对外训练标注都使用这一坐标。
+- **规范坐标（canonical UV）**：用于镜像、RTL 和纵排后的阅读版式。U 是规范横轴，V 是阅读轴；运行时使用当前页全分辨率 canonical 像素。
+- **参考页规范坐标**：项目级栏位置、栏宽、行高等可跨页复用的几何参数，以明确的 reference width 保存。设置中心需要暴露此类高级参数时会明确标为“参考页规范坐标”，不会把它简称成原图 px。
+- **Profile 页面模板**：页眉、页尾和左右页边使用百分比保存；应用到具体页面时再解析成该页原图物理边界。
+- **analysis / OCR band 坐标**：仅供内部缩放图和 OCR 候选带使用，不写入 PDIC/PPP，也不能直接当作原图坐标。
+- **旧显示坐标**：仅用于迁移旧项目。`parameter_display_width` 不再是新项目的坐标基准。
 
-- `参数坐标`：与栏宽、起始Y、字高等输入框使用同一坐标系，校准参数时看这一组。
-- `原图坐标`：写入 `.pdic`、`.ppp` 以及实际裁剪区域的坐标。
+主界面遵循“能用原图就用原图”的原则：横排页面的【页眉Y/页尾Y】显示当前原图像素；纵排/旋转版式若一个单独的 source X/Y 无法表达阅读轴边界，则明确显示 U/V，而不是伪装成原图 Y。
 
-Ctrl＋滚轮只改变查看倍率，不会改变参数对应的原图位置；翻页时程序会按页面载入后的显示宽度重新建立参数换算。这样既保持旧版调参习惯，也确保保存和切图使用无损原图。
+Ctrl＋滚轮只改变查看倍率，不改变任何持久化几何或 PDIC/PPP 坐标。项目转交时，只要保留原始扫描图与 `_PictureCapture/`，坐标含义不依赖接手者的窗口大小或显示器分辨率。
 
 ### 推荐：优先使用 OCR画线
 
@@ -137,7 +141,7 @@ OCR词头识别阶段仍只截取各栏左侧候选带；只有用户主动点�
 
 v1.5.9 起，词头结构解析会在正则之后再做一层语法校正：旧/自定义正则即使把 `lemma, da` 的逗号误吞进 lemma，也会自动把逗号归还给性别变体/POS 解析；长词头若把 POS 挤到紧邻下一印刷行，也可逻辑回接而不改变首行画线 Y。还支持 `s.amb.`、`pron.indef.`、`Contracción de` 和部分 `||` 平行表达结构，并把 `Pron. [..]` 视为发音说明以避免假词头。
 
-每页的原始识别框、同行合并结果、`raw_headword`、`corrected_headword`、`ocr_repairs`、标准化后的 `normalized_headword`、词性/变形提示、候选得分和明确 `reject_reason` 保存在 `QT/PaddleOCR/页名.json`。v1.5.8 起，`页名_ocr_diagnostics.txt` 是严格的 12 列 TSV：`column / box / conf / text / accept-reject / score / lemma / raw / corrected / POS / repairs / reason`，只有一个表头，所有后续行列数完全相同；Paddle/Tesseract 来源写在 `reason` 的 `engine=...` 中。按源图 Y 自动配对的双 OCR 对照移到独立 `页名_ocr_comparison.txt`，固定 27 列，可直接查看 `delta_y`、两侧 lemma/status 一致性和冲突原因。接受词头如果违反页面内近似字典序，只产生 `WARN:alphabetical_*`，不会因此被删除。JSON 还保存 `final_entries`，GUI 翻页后会恢复 OCR confidence，并用文本框底色分级显示。修改筛选正则和阈值后再次识别会复用 Paddle OCR 缓存；只有图像、列路径、候选带、语言或模型设置变化时才重新推理。需要忽略缓存时在主界面选择“②强制重新识别”后运行 OCR 画线。
+每页的原始识别框、同行合并结果、`raw_headword`、`corrected_headword`、`ocr_repairs`、标准化后的 `normalized_headword`、词性/变形提示、候选得分和明确 `reject_reason` 保存在 `QT/PaddleOCR/页名.json`。v1.5.8 起，`页名_ocr_diagnostics.txt` 是严格的 12 列 TSV：`column / box / conf / text / accept-reject / score / lemma / raw / corrected / POS / repairs / reason`，只有一个表头，所有后续行列数完全相同；Paddle/Tesseract 来源写在 `reason` 的 `engine=...` 中。按 canonical 阅读轴 V 自动配对的双 OCR 对照移到独立 `页名_ocr_comparison.txt`，固定 27 列，可直接查看 `delta_y`、两侧 lemma/status 一致性和冲突原因。接受词头如果违反页面内近似字典序，只产生 `WARN:alphabetical_*`，不会因此被删除。JSON 还保存 `final_entries`，GUI 翻页后会恢复 OCR confidence，并用文本框底色分级显示。修改筛选正则和阈值后再次识别会复用 Paddle OCR 缓存；只有图像、列路径、候选带、语言或模型设置变化时才重新推理。需要忽略缓存时在主界面选择“②强制重新识别”后运行 OCR 画线。
 
 整页版面参数估计使用 PaddleOCR detection-only 文本框，不把 PP-StructureV3 作为普通页面的必经流程；栏左词头 OCR 仍保持窄候选带策略，以避免无关正文增加耗时。
 
@@ -195,7 +199,7 @@ uv run picture-capture-cli "D:\Dictionary" split-whole
 - 自动切图不再误用无关的 `CheckBox3` 状态。
 - 所有裁剪框都会限制在图像范围内；不会因负坐标或超过边界而使整批任务崩溃。
 - 不再用空的 `Catch` 吞掉错误；错误会显示原因并在终端输出详细信息。
-- 参数使用显示图像像素；保存时统一换算为原始图像像素，窗口缩放不会改变 PDIC 坐标。
+- 旧显示坐标仅用于兼容迁移；PDIC/PPP/切图与对外标注统一使用原图像素，版式内部使用显式 canonical/reference 坐标，窗口缩放不会改变任何持久化坐标。
 - 文件路径使用 `pathlib`，不再依赖 Windows 反斜杠字符串拼接。
 
 ## 已复原的功能
