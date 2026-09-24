@@ -704,9 +704,14 @@ def refine_existing_entries(
 
     from .paddle_headwords import refine_separator_y
 
-    display_per_source = parameter_scale(canonical, settings)
-    source_per_display = 1.0 / max(1e-9, display_per_source)
-    line_height = max(2, round(settings.character_height * source_per_display))
+    canonical_width = canonical.width
+    line_height = max(
+        2,
+        stored_geometry_to_canonical(
+            settings.character_height, canonical_width, settings,
+        ),
+    )
+    source_per_reference = canonical_width / 1400.0
     search_ratio = max(0.05, min(0.80, float(settings.paddle_separator_search_ratio)))
     max_delta = max(2, round(line_height * search_ratio))
 
@@ -728,7 +733,7 @@ def refine_existing_entries(
                 int(canonical_v),
                 line_height,
                 settings,
-                source_per_display_pixel=source_per_display,
+                source_per_display_pixel=source_per_reference,
                 lower_bound=max(0, int(geometry.top)),
             )
             delta = int(candidate_v) - int(canonical_v)
@@ -893,9 +898,15 @@ def clamp_box(box: tuple[int, int, int, int], image: Image.Image) -> tuple[int, 
 def line_box(entry: Entry, geometry: Geometry, image: Image.Image, settings: AppSettings) -> tuple[int, int, int, int]:
     _entry_u, entry_v = geometry.source_to_canonical(entry.x, entry.y)
     idx = column_index(entry.x, geometry, entry.y)
-    scale = parameter_scale(image, settings)
-    vertical_pad = round(abs(settings.row_padding) / scale)
-    height = round((settings.character_height + 2 * abs(settings.row_padding)) / scale)
+    canonical_width = geometry.transform.canonical_size(image.size)[0]
+    row_padding = stored_geometry_to_canonical(
+        settings.row_padding, canonical_width, settings,
+    )
+    character_height = stored_geometry_to_canonical(
+        settings.character_height, canonical_width, settings,
+    )
+    vertical_pad = abs(row_padding)
+    height = character_height + 2 * abs(row_padding)
     width = round(geometry.column_widths[idx] * min(100.0, max(1.0, settings.right_ratio)) / 100.0)
     left_extension = round(geometry.column_starts[0] * 0.5)
     tracked_x = geometry.x_at(idx, entry_v)
