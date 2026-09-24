@@ -64,7 +64,7 @@ from .profile_setup import ProjectProfileWizard, _screen_work_area
 from .profile_semantics import (
     effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
 )
-from .picdic import build_picdic_package
+from .picdic import PicDicBuildCancelled, build_picdic_package
 from .image_utils import normalize_page_rgb
 from .reference_index import contains_cjk, reference_sort_key
 from .network_lookup import LexicalLookupResult, lookup_word_free, web_search_url
@@ -14018,9 +14018,12 @@ class PictureCaptureApp(tk.Tk):
         language = self.settings.ocr_language
 
         def worker(_item, _position: int, _total: int):
-            return build_picdic_package(
-                root, language, should_stop=self._batch_stop_event.is_set,
-            )
+            try:
+                return build_picdic_package(
+                    root, language, should_stop=self._batch_stop_event.is_set,
+                )
+            except PicDicBuildCancelled:
+                return None
 
         def done(_completed, _total, stopped, results, error):
             if error is not None or stopped or not results:
