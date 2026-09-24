@@ -1374,20 +1374,6 @@ class SettingsDialog(tk.Toplevel):
         ("校对时主界面显示 OCR 置信度底色", "review_main_show_ocr_background"),
     )
 
-    def _setting_var(self, name: str) -> tk.Variable:
-        if name in self.vars:
-            return self.vars[name]
-        raw = getattr(self.parent.settings, name)
-        choices = self.SETTING_CHOICES.get(name)
-        if choices:
-            reverse = {value: label for label, value in choices.items()}
-            value = reverse.get(str(raw), str(raw))
-        else:
-            value = str(raw)
-        var = tk.StringVar(value=value)
-        self.vars[name] = var
-        return var
-
     def _show_settings_help(self, title: str, body: str) -> None:
         if hasattr(self, "_settings_help_title_var"):
             self._settings_help_title_var.set(str(title or "设置说明"))
