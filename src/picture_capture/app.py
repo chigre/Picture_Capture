@@ -1275,8 +1275,9 @@ class UsageGuideWindow(tk.Toplevel):
             add="+",
         )
         self._canvas.bind("<Configure>", self._resize_content, add="+")
-        self._canvas.bind("<MouseWheel>", self._mousewheel, add="+")
-        self._content.bind("<MouseWheel>", self._mousewheel, add="+")
+        self.bind("<MouseWheel>", self._mousewheel, add="+")
+        self.bind("<Button-4>", lambda _event: self._canvas.yview_scroll(-3, "units"), add="+")
+        self.bind("<Button-5>", lambda _event: self._canvas.yview_scroll(3, "units"), add="+")
 
         footer = tk.Frame(shell, bg=colors["bg"])
         footer.pack(fill="x", pady=(12, 0))
