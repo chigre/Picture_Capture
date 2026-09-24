@@ -3793,11 +3793,9 @@ class ReviewWindow(tk.Toplevel):
         self.parent.toggle_autosave()
 
     def open_sort_rules(self) -> None:
-        dialog = SettingsDialog(self.parent, initial_tab="sort")
-        try:
-            dialog.transient(self)
-        except tk.TclError:
-            pass
+        # Reuse the same modeless Settings Center so the main image remains
+        # available for reference while settings are edited.
+        self.parent.open_settings(initial_tab="sort")
 
     def run_order_check(self) -> None:
         self.check_order(self.order_scope_var.get() == "all")
