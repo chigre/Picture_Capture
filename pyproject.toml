@@ -48,7 +48,6 @@ where = ["src"]
 picture_capture = [
     "data/*.json",
     "data/layout_example/*.png",
-    "data/profile_previews/*.jpg",
     "data/headword_examples/*.jpg",
     "data/headword_examples/*.png",
     "data/headword_examples/*.jpeg",
@@ -57,10 +56,6 @@ picture_capture = [
     "data/headword_examples/recommended_current/*.png",
     "data/headword_examples/recommended_current/*.jpeg",
     "data/headword_examples/recommended_current/*.webp",
-    "data/headword_examples/extended/*.jpg",
-    "data/headword_examples/extended/*.png",
-    "data/headword_examples/extended/*.jpeg",
-    "data/headword_examples/extended/*.webp",
 ]
 
 [tool.ruff]
