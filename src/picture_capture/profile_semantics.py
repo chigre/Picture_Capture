@@ -421,28 +421,57 @@ def excluded_source_side_percent(settings: AppSettings, page_index: int) -> floa
 
 
 def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], page_index: int = 0) -> AppSettings:
-    """Return a per-page copy with intuitive header/footer template applied."""
+    """Return a per-page copy with the confirmed page template applied.
+
+    For horizontal dictionaries, an explicit physical header/footer also defines
+    the OCR/layout body's top/bottom. Keeping those bounds independent caused
+    the Project Profile preview to show one yellow exclusion boundary while the
+    blue column path (and later OCR band) still started at an older start_y.
+    Vertical dictionaries keep header/footer as source-space masks because their
+    physical top/bottom is not the canonical reading-axis Y.
+    """
     current = replace(settings)
-    # image_size remains part of this helper's API because the per-page template
-    # is resolved alongside an actual page; physical masks are applied later to
-    # source pixels and canonical geometry stays in its own coordinate system.
-    _ = image_size
+    source_width = max(1, int(image_size[0]))
+    source_height = max(1, int(image_size[1]))
+    horizontal = (
+        str(getattr(current, "layout_writing_mode", "horizontal-tb") or "horizontal-tb")
+        == "horizontal-tb"
+    )
+
+    # Layout Y parameters use the historical displayed-page coordinate scale.
+    # Horizontal canonical width equals source width for both identity/mirror_x.
+    if int(getattr(current, "parameter_display_width", 0) or 0) > 0:
+        display_scale = max(
+            0.01,
+            float(current.parameter_display_width) / float(source_width),
+        )
+    else:
+        display_scale = min(1.0, 1400.0 / float(source_width))
 
     header_mode = str(getattr(current, "profile_header_mode", "auto") or "auto")
-    # Page-template header/footer are physical SOURCE-page regions. They are
-    # masked before canonical rotation/mirroring below, so never reinterpret
-    # their percentages as canonical start_y/bottom_y. The historical automatic
-    # horizontal header-rule detector remains useful for horizontal pages only.
-    if header_mode == "auto" and current.layout_writing_mode == "horizontal-tb":
+    if header_mode == "present" and horizontal:
+        pct = max(
+            0.0, min(35.0, float(getattr(current, "profile_header_percent", 6.0)))
+        )
+        source_top = round(source_height * pct / 100.0)
+        current.start_y = max(0, round(source_top * display_scale))
+        current.paddle_auto_header_rule = False
+    elif header_mode == "auto" and horizontal:
         current.paddle_auto_header_rule = True
     else:
         current.paddle_auto_header_rule = False
 
     footer_mode = str(getattr(current, "profile_footer_mode", "auto") or "auto")
-    # bottom_y is a canonical reading-axis body bound learned during Profile
-    # analysis. Reuse it for automatic mode; an explicit physical footer is
-    # independently masked in source space and therefore must not overwrite it.
-    if footer_mode == "auto":
+    if footer_mode == "present" and horizontal:
+        pct = max(
+            0.0, min(35.0, float(getattr(current, "profile_footer_percent", 5.0)))
+        )
+        source_bottom = round(source_height * (1.0 - pct / 100.0))
+        current.bottom_y = max(
+            current.start_y + 1, round(source_bottom * display_scale)
+        )
+        current.crop_to_bottom_y = True
+    elif footer_mode == "auto":
         current.crop_to_bottom_y = int(getattr(current, "bottom_y", 0) or 0) > 0
     elif footer_mode == "none":
         current.crop_to_bottom_y = False
