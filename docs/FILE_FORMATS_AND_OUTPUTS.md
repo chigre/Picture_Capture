@@ -1,5 +1,17 @@
 # Picture Capture v2.11.12 文件格式与输出目录
 
+## 坐标契约
+
+跨机器、跨版本可复用的标注坐标统一以**原图像素**为对外标准；原点位于原图左上角，X 向右、Y 向下。
+
+- PDIC、PPP、最终 OCR 词头、Crop Plan 的 `source_xyxy`、切图日志：`source_image_pixels`。
+- 版式栏结构可使用 `canonical_full_resolution_pixels` 或 `canonical_reference_page_pixels`，但文件中必须同时保存坐标空间、变换类型和/或参考宽度。
+- Profile 页眉/页尾/页边规则保存百分比，应用到具体页时解析为该页原图物理边界。
+- OCR band/analysis 坐标只属于中间计算，不应被外部工具当作原图坐标。
+- 旧 `parameter_display_width` 仅用于迁移历史项目。
+
+完整定义见 [coordinate-system.md](coordinate-system.md)。
+
 ## 1. PDIC
 
 每个扫描页可有一个同名 `.pdic` 文件，例如：
@@ -139,7 +151,9 @@ X/Y 直接读取 PDIC 已保存比例值，不重新从像素计算，也不带 
 
 ### `QT/PaddleOCR/`
 
-OCR 缓存与诊断：
+OCR 缓存与诊断。JSON v3 中保存 `coordinate_spaces` 元数据：最终词头与 `source_x/source_y` 为原图像素，`canonical_u/canonical_v` 为当前页规范全分辨率坐标，OCR `box` 为候选带局部坐标。不要把这三者混用。
+
+主要文件：
 
 - `<page>.json`：OCR候选、几何、融合信息。
 - `<page>_manual_selection.json`：人工候选选择覆盖。
@@ -170,7 +184,11 @@ DSL 中同一词头可关联多张词条图片；跨页连续片段会尽量附�
 
 ### `QT/CropPlan/`
 
-正式切图前生成的逐页 Crop Plan JSON。主界面“切图预览（主图）”和正式切图使用同一套关系判定逻辑。
+正式切图前生成的逐页 Crop Plan JSON。主界面“切图预览（主图）”和正式切图使用同一套关系判定逻辑。v3 文件显式包含 `coordinate_space: source_image_pixels` 与 `box_format: source_xyxy`，其中所有导出框均可直接回到原扫描图定位。
+
+### `QT/_file_log.txt`
+
+词条/单行切图日志。新建日志首行写入 `coordinate_space=source_image_pixels`，后续每行的 `source_x / source_y / width / height` 都是原图像素。旧日志没有该注释行，但数据仍按历史格式兼容。
 
 ### `QT/_illustration_crop_log.txt`
 
