@@ -6896,13 +6896,15 @@ class PictureCaptureApp(tk.Tk):
     def _footer_action_button(
         self, parent: tk.Misc, text: str, command, *, role: str
     ) -> tk.Button:
-        """Create one emphasized bottom-bar action with a soft functional color."""
+        """Create one emphasized bottom-bar action with a functional color."""
+        colors = self._main_ui_colors
         palette = {
-            "project": ("#dff1e3", "#cbe7d1", "#356b42"),
+            # Match the exact color treatment used by `保存当前页`.
+            "project": (colors["success"], colors["success_hover"], "#ffffff"),
             "config": ("#dceeff", "#c7e1f8", "#245b86"),
         }
         background, active_background, foreground = palette[role]
-        border = "#cfd5dc"
+        border = colors["button_border"]
         return tk.Button(
             parent,
             text=text,
