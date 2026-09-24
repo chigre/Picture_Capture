@@ -6342,7 +6342,7 @@ def test_coordinate_contract_legacy_migration_preserves_runtime_geometry():
     from copy import deepcopy
     from PIL import Image
     from picture_capture.coordinate_space import (
-        CANONICAL_COORDINATE_SPACE,
+        CANONICAL_REFERENCE_SPACE,
         migrate_legacy_geometry_settings,
     )
     from picture_capture.models import AppSettings
@@ -6367,7 +6367,8 @@ def test_coordinate_contract_legacy_migration_preserves_runtime_geometry():
     migrated = deepcopy(legacy)
     assert migrate_legacy_geometry_settings(migrated, image.size) is True
     assert migrated.geometry_coordinate_version == 2
-    assert migrated.geometry_coordinate_space == CANONICAL_COORDINATE_SPACE
+    assert migrated.geometry_coordinate_space == CANONICAL_REFERENCE_SPACE
+    assert migrated.geometry_reference_width == 2000
     assert migrated.manual_x == 100
     assert migrated.column_width == 800
     assert migrated.gutter == 100
@@ -6378,6 +6379,14 @@ def test_coordinate_contract_legacy_migration_preserves_runtime_geometry():
     assert after.column_widths == before.column_widths
     assert after.top == before.top
     assert after.bottom == before.bottom
+    # The reference width also preserves the old width-normalized behavior on a
+    # differently sized scan without reintroducing GUI display coordinates.
+    larger = Image.new("RGB", (3000, 1800), "white")
+    legacy_large = derive_geometry(larger, legacy)
+    migrated_large = derive_geometry(larger, migrated)
+    assert migrated_large.column_starts == legacy_large.column_starts
+    assert migrated_large.column_widths == legacy_large.column_widths
+    assert migrated_large.top == legacy_large.top
     assert migrate_legacy_geometry_settings(migrated, image.size) is False
 
 
@@ -6457,7 +6466,7 @@ def test_coordinate_contract_training_export_separates_source_and_canonical(tmp_
 
     assert annotation["format"] == "picture-capture-training-v2"
     assert annotation["coordinate_contract"]["annotations"] == SOURCE_COORDINATE_SPACE
-    assert annotation["coordinate_contract"]["layout_geometry"] == CANONICAL_COORDINATE_SPACE
+    assert annotation["coordinate_contract"]["layout_geometry_runtime"] == CANONICAL_COORDINATE_SPACE
     assert annotation["ground_truth_lines"][0]["x"] == 20
     assert annotation["ground_truth_lines"][0]["y"] == 120
     assert annotation["page_template"]["coordinate_space"] == SOURCE_COORDINATE_SPACE
