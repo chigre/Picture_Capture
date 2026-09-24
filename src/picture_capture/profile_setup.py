@@ -2209,7 +2209,7 @@ class ProjectProfileWizard(tk.Toplevel):
                     # visible numeric thresholds, but do not silently enable the
                     # extra strong-visual gate that previously dropped true heads.
                     self.cjk_require_left_edge_var.set(True)
-            elif key in {"latin_regular", "edge_visual_regular", "legacy_spanish_structured"}:
+            elif key in {"latin_regular", "legacy_spanish_structured"}:
                 self.headword_left_tolerance_var.set(max(
                     4, int(self.headword_left_tolerance_var.get()) - 4 * delta
                 ))
