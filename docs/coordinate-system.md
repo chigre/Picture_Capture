@@ -32,6 +32,12 @@ runtime, layout geometry is scaled to the current page's canonical width.
 This keeps values human-readable as real full-resolution pixels while also
 preserving layout on projects whose page images have different resolutions.
 
+A bare `AppSettings` object has no implicit reference width. When a real new
+project is opened, the first page establishes the initial canonical reference
+width; the shipped numeric defaults are converted so their historical 1400px
+physical meaning is preserved. Representative-page layout analysis may later
+replace that reference with the detected aggregate reference width.
+
 ### Percentages
 
 **Use for:** physical Profile rules that should follow page size, including

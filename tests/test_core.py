@@ -6483,12 +6483,13 @@ def test_coordinate_contract_source_canonical_points_round_trip_for_all_transfor
             assert restored == point
 
 
-def test_coordinate_contract_profile_percent_is_source_pixel_rule():
+def test_coordinate_contract_profile_percent_resolves_to_source_pixels_across_reference_width():
     from picture_capture.models import AppSettings
     from picture_capture.profile_semantics import effective_page_settings
     from picture_capture.processing import derive_nominal_geometry
 
     settings = AppSettings(
+        geometry_reference_width=1400,
         profile_header_mode="present",
         profile_header_percent=3.0,
         profile_footer_mode="present",
@@ -6498,11 +6499,22 @@ def test_coordinate_contract_profile_percent_is_source_pixel_rule():
         column_width=800,
     )
     effective = effective_page_settings(settings, (1000, 1642), 0)
-    assert effective.start_y == 49
-    assert effective.bottom_y == 1576
+
+    # Persisted layout bounds remain reference-page values, not source Y.
+    assert effective.start_y != 49
+    assert effective.bottom_y != 1576
+
+    # Runtime geometry and the public quick panel must resolve the physical
+    # Profile percentages against the current original image.
     geometry = derive_nominal_geometry(1000, 1642, effective)
     assert geometry.top == 49
     assert geometry.bottom == 1576
+
+    app = PictureCaptureApp.__new__(PictureCaptureApp)
+    app.image = Image.new("RGB", (1000, 1642), "white")
+    app.settings = settings
+    assert PictureCaptureApp._quick_geometry_value(app, "start_y") == 49
+    assert PictureCaptureApp._quick_geometry_value(app, "bottom_y") == 1576
 
 
 def test_coordinate_contract_training_export_separates_source_and_canonical(tmp_path):
@@ -6560,18 +6572,21 @@ def test_coordinate_contract_training_export_separates_source_and_canonical(tmp_
     assert "derived_top" not in layout
 
 
-def test_new_project_defaults_preserve_historical_1400_reference_geometry():
-    from picture_capture.coordinate_space import (
-        REFERENCE_CANONICAL_WIDTH,
-        stored_geometry_to_canonical,
-    )
-    from picture_capture.models import AppSettings
+def test_new_project_initializes_explicit_reference_without_changing_1400_default_meaning(tmp_path):
+    from picture_capture.coordinate_space import stored_geometry_to_canonical
+    from picture_capture.models import AppSettings, ProjectState
 
-    modern = AppSettings()
-    assert modern.geometry_reference_width == REFERENCE_CANONICAL_WIDTH
-    # The old untouched defaults were interpreted at a 1400px display
-    # reference. A new 3000px scan must therefore keep the same physical
-    # geometry instead of shrinking a 700px column to 700 source pixels.
+    # A bare settings object remains page-local for library/test callers.
+    assert AppSettings().geometry_reference_width == 0
+
+    # A real project establishes an explicit reference only after a source page
+    # is known. Historical untouched defaults still retain their old 1400px
+    # physical meaning: 700 at 1400 becomes 1500 on a 3000px reference page.
+    Image.new("RGB", (3000, 1800), "white").save(tmp_path / "0001.png")
+    project = ProjectState.open(tmp_path)
+    modern = project.settings
+    assert modern.geometry_reference_width == 3000
+    assert modern.column_width == 1500
     assert stored_geometry_to_canonical(modern.column_width, 3000, modern) == 1500
 
     legacy = AppSettings(
