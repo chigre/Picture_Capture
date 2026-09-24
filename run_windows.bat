@@ -2,29 +2,22 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-rem Minimal foreground launcher for the project virtual environment.
+rem Foreground launcher only.
+rem This file never installs, downloads, updates, or selects dependency profiles.
 
 if not exist ".venv\Scripts\python.exe" (
-  where uv >nul 2>&1
-  if errorlevel 1 (
-    echo [Picture Capture] uv was not found.
-    echo Install uv, then run this file again.
-    pause
-    exit /b 1
-  )
-
-  echo [Picture Capture] Preparing the core environment...
-  uv sync --locked --no-dev
-  if errorlevel 1 goto :failed
+  echo [Picture Capture] Project environment is not prepared.
+  echo Run install_ocr_windows.bat once before starting Picture Capture.
+  echo Choose "Core only" there if you do not need optional OCR components.
+  pause
+  exit /b 2
 )
 
 ".venv\Scripts\python.exe" "run.py"
-if errorlevel 1 goto :failed
-exit /b 0
-
-:failed
-echo.
-echo [Picture Capture] Startup failed.
-echo [Picture Capture] For troubleshooting, run: uv run --locked --no-dev python run.py
-pause
-exit /b 1
+set "PC_EXIT=%ERRORLEVEL%"
+if not "%PC_EXIT%"=="0" (
+  echo.
+  echo [Picture Capture] Startup failed with exit code %PC_EXIT%.
+  pause
+)
+exit /b %PC_EXIT%
