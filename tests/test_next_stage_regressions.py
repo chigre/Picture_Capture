@@ -233,7 +233,9 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     settings = source[settings_start:settings_end]
     assert '_build_modern_dialog_heading(' in settings
     assert '"设置中心"' in settings
-    assert 'text="保存并关闭"' in settings
+    assert 'text="校验当前设置"' in settings
+    assert 'command=self._close_validated' in settings
+    assert 'text="保存并关闭"' not in settings
     assert 'text="检测 OCR 引擎"' in settings
 
     review_start = source.index("class ReviewWindow")
@@ -263,6 +265,36 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     assert 'text="比较摘要"' in compare
     assert 'text="保存当前 PDIC 快照…"' in compare
     assert 'text="导出差异报告…"' in compare
+
+
+def test_settings_center_uses_context_help_units_and_user_facing_modes():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("class SettingsDialog")
+    end = text.index("class ReviewWindow", start)
+    settings = text[start:end]
+
+    assert '"bottom_y", int' in settings
+    assert '"bottom_y": "正文结束 Y"' in settings
+    assert '"columns": "正文栏数"' in settings
+    assert '"manual_x": "第一栏左缘 X"' in settings
+    assert '"paddle_band_width_ratio": "%"' in settings
+    assert '"columns": (1, 12, 1)' in settings
+    assert "def _show_setting_help(" in settings
+    assert 'text="设置说明"' in settings
+    assert 'text="ⓘ"' in settings
+    assert 'host.columnconfigure(0, weight=3)' in settings
+    assert 'host.columnconfigure(1, weight=2)' in settings
+
+    assert 'text="普通画线（左缘规则）"' in settings
+    assert 'text="OCR画线（识别词头）"' in settings
+    assert 'value=DETECTION_LABELS["left_edge"]' in settings
+    assert 'value=DETECTION_LABELS["paddleocr"]' in settings
+
+    assert 'text="校验当前设置"' in settings
+    assert 'self.bind("<Escape>", lambda _event: self._close_validated())' in settings
+    assert "✓ 已自动保存" in settings
+    assert "⚠ 当前输入暂未保存" in settings
 
 
 def test_project_toolbar_and_profile_scroll_layout_are_wired():

@@ -951,7 +951,7 @@ class SettingsDialog(tk.Toplevel):
         ("自定义 Profile 名称", "dictionary_custom_profile_name", str),
         ("词典分栏", "columns", int), ("两栏中隔", "gutter", int),
         ("单栏宽距", "column_width", int), ("起始点 Y", "start_y", int),
-        ("首栏 X", "manual_x", int),
+        ("正文结束 Y", "bottom_y", int), ("首栏 X", "manual_x", int),
         ("正文缩进", "body_indent", int), ("单行字高", "character_height", int),
         ("行间空白", "row_padding", int), ("向右比例 %", "right_ratio", float),
         ("微调判距", "horizontal_tolerance", int), ("标记线高", "marker_height", int),
@@ -1103,6 +1103,15 @@ class SettingsDialog(tk.Toplevel):
     # Human-facing setting metadata. Internal field names and persisted JSON stay
     # unchanged; this layer only reorganizes the settings experience.
     SETTING_LABELS = {
+        "columns": "正文栏数",
+        "start_y": "正文起始 Y",
+        "bottom_y": "正文结束 Y",
+        "manual_x": "第一栏左缘 X",
+        "column_width": "单栏正文宽度",
+        "gutter": "栏间空白",
+        "character_height": "典型行高",
+        "row_padding": "典型行间空白",
+        "ocr_language": "词头 OCR 语言",
         "analysis_threshold_mode": "墨迹判断方式",
         "body_indent": "左缘检测宽度",
         "character_height": "典型单行字高",
@@ -1137,6 +1146,7 @@ class SettingsDialog(tk.Toplevel):
         "gutter": "相邻两栏之间的空白宽度。主要影响栏边界、切图范围和列定位。",
         "column_width": "单栏正文宽度。通常由版面检测得到，不建议只凭肉眼频繁微调。",
         "start_y": "正文开始的 Y 位置，用来排除页眉。若顶部误画线，优先检查这里或 Project Profile 的页眉设置。",
+        "bottom_y": "正文结束的 Y 位置，用来排除页脚/页码并限定识别正文范围。它不是【切图设置】里的切图下边界。",
         "manual_x": "第一栏左缘基准位置。自动检测稳定时通常不需要手动修改。",
         "body_indent": "普通画线只检查每栏左侧这段宽度。太小会漏掉缩进词头；太大会把正文开头误当词头。",
         "character_height": "典型文字行高。影响普通画线的最小词条间距，也影响横线 Y 精修的搜索尺度。",
@@ -1213,7 +1223,7 @@ class SettingsDialog(tk.Toplevel):
     }
 
     COMMON_FIELDS = (
-        "columns", "start_y", "manual_x", "column_width", "gutter",
+        "columns", "start_y", "bottom_y", "manual_x", "column_width", "gutter",
         "character_height", "row_padding", "ocr_language",
     )
     NORMAL_COMMON_FIELDS = (
@@ -1260,6 +1270,47 @@ class SettingsDialog(tk.Toplevel):
         "paddle_lens_default_confidence",
         "paddle_headword_regex", "paddle_pos_regex", "paddle_special_symbol_regex",
     )
+
+    SETTING_UNITS = {
+        "columns": "栏",
+        "start_y": "px", "bottom_y": "px", "manual_x": "px",
+        "column_width": "px", "gutter": "px", "body_indent": "px",
+        "character_height": "px", "row_padding": "px", "horizontal_tolerance": "px",
+        "darkness_threshold": "RGB 和", "column_track_radius": "px",
+        "column_track_block_height": "px", "column_track_max_step": "px",
+        "paddle_band_width_ratio": "%", "paddle_band_left_margin": "px",
+        "paddle_left_tolerance": "px", "paddle_max_input_side": "px",
+        "paddle_separator_safety_px": "px", "paddle_separator_band_radius": "px",
+        "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "px",
+        "paddle_header_search_height": "px", "paddle_header_rule_margin": "px",
+        "batch_interval": "秒", "illustration_detect_padding": "px",
+        "illustration_detect_right_padding": "px", "main_entry_font_size": "pt",
+        "review_entry_font_size": "pt", "review_entry_vertical_padding": "px",
+        "review_single_cjk_line_height": "px", "review_zoom_percent": "%",
+    }
+    SETTING_SPIN = {
+        "columns": (1, 12, 1),
+        "start_y": (0, 50000, 1), "bottom_y": (0, 50000, 1),
+        "manual_x": (0, 50000, 1), "column_width": (1, 50000, 1),
+        "gutter": (0, 10000, 1), "body_indent": (0, 10000, 1),
+        "character_height": (1, 2000, 1), "row_padding": (0, 1000, 1),
+        "horizontal_tolerance": (0, 5000, 1), "darkness_threshold": (0, 765, 1),
+        "column_track_radius": (0, 5000, 1), "column_track_block_height": (1, 10000, 1),
+        "column_track_max_step": (0, 5000, 1),
+        "paddle_band_width_ratio": (1, 100, 1), "paddle_band_left_margin": (0, 5000, 1),
+        "paddle_left_tolerance": (0, 5000, 1), "paddle_max_input_side": (256, 20000, 64),
+        "paddle_separator_safety_px": (0, 1000, 1),
+        "paddle_separator_band_radius": (0, 200, 1),
+        "paddle_separator_roi_width_ratio": (10, 100, 1),
+        "paddle_separator_column_margin": (0, 2000, 1),
+        "paddle_header_search_height": (0, 5000, 1), "paddle_header_rule_margin": (0, 1000, 1),
+        "batch_interval": (0.5, 3600, 0.5),
+        "illustration_detect_padding": (0, 5000, 1),
+        "illustration_detect_right_padding": (0, 5000, 1),
+        "main_entry_font_size": (5, 200, 1), "review_entry_font_size": (6, 200, 1),
+        "review_entry_vertical_padding": (0, 30, 1),
+        "review_single_cjk_line_height": (0, 500, 1), "review_zoom_percent": (20, 250, 5),
+    }
 
     SETTING_CHOICES = {
         "analysis_threshold_mode": {
@@ -1323,6 +1374,39 @@ class SettingsDialog(tk.Toplevel):
         ("校对时主界面显示 OCR 置信度底色", "review_main_show_ocr_background"),
     )
 
+    def _show_settings_help(self, title: str, body: str) -> None:
+        if hasattr(self, "_settings_help_title_var"):
+            self._settings_help_title_var.set(str(title or "设置说明"))
+        if hasattr(self, "_settings_help_body_var"):
+            self._settings_help_body_var.set(str(body or "不确定时保持当前值即可。"))
+
+    def _show_setting_help(self, name: str) -> None:
+        title = self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])
+        body = self.SETTING_HELP.get(name, "专家参数；不确定时建议保持当前值。")
+        unit = self.SETTING_UNITS.get(name, "")
+        if unit:
+            body += f"\n\n单位：{unit}"
+        self._show_settings_help(title, body)
+
+    def _show_check_help(self, label: str, name: str) -> None:
+        self._show_settings_help(
+            label,
+            self.CHECK_HELP.get(name, "高级行为开关；不确定时保持默认。"),
+        )
+
+    def _bind_help_widget(self, widget: tk.Misc, callback) -> None:
+        """Keep full explanations one glance away without filling every form row."""
+        try:
+            widget.bind("<Enter>", lambda _e: callback(), add="+")
+            widget.bind("<FocusIn>", lambda _e: callback(), add="+")
+        except tk.TclError:
+            return
+        try:
+            for child in widget.winfo_children():
+                self._bind_help_widget(child, callback)
+        except tk.TclError:
+            pass
+
     def _setting_var(self, name: str) -> tk.Variable:
         if name in self.vars:
             return self.vars[name]
@@ -1343,17 +1427,17 @@ class SettingsDialog(tk.Toplevel):
         if choices:
             return ttk.Combobox(
                 parent, textvariable=var, values=tuple(choices.keys()),
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name in {"dictionary_index_language", "dictionary_content_language"}:
             return ttk.Combobox(
                 parent, textvariable=var, values=PROJECT_LANGUAGE_CODES,
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name == "ocr_language":
             widget = ttk.Combobox(
                 parent, textvariable=var, values=self.OCR_LANGUAGES,
-                state="normal", width=28,
+                state="normal", width=26,
             )
             widget.bind("<<ComboboxSelected>>", lambda _e: self._refresh_sort_choices())
             widget.bind("<FocusOut>", lambda _e: self._refresh_sort_choices())
@@ -1361,40 +1445,51 @@ class SettingsDialog(tk.Toplevel):
         if name in {"main_entry_font_family", "review_entry_font_family"}:
             families = tuple(sorted(set(font.families()), key=str.casefold))
             return ttk.Combobox(
-                parent, textvariable=var, values=families, state="normal", width=28,
+                parent, textvariable=var, values=families, state="normal", width=26,
             )
         if name == "wordslist_path":
             box = ttk.Frame(parent)
             box.columnconfigure(0, weight=1)
-            ttk.Entry(box, textvariable=var, width=30).grid(row=0, column=0, sticky="ew")
+            ttk.Entry(box, textvariable=var, width=28).grid(row=0, column=0, sticky="ew")
             ttk.Button(
                 box, text="浏览…", command=lambda v=var: self._browse_wordslist_setting(v)
             ).grid(row=0, column=1, padx=(5, 0))
             return box
+        if name in self.SETTING_SPIN:
+            lower, upper, increment = self.SETTING_SPIN[name]
+            return ttk.Spinbox(
+                parent,
+                textvariable=var,
+                from_=lower,
+                to=upper,
+                increment=increment,
+                width=18,
+                justify="right",
+            )
         if name == "layout_writing_mode":
             return ttk.Combobox(
                 parent, textvariable=var,
                 values=("horizontal-tb", "vertical-rl", "vertical-lr"),
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name == "layout_text_direction":
             return ttk.Combobox(
                 parent, textvariable=var, values=("ltr", "rtl"),
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name == "layout_columns_policy":
             return ttk.Combobox(
                 parent, textvariable=var, values=("detect", "fixed"),
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name == "layout_column_separator_mode":
             return ttk.Combobox(
                 parent, textvariable=var, values=("auto", "present", "absent"),
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name == "layout_transform":
-            return ttk.Entry(parent, textvariable=var, width=30, state="readonly")
-        return ttk.Entry(parent, textvariable=var, width=30)
+            return ttk.Entry(parent, textvariable=var, width=28, state="readonly")
+        return ttk.Entry(parent, textvariable=var, width=28)
 
     def _add_setting_group(
         self,
@@ -1406,25 +1501,37 @@ class SettingsDialog(tk.Toplevel):
     ) -> ttk.LabelFrame:
         group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
         group.pack(fill="x", pady=(0, 10))
-        group.columnconfigure(2, weight=1)
+        group.columnconfigure(1, weight=1)
         row = 0
         if intro:
             ttk.Label(
-                group, text=intro, foreground="#5f6670", justify="left", wraplength=820,
+                group, text=intro, foreground="#5f6670", justify="left", wraplength=560,
             ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 8))
             row += 1
         for name in names:
             label = self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])
-            ttk.Label(group, text=f"{label}：").grid(
-                row=row, column=0, sticky="ne", padx=(0, 10), pady=5
-            )
-            widget = self._setting_widget(group, name)
-            widget.grid(row=row, column=1, sticky="ew", padx=(0, 12), pady=4)
-            ttk.Label(
-                group,
-                text=self.SETTING_HELP.get(name, "专家参数；不确定时建议保持当前值。"),
-                foreground="#666666", justify="left", wraplength=520,
-            ).grid(row=row, column=2, sticky="nw", pady=5)
+            label_widget = ttk.Label(group, text=f"{label}：")
+            label_widget.grid(row=row, column=0, sticky="e", padx=(0, 10), pady=5)
+
+            control = ttk.Frame(group)
+            control.grid(row=row, column=1, sticky="ew", pady=4)
+            stretch = name == "wordslist_path"
+            control.columnconfigure(0, weight=(1 if stretch else 0))
+            widget = self._setting_widget(control, name)
+            widget.grid(row=0, column=0, sticky=("ew" if stretch else "w"))
+            unit = self.SETTING_UNITS.get(name, "")
+            if unit:
+                ttk.Label(control, text=unit, foreground="#70757d").grid(
+                    row=0, column=1, sticky="w", padx=(6, 0)
+                )
+
+            info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
+            info.grid(row=row, column=2, sticky="w", padx=(8, 0))
+            callback = lambda n=name: self._show_setting_help(n)
+            self._bind_help_widget(label_widget, callback)
+            self._bind_help_widget(control, callback)
+            self._bind_help_widget(info, callback)
+            info.bind("<Button-1>", lambda _e, n=name: self._show_setting_help(n), add="+")
             row += 1
         return group
 
@@ -1438,24 +1545,28 @@ class SettingsDialog(tk.Toplevel):
     ) -> ttk.LabelFrame:
         group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
         group.pack(fill="x", pady=(0, 10))
-        group.columnconfigure(1, weight=1)
+        group.columnconfigure(0, weight=1)
         row = 0
         if intro:
             ttk.Label(
-                group, text=intro, foreground="#5f6670", justify="left", wraplength=820,
+                group, text=intro, foreground="#5f6670", justify="left", wraplength=560,
             ).grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 8))
             row += 1
         for label, name in checks:
             if name not in self.vars:
                 self.vars[name] = tk.BooleanVar(value=bool(getattr(self.parent.settings, name)))
-            ttk.Checkbutton(group, text=label, variable=self.vars[name]).grid(
-                row=row, column=0, sticky="nw", padx=(0, 14), pady=4
+            check = ttk.Checkbutton(group, text=label, variable=self.vars[name])
+            check.grid(row=row, column=0, sticky="w", pady=4)
+            info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
+            info.grid(row=row, column=1, sticky="w", padx=(8, 0))
+            callback = lambda l=label, n=name: self._show_check_help(l, n)
+            self._bind_help_widget(check, callback)
+            self._bind_help_widget(info, callback)
+            info.bind(
+                "<Button-1>",
+                lambda _e, l=label, n=name: self._show_check_help(l, n),
+                add="+",
             )
-            ttk.Label(
-                group,
-                text=self.CHECK_HELP.get(name, "高级行为开关；不确定时保持默认。"),
-                foreground="#666666", justify="left", wraplength=600,
-            ).grid(row=row, column=1, sticky="nw", pady=4)
             row += 1
         return group
 
@@ -1491,12 +1602,21 @@ class SettingsDialog(tk.Toplevel):
     def _scrollable_settings_page(self, tab: ttk.Frame) -> ttk.Frame:
         host = ttk.Frame(tab)
         host.pack(fill="both", expand=True)
-        canvas = tk.Canvas(host, highlightthickness=0, borderwidth=0)
-        scrollbar = ttk.Scrollbar(host, orient="vertical", command=canvas.yview)
+        host.rowconfigure(0, weight=1)
+        host.columnconfigure(0, weight=3)
+        host.columnconfigure(1, weight=2)
+
+        left = ttk.Frame(host)
+        left.grid(row=0, column=0, sticky="nsew")
+        left.rowconfigure(0, weight=1)
+        left.columnconfigure(0, weight=1)
+        canvas = tk.Canvas(left, highlightthickness=0, borderwidth=0)
+        scrollbar = ttk.Scrollbar(left, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-        content = ttk.Frame(canvas, padding=(14, 12, 14, 18))
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+
+        content = ttk.Frame(canvas, padding=(14, 12, 10, 18))
         window = canvas.create_window((0, 0), window=content, anchor="nw")
         content.bind(
             "<Configure>",
@@ -1507,6 +1627,30 @@ class SettingsDialog(tk.Toplevel):
             lambda e, cv=canvas, item=window: cv.itemconfigure(item, width=e.width),
         )
         self._settings_canvases[str(tab)] = canvas
+
+        help_box = ttk.LabelFrame(host, text="设置说明", padding=(14, 12))
+        help_box.grid(row=0, column=1, sticky="nsew", padx=(6, 8), pady=(8, 8))
+        ttk.Label(
+            help_box,
+            textvariable=self._settings_help_title_var,
+            font=("TkDefaultFont", 10, "bold"),
+        ).pack(anchor="w")
+        ttk.Label(
+            help_box,
+            textvariable=self._settings_help_body_var,
+            foreground="#555b63",
+            justify="left",
+            wraplength=320,
+        ).pack(anchor="w", fill="x", pady=(7, 0))
+        ttk.Separator(help_box, orient="horizontal").pack(fill="x", pady=(14, 10))
+        ttk.Label(
+            help_box,
+            text="把鼠标停在设置项上，或用 Tab/鼠标进入输入框，"
+                 "这里会显示完整说明。高级设置不确定时保持默认即可。",
+            foreground="#7a8088",
+            justify="left",
+            wraplength=320,
+        ).pack(anchor="w", fill="x")
         return content
 
     def _settings_intro(self, parent: ttk.Frame, title: str, text: str) -> None:
@@ -1533,6 +1677,12 @@ class SettingsDialog(tk.Toplevel):
         self._casts = {name: cast for _, name, cast in self.FIELDS}
         self._field_meta = {name: (label, cast) for label, name, cast in self.FIELDS}
         self._sort_label_to_value: dict[str, str] = {}
+        self._settings_help_title_var = tk.StringVar(value="这里会解释当前设置")
+        self._settings_help_body_var = tk.StringVar(
+            value="把鼠标停在任一设置项上，或进入输入框，即可看到它控制什么、"
+                  "什么时候需要调整，以及调大/调小可能带来的影响。"
+        )
+        self._settings_save_status_var = tk.StringVar(value="✓ 自动保存已开启")
 
         outer = ttk.Frame(self, padding=(18, 14, 18, 12))
         outer.pack(fill="both", expand=True)
@@ -1619,18 +1769,51 @@ class SettingsDialog(tk.Toplevel):
             )
         )
         self.vars["detection_method"] = method_var
-        ttk.Label(mode_group, text="项目默认：").grid(
-            row=0, column=0, sticky="e", padx=(0, 10), pady=4
+
+        normal_mode = ttk.Radiobutton(
+            mode_group,
+            text="普通画线（左缘规则）",
+            variable=method_var,
+            value=DETECTION_LABELS["left_edge"],
         )
-        ttk.Combobox(
-            mode_group, textvariable=method_var, values=tuple(DETECTION_VALUES),
-            state="readonly", width=28,
-        ).grid(row=0, column=1, sticky="w", pady=4)
+        normal_mode.grid(row=0, column=0, sticky="w", pady=3)
         ttk.Label(
             mode_group,
-            text="这只决定默认按钮/批处理方式；两种模式始终可以在主界面直接运行。",
-            foreground="#666666", wraplength=620, justify="left",
-        ).grid(row=0, column=2, sticky="w", padx=(12, 0), pady=4)
+            text="速度快，不识别文字；适合词头靠近栏左、正文缩进稳定的版式。",
+            foreground="#666666",
+        ).grid(row=0, column=1, sticky="w", padx=(12, 0), pady=3)
+
+        ocr_mode = ttk.Radiobutton(
+            mode_group,
+            text="OCR画线（识别词头）",
+            variable=method_var,
+            value=DETECTION_LABELS["paddleocr"],
+        )
+        ocr_mode.grid(row=1, column=0, sticky="w", pady=3)
+        ttk.Label(
+            mode_group,
+            text="结合文字、位置和结构证据；适合粗体、词性、符号等结构较复杂的词典。",
+            foreground="#666666",
+        ).grid(row=1, column=1, sticky="w", padx=(12, 0), pady=3)
+
+        for widget, title, body in (
+            (
+                normal_mode,
+                "普通画线（左缘规则）",
+                "只看版面几何和栏左墨迹，不依赖 OCR。优点是快；"
+                "当正文也贴近栏左或词头缩进变化很大时，误检/漏检会增加。",
+            ),
+            (
+                ocr_mode,
+                "OCR画线（识别词头）",
+                "用 OCR 文字、左缘位置、粗体/字高、词性或特殊符号等证据判断词头。"
+                "复杂版式更稳，但首次 OCR 会更耗时。",
+            ),
+        ):
+            self._bind_help_widget(
+                widget,
+                lambda t=title, b=body: self._show_settings_help(t, b),
+            )
         self._add_setting_group(
             common,
             "常用版面参数",
@@ -1893,17 +2076,19 @@ class SettingsDialog(tk.Toplevel):
         footer.pack(fill="x")
         ttk.Label(
             footer,
-            text="改动会自动保存；“保存并关闭”会立即校验当前参数。",
+            textvariable=self._settings_save_status_var,
             foreground="#666666",
         ).pack(side="left")
-        ttk.Button(footer, text="关闭", command=self.destroy).pack(side="right", padx=(6, 0))
-        ttk.Button(footer, text="保存并关闭", command=self.save).pack(side="right")
         ttk.Button(
-            footer, text="检测 OCR 引擎", command=self.check_ocr_engines
+            footer, text="关闭", command=self._close_validated
+        ).pack(side="right")
+        ttk.Button(
+            footer, text="校验当前设置",
+            command=lambda: self._validate_settings_now(),
         ).pack(side="right", padx=(0, 8))
-        self.bind("<Control-s>", lambda _event: self.save())
-        self.bind("<Escape>", lambda _event: self.destroy())
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.bind("<Control-s>", lambda _event: self._validate_settings_now())
+        self.bind("<Escape>", lambda _event: self._close_validated())
+        self.protocol("WM_DELETE_WINDOW", self._close_validated)
         self._autosave_job: str | None = None
         self._autosave_ready = True
         for _name, _var in self.vars.items():
@@ -2455,6 +2640,8 @@ class SettingsDialog(tk.Toplevel):
     def _schedule_autosave(self) -> None:
         if not getattr(self, "_autosave_ready", False):
             return
+        if hasattr(self, "_settings_save_status_var"):
+            self._settings_save_status_var.set("● 有改动，正在自动保存…")
         job = getattr(self, "_autosave_job", None)
         if job is not None:
             try:
@@ -2465,7 +2652,29 @@ class SettingsDialog(tk.Toplevel):
 
     def _run_autosave(self) -> None:
         self._autosave_job = None
-        self.save(close=False, show_errors=False)
+        ok = self.save(close=False, show_errors=False)
+        if hasattr(self, "_settings_save_status_var"):
+            self._settings_save_status_var.set(
+                "✓ 已自动保存" if ok else "⚠ 当前输入暂未保存；关闭时会提示需要修正的项目"
+            )
+
+    def _validate_settings_now(self) -> bool:
+        ok = self.save(close=False, show_errors=True)
+        if hasattr(self, "_settings_save_status_var"):
+            self._settings_save_status_var.set(
+                "✓ 当前设置有效并已保存" if ok else "⚠ 请修正无效设置"
+            )
+        return ok
+
+    def _close_validated(self) -> None:
+        job = getattr(self, "_autosave_job", None)
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except tk.TclError:
+                pass
+            self._autosave_job = None
+        self.save(close=True, show_errors=True)
 
     def save(self, *, close: bool = True, show_errors: bool = True) -> bool:
         try:
