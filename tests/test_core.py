@@ -6566,7 +6566,10 @@ def test_coordinate_contract_training_export_separates_source_and_canonical(tmp_
     assert annotation["page_template"]["footer_boundary_y"] == 864
     layout = annotation["layout"]
     assert layout["coordinate_space"] == CANONICAL_COORDINATE_SPACE
-    assert "top_v" in layout and "bottom_v" in layout
+    # The exported runtime layout must use the same Profile-resolved boundaries
+    # as detection/display, not the raw persisted start_y/bottom_y values.
+    assert layout["top_v"] == 27
+    assert layout["bottom_v"] == 864
     assert "column_starts_u" in layout and "column_paths_vu" in layout
     assert "header_y" not in layout
     assert "derived_top" not in layout

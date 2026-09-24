@@ -19,7 +19,12 @@ from .coordinate_space import (
     stored_geometry_to_canonical,
 )
 from .processing import column_index, derive_geometry
-from .profile_semantics import excluded_source_side, excluded_source_side_percent
+from .profile_semantics import (
+    effective_page_settings,
+    excluded_source_side,
+    excluded_source_side_percent,
+    page_template_analysis_image,
+)
 from .project_storage import (
     headword_filter_rules_path, ocr_cache_root, ppp_read_path_for_image,
     profile_path, replace_rules_path, settings_path,
@@ -148,7 +153,12 @@ def export_training_page(
     with Image.open(page) as opened:
         image = normalize_page_rgb(opened)
         width, height = image.size
-        geometry = derive_geometry(image, settings)
+        # Export the exact same per-page layout geometry used by detection and
+        # the main canvas. Physical Profile percentages are resolved once at
+        # this boundary; only the disposable analysis image is masked.
+        effective = effective_page_settings(settings, image.size, page_index)
+        analysis_image = page_template_analysis_image(image, effective, page_index)
+        geometry = derive_geometry(analysis_image, effective)
 
     pdic = pdic_path(page)
     entries = read_pdic(pdic)
@@ -210,7 +220,7 @@ def export_training_page(
         image.size
     )
     canonical_line_height = stored_geometry_to_canonical(
-        settings.character_height, canonical_width, settings,
+        effective.character_height, canonical_width, effective,
     )
     candidates: list[dict[str, Any]] = []
     for raw in list(cache.get("review_candidates") or []):
@@ -311,7 +321,7 @@ def export_training_page(
             "line_height": int(canonical_line_height),
             "row_padding": int(
                 stored_geometry_to_canonical(
-                    settings.row_padding, canonical_width, settings,
+                    effective.row_padding, canonical_width, effective,
                 )
             ),
         },
