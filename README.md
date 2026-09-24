@@ -101,9 +101,10 @@ install_ocr_windows.bat
 
 1. 使用所选 uv profile 同步项目 `.venv`；
 2. 由 `pyproject.toml + uv.lock` 选择对应 PaddlePaddle 官方 CPU/CUDA 索引；
-3. 一次性安装 PaddleOCR、Google Lens 与对应 CPU/GPU runtime；
-4. 检查 PaddleOCR、Google Lens、CUDA build 和当前 Paddle device；
-5. 保存当前 OCR profile。
+3. 一次性安装 PaddleOCR、Google Lens 与对应 CPU/GPU runtime；Windows CUDA 12.6/12.9 profile 还会安装项目内的 NVIDIA cuDNN wheel；
+4. 在进程内自动加入项目 `.venv` 中 NVIDIA DLL 目录，无需手工修改系统 PATH；
+5. 实际执行一次 GPU 卷积 smoke test，确认 CUDA + cuDNN 均可用；
+6. 保存当前 OCR profile。
 
 **GPU 用户不需要再手工执行 `uv pip uninstall/install`，也不需要自己填写 CUDA 索引。**
 
@@ -166,12 +167,12 @@ v2.13.2 提供以下正式 profile：
 | --- | --- | --- |
 | CPU | `ocr-cpu` | PaddleOCR + PaddlePaddle CPU + Google Lens |
 | GPU CUDA 11.8 | `ocr-gpu-cu118` | PaddleOCR + Google Lens + cu118 GPU runtime |
-| GPU CUDA 12.6 | `ocr-gpu-cu126` | PaddleOCR + Google Lens + cu126 GPU runtime |
-| GPU CUDA 12.9 | `ocr-gpu-cu129` | PaddleOCR + Google Lens + cu129 GPU runtime |
+| GPU CUDA 12.6 | `ocr-gpu-cu126` | PaddleOCR + Google Lens + cu126 GPU runtime + Windows cuDNN 9 |
+| GPU CUDA 12.9 | `ocr-gpu-cu129` | PaddleOCR + Google Lens + cu129 GPU runtime + Windows cuDNN 9 |
 | Lens only | `lens` | Google Lens |
 | Core only | 无 | 仅核心依赖 |
 
-GPU profile 已把 `paddlepaddle-gpu==3.3.0` 和对应 CUDA 官方索引直接声明在 `pyproject.toml` 中，并由 `uv.lock` 锁定。安装器只负责选择 profile 并执行标准 `uv sync --locked --no-dev --extra <profile>`。
+GPU profile 已把 `paddlepaddle-gpu==3.3.0` 和对应 CUDA 官方索引直接声明在 `pyproject.toml` 中，并由 `uv.lock` 锁定。由于 Paddle 的 Windows CUDA wheel 不会像 Linux 一样自动声明 cuDNN pip runtime，CUDA 12.6/12.9 profile 另外锁定 Windows `nvidia-cudnn-cu12`；程序会自动把其 DLL 目录加入当前进程。安装器只负责选择 profile 并执行标准 `uv sync --locked --no-dev --extra <profile>`。
 
 详细说明见 [docs/ocr-install.md](docs/ocr-install.md)。
 
