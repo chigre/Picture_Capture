@@ -951,7 +951,7 @@ class SettingsDialog(tk.Toplevel):
         ("自定义 Profile 名称", "dictionary_custom_profile_name", str),
         ("词典分栏", "columns", int), ("两栏中隔", "gutter", int),
         ("单栏宽距", "column_width", int), ("起始点 Y", "start_y", int),
-        ("首栏 X", "manual_x", int),
+        ("正文结束 Y", "bottom_y", int), ("首栏 X", "manual_x", int),
         ("正文缩进", "body_indent", int), ("单行字高", "character_height", int),
         ("行间空白", "row_padding", int), ("向右比例 %", "right_ratio", float),
         ("微调判距", "horizontal_tolerance", int), ("标记线高", "marker_height", int),
@@ -1103,6 +1103,15 @@ class SettingsDialog(tk.Toplevel):
     # Human-facing setting metadata. Internal field names and persisted JSON stay
     # unchanged; this layer only reorganizes the settings experience.
     SETTING_LABELS = {
+        "columns": "正文栏数",
+        "start_y": "正文起始 Y",
+        "bottom_y": "正文结束 Y",
+        "manual_x": "第一栏左缘 X",
+        "column_width": "单栏正文宽度",
+        "gutter": "栏间空白",
+        "character_height": "典型行高",
+        "row_padding": "典型行间空白",
+        "ocr_language": "词头 OCR 语言",
         "analysis_threshold_mode": "墨迹判断方式",
         "body_indent": "左缘检测宽度",
         "character_height": "典型单行字高",
@@ -1137,6 +1146,7 @@ class SettingsDialog(tk.Toplevel):
         "gutter": "相邻两栏之间的空白宽度。主要影响栏边界、切图范围和列定位。",
         "column_width": "单栏正文宽度。通常由版面检测得到，不建议只凭肉眼频繁微调。",
         "start_y": "正文开始的 Y 位置，用来排除页眉。若顶部误画线，优先检查这里或 Project Profile 的页眉设置。",
+        "bottom_y": "正文结束的 Y 位置，用来排除页脚/页码并限定识别正文范围。它不是【切图设置】里的切图下边界。",
         "manual_x": "第一栏左缘基准位置。自动检测稳定时通常不需要手动修改。",
         "body_indent": "普通画线只检查每栏左侧这段宽度。太小会漏掉缩进词头；太大会把正文开头误当词头。",
         "character_height": "典型文字行高。影响普通画线的最小词条间距，也影响横线 Y 精修的搜索尺度。",
@@ -1213,7 +1223,7 @@ class SettingsDialog(tk.Toplevel):
     }
 
     COMMON_FIELDS = (
-        "columns", "start_y", "manual_x", "column_width", "gutter",
+        "columns", "start_y", "bottom_y", "manual_x", "column_width", "gutter",
         "character_height", "row_padding", "ocr_language",
     )
     NORMAL_COMMON_FIELDS = (
@@ -1260,6 +1270,47 @@ class SettingsDialog(tk.Toplevel):
         "paddle_lens_default_confidence",
         "paddle_headword_regex", "paddle_pos_regex", "paddle_special_symbol_regex",
     )
+
+    SETTING_UNITS = {
+        "columns": "栏",
+        "start_y": "px", "bottom_y": "px", "manual_x": "px",
+        "column_width": "px", "gutter": "px", "body_indent": "px",
+        "character_height": "px", "row_padding": "px", "horizontal_tolerance": "px",
+        "darkness_threshold": "RGB 和", "column_track_radius": "px",
+        "column_track_block_height": "px", "column_track_max_step": "px",
+        "paddle_band_width_ratio": "%", "paddle_band_left_margin": "px",
+        "paddle_left_tolerance": "px", "paddle_max_input_side": "px",
+        "paddle_separator_safety_px": "px", "paddle_separator_band_radius": "px",
+        "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "px",
+        "paddle_header_search_height": "px", "paddle_header_rule_margin": "px",
+        "batch_interval": "秒", "illustration_detect_padding": "px",
+        "illustration_detect_right_padding": "px", "main_entry_font_size": "pt",
+        "review_entry_font_size": "pt", "review_entry_vertical_padding": "px",
+        "review_single_cjk_line_height": "px", "review_zoom_percent": "%",
+    }
+    SETTING_SPIN = {
+        "columns": (1, 12, 1),
+        "start_y": (0, 50000, 1), "bottom_y": (0, 50000, 1),
+        "manual_x": (0, 50000, 1), "column_width": (1, 50000, 1),
+        "gutter": (0, 10000, 1), "body_indent": (0, 10000, 1),
+        "character_height": (1, 2000, 1), "row_padding": (0, 1000, 1),
+        "horizontal_tolerance": (0, 5000, 1), "darkness_threshold": (0, 765, 1),
+        "column_track_radius": (0, 5000, 1), "column_track_block_height": (1, 10000, 1),
+        "column_track_max_step": (0, 5000, 1),
+        "paddle_band_width_ratio": (1, 100, 1), "paddle_band_left_margin": (0, 5000, 1),
+        "paddle_left_tolerance": (0, 5000, 1), "paddle_max_input_side": (256, 20000, 64),
+        "paddle_separator_safety_px": (0, 1000, 1),
+        "paddle_separator_band_radius": (0, 200, 1),
+        "paddle_separator_roi_width_ratio": (10, 100, 1),
+        "paddle_separator_column_margin": (0, 2000, 1),
+        "paddle_header_search_height": (0, 5000, 1), "paddle_header_rule_margin": (0, 1000, 1),
+        "batch_interval": (0.5, 3600, 0.5),
+        "illustration_detect_padding": (0, 5000, 1),
+        "illustration_detect_right_padding": (0, 5000, 1),
+        "main_entry_font_size": (5, 200, 1), "review_entry_font_size": (6, 200, 1),
+        "review_entry_vertical_padding": (0, 30, 1),
+        "review_single_cjk_line_height": (0, 500, 1), "review_zoom_percent": (20, 250, 5),
+    }
 
     SETTING_CHOICES = {
         "analysis_threshold_mode": {
