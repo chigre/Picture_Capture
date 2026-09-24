@@ -1178,6 +1178,15 @@ def test_project_profile_wizard_is_the_normal_entry_path():
     text = source.read_text(encoding="utf-8")
     assert "ProjectProfileWizard(self, new_project=new_project)" in text
     assert "launch_profile_setup=not existing_project" in text
+
+    profile_source = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
+    ).read_text(encoding="utf-8")
+    wizard_start = profile_source.index("class ProjectProfileWizard(tk.Toplevel):")
+    wizard_end = profile_source.index("    def _build_vars(self) -> None:", wizard_start)
+    wizard_init = profile_source[wizard_start:wizard_end]
+    assert "x = work_x + max(0, (work_w - width) // 2)" in wizard_init
+    assert "y = work_y + max(0, (work_h - height) // 2)" in wizard_init
     assert '(common_tab, "常用")' in text
     assert '(ocr_tab, "OCR画线（推荐）")' in text
     assert '(normal_tab, "普通画线（备用）")' in text
