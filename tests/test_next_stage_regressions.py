@@ -487,7 +487,10 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert '"primary" if text == "运行OCR画线（推荐）"' in actions
     assert '("运行OCR画线（推荐）", self.run_ocr_draw_action)' in actions
     assert '("运行普通画线（备用）", self.run_normal_draw_action)' in actions
-    assert actions.index('("运行OCR画线（推荐）", self.run_ocr_draw_action)') < actions.index('("运行普通画线（备用）", self.run_normal_draw_action)')
+    assert actions.index('("运行普通画线（备用）", self.run_normal_draw_action)') < actions.index('("运行OCR画线（推荐）", self.run_ocr_draw_action)')
+    assert '("填充词条", self.fill_existing_headwords)' in actions
+    assert '("修复排序", self.repair_pdic_order_selected_scope)' in actions
+    assert '("恢复PDIC", self.restore_from_pdic_backup)' in actions
     assert '"success" if text == "保存当前页"' in actions
     assert '"primary" if text == "词条校对"' in actions
     assert '"danger_soft"' not in actions
