@@ -414,6 +414,40 @@ def test_bottom_important_actions_follow_scheme_a_groups():
     assert '("使用提示", self.show_help_dialog, None)' in project_bar
 
 
+def test_usage_help_is_a_modern_task_oriented_guide():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+
+    guide_start = text.index("class UsageGuideWindow(tk.Toplevel):")
+    guide_end = text.index("class SettingsDialog(tk.Toplevel):", guide_start)
+    guide = text[guide_start:guide_end]
+
+    assert '"快速开始"' in guide
+    assert '"画线与 OCR"' in guide
+    assert '"校对与词表"' in guide
+    assert '"插图与切图"' in guide
+    assert '"后期制作"' in guide
+    assert '"导航与排错"' in guide
+    assert 'self.search_var = tk.StringVar()' in guide
+    assert '"推荐原则"' in guide
+    assert '"项目Profile"' in guide
+    assert '"检测版面参数"' in guide
+    assert '"检测 OCR 引擎"' in guide
+    assert '"设置中心"' in guide
+    assert "wraplength=158" in guide
+    assert 'self.bind("<Escape>", lambda _event: self.destroy())' in guide
+
+    show_start = text.index("    def show_help_dialog(self) -> None:")
+    show_end = text.index("    @staticmethod\n    def _distribution_version", show_start)
+    show = text[show_start:show_end]
+    assert "UsageGuideWindow(self)" in show
+    assert "_usage_guide_window" in show
+    assert "messagebox.showinfo" not in show
+    assert "show_help_popup" not in text
+    assert "OCR_USAGE_HELP" not in text
+    assert "打开使用指南：推荐流程、各功能用途、快捷操作与常见排错。" in text
+
+
 def test_main_workspace_modern_styles_are_scoped_and_dense():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
