@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from .models import AppSettings, Entry, PolygonRegion, read_noncomment_lines, resolved_tesseract_language
 from .coordinate_space import (
+    SOURCE_COORDINATE_SPACE,
     canonical_to_analysis_scale,
     geometry_uses_canonical_pixels,
     legacy_parameter_scale,
@@ -1315,7 +1316,9 @@ def build_page_crop_plan(
 
 def page_crop_plan_dict(plan: PageCropPlan) -> dict:
     return {
-        "version": 2,
+        "version": 3,
+        "coordinate_space": SOURCE_COORDINATE_SPACE,
+        "box_format": "source_xyxy",
         "integrate_illustrations": bool(plan.integrate_illustrations),
         "entry_pieces": [
             {
