@@ -11451,11 +11451,11 @@ class PictureCaptureApp(tk.Tk):
             return None
         config = self._load_crop_settings()
         special = config.get("special_pages", {}).get(self.current_page.stem, {}) if isinstance(config.get("special_pages", {}), dict) else {}
-        top_y = int(special.get("top_y", config.get("general_top_y", self.settings.start_y)))
-        bottom_y = int(special.get("bottom_y", config.get("general_bottom_y", 0)))
+        top_y = int(special.get("top_y", config.get("general_top_v", self.settings.start_y)))
+        bottom_y = int(special.get("bottom_y", config.get("general_bottom_v", 0)))
         margin = int(config.get("polygon_margin", 0))
-        entry_left = int(config.get("entry_left_padding", 0))
-        entry_right = int(config.get("entry_right_padding", 0))
+        entry_left = int(config.get("entry_left_padding_u", 0))
+        entry_right = int(config.get("entry_right_padding_u", 0))
         integrate_illustrations = bool(config.get("integrate_illustrations", True))
         return build_page_crop_plan(
             self.image, list(self.entries), list(self.polygons), self.settings,
@@ -13481,13 +13481,13 @@ class PictureCaptureApp(tk.Tk):
             return
         try:
             config = self._load_crop_settings(); special = config.get("special_pages", {}).get(self.current_page.stem, {})
-            top_y = int(special.get("top_y", config.get("general_top_y", self.settings.start_y)))
-            bottom_y = int(special.get("bottom_y", config.get("general_bottom_y", 0)))
+            top_y = int(special.get("top_y", config.get("general_top_v", self.settings.start_y)))
+            bottom_y = int(special.get("bottom_y", config.get("general_bottom_v", 0)))
             records = split_whole_entries(
                 self.current_page, self.entries, self.settings, qt_root(self.project.root) / "PWW",
                 top_y=top_y, bottom_y=bottom_y, polygons=list(self.polygons),
-                entry_left_padding=int(config.get("entry_left_padding", 0)),
-                entry_right_padding=int(config.get("entry_right_padding", 0)),
+                entry_left_padding=int(config.get("entry_left_padding_u", 0)),
+                entry_right_padding=int(config.get("entry_right_padding_u", 0)),
                 integrate_illustrations=bool(config.get("integrate_illustrations", True)),
             )
             append_crop_log(self.project.root, records); self.status_var.set(f"已导出 {len(records)} 张词条整体图")
@@ -13496,11 +13496,13 @@ class PictureCaptureApp(tk.Tk):
     def _crop_settings_defaults(self) -> dict:
         default_bottom = self.settings.bottom_y if self.settings.crop_to_bottom_y else 0
         return {
-            "version": 5,
-            "general_top_y": int(self.settings.start_y),
-            "general_bottom_y": int(default_bottom),
-            "entry_left_padding": 0,
-            "entry_right_padding": 0,
+            "version": CROP_SETTINGS_VERSION,
+            "coordinate_space": CANONICAL_REFERENCE_SPACE,
+            "geometry_reference_width": _geometry_reference_width(self.settings),
+            "general_top_v": int(self.settings.start_y),
+            "general_bottom_v": int(default_bottom),
+            "entry_left_padding_u": 0,
+            "entry_right_padding_u": 0,
             "integrate_illustrations": True,
             "polygon_margin": 0,
             "parallel_workers": int(self.settings.crop_parallel_workers),
@@ -13508,24 +13510,20 @@ class PictureCaptureApp(tk.Tk):
         }
 
     def _load_crop_settings(self) -> dict:
-        payload = self._crop_settings_defaults()
         if not self.project:
-            return payload
+            return self._crop_settings_defaults()
         new_path = qt_root(self.project.root) / CropSettingsDialog.CONFIG_NAME
         legacy_path = qt_root(self.project.root) / CropSettingsDialog.LEGACY_CONFIG_NAME
         path = new_path if new_path.exists() else legacy_path
+        raw: dict = {}
         if path.exists():
             try:
-                raw = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(raw, dict):
-                    for key in ("general_top_y", "general_bottom_y", "entry_left_padding", "entry_right_padding", "integrate_illustrations", "polygon_margin", "parallel_workers", "special_pages"):
-                        if key in raw:
-                            payload[key] = raw[key]
+                candidate = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(candidate, dict):
+                    raw = candidate
             except (OSError, ValueError, TypeError):
-                pass
-        if not isinstance(payload.get("special_pages"), dict):
-            payload["special_pages"] = {}
-        return payload
+                raw = {}
+        return _normalize_crop_settings_payload(raw, self.settings)
 
     def open_crop_settings(self) -> None:
         if not self.project or not self.current_page or self.image is None:
@@ -13554,10 +13552,10 @@ class PictureCaptureApp(tk.Tk):
         settings = replace(self.settings)
         config = self._load_crop_settings()
         out_dir = qt_root(project.root) / "PWW"
-        general_top = int(config.get("general_top_y", settings.start_y))
-        general_bottom = int(config.get("general_bottom_y", 0))
-        entry_left = int(config.get("entry_left_padding", 0))
-        entry_right = int(config.get("entry_right_padding", 0))
+        general_top = int(config.get("general_top_v", settings.start_y))
+        general_bottom = int(config.get("general_bottom_v", 0))
+        entry_left = int(config.get("entry_left_padding_u", 0))
+        entry_right = int(config.get("entry_right_padding_u", 0))
         integrate_illustrations = bool(config.get("integrate_illustrations", True))
         specials = config.get("special_pages", {}) if isinstance(config.get("special_pages", {}), dict) else {}
         workers = int(config.get("parallel_workers", settings.crop_parallel_workers))
@@ -13565,7 +13563,7 @@ class PictureCaptureApp(tk.Tk):
         def job_builder(index: int, _position: int, _total: int):
             page = project.images[index]
             special = specials.get(page.stem, {}) if isinstance(specials.get(page.stem, {}), dict) else {}
-            top_y = int(special.get("top_y", general_top)); bottom_y = int(special.get("bottom_y", general_bottom))
+            top_y = int(special.get("top_v", general_top)); bottom_y = int(special.get("bottom_v", general_bottom))
             return (
                 str(page), str(pdic_path(page)), settings, str(out_dir), top_y, bottom_y,
                 str(self._ppp_read_path(page)), entry_left, entry_right, integrate_illustrations,
@@ -13668,11 +13666,11 @@ class PictureCaptureApp(tk.Tk):
         project = self.project
         settings = replace(self.settings)
         out_dir = qt_root(project.root) / "PIC"
-        general_top = int(config.get("general_top_y", settings.start_y))
-        general_bottom = int(config.get("general_bottom_y", 0))
+        general_top = int(config.get("general_top_v", settings.start_y))
+        general_bottom = int(config.get("general_bottom_v", 0))
         margin = int(config.get("polygon_margin", 0))
-        entry_left = int(config.get("entry_left_padding", 0))
-        entry_right = int(config.get("entry_right_padding", 0))
+        entry_left = int(config.get("entry_left_padding_u", 0))
+        entry_right = int(config.get("entry_right_padding_u", 0))
         integrate_illustrations = bool(config.get("integrate_illustrations", True))
         specials = config.get("special_pages", {}) if isinstance(config.get("special_pages", {}), dict) else {}
         workers = int(config.get("parallel_workers", settings.crop_parallel_workers))
@@ -13680,8 +13678,8 @@ class PictureCaptureApp(tk.Tk):
         def job_builder(index: int, _position: int, _total: int):
             page = project.images[index]
             special = specials.get(page.stem, {}) if isinstance(specials.get(page.stem, {}), dict) else {}
-            top_y = int(special.get("top_y", general_top))
-            bottom_y = int(special.get("bottom_y", general_bottom))
+            top_y = int(special.get("top_v", general_top))
+            bottom_y = int(special.get("bottom_v", general_bottom))
             return (
                 str(page), str(self._ppp_read_path(page)), str(out_dir), settings,
                 top_y, bottom_y, margin, str(pdic_path(page)), entry_left, entry_right, integrate_illustrations,
@@ -13857,10 +13855,10 @@ class PictureCaptureApp(tk.Tk):
         indices = list(range(len(project.images)))
         out_dir = qt_root(project.root) / "PWW"
         config = self._load_crop_settings()
-        general_top = int(config.get("general_top_y", settings.start_y))
-        general_bottom = int(config.get("general_bottom_y", 0))
-        entry_left = int(config.get("entry_left_padding", 0))
-        entry_right = int(config.get("entry_right_padding", 0))
+        general_top = int(config.get("general_top_v", settings.start_y))
+        general_bottom = int(config.get("general_bottom_v", 0))
+        entry_left = int(config.get("entry_left_padding_u", 0))
+        entry_right = int(config.get("entry_right_padding_u", 0))
         integrate_illustrations = bool(config.get("integrate_illustrations", True))
         specials = config.get("special_pages", {}) if isinstance(config.get("special_pages", {}), dict) else {}
 
@@ -13869,8 +13867,8 @@ class PictureCaptureApp(tk.Tk):
             entries = read_pdic(pdic_path(page))
             polygons = read_ppp(self._ppp_read_path(page))
             special = specials.get(page.stem, {}) if isinstance(specials.get(page.stem, {}), dict) else {}
-            top_y = int(special.get("top_y", general_top))
-            bottom_y = int(special.get("bottom_y", general_bottom))
+            top_y = int(special.get("top_v", general_top))
+            bottom_y = int(special.get("bottom_v", general_bottom))
             records = split_whole_entries(
                 page, entries, settings, out_dir, top_y=top_y, bottom_y=bottom_y, polygons=polygons,
                 entry_left_padding=entry_left, entry_right_padding=entry_right,
