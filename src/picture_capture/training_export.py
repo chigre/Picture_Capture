@@ -158,6 +158,11 @@ def export_training_page(
         ground_truth.append({
             "order": order,
             "word": entry.word,
+            "coordinate_space": SOURCE_COORDINATE_SPACE,
+            "source_x": int(entry.x),
+            "source_y": int(entry.y),
+            # Compatibility aliases for v1 consumers. The coordinate_space field
+            # makes their meaning explicit; new consumers should use source_x/y.
             "x": int(entry.x),
             "y": int(entry.y),
             "column": int(col),
@@ -267,7 +272,13 @@ def export_training_page(
         "annotation_status": "human_verified_saved_pdic",
         "ground_truth_lines": ground_truth,
         "illustration_polygons": [
-            {"label": region.label, "points": [[int(x), int(y)] for x, y in region.points]}
+            {
+                "label": region.label,
+                "coordinate_space": SOURCE_COORDINATE_SPACE,
+                "source_points_xy": [[int(x), int(y)] for x, y in region.points],
+                # Compatibility alias; source_points_xy is the preferred v2 key.
+                "points": [[int(x), int(y)] for x, y in region.points],
+            }
             for region in polygons
         ],
         "coordinate_contract": coordinate_contract(),
@@ -370,7 +381,8 @@ def write_training_manifest(
             "ground_truth": "saved .pdic lines confirmed by the user at export time",
             "negative_candidates": "OCR review candidates not matched to a saved ground-truth line",
             "coordinates": "ground truth, illustration polygons and page-template boundaries use original-image pixels",
-            "layout_coordinates": "layout geometry uses full-resolution canonical pixels with an explicit transform",
+            "layout_coordinates": "runtime layout geometry uses full-resolution canonical pixels with an explicit transform",
+            "persisted_geometry": "settings geometry uses canonical reference-page pixels and geometry_reference_width",
             "page_split_rule": "future train/validation/test splits should be performed by dictionary, not adjacent pages",
         },
         "settings": asdict(settings),
