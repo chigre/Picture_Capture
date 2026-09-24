@@ -362,10 +362,14 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
     project_bar = text[project_bar_start:project_bar_end]
     assert project_bar.index('text="已有项目"') < project_bar.index('text="导出训练标记包"')
-    assert project_bar.index('("项目Profile", self.open_project_profile)') < project_bar.index('("设置中心", self.open_settings)')
-    assert project_bar.index('("设置中心", self.open_settings)') < project_bar.index('("保存参数", self.save_main_parameters)')
-    assert project_bar.index('("保存参数", self.save_main_parameters)') < project_bar.index('("使用提示", self.show_help_dialog)')
-    assert '("项目Profile", self.open_project_profile)' in project_bar
+    assert project_bar.index('("项目Profile", self.open_project_profile, "profile")') < project_bar.index('("设置中心", self.open_settings, "settings")')
+    assert project_bar.index('("设置中心", self.open_settings, "settings")') < project_bar.index('("保存参数", self.save_main_parameters, "save")')
+    assert project_bar.index('("保存参数", self.save_main_parameters, "save")') < project_bar.index('("使用提示", self.show_help_dialog, "help")')
+    assert '("项目Profile", self.open_project_profile, "profile")' in project_bar
+    assert 'uniform="project-footer-columns"' in project_bar
+    assert 'project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
+    assert 'parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
+    assert 'self._footer_action_button(' in project_bar
 
     actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
@@ -380,6 +384,20 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     assert "profile_scrollbar" in profile
     assert 'text="自定义结构名称："' in profile
     assert "ProjectProfileWizard(self, new_project=new_project)" in text
+
+
+def test_bottom_important_actions_have_distinct_soft_colors():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    def _footer_action_button(")
+    end = text.index("    def _section_frame(", start)
+    helper = text[start:end]
+    assert '"profile": ("#eee8f8", "#dfd3f2", "#604482")' in helper
+    assert '"settings": ("#dceeff", "#c7e1f8", "#245b86")' in helper
+    assert '"save": ("#dff1e3", "#cbe7d1", "#356b42")' in helper
+    assert '"help": ("#fff0cf", "#ffe2a6", "#76520f")' in helper
+    assert 'highlightbackground=border' in helper
+    assert 'highlightthickness=1' in helper
 
 
 def test_main_workspace_modern_styles_are_scoped_and_dense():
