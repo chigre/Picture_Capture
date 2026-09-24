@@ -16,12 +16,12 @@ dependencies = ["Pillow>=10", "numpy>=1.24", "pypinyin>=0.53,<1", "opencc>=1.4.2
 paddleocr = ["paddleocr>=3.7,<4", "paddlepaddle==3.3.0"]
 lens = ["chrome-lens-py>=3.4,<4"]
 
-# Recommended OCR profiles. GPU profiles intentionally keep the CUDA runtime
-# installer-managed so the correct PaddlePaddle CUDA index can be selected.
+# Recommended OCR profiles. CPU/GPU runtimes are fully declared here so the
+# Windows installer only needs a standard locked uv sync.
 ocr-cpu = ["paddleocr>=3.7,<4", "paddlepaddle==3.3.0", "chrome-lens-py>=3.4,<4"]
-ocr-gpu-cu118 = ["paddleocr>=3.7,<4", "chrome-lens-py>=3.4,<4"]
-ocr-gpu-cu126 = ["paddleocr>=3.7,<4", "chrome-lens-py>=3.4,<4"]
-ocr-gpu-cu129 = ["paddleocr>=3.7,<4", "chrome-lens-py>=3.4,<4"]
+ocr-gpu-cu118 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py>=3.4,<4"]
+ocr-gpu-cu126 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py>=3.4,<4"]
+ocr-gpu-cu129 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py>=3.4,<4"]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
@@ -30,16 +30,45 @@ dev = ["pytest>=8", "ruff>=0.6"]
 picture-capture = "picture_capture.app:main"
 picture-capture-cli = "picture_capture.cli:main"
 
+[tool.uv]
+required-version = ">=0.11"
+conflicts = [
+    [
+        { extra = "paddleocr" },
+        { extra = "ocr-cpu" },
+        { extra = "ocr-gpu-cu118" },
+        { extra = "ocr-gpu-cu126" },
+        { extra = "ocr-gpu-cu129" },
+    ],
+]
+
+[tool.uv.sources]
+paddlepaddle = { index = "paddle-cpu" }
+paddlepaddle-gpu = [
+    { index = "paddle-gpu-cu118", extra = "ocr-gpu-cu118" },
+    { index = "paddle-gpu-cu126", extra = "ocr-gpu-cu126" },
+    { index = "paddle-gpu-cu129", extra = "ocr-gpu-cu129" },
+]
+
 [[tool.uv.index]]
 name = "paddle-cpu"
 url = "https://www.paddlepaddle.org.cn/packages/stable/cpu/"
 explicit = true
 
-[tool.uv.sources]
-paddlepaddle = { index = "paddle-cpu" }
+[[tool.uv.index]]
+name = "paddle-gpu-cu118"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu118/"
+explicit = true
 
-[tool.uv]
-required-version = ">=0.11"
+[[tool.uv.index]]
+name = "paddle-gpu-cu126"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu126/"
+explicit = true
+
+[[tool.uv.index]]
+name = "paddle-gpu-cu129"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu129/"
+explicit = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
