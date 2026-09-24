@@ -2368,7 +2368,7 @@ wheels = [
 
 [[package]]
 name = "picture-capture-restored"
-version = "2.13.2"
+version = "2.13.3"
 source = { editable = "." }
 dependencies = [
     { name = "charset-normalizer" },
