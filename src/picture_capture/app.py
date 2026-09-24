@@ -11451,8 +11451,8 @@ class PictureCaptureApp(tk.Tk):
             return None
         config = self._load_crop_settings()
         special = config.get("special_pages", {}).get(self.current_page.stem, {}) if isinstance(config.get("special_pages", {}), dict) else {}
-        top_y = int(special.get("top_y", config.get("general_top_v", self.settings.start_y)))
-        bottom_y = int(special.get("bottom_y", config.get("general_bottom_v", 0)))
+        top_y = int(special.get("top_v", config.get("general_top_v", self.settings.start_y)))
+        bottom_y = int(special.get("bottom_v", config.get("general_bottom_v", 0)))
         margin = int(config.get("polygon_margin", 0))
         entry_left = int(config.get("entry_left_padding_u", 0))
         entry_right = int(config.get("entry_right_padding_u", 0))
@@ -13481,8 +13481,8 @@ class PictureCaptureApp(tk.Tk):
             return
         try:
             config = self._load_crop_settings(); special = config.get("special_pages", {}).get(self.current_page.stem, {})
-            top_y = int(special.get("top_y", config.get("general_top_v", self.settings.start_y)))
-            bottom_y = int(special.get("bottom_y", config.get("general_bottom_v", 0)))
+            top_y = int(special.get("top_v", config.get("general_top_v", self.settings.start_y)))
+            bottom_y = int(special.get("bottom_v", config.get("general_bottom_v", 0)))
             records = split_whole_entries(
                 self.current_page, self.entries, self.settings, qt_root(self.project.root) / "PWW",
                 top_y=top_y, bottom_y=bottom_y, polygons=list(self.polygons),
