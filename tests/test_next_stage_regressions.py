@@ -285,6 +285,9 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert 'text="ⓘ"' in settings
     assert 'host.columnconfigure(0, weight=3)' in settings
     assert 'host.columnconfigure(1, weight=2)' in settings
+    assert "def resize_help_content(event: tk.Event)" in settings
+    assert "wraplength = max(120, int(event.width) - 28)" in settings
+    assert "label.configure(wraplength=wraplength)" in settings
 
     assert 'text="普通画线（左缘规则）"' in settings
     assert 'text="OCR画线（识别词头）"' in settings
