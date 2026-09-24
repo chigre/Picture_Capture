@@ -5762,6 +5762,23 @@ def test_v2128_cc_cedict_local_install_and_lookup(tmp_path, monkeypatch):
     assert state.path.parent == tmp_path / "local" / "PictureCapture" / "dictionaries" / "cc-cedict"
 
 
+def test_review_network_status_uses_fixed_two_line_result_block():
+    from pathlib import Path
+    import inspect
+    import picture_capture.app as app_module
+
+    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    start = text.index("class ReviewWindow")
+    end = text.index("class OCRConflictReviewDialog", start)
+    review = text[start:end]
+    assert 'value="网络词汇核验\\n等待选择词条"' in review
+    assert "height=2" in review
+    assert '"✓ 有词典收录\\n" + "、".join(found_names)' in review
+    assert '"○ 各可用词典均未检出精确词条\\n不代表该词不存在"' in review
+    assert '"⚠ 部分词典未安装或网络来源暂不可用\\n可继续网络搜索。"' in review
+    assert '"⚠ 网络词汇核验暂时失败\\n可点“网络搜索”手工确认。"' in review
+
+
 def test_v2128_review_network_toolbar_has_compact_source_badges():
     from pathlib import Path
     import inspect
