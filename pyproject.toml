@@ -47,6 +47,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 picture_capture = [
     "data/*.json",
+    "data/layout_example/*.png",
     "data/profile_previews/*.jpg",
     "data/headword_examples/*.jpg",
     "data/headword_examples/*.png",

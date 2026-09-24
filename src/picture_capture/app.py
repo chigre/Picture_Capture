@@ -1312,6 +1312,17 @@ class SettingsDialog(tk.Toplevel):
         "review_single_cjk_line_height": (0, 500, 1), "review_zoom_percent": (20, 250, 5),
     }
 
+    SETTING_HELP_IMAGES = {
+        "columns": "layout_col_number.png",
+        "start_y": "layout_settings.png",
+        "bottom_y": "layout_settings.png",
+        "manual_x": "layout_settings.png",
+        "column_width": "layout_settings.png",
+        "gutter": "layout_settings.png",
+        "character_height": "layout_settings.png",
+        "row_padding": "layout_settings.png",
+    }
+
     SETTING_CHOICES = {
         "analysis_threshold_mode": {
             "自动（推荐，等同 Otsu）": "auto",
@@ -1374,19 +1385,99 @@ class SettingsDialog(tk.Toplevel):
         ("校对时主界面显示 OCR 置信度底色", "review_main_show_ocr_background"),
     )
 
-    def _show_settings_help(self, title: str, body: str) -> None:
+    def _show_settings_help(
+        self,
+        title: str,
+        body: str,
+        image_name: str | None = None,
+    ) -> None:
         if hasattr(self, "_settings_help_title_var"):
             self._settings_help_title_var.set(str(title or "设置说明"))
         if hasattr(self, "_settings_help_body_var"):
             self._settings_help_body_var.set(str(body or "不确定时保持当前值即可。"))
+        self._settings_help_current_image = image_name
+        self._schedule_settings_help_image_render()
 
-    def _show_setting_help(self, name: str) -> None:
+    def _settings_help_image_path(self, image_name: str) -> Path:
+        return (
+            Path(__file__).resolve().parent
+            / "data"
+            / "layout_example"
+            / image_name
+        )
+
+    def _load_settings_help_image(self, image_name: str) -> Image.Image | None:
+        cached = self._settings_help_original_images.get(image_name)
+        if cached is not None:
+            return cached
+        path = self._settings_help_image_path(image_name)
+        try:
+            with Image.open(path) as opened:
+                image = opened.convert("RGBA").copy()
+        except (OSError, ValueError):
+            return None
+        self._settings_help_original_images[image_name] = image
+        return image
+
+    def _schedule_settings_help_image_render(self) -> None:
+        job = getattr(self, "_settings_help_image_job", None)
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except tk.TclError:
+                pass
+        self._settings_help_image_job = self.after_idle(self._render_settings_help_images)
+
+    def _render_settings_help_images(self) -> None:
+        self._settings_help_image_job = None
+        image_name = getattr(self, "_settings_help_current_image", None)
+        original = self._load_settings_help_image(image_name) if image_name else None
+
+        for label, separator, help_box in self._settings_help_image_widgets:
+            if original is None:
+                try:
+                    label.configure(image="")
+                    label.image = None
+                    label.pack_forget()
+                except tk.TclError:
+                    pass
+                continue
+            try:
+                mapped = bool(help_box.winfo_ismapped())
+            except tk.TclError:
+                continue
+            if not mapped:
+                continue
+
+            available_width = max(180, int(help_box.winfo_width()) - 28)
+            max_width = min(380, available_width)
+            max_height = 330
+            scale = min(
+                1.0,
+                max_width / max(1, original.width),
+                max_height / max(1, original.height),
+            )
+            width = max(1, int(round(original.width * scale)))
+            height = max(1, int(round(original.height * scale)))
+            rendered = original.resize((width, height), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(rendered)
+            label.configure(image=photo)
+            label.image = photo
+            label.pack(
+                anchor="center",
+                fill="x",
+                pady=(12, 2),
+                before=separator,
+            )
+
+    def _show_setting_help(self, name: str, *, show_layout_image: bool = False) -> None:
         title = self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])
         body = self.SETTING_HELP.get(name, "专家参数；不确定时建议保持当前值。")
         unit = self.SETTING_UNITS.get(name, "")
         if unit:
             body += f"\n\n单位：{unit}"
-        self._show_settings_help(title, body)
+        image_name = self.SETTING_HELP_IMAGES.get(name) if show_layout_image else None
+        self._show_settings_help(title, body, image_name)
 
     def _show_check_help(self, label: str, name: str) -> None:
         self._show_settings_help(
@@ -1498,6 +1589,7 @@ class SettingsDialog(tk.Toplevel):
         names: tuple[str, ...] | list[str],
         *,
         intro: str = "",
+        help_images: bool = False,
     ) -> ttk.LabelFrame:
         group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
         group.pack(fill="x", pady=(0, 10))
@@ -1527,7 +1619,9 @@ class SettingsDialog(tk.Toplevel):
 
             info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
             info.grid(row=row, column=2, sticky="w", padx=(8, 0))
-            callback = lambda n=name: self._show_setting_help(n)
+            callback = lambda n=name, hi=help_images: self._show_setting_help(
+                n, show_layout_image=hi
+            )
             self._bind_help_widget(label_widget, callback)
             self._bind_help_widget(control, callback)
             self._bind_help_widget(info, callback)
@@ -1642,7 +1736,17 @@ class SettingsDialog(tk.Toplevel):
             justify="left",
             wraplength=320,
         ).pack(anchor="w", fill="x", pady=(7, 0))
-        ttk.Separator(help_box, orient="horizontal").pack(fill="x", pady=(14, 10))
+        help_image = ttk.Label(help_box, anchor="center")
+        help_separator = ttk.Separator(help_box, orient="horizontal")
+        help_separator.pack(fill="x", pady=(14, 10))
+        self._settings_help_image_widgets.append(
+            (help_image, help_separator, help_box)
+        )
+        help_box.bind(
+            "<Configure>",
+            lambda _e: self._schedule_settings_help_image_render(),
+            add="+",
+        )
         ttk.Label(
             help_box,
             text="把鼠标停在设置项上，或用 Tab/鼠标进入输入框，"
@@ -1683,6 +1787,12 @@ class SettingsDialog(tk.Toplevel):
                   "什么时候需要调整，以及调大/调小可能带来的影响。"
         )
         self._settings_save_status_var = tk.StringVar(value="✓ 自动保存已开启")
+        self._settings_help_current_image: str | None = None
+        self._settings_help_original_images: dict[str, Image.Image] = {}
+        self._settings_help_image_widgets: list[
+            tuple[ttk.Label, ttk.Separator, ttk.LabelFrame]
+        ] = []
+        self._settings_help_image_job: str | None = None
 
         outer = ttk.Frame(self, padding=(18, 14, 18, 12))
         outer.pack(fill="both", expand=True)
@@ -1729,6 +1839,15 @@ class SettingsDialog(tk.Toplevel):
             "rules": rules_tab,
         }.get(initial_tab, common_tab)
         notebook.select(selected_tab)
+        notebook.bind(
+            "<<NotebookTabChanged>>",
+            lambda _e: self._show_settings_help(
+                "设置说明",
+                "把鼠标停在任一设置项上，或进入输入框，即可看到它控制什么、"
+                "什么时候需要调整，以及调大/调小可能带来的影响。",
+            ),
+            add="+",
+        )
 
         # SettingsDialog no longer duplicates the normal Project Profile wizard.
         # Keep the active profile ID intact for save() while exposing a direct
@@ -1819,6 +1938,7 @@ class SettingsDialog(tk.Toplevel):
             "常用版面参数",
             self.COMMON_FIELDS,
             intro="这些值同时影响普通画线、OCR画线和后续切图。能自动检测时，优先使用检测结果。",
+            help_images=True,
         )
 
         normal = self._scrollable_settings_page(normal_tab)
