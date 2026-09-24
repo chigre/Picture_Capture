@@ -1,5 +1,11 @@
 ## Unreleased
 
+### 清理未使用的 Profile 样例资源
+
+- 移除已不再被当前 Profile 数据引用的 `data/profile_previews/`、`headword_examples/contact_sheet.jpg` 和 `headword_examples/extended/`，减少仓库与安装包中的无效图片资源。
+- 删除设置中心旧的【预览经典词典…】入口及 `profile_preview_path` 相关遗留代码；Project Profile 向导继续使用 `recommended_current/`，缺图时回退到 `classic_headword_examples.jpg`。
+- package-data、样例 manifest、README 与回归测试同步收敛到当前实际使用的 9 张经典词头局部样例。
+
 ### 设置中心常用版面参数图解
 
 - 【设置中心 → 常用 → 常用版面参数】的右侧【设置说明】支持上下文图解。
