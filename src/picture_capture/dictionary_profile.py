@@ -17,8 +17,6 @@ DEFAULT_PROFILE_ID = "custom"
 @dataclass(frozen=True, slots=True)
 class ProfileExample:
     dictionary: str
-    image: str
-    note: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,14 +163,6 @@ def profile_library_path() -> Path:
     return Path(__file__).resolve().parent / "data" / "dictionary_profiles_v3.json"
 
 
-def profile_preview_dir() -> Path:
-    return Path(__file__).resolve().parent / "data" / "profile_previews"
-
-
-def profile_preview_path(filename: str) -> Path:
-    return profile_preview_dir() / Path(filename).name
-
-
 def _load_profile_library_raw() -> dict[str, Any]:
     path = profile_library_path()
     try:
@@ -197,7 +187,7 @@ def available_dictionary_profiles() -> tuple[DictionaryProfilePreset, ...]:
         if not isinstance(item, dict) or item.get("user_visible") is False:
             continue
         examples = tuple(
-            ProfileExample(dictionary=str(name), image="", note="已验证组合示例")
+            ProfileExample(dictionary=str(name))
             for name in item.get("validated_examples", []) if str(name)
         )
         headword = dict(item)
