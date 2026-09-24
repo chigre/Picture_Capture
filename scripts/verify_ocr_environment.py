@@ -3,7 +3,16 @@ from __future__ import annotations
 import argparse
 import importlib.util
 from importlib import metadata
+from pathlib import Path
 import sys
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from picture_capture.windows_gpu_runtime import configure_windows_nvidia_dlls
 
 
 def dist_version(name: str) -> str | None:
@@ -11,6 +20,15 @@ def dist_version(name: str) -> str | None:
         return metadata.version(name)
     except metadata.PackageNotFoundError:
         return None
+
+
+def _gpu_smoke_test(paddle) -> str:
+    paddle.set_device("gpu:0")
+    x = paddle.ones([1, 1, 5, 5], dtype="float32")
+    weight = paddle.ones([1, 1, 3, 3], dtype="float32")
+    y = paddle.nn.functional.conv2d(x, weight)
+    total = float(y.numpy().sum())
+    return f"conv2d sum={total:.1f}"
 
 
 def main() -> int:
@@ -22,6 +40,12 @@ def main() -> int:
     print(f"Python: {sys.version.split()[0]}")
     if args.profile:
         print(f"OCR profile: {args.profile}")
+
+    dll_dirs = configure_windows_nvidia_dlls()
+    if dll_dirs:
+        print("NVIDIA DLL directories:")
+        for path in dll_dirs:
+            print(f"  {path}")
 
     errors: list[str] = []
 
@@ -48,10 +72,16 @@ def main() -> int:
 
     cpu_version = dist_version("paddlepaddle")
     gpu_version = dist_version("paddlepaddle-gpu")
+    cudnn12_version = dist_version("nvidia-cudnn-cu12")
+    cudnn11_version = dist_version("nvidia-cudnn-cu11")
     if cpu_version and gpu_version:
         errors.append(f"both paddlepaddle CPU {cpu_version} and paddlepaddle-gpu {gpu_version} are installed")
     elif gpu_version:
         print(f"PaddlePaddle runtime: GPU {gpu_version}")
+        if cudnn12_version:
+            print(f"NVIDIA cuDNN CUDA 12 wheel: {cudnn12_version}")
+        if cudnn11_version:
+            print(f"NVIDIA cuDNN CUDA 11 wheel: {cudnn11_version}")
     elif cpu_version:
         print(f"PaddlePaddle runtime: CPU {cpu_version}")
     else:
@@ -69,6 +99,15 @@ def main() -> int:
 
         if args.expect == "gpu" and not compiled_cuda:
             errors.append("GPU profile selected but Paddle was not compiled with CUDA")
+        elif args.expect == "gpu":
+            try:
+                detail = _gpu_smoke_test(paddle)
+                print(f"Paddle GPU/cuDNN smoke test: OK ({detail})")
+            except Exception as exc:
+                errors.append(
+                    "GPU/cuDNN smoke test failed. On Windows this commonly means the "
+                    f"required cudnn DLL is missing or not discoverable: {exc}"
+                )
         if args.expect == "cpu" and compiled_cuda:
             errors.append("CPU profile selected but CUDA Paddle runtime is active")
     except Exception as exc:
