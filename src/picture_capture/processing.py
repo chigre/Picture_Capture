@@ -1849,7 +1849,7 @@ def split_illustrations(
     """Export only PPPs that are not already carried by an associated entry crop."""
     with Image.open(image_path) as opened:
         image = ImageOps.exif_transpose(opened).convert("RGBA")
-    effective_settings = settings or AppSettings(parameter_display_width=image.width)
+    effective_settings = settings or AppSettings(geometry_reference_width=image.width)
     rgb_for_plan = image.convert("RGB")
     try:
         plan = build_page_crop_plan(
