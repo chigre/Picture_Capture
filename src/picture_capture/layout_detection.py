@@ -79,6 +79,10 @@ def aggregate_layout_estimates(
     result = {"columns": columns}
     for field in ("start_y", "bottom_y", "manual_x", "column_width", "gutter", "character_height", "row_padding"):
         result[field] = robust_median(field)
+    # Leave a small safety margin above the first detected body line instead of
+    # placing the header boundary directly against text.  This value is already
+    # in the user-facing parameter coordinate system.
+    result["start_y"] = max(0, result["start_y"] - 5)
     result["row_padding"] = max(1, result["row_padding"])
     return result, f"{columns}栏: {counts.get(columns, 0)}/{len(rows)} pages"
 
