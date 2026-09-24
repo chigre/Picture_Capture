@@ -5773,7 +5773,7 @@ def test_v2128_cc_cedict_local_install_and_lookup(tmp_path, monkeypatch):
     assert state.path.parent == tmp_path / "local" / "PictureCapture" / "dictionaries" / "cc-cedict"
 
 
-def test_review_network_status_uses_fixed_two_line_result_block():
+def test_review_network_status_uses_single_line_result_block():
     from pathlib import Path
     import inspect
     import picture_capture.app as app_module
@@ -5782,12 +5782,22 @@ def test_review_network_status_uses_fixed_two_line_result_block():
     start = text.index("class ReviewWindow")
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
-    assert 'value="网络词汇核验\\n等待选择词条"' in review
-    assert "height=2" in review
-    assert '"✓ 有词典收录\\n" + "、".join(found_names)' in review
-    assert '"○ 各可用词典均未检出精确词条\\n不代表该词不存在"' in review
-    assert '"⚠ 部分词典未安装或网络来源暂不可用\\n可继续网络搜索。"' in review
-    assert '"⚠ 网络词汇核验暂时失败\\n可点“网络搜索”手工确认。"' in review
+    assert 'value="网络词汇核验：等待选择词条"' in review
+    assert '"✓ 有词典收录：" + "、".join(found_names)' in review
+    assert '"○ 各可用词典均未检出精确词条（不代表该词不存在）"' in review
+    assert '"⚠ 部分词典未安装或网络来源暂不可用；可继续网络搜索。"' in review
+    assert '"⚠ 网络词汇核验暂时失败；可点“网络搜索”手工确认。"' in review
+
+    label_start = review.index("        self.network_status_label = tk.Label(")
+    label_end = review.index("        self._refresh_cc_cedict_button_idle()", label_start)
+    network_label = review[label_start:label_end]
+    assert "height=2" not in network_label
+    assert "wraplength=" not in network_label
+
+    wordslist_label_start = review.index("        self.wordslist_label_var = tk.StringVar")
+    wordslist_label_end = review.index("        word_nav = ttk.Frame(", wordslist_label_start)
+    wordslist_label = review[wordslist_label_start:wordslist_label_end]
+    assert "wraplength=" not in wordslist_label
 
 
 def test_v2128_review_network_toolbar_has_compact_source_badges():
@@ -5805,6 +5815,10 @@ def test_v2128_review_network_toolbar_has_compact_source_badges():
     assert 'value="萌(?)"' in review
     assert 'value="Wiki(?)"' in review
     assert 'text="网络搜索"' in review
+    assert "network_actions_more = ttk.Frame(network_box" in review
+    assert "network_actions_more, textvariable=self.moedict_lookup_var" in review
+    assert "network_actions_more, textvariable=self.wiktionary_lookup_var" in review
+    assert 'network_actions_more, text="网络搜索"' in review
     assert "def manage_cc_cedict" in review
     assert "install_cc_cedict_from_file(source)" in review
 
