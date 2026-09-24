@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 import shutil
 import subprocess
@@ -10,21 +9,13 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = ROOT / ".picture_capture_ocr_extra"
 
-
-@dataclass(frozen=True)
-class OCRProfile:
-    label: str
-    extra: str | None
-    expect: str | None
-
-
 PROFILES = {
-    "1": OCRProfile("CPU - PaddleOCR + Google Lens", "ocr-cpu", "cpu"),
-    "2": OCRProfile("GPU CUDA 11.8 - PaddleOCR + Google Lens", "ocr-gpu-cu118", "gpu"),
-    "3": OCRProfile("GPU CUDA 12.6 - PaddleOCR + Google Lens", "ocr-gpu-cu126", "gpu"),
-    "4": OCRProfile("GPU CUDA 12.9 - PaddleOCR + Google Lens", "ocr-gpu-cu129", "gpu"),
-    "5": OCRProfile("Google Lens only", "lens", "lens"),
-    "6": OCRProfile("Core only - no optional OCR profile", None, None),
+    "1": {"label": "CPU - PaddleOCR + Google Lens", "extra": "ocr-cpu", "expect": "cpu"},
+    "2": {"label": "GPU CUDA 11.8 - PaddleOCR + Google Lens", "extra": "ocr-gpu-cu118", "expect": "gpu"},
+    "3": {"label": "GPU CUDA 12.6 - PaddleOCR + Google Lens", "extra": "ocr-gpu-cu126", "expect": "gpu"},
+    "4": {"label": "GPU CUDA 12.9 - PaddleOCR + Google Lens", "extra": "ocr-gpu-cu129", "expect": "gpu"},
+    "5": {"label": "Google Lens only", "extra": "lens", "expect": "lens"},
+    "6": {"label": "Core only - no optional OCR profile", "extra": None, "expect": None},
 }
 
 
@@ -34,23 +25,26 @@ def venv_python() -> Path:
     return ROOT / ".venv" / "bin" / "python"
 
 
-def sync_command(profile: OCRProfile) -> list[str]:
+def sync_command(profile: dict[str, str | None]) -> list[str]:
     command = ["uv", "sync", "--locked", "--no-dev"]
-    if profile.extra:
-        command.extend(["--extra", profile.extra])
+    extra = profile["extra"]
+    if extra:
+        command.extend(["--extra", extra])
     return command
 
 
-def verification_command(profile: OCRProfile) -> list[str]:
-    if not profile.extra or not profile.expect:
+def verification_command(profile: dict[str, str | None]) -> list[str]:
+    extra = profile["extra"]
+    expect = profile["expect"]
+    if not extra or not expect:
         return []
     return [
         str(venv_python()),
         str(ROOT / "scripts" / "verify_ocr_environment.py"),
         "--expect",
-        profile.expect,
+        expect,
         "--profile",
-        profile.extra,
+        extra,
     ]
 
 
@@ -74,7 +68,7 @@ def show_gpu() -> None:
     )
 
 
-def choose_profile() -> OCRProfile | None:
+def choose_profile() -> dict[str, str | None] | None:
     print()
     print("=" * 60)
     print("Picture Capture OCR installer")
@@ -83,7 +77,7 @@ def choose_profile() -> OCRProfile | None:
     print()
     print("Choose one profile:")
     for key, profile in PROFILES.items():
-        print(f"  {key}. {profile.label}")
+        print(f"  {key}. {profile['label']}")
     print()
     choice = input("Selection [1-6, Enter to cancel]: ").strip()
     if not choice:
@@ -91,20 +85,21 @@ def choose_profile() -> OCRProfile | None:
     return PROFILES.get(choice)
 
 
-def persist_profile(profile: OCRProfile) -> None:
-    if profile.extra:
-        MARKER.write_text(profile.extra + "\n", encoding="utf-8")
+def persist_profile(profile: dict[str, str | None]) -> None:
+    extra = profile["extra"]
+    if extra:
+        MARKER.write_text(extra + "\n", encoding="utf-8")
     else:
         MARKER.unlink(missing_ok=True)
 
 
-def install_profile(profile: OCRProfile) -> int:
+def install_profile(profile: dict[str, str | None]) -> int:
     if shutil.which("uv") is None:
-        print("ERROR: uv was not found. Install it from https://docs.astral.sh/uv/")
+        print("ERROR: uv was not found. Install uv and run this installer again.")
         return 1
 
     print()
-    print(f"Selected: {profile.label}")
+    print(f"Selected: {profile['label']}")
     if run(sync_command(profile)) != 0:
         print("ERROR: uv sync failed. The saved OCR profile was not changed.")
         return 1
@@ -116,8 +111,9 @@ def install_profile(profile: OCRProfile) -> int:
 
     persist_profile(profile)
     print()
-    if profile.extra:
-        print(f"Installation complete. Saved OCR profile: {profile.extra}")
+    extra = profile["extra"]
+    if extra:
+        print(f"Installation complete. Saved OCR profile: {extra}")
     else:
         print("Core environment is ready. Optional OCR components were removed.")
     return 0
@@ -128,9 +124,6 @@ def main() -> int:
     if profile is None:
         print("Cancelled.")
         return 0
-    if profile not in PROFILES.values():
-        print("Invalid selection.")
-        return 2
     return install_profile(profile)
 
 
