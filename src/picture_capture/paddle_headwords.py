@@ -18,6 +18,11 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from .models import AppSettings, Entry, resolved_tesseract_language
+from .coordinate_space import (
+    REFERENCE_CANONICAL_WIDTH,
+    reference_to_canonical,
+    stored_geometry_to_canonical,
+)
 from .image_utils import normalize_page_rgb
 from .dictionary_profile import (
     PROFILE_FILENAME,
@@ -618,8 +623,6 @@ def unwrap_column_band(
     the same source-image Y coordinate, so OCR Y boxes only need an offset when
     converted back to PDIC markers.
     """
-    from .processing import parameter_scale
-
     if source_rgb is None:
         source = np.asarray(normalize_page_rgb(image))
     else:
@@ -630,13 +633,28 @@ def unwrap_column_band(
             raise ValueError("source_rgb 尺寸必须与当前原始页面一致，禁止跨页复用")
         if source.shape[2] != 3:
             source = source[:, :, :3]
-    scale = parameter_scale(image, settings)
-    ratio = max(1, min(100, int(getattr(settings, "paddle_band_width_ratio", 100)))) / 100.0
-    left_margin = max(0, round(settings.paddle_band_left_margin / scale))
+    canonical_width = geometry.transform.canonical_size(image.size)[0]
+    band_ratio = max(
+        1, min(100, int(getattr(settings, "paddle_band_width_ratio", 100)))
+    ) / 100.0
+    left_margin = max(
+        0,
+        reference_to_canonical(
+            settings.paddle_band_left_margin, canonical_width,
+        ),
+    )
     if source_width is not None:
         band_width = max(24, int(source_width))
     else:
-        configured_band_width = max(24, round(settings.paddle_band_width * ratio / scale))
+        configured_band_width = max(
+            24,
+            round(
+                reference_to_canonical(
+                    settings.paddle_band_width, canonical_width,
+                )
+                * band_ratio
+            ),
+        )
         # Never let the OCR candidate strip spill into the next dictionary
         # column. This mattered little on wide two-column Latin pages but is
         # destructive on dense three-column CJK pages: OCR would merge a large
@@ -1936,7 +1954,7 @@ def _otsu_threshold(gray: np.ndarray) -> int:
 def _separator_analysis_x_bounds(
     width: int,
     settings: AppSettings,
-    source_per_display_pixel: float = 1.0,
+    reference_to_canonical_scale: float = 1.0,
 ) -> tuple[int, int]:
     """Return the left-local X ROI used for separator/boundary analysis.
 
@@ -1946,7 +1964,7 @@ def _separator_analysis_x_bounds(
     therefore limit refinement to a percentage of the left side of the column.
     """
     width = max(1, int(width))
-    margin = max(0, round(max(0, settings.paddle_separator_column_margin) * source_per_display_pixel))
+    margin = max(0, round(max(0, settings.paddle_separator_column_margin) * reference_to_canonical_scale))
     margin = min(margin, max(0, width // 4))
     ratio = max(10, min(100, int(getattr(settings, "paddle_separator_roi_width_ratio", 60)))) / 100.0
     usable = max(1, width - margin * 2)
@@ -1961,7 +1979,7 @@ def detect_image_separator_candidates(
     gray: np.ndarray,
     reference_line_height: int,
     settings: AppSettings,
-    source_per_display_pixel: float = 1.0,
+    reference_to_canonical_scale: float = 1.0,
     lower_bound: int = 0,
 ) -> list[dict[str, Any]]:
     """Detect image-only entry-boundary candidates from blank-to-ink transitions.
@@ -1977,7 +1995,7 @@ def detect_image_separator_candidates(
     if height < 4 or width < 12:
         return []
     lower = max(0, min(height - 1, int(lower_bound)))
-    x0, x1 = _separator_analysis_x_bounds(width, settings, source_per_display_pixel)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
     roi = gray[lower:, x0:x1]
     if roi.size == 0 or roi.shape[0] < 4 or roi.shape[1] < 8:
         return []
@@ -2015,7 +2033,7 @@ def detect_image_separator_candidates(
     min_blank = max(3, round(line_h * 0.12))
     min_ink = max(2, round(line_h * 0.07))
     configured_safety = max(0, int(getattr(settings, "paddle_separator_safety_px", 2)))
-    safety = max(0, round(configured_safety * max(0.5, float(source_per_display_pixel))))
+    safety = max(0, round(configured_safety * max(0.5, float(reference_to_canonical_scale))))
 
     result: list[dict[str, Any]] = []
     for run_start, run_end in _true_runs(blank_mask):
@@ -2112,7 +2130,7 @@ def _first_cjk_ideograph(text: str) -> str:
 
 
 def _cjk_visual_projection_runs(
-    gray: np.ndarray, header_cutoff: int, settings: AppSettings, source_per_display_pixel: float,
+    gray: np.ndarray, header_cutoff: int, settings: AppSettings, reference_to_canonical_scale: float,
 ) -> tuple[int, list[tuple[int, int]]]:
     """Locate oversized single-character rows from image geometry alone.
 
@@ -2125,7 +2143,7 @@ def _cjk_visual_projection_runs(
     """
     if gray.size == 0:
         return 0, []
-    ratio = max(0.25, float(source_per_display_pixel))
+    ratio = max(0.25, float(reference_to_canonical_scale))
     zone_width = min(gray.shape[1], max(48, round(100 * ratio)))
     if zone_width <= 0:
         return 0, []
@@ -2150,7 +2168,15 @@ def _cjk_visual_projection_runs(
         index = end
 
     runs = _true_runs(np.asarray(active_list, dtype=bool))
-    expected_body = max(8.0, settings.character_height * ratio)
+    canonical_width = max(1, round(REFERENCE_CANONICAL_WIDTH * ratio))
+    expected_body = max(
+        8.0,
+        float(
+            stored_geometry_to_canonical(
+                settings.character_height, canonical_width, settings,
+            )
+        ),
+    )
     body_heights = [
         end - start for start, end in runs
         if expected_body * 0.45 <= end - start <= expected_body * 1.55
@@ -2215,7 +2241,7 @@ def refine_separator_y(
     coarse_y: int,
     line_height: int,
     settings: AppSettings,
-    source_per_display_pixel: float = 1.0,
+    reference_to_canonical_scale: float = 1.0,
     lower_bound: int = 0,
 ) -> tuple[int, dict[str, Any]]:
     """Refine a coarse headword marker using a local horizontal ink valley.
@@ -2246,7 +2272,7 @@ def refine_separator_y(
     if bottom <= top:
         return coarse_y, {"enabled": True, "reason": "empty_search"}
 
-    x0, x1 = _separator_analysis_x_bounds(width, settings, source_per_display_pixel)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
 
     roi = gray[top:bottom + 1, x0:x1]
     threshold = _otsu_threshold(roi)
@@ -2262,7 +2288,7 @@ def refine_separator_y(
             ink[:, rule_columns] = False
 
     row_ink = ink.mean(axis=1).astype(np.float64)
-    band_radius = max(0, round(max(0, settings.paddle_separator_band_radius) * source_per_display_pixel))
+    band_radius = max(0, round(max(0, settings.paddle_separator_band_radius) * reference_to_canonical_scale))
     band_radius = min(band_radius, max(0, (len(row_ink) - 1) // 3))
     if band_radius > 0:
         kernel = np.ones(2 * band_radius + 1, dtype=np.float64) / (2 * band_radius + 1)
@@ -2333,7 +2359,7 @@ def refine_separator_y_adaptive(
     coarse_y: int,
     reference_line_height: int,
     settings: AppSettings,
-    source_per_display_pixel: float = 1.0,
+    reference_to_canonical_scale: float = 1.0,
     lower_bound: int = 0,
     content_top: int | None = None,
     preceding_gap_hint: int | None = None,
@@ -2364,7 +2390,17 @@ def refine_separator_y_adaptive(
     line_h = max(3, int(round(reference_line_height)))
     coarse_y = int(min(height - 1, max(lower_bound, coarse_y)))
     if content_top is None:
-        content_top = coarse_y + max(0, round(settings.row_padding * source_per_display_pixel))
+        canonical_width = max(
+            1,
+            round(
+                REFERENCE_CANONICAL_WIDTH
+                * max(0.01, reference_to_canonical_scale)
+            ),
+        )
+        row_padding = stored_geometry_to_canonical(
+            settings.row_padding, canonical_width, settings,
+        )
+        content_top = coarse_y + max(0, row_padding)
     content_top = int(min(height - 1, max(lower_bound, content_top)))
 
     # Analyse enough of the column to see the preceding blank band and a small
@@ -2379,7 +2415,7 @@ def refine_separator_y_adaptive(
     if bottom <= top:
         return coarse_y, {"enabled": True, "reason": "empty_search", "adaptive_mode": "fallback"}
 
-    x0, x1 = _separator_analysis_x_bounds(width, settings, source_per_display_pixel)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
     roi = gray[top:bottom + 1, x0:x1]
     threshold = _otsu_threshold(roi)
     ink = roi <= threshold
@@ -2423,13 +2459,12 @@ def refine_separator_y_adaptive(
     target_local = int(min(len(smooth) - 1, max(0, content_top - top)))
     min_ink_rows = max(2, round(line_h * 0.07))
     min_blank_rows = max(2, round(line_h * 0.08))
-    # User-configurable safety clearance.  Like the program's other geometry
-    # parameters, it follows the historical display-pixel convention and is
-    # converted to source-image pixels for the current page.  A value of 0 is
+    # User-configurable safety clearance uses 1400-width reference pixels and
+    # is scaled to the current canonical resolution. A value of 0 is
     # allowed when the user deliberately wants the rule to touch the detected
     # ink boundary.
     configured_safety = max(0, int(getattr(settings, "paddle_separator_safety_px", 2)))
-    safety = max(0, round(configured_safety * max(0.5, float(source_per_display_pixel))))
+    safety = max(0, round(configured_safety * max(0.5, float(reference_to_canonical_scale))))
 
     # Step 1: establish an image-derived ink onset rather than blindly trusting
     # OCR box.y.  OCR can occasionally merge the preceding definition line into
@@ -2559,7 +2594,7 @@ def refine_separator_y_adaptive(
     # a bounded valley, use its lower edge so the marker still hugs the entry.
     refined, legacy = refine_separator_y(
         gray, coarse_y, line_h, settings,
-        source_per_display_pixel=source_per_display_pixel,
+        reference_to_canonical_scale=reference_to_canonical_scale,
         lower_bound=lower_bound,
     )
     if legacy.get("reason") == "bounded_low_ink_valley" and legacy.get("valley_end") is not None:
@@ -2589,7 +2624,7 @@ def refine_first_content_y(
     coarse_y: int,
     line_height: int,
     settings: AppSettings,
-    source_per_display_pixel: float = 1.0,
+    reference_to_canonical_scale: float = 1.0,
     lower_bound: int = 0,
 ) -> tuple[int, dict[str, Any]]:
     """Place the first entry marker at the onset of the first sustained ink run.
@@ -2616,7 +2651,7 @@ def refine_first_content_y(
     if bottom <= top:
         return coarse_y, {"enabled": True, "reason": "empty_search"}
 
-    x0, x1 = _separator_analysis_x_bounds(width, settings, source_per_display_pixel)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
     roi = gray[top:bottom + 1, x0:x1]
     threshold = _otsu_threshold(roi)
     ink = roi <= threshold
@@ -2634,7 +2669,7 @@ def refine_first_content_y(
     local_low = float(np.percentile(positive, 20)) if positive.size else 0.0
     active_threshold = max(quantization * 3.0, min(0.004, local_low * 0.55 if local_low else 0.002))
     active = row_ink >= active_threshold
-    min_run = max(2, round(max(1, settings.paddle_separator_band_radius) * source_per_display_pixel) + 1)
+    min_run = max(2, round(max(1, settings.paddle_separator_band_radius) * reference_to_canonical_scale) + 1)
     runs = [(a, b) for a, b in _true_runs(active) if (b - a) >= min_run]
 
     # Prefer the first sustained run whose centre is not implausibly far above
@@ -2739,7 +2774,7 @@ def filter_headword_records(
     user_rules: list[HeadwordFilterRule] | None = None,
     engine_name: str = "paddle",
     profile: DictionaryProfile | None = None,
-    source_per_display_pixel: float | None = None,
+    reference_to_canonical_scale: float | None = None,
 ) -> tuple[list[Entry], list[dict[str, Any]]]:
     """Select dictionary headwords using structure, geometry and visual cues.
 
@@ -2763,12 +2798,25 @@ def filter_headword_records(
     # left-edge bold lemma from its right-side gender/POS fragments.
     lines = group_ocr_records([record for record in records if record.text], settings.paddle_line_merge_y_ratio)
     configured_width = max(1, settings.paddle_band_width)
-    ratio = (
-        max(0.01, float(source_per_display_pixel))
-        if source_per_display_pixel is not None
+    reference_scale = (
+        max(0.01, float(reference_to_canonical_scale))
+        if reference_to_canonical_scale is not None
         else band.width / configured_width
     )
-    left_limit = round((settings.paddle_band_left_margin + settings.paddle_left_tolerance) * ratio)
+    canonical_width = max(
+        1, round(REFERENCE_CANONICAL_WIDTH * reference_scale),
+    )
+    row_padding = stored_geometry_to_canonical(
+        settings.row_padding, canonical_width, settings,
+    )
+    character_height = stored_geometry_to_canonical(
+        settings.character_height, canonical_width, settings,
+    )
+    row_height = max(1, character_height + row_padding)
+    left_limit = round(
+        (settings.paddle_band_left_margin + settings.paddle_left_tolerance)
+        * reference_scale
+    )
     lines = _repair_split_headword_lines(lines, settings, left_limit, patterns)
     lines = _repair_wrapped_headword_structure(lines, settings, left_limit, patterns)
     lines = _repair_multiline_headword_state_machine(lines, settings, left_limit, patterns)
@@ -2785,11 +2833,10 @@ def filter_headword_records(
     heights = np.asarray([line.box[3] - line.box[1] for line in lines], dtype=float)
     median_height = max(1.0, float(np.median(heights)))
 
-    # Settings are expressed in displayed-image pixels; the straightened band
-    # remains at source resolution. Its actual/configured width recovers the
-    # conversion ratio without depending on GUI state.
-    gap_threshold = settings.row_height * settings.paddle_gap_ratio * ratio
-    header_cutoff = _header_cutoff(gray, settings, ratio)
+    # Profile/OCR tuning distances use fixed reference pixels at canonical
+    # width 1400; project line geometry itself is full-resolution canonical.
+    gap_threshold = row_height * settings.paddle_gap_ratio
+    header_cutoff = _header_cutoff(gray, settings, reference_scale)
 
     # Independent image-only separator candidates.  OCR lines and boundaries
     # are paired with a mutual-nearest rule, so the image validates OCR geometry
@@ -2799,7 +2846,7 @@ def filter_headword_records(
         separator_gray,
         max(2, round(median_height)),
         settings,
-        source_per_display_pixel=ratio,
+        reference_to_canonical_scale=reference_scale,
         lower_bound=header_cutoff,
     )
     image_boundary_matches = match_ocr_lines_to_image_boundaries(
@@ -3047,7 +3094,7 @@ def filter_headword_records(
             reject_reason = "missing_structure_or_visual_cue"
         else:
             reject_reason = "candidate_rejected"
-        coarse_band_y = max(0, y0 - round(settings.row_padding * ratio))
+        coarse_band_y = max(0, y0 - row_padding)
         # The first printed entry is a special geometry case: there is no
         # preceding line and therefore no inter-line whitespace valley. Locate
         # the first sustained ink row instead of applying the ordinary valley rule.
@@ -3058,7 +3105,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                source_per_display_pixel=ratio,
+                reference_to_canonical_scale=reference_scale,
                 lower_bound=header_cutoff,
             )
         elif is_headword and _is_chinese_ocr(settings):
@@ -3067,7 +3114,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                source_per_display_pixel=ratio,
+                reference_to_canonical_scale=reference_scale,
                 lower_bound=header_cutoff,
                 content_top=(int(image_boundary.get("ink_onset_y", y0)) if image_boundary else y0),
                 preceding_gap_hint=preceding_gap,
@@ -3078,7 +3125,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, y1 - y0),
                 settings,
-                source_per_display_pixel=ratio,
+                reference_to_canonical_scale=reference_scale,
                 lower_bound=header_cutoff,
             )
         else:
@@ -3204,12 +3251,14 @@ def filter_headword_records(
         not parser_controls
         or bool(getattr(settings, "profile_cjk_allow_single_headword", True))
     ):
-        zone_width, visual_runs = _cjk_visual_projection_runs(gray, header_cutoff, settings, ratio)
+        zone_width, visual_runs = _cjk_visual_projection_runs(
+            gray, header_cutoff, settings, reference_scale
+        )
         for run_start, run_end in visual_runs:
             word, confidence, matched_record = _cjk_word_for_visual_run(records, (run_start, run_end), zone_width, settings)
             if not word or matched_record is None:
                 continue
-            coarse_band_y = max(header_cutoff, run_start - round(settings.row_padding * ratio))
+            coarse_band_y = max(header_cutoff, run_start - row_padding)
             prior_record_bottom = max(
                 (int(record.box[3]) for record in records if int(record.box[3]) <= run_start),
                 default=header_cutoff,
@@ -3220,7 +3269,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                source_per_display_pixel=ratio,
+                reference_to_canonical_scale=reference_scale,
                 lower_bound=header_cutoff,
                 content_top=run_start,
                 preceding_gap_hint=visual_gap_hint,
@@ -3369,7 +3418,7 @@ def filter_headword_records(
 
     accepted.sort(key=lambda item: item[1].y)
     deduplicated: list[tuple[float, Entry]] = []
-    tolerance = max(2, round(settings.character_height * ratio * 0.5))
+    tolerance = max(2, round(character_height * 0.5))
     for item in accepted:
         if deduplicated and item[1].y - deduplicated[-1][1].y <= tolerance:
             if item[0] > deduplicated[-1][0]:
@@ -3379,7 +3428,7 @@ def filter_headword_records(
     diagnostics.insert(0, {
         "meta": {
             "header_cutoff_band_y": header_cutoff,
-            "header_cutoff_source_y": source_top + header_cutoff,
+            "header_cutoff_canonical_v": source_top + header_cutoff,
             "line_count": len(lines),
             "left_limit_band_x": left_limit,
             "separator_band_width": int(separator_gray.shape[1]),
@@ -3390,6 +3439,86 @@ def filter_headword_records(
         }
     })
     return [entry for _, entry in deduplicated], diagnostics
+
+
+def _attach_source_candidate_coordinates(
+    diagnostics: list[dict[str, Any]],
+    geometry: "Geometry",
+    column: int,
+) -> None:
+    """Attach explicit canonical and original-image coordinates to candidates."""
+    for item in diagnostics:
+        if "meta" in item:
+            meta = item.get("meta") or {}
+            meta["candidate_coordinate_space"] = "canonical_full_resolution_pixels"
+            meta["source_coordinate_space"] = "source_image_pixels"
+            meta["ocr_box_coordinate_space"] = "ocr_band_local_pixels"
+            if meta.get("header_cutoff_canonical_v") is not None:
+                try:
+                    cutoff_v = int(meta["header_cutoff_canonical_v"])
+                    cutoff_u = int(geometry.x_at(column, cutoff_v))
+                    sx, sy = geometry.canonical_to_source(cutoff_u, cutoff_v)
+                    meta["header_cutoff_source_point"] = [int(sx), int(sy)]
+                except (TypeError, ValueError):
+                    pass
+            continue
+
+        # Low-level filtering historically called these values source_y even
+        # though they were reading-axis canonical V. Convert them once here.
+        try:
+            canonical_v = int(item.get("canonical_v", item.get("source_y", 0)))
+        except (TypeError, ValueError):
+            canonical_v = 0
+        try:
+            coarse_v = int(
+                item.get(
+                    "coarse_canonical_v",
+                    item.get("coarse_source_y", canonical_v),
+                )
+            )
+        except (TypeError, ValueError):
+            coarse_v = canonical_v
+        try:
+            anchor_v = int(
+                item.get(
+                    "anchor_canonical_v",
+                    item.get("anchor_source_y", coarse_v),
+                )
+            )
+        except (TypeError, ValueError):
+            anchor_v = coarse_v
+
+        canonical_u = int(geometry.x_at(column, canonical_v))
+        source_x, source_y = geometry.canonical_to_source(canonical_u, canonical_v)
+        coarse_u = int(geometry.x_at(column, coarse_v))
+        coarse_source_x, coarse_source_y = geometry.canonical_to_source(
+            coarse_u, coarse_v
+        )
+        anchor_u = int(geometry.x_at(column, anchor_v))
+        anchor_source_x, anchor_source_y = geometry.canonical_to_source(
+            anchor_u, anchor_v
+        )
+
+        item["canonical_u"] = canonical_u
+        item["canonical_v"] = canonical_v
+        item["coarse_canonical_v"] = coarse_v
+        item["anchor_canonical_v"] = anchor_v
+        item["source_x"] = int(source_x)
+        item["source_y"] = int(source_y)
+        item["coarse_source_x"] = int(coarse_source_x)
+        item["coarse_source_y"] = int(coarse_source_y)
+        item["anchor_source_x"] = int(anchor_source_x)
+        item["anchor_source_y"] = int(anchor_source_y)
+
+
+def _candidate_axis_v(candidate: dict[str, Any] | None) -> int | None:
+    if not candidate:
+        return None
+    value = candidate.get("canonical_v", candidate.get("source_y"))
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _image_cache_fingerprint(image: Image.Image) -> str:
@@ -3406,11 +3535,13 @@ def _cache_signature(image: Image.Image, geometry: "Geometry", settings: AppSett
     # intentionally omitted so users can tune regex/weights and reuse cached
     # raw OCR without re-running the model.
     data = {
-        "version": 2,
+        "version": 3,
         "image_size": list(image.size),
         "image_fingerprint": _image_cache_fingerprint(image),
         "layout_transform": geometry.transform.kind,
-        "parameter_display_width": settings.parameter_display_width,
+        "geometry_coordinate_version": int(
+            getattr(settings, "geometry_coordinate_version", 0) or 0
+        ),
         "paths": [path.points for path in geometry.column_paths],
         "geometry_top": int(geometry.top),
         "geometry_bottom": int(geometry.bottom),
@@ -3470,7 +3601,7 @@ def _annotate_alphabetical_warnings(report_columns: list[dict[str, Any]]) -> lis
                 key = _alphabetical_sort_key(lemma)
                 if key:
                     seq.append((int(col.get("column", 0)), cand, key))
-        seq.sort(key=lambda item: (item[0], int(item[1].get("source_y", 0))))
+        seq.sort(key=lambda item: (item[0], _candidate_axis_v(item[1]) or 0))
         for i, (col_idx, cand, key) in enumerate(seq):
             prev_key = seq[i - 1][2] if i > 0 else ""
             next_key = seq[i + 1][2] if i + 1 < len(seq) else ""
@@ -3558,12 +3689,12 @@ def _eligible_alignment_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
         # grammar parser rejected it. Accepted candidates are always retained.
         if item.get("accepted") or features.get("at_left"):
             result.append(item)
-    return sorted(result, key=lambda x: int(x.get("source_y", 0)))
+    return sorted(result, key=lambda x: _candidate_axis_v(x) or 0)
 
 
 def _candidate_pair_score(p: dict[str, Any], t: dict[str, Any], tolerance: int) -> float:
     sim = _lemma_similarity(str(p.get("normalized_headword", "")), str(t.get("normalized_headword", "")))
-    dy = abs(int(p.get("source_y", 0)) - int(t.get("source_y", 0)))
+    dy = abs((_candidate_axis_v(p) or 0) - (_candidate_axis_v(t) or 0))
     y_score = max(0.0, 1.0 - dy / max(1.0, tolerance * 2.5))
     return 0.72 * sim + 0.28 * y_score
 
@@ -3599,7 +3730,10 @@ def _pair_ocr_candidates(
             for pi in pblock:
                 for tj in tblock:
                     score = _candidate_pair_score(paddle[pi], tess[tj], tolerance)
-                    dy = abs(int(paddle[pi].get("source_y", 0)) - int(tess[tj].get("source_y", 0)))
+                    dy = abs(
+                        int(_candidate_axis_v(paddle[pi]) or 0)
+                        - int(_candidate_axis_v(tess[tj]) or 0)
+                    )
                     sim = _lemma_similarity(
                         str(paddle[pi].get("normalized_headword", "")),
                         str(tess[tj].get("normalized_headword", "")),
@@ -3657,8 +3791,8 @@ def _make_ocr_pair(
     t: dict[str, Any] | None,
     alignment_method: str = "",
 ) -> dict[str, Any]:
-    py = int(p.get("source_y", 0)) if p else None
-    ty = int(t.get("source_y", 0)) if t else None
+    py = _candidate_axis_v(p)
+    ty = _candidate_axis_v(t)
     pl = str(p.get("normalized_headword", "")) if p else ""
     tl = str(t.get("normalized_headword", "")) if t else ""
     sim = _lemma_similarity(pl, tl) if p and t else 0.0
@@ -3685,6 +3819,16 @@ def _make_ocr_pair(
         lemma_compare = "tesseract_only"; status_compare = "tesseract_only"; reason = "tesseract_only"
     return {
         "paddle_y": py,
+        "paddle_source_x": p.get("source_x") if p else None,
+        "paddle_source_y": p.get("source_y") if p else None,
+        "paddle_coarse_y": (
+            int(p.get("coarse_canonical_v", py)) if p and py is not None else None
+        ),
+        "paddle_anchor_y": (
+            int(p.get("anchor_canonical_v", py)) if p and py is not None else None
+        ),
+        "paddle_separator_refinement": dict(p.get("separator_refinement", {}) or {}) if p else {},
+        "paddle_image_boundary_match": dict(p.get("image_boundary_match", {}) or {}) if p else {},
         "paddle_box": p.get("box") if p else None,
         "paddle_conf": p.get("confidence") if p else None,
         "paddle_accepted": bool(p.get("accepted")) if p else None,
@@ -3701,6 +3845,16 @@ def _make_ocr_pair(
         "paddle_bug_types": list(p.get("bug_types", []) or []) if p else [],
         "paddle_alphabetical_warning": str(p.get("alphabetical_warning", "")) if p else "",
         "tesseract_y": ty,
+        "tesseract_source_x": t.get("source_x") if t else None,
+        "tesseract_source_y": t.get("source_y") if t else None,
+        "tesseract_coarse_y": (
+            int(t.get("coarse_canonical_v", ty)) if t and ty is not None else None
+        ),
+        "tesseract_anchor_y": (
+            int(t.get("anchor_canonical_v", ty)) if t and ty is not None else None
+        ),
+        "tesseract_separator_refinement": dict(t.get("separator_refinement", {}) or {}) if t else {},
+        "tesseract_image_boundary_match": dict(t.get("image_boundary_match", {}) or {}) if t else {},
         "tesseract_box": t.get("box") if t else None,
         "tesseract_conf": t.get("confidence") if t else None,
         "tesseract_accepted": bool(t.get("accepted")) if t else None,
@@ -3717,6 +3871,12 @@ def _make_ocr_pair(
         "tesseract_bug_types": list(t.get("bug_types", []) or []) if t else [],
         "tesseract_alphabetical_warning": str(t.get("alphabetical_warning", "")) if t else "",
         "lens_y": None,
+        "lens_source_x": None,
+        "lens_source_y": None,
+        "lens_coarse_y": None,
+        "lens_anchor_y": None,
+        "lens_separator_refinement": {},
+        "lens_image_boundary_match": {},
         "lens_box": None,
         "lens_conf": None,
         "lens_accepted": None,
@@ -3742,9 +3902,21 @@ def _make_ocr_pair(
 
 
 def _copy_candidate_to_pair(pair: dict[str, Any], prefix: str, candidate: dict[str, Any]) -> None:
-    pair[f"{prefix}_y"] = int(candidate.get("source_y", 0))
-    pair[f"{prefix}_coarse_y"] = int(candidate.get("coarse_source_y", candidate.get("source_y", 0)))
-    pair[f"{prefix}_anchor_y"] = int(candidate.get("anchor_source_y", candidate.get("coarse_source_y", candidate.get("source_y", 0))))
+    canonical_v = _candidate_axis_v(candidate)
+    if canonical_v is None:
+        canonical_v = 0
+    pair[f"{prefix}_y"] = canonical_v
+    pair[f"{prefix}_coarse_y"] = int(
+        candidate.get("coarse_canonical_v", canonical_v)
+    )
+    pair[f"{prefix}_anchor_y"] = int(
+        candidate.get(
+            "anchor_canonical_v",
+            candidate.get("coarse_canonical_v", canonical_v),
+        )
+    )
+    pair[f"{prefix}_source_x"] = candidate.get("source_x")
+    pair[f"{prefix}_source_y"] = candidate.get("source_y")
     pair[f"{prefix}_box"] = candidate.get("box")
     pair[f"{prefix}_separator_refinement"] = dict(candidate.get("separator_refinement", {}) or {})
     pair[f"{prefix}_image_boundary_match"] = dict(candidate.get("image_boundary_match", {}) or {})
@@ -3784,7 +3956,7 @@ def _pair_with_lens_candidates(
         for index, candidate in enumerate(lens_rows):
             if index in used:
                 continue
-            cy = int(candidate.get("source_y", 0))
+            cy = _candidate_axis_v(candidate) or 0
             lemma = str(candidate.get("normalized_headword", ""))
             similarity = max((_lemma_similarity(lemma, word) for word in base_words if word), default=0.0)
             dy = abs(cy - base_y)
@@ -3897,7 +4069,14 @@ def _issues_for_pair(pair: dict[str, Any], chosen: str, needs_review: bool) -> l
     return list(dict.fromkeys(issues))
 
 
-def _arbitrate_pair(pair: dict[str, Any], column: int, source_x: int, settings: AppSettings) -> dict[str, Any]:
+def _arbitrate_pair(
+    pair: dict[str, Any],
+    column: int,
+    canonical_u: int,
+    settings: AppSettings,
+    *,
+    geometry: "Geometry" | None = None,
+) -> dict[str, Any]:
     has_p = pair.get("paddle_y") is not None
     has_t = pair.get("tesseract_y") is not None
     has_l = pair.get("lens_y") is not None
@@ -4027,15 +4206,44 @@ def _arbitrate_pair(pair: dict[str, Any], column: int, source_x: int, settings: 
     issues = _issues_for_pair(pair, chosen, needs_review)
     if decision_reason == "dual_consensus_visual_rescue" and "DUAL_CONSENSUS_RESCUE" not in issues:
         issues.append("DUAL_CONSENSUS_RESCUE")
-    candidate_id = _stable_candidate_id(column, y, str(pair.get("paddle_text", "")), str(pair.get("tesseract_text", "")))
+    candidate_id = _stable_candidate_id(
+        column, y, str(pair.get("paddle_text", "")), str(pair.get("tesseract_text", ""))
+    )
+    if geometry is not None:
+        refined_u = int(geometry.x_at(column, y))
+        source_x, source_y = geometry.canonical_to_source(refined_u, y)
+        coarse_u = int(geometry.x_at(column, coarse_y))
+        coarse_source_x, coarse_source_y = geometry.canonical_to_source(
+            coarse_u, coarse_y
+        )
+        anchor_u = int(geometry.x_at(column, anchor_y))
+        anchor_source_x, anchor_source_y = geometry.canonical_to_source(
+            anchor_u, anchor_y
+        )
+    else:
+        refined_u = int(canonical_u)
+        source_x, source_y = int(canonical_u), int(y)
+        coarse_u = int(canonical_u)
+        coarse_source_x, coarse_source_y = int(canonical_u), int(coarse_y)
+        anchor_u = int(canonical_u)
+        anchor_source_x, anchor_source_y = int(canonical_u), int(anchor_y)
+
     return {
         "candidate_id": candidate_id,
         "column": column,
-        "source_x": source_x,
-        "source_y": y,
-        "refined_source_y": y,
-        "coarse_source_y": coarse_y,
-        "anchor_source_y": anchor_y,
+        "coordinate_space": "source_image_pixels",
+        "canonical_coordinate_space": "canonical_full_resolution_pixels",
+        "canonical_u": int(refined_u),
+        "canonical_v": int(y),
+        "coarse_canonical_v": int(coarse_y),
+        "anchor_canonical_v": int(anchor_y),
+        "source_x": int(source_x),
+        "source_y": int(source_y),
+        "refined_source_y": int(source_y),
+        "coarse_source_x": int(coarse_source_x),
+        "coarse_source_y": int(coarse_source_y),
+        "anchor_source_x": int(anchor_source_x),
+        "anchor_source_y": int(anchor_source_y),
         "box": box,
         "original_box": list(box) if isinstance(box, (list, tuple)) and len(box) == 4 else box,
         "separator_refinement": separator_refinement,
@@ -4055,21 +4263,33 @@ def _arbitrate_pair(pair: dict[str, Any], column: int, source_x: int, settings: 
         "alphabetical_warning": str(pair.get(f"{chosen}_alphabetical_warning", "")) if chosen else "",
         "lemma_similarity": sim,
         "paddle": {
-            "y": pair.get("paddle_y"), "box": pair.get("paddle_box"), "confidence": pair.get("paddle_conf"),
+            "canonical_v": pair.get("paddle_y"),
+            "source_x": pair.get("paddle_source_x"),
+            "source_y": pair.get("paddle_source_y"),
+            "y": pair.get("paddle_y"),
+            "box": pair.get("paddle_box"), "confidence": pair.get("paddle_conf"),
             "accepted": pair.get("paddle_accepted"), "score": pair.get("paddle_score"), "lemma": pair.get("paddle_lemma"),
             "raw": pair.get("paddle_raw"), "corrected": pair.get("paddle_corrected"), "POS": pair.get("paddle_pos"),
             "repairs": pair.get("paddle_repairs"), "text": pair.get("paddle_text"), "reason": pair.get("paddle_reject_reason"),
             "parser_trace": pair.get("paddle_parser_trace"),
         },
         "tesseract": {
-            "y": pair.get("tesseract_y"), "box": pair.get("tesseract_box"), "confidence": pair.get("tesseract_conf"),
+            "canonical_v": pair.get("tesseract_y"),
+            "source_x": pair.get("tesseract_source_x"),
+            "source_y": pair.get("tesseract_source_y"),
+            "y": pair.get("tesseract_y"),
+            "box": pair.get("tesseract_box"), "confidence": pair.get("tesseract_conf"),
             "accepted": pair.get("tesseract_accepted"), "score": pair.get("tesseract_score"), "lemma": pair.get("tesseract_lemma"),
             "raw": pair.get("tesseract_raw"), "corrected": pair.get("tesseract_corrected"), "POS": pair.get("tesseract_pos"),
             "repairs": pair.get("tesseract_repairs"), "text": pair.get("tesseract_text"), "reason": pair.get("tesseract_reject_reason"),
             "parser_trace": pair.get("tesseract_parser_trace"),
         },
         "lens": {
-            "y": pair.get("lens_y"), "box": pair.get("lens_box"), "confidence": pair.get("lens_conf"),
+            "canonical_v": pair.get("lens_y"),
+            "source_x": pair.get("lens_source_x"),
+            "source_y": pair.get("lens_source_y"),
+            "y": pair.get("lens_y"),
+            "box": pair.get("lens_box"), "confidence": pair.get("lens_conf"),
             "accepted": pair.get("lens_accepted"), "score": pair.get("lens_score"), "lemma": pair.get("lens_lemma"),
             "raw": pair.get("lens_raw"), "corrected": pair.get("lens_corrected"), "POS": pair.get("lens_pos"),
             "repairs": pair.get("lens_repairs"), "text": pair.get("lens_text"), "reason": pair.get("lens_reject_reason"),
@@ -4078,6 +4298,59 @@ def _arbitrate_pair(pair: dict[str, Any], column: int, source_x: int, settings: 
         "alignment_method": pair.get("alignment_method", ""),
         "pair_reason": pair.get("reason", ""),
     }
+
+
+def _apply_pair_engine_position(
+    item: dict[str, Any],
+    pair: dict[str, Any],
+    prefix: str,
+    column: int,
+    canonical_u: int,
+    geometry: "Geometry" | None,
+) -> None:
+    """Apply one engine's position without mixing canonical V and source Y."""
+    raw_v = pair.get(f"{prefix}_y")
+    if raw_v is None:
+        return
+    canonical_v = int(raw_v)
+    coarse_v = int(pair.get(f"{prefix}_coarse_y") or canonical_v)
+    anchor_v = int(pair.get(f"{prefix}_anchor_y") or coarse_v)
+
+    if geometry is not None:
+        refined_u = int(geometry.x_at(column, canonical_v))
+        source_x, source_y = geometry.canonical_to_source(refined_u, canonical_v)
+        coarse_u = int(geometry.x_at(column, coarse_v))
+        coarse_source_x, coarse_source_y = geometry.canonical_to_source(
+            coarse_u, coarse_v
+        )
+        anchor_u = int(geometry.x_at(column, anchor_v))
+        anchor_source_x, anchor_source_y = geometry.canonical_to_source(
+            anchor_u, anchor_v
+        )
+    else:
+        refined_u = int(canonical_u)
+        source_x = pair.get(f"{prefix}_source_x")
+        source_y = pair.get(f"{prefix}_source_y")
+        source_x = refined_u if source_x is None else int(source_x)
+        source_y = canonical_v if source_y is None else int(source_y)
+        coarse_u = refined_u
+        coarse_source_x, coarse_source_y = source_x, coarse_v
+        anchor_u = refined_u
+        anchor_source_x, anchor_source_y = source_x, anchor_v
+
+    item.update({
+        "canonical_u": int(refined_u),
+        "canonical_v": int(canonical_v),
+        "coarse_canonical_v": int(coarse_v),
+        "anchor_canonical_v": int(anchor_v),
+        "source_x": int(source_x),
+        "source_y": int(source_y),
+        "refined_source_y": int(source_y),
+        "coarse_source_x": int(coarse_source_x),
+        "coarse_source_y": int(coarse_source_y),
+        "anchor_source_x": int(anchor_source_x),
+        "anchor_source_y": int(anchor_source_y),
+    })
 
 
 def _agreement_summary(review_candidates: list[dict[str, Any]]) -> dict[str, Any]:
@@ -4206,13 +4479,13 @@ def _candidate_tsv_row(
     return "\t".join(_tsv_clean(v) for v in values)
 
 
-_DIAGNOSTIC_HEADER = "column\tbox\tconf\ttext\taccept/reject\tscore\tlemma\traw\tcorrected\tPOS\trepairs\treason"
+_DIAGNOSTIC_HEADER = "column\tbox_band_xyxy\tconf\ttext\taccept/reject\tscore\tlemma\traw\tcorrected\tPOS\trepairs\treason"
 _COMPARISON_HEADER = (
-    "column\tpaddle_y\tpaddle_box\tpaddle_conf\tpaddle_accept/reject\tpaddle_score\t"
+    "column\tpaddle_canonical_v\tpaddle_box_band_xyxy\tpaddle_conf\tpaddle_accept/reject\tpaddle_score\t"
     "paddle_lemma\tpaddle_raw\tpaddle_corrected\tpaddle_POS\tpaddle_repairs\tpaddle_text\t"
-    "tesseract_y\ttesseract_box\ttesseract_conf\ttesseract_accept/reject\ttesseract_score\t"
+    "tesseract_canonical_v\ttesseract_box_band_xyxy\ttesseract_conf\ttesseract_accept/reject\ttesseract_score\t"
     "tesseract_lemma\ttesseract_raw\ttesseract_corrected\ttesseract_POS\ttesseract_repairs\t"
-    "tesseract_text\tdelta_y\tlemma_compare\tstatus_compare\treason"
+    "tesseract_text\tdelta_v_canonical\tlemma_compare\tstatus_compare\treason"
 )
 
 
@@ -4314,7 +4587,7 @@ def _comparison_text(report_columns: list[dict[str, Any]]) -> str:
 
 
 _ENGINES_LONG_HEADER = (
-    "pair_id\tcolumn\ty\tengine\tconf\ttext\tlemma\tPOS\tscore\trepairs\tparser_trace\taccepted\treason"
+    "pair_id\tcolumn\tcanonical_v\tengine\tconf\ttext\tlemma\tPOS\tscore\trepairs\tparser_trace\taccepted\treason"
 )
 
 
@@ -4340,7 +4613,7 @@ def _engines_long_text(report_columns: list[dict[str, Any]]) -> str:
 
 
 _FUSION_HEADER = (
-    "pair_id\tcolumn\ty\tengines\tselected\tfinal_lemma\tfinal_engine\tconfidence\t"
+    "pair_id\tcolumn\tsource_y\tengines\tselected\tfinal_lemma\tfinal_engine\tconfidence\t"
     "score\tneeds_review\tissues\tdecision_reason"
 )
 
@@ -4362,7 +4635,7 @@ def _fusion_text(review_candidates: list[dict[str, Any]]) -> str:
 
 
 _ISSUES_HEADER = (
-    "candidate_id\tcolumn\ty\tselected\tword\tfinal_engine\tconfidence\tscore\t"
+    "candidate_id\tcolumn\tsource_y\tselected\tword\tfinal_engine\tconfidence\tscore\t"
     "issue_types\tpaddle_lemma\ttesseract_lemma\tlens_lemma\tpaddle_text\ttesseract_text\t"
     "lens_text\tdecision_reason"
 )
@@ -4411,8 +4684,14 @@ def _expand_original_y_fallback_candidates(review_candidates: list[dict[str, Any
             continue
         try:
             refined_y = int(item.get("source_y", 0))
+            refined_x = int(item.get("source_x", 0))
             coarse_y = int(item.get("coarse_source_y", refined_y))
+            coarse_x = int(item.get("coarse_source_x", refined_x))
             anchor_y = int(item.get("anchor_source_y", coarse_y))
+            anchor_x = int(item.get("anchor_source_x", coarse_x))
+            refined_v = int(item.get("canonical_v", refined_y))
+            coarse_v = int(item.get("coarse_canonical_v", refined_v))
+            anchor_v = int(item.get("anchor_canonical_v", coarse_v))
         except (TypeError, ValueError):
             continue
         if refined_y <= 0 or anchor_y <= 0 or anchor_y == refined_y:
@@ -4429,10 +4708,16 @@ def _expand_original_y_fallback_candidates(review_candidates: list[dict[str, Any
 
         fallback = dict(item)
         fallback["candidate_id"] = f"{base_id}-rawy"
+        fallback["source_x"] = anchor_x
         fallback["source_y"] = anchor_y
+        fallback["canonical_v"] = anchor_v
         fallback["refined_source_y"] = refined_y
+        fallback["coarse_source_x"] = coarse_x
         fallback["coarse_source_y"] = coarse_y
+        fallback["coarse_canonical_v"] = coarse_v
+        fallback["anchor_source_x"] = anchor_x
         fallback["anchor_source_y"] = anchor_y
+        fallback["anchor_canonical_v"] = anchor_v
         fallback["position_group_id"] = group_id
         fallback["position_variant"] = "original"
         fallback["selected"] = False
@@ -4444,7 +4729,13 @@ def _expand_original_y_fallback_candidates(review_candidates: list[dict[str, Any
         additions.append(fallback)
         created += 1
     review_candidates.extend(additions)
-    review_candidates.sort(key=lambda row: (int(row.get("column", 0)), int(row.get("source_y", 0)), str(row.get("position_variant", ""))))
+    review_candidates.sort(
+        key=lambda row: (
+            int(row.get("column", 0)),
+            int(row.get("canonical_v", row.get("source_y", 0))),
+            str(row.get("position_variant", "")),
+        )
+    )
     return created
 
 
@@ -4537,7 +4828,10 @@ def _review_candidates_same_cjk_glyph(left: dict[str, Any], right: dict[str, Any
     lh = _review_candidate_box_height(left)
     rh = _review_candidate_box_height(right)
     max_h = max(lh, rh, 1)
-    dy = abs(int(left.get("source_y", 0)) - int(right.get("source_y", 0)))
+    dy = abs(
+        int(left.get("canonical_v", left.get("source_y", 0)))
+        - int(right.get("canonical_v", right.get("source_y", 0)))
+    )
 
     box_same_row = False
     if isinstance(lbox, (list, tuple)) and len(lbox) == 4 and isinstance(rbox, (list, tuple)) and len(rbox) == 4:
@@ -4613,7 +4907,10 @@ def _review_candidates_same_cjk_compound(left: dict[str, Any], right: dict[str, 
     lh = _review_candidate_box_height(left)
     rh = _review_candidate_box_height(right)
     max_h = max(lh, rh, 1)
-    dy = abs(int(left.get("source_y", 0)) - int(right.get("source_y", 0)))
+    dy = abs(
+        int(left.get("canonical_v", left.get("source_y", 0)))
+        - int(right.get("canonical_v", right.get("source_y", 0)))
+    )
 
     if not (isinstance(lbox, (list, tuple)) and len(lbox) == 4 and isinstance(rbox, (list, tuple)) and len(rbox) == 4):
         return dy <= max(6, round(max_h * 0.42))
@@ -4692,7 +4989,10 @@ def _single_cjk_duplicate_pair(left: dict[str, Any], right: dict[str, Any]) -> b
     if not (_candidate_has_single_cjk_identity(left) and _candidate_has_single_cjk_identity(right)):
         return False
     normal_line = max(_candidate_line_height(left), _candidate_line_height(right), 1.0)
-    dy = abs(int(left.get("source_y", 0)) - int(right.get("source_y", 0)))
+    dy = abs(
+        int(left.get("canonical_v", left.get("source_y", 0)))
+        - int(right.get("canonical_v", right.get("source_y", 0)))
+    )
     tolerance = max(4, round(normal_line * _SINGLE_CJK_LINE_DEDUP_RATIO))
     return dy <= tolerance and _boxes_same_large_cjk_region(left, right)
 
@@ -4736,9 +5036,19 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
         left: dict[str, Any], right: dict[str, Any], *, single_cjk_special: bool = False,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         keeper, loser = (left, right) if _review_candidate_priority(left) >= _review_candidate_priority(right) else (right, left)
-        # v2.8.13 refined separators deliberately bias downward toward the
-        # headword.  Deduplication must not undo that by restoring the upper Y.
-        keeper["source_y"] = max(int(left.get("source_y", 0)), int(right.get("source_y", 0)))
+        # Keep the lower/safer reading-axis V, but copy the complete
+        # canonical+source point. Taking max(source_y) is wrong after rotation.
+        left_v = int(left.get("canonical_v", left.get("source_y", 0)))
+        right_v = int(right.get("canonical_v", right.get("source_y", 0)))
+        position_row = left if left_v >= right_v else right
+        for key in (
+            "canonical_u", "canonical_v", "source_x", "source_y",
+            "refined_source_y", "coarse_canonical_v", "coarse_source_x",
+            "coarse_source_y", "anchor_canonical_v", "anchor_source_x",
+            "anchor_source_y",
+        ):
+            if position_row.get(key) is not None:
+                keeper[key] = position_row.get(key)
         for engine in ("paddle", "tesseract", "lens"):
             if not (keeper.get(engine, {}) or {}).get("y") and (loser.get(engine, {}) or {}).get("y") is not None:
                 keeper[engine] = dict(loser.get(engine, {}) or {})
@@ -4760,11 +5070,18 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
         return keeper, loser
 
     for rows in by_column.values():
-        rows.sort(key=lambda item: int(item.get("source_y", 0)))
+        rows.sort(
+            key=lambda item: int(
+                item.get("canonical_v", item.get("source_y", 0))
+            )
+        )
         i = 0
         while i < len(rows) - 1:
             left, right = rows[i], rows[i + 1]
-            dy = abs(int(left.get("source_y", 0)) - int(right.get("source_y", 0)))
+            dy = abs(
+        int(left.get("canonical_v", left.get("source_y", 0)))
+        - int(right.get("canonical_v", right.get("source_y", 0)))
+    )
             single_cjk_special = _single_cjk_duplicate_pair(left, right)
             tolerance = _threshold(left, right)
             if not single_cjk_special and dy > tolerance:
@@ -4775,7 +5092,11 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
             )
             merged += 1
             rows.remove(loser)
-            rows.sort(key=lambda item: int(item.get("source_y", 0)))
+            rows.sort(
+            key=lambda item: int(
+                item.get("canonical_v", item.get("source_y", 0))
+            )
+        )
             i = max(0, i - 1)
     return merged
 
@@ -4785,8 +5106,8 @@ def _entries_from_review_candidates(review_candidates: list[dict[str, Any]]) -> 
     selected = [item for item in review_candidates if item.get("selected")]
     selected.sort(key=lambda item: (
         int(item.get("column", 0)),
-        int(item.get("source_y", 0)),
-        int(item.get("source_x", 0)),
+        int(item.get("canonical_v", item.get("source_y", 0))),
+        int(item.get("canonical_u", item.get("source_x", 0))),
     ))
     for item in selected:
         entries.append(Entry(
@@ -4832,44 +5153,6 @@ def _update_project_quality_summary(cache_path: Path, summary: dict[str, Any], r
     path.write_text("\n".join(output) + "\n", encoding="utf-8")
 
 
-def _conservative_tesseract_rescue(
-    paddle_entries: list[Entry],
-    tess_entries: list[Entry],
-    tess_diagnostics: list[dict[str, Any]],
-    settings: AppSettings,
-    ratio: float,
-) -> tuple[list[Entry], list[Entry]]:
-    """Add only structurally strong Tesseract entries missing from Paddle.
-
-    Tesseract is a secondary opinion, not an equal-vote detector.  A rescue must
-    have a POS/inflection/descriptor (or an explicit user force-accept) and must
-    be vertically distinct from every Paddle hit.  This keeps dual OCR useful for
-    recall without turning OCR disagreement into a flood of false markers.
-    """
-    strong_y: list[int] = []
-    for diag in tess_diagnostics:
-        if not diag.get("accepted"):
-            continue
-        features = diag.get("features", {}) or {}
-        if features.get("structural_cue") or features.get("forced_accept"):
-            try:
-                strong_y.append(int(diag.get("source_y")))
-            except (TypeError, ValueError):
-                pass
-    tolerance = max(2, round(settings.character_height * ratio * 0.60))
-    merged = list(paddle_entries)
-    rescued: list[Entry] = []
-    for entry in tess_entries:
-        if not any(abs(entry.y - y) <= tolerance for y in strong_y):
-            continue
-        if any(abs(entry.y - item.y) <= tolerance for item in merged):
-            continue
-        merged.append(entry)
-        rescued.append(entry)
-    merged.sort(key=lambda item: item.y)
-    return merged, rescued
-
-
 def detect_paddle_headwords(
     image: Image.Image,
     geometry: "Geometry",
@@ -4891,10 +5174,14 @@ def detect_paddle_headwords(
     failures never abort the primary Paddle pass; arbitration falls back to the
     Paddle candidate sequence when the secondary engine is unavailable.
     """
-    from .processing import parameter_scale
-
     signature = _cache_signature(image, geometry, settings)
-    source_per_display_pixel = 1.0 / max(0.01, parameter_scale(image, settings))
+    canonical_width = geometry.transform.canonical_size(image.size)[0]
+    reference_to_canonical_scale = (
+        canonical_width / REFERENCE_CANONICAL_WIDTH
+    )
+    canonical_character_height = stored_geometry_to_canonical(
+        settings.character_height, canonical_width, settings,
+    )
     user_rules = load_headword_filter_rules(filter_rules_path)
     profile_path = filter_rules_path.parent / PROFILE_FILENAME if filter_rules_path else None
     profile = load_dictionary_profile(
@@ -4934,7 +5221,7 @@ def detect_paddle_headwords(
     oriented = normalize_page_rgb(image)
     shared_source_rgb = np.asarray(oriented)
 
-    for col, source_x in enumerate(geometry.column_starts):
+    for col, canonical_u in enumerate(geometry.column_starts):
         band, source_top, left_margin = unwrap_column_band(
             image, geometry, col, settings, source_rgb=shared_source_rgb,
         )
@@ -4961,10 +5248,11 @@ def detect_paddle_headwords(
         paddle_lines = _records_as_merged_lines(records, settings)
         paddle_full_text = "\n".join(line.text for line in paddle_lines)
         paddle_entries, diagnostics = filter_headword_records(
-            records, analysis_band, source_top, source_x, settings,
+            records, analysis_band, source_top, canonical_u, settings,
             separator_band=analysis_separator_band, user_rules=user_rules, engine_name="paddle", profile=profile,
-            source_per_display_pixel=source_per_display_pixel,
+            reference_to_canonical_scale=reference_to_canonical_scale,
         )
+        _attach_source_candidate_coordinates(diagnostics, geometry, col)
         for entry in paddle_entries:
             entry.x, entry.y = geometry.canonical_to_source(entry.x, entry.y)
 
@@ -5001,10 +5289,13 @@ def detect_paddle_headwords(
                         source_candidate_records, band.size, transform_kind
                     )
                     candidate_entries, candidate_diagnostics = filter_headword_records(
-                        candidate_records, analysis_band, source_top, source_x, settings,
+                        candidate_records, analysis_band, source_top, canonical_u, settings,
                         separator_band=analysis_separator_band, user_rules=user_rules,
                         engine_name="tesseract", profile=profile,
-                        source_per_display_pixel=source_per_display_pixel,
+                        reference_to_canonical_scale=reference_to_canonical_scale,
+                    )
+                    _attach_source_candidate_coordinates(
+                        candidate_diagnostics, geometry, col,
                     )
                     for entry in candidate_entries:
                         entry.x, entry.y = geometry.canonical_to_source(entry.x, entry.y)
@@ -5041,8 +5332,7 @@ def detect_paddle_headwords(
         compare_tolerance = max(
             4,
             round(
-                settings.character_height
-                * (band.width / max(1, settings.paddle_band_width))
+                canonical_character_height
                 * max(0.35, settings.paddle_alignment_y_tolerance_ratio)
             ),
         )
@@ -5076,9 +5366,12 @@ def detect_paddle_headwords(
                     source_lens_records, band.size, transform_kind
                 )
                 lens_entries, lens_diagnostics = filter_headword_records(
-                    lens_records, analysis_band, source_top, source_x, settings,
+                    lens_records, analysis_band, source_top, canonical_u, settings,
                     separator_band=analysis_separator_band, user_rules=user_rules,
                     engine_name="lens", profile=profile,
+                )
+                _attach_source_candidate_coordinates(
+                    lens_diagnostics, geometry, col,
                 )
                 lens_payload.update({
                     "version": lens_version, "full_text": lens_full_text,
@@ -5090,8 +5383,9 @@ def detect_paddle_headwords(
 
         report_columns.append({
             "column": col,
-            "source_x": source_x,
-            "source_top": source_top,
+            "canonical_column_u": int(canonical_u),
+            "canonical_top_v": int(source_top),
+            "column_coordinate_space": "canonical_full_resolution_pixels",
             "band_size": list(band.size),
             "ocr_records": [asdict(record) for record in records],
             "paddle_full_text": paddle_full_text,
@@ -5122,9 +5416,12 @@ def detect_paddle_headwords(
     review_candidates: list[dict[str, Any]] = []
     for col in report_columns:
         col_index = int(col.get("column", 0))
-        source_x = int(col.get("source_x", 0))
-        band_width = max(1, int((col.get("band_size") or [settings.paddle_band_width])[0]))
-        source_line_height = max(1.0, settings.character_height * (band_width / max(1, settings.paddle_band_width)))
+        canonical_u = int(col.get("canonical_column_u", 0))
+        band_width = max(
+            1,
+            int((col.get("band_size") or [settings.paddle_band_width])[0]),
+        )
+        source_line_height = max(1.0, float(canonical_character_height))
         compare_tolerance = max(
             4,
             round(source_line_height * max(0.35, settings.paddle_alignment_y_tolerance_ratio)),
@@ -5154,23 +5451,24 @@ def detect_paddle_headwords(
         column_review: list[dict[str, Any]] = []
         if settings.paddle_dual_ocr_arbitration or not tess_rows:
             for pair in pairs:
-                column_review.append(_arbitrate_pair(pair, col_index, source_x, settings))
+                column_review.append(_arbitrate_pair(pair, col_index, canonical_u, settings, geometry=geometry))
         else:
             # Compatibility mode: Paddle remains authoritative; optional legacy
             # Tesseract rescue can still promote structurally strong missing rows.
-            paddle_selected_y = {
-                int(c.get("source_y", 0))
+            paddle_selected_v = {
+                int(_candidate_axis_v(c) or 0)
                 for c in _candidate_rows(col.get("candidates", [])) if c.get("accepted")
             }
             for pair in pairs:
-                item = _arbitrate_pair(pair, col_index, source_x, settings)
+                item = _arbitrate_pair(pair, col_index, canonical_u, settings, geometry=geometry)
                 py = pair.get("paddle_y")
-                ty = pair.get("tesseract_y")
                 if py is not None:
-                    item["selected"] = int(py) in paddle_selected_y
+                    item["selected"] = int(py) in paddle_selected_v
                     item["final_engine"] = "paddle"
                     item["word"] = str(pair.get("paddle_lemma", ""))
-                    item["source_y"] = int(py)
+                    _apply_pair_engine_position(
+                        item, pair, "paddle", col_index, canonical_u, geometry,
+                    )
                     item["confidence"] = pair.get("paddle_conf")
                     item["score"] = pair.get("paddle_score")
                     item["decision_reason"] = "compat_paddle_authoritative"
@@ -5202,15 +5500,6 @@ def detect_paddle_headwords(
     _apply_manual_selection_overrides(review_candidates, overrides)
     _enforce_position_variant_exclusivity(review_candidates)
     cjk_duplicates_merged = _deduplicate_selected_cjk_review_candidates(review_candidates)
-    if geometry.transform.kind != "identity":
-        for item in review_candidates:
-            canonical_x = int(item.get("source_x", 0))
-            canonical_y = int(item.get("source_y", 0))
-            item["canonical_x"] = canonical_x
-            item["canonical_y"] = canonical_y
-            item["source_x"], item["source_y"] = geometry.canonical_to_source(
-                canonical_x, canonical_y
-            )
     all_entries = _entries_from_review_candidates(review_candidates)
     _apply_alphabetical_warnings_to_entries(report_columns, all_entries)
 
@@ -5236,8 +5525,15 @@ def detect_paddle_headwords(
     if cache_path:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "format": "picture-capture-headwords-v2.1",
+            "format": "picture-capture-headwords-v3",
             "signature": signature,
+            "coordinate_spaces": {
+                "final_entries": "source_image_pixels",
+                "candidate_source": "source_image_pixels",
+                "candidate_canonical": "canonical_full_resolution_pixels",
+                "ocr_record_box": "ocr_band_local_pixels",
+                "layout_transform": geometry.transform.kind,
+            },
             "filter_rules_path": str(filter_rules_path) if filter_rules_path else "",
             "filter_rule_count": len(user_rules),
             "dictionary_profile": {

@@ -275,9 +275,9 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     settings = text[start:end]
 
     assert '"bottom_y", int' in settings
-    assert '"bottom_y": "正文结束 Y"' in settings
+    assert '"bottom_y": "正文结束 V（参考页规范坐标）"' in settings
     assert '"columns": "正文栏数"' in settings
-    assert '"manual_x": "第一栏左缘 X"' in settings
+    assert '"manual_x": "第一栏左缘 U（参考页规范坐标）"' in settings
     assert '"paddle_band_width_ratio": "%"' in settings
     assert '"columns": (1, 12, 1)' in settings
     assert "def _show_setting_help(" in settings
@@ -473,7 +473,7 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     ui = text[ui_start:ui_end]
     assert 'style="PC.Treeview"' in ui
     assert 'style="PC.Footer.TFrame"' in ui
-    assert '"一、版面参数（两种画线共用）"' in text
+    assert '"一、版面参数（规范全分辨率坐标；横排 U/X、V/Y 与原图一致）"' in text
     assert '"二、OCR画线（推荐默认）"' in text
     assert 'text="普通画线设置（备用）…"' in text
     assert 'ttk.Separator(size_row, orient="vertical")' in ui

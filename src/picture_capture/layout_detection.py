@@ -12,7 +12,12 @@ from PIL import Image, ImageFilter, ImageOps
 from .models import AppSettings
 from .image_utils import normalize_page_rgb
 from .layout_transform import LayoutTransform
-from .processing import parameter_scale
+from .coordinate_space import (
+    CANONICAL_COORDINATE_SPACE,
+    geometry_uses_canonical_pixels,
+    legacy_parameter_scale,
+    stored_geometry_to_canonical,
+)
 
 
 @dataclass(slots=True)
@@ -30,6 +35,8 @@ class LayoutEstimate:
     canonical_transform: str = "identity"
     separator_x: int | None = None
     confidence: float = 0.0
+    # Full-resolution canonical page width represented by this estimate.
+    canonical_width: int = 0
 
 
 @dataclass(slots=True)
@@ -37,6 +44,7 @@ class LayoutConsistencyEstimate:
     header_rule_y: int | None
     body_left_x: int | None
     is_blank: bool = False
+    coordinate_space: str = CANONICAL_COORDINATE_SPACE
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,8 +76,17 @@ def aggregate_layout_estimates(
     mode_columns = min(counts, key=lambda value: (-counts[value], value))
     columns = max(1, int(fixed_columns or mode_columns)) if columns_policy == "fixed" else mode_columns
 
+    widths = [max(1, int(getattr(row, "canonical_width", 0) or 0)) for row in rows]
+    known_widths = [width for width in widths if width > 1]
+    reference_width = round(statistics.median(known_widths)) if known_widths else 0
+
     def robust_median(name: str) -> int:
-        values = [float(getattr(row, name)) for row in rows]
+        values: list[float] = []
+        for row, row_width in zip(rows, widths):
+            value = float(getattr(row, name))
+            if reference_width > 0 and row_width > 1:
+                value *= reference_width / row_width
+            values.append(value)
         center = statistics.median(values)
         deviations = [abs(value - center) for value in values]
         mad = statistics.median(deviations)
@@ -77,12 +94,13 @@ def aggregate_layout_estimates(
         return round(statistics.median(kept or values))
 
     result = {"columns": columns}
+    if reference_width > 0:
+        result["geometry_reference_width"] = reference_width
     for field in ("start_y", "bottom_y", "manual_x", "column_width", "gutter", "character_height", "row_padding"):
         result[field] = robust_median(field)
-    # Leave a small safety margin above the first detected body line instead of
-    # placing the header boundary directly against text.  This value is already
-    # in the user-facing parameter coordinate system.
-    result["start_y"] = max(0, result["start_y"] - 5)
+    # Keep a small resolution-aware safety margin above the first body line.
+    safety = max(1, round(5 * reference_width / 1400)) if reference_width > 0 else 5
+    result["start_y"] = max(0, result["start_y"] - safety)
     result["row_padding"] = max(1, result["row_padding"])
     return result, f"{columns}栏: {counts.get(columns, 0)}/{len(rows)} pages"
 
@@ -481,6 +499,7 @@ def infer_layout_from_boxes(
         source_boxes=len(filtered),
         method="paddle",
         separator_x=(round(float(np.median(separators)) * scale) if separators else None),
+        canonical_width=int(width),
     )
 
 
@@ -712,8 +731,12 @@ def _projection_layout_estimate(source: Image.Image, settings: AppSettings) -> L
             widths.append(round(float(np.median(widths))))
 
     back = 1.0 / resize_scale
-    display = parameter_scale(source, settings)
-    factor = back * display
+    output_scale = (
+        1.0
+        if geometry_uses_canonical_pixels(settings)
+        else legacy_parameter_scale(source.width, settings)
+    )
+    factor = back * output_scale
     return LayoutEstimate(
         columns=max(1, min(6, len(starts))),
         start_y=max(0, round(start_y_small * factor)),
@@ -726,6 +749,7 @@ def _projection_layout_estimate(source: Image.Image, settings: AppSettings) -> L
         source_boxes=max(1, len(starts) + len(chosen)),
         method="projection_fallback",
         separator_x=(round(float(np.median(separator_centers)) * factor) if separator_centers else None),
+        canonical_width=int(original_w),
     )
 
 
@@ -753,10 +777,15 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
             boxes = _boxes_from_detection(results[0], analysis.width, analysis.height)
             if boxes:
                 source_gray = np.asarray(ImageOps.grayscale(analysis), dtype=np.uint8)
+                output_scale = (
+                    1.0
+                    if geometry_uses_canonical_pixels(settings)
+                    else legacy_parameter_scale(analysis.width, settings)
+                )
                 estimate = infer_layout_from_boxes(
                     boxes,
                     analysis.size,
-                    display_scale=parameter_scale(analysis, settings),
+                    display_scale=output_scale,
                     ink_mask=_analysis_ink_mask(source_gray, settings),
                     columns_policy=settings.layout_columns_policy,
                     fixed_columns=settings.columns,
@@ -804,20 +833,41 @@ def detect_layout_consistency(image: Image.Image, settings: AppSettings) -> Layo
     active_columns = int(np.count_nonzero(ink.mean(axis=0) > 0.002))
     is_blank = float(ink.mean()) < 0.0008 or active_rows < 6 or active_columns < 12
     if is_blank:
-        return LayoutConsistencyEstimate(None, None, is_blank=True)
-    parameter_to_source = 1.0 / max(0.01, parameter_scale(source, settings))
-    header_limit = min(ink.shape[0], max(1, round(settings.start_y * parameter_to_source * scale)))
+        return LayoutConsistencyEstimate(
+            None, None, is_blank=True,
+            coordinate_space=CANONICAL_COORDINATE_SPACE,
+        )
+    start_y_canonical = max(
+        0,
+        stored_geometry_to_canonical(settings.start_y, source.width, settings),
+    )
+    header_limit = min(
+        ink.shape[0], max(1, round(start_y_canonical * scale))
+    )
     header_density = ink[:header_limit].mean(axis=1)
     header_rule_y: int | None = None
     if header_density.size and float(header_density.max()) >= 0.12:
-        header_rule_y = round(int(np.argmax(header_density)) / scale * parameter_scale(source, settings))
+        header_rule_y = round(int(np.argmax(header_density)) / scale)
 
     body = ink[header_limit:, :]
     body_left_x: int | None = None
     if body.size:
         column_density = body.mean(axis=0)
-        threshold = max(0.002, float(np.percentile(column_density[column_density > 0], 20)) * 0.35) if np.any(column_density > 0) else 0.002
+        threshold = (
+            max(
+                0.002,
+                float(np.percentile(column_density[column_density > 0], 20))
+                * 0.35,
+            )
+            if np.any(column_density > 0)
+            else 0.002
+        )
         active = np.flatnonzero(column_density > threshold)
         if active.size:
-            body_left_x = round(int(active[0]) / scale * parameter_scale(source, settings))
-    return LayoutConsistencyEstimate(header_rule_y=header_rule_y, body_left_x=body_left_x, is_blank=False)
+            body_left_x = round(int(active[0]) / scale)
+    return LayoutConsistencyEstimate(
+        header_rule_y=header_rule_y,
+        body_left_x=body_left_x,
+        is_blank=False,
+        coordinate_space=CANONICAL_COORDINATE_SPACE,
+    )

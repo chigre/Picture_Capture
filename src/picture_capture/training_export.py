@@ -12,14 +12,26 @@ from PIL import Image, ImageOps
 from .formats import pdic_path, read_pdic, read_ppp
 from .image_utils import normalize_page_rgb
 from .models import AppSettings
+from .coordinate_space import (
+    CANONICAL_COORDINATE_SPACE,
+    SOURCE_COORDINATE_SPACE,
+    coordinate_contract,
+    stored_geometry_to_canonical,
+)
 from .processing import column_index, derive_geometry
+from .profile_semantics import (
+    effective_page_settings,
+    excluded_source_side,
+    excluded_source_side_percent,
+    page_template_analysis_image,
+)
 from .project_storage import (
     headword_filter_rules_path, ocr_cache_root, ppp_read_path_for_image,
     profile_path, replace_rules_path, settings_path,
 )
 
 
-TRAINING_EXPORT_FORMAT = "picture-capture-training-v1"
+TRAINING_EXPORT_FORMAT = "picture-capture-training-v2"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -38,29 +50,81 @@ def _copy_if_exists(source: Path, target: Path) -> str | None:
     return target.as_posix()
 
 
-def _candidate_ground_truth_link(candidate: dict[str, Any], ground_truth: list[dict[str, Any]], line_height: int) -> dict[str, Any]:
-    """Link one OCR candidate to the nearest final saved line in the same column.
+def _candidate_ground_truth_link(
+    candidate: dict[str, Any],
+    ground_truth: list[dict[str, Any]],
+    geometry,
+    line_height: int,
+) -> dict[str, Any]:
+    """Link one OCR candidate to the nearest saved line on canonical reading V.
 
-    The saved PDIC is the exported ground truth. Candidate linkage is only
-    provenance/diagnostic metadata; it never changes the final labels.
+    Ground-truth points remain original-image pixels. Reading-order distance is
+    measured in full-resolution canonical V so rotated/vertical dictionaries do
+    not accidentally compare physical source Y.
     """
     try:
         column = int(candidate.get("column", -1))
-        y = int(candidate.get("source_y", candidate.get("refined_source_y", -999999)))
     except Exception:
-        return {"ground_truth_selected": False, "nearest_ground_truth_y": None, "ground_truth_y_delta": None}
-    same_col = [row for row in ground_truth if int(row.get("column", -2)) == column]
+        return {
+            "ground_truth_selected": False,
+            "nearest_ground_truth_source": None,
+            "ground_truth_canonical_v_delta": None,
+        }
+
+    candidate_v = candidate.get("canonical_v")
+    if candidate_v is None:
+        try:
+            source_x = int(candidate.get("source_x"))
+            source_y = int(
+                candidate.get(
+                    "source_y",
+                    candidate.get("refined_source_y"),
+                )
+            )
+            _u, candidate_v = geometry.source_to_canonical(source_x, source_y)
+        except Exception:
+            return {
+                "ground_truth_selected": False,
+                "nearest_ground_truth_source": None,
+                "ground_truth_canonical_v_delta": None,
+            }
+    candidate_v = int(candidate_v)
+
+    same_col = [
+        row for row in ground_truth
+        if int(row.get("column", -2)) == column
+    ]
     if not same_col:
-        return {"ground_truth_selected": False, "nearest_ground_truth_y": None, "ground_truth_y_delta": None}
-    nearest = min(same_col, key=lambda row: abs(int(row["y"]) - y))
-    delta = abs(int(nearest["y"]) - y)
+        return {
+            "ground_truth_selected": False,
+            "nearest_ground_truth_source": None,
+            "ground_truth_canonical_v_delta": None,
+        }
+
+    def row_v(row: dict[str, Any]) -> int:
+        _u, v = geometry.source_to_canonical(
+            int(row["x"]), int(row["y"])
+        )
+        return int(v)
+
+    nearest = min(same_col, key=lambda row: abs(row_v(row) - candidate_v))
+    nearest_v = row_v(nearest)
+    delta = abs(nearest_v - candidate_v)
     tolerance = max(4, round(max(1, line_height) * 0.60))
     return {
         "ground_truth_selected": bool(delta <= tolerance),
+        "nearest_ground_truth_source": [
+            int(nearest["x"]), int(nearest["y"])
+        ],
+        "nearest_ground_truth_canonical_v": int(nearest_v),
+        "ground_truth_canonical_v_delta": int(delta),
+        # Compatibility fields remain source-space facts where possible.
         "nearest_ground_truth_y": int(nearest["y"]),
-        "ground_truth_y_delta": int(delta),
+        "ground_truth_y_delta": (
+            abs(int(nearest["y"]) - int(candidate.get("source_y", nearest["y"])))
+            if candidate.get("source_y") is not None else None
+        ),
     }
-
 
 def export_training_page(
     page: Path,
@@ -89,7 +153,12 @@ def export_training_page(
     with Image.open(page) as opened:
         image = normalize_page_rgb(opened)
         width, height = image.size
-        geometry = derive_geometry(image, settings)
+        # Export the exact same per-page layout geometry used by detection and
+        # the main canvas. Physical Profile percentages are resolved once at
+        # this boundary; only the disposable analysis image is masked.
+        effective = effective_page_settings(settings, image.size, page_index)
+        analysis_image = page_template_analysis_image(image, effective, page_index)
+        geometry = derive_geometry(analysis_image, effective)
 
     pdic = pdic_path(page)
     entries = read_pdic(pdic)
@@ -99,6 +168,11 @@ def export_training_page(
         ground_truth.append({
             "order": order,
             "word": entry.word,
+            "coordinate_space": SOURCE_COORDINATE_SPACE,
+            "source_x": int(entry.x),
+            "source_y": int(entry.y),
+            # Compatibility aliases for v1 consumers. The coordinate_space field
+            # makes their meaning explicit; new consumers should use source_x/y.
             "x": int(entry.x),
             "y": int(entry.y),
             "column": int(col),
@@ -139,14 +213,61 @@ def export_training_page(
             shutil.copy2(source, target)
             ocr_files.append(target.relative_to(staging_root).as_posix())
 
-    manual_selection = _read_json(ocr_source_dir / f"{page.stem}_manual_selection.json")
+    manual_selection = _read_json(
+        ocr_source_dir / f"{page.stem}_manual_selection.json"
+    )
+    canonical_width, canonical_height = geometry.transform.canonical_size(
+        image.size
+    )
+    canonical_line_height = stored_geometry_to_canonical(
+        effective.character_height, canonical_width, effective,
+    )
     candidates: list[dict[str, Any]] = []
     for raw in list(cache.get("review_candidates") or []):
         if not isinstance(raw, dict):
             continue
         row = dict(raw)
-        row.update(_candidate_ground_truth_link(row, ground_truth, settings.character_height))
+        row.update(
+            _candidate_ground_truth_link(
+                row, ground_truth, geometry, canonical_line_height,
+            )
+        )
         candidates.append(row)
+
+    header_boundary_y = None
+    if str(getattr(settings, "profile_header_mode", "auto") or "auto") == "present":
+        header_boundary_y = round(
+            height
+            * float(getattr(settings, "profile_header_percent", 0.0) or 0.0)
+            / 100.0
+        )
+    footer_boundary_y = None
+    if str(getattr(settings, "profile_footer_mode", "auto") or "auto") == "present":
+        footer_boundary_y = round(
+            height
+            * (
+                1.0
+                - float(getattr(settings, "profile_footer_percent", 0.0) or 0.0)
+                / 100.0
+            )
+        )
+    side = excluded_source_side(settings, page_index)
+    side_percent = (
+        excluded_source_side_percent(settings, page_index)
+        if side is not None else 0.0
+    )
+    side_boundary_x = None
+    if side == "left":
+        side_boundary_x = round(width * side_percent / 100.0)
+    elif side == "right":
+        side_boundary_x = round(width * (1.0 - side_percent / 100.0))
+
+    source_column_paths = []
+    for path in geometry.column_paths:
+        source_column_paths.append([
+            list(geometry.canonical_to_source(int(u), int(v)))
+            for v, u in path.points
+        ])
 
     annotation = {
         "format": TRAINING_EXPORT_FORMAT,
@@ -161,20 +282,48 @@ def export_training_page(
         "annotation_status": "human_verified_saved_pdic",
         "ground_truth_lines": ground_truth,
         "illustration_polygons": [
-            {"label": region.label, "points": [[int(x), int(y)] for x, y in region.points]}
+            {
+                "label": region.label,
+                "coordinate_space": SOURCE_COORDINATE_SPACE,
+                "source_points_xy": [[int(x), int(y)] for x, y in region.points],
+                # Compatibility alias; source_points_xy is the preferred v2 key.
+                "points": [[int(x), int(y)] for x, y in region.points],
+            }
             for region in polygons
         ],
+        "coordinate_contract": coordinate_contract(),
+        "page_template": {
+            "coordinate_space": SOURCE_COORDINATE_SPACE,
+            "header_mode": str(getattr(settings, "profile_header_mode", "auto")),
+            "header_percent": float(getattr(settings, "profile_header_percent", 0.0) or 0.0),
+            "header_boundary_y": header_boundary_y,
+            "footer_mode": str(getattr(settings, "profile_footer_mode", "auto")),
+            "footer_percent": float(getattr(settings, "profile_footer_percent", 0.0) or 0.0),
+            "footer_boundary_y": footer_boundary_y,
+            "excluded_side": side,
+            "side_percent": float(side_percent),
+            "side_boundary_x": side_boundary_x,
+        },
         "layout": {
-            "columns": int(settings.columns),
-            "header_y": int(settings.start_y),
-            "column_width": int(settings.column_width),
-            "gutter": int(settings.gutter),
-            "line_height": int(settings.character_height),
-            "row_padding": int(settings.row_padding),
-            "derived_column_starts": [int(v) for v in geometry.column_starts],
-            "derived_column_widths": [int(v) for v in geometry.column_widths],
-            "derived_top": int(geometry.top),
-            "derived_bottom": int(geometry.bottom),
+            "coordinate_space": CANONICAL_COORDINATE_SPACE,
+            "transform": geometry.transform.kind,
+            "canonical_size": [int(canonical_width), int(canonical_height)],
+            "columns": int(len(geometry.column_starts)),
+            "top_v": int(geometry.top),
+            "bottom_v": int(geometry.bottom),
+            "column_starts_u": [int(v) for v in geometry.column_starts],
+            "column_widths": [int(v) for v in geometry.column_widths],
+            "column_paths_vu": [
+                [[int(v), int(u)] for v, u in path.points]
+                for path in geometry.column_paths
+            ],
+            "source_column_paths_xy": source_column_paths,
+            "line_height": int(canonical_line_height),
+            "row_padding": int(
+                stored_geometry_to_canonical(
+                    effective.row_padding, canonical_width, effective,
+                )
+            ),
         },
         "artifacts": {
             "pdic": pdic_rel,
@@ -241,7 +390,9 @@ def write_training_manifest(
         "annotation_contract": {
             "ground_truth": "saved .pdic lines confirmed by the user at export time",
             "negative_candidates": "OCR review candidates not matched to a saved ground-truth line",
-            "coordinates": "original-image pixels",
+            "coordinates": "ground truth, illustration polygons and page-template boundaries use original-image pixels",
+            "layout_coordinates": "runtime layout geometry uses full-resolution canonical pixels with an explicit transform",
+            "persisted_geometry": "settings geometry uses canonical reference-page pixels and geometry_reference_width",
             "page_split_rule": "future train/validation/test splits should be performed by dictionary, not adjacent pages",
         },
         "settings": asdict(settings),

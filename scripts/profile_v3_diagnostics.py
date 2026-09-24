@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from picture_capture.dictionary_profile import language_effective_settings, profile_library_path  # noqa: E402
+from picture_capture.coordinate_space import CANONICAL_COORDINATE_SPACE  # noqa: E402
 from picture_capture.image_utils import normalize_page_rgb  # noqa: E402
 from picture_capture.layout_detection import detect_layout_parameters  # noqa: E402
 from picture_capture.models import IMAGE_EXTENSIONS, AppSettings  # noqa: E402
@@ -82,19 +83,21 @@ def main() -> int:
         for path in sorted(p for p in folder.iterdir() if p.suffix.lower() in IMAGE_EXTENSIONS):
             with Image.open(path) as opened:
                 image = normalize_page_rgb(opened)
-            settings.parameter_display_width = image.width
             estimate = detect_layout_parameters(image, settings)
             entries, geometry = detect_entries(image, settings)
             marker = geometry.transform.canonical_marker_to_source((10, 10), (50, 10), image.size)
             orientation = "vertical" if marker[0][0] == marker[1][0] else "horizontal"
             row = {
+                "format": "picture-capture-profile-diagnostics-v2",
                 "dictionary": name,
                 "page": path.name,
                 "detected_columns": estimate.columns,
-                "column_start": estimate.manual_x,
-                "column_width": estimate.column_width,
-                "gutter": estimate.gutter,
-                "separator_x": estimate.separator_x,
+                "layout_coordinate_space": CANONICAL_COORDINATE_SPACE,
+                "canonical_page_width": int(estimate.canonical_width or geometry.transform.canonical_size(image.size)[0]),
+                "column_start_u": estimate.manual_x,
+                "column_width_u": estimate.column_width,
+                "gutter_u": estimate.gutter,
+                "separator_u": estimate.separator_x,
                 "canonical_transform": estimate.canonical_transform,
                 "entry_count": len(entries),
                 "marker_orientation": orientation,

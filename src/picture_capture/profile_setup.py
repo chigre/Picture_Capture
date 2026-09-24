@@ -2140,7 +2140,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.columns_var.set(int(self._analysis_suggestion.get("columns", self.columns_var.get())))
         for name in (
             "start_y", "bottom_y", "manual_x", "column_width", "gutter",
-            "character_height", "row_padding",
+            "character_height", "row_padding", "geometry_reference_width",
         ):
             if name in self._analysis_suggestion:
                 setattr(self.working, name, int(self._analysis_suggestion[name]))

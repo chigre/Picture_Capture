@@ -321,6 +321,7 @@ uv run ruff check .
 | [docs/ocr-install.md](docs/ocr-install.md) | Windows CPU/GPU OCR 一键安装、CUDA profile、切换与验证 |
 | [docs/cc-cedict-install.md](docs/cc-cedict-install.md) | CC-CEDICT 本地词典安装 |
 | [docs/architecture.md](docs/architecture.md) | OCR / 词头管线与存储架构 |
+| [docs/coordinate-system.md](docs/coordinate-system.md) | 原图 / canonical / analysis / OCR band 坐标契约与旧项目迁移 |
 | [docs/legacy-function-map.md](docs/legacy-function-map.md) | 旧 VB.NET 功能到 Python 的映射 |
 | [CHANGELOG.md](CHANGELOG.md) | 完整版本历史 |
 
