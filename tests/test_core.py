@@ -50,6 +50,7 @@ from picture_capture.paddle_headwords import (
     _agreement_summary,
     _issues_text,
     _pair_with_lens_candidates,
+    _apply_pair_engine_position,
 )
 from picture_capture.processing import (
     clamp_box,
@@ -65,6 +66,8 @@ from picture_capture.processing import (
     illustration_crop_bounds,
     illustration_polygon_box,
     build_page_crop_plan,
+    Geometry,
+    ColumnPath,
     entry_crop_column_boxes,
 )
 
@@ -1048,6 +1051,66 @@ class ProcessingTests(unittest.TestCase):
         comp_counts = {len(line.split("\t")) for line in comp_lines}
         self.assertEqual(comp_counts, {27})
         self.assertIn("\tsame\tsame\tagree", comparison)
+
+    def test_coordinate_pairing_uses_canonical_v_not_source_y(self) -> None:
+        def cand(canonical_v, source_y, lemma):
+            return {
+                "canonical_v": canonical_v,
+                "source_x": 20,
+                "source_y": source_y,
+                "accepted": True,
+                "score": 8.0,
+                "confidence": 0.95,
+                "box": [5, canonical_v, 100, canonical_v + 20],
+                "normalized_headword": lemma,
+                "raw_headword": lemma,
+                "corrected_headword": lemma,
+                "pos_cue": "s.m.",
+                "ocr_repairs": [],
+                "text": lemma + " s.m.",
+                "reject_reason": "",
+                "features": {"at_left": True, "structural_cue": True},
+                "parser_trace": [],
+                "bug_types": [],
+            }
+
+        # Same reading-axis row but very different physical source Y. This is
+        # normal after a 90-degree transform; source Y must not drive pairing.
+        pairs = _pair_ocr_candidates(
+            [cand(100, 420, "alpha")],
+            [cand(104, 30, "alfa")],
+            tolerance=10,
+            min_similarity=0.55,
+        )
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual(pairs[0]["paddle_lemma"], "alpha")
+        self.assertEqual(pairs[0]["tesseract_lemma"], "alfa")
+
+    def test_authoritative_engine_position_preserves_source_coordinates_after_rotation(self) -> None:
+        source_size = (600, 900)
+        transform = LayoutTransform("rotate_ccw90")
+        geometry = Geometry(
+            column_starts=[100],
+            column_widths=[300],
+            top=0,
+            bottom=600,
+            column_paths=[ColumnPath([(0, 100), (599, 100)])],
+            transform=transform,
+            source_size=source_size,
+        )
+        pair = {
+            "paddle_y": 200,
+            "paddle_coarse_y": 210,
+            "paddle_anchor_y": 215,
+            "paddle_source_x": 399,
+            "paddle_source_y": 100,
+        }
+        item = {}
+        _apply_pair_engine_position(item, pair, "paddle", 0, 100, geometry)
+        expected = transform.canonical_to_source_point(100, 200, source_size)
+        self.assertEqual((item["source_x"], item["source_y"]), expected)
+        self.assertEqual(item["canonical_v"], 200)
+        self.assertNotEqual(item["source_y"], item["canonical_v"])
 
     def test_v159_legacy_comma_swallowing_regex_is_hardened(self) -> None:
         # Some existing projects carried a legacy/custom regex that included
