@@ -6159,55 +6159,35 @@ def test_v2132_windows_ocr_installer_has_three_cuda_profiles_and_persists_profil
     assert "verify_ocr_environment.py" in text
 
 
-def test_v2132_windows_launcher_reuses_saved_ocr_profile():
+def test_windows_batch_launcher_uses_direct_pythonw_without_hidden_relaunch():
     from pathlib import Path
 
-    text = Path("run_windows.bat").read_text(encoding="utf-8")
-    assert '.picture_capture_ocr_extra' in text
-    assert '--extra "%PC_OCR_EXTRA%"' in text
-    assert 'uv run --locked' in text
+    batch = Path("run_windows.bat").read_text(encoding="utf-8")
+    run_py = Path("run.py").read_text(encoding="utf-8")
+
+    assert 'start "" ".venv\\Scripts\\pythonw.exe" "run.py"' in batch
+    assert 'fc /b "uv.lock" "%PC_LOCK_MARKER%"' in batch
+    assert 'call :prepare_environment' in batch
+    assert ':prepare_environment' in batch
+    assert '.picture_capture_ocr_extra' in batch
+    assert 'set /p PC_OCR_EXTRA=<".picture_capture_ocr_extra"' in batch
+    assert 'uv sync --locked --extra "%PC_OCR_EXTRA%"' in batch
+    assert 'echo [Picture Capture] OCR profile: %PC_OCR_EXTRA%' in batch
+    assert "subprocess" not in run_py
+    assert "Popen" not in run_py
+    assert "CREATE_NO_WINDOW" not in run_py
+    assert "PC_NO_CONSOLE" not in run_py
+    assert not Path("Picture_Capture.pyw").exists()
 
 
-def _load_launcher_module():
+def test_pythonw_launcher_redirects_streams_without_spawning_processes(tmp_path, monkeypatch):
     import importlib.util
-    import inspect
-
-    import picture_capture
-
-    root = Path(inspect.getsourcefile(picture_capture)).resolve().parents[2]
-    spec = importlib.util.spec_from_file_location("_picture_capture_launcher", root / "run.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module, root
-
-
-def test_v2133_launcher_is_noop_off_windows(monkeypatch):
-    module, _ = _load_launcher_module()
-    monkeypatch.setattr(module, "_is_windows", lambda: False)
-    monkeypatch.setattr(module, "_has_console", lambda: False)
-
-    assert module._windowed_python() is None
-    assert module._prepare_windows_launch() is False
-
-
-def test_v2133_windowed_python_prefers_venv_pythonw(tmp_path, monkeypatch):
-    module, _ = _load_launcher_module()
-    scripts = tmp_path / ".venv" / "Scripts"
-    scripts.mkdir(parents=True)
-    (scripts / "python.exe").write_text("", encoding="utf-8")
-
-    monkeypatch.setattr(module, "_is_windows", lambda: True)
-    monkeypatch.setattr(module, "_PROJECT_ROOT", tmp_path)
-    assert module._windowed_python() == scripts / "python.exe"
-
-    (scripts / "pythonw.exe").write_text("", encoding="utf-8")
-    assert module._windowed_python() == scripts / "pythonw.exe"
-
-
-def test_v2133_launcher_redirects_streams_to_log(tmp_path, monkeypatch):
     import sys
 
-    module, _ = _load_launcher_module()
+    spec = importlib.util.spec_from_file_location("_picture_capture_launcher", Path("run.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
     log = tmp_path / "launcher.log"
     monkeypatch.setattr(module, "_has_console", lambda: False)
     monkeypatch.setenv("PC_LOG", str(log))
@@ -6216,50 +6196,12 @@ def test_v2133_launcher_redirects_streams_to_log(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "excepthook", sys.excepthook)
 
     module._redirect_streams_to_log()
-    print("hello from launcher")
-    sys.stderr.write("boom\n")
+    print("direct pythonw launch")
     stream = sys.stdout
     stream.flush()
     stream.close()
 
-    text = log.read_text(encoding="utf-8")
-    assert "hello from launcher" in text
-    assert "boom" in text
-
-
-def test_v2133_launcher_decides_before_redirecting_streams(tmp_path, monkeypatch):
-    import sys
-
-    module, _ = _load_launcher_module()
-    scripts = tmp_path / ".venv" / "Scripts"
-    scripts.mkdir(parents=True)
-    (scripts / "pythonw.exe").write_text("", encoding="utf-8")
-
-    monkeypatch.setattr(module, "_PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(module, "_is_windows", lambda: True)
-    monkeypatch.setattr(sys, "stdout", None)
-    monkeypatch.setattr(sys, "stderr", None)
-    monkeypatch.delenv(module._NO_RELAUNCH_ENV, raising=False)
-    monkeypatch.setenv("PC_LOG", str(tmp_path / "launcher.log"))
-    launched = []
-    monkeypatch.setattr(module, "_relaunch_windowed", lambda interpreter: launched.append(interpreter))
-
-    assert module.main() == 0
-    assert launched == [scripts / "pythonw.exe"]
-    # The parent hands off without redirecting, otherwise a later
-    # _has_console() check would wrongly report a console.
-    assert sys.stdout is None
-
-
-def test_v2133_silent_entry_point_delegates_to_run_py():
-    module, root = _load_launcher_module()
-    text = (root / "Picture_Capture.pyw").read_text(encoding="utf-8")
-
-    assert "runpy.run_path" in text
-    assert "run.py" in text
-    # The shim must start under a bare system pythonw, before the venv exists,
-    # so it may not import the application package or any third-party module.
-    assert "picture_capture" not in text
+    assert "direct pythonw launch" in log.read_text(encoding="utf-8")
 
 
 def test_rtl_geometry_orders_source_right_column_first_and_keeps_source_crop_pixels():

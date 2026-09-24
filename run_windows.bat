@@ -2,15 +2,35 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-rem Keep the console open on failure so error messages stay readable when the
-rem launcher is double-clicked. This entry point is intentionally visible; use
-rem Picture_Capture.pyw for a silent start.
+rem Everyday path: launch the project's own pythonw.exe directly, then let this
+rem short-lived batch window close. No CREATE_NO_WINDOW or Python subprocess
+rem relaunch is used. The console remains visible only when setup/repair is
+rem needed or when an error occurs.
 set "PC_HOLD=pause"
+set "PC_LOCK_MARKER=.venv\.picture_capture_uv.lock"
+set "PC_NEED_SYNC=0"
 
+if not exist ".venv\Scripts\pythonw.exe" set "PC_NEED_SYNC=1"
+if not exist "%PC_LOCK_MARKER%" set "PC_NEED_SYNC=1"
+
+if "%PC_NEED_SYNC%"=="0" (
+  fc /b "uv.lock" "%PC_LOCK_MARKER%" >nul 2>&1
+  if errorlevel 1 set "PC_NEED_SYNC=1"
+)
+
+if "%PC_NEED_SYNC%"=="1" (
+  call :prepare_environment
+  if errorlevel 1 goto :failed
+)
+
+start "" ".venv\Scripts\pythonw.exe" "run.py"
+if errorlevel 1 goto :failed
+exit /b 0
+
+:prepare_environment
 where uv >nul 2>&1
 if errorlevel 1 (
   echo [Picture Capture] uv was not found. Install it from https://docs.astral.sh/uv/
-  %PC_HOLD%
   exit /b 1
 )
 
@@ -19,19 +39,26 @@ if exist ".picture_capture_ocr_extra" (
   set /p PC_OCR_EXTRA=<".picture_capture_ocr_extra"
 )
 
+echo [Picture Capture] Preparing project environment...
 if defined PC_OCR_EXTRA (
-  echo [Picture Capture] Starting with uv project environment + OCR profile: %PC_OCR_EXTRA%
-  uv run --locked --extra "%PC_OCR_EXTRA%" python run.py
+  echo [Picture Capture] OCR profile: %PC_OCR_EXTRA%
+  uv sync --locked --extra "%PC_OCR_EXTRA%"
 ) else (
-  echo [Picture Capture] Starting with uv project environment...
-  uv run --locked python run.py
+  uv sync --locked
 )
+if errorlevel 1 exit /b 1
 
-set "PC_RC=%errorlevel%"
-if not "%PC_RC%"=="0" (
-  echo.
-  echo [Picture Capture] If uv reports that its version is too old, run: uv self update
-  echo [Picture Capture] To install or change OCR components, run: install_ocr_windows.bat
-  %PC_HOLD%
+if not exist ".venv\Scripts\pythonw.exe" (
+  echo [Picture Capture] .venv\Scripts\pythonw.exe was not created.
+  exit /b 1
 )
-exit /b %PC_RC%
+copy /y "uv.lock" "%PC_LOCK_MARKER%" >nul
+exit /b 0
+
+:failed
+echo.
+echo [Picture Capture] Startup failed.
+echo [Picture Capture] To install or change OCR components, run: install_ocr_windows.bat
+echo [Picture Capture] For troubleshooting, run: uv run --locked python run.py
+%PC_HOLD%
+exit /b 1
