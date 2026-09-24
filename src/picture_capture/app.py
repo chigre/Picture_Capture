@@ -6892,6 +6892,37 @@ class PictureCaptureApp(tk.Tk):
             cursor="hand2",
         )
 
+    def _footer_action_button(
+        self, parent: tk.Misc, text: str, command, *, role: str
+    ) -> tk.Button:
+        """Create one emphasized bottom-bar action with a soft semantic color."""
+        palette = {
+            "profile": ("#eee8f8", "#dfd3f2", "#604482"),
+            "settings": ("#dceeff", "#c7e1f8", "#245b86"),
+            "save": ("#dff1e3", "#cbe7d1", "#356b42"),
+            "help": ("#fff0cf", "#ffe2a6", "#76520f"),
+        }
+        background, active_background, foreground = palette[role]
+        border = "#cfd5dc"
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=background,
+            fg=foreground,
+            activebackground=active_background,
+            activeforeground=foreground,
+            relief="flat",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=border,
+            highlightcolor=border,
+            padx=7,
+            pady=3,
+            cursor="hand2",
+        )
+
+
     def _section_frame(
         self, parent: tk.Misc, title: str, padding: int = 5, *, section_key: str | None = None
     ) -> ttk.LabelFrame:
@@ -7290,37 +7321,51 @@ class PictureCaptureApp(tk.Tk):
 
         project_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
         project_row.pack(fill="x")
-        ttk.Button(
-            project_row, text="新建项目", command=self.open_project, style="PC.Footer.TButton"
-        ).pack(side="left", fill="x", expand=True)
-        ttk.Button(
-            project_row, text="已有项目", command=self.open_recent_project, style="PC.Footer.TButton"
-        ).pack(side="left", fill="x", expand=True, padx=(4, 0))
-        ttk.Button(
-            project_row, text="导出训练标记包", command=self.export_training_package,
-            style="PC.Footer.TButton",
-        ).pack(side="left", fill="x", expand=True, padx=(4, 0))
-        ttk.Label(project_row, text="图片后缀：", style="PC.Footer.TLabel").pack(
-            side="left", padx=(8, 2)
+        for col in range(4):
+            project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
+        for col, (label, command) in enumerate((
+            ("新建项目", self.open_project),
+            ("已有项目", self.open_recent_project),
+            ("导出训练标记包", self.export_training_package),
+        )):
+            ttk.Button(
+                project_row, text=label, command=command, style="PC.Footer.TButton"
+            ).grid(
+                row=0, column=col, sticky="ew",
+                padx=(0 if col == 0 else 4, 0),
+            )
+
+        suffix_cell = ttk.Frame(project_row, style="PC.Footer.TFrame")
+        suffix_cell.grid(row=0, column=3, sticky="ew", padx=(4, 0))
+        suffix_cell.columnconfigure(1, weight=1)
+        ttk.Label(suffix_cell, text="图片后缀：", style="PC.Footer.TLabel").grid(
+            row=0, column=0, sticky="e", padx=(0, 2)
         )
         self.image_suffix_var = tk.StringVar(value=self.settings.image_suffix)
         ttk.Entry(
-            project_row, textvariable=self.image_suffix_var, width=7, style="PC.Footer.TEntry"
-        ).pack(side="left")
+            suffix_cell,
+            textvariable=self.image_suffix_var,
+            width=7,
+            justify="left",
+            style="PC.Footer.TEntry",
+        ).grid(row=0, column=1, sticky="ew")
         self.image_suffix_var.trace_add("write", lambda *_args: self._quick_parameter_changed())
 
         parameter_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
         parameter_row.pack(fill="x", pady=(4, 0))
-        for index, (label, command) in enumerate((
-            ("项目Profile", self.open_project_profile),
-            ("设置中心", self.open_settings),
-            ("保存参数", self.save_main_parameters),
-            ("使用提示", self.show_help_dialog),
+        for col in range(4):
+            parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
+        for col, (label, command, role) in enumerate((
+            ("项目Profile", self.open_project_profile, "profile"),
+            ("设置中心", self.open_settings, "settings"),
+            ("保存参数", self.save_main_parameters, "save"),
+            ("使用提示", self.show_help_dialog, "help"),
         )):
-            ttk.Button(
-                parameter_row, text=label, command=command, style="PC.Footer.TButton"
-            ).pack(
-                side="left", fill="x", expand=True, padx=(0 if index == 0 else 4, 0),
+            self._footer_action_button(
+                parameter_row, label, command, role=role
+            ).grid(
+                row=0, column=col, sticky="ew",
+                padx=(0 if col == 0 else 4, 0),
             )
 
         self.canvas = tk.Canvas(
