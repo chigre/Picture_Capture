@@ -6728,28 +6728,19 @@ class CropSettingsDialog(tk.Toplevel):
         return qt_root(self.parent.project.root) / self.LEGACY_CONFIG_NAME
 
     def _load_initial_values(self) -> None:
-        saved: dict = {}
-        path = self._config_path
-        if path is None or not path.exists():
-            legacy = self._legacy_config_path
-            if legacy is not None and legacy.exists():
-                path = legacy
-        if path and path.exists():
-            try:
-                raw = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(raw, dict):
-                    saved = raw
-            except (OSError, ValueError, TypeError):
-                saved = {}
-        self.general_top_var.set(str(saved.get("general_top_y", self.parent.settings.start_y)))
+        saved = self.parent._load_crop_settings()
+        self.general_top_var.set(str(saved.get("general_top_v", self.parent.settings.start_y)))
         default_bottom = self.parent.settings.bottom_y if self.parent.settings.crop_to_bottom_y else 0
-        self.general_bottom_var.set(str(saved.get("general_bottom_y", default_bottom)))
-        self.entry_left_padding_var.set(str(saved.get("entry_left_padding", 0)))
-        self.entry_right_padding_var.set(str(saved.get("entry_right_padding", 0)))
+        self.general_bottom_var.set(str(saved.get("general_bottom_v", default_bottom)))
+        self.entry_left_padding_var.set(str(saved.get("entry_left_padding_u", 0)))
+        self.entry_right_padding_var.set(str(saved.get("entry_right_padding_u", 0)))
         self.integrate_illustrations_var.set(bool(saved.get("integrate_illustrations", True)))
         self.margin_var.set(str(saved.get("polygon_margin", 0)))
         self.workers_var.set(str(saved.get("parallel_workers", self.parent.settings.crop_parallel_workers)))
-        self._saved_specials = saved.get("special_pages", {}) if isinstance(saved.get("special_pages", {}), dict) else {}
+        self._saved_specials = (
+            saved.get("special_pages", {})
+            if isinstance(saved.get("special_pages", {}), dict) else {}
+        )
         if self.parent.current_page:
             self.special_page_var.set(self.parent.current_page.stem)
 
@@ -6774,19 +6765,19 @@ class CropSettingsDialog(tk.Toplevel):
             scope += f"（{first} → {last}）"
         ttk.Label(general, text=scope).grid(row=0, column=1, columnspan=4, sticky="w")
 
-        ttk.Label(general, text="一般页切图上边界 Y：").grid(row=1, column=0, sticky="w", pady=(7, 2))
+        ttk.Label(general, text="一般页切图上边界 V（参考页）：").grid(row=1, column=0, sticky="w", pady=(7, 2))
         ttk.Entry(general, textvariable=self.general_top_var, width=10).grid(row=1, column=1, sticky="w", pady=(7, 2))
-        ttk.Label(general, text="一般页切图下边界 Y：").grid(row=1, column=2, sticky="w", padx=(14, 0), pady=(7, 2))
+        ttk.Label(general, text="一般页切图下边界 V（参考页）：").grid(row=1, column=2, sticky="w", padx=(14, 0), pady=(7, 2))
         ttk.Entry(general, textvariable=self.general_bottom_var, width=10).grid(row=1, column=3, sticky="w", pady=(7, 2))
-        ttk.Label(general, text="0 = 图片底部；这里的上下边界只控制切图，不改变版面检测的页眉Y。", foreground="#666666").grid(row=2, column=0, columnspan=5, sticky="w")
+        ttk.Label(general, text="单位：参考页规范像素；0 = 页面底部。横排时 V 与原图 Y 一致；竖排时 V 是阅读轴。", foreground="#666666").grid(row=2, column=0, columnspan=5, sticky="w")
 
-        ttk.Label(general, text="词条左侧额外留白：").grid(row=3, column=0, sticky="w", pady=(8, 2))
+        ttk.Label(general, text="词条 U 负向额外留白：").grid(row=3, column=0, sticky="w", pady=(8, 2))
         ttk.Entry(general, textvariable=self.entry_left_padding_var, width=10).grid(row=3, column=1, sticky="w", pady=(8, 2))
-        ttk.Label(general, text="词条右侧额外留白：").grid(row=3, column=2, sticky="w", padx=(14, 0), pady=(8, 2))
+        ttk.Label(general, text="词条 U 正向额外留白：").grid(row=3, column=2, sticky="w", padx=(14, 0), pady=(8, 2))
         ttk.Entry(general, textvariable=self.entry_right_padding_var, width=10).grid(row=3, column=3, sticky="w", pady=(8, 2))
         ttk.Label(
             general,
-            text="px；基础宽度已自动按相邻栏间空白中线计算，这里只做额外扩展",
+            text="单位：参考页规范像素；运行时按当前页面分辨率缩放。",
         ).grid(row=4, column=0, columnspan=5, sticky="w")
 
         ttk.Checkbutton(
@@ -6800,9 +6791,9 @@ class CropSettingsDialog(tk.Toplevel):
             foreground="#666666",
         ).grid(row=5, column=2, columnspan=3, sticky="w", pady=(8, 2))
 
-        ttk.Label(general, text="PPP多边形外扩：").grid(row=6, column=0, sticky="w", pady=(8, 2))
+        ttk.Label(general, text="PPP多边形外扩（参考页）：").grid(row=6, column=0, sticky="w", pady=(8, 2))
         ttk.Entry(general, textvariable=self.margin_var, width=10).grid(row=6, column=1, sticky="w", pady=(8, 2))
-        ttk.Label(general, text="px（只影响插图导出，不改PPP坐标）").grid(row=6, column=2, columnspan=3, sticky="w", pady=(8, 2))
+        ttk.Label(general, text="参考页像素（只影响插图导出，不改PPP原图坐标）").grid(row=6, column=2, columnspan=3, sticky="w", pady=(8, 2))
         ttk.Label(general, text="并行进程：").grid(row=7, column=0, sticky="w", pady=2)
         ttk.Entry(general, textvariable=self.workers_var, width=10).grid(row=7, column=1, sticky="w", pady=2)
         ttk.Label(general, text="0 = 自动；词条/插图切图共用").grid(row=7, column=2, columnspan=3, sticky="w", pady=2)
@@ -6816,9 +6807,9 @@ class CropSettingsDialog(tk.Toplevel):
         ttk.Label(form, text="页面：").grid(row=0, column=0, sticky="w")
         ttk.Entry(form, textvariable=self.special_page_var, width=18).grid(row=0, column=1, sticky="ew")
         ttk.Button(form, text="当前页", command=self.use_current_page).grid(row=0, column=2, padx=(5, 12))
-        ttk.Label(form, text="上边界Y：").grid(row=0, column=3, sticky="w")
+        ttk.Label(form, text="上边界V：").grid(row=0, column=3, sticky="w")
         ttk.Entry(form, textvariable=self.special_top_var, width=9).grid(row=0, column=4, sticky="w")
-        ttk.Label(form, text="下边界Y：").grid(row=0, column=5, sticky="w", padx=(8, 0))
+        ttk.Label(form, text="下边界V：").grid(row=0, column=5, sticky="w", padx=(8, 0))
         ttk.Entry(form, textvariable=self.special_bottom_var, width=9).grid(row=0, column=6, sticky="w")
         form.columnconfigure(1, weight=1)
 
@@ -6830,7 +6821,7 @@ class CropSettingsDialog(tk.Toplevel):
 
         cols = ("page", "top", "bottom")
         self.special_tree = ttk.Treeview(special, columns=cols, show="headings", height=10, selectmode="browse")
-        for col, text, width in (("page", "页面", 190), ("top", "上边界Y", 90), ("bottom", "下边界Y", 90)):
+        for col, text, width in (("page", "页面", 190), ("top", "上边界V", 90), ("bottom", "下边界V", 90)):
             self.special_tree.heading(col, text=text)
             self.special_tree.column(col, width=width, anchor="w" if col == "page" else "center")
         bar = ttk.Scrollbar(special, orient="vertical", command=self.special_tree.yview)
@@ -6840,7 +6831,7 @@ class CropSettingsDialog(tk.Toplevel):
         self.special_tree.bind("<<TreeviewSelect>>", self.on_special_select)
         for page, values in sorted(self._saved_specials.items()):
             if isinstance(values, dict):
-                self.special_tree.insert("", "end", iid=str(page), values=(page, values.get("top_y", ""), values.get("bottom_y", 0)))
+                self.special_tree.insert("", "end", iid=str(page), values=(page, values.get("top_v", ""), values.get("bottom_v", 0)))
 
         bottom = ttk.Frame(self, padding=(18, 0, 18, 12))
         bottom.pack(fill="x")
@@ -6876,8 +6867,8 @@ class CropSettingsDialog(tk.Toplevel):
         for iid in self.special_tree.get_children():
             page, top, bottom = self.special_tree.item(iid, "values")
             result[str(page)] = {
-                "top_y": self._nonnegative_int(str(top), f"{page} 页眉Y"),
-                "bottom_y": self._nonnegative_int(str(bottom), f"{page} 底部Y"),
+                "top_v": self._nonnegative_int(str(top), f"{page} 上边界V"),
+                "bottom_v": self._nonnegative_int(str(bottom), f"{page} 下边界V"),
             }
         return result
 
@@ -6894,14 +6885,16 @@ class CropSettingsDialog(tk.Toplevel):
             raise ValueError("一般底部Y必须大于页眉Y，或填0表示图片底部")
         specials = self._special_mapping()
         for page, values in specials.items():
-            if values["bottom_y"] and values["bottom_y"] <= values["top_y"]:
+            if values["bottom_v"] and values["bottom_v"] <= values["top_v"]:
                 raise ValueError(f"{page} 的底部Y必须大于页眉Y，或填0")
         return {
-            "version": 5,
-            "general_top_y": top,
-            "general_bottom_y": bottom,
-            "entry_left_padding": entry_left,
-            "entry_right_padding": entry_right,
+            "version": CROP_SETTINGS_VERSION,
+            "coordinate_space": CANONICAL_REFERENCE_SPACE,
+            "geometry_reference_width": _geometry_reference_width(self.parent.settings),
+            "general_top_v": top,
+            "general_bottom_v": bottom,
+            "entry_left_padding_u": entry_left,
+            "entry_right_padding_u": entry_right,
             "integrate_illustrations": bool(self.integrate_illustrations_var.get()),
             "polygon_margin": margin,
             "parallel_workers": workers,
