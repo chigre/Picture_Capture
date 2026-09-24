@@ -6748,17 +6748,9 @@ class PictureCaptureApp(tk.Tk):
             "border": "#d8dde5",
             "text": "#30343b",
             "muted": "#68707b",
-            "button": "#eceff3",
-            "button_hover": "#e1e5ea",
-            "danger_soft": "#f8e3e3",
-            "danger_soft_hover": "#f2cece",
-            "danger_soft_text": "#8a3030",
-            "refine_soft": "#fff0cf",
-            "refine_soft_hover": "#ffe2a6",
-            "refine_soft_text": "#76520f",
-            "compare_soft": "#eee8f8",
-            "compare_soft_hover": "#dfd3f2",
-            "compare_soft_text": "#604482",
+            "button": "#f4f5f7",
+            "button_hover": "#e7eaee",
+            "button_border": "#b9c1cb",
             "review_soft": "#dceeff",
             "review_soft_hover": "#c7e1f8",
             "review_soft_text": "#245b86",
@@ -6845,35 +6837,23 @@ class PictureCaptureApp(tk.Tk):
         colors = self._main_ui_colors
         palette = {
             "neutral": (
-                colors["button"], colors["button_hover"], colors["text"], colors["border"]
+                colors["button"], colors["button_hover"], colors["text"],
+                colors["button_border"],
             ),
             "primary": (
-                colors["primary"], colors["primary_hover"], "#ffffff", colors["primary"]
+                colors["primary"], colors["primary_hover"], "#ffffff", "#bd6c17",
             ),
             "success": (
-                colors["success"], colors["success_hover"], "#ffffff", colors["success"]
-            ),
-            "danger_soft": (
-                colors["danger_soft"], colors["danger_soft_hover"],
-                colors["danger_soft_text"], "#e7bcbc",
-            ),
-            "refine_soft": (
-                colors["refine_soft"], colors["refine_soft_hover"],
-                colors["refine_soft_text"], "#e3ca8c",
-            ),
-            "compare_soft": (
-                colors["compare_soft"], colors["compare_soft_hover"],
-                colors["compare_soft_text"], "#cdbce4",
+                colors["success"], colors["success_hover"], "#ffffff", "#477f52",
             ),
             "review_soft": (
                 colors["review_soft"], colors["review_soft_hover"],
-                colors["review_soft_text"], "#aacde9",
+                colors["review_soft_text"], "#9fc5e4",
             ),
         }
         background, active_background, foreground, border = palette.get(
             role, palette["neutral"]
         )
-        outlined = role not in {"primary", "success"}
         return tk.Button(
             parent,
             text=text,
@@ -6882,13 +6862,13 @@ class PictureCaptureApp(tk.Tk):
             fg=foreground,
             activebackground=active_background,
             activeforeground=foreground,
-            relief="flat",
-            bd=0,
-            highlightthickness=(1 if outlined else 0),
+            relief="solid",
+            bd=1,
+            highlightthickness=0,
             highlightbackground=border,
             highlightcolor=border,
-            padx=(7 if outlined else 8),
-            pady=(3 if outlined else 4),
+            padx=7,
+            pady=3,
             cursor="hand2",
         )
 
@@ -8151,9 +8131,6 @@ class PictureCaptureApp(tk.Tk):
                 role = (
                     "primary" if text == "运行OCR画线"
                     else "success" if text == "保存当前页"
-                    else "danger_soft" if text in {"清除画线", "清除文本"}
-                    else "refine_soft" if text == "精修画线"
-                    else "compare_soft" if text == "新旧比较"
                     else "review_soft" if text == "词条校对"
                     else "neutral"
                 )
