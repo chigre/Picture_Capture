@@ -4203,13 +4203,13 @@ class ReviewWindow(tk.Toplevel):
             textvariable=self.review_line_height_var, style="PCR.Compact.TSpinbox",
         )
         self.review_line_height_spin.pack(side="left")
-        ttk.Label(height_row, text="px").pack(side="left", padx=(2, 9))
+        ttk.Label(height_row, text="参考页px").pack(side="left", padx=(2, 9))
         ttk.Label(height_row, text="行间空：").pack(side="left")
         ttk.Spinbox(
             height_row, from_=0, to=200, increment=1, width=4,
             textvariable=self.review_row_padding_var, style="PCR.Compact.TSpinbox",
         ).pack(side="left")
-        ttk.Label(height_row, text="px").pack(side="left", padx=(2, 0))
+        ttk.Label(height_row, text="参考页px").pack(side="left", padx=(2, 0))
 
         crop_height_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         crop_height_row.pack(fill="x", pady=(3, 0))
@@ -4218,14 +4218,14 @@ class ReviewWindow(tk.Toplevel):
             crop_height_row, from_=1, to=500, increment=1, width=5,
             textvariable=self.review_regular_crop_height_var, style="PCR.Compact.TSpinbox",
         ).pack(side="left")
-        ttk.Label(crop_height_row, text="px").pack(side="left", padx=(2, 9))
+        ttk.Label(crop_height_row, text="参考页px").pack(side="left", padx=(2, 9))
         ttk.Label(crop_height_row, text="单字行高：").pack(side="left")
         self.review_single_cjk_line_height_spin = ttk.Spinbox(
             crop_height_row, from_=1, to=500, increment=1, width=5,
             textvariable=self.review_single_cjk_line_height_var, style="PCR.Compact.TSpinbox",
         )
         self.review_single_cjk_line_height_spin.pack(side="left")
-        ttk.Label(crop_height_row, text="px").pack(side="left", padx=(2, 0))
+        ttk.Label(crop_height_row, text="参考页px").pack(side="left", padx=(2, 0))
 
         zoom_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         zoom_row.pack(fill="x")
@@ -10919,21 +10919,13 @@ class PictureCaptureApp(tk.Tk):
                 self.image.width * self.view_scale
             )
         if self.settings.bottom_y <= 0:
-            canonical_height = LayoutTransform(
+            transform = LayoutTransform(
                 str(getattr(self.settings, "layout_transform", "identity") or "identity")
-            ).canonical_size(self.image.size)[1]
-            if geometry_uses_canonical_pixels(self.settings):
-                self.settings.bottom_y = canonical_height
-            else:
-                self.settings.bottom_y = round(
-                    canonical_height
-                    * legacy_parameter_scale(
-                        LayoutTransform(
-                            str(getattr(self.settings, "layout_transform", "identity") or "identity")
-                        ).canonical_size(self.image.size)[0],
-                        self.settings,
-                    )
-                )
+            )
+            canonical_width, canonical_height = transform.canonical_size(self.image.size)
+            self.settings.bottom_y = canonical_geometry_to_stored(
+                canonical_height, canonical_width, self.settings,
+            )
         self.cursor_canvas_xy = None
         self.sync_quick_settings()
         self._update_view_zoom_label()
@@ -12281,7 +12273,7 @@ class PictureCaptureApp(tk.Tk):
             for candidate in self.ocr_review_candidates:
                 if str(candidate.get("candidate_id", "")) == entry.candidate_id:
                     return candidate
-        tolerance = max(6, round(self.settings.character_height * 0.55))
+        tolerance = max(6, round(self._quick_geometry_value("character_height") * 0.55))
         nearby: list[tuple[float, dict]] = []
         for candidate in self.ocr_review_candidates:
             try:
@@ -12403,7 +12395,7 @@ class PictureCaptureApp(tk.Tk):
         for entry in self.entries:
             if cid and entry.candidate_id == cid:
                 return True
-            if abs(entry.x - x) <= 12 and abs(entry.y - y) <= max(5, round(self.settings.character_height * 0.45)):
+            if abs(entry.x - x) <= 12 and abs(entry.y - y) <= max(5, round(self._quick_geometry_value("character_height") * 0.45)):
                 return True
         return False
 
@@ -12523,7 +12515,7 @@ class PictureCaptureApp(tk.Tk):
         for entry in self.entries:
             if cid and entry.candidate_id == cid:
                 return entry
-            if abs(entry.x - x) <= 12 and abs(entry.y - y) <= max(5, round(self.settings.character_height * 0.45)):
+            if abs(entry.x - x) <= 12 and abs(entry.y - y) <= max(5, round(self._quick_geometry_value("character_height") * 0.45)):
                 return entry
         return None
 
