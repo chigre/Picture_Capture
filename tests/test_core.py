@@ -5733,9 +5733,12 @@ def test_v2131_windows_launcher_uses_locked_uv_project_environment():
 
     project_root = Path(inspect.getsourcefile(picture_capture)).resolve().parents[2]
     bat = (project_root / "run_windows.bat").read_text(encoding="utf-8")
-    assert "uv run --locked python run.py" in bat
+    assert '".venv\\Scripts\\python.exe" "run.py"' in bat
+    assert "uv sync --locked --no-dev" in bat
     assert "pip install" not in bat
     assert "pip uninstall" not in bat
+    assert "pythonw.exe" not in bat
+    assert "start " not in bat.casefold()
     assert (project_root / ".python-version").read_text(encoding="utf-8").strip() == "3.13"
     assert not (project_root / "requirements.txt").exists()
 
@@ -6143,67 +6146,78 @@ def test_v2132_declares_cpu_and_gpu_ocr_profiles():
     for name in ("ocr-gpu-cu118", "ocr-gpu-cu126", "ocr-gpu-cu129"):
         assert "paddleocr>=3.7,<4" in extras[name]
         assert "chrome-lens-py>=3.4,<4" in extras[name]
-        assert not any(item.startswith("paddlepaddle") for item in extras[name])
+        assert "paddlepaddle-gpu==3.3.0" in extras[name]
+    assert not any("nvidia-cudnn" in item for item in extras["ocr-gpu-cu118"])
+    assert "nvidia-cudnn-cu12==9.5.1.17; sys_platform == 'win32'" in extras["ocr-gpu-cu126"]
+    assert "nvidia-cudnn-cu12==9.9.0.52; sys_platform == 'win32'" in extras["ocr-gpu-cu129"]
 
 
-def test_v2132_windows_ocr_installer_has_three_cuda_profiles_and_persists_profile():
+def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
+    import importlib.util
+    import tomllib
     from pathlib import Path
 
-    text = Path("install_ocr_windows.bat").read_text(encoding="utf-8")
-    assert "ocr-gpu-cu118" in text
-    assert "ocr-gpu-cu126" in text
-    assert "ocr-gpu-cu129" in text
-    assert "packages/stable/cu118/" in text
-    assert "packages/stable/cu126/" in text
-    assert "packages/stable/cu129/" in text
-    assert '"paddlepaddle-gpu==3.3.0"' in text
-    assert ".picture_capture_ocr_extra" in text
-    assert "verify_ocr_environment.py" in text
+    batch = Path("install_ocr_windows.bat").read_text(encoding="utf-8")
+    assert '"scripts\\windows_ocr_setup.py"' in batch
+    for suspicious in (
+        "uv pip", "uninstall", "--index", "paddlepaddle-gpu",
+        "packages/stable/cu", "nvidia-smi", "set /p",
+    ):
+        assert suspicious not in batch
+
+    spec = importlib.util.spec_from_file_location(
+        "_picture_capture_windows_ocr_setup", Path("scripts/windows_ocr_setup.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.PROFILES["2"]["extra"] == "ocr-gpu-cu118"
+    assert module.PROFILES["3"]["extra"] == "ocr-gpu-cu126"
+    assert module.PROFILES["4"]["extra"] == "ocr-gpu-cu129"
+    assert module.sync_command(module.PROFILES["3"]) == [
+        "uv", "sync", "--locked", "--no-dev", "--extra", "ocr-gpu-cu126",
+    ]
+    assert module.MARKER.name == ".picture_capture_ocr_extra"
+
+    data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    extras = data["project"]["optional-dependencies"]
+    for name in ("ocr-gpu-cu118", "ocr-gpu-cu126", "ocr-gpu-cu129"):
+        assert "paddlepaddle-gpu==3.3.0" in extras[name]
+    sources = data["tool"]["uv"]["sources"]["paddlepaddle-gpu"]
+    assert {item["extra"] for item in sources} == {
+        "ocr-gpu-cu118", "ocr-gpu-cu126", "ocr-gpu-cu129",
+    }
+
+    runtime_source = Path("src/picture_capture/windows_gpu_runtime.py").read_text(encoding="utf-8")
+    paddle_source = Path("src/picture_capture/paddle_headwords.py").read_text(encoding="utf-8")
+    layout_source = Path("src/picture_capture/layout_detection.py").read_text(encoding="utf-8")
+    verify_source = Path("scripts/verify_ocr_environment.py").read_text(encoding="utf-8")
+    assert "add_dll_directory" in runtime_source
+    assert 'glob("*/bin")' in runtime_source
+    assert "configure_windows_nvidia_dlls()" in paddle_source
+    assert "configure_windows_nvidia_dlls()" in layout_source
+    assert "Paddle GPU/cuDNN smoke test: OK" in verify_source
+    assert "paddle.nn.functional.conv2d" in verify_source
 
 
-def test_windows_batch_launcher_uses_direct_pythonw_without_hidden_relaunch():
+def test_windows_batch_launcher_is_visible_foreground_and_minimal():
     from pathlib import Path
 
-    batch = Path("run_windows.bat").read_text(encoding="utf-8")
+    batch = Path("run_windows.bat").read_text(encoding="utf-8").casefold()
     run_py = Path("run.py").read_text(encoding="utf-8")
 
-    assert 'start "" ".venv\\Scripts\\pythonw.exe" "run.py"' in batch
-    assert 'fc /b "uv.lock" "%PC_LOCK_MARKER%"' in batch
-    assert 'call :prepare_environment' in batch
-    assert ':prepare_environment' in batch
-    assert '.picture_capture_ocr_extra' in batch
-    assert 'set /p PC_OCR_EXTRA=<".picture_capture_ocr_extra"' in batch
-    assert 'uv sync --locked --extra "%PC_OCR_EXTRA%"' in batch
-    assert 'echo [Picture Capture] OCR profile: %PC_OCR_EXTRA%' in batch
+    assert '".venv\\scripts\\python.exe" "run.py"' in batch
+    assert "uv sync --locked --no-dev" in batch
+    for suspicious in (
+        "pythonw.exe", "start ", "create_no_window", "subprocess",
+        "fc /b", "set /p", ".picture_capture_ocr_extra",
+    ):
+        assert suspicious not in batch
     assert "subprocess" not in run_py
     assert "Popen" not in run_py
     assert "CREATE_NO_WINDOW" not in run_py
     assert "PC_NO_CONSOLE" not in run_py
     assert not Path("Picture_Capture.pyw").exists()
-
-
-def test_pythonw_launcher_redirects_streams_without_spawning_processes(tmp_path, monkeypatch):
-    import importlib.util
-    import sys
-
-    spec = importlib.util.spec_from_file_location("_picture_capture_launcher", Path("run.py"))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    log = tmp_path / "launcher.log"
-    monkeypatch.setattr(module, "_has_console", lambda: False)
-    monkeypatch.setenv("PC_LOG", str(log))
-    monkeypatch.setattr(sys, "stdout", None)
-    monkeypatch.setattr(sys, "stderr", None)
-    monkeypatch.setattr(sys, "excepthook", sys.excepthook)
-
-    module._redirect_streams_to_log()
-    print("direct pythonw launch")
-    stream = sys.stdout
-    stream.flush()
-    stream.close()
-
-    assert "direct pythonw launch" in log.read_text(encoding="utf-8")
 
 
 def test_rtl_geometry_orders_source_right_column_first_and_keeps_source_crop_pixels():

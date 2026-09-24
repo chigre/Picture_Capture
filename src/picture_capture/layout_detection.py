@@ -123,6 +123,8 @@ def _get_text_detector(settings: AppSettings) -> Any:
     # This is intentionally an assignment (not setdefault): some PaddleX builds
     # may have set it to 1 earlier in the process.
     os.environ["FLAGS_enable_pir_api"] = "0"
+    from .windows_gpu_runtime import configure_windows_nvidia_dlls
+    configure_windows_nvidia_dlls()
     try:
         from paddleocr import TextDetection
     except ImportError as exc:
