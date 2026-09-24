@@ -45,7 +45,7 @@ from .dictionary_profile import (
     DEFAULT_PROFILE_ID, PROFILE_FILENAME, available_dictionary_profiles,
     dictionary_profile_preset,
     effective_project_profile_id,
-    language_effective_settings, managed_profile_setting_names, profile_effective_settings, profile_preview_path,
+    language_effective_settings, managed_profile_setting_names, profile_effective_settings,
     profile_layout_summary, write_project_profile,
 )
 from .profile_setup import ProjectProfileWizard
@@ -2505,11 +2505,8 @@ class SettingsDialog(tk.Toplevel):
         )
         self.profile_combo.grid(row=0, column=1, sticky="ew", pady=4)
         self.profile_combo.bind("<<ComboboxSelected>>", self._on_profile_selected)
-        ttk.Button(top, text="预览经典词典…", command=self.preview_profile_examples).grid(
-            row=0, column=2, padx=(10, 0), pady=4
-        )
         ttk.Button(top, text="恢复 Profile 默认值", command=self.restore_profile_defaults).grid(
-            row=0, column=3, padx=(8, 0), pady=4
+            row=0, column=2, padx=(10, 0), pady=4
         )
 
         ttk.Label(top, text="自定义结构名称：").grid(
@@ -2809,48 +2806,6 @@ class SettingsDialog(tk.Toplevel):
         transform = "rotate_ccw90" if writing == "vertical-rl" else "rotate_cw90" if writing == "vertical-lr" else "mirror_x" if direction == "rtl" else "identity"
         self.vars["layout_transform"].set(transform)
         self._on_profile_language_changed()
-
-    def preview_profile_examples(self) -> None:
-        profile = dictionary_profile_preset(self._current_profile_key())
-        popup = tk.Toplevel(self)
-        display_name = self._profile_display_name(profile.key)
-        popup.title(f"Profile 预览 — {display_name}")
-        screen_w = max(900, popup.winfo_screenwidth())
-        screen_h = max(650, popup.winfo_screenheight())
-        popup.geometry(f"{min(980, int(screen_w * 0.76))}x{min(820, int(screen_h * 0.84))}")
-        popup.minsize(620, 520)
-        header = ttk.Frame(popup, padding=(12, 10))
-        header.pack(fill="x")
-        ttk.Label(header, text=display_name, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
-        ttk.Label(header, text=profile.description, justify="left", wraplength=900).pack(anchor="w", pady=(4, 0))
-        if not profile.examples:
-            ttk.Label(popup, text="此通用兼容 Profile 暂无内置经典样页。", padding=24).pack(fill="both", expand=True)
-            return
-        tabs = ttk.Notebook(popup)
-        tabs.pack(fill="both", expand=True, padx=12, pady=(0, 12))
-        popup._profile_photos = []
-        for example in profile.examples:
-            pane = ttk.Frame(tabs, padding=10)
-            tabs.add(pane, text=example.dictionary[:28])
-            ttk.Label(pane, text=example.dictionary, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
-            if example.note:
-                ttk.Label(pane, text=example.note).pack(anchor="w", pady=(2, 8))
-            if not example.image:
-                ttk.Label(pane, text="真实扫描仅用于本地集成回归，未打包进仓库。", foreground="#666666").pack(
-                    anchor="w", pady=12
-                )
-                continue
-            path = profile_preview_path(example.image)
-            try:
-                image = Image.open(path).convert("RGB")
-                image.thumbnail((760, 650), Image.Resampling.LANCZOS)
-                photo = ImageTk.PhotoImage(image)
-                popup._profile_photos.append(photo)
-                label = ttk.Label(pane, image=photo, anchor="center")
-                label.pack(fill="both", expand=True)
-            except Exception as exc:
-                ttk.Label(pane, text=f"预览图片无法读取：{exc}").pack(fill="both", expand=True)
-        popup.transient(self)
 
     def _refresh_sort_choices(self, initial: bool = False) -> None:
         if not hasattr(self, "sort_combo"):
