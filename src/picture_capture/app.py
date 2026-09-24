@@ -6815,7 +6815,7 @@ class PictureCaptureApp(tk.Tk):
             background=[("active", "#f3c451"), ("pressed", "#eab843")],
         )
         style.configure("PC.Tool.TButton", padding=(4, 2))
-        style.configure("PC.PageNav.TButton", padding=(4, 2))
+        style.configure("PC.PageNav.TButton", padding=(2, 2))
         style.configure("PC.Footer.TButton", padding=(7, 3))
         style.configure("PC.Compact.TEntry", padding=(4, 2))
         style.configure("PC.Footer.TEntry", padding=(4, 2))
