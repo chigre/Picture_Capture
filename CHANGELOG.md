@@ -1,5 +1,19 @@
 ## Unreleased
 
+### 坐标体系统一与旧项目迁移
+
+- 新增统一坐标契约：PDIC/PPP/最终 OCR 词头/切图框与对外训练标注使用原图像素；版式运行几何使用 canonical 全分辨率；项目级版式参数使用带参考宽度的 canonical reference 坐标；analysis/OCR-band 坐标仅限内部。
+- `parameter_display_width` 降级为旧项目迁移兼容字段；新项目和新功能不再依赖窗口宽度作为几何坐标基准。
+- 旧 display-scaled 项目在打开并获得真实页面尺寸后一次性迁移到参考页规范坐标，迁移幂等并保留旧项目实际版式含义。
+- 修复 Project Profile 页眉百分比与主界面页眉 Y 语义不一致：横排主界面显示当前原图 Y；纵排/旋转版式明确使用 canonical U/V，不再把阅读轴 V 冒充 source Y。
+- 自动版面分析可跨不同分辨率代表页聚合：先归一到统一 canonical reference width，再计算稳健中位数。
+- 修复 90° 旋转/纵排 OCR 中曾把 canonical V 与 source Y 混用的候选配对及兼容仲裁路径；最终候选同时保留明确的 canonical U/V 与 source X/Y。
+- 版面一致性 CSV 同时输出原图边界线段、当前页 canonical 值和统一参考页值；异常页判定统一使用参考页坐标。
+- 训练标记包升级坐标元数据：人工标注/PPP/页面模板物理边界使用原图坐标，版式结构显式保存 canonical transform/size/U/V，不再在同一 `layout` 对象中混入未声明的旧参数坐标。
+- Crop Plan 与 `_file_log.txt` 明确声明 `source_image_pixels`；Profile 诊断 JSON、OCR cache 与文档同步补充机器可读/可追溯的坐标空间说明。
+- 新项目版式参考宽度固定以 1400px 历史基准初始化，避免高分辨率扫描下旧默认栏宽/行高被错误缩小；实际版面分析后可更新为检测得到的参考宽度。
+- 增加坐标迁移、不同分辨率缩放、纵排旋转、OCR 配对、训练导出、切图设置与 legacy 兼容回归测试。
+
 ### Project Profile 代表页局部刷新
 
 - 【项目 Profile】手动“更换…”某一张代表页时，只异步解码并替换对应槽位，不再销毁重建其余 5 张代表页缩略图。
