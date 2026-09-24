@@ -1434,17 +1434,19 @@ class SettingsDialog(tk.Toplevel):
         original = self._load_settings_help_image(image_name) if image_name else None
 
         for label, separator, help_box in self._settings_help_image_widgets:
+            if original is None:
+                try:
+                    label.configure(image="")
+                    label.image = None
+                    label.pack_forget()
+                except tk.TclError:
+                    pass
+                continue
             try:
                 mapped = bool(help_box.winfo_ismapped())
             except tk.TclError:
                 continue
             if not mapped:
-                continue
-
-            if original is None:
-                label.configure(image="")
-                label.image = None
-                label.pack_forget()
                 continue
 
             available_width = max(180, int(help_box.winfo_width()) - 28)
@@ -1468,13 +1470,14 @@ class SettingsDialog(tk.Toplevel):
                 before=separator,
             )
 
-    def _show_setting_help(self, name: str) -> None:
+    def _show_setting_help(self, name: str, *, show_layout_image: bool = False) -> None:
         title = self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])
         body = self.SETTING_HELP.get(name, "专家参数；不确定时建议保持当前值。")
         unit = self.SETTING_UNITS.get(name, "")
         if unit:
             body += f"\n\n单位：{unit}"
-        self._show_settings_help(title, body, self.SETTING_HELP_IMAGES.get(name))
+        image_name = self.SETTING_HELP_IMAGES.get(name) if show_layout_image else None
+        self._show_settings_help(title, body, image_name)
 
     def _show_check_help(self, label: str, name: str) -> None:
         self._show_settings_help(
@@ -1586,6 +1589,7 @@ class SettingsDialog(tk.Toplevel):
         names: tuple[str, ...] | list[str],
         *,
         intro: str = "",
+        help_images: bool = False,
     ) -> ttk.LabelFrame:
         group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
         group.pack(fill="x", pady=(0, 10))
@@ -1615,7 +1619,9 @@ class SettingsDialog(tk.Toplevel):
 
             info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
             info.grid(row=row, column=2, sticky="w", padx=(8, 0))
-            callback = lambda n=name: self._show_setting_help(n)
+            callback = lambda n=name, hi=help_images: self._show_setting_help(
+                n, show_layout_image=hi
+            )
             self._bind_help_widget(label_widget, callback)
             self._bind_help_widget(control, callback)
             self._bind_help_widget(info, callback)
@@ -1932,6 +1938,7 @@ class SettingsDialog(tk.Toplevel):
             "常用版面参数",
             self.COMMON_FIELDS,
             intro="这些值同时影响普通画线、OCR画线和后续切图。能自动检测时，优先使用检测结果。",
+            help_images=True,
         )
 
         normal = self._scrollable_settings_page(normal_tab)
