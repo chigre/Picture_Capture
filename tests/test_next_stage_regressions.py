@@ -860,13 +860,24 @@ def test_headword_profile_does_not_override_confirmed_layout_or_language():
     assert settings.ocr_language == "jpn"
 
 
-def test_numbered_headword_profile_choices_keep_custom_last():
+def test_numbered_headword_profile_choices_keep_fixed_order_and_custom_last():
     choices = ordered_headword_profiles("古汉语单字结构")
     labels = [label for label, _key in choices]
     keys = [key for _label, key in choices]
-    assert keys[-1] == "custom"
-    assert labels[-1].endswith("古汉语单字结构（自定义）")
-    assert all(label.startswith(f"{index}. ") for index, label in enumerate(labels, start=1))
+    assert keys == [
+        "latin_regular",
+        "cjk_visual",
+        "numbered_prefix",
+        "marker_prefixed",
+        "custom",
+    ]
+    assert labels == [
+        "1. 常规边缘词头",
+        "2. 视觉词头（大字/括号词头）",
+        "3. 编号前缀词头",
+        "4. 符号前缀词头",
+        "5. 古汉语单字结构（自定义）",
+    ]
 
 
 def test_page_template_masks_side_content_before_geometry_without_mutating_source():
@@ -987,42 +998,37 @@ def test_project_profile_feedback_tuning_is_profile_aware():
     assert marker.paddle_min_candidate_score == base_score
 
 
-def test_project_profile_classic_headword_atlas_is_packaged():
+def test_project_profile_headword_examples_are_packaged():
     from PIL import Image
 
     root = (
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "data" / "headword_examples"
     )
-    atlas = root / "classic_headword_examples.jpg"
-    assert atlas.exists()
-    with Image.open(atlas) as image:
-        assert image.size == (720, 316)
+    expected = [
+        "headword_example_1.png",
+        "headword_example_2.png",
+        "headword_example_3.png",
+        "headword_example_4.png",
+    ]
+    for name in expected:
+        path = root / name
+        assert path.exists()
+        with Image.open(path) as image:
+            assert image.width > 0 and image.height > 0
 
-    # Curated runtime samples live in this subfolder and must be found
-    # before falling back to the atlas.
-    recommended = root / "recommended_current"
-    expected = {
-        "latin_regular_NewApproach.jpg",
-        "latin_regular_LDER.jpg",
-        "numbered_prefix_RUIGO.jpg",
-        "cjk_visual_HZYLDZD.jpg",
-        "cjk_visual_XDHYCD.jpg",
-        "cjk_visual_TimesCED.jpg",
-        "cjk_visual_shueisha.jpg",
-        "edge_visual_regular_XAHDCD.jpg",
-        "marker_prefixed_HanYi.jpg",
-    }
-    assert expected <= {path.name for path in recommended.glob("*.jpg")}
+    assert not (root / "classic_headword_examples.jpg").exists()
+    assert not (root / "recommended_current").exists()
+    assert not (root / "manifest.csv").exists()
+    assert not (root / "manifest.json").exists()
 
     pyproject = (
         Path(__file__).resolve().parents[1] / "pyproject.toml"
     ).read_text(encoding="utf-8")
-    assert "data/headword_examples/recommended_current/*.jpg" in pyproject
+    assert "data/headword_examples/*.png" in pyproject
+    assert "data/headword_examples/recommended_current/" not in pyproject
     assert "data/profile_previews/" not in pyproject
     assert "data/headword_examples/extended/" not in pyproject
-    assert not (root / "contact_sheet.jpg").exists()
-    assert not (root / "extended").exists()
 
     dictionary_source = (
         Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "dictionary_profile.py"
@@ -1034,7 +1040,6 @@ def test_project_profile_classic_headword_atlas_is_packaged():
     assert "profile_preview_dir" not in dictionary_source
     assert "profile_preview_path" not in app_source
     assert "preview_profile_examples" not in app_source
-
 
 
 def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns():
@@ -1068,7 +1073,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert 'text="更换…"' in text
     assert '"页面模板即时预览"' in text
     assert 'text="◀ 上一张"' in text and 'text="下一张 ▶"' in text
-    assert '"经典词头局部样例"' in text
+    assert '"词头类型样例"' in text
     assert "self._build_right_image_workspace(right_panel)" in text
     assert 'ttk.Panedwindow(outer, orient="horizontal")' in text
     assert "self.profile_paned.add(left_panel, weight=40)" in text
@@ -1125,9 +1130,14 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "target_width = max(320, int(preview_width))" in text
     assert "source.resize(" in text
     assert "right_width = int(getattr(self, \"right_canvas\", self).winfo_width())" in text
-    assert "HEADWORD_EXAMPLE_ATLAS_CROPS" in text
-    assert '"classic_headword_examples.jpg"' in text
-    assert 'root / "recommended_current"' in text
+    assert "HEADWORD_EXAMPLE_FILES" in text
+    assert '"headword_example_1.png"' in text
+    assert '"headword_example_2.png"' in text
+    assert '"headword_example_3.png"' in text
+    assert '"headword_example_4.png"' in text
+    assert "HEADWORD_EXAMPLE_ATLAS_CROPS" not in text
+    assert '"classic_headword_examples.jpg"' not in text
+    assert "recommended_current" not in text
     assert 'root / "extended"' not in text
     assert "fill=(255, 0, 0, 255), width=1" in text
     assert "允许的词头结构（决定哪些 parser 通道开放）" in text

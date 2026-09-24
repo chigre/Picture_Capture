@@ -52,10 +52,6 @@ picture_capture = [
     "data/headword_examples/*.png",
     "data/headword_examples/*.jpeg",
     "data/headword_examples/*.webp",
-    "data/headword_examples/recommended_current/*.jpg",
-    "data/headword_examples/recommended_current/*.png",
-    "data/headword_examples/recommended_current/*.jpeg",
-    "data/headword_examples/recommended_current/*.webp",
 ]
 
 [tool.ruff]

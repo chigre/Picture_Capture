@@ -1,12 +1,10 @@
-# Project Profile 经典词头局部样例包
+# Headword examples
 
-本目录保存 Project Profile 向导实际使用的经典词头局部样例。
+本目录保存 Project Profile 向导中 1–4 类内置词头结构的固定样例图：
 
-## recommended_current
-当前 9 张图片与 `dictionary_profiles_v3.json` 中的 `validated_examples` 一一对应。程序会先兼容查找 `headword_examples/` 根目录中的同名资源，再读取 `recommended_current/`；若单张样例缺失，则回退到 `classic_headword_examples.jpg` atlas 裁切。
+- `headword_example_1.png`：常规边缘词头
+- `headword_example_2.png`：视觉词头（大字/括号词头）
+- `headword_example_3.png`：编号前缀词头
+- `headword_example_4.png`：符号前缀词头
 
-## 原则
-- 均为真实测试词典页面的局部裁切，不使用整页缩略图替代。
-- 每张保留 1–数个完整词头及少量相邻释义，使“哪里是新词条”一眼可见。
-- 自定义结构不放固定经典样例，因为它定义上就是预设无法覆盖的版式。
-- `manifest.csv/json` 仅记录当前实际保留并可被程序使用的 `recommended_current` 样例及来源。
+第 5 类“自定义结构”不绑定内置样例。

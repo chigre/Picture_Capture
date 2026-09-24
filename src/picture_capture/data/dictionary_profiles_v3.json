@@ -4,9 +4,7 @@
   "default_headword_profile": "custom",
   "headword_profiles": {
     "latin_regular": {
-      "parser_modes": [
-        "latin"
-      ],
+      "parser_modes": [],
       "require_visual_cue": true,
       "settings": {
         "paddle_band_width_ratio": 100,
@@ -82,8 +80,8 @@
           "¶"
         ]
       },
-      "display_name": "拉丁字母常规词头",
-      "description": "粗体、字号、音标、词性或变形提示组合；语言与版面独立设置。",
+      "display_name": "常规边缘词头",
+      "description": "词头位于正文栏起始边，以边缘位置及字号、粗体、词后结构等线索综合判断。",
       "family": "latin_regular",
       "validated_examples": [
         "NewApproach",
@@ -362,8 +360,8 @@
           "["
         ]
       },
-      "display_name": "CJK 大字/括号词头",
-      "description": "组合大字单字、括号复合词、可选拼音和视觉强调 cue。",
+      "display_name": "视觉词头（大字/括号词头）",
+      "description": "以大字单字、【】/〔〕/［］括号词及明显视觉强调作为词头提示。",
       "family": "cjk_visual",
       "validated_examples": [
         "HZYLDZD",
@@ -466,43 +464,6 @@
       "description": "保留高级参数和自定义规则，不绑定具体语言、方向或栏数。",
       "family": "custom",
       "validated_examples": []
-    },
-    "edge_visual_regular": {
-      "parser_modes": [],
-      "require_visual_cue": true,
-      "settings": {
-        "paddle_band_width_ratio": 100,
-        "paddle_band_left_margin": 12,
-        "paddle_left_tolerance": 24,
-        "paddle_height_ratio": 1.05,
-        "paddle_boldness_ratio": 1.12,
-        "paddle_gap_ratio": 0.7,
-        "paddle_min_candidate_score": 1,
-        "paddle_require_pos_or_symbol": true,
-        "paddle_remove_syllable_separators": true,
-        "paddle_auto_header_rule": true,
-        "paddle_refine_separator_y": true,
-        "paddle_separator_search_ratio": 0.3,
-        "paddle_separator_band_radius": 2,
-        "paddle_separator_safety_px": 2,
-        "paddle_separator_roi_width_ratio": 60,
-        "paddle_separator_column_margin": 8,
-        "paddle_pos_search_chars": 160
-      },
-      "grammar": {
-        "part_of_speech": [],
-        "usage_and_region": [],
-        "subject_domains": [],
-        "article_relations": [],
-        "internal_not_new_entry": [],
-        "entry_markers": []
-      },
-      "display_name": "常规边缘/视觉词头",
-      "description": "脚本中立的词条起始边、粗体、字号与空白结构策略；不假定拉丁词性语法。",
-      "family": "edge_visual_regular",
-      "validated_examples": [
-        "XAHDCD"
-      ]
     },
     "legacy_spanish_structured": {
       "parser_modes": [
@@ -925,7 +886,7 @@
       }
     },
     "XAHDCD": {
-      "headword_profile": "edge_visual_regular",
+      "headword_profile": "latin_regular",
       "headword_features": [],
       "language": "ara",
       "layout": {
@@ -965,7 +926,10 @@
         "columns_policy": "fixed",
         "column_separator": "absent",
         "analysis_threshold_mode": "auto"
-      }
+      },
+      "parser_modes": [
+        "latin"
+      ]
     },
     "lder_single": {
       "headword_profile": "latin_regular",
@@ -978,7 +942,10 @@
         "columns_policy": "fixed",
         "column_separator": "absent",
         "analysis_threshold_mode": "auto"
-      }
+      },
+      "parser_modes": [
+        "latin"
+      ]
     },
     "cjk_etymology_large_head_2col": {
       "headword_profile": "cjk_visual",
@@ -1050,7 +1017,7 @@
       }
     },
     "arabic_rtl_bilingual_2col": {
-      "headword_profile": "edge_visual_regular",
+      "headword_profile": "latin_regular",
       "headword_features": [],
       "language": "ara",
       "layout": {
@@ -1088,7 +1055,10 @@
         "columns_policy": "fixed",
         "column_separator": "absent",
         "analysis_threshold_mode": "auto"
-      }
+      },
+      "parser_modes": [
+        "latin"
+      ]
     },
     "latin_pos_classic": {
       "headword_profile": "latin_regular",
@@ -1105,6 +1075,9 @@
       "supported_languages": [
         "por",
         "ita"
+      ],
+      "parser_modes": [
+        "latin"
       ]
     },
     "latin_numbered_pos": {
@@ -1274,6 +1247,10 @@
         "column_separator": "auto",
         "analysis_threshold_mode": "auto"
       }
+    },
+    "edge_visual_regular": {
+      "headword_profile": "latin_regular",
+      "headword_features": []
     }
   }
 }
