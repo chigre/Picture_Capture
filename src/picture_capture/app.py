@@ -1849,9 +1849,40 @@ class SettingsDialog(tk.Toplevel):
         "paddle_alignment_y_tolerance_ratio": "Paddle 与 Tesseract 候选按 Y 位置配对时允许的差异。",
         "paddle_alignment_min_similarity": "两个 OCR 词头要多相似才视为同一候选。",
         "paddle_conflict_review_margin": "两个 OCR 质量接近到什么程度时标记为需要人工复核。",
-        "paddle_headword_regex": "专家项：定义什么文字形态可以作为词头。普通项目应优先通过 Project Profile 调整，不直接改正则。",
-        "paddle_pos_regex": "专家项：用于识别词性提示。只有特殊词典缩写体系无法覆盖时才修改。",
-        "paddle_special_symbol_regex": "专家项：定义词头前允许的特殊符号。",
+        "paddle_headword_regex": (
+            "作用：从每个合并后的 OCR 候选行开头提取 lemma（词头文字）。匹配成功后，"
+            "若正则含捕获组，程序取第 1 个捕获组作为原始词头；它只是“词头像不像一个合法字符串”"
+            "这一关，最终是否接受仍会结合栏左位置、词性/变形/符号、视觉分数和 Profile 规则。\n\n"
+            "默认规则：允许行首空格及可选的 • ◆ ◇ ► ▶ * † ‡ § ¶；允许前/后置连字符、"
+            "Unicode 字母、音节分隔点 · • ∙ ‧，并容忍 OCR 把分隔点识成 . : + -；也允许 ' / ’ "
+            "连接的词形。例如“• a·ga·rrón s. m.”会提取 a·ga·rrón，“anti- adj.”会提取 anti-。\n\n"
+            "修改时：第 1 捕获组应只包住 lemma，不要把逗号、词性或释义正文一起吞进去。写得过宽会把"
+            "正文/POS 并入词头并增加误检；写得过窄会让合法词头在后续评分前就被淘汰。未自定义默认规则时，"
+            "Latin Profile 会把通用 Unicode 字母范围进一步收窄为拉丁字母；非拉丁脚本优先由对应 Profile/"
+            "解析器处理。通常先改 Project Profile 或词头过滤规则，只有“词头字符结构”确实不同才改这里。"
+        ),
+        "paddle_pos_regex": (
+            "作用：识别词头后面的 POS（词性）/语法标签，把它作为“这一行确实是词条起始行”的强结构证据；"
+            "它不负责提取 lemma。搜索范围还受【AI 词性搜索字符数】限制，因此不会无限扫描整段释义。\n\n"
+            "默认兼容规则可识别 s.、s. m.、s. f.、s. amb.、s. pl.、adj.、adj. inv.、adv.、"
+            "v./y.、v. prnl.、prep.、conj.、pron. 及其 indef./dem./pers./rel./interr./"
+            "exclam./poses. 子类，以及 det.、interj.、art.、num.、loc.、superlat. 等；y. 是对 "
+            "OCR 把 v. 误识成 y. 的容错。\n\n"
+            "重要：新版主程序通常会加载 Dictionary Profile；只要存在活动 Profile，实际 POS 正则由该 "
+            "Profile 的 pos_labels 动态生成，这个字段主要用于兼容/低层 fallback。若当前项目已经有 Profile，"
+            "要新增或删减词性缩写，应优先修改 Profile grammar/pos_labels，而不是改这里。只有确认当前调用路径"
+            "没有由 Profile 接管 POS 时，本字段才直接生效。"
+        ),
+        "paddle_special_symbol_regex": (
+            "作用：判断 OCR 行开头是否出现“可作为新词条结构证据”的项目符号。它只提供一项辅助证据，"
+            "不会因为命中符号就无条件把该行接受为词头；仍需结合 lemma、左缘位置和其他规则。\n\n"
+            "默认规则只在行首（允许前导空格）识别 • ◆ ◇ ► ▶ * † ‡ § ¶。例如“◆ palabra ...”会得到"
+            "特殊符号提示，而“正文中间出现 ◆”不会命中。\n\n"
+            "修改时只加入真正表示“新词条/新条目起始”的符号。不要把词条内部的释义标记、交叉引用符号或"
+            "文章内部结构符号随意加入，否则正文行会获得错误的词条证据。当前 Profile 还能单独定义内部文章"
+            "符号；例如某些词典中的 ■、□、||、~、→ 会由 Profile 逻辑处理，它们与这里的“新词条证据”不是"
+            "同一概念。"
+        ),
         "ocr_executable": "Tesseract 可执行文件位置。只有启用 Tesseract 对照/补漏时需要正确配置。",
         "paddle_ocr_version": "PaddleOCR 模型系列。项目稳定后不要随意切换，否则建议重新 OCR。",
         "tesseract_language": "Tesseract 使用的语言包。通常跟随 OCR 语言自动设置。",
