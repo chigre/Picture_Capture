@@ -539,11 +539,19 @@ def _review_line_box(
             regular_settings.character_height = _effective_review_regular_crop_height(settings)
             return line_box(entry, geometry, image, regular_settings)
         left, _old_top, right, _bottom = line_box(entry, geometry, image, settings)
-        scale = parameter_scale(image, settings)
-        half_spacing = round(0.5 * max(0, int(settings.row_padding)) / scale)
+        canonical_width = geometry.transform.canonical_size(image.size)[0]
+        row_padding = stored_geometry_to_canonical(
+            max(0, int(settings.row_padding)), canonical_width, settings,
+        )
+        regular_height = stored_geometry_to_canonical(
+            _effective_review_regular_crop_height(settings),
+            canonical_width,
+            settings,
+        )
+        half_spacing = round(0.5 * row_padding)
+        # Identity layout: source Y and canonical V are the same coordinate.
         top = max(geometry.top, int(entry.y) - half_spacing)
-        height = round(_effective_review_regular_crop_height(settings) / parameter_scale(image, settings))
-        return left, top, right, min(image.height, top + max(1, height))
+        return left, top, right, min(image.height, top + max(1, regular_height))
 
     single_settings = replace(settings)
     single_settings.character_height = _effective_review_single_cjk_line_height(settings)
