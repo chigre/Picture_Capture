@@ -253,9 +253,19 @@ def apply_reading_choice(settings: AppSettings, choice: str) -> None:
 
 
 def ordered_headword_profiles(custom_name: str = "") -> list[tuple[str, str]]:
-    """Return numbered UI labels with custom permanently placed last."""
-    profiles = list(available_dictionary_profiles())
-    profiles.sort(key=lambda profile: profile.key == "custom")
+    """Return the five user-facing headword types in their fixed UI order."""
+    order = (
+        "latin_regular",
+        "cjk_visual",
+        "numbered_prefix",
+        "marker_prefixed",
+        "custom",
+    )
+    rank = {key: index for index, key in enumerate(order)}
+    profiles = sorted(
+        available_dictionary_profiles(),
+        key=lambda profile: rank.get(profile.key, len(order)),
+    )
     result: list[tuple[str, str]] = []
     for number, profile in enumerate(profiles, start=1):
         label = profile.display_name
