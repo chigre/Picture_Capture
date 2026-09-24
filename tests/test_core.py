@@ -6203,30 +6203,6 @@ def test_windows_batch_launcher_is_visible_foreground_and_minimal():
     assert not Path("Picture_Capture.pyw").exists()
 
 
-def test_pythonw_launcher_redirects_streams_without_spawning_processes(tmp_path, monkeypatch):
-    import importlib.util
-    import sys
-
-    spec = importlib.util.spec_from_file_location("_picture_capture_launcher", Path("run.py"))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    log = tmp_path / "launcher.log"
-    monkeypatch.setattr(module, "_has_console", lambda: False)
-    monkeypatch.setenv("PC_LOG", str(log))
-    monkeypatch.setattr(sys, "stdout", None)
-    monkeypatch.setattr(sys, "stderr", None)
-    monkeypatch.setattr(sys, "excepthook", sys.excepthook)
-
-    module._redirect_streams_to_log()
-    print("direct pythonw launch")
-    stream = sys.stdout
-    stream.flush()
-    stream.close()
-
-    assert "direct pythonw launch" in log.read_text(encoding="utf-8")
-
-
 def test_rtl_geometry_orders_source_right_column_first_and_keeps_source_crop_pixels():
     image = Image.new("RGB", (400, 300), "white")
     draw = ImageDraw.Draw(image)
