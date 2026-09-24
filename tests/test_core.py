@@ -6167,8 +6167,12 @@ def test_windows_batch_launcher_uses_direct_pythonw_without_hidden_relaunch():
 
     assert 'start "" ".venv\\Scripts\\pythonw.exe" "run.py"' in batch
     assert 'fc /b "uv.lock" "%PC_LOCK_MARKER%"' in batch
+    assert 'call :prepare_environment' in batch
+    assert ':prepare_environment' in batch
     assert '.picture_capture_ocr_extra' in batch
+    assert 'set /p PC_OCR_EXTRA=<".picture_capture_ocr_extra"' in batch
     assert 'uv sync --locked --extra "%PC_OCR_EXTRA%"' in batch
+    assert 'echo [Picture Capture] OCR profile: %PC_OCR_EXTRA%' in batch
     assert "subprocess" not in run_py
     assert "Popen" not in run_py
     assert "CREATE_NO_WINDOW" not in run_py
