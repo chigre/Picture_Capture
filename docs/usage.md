@@ -105,7 +105,7 @@ v2.4 已移除 `projection` / `hybrid` 及投影空白高度、投影阈值系�
  Dictionary Profile + Grammar Parser
 lemma / variant / plural / POS / usage / definition
                  ↓
-      SequenceMatcher + Y 对齐
+      SequenceMatcher + 阅读轴 V 对齐
                  ↓
        Multi-OCR Arbitration
                  ↓
@@ -120,7 +120,7 @@ lemma / variant / plural / POS / usage / definition
 
 ### PaddleOCR 词头识别
 
-OCR词头识别阶段仍只截取各栏左侧候选带；只有用户主动点击“检测版面”时才对整页运行 detection-only 文本框检测。候选带随“倾斜/变形”路径变化并被拉直，因此即使词头列呈斜线或缓慢弯曲，OCR 仍接收到近似竖直的窄图。每个识别框的 Y 坐标与原图保持一一对应，筛选通过后可直接生成 `.pdic` 画线。
+OCR词头识别阶段仍只截取各栏左侧候选带；只有用户主动点击“检测版面”时才对整页运行 detection-only 文本框检测。候选带随“倾斜/变形”路径变化并被拉直，因此即使词头列呈斜线或缓慢弯曲，OCR 仍接收到近似竖直的窄图。OCR box 本身属于候选带局部坐标；程序随后显式换算为 canonical U/V 和原图 source X/Y，最终 `.pdic` 只保存原图像素坐标。
 
 【设置中心】中按任务调整：
 
@@ -149,7 +149,7 @@ v1.5.9 起，词头结构解析会在正则之后再做一层语法校正：旧/
 
 - `v2 双OCR自动融合决策` 默认开启；即使“仅对照”未勾选，只要本机可找到 Tesseract，v2 会运行第二 OCR 参与 fusion。Tesseract 缺失/失败不会阻止 Paddle 结果。
 - `*_ocr_diagnostics.txt` 仍严格固定为 12 列；parser stage/trace/bug type 写在最后的 `reason` 字段，因此旧 TSV 工作流不受影响。
-- `*_ocr_comparison.txt` 仍严格固定 27 列，但配对算法已从最近 Y 升级为词头序列 + Y 双重约束。
+- `*_ocr_comparison.txt` 仍严格固定 27 列，但配对算法按词头序列 + canonical 阅读轴 V 双重约束，不使用旋转后失真的 source Y 做配对。
 - `*_ocr_engines.tsv` 是固定13列长表，同一候选的 Paddle/Tesseract/Lens 各占一行；`*_fusion.tsv` 保存最终选择，新增 OCR 引擎不再迫使旧双引擎表无限加列。
 - `*_issues.tsv` 是固定16列人工复核入口，包含三引擎 lemma/text；`_quality_summary.tsv` 增加 Lens 使用数和多引擎多数一致数。
 - 主图右边的复选框对应栏左 OCR 候选行。勾选被自动拒绝的行会立即创建词条线和可编辑 lemma 文本框；取消则从最终结果删除。
