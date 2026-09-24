@@ -420,12 +420,16 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     button_start = text.index("    def _sidebar_action_button(")
     button_end = text.index("    def _section_frame(", button_start)
     button = text[button_start:button_end]
+    assert 'if role == "neutral":' in button
+    assert 'return ttk.Button(' in button
+    assert 'style="PC.Compact.TButton"' in button
     assert 'border = colors["button_border"]' in button
     assert 'relief="flat"' in button
     assert "bd=0" in button
     assert "highlightthickness=1" in button
     assert "highlightbackground=border" in button
     assert "highlightcolor=border" in button
+    assert '"PC.EditActive.TButton"' in styles
 
 
 def test_binary_preview_and_font_scaling_are_display_only():
