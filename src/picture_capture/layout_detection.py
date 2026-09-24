@@ -12,7 +12,11 @@ from PIL import Image, ImageFilter, ImageOps
 from .models import AppSettings
 from .image_utils import normalize_page_rgb
 from .layout_transform import LayoutTransform
-from .processing import parameter_scale
+from .coordinate_space import (
+    CANONICAL_COORDINATE_SPACE,
+    geometry_uses_canonical_pixels,
+    legacy_parameter_scale,
+)
 
 
 @dataclass(slots=True)
@@ -37,6 +41,7 @@ class LayoutConsistencyEstimate:
     header_rule_y: int | None
     body_left_x: int | None
     is_blank: bool = False
+    coordinate_space: str = CANONICAL_COORDINATE_SPACE
 
 
 @dataclass(frozen=True, slots=True)
@@ -712,8 +717,12 @@ def _projection_layout_estimate(source: Image.Image, settings: AppSettings) -> L
             widths.append(round(float(np.median(widths))))
 
     back = 1.0 / resize_scale
-    display = parameter_scale(source, settings)
-    factor = back * display
+    output_scale = (
+        1.0
+        if geometry_uses_canonical_pixels(settings)
+        else legacy_parameter_scale(source.width, settings)
+    )
+    factor = back * output_scale
     return LayoutEstimate(
         columns=max(1, min(6, len(starts))),
         start_y=max(0, round(start_y_small * factor)),
@@ -753,10 +762,15 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
             boxes = _boxes_from_detection(results[0], analysis.width, analysis.height)
             if boxes:
                 source_gray = np.asarray(ImageOps.grayscale(analysis), dtype=np.uint8)
+                output_scale = (
+                    1.0
+                    if geometry_uses_canonical_pixels(settings)
+                    else legacy_parameter_scale(analysis.width, settings)
+                )
                 estimate = infer_layout_from_boxes(
                     boxes,
                     analysis.size,
-                    display_scale=parameter_scale(analysis, settings),
+                    display_scale=output_scale,
                     ink_mask=_analysis_ink_mask(source_gray, settings),
                     columns_policy=settings.layout_columns_policy,
                     fixed_columns=settings.columns,
@@ -804,20 +818,44 @@ def detect_layout_consistency(image: Image.Image, settings: AppSettings) -> Layo
     active_columns = int(np.count_nonzero(ink.mean(axis=0) > 0.002))
     is_blank = float(ink.mean()) < 0.0008 or active_rows < 6 or active_columns < 12
     if is_blank:
-        return LayoutConsistencyEstimate(None, None, is_blank=True)
-    parameter_to_source = 1.0 / max(0.01, parameter_scale(source, settings))
-    header_limit = min(ink.shape[0], max(1, round(settings.start_y * parameter_to_source * scale)))
+        return LayoutConsistencyEstimate(
+            None, None, is_blank=True,
+            coordinate_space=CANONICAL_COORDINATE_SPACE,
+        )
+    if geometry_uses_canonical_pixels(settings):
+        start_y_canonical = max(0, int(settings.start_y))
+    else:
+        start_y_canonical = round(
+            int(settings.start_y)
+            / max(0.01, legacy_parameter_scale(source.width, settings))
+        )
+    header_limit = min(
+        ink.shape[0], max(1, round(start_y_canonical * scale))
+    )
     header_density = ink[:header_limit].mean(axis=1)
     header_rule_y: int | None = None
     if header_density.size and float(header_density.max()) >= 0.12:
-        header_rule_y = round(int(np.argmax(header_density)) / scale * parameter_scale(source, settings))
+        header_rule_y = round(int(np.argmax(header_density)) / scale)
 
     body = ink[header_limit:, :]
     body_left_x: int | None = None
     if body.size:
         column_density = body.mean(axis=0)
-        threshold = max(0.002, float(np.percentile(column_density[column_density > 0], 20)) * 0.35) if np.any(column_density > 0) else 0.002
+        threshold = (
+            max(
+                0.002,
+                float(np.percentile(column_density[column_density > 0], 20))
+                * 0.35,
+            )
+            if np.any(column_density > 0)
+            else 0.002
+        )
         active = np.flatnonzero(column_density > threshold)
         if active.size:
-            body_left_x = round(int(active[0]) / scale * parameter_scale(source, settings))
-    return LayoutConsistencyEstimate(header_rule_y=header_rule_y, body_left_x=body_left_x, is_blank=False)
+            body_left_x = round(int(active[0]) / scale)
+    return LayoutConsistencyEstimate(
+        header_rule_y=header_rule_y,
+        body_left_x=body_left_x,
+        is_blank=False,
+        coordinate_space=CANONICAL_COORDINATE_SPACE,
+    )
