@@ -4772,7 +4772,10 @@ def _review_candidates_same_cjk_glyph(left: dict[str, Any], right: dict[str, Any
     lh = _review_candidate_box_height(left)
     rh = _review_candidate_box_height(right)
     max_h = max(lh, rh, 1)
-    dy = abs(int(left.get("source_y", 0)) - int(right.get("source_y", 0)))
+    dy = abs(
+        int(left.get("canonical_v", left.get("source_y", 0)))
+        - int(right.get("canonical_v", right.get("source_y", 0)))
+    )
 
     box_same_row = False
     if isinstance(lbox, (list, tuple)) and len(lbox) == 4 and isinstance(rbox, (list, tuple)) and len(rbox) == 4:
@@ -4848,7 +4851,10 @@ def _review_candidates_same_cjk_compound(left: dict[str, Any], right: dict[str, 
     lh = _review_candidate_box_height(left)
     rh = _review_candidate_box_height(right)
     max_h = max(lh, rh, 1)
-    dy = abs(int(left.get("source_y", 0)) - int(right.get("source_y", 0)))
+    dy = abs(
+        int(left.get("canonical_v", left.get("source_y", 0)))
+        - int(right.get("canonical_v", right.get("source_y", 0)))
+    )
 
     if not (isinstance(lbox, (list, tuple)) and len(lbox) == 4 and isinstance(rbox, (list, tuple)) and len(rbox) == 4):
         return dy <= max(6, round(max_h * 0.42))
@@ -4927,7 +4933,10 @@ def _single_cjk_duplicate_pair(left: dict[str, Any], right: dict[str, Any]) -> b
     if not (_candidate_has_single_cjk_identity(left) and _candidate_has_single_cjk_identity(right)):
         return False
     normal_line = max(_candidate_line_height(left), _candidate_line_height(right), 1.0)
-    dy = abs(int(left.get("source_y", 0)) - int(right.get("source_y", 0)))
+    dy = abs(
+        int(left.get("canonical_v", left.get("source_y", 0)))
+        - int(right.get("canonical_v", right.get("source_y", 0)))
+    )
     tolerance = max(4, round(normal_line * _SINGLE_CJK_LINE_DEDUP_RATIO))
     return dy <= tolerance and _boxes_same_large_cjk_region(left, right)
 
@@ -4971,9 +4980,19 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
         left: dict[str, Any], right: dict[str, Any], *, single_cjk_special: bool = False,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         keeper, loser = (left, right) if _review_candidate_priority(left) >= _review_candidate_priority(right) else (right, left)
-        # v2.8.13 refined separators deliberately bias downward toward the
-        # headword.  Deduplication must not undo that by restoring the upper Y.
-        keeper["source_y"] = max(int(left.get("source_y", 0)), int(right.get("source_y", 0)))
+        # Keep the lower/safer reading-axis V, but copy the complete
+        # canonical+source point. Taking max(source_y) is wrong after rotation.
+        left_v = int(left.get("canonical_v", left.get("source_y", 0)))
+        right_v = int(right.get("canonical_v", right.get("source_y", 0)))
+        position_row = left if left_v >= right_v else right
+        for key in (
+            "canonical_u", "canonical_v", "source_x", "source_y",
+            "refined_source_y", "coarse_canonical_v", "coarse_source_x",
+            "coarse_source_y", "anchor_canonical_v", "anchor_source_x",
+            "anchor_source_y",
+        ):
+            if position_row.get(key) is not None:
+                keeper[key] = position_row.get(key)
         for engine in ("paddle", "tesseract", "lens"):
             if not (keeper.get(engine, {}) or {}).get("y") and (loser.get(engine, {}) or {}).get("y") is not None:
                 keeper[engine] = dict(loser.get(engine, {}) or {})
@@ -4995,11 +5014,18 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
         return keeper, loser
 
     for rows in by_column.values():
-        rows.sort(key=lambda item: int(item.get("source_y", 0)))
+        rows.sort(
+            key=lambda item: int(
+                item.get("canonical_v", item.get("source_y", 0))
+            )
+        )
         i = 0
         while i < len(rows) - 1:
             left, right = rows[i], rows[i + 1]
-            dy = abs(int(left.get("source_y", 0)) - int(right.get("source_y", 0)))
+            dy = abs(
+        int(left.get("canonical_v", left.get("source_y", 0)))
+        - int(right.get("canonical_v", right.get("source_y", 0)))
+    )
             single_cjk_special = _single_cjk_duplicate_pair(left, right)
             tolerance = _threshold(left, right)
             if not single_cjk_special and dy > tolerance:
@@ -5010,7 +5036,11 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
             )
             merged += 1
             rows.remove(loser)
-            rows.sort(key=lambda item: int(item.get("source_y", 0)))
+            rows.sort(
+            key=lambda item: int(
+                item.get("canonical_v", item.get("source_y", 0))
+            )
+        )
             i = max(0, i - 1)
     return merged
 
@@ -5020,8 +5050,8 @@ def _entries_from_review_candidates(review_candidates: list[dict[str, Any]]) -> 
     selected = [item for item in review_candidates if item.get("selected")]
     selected.sort(key=lambda item: (
         int(item.get("column", 0)),
-        int(item.get("source_y", 0)),
-        int(item.get("source_x", 0)),
+        int(item.get("canonical_v", item.get("source_y", 0))),
+        int(item.get("canonical_u", item.get("source_x", 0))),
     ))
     for item in selected:
         entries.append(Entry(
