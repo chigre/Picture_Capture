@@ -409,12 +409,20 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert 'self._sidebar_action_button(row, text, command, role=role)' in actions
     assert '"primary" if text == "运行OCR画线"' in actions
     assert '"success" if text == "保存当前页"' in actions
-    assert '"danger_soft" if text in {"清除画线", "清除文本"}' in actions
-    assert '"refine_soft" if text == "精修画线"' in actions
-    assert '"compare_soft" if text == "新旧比较"' in actions
     assert '"review_soft" if text == "词条校对"' in actions
+    assert '"danger_soft"' not in actions
+    assert '"refine_soft"' not in actions
+    assert '"compare_soft"' not in actions
     assert '("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)' in actions
     assert '"review_soft": "#dceeff"' in styles
+    assert '"button_border": "#b9c1cb"' in styles
+
+    button_start = text.index("    def _sidebar_action_button(")
+    button_end = text.index("    def _section_frame(", button_start)
+    button = text[button_start:button_end]
+    assert 'relief="solid"' in button
+    assert "bd=1" in button
+    assert "highlightthickness=0" in button
 
 
 def test_binary_preview_and_font_scaling_are_display_only():
