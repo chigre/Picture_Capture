@@ -719,7 +719,7 @@ class ProcessingTests(unittest.TestCase):
         gray[58:76, 20:285] = 35
         refined, details = refine_separator_y(
             gray, coarse_y=50, line_height=24, settings=settings,
-            source_per_display_pixel=1.0,
+            reference_to_canonical_scale=1.0,
         )
         self.assertGreater(refined, 50)
         self.assertLess(refined, 58)
@@ -2448,12 +2448,12 @@ def test_v2817_separator_safety_is_configurable():
     settings.paddle_separator_safety_px = 2
     y2, d2 = refine_separator_y_adaptive(
         gray, coarse_y=70, reference_line_height=20, settings=settings,
-        source_per_display_pixel=1.0, lower_bound=0, content_top=70,
+        reference_to_canonical_scale=1.0, lower_bound=0, content_top=70,
     )
     settings.paddle_separator_safety_px = 6
     y6, d6 = refine_separator_y_adaptive(
         gray, coarse_y=70, reference_line_height=20, settings=settings,
-        source_per_display_pixel=1.0, lower_bound=0, content_top=70,
+        reference_to_canonical_scale=1.0, lower_bound=0, content_top=70,
     )
 
     assert d2["configured_safety_pixels"] == 2
@@ -2476,7 +2476,7 @@ def test_v2817_separator_safety_scales_with_page_geometry():
     settings.paddle_separator_safety_px = 3
     _, diag = refine_separator_y_adaptive(
         gray, coarse_y=90, reference_line_height=24, settings=settings,
-        source_per_display_pixel=2.0, lower_bound=0, content_top=90,
+        reference_to_canonical_scale=2.0, lower_bound=0, content_top=90,
     )
     assert diag["configured_safety_pixels"] == 3
     assert diag["safety_pixels"] == 6
@@ -2601,7 +2601,7 @@ def test_v2819_adaptive_refine_can_relocate_box_top_from_previous_line():
     gray[39:61, 8:70] = 0
     refined, meta = refine_separator_y_adaptive(
         gray, coarse_y=24, reference_line_height=24, settings=settings,
-        source_per_display_pixel=1.0, lower_bound=0, content_top=24,
+        reference_to_canonical_scale=1.0, lower_bound=0, content_top=24,
     )
     assert meta["relocated_from_prior_ink"] is True
     assert 38 <= meta["current_ink_onset"] <= 41
