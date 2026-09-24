@@ -221,7 +221,7 @@ def _estimate_column_paths(
     top_analysis: int,
     bottom_analysis: int,
     settings: AppSettings,
-    parameter_to_analysis: float,
+    geometry_to_analysis: float,
 ) -> list[ColumnPath]:
     """Track each column's left text edge with piecewise-linear anchors.
 
@@ -237,21 +237,34 @@ def _estimate_column_paths(
             for x in starts_analysis
         ]
 
+    canonical_width = max(1, round(analysis.width / max(scale, 1e-9)))
+    body_indent = stored_geometry_to_canonical(
+        settings.body_indent, canonical_width, settings,
+    )
+    block_height_value = stored_geometry_to_canonical(
+        settings.column_track_block_height, canonical_width, settings,
+    )
+    radius_value = stored_geometry_to_canonical(
+        settings.column_track_radius, canonical_width, settings,
+    )
+    max_step_value = stored_geometry_to_canonical(
+        settings.column_track_max_step, canonical_width, settings,
+    )
     dark = _adaptive_dark_mask(
         ImageOps.grayscale(analysis),
-        round(_COLUMN_TRACK_ADAPTIVE_BLOCK * parameter_to_analysis),
+        max(3, round(_COLUMN_TRACK_ADAPTIVE_BLOCK * geometry_to_analysis)),
         _COLUMN_TRACK_ADAPTIVE_C,
     )
     height, width = dark.shape
-    block_height = max(30, round(settings.column_track_block_height * parameter_to_analysis))
-    radius = max(8, round(settings.column_track_radius * parameter_to_analysis))
+    block_height = max(30, round(block_height_value * geometry_to_analysis))
+    radius = max(8, round(radius_value * geometry_to_analysis))
     paths: list[ColumnPath] = []
 
     for nominal_x, column_width in zip(starts_analysis, widths_analysis):
         search_left = max(0, nominal_x - radius)
         search_right = min(
             width,
-            nominal_x + radius + max(6, round(settings.body_indent * parameter_to_analysis * 0.5)),
+            nominal_x + radius + max(6, round(body_indent * geometry_to_analysis * 0.5)),
         )
         anchors_y: list[int] = []
         raw_x: list[int | None] = []
@@ -308,7 +321,7 @@ def _estimate_column_paths(
                 filled.append(int(raw_x[nearest]))  # type: ignore[arg-type]
         filled = _smooth_track(
             filled,
-            max(1, round(settings.column_track_max_step * parameter_to_analysis)),
+            max(1, round(max_step_value * geometry_to_analysis)),
         )
         source_points = [
             (round(y / scale), round(x / scale)) for y, x in zip(anchors_y, filled)
