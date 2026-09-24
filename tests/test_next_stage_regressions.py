@@ -282,6 +282,10 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert '"columns": (1, 12, 1)' in settings
     assert "def _show_setting_help(" in settings
     assert 'text="设置说明"' in settings
+    assert "程序取第 1 个捕获组作为原始词头" in settings
+    assert "实际 POS 正则由 Profile 的 pos_labels 动态生成" in settings
+    assert "可作为新词条起始证据" in settings
+    assert "命中只增加一项结构证据，不会无条件把该行接受为词头" in settings
     assert 'text="ⓘ"' in settings
     assert 'panes = ttk.Panedwindow(host, orient="horizontal")' in settings
     assert 'panes.add(left, weight=3)' in settings
@@ -308,6 +312,33 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert 'self.bind("<Escape>", lambda _event: self._close_validated())' in settings
     assert "✓ 已自动保存" in settings
     assert "⚠ 当前输入暂未保存" in settings
+
+    # Every Settings Center field/check must have a real help entry; avoid
+    # silently falling back to the generic "专家参数" text as the UI grows.
+    from picture_capture.app import SettingsDialog
+    field_names = {name for _label, name, _cast in SettingsDialog.FIELDS}
+    assert field_names <= set(SettingsDialog.SETTING_HELP)
+    visible_checks = (
+        SettingsDialog.NORMAL_CHECKS
+        + SettingsDialog.OCR_COMMON_CHECKS
+        + SettingsDialog.OCR_ADVANCED_CHECKS
+        + SettingsDialog.DISPLAY_STYLE_CHECKS
+        + SettingsDialog.DISPLAY_CHECKS
+    )
+    check_names = {name for _label, name in visible_checks} | {"paddle_enable_lens"}
+    assert check_names <= set(SettingsDialog.CHECK_HELP)
+    for key in field_names:
+        assert len(SettingsDialog.SETTING_HELP[key]) >= 40, key
+    for key in check_names:
+        assert len(SettingsDialog.CHECK_HELP[key]) >= 40, key
+    for key in (
+        "detection_method", "paddle_lens_mode", "ocr_engine",
+        "headword_sort_mode", "headword_custom_order", "headword_custom_fold_accents",
+    ):
+        assert len(SettingsDialog.SETTING_HELP[key]) >= 60, key
+    assert 'self._show_setting_help("paddle_lens_mode")' in settings
+    assert 'self._show_setting_help("ocr_engine")' in settings
+    assert 'self._show_setting_help("headword_sort_mode")' in settings
 
 
 def test_settings_center_is_reused_without_blocking_main_workspace():
