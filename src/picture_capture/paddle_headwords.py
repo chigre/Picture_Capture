@@ -3252,12 +3252,14 @@ def filter_headword_records(
         not parser_controls
         or bool(getattr(settings, "profile_cjk_allow_single_headword", True))
     ):
-        zone_width, visual_runs = _cjk_visual_projection_runs(gray, header_cutoff, settings, ratio)
+        zone_width, visual_runs = _cjk_visual_projection_runs(
+            gray, header_cutoff, settings, reference_scale
+        )
         for run_start, run_end in visual_runs:
             word, confidence, matched_record = _cjk_word_for_visual_run(records, (run_start, run_end), zone_width, settings)
             if not word or matched_record is None:
                 continue
-            coarse_band_y = max(header_cutoff, run_start - round(settings.row_padding * ratio))
+            coarse_band_y = max(header_cutoff, run_start - row_padding)
             prior_record_bottom = max(
                 (int(record.box[3]) for record in records if int(record.box[3]) <= run_start),
                 default=header_cutoff,
@@ -3417,7 +3419,7 @@ def filter_headword_records(
 
     accepted.sort(key=lambda item: item[1].y)
     deduplicated: list[tuple[float, Entry]] = []
-    tolerance = max(2, round(settings.character_height * ratio * 0.5))
+    tolerance = max(2, round(character_height * 0.5))
     for item in accepted:
         if deduplicated and item[1].y - deduplicated[-1][1].y <= tolerance:
             if item[0] > deduplicated[-1][0]:
@@ -3427,7 +3429,7 @@ def filter_headword_records(
     diagnostics.insert(0, {
         "meta": {
             "header_cutoff_band_y": header_cutoff,
-            "header_cutoff_source_y": source_top + header_cutoff,
+            "header_cutoff_canonical_v": source_top + header_cutoff,
             "line_count": len(lines),
             "left_limit_band_x": left_limit,
             "separator_band_width": int(separator_gray.shape[1]),
@@ -3457,6 +3459,14 @@ def _attach_source_candidate_coordinates(
             meta["candidate_coordinate_space"] = "canonical_full_resolution_pixels"
             meta["source_coordinate_space"] = "source_image_pixels"
             meta["ocr_box_coordinate_space"] = "ocr_band_local_pixels"
+            if meta.get("header_cutoff_canonical_v") is not None:
+                try:
+                    cutoff_v = int(meta["header_cutoff_canonical_v"])
+                    cutoff_u = int(geometry.x_at(column, cutoff_v))
+                    sx, sy = geometry.canonical_to_source(cutoff_u, cutoff_v)
+                    meta["header_cutoff_source_point"] = [int(sx), int(sy)]
+                except (TypeError, ValueError):
+                    pass
             continue
         try:
             canonical_v = int(item.get("canonical_v", item.get("source_y", 0)))
