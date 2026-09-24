@@ -5813,22 +5813,18 @@ def test_v2126_opencc_converter_uses_official_t2s_json(monkeypatch):
     assert seen == ["t2s.json"]
 
 
-def test_v2133_windows_launcher_is_runtime_only_and_never_installs():
+def test_v2133_repository_ships_no_windows_shell_wrappers():
     from pathlib import Path
-    import inspect
-    import picture_capture
 
-    project_root = Path(inspect.getsourcefile(picture_capture)).resolve().parents[2]
-    bat = (project_root / "run_windows.bat").read_text(encoding="utf-8")
-    folded = bat.casefold()
-    assert '".venv\\Scripts\\python.exe" "run.py"' in bat
-    assert "install_ocr_windows.bat" in bat
-    for suspicious in (
-        "uv ", "pip ", "powershell", "curl ", "wget ", "certutil", "bitsadmin",
-        "invoke-webrequest", "http://", "https://", "pythonw.exe", "start ",
-        "set /p", "create_no_window", ".picture_capture_ocr_extra",
-    ):
-        assert suspicious not in folded
+    project_root = Path(__file__).resolve().parents[1]
+    forbidden = ("*.bat", "*.cmd", "*.ps1", "*.vbs", "*.pyw")
+    found = sorted(
+        str(path.relative_to(project_root))
+        for pattern in forbidden
+        for path in project_root.rglob(pattern)
+        if ".venv" not in path.parts
+    )
+    assert found == []
     assert (project_root / ".python-version").read_text(encoding="utf-8").strip() == "3.13"
     assert not (project_root / "requirements.txt").exists()
 
@@ -6242,20 +6238,10 @@ def test_v2132_declares_cpu_and_gpu_ocr_profiles():
     assert "nvidia-cudnn-cu12==9.9.0.52; sys_platform == 'win32'" in extras["ocr-gpu-cu129"]
 
 
-def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
+def test_windows_ocr_installer_uses_python_and_locked_uv_profiles():
     import importlib.util
     import tomllib
     from pathlib import Path
-
-    batch = Path("install_ocr_windows.bat").read_text(encoding="utf-8")
-    assert '"scripts\\windows_ocr_setup.py"' in batch
-    for suspicious in (
-        "uv pip", "uninstall", "--index", "paddlepaddle-gpu",
-        "packages/stable/cu", "nvidia-smi", "set /p",
-        "powershell", "curl ", "wget ", "certutil", "bitsadmin",
-        "invoke-webrequest", "http://", "https://", "pythonw.exe", "start ",
-    ):
-        assert suspicious not in batch.casefold()
 
     spec = importlib.util.spec_from_file_location(
         "_picture_capture_windows_ocr_setup", Path("scripts/windows_ocr_setup.py")
@@ -6292,30 +6278,21 @@ def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
     assert "paddle.nn.functional.conv2d" in verify_source
 
 
-def test_windows_batch_launcher_is_visible_foreground_and_minimal():
+def test_release_archive_contains_python_setup_but_no_windows_shell_wrappers():
     from pathlib import Path
 
-    batch = Path("run_windows.bat").read_text(encoding="utf-8").casefold()
-    run_py = Path("run.py").read_text(encoding="utf-8")
-
-    assert '".venv\\scripts\\python.exe" "run.py"' in batch
-    for suspicious in (
-        "uv ", "pip ", "powershell", "curl ", "wget ", "certutil", "bitsadmin",
-        "invoke-webrequest", "http://", "https://", "pythonw.exe", "start ",
-        "create_no_window", "subprocess", "fc /b", "set /p",
-        ".picture_capture_ocr_extra",
-    ):
-        assert suspicious not in batch
-    assert "subprocess" not in run_py
-    assert "Popen" not in run_py
-    assert "CREATE_NO_WINDOW" not in run_py
-    assert "PC_NO_CONSOLE" not in run_py
-    assert not Path("Picture_Capture.pyw").exists()
-    assert not Path("Picture_Capture.vbs").exists()
-
     release = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
+    assert "src docs examples scripts" in release
+    assert "WINDOWS_SETUP.txt" in release
+    assert "run_windows.bat" not in release
+    assert "install_ocr_windows.bat" not in release
     assert "sha256sum" in release
     assert "SHA256SUMS.txt" in release
+
+    setup = Path("WINDOWS_SETUP.txt").read_text(encoding="utf-8")
+    assert "uv sync --locked --no-dev" in setup
+    assert ".venv\\Scripts\\python.exe scripts\\windows_ocr_setup.py" in setup
+    assert ".venv\\Scripts\\python.exe run.py" in setup
 
 
 def test_rtl_geometry_orders_source_right_column_first_and_keeps_source_crop_pixels():
