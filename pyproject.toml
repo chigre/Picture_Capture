@@ -20,8 +20,8 @@ lens = ["chrome-lens-py>=3.4,<4"]
 # Windows installer only needs a standard locked uv sync.
 ocr-cpu = ["paddleocr>=3.7,<4", "paddlepaddle==3.3.0", "chrome-lens-py>=3.4,<4"]
 ocr-gpu-cu118 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py>=3.4,<4"]
-ocr-gpu-cu126 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py>=3.4,<4"]
-ocr-gpu-cu129 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py>=3.4,<4"]
+ocr-gpu-cu126 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py>=3.4,<4", "nvidia-cudnn-cu12==9.5.1.17; sys_platform == 'win32'"]
+ocr-gpu-cu129 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py>=3.4,<4", "nvidia-cudnn-cu12==9.9.0.52; sys_platform == 'win32'"]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
