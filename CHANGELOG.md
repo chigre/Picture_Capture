@@ -1,4 +1,4 @@
-## Unreleased
+## v2.13.3
 
 ### 坐标体系统一与旧项目迁移
 
@@ -28,6 +28,14 @@
 - 【页面模板即时预览】与后续【多页测试】因此使用同一正文范围，避免代表页分析遗留的旧 `start_y` 使页首词条被漏掉。
 - 纵排词典继续把页眉/页尾作为物理源页面遮罩处理，不错误映射到旋转后的阅读轴 Y。
 
+
+### Windows Release 与杀软误报进一步收敛
+
+- 追查确认 2026-09-21 发布的 v2.13.2 Release tag 指向旧提交，正式 ZIP 并未包含 9 月 24 日完成的 BAT 安全收敛，因此用户继续下载 v2.13.2 时仍可能遇到杀软启发式告警。
+- `run_windows.bat` 进一步改为纯运行时启动器：不再调用 `uv sync` / `uv run` / pip，也不承担首次环境创建；缺少 `.venv` 时仅提示运行 `install_ocr_windows.bat` 后退出。
+- 新增 BAT 安全回归测试：禁止在日常启动器中重新出现 PowerShell、curl/wget、certutil/bitsadmin、HTTP URL、`uv`/pip、`pythonw`、`start`、隐藏启动或 profile 解析；安装器同样禁止直接 web 下载、`uv pip`、动态 GPU runtime 替换和隐藏启动。
+- Release workflow 继续生成 `SHA256SUMS.txt`，用于核对正式 ZIP / wheel 的文件完整性。
+- v2.13.3 必须由当前代码重新打 tag / 构建；仅修改仓库源码不会改变已经发布的 v2.13.2 ZIP。
 
 ### Windows 启动与 OCR 安装脚本降风险
 

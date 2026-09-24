@@ -2,7 +2,7 @@
 
 Picture Capture 是一个面向**多栏词典扫描页**的桌面制作与校对工具。它可以自动/半自动为词头画线，调用多引擎 OCR 识别词条，进行繁简校对、参考词表定位与词典核验，并输出 PDIC / PicDic / 训练数据。
 
-当前版本：**v2.13.2**  
+当前版本：**v2.13.3**  
 界面：Tkinter  
 环境管理：**uv + 项目专属 `.venv`**
 
@@ -33,6 +33,8 @@ Picture Capture 是一个面向**多栏词典扫描页**的桌面制作与校对
 # 获取正式版本
 
 普通用户请从 GitHub 的 [Releases 页面](https://github.com/chigre/Picture_Capture/releases/latest) 下载最新正式版本的 **Release ZIP**，完整解压后再安装和运行。不要使用 GitHub 自动生成的 “Source code” 压缩包代替正式发布包；仓库源码和 source archive 主要供开发者使用。
+
+> **不要继续使用 2026-09-21 发布的 v2.13.2 Release ZIP。** 该旧包生成于 Windows 启动/安装脚本安全收敛之前，仍包含更复杂的批处理安装逻辑，可能触发杀毒软件启发式检测。v2.13.3 起请使用重新构建的 Release ZIP，并可用同一 Release 中的 `SHA256SUMS.txt` 校验文件完整性。
 
 ---
 
@@ -140,8 +142,9 @@ Windows 启动脚本现在刻意保持为**前台、可见的最小包装器**�
 `.venv\Scripts\python.exe` 运行 `run.py`，程序运行期间控制台窗口会保留。
 这样不再使用 `start`、`pythonw.exe`、隐藏窗口或后台重启链路，减少安全软件对启动行为的启发式误判。
 
-如果首次运行时 `.venv` 尚不存在，脚本只执行一次标准的
-`uv sync --locked --no-dev` 来建立核心环境。
+日常 `run_windows.bat` **不再执行任何安装、更新或联网命令**。如果 `.venv` 尚不存在，
+启动器会直接提示先运行 `install_ocr_windows.bat` 并退出；不需要 PaddleOCR / Google Lens
+时，在安装器中选择 **Core only** 即可建立仅含核心依赖的环境。
 
 安装器会在程序目录生成本机配置：
 
@@ -161,7 +164,7 @@ ocr-gpu-cu126
 
 # OCR profile
 
-v2.13.2 提供以下正式 profile：
+v2.13.3 提供以下正式 profile：
 
 | 安装选项 | uv profile | 内容 |
 | --- | --- | --- |

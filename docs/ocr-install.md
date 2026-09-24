@@ -77,7 +77,7 @@ GPU 模式会检查：
 
 两个 Windows BAT 都只保留最小包装逻辑：
 
-- `run_windows.bat` 以前台 `python.exe` 直接运行主程序，不使用 `start`、`pythonw.exe`、隐藏窗口或后台重启。
+- `run_windows.bat` 以前台 `python.exe` 直接运行主程序，不使用 `start`、`pythonw.exe`、隐藏窗口或后台重启；同时不再执行 `uv sync`、`uv run`、pip 或任何下载/安装命令。若 `.venv` 不存在，启动器只提示先运行安装器并退出。
 - `install_ocr_windows.bat` 只负责确保核心 `.venv` 存在并调用 `scripts/windows_ocr_setup.py`；BAT 本身不包含 GPU 下载索引、包卸载、动态安装命令或交互式 profile 解析。
 
 这种结构让批处理文件本身保持简单、可审计，同时把依赖选择交给 uv 的声明式配置。

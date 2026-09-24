@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "picture-capture-restored"
-version = "2.13.2"
+version = "2.13.3"
 description = "Python restoration of the Picture Capture dictionary-page tool"
 license = "MIT"
 license-files = ["LICENSE.txt"]
