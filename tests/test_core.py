@@ -6334,3 +6334,153 @@ def test_transformed_ocr_band_uses_original_source_orientation_and_box_adapter()
     source_pixel_x = next(x for x in range(band.width) if band.getpixel((x, 25)) == (1, 2, 3))
     assert canonical.getpixel((band.width - 1 - source_pixel_x, 25)) == (1, 2, 3)
     assert records[0].box[0] < records[0].box[2] <= band.width
+
+
+def test_coordinate_contract_legacy_migration_preserves_runtime_geometry():
+    from copy import deepcopy
+    from PIL import Image
+    from picture_capture.coordinate_space import (
+        CANONICAL_COORDINATE_SPACE,
+        migrate_legacy_geometry_settings,
+    )
+    from picture_capture.models import AppSettings
+    from picture_capture.processing import derive_geometry
+
+    image = Image.new("RGB", (2000, 1200), "white")
+    legacy = AppSettings(
+        geometry_coordinate_version=1,
+        geometry_coordinate_space="legacy_display_pixels",
+        parameter_display_width=1000,
+        columns=2,
+        manual_x=50,
+        column_width=400,
+        gutter=50,
+        start_y=25,
+        bottom_y=0,
+        character_height=20,
+        row_padding=3,
+        follow_column_deformation=False,
+    )
+    before = derive_geometry(image, legacy)
+    migrated = deepcopy(legacy)
+    assert migrate_legacy_geometry_settings(migrated, image.size) is True
+    assert migrated.geometry_coordinate_version == 2
+    assert migrated.geometry_coordinate_space == CANONICAL_COORDINATE_SPACE
+    assert migrated.manual_x == 100
+    assert migrated.column_width == 800
+    assert migrated.gutter == 100
+    assert migrated.start_y == 50
+    assert migrated.bottom_y == 0  # sentinel remains a sentinel
+    after = derive_geometry(image, migrated)
+    assert after.column_starts == before.column_starts
+    assert after.column_widths == before.column_widths
+    assert after.top == before.top
+    assert after.bottom == before.bottom
+    assert migrate_legacy_geometry_settings(migrated, image.size) is False
+
+
+def test_coordinate_contract_source_canonical_points_round_trip_for_all_transforms():
+    from picture_capture.layout_transform import LayoutTransform
+
+    source_size = (1234, 1642)
+    points = [(0, 0), (1, 1), (617, 821), (1233, 1641), (77, 1500)]
+    for kind in ("identity", "mirror_x", "rotate_ccw90", "rotate_cw90"):
+        transform = LayoutTransform(kind)
+        for point in points:
+            canonical = transform.source_to_canonical_point(*point, source_size)
+            restored = transform.canonical_to_source_point(*canonical, source_size)
+            assert restored == point
+
+
+def test_coordinate_contract_profile_percent_is_source_pixel_rule():
+    from picture_capture.models import AppSettings
+    from picture_capture.profile_semantics import effective_page_settings
+    from picture_capture.processing import derive_nominal_geometry
+
+    settings = AppSettings(
+        profile_header_mode="present",
+        profile_header_percent=3.0,
+        profile_footer_mode="present",
+        profile_footer_percent=4.0,
+        columns=1,
+        manual_x=20,
+        column_width=800,
+    )
+    effective = effective_page_settings(settings, (1000, 1642), 0)
+    assert effective.start_y == 49
+    assert effective.bottom_y == 1576
+    geometry = derive_nominal_geometry(1000, 1642, effective)
+    assert geometry.top == 49
+    assert geometry.bottom == 1576
+
+
+def test_coordinate_contract_training_export_separates_source_and_canonical(tmp_path):
+    import json
+    from PIL import Image
+    from picture_capture.formats import write_pdic, write_ppp
+    from picture_capture.models import AppSettings, Entry, PolygonRegion
+    from picture_capture.training_export import export_training_page
+    from picture_capture.coordinate_space import (
+        SOURCE_COORDINATE_SPACE, CANONICAL_COORDINATE_SPACE,
+    )
+
+    root = tmp_path / "dict"
+    root.mkdir()
+    page = root / "0001.png"
+    Image.new("RGB", (600, 900), "white").save(page)
+    settings = AppSettings(
+        columns=2,
+        manual_x=20,
+        column_width=250,
+        gutter=40,
+        start_y=30,
+        bottom_y=850,
+        crop_to_bottom_y=True,
+        profile_header_mode="present",
+        profile_header_percent=3.0,
+        profile_footer_mode="present",
+        profile_footer_percent=4.0,
+    )
+    write_pdic(page.with_suffix(".pdic"), [Entry("alpha", 20, 120)], 600, ("0001", "@", "@"))
+    write_ppp(
+        page.with_suffix(".ppp"),
+        [PolygonRegion("fig", [(400, 500), (500, 500), (500, 650)])],
+        "0001",
+    )
+    staging = tmp_path / "staging"
+    export_training_page(page, root, settings, staging, 0)
+    annotation = json.loads(
+        (staging / "annotations" / "0001.json").read_text(encoding="utf-8")
+    )
+
+    assert annotation["format"] == "picture-capture-training-v2"
+    assert annotation["coordinate_contract"]["annotations"] == SOURCE_COORDINATE_SPACE
+    assert annotation["coordinate_contract"]["layout_geometry"] == CANONICAL_COORDINATE_SPACE
+    assert annotation["ground_truth_lines"][0]["x"] == 20
+    assert annotation["ground_truth_lines"][0]["y"] == 120
+    assert annotation["page_template"]["coordinate_space"] == SOURCE_COORDINATE_SPACE
+    assert annotation["page_template"]["header_boundary_y"] == 27
+    assert annotation["page_template"]["footer_boundary_y"] == 864
+    layout = annotation["layout"]
+    assert layout["coordinate_space"] == CANONICAL_COORDINATE_SPACE
+    assert "top_v" in layout and "bottom_v" in layout
+    assert "column_starts_u" in layout and "column_paths_vu" in layout
+    assert "header_y" not in layout
+    assert "derived_top" not in layout
+
+
+def test_coordinate_contract_parameter_display_width_is_legacy_only_in_core_runtime():
+    from pathlib import Path
+
+    package = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    coordinate_text = (package / "coordinate_space.py").read_text(encoding="utf-8")
+    models_text = (package / "models.py").read_text(encoding="utf-8")
+    assert "parameter_display_width" in coordinate_text
+    assert "parameter_display_width" in models_text
+
+    paddle_text = (package / "paddle_headwords.py").read_text(encoding="utf-8")
+    profile_text = (package / "profile_semantics.py").read_text(encoding="utf-8")
+    training_text = (package / "training_export.py").read_text(encoding="utf-8")
+    assert "parameter_display_width" not in paddle_text
+    assert "parameter_display_width" not in profile_text
+    assert "parameter_display_width" not in training_text
