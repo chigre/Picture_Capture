@@ -3863,6 +3863,20 @@ def test_v2110_main_crop_preview_replaces_old_width_only_checkbox():
     assert 'def _draw_crop_plan_preview' in text
 
 
+def test_page_list_uses_display_mode_selector_for_existing_view_states():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'text="显示模式："' in text
+    assert 'values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览")' in text
+    assert 'display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)' in text
+    assert 'text="◧"' not in text
+    assert '"原图+标注": (False, False, False)' in text
+    assert '"二值+标注": (True, False, False)' in text
+    assert '"仅原图": (False, True, False)' in text
+    assert '"仅二值": (True, True, False)' in text
+    assert '"切图预览": (False, False, True)' in text
+
+
 def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
@@ -5141,13 +5155,13 @@ def test_v21122_hotfix3_page_word_text_and_diff_classify_add_delete_modify():
     ]
 
 
-def test_v21122_hotfix3_main_actions_put_old_new_compare_after_review():
+def test_v21122_hotfix3_main_actions_put_compare_before_review():
     from pathlib import Path
     import inspect
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope))'
+    row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review))'
     assert row in text
     assert "class OldNewComparisonWindow" in text
     assert 'notebook.add(diff_tab, text="差异")' in text
