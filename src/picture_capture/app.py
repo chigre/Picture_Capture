@@ -3784,14 +3784,32 @@ class SettingsDialog(tk.Toplevel):
         language = str(self.vars.get("tesseract_language", self.vars["ocr_language"]).get()).strip()
         if not language:
             language = str(self.vars["ocr_language"].get())
-        tess = tesseract_status(executable, language); lens = lens_status()
-        if tess.get("available"):
-            tess_text = f"✓ {tess.get('version') or 'Tesseract'}\n路径：{tess.get('resolved')}\n语言：{', '.join(tess.get('requested_languages', []))}"
-            self.vars["ocr_executable"].set(str(tess.get("resolved")))
-        else:
-            tess_text = f"✗ Tesseract：{tess.get('error')}\n检测路径：{tess.get('resolved') or '无'}"
-        lens_text = f"✓ Google Lens / chrome-lens-py {lens.get('version')}" if lens.get("available") else f"✗ Google Lens：{lens.get('error')}"
-        messagebox.showinfo("OCR 引擎状态", tess_text + "\n\n" + lens_text, parent=self)
+        self._settings_save_status_var.set("正在后台检测 OCR 引擎…")
+
+        def worker():
+            return tesseract_status(executable, language), lens_status()
+
+        def done(payload) -> None:
+            if not self.winfo_exists():
+                return
+            tess, lens = payload
+            if tess.get("available"):
+                tess_text = f"✓ {tess.get('version') or 'Tesseract'}\n路径：{tess.get('resolved')}\n语言：{', '.join(tess.get('requested_languages', []))}"
+                self.vars["ocr_executable"].set(str(tess.get("resolved")))
+            else:
+                tess_text = f"✗ Tesseract：{tess.get('error')}\n检测路径：{tess.get('resolved') or '无'}"
+            lens_text = f"✓ Google Lens / chrome-lens-py {lens.get('version')}" if lens.get("available") else f"✗ Google Lens：{lens.get('error')}"
+            self._settings_save_status_var.set("✓ OCR 引擎检测完成")
+            messagebox.showinfo("OCR 引擎状态", tess_text + "\n\n" + lens_text, parent=self)
+
+        def failed(exc, detail) -> None:
+            if detail:
+                print(detail)
+            if self.winfo_exists():
+                self._settings_save_status_var.set("⚠ OCR 引擎检测失败")
+                messagebox.showerror("OCR 引擎检测失败", str(exc), parent=self)
+
+        self.parent._start_ui_worker(f"settings-ocr-check-{id(self)}", worker, done, failed)
 
 
 def _review_window_dimensions(screen_w: int, screen_h: int) -> tuple[int, int]:
@@ -7383,6 +7401,13 @@ class PictureCaptureApp(tk.Tk):
         self._batch_close_after_stop = False
         self._batch_on_done = None
         self._batch_title = ""
+        # One-shot background jobs use a separate queue from multi-page batch
+        # work. Workers never call Tk; per-key generations discard stale results.
+        self._ui_worker_queue: queue.Queue = queue.Queue()
+        self._ui_worker_poll_job: str | None = None
+        self._ui_worker_generations: dict[str, int] = {}
+        self._ui_worker_handlers: dict[tuple[str, int], tuple] = {}
+        self._ui_worker_shutdown = False
         self._session_path = self._default_session_state_path()
         self._last_session = self._read_session_state()
         self.section_expanded = {
@@ -7439,6 +7464,72 @@ class PictureCaptureApp(tk.Tk):
             paned.sashpos(0, min(required, available) if available else required)
         except (tk.TclError, ValueError):
             return
+
+    def _start_ui_worker(self, key: str, worker, on_done, on_error=None) -> int:
+        """Run one replaceable blocking operation without letting its worker touch Tk."""
+        if self._ui_worker_shutdown:
+            return -1
+        generation = int(self._ui_worker_generations.get(key, 0)) + 1
+        self._ui_worker_generations[key] = generation
+        self._ui_worker_handlers[(key, generation)] = (on_done, on_error)
+
+        def runner() -> None:
+            try:
+                result = worker()
+                event = ("done", key, generation, result, None, None)
+            except Exception as exc:
+                event = ("error", key, generation, None, exc, traceback.format_exc())
+            self._ui_worker_queue.put(event)
+
+        threading.Thread(
+            target=runner, name=f"PictureCapture-{key}-{generation}", daemon=True,
+        ).start()
+        if self._ui_worker_poll_job is None:
+            self._ui_worker_poll_job = self.after(40, self._poll_ui_worker_queue)
+        return generation
+
+    def _invalidate_ui_worker(self, key: str) -> None:
+        self._ui_worker_generations[key] = int(self._ui_worker_generations.get(key, 0)) + 1
+        stale = [token for token in self._ui_worker_handlers if token[0] == key]
+        for token in stale:
+            self._ui_worker_handlers.pop(token, None)
+
+    def _poll_ui_worker_queue(self) -> None:
+        self._ui_worker_poll_job = None
+        if self._ui_worker_shutdown:
+            return
+        processed = 0
+        while processed < 48:
+            try:
+                kind, key, generation, result, exc, detail = self._ui_worker_queue.get_nowait()
+            except queue.Empty:
+                break
+            processed += 1
+            handler = self._ui_worker_handlers.pop((key, generation), None)
+            if generation != self._ui_worker_generations.get(key) or handler is None:
+                continue
+            on_done, on_error = handler
+            try:
+                if kind == "done":
+                    on_done(result)
+                elif on_error is not None:
+                    on_error(exc, detail)
+                else:
+                    if detail:
+                        print(detail)
+                    self.show_error(f"{key}失败", exc)
+            except tk.TclError:
+                pass
+            except Exception as callback_exc:
+                traceback.print_exc()
+                try:
+                    self.show_error(f"{key}完成处理失败", callback_exc)
+                except tk.TclError:
+                    pass
+        if self._ui_worker_handlers and not self._ui_worker_shutdown:
+            self._ui_worker_poll_job = self.after(
+                8 if processed >= 48 else 60, self._poll_ui_worker_queue
+            )
 
     def _configure_main_workspace_styles(self) -> None:
         """Configure a scoped, dense visual system for the main workspace only.
@@ -7791,6 +7882,15 @@ class PictureCaptureApp(tk.Tk):
             self._request_batch_stop()
             return
         try:
+            self._ui_worker_shutdown = True
+            for key in tuple(self._ui_worker_generations):
+                self._invalidate_ui_worker(key)
+            if self._ui_worker_poll_job is not None:
+                try:
+                    self.after_cancel(self._ui_worker_poll_job)
+                except tk.TclError:
+                    pass
+                self._ui_worker_poll_job = None
             self._flush_deferred_page_save()
             if self.project and self.current_page and self.image is not None:
                 try:
@@ -9499,67 +9599,58 @@ class PictureCaptureApp(tk.Tk):
         return "\n".join(lines)
 
     def check_ocr_engines(self) -> None:
-        paddle_text = self._paddle_environment_text()
-        tess = tesseract_status(self.settings.ocr_executable, resolved_tesseract_language(self.settings))
-        lens = lens_status()
-        if tess.get("available"):
-            self.settings.ocr_executable = str(tess.get("resolved"))
-            tess_text = (
-                f"✓ {tess.get('version') or 'Tesseract'}\n路径：{tess.get('resolved')}\n"
-                f"语言：{', '.join(tess.get('requested_languages', []))}"
-            )
-            self.save_settings()
-        else:
-            tess_text = f"✗ Tesseract：{tess.get('error')}\n检测路径：{tess.get('resolved') or '无'}"
-        lens_text = (
-            f"✓ Google Lens / chrome-lens-py {lens.get('version')}"
-            if lens.get("available") else f"✗ Google Lens：{lens.get('error')}"
-        )
-        official_opencc = self._distribution_version("opencc")
-        legacy_opencc = self._distribution_version("opencc-python-reimplemented")
-        runtime = opencc_runtime_status(retry=True)
-        if official_opencc and runtime.get("available"):
-            opencc_lines = [f"✓ OpenCC {official_opencc}（官方，可正常转换）", "简化配置：t2s.json（词组优先）"]
-            if legacy_opencc:
-                opencc_lines.append(
-                    f"⚠ 同时检测到旧版 opencc-python-reimplemented {legacy_opencc}；"
-                    "当前项目已使用 uv 隔离环境，建议在项目目录执行 uv sync 清理未声明包。"
-                )
-        elif official_opencc:
-            opencc_lines = [
-                f"⚠ OpenCC {official_opencc}（官方）已安装，但运行不可用",
-                f"初始化错误：{runtime.get('error') or '未知错误'}",
-                "请在项目目录执行 uv sync --reinstall-package opencc；若仍异常，可删除 .venv 后重新运行 run_windows.bat。",
-            ]
-        elif legacy_opencc:
-            opencc_lines = [
-                f"⚠ OpenCC：仅检测到旧版 opencc-python-reimplemented {legacy_opencc}",
-                f"运行状态：{'可用' if runtime.get('available') else '不可用'}",
-                "请在项目目录执行 uv sync；若仍残留旧包，可删除 .venv 后重新运行 run_windows.bat。",
-            ]
-        else:
-            opencc_lines = [
-                "✗ OpenCC（官方）：未安装",
-                f"运行检查：{runtime.get('error') or '不可用'}",
-                "请在项目目录执行 uv sync；核心 OpenCC 依赖会由 uv 安装到项目 .venv。",
-            ]
-        opencc_text = "\n".join(opencc_lines)
-        try:
-            cedict = cc_cedict_status()
-            if cedict.installed:
-                cedict_text = f"✓ CC-CEDICT：已安装（{cedict.entry_count:,} 条）\n位置：{cedict.path}"
+        self.status_var.set("正在后台检测 OCR / Paddle / OpenCC 环境…")
+
+        def worker():
+            paddle_text = self._paddle_environment_text()
+            tess = tesseract_status(self.settings.ocr_executable, resolved_tesseract_language(self.settings))
+            lens = lens_status()
+            official_opencc = self._distribution_version("opencc")
+            legacy_opencc = self._distribution_version("opencc-python-reimplemented")
+            runtime = opencc_runtime_status(retry=True)
+            try:
+                cedict = cc_cedict_status()
+                cedict_error = None
+            except Exception as exc:
+                cedict = None
+                cedict_error = str(exc)
+            return paddle_text, tess, lens, official_opencc, legacy_opencc, runtime, cedict, cedict_error
+
+        def done(payload) -> None:
+            paddle_text, tess, lens, official_opencc, legacy_opencc, runtime, cedict, cedict_error = payload
+            if tess.get("available"):
+                self.settings.ocr_executable = str(tess.get("resolved"))
+                tess_text = f"✓ {tess.get('version') or 'Tesseract'}\n路径：{tess.get('resolved')}\n语言：{', '.join(tess.get('requested_languages', []))}"
+                self.save_settings()
             else:
-                cedict_text = (
-                    "○ CC-CEDICT：未安装\n"
-                    "在校对界面点击 CC-CEDICT(未装)，可打开官方下载页或选择已下载文件安装。"
-                )
-        except Exception as exc:
-            cedict_text = f"⚠ CC-CEDICT 状态检查失败：{exc}"
-        messagebox.showinfo(
-            "OCR / 简化环境状态",
-            paddle_text + "\n\n" + tess_text + "\n\n" + lens_text + "\n\n" + opencc_text + "\n\n" + cedict_text,
-            parent=self,
-        )
+                tess_text = f"✗ Tesseract：{tess.get('error')}\n检测路径：{tess.get('resolved') or '无'}"
+            lens_text = f"✓ Google Lens / chrome-lens-py {lens.get('version')}" if lens.get("available") else f"✗ Google Lens：{lens.get('error')}"
+            if runtime.get("available") and official_opencc:
+                opencc_lines = [f"✓ OpenCC {official_opencc}（官方）：运行正常"]
+                if legacy_opencc:
+                    opencc_lines.append(f"⚠ 同时检测到旧版 opencc-python-reimplemented {legacy_opencc}；当前项目已使用 uv 隔离环境，建议在项目目录执行 uv sync 清理未声明包。")
+            elif official_opencc:
+                opencc_lines = [f"⚠ OpenCC {official_opencc}（官方）已安装，但运行不可用", f"初始化错误：{runtime.get('error') or '未知错误'}", "请在项目目录执行 uv sync --reinstall-package opencc；若仍异常，可删除 .venv 后重新运行 run_windows.bat。"]
+            elif legacy_opencc:
+                opencc_lines = [f"⚠ OpenCC：仅检测到旧版 opencc-python-reimplemented {legacy_opencc}", f"运行状态：{'可用' if runtime.get('available') else '不可用'}", "请在项目目录执行 uv sync；若仍残留旧包，可删除 .venv 后重新运行 run_windows.bat。"]
+            else:
+                opencc_lines = ["✗ OpenCC（官方）：未安装", f"运行检查：{runtime.get('error') or '不可用'}", "请在项目目录执行 uv sync；核心 OpenCC 依赖会由 uv 安装到项目 .venv。"]
+            opencc_text = "\n".join(opencc_lines)
+            if cedict is not None and cedict.installed:
+                cedict_text = f"✓ CC-CEDICT：已安装（{cedict.entry_count:,} 条）\n位置：{cedict.path}"
+            elif cedict is not None:
+                cedict_text = "○ CC-CEDICT：未安装\n在校对界面点击 CC-CEDICT(未装)，可打开官方下载页或选择已下载文件安装。"
+            else:
+                cedict_text = f"⚠ CC-CEDICT 状态检查失败：{cedict_error or '未知错误'}"
+            self.status_var.set("OCR / 简化环境检测完成")
+            messagebox.showinfo("OCR / 简化环境状态", paddle_text + "\n\n" + tess_text + "\n\n" + lens_text + "\n\n" + opencc_text + "\n\n" + cedict_text, parent=self)
+
+        def failed(exc, detail) -> None:
+            if detail:
+                print(detail)
+            self.show_error("OCR / 简化环境检测失败", exc)
+
+        self._start_ui_worker("ocr-environment-check", worker, done, failed)
 
     def detect_layout_current(self) -> None:
         if not self.guard() or not self.apply_quick_settings(show_status=False): return
@@ -13845,18 +13936,37 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def build_picdic(self) -> None:
-        if not self.guard(): return
+        if not self.guard():
+            return
+        if self._batch_active:
+            self.status_var.set("已有批量任务正在运行，请结束后再制作 PicDic。")
+            return
         try:
             self.save_pdic(silent=True)
-            dsl, archive, words, images = build_picdic_package(self.project.root, self.settings.ocr_language)
+        except Exception as exc:
+            self.show_error("PicDic 制作准备失败", exc)
+            return
+        root = self.project.root
+        language = self.settings.ocr_language
+
+        def worker(_item, _position: int, _total: int):
+            return build_picdic_package(root, language)
+
+        def done(_completed, _total, stopped, results, error):
+            if error is not None or stopped or not results:
+                return
+            dsl, archive, words, images = results[-1]
             self.status_var.set(f"PicDic 制作完成：{words} 个词头，{images} 张图片")
             messagebox.showinfo(
                 "PicDic 制作完成",
                 f"词头：{words}\n图片：{images}\n\nDSL：{dsl.name}\n图片包：{archive.name}\n目录：{dsl.parent}",
                 parent=self,
             )
-        except Exception as exc:
-            self.show_error("PicDic 制作失败", exc)
+
+        self._start_batch_task(
+            "PicDic 制作", [root], worker, done,
+            item_label=lambda _item: "生成 DSL 与图片包", refresh_page_quality=False,
+        )
 
     def _order_key(self, word: str) -> tuple:
         return collation_key(
