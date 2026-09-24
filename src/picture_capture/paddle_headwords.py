@@ -2168,7 +2168,15 @@ def _cjk_visual_projection_runs(
         index = end
 
     runs = _true_runs(np.asarray(active_list, dtype=bool))
-    expected_body = max(8.0, settings.character_height * ratio)
+    canonical_width = max(1, round(REFERENCE_CANONICAL_WIDTH * ratio))
+    expected_body = max(
+        8.0,
+        float(
+            stored_geometry_to_canonical(
+                settings.character_height, canonical_width, settings,
+            )
+        ),
+    )
     body_heights = [
         end - start for start, end in runs
         if expected_body * 0.45 <= end - start <= expected_body * 1.55
@@ -2382,7 +2390,17 @@ def refine_separator_y_adaptive(
     line_h = max(3, int(round(reference_line_height)))
     coarse_y = int(min(height - 1, max(lower_bound, coarse_y)))
     if content_top is None:
-        content_top = coarse_y + max(0, round(settings.row_padding * source_per_display_pixel))
+        canonical_width = max(
+            1,
+            round(
+                REFERENCE_CANONICAL_WIDTH
+                * max(0.01, source_per_display_pixel)
+            ),
+        )
+        row_padding = stored_geometry_to_canonical(
+            settings.row_padding, canonical_width, settings,
+        )
+        content_top = coarse_y + max(0, row_padding)
     content_top = int(min(height - 1, max(lower_bound, content_top)))
 
     # Analyse enough of the column to see the preceding blank band and a small
@@ -2781,12 +2799,27 @@ def filter_headword_records(
     # left-edge bold lemma from its right-side gender/POS fragments.
     lines = group_ocr_records([record for record in records if record.text], settings.paddle_line_merge_y_ratio)
     configured_width = max(1, settings.paddle_band_width)
-    ratio = (
+    # OCR/profile tuning distances are resolution-normalized at a fixed
+    # 1400-pixel canonical width. They are not GUI-display coordinates.
+    reference_scale = (
         max(0.01, float(source_per_display_pixel))
         if source_per_display_pixel is not None
         else band.width / configured_width
     )
-    left_limit = round((settings.paddle_band_left_margin + settings.paddle_left_tolerance) * ratio)
+    canonical_width = max(
+        1, round(REFERENCE_CANONICAL_WIDTH * reference_scale),
+    )
+    row_padding = stored_geometry_to_canonical(
+        settings.row_padding, canonical_width, settings,
+    )
+    character_height = stored_geometry_to_canonical(
+        settings.character_height, canonical_width, settings,
+    )
+    row_height = max(1, character_height + row_padding)
+    left_limit = round(
+        (settings.paddle_band_left_margin + settings.paddle_left_tolerance)
+        * reference_scale
+    )
     lines = _repair_split_headword_lines(lines, settings, left_limit, patterns)
     lines = _repair_wrapped_headword_structure(lines, settings, left_limit, patterns)
     lines = _repair_multiline_headword_state_machine(lines, settings, left_limit, patterns)
@@ -2803,11 +2836,8 @@ def filter_headword_records(
     heights = np.asarray([line.box[3] - line.box[1] for line in lines], dtype=float)
     median_height = max(1.0, float(np.median(heights)))
 
-    # Settings are expressed in displayed-image pixels; the straightened band
-    # remains at source resolution. Its actual/configured width recovers the
-    # conversion ratio without depending on GUI state.
-    gap_threshold = settings.row_height * settings.paddle_gap_ratio * ratio
-    header_cutoff = _header_cutoff(gray, settings, ratio)
+    gap_threshold = row_height * settings.paddle_gap_ratio
+    header_cutoff = _header_cutoff(gray, settings, reference_scale)
 
     # Independent image-only separator candidates.  OCR lines and boundaries
     # are paired with a mutual-nearest rule, so the image validates OCR geometry
@@ -2817,7 +2847,7 @@ def filter_headword_records(
         separator_gray,
         max(2, round(median_height)),
         settings,
-        source_per_display_pixel=ratio,
+        source_per_display_pixel=reference_scale,
         lower_bound=header_cutoff,
     )
     image_boundary_matches = match_ocr_lines_to_image_boundaries(
@@ -3065,7 +3095,7 @@ def filter_headword_records(
             reject_reason = "missing_structure_or_visual_cue"
         else:
             reject_reason = "candidate_rejected"
-        coarse_band_y = max(0, y0 - round(settings.row_padding * ratio))
+        coarse_band_y = max(0, y0 - row_padding)
         # The first printed entry is a special geometry case: there is no
         # preceding line and therefore no inter-line whitespace valley. Locate
         # the first sustained ink row instead of applying the ordinary valley rule.
@@ -3076,7 +3106,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                source_per_display_pixel=ratio,
+                source_per_display_pixel=reference_scale,
                 lower_bound=header_cutoff,
             )
         elif is_headword and _is_chinese_ocr(settings):
@@ -3085,7 +3115,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                source_per_display_pixel=ratio,
+                source_per_display_pixel=reference_scale,
                 lower_bound=header_cutoff,
                 content_top=(int(image_boundary.get("ink_onset_y", y0)) if image_boundary else y0),
                 preceding_gap_hint=preceding_gap,
@@ -3096,7 +3126,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, y1 - y0),
                 settings,
-                source_per_display_pixel=ratio,
+                source_per_display_pixel=reference_scale,
                 lower_bound=header_cutoff,
             )
         else:
@@ -3238,7 +3268,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                source_per_display_pixel=ratio,
+                source_per_display_pixel=reference_scale,
                 lower_bound=header_cutoff,
                 content_top=run_start,
                 preceding_gap_hint=visual_gap_hint,
