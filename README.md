@@ -46,9 +46,9 @@ Picture Capture 是一个面向**多栏词典扫描页**的桌面制作与校对
 
 <https://docs.astral.sh/uv/getting-started/installation/>
 
-安装后可在命令行确认：
+安装后在 Windows Terminal、PowerShell 或命令提示符中确认：
 
-```bat
+```text
 uv --version
 ```
 
@@ -56,12 +56,28 @@ uv --version
 
 将 Release ZIP 完整解压到一个普通文件夹中。不要直接在 ZIP 压缩包内运行程序。
 
-## 3. 安装 OCR 组件
+从 v2.13.3 起，Windows 分发包**不再携带 .bat / .cmd / .ps1 / .vbs / .pyw 启动或安装脚本**。这是为了彻底避免批处理/脚本包装器触发 Windows Defender 等安全软件的启发式误报。所有安装步骤都使用可见、可复制的标准命令。
 
-推荐直接双击：
+Release ZIP 根目录同时提供 `WINDOWS_SETUP.txt`，内容与下面步骤一致。
+
+## 3. 建立核心环境
+
+在 Picture Capture 解压目录打开终端，执行：
 
 ```text
-install_ocr_windows.bat
+uv sync --locked --no-dev
+```
+
+这会按 `.python-version` 和 `uv.lock` 建立项目自己的 `.venv`，不会安装到系统 Python。
+
+如果只使用核心功能或系统 Tesseract，到这里即可。
+
+## 4. 安装 / 切换 OCR 组件（可选）
+
+核心环境建立后执行：
+
+```text
+.venv\Scripts\python.exe scripts\windows_ocr_setup.py
 ```
 
 安装器会显示：
@@ -75,90 +91,28 @@ install_ocr_windows.bat
 6. Core only - 不安装可选 OCR 组件
 ```
 
-### CPU 用户
+CPU 用户选择 1。NVIDIA GPU 用户按自己的 CUDA 环境选择 2 / 3 / 4。安装器只调用项目声明的锁定 uv profile；CPU/GPU runtime 与 CUDA 索引均由 `pyproject.toml + uv.lock` 决定，不再由 Windows shell 脚本动态拼装。
 
-选择：
+GPU CUDA 12.6/12.9 profile 会安装项目内的 NVIDIA cuDNN wheel，并在当前 Python 进程中注册 `.venv` 内 NVIDIA DLL 目录；不会修改系统 PATH。安装完成后会实际执行一次 GPU `conv2d` smoke test。
 
-```text
-1. CPU
-```
-
-安装器会一次安装：
-
-- PaddleOCR
-- PaddlePaddle CPU 3.3.0
-- Google Lens (`chrome-lens-py`)
-
-### NVIDIA GPU 用户
-
-根据自己的环境选择：
-
-```text
-2. CUDA 11.8
-3. CUDA 12.6
-4. CUDA 12.9
-```
-
-安装器会自动：
-
-1. 使用所选 uv profile 同步项目 `.venv`；
-2. 由 `pyproject.toml + uv.lock` 选择对应 PaddlePaddle 官方 CPU/CUDA 索引；
-3. 一次性安装 PaddleOCR、Google Lens 与对应 CPU/GPU runtime；Windows CUDA 12.6/12.9 profile 还会安装项目内的 NVIDIA cuDNN wheel；
-4. 在进程内自动加入项目 `.venv` 中 NVIDIA DLL 目录，无需手工修改系统 PATH；
-5. 实际执行一次 GPU 卷积 smoke test，确认 CUDA + cuDNN 均可用；
-6. 保存当前 OCR profile。
-
-**GPU 用户不需要再手工执行 `uv pip uninstall/install`，也不需要自己填写 CUDA 索引。**
-
-> GPU 用户不要再额外执行旧的 `uv sync --extra paddleocr`。该兼容 extra 是 CPU 预设，可能重新引入 CPU Paddle runtime。
-
-### 只使用 Google Lens
-
-选择：
-
-```text
-5. Lens only
-```
-
-### 不使用 PaddleOCR / Google Lens
-
-选择：
-
-```text
-6. Core only
-```
-
-Picture Capture 仍然可以启动；如果系统已经安装 Tesseract，也可以继续使用 Tesseract。
-
-## 4. 启动程序
-
-安装完成后，日常双击：
-
-```text
-run_windows.bat
-```
-
-Windows 启动脚本现在刻意保持为**前台、可见的最小包装器**：它直接使用项目自己的
-`.venv\Scripts\python.exe` 运行 `run.py`，程序运行期间控制台窗口会保留。
-这样不再使用 `start`、`pythonw.exe`、隐藏窗口或后台重启链路，减少安全软件对启动行为的启发式误判。
-
-日常 `run_windows.bat` **不再执行任何安装、更新或联网命令**。如果 `.venv` 尚不存在，
-启动器会直接提示先运行 `install_ocr_windows.bat` 并退出；不需要 PaddleOCR / Google Lens
-时，在安装器中选择 **Core only** 即可建立仅含核心依赖的环境。
-
-安装器会在程序目录生成本机配置：
+安装成功后根目录会生成：
 
 ```text
 .picture_capture_ocr_extra
 ```
 
-例如 GPU CUDA 12.6：
+该文件只记录最近一次成功安装的 OCR profile，供诊断使用。
+
+## 5. 启动程序
+
+日常启动直接在项目目录运行：
 
 ```text
-ocr-gpu-cu126
+.venv\Scripts\python.exe run.py
 ```
 
-该文件用于记录最近一次成功安装的 OCR profile，便于诊断和后续切换；日常 `run_windows.bat` 不再解析该文件，也不会在每次启动时重新同步依赖。
+这条命令只使用已经准备好的项目环境，不安装、更新或下载任何依赖。
+
 
 ---
 
@@ -184,7 +138,7 @@ GPU profile 已把 `paddlepaddle-gpu==3.3.0` 和对应 CUDA 官方索引直接�
 无需删除 `.venv`。重新运行：
 
 ```text
-install_ocr_windows.bat
+.venv\Scripts\python.exe scripts\windows_ocr_setup.py
 ```
 
 然后选择新的 profile 即可。uv 会按互斥 profile 同步对应 CPU/GPU runtime，并在完成后重新验证环境。
@@ -230,7 +184,7 @@ Picture Capture 可使用它：
 uv run --locked python run.py
 ```
 
-Windows 的 `install_ocr_windows.bat` 只针对 Windows；其他平台的 PaddleOCR / GPU runtime 请根据对应平台的 PaddlePaddle 安装方式配置。
+上述 Windows OCR 配置脚本只针对 Windows；其他平台的 PaddleOCR / GPU runtime 请根据对应平台的 PaddlePaddle 安装方式配置。
 
 ---
 
