@@ -2,8 +2,7 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-rem Keep the Windows launcher deliberately simple and visible.
-rem It does not use pythonw, START, hidden windows, or background relaunches.
+rem Minimal foreground launcher for the project virtual environment.
 
 if not exist ".venv\Scripts\python.exe" (
   where uv >nul 2>&1
