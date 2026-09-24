@@ -930,13 +930,21 @@ def _build_modern_dialog_heading(
         weight="bold",
     )
     ttk.Label(block, text=title, font=heading_font).pack(anchor="w")
-    ttk.Label(
+    subtitle_label = ttk.Label(
         block,
         text=subtitle,
         foreground="#666666",
         justify="left",
-        wraplength=900,
-    ).pack(anchor="w", pady=(3, 0))
+    )
+    subtitle_label.pack(anchor="w", fill="x", pady=(3, 0))
+
+    def resize_subtitle(event: tk.Event) -> None:
+        try:
+            subtitle_label.configure(wraplength=max(160, int(event.width) - 4))
+        except tk.TclError:
+            pass
+
+    block.bind("<Configure>", resize_subtitle, add="+")
     return block
 
 
@@ -1498,6 +1506,35 @@ class SettingsDialog(tk.Toplevel):
         except tk.TclError:
             pass
 
+    def _bind_responsive_labels(
+        self,
+        container: tk.Misc,
+        *labels: ttk.Label,
+        horizontal_padding: int = 12,
+        min_wrap: int = 120,
+    ) -> None:
+        """Wrap descriptive text to the width it actually receives on screen."""
+
+        def refresh(event=None) -> None:
+            try:
+                width = int(event.width) if event is not None else int(container.winfo_width())
+            except (AttributeError, tk.TclError, TypeError, ValueError):
+                return
+            if width <= 1:
+                return
+            wraplength = max(min_wrap, width - horizontal_padding)
+            for label in labels:
+                try:
+                    label.configure(wraplength=wraplength)
+                except tk.TclError:
+                    pass
+
+        try:
+            container.bind("<Configure>", refresh, add="+")
+            self.after_idle(refresh)
+        except tk.TclError:
+            pass
+
     def _setting_var(self, name: str) -> tk.Variable:
         if name in self.vars:
             return self.vars[name]
@@ -1596,21 +1633,32 @@ class SettingsDialog(tk.Toplevel):
         group.columnconfigure(1, weight=1)
         row = 0
         if intro:
-            ttk.Label(
-                group, text=intro, foreground="#5f6670", justify="left", wraplength=560,
-            ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 8))
+            intro_label = ttk.Label(
+                group, text=intro, foreground="#5f6670", justify="left",
+            )
+            intro_label.grid(
+                row=row, column=0, columnspan=3, sticky="ew", pady=(0, 8)
+            )
+            self._bind_responsive_labels(
+                group, intro_label, horizontal_padding=24, min_wrap=150
+            )
             row += 1
         for name in names:
             label = self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])
-            label_widget = ttk.Label(group, text=f"{label}：")
+            label_widget = ttk.Label(
+                group,
+                text=f"{label}：",
+                justify="right",
+                anchor="e",
+                wraplength=180,
+            )
             label_widget.grid(row=row, column=0, sticky="e", padx=(0, 10), pady=5)
 
             control = ttk.Frame(group)
             control.grid(row=row, column=1, sticky="ew", pady=4)
-            stretch = name == "wordslist_path"
-            control.columnconfigure(0, weight=(1 if stretch else 0))
+            control.columnconfigure(0, weight=1)
             widget = self._setting_widget(control, name)
-            widget.grid(row=0, column=0, sticky=("ew" if stretch else "w"))
+            widget.grid(row=0, column=0, sticky="ew")
             unit = self.SETTING_UNITS.get(name, "")
             if unit:
                 ttk.Label(control, text=unit, foreground="#70757d").grid(
@@ -1642,9 +1690,15 @@ class SettingsDialog(tk.Toplevel):
         group.columnconfigure(0, weight=1)
         row = 0
         if intro:
-            ttk.Label(
-                group, text=intro, foreground="#5f6670", justify="left", wraplength=560,
-            ).grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 8))
+            intro_label = ttk.Label(
+                group, text=intro, foreground="#5f6670", justify="left",
+            )
+            intro_label.grid(
+                row=row, column=0, columnspan=2, sticky="ew", pady=(0, 8)
+            )
+            self._bind_responsive_labels(
+                group, intro_label, horizontal_padding=24, min_wrap=150
+            )
             row += 1
         for label, name in checks:
             if name not in self.vars:
@@ -1696,12 +1750,11 @@ class SettingsDialog(tk.Toplevel):
     def _scrollable_settings_page(self, tab: ttk.Frame) -> ttk.Frame:
         host = ttk.Frame(tab)
         host.pack(fill="both", expand=True)
-        host.rowconfigure(0, weight=1)
-        host.columnconfigure(0, weight=3)
-        host.columnconfigure(1, weight=2)
 
-        left = ttk.Frame(host)
-        left.grid(row=0, column=0, sticky="nsew")
+        panes = ttk.Panedwindow(host, orient="horizontal")
+        panes.pack(fill="both", expand=True)
+
+        left = ttk.Frame(panes)
         left.rowconfigure(0, weight=1)
         left.columnconfigure(0, weight=1)
         canvas = tk.Canvas(left, highlightthickness=0, borderwidth=0)
@@ -1722,8 +1775,30 @@ class SettingsDialog(tk.Toplevel):
         )
         self._settings_canvases[str(tab)] = canvas
 
-        help_box = ttk.LabelFrame(host, text="设置说明", padding=(14, 12))
-        help_box.grid(row=0, column=1, sticky="nsew", padx=(6, 8), pady=(8, 8))
+        right = ttk.Frame(panes, padding=(6, 8, 8, 8))
+        panes.add(left, weight=3)
+        panes.add(right, weight=2)
+
+        split_initialized = {"done": False}
+
+        def initialize_split(_event=None) -> None:
+            if split_initialized["done"]:
+                return
+            try:
+                width = int(panes.winfo_width())
+                if width <= 200:
+                    return
+                panes.sashpos(0, int(width * 0.60))
+                split_initialized["done"] = True
+            except tk.TclError:
+                return
+
+        panes.bind("<Map>", initialize_split, add="+")
+        panes.bind("<Configure>", initialize_split, add="+")
+        self.after_idle(initialize_split)
+
+        help_box = ttk.LabelFrame(right, text="设置说明", padding=(14, 12))
+        help_box.pack(fill="both", expand=True)
         help_title = ttk.Label(
             help_box,
             textvariable=self._settings_help_title_var,
@@ -1752,28 +1827,37 @@ class SettingsDialog(tk.Toplevel):
             justify="left",
         )
         help_hint.pack(anchor="w", fill="x")
-
-        def resize_help_content(event: tk.Event) -> None:
-            # ttk.Label does not automatically reflow text to the width granted
-            # by grid/pack.  Keep wraplength tied to the actual help pane so
-            # long explanations wrap at the visible boundary instead of being
-            # clipped when the Settings Center is resized or DPI-scaled.
-            wraplength = max(120, int(event.width) - 28)
-            for label in (help_title, help_body, help_hint):
-                try:
-                    label.configure(wraplength=wraplength)
-                except tk.TclError:
-                    pass
-            self._schedule_settings_help_image_render()
-
-        help_box.bind("<Configure>", resize_help_content, add="+")
+        self._bind_responsive_labels(
+            help_box,
+            help_title,
+            help_body,
+            help_hint,
+            horizontal_padding=28,
+            min_wrap=120,
+        )
+        help_box.bind(
+            "<Configure>",
+            lambda _e: self._schedule_settings_help_image_render(),
+            add="+",
+        )
         return content
 
     def _settings_intro(self, parent: ttk.Frame, title: str, text: str) -> None:
-        ttk.Label(parent, text=title, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
-        ttk.Label(
-            parent, text=text, foreground="#5f6670", justify="left", wraplength=900,
-        ).pack(anchor="w", pady=(3, 10))
+        title_label = ttk.Label(
+            parent, text=title, font=("TkDefaultFont", 11, "bold"), justify="left",
+        )
+        title_label.pack(anchor="w", fill="x")
+        body_label = ttk.Label(
+            parent, text=text, foreground="#5f6670", justify="left",
+        )
+        body_label.pack(anchor="w", fill="x", pady=(3, 10))
+        self._bind_responsive_labels(
+            parent,
+            title_label,
+            body_label,
+            horizontal_padding=12,
+            min_wrap=160,
+        )
 
     def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:
         super().__init__(parent)
@@ -1908,11 +1992,16 @@ class SettingsDialog(tk.Toplevel):
             value=DETECTION_LABELS["left_edge"],
         )
         normal_mode.grid(row=0, column=0, sticky="w", pady=3)
-        ttk.Label(
+        normal_mode_help = ttk.Label(
             mode_group,
             text="速度快，不识别文字；适合词头靠近栏左、正文缩进稳定的版式。",
             foreground="#666666",
-        ).grid(row=0, column=1, sticky="w", padx=(12, 0), pady=3)
+            justify="left",
+        )
+        normal_mode_help.grid(row=0, column=1, sticky="ew", padx=(12, 0), pady=3)
+        self._bind_responsive_labels(
+            normal_mode_help, normal_mode_help, horizontal_padding=4, min_wrap=100
+        )
 
         ocr_mode = ttk.Radiobutton(
             mode_group,
@@ -1921,11 +2010,16 @@ class SettingsDialog(tk.Toplevel):
             value=DETECTION_LABELS["paddleocr"],
         )
         ocr_mode.grid(row=1, column=0, sticky="w", pady=3)
-        ttk.Label(
+        ocr_mode_help = ttk.Label(
             mode_group,
             text="结合文字、位置和结构证据；适合粗体、词性、符号等结构较复杂的词典。",
             foreground="#666666",
-        ).grid(row=1, column=1, sticky="w", padx=(12, 0), pady=3)
+            justify="left",
+        )
+        ocr_mode_help.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=3)
+        self._bind_responsive_labels(
+            ocr_mode_help, ocr_mode_help, horizontal_padding=4, min_wrap=100
+        )
 
         for widget, title, body in (
             (
@@ -2008,11 +2102,16 @@ class SettingsDialog(tk.Toplevel):
             lens_group, text="启用 Lens 第三意见",
             variable=self.vars["paddle_enable_lens"],
         ).pack(anchor="w")
-        ttk.Label(
+        lens_help = ttk.Label(
             lens_group,
             text="建议只在 Paddle/Tesseract 冲突时使用，避免不必要的网络等待。",
             foreground="#666666",
-        ).pack(anchor="w", pady=(2, 5))
+            justify="left",
+        )
+        lens_help.pack(anchor="w", fill="x", pady=(2, 5))
+        self._bind_responsive_labels(
+            lens_group, lens_help, horizontal_padding=12, min_wrap=120
+        )
         lens_mode_var = tk.StringVar(
             value=LENS_MODE_LABELS.get(
                 parent.settings.paddle_lens_mode, LENS_MODE_LABELS["conflict"]
@@ -2094,12 +2193,17 @@ class SettingsDialog(tk.Toplevel):
             text_ocr_group, textvariable=ocr_engine_var,
             values=tuple(OCR_ENGINE_VALUES), state="readonly", width=28,
         ).grid(row=0, column=1, sticky="w", pady=4)
-        ttk.Label(
+        text_ocr_help = ttk.Label(
             text_ocr_group,
             text="用于“已有横线后再识别整行文本”的普通 OCR 功能；"
                  "OCR画线使用上一个页签中的多引擎流程，两者不要混淆。",
-            foreground="#666666", wraplength=560, justify="left",
-        ).grid(row=0, column=2, sticky="w", padx=(12, 0), pady=4)
+            foreground="#666666",
+            justify="left",
+        )
+        text_ocr_help.grid(row=0, column=2, sticky="ew", padx=(12, 0), pady=4)
+        self._bind_responsive_labels(
+            text_ocr_help, text_ocr_help, horizontal_padding=4, min_wrap=120
+        )
         project_checks = (
             ("OCR 后执行替换规则", "ocr_replace"),
             ("普通 OCR 文本转小写", "lowercase_ocr"),
@@ -2174,7 +2278,13 @@ class SettingsDialog(tk.Toplevel):
             "始终可选“通用 Unicode”或“自定义排序规则”。自定义规则就是词典自己的字母表；\n"
             "例如西班牙语旧式可写：a b c ch d e f g h i j k l ll m n ñ o p q r s t u v w x y z。"
         )
-        ttk.Label(sort_frame, text=help_text, justify="left", wraplength=820).grid(row=4, column=0, columnspan=2, sticky="w", pady=(12, 0))
+        sort_help = ttk.Label(sort_frame, text=help_text, justify="left")
+        sort_help.grid(
+            row=4, column=0, columnspan=2, sticky="ew", pady=(12, 0)
+        )
+        self._bind_responsive_labels(
+            sort_frame, sort_help, horizontal_padding=24, min_wrap=180
+        )
         self._refresh_sort_choices(initial=True)
 
         # User-editable OCR headword filter rules.
@@ -2185,7 +2295,13 @@ class SettingsDialog(tk.Toplevel):
             "常用：reject_lemma_exact / reject_lemma_regex / reject_line_contains / "
             "reject_line_regex；accept_*；pos_exclude_exact / pos_exclude_regex。"
         )
-        ttk.Label(rules_tab, text=rules_help, justify="left", padding=(12, 10, 12, 6)).grid(row=0, column=0, sticky="ew")
+        rules_help_label = ttk.Label(
+            rules_tab, text=rules_help, justify="left", padding=(12, 10, 12, 6)
+        )
+        rules_help_label.grid(row=0, column=0, sticky="ew")
+        self._bind_responsive_labels(
+            rules_tab, rules_help_label, horizontal_padding=24, min_wrap=180
+        )
         rules_editor_frame = ttk.Frame(rules_tab, padding=(12, 0, 12, 6))
         rules_editor_frame.grid(row=1, column=0, sticky="nsew")
         rules_editor_frame.columnconfigure(0, weight=1); rules_editor_frame.rowconfigure(0, weight=1)
@@ -2368,11 +2484,24 @@ class SettingsDialog(tk.Toplevel):
         self.profile_description_var = tk.StringVar(value="")
         self.profile_examples_var = tk.StringVar(value="")
         self.profile_layout_summary_var = tk.StringVar(value="")
-        ttk.Label(top, textvariable=self.profile_description_var, justify="left", wraplength=880).grid(
-            row=2, column=0, columnspan=4, sticky="w", pady=(8, 2)
+        profile_description = ttk.Label(
+            top, textvariable=self.profile_description_var, justify="left"
         )
-        ttk.Label(top, textvariable=self.profile_examples_var, justify="left", wraplength=880).grid(
-            row=3, column=0, columnspan=4, sticky="w", pady=(2, 0)
+        profile_description.grid(
+            row=2, column=0, columnspan=4, sticky="ew", pady=(8, 2)
+        )
+        profile_examples = ttk.Label(
+            top, textvariable=self.profile_examples_var, justify="left"
+        )
+        profile_examples.grid(
+            row=3, column=0, columnspan=4, sticky="ew", pady=(2, 0)
+        )
+        self._bind_responsive_labels(
+            top,
+            profile_description,
+            profile_examples,
+            horizontal_padding=20,
+            min_wrap=180,
         )
         ttk.Label(
             top, textvariable=self.profile_layout_summary_var,
