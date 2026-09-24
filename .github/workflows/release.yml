@@ -51,9 +51,9 @@ jobs:
           staging="$(mktemp -d)"
           mkdir -p "${staging}/${package}"
           cp -R \
-            src docs examples \
+            src docs examples scripts \
             README.md CHANGELOG.md LICENSE.txt pyproject.toml uv.lock .python-version \
-            run.py run_tests.py run_windows.bat install_ocr_windows.bat \
+            run.py run_tests.py WINDOWS_SETUP.txt \
             "${staging}/${package}/"
           (cd "${staging}" && zip -qr "${GITHUB_WORKSPACE}/dist/${package}-release.zip" "${package}")
 
