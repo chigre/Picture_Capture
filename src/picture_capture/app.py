@@ -11152,7 +11152,9 @@ class PictureCaptureApp(tk.Tk):
         s = self.settings
         return (
             id(self.image), int(self.__dict__.get("current_index", 0) or 0),
-            int(getattr(s, "geometry_coordinate_version", 0) or 0), int(s.columns),
+            int(getattr(s, "geometry_coordinate_version", 0) or 0),
+            str(getattr(s, "geometry_coordinate_space", "") or ""),
+            int(getattr(s, "geometry_reference_width", 0) or 0), int(s.columns),
             str(s.layout_columns_policy), str(s.layout_column_separator_mode),
             str(s.analysis_threshold_mode),
             float(s.manual_x), float(s.gutter), float(s.column_width),
@@ -11160,6 +11162,8 @@ class PictureCaptureApp(tk.Tk):
             bool(s.follow_column_deformation), float(s.column_track_block_height),
             float(s.column_track_radius), float(s.body_indent),
             float(s.column_track_max_step), str(s.layout_transform),
+            str(getattr(s, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"),
+            str(getattr(s, "layout_text_direction", "ltr") or "ltr"),
             str(getattr(s, "profile_header_mode", "auto")),
             str(getattr(s, "profile_footer_mode", "auto")),
             str(getattr(s, "profile_side_content_mode", "none")),
@@ -11168,6 +11172,8 @@ class PictureCaptureApp(tk.Tk):
             float(getattr(s, "profile_header_percent", 6.0)),
             float(getattr(s, "profile_footer_percent", 5.0)),
             float(getattr(s, "profile_side_percent", 8.0)),
+            float(getattr(s, "profile_side_percent_a", getattr(s, "profile_side_percent", 8.0))),
+            float(getattr(s, "profile_side_percent_b", getattr(s, "profile_side_percent", 8.0))),
         )
 
     def _get_cached_display_geometry(self):

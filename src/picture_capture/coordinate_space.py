@@ -180,15 +180,16 @@ def initialize_geometry_reference(
 ) -> bool:
     """Initialize an explicit canonical reference width once a real page is known.
 
-    AppSettings intentionally keeps geometry_reference_width=0 so library callers
-    can construct page-local geometry without an implicit scale. A real project,
-    however, needs a portable persisted reference width.
+    Fresh AppSettings uses the stable historical 1400px canonical reference so
+    its shipped numeric defaults have an unambiguous physical meaning before any
+    page is opened. This helper remains for older modern-format settings that
+    explicitly persisted a missing/zero reference width.
 
-    Clean projects inherit numeric defaults from the historical 1400px display
-    convention. When historical_1400_values is true, preserve their physical
-    meaning by resolving those values to the first page before storing that page
-    as the project's canonical reference. Existing modern JSON with a missing
-    reference width keeps its current numeric values unchanged.
+    When historical_1400_values is true for such a zero-reference object, preserve
+    the historical defaults' physical meaning by resolving those values to the
+    first page before storing that page as the project's canonical reference.
+    Existing modern JSON with a missing reference width keeps its current numeric
+    values unchanged unless the caller explicitly identifies historical defaults.
     """
     if not geometry_uses_canonical_pixels(settings):
         return False

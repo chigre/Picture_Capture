@@ -8,6 +8,7 @@ import re
 from PIL import Image
 
 from .layout_transform import LayoutTransform
+from .coordinate_space import REFERENCE_CANONICAL_WIDTH
 
 
 IMAGE_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp"}
@@ -120,7 +121,7 @@ class AppSettings:
     geometry_coordinate_space: str = "canonical_reference_page_pixels"
     # Canonical width of the page whose pixels define the persisted layout
     # scalars. Runtime geometry scales these values to the current page width.
-    geometry_reference_width: int = 0
+    geometry_reference_width: int = REFERENCE_CANONICAL_WIDTH
     parameter_display_width: int = 0
     columns: int = 2
     # Profile v3 layout semantics. Geometry is measured in canonical space;

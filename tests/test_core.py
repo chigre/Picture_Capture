@@ -69,6 +69,8 @@ from picture_capture.processing import (
     Geometry,
     ColumnPath,
     entry_crop_column_boxes,
+    CropRecord,
+    append_crop_log,
 )
 
 
@@ -3121,6 +3123,14 @@ def test_v294_display_geometry_cache_invalidates_when_layout_parameters_change()
     app.settings.column_track_radius += 2
     key3 = PictureCaptureApp._display_geometry_key(app)
     assert key3 != key1
+    app.settings.column_track_radius -= 2
+    app.settings.geometry_reference_width += 100
+    key4 = PictureCaptureApp._display_geometry_key(app)
+    assert key4 != key1
+    app.settings.geometry_reference_width -= 100
+    app.settings.profile_side_percent_a += 1.0
+    key5 = PictureCaptureApp._display_geometry_key(app)
+    assert key5 != key1
 
 
 
