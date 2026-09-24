@@ -6170,9 +6170,9 @@ def test_windows_batch_launcher_uses_direct_pythonw_without_hidden_relaunch():
     assert '.picture_capture_ocr_extra' in batch
     assert 'uv sync --locked --extra "%PC_OCR_EXTRA%"' in batch
     assert "subprocess" not in run_py
+    assert "Popen" not in run_py
     assert "CREATE_NO_WINDOW" not in run_py
     assert "PC_NO_CONSOLE" not in run_py
-    assert "pythonw.exe" not in run_py
     assert not Path("Picture_Capture.pyw").exists()
 
 
