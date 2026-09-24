@@ -1724,37 +1724,49 @@ class SettingsDialog(tk.Toplevel):
 
         help_box = ttk.LabelFrame(host, text="设置说明", padding=(14, 12))
         help_box.grid(row=0, column=1, sticky="nsew", padx=(6, 8), pady=(8, 8))
-        ttk.Label(
+        help_title = ttk.Label(
             help_box,
             textvariable=self._settings_help_title_var,
             font=("TkDefaultFont", 10, "bold"),
-        ).pack(anchor="w")
-        ttk.Label(
+            justify="left",
+        )
+        help_title.pack(anchor="w", fill="x")
+        help_body = ttk.Label(
             help_box,
             textvariable=self._settings_help_body_var,
             foreground="#555b63",
             justify="left",
-            wraplength=320,
-        ).pack(anchor="w", fill="x", pady=(7, 0))
+        )
+        help_body.pack(anchor="w", fill="x", pady=(7, 0))
         help_image = ttk.Label(help_box, anchor="center")
         help_separator = ttk.Separator(help_box, orient="horizontal")
         help_separator.pack(fill="x", pady=(14, 10))
         self._settings_help_image_widgets.append(
             (help_image, help_separator, help_box)
         )
-        help_box.bind(
-            "<Configure>",
-            lambda _e: self._schedule_settings_help_image_render(),
-            add="+",
-        )
-        ttk.Label(
+        help_hint = ttk.Label(
             help_box,
             text="把鼠标停在设置项上，或用 Tab/鼠标进入输入框，"
                  "这里会显示完整说明。高级设置不确定时保持默认即可。",
             foreground="#7a8088",
             justify="left",
-            wraplength=320,
-        ).pack(anchor="w", fill="x")
+        )
+        help_hint.pack(anchor="w", fill="x")
+
+        def resize_help_content(event: tk.Event) -> None:
+            # ttk.Label does not automatically reflow text to the width granted
+            # by grid/pack.  Keep wraplength tied to the actual help pane so
+            # long explanations wrap at the visible boundary instead of being
+            # clipped when the Settings Center is resized or DPI-scaled.
+            wraplength = max(120, int(event.width) - 28)
+            for label in (help_title, help_body, help_hint):
+                try:
+                    label.configure(wraplength=wraplength)
+                except tk.TclError:
+                    pass
+            self._schedule_settings_help_image_render()
+
+        help_box.bind("<Configure>", resize_help_content, add="+")
         return content
 
     def _settings_intro(self, parent: ttk.Frame, title: str, text: str) -> None:
