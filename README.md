@@ -99,15 +99,13 @@ install_ocr_windows.bat
 
 安装器会自动：
 
-1. 建立/同步项目 `.venv`；
-2. 安装 PaddleOCR；
-3. 安装 Google Lens；
-4. 清理可能冲突的 CPU / GPU Paddle runtime；
-5. 从所选 PaddlePaddle 官方 CUDA 索引安装 `paddlepaddle-gpu==3.3.0`；
-6. 检查 PaddleOCR、Google Lens、CUDA build 和当前 Paddle device；
-7. 保存当前 OCR profile。
+1. 使用所选 uv profile 同步项目 `.venv`；
+2. 由 `pyproject.toml + uv.lock` 选择对应 PaddlePaddle 官方 CPU/CUDA 索引；
+3. 一次性安装 PaddleOCR、Google Lens 与对应 CPU/GPU runtime；
+4. 检查 PaddleOCR、Google Lens、CUDA build 和当前 Paddle device；
+5. 保存当前 OCR profile。
 
-**GPU 用户不需要再手工执行多条 `uv pip install` 命令。**
+**GPU 用户不需要再手工执行 `uv pip uninstall/install`，也不需要自己填写 CUDA 索引。**
 
 > GPU 用户不要再额外执行旧的 `uv sync --extra paddleocr`。该兼容 extra 是 CPU 预设，可能重新引入 CPU Paddle runtime。
 
@@ -137,19 +135,12 @@ Picture Capture 仍然可以启动；如果系统已经安装 Tesseract，也可
 run_windows.bat
 ```
 
-正常情况下它只会短暂出现一个启动窗口，然后直接用项目自己的
-`.venv\Scripts\pythonw.exe` 打开 Picture Capture；程序运行期间不会保留控制台窗口。
-如果 `.venv` 尚未建立或 `uv.lock` 有变化，启动窗口会暂时保持可见并先同步环境。
+Windows 启动脚本现在刻意保持为**前台、可见的最小包装器**：它直接使用项目自己的
+`.venv\Scripts\python.exe` 运行 `run.py`，程序运行期间控制台窗口会保留。
+这样不再使用 `start`、`pythonw.exe`、隐藏窗口或后台重启链路，减少安全软件对启动行为的启发式误判。
 
-后台运行时的输出与错误写入：
-
-```text
-%LOCALAPPDATA%\Picture_Capture\launcher.log
-```
-
-> 该启动方式不再使用 `Picture_Capture.pyw`、`CREATE_NO_WINDOW` 或 Python 内部
-> `subprocess.Popen` 重启链路。当前分支用于验证这种更简单的静默启动方式是否避免
-> Windows Defender 对 GitHub Download ZIP 的误报。
+如果首次运行时 `.venv` 尚不存在，脚本只执行一次标准的
+`uv sync --locked --no-dev` 来建立核心环境。
 
 安装器会在程序目录生成本机配置：
 
@@ -163,7 +154,7 @@ run_windows.bat
 ocr-gpu-cu126
 ```
 
-`run_windows.bat` 会自动读取该配置并使用相同的 `.venv` 启动，因此不需要每次重新选择 OCR 环境。
+该文件用于记录最近一次成功安装的 OCR profile，便于诊断和后续切换；日常 `run_windows.bat` 不再解析该文件，也不会在每次启动时重新同步依赖。
 
 ---
 
@@ -180,7 +171,7 @@ v2.13.2 提供以下正式 profile：
 | Lens only | `lens` | Google Lens |
 | Core only | 无 | 仅核心依赖 |
 
-GPU profile 中，PaddleOCR 与 Google Lens 由 uv profile 管理；`paddlepaddle-gpu` 因不同 CUDA 版本需要不同官方索引，因此由 `install_ocr_windows.bat` 根据选择自动安装。
+GPU profile 已把 `paddlepaddle-gpu==3.3.0` 和对应 CUDA 官方索引直接声明在 `pyproject.toml` 中，并由 `uv.lock` 锁定。安装器只负责选择 profile 并执行标准 `uv sync --locked --no-dev --extra <profile>`。
 
 详细说明见 [docs/ocr-install.md](docs/ocr-install.md)。
 
@@ -192,7 +183,7 @@ GPU profile 中，PaddleOCR 与 Google Lens 由 uv profile 管理；`paddlepaddl
 install_ocr_windows.bat
 ```
 
-然后选择新的 profile 即可。安装器会处理 Paddle CPU/GPU runtime 的切换并重新验证环境。
+然后选择新的 profile 即可。uv 会按互斥 profile 同步对应 CPU/GPU runtime，并在完成后重新验证环境。
 
 ---
 
