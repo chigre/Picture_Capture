@@ -1690,6 +1690,12 @@ class SettingsDialog(tk.Toplevel):
         self._casts = {name: cast for _, name, cast in self.FIELDS}
         self._field_meta = {name: (label, cast) for label, name, cast in self.FIELDS}
         self._sort_label_to_value: dict[str, str] = {}
+        self._settings_help_title_var = tk.StringVar(value="这里会解释当前设置")
+        self._settings_help_body_var = tk.StringVar(
+            value="把鼠标停在任一设置项上，或进入输入框，即可看到它控制什么、"
+                  "什么时候需要调整，以及调大/调小可能带来的影响。"
+        )
+        self._settings_save_status_var = tk.StringVar(value="✓ 自动保存已开启")
 
         outer = ttk.Frame(self, padding=(18, 14, 18, 12))
         outer.pack(fill="both", expand=True)
@@ -1776,18 +1782,51 @@ class SettingsDialog(tk.Toplevel):
             )
         )
         self.vars["detection_method"] = method_var
-        ttk.Label(mode_group, text="项目默认：").grid(
-            row=0, column=0, sticky="e", padx=(0, 10), pady=4
+
+        normal_mode = ttk.Radiobutton(
+            mode_group,
+            text="普通画线（左缘规则）",
+            variable=method_var,
+            value=DETECTION_LABELS["left_edge"],
         )
-        ttk.Combobox(
-            mode_group, textvariable=method_var, values=tuple(DETECTION_VALUES),
-            state="readonly", width=28,
-        ).grid(row=0, column=1, sticky="w", pady=4)
+        normal_mode.grid(row=0, column=0, sticky="w", pady=3)
         ttk.Label(
             mode_group,
-            text="这只决定默认按钮/批处理方式；两种模式始终可以在主界面直接运行。",
-            foreground="#666666", wraplength=620, justify="left",
-        ).grid(row=0, column=2, sticky="w", padx=(12, 0), pady=4)
+            text="速度快，不识别文字；适合词头靠近栏左、正文缩进稳定的版式。",
+            foreground="#666666",
+        ).grid(row=0, column=1, sticky="w", padx=(12, 0), pady=3)
+
+        ocr_mode = ttk.Radiobutton(
+            mode_group,
+            text="OCR画线（识别词头）",
+            variable=method_var,
+            value=DETECTION_LABELS["paddleocr"],
+        )
+        ocr_mode.grid(row=1, column=0, sticky="w", pady=3)
+        ttk.Label(
+            mode_group,
+            text="结合文字、位置和结构证据；适合粗体、词性、符号等结构较复杂的词典。",
+            foreground="#666666",
+        ).grid(row=1, column=1, sticky="w", padx=(12, 0), pady=3)
+
+        for widget, title, body in (
+            (
+                normal_mode,
+                "普通画线（左缘规则）",
+                "只看版面几何和栏左墨迹，不依赖 OCR。优点是快；"
+                "当正文也贴近栏左或词头缩进变化很大时，误检/漏检会增加。",
+            ),
+            (
+                ocr_mode,
+                "OCR画线（识别词头）",
+                "用 OCR 文字、左缘位置、粗体/字高、词性或特殊符号等证据判断词头。"
+                "复杂版式更稳，但首次 OCR 会更耗时。",
+            ),
+        ):
+            self._bind_help_widget(
+                widget,
+                lambda t=title, b=body: self._show_settings_help(t, b),
+            )
         self._add_setting_group(
             common,
             "常用版面参数",
@@ -2050,17 +2089,19 @@ class SettingsDialog(tk.Toplevel):
         footer.pack(fill="x")
         ttk.Label(
             footer,
-            text="改动会自动保存；“保存并关闭”会立即校验当前参数。",
+            textvariable=self._settings_save_status_var,
             foreground="#666666",
         ).pack(side="left")
-        ttk.Button(footer, text="关闭", command=self.destroy).pack(side="right", padx=(6, 0))
-        ttk.Button(footer, text="保存并关闭", command=self.save).pack(side="right")
         ttk.Button(
-            footer, text="检测 OCR 引擎", command=self.check_ocr_engines
+            footer, text="关闭", command=self._close_validated
+        ).pack(side="right")
+        ttk.Button(
+            footer, text="校验当前设置",
+            command=lambda: self._validate_settings_now(),
         ).pack(side="right", padx=(0, 8))
-        self.bind("<Control-s>", lambda _event: self.save())
-        self.bind("<Escape>", lambda _event: self.destroy())
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.bind("<Control-s>", lambda _event: self._validate_settings_now())
+        self.bind("<Escape>", lambda _event: self._close_validated())
+        self.protocol("WM_DELETE_WINDOW", self._close_validated)
         self._autosave_job: str | None = None
         self._autosave_ready = True
         for _name, _var in self.vars.items():
@@ -2612,6 +2653,8 @@ class SettingsDialog(tk.Toplevel):
     def _schedule_autosave(self) -> None:
         if not getattr(self, "_autosave_ready", False):
             return
+        if hasattr(self, "_settings_save_status_var"):
+            self._settings_save_status_var.set("● 有改动，正在自动保存…")
         job = getattr(self, "_autosave_job", None)
         if job is not None:
             try:
@@ -2622,7 +2665,29 @@ class SettingsDialog(tk.Toplevel):
 
     def _run_autosave(self) -> None:
         self._autosave_job = None
-        self.save(close=False, show_errors=False)
+        ok = self.save(close=False, show_errors=False)
+        if hasattr(self, "_settings_save_status_var"):
+            self._settings_save_status_var.set(
+                "✓ 已自动保存" if ok else "⚠ 当前输入暂未保存；关闭时会提示需要修正的项目"
+            )
+
+    def _validate_settings_now(self) -> bool:
+        ok = self.save(close=False, show_errors=True)
+        if hasattr(self, "_settings_save_status_var"):
+            self._settings_save_status_var.set(
+                "✓ 当前设置有效并已保存" if ok else "⚠ 请修正无效设置"
+            )
+        return ok
+
+    def _close_validated(self) -> None:
+        job = getattr(self, "_autosave_job", None)
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except tk.TclError:
+                pass
+            self._autosave_job = None
+        self.save(close=True, show_errors=True)
 
     def save(self, *, close: bool = True, show_errors: bool = True) -> bool:
         try:
