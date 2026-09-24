@@ -3902,7 +3902,7 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     assert 'text="跳转", width=6' in page_toolbar
     assert 'text="上一页", width=6' in page_toolbar
     assert 'text="下一页", width=6' in page_toolbar
-    assert page_toolbar.count("width=6") == 3
+    assert page_toolbar.count('style="PC.PageNav.TButton"') == 3
     for tooltip in (
         "缩小显示",
         "放大显示",
