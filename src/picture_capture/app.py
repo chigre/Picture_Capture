@@ -983,7 +983,7 @@ class UsageGuideWindow(tk.Toplevel):
                 (
                     "A", "OCR画线：默认推荐",
                     "优先运行【OCR画线】。它同时利用词头文字、左缘位置、粗体/字高、词性和特殊符号等证据，"
-                    "比单纯依赖栏左墨迹更适合真实词典中的复杂版式；默认只启用 PaddleOCR，Tesseract 与 Google Lens 按需手动开启。"
+                    "比单纯依赖栏左墨迹更适合真实词典中的复杂版式；默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启。"
                 ),
                 (
                     "B", "有效缓存：OCR 不必每次重跑",
