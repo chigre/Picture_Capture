@@ -948,7 +948,7 @@ def test_project_profile_classic_headword_atlas_is_packaged():
     with Image.open(atlas) as image:
         assert image.size == (720, 316)
 
-    # Curated user-uploaded files live in this subfolder and must be found
+    # Curated runtime samples live in this subfolder and must be found
     # before falling back to the atlas.
     recommended = root / "recommended_current"
     expected = {
@@ -968,7 +968,21 @@ def test_project_profile_classic_headword_atlas_is_packaged():
         Path(__file__).resolve().parents[1] / "pyproject.toml"
     ).read_text(encoding="utf-8")
     assert "data/headword_examples/recommended_current/*.jpg" in pyproject
-    assert "data/headword_examples/extended/*.jpg" in pyproject
+    assert "data/profile_previews/" not in pyproject
+    assert "data/headword_examples/extended/" not in pyproject
+    assert not (root / "contact_sheet.jpg").exists()
+    assert not (root / "extended").exists()
+
+    dictionary_source = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "dictionary_profile.py"
+    ).read_text(encoding="utf-8")
+    app_source = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    assert "profile_preview_path" not in dictionary_source
+    assert "profile_preview_dir" not in dictionary_source
+    assert "profile_preview_path" not in app_source
+    assert "preview_profile_examples" not in app_source
 
 
 
@@ -1063,7 +1077,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "HEADWORD_EXAMPLE_ATLAS_CROPS" in text
     assert '"classic_headword_examples.jpg"' in text
     assert 'root / "recommended_current"' in text
-    assert 'root / "extended"' in text
+    assert 'root / "extended"' not in text
     assert "fill=(255, 0, 0, 255), width=1" in text
     assert "允许的词头结构（决定哪些 parser 通道开放）" in text
     assert "普通左缘短词可以作为词头" in text
