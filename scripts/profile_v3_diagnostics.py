@@ -82,7 +82,6 @@ def main() -> int:
         for path in sorted(p for p in folder.iterdir() if p.suffix.lower() in IMAGE_EXTENSIONS):
             with Image.open(path) as opened:
                 image = normalize_page_rgb(opened)
-            settings.parameter_display_width = image.width
             estimate = detect_layout_parameters(image, settings)
             entries, geometry = detect_entries(image, settings)
             marker = geometry.transform.canonical_marker_to_source((10, 10), (50, 10), image.size)
