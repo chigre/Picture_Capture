@@ -6750,7 +6750,7 @@ class PictureCaptureApp(tk.Tk):
             "muted": "#68707b",
             "button": "#f4f5f7",
             "button_hover": "#e7eaee",
-            "button_border": "#b9c1cb",
+            "button_border": "#d3d8df",
             "review_soft": "#dceeff",
             "review_soft_hover": "#c7e1f8",
             "review_soft_text": "#245b86",
@@ -6838,22 +6838,22 @@ class PictureCaptureApp(tk.Tk):
         palette = {
             "neutral": (
                 colors["button"], colors["button_hover"], colors["text"],
-                colors["button_border"],
             ),
             "primary": (
-                colors["primary"], colors["primary_hover"], "#ffffff", "#bd6c17",
+                colors["primary"], colors["primary_hover"], "#ffffff",
             ),
             "success": (
-                colors["success"], colors["success_hover"], "#ffffff", "#477f52",
+                colors["success"], colors["success_hover"], "#ffffff",
             ),
             "review_soft": (
                 colors["review_soft"], colors["review_soft_hover"],
-                colors["review_soft_text"], "#9fc5e4",
+                colors["review_soft_text"],
             ),
         }
-        background, active_background, foreground, border = palette.get(
+        background, active_background, foreground = palette.get(
             role, palette["neutral"]
         )
+        border = colors["button_border"]
         return tk.Button(
             parent,
             text=text,
@@ -6862,9 +6862,9 @@ class PictureCaptureApp(tk.Tk):
             fg=foreground,
             activebackground=active_background,
             activeforeground=foreground,
-            relief="solid",
-            bd=1,
-            highlightthickness=0,
+            relief="flat",
+            bd=0,
+            highlightthickness=1,
             highlightbackground=border,
             highlightcolor=border,
             padx=7,
