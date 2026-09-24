@@ -27,6 +27,12 @@ CANONICAL_GEOMETRY_FIELDS = (
     "body_indent",
     "character_height",
     "row_padding",
+    "horizontal_tolerance",
+    "column_track_radius",
+    "column_track_block_height",
+    "column_track_max_step",
+    "illustration_detect_padding",
+    "illustration_detect_right_padding",
     "review_single_cjk_line_height",
     "review_regular_crop_height",
 )
