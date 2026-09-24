@@ -13,6 +13,14 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from .models import AppSettings, Entry, PolygonRegion, read_noncomment_lines, resolved_tesseract_language
+from .coordinate_space import (
+    canonical_to_analysis_scale,
+    geometry_uses_canonical_pixels,
+    legacy_parameter_scale,
+    reference_to_analysis,
+    reference_to_canonical,
+    stored_geometry_to_canonical,
+)
 from .image_utils import normalize_page_rgb
 from .layout_transform import LayoutTransform
 from .profile_semantics import (
@@ -166,17 +174,15 @@ def _analysis_image(image: Image.Image, max_width: int = 1400) -> tuple[Image.Im
 
 
 def parameter_scale(image: Image.Image, settings: AppSettings) -> float:
-    """Return displayed-image pixels per source-image pixel.
+    """Compatibility scale for pre-v2 display-coordinate projects.
 
-    The VB program resized a page to the PictureBox width and interpreted all
-    geometry controls in those displayed pixels. A stored reference width lets
-    the same semantics work in GUI batch jobs and the CLI. Projects saved by an
-    earlier Python version fall back to its 1400-pixel analysis convention
-    until the GUI opens a page and records the actual displayed width.
+    Modern project geometry is already stored in full-resolution canonical
+    pixels, so its runtime scale is exactly 1. Old projects keep the historical
+    conversion until ProjectState migrates them.
     """
-    if settings.parameter_display_width > 0 and image.width > 0:
-        return max(0.01, settings.parameter_display_width / image.width)
-    return min(1.0, 1400 / max(1, image.width))
+    if geometry_uses_canonical_pixels(settings):
+        return 1.0
+    return legacy_parameter_scale(image.width, settings)
 
 
 def _adaptive_dark_mask(gray_image: Image.Image, block_size: int, c_value: int) -> np.ndarray:
@@ -319,55 +325,55 @@ def _estimate_column_paths(
     return paths
 
 
-def _derive_nominal_geometry_canonical(image_width: int, image_height: int, settings: AppSettings) -> Geometry:
-    """Return page geometry using only image dimensions and saved layout settings.
-
-    This intentionally skips pixel decoding / column-edge tracking.  Reading-order
-    sorting only needs the nominal column intervals, so batch PDIC operations can
-    classify entries by column without reopening thousands of full-resolution pages.
-    The column starts/widths/top/bottom mirror :func:`derive_geometry`; column paths
-    are straight nominal lines because no image pixels are inspected.
-    """
+def _derive_nominal_geometry_canonical(
+    image_width: int, image_height: int, settings: AppSettings,
+) -> Geometry:
+    """Return nominal geometry in full-resolution canonical pixels."""
     width = max(1, int(image_width))
     height = max(1, int(image_height))
-    analysis_scale = 1.0 if width <= 1400 else 1400.0 / width
-    analysis_width = width if width <= 1400 else 1400
-    if settings.parameter_display_width > 0:
-        display_scale = max(0.01, settings.parameter_display_width / width)
-    else:
-        display_scale = min(1.0, 1400 / width)
-    parameter_to_analysis = analysis_scale / display_scale
+    analysis_scale = min(1.0, 1400.0 / width)
+    analysis_width = max(1, round(width * analysis_scale))
+
+    def canonical_value(name: str) -> int:
+        return stored_geometry_to_canonical(
+            getattr(settings, name), width, settings,
+        )
 
     count = max(1, settings.columns)
-    left = max(0, round(settings.manual_x * parameter_to_analysis))
-    gutter = max(0, round(settings.gutter * parameter_to_analysis))
-    column_width = max(10, round(settings.column_width * parameter_to_analysis))
+    left = max(0, round(canonical_value("manual_x") * analysis_scale))
+    gutter = max(0, round(canonical_value("gutter") * analysis_scale))
+    column_width = max(10, round(canonical_value("column_width") * analysis_scale))
     configured_right = left + count * column_width + (count - 1) * gutter
     if configured_right > analysis_width * 1.08 or configured_right < analysis_width * 0.55:
         left = max(2, round(analysis_width * 0.025))
         gutter = max(4, round(analysis_width * 0.035)) if count > 1 else 0
-        column_width = max(10, (analysis_width - 2 * left - (count - 1) * gutter) // count)
+        column_width = max(
+            10, (analysis_width - 2 * left - (count - 1) * gutter) // count
+        )
 
-    starts_analysis = [left + i * (column_width + gutter) for i in range(count)]
-    starts = [min(width - 1, max(0, round(x / analysis_scale))) for x in starts_analysis]
-    gutter_source = round(gutter / analysis_scale)
+    starts_analysis = [
+        left + i * (column_width + gutter) for i in range(count)
+    ]
+    starts = [
+        min(width - 1, max(0, round(x / analysis_scale)))
+        for x in starts_analysis
+    ]
+    gutter_canonical = round(gutter / analysis_scale)
     widths: list[int] = []
-    for i, start in enumerate(starts):
+    for i, start_x in enumerate(starts):
         if i + 1 < len(starts):
-            widths.append(max(1, starts[i + 1] - start - gutter_source))
+            widths.append(max(1, starts[i + 1] - start_x - gutter_canonical))
         else:
-            widths.append(max(1, width - start))
+            widths.append(max(1, width - start_x))
 
-    start_y_analysis = round(settings.start_y * parameter_to_analysis)
-    top = min(height - 1, max(0, round(start_y_analysis / analysis_scale)))
-    if settings.crop_to_bottom_y and settings.bottom_y > settings.start_y:
-        bottom_y_analysis = round(settings.bottom_y * parameter_to_analysis)
-        bottom = min(height, max(top + 1, round(bottom_y_analysis / analysis_scale)))
+    top = min(height - 1, max(0, canonical_value("start_y")))
+    bottom_setting = canonical_value("bottom_y")
+    if settings.crop_to_bottom_y and bottom_setting > top:
+        bottom = min(height, max(top + 1, bottom_setting))
     else:
         bottom = height
-    paths = [ColumnPath([(top, start), (bottom, start)]) for start in starts]
+    paths = [ColumnPath([(top, x), (bottom, x)]) for x in starts]
     return Geometry(starts, widths, top, bottom, paths)
-
 
 def derive_nominal_geometry(image_width: int, image_height: int, settings: AppSettings) -> Geometry:
     """Return canonical nominal geometry while retaining source mapping metadata."""
@@ -381,54 +387,88 @@ def derive_nominal_geometry(image_width: int, image_height: int, settings: AppSe
 
 
 def _derive_geometry_canonical(image: Image.Image, settings: AppSettings) -> Geometry:
-    """Translate legacy display-coordinate settings into source pixels.
+    """Build geometry in full-resolution canonical pixels.
 
-    If the saved geometry cannot fit the current page, use a conservative
-    evenly spaced fallback. This makes the default usable on unseen scans while
-    still honoring settings from an old project folder.
+    Version-2 settings are already stored in this space. Legacy display-scaled
+    values are converted only at this boundary, so downstream code never needs
+    to know about GUI zoom or parameter_display_width.
     """
-    analysis, scale = _analysis_image(image)
-    width, height = analysis.size
-    parameter_to_analysis = scale / parameter_scale(image, settings)
+    analysis, analysis_scale = _analysis_image(image)
+    analysis_width, analysis_height = analysis.size
+    canonical_width, canonical_height = image.size
+
+    def canonical_value(name: str) -> int:
+        return stored_geometry_to_canonical(
+            getattr(settings, name), canonical_width, settings,
+        )
+
     count = max(1, settings.columns)
-    left = max(0, round(settings.manual_x * parameter_to_analysis))
-    gutter = max(0, round(settings.gutter * parameter_to_analysis))
-    column_width = max(10, round(settings.column_width * parameter_to_analysis))
+    left = max(0, round(canonical_value("manual_x") * analysis_scale))
+    gutter = max(0, round(canonical_value("gutter") * analysis_scale))
+    column_width = max(10, round(canonical_value("column_width") * analysis_scale))
     configured_right = left + count * column_width + (count - 1) * gutter
-    if configured_right > width * 1.08 or configured_right < width * 0.55:
-        left = max(2, round(width * 0.025))
-        gutter = max(4, round(width * 0.035)) if count > 1 else 0
-        column_width = max(10, (width - 2 * left - (count - 1) * gutter) // count)
-    starts_analysis = [left + i * (column_width + gutter) for i in range(count)]
+    if configured_right > analysis_width * 1.08 or configured_right < analysis_width * 0.55:
+        left = max(2, round(analysis_width * 0.025))
+        gutter = max(4, round(analysis_width * 0.035)) if count > 1 else 0
+        column_width = max(
+            10,
+            (analysis_width - 2 * left - (count - 1) * gutter) // count,
+        )
+
+    starts_analysis = [
+        left + i * (column_width + gutter) for i in range(count)
+    ]
     widths_analysis: list[int] = []
-    for i, start in enumerate(starts_analysis):
+    for i, start_x in enumerate(starts_analysis):
         if i + 1 < len(starts_analysis):
-            widths_analysis.append(max(1, starts_analysis[i + 1] - start - gutter))
+            widths_analysis.append(
+                max(1, starts_analysis[i + 1] - start_x - gutter)
+            )
         else:
-            widths_analysis.append(max(1, width - start))
-    starts = [min(image.width - 1, max(0, round(x / scale))) for x in starts_analysis]
-    gutter_source = round(gutter / scale)
+            widths_analysis.append(max(1, analysis_width - start_x))
+
+    starts = [
+        min(canonical_width - 1, max(0, round(x / analysis_scale)))
+        for x in starts_analysis
+    ]
+    gutter_canonical = round(gutter / analysis_scale)
     widths: list[int] = []
-    for i, start in enumerate(starts):
+    for i, start_x in enumerate(starts):
         if i + 1 < len(starts):
-            widths.append(max(1, starts[i + 1] - start - gutter_source))
+            widths.append(
+                max(1, starts[i + 1] - start_x - gutter_canonical)
+            )
         else:
-            widths.append(max(1, image.width - start))
-    start_y_analysis = round(settings.start_y * parameter_to_analysis)
-    top = min(image.height - 1, max(0, round(start_y_analysis / scale)))
-    if settings.crop_to_bottom_y and settings.bottom_y > settings.start_y:
-        bottom_y_analysis = round(settings.bottom_y * parameter_to_analysis)
-        bottom = min(image.height, max(top + 1, round(bottom_y_analysis / scale)))
+            widths.append(max(1, canonical_width - start_x))
+
+    top = min(
+        canonical_height - 1,
+        max(0, canonical_value("start_y")),
+    )
+    bottom_setting = canonical_value("bottom_y")
+    if settings.crop_to_bottom_y and bottom_setting > top:
+        bottom = min(canonical_height, max(top + 1, bottom_setting))
     else:
-        bottom = image.height
-    top_analysis = min(height - 1, max(0, round(top * scale)))
-    bottom_analysis = min(height, max(top_analysis + 1, round(bottom * scale)))
+        bottom = canonical_height
+
+    top_analysis = min(
+        analysis_height - 1, max(0, round(top * analysis_scale))
+    )
+    bottom_analysis = min(
+        analysis_height,
+        max(top_analysis + 1, round(bottom * analysis_scale)),
+    )
     paths = _estimate_column_paths(
-        analysis, scale, starts_analysis, widths_analysis,
-        top_analysis, bottom_analysis, settings, parameter_to_analysis,
+        analysis,
+        analysis_scale,
+        starts_analysis,
+        widths_analysis,
+        top_analysis,
+        bottom_analysis,
+        settings,
+        analysis_scale,
     )
     return Geometry(starts, widths, top, bottom, paths)
-
 
 def derive_geometry(image: Image.Image, settings: AppSettings) -> Geometry:
     """Build layout geometry in canonical space without changing source pixels."""
