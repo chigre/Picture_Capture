@@ -31,7 +31,7 @@ from picture_capture.paddle_headwords import (
     _repair_multiline_headword_state_machine, parse_headword_text,
     prepare_ocr_band, run_paddle_band,
 )
-from picture_capture.project_storage import profile_path, settings_path
+from picture_capture.project_storage import profile_path, qt_root, settings_path
 from picture_capture.picdic import PicDicBuildCancelled, build_picdic_package
 from picture_capture.recent_projects import (
     load_recent_projects, recent_project_details, remove_recent_project, touch_recent_project,
@@ -1460,7 +1460,7 @@ def test_round1_blocking_ui_paths_use_background_workers():
 
 def test_round1_picdic_cancel_is_atomic(tmp_path):
     root = tmp_path / "dictionary"
-    pww = root / "_PictureCapture" / "QT" / "PWW"
+    pww = qt_root(root) / "PWW"
     pww.mkdir(parents=True)
     Image.new("RGB", (8, 8), "white").save(pww / "0001_0001.png")
     (pww / "0001.PWWords").write_text(
@@ -1474,7 +1474,7 @@ def test_round1_picdic_cancel_is_atomic(tmp_path):
     else:
         raise AssertionError("expected cooperative PicDic cancellation")
 
-    out = root / "_PictureCapture" / "QT" / "PicDic"
+    out = qt_root(root) / "PicDic"
     assert not list(out.glob("*.tmp")) if out.exists() else True
     assert not list(out.glob("*.dsl")) if out.exists() else True
     assert not list(out.glob("*.zip")) if out.exists() else True
