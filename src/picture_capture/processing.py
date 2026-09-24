@@ -637,7 +637,7 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
                         y_source,
                         max(2, character_height),
                         settings,
-                        source_per_display_pixel=reference_to_source,
+                        reference_to_canonical_scale=reference_to_source,
                         lower_bound=max(0, geometry.top),
                     )
             if y_source - last_y < round(min_gap / scale):
@@ -733,7 +733,7 @@ def refine_existing_entries(
                 int(canonical_v),
                 line_height,
                 settings,
-                source_per_display_pixel=source_per_reference,
+                reference_to_canonical_scale=source_per_reference,
                 lower_bound=max(0, int(geometry.top)),
             )
             delta = int(candidate_v) - int(canonical_v)
