@@ -11539,6 +11539,7 @@ class PictureCaptureApp(tk.Tk):
             top_y=top_y, bottom_y=bottom_y, illustration_margin=margin,
             entry_left_padding=entry_left, entry_right_padding=entry_right,
             integrate_illustrations=integrate_illustrations,
+            profile_page_index=max(0, int(self.current_index)),
         )
 
     def _draw_crop_plan_preview(self) -> None:
@@ -13176,7 +13177,9 @@ class PictureCaptureApp(tk.Tk):
             original_words = [entry.word for entry in entries]
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
-            refined, stats = refine_existing_entries(image, entries, settings)
+            refined, stats = refine_existing_entries(
+                image, entries, settings, profile_page_index=index,
+            )
             if len(refined) != original_count:
                 raise RuntimeError(
                     f"{page.name} 精修前后画线数变化：{original_count} → {len(refined)}"
@@ -13521,7 +13524,10 @@ class PictureCaptureApp(tk.Tk):
             engine_name = OCR_ENGINE_LABELS.get(self.settings.ocr_engine, self.settings.ocr_engine)
             self.status_var.set(f"正在用 {engine_name} OCR 当前页…"); self.update_idletasks()
             rules = load_replace_rules(replace_rules_path(self.project.root))
-            texts = ocr_entries(self.image, self.entries, self.settings, rules)
+            texts = ocr_entries(
+                self.image, self.entries, self.settings, rules,
+                profile_page_index=max(0, int(self.current_index)),
+            )
             for entry, text in zip(self._ordered_entries_reading_order(), texts): entry.word = text
             export_ocred(qt_root(self.project.root) / f"{self.current_page.stem}.OCRed", texts)
             self.save_pdic(silent=True); self.redraw(); self.status_var.set(f"{engine_name} OCR 完成：{len(texts)} 个词条")
@@ -13548,7 +13554,10 @@ class PictureCaptureApp(tk.Tk):
         if not self._guard_transformed_geometry("单行切图"):
             return
         try:
-            records = split_single_lines(self.current_page, self.entries, self.settings, qt_root(self.project.root) / "PSW")
+            records = split_single_lines(
+                self.current_page, self.entries, self.settings, qt_root(self.project.root) / "PSW",
+                profile_page_index=max(0, int(self.current_index)),
+            )
             append_crop_log(self.project.root, records); self.status_var.set(f"已导出 {len(records)} 张词条单行图")
         except Exception as exc: self.show_error("单行切图失败", exc)
 
@@ -13566,6 +13575,7 @@ class PictureCaptureApp(tk.Tk):
                 entry_left_padding=int(config.get("entry_left_padding_u", 0)),
                 entry_right_padding=int(config.get("entry_right_padding_u", 0)),
                 integrate_illustrations=bool(config.get("integrate_illustrations", True)),
+                profile_page_index=max(0, int(self.current_index)),
             )
             append_crop_log(self.project.root, records); self.status_var.set(f"已导出 {len(records)} 张词条整体图")
         except Exception as exc: self.show_error("整体切图失败", exc)
@@ -13644,6 +13654,7 @@ class PictureCaptureApp(tk.Tk):
             return (
                 str(page), str(pdic_path(page)), settings, str(out_dir), top_y, bottom_y,
                 str(self._ppp_read_path(page)), entry_left, entry_right, integrate_illustrations,
+                index,
             )
 
         def consume_result(_index: int, records):
@@ -13692,7 +13703,7 @@ class PictureCaptureApp(tk.Tk):
 
         def worker(index: int, _position: int, _total: int):
             page = project.images[index]
-            return detect_illustrations_job(str(page), settings)
+            return detect_illustrations_job(str(page), settings, index)
 
         def done(completed, total_pages, stopped, results, error):
             if error is not None:
@@ -13760,6 +13771,7 @@ class PictureCaptureApp(tk.Tk):
             return (
                 str(page), str(self._ppp_read_path(page)), str(out_dir), settings,
                 top_y, bottom_y, margin, str(pdic_path(page)), entry_left, entry_right, integrate_illustrations,
+                index,
             )
 
         def consume_result(_index: int, result):
@@ -13906,7 +13918,9 @@ class PictureCaptureApp(tk.Tk):
             entries = sort_entries_reading_order(
                 entries, derive_geometry(analysis_image, effective_settings)
             )
-            texts = ocr_entries(image, entries, settings, rules)
+            texts = ocr_entries(
+                image, entries, settings, rules, profile_page_index=index,
+            )
             for entry, text in zip(entries, texts): entry.word = text
             export_ocred(qt_root(project.root) / f"{page.stem}.OCRed", texts)
             write_pdic(pdic_path(page), entries, image.width, pages_info[index])
@@ -13950,6 +13964,7 @@ class PictureCaptureApp(tk.Tk):
                 page, entries, settings, out_dir, top_y=top_y, bottom_y=bottom_y, polygons=polygons,
                 entry_left_padding=entry_left, entry_right_padding=entry_right,
                 integrate_illustrations=integrate_illustrations,
+                profile_page_index=index,
             )
             append_crop_log(project.root, records)
             return len(records)

@@ -6517,6 +6517,37 @@ def test_coordinate_contract_profile_percent_resolves_to_source_pixels_across_re
     assert PictureCaptureApp._quick_geometry_value(app, "bottom_y") == 1576
 
 
+
+
+
+def test_coordinate_contract_crop_plan_uses_same_profile_boundaries_as_main_geometry():
+    from picture_capture.processing import build_page_crop_plan
+    from picture_capture.models import AppSettings
+
+    image = Image.new("RGB", (1000, 1642), "white")
+    settings = AppSettings(
+        geometry_reference_width=1400,
+        columns=1,
+        manual_x=70,
+        column_width=1120,
+        start_y=130,
+        bottom_y=2000,
+        crop_to_bottom_y=True,
+        follow_column_deformation=False,
+        profile_header_mode="present",
+        profile_header_percent=3.0,
+        profile_footer_mode="present",
+        profile_footer_percent=4.0,
+    )
+    plan = build_page_crop_plan(
+        image, [], [], settings, profile_page_index=0,
+    )
+    assert len(plan.entry_pieces) == 1
+    box = plan.entry_pieces[0].box
+    assert box[1] == 49
+    assert box[3] == 1576
+
+
 def test_coordinate_contract_training_export_separates_source_and_canonical(tmp_path):
     import json
     from PIL import Image

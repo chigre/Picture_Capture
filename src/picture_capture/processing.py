@@ -495,6 +495,28 @@ def derive_geometry(image: Image.Image, settings: AppSettings) -> Geometry:
     return geometry
 
 
+def _page_geometry_context(
+    image: Image.Image,
+    settings: AppSettings,
+    profile_page_index: int = 0,
+) -> tuple[Image.Image, AppSettings, Image.Image, Geometry]:
+    """Resolve one page through the single Profile -> geometry boundary.
+
+    Persisted project geometry remains in reference-page canonical pixels.
+    Physical Profile percentages are resolved against this source page, and
+    page-edge exclusions are applied only to a disposable analysis copy.
+    Every downstream consumer can therefore share the same runtime geometry
+    while crops/PDIC/PPP continue to use untouched source pixels.
+    """
+    source = normalize_page_rgb(image)
+    effective = effective_page_settings(settings, source.size, profile_page_index)
+    analysis_source = page_template_analysis_image(
+        source, effective, profile_page_index,
+    )
+    geometry = derive_geometry(analysis_source, effective)
+    return source, effective, analysis_source, geometry
+
+
 def _left_edge_otsu_threshold(gray: np.ndarray) -> int:
     """Return a stable Otsu threshold for ordinary left-edge detection."""
     hist = np.bincount(gray.ravel(), minlength=256).astype(np.float64)
@@ -542,9 +564,10 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
     dark ink inside a narrow strip at the left of a dictionary column. Runs are
     consolidated and filtered using the configured character height.
     """
-    source = normalize_page_rgb(image)
-    geometry = derive_geometry(source, settings)
-    canonical = geometry.transform.canonical_image_for_analysis(source)
+    source, effective, analysis_source, geometry = _page_geometry_context(
+        image, settings, profile_page_index,
+    )
+    canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
     analysis, scale = _analysis_image(canonical)
     canonical_width = canonical.width
     body_indent = stored_geometry_to_canonical(
@@ -689,6 +712,8 @@ def refine_existing_entries(
     image: Image.Image,
     entries: list[Entry],
     settings: AppSettings,
+    *,
+    profile_page_index: int = 0,
 ) -> tuple[list[Entry], dict[str, int]]:
     """Refine only existing marker positions without adding or removing rows.
 
@@ -709,11 +734,11 @@ def refine_existing_entries(
     line_height = max(
         2,
         stored_geometry_to_canonical(
-            settings.character_height, canonical_width, settings,
+            effective.character_height, canonical_width, effective,
         ),
     )
     source_per_reference = canonical_width / 1400.0
-    search_ratio = max(0.05, min(0.80, float(settings.paddle_separator_search_ratio)))
+    search_ratio = max(0.05, min(0.80, float(effective.paddle_separator_search_ratio)))
     max_delta = max(2, round(line_height * search_ratio))
 
     refined_entries: list[Entry] = []
@@ -733,7 +758,7 @@ def refine_existing_entries(
                 gray[:, column_x:column_right],
                 int(canonical_v),
                 line_height,
-                settings,
+                effective,
                 reference_to_canonical_scale=source_per_reference,
                 lower_bound=max(0, int(geometry.top)),
             )
@@ -925,24 +950,28 @@ def ocr_entries(
     entries: list[Entry],
     settings: AppSettings,
     replace_rules: list[tuple[str, str, str]],
+    *,
+    profile_page_index: int = 0,
 ) -> list[str]:
-    geometry = derive_geometry(image, settings)
+    source, effective, _analysis_source, geometry = _page_geometry_context(
+        image, settings, profile_page_index,
+    )
     results: list[str] = []
     paddle_engine = None
-    if settings.ocr_engine == "paddleocr":
+    if effective.ocr_engine == "paddleocr":
         from .paddle_headwords import get_paddle_engine
-        paddle_engine = get_paddle_engine(settings)
+        paddle_engine = get_paddle_engine(effective)
     for entry in sort_entries_reading_order(entries, geometry):
-        crop = image.crop(line_box(entry, geometry, image, settings))
-        if settings.ocr_engine == "paddleocr":
+        crop = source.crop(line_box(entry, geometry, source, effective))
+        if effective.ocr_engine == "paddleocr":
             from .paddle_headwords import recognize_paddle_text
-            raw = recognize_paddle_text(crop, settings, engine=paddle_engine)
+            raw = recognize_paddle_text(crop, effective, engine=paddle_engine)
         else:
-            psm = 5 if str(getattr(settings, "layout_writing_mode", "")).startswith("vertical") else 7
+            psm = 5 if str(getattr(effective, "layout_writing_mode", "")).startswith("vertical") else 7
             raw = run_tesseract(
-                crop, resolved_tesseract_language(settings), settings.ocr_executable, psm=psm
+                crop, resolved_tesseract_language(effective), effective.ocr_executable, psm=psm
             )
-        results.append(process_ocr_text(raw, replace_rules, settings.lowercase_ocr) if settings.ocr_replace else raw.strip())
+        results.append(process_ocr_text(raw, replace_rules, effective.lowercase_ocr) if effective.ocr_replace else raw.strip())
     return results
 
 
@@ -965,16 +994,19 @@ def _save_crop(image: Image.Image, output: Path, box: tuple[int, int, int, int])
 
 
 def split_single_lines(
-    image_path: Path, entries: list[Entry], settings: AppSettings, output_dir: Path
+    image_path: Path, entries: list[Entry], settings: AppSettings, output_dir: Path,
+    *, profile_page_index: int = 0,
 ) -> list[CropRecord]:
     with Image.open(image_path) as opened:
         image = normalize_page_rgb(opened)
-    geometry = derive_geometry(image, settings)
+    source, effective, _analysis_source, geometry = _page_geometry_context(
+        image, settings, profile_page_index,
+    )
     records: list[CropRecord] = []
     manifest: list[str] = []
     for index, entry in enumerate(sort_entries_reading_order(entries, geometry)):
         filename = f"{image_path.stem}_SW_{index:03d}.png"
-        box = _save_crop(image, output_dir / filename, line_box(entry, geometry, image, settings))
+        box = _save_crop(source, output_dir / filename, line_box(entry, geometry, source, effective))
         records.append(CropRecord(image_path.name, index, entry.word, filename, box))
         manifest.append(filename)
     (output_dir / f"{image_path.stem}.PSWords").write_text("\n".join(manifest) + ("\n" if manifest else ""), encoding="utf-8")
@@ -1092,14 +1124,16 @@ def _entry_crop_box_for_column(
 
 def entry_crop_column_boxes(
     image: Image.Image, settings: AppSettings, *, top_y: int | None = None, bottom_y: int | None = None,
-    extra_left: int = 0, extra_right: int = 0,
+    extra_left: int = 0, extra_right: int = 0, profile_page_index: int = 0,
 ) -> list[tuple[int, int, int, int]]:
-    """Return full-height boxes using the exact whole-entry horizontal geometry."""
-    geometry = derive_geometry(image, settings)
-    top, bottom = entry_crop_bounds(image, settings, top_y=top_y, bottom_y=bottom_y)
+    """Return full-height boxes using the exact Profile-resolved horizontal geometry."""
+    source, effective, _analysis_source, geometry = _page_geometry_context(
+        image, settings, profile_page_index,
+    )
+    top, bottom = entry_crop_bounds(source, effective, top_y=top_y, bottom_y=bottom_y)
     return [
         _entry_crop_box_for_column(
-            image, settings, geometry, col, top, bottom,
+            source, effective, geometry, col, top, bottom,
             extra_left=extra_left, extra_right=extra_right,
         )
         for col in range(len(geometry.column_starts))
@@ -1191,18 +1225,21 @@ def _base_entry_crop_pieces(
     image: Image.Image, entries: list[Entry], settings: AppSettings,
     *, top_y: int | None = None, bottom_y: int | None = None,
     entry_left_padding: int = 0, entry_right_padding: int = 0,
+    profile_page_index: int = 0,
 ) -> tuple[list[Entry], list[EntryCropPiecePlan]]:
-    geometry = derive_geometry(image, settings)
-    canonical_width = geometry.transform.canonical_size(image.size)[0]
+    source, effective, _analysis_source, geometry = _page_geometry_context(
+        image, settings, profile_page_index,
+    )
+    canonical_width = geometry.transform.canonical_size(source.size)[0]
     character_height = stored_geometry_to_canonical(
-        settings.character_height, canonical_width, settings,
+        effective.character_height, canonical_width, effective,
     )
     row_padding = stored_geometry_to_canonical(
-        settings.row_padding, canonical_width, settings,
+        effective.row_padding, canonical_width, effective,
     )
     row_height = max(1, character_height + row_padding)
     top, bottom = entry_crop_bounds(
-        image, settings, top_y=top_y, bottom_y=bottom_y,
+        source, effective, top_y=top_y, bottom_y=bottom_y,
     )
     ordered = sort_entries_reading_order(entries, geometry)
     row_guard = round(row_height * 0.6)
@@ -1211,7 +1248,7 @@ def _base_entry_crop_pieces(
 
     def col_box(col: int, y0: int, y1: int) -> tuple[int,int,int,int]:
         return _entry_crop_box_for_column(
-            image, settings, geometry, col, y0, y1,
+            source, effective, geometry, col, y0, y1,
             extra_left=entry_left_padding, extra_right=entry_right_padding,
         )
 
@@ -1251,7 +1288,7 @@ def build_page_crop_plan(
     image: Image.Image, entries: list[Entry], polygons: list[PolygonRegion], settings: AppSettings,
     *, top_y: int | None = None, bottom_y: int | None = None, illustration_margin: int = 0,
     entry_left_padding: int = 0, entry_right_padding: int = 0,
-    integrate_illustrations: bool = True,
+    integrate_illustrations: bool = True, profile_page_index: int = 0,
 ) -> PageCropPlan:
     """Plan entry and PPP crops before any pixels are written.
 
@@ -1263,6 +1300,7 @@ def build_page_crop_plan(
     ordered, pieces = _base_entry_crop_pieces(
         image, entries, settings, top_y=top_y, bottom_y=bottom_y,
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
+        profile_page_index=profile_page_index,
     )
     boxes_by_entry: dict[int,list[tuple[int,int,int,int]]] = {}
     piece_indices_by_entry: dict[int,list[int]] = {}
@@ -1272,9 +1310,10 @@ def build_page_crop_plan(
             piece_indices_by_entry.setdefault(piece.entry_ref_index,[]).append(pos)
     names: dict[str,list[int]] = {}
     for i,entry in enumerate(ordered): names.setdefault(_normalized_crop_name(entry.word),[]).append(i)
-    illustration_top = settings.start_y if top_y is None else int(top_y)
+    effective = effective_page_settings(settings, image.size, profile_page_index)
+    illustration_top = effective.start_y if top_y is None else int(top_y)
     illustration_bottom = 0 if bottom_y is None else int(bottom_y)
-    top,bottom,margin_px=illustration_crop_bounds(image,settings,top_y=illustration_top,bottom_y=illustration_bottom,margin=illustration_margin)
+    top,bottom,margin_px=illustration_crop_bounds(image,effective,top_y=illustration_top,bottom_y=illustration_bottom,margin=illustration_margin)
     illustrations: list[IllustrationCropPlan] = []
     linked_inside: dict[int,list[int]] = {}
     partial_merge: dict[int,list[int]] = {}
@@ -1385,7 +1424,7 @@ def split_whole_entries(
     image_path: Path, entries: list[Entry], settings: AppSettings, output_dir: Path,
     *, top_y: int | None = None, bottom_y: int | None = None, polygons: list[PolygonRegion] | None = None,
     entry_left_padding: int = 0, entry_right_padding: int = 0,
-    integrate_illustrations: bool = True,
+    integrate_illustrations: bool = True, profile_page_index: int = 0,
 ) -> list[CropRecord]:
     with Image.open(image_path) as opened:
         image = normalize_page_rgb(opened)
@@ -1394,6 +1433,7 @@ def split_whole_entries(
         image, entries, polygons, settings, top_y=top_y, bottom_y=bottom_y,
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
         integrate_illustrations=integrate_illustrations,
+        profile_page_index=profile_page_index,
     )
     write_page_crop_plan(image_path.parent, image_path.stem, plan)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1611,6 +1651,7 @@ def is_auto_illustration_region(region: PolygonRegion) -> bool:
 
 def detect_illustration_regions(
     image_path: Path, settings: AppSettings, *, analysis_column_width: int = 520,
+    profile_page_index: int = 0,
 ) -> list[PolygonRegion]:
     """Detect large non-text illustration-like ink components on a dictionary page.
 
@@ -1624,23 +1665,25 @@ def detect_illustration_regions(
     with Image.open(image_path) as opened:
         image = normalize_page_rgb(opened)
     try:
-        geometry = derive_geometry(image, settings)
-        work_image = geometry.transform.canonical_image_for_analysis(image)
-        canonical_width = geometry.transform.canonical_size(image.size)[0]
+        source, effective, analysis_source, geometry = _page_geometry_context(
+            image, settings, profile_page_index,
+        )
+        work_image = geometry.transform.canonical_image_for_analysis(analysis_source)
+        canonical_width = geometry.transform.canonical_size(source.size)[0]
         source_margin = max(
             2,
             stored_geometry_to_canonical(
-                max(0, int(getattr(settings, "illustration_detect_padding", 8))),
+                max(0, int(getattr(effective, "illustration_detect_padding", 8))),
                 canonical_width,
-                settings,
+                effective,
             ),
         )
         source_margin_right = max(
             source_margin,
             stored_geometry_to_canonical(
-                max(0, int(getattr(settings, "illustration_detect_right_padding", 16))),
+                max(0, int(getattr(effective, "illustration_detect_right_padding", 16))),
                 canonical_width,
-                settings,
+                effective,
             ),
         )
         results: list[PolygonRegion] = []
@@ -1735,7 +1778,9 @@ def detect_illustration_regions(
         image.close()
 
 
-def detect_illustrations_to_ppp(image_path: Path, settings: AppSettings) -> dict[str, int]:
+def detect_illustrations_to_ppp(
+    image_path: Path, settings: AppSettings, *, profile_page_index: int = 0,
+) -> dict[str, int]:
     """Detect illustrations and safely update one page's PPP file.
 
     Manual polygons are never overwritten.  Re-running detection replaces only
@@ -1746,7 +1791,9 @@ def detect_illustrations_to_ppp(image_path: Path, settings: AppSettings) -> dict
     write_path = ppp_write_path_for_image(image_path)
     existing = read_ppp(read_path)
     manual = [r for r in existing if not is_auto_illustration_region(r)]
-    detected = detect_illustration_regions(image_path, settings)
+    detected = detect_illustration_regions(
+        image_path, settings, profile_page_index=profile_page_index,
+    )
     manual_boxes = [b for r in manual if (b := _polygon_bbox(r)) is not None]
     accepted: list[PolygonRegion] = []
     for region in detected:
@@ -1762,9 +1809,13 @@ def detect_illustrations_to_ppp(image_path: Path, settings: AppSettings) -> dict
     return {"manual": len(manual), "auto": len(accepted), "total": len(manual) + len(accepted)}
 
 
-def detect_illustrations_job(image_path: str, settings: AppSettings) -> dict[str, int]:
+def detect_illustrations_job(
+    image_path: str, settings: AppSettings, profile_page_index: int = 0,
+) -> dict[str, int]:
     """Background-safe one-page illustration detector used by the GUI batch runner."""
-    return detect_illustrations_to_ppp(Path(image_path), settings)
+    return detect_illustrations_to_ppp(
+        Path(image_path), settings, profile_page_index=profile_page_index,
+    )
 
 def illustration_crop_bounds(
     image: Image.Image,
@@ -1852,6 +1903,7 @@ def split_illustrations(
     entry_left_padding: int = 0,
     entry_right_padding: int = 0,
     integrate_illustrations: bool = True,
+    profile_page_index: int = 0,
 ) -> IllustrationSplitResult:
     """Export only PPPs that are not already carried by an associated entry crop."""
     with Image.open(image_path) as opened:
@@ -1864,6 +1916,7 @@ def split_illustrations(
             top_y=top_y, bottom_y=bottom_y, illustration_margin=margin,
             entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
             integrate_illustrations=integrate_illustrations,
+            profile_page_index=profile_page_index,
         )
     finally:
         rgb_for_plan.close()
@@ -1947,6 +2000,7 @@ def split_whole_entries_job(
     entry_left_padding: int = 0,
     entry_right_padding: int = 0,
     integrate_illustrations: bool = True,
+    profile_page_index: int = 0,
 ) -> list[CropRecord]:
     """Spawn-safe worker: build the crop plan first, then execute it."""
     page = Path(image_path)
@@ -1956,6 +2010,7 @@ def split_whole_entries_job(
         page, entries, settings, Path(output_dir), top_y=top_y, bottom_y=bottom_y, polygons=polygons,
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
         integrate_illustrations=integrate_illustrations,
+        profile_page_index=profile_page_index,
     )
 
 
@@ -1971,6 +2026,7 @@ def split_illustrations_job(
     entry_left_padding: int = 0,
     entry_right_padding: int = 0,
     integrate_illustrations: bool = True,
+    profile_page_index: int = 0,
 ) -> IllustrationSplitResult:
     """Spawn-safe worker: plan PPP/entry relations before exporting standalone PPPs."""
     page = Path(image_path)
@@ -1980,4 +2036,5 @@ def split_illustrations_job(
         page, polygons, Path(output_dir), settings, top_y=top_y, bottom_y=bottom_y, margin=margin, entries=entries,
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
         integrate_illustrations=integrate_illustrations,
+        profile_page_index=profile_page_index,
     )
