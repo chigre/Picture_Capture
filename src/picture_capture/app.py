@@ -1388,23 +1388,70 @@ class SettingsDialog(tk.Toplevel):
         self.vars[name] = var
         return var
 
+    def _show_settings_help(self, title: str, body: str) -> None:
+        if hasattr(self, "_settings_help_title_var"):
+            self._settings_help_title_var.set(str(title or "设置说明"))
+        if hasattr(self, "_settings_help_body_var"):
+            self._settings_help_body_var.set(str(body or "不确定时保持当前值即可。"))
+
+    def _show_setting_help(self, name: str) -> None:
+        title = self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])
+        body = self.SETTING_HELP.get(name, "专家参数；不确定时建议保持当前值。")
+        unit = self.SETTING_UNITS.get(name, "")
+        if unit:
+            body += f"\n\n单位：{unit}"
+        self._show_settings_help(title, body)
+
+    def _show_check_help(self, label: str, name: str) -> None:
+        self._show_settings_help(
+            label,
+            self.CHECK_HELP.get(name, "高级行为开关；不确定时保持默认。"),
+        )
+
+    def _bind_help_widget(self, widget: tk.Misc, callback) -> None:
+        """Keep full explanations one glance away without filling every form row."""
+        try:
+            widget.bind("<Enter>", lambda _e: callback(), add="+")
+            widget.bind("<FocusIn>", lambda _e: callback(), add="+")
+        except tk.TclError:
+            return
+        try:
+            for child in widget.winfo_children():
+                self._bind_help_widget(child, callback)
+        except tk.TclError:
+            pass
+
+    def _setting_var(self, name: str) -> tk.Variable:
+        if name in self.vars:
+            return self.vars[name]
+        raw = getattr(self.parent.settings, name)
+        choices = self.SETTING_CHOICES.get(name)
+        if choices:
+            reverse = {value: label for label, value in choices.items()}
+            value = reverse.get(str(raw), str(raw))
+        else:
+            value = str(raw)
+        var = tk.StringVar(value=value)
+        self.vars[name] = var
+        return var
+
     def _setting_widget(self, parent: ttk.Frame, name: str) -> tk.Widget:
         var = self._setting_var(name)
         choices = self.SETTING_CHOICES.get(name)
         if choices:
             return ttk.Combobox(
                 parent, textvariable=var, values=tuple(choices.keys()),
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name in {"dictionary_index_language", "dictionary_content_language"}:
             return ttk.Combobox(
                 parent, textvariable=var, values=PROJECT_LANGUAGE_CODES,
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name == "ocr_language":
             widget = ttk.Combobox(
                 parent, textvariable=var, values=self.OCR_LANGUAGES,
-                state="normal", width=28,
+                state="normal", width=26,
             )
             widget.bind("<<ComboboxSelected>>", lambda _e: self._refresh_sort_choices())
             widget.bind("<FocusOut>", lambda _e: self._refresh_sort_choices())
@@ -1412,40 +1459,51 @@ class SettingsDialog(tk.Toplevel):
         if name in {"main_entry_font_family", "review_entry_font_family"}:
             families = tuple(sorted(set(font.families()), key=str.casefold))
             return ttk.Combobox(
-                parent, textvariable=var, values=families, state="normal", width=28,
+                parent, textvariable=var, values=families, state="normal", width=26,
             )
         if name == "wordslist_path":
             box = ttk.Frame(parent)
             box.columnconfigure(0, weight=1)
-            ttk.Entry(box, textvariable=var, width=30).grid(row=0, column=0, sticky="ew")
+            ttk.Entry(box, textvariable=var, width=28).grid(row=0, column=0, sticky="ew")
             ttk.Button(
                 box, text="浏览…", command=lambda v=var: self._browse_wordslist_setting(v)
             ).grid(row=0, column=1, padx=(5, 0))
             return box
+        if name in self.SETTING_SPIN:
+            lower, upper, increment = self.SETTING_SPIN[name]
+            return ttk.Spinbox(
+                parent,
+                textvariable=var,
+                from_=lower,
+                to=upper,
+                increment=increment,
+                width=18,
+                justify="right",
+            )
         if name == "layout_writing_mode":
             return ttk.Combobox(
                 parent, textvariable=var,
                 values=("horizontal-tb", "vertical-rl", "vertical-lr"),
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name == "layout_text_direction":
             return ttk.Combobox(
                 parent, textvariable=var, values=("ltr", "rtl"),
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name == "layout_columns_policy":
             return ttk.Combobox(
                 parent, textvariable=var, values=("detect", "fixed"),
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name == "layout_column_separator_mode":
             return ttk.Combobox(
                 parent, textvariable=var, values=("auto", "present", "absent"),
-                state="readonly", width=28,
+                state="readonly", width=26,
             )
         if name == "layout_transform":
-            return ttk.Entry(parent, textvariable=var, width=30, state="readonly")
-        return ttk.Entry(parent, textvariable=var, width=30)
+            return ttk.Entry(parent, textvariable=var, width=28, state="readonly")
+        return ttk.Entry(parent, textvariable=var, width=28)
 
     def _add_setting_group(
         self,
@@ -1457,25 +1515,36 @@ class SettingsDialog(tk.Toplevel):
     ) -> ttk.LabelFrame:
         group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
         group.pack(fill="x", pady=(0, 10))
-        group.columnconfigure(2, weight=1)
+        group.columnconfigure(1, weight=1)
         row = 0
         if intro:
             ttk.Label(
-                group, text=intro, foreground="#5f6670", justify="left", wraplength=820,
+                group, text=intro, foreground="#5f6670", justify="left", wraplength=560,
             ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 8))
             row += 1
         for name in names:
             label = self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])
-            ttk.Label(group, text=f"{label}：").grid(
-                row=row, column=0, sticky="ne", padx=(0, 10), pady=5
-            )
-            widget = self._setting_widget(group, name)
-            widget.grid(row=row, column=1, sticky="ew", padx=(0, 12), pady=4)
-            ttk.Label(
-                group,
-                text=self.SETTING_HELP.get(name, "专家参数；不确定时建议保持当前值。"),
-                foreground="#666666", justify="left", wraplength=520,
-            ).grid(row=row, column=2, sticky="nw", pady=5)
+            label_widget = ttk.Label(group, text=f"{label}：")
+            label_widget.grid(row=row, column=0, sticky="e", padx=(0, 10), pady=5)
+
+            control = ttk.Frame(group)
+            control.grid(row=row, column=1, sticky="ew", pady=4)
+            control.columnconfigure(0, weight=1)
+            widget = self._setting_widget(control, name)
+            widget.grid(row=0, column=0, sticky="ew")
+            unit = self.SETTING_UNITS.get(name, "")
+            if unit:
+                ttk.Label(control, text=unit, foreground="#70757d").grid(
+                    row=0, column=1, sticky="w", padx=(6, 0)
+                )
+
+            info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
+            info.grid(row=row, column=2, sticky="w", padx=(8, 0))
+            callback = lambda n=name: self._show_setting_help(n)
+            self._bind_help_widget(label_widget, callback)
+            self._bind_help_widget(control, callback)
+            self._bind_help_widget(info, callback)
+            info.bind("<Button-1>", lambda _e, n=name: self._show_setting_help(n), add="+")
             row += 1
         return group
 
@@ -1489,24 +1558,28 @@ class SettingsDialog(tk.Toplevel):
     ) -> ttk.LabelFrame:
         group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
         group.pack(fill="x", pady=(0, 10))
-        group.columnconfigure(1, weight=1)
+        group.columnconfigure(0, weight=1)
         row = 0
         if intro:
             ttk.Label(
-                group, text=intro, foreground="#5f6670", justify="left", wraplength=820,
+                group, text=intro, foreground="#5f6670", justify="left", wraplength=560,
             ).grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 8))
             row += 1
         for label, name in checks:
             if name not in self.vars:
                 self.vars[name] = tk.BooleanVar(value=bool(getattr(self.parent.settings, name)))
-            ttk.Checkbutton(group, text=label, variable=self.vars[name]).grid(
-                row=row, column=0, sticky="nw", padx=(0, 14), pady=4
+            check = ttk.Checkbutton(group, text=label, variable=self.vars[name])
+            check.grid(row=row, column=0, sticky="w", pady=4)
+            info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
+            info.grid(row=row, column=1, sticky="w", padx=(8, 0))
+            callback = lambda l=label, n=name: self._show_check_help(l, n)
+            self._bind_help_widget(check, callback)
+            self._bind_help_widget(info, callback)
+            info.bind(
+                "<Button-1>",
+                lambda _e, l=label, n=name: self._show_check_help(l, n),
+                add="+",
             )
-            ttk.Label(
-                group,
-                text=self.CHECK_HELP.get(name, "高级行为开关；不确定时保持默认。"),
-                foreground="#666666", justify="left", wraplength=600,
-            ).grid(row=row, column=1, sticky="nw", pady=4)
             row += 1
         return group
 
@@ -1542,12 +1615,21 @@ class SettingsDialog(tk.Toplevel):
     def _scrollable_settings_page(self, tab: ttk.Frame) -> ttk.Frame:
         host = ttk.Frame(tab)
         host.pack(fill="both", expand=True)
-        canvas = tk.Canvas(host, highlightthickness=0, borderwidth=0)
-        scrollbar = ttk.Scrollbar(host, orient="vertical", command=canvas.yview)
+        host.rowconfigure(0, weight=1)
+        host.columnconfigure(0, weight=3)
+        host.columnconfigure(1, weight=2)
+
+        left = ttk.Frame(host)
+        left.grid(row=0, column=0, sticky="nsew")
+        left.rowconfigure(0, weight=1)
+        left.columnconfigure(0, weight=1)
+        canvas = tk.Canvas(left, highlightthickness=0, borderwidth=0)
+        scrollbar = ttk.Scrollbar(left, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-        content = ttk.Frame(canvas, padding=(14, 12, 14, 18))
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+
+        content = ttk.Frame(canvas, padding=(14, 12, 10, 18))
         window = canvas.create_window((0, 0), window=content, anchor="nw")
         content.bind(
             "<Configure>",
@@ -1558,6 +1640,30 @@ class SettingsDialog(tk.Toplevel):
             lambda e, cv=canvas, item=window: cv.itemconfigure(item, width=e.width),
         )
         self._settings_canvases[str(tab)] = canvas
+
+        help_box = ttk.LabelFrame(host, text="设置说明", padding=(14, 12))
+        help_box.grid(row=0, column=1, sticky="nsew", padx=(6, 8), pady=(8, 8))
+        ttk.Label(
+            help_box,
+            textvariable=self._settings_help_title_var,
+            font=("TkDefaultFont", 10, "bold"),
+        ).pack(anchor="w")
+        ttk.Label(
+            help_box,
+            textvariable=self._settings_help_body_var,
+            foreground="#555b63",
+            justify="left",
+            wraplength=320,
+        ).pack(anchor="w", fill="x", pady=(7, 0))
+        ttk.Separator(help_box, orient="horizontal").pack(fill="x", pady=(14, 10))
+        ttk.Label(
+            help_box,
+            text="把鼠标停在设置项上，或用 Tab/鼠标进入输入框，"
+                 "这里会显示完整说明。高级设置不确定时保持默认即可。",
+            foreground="#7a8088",
+            justify="left",
+            wraplength=320,
+        ).pack(anchor="w", fill="x")
         return content
 
     def _settings_intro(self, parent: ttk.Frame, title: str, text: str) -> None:
