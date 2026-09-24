@@ -16,6 +16,7 @@ from .coordinate_space import (
     CANONICAL_COORDINATE_SPACE,
     geometry_uses_canonical_pixels,
     legacy_parameter_scale,
+    stored_geometry_to_canonical,
 )
 
 
@@ -836,13 +837,10 @@ def detect_layout_consistency(image: Image.Image, settings: AppSettings) -> Layo
             None, None, is_blank=True,
             coordinate_space=CANONICAL_COORDINATE_SPACE,
         )
-    if geometry_uses_canonical_pixels(settings):
-        start_y_canonical = max(0, int(settings.start_y))
-    else:
-        start_y_canonical = round(
-            int(settings.start_y)
-            / max(0.01, legacy_parameter_scale(source.width, settings))
-        )
+    start_y_canonical = max(
+        0,
+        stored_geometry_to_canonical(settings.start_y, source.width, settings),
+    )
     header_limit = min(
         ink.shape[0], max(1, round(start_y_canonical * scale))
     )
