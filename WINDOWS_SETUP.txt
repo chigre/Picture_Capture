@@ -1,0 +1,23 @@
+Picture Capture v2.13.3 - Windows setup
+=========================================
+
+This release intentionally contains no .bat, .cmd, .ps1, .vbs, or .pyw
+launcher/installer wrappers.
+
+1) Install uv >= 0.11
+   https://docs.astral.sh/uv/getting-started/installation/
+
+2) Open Windows Terminal / PowerShell / Command Prompt in this folder.
+
+3) Create the locked core environment:
+   uv sync --locked --no-dev
+
+4) Optional: install or switch OCR profile:
+   .venv\Scripts\python.exe scripts\windows_ocr_setup.py
+
+5) Start Picture Capture:
+   .venv\Scripts\python.exe run.py
+
+The project environment stays inside .venv.
+OCR CPU/GPU package choices are declared in pyproject.toml and uv.lock.
+The GitHub Release also publishes SHA256SUMS.txt for integrity verification.
