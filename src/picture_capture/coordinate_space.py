@@ -7,6 +7,7 @@ from .layout_transform import LayoutTransform
 
 SOURCE_COORDINATE_SPACE = "source_image_pixels"
 CANONICAL_COORDINATE_SPACE = "canonical_full_resolution_pixels"
+CANONICAL_REFERENCE_SPACE = "canonical_reference_page_pixels"
 ANALYSIS_COORDINATE_SPACE = "analysis_resized_pixels"
 BAND_COORDINATE_SPACE = "ocr_band_local_pixels"
 REFERENCE_PIXEL_SPACE = "reference_pixels_at_1400_canonical_width"
@@ -61,15 +62,31 @@ def legacy_parameter_scale(canonical_width: int, settings: Any) -> float:
     return min(1.0, REFERENCE_CANONICAL_WIDTH / width)
 
 
+def _modern_reference_scale(canonical_width: int, settings: Any) -> float:
+    """Current-page canonical pixels per persisted reference-page pixel."""
+    width = max(1, int(canonical_width))
+    try:
+        reference = int(getattr(settings, "geometry_reference_width", 0) or 0)
+    except (TypeError, ValueError):
+        reference = 0
+    return width / reference if reference > 0 else 1.0
+
+
 def stored_geometry_to_canonical(
     value: int | float,
     canonical_width: int,
     settings: Any,
 ) -> int:
-    """Convert one persisted geometry value to canonical full-resolution pixels."""
+    """Convert persisted layout geometry to this page's canonical pixels.
+
+    Modern projects store geometry in pixels of an explicit canonical reference
+    page. This preserves the convenience of real pixel values while remaining
+    stable when scans in one project have different resolutions. Legacy projects
+    use their historical display-width scale until migrated.
+    """
     numeric = float(value)
     if geometry_uses_canonical_pixels(settings):
-        return round(numeric)
+        return round(numeric * _modern_reference_scale(canonical_width, settings))
     return round(numeric / legacy_parameter_scale(canonical_width, settings))
 
 
@@ -78,10 +95,10 @@ def canonical_geometry_to_stored(
     canonical_width: int,
     settings: Any,
 ) -> int:
-    """Convert canonical full-resolution pixels to the persisted geometry space."""
+    """Convert current-page canonical pixels to persisted reference-page pixels."""
     numeric = float(value)
     if geometry_uses_canonical_pixels(settings):
-        return round(numeric)
+        return round(numeric / _modern_reference_scale(canonical_width, settings))
     return round(numeric * legacy_parameter_scale(canonical_width, settings))
 
 
@@ -149,7 +166,9 @@ def migrate_legacy_geometry_settings(
 
     settings.geometry_coordinate_version = GEOMETRY_COORDINATE_VERSION
     if hasattr(settings, "geometry_coordinate_space"):
-        settings.geometry_coordinate_space = CANONICAL_COORDINATE_SPACE
+        settings.geometry_coordinate_space = CANONICAL_REFERENCE_SPACE
+    if hasattr(settings, "geometry_reference_width"):
+        settings.geometry_reference_width = int(canonical_width)
     return True
 
 
@@ -158,7 +177,8 @@ def coordinate_contract() -> dict[str, str | int]:
     return {
         "version": 1,
         "annotations": SOURCE_COORDINATE_SPACE,
-        "layout_geometry": CANONICAL_COORDINATE_SPACE,
+        "layout_geometry_runtime": CANONICAL_COORDINATE_SPACE,
+        "layout_geometry_persisted": CANONICAL_REFERENCE_SPACE,
         "analysis": ANALYSIS_COORDINATE_SPACE,
         "ocr_band": BAND_COORDINATE_SPACE,
         "tuning_distances": REFERENCE_PIXEL_SPACE,
