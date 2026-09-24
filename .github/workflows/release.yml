@@ -35,6 +35,9 @@ jobs:
       - name: Compile Python sources
         run: uv run --locked python -m compileall -q src run.py run_tests.py
 
+      - name: Check undefined names
+        run: uv run --locked ruff check --select F821 src tests scripts run.py run_tests.py
+
       - name: Build wheel
         run: uv build --wheel
 
