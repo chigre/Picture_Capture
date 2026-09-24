@@ -9,7 +9,7 @@ if not exist ".venv\Scripts\python.exe" (
   where uv >nul 2>&1
   if errorlevel 1 (
     echo [Picture Capture] uv was not found.
-    echo Install uv first: https://docs.astral.sh/uv/
+    echo Install uv, then run this file again.
     pause
     exit /b 1
   )
