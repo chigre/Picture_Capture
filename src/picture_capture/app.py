@@ -10522,7 +10522,7 @@ class PictureCaptureApp(tk.Tk):
         )
 
         state: dict[str, object] = {
-            "rows": [], "details": [], "cover_photos": [],
+            "rows": [], "details": [], "cover_images": {}, "cover_photos": [],
         }
 
         def open_selected(root: Path, row: dict[str, object]) -> None:
@@ -10549,7 +10549,7 @@ class PictureCaptureApp(tk.Tk):
 
         def remove_one(root: Path) -> None:
             remove_recent_project(root)
-            rebuild()
+            refresh_recent_data()
 
         def remove_missing() -> None:
             missing = [
@@ -10568,7 +10568,7 @@ class PictureCaptureApp(tk.Tk):
                 return
             for root in missing:
                 remove_recent_project(root)
-            rebuild()
+            refresh_recent_data()
 
         cleanup_button = ttk.Button(
             tools, text="清理失效项", command=remove_missing, state="disabled"
@@ -10600,10 +10600,9 @@ class PictureCaptureApp(tk.Tk):
                 child.destroy()
             state["cover_photos"] = []
 
-            rows = load_recent_projects()
-            details = [recent_project_details(row) for row in rows]
-            state["rows"] = rows
-            state["details"] = details
+            rows = list(state.get("rows", []))
+            details = list(state.get("details", []))
+            covers = dict(state.get("cover_images", {}))
             query = search_var.get().strip().casefold()
 
             paired = []
@@ -10623,25 +10622,15 @@ class PictureCaptureApp(tk.Tk):
                 f"{len(paired)} 个项目"
                 + (f" · {missing_count} 个路径失效" if missing_count else "")
             )
-            cleanup_button.configure(
-                state="normal" if missing_count else "disabled"
-            )
+            cleanup_button.configure(state="normal" if missing_count else "disabled")
 
             if not paired:
                 empty = ttk.Frame(cards, padding=(18, 50))
                 empty.grid(row=0, column=0, sticky="ew")
+                ttk.Label(empty, text="没有匹配的项目" if query else "还没有最近项目", font=card_title_font).pack()
                 ttk.Label(
                     empty,
-                    text="没有匹配的项目" if query else "还没有最近项目",
-                    font=card_title_font,
-                ).pack()
-                ttk.Label(
-                    empty,
-                    text=(
-                        "换一个关键词试试。"
-                        if query
-                        else "打开或新建项目后，它会出现在这里。"
-                    ),
+                    text="换一个关键词试试。" if query else "打开或新建项目后，它会出现在这里。",
                     foreground="#777777",
                 ).pack(pady=(6, 0))
                 return
@@ -10649,176 +10638,140 @@ class PictureCaptureApp(tk.Tk):
             for row_index, (row, detail) in enumerate(paired):
                 root = Path(str(detail["path"]))
                 exists = bool(detail["exists"])
-                card = ttk.Frame(
-                    cards, padding=(14, 11), relief="solid", borderwidth=1,
-                )
-                card.grid(
-                    row=row_index, column=0, sticky="ew",
-                    padx=(2, 8), pady=(0, 9),
-                )
+                card = ttk.Frame(cards, padding=(14, 11), relief="solid", borderwidth=1)
+                card.grid(row=row_index, column=0, sticky="ew", padx=(2, 8), pady=(0, 9))
                 card.columnconfigure(1, weight=1)
 
                 full_name = str(detail["full_name"] or root.name)
                 abbreviation = str(detail["abbreviation"] or "").strip()
                 tile_text = (abbreviation or full_name or "?")[:2].upper()
-                preview_path = Path(str(detail.get("preview_path") or ""))
                 cover_source = str(detail.get("cover_source") or "none")
                 tile_holder = tk.Frame(
-                    card,
-                    width=76,
-                    height=96,
-                    bg="#f4f6f8" if exists else "#f2f2f2",
-                    bd=0,
-                    relief="flat",
+                    card, width=76, height=96,
+                    bg="#f4f6f8" if exists else "#f2f2f2", bd=0, relief="flat",
                 )
                 tile_holder.grid_propagate(False)
                 tile = tk.Label(
-                    tile_holder,
-                    bg="#f4f6f8" if exists else "#f2f2f2",
-                    fg="#315a97" if exists else "#777777",
-                    font=card_title_font,
-                    bd=0,
-                    relief="flat",
-                    compound="center",
+                    tile_holder, bg="#f4f6f8" if exists else "#f2f2f2",
+                    fg="#315a97" if exists else "#777777", font=card_title_font,
+                    bd=0, relief="flat", compound="center",
                 )
                 tile.place(x=0, y=0, relwidth=1, relheight=1)
-                cover_loaded = False
-                if exists and preview_path.is_file():
-                    try:
-                        with Image.open(preview_path) as opened:
-                            cover_image = normalize_page_rgb(opened)
-                        cover_image.thumbnail(
-                            (72, 92), Image.Resampling.LANCZOS,
-                        )
-                        backdrop = Image.new("RGB", (76, 96), "#f4f6f8")
-                        px = (backdrop.width - cover_image.width) // 2
-                        py = (backdrop.height - cover_image.height) // 2
-                        backdrop.paste(cover_image, (px, py))
-                        cover_photo = ImageTk.PhotoImage(backdrop)
-                        state["cover_photos"].append(cover_photo)
-                        tile.configure(image=cover_photo)
-                        cover_loaded = True
-                    except Exception:
-                        cover_loaded = False
-                if not cover_loaded:
-                    tile.configure(
-                        text=tile_text,
-                        bg="#eaf0fb" if exists else "#f2f2f2",
-                    )
-                tile_holder.grid(
-                    row=0, column=0, rowspan=3, sticky="n", padx=(0, 12)
-                )
+                cover_image = covers.get(str(root))
+                if isinstance(cover_image, Image.Image):
+                    cover_photo = ImageTk.PhotoImage(cover_image)
+                    state["cover_photos"].append(cover_photo)
+                    tile.configure(image=cover_photo)
+                else:
+                    tile.configure(text=tile_text, bg="#eaf0fb" if exists else "#f2f2f2")
+                tile_holder.grid(row=0, column=0, rowspan=3, sticky="n", padx=(0, 12))
 
                 if cover_source == "cover":
-                    cover_tip = (
-                        "项目封面。可替换项目图片文件夹中的 _cover.jpg"
-                        "（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）；该文件不会计入正文图片。"
-                    )
+                    cover_tip = "项目封面。可替换项目图片文件夹中的 _cover.jpg（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）；该文件不会计入正文图片。"
                 elif cover_source == "first_page":
-                    cover_tip = (
-                        "当前用项目第一张图片作为预览。可在项目图片文件夹放置 "
-                        "_cover.jpg（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）作为项目封面；"
-                        "该文件不会计入正文图片。"
-                    )
+                    cover_tip = "当前用项目第一张图片作为预览。可在项目图片文件夹放置 _cover.jpg（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）作为项目封面；该文件不会计入正文图片。"
                 else:
-                    cover_tip = (
-                        "暂无封面预览。可在项目图片文件夹放置 _cover.jpg"
-                        "（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）作为项目封面；"
-                        "该文件不会计入正文图片。"
-                    )
+                    cover_tip = "暂无封面预览。可在项目图片文件夹放置 _cover.jpg（也支持 PNG/JPEG/WebP；兼容旧名 _project_cover.*）作为项目封面；该文件不会计入正文图片。"
                 self._attach_tooltip(tile_holder, cover_tip)
                 self._attach_tooltip(tile, cover_tip)
 
                 content = ttk.Frame(card)
                 content.grid(row=0, column=1, rowspan=3, sticky="nsew")
                 content.columnconfigure(0, weight=1)
-
                 title_row = ttk.Frame(content)
                 title_row.grid(row=0, column=0, sticky="ew")
-                name_label = ttk.Label(
-                    title_row, text=full_name, font=card_title_font,
-                )
+                name_label = ttk.Label(title_row, text=full_name, font=card_title_font)
                 name_label.pack(side="left")
                 if abbreviation:
-                    ttk.Label(
-                        title_row, text=f"  ·  {abbreviation}",
-                        foreground="#666666",
-                    ).pack(side="left")
-
+                    ttk.Label(title_row, text=f"  ·  {abbreviation}", foreground="#666666").pack(side="left")
                 status = tk.Label(
-                    title_row,
-                    text="可用" if exists else "路径失效",
-                    padx=8, pady=2,
-                    bg="#e9f6ee" if exists else "#fff0ee",
-                    fg="#247245" if exists else "#b42318",
+                    title_row, text="可用" if exists else "路径失效", padx=8, pady=2,
+                    bg="#e9f6ee" if exists else "#fff0ee", fg="#247245" if exists else "#b42318",
                     font=meta_font,
                 )
                 status.pack(side="left", padx=(10, 0))
-
                 image_count = int(detail["image_count"])
                 position_text = str(detail.get("position_text") or "—")
                 last_page = str(detail.get("last_page") or "").strip()
-                resume = (
-                    f"{last_page} · {position_text}"
-                    if last_page and position_text != last_page
-                    else position_text
-                )
-                meta_text = (
-                    f"{image_count:,} 张图片"
-                    f"    ·    上次停留：{resume}"
-                    f"    ·    最近活动：{detail['last_edited'] or '—'}"
-                )
-                meta_label = ttk.Label(
-                    content, text=meta_text, foreground="#555555",
-                )
+                resume = f"{last_page} · {position_text}" if last_page and position_text != last_page else position_text
+                meta_text = f"{image_count:,} 张图片    ·    上次停留：{resume}    ·    最近活动：{detail['last_edited'] or '—'}"
+                meta_label = ttk.Label(content, text=meta_text, foreground="#555555")
                 meta_label.grid(row=1, column=0, sticky="w", pady=(5, 0))
-
-                path_label = ttk.Label(
-                    content,
-                    text=str(root),
-                    foreground="#888888" if exists else "#b42318",
-                    font=meta_font,
-                )
+                path_label = ttk.Label(content, text=str(root), foreground="#888888" if exists else "#b42318", font=meta_font)
                 path_label.grid(row=2, column=0, sticky="ew", pady=(5, 0))
 
                 actions = ttk.Frame(card)
                 actions.grid(row=0, column=2, rowspan=3, sticky="ne", padx=(12, 0))
                 open_button = ttk.Button(
-                    actions,
-                    text="打开",
-                    command=lambda p=root, r=dict(row): open_selected(p, r),
-                    state="normal" if exists else "disabled",
-                    width=8,
+                    actions, text="打开", command=lambda p=root, r=dict(row): open_selected(p, r),
+                    state="normal" if exists else "disabled", width=8,
                 )
                 open_button.pack(side="left")
                 more_button = ttk.Button(actions, text="⋯", width=3)
-                more_button.configure(
-                    command=lambda b=more_button, p=root: card_menu(b, p)
-                )
+                more_button.configure(command=lambda b=more_button, p=root: card_menu(b, p))
                 more_button.pack(side="left", padx=(5, 0))
-
                 if exists:
-                    for widget in (
-                        card, tile_holder, tile, content, title_row, name_label,
-                        meta_label, path_label,
-                    ):
+                    for widget in (card, tile_holder, tile, content, title_row, name_label, meta_label, path_label):
                         bind_open(widget, root, row)
 
                 def update_wrap(_event=None, label=path_label, owner=content) -> None:
                     try:
-                        label.configure(
-                            wraplength=max(240, owner.winfo_width() - 10)
-                        )
+                        label.configure(wraplength=max(240, owner.winfo_width() - 10))
                     except tk.TclError:
                         pass
-
                 content.bind("<Configure>", update_wrap, add="+")
-                self._attach_tooltip(
-                    path_label,
-                    "项目路径；单击打开项目。" if exists else "该路径当前不存在。",
-                )
-
+                self._attach_tooltip(path_label, "项目路径；单击打开项目。" if exists else "该路径当前不存在。")
             canvas.yview_moveto(0.0)
+
+        def refresh_recent_data() -> None:
+            count_var.set("正在后台读取最近项目…")
+            cleanup_button.configure(state="disabled")
+            key = f"recent-projects-{id(dialog)}"
+
+            def worker():
+                rows = load_recent_projects()
+                details = [recent_project_details(row) for row in rows]
+                covers: dict[str, Image.Image] = {}
+                for detail in details:
+                    root = Path(str(detail.get("path") or ""))
+                    preview_text = str(detail.get("preview_path") or "")
+                    preview_path = Path(preview_text) if preview_text else None
+                    if not bool(detail.get("exists")) or preview_path is None or not preview_path.is_file():
+                        continue
+                    try:
+                        with Image.open(preview_path) as opened:
+                            cover_image = normalize_page_rgb(opened)
+                        cover_image.thumbnail((72, 92), Image.Resampling.LANCZOS)
+                        backdrop = Image.new("RGB", (76, 96), "#f4f6f8")
+                        px = (backdrop.width - cover_image.width) // 2
+                        py = (backdrop.height - cover_image.height) // 2
+                        backdrop.paste(cover_image, (px, py))
+                        covers[str(root)] = backdrop
+                    except Exception:
+                        continue
+                return rows, details, covers
+
+            def done(payload) -> None:
+                try:
+                    if not dialog.winfo_exists():
+                        return
+                except tk.TclError:
+                    return
+                rows, details, covers = payload
+                state["rows"] = rows
+                state["details"] = details
+                state["cover_images"] = covers
+                rebuild()
+
+            def failed(exc, detail) -> None:
+                if detail:
+                    print(detail)
+                try:
+                    if dialog.winfo_exists():
+                        count_var.set(f"读取最近项目失败：{exc}")
+                except tk.TclError:
+                    pass
+            self._start_ui_worker(key, worker, done, failed)
 
         search_var.trace_add("write", rebuild)
         search_entry.bind("<Escape>", lambda _event: search_var.set(""))
@@ -10837,7 +10790,7 @@ class PictureCaptureApp(tk.Tk):
             "<Button-5>", lambda _event: canvas.yview_scroll(3, "units"), add="+"
         )
 
-        rebuild()
+        refresh_recent_data()
         search_entry.focus_set()
 
 
