@@ -1801,118 +1801,101 @@ class SettingsDialog(tk.Toplevel):
         "ocr_executable": "Tesseract 程序路径",
         "batch_interval": "自动保存间隔",
         "wordslist_path": "参考词表文件",
+        "dictionary_custom_profile_name": "自定义 Profile 显示名称",
+        "detection_method": "默认画线方式",
+        "paddle_lens_mode": "Google Lens 运行模式",
+        "ocr_engine": "普通文本 OCR 引擎",
+        "headword_sort_mode": "词头排序预设",
+        "headword_custom_order": "自定义排序单元",
+        "headword_custom_fold_accents": "自定义排序重音折叠",
     }
 
     SETTING_HELP = {
-        "columns": "正文实际栏数。错栏会让后续所有画线偏位；通常先用“检测版面参数”自动估计。",
-        "gutter": "相邻两栏之间的空白宽度。主要影响栏边界、切图范围和列定位。",
-        "column_width": "单栏正文宽度。通常由版面检测得到，不建议只凭肉眼频繁微调。",
-        "start_y": "正文在参考页规范坐标中的起始 V。运行时会按当前页规范宽度缩放；横排参考页中 V 与原图 Y 一致。若 Project Profile 明确设置页眉百分比，该百分比是页面模板的权威来源。",
-        "bottom_y": "正文在参考页规范坐标中的结束 V。运行时会按当前页规范宽度缩放；它不是【切图设置】里的切图下边界。",
-        "manual_x": "第一栏在参考页规范坐标中的左缘 U。运行时会按当前页规范宽度缩放；镜像/竖排时仍按规范阅读坐标解释。",
-        "body_indent": "普通画线只检查每栏左侧这段宽度。太小会漏掉缩进词头；太大会把正文开头误当词头。",
-        "character_height": "典型文字行高。影响普通画线的最小词条间距，也影响横线 Y 精修的搜索尺度。",
-        "row_padding": "典型行间空白。数值过大可能把相邻词条合并；过小则更容易出现重复横线。",
-        "right_ratio": "词条单行切图向右覆盖栏宽的比例。它影响后续 OCR/切图，不决定词头是否被检测。",
-        "horizontal_tolerance": "列边或人工定位的横向容差。只有版面边缘轻微漂移时才需要调整。",
-        "analysis_threshold_mode": "普通画线识别墨迹的方式。推荐 auto/otsu；纸张发黄或亮度不均可试 adaptive；fixed 主要用于旧项目兼容。",
-        "darkness_threshold": "仅 fixed 模式生效。数值越大，越容易把灰色/污点算作墨迹，误检也会增加。",
-        "column_track_radius": "跟随弯曲/倾斜栏左缘时允许搜索的横向范围。版面正常时保持默认即可。",
-        "column_track_block_height": "列跟踪按多高的分块建立锚点。越小越灵活，但也更容易受局部噪声影响。",
-        "column_track_max_step": "相邻列跟踪锚点允许的最大横移。用于限制异常跳动。",
-        "ocr_language": "词头的主要语言。它会影响 OCR 模型、词头结构和排序预设；选错语言会明显降低识别率。",
-        "paddle_device": "建议有兼容 GPU 时使用 GPU；CPU 更通用但批量 OCR 较慢。",
-        "paddle_preprocessing": "通常用 original。扫描偏灰可试 auto_contrast；只有原图确实需要二值化时才用 binary。",
-        "paddle_max_input_side": "OCR 前允许的最大图像长边。更大可能保留小字细节，但速度和显存/内存占用更高。",
-        "paddle_band_width_ratio": "每栏左侧送入 OCR 的宽度比例。缩小可提速并减少正文干扰；太小会截断长词头、变形或词性提示。",
-        "paddle_band_left_margin": "OCR 识别带向栏左额外扩展的像素。用于保留贴近栏边或略超出栏线的字形。",
-        "paddle_left_tolerance": "词头允许离栏左缘多远。单位为固定 1400px 规范宽度下的参考像素，运行时按扫描分辨率缩放；调大能保留缩进词头，但也会吸入更多正文行。",
-        "paddle_rec_score_threshold": "保留 OCR 原始文字碎片的最低置信度。降低可救回难字，但噪声会增加；普通用户建议保持默认。",
-        "paddle_line_merge_y_ratio": "把同一视觉行上的 OCR 碎片合并时允许的垂直差。过大可能把上下两行合并。",
-        "paddle_height_ratio": "词头字高相对正文的视觉提示阈值。只有词头明显更大时才值得手动调整。",
-        "paddle_boldness_ratio": "词头粗体相对正文的视觉提示阈值。扫描对比度差时不要过分依赖此项。",
-        "paddle_gap_ratio": "利用词头前空白作为结构证据的阈值。不同词典差异较大，通常交给 Profile 默认值。",
-        "paddle_min_candidate_score": "综合文字结构、位置和视觉提示后的最低词头分数。调高更严格、误检少；调低更容易补回漏检。",
-        "paddle_header_search_height": "自动寻找页眉横线时只检查页面顶部这段高度；单位为 1400px 规范宽度下的参考像素。",
-        "paddle_header_rule_ink_ratio": "判断一条横向墨迹是否像页眉横线的强度阈值。",
-        "paddle_header_rule_margin": "检测到页眉横线后，正文起点向下再留出的安全距离。",
-        "paddle_pos_search_chars": "在词头后向右搜索词性/变形提示的字符范围。长词头或词性离得远时可适当增加。",
-        "paddle_separator_search_ratio": "OCR 找到词头后，横线在局部上下搜索空白带的范围。过大可能跳到相邻行。",
-        "paddle_separator_band_radius": "横线精修时对墨迹曲线做平滑的半径。通常无需修改。",
-        "paddle_separator_safety_px": "横线和当前词头墨迹之间额外保留的空白。文字被线压到时调大；间距太大时调小。",
-        "paddle_separator_roi_width_ratio": "横线精修只看栏左侧多少范围。较小可避免右侧长释义干扰。",
-        "paddle_separator_column_margin": "横线精修时跳过栏左边线/装饰线的宽度。",
-        "paddle_tesseract_psm": "Tesseract 对照识别的版面模式。开启自动比较时通常无需手动修改。",
-        "paddle_lens_language": "Google Lens 的提示语言，仅 Lens 已启用时生效。",
-        "paddle_lens_timeout": "Lens 网络识别等待时间。网络不稳定时可适当增加。",
-        "paddle_lens_default_confidence": "Lens 未提供真实置信度时的中性默认值，不建议普通用户调整。",
-        "paddle_alignment_y_tolerance_ratio": "Paddle 与 Tesseract 候选按 Y 位置配对时允许的差异。",
-        "paddle_alignment_min_similarity": "两个 OCR 词头要多相似才视为同一候选。",
-        "paddle_conflict_review_margin": "两个 OCR 质量接近到什么程度时标记为需要人工复核。",
-        "paddle_headword_regex": (
-            "作用：从每个合并后的 OCR 候选行开头提取 lemma（词头文字）。匹配成功后，"
-            "若正则含捕获组，程序取第 1 个捕获组作为原始词头；它只是“词头像不像一个合法字符串”"
-            "这一关，最终是否接受仍会结合栏左位置、词性/变形/符号、视觉分数和 Profile 规则。\n\n"
-            "默认规则：允许行首空格及可选的 • ◆ ◇ ► ▶ * † ‡ § ¶；允许前/后置连字符、"
-            "Unicode 字母、音节分隔点 · • ∙ ‧，并容忍 OCR 把分隔点识成 . : + -；也允许 ' / ’ "
-            "连接的词形。例如“• a·ga·rrón s. m.”会提取 a·ga·rrón，“anti- adj.”会提取 anti-。\n\n"
-            "修改时：第 1 捕获组应只包住 lemma，不要把逗号、词性或释义正文一起吞进去。写得过宽会把"
-            "正文/POS 并入词头并增加误检；写得过窄会让合法词头在后续评分前就被淘汰。未自定义默认规则时，"
-            "Latin Profile 会把通用 Unicode 字母范围进一步收窄为拉丁字母；非拉丁脚本优先由对应 Profile/"
-            "解析器处理。通常先改 Project Profile 或词头过滤规则，只有“词头字符结构”确实不同才改这里。"
-        ),
-        "paddle_pos_regex": (
-            "作用：识别词头后面的 POS（词性）/语法标签，把它作为“这一行确实是词条起始行”的强结构证据；"
-            "它不负责提取 lemma。搜索范围还受【AI 词性搜索字符数】限制，因此不会无限扫描整段释义。\n\n"
-            "默认兼容规则可识别 s.、s. m.、s. f.、s. amb.、s. pl.、adj.、adj. inv.、adv.、"
-            "v./y.、v. prnl.、prep.、conj.、pron. 及其 indef./dem./pers./rel./interr./"
-            "exclam./poses. 子类，以及 det.、interj.、art.、num.、loc.、superlat. 等；y. 是对 "
-            "OCR 把 v. 误识成 y. 的容错。\n\n"
-            "重要：新版主程序通常会加载 Dictionary Profile；只要存在活动 Profile，实际 POS 正则由该 "
-            "Profile 的 pos_labels 动态生成，这个字段主要用于兼容/低层 fallback。若当前项目已经有 Profile，"
-            "要新增或删减词性缩写，应优先修改 Profile grammar/pos_labels，而不是改这里。只有确认当前调用路径"
-            "没有由 Profile 接管 POS 时，本字段才直接生效。"
-        ),
-        "paddle_special_symbol_regex": (
-            "作用：判断 OCR 行开头是否出现“可作为新词条结构证据”的项目符号。它只提供一项辅助证据，"
-            "不会因为命中符号就无条件把该行接受为词头；仍需结合 lemma、左缘位置和其他规则。\n\n"
-            "默认规则只在行首（允许前导空格）识别 • ◆ ◇ ► ▶ * † ‡ § ¶。例如“◆ palabra ...”会得到"
-            "特殊符号提示，而“正文中间出现 ◆”不会命中。\n\n"
-            "修改时只加入真正表示“新词条/新条目起始”的符号。不要把词条内部的释义标记、交叉引用符号或"
-            "文章内部结构符号随意加入，否则正文行会获得错误的词条证据。当前 Profile 还能单独定义内部文章"
-            "符号；例如某些词典中的 ■、□、||、~、→ 会由 Profile 逻辑处理，它们与这里的“新词条证据”不是"
-            "同一概念。"
-        ),
-        "ocr_executable": "Tesseract 可执行文件位置。只有启用 Tesseract 对照/补漏时需要正确配置。",
-        "paddle_ocr_version": "PaddleOCR 模型系列。项目稳定后不要随意切换，否则建议重新 OCR。",
-        "tesseract_language": "Tesseract 使用的语言包。通常跟随 OCR 语言自动设置。",
-        "batch_interval": "自动保存的时间间隔。过短会增加磁盘写入；通常 3–10 秒即可。",
-        "marker_height": "主界面词头横线的显示高度，只影响显示和点击区域，不改变识别算法。",
-        "guide_width": "栏左参考线宽度，只影响界面显示。",
-        "main_entry_font_family": "主界面词条文本框字体，仅影响显示。",
-        "main_entry_font_size": "主界面词条字号，仅影响显示。",
-        "main_entry_width_chars": "主界面词条文本框宽度，以字符数估算。",
-        "main_entry_x_ratio": "主界面词条文本框相对栏宽的横向位置。",
-        "review_entry_font_family": "校对界面原词条字体，仅影响显示。",
-        "review_entry_font_size": "校对界面原词条字号，仅影响显示。",
-        "review_entry_vertical_padding": "校对文本框上下留白，仅影响校对界面密度。",
-        "review_single_cjk_line_height": "中文单字词条的特殊行高；0 表示按默认比例自动计算。",
-        "review_zoom_percent": "校对界面切图默认缩放比例。",
-        "wordslist_path": "校对和主界面成员判断使用的参考词表。可使用项目内相对路径。",
-        "illustration_detect_padding": "自动插图识别后四周额外扩出的像素。",
-        "illustration_detect_right_padding": "插图右侧额外扩出的像素，适合跨向栏间空白的插图。",
-        "dictionary_full_name": "词典完整名称，用于项目资料和后续导出；不影响识别。",
-        "dictionary_abbreviation": "词典缩写，用于 PicDic/导出等项目元数据；不影响识别。",
-        "dictionary_isbn": "可选项目资料，不影响识别。",
-        "dictionary_index_language": "词头/索引语言的 2 位语言代号，用于后期词典元数据。",
-        "dictionary_content_language": "释义内容语言的 2 位语言代号，用于后期词典元数据。",
-        "dictionary_body_page_range": "正文页范围，例如 1-1250。Project Profile 选代表页和批量任务时会参考它。",
-        "layout_writing_mode": "专家项：页面文字书写方向。通常由 Project Profile 确认。",
-        "layout_text_direction": "专家项：文字阅读方向。通常由 Project Profile 确认。",
-        "layout_transform": "专家项：内部标准化页面方向，由书写模式自动推导，不建议手动改。",
-        "layout_columns_policy": "专家项：栏数由程序检测还是固定使用项目值。",
-        "layout_column_separator_mode": "专家项：是否存在明显中央分隔线。通常由 Project Profile 处理。",
-        "paddle_language": "PaddleOCR 后端语言代码，通常根据 OCR 语言自动选择。",
+        "columns": "作用：正文栏数，是版面几何、阅读顺序、OCR 候选带和后续切图共同使用的基础参数。若【栏数策略】为自动检测，程序会在版面分析时估计栏数；若为固定，则这里的值是权威值。\n\n调整：栏数设错会让栏左缘、词条归栏、阅读顺序和切图边界整体错位。优先用【检测当前页版面参数】和 Project Profile 的代表页结果确认，不建议为修一个局部页面临时改全项目栏数。",
+        "gutter": "作用：相邻正文栏之间的典型空白宽度，保存为参考页规范坐标。它参与栏位置推导、栏间区域判断和部分切图边界计算；并不等同于印刷中央分隔线本身的线宽。\n\n调整：过小会让相邻栏靠得过近，过大则可能把正文有效区域压窄。不同分辨率页面会按参考页坐标自动换算，通常应由版面检测或 Profile 代表页确定。",
+        "column_width": "作用：单栏正文的典型宽度，保存为参考页规范坐标。它决定栏几何的水平范围，并间接影响 OCR 候选带、词条矩形和相邻栏边界。\n\n调整：过小可能截掉长词头/释义并让切图偏窄；过大可能侵入栏间空白甚至邻栏。优先使用检测结果，不要用它去补偿单个页面的扫描偏移。",
+        "start_y": "作用：正文在参考页 canonical 阅读坐标中的起始 V。横排、identity 页面上通常可直观理解为正文起始 Y；旋转/竖排项目应按 canonical V 理解，而不是原图 Y。\n\n生效：运行时会按当前页尺寸换算；若 Project Profile 明确设置页眉模式/页眉比例，页面模板得到的有效正文上界可覆盖这个基础值。它影响画线/OCR 的正文范围，不是【切图设置】里的最终切图上边界。",
+        "bottom_y": "作用：正文在参考页 canonical 阅读坐标中的结束 V，用来限制版面分析和词头识别的有效正文区。横排时通常近似原图 Y，旋转/竖排时仍应按 canonical V 理解。\n\n调整：过小会漏掉页尾词条，过大可能把页码/脚注吸入正文。若 Project Profile 明确设置页尾模板，则有效页面下界可由模板覆盖；它也不是最终切图的下边界设置。",
+        "manual_x": "作用：第一栏左缘在参考页 canonical 坐标中的 U 位置。其余栏位置会结合栏宽、栏间距、方向/变换等推导。\n\n注意：镜像、RTL、竖排或旋转项目中，U 是规范阅读坐标，不应直接把它理解为原图左上角系的 X。只有确认自动版面检测不能稳定定位栏左缘时才手动修改。",
+        "body_indent": "作用：主要服务【普通画线（备用）】的栏左墨迹搜索，表示从栏左缘向正文内部允许检查的宽度。它也会参与列跟踪搜索区的右侧范围。\n\n调整：太小会漏掉缩进词头；太大则更容易把释义正文开头当成词头。OCR画线主要依赖文字/结构证据，本项不是其首要调节项。",
+        "character_height": "作用：项目的典型单行字高（参考页规范坐标）。普通画线用它估计行尺度；OCR画线的行距/空白判断、横线 Y 精修和部分 CJK 视觉逻辑也会以它作为尺度基准。\n\n调整：应接近正文常规印刷行高，而不是某个特别大的词头字高。设得明显过大/过小会让行间关系、精修搜索尺度和部分切图高度失真。",
+        "row_padding": "作用：典型行周围的额外留白尺度。它参与普通画线行盒、词条单行框高度以及 OCR 词头前空白/分隔位置等计算。\n\n调整：增大可给文字上下更多安全空间，但过大会让相邻行更容易重叠/合并；过小则可能让横线或单行切图贴字过紧。应和【典型行高】一起校准。",
+        "right_ratio": "作用：词条单行矩形向右覆盖当前栏宽的百分比；当前实现会限制在 1%–100%。它主要影响词条矩形/单行切图的水平覆盖，不决定 OCR 是否把某行识别为词头。\n\n调整：减小可避免把过多释义或邻近内容纳入单行框；增大可保留更完整的同行上下文。它属于历史兼容参数，目前不在设置中心常用分组中，最终导出范围仍应以【切图设置】为准。",
+        "horizontal_tolerance": "兼容状态：该字段仍随项目保存并参与旧坐标迁移，但当前 v2.13.3 的普通画线/OCR画线主算法没有读取它来做实际判定。\n\n因此：修改这里通常不会改变当前识别结果。保留它主要是为了旧项目兼容和配置格式稳定；若需要修正栏左偏移，应优先调整版面几何、列跟踪或 OCR 左缘容差，而不是依赖此项。",
+        "analysis_threshold_mode": "作用：决定【普通画线（备用）】如何把页面灰度转换成“墨迹/背景”。auto 等同推荐的全页 Otsu；adaptive 适合底色、阴影或书脊亮度不均；fixed 使用固定 RGB 和阈值，主要用于旧项目或可控扫描。\n\n选择：普通扫描先用 auto/Otsu；只有明显局部底色不均时再试 adaptive。该项主要影响图像墨迹分析，不会改变 PaddleOCR 的文字模型。",
+        "darkness_threshold": "作用：仅在【分析阈值 = fixed】时作为固定黑度阈值使用，以 RGB 三通道和判断像素是否属于墨迹。auto/Otsu/adaptive 模式下它基本不参与当前判定。\n\n调整：阈值提高会让更浅的灰字/污点也被当作墨迹，召回可能增加但噪声也增加；阈值降低则更严格，可能漏掉浅色印刷。除旧项目外通常无需手调。",
+        "column_track_radius": "作用：开启【跟随栏左缘倾斜/弯曲】后，每个纵向分块允许在名义栏左缘附近向左右搜索真实墨迹边缘的半径，使用参考页规范坐标。\n\n调整：过小跟不上明显弯曲/斜拍；过大可能把搜索吸到正文内部或邻栏。平直扫描通常无需增加，先确认确实存在几何形变再改。",
+        "column_track_block_height": "作用：开启列跟踪后，沿阅读轴把页面切成多高的块来重新估计栏左缘。块越小，路径能更细地跟随局部弯曲；块越大，路径更平滑稳定。\n\n调整：太小容易受单个粗字、插图、污点影响；太大则跟不上快速变化的书脊弯曲。应与搜索半径、最大步移一起理解。",
+        "column_track_max_step": "作用：限制相邻列跟踪锚点之间允许的最大水平跳变，避免某个分块突然追到正文或邻栏。\n\n调整：过小会把真实的快速弯曲强行拉直；过大则失去防跳栏作用。仅在已开启列跟踪且诊断显示路径被过度限制/突然跳变时调整。",
+        "ocr_language": "作用：项目的主要词头/OCR语言，是多个组件的上层语义入口：用于选择/映射 PaddleOCR 与 Tesseract 语言、Dictionary Profile 默认结构、排序预设以及部分 CJK/拉丁解析路径。\n\n调整：应填写词头语言而不是释义语言。改变后可能导致 OCR 模型、Profile 和排序语义变化，已有 OCR 缓存/结果不应默认视为仍可比较，稳定项目中不要频繁切换。",
+        "paddle_device": "作用：指定 PaddleOCR 运行设备，例如 CPU/GPU。它影响推理速度、显存/内存和运行环境要求，不改变词头规则本身。\n\n调整：GPU 只有在 PaddlePaddle GPU、CUDA/cuDNN 与当前环境真正可用时才应选择；CPU 更通用。切换设备后如果出现 DLL/CUDA 错误，先运行 OCR 环境检测，而不是调识别阈值。",
+        "paddle_preprocessing": "作用：决定送入 PaddleOCR 前的图像预处理。original 保留原图；grayscale 转灰度；auto_contrast 拉伸对比度；binary 强制二值化。\n\n选择：默认优先 original，因为 OCR 模型通常能利用原始灰度/颜色信息。只有扫描发灰、底色不均或模型确有改善证据时再改；过度二值化可能损失细笔画和重音符号。",
+        "paddle_max_input_side": "作用：限制送入 PaddleOCR 的图像最大长边，超出时按比例缩小。它主要平衡小字细节、推理速度、内存/显存和模型稳定性。\n\n调整：增大可保留更多细节，但会更慢、更占显存；减小更省资源但可能让小字号/附加符号变糊。改变此项会改变 OCR 输入图像，应视为可能需要重新 OCR，而不仅是重新评分候选。",
+        "paddle_band_width_ratio": "作用：每栏左侧有多少百分比宽度进入 OCR 候选带。程序不是把整栏全文都送去做词头判断，而是优先截取栏左区域以减少正文干扰。\n\n调整：太小会截断长词头、性别变体或紧随其后的 POS；太大则会引入更多释义正文、增加耗时和误候选。先以“能完整覆盖词头 + 近邻语法标签”为目标。",
+        "paddle_band_left_margin": "作用：在 OCR 候选带左侧额外向外扩出的参考像素（以 canonical 1400 宽基准缩放），用于保留略越出估计栏左缘、装饰符号或列跟踪误差附近的文字。\n\n调整：增加可救回被左边界裁切的词头；过大则会纳入页边线、污点或上一栏区域。它改变 OCR 输入带几何，必要时会导致 OCR 缓存失效。",
+        "paddle_left_tolerance": "作用：词头候选允许偏离估计栏左缘的最大程度（固定 1400 canonical 宽下的参考像素，运行时按页尺度换算）。这是“候选位置是否仍算栏左”的关键阈值。\n\n调整：增大可容纳缩进词头，但也更容易把正文缩进行吸进候选；减小更严格，但可能漏掉真实缩进或版面轻微漂移。优先结合候选诊断里的 X/归栏信息判断。",
+        "paddle_rec_score_threshold": "作用：在 OCR 碎片完成必要的同行/结构修复后，按识别置信度过滤低质量 OCR 行。低于阈值的行不会继续进入词头候选评分。\n\n调整：降低可提高召回、救回难字/粗体/重音符号，但会带入更多噪声；提高则更干净但更容易漏词。它和【词头候选最低分】不同：前者是 OCR 文字质量门槛，后者是综合结构评分门槛。",
+        "paddle_line_merge_y_ratio": "作用：将同一印刷行被 OCR 拆成多个 box 时，允许多大的垂直差仍合并为一行。词头、性别变体和 POS 经常被模型拆成多个片段，因此这一步发生在后续语法解析之前。\n\n调整：增大可合并错开的碎片，但过大会把上下两行粘在一起；减小可避免串行，却可能让词头与 POS 分离。出现“同一行被拆开/上下行被合并”时才针对性调整。",
+        "paddle_height_ratio": "作用：把候选行字高与页面候选行中位字高比较；达到该比例后获得“较大字”视觉提示并增加候选分。它是辅助证据，不是独立接受条件。\n\n调整：提高会让“字大”证据更难触发；降低会让更多正文也被视为大字。仅当词头确实通过字号区别于正文时才值得调，结构证据通常比字号更可靠。",
+        "paddle_boldness_ratio": "作用：比较候选行前部墨迹密度与页面局部基准，达到该比例后获得“粗体/更黑”视觉提示并增加候选分。正文中的标签也可能粗体，所以它不是最强证据。\n\n调整：提高更严格、误触发少；降低更敏感，但扫描阴影/对比度变化会带来假粗体。应结合诊断中的 boldness_ratio，而不是仅凭肉眼猜测。",
+        "paddle_gap_ratio": "作用：以“典型行高 + 行间空白”为尺度，判断当前候选前方是否存在足够大的纵向空白；满足时作为词条起始的弱视觉证据加分。\n\n调整：提高意味着需要更大的前置空白才算 separated；降低会让较小行距也触发该证据。它只贡献较弱分值，不应拿它替代 POS/变形等结构证据。",
+        "paddle_min_candidate_score": "作用：候选在完成 lemma 解析、栏左位置、POS/变形/描述符、特殊符号、字高、粗体和行前空白等加权后，必须达到的综合最低分。\n\n调整：提高会减少误检但增加漏检；降低会提高召回但放入更多边缘候选。不要在不知道 reject_reason/score 构成时盲目下调；优先看 diagnostics 是缺结构、位置不对还是单纯分数不足。",
+        "paddle_header_search_height": "作用：自动页眉横线检测只在页面顶部这段高度内搜索；单位是固定 1400 canonical 宽下的参考像素。超出范围的横线不会被当作页眉规则线。\n\n调整：页眉线较低时可增大；太大可能把正文中的表格线/装饰线误当页眉。若项目由 Profile 明确给出页眉模板，优先使用模板语义。",
+        "paddle_header_rule_ink_ratio": "作用：在页眉搜索区逐行计算黑色墨迹占比，达到该比例的行才有资格被视为贯穿式页眉横线。当前实现会把输入限制在合理范围后使用。\n\n调整：提高更严格，需要更长/更实的横线；降低可识别断裂或浅色横线，但也更容易把文字行误判为横线。只有【自动忽略页眉横线以上】开启时才有意义。",
+        "paddle_header_rule_margin": "作用：识别到页眉横线后，再向正文方向额外留出的安全距离，避免横线本身及其附近文字进入候选区；按 1400 canonical 宽参考像素缩放。\n\n调整：增大可避免页眉残留，但可能吃掉第一条正文词头；减小则更贴近横线。第一条词头被漏掉时应同时检查页眉线位置和这个余量。",
+        "paddle_pos_search_chars": "作用：lemma 提取后，语法解析在其后的多长文本范围内寻找 POS/变形等结构提示。这样可利用近邻语法标签，同时避免把很后面的释义正文缩写误当词头证据。\n\n调整：长词头、长性别变体或 POS 距离较远时可适当增大；过大可能在定义正文里误命中缩写。存在活动 Dictionary Profile 时，POS 标签集合通常由 Profile 的 pos_labels 决定。",
+        "paddle_separator_search_ratio": "作用：OCR 粗定位词头 Y 后，以典型行高为尺度，在其附近上下搜索更合理的空白带/分隔位置，从而把横线从文字框位置精修到视觉上的行间空白。\n\n调整：增大搜索更宽，能修正较大的 OCR Y 偏差，但更可能跳到相邻行；减小更保守。只有【自动精修横线 Y】开启时才直接影响结果。",
+        "paddle_separator_band_radius": "作用：横线 Y 精修时，对局部墨迹/空白曲线做平滑的半径（1400 canonical 宽参考像素）。目的是降低单个字符笔画、噪点造成的尖锐波动。\n\n调整：增大更平滑但可能抹掉窄空白带；减小更敏感但更受噪声影响。一般不应单独调，除非诊断显示精修曲线过躁或过度平滑。",
+        "paddle_separator_safety_px": "作用：横线精修后与当前词头墨迹之间保留的额外安全距离（1400 canonical 宽参考像素），防止横线压到字符。\n\n调整：文字被线贴住/穿过时增大；横线与词头间距明显过大时减小。它改变最终显示/词条边界位置，不改变 OCR 文本本身。",
+        "paddle_separator_roi_width_ratio": "作用：横线 Y 精修时，只分析当前栏左侧一定百分比的横向区域，而不是整栏释义。这样可减少右侧长定义、插图或其他墨迹干扰。\n\n调整：减小更聚焦词头附近；太小可能只看到少量字符而不稳定。增大提供更多墨迹统计，但正文干扰也增加。",
+        "paddle_separator_column_margin": "作用：横线精修分析时，从栏最左边缘跳过一小段区域，避免栏边线、装订阴影、竖直装饰线被误当作文字墨迹。\n\n调整：存在明显栏线/黑边时可增大；过大会跳过真正贴边的词头。单位按 1400 canonical 宽参考像素换算。",
+        "paddle_tesseract_psm": "作用：Tesseract 对照 OCR 的 Page Segmentation Mode。当前词头候选带常见 PSM 6（单一均匀文本块）与 PSM 4（单栏但行/字号更灵活）；若开启【自动比较 PSM 4/6】，程序会自行比较，不必手动固定。\n\n调整：只有 Tesseract 对照结果明显分行错误且自动比较关闭时才改。它不影响 PaddleOCR。",
+        "paddle_lens_language": "作用：发送给 Google Lens OCR 的语言提示，用于第三意见路径；只有 Lens 已启用且实际被调用时才生效。它不是项目的主 OCR 语言，也不会修改 Paddle/Tesseract 设置。\n\n调整：填写与词头文字最接近的语言提示。若 Lens 仅作诊断，修改它不会改变本地 OCR。",
+        "paddle_lens_timeout": "作用：一次 Google Lens 网络 OCR 最长等待时间。超时后该次 Lens 结果会失败/缺失，但本地 Paddle/Tesseract 流程仍可继续。\n\n调整：网络慢而频繁超时时可增大；过大则在服务不可达时等待更久。Lens 是可选网络依赖，不建议用超长超时掩盖网络配置问题。",
+        "paddle_lens_default_confidence": "作用：Lens 没有提供可直接比较的真实置信度时，给它一个用于多 OCR 质量比较的默认值。这个数会影响 Lens 在可投票模式下的相对权重。\n\n调整：提高会让无置信度 Lens 结果更容易与本地 OCR 竞争；降低则更保守。除非已系统评估 Lens 在本项目上的可靠性，否则保持默认。",
+        "paddle_alignment_y_tolerance_ratio": "作用：Paddle 与 Tesseract/Lens 候选做跨引擎配对时，允许它们在 canonical 阅读轴 V 上相差多少个典型行高。只有位置足够接近的候选才可能被认为是同一词头。\n\n调整：增大可配对 Y 偏差较大的结果，但可能把相邻两条词头错配；减小更严格但会增加“各自独立候选”。",
+        "paddle_alignment_min_similarity": "作用：跨 OCR 候选除位置外，lemma 文本相似度还需达到该最低值才优先视为同一候选。它帮助避免 Y 相近但实际上是不同词头的错误合并。\n\n调整：提高更严格、错配少但 OCR 字符误差较大时难配对；降低能容忍更多识别差异但可能错误合并。应结合 comparison/fusion 报告调。",
+        "paddle_conflict_review_margin": "作用：当多个 OCR 给出的质量分接近时，用这个“质量差阈值”决定是否把结果标成需要人工复核。当前逻辑中，质量差小于该值更容易进入 review。\n\n调整：增大意味着更多近似甚至中等差异的冲突进入人工复核；减小则只有非常接近的结果才提示 review。它影响复核负担，不是 OCR 字符识别阈值。",
+        "paddle_headword_regex": "作用：从每个合并后的 OCR 候选行开头提取 lemma（词头文字）。匹配成功后，若正则含捕获组，程序取第 1 个捕获组作为原始词头；它只是“词头像不像一个合法字符串”这一关，最终是否接受仍会结合栏左位置、词性/变形/符号、视觉分数和 Profile 规则。\n\n默认：允许行首空格及可选的 • ◆ ◇ ► ▶ * † ‡ § ¶；允许前/后置连字符、Unicode 字母、音节分隔点 · • ∙ ‧，并容忍 OCR 把分隔点识成 . : + -；也允许撇号连接。例如“• a·ga·rrón s. m.”提取 a·ga·rrón，“anti- adj.”提取 anti-。\n\n修改：第 1 捕获组应只包住 lemma。写得过宽会把逗号、POS/正文吞入词头；过窄会在后续评分前直接漏词。默认 Latin Profile 还会把通用 Unicode 字母范围收窄为拉丁字母；项目特例优先用 Profile 或过滤规则。",
+        "paddle_pos_regex": "作用：识别 lemma 后面的 POS/语法标签，作为“这一行确实是词条起始行”的强结构证据；它不负责提取 lemma，搜索范围还受【AI 词性搜索字符数】限制。\n\n默认兼容：可覆盖 s.、s. m./f./amb./pl.、adj./adj. inv.、adv.、v./y.、v. prnl.、prep.、conj.、pron. 子类、det.、interj.、art.、num.、loc.、superlat. 等；y. 是容忍 OCR 把 v. 识成 y.。\n\n重要：主程序加载活动 Dictionary Profile 时，实际 POS 正则由 Profile 的 pos_labels 动态生成，本字段主要是兼容/低层 fallback。当前项目要增删词性缩写应优先改 Profile grammar。",
+        "paddle_special_symbol_regex": "作用：判断 OCR 行首是否出现“可作为新词条起始证据”的项目符号。命中只增加一项结构证据，不会无条件把该行接受为词头。\n\n默认只在行首（允许前导空格）识别 • ◆ ◇ ► ▶ * † ‡ § ¶。正文中间出现同样符号不会命中。\n\n修改：只加入真正表示新词条/新条目起始的符号。词条内部释义标记、交叉引用或文章结构符号应交给 Dictionary Profile；例如某些词典中的 ■、□、||、~、→ 属于内部结构，不应因此触发新 lemma。",
+        "ocr_executable": "作用：Tesseract 可执行程序路径。可填写系统 PATH 中可直接调用的 tesseract，或完整 tesseract.exe 路径。只有普通文本 OCR、Tesseract 对照/补漏等路径需要它。\n\n调整：若“检测 OCR 引擎”提示找不到 Tesseract，应先修这里或系统安装；路径正确但语言缺失时还需安装对应 tessdata。PaddleOCR 单独运行不依赖此字段。",
+        "paddle_ocr_version": "作用：选择 PaddleOCR 使用的模型系列/版本。不同模型可能改变文字框、识别字符、速度和缓存签名，因此它属于后端级设置而不是单纯阈值。\n\n调整：项目一旦稳定不建议频繁切换。更换模型后应重新生成 OCR，而不是继续沿用旧缓存来比较候选规则。",
+        "tesseract_language": "作用：Tesseract 使用的语言包代码，可与项目 OCR 语言不同但通常应对应词头语言。它用于普通文本 OCR和 Tesseract 对照/补漏路径。\n\n调整：若语言包未安装，Tesseract 会不可用或报错；多语言可按 Tesseract 语法组合。仅使用 PaddleOCR 时不会因为这个值改变 Paddle 结果。",
+        "batch_interval": "作用：自动保存/批量相关状态写盘的节流间隔，用来避免每次微小编辑都立即写文件。它影响保存频率，不是 OCR 批量任务“每隔几秒处理一页”的间隔。\n\n调整：过短增加磁盘写入和界面抖动风险；过长则异常退出时可能丢失更多最近改动。通常保持数秒级即可。",
+        "marker_height": "作用：主界面词头横线的显示线宽/可视厚度，绘制时会按当前界面缩放和旧项目兼容比例调整。它影响视觉与点击辨识，不改变词头 Y 坐标或 OCR 判定。\n\n调整：高 DPI/高缩放下看不清可适当增大；过粗会遮挡文字。属于纯显示参数。",
+        "guide_width": "作用：主界面栏左参考线/列路径的显示宽度。只控制视觉叠加层，不改变列跟踪、栏位置或切图数据。\n\n调整：为了在高分辨率屏幕上更易观察可增大；如果参考线遮挡正文则减小。识别结果不应随它变化。",
+        "main_entry_font_family": "作用：主界面可编辑词条文本框与部分预览标签使用的字体族。只改变显示/编辑体验，不修改 PDIC 文本、OCR 结果或排序。\n\n选择：优先使用能完整覆盖项目字符集的字体；若出现方框/缺字，应换字体而不是修改 OCR。",
+        "main_entry_font_size": "作用：主界面词条编辑框在 100% 视图下的基础字号；实际显示会结合当前视图缩放。只影响界面文字大小，不改变图像坐标、词条线或切图。\n\n调整：增大便于校对但会占更多画布空间；过小影响阅读。它与图片缩放是两套独立概念。",
+        "main_entry_width_chars": "作用：主界面词条编辑控件的目标宽度，以字符数估算；横排时主要控制 Entry 宽度，竖排模式则用于窄 Text 控件的可见长度/高度语义。\n\n调整：长词头经常看不全可增大；过大会遮挡原图。只影响编辑控件，不改变词条内容。",
+        "main_entry_x_ratio": "作用：主界面词条编辑框相对当前栏宽的横向放置比例，用来把文本框挪到更不遮挡原图的位置。位置换算会考虑 layout transform/RTL。\n\n调整：只改变 GUI 叠加位置；不会修改 entry.x/PDIC 坐标或识别结果。不同版式遮挡严重时再调。",
+        "review_entry_font_family": "作用：校对窗口中“原词条”编辑框使用的字体，与主界面字体和简体伴随列字体相互独立。只影响显示和字符宽度测量。\n\n选择：应完整覆盖重音字母/CJK/特殊符号；字体变化可能改变编辑框按裁图宽度换算出的可见字符数，但不会修改保存文字。",
+        "review_entry_font_size": "作用：校对窗口原词条编辑框固定字号；校对图片缩放不会自动把这个字号一起放大/缩小。这样可独立控制图片细节和文字编辑可读性。\n\n调整：增大便于阅读，但同一宽度能显示的字符数减少；减小反之。只影响界面。",
+        "review_entry_vertical_padding": "作用：校对文本框内部上下对称留白（像素），主要用于避免重音、上标/下延部或特殊字体被单行 Entry 裁切。\n\n调整：字符顶/底被切时增大；过大会让每行校对控件显得过高。它不改变行高模型、图片裁图或 PDIC。",
+        "review_single_cjk_line_height": "作用：校对窗口针对中文单字词条使用的特殊裁图行高。0 表示自动按项目典型行高的约 2.5 倍计算；非 0 时使用显式参考页规范高度。\n\n调整：单字大字头被上下裁掉时增大；留白过多时减小。只影响校对裁图展示，不改变词头检测位置。",
+        "review_zoom_percent": "作用：校对窗口打开时词条切图片的默认缩放比例。它只改变图片显示尺寸；校对文本字体大小由独立字体设置控制。\n\n调整：高分辨率扫描可适当降低以一次看更多行，小字难辨可提高。不会改变实际切图文件或坐标。",
+        "wordslist_path": "作用：指定参考 wordslist.txt，用于主界面/校对界面的“是否已在词表中”、定位和新旧比较等辅助判断。程序使用成员索引，不要求把整份大词表一次渲染到 GUI。\n\n路径：项目内文件优先保存相对路径便于迁移；项目外文件使用绝对路径。它是校对参考源，不会反向修改 OCR 识别结果。",
+        "illustration_detect_padding": "作用：自动插图检测得到初始 PPP 轮廓/边界后，四周统一额外扩出的参考页规范像素，用于避免图像主体贴边被裁掉。\n\n调整：插图边缘经常缺失可增大；过大会吞入正文。它只影响自动生成的初始插图区域，之后人工编辑的 PPP 仍是最终依据。",
+        "illustration_detect_right_padding": "作用：在通用插图外扩之外，右侧再额外扩展的参考页规范像素。用于某些词典插图常向栏间或右侧空白延伸的版式。\n\n调整：只在右侧经常被截时增加；过大会把邻近文字纳入插图。它不会修改已经人工确认过的 PPP 顶点，除非重新运行自动检测生成新的初始结果。",
+        "dictionary_full_name": "作用：当前词典的完整名称，属于项目元数据，用于项目详情、后期词典制作和导出信息。不会改变 OCR、画线或排序算法。\n\n填写：建议使用正式书名而不是本地文件夹名；后续打包/共享项目时更容易识别来源。",
+        "dictionary_abbreviation": "作用：词典缩写/短名，供 PicDic、导出命名或项目元数据使用。它不参与识别。\n\n填写：应稳定、简短且避免频繁变化；如果下游格式使用它作为标识，修改后需注意旧导出物与新导出物的一致性。",
+        "dictionary_isbn": "作用：可选的 ISBN 项目资料，用于来源记录和后期词典元数据，不参与任何 OCR/版面判断。\n\n填写：没有 ISBN 或版本不确定时可留空；不要为了通过设置校验填伪值。",
+        "dictionary_index_language": "作用：词头/索引语言的 ISO 639-1 两位代码，用于后期词典元数据、索引/排序语义等项目层信息。首次可根据 OCR 语言自动建议，但之后用户选择应被保留。\n\n注意：它描述“索引词是什么语言”，不等同于释义内容语言，也不直接替代 OCR 引擎自己的语言代码。",
+        "dictionary_content_language": "作用：释义/正文内容语言的 ISO 639-1 两位代码，用于后期词典元数据。双语词典中它通常和索引语言不同。\n\n注意：它不负责选择 OCR 模型，也不会改变词头排序；请按词典内容语义填写。",
+        "dictionary_body_page_range": "作用：记录词典正文的页码范围，例如 1-1250。Project Profile 选择代表页、批量工作流或后续制作步骤可据此区分正文与前后附页。\n\n填写：使用逻辑正文页范围，而不是操作系统文件序号；范围错误可能让代表页/批量流程包含封面、索引或附录。",
+        "dictionary_custom_profile_name": "作用：仅给当前项目的“自定义结构”Profile 一个更易读的显示名称；底层 Profile key 仍保持 custom，解析器和持久化身份不会因此改变。\n\n适用：当你为某本特殊词典建立了自定义结构时，可用书名/版式名标记。它不是新建一个新的内置 Profile，也不会自动改变任何识别规则。",
+        "layout_writing_mode": "作用：定义页面文字的书写轴，例如横排 horizontal-tb 或竖排。它决定 canonical 阅读坐标如何解释，并影响栏排序、阅读轴和若干几何转换。\n\n修改：应由 Project Profile 根据真实版式确定。错误设置会造成坐标轴、阅读顺序、OCR 配对和切图语义整体错误，不应作为局部识别率微调项。",
+        "layout_text_direction": "作用：定义同一书写模式下的阅读方向，例如横排 LTR/RTL。它影响 canonical 栏顺序、阅读顺序和某些界面/导出排序，而不是把图片像素简单翻转。\n\n修改：应与词典实际阅读方向一致；阿拉伯/希伯来等 RTL 项目尤其重要。通常由 Project Profile 管理。",
+        "layout_transform": "作用：把原始扫描页面映射到内部 canonical 阅读坐标的变换，例如 identity、mirror_x、rotate_ccw90/rotate_cw90。它是坐标契约的一部分。\n\n修改：一般由书写模式/方向自动推导，不建议手动试错。错误 transform 会让 source X/Y 与 canonical U/V 对应关系整体错位，属于高风险专家项。",
+        "layout_columns_policy": "作用：决定栏数是由版面检测自动估计（detect）还是固定使用项目设置值（fixed）。\n\n选择：不同页面栏数稳定且检测容易受插图/空白干扰时可固定；版式可能变化或希望按实际页面估计时用 detect。fixed 下【正文栏数】尤为关键。",
+        "layout_column_separator_mode": "作用：告诉版面检测中央/栏间是否存在明显分隔线：auto 自动判断，present 明确存在，absent 明确没有。该信息会改变栏边搜索区域和分隔线检测策略。\n\n选择：有稳定印刷竖线时 present 可减少歧义；明确无竖线时 absent 避免程序为不存在的线留搜索空间；不确定保持 auto。",
+        "paddle_language": "作用：PaddleOCR 后端使用的语言/模型代码。通常由上层【OCR 语言】映射得到，属于后端专家覆盖项。\n\n修改：只有默认映射不适合当前模型或在调试 PaddleOCR 后端时才手动指定。与项目主语言不一致可能显著降低识别率，并可能改变 OCR 缓存签名。",
+        "detection_method": "作用：设置主界面默认使用哪条“画线”路径。OCR画线（推荐）综合文字、栏左位置、词性/变形/符号和视觉证据；普通画线（备用）只依赖几何与墨迹。\n\n选择：大多数词典优先 OCR画线；只有左缘极稳定、无需文字结构或 OCR 环境不可用时再用普通画线。它决定默认操作路径，不会删除另一种模式。",
+        "paddle_lens_mode": "作用：控制 Lens 在启用后的调用范围和是否参与融合。off 不调用；diagnostic 可全量获取但 Lens 不投票；conflict 只在 Paddle/Tesseract 冲突或缺失时调用；full 可对更多候选调用并影响非冲突决策。\n\n选择：推荐 conflict，能把网络调用集中在真正有价值的疑难项。full 最耗网络且会让 Lens 对更多最终结果产生影响。",
+        "ocr_engine": "作用：这是“已有词条线后再识别整行文本”的普通 OCR 引擎设置，与 OCR画线的多引擎词头检测不是同一件事。\n\n选择：Tesseract/PaddleOCR 只影响普通文本填充路径；不要因为这里选了 Tesseract 就以为 OCR画线也只使用 Tesseract，后者由 OCR画线页的独立开关控制。",
+        "headword_sort_mode": "作用：决定校对/索引检查采用的词头排序规则。可随 OCR 语言提供语言专用预设，也可使用通用 Unicode 或自定义字母表。\n\n注意：排序只改变比较/显示顺序和索引语义，不会改变扫描页面物理顺序、PDIC 坐标或 OCR 文字。",
+        "headword_custom_order": "作用：当排序预设选择“自定义”时，这里定义词典自己的排序单元，空格分隔；允许 ch、ll、dz 等多字符单元。\n\n填写：顺序就是排序优先级。遗漏的字符会按后备规则处理，因此应覆盖该词典真正需要特殊排序的字母/多字符单元，而不是照抄无关语言字母表。",
+        "headword_custom_fold_accents": "作用：仅在自定义排序中使用。开启后，没有在自定义顺序里单独列出的重音字母会按其基础字母折叠排序；关闭则保留它们的独立字符差异。\n\n选择：如果词典把 á/é/ñ 等视作独立排序单位，应显式列入自定义顺序或关闭折叠；若只把重音视作基本字母变体则可开启。",
     }
 
     COMMON_FIELDS = (
@@ -2032,25 +2015,29 @@ class SettingsDialog(tk.Toplevel):
     }
 
     CHECK_HELP = {
-        "manual_columns": "仅在自动分栏明显失败时启用。普通项目保持关闭，让栏位置按实际页面估计。",
-        "follow_column_deformation": "扫描页有明显倾斜、弯曲或局部拉伸时启用；平直页面关闭更稳定。",
-        "paddle_use_paddleocr": "PaddleOCR 是 OCR画线的主识别引擎。除非专门测试其他引擎，否则建议保持开启。",
-        "paddle_use_textline_orientation": "识别旋转/方向不稳定的文字行时可开启；普通横排页面通常无需额外方向识别。",
-        "paddle_remove_syllable_separators": "输出词头时去除音节分隔点（如 ·）；不会删除真正的词内连字符。",
-        "paddle_auto_header_rule": "自动识别页眉横线并忽略其上方内容，可减少页眉被误判为词头。",
-        "paddle_enable_lens": "把 Google Lens 作为可选第三意见。建议仅在本地 OCR 冲突时调用。",
-        "paddle_require_visual_cue": "要求候选同时有字高、粗体、左缘等视觉证据，可减少正文误检。",
-        "paddle_require_pos_or_symbol": "要求词头附近出现词性、变形或词条符号。结构明确的拉丁词典建议开启。",
-        "paddle_refine_separator_y": "OCR 先定位词头，再把横线移动到局部空白带。通常建议开启。",
-        "paddle_compare_tesseract": "同时运行 Tesseract 作为第二意见。更稳，但速度更慢且需要安装对应语言包。",
-        "paddle_tesseract_rescue": "允许 Tesseract 补回 Paddle 漏掉的词头。双 OCR 项目可开启。",
-        "paddle_tesseract_auto_psm": "自动比较 PSM 4/6 并选择更合适的结果。通常建议开启。",
-        "paddle_dual_ocr_arbitration": "Paddle/Tesseract 冲突时按结构、置信度和位置综合决策，而不是简单覆盖。",
-        "paddle_show_candidate_checkboxes": "主界面显示 OCR 候选复选框，便于人工补回漏检或排除误检。",
-        "ocr_replace": "普通 OCR 文本识别后执行项目替换规则；不影响词头横线位置。",
-        "lowercase_ocr": "把普通 OCR 文本转成小写；只影响文本，不影响画线。",
-        "review_main_show_ocr_choices": "打开校对窗口时，主界面仍显示多个 OCR 候选按钮。",
-        "review_main_show_ocr_background": "打开校对窗口时，主界面仍按 OCR 置信度显示词框底色。",
+        "manual_columns": "开启：普通画线/版面几何优先使用项目中保存的手工栏位置，而不是让每页自动估计。适合自动分栏被插图、装饰线或异常空白稳定干扰的项目。\n\n关闭（推荐默认）：按实际页面估计栏几何，对轻微扫描偏移更鲁棒。若开启后栏线整体错位，应先检查 manual_x、column_width、gutter，而不是继续调 OCR。",
+        "follow_column_deformation": "开启：沿页面分块重新跟踪栏左缘，让栏路径可随书脊弯曲、斜拍或局部形变变化；会使用搜索半径、分块高度和最大步移三个高级参数。\n\n关闭：栏左缘按较直的几何路径处理，平直扫描更稳定也更简单。没有明显弯曲时不建议开启。",
+        "paddle_use_paddleocr": "开启：PaddleOCR 作为 OCR画线的主文字识别来源。默认推荐，因为后续 grammar/parser、候选评分和多 OCR 融合都围绕结构化文字结果工作。\n\n关闭：仅用于专门测试其他引擎或故障排查；若同时没有可用 Tesseract/Lens，OCR画线将缺少主要文字来源。",
+        "paddle_use_textline_orientation": "开启：让 PaddleOCR 额外处理文字行方向/旋转信息，适合文字行方向不稳定、局部旋转或特殊扫描。\n\n代价：通常增加计算并可能改变模型路径。普通已经规范化的横排/竖排页面不需要为了“更准”而默认开启，优先让 Project Profile 的页面变换处理整体方向。",
+        "paddle_remove_syllable_separators": "开启：最终 lemma 归一化时去掉音节分隔点（如 ·、•、∙、‧），并对部分 OCR 分隔符误识别做保守清理；真正的单个词内连字符原则上保留。\n\n关闭：保留词头中的这些分隔符，适合词典索引本身就要求保留音节标记的项目。它改变输出 lemma 文本，不改变词头 Y。",
+        "paddle_auto_header_rule": "开启：在页面顶部指定范围内寻找高横向墨迹占比的页眉横线，并把其上方内容排除出候选区。可减少 running header、页码等误词头。\n\n关闭：不做这套自动横线截断。若 Project Profile 已明确提供页眉模板，优先相信模板；第一条正文被误裁时检查搜索高度、墨迹比例和页眉后余量。",
+        "paddle_enable_lens": "开启：允许 Google Lens 作为网络第三意见；实际何时调用、是否投票由【Lens 运行模式】决定。\n\n注意：会产生网络等待且依赖外部服务可用性。默认不应把 Lens 当成本地 OCR 的必需依赖，推荐仅在冲突模式下使用。",
+        "paddle_require_visual_cue": "名称是历史遗留。当前实现并不是“必须有纯视觉证据”，而是要求候选至少有一个结构或视觉 fallback cue：POS/变形/描述符/特殊符号，或字高/粗体/行前空白之一。\n\n开启可抑制只有合法字母形态、却没有任何词条特征的正文行；关闭会放宽候选门槛，除非 diagnostics 明确显示真实词头因此被拒，否则不建议关闭。",
+        "paddle_require_pos_or_symbol": "开启：普通词头候选必须具有至少一个强结构提示：POS、变形、结构描述符或可作为新词条证据的特殊符号。能显著抑制栏左正文误检。\n\n关闭：允许仅靠位置/视觉分数通过，召回更高但假阳性更多。对结构化拉丁词典通常建议开启；CJK/特殊 Profile 还会有自己的专用接受逻辑。",
+        "paddle_refine_separator_y": "开启：OCR 先提供词头粗 Y，再在当前栏左局部墨迹中寻找更合理的行间空白位置，把横线精修到视觉分隔处。\n\n关闭：更接近直接使用 OCR 粗定位，速度/逻辑更简单但线可能贴字。若精修总跳到相邻行，再检查搜索范围、平滑半径、安全距离，而不是直接永久关闭。",
+        "paddle_compare_tesseract": "开启：对同一候选带额外运行 Tesseract，作为 PaddleOCR 的第二意见并进入比较/诊断；需要 Tesseract 程序和相应语言包。\n\n影响：运行时间增加，但可暴露系统性字符差异。它本身不等于“允许 Tesseract 独有结果补线”，后者由【Tesseract 可补漏 Paddle】控制。",
+        "paddle_tesseract_rescue": "开启：允许满足结构/位置条件的 Tesseract 独有候选补回 Paddle 漏掉的词头，而不只是做诊断对照。\n\n风险：可提高召回，也会引入 Tesseract 特有误检。建议先开启对照看 comparison/issues，再决定是否让其参与补漏。",
+        "paddle_tesseract_auto_psm": "开启：程序自动比较 Tesseract PSM 4 与 PSM 6，选择更适合当前候选带的结果；减少手动猜 Page Segmentation Mode。\n\n关闭：固定使用【Tesseract 对照 PSM】。只有已验证某本词典某个 PSM 明显更稳定、且自动选择反复选错时才关闭。",
+        "paddle_dual_ocr_arbitration": "开启：对 Paddle/Tesseract（以及可投票的 Lens）候选按 canonical V、lemma 相似度、结构与质量做融合/仲裁，而不是让某个引擎简单覆盖另一个。\n\n关闭：更接近单引擎/诊断式工作流。正常多 OCR 项目建议开启；需要复现实验性的单引擎结果时再关闭。",
+        "paddle_show_candidate_checkboxes": "开启：主图为栏左 OCR 候选显示人工复选框，可把自动拒绝但合理的候选手工加入，也可取消自动接受结果；人工决定保存到独立 sidecar，便于追溯。\n\n关闭：界面更干净，但失去逐候选快速覆盖入口。只影响人工复核 UI，不重新运行 OCR。",
+        "ocr_replace": "开启：普通文本 OCR 完成后执行项目替换规则，用于已知 OCR 拼写/字符归一化。这里说的是“已有词条线后的文本 OCR”，不是 OCR画线的词头 parser。\n\n关闭：保留 OCR 原始文本。排查替换规则是否误改内容时可暂时关闭。",
+        "lowercase_ocr": "开启：普通文本 OCR 输出统一转为小写。只影响文本内容，不改变词头横线、坐标或 OCR画线候选。\n\n注意：专名、缩写或大小写具有词典意义的项目不应开启。它不是排序时的大小写折叠选项。",
+        "review_main_show_ocr_choices": "开启：校对窗口打开时，主界面仍保留多 OCR 候选/选择控件，便于一边看校对行一边核对不同引擎结果。\n\n关闭：校对期间隐藏这些控件，使主界面更简洁。只影响显示，不清除候选数据。",
+        "review_main_show_ocr_background": "开启：校对窗口打开时，主界面词条框仍按 OCR 置信度/状态显示底色，便于快速发现低可信项。\n\n关闭：校对期间使用更干净的统一显示。只改变视觉提示，不影响实际置信度或词条内容。",
+        "main_entry_font_bold": "开启后主界面词条编辑框使用粗体；关闭为常规字重。只改变显示和预览字体，不会改变 OCR、PDIC、坐标或切图。",
+        "main_entry_font_italic": "开启后主界面词条编辑框使用斜体；关闭为正体。仅影响显示。某些字体的斜体字宽会变化，可能让文本框视觉占用略有不同，但保存内容不变。",
+        "review_entry_font_bold": "开启后校对窗口“原词条”编辑框使用粗体；关闭为常规字重。只影响校对文字显示和字体测量，不改变原图裁图或保存内容。",
+        "review_entry_font_italic": "开启后校对窗口“原词条”编辑框使用斜体；关闭为正体。只影响显示；若某字体斜体导致字符更宽，可见字符数可能略变，但词条数据不变。",
     }
 
     NORMAL_CHECKS = (
@@ -2072,6 +2059,12 @@ class SettingsDialog(tk.Toplevel):
         ("Tesseract 可补漏 Paddle", "paddle_tesseract_rescue"),
         ("Tesseract 自动比较 PSM 4/6", "paddle_tesseract_auto_psm"),
         ("显示每个 OCR 候选复选框", "paddle_show_candidate_checkboxes"),
+    )
+    DISPLAY_STYLE_CHECKS = (
+        ("主界面词条粗体", "main_entry_font_bold"),
+        ("主界面词条斜体", "main_entry_font_italic"),
+        ("校对词条粗体", "review_entry_font_bold"),
+        ("校对词条斜体", "review_entry_font_italic"),
     )
     DISPLAY_CHECKS = (
         ("校对时主界面显示 OCR 候选", "review_main_show_ocr_choices"),
@@ -2747,14 +2740,16 @@ class SettingsDialog(tk.Toplevel):
             (
                 ocr_mode,
                 "OCR画线（推荐）",
-                "默认推荐路径：用 OCR 文字、左缘位置、粗体/字高、词性或特殊符号等证据判断词头。"
-                "首次运行会更耗时，但后续可复用有效缓存。",
+                "默认推荐路径：先在每栏左侧窄候选带运行 OCR，再把 lemma 结构、栏左位置、"
+                "POS/变形/特殊符号、字高/粗体/行前空白等证据组合判断。首次推理更耗时，"
+                "但未改变图像/模型/候选带时可复用 OCR 缓存；大多数词典应先调这条路径，而不是退回纯几何画线。",
             ),
             (
                 normal_mode,
                 "普通画线（备用）",
-                "只看版面几何和栏左墨迹，不依赖 OCR。适合左缘高度规律的简单版式；"
-                "当正文也贴近栏左或词头缩进变化较大时，更容易误检/漏检。",
+                "只看版面几何和栏左墨迹，不依赖文字识别。适合词头稳定贴近栏左、正文有一致缩进的简单版式，"
+                "也可作为 OCR 环境不可用时的备用路径。正文同样贴边、缩进不稳定或需要 POS/符号语义时，"
+                "它缺少文字结构证据，因此更容易误检或漏检。",
             ),
         ):
             self._bind_help_widget(
@@ -2819,10 +2814,15 @@ class SettingsDialog(tk.Toplevel):
             self.vars["paddle_enable_lens"] = tk.BooleanVar(
                 value=bool(parent.settings.paddle_enable_lens)
             )
-        ttk.Checkbutton(
+        lens_enable_check = ttk.Checkbutton(
             lens_group, text="启用 Lens 第三意见",
             variable=self.vars["paddle_enable_lens"],
-        ).pack(anchor="w")
+        )
+        lens_enable_check.pack(anchor="w")
+        self._bind_help_widget(
+            lens_enable_check,
+            lambda: self._show_check_help("启用 Lens 第三意见", "paddle_enable_lens"),
+        )
         lens_help = ttk.Label(
             lens_group,
             text="建议只在 Paddle/Tesseract 冲突时使用，避免不必要的网络等待。",
@@ -2842,10 +2842,15 @@ class SettingsDialog(tk.Toplevel):
         lens_row = ttk.Frame(lens_group)
         lens_row.pack(fill="x")
         ttk.Label(lens_row, text="运行模式：").pack(side="left")
-        ttk.Combobox(
+        lens_mode_combo = ttk.Combobox(
             lens_row, textvariable=lens_mode_var, values=tuple(LENS_MODE_VALUES),
             state="readonly", width=34,
-        ).pack(side="left")
+        )
+        lens_mode_combo.pack(side="left")
+        self._bind_help_widget(
+            lens_row,
+            lambda: self._show_setting_help("paddle_lens_mode"),
+        )
         self._add_collapsible_settings(
             ocr_page,
             "高级设置（漏检/误检有明确模式时再展开）",
@@ -2861,18 +2866,10 @@ class SettingsDialog(tk.Toplevel):
             "修改这些项目不会改变普通画线/OCR画线的词头判断。",
         )
         self._add_setting_group(display, "界面与校对", self.DISPLAY_FIELDS)
-        display_style_checks = (
-            ("主界面词条粗体", "main_entry_font_bold"),
-            ("主界面词条斜体", "main_entry_font_italic"),
-            ("校对词条粗体", "review_entry_font_bold"),
-            ("校对词条斜体", "review_entry_font_italic"),
-        )
-        for _label, _name in display_style_checks:
-            self.CHECK_HELP.setdefault(_name, "仅影响文字显示样式，不影响识别结果。")
         self._add_check_group(
             display,
             "显示行为",
-            display_style_checks + self.DISPLAY_CHECKS,
+            self.DISPLAY_STYLE_CHECKS + self.DISPLAY_CHECKS,
         )
 
         project_page = self._scrollable_settings_page(project_tab)
@@ -2910,10 +2907,15 @@ class SettingsDialog(tk.Toplevel):
         ttk.Label(text_ocr_group, text="OCR 引擎：").grid(
             row=0, column=0, sticky="e", padx=(0, 10), pady=4
         )
-        ttk.Combobox(
+        ocr_engine_combo = ttk.Combobox(
             text_ocr_group, textvariable=ocr_engine_var,
             values=tuple(OCR_ENGINE_VALUES), state="readonly", width=28,
-        ).grid(row=0, column=1, sticky="w", pady=4)
+        )
+        ocr_engine_combo.grid(row=0, column=1, sticky="w", pady=4)
+        self._bind_help_widget(
+            ocr_engine_combo,
+            lambda: self._show_setting_help("ocr_engine"),
+        )
         text_ocr_help = ttk.Label(
             text_ocr_group,
             text="用于“已有横线后再识别整行文本”的普通 OCR 功能；"
@@ -2968,9 +2970,7 @@ class SettingsDialog(tk.Toplevel):
         self.bind("<Button-5>", _wheel)
 
         # Language-aware collation tab.
-        sort_tab.columnconfigure(0, weight=1)
-        sort_frame = ttk.Frame(sort_tab, padding=14)
-        sort_frame.grid(row=0, column=0, sticky="nsew")
+        sort_frame = self._scrollable_settings_page(sort_tab)
         sort_frame.columnconfigure(1, weight=1)
         self.sort_language_var = tk.StringVar(value="")
         ttk.Label(sort_frame, text="OCR 语言：").grid(row=0, column=0, sticky="e", pady=4)
@@ -2981,6 +2981,10 @@ class SettingsDialog(tk.Toplevel):
         self.sort_combo = ttk.Combobox(sort_frame, textvariable=self.sort_mode_var, state="readonly", width=48)
         self.sort_combo.grid(row=1, column=1, sticky="ew", pady=4)
         self.sort_combo.bind("<<ComboboxSelected>>", lambda _e: self._toggle_custom_sort_state())
+        self._bind_help_widget(
+            self.sort_combo,
+            lambda: self._show_setting_help("headword_sort_mode"),
+        )
 
         ttk.Label(sort_frame, text="自定义排序单元：").grid(row=2, column=0, sticky="ne", pady=(10, 4))
         custom_box = ttk.Frame(sort_frame)
@@ -2990,15 +2994,25 @@ class SettingsDialog(tk.Toplevel):
         self.vars["headword_custom_order"] = self.custom_order_var
         self.custom_order_entry = ttk.Entry(custom_box, textvariable=self.custom_order_var)
         self.custom_order_entry.grid(row=0, column=0, sticky="ew")
+        self._bind_help_widget(
+            self.custom_order_entry,
+            lambda: self._show_setting_help("headword_custom_order"),
+        )
         ttk.Label(custom_box, text="空格分隔；允许多字符单元，如 ch / ll / dz").grid(row=1, column=0, sticky="w", pady=(3, 0))
         self.custom_fold_var = tk.BooleanVar(value=bool(getattr(parent.settings, "headword_custom_fold_accents", True)))
         self.vars["headword_custom_fold_accents"] = self.custom_fold_var
         self.custom_fold_check = ttk.Checkbutton(sort_frame, text="自定义规则中，未单列的重音字母按基础字母排序", variable=self.custom_fold_var)
         self.custom_fold_check.grid(row=3, column=1, sticky="w", pady=4)
+        self._bind_help_widget(
+            self.custom_fold_check,
+            lambda: self._show_setting_help("headword_custom_fold_accents"),
+        )
         help_text = (
-            "排序预设会随 OCR 语言变化。例如 OCR=spa 时只显示西班牙语现代/传统预设；OCR=eng 时显示英语预设。\n"
-            "始终可选“通用 Unicode”或“自定义排序规则”。自定义规则就是词典自己的字母表；\n"
-            "例如西班牙语旧式可写：a b c ch d e f g h i j k l ll m n ñ o p q r s t u v w x y z。"
+            "排序只控制词头的比较/索引顺序，不会重排扫描图片，也不会改 PDIC 坐标。\n"
+            "预设会随 OCR 语言变化；语言专用预设用于符合对应词典的字母序，始终还可选择通用 Unicode 或自定义。\n"
+            "自定义顺序用空格分隔排序单元，可写 ch / ll / dz 等多字符单位；例如旧式西班牙语："
+            "a b c ch d e f g h i j k l ll m n ñ o p q r s t u v w x y z。\n"
+            "如果重音字母有独立排序地位，应显式列入自定义顺序；否则可用“按基础字母排序”折叠。"
         )
         sort_help = ttk.Label(sort_frame, text=help_text, justify="left")
         sort_help.grid(
@@ -3013,9 +3027,11 @@ class SettingsDialog(tk.Toplevel):
         rules_tab.columnconfigure(0, weight=1)
         rules_tab.rowconfigure(1, weight=1)
         rules_help = (
-            "每行一条规则；# 开头为注释。拒绝规则优先于强制接受规则。\n"
-            "常用：reject_lemma_exact / reject_lemma_regex / reject_line_contains / "
-            "reject_line_regex；accept_*；pos_exclude_exact / pos_exclude_regex。"
+            "这是项目级候选覆盖层：用于处理某一本词典反复出现、但不值得改全局 parser/Profile 的例外。每行一条；# 开头为注释。\n"
+            "拒绝规则优先于强制接受：reject_lemma_exact / reject_lemma_regex 针对 lemma；"
+            "reject_line_contains / reject_line_regex 针对整行。accept_* 可救回已成功解析且位于合法栏左区域的候选，"
+            "但不能把任意页眉/噪声变成词头。pos_exclude_exact / pos_exclude_regex 用于排除容易被误当 POS 的固定标签。\n"
+            "修改过滤规则通常只需要重新跑候选解析，不必强制重做 PaddleOCR；若问题属于整类词典结构，应优先写入 Project Profile。"
         )
         rules_help_label = ttk.Label(
             rules_tab, text=rules_help, justify="left", padding=(12, 10, 12, 6)
