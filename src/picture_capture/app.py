@@ -9583,7 +9583,8 @@ class PictureCaptureApp(tk.Tk):
             transform_kind = str(
                 getattr(settings, "layout_transform", "identity") or "identity"
             )
-            canonical_width = LayoutTransform(transform_kind).canonical_size(image_size)[0]
+            transform = LayoutTransform(transform_kind)
+            canonical_width, canonical_height = transform.canonical_size(image_size)
             header_ref = (
                 canonical_geometry_to_stored(
                     estimate.header_rule_y, canonical_width, settings,
@@ -9596,6 +9597,20 @@ class PictureCaptureApp(tk.Tk):
                 )
                 if estimate.body_left_x is not None else None
             )
+            header_source_segment = None
+            if estimate.header_rule_y is not None:
+                header_source_segment = transform.canonical_marker_to_source(
+                    (0, int(estimate.header_rule_y)),
+                    (max(0, canonical_width - 1), int(estimate.header_rule_y)),
+                    image_size,
+                )
+            left_source_segment = None
+            if estimate.body_left_x is not None:
+                left_source_segment = transform.canonical_marker_to_source(
+                    (int(estimate.body_left_x), 0),
+                    (int(estimate.body_left_x), max(0, canonical_height - 1)),
+                    image_size,
+                )
             return (
                 pages[index].name,
                 estimate.header_rule_y,
@@ -9606,6 +9621,8 @@ class PictureCaptureApp(tk.Tk):
                 estimate.coordinate_space,
                 transform_kind,
                 canonical_width,
+                header_source_segment,
+                left_source_segment,
             )
 
         def done(_completed, _total, stopped, results, error) -> None:
@@ -9618,6 +9635,9 @@ class PictureCaptureApp(tk.Tk):
                 writer = csv.writer(handle)
                 writer.writerow((
                     "page",
+                    "header_rule_source_segment_xyxy",
+                    "body_left_source_segment_xyxy",
+                    "source_coordinate_space",
                     "header_rule_v_canonical_page",
                     "body_left_u_canonical_page",
                     "header_rule_v_reference",
@@ -9629,8 +9649,17 @@ class PictureCaptureApp(tk.Tk):
                     "layout_transform",
                     "status",
                 ))
+                def segment_text(segment) -> str:
+                    if not segment:
+                        return ""
+                    (x0, y0), (x1, y1) = segment
+                    return f"{x0},{y0}->{x1},{y1}"
                 writer.writerows((
-                    row[0], row[1], row[2], row[3], row[4],
+                    row[0],
+                    segment_text(row[9]),
+                    segment_text(row[10]),
+                    SOURCE_COORDINATE_SPACE,
+                    row[1], row[2], row[3], row[4],
                     row[6], CANONICAL_REFERENCE_SPACE,
                     _geometry_reference_width(settings), row[8], row[7],
                     "blank_skipped" if row[5] else "analyzed",
@@ -9649,7 +9678,7 @@ class PictureCaptureApp(tk.Tk):
                 values = [value for _name, value in pairs]; mean = statistics.fmean(values); deviation = statistics.pstdev(values)
                 tolerance = max(3.0, deviation * 2.5)
                 return [name for name, value in pairs if abs(value - mean) > tolerance]
-            abnormal = sorted(set(outliers(1) + outliers(2)))
+            abnormal = sorted(set(outliers(3) + outliers(4)))
             report_text = (
                 f"页面范围：{range_name}\n总页数：{len(results)}\n有效分析：{len(analyzed)}\n"
                 f"空白页跳过：{len(blanks)}（{', '.join(blanks) or '无'}）\n"
@@ -9662,7 +9691,8 @@ class PictureCaptureApp(tk.Tk):
                 f"完成 {len(results)} 页，有效 {len(analyzed)} 页，跳过空白页 {len(blanks)} 页"
                 f"{'（提前停止）' if stopped else ''}\n页眉横线 V（参考页规范px）：{summary(header_values)}\n"
                 f"正文起始 U（参考页规范px）：{summary(left_values)}\n异常页面：{', '.join(abnormal) or '无'}\n\n"
-                f"CSV 同时保留当前页 canonical 值与统一参考页值；统计/异常判断使用参考页坐标。\n结果：{target}\n报告：{report}",
+                f"CSV 同时保存原图像素中的边界线段、当前页 canonical 值与统一参考页值；"
+                f"统计/异常判断使用参考页坐标。\n结果：{target}\n报告：{report}",
                 parent=self,
             )
             self.status_var.set(f"版面一致性检测完成：{target.name}")
