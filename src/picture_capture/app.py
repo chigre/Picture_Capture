@@ -189,6 +189,21 @@ def _normalize_crop_settings_payload(
     reference_width = _geometry_reference_width(settings)
     default_bottom = int(settings.bottom_y) if settings.crop_to_bottom_y else 0
 
+    if not raw:
+        return {
+            "version": CROP_SETTINGS_VERSION,
+            "coordinate_space": CANONICAL_REFERENCE_SPACE,
+            "geometry_reference_width": reference_width,
+            "general_top_v": int(settings.start_y),
+            "general_bottom_v": default_bottom,
+            "entry_left_padding_u": 0,
+            "entry_right_padding_u": 0,
+            "integrate_illustrations": True,
+            "polygon_margin": 0,
+            "parallel_workers": int(settings.crop_parallel_workers),
+            "special_pages": {},
+        }
+
     version = int(raw.get("version", 0) or 0)
     source_space = str(raw.get("coordinate_space") or "")
     source_reference = int(raw.get("geometry_reference_width", 0) or 0)
@@ -208,10 +223,12 @@ def _normalize_crop_settings_payload(
 
     def scalar(new_name: str, old_name: str, default: int = 0) -> int:
         key = old_name if old_names else new_name
+        if key not in raw:
+            return int(default)
         try:
-            value = int(raw.get(key, default) or 0)
+            value = int(raw.get(key, 0) or 0)
         except (TypeError, ValueError):
-            value = int(default)
+            return int(default)
         if value == 0:
             return 0
         return max(0, round(value * factor))
