@@ -27,7 +27,7 @@ from picture_capture.layout_transform import LayoutTransform
 from picture_capture.collation import available_profile_labels, collation_key, parse_custom_order
 from picture_capture.dictionary_profile import (
     PROFILE_FORMAT_V2, PROFILE_FORMAT_V3, available_dictionary_profiles, dictionary_profile_labels,
-    dictionary_profile_preset, load_dictionary_profile, profile_effective_settings, profile_layout_summary, profile_preview_path,
+    dictionary_profile_preset, load_dictionary_profile, profile_effective_settings, profile_layout_summary,
     write_project_profile,
 )
 from picture_capture.ocr_engines import _lens_payload_records, find_tesseract
