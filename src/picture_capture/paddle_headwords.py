@@ -5451,15 +5451,6 @@ def detect_paddle_headwords(
     _apply_manual_selection_overrides(review_candidates, overrides)
     _enforce_position_variant_exclusivity(review_candidates)
     cjk_duplicates_merged = _deduplicate_selected_cjk_review_candidates(review_candidates)
-    if geometry.transform.kind != "identity":
-        for item in review_candidates:
-            canonical_x = int(item.get("source_x", 0))
-            canonical_y = int(item.get("source_y", 0))
-            item["canonical_x"] = canonical_x
-            item["canonical_y"] = canonical_y
-            item["source_x"], item["source_y"] = geometry.canonical_to_source(
-                canonical_x, canonical_y
-            )
     all_entries = _entries_from_review_candidates(review_candidates)
     _apply_alphabetical_warnings_to_entries(report_columns, all_entries)
 
