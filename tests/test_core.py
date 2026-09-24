@@ -1271,13 +1271,14 @@ class DictionaryProfileV2Tests(unittest.TestCase):
     def test_v210_profile_names_describe_layout_types(self) -> None:
         labels = dictionary_profile_labels()
         self.assertEqual(set(labels.values()), {
-            "latin_regular", "numbered_prefix", "cjk_visual", "marker_prefixed", "edge_visual_regular", "custom",
+            "latin_regular", "cjk_visual", "numbered_prefix", "marker_prefixed", "custom",
         })
-        self.assertIn("拉丁字母常规词头", labels)
+        self.assertIn("常规边缘词头", labels)
+        self.assertIn("视觉词头（大字/括号词头）", labels)
         self.assertIn("编号前缀词头", labels)
-        self.assertIn("CJK 大字/括号词头", labels)
+        self.assertIn("符号前缀词头", labels)
         self.assertNotIn("FarEast", " ".join(labels))
-        self.assertEqual(len(labels), 6)
+        self.assertEqual(len(labels), 5)
 
     def test_v210_profile_preview_examples_exist(self) -> None:
         import json
@@ -1508,7 +1509,8 @@ class DictionaryProfileV2Tests(unittest.TestCase):
     def test_old_profile_ids_are_aliases_not_visible_profiles(self) -> None:
         labels = set(dictionary_profile_labels().values())
         self.assertNotIn("arabic_rtl_bilingual_2col", labels)
-        self.assertEqual(dictionary_profile_preset("arabic_rtl_bilingual_2col").family, "edge_visual_regular")
+        self.assertEqual(dictionary_profile_preset("arabic_rtl_bilingual_2col").family, "latin_regular")
+        self.assertEqual(dictionary_profile_preset("edge_visual_regular").family, "latin_regular")
         self.assertEqual(dictionary_profile_preset("cjk_large_head_pinyin_2col").family, "cjk_visual")
 
 
