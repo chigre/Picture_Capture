@@ -34,6 +34,8 @@ class LayoutEstimate:
     canonical_transform: str = "identity"
     separator_x: int | None = None
     confidence: float = 0.0
+    # Full-resolution canonical page width represented by this estimate.
+    canonical_width: int = 0
 
 
 @dataclass(slots=True)
@@ -73,8 +75,17 @@ def aggregate_layout_estimates(
     mode_columns = min(counts, key=lambda value: (-counts[value], value))
     columns = max(1, int(fixed_columns or mode_columns)) if columns_policy == "fixed" else mode_columns
 
+    widths = [max(1, int(getattr(row, "canonical_width", 0) or 0)) for row in rows]
+    known_widths = [width for width in widths if width > 1]
+    reference_width = round(statistics.median(known_widths)) if known_widths else 0
+
     def robust_median(name: str) -> int:
-        values = [float(getattr(row, name)) for row in rows]
+        values: list[float] = []
+        for row, row_width in zip(rows, widths):
+            value = float(getattr(row, name))
+            if reference_width > 0 and row_width > 1:
+                value *= reference_width / row_width
+            values.append(value)
         center = statistics.median(values)
         deviations = [abs(value - center) for value in values]
         mad = statistics.median(deviations)
@@ -82,12 +93,13 @@ def aggregate_layout_estimates(
         return round(statistics.median(kept or values))
 
     result = {"columns": columns}
+    if reference_width > 0:
+        result["geometry_reference_width"] = reference_width
     for field in ("start_y", "bottom_y", "manual_x", "column_width", "gutter", "character_height", "row_padding"):
         result[field] = robust_median(field)
-    # Leave a small safety margin above the first detected body line instead of
-    # placing the header boundary directly against text.  This value is already
-    # in the user-facing parameter coordinate system.
-    result["start_y"] = max(0, result["start_y"] - 5)
+    # Keep a small resolution-aware safety margin above the first body line.
+    safety = max(1, round(5 * reference_width / 1400)) if reference_width > 0 else 5
+    result["start_y"] = max(0, result["start_y"] - safety)
     result["row_padding"] = max(1, result["row_padding"])
     return result, f"{columns}栏: {counts.get(columns, 0)}/{len(rows)} pages"
 
@@ -486,6 +498,7 @@ def infer_layout_from_boxes(
         source_boxes=len(filtered),
         method="paddle",
         separator_x=(round(float(np.median(separators)) * scale) if separators else None),
+        canonical_width=int(width),
     )
 
 
@@ -735,6 +748,7 @@ def _projection_layout_estimate(source: Image.Image, settings: AppSettings) -> L
         source_boxes=max(1, len(starts) + len(chosen)),
         method="projection_fallback",
         separator_x=(round(float(np.median(separator_centers)) * factor) if separator_centers else None),
+        canonical_width=int(original_w),
     )
 
 
