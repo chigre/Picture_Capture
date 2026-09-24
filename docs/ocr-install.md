@@ -21,7 +21,7 @@ install_ocr_windows.bat
 | Lens only | `lens` | Google Lens / chrome-lens-py |
 | Core only | 无 | 删除可选 OCR profile，仅保留核心环境 |
 
-GPU 模式下，安装器先通过对应的 uv profile 同步 PaddleOCR 与 Google Lens，然后自动从 PaddlePaddle 对应 CUDA 专用索引安装 `paddlepaddle-gpu==3.3.0`。CPU/GPU runtime 会先清理再安装，避免 `paddlepaddle` 与 `paddlepaddle-gpu` 同时提供 `paddle` 模块。
+GPU 模式下，`paddlepaddle-gpu==3.3.0` 与 CUDA 11.8 / 12.6 / 12.9 对应的 PaddlePaddle 官方索引都直接声明在 `pyproject.toml` 中。CPU/GPU profile 在 uv 中声明为互斥，安装器只执行标准的锁定同步，不再手工卸载 runtime、拼接下载 URL 或运行 `uv pip install`。
 
 ## profile 持久化
 
@@ -37,26 +37,20 @@ GPU 模式下，安装器先通过对应的 uv profile 同步 PaddleOCR 与 Goog
 ocr-gpu-cu126
 ```
 
-`run_windows.bat` 启动时会读取它，并自动运行等价于：
-
-```bat
-uv run --locked --extra ocr-gpu-cu126 python run.py
-```
-
-因此用户不需要每次重新输入 `--extra`。该 profile 文件属于本机环境设置，已加入 `.gitignore`。
+该文件记录最近一次成功安装的 profile，主要用于诊断和切换提示。日常 `run_windows.bat` 不再读取它，也不会在每次启动时重新同步环境；启动脚本只直接运行已经准备好的项目 `.venv`。该 profile 文件属于本机环境设置，已加入 `.gitignore`。
 
 ## 为什么 GPU runtime 由安装器处理
 
-PaddlePaddle GPU 的 wheel 使用 CUDA 专用索引。`ocr-gpu-cu118`、`ocr-gpu-cu126`、`ocr-gpu-cu129` 是正式 uv profile extra，用于锁定共同的 Python 侧 OCR 依赖（PaddleOCR + Google Lens）；安装器再根据所选 profile 从对应官方索引安装 GPU runtime。
+PaddlePaddle GPU 的 wheel 使用 CUDA 专用索引。项目通过 uv 的 extra-specific source 配置，让 `ocr-gpu-cu118`、`ocr-gpu-cu126`、`ocr-gpu-cu129` 各自绑定对应官方索引，并将 CPU/GPU runtime profile 声明为互斥。
 
-这样既保持 `uv.lock` 对通用 Python 依赖的可复现性，也避免把不同 CUDA runtime 同时解析进同一个环境。
+因此 PaddleOCR、Google Lens 和 Paddle runtime 都由同一份 `pyproject.toml + uv.lock` 管理，不再需要安装器对环境做额外的 pip 式修改。
 
 ## 验证
 
 安装器会自动运行：
 
-```bat
-uv run --locked --extra <profile> python scripts\verify_ocr_environment.py --expect gpu --profile <profile>
+```text
+.venv\Scripts\python.exe scripts\verify_ocr_environment.py --expect gpu --profile <profile>
 ```
 
 GPU 模式会检查：
@@ -71,9 +65,18 @@ GPU 模式会检查：
 
 ## 切换 CUDA 配置
 
-直接重新运行 `install_ocr_windows.bat` 并选择新的 CUDA profile 即可。安装器会先同步新的 profile，再清理旧 Paddle runtime，最后安装新的 GPU runtime 并覆盖 `.picture_capture_ocr_extra`。
+直接重新运行 `install_ocr_windows.bat` 并选择新的 CUDA profile 即可。uv 会按所选互斥 profile 同步环境、移除不属于该 profile 的旧 runtime，再安装锁定的目标 runtime；验证成功后才更新 `.picture_capture_ocr_extra`。
 
 不建议同时手工选择多个 GPU profile，也不要在 GPU 环境中叠加旧的 `paddleocr` CPU extra。
+
+## Windows BAT 的安全收敛
+
+两个 Windows BAT 都只保留最小包装逻辑：
+
+- `run_windows.bat` 以前台 `python.exe` 直接运行主程序，不使用 `start`、`pythonw.exe`、隐藏窗口或后台重启。
+- `install_ocr_windows.bat` 只负责确保核心 `.venv` 存在并调用 `scripts/windows_ocr_setup.py`；BAT 本身不包含 GPU 下载索引、包卸载、动态安装命令或交互式 profile 解析。
+
+这种结构让批处理文件本身保持简单、可审计，同时把依赖选择交给 uv 的声明式配置。
 
 ## Tesseract
 
