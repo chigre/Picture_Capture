@@ -6815,6 +6815,7 @@ class PictureCaptureApp(tk.Tk):
             background=[("active", "#f3c451"), ("pressed", "#eab843")],
         )
         style.configure("PC.Tool.TButton", padding=(4, 2))
+        style.configure("PC.PageNav.TButton", padding=(4, 2))
         style.configure("PC.Footer.TButton", padding=(7, 3))
         style.configure("PC.Compact.TEntry", padding=(4, 2))
         style.configure("PC.Footer.TEntry", padding=(4, 2))
@@ -7264,13 +7265,13 @@ class PictureCaptureApp(tk.Tk):
         ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
 
         ttk.Button(
-            size_row, text="跳转", command=self.jump_to_page_spec, style="PC.Compact.TButton"
+            size_row, text="跳转", command=self.jump_to_page_spec, style="PC.PageNav.TButton"
         ).pack(side="left", padx=(0, 3))
         ttk.Button(
-            size_row, text="上一页", command=lambda: self.change_page(-1), style="PC.Compact.TButton"
+            size_row, text="上一页", command=lambda: self.change_page(-1), style="PC.PageNav.TButton"
         ).pack(side="left", padx=(0, 3))
         ttk.Button(
-            size_row, text="下一页", command=lambda: self.change_page(1), style="PC.Compact.TButton"
+            size_row, text="下一页", command=lambda: self.change_page(1), style="PC.PageNav.TButton"
         ).pack(side="left")
 
         list_frame = ttk.Frame(page_panel)
