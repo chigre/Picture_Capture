@@ -5733,9 +5733,12 @@ def test_v2131_windows_launcher_uses_locked_uv_project_environment():
 
     project_root = Path(inspect.getsourcefile(picture_capture)).resolve().parents[2]
     bat = (project_root / "run_windows.bat").read_text(encoding="utf-8")
-    assert "uv run --locked python run.py" in bat
+    assert '".venv\\Scripts\\python.exe" "run.py"' in bat
+    assert "uv sync --locked --no-dev" in bat
     assert "pip install" not in bat
     assert "pip uninstall" not in bat
+    assert "pythonw.exe" not in bat
+    assert "start " not in bat.casefold()
     assert (project_root / ".python-version").read_text(encoding="utf-8").strip() == "3.13"
     assert not (project_root / "requirements.txt").exists()
 
@@ -6143,7 +6146,7 @@ def test_v2132_declares_cpu_and_gpu_ocr_profiles():
     for name in ("ocr-gpu-cu118", "ocr-gpu-cu126", "ocr-gpu-cu129"):
         assert "paddleocr>=3.7,<4" in extras[name]
         assert "chrome-lens-py>=3.4,<4" in extras[name]
-        assert not any(item.startswith("paddlepaddle") for item in extras[name])
+        assert "paddlepaddle-gpu==3.3.0" in extras[name]
 
 
 def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
@@ -6165,9 +6168,9 @@ def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    assert module.PROFILES["2"].extra == "ocr-gpu-cu118"
-    assert module.PROFILES["3"].extra == "ocr-gpu-cu126"
-    assert module.PROFILES["4"].extra == "ocr-gpu-cu129"
+    assert module.PROFILES["2"]["extra"] == "ocr-gpu-cu118"
+    assert module.PROFILES["3"]["extra"] == "ocr-gpu-cu126"
+    assert module.PROFILES["4"]["extra"] == "ocr-gpu-cu129"
     assert module.sync_command(module.PROFILES["3"]) == [
         "uv", "sync", "--locked", "--no-dev", "--extra", "ocr-gpu-cu126",
     ]
