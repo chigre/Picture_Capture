@@ -175,7 +175,7 @@ def migrate_legacy_geometry_settings(
 def coordinate_contract() -> dict[str, str | int]:
     """Machine-readable coordinate contract used by exports and diagnostics."""
     return {
-        "version": 1,
+        "version": 2,
         "annotations": SOURCE_COORDINATE_SPACE,
         "layout_geometry_runtime": CANONICAL_COORDINATE_SPACE,
         "layout_geometry_persisted": CANONICAL_REFERENCE_SPACE,
