@@ -40,6 +40,7 @@ from .layout_detection import detect_layout_consistency, detect_layout_parameter
 from .layout_transform import LayoutTransform
 from .coordinate_space import (
     CANONICAL_COORDINATE_SPACE,
+    CANONICAL_REFERENCE_SPACE,
     REFERENCE_CANONICAL_WIDTH,
     SOURCE_COORDINATE_SPACE,
     canonical_geometry_to_stored,
@@ -165,6 +166,87 @@ def transformed_geometry_pending(settings: AppSettings) -> bool:
     """Return whether a configured transform is unknown to the geometry adapter."""
     return str(getattr(settings, "layout_transform", "identity") or "identity") not in {
         "identity", "mirror_x", "rotate_ccw90", "rotate_cw90",
+    }
+
+
+CROP_SETTINGS_VERSION = 6
+
+
+def _geometry_reference_width(settings: AppSettings) -> int:
+    """Return the persisted canonical reference-page width for project rules."""
+    value = int(getattr(settings, "geometry_reference_width", 0) or 0)
+    if value > 0:
+        return value
+    legacy = int(getattr(settings, "parameter_display_width", 0) or 0)
+    return legacy if legacy > 0 else REFERENCE_CANONICAL_WIDTH
+
+
+def _normalize_crop_settings_payload(
+    raw: dict | None, settings: AppSettings,
+) -> dict:
+    """Normalize historical crop settings to the v6 reference-page contract."""
+    raw = raw if isinstance(raw, dict) else {}
+    reference_width = _geometry_reference_width(settings)
+    default_bottom = int(settings.bottom_y) if settings.crop_to_bottom_y else 0
+
+    version = int(raw.get("version", 0) or 0)
+    source_space = str(raw.get("coordinate_space") or "")
+    source_reference = int(raw.get("geometry_reference_width", 0) or 0)
+
+    if version >= CROP_SETTINGS_VERSION and source_space == CANONICAL_REFERENCE_SPACE:
+        source_reference = source_reference if source_reference > 0 else reference_width
+        factor = reference_width / max(1, source_reference)
+        old_names = False
+    else:
+        # Crop Settings <= v5 used the same legacy display-pixel convention as
+        # old layout geometry. ProjectState may already have migrated AppSettings,
+        # but parameter_display_width is intentionally retained for this adapter.
+        factor = 1.0 / max(
+            0.01, legacy_parameter_scale(reference_width, settings),
+        )
+        old_names = True
+
+    def scalar(new_name: str, old_name: str, default: int = 0) -> int:
+        key = old_name if old_names else new_name
+        try:
+            value = int(raw.get(key, default) or 0)
+        except (TypeError, ValueError):
+            value = int(default)
+        if value == 0:
+            return 0
+        return max(0, round(value * factor))
+
+    specials_raw = raw.get("special_pages")
+    specials: dict[str, dict[str, int]] = {}
+    if isinstance(specials_raw, dict):
+        for page, values in specials_raw.items():
+            if not isinstance(values, dict):
+                continue
+            if old_names:
+                top = values.get("top_y", 0)
+                bottom = values.get("bottom_y", 0)
+            else:
+                top = values.get("top_v", 0)
+                bottom = values.get("bottom_v", 0)
+            try:
+                top_v = max(0, round(int(top or 0) * factor))
+                bottom_v = max(0, round(int(bottom or 0) * factor))
+            except (TypeError, ValueError):
+                continue
+            specials[str(page)] = {"top_v": top_v, "bottom_v": bottom_v}
+
+    return {
+        "version": CROP_SETTINGS_VERSION,
+        "coordinate_space": CANONICAL_REFERENCE_SPACE,
+        "geometry_reference_width": reference_width,
+        "general_top_v": scalar("general_top_v", "general_top_y", int(settings.start_y)),
+        "general_bottom_v": scalar("general_bottom_v", "general_bottom_y", default_bottom),
+        "entry_left_padding_u": scalar("entry_left_padding_u", "entry_left_padding", 0),
+        "entry_right_padding_u": scalar("entry_right_padding_u", "entry_right_padding", 0),
+        "integrate_illustrations": bool(raw.get("integrate_illustrations", True)),
+        "polygon_margin": scalar("polygon_margin", "polygon_margin", 0),
+        "parallel_workers": int(raw.get("parallel_workers", settings.crop_parallel_workers) or 0),
+        "special_pages": specials,
     }
 
 OCR_SCOPE_LABELS = {"current": "当前页", "all": "全部页面"}
