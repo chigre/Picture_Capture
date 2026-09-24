@@ -4,9 +4,7 @@
   "default_headword_profile": "custom",
   "headword_profiles": {
     "latin_regular": {
-      "parser_modes": [
-        "latin"
-      ],
+      "parser_modes": [],
       "require_visual_cue": true,
       "settings": {
         "paddle_band_width_ratio": 100,
@@ -928,7 +926,10 @@
         "columns_policy": "fixed",
         "column_separator": "absent",
         "analysis_threshold_mode": "auto"
-      }
+      },
+      "parser_modes": [
+        "latin"
+      ]
     },
     "lder_single": {
       "headword_profile": "latin_regular",
@@ -941,7 +942,10 @@
         "columns_policy": "fixed",
         "column_separator": "absent",
         "analysis_threshold_mode": "auto"
-      }
+      },
+      "parser_modes": [
+        "latin"
+      ]
     },
     "cjk_etymology_large_head_2col": {
       "headword_profile": "cjk_visual",
@@ -1051,7 +1055,10 @@
         "columns_policy": "fixed",
         "column_separator": "absent",
         "analysis_threshold_mode": "auto"
-      }
+      },
+      "parser_modes": [
+        "latin"
+      ]
     },
     "latin_pos_classic": {
       "headword_profile": "latin_regular",
@@ -1068,6 +1075,9 @@
       "supported_languages": [
         "por",
         "ita"
+      ],
+      "parser_modes": [
+        "latin"
       ]
     },
     "latin_numbered_pos": {
