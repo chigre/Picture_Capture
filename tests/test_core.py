@@ -1034,7 +1034,7 @@ class ProcessingTests(unittest.TestCase):
             "tesseract_rescued": [],
         }]
         text = _diagnostic_text(report)
-        header = "column\tbox\tconf\ttext\taccept/reject\tscore\tlemma\traw\tcorrected\tPOS\trepairs\treason"
+        header = "column\tbox_band_xyxy\tconf\ttext\taccept/reject\tscore\tlemma\traw\tcorrected\tPOS\trepairs\treason"
         self.assertEqual(text.splitlines()[0], header)
         diag_counts = {len(line.split("\t")) for line in text.splitlines()}
         self.assertEqual(diag_counts, {12})
