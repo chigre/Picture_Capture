@@ -6577,17 +6577,45 @@ def test_coordinate_contract_parameter_display_width_is_legacy_only_in_core_runt
     from pathlib import Path
 
     package = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    allowed = {
+        "app.py",             # legacy project/crop-settings adapters + viewer compatibility
+        "coordinate_space.py", # single migration/conversion authority
+        "models.py",          # persisted legacy field + one-time project migration
+        "processing.py",      # compatibility scale for unmigrated old settings
+    }
+    offenders = []
+    for source in package.glob("*.py"):
+        text = source.read_text(encoding="utf-8")
+        if "parameter_display_width" in text and source.name not in allowed:
+            offenders.append(source.name)
+    assert offenders == []
+
     coordinate_text = (package / "coordinate_space.py").read_text(encoding="utf-8")
     models_text = (package / "models.py").read_text(encoding="utf-8")
     assert "parameter_display_width" in coordinate_text
     assert "parameter_display_width" in models_text
+    assert "parameter_display_width" not in (
+        package / "paddle_headwords.py"
+    ).read_text(encoding="utf-8")
+    assert "parameter_display_width" not in (
+        package / "profile_semantics.py"
+    ).read_text(encoding="utf-8")
+    assert "parameter_display_width" not in (
+        package / "training_export.py"
+    ).read_text(encoding="utf-8")
 
-    paddle_text = (package / "paddle_headwords.py").read_text(encoding="utf-8")
-    profile_text = (package / "profile_semantics.py").read_text(encoding="utf-8")
-    training_text = (package / "training_export.py").read_text(encoding="utf-8")
-    assert "parameter_display_width" not in paddle_text
-    assert "parameter_display_width" not in profile_text
-    assert "parameter_display_width" not in training_text
+
+def test_crop_log_declares_source_image_coordinate_space(tmp_path):
+    (tmp_path / "QT").mkdir()
+    append_crop_log(
+        tmp_path,
+        [CropRecord("0001.png", 1, "alpha", "0001_SW_001.png", (10, 20, 110, 70))],
+    )
+    log = (tmp_path / "QT" / "_file_log.txt").read_text(encoding="utf-8")
+    rows = log.splitlines()
+    assert rows[0].startswith("# coordinate_space=source_image_pixels")
+    assert "source_x,source_y,width,height" in rows[0]
+    assert rows[1] == "0001.png\t0001_SW_001.png\t10\t20\t100\t50"
 
 
 def test_crop_settings_v5_migrates_to_reference_page_pixels():
