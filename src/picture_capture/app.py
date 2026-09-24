@@ -110,8 +110,8 @@ from .processing import (
 
 
 DETECTION_LABELS = {
-    "paddleocr": "PaddleOCR（词头＋坐标）",
-    "left_edge": "左缘规则",
+    "paddleocr": "PaddleOCR（推荐｜词头＋坐标）",
+    "left_edge": "左缘规则（备用）",
 }
 DETECTION_VALUES = {label: value for value, label in DETECTION_LABELS.items()}
 OCR_ENGINE_LABELS = {"tesseract": "Tesseract", "paddleocr": "PaddleOCR"}
@@ -954,9 +954,9 @@ class UsageGuideWindow(tk.Toplevel):
                     "页眉/页尾、首栏 X、单栏宽和栏间空；检测值应先通过肉眼确认，再进入批量画线。"
                 ),
                 (
-                    "03", "只用少量代表页试画",
-                    "先在 1–3 张典型页面运行【运行OCR画线】。模型和原图没有变化时保留“使用有效缓存（推荐）”；"
-                    "只有模型、OCR 后端或图像发生改变时才需要重新 OCR。"
+                    "03", "默认先用 OCR画线验证代表页",
+                    "先在 1–3 张典型页面运行【运行OCR画线（推荐）】。OCR画线是主流程；"
+                    "普通画线仅作为左缘极稳定版式或 OCR 暂不可用时的备用方案。模型和原图没有变化时保留“使用有效缓存（推荐）”。"
                 ),
                 (
                     "04", "先校对误差模式，再决定是否调参",
@@ -978,30 +978,35 @@ class UsageGuideWindow(tk.Toplevel):
         (
             "drawing",
             "画线与 OCR",
-            "普通画线适合版式规则稳定的页面；OCR 画线适合需要识别词头结构、字号/粗体或语法证据的页面。",
+            "OCR画线是默认推荐模式；普通画线降为备用，只在左缘极稳定的简单版式或 OCR 暂不可用时优先考虑。",
             (
                 (
-                    "A", "普通画线：先解决几何问题",
-                    "普通画线主要依赖栏位置、墨迹和行高等版面信息。若整本词典版式稳定，先把【普通版面参数】调准，"
-                    "通常比增加 OCR 复杂度更快。底色不均时可在设置中心使用 auto/Otsu 或 adaptive 阈值策略。"
+                    "A", "OCR画线：默认推荐",
+                    "优先运行【OCR画线】。它同时利用词头文字、左缘位置、粗体/字高、词性和特殊符号等证据，"
+                    "比单纯依赖栏左墨迹更适合真实词典中的复杂版式；默认只启用 PaddleOCR，Tesseract 与 Google Lens 按需手动开启。"
                 ),
                 (
-                    "B", "OCR画线：默认复用有效缓存",
-                    "【二、基于OCR画线】默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启。"
-                    "“使用有效缓存（推荐）”会在真正影响原始 OCR 的设置变化时自动失效，无需每次强制识别。"
+                    "B", "有效缓存：OCR 不必每次重跑",
+                    "保持“使用有效缓存（推荐）”即可。缓存会在真正影响原始 OCR 的设置、模型或图像变化时自动失效；"
+                    "仅调整候选判定参数时通常无需强制重新识别。"
                 ),
                 (
-                    "C", "页面范围会影响批量任务",
+                    "C", "普通画线：备用而不是默认",
+                    "普通画线只依赖栏位置、墨迹和行高。它适合词头始终紧贴栏左、正文缩进稳定的简单版式，"
+                    "或 OCR 环境暂不可用时快速应急；若 OCR 可用，建议仍以 OCR画线作为主流程。"
+                ),
+                (
+                    "D", "页面范围会影响批量任务",
                     "页面列表上方可选“当前页 / 当前页至末页 / 指定范围”。检测版面、画线、插图识别和切图等批量操作"
                     "都会读取这里的范围；指定范围可使用类似 12~18,23,31 的写法。"
                 ),
                 (
-                    "D", "主画布是最后的人工控制层",
+                    "E", "主画布是最后的人工控制层",
                     "左键可手动增加词条线；Delete 或反引号键可删除当前词条。普通模式下右键进入下一页。"
                     "鼠标滚轮纵向滚动，Shift + 滚轮横向滚动，Ctrl + 滚轮缩放。"
                 ),
                 (
-                    "E", "不要把高级参数当作第一步",
+                    "F", "不要把高级参数当作第一步",
                     "候选置信度、最低候选分、同行合并等参数已经移到【设置中心 → OCR画线 → 高级设置】。"
                     "先通过代表页判断具体错误类型，再调整对应参数，避免为解决一个个案破坏整本词典的稳定性。"
                 ),
@@ -2422,8 +2427,8 @@ class SettingsDialog(tk.Toplevel):
         _build_modern_dialog_heading(
             outer,
             "设置中心",
-            "按工作任务整理：第一次使用只看“常用 / 普通画线 / OCR画线”；"
-            "底层阈值、正则和后端参数集中在高级区，不确定时无需修改。",
+            "按工作任务整理：第一次使用优先看“常用 / OCR画线（推荐）”；"
+            "普通画线是备用方案，底层阈值、正则和后端参数集中在高级区，不确定时无需修改。",
         )
         style = ttk.Style(self)
         native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
@@ -2473,8 +2478,8 @@ class SettingsDialog(tk.Toplevel):
         rules_tab = ttk.Frame(notebook)
         for tab, label in (
             (common_tab, "常用"),
-            (normal_tab, "普通画线"),
-            (ocr_tab, "OCR画线"),
+            (ocr_tab, "OCR画线（推荐）"),
+            (normal_tab, "普通画线（备用）"),
             (display_tab, "显示 / 校对"),
             (project_tab, "项目 / 批量"),
             (advanced_tab, "高级"),
@@ -2519,10 +2524,10 @@ class SettingsDialog(tk.Toplevel):
         common = self._scrollable_settings_page(common_tab)
         self._settings_intro(
             common,
-            "先确认版面，再选择画线方式",
-            "推荐流程：项目 Profile → 检测版面参数 → 用当前页试画 → "
-            "确认无明显漏线/误线后再批量。普通画线适合词头左缘规律的词典；"
-            "OCR画线适合需要识别词头文字、粗体、词性或特殊符号的版式。",
+            "先确认版面，再用 OCR 画线完成代表页验证",
+            "推荐流程：项目 Profile → 检测版面参数 → 当前页运行 OCR 画线 → "
+            "确认无明显漏线/误线后再批量。OCR画线是默认推荐路径，会同时利用文字、位置和结构证据；"
+            "普通画线保留为备用方案，主要用于左缘极稳定的简单版式或 OCR 暂不可用时。",
         )
         workflow = ttk.Frame(common)
         workflow.pack(fill="x", pady=(0, 10))
@@ -2546,54 +2551,54 @@ class SettingsDialog(tk.Toplevel):
         )
         self.vars["detection_method"] = method_var
 
-        normal_mode = ttk.Radiobutton(
-            mode_group,
-            text="普通画线（左缘规则）",
-            variable=method_var,
-            value=DETECTION_LABELS["left_edge"],
-        )
-        normal_mode.grid(row=0, column=0, sticky="w", pady=3)
-        normal_mode_help = ttk.Label(
-            mode_group,
-            text="速度快，不识别文字；适合词头靠近栏左、正文缩进稳定的版式。",
-            foreground="#666666",
-            justify="left",
-        )
-        normal_mode_help.grid(row=0, column=1, sticky="ew", padx=(12, 0), pady=3)
-        self._bind_responsive_labels(
-            normal_mode_help, normal_mode_help, horizontal_padding=4, min_wrap=100
-        )
-
         ocr_mode = ttk.Radiobutton(
             mode_group,
-            text="OCR画线（识别词头）",
+            text="OCR画线（推荐）",
             variable=method_var,
             value=DETECTION_LABELS["paddleocr"],
         )
-        ocr_mode.grid(row=1, column=0, sticky="w", pady=3)
+        ocr_mode.grid(row=0, column=0, sticky="w", pady=3)
         ocr_mode_help = ttk.Label(
             mode_group,
-            text="结合文字、位置和结构证据；适合粗体、词性、符号等结构较复杂的词典。",
+            text="默认推荐；结合文字、位置和结构证据，适合绝大多数词典项目。",
             foreground="#666666",
             justify="left",
         )
-        ocr_mode_help.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=3)
+        ocr_mode_help.grid(row=0, column=1, sticky="ew", padx=(12, 0), pady=3)
         self._bind_responsive_labels(
             ocr_mode_help, ocr_mode_help, horizontal_padding=4, min_wrap=100
         )
 
+        normal_mode = ttk.Radiobutton(
+            mode_group,
+            text="普通画线（备用）",
+            variable=method_var,
+            value=DETECTION_LABELS["left_edge"],
+        )
+        normal_mode.grid(row=1, column=0, sticky="w", pady=3)
+        normal_mode_help = ttk.Label(
+            mode_group,
+            text="不识别文字；仅在左缘极稳定的简单版式或 OCR 暂不可用时优先考虑。",
+            foreground="#666666",
+            justify="left",
+        )
+        normal_mode_help.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=3)
+        self._bind_responsive_labels(
+            normal_mode_help, normal_mode_help, horizontal_padding=4, min_wrap=100
+        )
+
         for widget, title, body in (
             (
-                normal_mode,
-                "普通画线（左缘规则）",
-                "只看版面几何和栏左墨迹，不依赖 OCR。优点是快；"
-                "当正文也贴近栏左或词头缩进变化很大时，误检/漏检会增加。",
+                ocr_mode,
+                "OCR画线（推荐）",
+                "默认推荐路径：用 OCR 文字、左缘位置、粗体/字高、词性或特殊符号等证据判断词头。"
+                "首次运行会更耗时，但后续可复用有效缓存。",
             ),
             (
-                ocr_mode,
-                "OCR画线（识别词头）",
-                "用 OCR 文字、左缘位置、粗体/字高、词性或特殊符号等证据判断词头。"
-                "复杂版式更稳，但首次 OCR 会更耗时。",
+                normal_mode,
+                "普通画线（备用）",
+                "只看版面几何和栏左墨迹，不依赖 OCR。适合左缘高度规律的简单版式；"
+                "当正文也贴近栏左或词头缩进变化较大时，更容易误检/漏检。",
             ),
         ):
             self._bind_help_widget(
@@ -2611,10 +2616,9 @@ class SettingsDialog(tk.Toplevel):
         normal = self._scrollable_settings_page(normal_tab)
         self._settings_intro(
             normal,
-            "普通画线：优先用几何和栏左墨迹，速度快、不依赖 OCR",
-            "适合词头基本贴近栏左缘、释义正文有稳定缩进的词典。"
-            "本版已改为自动/自适应墨迹阈值，并按当前栏的实际墨迹密度调整触发门槛，"
-            "对发黄扫描、亮度变化和细字体比旧版更稳。",
+            "普通画线（备用）：只使用几何和栏左墨迹",
+            "这是二线方案，适合词头基本贴近栏左缘、释义正文有稳定缩进的简单版式，"
+            "或 OCR 环境暂不可用时临时使用。若 OCR 可用，仍建议优先从 OCR画线开始。",
         )
         self._add_setting_group(
             normal,
@@ -2637,8 +2641,8 @@ class SettingsDialog(tk.Toplevel):
         ocr_page = self._scrollable_settings_page(ocr_tab)
         self._settings_intro(
             ocr_page,
-            "OCR画线：用文字 + 版式 + 视觉证据判断真正词头",
-            "推荐模式。PaddleOCR 负责主识别；可选 Tesseract 作为第二意见，"
+            "OCR画线（推荐默认）：用文字 + 版式 + 视觉证据判断真正词头",
+            "优先使用这一模式。PaddleOCR 负责主识别；可选 Tesseract 作为第二意见，"
             "Google Lens 作为冲突时的第三意见。OCR 原始结果有缓存：参数只改变候选判断时无需重新跑 OCR。",
         )
         self._add_setting_group(
@@ -2776,7 +2780,8 @@ class SettingsDialog(tk.Toplevel):
             advanced,
             "高级 / 专家参数",
             "这里保留版面语义、OCR 后端和正则规则等底层控制。"
-            "如果只是想提高某本词典的识别率，请优先回到“普通画线 / OCR画线”页或 Project Profile。",
+            "如果只是想提高某本词典的识别率，请优先回到“OCR画线（推荐）”页或 Project Profile；"
+            "只有左缘高度规则的简单版式才优先考虑“普通画线（备用）”。",
         )
         ttk.Button(
             advanced, text="打开项目 Profile（推荐）…", command=parent.open_project_profile
@@ -8504,7 +8509,7 @@ class PictureCaptureApp(tk.Tk):
                 style="PC.Compact.TEntry",
             ).grid(row=row, column=col + 1, sticky="ew", padx=(0, 6), pady=1)
 
-        normal = self._section_frame(parent, "一、普通版面参数", padding=5, section_key="normal")
+        normal = self._section_frame(parent, "一、版面参数（两种画线共用）", padding=5, section_key="normal")
         normal.pack(fill="x")
         add_field(normal, 0, 0, "分栏数：", "columns", int)
         add_field(normal, 0, 2, "页眉Y：", "start_y", int)
@@ -8524,13 +8529,13 @@ class PictureCaptureApp(tk.Tk):
             style="PC.Compact.TButton",
         ).pack(side="left", fill="x", expand=True, padx=(5, 0))
         ttk.Button(
-            row, text="普通画线设置…",
+            row, text="普通画线设置（备用）…",
             command=lambda: self.open_settings(initial_tab="normal"),
             style="PC.Compact.TButton",
         ).pack(side="left", fill="x", expand=True, padx=(5, 0))
         for col in (1, 3, 5, 7): normal.columnconfigure(col, weight=1)
 
-        ocr = self._section_frame(parent, "二、基于OCR画线（默认模式）", padding=5, section_key="ocr")
+        ocr = self._section_frame(parent, "二、OCR画线（推荐默认）", padding=5, section_key="ocr")
         ocr.pack(fill="x", pady=(4, 0))
         self.ocr_refresh_var = tk.StringVar(value="reuse")
         ttk.Label(ocr, text="识别策略：").grid(row=0, column=0, sticky="w")
@@ -8724,7 +8729,7 @@ class PictureCaptureApp(tk.Tk):
         actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
         actions.pack(fill="x", pady=(4, 0))
         rows = [
-            (("运行普通画线", self.run_normal_draw_action), ("运行OCR画线", self.run_ocr_draw_action)),
+            (("运行OCR画线（推荐）", self.run_ocr_draw_action), ("运行普通画线（备用）", self.run_normal_draw_action)),
             (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充既有词条", self.fill_existing_headwords), ("修复PDIC排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("从PDIC备份恢复", self.restore_from_pdic_backup)),
             (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
@@ -8736,12 +8741,16 @@ class PictureCaptureApp(tk.Tk):
                 row.columnconfigure(bi, weight=1, uniform=f"actions-row-{ri}")
             for bi, (text, command) in enumerate(specs):
                 role = (
-                    "primary" if text == "运行OCR画线"
+                    "primary" if text == "运行OCR画线（推荐）"
                     else "success" if text == "保存当前页"
                     else "primary" if text == "词条校对"
                     else "neutral"
                 )
                 button = self._sidebar_action_button(row, text, command, role=role)
+                if text == "运行OCR画线（推荐）":
+                    self._attach_tooltip(button, "推荐默认：结合 OCR 文字、位置与结构证据识别词头，并可复用有效缓存。")
+                elif text == "运行普通画线（备用）":
+                    self._attach_tooltip(button, "备用模式：只依赖栏左几何和墨迹，适合左缘极稳定版式或 OCR 暂不可用时。")
                 if text == "编辑插图":
                     self.polygon_draw_button = button
                 button.grid(
