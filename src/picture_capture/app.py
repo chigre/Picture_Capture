@@ -7241,9 +7241,11 @@ class PictureCaptureApp(tk.Tk):
         self.page_size_row = size_row
         size_row.grid(row=1, column=0, sticky="ew", pady=(0, 5))
 
-        ttk.Button(
+        zoom_out_button = ttk.Button(
             size_row, text="−", width=3, command=lambda: self.zoom(0.87), style="PC.Tool.TButton"
-        ).pack(side="left")
+        )
+        zoom_out_button.pack(side="left")
+        self._attach_tooltip(zoom_out_button, "缩小显示")
         view_zoom_entry = ttk.Entry(
             size_row, textvariable=self.view_zoom_var, width=6, justify="center",
             style="PC.Compact.TEntry",
@@ -7251,32 +7253,44 @@ class PictureCaptureApp(tk.Tk):
         view_zoom_entry.pack(side="left", padx=2)
         view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)
         view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)
-        ttk.Button(
+        zoom_in_button = ttk.Button(
             size_row, text="+", width=3, command=lambda: self.zoom(1.15), style="PC.Tool.TButton"
-        ).pack(side="left")
+        )
+        zoom_in_button.pack(side="left")
+        self._attach_tooltip(zoom_in_button, "放大显示")
         ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
 
-        ttk.Button(
+        fit_width_button = ttk.Button(
             size_row, text="↔", width=3, command=self.fit_page_width, style="PC.Tool.TButton"
-        ).pack(side="left", padx=(0, 2))
-        ttk.Button(
+        )
+        fit_width_button.pack(side="left", padx=(0, 2))
+        self._attach_tooltip(fit_width_button, "适合宽度显示")
+        fit_height_button = ttk.Button(
             size_row, text="↕", width=3, command=self.fit_page_height, style="PC.Tool.TButton"
-        ).pack(side="left")
+        )
+        fit_height_button.pack(side="left")
+        self._attach_tooltip(fit_height_button, "适合高度显示")
         ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
 
-        ttk.Button(
+        previous_bookmark_button = ttk.Button(
             size_row, text="⨇", width=3, command=lambda: self.jump_to_bookmark(-1),
             style="PC.Tool.TButton",
-        ).pack(side="left", padx=(0, 2))
-        ttk.Button(
+        )
+        previous_bookmark_button.pack(side="left", padx=(0, 2))
+        self._attach_tooltip(previous_bookmark_button, "跳转到上一书签")
+        next_bookmark_button = ttk.Button(
             size_row, text="⨈", width=3, command=lambda: self.jump_to_bookmark(1),
             style="PC.Tool.TButton",
-        ).pack(side="left")
+        )
+        next_bookmark_button.pack(side="left")
+        self._attach_tooltip(next_bookmark_button, "跳转到下一书签")
         ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
 
-        ttk.Button(
+        jump_button = ttk.Button(
             size_row, text="跳转", command=self.jump_to_page_spec, style="PC.PageNav.TButton"
-        ).pack(side="left", padx=(0, 3))
+        )
+        jump_button.pack(side="left", padx=(0, 3))
+        self._attach_tooltip(jump_button, "跳转到指定页面的第一个有效页面")
         ttk.Button(
             size_row, text="上一页", command=lambda: self.change_page(-1), style="PC.PageNav.TButton"
         ).pack(side="left", padx=(0, 3))
