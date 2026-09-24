@@ -7336,6 +7336,16 @@ def _make_ocr_pair(
         lemma_compare = "tesseract_only"; status_compare = "tesseract_only"; reason = "tesseract_only"
     return {
         "paddle_y": py,
+        "paddle_source_x": p.get("source_x") if p else None,
+        "paddle_source_y": p.get("source_y") if p else None,
+        "paddle_coarse_y": (
+            int(p.get("coarse_canonical_v", py)) if p and py is not None else None
+        ),
+        "paddle_anchor_y": (
+            int(p.get("anchor_canonical_v", py)) if p and py is not None else None
+        ),
+        "paddle_separator_refinement": dict(p.get("separator_refinement", {}) or {}) if p else {},
+        "paddle_image_boundary_match": dict(p.get("image_boundary_match", {}) or {}) if p else {},
         "paddle_box": p.get("box") if p else None,
         "paddle_conf": p.get("confidence") if p else None,
         "paddle_accepted": bool(p.get("accepted")) if p else None,
@@ -7352,6 +7362,16 @@ def _make_ocr_pair(
         "paddle_bug_types": list(p.get("bug_types", []) or []) if p else [],
         "paddle_alphabetical_warning": str(p.get("alphabetical_warning", "")) if p else "",
         "tesseract_y": ty,
+        "tesseract_source_x": t.get("source_x") if t else None,
+        "tesseract_source_y": t.get("source_y") if t else None,
+        "tesseract_coarse_y": (
+            int(t.get("coarse_canonical_v", ty)) if t and ty is not None else None
+        ),
+        "tesseract_anchor_y": (
+            int(t.get("anchor_canonical_v", ty)) if t and ty is not None else None
+        ),
+        "tesseract_separator_refinement": dict(t.get("separator_refinement", {}) or {}) if t else {},
+        "tesseract_image_boundary_match": dict(t.get("image_boundary_match", {}) or {}) if t else {},
         "tesseract_box": t.get("box") if t else None,
         "tesseract_conf": t.get("confidence") if t else None,
         "tesseract_accepted": bool(t.get("accepted")) if t else None,
@@ -7368,6 +7388,12 @@ def _make_ocr_pair(
         "tesseract_bug_types": list(t.get("bug_types", []) or []) if t else [],
         "tesseract_alphabetical_warning": str(t.get("alphabetical_warning", "")) if t else "",
         "lens_y": None,
+        "lens_source_x": None,
+        "lens_source_y": None,
+        "lens_coarse_y": None,
+        "lens_anchor_y": None,
+        "lens_separator_refinement": {},
+        "lens_image_boundary_match": {},
         "lens_box": None,
         "lens_conf": None,
         "lens_accepted": None,
