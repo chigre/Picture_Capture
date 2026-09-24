@@ -1054,11 +1054,23 @@ def entry_crop_bounds(
         if top_y is None
         else stored_geometry_to_canonical(max(0, int(top_y)), canonical_width, settings)
     )
-    bottom_value = (
-        0
-        if bottom_y is None or int(bottom_y) <= 0
-        else stored_geometry_to_canonical(max(0, int(bottom_y)), canonical_width, settings)
-    )
+    if bottom_y is None:
+        bottom_value = (
+            stored_geometry_to_canonical(
+                max(0, int(settings.bottom_y)), canonical_width, settings,
+            )
+            if bool(getattr(settings, "crop_to_bottom_y", False))
+            and int(getattr(settings, "bottom_y", 0) or 0) > 0
+            else 0
+        )
+    else:
+        bottom_value = (
+            0
+            if int(bottom_y) <= 0
+            else stored_geometry_to_canonical(
+                max(0, int(bottom_y)), canonical_width, settings,
+            )
+        )
     top = max(0, min(canonical_height - 1, int(top_value)))
     bottom = canonical_height if bottom_value <= 0 else max(
         top + 1, min(canonical_height, int(bottom_value))
