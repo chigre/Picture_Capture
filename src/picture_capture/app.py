@@ -104,6 +104,7 @@ from .processing import (
     import_ocred,
     line_box,
     load_replace_rules,
+    parameter_scale,
     ocr_entries,
     split_single_lines,
     split_whole_entries,
