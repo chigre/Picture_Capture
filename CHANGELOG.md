@@ -6,6 +6,8 @@
 - `install_ocr_windows.bat` 收敛为薄包装器；CPU/GPU/Lens profile 选择、同步与验证移到 `scripts/windows_ocr_setup.py`，BAT 本身不再包含 CUDA 下载 URL、`uv pip uninstall/install`、GPU runtime 替换或 `set /p` 交互逻辑。
 - `ocr-gpu-cu118`、`ocr-gpu-cu126`、`ocr-gpu-cu129` 现在直接声明 `paddlepaddle-gpu==3.3.0`，并通过 uv extra-specific sources 绑定 PaddlePaddle 官方 CUDA 索引；CPU/GPU runtime profile 声明为互斥。
 - OCR 安装统一为 `uv sync --locked --no-dev --extra <profile>`，验证成功后才更新 `.picture_capture_ocr_extra`。
+- 修复 Windows CUDA 12.6/12.9 下 PaddleOCR 到真正推理阶段才报 `cudnn64_9.dll` 缺失的问题：对应 GPU profile 显式安装项目内 `nvidia-cudnn-cu12`，运行前自动注册 `.venv` 中 NVIDIA DLL 目录。
+- GPU 环境验证从“仅 import Paddle/检查 CUDA build”升级为实际执行一次 GPU `conv2d`，cuDNN 缺失会在安装阶段直接失败并给出明确错误。
 - 该调整优先降低 Windows Defender 对下载 ZIP 内批处理脚本的启发式误判，同时使 OCR 依赖切换更可复现、更易审计。
 
 
