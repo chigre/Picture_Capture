@@ -224,6 +224,11 @@ class ProjectProfileWizard(tk.Toplevel):
         self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self._close_without_save)
         self._photos: list[ImageTk.PhotoImage] = []
+        self._sample_cells: dict[int, ttk.Frame] = {}
+        self._sample_photo_by_slot: dict[int, ImageTk.PhotoImage] = {}
+        self._thumbnail_slot_queue: queue.Queue = queue.Queue()
+        self._thumbnail_slot_generation: dict[int, int] = {}
+        self._thumbnail_slot_pending: set[tuple[int, int]] = set()
         self._validation_photos: list[ImageTk.PhotoImage] = []
         self._template_photos: list[ImageTk.PhotoImage] = []
         self._thumbnail_queue: queue.Queue | None = None
@@ -1732,6 +1737,8 @@ class ProjectProfileWizard(tk.Toplevel):
     def _sample_groups(self) -> list[ttk.LabelFrame]:
         for child in self.sample_frame.winfo_children():
             child.destroy()
+        self._sample_cells.clear()
+        self._sample_photo_by_slot.clear()
         region_titles = ("前部", "中部", "后部")
         groups: list[ttk.LabelFrame] = []
         for column, title in enumerate(region_titles):
@@ -1753,6 +1760,7 @@ class ProjectProfileWizard(tk.Toplevel):
             cell.grid(row=slot % 2, column=0, sticky="nsew", pady=3)
             cell.columnconfigure(0, weight=1)
             cell.rowconfigure(0, weight=1)
+            self._sample_cells[slot] = cell
             ttk.Label(
                 cell, text="正在加载代表页…", anchor="center",
             ).pack(fill="x", ipady=24)
@@ -1809,6 +1817,32 @@ class ProjectProfileWizard(tk.Toplevel):
             return
         self._finish_sample_thumbnail_load(results)
 
+    def _render_sample_thumbnail_slot(
+        self, slot: int, index: int, name: str,
+        image: Image.Image | None, error: str | None,
+    ) -> None:
+        """Replace one representative-page cell without rebuilding its siblings."""
+        if slot >= len(self.sample_indices) or self.sample_indices[slot] != index:
+            return
+        cell = self._sample_cells.get(slot)
+        if cell is None or not cell.winfo_exists():
+            return
+        for child in cell.winfo_children():
+            child.destroy()
+        if image is not None:
+            photo = ImageTk.PhotoImage(image)
+            self._sample_photo_by_slot[slot] = photo
+            ttk.Label(cell, image=photo, anchor="center").pack(fill="both", expand=True)
+        else:
+            self._sample_photo_by_slot.pop(slot, None)
+            ttk.Label(
+                cell, text=f"缩略图失败：{error}", wraplength=250,
+            ).pack(fill="x", ipady=20)
+        ttk.Label(cell, text=name, wraplength=260).pack(anchor="center", pady=(3, 0))
+        ttk.Button(
+            cell, text="更换…", command=lambda s=slot: self._choose_sample_page(s),
+        ).pack(anchor="center", pady=(3, 0))
+
     def _finish_sample_thumbnail_load(self, results) -> None:
         groups = self._sample_groups()
         self._photos.clear()
@@ -1820,18 +1854,63 @@ class ProjectProfileWizard(tk.Toplevel):
             cell.grid(row=slot % 2, column=0, sticky="nsew", pady=3)
             cell.columnconfigure(0, weight=1)
             cell.rowconfigure(0, weight=1)
-            if image is not None:
-                photo = ImageTk.PhotoImage(image)
-                self._photos.append(photo)
-                ttk.Label(cell, image=photo, anchor="center").pack(fill="both", expand=True)
-            else:
-                ttk.Label(
-                    cell, text=f"缩略图失败：{error}", wraplength=250,
-                ).pack(fill="x", ipady=20)
-            ttk.Label(cell, text=name, wraplength=260).pack(anchor="center", pady=(3, 0))
-            ttk.Button(
-                cell, text="更换…", command=lambda s=slot: self._choose_sample_page(s),
-            ).pack(anchor="center", pady=(3, 0))
+            self._sample_cells[slot] = cell
+            self._render_sample_thumbnail_slot(slot, index, name, image, error)
+
+    def _start_sample_thumbnail_slot_load(self, slot: int) -> None:
+        """Decode only one replacement thumbnail and keep all other cells intact."""
+        if not self.winfo_exists() or not (0 <= slot < len(self.sample_indices)):
+            return
+        index = self.sample_indices[slot]
+        path = self.project.images[index]
+        generation = self._thumbnail_slot_generation.get(slot, 0) + 1
+        self._thumbnail_slot_generation[slot] = generation
+        token = (slot, generation)
+        self._thumbnail_slot_pending.add(token)
+
+        self.update_idletasks()
+        right_w = int(getattr(self, "right_canvas", self).winfo_width())
+        right_h = int(getattr(self, "right_canvas", self).winfo_height())
+        available_w = right_w if right_w > 200 else self._wizard_image_width
+        available_h = right_h if right_h > 300 else self._wizard_height
+        thumb_w = max(180, (available_w - 54) // 3)
+        thumb_h = max(220, (available_h - 150) // 2 - 42)
+
+        def worker() -> None:
+            image = None
+            error = None
+            try:
+                with Image.open(path) as opened:
+                    image = normalize_page_rgb(opened)
+                image.thumbnail((thumb_w, thumb_h), Image.Resampling.LANCZOS)
+            except Exception as exc:
+                error = str(exc)
+            self._thumbnail_slot_queue.put(
+                (slot, generation, index, path.name, image, error)
+            )
+
+        threading.Thread(target=worker, daemon=True).start()
+        self.after(50, self._poll_sample_thumbnail_slot_load)
+
+    def _poll_sample_thumbnail_slot_load(self) -> None:
+        processed = False
+        while True:
+            try:
+                slot, generation, index, name, image, error = (
+                    self._thumbnail_slot_queue.get_nowait()
+                )
+            except queue.Empty:
+                break
+            processed = True
+            self._thumbnail_slot_pending.discard((slot, generation))
+            if self._thumbnail_slot_generation.get(slot) != generation:
+                continue
+            self._render_sample_thumbnail_slot(slot, index, name, image, error)
+
+        if self._thumbnail_slot_pending and self.winfo_exists():
+            self.after(50, self._poll_sample_thumbnail_slot_load)
+        elif processed:
+            self.update_idletasks()
 
     def _choose_sample_page(self, slot: int) -> None:
         all_indices = list(range(len(self.project.images)))
@@ -1876,19 +1955,38 @@ class ProjectProfileWizard(tk.Toplevel):
             if not selection:
                 return
             index = all_indices[int(selection[0])]
-            if index in self.sample_indices and index != self.sample_indices[slot]:
+            current_index = self.sample_indices[slot]
+            if index == current_index:
+                picker.destroy()
+                return
+            if index in self.sample_indices:
                 messagebox.showinfo("代表页已使用", "这张页面已经在代表页中，请选择另一张。", parent=picker)
                 return
+            preview_uses_slot = self.template_preview_slot == slot
             self.sample_indices[slot] = index
-            self.template_preview_slot = min(self.template_preview_slot, len(self.sample_indices) - 1)
+            self.template_preview_slot = min(
+                self.template_preview_slot, len(self.sample_indices) - 1
+            )
             self._profile_revision += 1
             self._mark_validation_stale()
             self._analysis_suggestion = {}
             if hasattr(self, "analysis_suggestion_var"):
                 self.analysis_suggestion_var.set("代表页已更换，请重新分析当前代表页。")
                 self.apply_analysis_button.configure(state="disabled")
-            self._start_sample_thumbnail_load()
-            self._refresh_template_preview()
+
+            # A manual replacement changes exactly one representative-page
+            # slot. Do not rebuild or re-decode the other five thumbnails.
+            self._start_sample_thumbnail_slot_load(slot)
+
+            # The template preview is hidden while representative pages are
+            # being edited. Refresh it only when it is actually visible and the
+            # replaced slot is the page currently previewed there.
+            if preview_uses_slot and hasattr(self, "notebook"):
+                try:
+                    if self.notebook.index(self.notebook.select()) == 1:
+                        self._refresh_template_preview()
+                except (tk.TclError, ValueError):
+                    pass
             picker.destroy()
 
         listing.bind("<Double-Button-1>", apply_choice)
