@@ -30,5 +30,5 @@ Desktop.ini
 _PictureCapture/
 *.log
 
-# Local OCR runtime profile selected by install_ocr_windows.bat
+# Local OCR runtime profile selected by scripts/windows_ocr_setup.py
 .picture_capture_ocr_extra
