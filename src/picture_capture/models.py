@@ -5,6 +5,8 @@ from pathlib import Path
 import json
 import re
 
+from PIL import Image
+
 
 IMAGE_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp"}
 PROJECT_COVER_STEMS = ("_cover", "_project_cover")
@@ -107,9 +109,13 @@ class AppSettings:
     dictionary_index_language: str = ""
     dictionary_content_language: str = ""
     dictionary_body_page_range: str = ""
-    # Geometric values use the old program's displayed-image pixel convention.
-    # ``parameter_display_width`` records that displayed image width so batch
-    # processing can convert the values back to source-image pixels.
+    # Coordinate contract:
+    # - saved PDIC/PPP/exports use original-image pixels;
+    # - project layout scalars use full-resolution canonical pixels;
+    # - OCR/profile tuning distances use fixed 1400px-reference units;
+    # - parameter_display_width is retained only to migrate old display-scaled projects.
+    geometry_coordinate_version: int = 2
+    geometry_coordinate_space: str = "canonical_full_resolution_pixels"
     parameter_display_width: int = 0
     columns: int = 2
     # Profile v3 layout semantics. Geometry is measured in canonical space;
@@ -423,6 +429,12 @@ class AppSettings:
     @classmethod
     def from_json(cls, path: Path) -> "AppSettings":
         raw = json.loads(path.read_text(encoding="utf-8"))
+        # Settings written before the coordinate-contract migration stored page
+        # geometry in GUI display pixels. Mark them explicitly so ProjectState
+        # can upgrade them once the first source-image size is known.
+        if "geometry_coordinate_version" not in raw:
+            raw["geometry_coordinate_version"] = 1
+            raw["geometry_coordinate_space"] = "legacy_display_pixels"
         if int(raw.get("right_ratio_percent_version", 0) or 0) < 1:
             old_divisor = max(0.01, float(raw.get("right_ratio", 1.0) or 1.0))
             raw["right_ratio"] = 100.0 / old_divisor
@@ -558,6 +570,8 @@ class AppSettings:
         """Read the positional _Mysettings.ini format emitted by Form1.vb."""
         parts = path.read_text(encoding="utf-8-sig").split("@")
         settings = cls()
+        settings.geometry_coordinate_version = 1
+        settings.geometry_coordinate_space = "legacy_display_pixels"
         converters = {
             2: ("columns", int),
             3: ("gutter", int),
@@ -659,6 +673,24 @@ class ProjectState:
                 )
             except Exception:
                 pass
+        # Upgrade legacy display-scaled geometry once a real source page is known.
+        # The migration is deterministic and idempotent; modern projects remain
+        # untouched. Persist immediately for modern JSON projects so a copied
+        # project no longer depends on the original GUI display width.
+        if images:
+            try:
+                from .coordinate_space import migrate_legacy_geometry_settings
+                with Image.open(images[0]) as first_page:
+                    source_size = first_page.size
+                migrated = migrate_legacy_geometry_settings(settings, source_size)
+                if migrated and json_settings.exists():
+                    settings.to_json(json_settings)
+            except Exception:
+                # Coordinate migration must never make an otherwise readable
+                # project impossible to open. The legacy runtime path remains
+                # available until the project can be migrated successfully.
+                pass
+
         words_path = resolve_wordslist_path(root, settings.wordslist_path)
         words = read_noncomment_lines(words_path) if words_path.exists() else []
         active_qt = qt_root(root)
