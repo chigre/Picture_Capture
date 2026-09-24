@@ -283,11 +283,21 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert "def _show_setting_help(" in settings
     assert 'text="设置说明"' in settings
     assert 'text="ⓘ"' in settings
-    assert 'host.columnconfigure(0, weight=3)' in settings
-    assert 'host.columnconfigure(1, weight=2)' in settings
-    assert "def resize_help_content(event: tk.Event)" in settings
-    assert "wraplength = max(120, int(event.width) - 28)" in settings
+    assert 'panes = ttk.Panedwindow(host, orient="horizontal")' in settings
+    assert 'panes.add(left, weight=3)' in settings
+    assert 'panes.add(right, weight=2)' in settings
+    assert 'panes.sashpos(0, int(width * 0.60))' in settings
+    assert "def _bind_responsive_labels(" in settings
     assert "label.configure(wraplength=wraplength)" in settings
+    assert "control.columnconfigure(0, weight=1)" in settings
+    assert 'widget.grid(row=0, column=0, sticky="ew")' in settings
+    assert "wraplength=180" in settings
+    assert 'justify="left"' in settings
+    assert 'style="PC.Settings.TNotebook"' in settings
+    assert '"PC.Settings.TNotebook.Tab"' in settings
+    assert 'padding=(13, 7)' in settings
+    assert "self.transient(parent); self.grab_set()" not in settings
+    assert "def select_tab(self, key: str | None)" in settings
 
     assert 'text="普通画线（左缘规则）"' in settings
     assert 'text="OCR画线（识别词头）"' in settings
@@ -298,6 +308,22 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert 'self.bind("<Escape>", lambda _event: self._close_validated())' in settings
     assert "✓ 已自动保存" in settings
     assert "⚠ 当前输入暂未保存" in settings
+
+
+def test_settings_center_is_reused_without_blocking_main_workspace():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    start = source.index("    def open_settings(self, initial_tab:")
+    end = source.index("\n    def open_project_profile(", start)
+    open_settings = source[start:end]
+
+    assert 'self.__dict__.get("_settings_dialog")' in open_settings
+    assert "existing.select_tab(initial_tab)" in open_settings
+    assert "existing.deiconify()" in open_settings
+    assert "dialog = SettingsDialog(self, initial_tab=initial_tab)" in open_settings
+    assert "self._settings_dialog = dialog" in open_settings
 
 
 def test_common_layout_settings_show_packaged_context_diagrams():
@@ -335,11 +361,15 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
     project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
     project_bar = text[project_bar_start:project_bar_end]
-    assert project_bar.index('text="已有项目"') < project_bar.index('text="导出训练标记包"')
-    assert project_bar.index('("项目Profile", self.open_project_profile)') < project_bar.index('("设置中心", self.open_settings)')
-    assert project_bar.index('("设置中心", self.open_settings)') < project_bar.index('("保存参数", self.save_main_parameters)')
-    assert project_bar.index('("保存参数", self.save_main_parameters)') < project_bar.index('("使用提示", self.show_help_dialog)')
-    assert '("项目Profile", self.open_project_profile)' in project_bar
+    assert project_bar.index('("已有项目", self.open_recent_project, "project")') < project_bar.index('("导出训练标记包", self.export_training_package, None)')
+    assert project_bar.index('("项目Profile", self.open_project_profile, "config")') < project_bar.index('("设置中心", self.open_settings, "config")')
+    assert project_bar.index('("设置中心", self.open_settings, "config")') < project_bar.index('("保存参数", self.save_main_parameters, None)')
+    assert project_bar.index('("保存参数", self.save_main_parameters, None)') < project_bar.index('("使用提示", self.show_help_dialog, None)')
+    assert '("项目Profile", self.open_project_profile, "config")' in project_bar
+    assert 'uniform="project-footer-columns"' in project_bar
+    assert 'project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
+    assert 'parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
+    assert 'self._footer_action_button(' in project_bar
 
     actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
@@ -354,6 +384,34 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     assert "profile_scrollbar" in profile
     assert 'text="自定义结构名称："' in profile
     assert "ProjectProfileWizard(self, new_project=new_project)" in text
+
+
+def test_bottom_important_actions_follow_scheme_a_groups():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    def _footer_action_button(")
+    end = text.index("    def _section_frame(", start)
+    helper = text[start:end]
+    assert '"project": (colors["success"], colors["success_hover"], "#ffffff")' in helper
+    assert '"config": (colors["success"], colors["success_hover"], "#ffffff")' in helper
+    assert 'border = colors["button_border"]' in helper
+    assert '"profile":' not in helper
+    assert '"settings":' not in helper
+    assert '"save":' not in helper
+    assert '"help":' not in helper
+    assert 'highlightbackground=border' in helper
+    assert 'highlightthickness=1' in helper
+
+    project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
+    project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
+    project_bar = text[project_bar_start:project_bar_end]
+    assert '("新建项目", self.open_project, "project")' in project_bar
+    assert '("已有项目", self.open_recent_project, "project")' in project_bar
+    assert '("导出训练标记包", self.export_training_package, None)' in project_bar
+    assert '("项目Profile", self.open_project_profile, "config")' in project_bar
+    assert '("设置中心", self.open_settings, "config")' in project_bar
+    assert '("保存参数", self.save_main_parameters, None)' in project_bar
+    assert '("使用提示", self.show_help_dialog, None)' in project_bar
 
 
 def test_main_workspace_modern_styles_are_scoped_and_dense():
@@ -383,6 +441,31 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert 'self._sidebar_action_button(row, text, command, role=role)' in actions
     assert '"primary" if text == "运行OCR画线"' in actions
     assert '"success" if text == "保存当前页"' in actions
+    assert '"primary" if text == "词条校对"' in actions
+    assert '"danger_soft"' not in actions
+    assert '"refine_soft"' not in actions
+    assert '"compare_soft"' not in actions
+    assert '("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)' in actions
+    assert '"primary": "#4F7CAC"' in styles
+    assert '"primary_hover": "#416A94"' in styles
+    assert '"success": "#69A875"' in styles
+    assert '"success_hover": "#588F64"' in styles
+    assert '"review_soft"' not in styles
+    assert '"button_border": "#d3d8df"' in styles
+
+    button_start = text.index("    def _sidebar_action_button(")
+    button_end = text.index("    def _section_frame(", button_start)
+    button = text[button_start:button_end]
+    assert 'if role == "neutral":' in button
+    assert 'return ttk.Button(' in button
+    assert 'style="PC.Compact.TButton"' in button
+    assert 'border = colors["button_border"]' in button
+    assert 'relief="flat"' in button
+    assert "bd=0" in button
+    assert "highlightthickness=1" in button
+    assert "highlightbackground=border" in button
+    assert "highlightcolor=border" in button
+    assert '"PC.EditActive.TButton"' in styles
 
 
 def test_binary_preview_and_font_scaling_are_display_only():

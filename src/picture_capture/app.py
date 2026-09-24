@@ -930,13 +930,21 @@ def _build_modern_dialog_heading(
         weight="bold",
     )
     ttk.Label(block, text=title, font=heading_font).pack(anchor="w")
-    ttk.Label(
+    subtitle_label = ttk.Label(
         block,
         text=subtitle,
         foreground="#666666",
         justify="left",
-        wraplength=900,
-    ).pack(anchor="w", pady=(3, 0))
+    )
+    subtitle_label.pack(anchor="w", fill="x", pady=(3, 0))
+
+    def resize_subtitle(event: tk.Event) -> None:
+        try:
+            subtitle_label.configure(wraplength=max(160, int(event.width) - 4))
+        except tk.TclError:
+            pass
+
+    block.bind("<Configure>", resize_subtitle, add="+")
     return block
 
 
@@ -1498,6 +1506,35 @@ class SettingsDialog(tk.Toplevel):
         except tk.TclError:
             pass
 
+    def _bind_responsive_labels(
+        self,
+        container: tk.Misc,
+        *labels: ttk.Label,
+        horizontal_padding: int = 12,
+        min_wrap: int = 120,
+    ) -> None:
+        """Wrap descriptive text to the width it actually receives on screen."""
+
+        def refresh(event=None) -> None:
+            try:
+                width = int(event.width) if event is not None else int(container.winfo_width())
+            except (AttributeError, tk.TclError, TypeError, ValueError):
+                return
+            if width <= 1:
+                return
+            wraplength = max(min_wrap, width - horizontal_padding)
+            for label in labels:
+                try:
+                    label.configure(wraplength=wraplength)
+                except tk.TclError:
+                    pass
+
+        try:
+            container.bind("<Configure>", refresh, add="+")
+            self.after_idle(refresh)
+        except tk.TclError:
+            pass
+
     def _setting_var(self, name: str) -> tk.Variable:
         if name in self.vars:
             return self.vars[name]
@@ -1555,7 +1592,7 @@ class SettingsDialog(tk.Toplevel):
                 to=upper,
                 increment=increment,
                 width=18,
-                justify="right",
+                justify="left",
             )
         if name == "layout_writing_mode":
             return ttk.Combobox(
@@ -1596,21 +1633,32 @@ class SettingsDialog(tk.Toplevel):
         group.columnconfigure(1, weight=1)
         row = 0
         if intro:
-            ttk.Label(
-                group, text=intro, foreground="#5f6670", justify="left", wraplength=560,
-            ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 8))
+            intro_label = ttk.Label(
+                group, text=intro, foreground="#5f6670", justify="left",
+            )
+            intro_label.grid(
+                row=row, column=0, columnspan=3, sticky="ew", pady=(0, 8)
+            )
+            self._bind_responsive_labels(
+                group, intro_label, horizontal_padding=24, min_wrap=150
+            )
             row += 1
         for name in names:
             label = self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])
-            label_widget = ttk.Label(group, text=f"{label}：")
+            label_widget = ttk.Label(
+                group,
+                text=f"{label}：",
+                justify="right",
+                anchor="e",
+                wraplength=180,
+            )
             label_widget.grid(row=row, column=0, sticky="e", padx=(0, 10), pady=5)
 
             control = ttk.Frame(group)
             control.grid(row=row, column=1, sticky="ew", pady=4)
-            stretch = name == "wordslist_path"
-            control.columnconfigure(0, weight=(1 if stretch else 0))
+            control.columnconfigure(0, weight=1)
             widget = self._setting_widget(control, name)
-            widget.grid(row=0, column=0, sticky=("ew" if stretch else "w"))
+            widget.grid(row=0, column=0, sticky="ew")
             unit = self.SETTING_UNITS.get(name, "")
             if unit:
                 ttk.Label(control, text=unit, foreground="#70757d").grid(
@@ -1642,9 +1690,15 @@ class SettingsDialog(tk.Toplevel):
         group.columnconfigure(0, weight=1)
         row = 0
         if intro:
-            ttk.Label(
-                group, text=intro, foreground="#5f6670", justify="left", wraplength=560,
-            ).grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 8))
+            intro_label = ttk.Label(
+                group, text=intro, foreground="#5f6670", justify="left",
+            )
+            intro_label.grid(
+                row=row, column=0, columnspan=2, sticky="ew", pady=(0, 8)
+            )
+            self._bind_responsive_labels(
+                group, intro_label, horizontal_padding=24, min_wrap=150
+            )
             row += 1
         for label, name in checks:
             if name not in self.vars:
@@ -1696,12 +1750,11 @@ class SettingsDialog(tk.Toplevel):
     def _scrollable_settings_page(self, tab: ttk.Frame) -> ttk.Frame:
         host = ttk.Frame(tab)
         host.pack(fill="both", expand=True)
-        host.rowconfigure(0, weight=1)
-        host.columnconfigure(0, weight=3)
-        host.columnconfigure(1, weight=2)
 
-        left = ttk.Frame(host)
-        left.grid(row=0, column=0, sticky="nsew")
+        panes = ttk.Panedwindow(host, orient="horizontal")
+        panes.pack(fill="both", expand=True)
+
+        left = ttk.Frame(panes)
         left.rowconfigure(0, weight=1)
         left.columnconfigure(0, weight=1)
         canvas = tk.Canvas(left, highlightthickness=0, borderwidth=0)
@@ -1722,8 +1775,30 @@ class SettingsDialog(tk.Toplevel):
         )
         self._settings_canvases[str(tab)] = canvas
 
-        help_box = ttk.LabelFrame(host, text="设置说明", padding=(14, 12))
-        help_box.grid(row=0, column=1, sticky="nsew", padx=(6, 8), pady=(8, 8))
+        right = ttk.Frame(panes, padding=(6, 8, 8, 8))
+        panes.add(left, weight=3)
+        panes.add(right, weight=2)
+
+        split_initialized = {"done": False}
+
+        def initialize_split(_event=None) -> None:
+            if split_initialized["done"]:
+                return
+            try:
+                width = int(panes.winfo_width())
+                if width <= 200:
+                    return
+                panes.sashpos(0, int(width * 0.60))
+                split_initialized["done"] = True
+            except tk.TclError:
+                return
+
+        panes.bind("<Map>", initialize_split, add="+")
+        panes.bind("<Configure>", initialize_split, add="+")
+        self.after_idle(initialize_split)
+
+        help_box = ttk.LabelFrame(right, text="设置说明", padding=(14, 12))
+        help_box.pack(fill="both", expand=True)
         help_title = ttk.Label(
             help_box,
             textvariable=self._settings_help_title_var,
@@ -1752,28 +1827,37 @@ class SettingsDialog(tk.Toplevel):
             justify="left",
         )
         help_hint.pack(anchor="w", fill="x")
-
-        def resize_help_content(event: tk.Event) -> None:
-            # ttk.Label does not automatically reflow text to the width granted
-            # by grid/pack.  Keep wraplength tied to the actual help pane so
-            # long explanations wrap at the visible boundary instead of being
-            # clipped when the Settings Center is resized or DPI-scaled.
-            wraplength = max(120, int(event.width) - 28)
-            for label in (help_title, help_body, help_hint):
-                try:
-                    label.configure(wraplength=wraplength)
-                except tk.TclError:
-                    pass
-            self._schedule_settings_help_image_render()
-
-        help_box.bind("<Configure>", resize_help_content, add="+")
+        self._bind_responsive_labels(
+            help_box,
+            help_title,
+            help_body,
+            help_hint,
+            horizontal_padding=28,
+            min_wrap=120,
+        )
+        help_box.bind(
+            "<Configure>",
+            lambda _e: self._schedule_settings_help_image_render(),
+            add="+",
+        )
         return content
 
     def _settings_intro(self, parent: ttk.Frame, title: str, text: str) -> None:
-        ttk.Label(parent, text=title, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
-        ttk.Label(
-            parent, text=text, foreground="#5f6670", justify="left", wraplength=900,
-        ).pack(anchor="w", pady=(3, 10))
+        title_label = ttk.Label(
+            parent, text=title, font=("TkDefaultFont", 11, "bold"), justify="left",
+        )
+        title_label.pack(anchor="w", fill="x")
+        body_label = ttk.Label(
+            parent, text=text, foreground="#5f6670", justify="left",
+        )
+        body_label.pack(anchor="w", fill="x", pady=(3, 10))
+        self._bind_responsive_labels(
+            parent,
+            title_label,
+            body_label,
+            horizontal_padding=12,
+            min_wrap=160,
+        )
 
     def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:
         super().__init__(parent)
@@ -1814,7 +1898,40 @@ class SettingsDialog(tk.Toplevel):
             "按工作任务整理：第一次使用只看“常用 / 普通画线 / OCR画线”；"
             "底层阈值、正则和后端参数集中在高级区，不确定时无需修改。",
         )
-        notebook = ttk.Notebook(outer)
+        style = ttk.Style(self)
+        native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
+        style.configure(
+            "PC.Settings.TNotebook",
+            background=native_background,
+            borderwidth=0,
+            tabmargins=(0, 2, 0, 0),
+        )
+        style.configure(
+            "PC.Settings.TNotebook.Tab",
+            padding=(13, 7),
+            borderwidth=1,
+            relief="raised",
+            background="#e6eaf0",
+            foreground="#4b5563",
+        )
+        style.map(
+            "PC.Settings.TNotebook.Tab",
+            background=[
+                ("selected", native_background),
+                ("active", "#f1f3f6"),
+                ("!selected", "#e6eaf0"),
+            ],
+            foreground=[
+                ("selected", "#111827"),
+                ("active", "#1f2937"),
+                ("!selected", "#4b5563"),
+            ],
+            relief=[
+                ("selected", "sunken"),
+                ("!selected", "raised"),
+            ],
+        )
+        notebook = ttk.Notebook(outer, style="PC.Settings.TNotebook")
         self.notebook = notebook
         notebook.pack(fill="both", expand=True)
         self._settings_canvases: dict[str, tk.Canvas] = {}
@@ -1839,7 +1956,8 @@ class SettingsDialog(tk.Toplevel):
         ):
             notebook.add(tab, text=label)
 
-        selected_tab = {
+        self._settings_tabs = {
+            "common": common_tab,
             "normal": normal_tab,
             "ocr": ocr_tab,
             "display": display_tab,
@@ -1849,8 +1967,8 @@ class SettingsDialog(tk.Toplevel):
             "params": common_tab,
             "sort": sort_tab,
             "rules": rules_tab,
-        }.get(initial_tab, common_tab)
-        notebook.select(selected_tab)
+        }
+        self.select_tab(initial_tab)
         notebook.bind(
             "<<NotebookTabChanged>>",
             lambda _e: self._show_settings_help(
@@ -1908,11 +2026,16 @@ class SettingsDialog(tk.Toplevel):
             value=DETECTION_LABELS["left_edge"],
         )
         normal_mode.grid(row=0, column=0, sticky="w", pady=3)
-        ttk.Label(
+        normal_mode_help = ttk.Label(
             mode_group,
             text="速度快，不识别文字；适合词头靠近栏左、正文缩进稳定的版式。",
             foreground="#666666",
-        ).grid(row=0, column=1, sticky="w", padx=(12, 0), pady=3)
+            justify="left",
+        )
+        normal_mode_help.grid(row=0, column=1, sticky="ew", padx=(12, 0), pady=3)
+        self._bind_responsive_labels(
+            normal_mode_help, normal_mode_help, horizontal_padding=4, min_wrap=100
+        )
 
         ocr_mode = ttk.Radiobutton(
             mode_group,
@@ -1921,11 +2044,16 @@ class SettingsDialog(tk.Toplevel):
             value=DETECTION_LABELS["paddleocr"],
         )
         ocr_mode.grid(row=1, column=0, sticky="w", pady=3)
-        ttk.Label(
+        ocr_mode_help = ttk.Label(
             mode_group,
             text="结合文字、位置和结构证据；适合粗体、词性、符号等结构较复杂的词典。",
             foreground="#666666",
-        ).grid(row=1, column=1, sticky="w", padx=(12, 0), pady=3)
+            justify="left",
+        )
+        ocr_mode_help.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=3)
+        self._bind_responsive_labels(
+            ocr_mode_help, ocr_mode_help, horizontal_padding=4, min_wrap=100
+        )
 
         for widget, title, body in (
             (
@@ -2008,11 +2136,16 @@ class SettingsDialog(tk.Toplevel):
             lens_group, text="启用 Lens 第三意见",
             variable=self.vars["paddle_enable_lens"],
         ).pack(anchor="w")
-        ttk.Label(
+        lens_help = ttk.Label(
             lens_group,
             text="建议只在 Paddle/Tesseract 冲突时使用，避免不必要的网络等待。",
             foreground="#666666",
-        ).pack(anchor="w", pady=(2, 5))
+            justify="left",
+        )
+        lens_help.pack(anchor="w", fill="x", pady=(2, 5))
+        self._bind_responsive_labels(
+            lens_group, lens_help, horizontal_padding=12, min_wrap=120
+        )
         lens_mode_var = tk.StringVar(
             value=LENS_MODE_LABELS.get(
                 parent.settings.paddle_lens_mode, LENS_MODE_LABELS["conflict"]
@@ -2094,12 +2227,17 @@ class SettingsDialog(tk.Toplevel):
             text_ocr_group, textvariable=ocr_engine_var,
             values=tuple(OCR_ENGINE_VALUES), state="readonly", width=28,
         ).grid(row=0, column=1, sticky="w", pady=4)
-        ttk.Label(
+        text_ocr_help = ttk.Label(
             text_ocr_group,
             text="用于“已有横线后再识别整行文本”的普通 OCR 功能；"
                  "OCR画线使用上一个页签中的多引擎流程，两者不要混淆。",
-            foreground="#666666", wraplength=560, justify="left",
-        ).grid(row=0, column=2, sticky="w", padx=(12, 0), pady=4)
+            foreground="#666666",
+            justify="left",
+        )
+        text_ocr_help.grid(row=0, column=2, sticky="ew", padx=(12, 0), pady=4)
+        self._bind_responsive_labels(
+            text_ocr_help, text_ocr_help, horizontal_padding=4, min_wrap=120
+        )
         project_checks = (
             ("OCR 后执行替换规则", "ocr_replace"),
             ("普通 OCR 文本转小写", "lowercase_ocr"),
@@ -2174,7 +2312,13 @@ class SettingsDialog(tk.Toplevel):
             "始终可选“通用 Unicode”或“自定义排序规则”。自定义规则就是词典自己的字母表；\n"
             "例如西班牙语旧式可写：a b c ch d e f g h i j k l ll m n ñ o p q r s t u v w x y z。"
         )
-        ttk.Label(sort_frame, text=help_text, justify="left", wraplength=820).grid(row=4, column=0, columnspan=2, sticky="w", pady=(12, 0))
+        sort_help = ttk.Label(sort_frame, text=help_text, justify="left")
+        sort_help.grid(
+            row=4, column=0, columnspan=2, sticky="ew", pady=(12, 0)
+        )
+        self._bind_responsive_labels(
+            sort_frame, sort_help, horizontal_padding=24, min_wrap=180
+        )
         self._refresh_sort_choices(initial=True)
 
         # User-editable OCR headword filter rules.
@@ -2185,7 +2329,13 @@ class SettingsDialog(tk.Toplevel):
             "常用：reject_lemma_exact / reject_lemma_regex / reject_line_contains / "
             "reject_line_regex；accept_*；pos_exclude_exact / pos_exclude_regex。"
         )
-        ttk.Label(rules_tab, text=rules_help, justify="left", padding=(12, 10, 12, 6)).grid(row=0, column=0, sticky="ew")
+        rules_help_label = ttk.Label(
+            rules_tab, text=rules_help, justify="left", padding=(12, 10, 12, 6)
+        )
+        rules_help_label.grid(row=0, column=0, sticky="ew")
+        self._bind_responsive_labels(
+            rules_tab, rules_help_label, horizontal_padding=24, min_wrap=180
+        )
         rules_editor_frame = ttk.Frame(rules_tab, padding=(12, 0, 12, 6))
         rules_editor_frame.grid(row=1, column=0, sticky="nsew")
         rules_editor_frame.columnconfigure(0, weight=1); rules_editor_frame.rowconfigure(0, weight=1)
@@ -2233,7 +2383,20 @@ class SettingsDialog(tk.Toplevel):
             _bbox = _canvas.bbox("all")
             if _bbox:
                 _canvas.configure(scrollregion=_bbox)
-        self.transient(parent); self.grab_set()
+        # Keep Settings Center modeless: users often need to move the pointer
+        # over the main image to read coordinates while entering layout values.
+        # Do not use transient()/grab_set(), which would keep this window in
+        # front and block interaction with the main workspace.
+
+    def select_tab(self, key: str | None) -> None:
+        """Select a requested settings task when reusing the modeless window."""
+        if not hasattr(self, "notebook") or not hasattr(self, "_settings_tabs"):
+            return
+        tab = self._settings_tabs.get(key or "common", self._settings_tabs["common"])
+        try:
+            self.notebook.select(tab)
+        except tk.TclError:
+            pass
 
     def _build_project_details_tab(self, tab: ttk.Frame) -> None:
         """Build project metadata fields without mixing them into OCR controls."""
@@ -2368,11 +2531,24 @@ class SettingsDialog(tk.Toplevel):
         self.profile_description_var = tk.StringVar(value="")
         self.profile_examples_var = tk.StringVar(value="")
         self.profile_layout_summary_var = tk.StringVar(value="")
-        ttk.Label(top, textvariable=self.profile_description_var, justify="left", wraplength=880).grid(
-            row=2, column=0, columnspan=4, sticky="w", pady=(8, 2)
+        profile_description = ttk.Label(
+            top, textvariable=self.profile_description_var, justify="left"
         )
-        ttk.Label(top, textvariable=self.profile_examples_var, justify="left", wraplength=880).grid(
-            row=3, column=0, columnspan=4, sticky="w", pady=(2, 0)
+        profile_description.grid(
+            row=2, column=0, columnspan=4, sticky="ew", pady=(8, 2)
+        )
+        profile_examples = ttk.Label(
+            top, textvariable=self.profile_examples_var, justify="left"
+        )
+        profile_examples.grid(
+            row=3, column=0, columnspan=4, sticky="ew", pady=(2, 0)
+        )
+        self._bind_responsive_labels(
+            top,
+            profile_description,
+            profile_examples,
+            horizontal_padding=20,
+            min_wrap=180,
         )
         ttk.Label(
             top, textvariable=self.profile_layout_summary_var,
@@ -3020,7 +3196,7 @@ class ReviewWindow(tk.Toplevel):
         self.network_lookup_enabled_var = tk.BooleanVar(
             value=bool(getattr(parent.settings, "review_network_lookup_enabled", True))
         )
-        self.network_lookup_status_var = tk.StringVar(value="网络词汇核验：等待选择词条")
+        self.network_lookup_status_var = tk.StringVar(value="网络词汇核验\n等待选择词条")
         self.cc_cedict_lookup_var = tk.StringVar(value="CC-CEDICT(?)")
         self.cc_simplified_compare_var = tk.StringVar(value="CC简(?)")
         self.moedict_lookup_var = tk.StringVar(value="萌(?)")
@@ -3525,8 +3701,14 @@ class ReviewWindow(tk.Toplevel):
             style="PCR.Tool.TButton",
         ).pack(side="left", padx=(5, 0))
         self.network_status_label = tk.Label(
-            network_box, textvariable=self.network_lookup_status_var, anchor="w", justify="left",
-            wraplength=430, fg="#555555", bg=self._review_ui_colors["surface"],
+            network_box,
+            textvariable=self.network_lookup_status_var,
+            anchor="w",
+            justify="left",
+            height=2,
+            wraplength=430,
+            fg="#555555",
+            bg=self._review_ui_colors["surface"],
         )
         self.network_status_label.pack(fill="x", pady=(4, 0))
         self._refresh_cc_cedict_button_idle()
@@ -3617,11 +3799,9 @@ class ReviewWindow(tk.Toplevel):
         self.parent.toggle_autosave()
 
     def open_sort_rules(self) -> None:
-        dialog = SettingsDialog(self.parent, initial_tab="sort")
-        try:
-            dialog.transient(self)
-        except tk.TclError:
-            pass
+        # Reuse the same modeless Settings Center so the main image remains
+        # available for reference while settings are edited.
+        self.parent.open_settings(initial_tab="sort")
 
     def run_order_check(self) -> None:
         self.check_order(self.order_scope_var.get() == "all")
@@ -3922,7 +4102,7 @@ class ReviewWindow(tk.Toplevel):
                 except tk.TclError:
                     pass
                 self._network_lookup_job = None
-            self.network_lookup_status_var.set("网络词汇核验：自动检查已关闭")
+            self.network_lookup_status_var.set("网络词汇核验\n自动检查已关闭")
             try:
                 self.network_status_label.configure(fg="#666666")
             except tk.TclError:
@@ -3948,7 +4128,7 @@ class ReviewWindow(tk.Toplevel):
                 pass
             self._network_lookup_job = None
         if not value:
-            self.network_lookup_status_var.set("网络词汇核验：当前词条为空")
+            self.network_lookup_status_var.set("网络词汇核验\n当前词条为空")
             try:
                 self.network_status_label.configure(fg="#666666")
             except tk.TclError:
@@ -3960,7 +4140,7 @@ class ReviewWindow(tk.Toplevel):
         if cached is not None:
             self._apply_network_lookup_result(serial, value, cached)
             return
-        self.network_lookup_status_var.set(f"网络词汇核验：正在查询“{value}”…")
+        self.network_lookup_status_var.set(f"网络词汇核验\n正在查询“{value}”…")
         self._network_source_urls.clear()
         self._set_lookup_source_states(pending=True)
         try:
@@ -4008,7 +4188,9 @@ class ReviewWindow(tk.Toplevel):
         if serial != self._network_lookup_serial or word != self._network_lookup_word:
             return
         if result is None:
-            self.network_lookup_status_var.set("⚠ 网络词汇核验暂时失败；可点“网络搜索”手工确认。")
+            self.network_lookup_status_var.set(
+                "⚠ 网络词汇核验暂时失败\n可点“网络搜索”手工确认。"
+            )
             try:
                 self.network_status_label.configure(fg="#9a6700")
             except tk.TclError:
@@ -4041,13 +4223,19 @@ class ReviewWindow(tk.Toplevel):
 
         found_names = [item.name for item in result.sources if item.found is True]
         if result.found is True:
-            self.network_lookup_status_var.set("✓ 有词典收录：" + "、".join(found_names))
+            self.network_lookup_status_var.set(
+                "✓ 有词典收录\n" + "、".join(found_names)
+            )
             status_color = "#1b7f3a"
         elif result.found is False:
-            self.network_lookup_status_var.set("○ 各可用词典均未检出精确词条（不代表该词不存在）")
+            self.network_lookup_status_var.set(
+                "○ 各可用词典均未检出精确词条\n不代表该词不存在"
+            )
             status_color = "#8a5a00"
         else:
-            self.network_lookup_status_var.set("⚠ 部分词典未安装或网络来源暂不可用；可继续网络搜索。")
+            self.network_lookup_status_var.set(
+                "⚠ 部分词典未安装或网络来源暂不可用\n可继续网络搜索。"
+            )
             status_color = "#9a6700"
         try:
             self.network_status_label.configure(fg=status_color)
@@ -4060,7 +4248,7 @@ class ReviewWindow(tk.Toplevel):
         # simplified companion rather than the original headword.
         word = (self._network_lookup_word or self._active_review_word()).strip()
         if not word:
-            self.network_lookup_status_var.set("网络词汇核验：当前词条为空")
+            self.network_lookup_status_var.set("网络词汇核验\n当前词条为空")
             return
         try:
             webbrowser.open(web_search_url(word))
@@ -6397,7 +6585,9 @@ class PictureCaptureApp(tk.Tk):
         self.polygon_draw_var = tk.BooleanVar(value=False)
         self.crop_preview_var = tk.BooleanVar(value=False)
         self.binary_preview_var = tk.BooleanVar(value=False)
-        self.polygon_draw_button: tk.Button | None = None
+        self.display_mode_var = tk.StringVar(value="原图+标注")
+        self._display_mode_syncing = False
+        self.polygon_draw_button: ttk.Button | None = None
         # PPP label editors and vertex-drag state are rebuilt with each canvas redraw.
         self.polygon_label_bindings: list[tuple[tk.Entry, PolygonRegion]] = []
         self._polygon_canvas_items: dict[int, dict] = {}
@@ -6572,12 +6762,13 @@ class PictureCaptureApp(tk.Tk):
             "border": "#d8dde5",
             "text": "#30343b",
             "muted": "#68707b",
-            "button": "#eceff3",
-            "button_hover": "#e1e5ea",
-            "primary": "#e58a2b",
-            "primary_hover": "#d77b20",
-            "success": "#5e9f69",
-            "success_hover": "#4f8e5c",
+            "button": "#f4f5f7",
+            "button_hover": "#e7eaee",
+            "button_border": "#d3d8df",
+            "primary": "#4F7CAC",
+            "primary_hover": "#416A94",
+            "success": "#69A875",
+            "success_hover": "#588F64",
             "tree_selected": "#dce8f7",
             "canvas": "#30343b",
         }
@@ -6624,7 +6815,18 @@ class PictureCaptureApp(tk.Tk):
         )
 
         style.configure("PC.Compact.TButton", padding=(7, 3))
+        style.configure(
+            "PC.EditActive.TButton",
+            padding=(7, 3),
+            background="#ffd166",
+            foreground=colors["text"],
+        )
+        style.map(
+            "PC.EditActive.TButton",
+            background=[("active", "#f3c451"), ("pressed", "#eab843")],
+        )
         style.configure("PC.Tool.TButton", padding=(4, 2))
+        style.configure("PC.PageNav.TButton", padding=(2, 2))
         style.configure("PC.Footer.TButton", padding=(7, 3))
         style.configure("PC.Compact.TEntry", padding=(4, 2))
         style.configure("PC.Footer.TEntry", padding=(4, 2))
@@ -6652,16 +6854,34 @@ class PictureCaptureApp(tk.Tk):
 
     def _sidebar_action_button(
         self, parent: tk.Misc, text: str, command, *, role: str = "neutral"
-    ) -> tk.Button:
-        """Return one dense flat button used by main-sidebar action groups."""
+    ) -> tk.Widget:
+        """Return one dense action button for the main sidebar.
+
+        Neutral actions intentionally use the exact same ttk style as
+        `检测版面参数`, so sections 四/五 share one native button chrome.
+        Only the three explicitly emphasized actions use custom colors.
+        """
+        if role == "neutral":
+            return ttk.Button(
+                parent,
+                text=text,
+                command=command,
+                style="PC.Compact.TButton",
+            )
+
         colors = self._main_ui_colors
         palette = {
-            "neutral": (colors["button"], colors["button_hover"], colors["text"]),
-            "primary": (colors["primary"], colors["primary_hover"], "#ffffff"),
-            "success": (colors["success"], colors["success_hover"], "#ffffff"),
+            "primary": (
+                colors["primary"], colors["primary_hover"], "#ffffff",
+            ),
+            "success": (
+                colors["success"], colors["success_hover"], "#ffffff",
+            ),
         }
-        background, active_background, foreground = palette.get(role, palette["neutral"])
-        is_neutral = role == "neutral"
+        background, active_background, foreground = palette.get(
+            role, palette["primary"]
+        )
+        border = colors["button_border"]
         return tk.Button(
             parent,
             text=text,
@@ -6672,13 +6892,45 @@ class PictureCaptureApp(tk.Tk):
             activeforeground=foreground,
             relief="flat",
             bd=0,
-            highlightthickness=(1 if is_neutral else 0),
-            highlightbackground=colors["border"],
-            highlightcolor=colors["border"],
-            padx=(7 if is_neutral else 8),
-            pady=(3 if is_neutral else 4),
+            highlightthickness=1,
+            highlightbackground=border,
+            highlightcolor=border,
+            padx=7,
+            pady=3,
             cursor="hand2",
         )
+
+    def _footer_action_button(
+        self, parent: tk.Misc, text: str, command, *, role: str
+    ) -> tk.Button:
+        """Create one emphasized bottom-bar action with a functional color."""
+        colors = self._main_ui_colors
+        palette = {
+            # Scheme A: project/config entry points share the same green
+            # treatment as `保存当前页`.
+            "project": (colors["success"], colors["success_hover"], "#ffffff"),
+            "config": (colors["success"], colors["success_hover"], "#ffffff"),
+        }
+        background, active_background, foreground = palette[role]
+        border = colors["button_border"]
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=background,
+            fg=foreground,
+            activebackground=active_background,
+            activeforeground=foreground,
+            relief="flat",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=border,
+            highlightcolor=border,
+            padx=7,
+            pady=3,
+            cursor="hand2",
+        )
+
 
     def _section_frame(
         self, parent: tk.Misc, title: str, padding: int = 5, *, section_key: str | None = None
@@ -6966,23 +7218,28 @@ class PictureCaptureApp(tk.Tk):
 
         range_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
         range_row.grid(row=0, column=0, sticky="ew", pady=(0, 3))
-        ttk.Label(range_row, text="页面范围：").pack(side="left")
+        ttk.Label(range_row, text="显示模式：").pack(side="left")
+        display_mode_combo = ttk.Combobox(
+            range_row,
+            textvariable=self.display_mode_var,
+            values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览"),
+            state="readonly",
+            width=10,
+        )
+        display_mode_combo.pack(side="left", padx=(0, 3))
+        display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)
+        ttk.Separator(range_row, orient="vertical").pack(
+            side="left", fill="y", padx=4, pady=3
+        )
         ttk.Radiobutton(range_row, text="当前页", variable=self.page_range_var, value="current").pack(side="left")
         ttk.Radiobutton(range_row, text="当前至末页", variable=self.page_range_var, value="to_end").pack(side="left", padx=(4, 0))
         ttk.Radiobutton(range_row, text="指定：", variable=self.page_range_var, value="specified").pack(side="left", padx=(4, 0))
-        ttk.Entry(range_row, textvariable=self.page_range_spec_var, width=14).pack(side="left", fill="x", expand=True)
-        ttk.Button(
-            range_row, text="跳到", command=self.jump_to_page_spec, style="PC.Compact.TButton"
-        ).pack(side="left", padx=(4, 0))
-
+        ttk.Entry(
+            range_row, textvariable=self.page_range_spec_var, width=14, justify="left"
+        ).pack(side="left", fill="x", expand=True)
         size_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
         self.page_size_row = size_row
         size_row.grid(row=1, column=0, sticky="ew", pady=(0, 5))
-        ttk.Checkbutton(
-            size_row, text="◧", width=3, variable=self.binary_preview_var,
-            command=self._toggle_binary_preview,
-        ).pack(side="left", padx=(0, 2))
-        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=3, pady=3)
 
         ttk.Button(
             size_row, text="−", width=3, command=lambda: self.zoom(0.87), style="PC.Tool.TButton"
@@ -7018,10 +7275,13 @@ class PictureCaptureApp(tk.Tk):
         ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
 
         ttk.Button(
-            size_row, text="上一页", command=lambda: self.change_page(-1), style="PC.Compact.TButton"
+            size_row, text="跳转", command=self.jump_to_page_spec, style="PC.PageNav.TButton"
         ).pack(side="left", padx=(0, 3))
         ttk.Button(
-            size_row, text="下一页", command=lambda: self.change_page(1), style="PC.Compact.TButton"
+            size_row, text="上一页", command=lambda: self.change_page(-1), style="PC.PageNav.TButton"
+        ).pack(side="left", padx=(0, 3))
+        ttk.Button(
+            size_row, text="下一页", command=lambda: self.change_page(1), style="PC.PageNav.TButton"
         ).pack(side="left")
 
         list_frame = ttk.Frame(page_panel)
@@ -7070,37 +7330,61 @@ class PictureCaptureApp(tk.Tk):
 
         project_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
         project_row.pack(fill="x")
-        ttk.Button(
-            project_row, text="新建项目", command=self.open_project, style="PC.Footer.TButton"
-        ).pack(side="left", fill="x", expand=True)
-        ttk.Button(
-            project_row, text="已有项目", command=self.open_recent_project, style="PC.Footer.TButton"
-        ).pack(side="left", fill="x", expand=True, padx=(4, 0))
-        ttk.Button(
-            project_row, text="导出训练标记包", command=self.export_training_package,
-            style="PC.Footer.TButton",
-        ).pack(side="left", fill="x", expand=True, padx=(4, 0))
-        ttk.Label(project_row, text="图片后缀：", style="PC.Footer.TLabel").pack(
-            side="left", padx=(8, 2)
+        for col in range(4):
+            project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
+        for col, (label, command, role) in enumerate((
+            ("新建项目", self.open_project, "project"),
+            ("已有项目", self.open_recent_project, "project"),
+            ("导出训练标记包", self.export_training_package, None),
+        )):
+            button = (
+                self._footer_action_button(project_row, label, command, role=role)
+                if role is not None
+                else ttk.Button(
+                    project_row, text=label, command=command, style="PC.Footer.TButton"
+                )
+            )
+            button.grid(
+                row=0, column=col, sticky="ew",
+                padx=(0 if col == 0 else 4, 0),
+            )
+
+        suffix_cell = ttk.Frame(project_row, style="PC.Footer.TFrame")
+        suffix_cell.grid(row=0, column=3, sticky="ew", padx=(4, 0))
+        suffix_cell.columnconfigure(1, weight=1)
+        ttk.Label(suffix_cell, text="图片后缀：", style="PC.Footer.TLabel").grid(
+            row=0, column=0, sticky="e", padx=(0, 2)
         )
         self.image_suffix_var = tk.StringVar(value=self.settings.image_suffix)
         ttk.Entry(
-            project_row, textvariable=self.image_suffix_var, width=7, style="PC.Footer.TEntry"
-        ).pack(side="left")
+            suffix_cell,
+            textvariable=self.image_suffix_var,
+            width=7,
+            justify="left",
+            style="PC.Footer.TEntry",
+        ).grid(row=0, column=1, sticky="ew")
         self.image_suffix_var.trace_add("write", lambda *_args: self._quick_parameter_changed())
 
         parameter_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
         parameter_row.pack(fill="x", pady=(4, 0))
-        for index, (label, command) in enumerate((
-            ("项目Profile", self.open_project_profile),
-            ("设置中心", self.open_settings),
-            ("保存参数", self.save_main_parameters),
-            ("使用提示", self.show_help_dialog),
+        for col in range(4):
+            parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
+        for col, (label, command, role) in enumerate((
+            ("项目Profile", self.open_project_profile, "config"),
+            ("设置中心", self.open_settings, "config"),
+            ("保存参数", self.save_main_parameters, None),
+            ("使用提示", self.show_help_dialog, None),
         )):
-            ttk.Button(
-                parameter_row, text=label, command=command, style="PC.Footer.TButton"
-            ).pack(
-                side="left", fill="x", expand=True, padx=(0 if index == 0 else 4, 0),
+            button = (
+                self._footer_action_button(parameter_row, label, command, role=role)
+                if role is not None
+                else ttk.Button(
+                    parameter_row, text=label, command=command, style="PC.Footer.TButton"
+                )
+            )
+            button.grid(
+                row=0, column=col, sticky="ew",
+                padx=(0 if col == 0 else 4, 0),
             )
 
         self.canvas = tk.Canvas(
@@ -7717,7 +8001,7 @@ class PictureCaptureApp(tk.Tk):
                 panel,
                 textvariable=var,
                 width=width,
-                justify="right" if cast in {int, float} else "left",
+                justify="left",
                 style="PC.Compact.TEntry",
             ).grid(row=row, column=col + 1, sticky="ew", padx=(0, 6), pady=1)
 
@@ -7780,7 +8064,9 @@ class PictureCaptureApp(tk.Tk):
         safety_var = tk.StringVar(value=str(self.settings.paddle_separator_safety_px))
         self.quick_vars["paddle_separator_safety_px"] = safety_var
         self.quick_field_casts["paddle_separator_safety_px"] = int
-        ttk.Entry(lens_row, textvariable=safety_var, width=4).pack(side="left", padx=(2, 2))
+        ttk.Entry(
+            lens_row, textvariable=safety_var, width=4, justify="left"
+        ).pack(side="left", padx=(2, 2))
         ttk.Label(lens_row, text="px").pack(side="left")
         ocr_tools = ttk.Frame(ocr)
         ocr_tools.grid(row=4, column=0, columnspan=6, sticky="ew", pady=(4, 0))
@@ -7825,12 +8111,16 @@ class PictureCaptureApp(tk.Tk):
         color_button(line_row, "guide_color")
         ttk.Label(line_row, text="宽度：").pack(side="left")
         guide_value = tk.StringVar(value=str(self.settings.guide_width)); self.quick_vars["guide_width"] = guide_value; self.quick_field_casts["guide_width"] = int
-        ttk.Entry(line_row, textvariable=guide_value, width=5).pack(side="left", padx=(2, 10))
+        ttk.Entry(
+            line_row, textvariable=guide_value, width=5, justify="left"
+        ).pack(side="left", padx=(2, 10))
         ttk.Checkbutton(line_row, text="插图形状：轮廓", variable=self.polygon_var, command=self.redraw).pack(side="left")
         color_button(line_row, "illustration_outline_color")
         ttk.Label(line_row, text="粗细").pack(side="left")
         outline_width_var = tk.StringVar(value=str(self.settings.illustration_outline_width)); self.quick_vars["illustration_outline_width"] = outline_width_var; self.quick_field_casts["illustration_outline_width"] = int
-        ttk.Entry(line_row, textvariable=outline_width_var, width=4).pack(side="left", padx=(2, 5))
+        ttk.Entry(
+            line_row, textvariable=outline_width_var, width=4, justify="left"
+        ).pack(side="left", padx=(2, 5))
         ttk.Label(line_row, text="背景").pack(side="left")
         color_button(line_row, "illustration_fill_color")
 
@@ -7839,14 +8129,18 @@ class PictureCaptureApp(tk.Tk):
         color_button(marker_row, "headword_marker_color")
         ttk.Label(marker_row, text="高度：").pack(side="left")
         marker_value = tk.StringVar(value=str(self.settings.marker_height)); self.quick_vars["marker_height"] = marker_value; self.quick_field_casts["marker_height"] = int
-        ttk.Entry(marker_row, textvariable=marker_value, width=5).pack(side="left", padx=(2, 10))
+        ttk.Entry(
+            marker_row, textvariable=marker_value, width=5, justify="left"
+        ).pack(side="left", padx=(2, 10))
         label_visible_var = tk.BooleanVar(value=bool(self.settings.show_illustration_labels))
         self.quick_bool_vars["show_illustration_labels"] = label_visible_var
         ttk.Checkbutton(marker_row, text="插图标签：外框", variable=label_visible_var).pack(side="left")
         color_button(marker_row, "illustration_label_border_color")
         ttk.Label(marker_row, text="粗细").pack(side="left")
         label_width_var = tk.StringVar(value=str(self.settings.illustration_label_border_width)); self.quick_vars["illustration_label_border_width"] = label_width_var; self.quick_field_casts["illustration_label_border_width"] = int
-        ttk.Entry(marker_row, textvariable=label_width_var, width=4).pack(side="left", padx=(2, 5))
+        ttk.Entry(
+            marker_row, textvariable=label_width_var, width=4, justify="left"
+        ).pack(side="left", padx=(2, 5))
         ttk.Label(marker_row, text="背景").pack(side="left")
         color_button(marker_row, "illustration_label_fill_color")
 
@@ -7856,7 +8150,9 @@ class PictureCaptureApp(tk.Tk):
             shown = getattr(self.settings, name) * 100 if name == "main_entry_x_ratio" else getattr(self.settings, name)
             var = tk.StringVar(value=str(round(shown) if name == "main_entry_x_ratio" else shown)); self.quick_vars[name] = var; self.quick_field_casts[name] = int if name.endswith("chars") else float
             if name == "main_entry_x_ratio": ttk.Label(entry_row, text="偏移%").pack(side="left", padx=(8, 2))
-            ttk.Entry(entry_row, textvariable=var, width=width).pack(side="left")
+            ttk.Entry(
+                entry_row, textvariable=var, width=width, justify="left"
+            ).pack(side="left")
         follow_var = tk.BooleanVar(value=bool(self.settings.main_entry_follow_zoom)); self.quick_bool_vars["main_entry_follow_zoom"] = follow_var
         ttk.Checkbutton(entry_row, text="跟随缩放", variable=follow_var).pack(side="left", padx=(8, 0))
         ttk.Label(entry_row, text="默认").pack(side="left", padx=(8, 0))
@@ -7868,7 +8164,9 @@ class PictureCaptureApp(tk.Tk):
         ttk.Combobox(font_row, textvariable=family_var, values=tuple(sorted(set(font.families()), key=str.casefold)), width=16).pack(side="left")
         ttk.Label(font_row, text="字号").pack(side="left", padx=(8, 2))
         size_var = tk.StringVar(value=str(self.settings.main_entry_font_size)); self.quick_vars["main_entry_font_size"] = size_var; self.quick_field_casts["main_entry_font_size"] = int
-        ttk.Entry(font_row, textvariable=size_var, width=5).pack(side="left")
+        ttk.Entry(
+            font_row, textvariable=size_var, width=5, justify="left"
+        ).pack(side="left")
         for label, name in (("粗体", "main_entry_font_bold"), ("斜体", "main_entry_font_italic")):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
@@ -7879,7 +8177,9 @@ class PictureCaptureApp(tk.Tk):
         ttk.Combobox(label_font_row, textvariable=label_family_var, values=tuple(sorted(set(font.families()), key=str.casefold)), width=16).pack(side="left")
         ttk.Label(label_font_row, text="字号").pack(side="left", padx=(8, 2))
         label_size_var = tk.StringVar(value=str(self.settings.illustration_label_font_size)); self.quick_vars["illustration_label_font_size"] = label_size_var; self.quick_field_casts["illustration_label_font_size"] = int
-        ttk.Entry(label_font_row, textvariable=label_size_var, width=5).pack(side="left")
+        ttk.Entry(
+            label_font_row, textvariable=label_size_var, width=5, justify="left"
+        ).pack(side="left")
         for label, name in (("粗体", "illustration_label_font_bold"), ("斜体", "illustration_label_font_italic")):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(label_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
@@ -7900,39 +8200,55 @@ class PictureCaptureApp(tk.Tk):
                 "paddle_show_candidate_checkboxes", candidate_var,
             ),
         ).pack(side="left")
-        ttk.Checkbutton(option_row, text="显示切图预览", variable=self.crop_preview_var, command=self._toggle_crop_preview).pack(side="left", padx=(8, 0))
-        ttk.Checkbutton(option_row, text="隐藏线框(插图除外)", variable=self.hide_var, command=self.redraw).pack(side="left", padx=(8, 0))
+        ttk.Checkbutton(
+            option_row, text="显示切图预览", variable=self.crop_preview_var,
+            command=self._toggle_crop_preview,
+        ).pack(side="left", padx=(8, 0))
+        ttk.Checkbutton(
+            option_row, text="隐藏线框(插图除外)", variable=self.hide_var,
+            command=self._toggle_hide_overlays,
+        ).pack(side="left", padx=(8, 0))
         save_row = ttk.Frame(aux); save_row.grid(row=7, column=0, columnspan=4, sticky="ew")
         ttk.Checkbutton(save_row, text="自动保存", variable=self.autosave_var, command=self.toggle_autosave).pack(side="left")
         ttk.Label(save_row, text="间隔时间(秒)").pack(side="left", padx=(8, 2))
         interval_var = tk.StringVar(value=str(self.settings.batch_interval)); self.quick_vars["batch_interval"] = interval_var; self.quick_field_casts["batch_interval"] = float
-        ttk.Entry(save_row, textvariable=interval_var, width=6).pack(side="left")
+        ttk.Entry(
+            save_row, textvariable=interval_var, width=6, justify="left"
+        ).pack(side="left")
         ttk.Label(save_row, text="向右比例%").pack(side="left", padx=(10, 2))
         ratio_var = tk.StringVar(value=str(self.settings.right_ratio)); self.quick_vars["right_ratio"] = ratio_var; self.quick_field_casts["right_ratio"] = float
-        ttk.Entry(save_row, textvariable=ratio_var, width=6).pack(side="left")
+        ttk.Entry(
+            save_row, textvariable=ratio_var, width=6, justify="left"
+        ).pack(side="left")
         aux.columnconfigure(1, weight=1); aux.columnconfigure(3, weight=1)
 
         actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
         actions.pack(fill="x", pady=(4, 0))
         rows = [
             (("运行普通画线", self.run_normal_draw_action), ("运行OCR画线", self.run_ocr_draw_action)),
-            (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope)),
+            (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充既有词条", self.fill_existing_headwords), ("修复PDIC排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("从PDIC备份恢复", self.restore_from_pdic_backup)),
             (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
         ]
         for ri, specs in enumerate(rows):
-            row = ttk.Frame(actions); row.grid(row=ri, column=0, sticky="ew", pady=(0 if ri == 0 else 3, 0))
+            row = ttk.Frame(actions)
+            row.grid(row=ri, column=0, sticky="ew", pady=(0 if ri == 0 else 3, 0))
+            for bi in range(len(specs)):
+                row.columnconfigure(bi, weight=1, uniform=f"actions-row-{ri}")
             for bi, (text, command) in enumerate(specs):
-                padx = (0 if bi == 0 else 4, 0)
                 role = (
                     "primary" if text == "运行OCR画线"
                     else "success" if text == "保存当前页"
+                    else "primary" if text == "词条校对"
                     else "neutral"
                 )
                 button = self._sidebar_action_button(row, text, command, role=role)
                 if text == "编辑插图":
                     self.polygon_draw_button = button
-                button.pack(side="left", fill="x", expand=True, padx=padx)
+                button.grid(
+                    row=0, column=bi, sticky="ew",
+                    padx=(0 if bi == 0 else 4, 0),
+                )
         actions.columnconfigure(0, weight=1)
 
         postproduction = self._section_frame(
@@ -7946,9 +8262,12 @@ class PictureCaptureApp(tk.Tk):
         for ri, specs in enumerate(production_rows):
             row = ttk.Frame(postproduction)
             row.grid(row=ri, column=0, sticky="ew", pady=(0 if ri == 0 else 3, 0))
+            for bi in range(len(specs)):
+                row.columnconfigure(bi, weight=1, uniform=f"postproduction-row-{ri}")
             for bi, (text, command) in enumerate(specs):
-                self._sidebar_action_button(row, text, command).pack(
-                    side="left", fill="x", expand=True, padx=(0 if bi == 0 else 4, 0)
+                self._sidebar_action_button(row, text, command).grid(
+                    row=0, column=bi, sticky="ew",
+                    padx=(0 if bi == 0 else 4, 0),
                 )
         postproduction.columnconfigure(0, weight=1)
 
@@ -9644,7 +9963,7 @@ class PictureCaptureApp(tk.Tk):
         self.polygon_draw_var.set(False)
         if self.polygon_draw_button is not None:
             self.polygon_draw_button.configure(
-                text="编辑插图", bg="#f0f0f0", activebackground="#e6e6e6", relief="raised"
+                text="编辑插图", style="PC.Compact.TButton"
             )
         trace_was_ready = self._quick_trace_ready
         self._quick_trace_ready = False
@@ -9872,10 +10191,65 @@ class PictureCaptureApp(tk.Tk):
             self._display_photo_cache_key = key
         return self.photo
 
+    def _display_mode_from_flags(self) -> str:
+        """Return the compact viewer mode represented by the existing flags."""
+        if self.crop_preview_var.get():
+            return "切图预览"
+        binary = bool(self.binary_preview_var.get())
+        hidden = bool(self.hide_var.get())
+        if hidden:
+            return "仅二值" if binary else "仅原图"
+        return "二值+标注" if binary else "原图+标注"
+
+    def _sync_display_mode_from_flags(self) -> None:
+        if getattr(self, "_display_mode_syncing", False):
+            return
+        try:
+            self._display_mode_syncing = True
+            self.display_mode_var.set(self._display_mode_from_flags())
+        finally:
+            self._display_mode_syncing = False
+
+    def _apply_display_mode(self, _event=None) -> None:
+        """Apply one of the practical combinations already supported by the viewer."""
+        states = {
+            "原图+标注": (False, False, False),
+            "二值+标注": (True, False, False),
+            "仅原图": (False, True, False),
+            "仅二值": (True, True, False),
+            "切图预览": (False, False, True),
+        }
+        mode = str(self.display_mode_var.get() or "原图+标注")
+        binary, hidden, crop_preview = states.get(mode, states["原图+标注"])
+        previous_binary = bool(self.binary_preview_var.get())
+        try:
+            self._display_mode_syncing = True
+            self.binary_preview_var.set(binary)
+            self.hide_var.set(hidden)
+            self.crop_preview_var.set(crop_preview)
+        finally:
+            self._display_mode_syncing = False
+        if previous_binary != binary:
+            self.photo = None
+            self._display_photo_cache_key = None
+        if crop_preview:
+            self.status_var.set(
+                "切图预览：普通编辑线框已临时隐藏；切回其他显示模式即可恢复编辑。"
+            )
+        self.redraw()
+
     def _toggle_binary_preview(self) -> None:
         """Invalidate only the canvas bitmap; source/OCR geometry stays intact."""
         self.photo = None
         self._display_photo_cache_key = None
+        self._sync_display_mode_from_flags()
+        self.redraw()
+
+    def _toggle_hide_overlays(self) -> None:
+        """Keep the legacy overlay switch and the page-toolbar mode selector aligned."""
+        if self.hide_var.get() and self.crop_preview_var.get():
+            self.crop_preview_var.set(False)
+        self._sync_display_mode_from_flags()
         self.redraw()
 
     def _current_effective_profile_settings(self) -> AppSettings:
@@ -10245,7 +10619,17 @@ class PictureCaptureApp(tk.Tk):
     def _toggle_crop_preview(self) -> None:
         """Switch between the editable overlays and the complete crop-plan preview."""
         if self.crop_preview_var.get():
-            self.status_var.set("切图预览：普通编辑线框已临时隐藏；关闭预览即可恢复编辑。")
+            # Crop-plan preview is a distinct mode; keep it on the original page
+            # background and ignore the ordinary overlay-hiding state.
+            if self.binary_preview_var.get():
+                self.binary_preview_var.set(False)
+                self.photo = None
+                self._display_photo_cache_key = None
+            self.hide_var.set(False)
+            self.status_var.set(
+                "切图预览：普通编辑线框已临时隐藏；关闭预览即可恢复编辑。"
+            )
+        self._sync_display_mode_from_flags()
         self.redraw()
 
     def _current_page_crop_plan(self):
@@ -10881,14 +11265,14 @@ class PictureCaptureApp(tk.Tk):
             self.polygon_var.set(True)
             if self.polygon_draw_button is not None:
                 self.polygon_draw_button.configure(
-                    text="结束编辑插图", bg="#ffd166", activebackground="#f3c451", relief="sunken"
+                    text="结束编辑插图", style="PC.EditActive.TButton"
                 )
             self.status_var.set("插图多边形绘制：左键逐点添加，右键闭合并保存该多边形。")
         else:
             self.new_polygon.clear()
             if self.polygon_draw_button is not None:
                 self.polygon_draw_button.configure(
-                    text="编辑插图", bg="#f0f0f0", activebackground="#e6e6e6", relief="raised"
+                    text="编辑插图", style="PC.Compact.TButton"
                 )
             self.status_var.set("已退出插图多边形绘制模式")
         self.redraw()
@@ -12183,7 +12567,24 @@ class PictureCaptureApp(tk.Tk):
         # object first so language-dependent options are immediately correct.
         if not self.apply_quick_settings(show_status=False, persist=False):
             return
-        SettingsDialog(self, initial_tab=initial_tab)
+        existing = self.__dict__.get("_settings_dialog")
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.select_tab(initial_tab)
+                    existing.deiconify()
+                    existing.lift()
+                    return
+            except tk.TclError:
+                pass
+        dialog = SettingsDialog(self, initial_tab=initial_tab)
+        self._settings_dialog = dialog
+        dialog.bind(
+            "<Destroy>",
+            lambda event, w=dialog: self.__dict__.pop("_settings_dialog", None)
+            if event.widget is w else None,
+            add="+",
+        )
 
     def open_project_profile(self, new_project: bool = False) -> None:
         if not self.project:

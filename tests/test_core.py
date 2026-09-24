@@ -3863,6 +3863,27 @@ def test_v2110_main_crop_preview_replaces_old_width_only_checkbox():
     assert 'def _draw_crop_plan_preview' in text
 
 
+def test_page_list_uses_display_mode_selector_for_existing_view_states():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'text="显示模式："' in text
+    assert 'values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览")' in text
+    assert 'display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)' in text
+    page_start = text.index('page_panel = self._section_frame(sidebar, "六、页面列表"')
+    page_end = text.index("        list_frame = ttk.Frame(page_panel)", page_start)
+    page_toolbar = text[page_start:page_end]
+    assert 'text="页面范围："' not in page_toolbar
+    assert page_toolbar.index('text="显示模式："') < page_toolbar.index('text="当前页"')
+    assert 'display_mode_combo = ttk.Combobox(\n            range_row,' in page_toolbar
+    assert 'display_mode_combo = ttk.Combobox(\n            size_row,' not in page_toolbar
+    assert 'text="◧"' not in text
+    assert '"原图+标注": (False, False, False)' in text
+    assert '"二值+标注": (True, False, False)' in text
+    assert '"仅原图": (False, True, False)' in text
+    assert '"仅二值": (True, True, False)' in text
+    assert '"切图预览": (False, False, True)' in text
+
+
 def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
@@ -3870,14 +3891,54 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     assert 'text="当前至末页"' in text
     assert 'text="↔"' in text
     assert 'text="↕"' in text
-    assert text.index('text="↕"') < text.index('text="上一页"') < text.index('text="下一页"')
+    assert 'text="跳到"' not in text
+    assert 'text="跳转"' in text
+    assert text.index('text="↕"') < text.index('text="跳转"') < text.index('text="上一页"') < text.index('text="下一页"')
+    page_start = text.index('page_panel = self._section_frame(sidebar, "六、页面列表"')
+    page_end = text.index("        list_frame = ttk.Frame(page_panel)", page_start)
+    page_toolbar = text[page_start:page_end]
+    assert page_toolbar.count('style="PC.PageNav.TButton"') == 3
+    assert 'style.configure("PC.PageNav.TButton", padding=(2, 2))' in text
+    assert 'text="跳转", command=self.jump_to_page_spec, style="PC.PageNav.TButton"' in page_toolbar
+    assert 'text="上一页", command=lambda: self.change_page(-1), style="PC.PageNav.TButton"' in page_toolbar
+    assert 'text="下一页", command=lambda: self.change_page(1), style="PC.PageNav.TButton"' in page_toolbar
     assert 'text="页面大小："' not in text
-    assert 'text="已有项目"' in text
+    assert '("已有项目", self.open_recent_project, "project")' in text
     assert "self.after_idle(self._maximize_main_window)" in text
     assert "self.after_idle(self._ensure_sidebar_navigation_width)" in text
     assert '"lined": "画线"' in text
     assert 'if len(indices) < 2:' in text
     assert '至少需要选择 2 页' in text
+
+
+def test_action_and_postproduction_rows_use_equal_width_grid_columns():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
+    actions_end = text.index("        postproduction = self._section_frame(", actions_start)
+    actions = text[actions_start:actions_end]
+    assert 'row.columnconfigure(bi, weight=1, uniform=f"actions-row-{ri}")' in actions
+    assert 'button.grid(' in actions
+    assert 'button.pack(side="left", fill="x", expand=True' not in actions
+
+    post_start = text.index("        postproduction = self._section_frame(", actions_end)
+    post_end = text.index("        # Main-panel parameters are live:", post_start)
+    post = text[post_start:post_end]
+    assert 'row.columnconfigure(bi, weight=1, uniform=f"postproduction-row-{ri}")' in post
+    assert ').grid(' in post
+    assert '.pack(\n                    side="left", fill="x", expand=True' not in post
+
+
+def test_main_quick_parameter_entries_are_left_aligned():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    def _build_quick_settings(")
+    end = text.index("\n    @staticmethod\n    def _style_color_button", start)
+    quick = text[start:end]
+    assert 'justify="right" if cast in {int, float} else "left"' not in quick
+    assert 'justify="left"' in quick
+    # Every explicit quick-panel Entry should declare left alignment.
+    assert quick.count("ttk.Entry(") == quick.count('justify="left"')
 
 
 def test_entry_default_color_and_bookmarks_persist(tmp_path):
@@ -5141,13 +5202,13 @@ def test_v21122_hotfix3_page_word_text_and_diff_classify_add_delete_modify():
     ]
 
 
-def test_v21122_hotfix3_main_actions_put_old_new_compare_after_review():
+def test_v21122_hotfix3_main_actions_put_compare_before_review():
     from pathlib import Path
     import inspect
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("词条校对", self.open_review), ("新旧比较", self.compare_old_new_selected_scope))'
+    row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review))'
     assert row in text
     assert "class OldNewComparisonWindow" in text
     assert 'notebook.add(diff_tab, text="差异")' in text
@@ -5699,6 +5760,23 @@ def test_v2128_cc_cedict_local_install_and_lookup(tmp_path, monkeypatch):
     assert cedict.lookup("测试8").found is True
     assert cedict.lookup("不存在词").found is False
     assert state.path.parent == tmp_path / "local" / "PictureCapture" / "dictionaries" / "cc-cedict"
+
+
+def test_review_network_status_uses_fixed_two_line_result_block():
+    from pathlib import Path
+    import inspect
+    import picture_capture.app as app_module
+
+    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    start = text.index("class ReviewWindow")
+    end = text.index("class OCRConflictReviewDialog", start)
+    review = text[start:end]
+    assert 'value="网络词汇核验\\n等待选择词条"' in review
+    assert "height=2" in review
+    assert '"✓ 有词典收录\\n" + "、".join(found_names)' in review
+    assert '"○ 各可用词典均未检出精确词条\\n不代表该词不存在"' in review
+    assert '"⚠ 部分词典未安装或网络来源暂不可用\\n可继续网络搜索。"' in review
+    assert '"⚠ 网络词汇核验暂时失败\\n可点“网络搜索”手工确认。"' in review
 
 
 def test_v2128_review_network_toolbar_has_compact_source_badges():
