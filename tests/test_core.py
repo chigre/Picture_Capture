@@ -491,6 +491,8 @@ class ProcessingTests(unittest.TestCase):
     def test_geometry_parameters_use_displayed_image_pixels(self) -> None:
         image = Image.new("RGB", (2000, 1200), "white")
         settings = AppSettings(
+            geometry_coordinate_version=1,
+            geometry_coordinate_space="legacy_display_pixels",
             parameter_display_width=1000,
             columns=2,
             manual_x=50,
