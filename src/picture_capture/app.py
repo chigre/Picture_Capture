@@ -432,14 +432,15 @@ def _fill_status_cell_style(status_text: object) -> tuple[str, str] | None:
 def _review_crop_settings(image: Image.Image, settings: AppSettings, viewer_width: int) -> AppSettings:
     """Return stable single-line crop geometry for the review panel.
 
-    Review crops historically used the page width as fitted to the main viewer,
-    not the user's current page zoom.  Keeping that reference independent avoids
-    a stale/small ``parameter_display_width`` turning one-line crops into 2-3 lines.
+    Modern projects already store full-resolution canonical geometry, so review
+    crops must not depend on the viewer width. The fitted-display reference is
+    retained only for an unmigrated legacy settings object.
     """
     local = replace(settings)
-    available = max(500, int(viewer_width) - 24)
-    fit_scale = min(1.0, available / max(1, image.width))
-    local.parameter_display_width = max(1, round(image.width * fit_scale))
+    if not geometry_uses_canonical_pixels(local):
+        available = max(500, int(viewer_width) - 24)
+        fit_scale = min(1.0, available / max(1, image.width))
+        local.parameter_display_width = max(1, round(image.width * fit_scale))
     return local
 
 
@@ -10748,13 +10749,31 @@ class PictureCaptureApp(tk.Tk):
         if reset_zoom:
             available = max(500, self.canvas.winfo_width() - 24)
             self.view_scale = min(1.0, available / self.image.width)
-        # Keep page zoom stable while moving through the project. Geometry
-        # parameters keep their established reference width instead of being
-        # silently reinterpreted whenever the user changes page zoom.
-        if reset_zoom or self.settings.parameter_display_width <= 0:
-            self.settings.parameter_display_width = round(self.image.width * self.view_scale)
+        # Viewer zoom is presentation-only. Modern geometry is full-resolution
+        # canonical and must never be rewritten when the canvas fit changes.
+        if (
+            not geometry_uses_canonical_pixels(self.settings)
+            and (reset_zoom or self.settings.parameter_display_width <= 0)
+        ):
+            self.settings.parameter_display_width = round(
+                self.image.width * self.view_scale
+            )
         if self.settings.bottom_y <= 0:
-            self.settings.bottom_y = round(self.image.height * parameter_scale(self.image, self.settings))
+            canonical_height = LayoutTransform(
+                str(getattr(self.settings, "layout_transform", "identity") or "identity")
+            ).canonical_size(self.image.size)[1]
+            if geometry_uses_canonical_pixels(self.settings):
+                self.settings.bottom_y = canonical_height
+            else:
+                self.settings.bottom_y = round(
+                    canonical_height
+                    * legacy_parameter_scale(
+                        LayoutTransform(
+                            str(getattr(self.settings, "layout_transform", "identity") or "identity")
+                        ).canonical_size(self.image.size)[0],
+                        self.settings,
+                    )
+                )
         self.cursor_canvas_xy = None
         self.sync_quick_settings()
         self._update_view_zoom_label()
@@ -10907,7 +10926,7 @@ class PictureCaptureApp(tk.Tk):
         s = self.settings
         return (
             id(self.image), int(self.__dict__.get("current_index", 0) or 0),
-            int(s.parameter_display_width), int(s.columns),
+            int(getattr(s, "geometry_coordinate_version", 0) or 0), int(s.columns),
             str(s.layout_columns_policy), str(s.layout_column_separator_mode),
             str(s.analysis_threshold_mode),
             float(s.manual_x), float(s.gutter), float(s.column_width),
