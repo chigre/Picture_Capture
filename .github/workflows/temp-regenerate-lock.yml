@@ -1,9 +1,9 @@
 name: Temporary lock regeneration
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/windows-bat-defender-hardening
+      - main
 
 permissions:
   contents: read
