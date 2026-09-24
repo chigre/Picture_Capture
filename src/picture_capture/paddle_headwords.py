@@ -18,6 +18,11 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from .models import AppSettings, Entry, resolved_tesseract_language
+from .coordinate_space import (
+    REFERENCE_CANONICAL_WIDTH,
+    reference_to_canonical,
+    stored_geometry_to_canonical,
+)
 from .image_utils import normalize_page_rgb
 from .dictionary_profile import (
     PROFILE_FILENAME,
@@ -618,8 +623,6 @@ def unwrap_column_band(
     the same source-image Y coordinate, so OCR Y boxes only need an offset when
     converted back to PDIC markers.
     """
-    from .processing import parameter_scale
-
     if source_rgb is None:
         source = np.asarray(normalize_page_rgb(image))
     else:
@@ -630,13 +633,28 @@ def unwrap_column_band(
             raise ValueError("source_rgb 尺寸必须与当前原始页面一致，禁止跨页复用")
         if source.shape[2] != 3:
             source = source[:, :, :3]
-    scale = parameter_scale(image, settings)
-    ratio = max(1, min(100, int(getattr(settings, "paddle_band_width_ratio", 100)))) / 100.0
-    left_margin = max(0, round(settings.paddle_band_left_margin / scale))
+    canonical_width = geometry.transform.canonical_size(image.size)[0]
+    band_ratio = max(
+        1, min(100, int(getattr(settings, "paddle_band_width_ratio", 100)))
+    ) / 100.0
+    left_margin = max(
+        0,
+        reference_to_canonical(
+            settings.paddle_band_left_margin, canonical_width,
+        ),
+    )
     if source_width is not None:
         band_width = max(24, int(source_width))
     else:
-        configured_band_width = max(24, round(settings.paddle_band_width * ratio / scale))
+        configured_band_width = max(
+            24,
+            round(
+                reference_to_canonical(
+                    settings.paddle_band_width, canonical_width,
+                )
+                * band_ratio
+            ),
+        )
         # Never let the OCR candidate strip spill into the next dictionary
         # column. This mattered little on wide two-column Latin pages but is
         # destructive on dense three-column CJK pages: OCR would merge a large
