@@ -292,6 +292,12 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert "control.columnconfigure(0, weight=1)" in settings
     assert 'widget.grid(row=0, column=0, sticky="ew")' in settings
     assert "wraplength=180" in settings
+    assert 'justify="left"' in settings
+    assert 'style="PC.Settings.TNotebook"' in settings
+    assert '"PC.Settings.TNotebook.Tab"' in settings
+    assert 'padding=(13, 7)' in settings
+    assert "self.transient(parent); self.grab_set()" not in settings
+    assert "def select_tab(self, key: str | None)" in settings
 
     assert 'text="普通画线（左缘规则）"' in settings
     assert 'text="OCR画线（识别词头）"' in settings
@@ -302,6 +308,22 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert 'self.bind("<Escape>", lambda _event: self._close_validated())' in settings
     assert "✓ 已自动保存" in settings
     assert "⚠ 当前输入暂未保存" in settings
+
+
+def test_settings_center_is_reused_without_blocking_main_workspace():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    start = source.index("    def open_settings(self, initial_tab:")
+    end = source.index("\n    def open_project_profile(", start)
+    open_settings = source[start:end]
+
+    assert 'self.__dict__.get("_settings_dialog")' in open_settings
+    assert "existing.select_tab(initial_tab)" in open_settings
+    assert "existing.deiconify()" in open_settings
+    assert "dialog = SettingsDialog(self, initial_tab=initial_tab)" in open_settings
+    assert "self._settings_dialog = dialog" in open_settings
 
 
 def test_common_layout_settings_show_packaged_context_diagrams():
