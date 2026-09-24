@@ -6895,12 +6895,10 @@ class PictureCaptureApp(tk.Tk):
     def _footer_action_button(
         self, parent: tk.Misc, text: str, command, *, role: str
     ) -> tk.Button:
-        """Create one emphasized bottom-bar action with a soft semantic color."""
+        """Create one emphasized bottom-bar action with a soft functional color."""
         palette = {
-            "profile": ("#eee8f8", "#dfd3f2", "#604482"),
-            "settings": ("#dceeff", "#c7e1f8", "#245b86"),
-            "save": ("#dff1e3", "#cbe7d1", "#356b42"),
-            "help": ("#fff0cf", "#ffe2a6", "#76520f"),
+            "project": ("#dff1e3", "#cbe7d1", "#356b42"),
+            "config": ("#dceeff", "#c7e1f8", "#245b86"),
         }
         background, active_background, foreground = palette[role]
         border = "#cfd5dc"
@@ -7323,14 +7321,19 @@ class PictureCaptureApp(tk.Tk):
         project_row.pack(fill="x")
         for col in range(4):
             project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
-        for col, (label, command) in enumerate((
-            ("新建项目", self.open_project),
-            ("已有项目", self.open_recent_project),
-            ("导出训练标记包", self.export_training_package),
+        for col, (label, command, role) in enumerate((
+            ("新建项目", self.open_project, "project"),
+            ("已有项目", self.open_recent_project, "project"),
+            ("导出训练标记包", self.export_training_package, None),
         )):
-            ttk.Button(
-                project_row, text=label, command=command, style="PC.Footer.TButton"
-            ).grid(
+            button = (
+                self._footer_action_button(project_row, label, command, role=role)
+                if role is not None
+                else ttk.Button(
+                    project_row, text=label, command=command, style="PC.Footer.TButton"
+                )
+            )
+            button.grid(
                 row=0, column=col, sticky="ew",
                 padx=(0 if col == 0 else 4, 0),
             )
@@ -7356,14 +7359,19 @@ class PictureCaptureApp(tk.Tk):
         for col in range(4):
             parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
         for col, (label, command, role) in enumerate((
-            ("项目Profile", self.open_project_profile, "profile"),
-            ("设置中心", self.open_settings, "settings"),
-            ("保存参数", self.save_main_parameters, "save"),
-            ("使用提示", self.show_help_dialog, "help"),
+            ("项目Profile", self.open_project_profile, "config"),
+            ("设置中心", self.open_settings, "config"),
+            ("保存参数", self.save_main_parameters, None),
+            ("使用提示", self.show_help_dialog, None),
         )):
-            self._footer_action_button(
-                parameter_row, label, command, role=role
-            ).grid(
+            button = (
+                self._footer_action_button(parameter_row, label, command, role=role)
+                if role is not None
+                else ttk.Button(
+                    parameter_row, text=label, command=command, style="PC.Footer.TButton"
+                )
+            )
+            button.grid(
                 row=0, column=col, sticky="ew",
                 padx=(0 if col == 0 else 4, 0),
             )
