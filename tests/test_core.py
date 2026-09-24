@@ -6146,35 +6146,56 @@ def test_v2132_declares_cpu_and_gpu_ocr_profiles():
         assert not any(item.startswith("paddlepaddle") for item in extras[name])
 
 
-def test_v2132_windows_ocr_installer_has_three_cuda_profiles_and_persists_profile():
+def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
+    import importlib.util
+    import tomllib
     from pathlib import Path
 
-    text = Path("install_ocr_windows.bat").read_text(encoding="utf-8")
-    assert "ocr-gpu-cu118" in text
-    assert "ocr-gpu-cu126" in text
-    assert "ocr-gpu-cu129" in text
-    assert "packages/stable/cu118/" in text
-    assert "packages/stable/cu126/" in text
-    assert "packages/stable/cu129/" in text
-    assert '"paddlepaddle-gpu==3.3.0"' in text
-    assert ".picture_capture_ocr_extra" in text
-    assert "verify_ocr_environment.py" in text
+    batch = Path("install_ocr_windows.bat").read_text(encoding="utf-8")
+    assert '"scripts\\windows_ocr_setup.py"' in batch
+    for suspicious in (
+        "uv pip", "uninstall", "--index", "paddlepaddle-gpu",
+        "packages/stable/cu", "nvidia-smi", "set /p",
+    ):
+        assert suspicious not in batch
+
+    spec = importlib.util.spec_from_file_location(
+        "_picture_capture_windows_ocr_setup", Path("scripts/windows_ocr_setup.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.PROFILES["2"].extra == "ocr-gpu-cu118"
+    assert module.PROFILES["3"].extra == "ocr-gpu-cu126"
+    assert module.PROFILES["4"].extra == "ocr-gpu-cu129"
+    assert module.sync_command(module.PROFILES["3"]) == [
+        "uv", "sync", "--locked", "--no-dev", "--extra", "ocr-gpu-cu126",
+    ]
+    assert module.MARKER.name == ".picture_capture_ocr_extra"
+
+    data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    extras = data["project"]["optional-dependencies"]
+    for name in ("ocr-gpu-cu118", "ocr-gpu-cu126", "ocr-gpu-cu129"):
+        assert "paddlepaddle-gpu==3.3.0" in extras[name]
+    sources = data["tool"]["uv"]["sources"]["paddlepaddle-gpu"]
+    assert {item["extra"] for item in sources} == {
+        "ocr-gpu-cu118", "ocr-gpu-cu126", "ocr-gpu-cu129",
+    }
 
 
-def test_windows_batch_launcher_uses_direct_pythonw_without_hidden_relaunch():
+def test_windows_batch_launcher_is_visible_foreground_and_minimal():
     from pathlib import Path
 
-    batch = Path("run_windows.bat").read_text(encoding="utf-8")
+    batch = Path("run_windows.bat").read_text(encoding="utf-8").casefold()
     run_py = Path("run.py").read_text(encoding="utf-8")
 
-    assert 'start "" ".venv\\Scripts\\pythonw.exe" "run.py"' in batch
-    assert 'fc /b "uv.lock" "%PC_LOCK_MARKER%"' in batch
-    assert 'call :prepare_environment' in batch
-    assert ':prepare_environment' in batch
-    assert '.picture_capture_ocr_extra' in batch
-    assert 'set /p PC_OCR_EXTRA=<".picture_capture_ocr_extra"' in batch
-    assert 'uv sync --locked --extra "%PC_OCR_EXTRA%"' in batch
-    assert 'echo [Picture Capture] OCR profile: %PC_OCR_EXTRA%' in batch
+    assert '".venv\\scripts\\python.exe" "run.py"' in batch
+    assert "uv sync --locked --no-dev" in batch
+    for suspicious in (
+        "pythonw.exe", "start ", "create_no_window", "subprocess",
+        "fc /b", "set /p", ".picture_capture_ocr_extra",
+    ):
+        assert suspicious not in batch
     assert "subprocess" not in run_py
     assert "Popen" not in run_py
     assert "CREATE_NO_WINDOW" not in run_py
