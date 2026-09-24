@@ -2,9 +2,8 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-rem Keep the console open on failure so error messages stay readable when the
-rem launcher is double-clicked. This entry point is intentionally visible; use
-rem Picture_Capture.pyw for a silent start.
+rem Keep the console visible so startup and any security-related diagnostics
+rem are observable while testing this branch.
 set "PC_HOLD=pause"
 
 where uv >nul 2>&1
