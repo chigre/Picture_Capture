@@ -1657,17 +1657,17 @@ class SettingsDialog(tk.Toplevel):
     # unchanged; this layer only reorganizes the settings experience.
     SETTING_LABELS = {
         "columns": "正文栏数",
-        "start_y": "正文起始 Y",
-        "bottom_y": "正文结束 Y",
-        "manual_x": "第一栏左缘 X",
-        "column_width": "单栏正文宽度",
-        "gutter": "栏间空白",
-        "character_height": "典型行高",
-        "row_padding": "典型行间空白",
+        "start_y": "正文起始 V（规范坐标）",
+        "bottom_y": "正文结束 V（规范坐标）",
+        "manual_x": "第一栏左缘 U（规范坐标）",
+        "column_width": "单栏正文宽度（规范坐标）",
+        "gutter": "栏间空白（规范坐标）",
+        "character_height": "典型行高（规范坐标）",
+        "row_padding": "典型行间空白（规范坐标）",
         "ocr_language": "词头 OCR 语言",
         "analysis_threshold_mode": "墨迹判断方式",
-        "body_indent": "左缘检测宽度",
-        "character_height": "典型单行字高",
+        "body_indent": "左缘检测宽度（规范坐标）",
+        "character_height": "典型单行字高（规范坐标）",
         "row_padding": "典型行间空白",
         "darkness_threshold": "固定黑度阈值",
         "horizontal_tolerance": "横向微调容差",
@@ -1698,9 +1698,9 @@ class SettingsDialog(tk.Toplevel):
         "columns": "正文实际栏数。错栏会让后续所有画线偏位；通常先用“检测版面参数”自动估计。",
         "gutter": "相邻两栏之间的空白宽度。主要影响栏边界、切图范围和列定位。",
         "column_width": "单栏正文宽度。通常由版面检测得到，不建议只凭肉眼频繁微调。",
-        "start_y": "正文开始的 Y 位置，用来排除页眉。若顶部误画线，优先检查这里或 Project Profile 的页眉设置。",
-        "bottom_y": "正文结束的 Y 位置，用来排除页脚/页码并限定识别正文范围。它不是【切图设置】里的切图下边界。",
-        "manual_x": "第一栏左缘基准位置。自动检测稳定时通常不需要手动修改。",
+        "start_y": "正文在全分辨率规范坐标中的起始 V。横排页面中 V 与原图 Y 一致；若 Project Profile 明确设置页眉百分比，该百分比是页面模板的权威来源。",
+        "bottom_y": "正文在全分辨率规范坐标中的结束 V。横排页面中 V 与原图 Y 一致；它不是【切图设置】里的切图下边界。",
+        "manual_x": "第一栏在全分辨率规范坐标中的左缘 U。横排 identity 页面中 U 与原图 X 一致；镜像/竖排时以规范阅读坐标解释。",
         "body_indent": "普通画线只检查每栏左侧这段宽度。太小会漏掉缩进词头；太大会把正文开头误当词头。",
         "character_height": "典型文字行高。影响普通画线的最小词条间距，也影响横线 Y 精修的搜索尺度。",
         "row_padding": "典型行间空白。数值过大可能把相邻词条合并；过小则更容易出现重复横线。",
@@ -1717,14 +1717,14 @@ class SettingsDialog(tk.Toplevel):
         "paddle_max_input_side": "OCR 前允许的最大图像长边。更大可能保留小字细节，但速度和显存/内存占用更高。",
         "paddle_band_width_ratio": "每栏左侧送入 OCR 的宽度比例。缩小可提速并减少正文干扰；太小会截断长词头、变形或词性提示。",
         "paddle_band_left_margin": "OCR 识别带向栏左额外扩展的像素。用于保留贴近栏边或略超出栏线的字形。",
-        "paddle_left_tolerance": "词头允许离栏左缘多远。调大能保留缩进词头，但也会吸入更多正文行。",
+        "paddle_left_tolerance": "词头允许离栏左缘多远。单位为固定 1400px 规范宽度下的参考像素，运行时按扫描分辨率缩放；调大能保留缩进词头，但也会吸入更多正文行。",
         "paddle_rec_score_threshold": "保留 OCR 原始文字碎片的最低置信度。降低可救回难字，但噪声会增加；普通用户建议保持默认。",
         "paddle_line_merge_y_ratio": "把同一视觉行上的 OCR 碎片合并时允许的垂直差。过大可能把上下两行合并。",
         "paddle_height_ratio": "词头字高相对正文的视觉提示阈值。只有词头明显更大时才值得手动调整。",
         "paddle_boldness_ratio": "词头粗体相对正文的视觉提示阈值。扫描对比度差时不要过分依赖此项。",
         "paddle_gap_ratio": "利用词头前空白作为结构证据的阈值。不同词典差异较大，通常交给 Profile 默认值。",
         "paddle_min_candidate_score": "综合文字结构、位置和视觉提示后的最低词头分数。调高更严格、误检少；调低更容易补回漏检。",
-        "paddle_header_search_height": "自动寻找页眉横线时只检查页面顶部这段高度。",
+        "paddle_header_search_height": "自动寻找页眉横线时只检查页面顶部这段高度；单位为 1400px 规范宽度下的参考像素。",
         "paddle_header_rule_ink_ratio": "判断一条横向墨迹是否像页眉横线的强度阈值。",
         "paddle_header_rule_margin": "检测到页眉横线后，正文起点向下再留出的安全距离。",
         "paddle_pos_search_chars": "在词头后向右搜索词性/变形提示的字符范围。长词头或词性离得远时可适当增加。",
@@ -1826,20 +1826,20 @@ class SettingsDialog(tk.Toplevel):
 
     SETTING_UNITS = {
         "columns": "栏",
-        "start_y": "px", "bottom_y": "px", "manual_x": "px",
-        "column_width": "px", "gutter": "px", "body_indent": "px",
-        "character_height": "px", "row_padding": "px", "horizontal_tolerance": "px",
-        "darkness_threshold": "RGB 和", "column_track_radius": "px",
-        "column_track_block_height": "px", "column_track_max_step": "px",
-        "paddle_band_width_ratio": "%", "paddle_band_left_margin": "px",
-        "paddle_left_tolerance": "px", "paddle_max_input_side": "px",
-        "paddle_separator_safety_px": "px", "paddle_separator_band_radius": "px",
-        "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "px",
-        "paddle_header_search_height": "px", "paddle_header_rule_margin": "px",
-        "batch_interval": "秒", "illustration_detect_padding": "px",
-        "illustration_detect_right_padding": "px", "main_entry_font_size": "pt",
+        "start_y": "规范px", "bottom_y": "规范px", "manual_x": "规范px",
+        "column_width": "规范px", "gutter": "规范px", "body_indent": "规范px",
+        "character_height": "规范px", "row_padding": "规范px", "horizontal_tolerance": "规范px",
+        "darkness_threshold": "RGB 和", "column_track_radius": "规范px",
+        "column_track_block_height": "规范px", "column_track_max_step": "规范px",
+        "paddle_band_width_ratio": "%", "paddle_band_left_margin": "参考px@1400",
+        "paddle_left_tolerance": "参考px@1400", "paddle_max_input_side": "px",
+        "paddle_separator_safety_px": "参考px@1400", "paddle_separator_band_radius": "参考px@1400",
+        "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "参考px@1400",
+        "paddle_header_search_height": "参考px@1400", "paddle_header_rule_margin": "参考px@1400",
+        "batch_interval": "秒", "illustration_detect_padding": "规范px",
+        "illustration_detect_right_padding": "规范px", "main_entry_font_size": "pt",
         "review_entry_font_size": "pt", "review_entry_vertical_padding": "px",
-        "review_single_cjk_line_height": "px", "review_zoom_percent": "%",
+        "review_single_cjk_line_height": "规范px", "review_zoom_percent": "%",
     }
     SETTING_SPIN = {
         "columns": (1, 12, 1),
@@ -2084,6 +2084,12 @@ class SettingsDialog(tk.Toplevel):
         if name in self.vars:
             return self.vars[name]
         raw = getattr(self.parent.settings, name)
+        if (
+            name in {"start_y", "bottom_y"}
+            and self.parent.image is not None
+            and hasattr(self.parent, "_quick_geometry_value")
+        ):
+            raw = self.parent._quick_geometry_value(name)
         choices = self.SETTING_CHOICES.get(name)
         if choices:
             reverse = {value: label for label, value in choices.items()}
@@ -3516,6 +3522,40 @@ class SettingsDialog(tk.Toplevel):
                     self.parent.settings.headword_custom_fold_accents = bool(value)
                 else:
                     setattr(self.parent.settings, name, bool(value))
+            if self.parent.image is not None and not str(
+                getattr(self.parent.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
+            ).startswith("vertical"):
+                if (
+                    "start_y" in self.vars
+                    and str(getattr(self.parent.settings, "profile_header_mode", "auto") or "auto")
+                    == "present"
+                ):
+                    source_y = max(0, min(
+                        self.parent.image.height,
+                        int(self.parent.settings.start_y),
+                    ))
+                    percent = source_y * 100.0 / max(1, self.parent.image.height)
+                    if percent > 35.0:
+                        raise ValueError("页眉不能超过原图高度的 35%。")
+                    self.parent.settings.profile_header_percent = round(percent, 6)
+                if (
+                    "bottom_y" in self.vars
+                    and str(getattr(self.parent.settings, "profile_footer_mode", "auto") or "auto")
+                    == "present"
+                ):
+                    source_y = max(0, min(
+                        self.parent.image.height,
+                        int(self.parent.settings.bottom_y),
+                    ))
+                    percent = (
+                        (self.parent.image.height - source_y)
+                        * 100.0
+                        / max(1, self.parent.image.height)
+                    )
+                    if not 0.0 <= percent <= 35.0:
+                        raise ValueError("页尾必须位于原图底部 35% 范围内。")
+                    self.parent.settings.profile_footer_percent = round(percent, 6)
+
             current_language = str(getattr(self.parent.settings, "ocr_language", "") or "")
             if current_language != previous_language:
                 derived = language_effective_settings(
