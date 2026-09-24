@@ -6147,6 +6147,9 @@ def test_v2132_declares_cpu_and_gpu_ocr_profiles():
         assert "paddleocr>=3.7,<4" in extras[name]
         assert "chrome-lens-py>=3.4,<4" in extras[name]
         assert "paddlepaddle-gpu==3.3.0" in extras[name]
+    assert not any("nvidia-cudnn" in item for item in extras["ocr-gpu-cu118"])
+    assert "nvidia-cudnn-cu12==9.5.1.17; sys_platform == 'win32'" in extras["ocr-gpu-cu126"]
+    assert "nvidia-cudnn-cu12==9.9.0.52; sys_platform == 'win32'" in extras["ocr-gpu-cu129"]
 
 
 def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
@@ -6184,6 +6187,17 @@ def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
     assert {item["extra"] for item in sources} == {
         "ocr-gpu-cu118", "ocr-gpu-cu126", "ocr-gpu-cu129",
     }
+
+    runtime_source = Path("src/picture_capture/windows_gpu_runtime.py").read_text(encoding="utf-8")
+    paddle_source = Path("src/picture_capture/paddle_headwords.py").read_text(encoding="utf-8")
+    layout_source = Path("src/picture_capture/layout_detection.py").read_text(encoding="utf-8")
+    verify_source = Path("scripts/verify_ocr_environment.py").read_text(encoding="utf-8")
+    assert "add_dll_directory" in runtime_source
+    assert 'glob("*/bin")' in runtime_source
+    assert "configure_windows_nvidia_dlls()" in paddle_source
+    assert "configure_windows_nvidia_dlls()" in layout_source
+    assert "Paddle GPU/cuDNN smoke test: OK" in verify_source
+    assert "paddle.nn.functional.conv2d" in verify_source
 
 
 def test_windows_batch_launcher_is_visible_foreground_and_minimal():
