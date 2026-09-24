@@ -3872,7 +3872,8 @@ def test_page_list_uses_display_mode_selector_for_existing_view_states():
     page_start = text.index('page_panel = self._section_frame(sidebar, "六、页面列表"')
     page_end = text.index("        list_frame = ttk.Frame(page_panel)", page_start)
     page_toolbar = text[page_start:page_end]
-    assert page_toolbar.index('text="显示模式："') < page_toolbar.index('text="页面范围："')
+    assert 'text="页面范围："' not in page_toolbar
+    assert page_toolbar.index('text="显示模式："') < page_toolbar.index('text="当前页"')
     assert 'display_mode_combo = ttk.Combobox(\n            range_row,' in page_toolbar
     assert 'display_mode_combo = ttk.Combobox(\n            size_row,' not in page_toolbar
     assert 'text="◧"' not in text
@@ -3890,7 +3891,9 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     assert 'text="当前至末页"' in text
     assert 'text="↔"' in text
     assert 'text="↕"' in text
-    assert text.index('text="↕"') < text.index('text="上一页"') < text.index('text="下一页"')
+    assert 'text="跳到"' not in text
+    assert 'text="跳转"' in text
+    assert text.index('text="↕"') < text.index('text="跳转"') < text.index('text="上一页"') < text.index('text="下一页"')
     assert 'text="页面大小："' not in text
     assert 'text="已有项目"' in text
     assert "self.after_idle(self._maximize_main_window)" in text
@@ -3898,6 +3901,24 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     assert '"lined": "画线"' in text
     assert 'if len(indices) < 2:' in text
     assert '至少需要选择 2 页' in text
+
+
+def test_action_and_postproduction_rows_use_equal_width_grid_columns():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
+    actions_end = text.index("        postproduction = self._section_frame(", actions_start)
+    actions = text[actions_start:actions_end]
+    assert 'row.columnconfigure(bi, weight=1, uniform=f"actions-row-{ri}")' in actions
+    assert 'button.grid(' in actions
+    assert 'button.pack(side="left", fill="x", expand=True' not in actions
+
+    post_start = text.index("        postproduction = self._section_frame(", actions_end)
+    post_end = text.index("        # Main-panel parameters are live:", post_start)
+    post = text[post_start:post_end]
+    assert 'row.columnconfigure(bi, weight=1, uniform=f"postproduction-row-{ri}")' in post
+    assert ').grid(' in post
+    assert '.pack(\n                    side="left", fill="x", expand=True' not in post
 
 
 def test_main_quick_parameter_entries_are_left_aligned():
