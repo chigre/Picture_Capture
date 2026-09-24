@@ -6599,7 +6599,7 @@ class ReviewWindow(tk.Toplevel):
         self.save(redraw_main=False)
         preloaded = self._take_prefetched_page(target)
         if self.parent.change_page(
-            delta, preloaded=preloaded, current_already_saved=True
+            delta, preloaded=preloaded, current_already_saved=True, async_allowed=False
         ):
             crops = None
             if preloaded is not None and preloaded.get("review_key") == self._review_prefetch_key():
@@ -8458,7 +8458,7 @@ class PictureCaptureApp(tk.Tk):
         if not candidates:
             self.status_var.set("当前页之前没有书签" if direction < 0 else "当前页之后没有书签")
             return
-        self.load_page(max(candidates) if direction < 0 else min(candidates))
+        self._request_page_load(max(candidates) if direction < 0 else min(candidates))
 
     def _set_page_list_selection(self, index: int, *, ensure_visible: bool = True) -> None:
         """Synchronize the Treeview to exactly one page iid.
@@ -8486,7 +8486,7 @@ class PictureCaptureApp(tk.Tk):
         # Overlay labels sit above Treeview cells, so navigate directly instead
         # of synthesizing a delayed TreeviewSelect event.
         if index != self.current_index:
-            self.load_page(index)
+            self._request_page_load(index)
         else:
             self._set_page_list_selection(index, ensure_visible=True)
 
@@ -11082,7 +11082,65 @@ class PictureCaptureApp(tk.Tk):
         except (TypeError, ValueError):
             return
         if index != self.current_index:
-            self.load_page(index)
+            self._request_page_load(index)
+
+    def _request_page_load(
+        self, index: int, *, reset_zoom: bool = False, current_already_saved: bool = False,
+    ) -> bool:
+        """Decode/read a target page off-thread, then commit it on the Tk thread."""
+        if not self.project or not (0 <= index < len(self.project.images)):
+            return False
+        if index == self.current_index and self.image is not None:
+            self._set_page_list_selection(index, ensure_visible=True)
+            return True
+        project = self.project
+        page = project.images[index]
+        project_root = project.root
+        view_scale = float(self.view_scale)
+        self.status_var.set(f"正在后台加载 {page.name}…")
+
+        def worker():
+            with Image.open(page) as opened:
+                image = normalize_page_rgb(opened)
+            entries = read_pdic(pdic_path(page))
+            polygons = read_ppp(ppp_read_path_for_image(page))
+            cache_path = ocr_cache_root(project_root) / f"{page.stem}.json"
+            ocr_payload: dict = {}
+            if cache_path.exists():
+                try:
+                    loaded = json.loads(cache_path.read_text(encoding="utf-8"))
+                    if isinstance(loaded, dict):
+                        ocr_payload = loaded
+                except Exception:
+                    ocr_payload = {}
+            display_size = (
+                max(1, round(image.width * view_scale)),
+                max(1, round(image.height * view_scale)),
+            )
+            display_image = image.resize(display_size, Image.Resampling.LANCZOS)
+            return {
+                "project_root": str(project_root), "index": index, "image": image,
+                "entries": entries, "polygons": polygons, "ocr_payload": ocr_payload,
+                "display_size": display_size, "display_image": display_image,
+                "view_scale": view_scale,
+            }
+
+        def done(payload) -> None:
+            if self.project is not project:
+                return
+            self.load_page(
+                index, reset_zoom=reset_zoom, preloaded=payload,
+                skip_current_save=current_already_saved,
+            )
+
+        def failed(exc, detail) -> None:
+            if detail:
+                print(detail)
+            if self.project is project:
+                self.show_error(f"加载页面失败：{page.name}", exc)
+
+        self._start_ui_worker("page-load", worker, done, failed)
+        return True
 
     def load_page(
         self, index: int, reset_zoom: bool = False, *,
@@ -11090,6 +11148,7 @@ class PictureCaptureApp(tk.Tk):
     ) -> None:
         if not self.project or not (0 <= index < len(self.project.images)):
             return
+        self._invalidate_ui_worker("page-load")
         self._flush_deferred_page_save()
         if self.current_page and self.image and index != self.current_index and not skip_current_save:
             if self._can_save_current_during_batch_navigation():
@@ -11175,7 +11234,8 @@ class PictureCaptureApp(tk.Tk):
         self._save_session_state()
 
     def change_page(
-        self, delta: int, *, preloaded: dict | None = None, current_already_saved: bool = False
+        self, delta: int, *, preloaded: dict | None = None,
+        current_already_saved: bool = False, async_allowed: bool = True,
     ) -> bool:
         if getattr(self, "_batch_active", False) and not self._batch_foreground_pages:
             self.status_var.set("当前批量任务运行中，暂不允许切换页面；可先暂停/停止。")
@@ -11184,13 +11244,17 @@ class PictureCaptureApp(tk.Tk):
             return False
         target = self.current_index + delta
         if not 0 <= target < len(self.project.images):
-            # A navigation-button click is also an explicit save point, even
-            # when the user is already on the first/last page.
             if not current_already_saved and self._can_save_current_during_batch_navigation():
                 self._save_current_page_by_mode()
             self.status_var.set("已经到起始页" if target < 0 else "已经到最末页")
             return False
-        self.load_page(target, preloaded=preloaded, skip_current_save=current_already_saved)
+        if preloaded is None and async_allowed:
+            return self._request_page_load(
+                target, current_already_saved=current_already_saved,
+            )
+        self.load_page(
+            target, preloaded=preloaded, skip_current_save=current_already_saved,
+        )
         return True
 
     def _get_cached_display_photo(self, size: tuple[int, int]) -> ImageTk.PhotoImage:
