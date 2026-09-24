@@ -4423,13 +4423,13 @@ def _candidate_tsv_row(
     return "\t".join(_tsv_clean(v) for v in values)
 
 
-_DIAGNOSTIC_HEADER = "column\tbox\tconf\ttext\taccept/reject\tscore\tlemma\traw\tcorrected\tPOS\trepairs\treason"
+_DIAGNOSTIC_HEADER = "column\tbox_band_xyxy\tconf\ttext\taccept/reject\tscore\tlemma\traw\tcorrected\tPOS\trepairs\treason"
 _COMPARISON_HEADER = (
-    "column\tpaddle_y\tpaddle_box\tpaddle_conf\tpaddle_accept/reject\tpaddle_score\t"
+    "column\tpaddle_canonical_v\tpaddle_box_band_xyxy\tpaddle_conf\tpaddle_accept/reject\tpaddle_score\t"
     "paddle_lemma\tpaddle_raw\tpaddle_corrected\tpaddle_POS\tpaddle_repairs\tpaddle_text\t"
-    "tesseract_y\ttesseract_box\ttesseract_conf\ttesseract_accept/reject\ttesseract_score\t"
+    "tesseract_canonical_v\ttesseract_box_band_xyxy\ttesseract_conf\ttesseract_accept/reject\ttesseract_score\t"
     "tesseract_lemma\ttesseract_raw\ttesseract_corrected\ttesseract_POS\ttesseract_repairs\t"
-    "tesseract_text\tdelta_y\tlemma_compare\tstatus_compare\treason"
+    "tesseract_text\tdelta_v_canonical\tlemma_compare\tstatus_compare\treason"
 )
 
 
@@ -4531,7 +4531,7 @@ def _comparison_text(report_columns: list[dict[str, Any]]) -> str:
 
 
 _ENGINES_LONG_HEADER = (
-    "pair_id\tcolumn\ty\tengine\tconf\ttext\tlemma\tPOS\tscore\trepairs\tparser_trace\taccepted\treason"
+    "pair_id\tcolumn\tcanonical_v\tengine\tconf\ttext\tlemma\tPOS\tscore\trepairs\tparser_trace\taccepted\treason"
 )
 
 
@@ -4557,7 +4557,7 @@ def _engines_long_text(report_columns: list[dict[str, Any]]) -> str:
 
 
 _FUSION_HEADER = (
-    "pair_id\tcolumn\ty\tengines\tselected\tfinal_lemma\tfinal_engine\tconfidence\t"
+    "pair_id\tcolumn\tsource_y\tengines\tselected\tfinal_lemma\tfinal_engine\tconfidence\t"
     "score\tneeds_review\tissues\tdecision_reason"
 )
 
@@ -4579,7 +4579,7 @@ def _fusion_text(review_candidates: list[dict[str, Any]]) -> str:
 
 
 _ISSUES_HEADER = (
-    "candidate_id\tcolumn\ty\tselected\tword\tfinal_engine\tconfidence\tscore\t"
+    "candidate_id\tcolumn\tsource_y\tselected\tword\tfinal_engine\tconfidence\tscore\t"
     "issue_types\tpaddle_lemma\ttesseract_lemma\tlens_lemma\tpaddle_text\ttesseract_text\t"
     "lens_text\tdecision_reason"
 )
