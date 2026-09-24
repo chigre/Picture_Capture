@@ -6573,7 +6573,7 @@ class PictureCaptureApp(tk.Tk):
         self.binary_preview_var = tk.BooleanVar(value=False)
         self.display_mode_var = tk.StringVar(value="原图+标注")
         self._display_mode_syncing = False
-        self.polygon_draw_button: tk.Button | None = None
+        self.polygon_draw_button: ttk.Button | None = None
         # PPP label editors and vertex-drag state are rebuilt with each canvas redraw.
         self.polygon_label_bindings: list[tuple[tk.Entry, PolygonRegion]] = []
         self._polygon_canvas_items: dict[int, dict] = {}
@@ -6804,6 +6804,16 @@ class PictureCaptureApp(tk.Tk):
         )
 
         style.configure("PC.Compact.TButton", padding=(7, 3))
+        style.configure(
+            "PC.EditActive.TButton",
+            padding=(7, 3),
+            background="#ffd166",
+            foreground=colors["text"],
+        )
+        style.map(
+            "PC.EditActive.TButton",
+            background=[("active", "#f3c451"), ("pressed", "#eab843")],
+        )
         style.configure("PC.Tool.TButton", padding=(4, 2))
         style.configure("PC.Footer.TButton", padding=(7, 3))
         style.configure("PC.Compact.TEntry", padding=(4, 2))
@@ -6832,13 +6842,23 @@ class PictureCaptureApp(tk.Tk):
 
     def _sidebar_action_button(
         self, parent: tk.Misc, text: str, command, *, role: str = "neutral"
-    ) -> tk.Button:
-        """Return one dense flat button used by main-sidebar action groups."""
+    ) -> tk.Widget:
+        """Return one dense action button for the main sidebar.
+
+        Neutral actions intentionally use the exact same ttk style as
+        `检测版面参数`, so sections 四/五 share one native button chrome.
+        Only the three explicitly emphasized actions use custom colors.
+        """
+        if role == "neutral":
+            return ttk.Button(
+                parent,
+                text=text,
+                command=command,
+                style="PC.Compact.TButton",
+            )
+
         colors = self._main_ui_colors
         palette = {
-            "neutral": (
-                colors["button"], colors["button_hover"], colors["text"],
-            ),
             "primary": (
                 colors["primary"], colors["primary_hover"], "#ffffff",
             ),
@@ -6851,7 +6871,7 @@ class PictureCaptureApp(tk.Tk):
             ),
         }
         background, active_background, foreground = palette.get(
-            role, palette["neutral"]
+            role, palette["primary"]
         )
         border = colors["button_border"]
         return tk.Button(
@@ -9873,7 +9893,7 @@ class PictureCaptureApp(tk.Tk):
         self.polygon_draw_var.set(False)
         if self.polygon_draw_button is not None:
             self.polygon_draw_button.configure(
-                text="编辑插图", bg="#f0f0f0", activebackground="#e6e6e6", relief="raised"
+                text="编辑插图", style="PC.Compact.TButton"
             )
         trace_was_ready = self._quick_trace_ready
         self._quick_trace_ready = False
@@ -11175,14 +11195,14 @@ class PictureCaptureApp(tk.Tk):
             self.polygon_var.set(True)
             if self.polygon_draw_button is not None:
                 self.polygon_draw_button.configure(
-                    text="结束编辑插图", bg="#ffd166", activebackground="#f3c451", relief="sunken"
+                    text="结束编辑插图", style="PC.EditActive.TButton"
                 )
             self.status_var.set("插图多边形绘制：左键逐点添加，右键闭合并保存该多边形。")
         else:
             self.new_polygon.clear()
             if self.polygon_draw_button is not None:
                 self.polygon_draw_button.configure(
-                    text="编辑插图", bg="#f0f0f0", activebackground="#e6e6e6", relief="raised"
+                    text="编辑插图", style="PC.Compact.TButton"
                 )
             self.status_var.set("已退出插图多边形绘制模式")
         self.redraw()
