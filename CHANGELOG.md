@@ -1,5 +1,12 @@
 ## v2.13.3
 
+### 设置中心专家正则说明补全
+
+- 扩展【高级/专家参数】中的 AI 词头提取正则、AI 词性提示正则、AI 特殊符号正则说明：明确各自处于“lemma 提取 / POS 结构证据 / 行首条目标记证据”的不同阶段，并加入默认规则可识别形式、示例、修改风险和建议修改顺序。
+- 明确记录实际运行语义：词头正则的第 1 捕获组作为 lemma；活动 Dictionary Profile 会用 `pos_labels` 动态生成实际 POS 正则，因此设置中心的词性正则主要作为兼容/fallback；内部文章符号由 Profile 单独处理，不应误加到“新词条特殊符号”正则。
+- SETTINGS_REFERENCE 与 OCR 使用文档同步补充，避免开发维护时必须重新阅读实现代码才能判断三个字段的职责和生效范围。
+
+
 ### 主界面重绘回归修复
 
 - 修复坐标体系统一后 `app.py` 遗漏导入 `processing.parameter_scale`，导致点击【项目Profile】或【设置中心】时快速设置回调触发 `redraw()` 并报 `NameError: parameter_scale is not defined`，窗口因此无法正常弹出。
