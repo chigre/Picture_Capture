@@ -37,6 +37,7 @@ from .paddle_headwords import (
 )
 from .ocr_engines import lens_status, tesseract_status
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
+from .layout_transform import LayoutTransform
 from .coordinate_space import (
     CANONICAL_COORDINATE_SPACE,
     REFERENCE_CANONICAL_WIDTH,
@@ -8877,7 +8878,10 @@ class PictureCaptureApp(tk.Tk):
         )
         canonical_width, _canonical_height = transform.canonical_size(self.image.size)
 
-        if name == "start_y" and str(
+        horizontal = not str(
+            getattr(self.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
+        ).startswith("vertical")
+        if horizontal and name == "start_y" and str(
             getattr(self.settings, "profile_header_mode", "auto") or "auto"
         ) == "present":
             return round(
@@ -8885,7 +8889,7 @@ class PictureCaptureApp(tk.Tk):
                 * float(getattr(self.settings, "profile_header_percent", 0.0) or 0.0)
                 / 100.0
             )
-        if name == "bottom_y" and str(
+        if horizontal and name == "bottom_y" and str(
             getattr(self.settings, "profile_footer_mode", "auto") or "auto"
         ) == "present":
             return round(
@@ -8973,7 +8977,10 @@ class PictureCaptureApp(tk.Tk):
                     if value < 0:
                         raise ValueError(f"{name} 不能小于 0。")
                     changed = value != original_geometry[name]
-                    if self.image is not None and name == "start_y" and str(
+                    horizontal = not str(
+                        getattr(self.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
+                    ).startswith("vertical")
+                    if self.image is not None and horizontal and name == "start_y" and str(
                         getattr(self.settings, "profile_header_mode", "auto") or "auto"
                     ) == "present":
                         if value > self.image.height:
@@ -8983,7 +8990,7 @@ class PictureCaptureApp(tk.Tk):
                             if percent > 35.0:
                                 raise ValueError("页眉不能超过原图高度的 35%。")
                             self.settings.profile_header_percent = round(percent, 6)
-                    elif self.image is not None and name == "bottom_y" and str(
+                    elif self.image is not None and horizontal and name == "bottom_y" and str(
                         getattr(self.settings, "profile_footer_mode", "auto") or "auto"
                     ) == "present":
                         if value > self.image.height:
