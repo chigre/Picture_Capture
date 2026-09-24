@@ -53,7 +53,7 @@ jobs:
           cp -R \
             src docs examples \
             README.md CHANGELOG.md LICENSE.txt pyproject.toml uv.lock .python-version \
-            run.py run_tests.py run_windows.bat install_ocr_windows.bat Picture_Capture.pyw \
+            run.py run_tests.py run_windows.bat install_ocr_windows.bat \
             "${staging}/${package}/"
           (cd "${staging}" && zip -qr "${GITHUB_WORKSPACE}/dist/${package}-release.zip" "${package}")
 
