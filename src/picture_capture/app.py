@@ -9563,14 +9563,32 @@ class PictureCaptureApp(tk.Tk):
             with Image.open(pages[index]) as opened:
                 image_size = opened.size
                 estimate = detect_layout_consistency(opened, settings)
+            transform_kind = str(
+                getattr(settings, "layout_transform", "identity") or "identity"
+            )
+            canonical_width = LayoutTransform(transform_kind).canonical_size(image_size)[0]
+            header_ref = (
+                canonical_geometry_to_stored(
+                    estimate.header_rule_y, canonical_width, settings,
+                )
+                if estimate.header_rule_y is not None else None
+            )
+            left_ref = (
+                canonical_geometry_to_stored(
+                    estimate.body_left_x, canonical_width, settings,
+                )
+                if estimate.body_left_x is not None else None
+            )
             return (
                 pages[index].name,
                 estimate.header_rule_y,
                 estimate.body_left_x,
+                header_ref,
+                left_ref,
                 estimate.is_blank,
                 estimate.coordinate_space,
-                str(getattr(settings, "layout_transform", "identity") or "identity"),
-                image_size,
+                transform_kind,
+                canonical_width,
             )
 
         def done(_completed, _total, stopped, results, error) -> None:
@@ -9583,20 +9601,29 @@ class PictureCaptureApp(tk.Tk):
                 writer = csv.writer(handle)
                 writer.writerow((
                     "page",
-                    "header_rule_v_canonical",
-                    "body_left_u_canonical",
-                    "coordinate_space",
+                    "header_rule_v_canonical_page",
+                    "body_left_u_canonical_page",
+                    "header_rule_v_reference",
+                    "body_left_u_reference",
+                    "runtime_coordinate_space",
+                    "reference_coordinate_space",
+                    "geometry_reference_width",
+                    "page_canonical_width",
                     "layout_transform",
                     "status",
                 ))
                 writer.writerows((
-                    row[0], row[1], row[2], row[4], row[5],
-                    "blank_skipped" if row[3] else "analyzed",
+                    row[0], row[1], row[2], row[3], row[4],
+                    row[6], CANONICAL_REFERENCE_SPACE,
+                    _geometry_reference_width(settings), row[8], row[7],
+                    "blank_skipped" if row[5] else "analyzed",
                 ) for row in results)
-            analyzed = [row for row in results if not row[3]]
-            blanks = [row[0] for row in results if row[3]]
-            header_values = [row[1] for row in analyzed if row[1] is not None]
-            left_values = [row[2] for row in analyzed if row[2] is not None]
+            analyzed = [row for row in results if not row[5]]
+            blanks = [row[0] for row in results if row[5]]
+            # Cross-page consistency must use one common reference space. Raw
+            # full-resolution canonical values differ when page resolutions do.
+            header_values = [row[3] for row in analyzed if row[3] is not None]
+            left_values = [row[4] for row in analyzed if row[4] is not None]
             def summary(values) -> str:
                 return "无有效值" if not values else f"均值 {statistics.fmean(values):.1f}，范围 {min(values)}–{max(values)}，标准差 {statistics.pstdev(values):.1f}"
             def outliers(column: int) -> list[str]:
@@ -9609,16 +9636,16 @@ class PictureCaptureApp(tk.Tk):
             report_text = (
                 f"页面范围：{range_name}\n总页数：{len(results)}\n有效分析：{len(analyzed)}\n"
                 f"空白页跳过：{len(blanks)}（{', '.join(blanks) or '无'}）\n"
-                f"页眉横线 V（规范px）：{summary(header_values)}\n正文起始 U（规范px）：{summary(left_values)}\n"
+                f"页眉横线 V（参考页规范px）：{summary(header_values)}\n正文起始 U（参考页规范px）：{summary(left_values)}\n"
                 f"异常页面：{', '.join(abnormal) or '无'}\n"
             )
             report.write_text(report_text, encoding="utf-8-sig")
             messagebox.showinfo(
                 "版面一致性统计",
                 f"完成 {len(results)} 页，有效 {len(analyzed)} 页，跳过空白页 {len(blanks)} 页"
-                f"{'（提前停止）' if stopped else ''}\n页眉横线 V（规范px）：{summary(header_values)}\n"
-                f"正文起始 U（规范px）：{summary(left_values)}\n异常页面：{', '.join(abnormal) or '无'}\n\n"
-                f"CSV 已明确记录 coordinate_space 与 layout_transform。\n结果：{target}\n报告：{report}",
+                f"{'（提前停止）' if stopped else ''}\n页眉横线 V（参考页规范px）：{summary(header_values)}\n"
+                f"正文起始 U（参考页规范px）：{summary(left_values)}\n异常页面：{', '.join(abnormal) or '无'}\n\n"
+                f"CSV 同时保留当前页 canonical 值与统一参考页值；统计/异常判断使用参考页坐标。\n结果：{target}\n报告：{report}",
                 parent=self,
             )
             self.status_var.set(f"版面一致性检测完成：{target.name}")
