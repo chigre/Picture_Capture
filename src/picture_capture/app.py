@@ -7408,6 +7408,7 @@ class PictureCaptureApp(tk.Tk):
         self._ui_worker_generations: dict[str, int] = {}
         self._ui_worker_handlers: dict[tuple[str, int], tuple] = {}
         self._ui_worker_shutdown = False
+        self._pending_page_index: int | None = None
         self._session_path = self._default_session_state_path()
         self._last_session = self._read_session_state()
         self.section_expanded = {
@@ -7469,6 +7470,9 @@ class PictureCaptureApp(tk.Tk):
         """Run one replaceable blocking operation without letting its worker touch Tk."""
         if self._ui_worker_shutdown:
             return -1
+        stale = [token for token in self._ui_worker_handlers if token[0] == key]
+        for token in stale:
+            self._ui_worker_handlers.pop(token, None)
         generation = int(self._ui_worker_generations.get(key, 0)) + 1
         self._ui_worker_generations[key] = generation
         self._ui_worker_handlers[(key, generation)] = (on_done, on_error)
@@ -10962,6 +10966,12 @@ class PictureCaptureApp(tk.Tk):
 
         def done(result) -> None:
             project, selected_index, payload, view_scale, migration_detail, recent_warning = result
+            if self.project and self.current_page and self.image is not None:
+                self._flush_deferred_page_save()
+                self.save_pdic(silent=True)
+                write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
+                self.settings.to_json(settings_path(self.project.root))
+            self._pending_page_index = None
             self._invalidate_ui_worker("page-load")
             self.current_page = None
             self.image = None
@@ -11065,6 +11075,9 @@ class PictureCaptureApp(tk.Tk):
             return
         if index != self.current_index:
             self._request_page_load(index)
+        else:
+            self._pending_page_index = None
+            self._invalidate_ui_worker("page-load")
 
     def _request_page_load(
         self, index: int, *, reset_zoom: bool = False, current_already_saved: bool = False,
@@ -11073,12 +11086,17 @@ class PictureCaptureApp(tk.Tk):
         if not self.project or not (0 <= index < len(self.project.images)):
             return False
         if index == self.current_index and self.image is not None:
+            self._pending_page_index = None
+            self._invalidate_ui_worker("page-load")
             self._set_page_list_selection(index, ensure_visible=True)
+            return True
+        if self._pending_page_index == index:
             return True
         project = self.project
         page = project.images[index]
         project_root = project.root
         view_scale = float(self.view_scale)
+        self._pending_page_index = index
         self.status_var.set(f"正在后台加载 {page.name}…")
 
         def worker():
@@ -11110,6 +11128,7 @@ class PictureCaptureApp(tk.Tk):
         def done(payload) -> None:
             if self.project is not project:
                 return
+            self._pending_page_index = None
             self.load_page(
                 index, reset_zoom=reset_zoom, preloaded=payload,
                 skip_current_save=current_already_saved,
@@ -11119,6 +11138,7 @@ class PictureCaptureApp(tk.Tk):
             if detail:
                 print(detail)
             if self.project is project:
+                self._pending_page_index = None
                 self.show_error(f"加载页面失败：{page.name}", exc)
 
         self._start_ui_worker("page-load", worker, done, failed)
@@ -11130,6 +11150,7 @@ class PictureCaptureApp(tk.Tk):
     ) -> None:
         if not self.project or not (0 <= index < len(self.project.images)):
             return
+        self._pending_page_index = None
         self._invalidate_ui_worker("page-load")
         self._flush_deferred_page_save()
         if self.current_page and self.image and index != self.current_index and not skip_current_save:
@@ -11224,7 +11245,8 @@ class PictureCaptureApp(tk.Tk):
             return False
         if not self.project:
             return False
-        target = self.current_index + delta
+        base_index = self._pending_page_index if self._pending_page_index is not None else self.current_index
+        target = base_index + delta
         if not 0 <= target < len(self.project.images):
             if not current_already_saved and self._can_save_current_during_batch_navigation():
                 self._save_current_page_by_mode()
@@ -13996,7 +14018,9 @@ class PictureCaptureApp(tk.Tk):
         language = self.settings.ocr_language
 
         def worker(_item, _position: int, _total: int):
-            return build_picdic_package(root, language)
+            return build_picdic_package(
+                root, language, should_stop=self._batch_stop_event.is_set,
+            )
 
         def done(_completed, _total, stopped, results, error):
             if error is not None or stopped or not results:
