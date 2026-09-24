@@ -172,6 +172,61 @@ def migrate_legacy_geometry_settings(
     return True
 
 
+def initialize_geometry_reference(
+    settings: Any,
+    source_size: tuple[int, int],
+    *,
+    historical_1400_values: bool = False,
+) -> bool:
+    """Initialize an explicit canonical reference width once a real page is known.
+
+    AppSettings intentionally keeps geometry_reference_width=0 so library callers
+    can construct page-local geometry without an implicit scale. A real project,
+    however, needs a portable persisted reference width.
+
+    Clean projects inherit numeric defaults from the historical 1400px display
+    convention. When historical_1400_values is true, preserve their physical
+    meaning by resolving those values to the first page before storing that page
+    as the project's canonical reference. Existing modern JSON with a missing
+    reference width keeps its current numeric values unchanged.
+    """
+    if not geometry_uses_canonical_pixels(settings):
+        return False
+    try:
+        existing = int(getattr(settings, "geometry_reference_width", 0) or 0)
+    except (TypeError, ValueError):
+        existing = 0
+    if existing > 0:
+        if hasattr(settings, "geometry_coordinate_space"):
+            settings.geometry_coordinate_space = CANONICAL_REFERENCE_SPACE
+        return False
+
+    transform = LayoutTransform(
+        str(getattr(settings, "layout_transform", "identity") or "identity")
+    )
+    canonical_width, _canonical_height = transform.canonical_size(
+        (max(1, int(source_size[0])), max(1, int(source_size[1])))
+    )
+
+    if historical_1400_values:
+        scale = min(1.0, REFERENCE_CANONICAL_WIDTH / max(1, canonical_width))
+        for name in CANONICAL_GEOMETRY_FIELDS:
+            if not hasattr(settings, name):
+                continue
+            raw = getattr(settings, name)
+            try:
+                numeric = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if numeric == 0:
+                continue
+            setattr(settings, name, round(numeric / max(scale, 1e-9)))
+
+    settings.geometry_reference_width = int(canonical_width)
+    if hasattr(settings, "geometry_coordinate_space"):
+        settings.geometry_coordinate_space = CANONICAL_REFERENCE_SPACE
+    return True
+
 def coordinate_contract() -> dict[str, str | int]:
     """Machine-readable coordinate contract used by exports and diagnostics."""
     return {
