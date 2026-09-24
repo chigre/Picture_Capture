@@ -9639,7 +9639,7 @@ class PictureCaptureApp(tk.Tk):
                 opencc_lines = [f"⚠ OpenCC：仅检测到旧版 opencc-python-reimplemented {legacy_opencc}", f"运行状态：{'可用' if runtime.get('available') else '不可用'}", "请在项目目录执行 uv sync；若仍残留旧包，可删除 .venv 后重新运行 run_windows.bat。"]
             else:
                 opencc_lines = ["✗ OpenCC（官方）：未安装", f"运行检查：{runtime.get('error') or '不可用'}", "请在项目目录执行 uv sync；核心 OpenCC 依赖会由 uv 安装到项目 .venv。"]
-            opencc_text = "\n".join(opencc_lines)
+            opencc_text = "\n".join(opencc_lines) + "\n简化配置：t2s.json（词组优先）"
             if cedict is not None and cedict.installed:
                 cedict_text = f"✓ CC-CEDICT：已安装（{cedict.entry_count:,} 条）\n位置：{cedict.path}"
             elif cedict is not None:
