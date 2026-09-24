@@ -7,6 +7,8 @@ import re
 
 from PIL import Image
 
+from .layout_transform import LayoutTransform
+
 
 IMAGE_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp"}
 PROJECT_COVER_STEMS = ("_cover", "_project_cover")
@@ -111,11 +113,14 @@ class AppSettings:
     dictionary_body_page_range: str = ""
     # Coordinate contract:
     # - saved PDIC/PPP/exports use original-image pixels;
-    # - project layout scalars use full-resolution canonical pixels;
+    # - project layout scalars use pixels of an explicit canonical reference page;
     # - OCR/profile tuning distances use fixed 1400px-reference units;
     # - parameter_display_width is retained only to migrate old display-scaled projects.
     geometry_coordinate_version: int = 2
-    geometry_coordinate_space: str = "canonical_full_resolution_pixels"
+    geometry_coordinate_space: str = "canonical_reference_page_pixels"
+    # Canonical width of the page whose pixels define the persisted layout
+    # scalars. Runtime geometry scales these values to the current page width.
+    geometry_reference_width: int = 0
     parameter_display_width: int = 0
     columns: int = 2
     # Profile v3 layout semantics. Geometry is measured in canonical space;
@@ -679,11 +684,27 @@ class ProjectState:
         # project no longer depends on the original GUI display width.
         if images:
             try:
-                from .coordinate_space import migrate_legacy_geometry_settings
+                from .coordinate_space import (
+                    CANONICAL_REFERENCE_SPACE,
+                    geometry_uses_canonical_pixels,
+                    migrate_legacy_geometry_settings,
+                )
                 with Image.open(images[0]) as first_page:
                     source_size = first_page.size
                 migrated = migrate_legacy_geometry_settings(settings, source_size)
-                if migrated and json_settings.exists():
+                initialized_reference = False
+                if geometry_uses_canonical_pixels(settings) and int(
+                    getattr(settings, "geometry_reference_width", 0) or 0
+                ) <= 0:
+                    transform = LayoutTransform(
+                        str(getattr(settings, "layout_transform", "identity") or "identity")
+                    )
+                    settings.geometry_reference_width = int(
+                        transform.canonical_size(source_size)[0]
+                    )
+                    settings.geometry_coordinate_space = CANONICAL_REFERENCE_SPACE
+                    initialized_reference = True
+                if (migrated or initialized_reference) and json_settings.exists():
                     settings.to_json(json_settings)
             except Exception:
                 # Coordinate migration must never make an otherwise readable
