@@ -1091,7 +1091,7 @@ class UsageGuideWindow(tk.Toplevel):
                 ),
                 (
                     "04", "PDIC 备份用于阶段性回退",
-                    "在大批量校对、自动填充或规则调整前可先【备份PDIC】。需要恢复时使用【从PDIC备份恢复】，"
+                    "在大批量校对、自动填充或规则调整前可先【备份PDIC】。需要恢复时使用【恢复PDIC】，"
                     "恢复范围仍受主界面当前页面范围约束。"
                 ),
                 (
@@ -8426,7 +8426,7 @@ class PictureCaptureApp(tk.Tk):
 
         Editing OCR/headword text does not invalidate a count check. Adding or
         deleting a line does: the page then shows ``待重新核对`` until the user
-        runs “填充既有词条” again.
+        runs “填充词条” again.
         """
         if not self.project or not (0 <= index < len(self.project.images)):
             return
@@ -8735,9 +8735,9 @@ class PictureCaptureApp(tk.Tk):
         actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
         actions.pack(fill="x", pady=(4, 0))
         rows = [
-            (("运行OCR画线（推荐）", self.run_ocr_draw_action), ("运行普通画线（备用）", self.run_normal_draw_action)),
+            (("运行普通画线（备用）", self.run_normal_draw_action), ("运行OCR画线（推荐）", self.run_ocr_draw_action)),
             (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)),
-            (("选择词条文件", self.select_existing_headwords_file), ("填充既有词条", self.fill_existing_headwords), ("修复PDIC排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("从PDIC备份恢复", self.restore_from_pdic_backup)),
+            (("选择词条文件", self.select_existing_headwords_file), ("填充词条", self.fill_existing_headwords), ("修复排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("恢复PDIC", self.restore_from_pdic_backup)),
             (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
         ]
         for ri, specs in enumerate(rows):
@@ -13590,7 +13590,7 @@ class PictureCaptureApp(tk.Tk):
             messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=self)
             return
         if self._batch_active:
-            self.status_var.set("已有批量任务正在运行，请结束后再修复PDIC排序。")
+            self.status_var.set("已有批量任务正在运行，请结束后再修复排序。")
             return
         try:
             indices = self.selected_page_indices()
@@ -13610,11 +13610,11 @@ class PictureCaptureApp(tk.Tk):
             self._sync_entry_editor_texts()
             self.save_pdic(silent=True, sync_editors=False)
         except Exception as exc:
-            self.show_error("修复PDIC排序准备失败", exc)
+            self.show_error("修复排序准备失败", exc)
             return
 
         if not messagebox.askyesno(
-            "修复PDIC排序",
+            "修复排序",
             f"将对所选范围中 {len(existing)} 个已有 PDIC 页面按“栏号 → Y”重新排序并原子写回（X 不参与排序）。\n\n"
             "每条记录现有的词条文字与 X/Y 坐标会保持绑定，不会重新 OCR 或改词。\n"
             "建议先点击【备份PDIC】保留当前状态。\n\n继续？",
@@ -13651,11 +13651,11 @@ class PictureCaptureApp(tk.Tk):
                 self.load_page(self.current_index)
             state = "已停止" if stopped else "完成"
             self.status_var.set(
-                f"修复PDIC排序{state}：处理 {completed}/{total} 页；实际改序 {changed} 页；{records} 条记录"
+                f"修复排序{state}：处理 {completed}/{total} 页；实际改序 {changed} 页；{records} 条记录"
             )
 
         self._start_batch_task(
-            "修复PDIC排序", existing, worker, done,
+            "修复排序", existing, worker, done,
             item_label=lambda i: project.images[i].name,
         )
 
@@ -13894,7 +13894,7 @@ class PictureCaptureApp(tk.Tk):
             return
         source = Path(path_text)
         if not messagebox.askyesno(
-            "从PDIC备份恢复",
+            "恢复PDIC",
             f"将从：\n{source.name}\n\n覆盖重建主界面所选范围内的 {len(indices)} 个页面 PDIC。\n"
             "范围外页面不会修改。PDIC 备份 中若某个选定页面没有记录，该页会被重建为空 PDIC。\n\n"
             "每页完成后立即原子覆盖，可暂停或停止；已完成页面不会回滚。继续？",
@@ -13998,7 +13998,7 @@ class PictureCaptureApp(tk.Tk):
                 )
 
         started = self._start_batch_task(
-            "从PDIC备份恢复",
+            "恢复PDIC",
             indices,
             worker,
             done,
@@ -14006,7 +14006,7 @@ class PictureCaptureApp(tk.Tk):
             foreground_page_edit=False,
         )
         if started:
-            self.batch_text_var.set(f"从PDIC备份恢复：准备读取备份文件 0/{len(indices)}")
+            self.batch_text_var.set(f"恢复PDIC：准备读取备份文件 0/{len(indices)}")
             self.status_var.set(
                 f"正在后台解析PDIC 备份 并逐页覆盖重建：共 {len(indices)} 页；"
                 "进度按页面更新，可暂停或停止。"
@@ -14064,7 +14064,7 @@ class PictureCaptureApp(tk.Tk):
         self._word_fill_source_path = path
         self._word_fill_source_signature = signature
         cached = "（已缓存解析结果）" if self._word_fill_source_mapping is not None else ""
-        self.status_var.set(f"已选择词条文件：{path.name}{cached}；调整页面范围后点击[填充既有词条]。")
+        self.status_var.set(f"已选择词条文件：{path.name}{cached}；调整页面范围后点击[填充词条]。")
 
     def fill_existing_headwords(self) -> None:
         """Fill the selected range from the already chosen page-aware TXT.
@@ -14110,7 +14110,7 @@ class PictureCaptureApp(tk.Tk):
             self._sync_entry_editor_texts()
             self.save_pdic(silent=True, sync_editors=False)
         except Exception as exc:
-            self.show_error("填充既有词条失败", exc)
+            self.show_error("填充词条失败", exc)
             return
 
         project = self.project
@@ -14213,7 +14213,7 @@ class PictureCaptureApp(tk.Tk):
                 )
 
         started = self._start_batch_task(
-            "填充既有词条",
+            "填充词条",
             indices,
             worker,
             done,
@@ -14223,7 +14223,7 @@ class PictureCaptureApp(tk.Tk):
         if started:
             cached = self._word_fill_source_mapping is not None
             phase = "使用已缓存词条索引" if cached else "准备读取并解析词条文件"
-            self.batch_text_var.set(f"填充既有词条：{phase} 0/{len(indices)}")
+            self.batch_text_var.set(f"填充词条：{phase} 0/{len(indices)}")
             self.status_var.set(
                 f"正在后台逐页填充：共 {len(indices)} 页；来源：{txt_path.name}；"
                 "进度按页面更新，可暂停或停止。"
