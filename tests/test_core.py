@@ -4913,7 +4913,11 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
     assert 'panes.add(right, weight=2)' in build
     assert 'text="上\\n一\\n页"' in build and 'text="下\\n一\\n页"' in build
     assert 'self._review_collapsible_section(' in build
-    assert 'style="PCR.Header.TLabel"' in build
+    section_helper = review[
+        review.index("    def _review_collapsible_section("):
+        review.index("    def _build(self) -> None:")
+    ]
+    assert 'style="PCR.Header.TLabel"' in section_helper
     assert 'relief="sunken"' not in build
     assert 'relief="groove"' not in build
 
@@ -4936,11 +4940,12 @@ def test_review_screenshot_polish_prevents_right_pane_clipping():
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
 
-    section_start = review.index("    def _review_section_frame(")
+    section_start = review.index("    def _review_collapsible_section(")
     section_end = review.index("    def _build(self) -> None:", section_start)
     section = review[section_start:section_end]
     assert "ttk.LabelFrame(" not in section
-    assert "ttk.Separator(frame, orient=\"horizontal\")" in section
+    assert 'ttk.Separator(frame, orient="horizontal")' in section
+    assert "body.pack_forget()" in section
 
     build_start = review.index("    def _build(self) -> None:")
     build_end = review.index("    def _toggle_review_panel(", build_start)
