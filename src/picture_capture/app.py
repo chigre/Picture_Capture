@@ -46,7 +46,10 @@ from .paddle_headwords import (
 )
 from .environment_center import EnvironmentCenterWindow
 from .runtime_environment import legacy_user_config_files, resolve_paddle_device, user_config_root
-from .ui_compat import bind_context_menu, fit_window_to_work_area, preferred_font_family
+from .ui_compat import (
+    AUTO_FONT_FAMILY, bind_context_menu, fit_window_to_work_area,
+    normalize_content_font_setting, preferred_font_family, resolve_content_font_family,
+)
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
 from .layout_transform import LayoutTransform
 from .coordinate_space import (
@@ -3862,11 +3865,21 @@ class SettingsDialog(tk.Toplevel):
             self.parent.settings.paddle_lens_language = str(
                 getattr(self.parent.settings, "ocr_language", "") or ""
             )
-            self.parent.settings.main_entry_font_family = str(self.parent.settings.main_entry_font_family).strip() or "DengXian"
+            self.parent.settings.main_entry_font_family = normalize_content_font_setting(
+                self.parent.settings.main_entry_font_family
+            )
+            self.parent.settings.illustration_label_font_family = normalize_content_font_setting(
+                self.parent.settings.illustration_label_font_family
+            )
             self.parent.settings.main_entry_font_size = max(5, int(self.parent.settings.main_entry_font_size))
             self.parent.settings.main_entry_width_chars = max(4, int(self.parent.settings.main_entry_width_chars))
             self.parent.settings.main_entry_x_ratio = min(1.25, max(0.0, float(self.parent.settings.main_entry_x_ratio)))
-            self.parent.settings.review_entry_font_family = str(self.parent.settings.review_entry_font_family).strip() or "DengXian"
+            self.parent.settings.review_entry_font_family = normalize_content_font_setting(
+                self.parent.settings.review_entry_font_family
+            )
+            self.parent.settings.review_simplified_font_family = normalize_content_font_setting(
+                self.parent.settings.review_simplified_font_family
+            )
             self.parent.settings.review_entry_font_size = max(6, int(self.parent.settings.review_entry_font_size))
             self.parent.settings.review_entry_vertical_padding = min(30, max(0, int(self.parent.settings.review_entry_vertical_padding)))
             self.parent.settings.review_single_cjk_line_height = min(500, max(0, int(self.parent.settings.review_single_cjk_line_height)))
@@ -3981,12 +3994,16 @@ class ReviewWindow(tk.Toplevel):
         # Review typography is deliberately independent from the image zoom.
         # Expose the same persisted font settings directly in the review window
         # so users do not need to return to the detailed-settings dialog.
-        self.review_font_family_var = tk.StringVar(value=str(parent.settings.review_entry_font_family or "DengXian"))
+        self.review_font_family_var = tk.StringVar(
+            value=normalize_content_font_setting(parent.settings.review_entry_font_family)
+        )
         self.review_font_size_var = tk.StringVar(value=str(_review_editor_font_size(parent.settings)))
         self.review_font_bold_var = tk.BooleanVar(value=bool(parent.settings.review_entry_font_bold))
         self.review_font_italic_var = tk.BooleanVar(value=bool(parent.settings.review_entry_font_italic))
         self.review_simplified_font_family_var = tk.StringVar(
-            value=str(getattr(parent.settings, "review_simplified_font_family", parent.settings.review_entry_font_family) or "DengXian")
+            value=normalize_content_font_setting(
+                getattr(parent.settings, "review_simplified_font_family", parent.settings.review_entry_font_family)
+            )
         )
         self.review_simplified_font_size_var = tk.StringVar(
             value=str(max(6, int(getattr(parent.settings, "review_simplified_font_size", _review_editor_font_size(parent.settings)))))
@@ -4605,7 +4622,7 @@ class ReviewWindow(tk.Toplevel):
         font_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         font_row.pack(fill="x", pady=(5, 0))
         ttk.Label(font_row, text="词条字体：").pack(side="left")
-        review_families = tuple(sorted(set(font.families()), key=str.casefold))
+        review_families = (AUTO_FONT_FAMILY, *tuple(sorted(set(font.families()), key=str.casefold)))
         self.review_font_combo = ttk.Combobox(
             font_row, textvariable=self.review_font_family_var, values=review_families,
             state="normal", width=15, style="PCR.Compact.TCombobox",
@@ -5705,7 +5722,7 @@ class ReviewWindow(tk.Toplevel):
 
     def _apply_review_font_settings(self) -> None:
         self._review_font_apply_job = None
-        family = self.review_font_family_var.get().strip() or "DengXian"
+        family = normalize_content_font_setting(self.review_font_family_var.get())
         try:
             size = int(float(self.review_font_size_var.get().strip()))
         except (TypeError, ValueError):
@@ -5725,9 +5742,12 @@ class ReviewWindow(tk.Toplevel):
         settings.review_entry_font_bold = bold
         settings.review_entry_font_italic = italic
 
-        spec = _entry_font_spec(family, size, bold, italic)
+        resolved_family = resolve_content_font_family(
+            self, family, self.parent.settings.ocr_language,
+        )
+        spec = _entry_font_spec(resolved_family, size, bold, italic)
         measure_font = font.Font(
-            family=family, size=size,
+            family=resolved_family, size=size,
             weight="bold" if bold else "normal",
             slant="italic" if italic else "roman",
         )
@@ -5752,7 +5772,7 @@ class ReviewWindow(tk.Toplevel):
 
     def _apply_review_simplified_font_settings(self) -> None:
         self._review_simplified_font_apply_job = None
-        family = self.review_simplified_font_family_var.get().strip() or "DengXian"
+        family = normalize_content_font_setting(self.review_simplified_font_family_var.get())
         try:
             size = int(float(self.review_simplified_font_size_var.get().strip()))
         except (TypeError, ValueError):
@@ -5769,9 +5789,12 @@ class ReviewWindow(tk.Toplevel):
         settings.review_simplified_font_bold = bold
         settings.review_simplified_font_italic = italic
 
-        spec = _entry_font_spec(family, size, bold, italic)
+        resolved_family = resolve_content_font_family(
+            self, family, self.parent.settings.ocr_language,
+        )
+        spec = _entry_font_spec(resolved_family, size, bold, italic)
         measure_font = font.Font(
-            family=family, size=size,
+            family=resolved_family, size=size,
             weight="bold" if bold else "normal",
             slant="italic" if italic else "roman",
         )
@@ -6380,21 +6403,21 @@ class ReviewWindow(tk.Toplevel):
             # Review zoom changes only the cropped line image.  Text-entry font
             # size is a user setting and remains fixed while zooming the image.
             editor_font_size = _review_editor_font_size(self.parent.settings)
-            review_family = preferred_font_family(
+            review_family = resolve_content_font_family(
                 self,
-                (
-                    self.parent.settings.review_entry_font_family,
-                    "DengXian", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
-                ),
+                self.parent.settings.review_entry_font_family,
+                self.parent.settings.ocr_language,
             )
             review_weight = "bold" if self.parent.settings.review_entry_font_bold else "normal"
             review_slant = "italic" if self.parent.settings.review_entry_font_italic else "roman"
-            simplified_family = preferred_font_family(
+            simplified_family = resolve_content_font_family(
                 self,
-                (
-                    str(getattr(self.parent.settings, "review_simplified_font_family", review_family) or review_family),
-                    "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
+                getattr(
+                    self.parent.settings,
+                    "review_simplified_font_family",
+                    self.parent.settings.review_entry_font_family,
                 ),
+                self.parent.settings.ocr_language,
             )
             simplified_font_size = max(6, int(getattr(self.parent.settings, "review_simplified_font_size", editor_font_size)))
             simplified_bold = bool(getattr(self.parent.settings, "review_simplified_font_bold", self.parent.settings.review_entry_font_bold))
@@ -10126,8 +10149,9 @@ class PictureCaptureApp(tk.Tk):
 
         font_row = ttk.Frame(aux); font_row.grid(row=4, column=0, columnspan=4, sticky="ew", pady=(2, 0))
         ttk.Label(font_row, text="词条字体").pack(side="left")
-        family_var = tk.StringVar(value=self.settings.main_entry_font_family); self.quick_vars["main_entry_font_family"] = family_var; self.quick_field_casts["main_entry_font_family"] = str
-        ttk.Combobox(font_row, textvariable=family_var, values=tuple(sorted(set(font.families()), key=str.casefold)), width=16).pack(side="left")
+        family_var = tk.StringVar(value=normalize_content_font_setting(self.settings.main_entry_font_family)); self.quick_vars["main_entry_font_family"] = family_var; self.quick_field_casts["main_entry_font_family"] = str
+        content_font_values = (AUTO_FONT_FAMILY, *tuple(sorted(set(font.families()), key=str.casefold)))
+        ttk.Combobox(font_row, textvariable=family_var, values=content_font_values, width=18).pack(side="left")
         ttk.Label(font_row, text="字号").pack(side="left", padx=(8, 2))
         size_var = tk.StringVar(value=str(self.settings.main_entry_font_size)); self.quick_vars["main_entry_font_size"] = size_var; self.quick_field_casts["main_entry_font_size"] = int
         ttk.Entry(
@@ -10139,8 +10163,8 @@ class PictureCaptureApp(tk.Tk):
 
         label_font_row = ttk.Frame(aux); label_font_row.grid(row=5, column=0, columnspan=4, sticky="ew", pady=(2, 0))
         ttk.Label(label_font_row, text="标签字体").pack(side="left")
-        label_family_var = tk.StringVar(value=self.settings.illustration_label_font_family); self.quick_vars["illustration_label_font_family"] = label_family_var; self.quick_field_casts["illustration_label_font_family"] = str
-        ttk.Combobox(label_font_row, textvariable=label_family_var, values=tuple(sorted(set(font.families()), key=str.casefold)), width=16).pack(side="left")
+        label_family_var = tk.StringVar(value=normalize_content_font_setting(self.settings.illustration_label_font_family)); self.quick_vars["illustration_label_font_family"] = label_family_var; self.quick_field_casts["illustration_label_font_family"] = str
+        ttk.Combobox(label_font_row, textvariable=label_family_var, values=content_font_values, width=18).pack(side="left")
         ttk.Label(label_font_row, text="字号").pack(side="left", padx=(8, 2))
         label_size_var = tk.StringVar(value=str(self.settings.illustration_label_font_size)); self.quick_vars["illustration_label_font_size"] = label_size_var; self.quick_field_casts["illustration_label_font_size"] = int
         ttk.Entry(
@@ -10495,6 +10519,17 @@ class PictureCaptureApp(tk.Tk):
                 if name == "illustration_label_font_size" and not 5 <= int(value) <= 200:
                     raise ValueError("插图标签字号必须在 5–200 之间。")
                 setattr(self.settings, name, value)
+            for font_setting_name in (
+                "main_entry_font_family",
+                "illustration_label_font_family",
+                "review_entry_font_family",
+                "review_simplified_font_family",
+            ):
+                setattr(
+                    self.settings,
+                    font_setting_name,
+                    normalize_content_font_setting(getattr(self.settings, font_setting_name, "")),
+                )
             current_ocr_language = str(getattr(self.settings, "ocr_language", "") or "")
             if current_ocr_language != previous_ocr_language:
                 for setting_name, setting_value in language_effective_settings(
@@ -12829,12 +12864,10 @@ class PictureCaptureApp(tk.Tk):
         horizontal = self.settings.layout_writing_mode == "horizontal-tb"
         vertical = not horizontal
         rtl = horizontal and self.settings.layout_text_direction == "rtl"
-        main_family = preferred_font_family(
+        main_family = resolve_content_font_family(
             self.canvas,
-            (
-                self.settings.main_entry_font_family,
-                "DengXian", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
-            ),
+            self.settings.main_entry_font_family,
+            self.settings.ocr_language,
         )
         editor_font = _entry_font_spec(
             main_family, editor_font_size,
@@ -13169,12 +13202,10 @@ class PictureCaptureApp(tk.Tk):
         # Entry pieces: cyan = ordinary crop; green = entry carrying a linked
         # illustration. Orange is used when the rectangle is unioned with a PPP.
         illustrated_entries = {p.entry_ref_index for p in plan.entry_pieces if p.source_mode == "linked_original" and p.entry_ref_index is not None}
-        preview_family = preferred_font_family(
+        preview_family = resolve_content_font_family(
             self.canvas,
-            (
-                self.settings.main_entry_font_family,
-                "DengXian", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
-            ),
+            self.settings.main_entry_font_family,
+            self.settings.ocr_language,
         )
         preview_font = _entry_font_spec(
             preview_family,
@@ -13390,12 +13421,10 @@ class PictureCaptureApp(tk.Tk):
                         label_frame, width=18, relief="flat", bd=0, highlightthickness=0,
                         bg=self.settings.illustration_label_fill_color,
                         font=_entry_font_spec(
-                            preferred_font_family(
+                            resolve_content_font_family(
                                 self.canvas,
-                                (
-                                    self.settings.illustration_label_font_family,
-                                    "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
-                                ),
+                                self.settings.illustration_label_font_family,
+                                self.settings.ocr_language,
                             ),
                             max(7, round(self.settings.illustration_label_font_size * self.view_scale)),
                             self.settings.illustration_label_font_bold,
