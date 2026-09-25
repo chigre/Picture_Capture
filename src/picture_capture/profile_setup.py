@@ -246,6 +246,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._analysis_queue: queue.Queue | None = None
         self._validation_queue: queue.Queue | None = None
         self._validation_stop_event = threading.Event()
+        self._validation_close_requested = False
         if not str(getattr(self.working, "dictionary_body_page_range", "") or "").strip():
             self.working.dictionary_body_page_range = suggested_body_page_range(self.project.images)
         configured_body = configured_body_page_indices(
@@ -2493,6 +2494,9 @@ class ProjectProfileWizard(tk.Toplevel):
                 return
             self._validation_running = False
             if stop_event.is_set():
+                if self._validation_close_requested:
+                    self.after_idle(self.destroy)
+                    return
                 self.validation_status_var.set("Profile 测试已安全停止。")
                 self.validate_button.configure(state="normal")
                 return
@@ -2507,6 +2511,9 @@ class ProjectProfileWizard(tk.Toplevel):
             except tk.TclError:
                 return
             self._validation_running = False
+            if self._validation_close_requested:
+                self.after_idle(self.destroy)
+                return
             self.validate_button.configure(state="normal")
             self.validation_status_var.set(f"Profile 测试失败：{exc}")
 
@@ -2733,11 +2740,6 @@ class ProjectProfileWizard(tk.Toplevel):
         self._render_validation_result()
 
     def save_and_close(self) -> None:
-        # If validation is still running, stop after its current page reaches
-        # the cache-write boundary; the parent tracks that worker until cleanup.
-        if self._validation_running:
-            self._validation_stop_event.set()
-            self.parent._invalidate_ui_worker("profile-validation")
         # The confirmation button saves immediately, even if the user chooses
         # to go back to validation instead of closing the Wizard.
         if not self._save_profile_progress(
@@ -2762,14 +2764,16 @@ class ProjectProfileWizard(tk.Toplevel):
                 status="Project Profile 已保存并应用",
             ):
                 return
+            if self._validation_running:
+                self._validation_close_requested = True
+                self._validation_stop_event.set()
+                self.validation_status_var.set("正在安全结束当前测试页，完成后关闭…")
+                return
             self.destroy()
         except Exception as exc:
             messagebox.showerror("Project Profile 保存失败", str(exc), parent=self)
 
     def _close_without_save(self) -> None:
-        if self._validation_running:
-            self._validation_stop_event.set()
-            self.parent._invalidate_ui_worker("profile-validation")
         # 关闭也先保存当前页；因此误关窗口不会丢掉尚未切页的输入。
         if not self._save_profile_progress(
             finalize=False,
@@ -2787,4 +2791,9 @@ class ProjectProfileWizard(tk.Toplevel):
                 parent=self,
             ):
                 return
+        if self._validation_running:
+            self._validation_close_requested = True
+            self._validation_stop_event.set()
+            self.validation_status_var.set("正在安全结束当前测试页，完成后关闭…")
+            return
         self.destroy()
