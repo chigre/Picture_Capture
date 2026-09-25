@@ -14,7 +14,7 @@ def pdic_path(image_path: Path) -> Path:
     return pdic_path_for_image(image_path)
 
 
-def _atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None:
     """Publish one text file atomically so concurrent readers never see a partial write."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -78,7 +78,7 @@ def write_pdic(path: Path, entries: list[Entry], image_width: int, pages: tuple[
             f"{word}#{entry.x}#{entry.y}#{x_percent:g}#{y_percent:g}#"
             f"{current}#{previous}#{following}"
         )
-    _atomic_write_text(
+    write_text_atomic(
         path, "\n".join(records) + ("\n" if records else ""), encoding="utf-8",
     )
 
@@ -144,6 +144,6 @@ def write_ppp(path: Path, regions: list[PolygonRegion], page_stem: str) -> None:
         label = region.label or f"{page_stem}|P_{index:02d}|1|{page_stem}|"
         coords = "".join(f"|{x},{y}" for x, y in region.points)
         lines.append(f"{index}\t{label}\t{coords}")
-    _atomic_write_text(
+    write_text_atomic(
         path, "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8",
     )
