@@ -1216,6 +1216,10 @@ class ProjectProfileWizard(tk.Toplevel):
         for child in self.template_preview_frame.winfo_children():
             child.destroy()
         self._template_photos.clear()
+        self._template_preview_canvas = None
+        self._template_line_items = []
+        self._template_line_paths = []
+        self._template_nudge_vector = (0.0, 0.0)
         if not self.sample_indices:
             ttk.Label(self.template_preview_frame, text="没有可预览页面").grid(row=0, column=0)
             self.template_preview_caption_var.set("")
