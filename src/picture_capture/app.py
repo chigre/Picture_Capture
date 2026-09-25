@@ -1628,6 +1628,276 @@ class UsageGuideWindow(tk.Toplevel):
         return None
 
 
+def _font_choice_summary(family: str, size: int | str, bold: bool, italic: bool) -> str:
+    """Compact UI summary for one complete font choice."""
+    if bold and italic:
+        style = "粗斜体"
+    elif bold:
+        style = "粗体"
+    elif italic:
+        style = "斜体"
+    else:
+        style = "常规"
+    try:
+        shown_size = int(float(size))
+    except (TypeError, ValueError):
+        shown_size = size
+    return f"{str(family).strip() or '默认字体'} · {shown_size} pt · {style}"
+
+
+class FontPickerDialog(tk.Toplevel):
+    """Reusable cross-platform font chooser with live preview."""
+
+    STYLE_OPTIONS = (
+        ("常规", False, False),
+        ("粗体", True, False),
+        ("斜体", False, True),
+        ("粗斜体", True, True),
+    )
+    COMMON_SIZES = (6, 8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 48, 72, 96, 120, 144)
+
+    def __init__(
+        self,
+        parent: tk.Misc,
+        *,
+        title: str,
+        family: str,
+        size: int,
+        bold: bool,
+        italic: bool,
+        on_apply,
+        min_size: int = 5,
+        max_size: int = 200,
+    ) -> None:
+        super().__init__(parent)
+        self.title(title)
+        self.transient(parent)
+        self.resizable(True, True)
+        fit_window_to_work_area(self, 720, 500, min_width=620, min_height=430)
+        self._on_apply = on_apply
+        self._min_size = int(min_size)
+        self._max_size = int(max_size)
+        self._all_families = tuple(sorted(set(font.families()), key=str.casefold))
+        initial_family = str(family or "").strip()
+        if initial_family not in self._all_families and self._all_families:
+            initial_family = preferred_font_family(self, (initial_family, self._all_families[0]))
+        self.family_var = tk.StringVar(value=initial_family)
+        self.size_var = tk.StringVar(value=str(max(self._min_size, min(self._max_size, int(size)))))
+        self.style_var = tk.StringVar(value=self._style_label(bool(bold), bool(italic)))
+
+        outer = ttk.Frame(self, padding=(14, 12, 14, 12))
+        outer.pack(fill="both", expand=True)
+        chooser = ttk.Frame(outer)
+        chooser.pack(fill="both", expand=True)
+        chooser.columnconfigure(0, weight=3)
+        chooser.columnconfigure(1, weight=2)
+        chooser.columnconfigure(2, weight=1)
+        chooser.rowconfigure(2, weight=1)
+
+        ttk.Label(chooser, text="字体").grid(row=0, column=0, sticky="w", padx=(0, 10))
+        ttk.Label(chooser, text="字形").grid(row=0, column=1, sticky="w", padx=(0, 10))
+        ttk.Label(chooser, text="大小").grid(row=0, column=2, sticky="w")
+
+        family_entry = ttk.Entry(chooser, textvariable=self.family_var)
+        family_entry.grid(row=1, column=0, sticky="ew", padx=(0, 10), pady=(3, 4))
+        style_entry = ttk.Entry(chooser, textvariable=self.style_var, state="readonly")
+        style_entry.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(3, 4))
+        size_entry = ttk.Entry(chooser, textvariable=self.size_var, width=7)
+        size_entry.grid(row=1, column=2, sticky="ew", pady=(3, 4))
+
+        family_box = ttk.Frame(chooser)
+        family_box.grid(row=2, column=0, sticky="nsew", padx=(0, 10))
+        family_box.rowconfigure(0, weight=1)
+        family_box.columnconfigure(0, weight=1)
+        family_scroll = ttk.Scrollbar(family_box, orient="vertical")
+        self.family_list = tk.Listbox(
+            family_box, exportselection=False, yscrollcommand=family_scroll.set,
+            activestyle="dotbox",
+        )
+        family_scroll.configure(command=self.family_list.yview)
+        self.family_list.grid(row=0, column=0, sticky="nsew")
+        family_scroll.grid(row=0, column=1, sticky="ns")
+
+        style_box = ttk.Frame(chooser)
+        style_box.grid(row=2, column=1, sticky="nsew", padx=(0, 10))
+        style_box.rowconfigure(0, weight=1)
+        style_box.columnconfigure(0, weight=1)
+        self.style_list = tk.Listbox(style_box, exportselection=False, activestyle="dotbox")
+        self.style_list.grid(row=0, column=0, sticky="nsew")
+        for label, _bold, _italic in self.STYLE_OPTIONS:
+            self.style_list.insert("end", label)
+
+        size_box = ttk.Frame(chooser)
+        size_box.grid(row=2, column=2, sticky="nsew")
+        size_box.rowconfigure(0, weight=1)
+        size_box.columnconfigure(0, weight=1)
+        size_scroll = ttk.Scrollbar(size_box, orient="vertical")
+        self.size_list = tk.Listbox(
+            size_box, exportselection=False, yscrollcommand=size_scroll.set,
+            activestyle="dotbox",
+        )
+        size_scroll.configure(command=self.size_list.yview)
+        self.size_list.grid(row=0, column=0, sticky="nsew")
+        size_scroll.grid(row=0, column=1, sticky="ns")
+        for value in self.COMMON_SIZES:
+            if self._min_size <= value <= self._max_size:
+                self.size_list.insert("end", str(value))
+
+        preview_box = ttk.LabelFrame(outer, text="示例", padding=(12, 8))
+        preview_box.pack(fill="x", pady=(12, 0))
+        self.preview_label = ttk.Label(
+            preview_box,
+            text="AaBbYyZz  简体 繁體  áéíóú",
+            anchor="center",
+            justify="center",
+        )
+        self.preview_label.pack(fill="x", ipady=14)
+
+        buttons = ttk.Frame(outer)
+        buttons.pack(fill="x", pady=(12, 0))
+        ttk.Button(buttons, text="取消", command=self.destroy).pack(side="right")
+        ttk.Button(buttons, text="确定", command=self._accept).pack(side="right", padx=(0, 8))
+        ttk.Button(buttons, text="应用", command=self._apply).pack(side="right", padx=(0, 8))
+
+        family_entry.bind("<KeyRelease>", self._filter_families)
+        family_entry.bind("<FocusOut>", lambda _e: self._refresh_preview())
+        size_entry.bind("<KeyRelease>", lambda _e: self._refresh_preview())
+        self.family_list.bind("<<ListboxSelect>>", self._choose_family)
+        self.style_list.bind("<<ListboxSelect>>", self._choose_style)
+        self.size_list.bind("<<ListboxSelect>>", self._choose_size)
+        self.bind("<Return>", lambda _e: self._accept())
+        self.bind("<Escape>", lambda _e: self.destroy())
+
+        self._populate_families(self.family_var.get())
+        self._select_style()
+        self._select_size()
+        self._refresh_preview()
+        try:
+            self.grab_set()
+        except tk.TclError:
+            pass
+
+    @classmethod
+    def _style_label(cls, bold: bool, italic: bool) -> str:
+        for label, item_bold, item_italic in cls.STYLE_OPTIONS:
+            if item_bold == bold and item_italic == italic:
+                return label
+        return "常规"
+
+    def _style_flags(self) -> tuple[bool, bool]:
+        selected = self.style_var.get()
+        for label, bold, italic in self.STYLE_OPTIONS:
+            if label == selected:
+                return bold, italic
+        return False, False
+
+    def _populate_families(self, preferred: str = "") -> None:
+        query = self.family_var.get().strip().casefold()
+        shown = [name for name in self._all_families if not query or query in name.casefold()]
+        if not shown:
+            shown = list(self._all_families)
+        self.family_list.delete(0, "end")
+        for name in shown:
+            self.family_list.insert("end", name)
+        target = str(preferred or "").strip()
+        if target:
+            for index, name in enumerate(shown):
+                if name.casefold() == target.casefold():
+                    self.family_list.selection_set(index)
+                    self.family_list.see(index)
+                    break
+
+    def _filter_families(self, _event: tk.Event | None = None) -> None:
+        self._populate_families(self.family_var.get())
+        self._refresh_preview()
+
+    def _choose_family(self, _event: tk.Event | None = None) -> None:
+        selection = self.family_list.curselection()
+        if selection:
+            self.family_var.set(str(self.family_list.get(selection[0])))
+            self._refresh_preview()
+
+    def _choose_style(self, _event: tk.Event | None = None) -> None:
+        selection = self.style_list.curselection()
+        if selection:
+            self.style_var.set(str(self.style_list.get(selection[0])))
+            self._refresh_preview()
+
+    def _choose_size(self, _event: tk.Event | None = None) -> None:
+        selection = self.size_list.curselection()
+        if selection:
+            self.size_var.set(str(self.size_list.get(selection[0])))
+            self._refresh_preview()
+
+    def _select_style(self) -> None:
+        wanted = self.style_var.get()
+        for index, (label, _bold, _italic) in enumerate(self.STYLE_OPTIONS):
+            if label == wanted:
+                self.style_list.selection_set(index)
+                self.style_list.see(index)
+                return
+
+    def _select_size(self) -> None:
+        wanted = self.size_var.get()
+        for index in range(self.size_list.size()):
+            if str(self.size_list.get(index)) == wanted:
+                self.size_list.selection_set(index)
+                self.size_list.see(index)
+                return
+
+    def _validated_choice(self) -> tuple[str, int, bool, bool] | None:
+        family = self.family_var.get().strip()
+        if not family:
+            messagebox.showerror("字体", "请选择字体。", parent=self)
+            return None
+        try:
+            size = int(float(self.size_var.get().strip()))
+        except (TypeError, ValueError):
+            messagebox.showerror("字体", "字号必须是数字。", parent=self)
+            return None
+        if not self._min_size <= size <= self._max_size:
+            messagebox.showerror(
+                "字体", f"字号必须在 {self._min_size}–{self._max_size} 之间。", parent=self
+            )
+            return None
+        bold, italic = self._style_flags()
+        return family, size, bold, italic
+
+    def _refresh_preview(self) -> None:
+        choice = self._validated_choice_preview()
+        if choice is None:
+            return
+        family, size, bold, italic = choice
+        try:
+            self.preview_label.configure(
+                font=_entry_font_spec(family, size, bold, italic)
+            )
+        except tk.TclError:
+            pass
+
+    def _validated_choice_preview(self) -> tuple[str, int, bool, bool] | None:
+        family = self.family_var.get().strip()
+        try:
+            size = int(float(self.size_var.get().strip()))
+        except (TypeError, ValueError):
+            return None
+        if not family or not self._min_size <= size <= self._max_size:
+            return None
+        bold, italic = self._style_flags()
+        return family, size, bold, italic
+
+    def _apply(self) -> bool:
+        choice = self._validated_choice()
+        if choice is None:
+            return False
+        self._on_apply(*choice)
+        return True
+
+    def _accept(self) -> None:
+        if self._apply():
+            self.destroy()
+
+
 class SettingsDialog(tk.Toplevel):
     FIELDS = [
         ("词典完整名称", "dictionary_full_name", str),
