@@ -2018,6 +2018,53 @@ def test_v214_visual_single_cjk_rescue_rejects_definition_text_near_tall_run():
     assert word == "" and record is None
 
 
+def test_v214_single_only_profile_visual_rescue_keeps_large_head_not_body_line():
+    import numpy as np
+    from PIL import Image
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import OCRRecord, filter_headword_records
+
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_allow_numbered_prefix=False,
+        profile_allow_marker_prefix=False,
+        profile_cjk_allow_single_headword=True,
+        profile_cjk_allow_bracketed_headword=False,
+        paddle_band_width=220,
+        paddle_band_width_ratio=100,
+        paddle_band_left_margin=0,
+        paddle_left_tolerance=16,
+        paddle_rec_score_threshold=0.1,
+        paddle_auto_header_rule=False,
+        paddle_refine_separator_y=False,
+        character_height=20,
+        row_padding=4,
+    )
+    gray = np.full((380, 220), 255, dtype=np.uint8)
+    # Ordinary rows establish body height.
+    for y0 in (20, 60, 300, 340):
+        gray[y0:y0 + 20, 4:92] = 0
+    # False tall projection caused by dense/merged body ink.
+    gray[105:155, 4:88] = 0
+    # Genuine oversized display glyph.
+    gray[205:265, 8:72] = 0
+    band = Image.fromarray(gray, mode="L").convert("RGB")
+    records = [
+        OCRRecord("普通正文", 0.99, (4, 20, 92, 40)),
+        OCRRecord("另一正文", 0.99, (4, 60, 92, 80)),
+        OCRRecord("Âm: 花 ba (ba). 普通釋義", 0.99, (5, 118, 190, 140)),
+        OCRRecord("波 ba", 0.99, (8, 207, 88, 263)),
+        OCRRecord("後續正文", 0.99, (4, 300, 92, 320)),
+        OCRRecord("末行正文", 0.99, (4, 340, 92, 360)),
+    ]
+    entries, diagnostics = filter_headword_records(records, band, 0, 0, settings)
+    assert [entry.word for entry in entries] == ["波"]
+    false_rows = [row for row in diagnostics if row.get("text", "").startswith("Âm: 花")]
+    assert false_rows and false_rows[0]["accepted"] is False
+
+
 def test_v282_alignment_key_preserves_cjk_characters():
     from picture_capture.paddle_headwords import _alignment_key, _lemma_similarity
 
