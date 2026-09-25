@@ -41,6 +41,19 @@ Intel macOS remains usable for Picture Capture core features, Tesseract and opti
 
 The PaddlePaddle CPU source contains Linux aarch64 wheels, so Picture Capture can select `ocr-cpu`. The project does not offer its NVIDIA CUDA profiles on Linux ARM64.
 
+## Runtime portability
+
+Machine-specific state is deliberately separated from project data:
+
+- Paddle CPU/GPU is resolved from the current machine at runtime; legacy project `paddle_device` values are compatibility-only.
+- Tesseract executable selection is stored in the current user's runtime configuration. A stale path from another OS falls back to the local PATH and common macOS/Windows locations.
+- project-relative wordslist paths remain portable; a foreign absolute path falls back to a project-local `wordslist.txt` when available.
+- legacy sidecars and PicDic manifests are read with a unique case-insensitive filename fallback so projects created on case-insensitive Windows filesystems can move to Linux/macOS safely.
+- default UI fonts are resolved against installed fonts at render time, with Tk-native fallbacks when Windows-only fonts are unavailable.
+- large windows are clamped to the usable desktop work area; macOS/Linux context menus include platform-specific secondary-click bindings.
+- Windows BAT launchers use `pushd/popd` so UNC/network-share paths are valid working directories.
+- source/Release OCR installer buttons are only shown through a detected checkout root; wheel/site-packages installs no longer guess a repository root.
+
 ## CI policy
 
 Pull requests and pushes to `main` run the standard test/build job on:
@@ -53,7 +66,7 @@ Each runner:
 
 1. installs the locked core environment with Python 3.13;
 2. imports Tkinter and reports the detected platform support contract;
-3. dry-runs the `ocr-cpu` profile where Paddle CPU is supported;
+3. dry-runs the `ocr-cpu` profile where Paddle CPU is supported and constructs the main Tk window plus key Toplevels;
 4. runs pytest and the compatibility runner;
 5. runs compileall and Ruff undefined-name checks;
 6. builds the wheel.
