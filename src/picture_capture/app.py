@@ -1768,7 +1768,7 @@ class FontPickerDialog(tk.Toplevel):
         self.bind("<Return>", lambda _e: self._accept())
         self.bind("<Escape>", lambda _e: self.destroy())
 
-        self._populate_families(self.family_var.get())
+        self._populate_families(self.family_var.get(), query="")
         self._select_style()
         self._select_size()
         self._refresh_preview()
@@ -1791,9 +1791,12 @@ class FontPickerDialog(tk.Toplevel):
                 return bold, italic
         return False, False
 
-    def _populate_families(self, preferred: str = "") -> None:
-        query = self.family_var.get().strip().casefold()
-        shown = [name for name in self._all_families if not query or query in name.casefold()]
+    def _populate_families(self, preferred: str = "", *, query: str | None = None) -> None:
+        folded_query = str("" if query is None else query).strip().casefold()
+        shown = [
+            name for name in self._all_families
+            if not folded_query or folded_query in name.casefold()
+        ]
         if not shown:
             shown = list(self._all_families)
         self.family_list.delete(0, "end")
@@ -1808,7 +1811,9 @@ class FontPickerDialog(tk.Toplevel):
                     break
 
     def _filter_families(self, _event: tk.Event | None = None) -> None:
-        self._populate_families(self.family_var.get())
+        self._populate_families(
+            self.family_var.get(), query=self.family_var.get()
+        )
         self._refresh_preview()
 
     def _choose_family(self, _event: tk.Event | None = None) -> None:
@@ -10066,6 +10071,7 @@ class PictureCaptureApp(tk.Tk):
         self.quick_vars: dict[str, tk.Variable] = {}
         self.quick_bool_vars: dict[str, tk.BooleanVar] = {}
         self.quick_field_casts: dict[str, type] = {}
+        self.quick_font_summary_vars: dict[str, tk.StringVar] = {}
         self.quick_field_labels: dict[str, ttk.Label] = {}
 
         def add_field(
@@ -10259,6 +10265,7 @@ class PictureCaptureApp(tk.Tk):
                 family_var.get(), size_var.get(), main_bold_var.get(), main_italic_var.get()
             )
         )
+        self.quick_font_summary_vars["main_entry_font_family"] = main_font_summary_var
         ttk.Label(font_row, textvariable=main_font_summary_var).pack(side="left", fill="x", expand=True, padx=(6, 0))
         ttk.Button(
             font_row, text="选择字体…",
@@ -10286,6 +10293,7 @@ class PictureCaptureApp(tk.Tk):
                 label_family_var.get(), label_size_var.get(), label_bold_var.get(), label_italic_var.get()
             )
         )
+        self.quick_font_summary_vars["illustration_label_font_family"] = label_font_summary_var
         ttk.Label(label_font_row, textvariable=label_font_summary_var).pack(side="left", fill="x", expand=True, padx=(6, 0))
         ttk.Button(
             label_font_row, text="选择字体…",
@@ -10527,6 +10535,27 @@ class PictureCaptureApp(tk.Tk):
             for name, var in getattr(self, "quick_bool_vars", {}).items():
                 if hasattr(self.settings, name):
                     var.set(bool(getattr(self.settings, name)))
+            font_specs = (
+                (
+                    "main_entry_font_family", "main_entry_font_size",
+                    "main_entry_font_bold", "main_entry_font_italic",
+                ),
+                (
+                    "illustration_label_font_family", "illustration_label_font_size",
+                    "illustration_label_font_bold", "illustration_label_font_italic",
+                ),
+            )
+            for family_name, size_name, bold_name, italic_name in font_specs:
+                summary_var = getattr(self, "quick_font_summary_vars", {}).get(family_name)
+                if summary_var is not None:
+                    summary_var.set(
+                        _font_choice_summary(
+                            getattr(self.settings, family_name),
+                            getattr(self.settings, size_name),
+                            bool(getattr(self.settings, bold_name)),
+                            bool(getattr(self.settings, italic_name)),
+                        )
+                    )
             for name, var in getattr(self, "quick_color_vars", {}).items():
                 if hasattr(self.settings, name):
                     value = str(getattr(self.settings, name))
