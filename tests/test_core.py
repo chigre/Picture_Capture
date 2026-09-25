@@ -12,7 +12,7 @@ from picture_capture.app import (
     PictureCaptureApp, _candidate_choice_rows, _parse_words_of_pages_text, _fill_page_entries,
     _build_words_page_lookup, _resolve_words_page_token, _parse_merged_pdic_text, _write_pdic_atomic,
     _natural_text_key, _sorted_page_list_rows, project_language_from_ocr,
-    transformed_geometry_pending,
+    transformed_geometry_pending, scaled_overlay_line_width, review_auto_fit_zoom,
 )
 from picture_capture.models import AppSettings, Entry, PolygonRegion, ProjectState
 from picture_capture.page_sections import (
@@ -32,7 +32,7 @@ from picture_capture.collation import available_profile_labels, collation_key, p
 from picture_capture.dictionary_profile import (
     PROFILE_FORMAT_V2, PROFILE_FORMAT_V3, available_dictionary_profiles, dictionary_profile_labels,
     dictionary_profile_preset, load_dictionary_profile, profile_effective_settings, profile_layout_summary,
-    write_project_profile,
+    write_project_profile, language_effective_settings,
 )
 from picture_capture.ocr_engines import _lens_payload_records, find_tesseract
 from picture_capture.paddle_headwords import (
@@ -4716,14 +4716,24 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     settings = AppSettings()
     assert settings.guide_color == "#ff0000"
     assert settings.headword_marker_color == "#ff0000"
-    assert settings.guide_width == 4
     assert settings.marker_height == 2
-    assert settings.illustration_outline_width == 1
-    assert settings.illustration_label_border_width == 1
+    assert settings.guide_width == 2
+    assert settings.page_section_width == 2
+    assert settings.illustration_outline_width == 2
+    assert settings.illustration_label_border_width == 2
     assert settings.main_entry_width_chars == 18
     assert settings.main_entry_x_ratio == 0.66
-    assert settings.main_entry_font_size == 32
-    assert settings.illustration_label_font_size == 32
+
+    # Fresh-project content typography is deliberately consistent.
+    assert settings.main_entry_font_family == "DengXian"
+    assert settings.main_entry_font_size == 16
+    assert settings.illustration_label_font_family == "DengXian"
+    assert settings.illustration_label_font_size == 16
+    assert settings.review_entry_font_family == "DengXian"
+    assert settings.review_entry_font_size == 16
+    assert settings.review_simplified_font_family == "DengXian"
+    assert settings.review_simplified_font_size == 16
+
     assert settings.show_illustration_labels is False
     assert settings.batch_interval == 3.0
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
@@ -4736,6 +4746,15 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'self.quick_bool_vars["show_illustration_labels"]' in app_text
     assert 'show_shapes = bool(self.polygon_var.get() or self.polygon_draw_var.get())' in app_text
     assert 'show_labels = bool(self.settings.show_illustration_labels or self.polygon_draw_var.get())' in app_text
+
+    # All user-facing main-image line widths share one image->display ratio.
+    assert scaled_overlay_line_width(2, 1.0) == 2
+    assert scaled_overlay_line_width(2, 0.5) == 1
+    assert scaled_overlay_line_width(2, 1.5) == 3
+    assert 'scaled_overlay_line_width(self.settings.guide_width, overlay_scale)' in app_text
+    assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in app_text
+    assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
+    assert 'self.settings.illustration_label_border_width, overlay_scale' in app_text
 
 
 def test_v21112_picdic_index_has_no_percent_signs(tmp_path):
@@ -4779,6 +4798,32 @@ def test_review_crop_context_keeps_true_horizontal_columns():
     crop_lefts = [box[0] for box in boxes]
     assert crop_lefts[1] - crop_lefts[0] > 800
     assert crop_lefts[2] - crop_lefts[1] > 800
+
+
+def test_review_zoom_defaults_to_auto_99_percent_left_pane_fit():
+    settings = AppSettings()
+    assert settings.review_zoom_percent == 0
+    assert review_auto_fit_zoom(1000, 500) == 0.495
+    assert review_auto_fit_zoom(500, 1000) == 1.98
+
+    app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    assert 'text="自动", width=5, command=self.reset_review_zoom' in app_text
+    assert "self.review_zoom_auto = stored_review_zoom <= 0" in app_text
+    assert "widest_crop = max(crop.width for crop in raw_crops)" in app_text
+    assert "widest_crop, auto_image_area_width, 0.99" in app_text
+    assert "return 0 if self.review_zoom_auto else round(self.review_zoom * 100)" in app_text
+    assert "not self.review_zoom_auto" in app_text
+
+
+def test_google_lens_language_follows_headword_ocr_language():
+    settings = language_effective_settings("jpn", "horizontal-tb")
+    assert settings["ocr_language"] == "jpn"
+    assert settings["paddle_lens_language"] == "jpn"
+
+    source = (Path(__file__).parents[1] / "src" / "picture_capture" / "paddle_headwords.py").read_text(encoding="utf-8")
+    assert 'getattr(settings, "ocr_language", "")' in source
+    assert "band, language=lens_language" in source
+    assert '"google_lens_language": lens_language' in source
 
 
 def test_review_editor_font_size_is_independent_of_review_zoom():
