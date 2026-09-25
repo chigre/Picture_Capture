@@ -13531,51 +13531,88 @@ class PictureCaptureApp(tk.Tk):
         self.status_var.set(message)
         return False
 
-    def auto_detect_current(self, clicked_x: int | None = None, force_paddle_refresh: bool = False) -> None:
+    def auto_detect_current(
+        self, clicked_x: int | None = None, force_paddle_refresh: bool = False,
+    ) -> None:
+        """Backward-compatible single-page detection routed through the batch worker."""
         if self._batch_active:
             self.status_var.set("后台画线任务运行中，暂不启动前台自动识别；可进行人工校对。")
             return
-        if not self.guard(): return
+        if not self.guard():
+            return
         if not self._guard_transformed_geometry("自动画线"):
             return
-        try:
-            cache_path = None
-            if self.settings.detection_method == "paddleocr":
-                cache_path = ocr_cache_root(self.project.root) / f"{self.current_page.stem}.json"
-                self.status_var.set("PaddleOCR 正在识别各栏左侧候选带；首次运行会下载模型…")
-                self.update_idletasks()
+
+        project = self.project
+        page = self.current_page
+        page_index = int(self.current_index)
+        settings = replace(self.settings)
+        existing_entries = [replace(entry) for entry in self.entries]
+        cache_path = (
+            ocr_cache_root(project.root) / f"{page.stem}.json"
+            if settings.detection_method == "paddleocr" else None
+        )
+        filter_path = (
+            headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME)
+            if settings.detection_method == "paddleocr" else None
+        )
+
+        def worker(_item, _position: int, _total: int):
+            with Image.open(page) as opened:
+                image = normalize_page_rgb(opened)
             detected, geometry = detect_entries(
-                self.image,
-                self.settings,
+                image,
+                settings,
                 paddle_cache_path=cache_path,
                 force_paddle_refresh=force_paddle_refresh,
-                paddle_filter_rules_path=(
-                    headword_filter_rules_path(self.project.root, HEADWORD_FILTER_RULES_FILENAME)
-                    if self.project else None
-                ),
+                paddle_filter_rules_path=filter_path,
+                profile_page_index=page_index,
             )
+            return detected, geometry
+
+        def done(_completed, _total, stopped, results, error):
+            if error is not None or stopped or not results:
+                return
+            if self.project is not project or self.current_page != page:
+                return
+            detected, geometry = results[-1]
             if clicked_x is None:
-                self.entries = detected
+                self.entries = list(detected)
             else:
                 col = column_index_for_click(clicked_x, geometry)
-                self.entries = [e for e in self.entries if column_index(e.x, geometry, e.y) != col]
-                self.entries.extend(e for e in detected if column_index(e.x, geometry, e.y) == col)
+                merged = [
+                    entry for entry in existing_entries
+                    if column_index(entry.x, geometry, entry.y) != col
+                ]
+                merged.extend(
+                    entry for entry in detected
+                    if column_index(entry.x, geometry, entry.y) == col
+                )
+                self.entries = merged
             self._sort_entries_reading_order()
-            if self.settings.detection_method == "paddleocr":
+            if settings.detection_method == "paddleocr":
                 self._load_ocr_review_candidates()
                 self._refresh_page_quality_colors()
             self.redraw()
-            if self.settings.detection_method == "paddleocr" and self.project and self.current_page:
-                diag = ocr_cache_root(self.project.root) / f"{self.current_page.stem}_ocr_diagnostics.txt"
-                comp = ocr_cache_root(self.project.root) / f"{self.current_page.stem}_ocr_comparison.txt"
-                issues = ocr_cache_root(self.project.root) / f"{self.current_page.stem}_issues.tsv"
+            if settings.detection_method == "paddleocr":
+                diag = ocr_cache_root(project.root) / f"{page.stem}_ocr_diagnostics.txt"
+                issues = ocr_cache_root(project.root) / f"{page.stem}_issues.tsv"
                 quality = self._current_page_quality_text()
                 self.status_var.set(
-                    f"智能画线完成：{len(self.entries)} 个词条；{quality}；诊断 {diag.name}；复核 {issues.name}"
+                    f"智能画线完成：{len(self.entries)} 个词条；{quality}；"
+                    f"诊断 {diag.name}；复核 {issues.name}"
                 )
             else:
-                self.status_var.set(f"智能画线完成：检测到 {len(self.entries)} 个词条；可手动增删后保存")
-        except Exception as exc: self.show_error("智能画线失败", exc)
+                self.status_var.set(
+                    f"智能画线完成：检测到 {len(self.entries)} 个词条；可手动增删后保存"
+                )
+
+        label = "PaddleOCR 当前页识别" if settings.detection_method == "paddleocr" else "当前页自动画线"
+        self._start_batch_task(
+            label, [page_index], worker, done,
+            item_label=lambda _item: page.name,
+            refresh_page_quality=settings.detection_method == "paddleocr",
+        )
 
     def paddle_detect_current(self, force_refresh: bool = False) -> None:
         self.settings.detection_method = "paddleocr"
@@ -13975,24 +14012,60 @@ class PictureCaptureApp(tk.Tk):
         self.open_settings(initial_tab="project")
 
     def ocr_current(self) -> None:
+        """Backward-compatible current-page OCR, executed off the Tk thread."""
         if self._batch_active:
             self.status_var.set("后台画线任务运行中，暂不启动前台 OCR；可进行人工文本校对。")
             return
-        if not self.guard() or not self.entries: return
+        if not self.guard() or not self.entries:
+            return
         if not self._guard_transformed_geometry("OCR"):
             return
-        try:
-            engine_name = OCR_ENGINE_LABELS.get(self.settings.ocr_engine, self.settings.ocr_engine)
-            self.status_var.set(f"正在用 {engine_name} OCR 当前页…"); self.update_idletasks()
-            rules = load_replace_rules(replace_rules_path(self.project.root))
+
+        project = self.project
+        page = self.current_page
+        page_index = int(self.current_index)
+        settings = replace(self.settings)
+        ordered_entries = [replace(entry) for entry in self._ordered_entries_reading_order()]
+        pages_meta = self.pages_tuple(page_index)
+        rules_path = replace_rules_path(project.root)
+        ocred_path = qt_root(project.root) / f"{page.stem}.OCRed"
+        engine_name = OCR_ENGINE_LABELS.get(settings.ocr_engine, settings.ocr_engine)
+
+        def worker(_item, _position: int, _total: int):
+            rules = load_replace_rules(rules_path)
+            with Image.open(page) as opened:
+                image = normalize_page_rgb(opened)
             texts = ocr_entries(
-                self.image, self.entries, self.settings, rules,
-                profile_page_index=max(0, int(self.current_index)),
+                image, ordered_entries, settings, rules,
+                profile_page_index=page_index,
             )
-            for entry, text in zip(self._ordered_entries_reading_order(), texts): entry.word = text
-            export_ocred(qt_root(self.project.root) / f"{self.current_page.stem}.OCRed", texts)
-            self.save_pdic(silent=True); self.redraw(); self.status_var.set(f"{engine_name} OCR 完成：{len(texts)} 个词条")
-        except Exception as exc: self.show_error("OCR 失败", exc)
+            for entry, text in zip(ordered_entries, texts):
+                entry.word = text
+            export_ocred(ocred_path, texts)
+            write_pdic(pdic_path(page), ordered_entries, image.width, pages_meta)
+            return texts
+
+        def done(_completed, _total, stopped, results, error):
+            if error is not None or stopped or not results:
+                return
+            if self.project is not project or self.current_page != page:
+                return
+            texts = list(results[-1])
+            current = self._ordered_entries_reading_order()
+            if len(current) == len(texts):
+                for entry, text in zip(current, texts):
+                    entry.word = text
+                self.redraw()
+            else:
+                self._request_page_load(
+                    page_index, current_already_saved=True, force=True,
+                )
+            self.status_var.set(f"{engine_name} OCR 完成：{len(texts)} 个词条")
+
+        self._start_batch_task(
+            "当前页 OCR", [page_index], worker, done,
+            item_label=lambda _item: page.name,
+        )
 
     def export_text(self) -> None:
         if not self.guard(): return
@@ -14011,35 +14084,83 @@ class PictureCaptureApp(tk.Tk):
         except Exception as exc: self.show_error("导入失败", exc)
 
     def split_lines_current(self) -> None:
-        if not self.guard(): return
+        """Backward-compatible single-line crop export routed off the Tk thread."""
+        if self._batch_active:
+            self.status_var.set("已有批量任务正在运行，请结束后再执行单行切图。")
+            return
+        if not self.guard():
+            return
         if not self._guard_transformed_geometry("单行切图"):
             return
-        try:
+        project = self.project
+        page = self.current_page
+        page_index = int(self.current_index)
+        entries = [replace(entry) for entry in self.entries]
+        settings = replace(self.settings)
+        out_dir = qt_root(project.root) / "PSW"
+
+        def worker(_item, _position: int, _total: int):
             records = split_single_lines(
-                self.current_page, self.entries, self.settings, qt_root(self.project.root) / "PSW",
-                profile_page_index=max(0, int(self.current_index)),
+                page, entries, settings, out_dir,
+                profile_page_index=page_index,
             )
-            append_crop_log(self.project.root, records); self.status_var.set(f"已导出 {len(records)} 张词条单行图")
-        except Exception as exc: self.show_error("单行切图失败", exc)
+            append_crop_log(project.root, records)
+            return len(records)
+
+        def done(_completed, _total, stopped, results, error):
+            if error is None and not stopped and results:
+                self.status_var.set(f"已导出 {int(results[-1] or 0)} 张词条单行图")
+
+        self._start_batch_task(
+            "当前页单行切图", [page_index], worker, done,
+            item_label=lambda _item: page.name,
+        )
 
     def split_whole_current(self) -> None:
-        if not self.guard(): return
+        """Backward-compatible whole-entry crop export routed off the Tk thread."""
+        if self._batch_active:
+            self.status_var.set("已有批量任务正在运行，请结束后再执行整体切图。")
+            return
+        if not self.guard():
+            return
         if not self._guard_transformed_geometry("整体切图"):
             return
-        try:
-            config = self._load_crop_settings(); special = config.get("special_pages", {}).get(self.current_page.stem, {})
-            top_y = int(special.get("top_v", config.get("general_top_v", self.settings.start_y)))
-            bottom_y = int(special.get("bottom_v", config.get("general_bottom_v", 0)))
+
+        project = self.project
+        page = self.current_page
+        page_index = int(self.current_index)
+        entries = [replace(entry) for entry in self.entries]
+        polygons = list(self.polygons)
+        settings = replace(self.settings)
+        config = self._load_crop_settings()
+        special = config.get("special_pages", {}).get(page.stem, {})
+        top_y = int(special.get("top_v", config.get("general_top_v", settings.start_y)))
+        bottom_y = int(special.get("bottom_v", config.get("general_bottom_v", 0)))
+        entry_left = int(config.get("entry_left_padding_u", 0))
+        entry_right = int(config.get("entry_right_padding_u", 0))
+        integrate_illustrations = bool(config.get("integrate_illustrations", True))
+        out_dir = qt_root(project.root) / "PWW"
+
+        def worker(_item, _position: int, _total: int):
             records = split_whole_entries(
-                self.current_page, self.entries, self.settings, qt_root(self.project.root) / "PWW",
-                top_y=top_y, bottom_y=bottom_y, polygons=list(self.polygons),
-                entry_left_padding=int(config.get("entry_left_padding_u", 0)),
-                entry_right_padding=int(config.get("entry_right_padding_u", 0)),
-                integrate_illustrations=bool(config.get("integrate_illustrations", True)),
-                profile_page_index=max(0, int(self.current_index)),
+                page, entries, settings, out_dir,
+                top_y=top_y, bottom_y=bottom_y, polygons=polygons,
+                entry_left_padding=entry_left,
+                entry_right_padding=entry_right,
+                integrate_illustrations=integrate_illustrations,
+                profile_page_index=page_index,
             )
-            append_crop_log(self.project.root, records); self.status_var.set(f"已导出 {len(records)} 张词条整体图")
-        except Exception as exc: self.show_error("整体切图失败", exc)
+            append_crop_log(project.root, records)
+            return len(records)
+
+        def done(_completed, _total, stopped, results, error):
+            if error is None and not stopped and results:
+                self.status_var.set(f"已导出 {int(results[-1] or 0)} 张词条整体图")
+
+        self._start_batch_task(
+            "当前页整体切图", [page_index], worker, done,
+            item_label=lambda _item: page.name,
+        )
 
     def _crop_settings_defaults(self) -> dict:
         default_bottom = self.settings.bottom_y if self.settings.crop_to_bottom_y else 0
@@ -15212,38 +15333,110 @@ class PictureCaptureApp(tk.Tk):
             )
 
     def import_legacy_words(self) -> bool:
-        if not self.project: return False
-        path = words_of_pages_default_path(self.project.root)
+        """Import legacy words in a sequential background batch.
+
+        The return value now means that an import task was started; completion is
+        reported asynchronously in the status bar.
+        """
+        if not self.project or self._batch_active:
+            return False
+        project = self.project
+        path = words_of_pages_default_path(project.root)
         if not path.exists():
-            path_text = filedialog.askopenfilename(title="选择 _WordsOfPages.txt", filetypes=[("文本", "*.txt"), ("全部", "*")])
-            if not path_text: return False
+            path_text = filedialog.askopenfilename(
+                title="选择 _WordsOfPages.txt",
+                filetypes=[("文本", "*.txt"), ("全部", "*")],
+                parent=self,
+            )
+            if not path_text:
+                return False
             path = Path(path_text)
-        try:
+
+        pages = list(project.images)
+        pages_meta = [
+            (
+                page.stem,
+                pages[i - 1].stem if i > 0 else "@",
+                pages[i + 1].stem if i + 1 < len(pages) else "@",
+            )
+            for i, page in enumerate(pages)
+        ]
+        holder: dict[str, object] = {
+            "lines": None, "rich": False, "groups": None, "words": None, "cursor": 0,
+        }
+        items: list[object] = ["__parse__"] + list(range(len(pages)))
+
+        def ensure_parsed() -> None:
+            if holder["lines"] is not None:
+                return
             text_data, _encoding = read_text_detected(path)
             lines = [line for line in text_data.splitlines() if line.strip()]
             rich = [line for line in lines if line.count("#") >= 7]
+            holder["lines"] = lines
             if len(rich) == len(lines):
                 groups: dict[str, list[str]] = {}
-                for line in rich: groups.setdefault(line.split("#")[5], []).append(line)
-                for page in self.project.images:
-                    if page.stem in groups:
-                        pdic_path(page).write_text("\n".join(groups[page.stem]) + "\n", encoding="utf-8")
+                for line in rich:
+                    groups.setdefault(line.split("#")[5], []).append(line)
+                holder["rich"] = True
+                holder["groups"] = groups
             else:
-                words = [line.split("#", 1)[0].strip() for line in lines]
-                cursor = 0
-                for i, page in enumerate(self.project.images):
-                    entries = read_pdic(pdic_path(page))
-                    for entry in entries:
-                        if cursor >= len(words): break
-                        entry.word = words[cursor]; cursor += 1
-                    if entries:
-                        with Image.open(page) as opened: width = opened.width
-                        write_pdic(pdic_path(page), entries, width, self.pages_tuple(i))
-            self.load_page(self.current_index); self.status_var.set(f"已导入旧版数据：{len(lines)} 条")
-            return True
-        except Exception as exc:
-            self.show_error("旧版数据导入失败", exc)
-            return False
+                holder["words"] = [line.split("#", 1)[0].strip() for line in lines]
+
+        def worker(item, _position: int, _total: int):
+            ensure_parsed()
+            if item == "__parse__":
+                return {"parsed": len(holder["lines"] or [])}
+            index = int(item)
+            page = pages[index]
+            changed = False
+            if bool(holder["rich"]):
+                groups = holder["groups"] if isinstance(holder["groups"], dict) else {}
+                rows = list(groups.get(page.stem, []))
+                if rows:
+                    pdic_path(page).write_text(
+                        "\n".join(rows) + "\n", encoding="utf-8",
+                    )
+                    changed = True
+            else:
+                words = holder["words"] if isinstance(holder["words"], list) else []
+                cursor = int(holder["cursor"])
+                entries = read_pdic(pdic_path(page))
+                for entry in entries:
+                    if cursor >= len(words):
+                        break
+                    entry.word = str(words[cursor])
+                    cursor += 1
+                holder["cursor"] = cursor
+                if entries:
+                    with Image.open(page) as opened:
+                        width = int(opened.width)
+                    write_pdic(pdic_path(page), entries, width, pages_meta[index])
+                    changed = True
+            return {"index": index, "changed": changed}
+
+        def done(_completed, _total, stopped, results, error):
+            if error is not None:
+                return
+            changed_indices = {
+                int(row["index"]) for row in results
+                if isinstance(row, dict) and row.get("changed") and "index" in row
+            }
+            if self.project is project and self.current_index in changed_indices:
+                self._request_page_load(
+                    self.current_index, current_already_saved=True, force=True,
+                )
+            count = len(holder["lines"] or [])
+            suffix = "（提前停止）" if stopped else ""
+            self.status_var.set(f"已导入旧版数据：{count} 条{suffix}")
+
+        started = self._start_batch_task(
+            "导入旧版数据", items, worker, done,
+            item_label=lambda item: (
+                f"解析 {path.name}" if item == "__parse__"
+                else pages[int(item)].name
+            ),
+        )
+        return bool(started)
 
     def _default_old_new_compare_source(self) -> Path | None:
         """Return the best initial file suggestion for 【新旧比较】."""
