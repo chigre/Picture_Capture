@@ -1803,8 +1803,8 @@ class SettingsDialog(tk.Toplevel):
         "manual_x": "第一栏左缘 U",
         "column_width": "单栏正文宽度",
         "gutter": "栏间空白",
-        "character_height": "典型行高（参考页规范坐标）",
-        "row_padding": "典型行间空白（参考页规范坐标）",
+        "character_height": "典型行高",
+        "row_padding": "典型行间空白",
         "ocr_language": "词头 OCR 语言",
         "analysis_threshold_mode": "墨迹判断方式",
         "body_indent": "左缘检测宽度",
@@ -12134,7 +12134,7 @@ class PictureCaptureApp(tk.Tk):
                 self._recent_projects_warning = recent_warning
             if hasattr(self, "_page_column_vars"):
                 self._page_column_vars["lined"].set(bool(getattr(self.settings, "page_list_show_lined", True)))
-                self._page_column_vars["fill_status"].set(bool(getattr(self.settings, "page_list_show_fill_status", True)))
+                self._page_column_vars["fill_status"].set(bool(getattr(self.settings, "page_list_show_fill_status", False)))
                 self._page_column_vars["illustrations"].set(bool(getattr(self.settings, "page_list_show_illustrations", True)))
                 self._apply_page_list_display_columns(save=False)
             self.hide_var.set(bool(self.settings.hide_overlays))
