@@ -77,6 +77,9 @@ from .profile_semantics import (
 )
 from .picdic import PicDicBuildCancelled, build_picdic_package
 from .image_utils import normalize_page_rgb
+from .page_sections import (
+    PageSection, read_page_sections, write_page_sections, v_is_inside_sections,
+)
 from .reference_index import contains_cjk, reference_sort_key
 from .network_lookup import LexicalLookupResult, lookup_word_free, web_search_url
 from .cc_cedict import (
@@ -6955,7 +6958,8 @@ class ReviewWindow(tk.Toplevel):
                         image, effective_settings, page_index,
                     )
                     geometry = derive_geometry(analysis_image, effective_settings)
-                    entries = sort_entries_reading_order(entries, geometry)
+                    sections = read_page_sections(page_path)
+                    entries = sort_entries_reading_order(entries, geometry, sections)
                     polygons = read_ppp(local_ppp_path)
                     cache_path = ocr_cache_root(Path(local_project_root)) / f"{page_path.stem}.json"
                     ocr_payload: dict = {}
@@ -7735,6 +7739,10 @@ class PictureCaptureApp(tk.Tk):
         self.view_scale = 1.0
         self.entries: list[WordEntry] = []
         self.polygons: list[PolygonRegion] = []
+        self.page_sections: list[PageSection] = []
+        self._section_editing = False
+        self._drag_section_boundary: tuple[int, str] | None = None
+        self.section_edit_button: ttk.Button | None = None
         self.new_polygon: list[tuple[int, int]] = []
         self.overlay_widgets: list[tk.Widget] = []
         self.entry_editor_bindings: list[tuple[tk.Entry, WordEntry]] = []
@@ -11935,6 +11943,7 @@ class PictureCaptureApp(tk.Tk):
                 image = normalize_page_rgb(opened)
             entries = read_pdic(pdic_path(page))
             polygons = read_ppp(ppp_read_path_for_image(page))
+            page_sections = read_page_sections(page)
             cache_path = ocr_cache_root(project.root) / f"{page.stem}.json"
             ocr_payload: dict = {}
             if cache_path.exists():
@@ -11958,7 +11967,8 @@ class PictureCaptureApp(tk.Tk):
             )
             payload = {
                 "project_root": str(project.root), "index": selected_index, "image": image,
-                "entries": entries, "polygons": polygons, "ocr_payload": ocr_payload,
+                "entries": entries, "polygons": polygons, "page_sections": page_sections,
+                "ocr_payload": ocr_payload,
                 "display_size": display_size, "display_image": display_image,
                 "view_scale": view_scale, "appearance_mode": appearance_mode,
             }
@@ -11982,6 +11992,9 @@ class PictureCaptureApp(tk.Tk):
             self.image = None
             self.entries = []
             self.polygons = []
+            self.page_sections = []
+            self._section_editing = False
+            self._drag_section_boundary = None
             self.current_index = -1
             self.ocr_review_candidates = []
             self.candidate_check_vars = {}
@@ -12113,6 +12126,7 @@ class PictureCaptureApp(tk.Tk):
                 image = normalize_page_rgb(opened)
             entries = read_pdic(pdic_path(page))
             polygons = read_ppp(ppp_read_path_for_image(page))
+            page_sections = read_page_sections(page)
             cache_path = ocr_cache_root(project_root) / f"{page.stem}.json"
             ocr_payload: dict = {}
             if cache_path.exists():
@@ -12132,7 +12146,8 @@ class PictureCaptureApp(tk.Tk):
             )
             return {
                 "project_root": str(project_root), "index": index, "image": image,
-                "entries": entries, "polygons": polygons, "ocr_payload": ocr_payload,
+                "entries": entries, "polygons": polygons, "page_sections": page_sections,
+                "ocr_payload": ocr_payload,
                 "display_size": display_size, "display_image": display_image,
                 "view_scale": view_scale,
             }
@@ -12177,6 +12192,7 @@ class PictureCaptureApp(tk.Tk):
         )
         if use_preloaded:
             self.image = preloaded["image"]
+            self.page_sections = list(preloaded.get("page_sections") or [])
             self.entries = list(preloaded.get("entries") or [])
             self._sort_entries_reading_order()
             ocr_payload = preloaded.get("ocr_payload") if isinstance(preloaded.get("ocr_payload"), dict) else {}
@@ -12186,12 +12202,17 @@ class PictureCaptureApp(tk.Tk):
         else:
             with Image.open(self.current_page) as opened:
                 self.image = normalize_page_rgb(opened)
+            self.page_sections = read_page_sections(self.current_page)
             self.entries = read_pdic(pdic_path(self.current_page))
             self._sort_entries_reading_order()
             self._restore_entry_ocr_metadata()
             self._load_ocr_review_candidates()
             self.polygons = read_ppp(self._ppp_read_path(self.current_page))
         self.new_polygon = []
+        self._section_editing = False
+        self._drag_section_boundary = None
+        if self.section_edit_button is not None:
+            self.section_edit_button.configure(text="SECTION设置", style="PC.Compact.TButton")
         self.update_idletasks()
         if reset_zoom:
             available = max(500, self.canvas.winfo_width() - 24)
@@ -12771,6 +12792,7 @@ class PictureCaptureApp(tk.Tk):
             entry_left_padding=entry_left, entry_right_padding=entry_right,
             integrate_illustrations=integrate_illustrations,
             profile_page_index=max(0, int(self.current_index)),
+            page_sections=list(self.page_sections),
         )
 
     def _draw_crop_plan_preview(self) -> None:
@@ -14333,6 +14355,7 @@ class PictureCaptureApp(tk.Tk):
         page = self.current_page
         page_index = int(self.current_index)
         settings = replace(self.settings)
+        page_sections = list(self.page_sections)
         existing_entries = [replace(entry) for entry in self.entries]
         cache_path = (
             ocr_cache_root(project.root) / f"{page.stem}.json"
@@ -14353,6 +14376,7 @@ class PictureCaptureApp(tk.Tk):
                 force_paddle_refresh=force_paddle_refresh,
                 paddle_filter_rules_path=filter_path,
                 profile_page_index=page_index,
+                page_sections=page_sections,
             )
             return detected, geometry
 
@@ -14644,7 +14668,9 @@ class PictureCaptureApp(tk.Tk):
         settings = self.__dict__.get("settings")
         if image is None or settings is None or not entries:
             return entries
-        return sort_entries_reading_order(entries, self._get_cached_display_geometry())
+        return sort_entries_reading_order(
+            entries, self._get_cached_display_geometry(), self.page_sections,
+        )
 
     def _sort_entries_reading_order(self) -> None:
         """Keep manual and OCR entries in one geometry-based reading order."""
@@ -14815,6 +14841,7 @@ class PictureCaptureApp(tk.Tk):
         page_index = int(self.current_index)
         settings = replace(self.settings)
         ordered_entries = [replace(entry) for entry in self._ordered_entries_reading_order()]
+        page_sections = list(self.page_sections)
         pages_meta = self.pages_tuple(page_index)
         rules_path = replace_rules_path(project.root)
         ocred_path = qt_root(project.root) / f"{page.stem}.OCRed"
@@ -14826,7 +14853,7 @@ class PictureCaptureApp(tk.Tk):
                 image = normalize_page_rgb(opened)
             texts = ocr_entries(
                 image, ordered_entries, settings, rules,
-                profile_page_index=page_index,
+                profile_page_index=page_index, page_sections=page_sections,
             )
             for entry, text in zip(ordered_entries, texts):
                 entry.word = text
@@ -15450,11 +15477,13 @@ class PictureCaptureApp(tk.Tk):
                 image = normalize_page_rgb(opened)
             effective_settings = effective_page_settings(settings, image.size, index)
             analysis_image = page_template_analysis_image(image, effective_settings, index)
+            sections = read_page_sections(page)
             entries = sort_entries_reading_order(
-                entries, derive_geometry(analysis_image, effective_settings)
+                entries, derive_geometry(analysis_image, effective_settings), sections,
             )
             texts = ocr_entries(
                 image, entries, settings, rules, profile_page_index=index,
+                page_sections=sections,
             )
             for entry, text in zip(entries, texts): entry.word = text
             export_ocred(qt_root(project.root) / f"{page.stem}.OCRed", texts)
@@ -15570,7 +15599,9 @@ class PictureCaptureApp(tk.Tk):
             with Image.open(page) as opened:
                 width, height = map(int, opened.size)
             geometry = derive_nominal_geometry(width, height, settings)
-            ordered = sort_entries_column_y(entries, geometry)
+            ordered = sort_entries_column_y(
+                entries, geometry, read_page_sections(page),
+            )
             after = [(e.word, int(e.x), int(e.y)) for e in ordered]
             previous = project.images[index - 1].stem if index > 0 else "@"
             following = project.images[index + 1].stem if index + 1 < len(project.images) else "@"
@@ -15880,7 +15911,8 @@ class PictureCaptureApp(tk.Tk):
             with Image.open(page) as opened:
                 width, height = map(int, opened.size)
             entries = sort_entries_reading_order(
-                entries, derive_nominal_geometry(width, height, settings_snapshot)
+                entries, derive_nominal_geometry(width, height, settings_snapshot),
+                read_page_sections(page),
             )
             _write_pdic_atomic(pdic_path(page), entries, width, pages_meta[index])
             return {
@@ -16082,7 +16114,8 @@ class PictureCaptureApp(tk.Tk):
             with Image.open(page) as opened:
                 width, height = map(int, opened.size)
             entries = sort_entries_reading_order(
-                entries, derive_nominal_geometry(width, height, settings_snapshot)
+                entries, derive_nominal_geometry(width, height, settings_snapshot),
+                read_page_sections(page),
             )
             has_data = page.stem in present_pages
             words = list(mapping.get(page.stem, [])) if has_data else []
