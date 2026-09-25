@@ -4611,15 +4611,16 @@ class ReviewWindow(tk.Toplevel):
         ttk.Label(
             word_nav, textvariable=self.word_window_var, style="PCR.Body.TLabel"
         ).pack(side="left", fill="x", expand=True)
-        # Pack right-side buttons in reverse creation order so the visible order is 前100 后100.
+        word_nav_buttons = ttk.Frame(word_nav, style="PCR.Surface.TFrame")
+        word_nav_buttons.pack(side="right")
         ttk.Button(
-            word_nav, text="后100", width=7, command=lambda: self.shift_wordslist_window(1),
+            word_nav_buttons, text="前100", width=7, command=lambda: self.shift_wordslist_window(-1),
             style="PCR.Tool.TButton",
-        ).pack(side="right", padx=(4, 0))
+        ).pack(side="left")
         ttk.Button(
-            word_nav, text="前100", width=7, command=lambda: self.shift_wordslist_window(-1),
+            word_nav_buttons, text="后100", width=7, command=lambda: self.shift_wordslist_window(1),
             style="PCR.Tool.TButton",
-        ).pack(side="right")
+        ).pack(side="left", padx=(4, 0))
 
         word_family = preferred_font_family(
             self, ("Cambria", "Times New Roman", "Times", "DejaVu Serif")
