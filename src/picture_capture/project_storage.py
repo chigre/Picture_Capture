@@ -135,6 +135,15 @@ def simplified_review_path_for_image(image_path: Path) -> Path:
         return storage_root(root) / "data" / "Simplified" / f"{image_path.stem}.json"
     return root / "QT" / "Simplified" / f"{image_path.stem}.json"
 
+
+def page_sections_path_for_image(image_path: Path) -> Path:
+    """Return the per-page SECTION sidecar without changing PDIC/PPP formats."""
+    image_path = Path(image_path)
+    root = image_path.parent
+    if is_managed_project(root):
+        return storage_root(root) / "data" / "PageSections" / f"{image_path.stem}.json"
+    return root / "QT" / "PageSections" / f"{image_path.stem}.json"
+
 def ppp_write_path_for_image(image_path: Path) -> Path:
     image_path = Path(image_path)
     root = image_path.parent
@@ -213,7 +222,7 @@ def ensure_project_storage(project_root: Path, software_version: str) -> Path:
     root = Path(project_root).expanduser().resolve()
     target = storage_root(root)
     for rel in (
-        "data/PDIC", "data/PPP", "data/Simplified", "rules", "QT/PaddleOCR", "QT/PSW", "QT/PWW",
+        "data/PDIC", "data/PPP", "data/Simplified", "data/PageSections", "rules", "QT/PaddleOCR", "QT/PSW", "QT/PWW",
         "QT/PIC", "QT/PicDic", "output/TrainingExports", "output/exports", "logs", "legacy",
     ):
         (target / rel).mkdir(parents=True, exist_ok=True)
