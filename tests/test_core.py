@@ -7360,7 +7360,8 @@ def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order()
     assert 'fill="#ffffff"' in text
     assert 'fill=line_fill, outline=line_fill' in text
     assert 'overlay_scale = self.view_scale / parameter_scale(self.image, self.settings)' in text
-    assert 'round(int(getattr(self.settings, "page_section_width", 2) or 2) * overlay_scale)' in text
+    assert 'line_width = scaled_overlay_line_width(' in text
+    assert 'int(getattr(self.settings, "page_section_width", 2) or 2),' in text
     assert 'label_x = ((top_start[0] + top_end[0]) / 2.0) * self.view_scale' in text
     assert 'fill="#ffffff", anchor="s"' in text
 
