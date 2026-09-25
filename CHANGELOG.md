@@ -14,6 +14,7 @@
 - 主界面【六、页面列表】可见栏顺序调整为“书签 / 页面 / 画线 / 插图 / 填充状态”；隐藏/重新显示可选栏时继续保持该顺序。
 - 新增页面级 **SECTION** 支持：特殊页面可设置多个阅读区域，每个 SECTION 继承项目栏数，统一按“SECTION → 栏 → SECTION 内位置”排序；OCR、校对、TXT 填词、PDIC 修复/恢复与整词条切图共用同一 reading-lane 逻辑。
 - 主界面【六、页面列表】新增常驻 `Section` 列，取消独立【SECTION设置】按钮：双击单元格可设置 `0–10`，其中 `0` 关闭、`1–10` 为显式 SECTION 数量；启用后在画布拖动蓝色虚线上下边界，再次双击同一单元格结束编辑。SECTION 间空白不参与新增词条、排序或整词条切图，边界以 canonical 全分辨率 V 坐标保存到独立 sidecar，不修改 PDIC/PPP。
+- 【切图设置】移除可编辑的“特殊页面覆盖”；特殊页上下范围统一由 Section 管理：`Section=1` 可直接替代旧特殊页上/下边界，`Section≥2` 同时承担多区块阅读顺序。存在 SECTION sidecar 时，其边界优先于一般页切图上下边界以及旧版 `special_pages`；旧 `special_pages` 仅在 `Section=0` 时作为只读兼容 fallback。
 
 ### Runtime portability hardening
 
