@@ -4611,12 +4611,13 @@ class ReviewWindow(tk.Toplevel):
         ttk.Label(
             word_nav, textvariable=self.word_window_var, style="PCR.Body.TLabel"
         ).pack(side="left", fill="x", expand=True)
+        # Pack right-side buttons in reverse creation order so the visible order is 前100 后100.
         ttk.Button(
-            word_nav, text="前100", width=7, command=lambda: self.shift_wordslist_window(-1),
+            word_nav, text="后100", width=7, command=lambda: self.shift_wordslist_window(1),
             style="PCR.Tool.TButton",
         ).pack(side="right", padx=(4, 0))
         ttk.Button(
-            word_nav, text="后100", width=7, command=lambda: self.shift_wordslist_window(1),
+            word_nav, text="前100", width=7, command=lambda: self.shift_wordslist_window(-1),
             style="PCR.Tool.TButton",
         ).pack(side="right")
 
