@@ -245,6 +245,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._analysis_auto_apply = False
         self._analysis_queue: queue.Queue | None = None
         self._validation_queue: queue.Queue | None = None
+        self._validation_stop_event = threading.Event()
         if not str(getattr(self.working, "dictionary_body_page_range", "") or "").strip():
             self.working.dictionary_body_page_range = suggested_body_page_range(self.project.images)
         configured_body = configured_body_page_indices(
@@ -2404,16 +2405,20 @@ class ProjectProfileWizard(tk.Toplevel):
     def validate_profile(self) -> None:
         if self._validation_running:
             return
+        if self.parent._ui_worker_key_active("profile-validation"):
+            self.validation_status_var.set("上一轮 Profile 测试仍在安全结束，请稍后重试。")
+            return
         settings = self._settings_from_ui()
         # Project Profile validates the normal OCR-based workflow even when an
         # old project last saved "普通画线" as its active detection method.
-        # This is a temporary validation copy and does not overwrite that saved
-        # project preference.
         settings.detection_method = "paddleocr"
         settings.paddle_use_paddleocr = True
         indices = list(self.sample_indices)
         if not indices:
             return
+        project = self.project
+        project_root = Path(project.root)
+        paths = {index: project.images[index] for index in indices}
         self.update_idletasks()
         frame_width = int(self.validation_frame.winfo_width())
         preview_width = max(
@@ -2423,6 +2428,8 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         self._validation_running = True
         self._validation_revision_started = self._profile_revision
+        self._validation_stop_event.clear()
+        stop_event = self._validation_stop_event
         self.validate_button.configure(state="disabled")
         self.validation_status_var.set("正在强制重新识别并测试代表页…")
         self._validation_results = []
@@ -2440,17 +2447,19 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Label(self.validation_frame, text="正在生成测试结果…").grid(
             row=0, column=0, sticky="n", pady=30,
         )
-        filter_path = headword_filter_rules_path(self.project.root, HEADWORD_FILTER_RULES_FILENAME)
+        filter_path = headword_filter_rules_path(project_root, HEADWORD_FILTER_RULES_FILENAME)
 
-        def worker() -> None:
+        def worker():
             results = []
             for index in indices:
-                path = self.project.images[index]
+                if stop_event.is_set():
+                    break
+                path = paths[index]
                 try:
                     with Image.open(path) as opened:
                         image = normalize_page_rgb(opened)
                     cache_path = (
-                        ocr_cache_root(self.project.root) / f"{path.stem}.json"
+                        ocr_cache_root(project_root) / f"{path.stem}.json"
                         if settings.detection_method == "paddleocr" else None
                     )
                     entries, geometry = detect_entries(
@@ -2460,10 +2469,10 @@ class ProjectProfileWizard(tk.Toplevel):
                         paddle_filter_rules_path=filter_path,
                         profile_page_index=index,
                     )
-                    preview = self._marker_preview(
+                    preview = ProjectProfileWizard._marker_preview(
                         image, entries, geometry, settings, index, preview_width,
                     )
-                    coverage = self._validation_coverage_summary(
+                    coverage = ProjectProfileWizard._validation_coverage_summary(
                         cache_path, entries, geometry, settings,
                     )
                     results.append((
@@ -2472,12 +2481,38 @@ class ProjectProfileWizard(tk.Toplevel):
                     ))
                 except Exception as exc:
                     results.append((index, path.name, 0, 0, None, "", str(exc)))
-            assert self._validation_queue is not None
-            self._validation_queue.put(results)
+                if stop_event.is_set():
+                    break
+            return results
 
-        self._validation_queue = queue.Queue(maxsize=1)
-        threading.Thread(target=worker, daemon=True).start()
-        self.after(100, self._poll_validation_queue)
+        def done(results) -> None:
+            try:
+                if not self.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            self._validation_running = False
+            if stop_event.is_set():
+                self.validation_status_var.set("Profile 测试已安全停止。")
+                self.validate_button.configure(state="normal")
+                return
+            self._finish_validation(results)
+
+        def failed(exc, detail) -> None:
+            if detail:
+                print(detail)
+            try:
+                if not self.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            self._validation_running = False
+            self.validate_button.configure(state="normal")
+            self.validation_status_var.set(f"Profile 测试失败：{exc}")
+
+        self.parent._start_ui_worker(
+            "profile-validation", worker, done, failed, wait_on_close=True,
+        )
 
     def _poll_validation_queue(self) -> None:
         if self._validation_queue is None:
@@ -2698,6 +2733,11 @@ class ProjectProfileWizard(tk.Toplevel):
         self._render_validation_result()
 
     def save_and_close(self) -> None:
+        # If validation is still running, stop after its current page reaches
+        # the cache-write boundary; the parent tracks that worker until cleanup.
+        if self._validation_running:
+            self._validation_stop_event.set()
+            self.parent._invalidate_ui_worker("profile-validation")
         # The confirmation button saves immediately, even if the user chooses
         # to go back to validation instead of closing the Wizard.
         if not self._save_profile_progress(
@@ -2727,6 +2767,9 @@ class ProjectProfileWizard(tk.Toplevel):
             messagebox.showerror("Project Profile 保存失败", str(exc), parent=self)
 
     def _close_without_save(self) -> None:
+        if self._validation_running:
+            self._validation_stop_event.set()
+            self.parent._invalidate_ui_worker("profile-validation")
         # 关闭也先保存当前页；因此误关窗口不会丢掉尚未切页的输入。
         if not self._save_profile_progress(
             finalize=False,
