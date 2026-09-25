@@ -153,7 +153,7 @@ Picture Capture 可使用它：
 
 1. 启动 Picture Capture。
 2. 在左侧页面列表点击【打开项目目录】，选择词典项目文件夹。
-3. 点击【OCR / 简化环境状态】确认 OCR、OpenCC、CC-CEDICT 等环境。
+3. 点击【环境中心】统一检查 PaddleOCR、Google Lens、Tesseract、OpenCC、CC-CEDICT，并按提示处理缺失组件。
 4. 在单页先校准版面参数和词头画线。
 5. 确认结果后再执行批量 OCR / 批量画线。
 6. 在【词条校对】中完成原词条、简体、OCR 与词典核验。
