@@ -4865,6 +4865,50 @@ def test_v21117_review_layout_matches_compact_workflow():
     assert 'self.accent_panel_title = tk.StringVar(value="▸ 变音字符")' in review
 
 
+def test_review_toolbar_controls_are_grouped_by_function():
+    from pathlib import Path
+    import inspect
+    import picture_capture.app as app_module
+
+    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    start = text.index("class ReviewWindow")
+    end = text.index("class OCRConflictReviewDialog", start)
+    review = text[start:end]
+    build_start = review.index("    def _build(self) -> None:")
+    build_end = review.index("    def _toggle_review_panel(", build_start)
+    build = review[build_start:build_end]
+
+    row1_start = build.index('row1 = ttk.Frame(controls')
+    row1_end = build.index('ttk.Separator(controls, orient="horizontal")', row1_start)
+    row1 = build[row1_start:row1_end]
+    assert 'text="数字替换映射"' in row1
+    assert row1.index('text="数字替换映射"') < row1.index('text="排序规则"')
+    assert row1.index('text="排序规则"') < row1.index('text="当前页"')
+    assert row1.index('text="当前页"') < row1.index('text="所有页"')
+    assert row1.index('text="所有页"') < row1.index('text="排序检查"')
+    assert 'row2 = ttk.Frame(controls' not in build
+    assert 'text="文本左边距："' not in row1
+    assert 'text="上下边距："' not in row1
+    assert 'text="与OCR比较："' not in row1
+    assert 'text="简化"' not in row1
+
+    display_start = build.index('right, "display", "显示设置"')
+    display_end = build.index('right, "ocr", "OCR结果"', display_start)
+    display = build[display_start:display_end]
+    assert display.index("zoom_row = ttk.Frame(") < display.index("padding_row = ttk.Frame(")
+    assert display.index("padding_row = ttk.Frame(") < display.index("font_row = ttk.Frame(")
+    assert 'text="文本左边距：", style="PCR.Body.TLabel"' in display
+    assert 'text="上下边距：", style="PCR.Body.TLabel"' in display
+
+    ocr_start = build.index('right, "ocr", "OCR结果"')
+    ocr_end = build.index('right, "network", "网络词汇核验（免费，无需 Token）"', ocr_start)
+    ocr = build[ocr_start:ocr_end]
+    assert ocr.index("ocr_compare_row = ttk.Frame(") < ocr.index("ocr_row = ttk.Frame(")
+    assert 'text="与OCR比较：", style="PCR.Body.TLabel"' in ocr
+    assert 'text="简化"' in ocr
+    assert 'style="PCR.Body.TCheckbutton"' in ocr
+
+
 def test_review_right_sections_are_collapsible_and_default_expanded():
     from pathlib import Path
     import inspect
