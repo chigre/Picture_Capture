@@ -25,6 +25,10 @@ from .coordinate_space import (
 )
 from .image_utils import normalize_page_rgb
 from .layout_transform import LayoutTransform
+from .page_sections import (
+    PageSection, build_reading_lanes, normalize_page_sections, read_page_sections,
+    reading_lane_index, section_index_for_v, v_is_inside_sections,
+)
 from .profile_semantics import (
     effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
 )
@@ -681,6 +685,7 @@ def detect_entries(
     force_paddle_refresh: bool = False,
     paddle_filter_rules_path: Path | None = None,
     profile_page_index: int = 0,
+    page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Geometry]:
     """Detect markers with the active Project Profile page template applied."""
     source = normalize_page_rgb(image)
@@ -695,6 +700,7 @@ def detect_entries(
             cache_path=paddle_cache_path,
             force_refresh=force_paddle_refresh,
             filter_rules_path=paddle_filter_rules_path,
+            page_sections=page_sections,
         )
     else:
         entries, geometry = _detect_entries_left_edge(analysis_source, effective)
@@ -704,8 +710,15 @@ def detect_entries(
         if entry_allowed_by_page_template(
             entry.x, entry.y, source.size, effective, profile_page_index,
         )
+        and (
+            not page_sections
+            or v_is_inside_sections(
+                geometry.source_to_canonical(entry.x, entry.y)[1],
+                page_sections, geometry.top, geometry.bottom,
+            )
+        )
     ]
-    return sort_entries_reading_order(entries, geometry), geometry
+    return sort_entries_reading_order(entries, geometry, page_sections), geometry
 
 
 def refine_existing_entries(
@@ -795,6 +808,7 @@ def detect_entries_job(
     settings.detection_method = "left_edge"
     entries, _geometry = detect_entries(
         image, settings, profile_page_index=profile_page_index,
+        page_sections=read_page_sections(page),
     )
     write_pdic(pdic_path_for_image(page), entries, image.width, pages)
     return len(entries)
@@ -889,35 +903,54 @@ def column_index_for_click(x: int, geometry: Geometry, y: int = 0) -> int:
 
 
 
-def entry_reading_order_key(entry: Entry, geometry: Geometry) -> tuple[int, int, int]:
-    """Canonical dictionary reading order: column first, then top-to-bottom.
-
-    Manual lines are snapped to the tracked column edge while OCR lines retain
-    their measured text X. Sorting by raw ``(x, y)`` therefore groups manual
-    lines ahead of OCR lines inside the same column.  Classify both sources
-    into the same visual column first so their source never affects order.
-    """
+def entry_reading_order_key(
+    entry: Entry,
+    geometry: Geometry,
+    page_sections: list[PageSection] | tuple[PageSection, ...] | None = None,
+) -> tuple[int, int, int, int]:
+    """Canonical dictionary order: SECTION first, then column, then position."""
     u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
-    return (column_index_for_click(int(entry.x), geometry, int(entry.y)), v, u)
+    column = column_index_for_click(int(entry.x), geometry, int(entry.y))
+    section = section_index_for_v(v, page_sections, geometry.top, geometry.bottom)
+    return (section, column, v, u)
 
 
-def sort_entries_reading_order(entries: list[Entry], geometry: Geometry) -> list[Entry]:
-    return sorted(entries, key=lambda entry: entry_reading_order_key(entry, geometry))
+def sort_entries_reading_order(
+    entries: list[Entry],
+    geometry: Geometry,
+    page_sections: list[PageSection] | tuple[PageSection, ...] | None = None,
+) -> list[Entry]:
+    """Return one stable order shared by UI, OCR, filling and cropping."""
+    effective = normalize_page_sections(page_sections, geometry.top, geometry.bottom)
+
+    def key(entry: Entry) -> tuple[int, int, int, int]:
+        u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
+        column = column_index_for_click(int(entry.x), geometry, int(entry.y))
+        section = section_index_for_v(v, effective, geometry.top, geometry.bottom)
+        return (section, column, v, u)
+
+    return sorted(entries, key=key)
 
 
-def sort_entries_column_y(entries: list[Entry], geometry: Geometry) -> list[Entry]:
-    """Stable PDIC repair order: visual column, then Y only.
-
-    X is deliberately excluded.  If two records share the same column and Y,
-    Python's stable sort preserves their existing PDIC order.
-    """
+def sort_entries_column_y(
+    entries: list[Entry],
+    geometry: Geometry,
+    page_sections: list[PageSection] | tuple[PageSection, ...] | None = None,
+) -> list[Entry]:
+    """Stable PDIC repair order: SECTION, visual column, then V; never raw X."""
+    effective = normalize_page_sections(page_sections, geometry.top, geometry.bottom)
     return sorted(
         entries,
         key=lambda entry: (
+            section_index_for_v(
+                geometry.source_to_canonical(int(entry.x), int(entry.y))[1],
+                effective, geometry.top, geometry.bottom,
+            ),
             column_index_for_click(int(entry.x), geometry, int(entry.y)),
             geometry.source_to_canonical(int(entry.x), int(entry.y))[1],
         ),
     )
+
 
 def clamp_box(box: tuple[int, int, int, int], image: Image.Image) -> tuple[int, int, int, int]:
     left, top, right, bottom = box
@@ -959,6 +992,7 @@ def ocr_entries(
     replace_rules: list[tuple[str, str, str]],
     *,
     profile_page_index: int = 0,
+    page_sections: list[PageSection] | None = None,
 ) -> list[str]:
     source, effective, _analysis_source, geometry = _page_geometry_context(
         image, settings, profile_page_index,
@@ -968,7 +1002,7 @@ def ocr_entries(
     if effective.ocr_engine == "paddleocr":
         from .paddle_headwords import get_paddle_engine
         paddle_engine = get_paddle_engine(effective)
-    for entry in sort_entries_reading_order(entries, geometry):
+    for entry in sort_entries_reading_order(entries, geometry, page_sections):
         crop = source.crop(line_box(entry, geometry, source, effective))
         if effective.ocr_engine == "paddleocr":
             from .paddle_headwords import recognize_paddle_text
@@ -1090,19 +1124,21 @@ def _stage_crop(
 
 def split_single_lines(
     image_path: Path, entries: list[Entry], settings: AppSettings, output_dir: Path,
-    *, profile_page_index: int = 0,
+    *, profile_page_index: int = 0, page_sections: list[PageSection] | None = None,
 ) -> list[CropRecord]:
     with Image.open(image_path) as opened:
         image = normalize_page_rgb(opened)
     source, effective, _analysis_source, geometry = _page_geometry_context(
         image, settings, profile_page_index,
     )
+    if page_sections is None:
+        page_sections = read_page_sections(image_path)
     records: list[CropRecord] = []
     manifest: list[str] = []
     replacements: list[tuple[Path, Path]] = []
     staged: list[Path] = []
     try:
-        for index, entry in enumerate(sort_entries_reading_order(entries, geometry)):
+        for index, entry in enumerate(sort_entries_reading_order(entries, geometry, page_sections)):
             filename = f"{image_path.stem}_SW_{index:03d}.png"
             target = output_dir / filename
             box, temp = _stage_crop(
@@ -1352,6 +1388,7 @@ def _base_entry_crop_pieces(
     *, top_y: int | None = None, bottom_y: int | None = None,
     entry_left_padding: int = 0, entry_right_padding: int = 0,
     profile_page_index: int = 0,
+    page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], list[EntryCropPiecePlan]]:
     source, effective, _analysis_source, geometry = _page_geometry_context(
         image, settings, profile_page_index,
@@ -1364,49 +1401,109 @@ def _base_entry_crop_pieces(
         effective.row_padding, canonical_width, effective,
     )
     row_height = max(1, character_height + row_padding)
-    top, bottom = entry_crop_bounds(
-        source, effective, top_y=top_y, bottom_y=bottom_y,
-    )
-    ordered = sort_entries_reading_order(entries, geometry)
+    if page_sections:
+        # Explicit page SECTIONs are the authoritative crop range for that page.
+        # This lets Section=1 replace the former per-page crop top/bottom override
+        # while Section>=2 additionally contributes reading-lane gaps/order.
+        sections = normalize_page_sections(page_sections, geometry.top, geometry.bottom)
+        top, bottom = sections[0].top_v, sections[-1].bottom_v
+    else:
+        top, bottom = entry_crop_bounds(
+            source, effective, top_y=top_y, bottom_y=bottom_y,
+        )
+        sections = normalize_page_sections(None, top, bottom)
+    column_count = max(1, len(geometry.column_starts))
+    lanes = build_reading_lanes(column_count, top, bottom, sections)
+    ordered = sort_entries_reading_order(entries, geometry, sections)
     row_guard = round(row_height * 0.6)
     pieces: list[EntryCropPiecePlan] = []
     piece_counts: dict[int, int] = {}
 
-    def col_box(col: int, y0: int, y1: int) -> tuple[int,int,int,int]:
+    def lane_box(lane_index: int, y0: int, y1: int) -> tuple[int, int, int, int]:
+        lane = lanes[lane_index]
         return _entry_crop_box_for_column(
-            source, effective, geometry, col, y0, y1,
+            source, effective, geometry, lane.column_index, y0, y1,
             extra_left=entry_left_padding, extra_right=entry_right_padding,
         )
 
     def add(output_index: int, entry_ref: int | None, word: str, box, suffix: str | None = None):
-        if box[3]-box[1] <= 1: return
+        if box[3] - box[1] <= 1:
+            return
         if suffix is None:
-            piece_counts[output_index]=piece_counts.get(output_index,0)+1
-            suffix=f"({piece_counts[output_index]})"
+            piece_counts[output_index] = piece_counts.get(output_index, 0) + 1
+            suffix = f"({piece_counts[output_index]})"
         pieces.append(EntryCropPiecePlan(output_index, entry_ref, word, box, suffix))
 
+    def locate(entry: Entry) -> tuple[int, int]:
+        _u, raw_v = geometry.source_to_canonical(entry.x, entry.y)
+        column = column_index(entry.x, geometry, entry.y)
+        lane_index = reading_lane_index(
+            raw_v, column, column_count, top, bottom, sections,
+        )
+        lane = lanes[lane_index]
+        # Markers should normally lie inside a SECTION. If an older PDIC marker
+        # sits in a gap, attach it to the nearest lane but never crop the gap.
+        clipped_v = max(lane.top_v, min(lane.bottom_v, int(raw_v)))
+        return lane_index, clipped_v
+
     if not ordered:
-        for col in range(len(geometry.column_starts)):
-            add(0, None, "_上页末词条_", col_box(col,top,bottom), f"(0-{col+1})")
+        for lane_index, lane in enumerate(lanes):
+            add(
+                0, None, "_上页末词条_",
+                lane_box(lane_index, lane.top_v, lane.bottom_v),
+                f"(0-{lane_index + 1})",
+            )
         return ordered, pieces
-    _first_u, first_v = geometry.source_to_canonical(ordered[0].x, ordered[0].y)
-    first_col=column_index(ordered[0].x, geometry, ordered[0].y)
-    for col in range(first_col): add(0,None,"_上页末词条_",col_box(col,top,bottom),f"(0-{col+1})")
-    if first_v-top>row_guard: add(0,None,"_上页末词条_",col_box(first_col,top,first_v),f"(0-{first_col+1})")
+
+    first_lane_index, first_v = locate(ordered[0])
+    for lane_index in range(first_lane_index):
+        lane = lanes[lane_index]
+        add(
+            0, None, "_上页末词条_",
+            lane_box(lane_index, lane.top_v, lane.bottom_v),
+            f"(0-{lane_index + 1})",
+        )
+    first_lane = lanes[first_lane_index]
+    if first_v - first_lane.top_v > row_guard:
+        add(
+            0, None, "_上页末词条_",
+            lane_box(first_lane_index, first_lane.top_v, first_v),
+            f"(0-{first_lane_index + 1})",
+        )
+
     for index, entry in enumerate(ordered):
-        _entry_u, entry_v = geometry.source_to_canonical(entry.x, entry.y)
-        col=column_index(entry.x,geometry,entry.y)
-        next_entry=ordered[index+1] if index+1<len(ordered) else None
-        next_v = geometry.source_to_canonical(next_entry.x, next_entry.y)[1] if next_entry else bottom
-        next_col=column_index(next_entry.x,geometry,next_entry.y) if next_entry else len(geometry.column_starts)
-        y0=max(top,entry_v-abs(row_padding))
-        y1=next_v if next_entry and next_col==col else bottom
-        add(index,index,entry.word,col_box(col,y0,y1))
-        if next_entry and next_col>col:
-            for continuation_col in range(col+1,next_col): add(index,index,entry.word,col_box(continuation_col,top,bottom))
-            if next_v-top>row_guard: add(index,index,entry.word,col_box(next_col,top,next_v))
+        lane_index, entry_v = locate(entry)
+        lane = lanes[lane_index]
+        next_entry = ordered[index + 1] if index + 1 < len(ordered) else None
+        if next_entry is not None:
+            next_lane_index, next_v = locate(next_entry)
+        else:
+            next_lane_index, next_v = len(lanes), bottom
+
+        y0 = max(lane.top_v, entry_v - abs(row_padding))
+        y1 = next_v if next_entry is not None and next_lane_index == lane_index else lane.bottom_v
+        add(index, index, entry.word, lane_box(lane_index, y0, y1))
+
+        if next_entry is not None and next_lane_index > lane_index:
+            for continuation_lane in range(lane_index + 1, next_lane_index):
+                current = lanes[continuation_lane]
+                add(
+                    index, index, entry.word,
+                    lane_box(continuation_lane, current.top_v, current.bottom_v),
+                )
+            target = lanes[next_lane_index]
+            if next_v - target.top_v > row_guard:
+                add(
+                    index, index, entry.word,
+                    lane_box(next_lane_index, target.top_v, next_v),
+                )
         elif next_entry is None:
-            for continuation_col in range(col+1,len(geometry.column_starts)): add(index,index,entry.word,col_box(continuation_col,top,bottom))
+            for continuation_lane in range(lane_index + 1, len(lanes)):
+                current = lanes[continuation_lane]
+                add(
+                    index, index, entry.word,
+                    lane_box(continuation_lane, current.top_v, current.bottom_v),
+                )
     return ordered, pieces
 
 
@@ -1415,6 +1512,7 @@ def build_page_crop_plan(
     *, top_y: int | None = None, bottom_y: int | None = None, illustration_margin: int = 0,
     entry_left_padding: int = 0, entry_right_padding: int = 0,
     integrate_illustrations: bool = True, profile_page_index: int = 0,
+    page_sections: list[PageSection] | None = None,
 ) -> PageCropPlan:
     """Plan entry and PPP crops before any pixels are written.
 
@@ -1426,7 +1524,7 @@ def build_page_crop_plan(
     ordered, pieces = _base_entry_crop_pieces(
         image, entries, settings, top_y=top_y, bottom_y=bottom_y,
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
-        profile_page_index=profile_page_index,
+        profile_page_index=profile_page_index, page_sections=page_sections,
     )
     boxes_by_entry: dict[int,list[tuple[int,int,int,int]]] = {}
     piece_indices_by_entry: dict[int,list[int]] = {}
@@ -1439,7 +1537,10 @@ def build_page_crop_plan(
     effective = effective_page_settings(settings, image.size, profile_page_index)
     illustration_top = effective.start_y if top_y is None else int(top_y)
     illustration_bottom = 0 if bottom_y is None else int(bottom_y)
-    top,bottom,margin_px=illustration_crop_bounds(image,effective,top_y=illustration_top,bottom_y=illustration_bottom,margin=illustration_margin)
+    top,bottom,margin_px=illustration_crop_bounds(
+        image, effective, top_y=illustration_top, bottom_y=illustration_bottom,
+        margin=illustration_margin, page_sections=page_sections,
+    )
     illustrations: list[IllustrationCropPlan] = []
     linked_inside: dict[int,list[int]] = {}
     partial_merge: dict[int,list[int]] = {}
@@ -1559,15 +1660,18 @@ def split_whole_entries(
     *, top_y: int | None = None, bottom_y: int | None = None, polygons: list[PolygonRegion] | None = None,
     entry_left_padding: int = 0, entry_right_padding: int = 0,
     integrate_illustrations: bool = True, profile_page_index: int = 0,
+    page_sections: list[PageSection] | None = None,
 ) -> list[CropRecord]:
     with Image.open(image_path) as opened:
         image = normalize_page_rgb(opened)
     polygons = list(polygons or [])
+    if page_sections is None:
+        page_sections = read_page_sections(image_path)
     plan = build_page_crop_plan(
         image, entries, polygons, settings, top_y=top_y, bottom_y=bottom_y,
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
         integrate_illustrations=integrate_illustrations,
-        profile_page_index=profile_page_index,
+        profile_page_index=profile_page_index, page_sections=page_sections,
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     records: list[CropRecord] = []
@@ -2001,6 +2105,7 @@ def illustration_crop_bounds(
     top_y: int = 0,
     bottom_y: int = 0,
     margin: int = 0,
+    page_sections: list[PageSection] | None = None,
 ) -> tuple[int, int, int]:
     """Resolve persisted crop settings to current source-image pixels.
 
@@ -2015,14 +2120,19 @@ def illustration_crop_bounds(
     transform = LayoutTransform(
         str(getattr(effective, "layout_transform", "identity") or "identity")
     )
-    canonical_width, _canonical_height = transform.canonical_size(image.size)
-    top_canonical = stored_geometry_to_canonical(
-        max(0, int(top_y)), canonical_width, effective,
-    )
-    bottom_canonical = (
-        stored_geometry_to_canonical(max(0, int(bottom_y)), canonical_width, effective)
-        if int(bottom_y) > 0 else 0
-    )
+    canonical_width, canonical_height = transform.canonical_size(image.size)
+    if page_sections:
+        effective_sections = normalize_page_sections(page_sections, 0, canonical_height)
+        top_canonical = effective_sections[0].top_v
+        bottom_canonical = effective_sections[-1].bottom_v
+    else:
+        top_canonical = stored_geometry_to_canonical(
+            max(0, int(top_y)), canonical_width, effective,
+        )
+        bottom_canonical = (
+            stored_geometry_to_canonical(max(0, int(bottom_y)), canonical_width, effective)
+            if int(bottom_y) > 0 else 0
+        )
     margin_px = max(
         0, stored_geometry_to_canonical(max(0, int(margin)), canonical_width, effective),
     )
@@ -2081,11 +2191,14 @@ def split_illustrations(
     entry_right_padding: int = 0,
     integrate_illustrations: bool = True,
     profile_page_index: int = 0,
+    page_sections: list[PageSection] | None = None,
 ) -> IllustrationSplitResult:
     """Export only PPPs that are not already carried by an associated entry crop."""
     with Image.open(image_path) as opened:
         image = ImageOps.exif_transpose(opened).convert("RGBA")
     effective_settings = settings or AppSettings(geometry_reference_width=image.width)
+    if page_sections is None:
+        page_sections = read_page_sections(image_path)
     rgb_for_plan = image.convert("RGB")
     try:
         plan = build_page_crop_plan(
@@ -2093,7 +2206,7 @@ def split_illustrations(
             top_y=top_y, bottom_y=bottom_y, illustration_margin=margin,
             entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
             integrate_illustrations=integrate_illustrations,
-            profile_page_index=profile_page_index,
+            profile_page_index=profile_page_index, page_sections=page_sections,
         )
     finally:
         rgb_for_plan.close()

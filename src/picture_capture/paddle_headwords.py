@@ -26,6 +26,7 @@ from .coordinate_space import (
     stored_geometry_to_canonical,
 )
 from .image_utils import normalize_page_rgb
+from .page_sections import PageSection, normalize_page_sections, section_index_for_v
 from .dictionary_profile import (
     PROFILE_FILENAME,
     DictionaryProfile,
@@ -3589,30 +3590,52 @@ def _alphabetical_sort_key(word: str) -> str:
     return "".join(ch for ch in value if ch.isalpha() or ch == "~")
 
 
-def _annotate_alphabetical_warnings(report_columns: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Annotate, never reject, suspicious dictionary-order jumps/backtracks."""
+def _annotate_alphabetical_warnings(
+    report_columns: list[dict[str, Any]],
+    page_sections: list[PageSection] | None = None,
+    *,
+    top_v: int | None = None,
+    bottom_v: int | None = None,
+) -> list[dict[str, Any]]:
+    """Annotate, never reject, order anomalies along the real page reading path."""
     warnings: list[dict[str, Any]] = []
+    effective_sections = None
+    if page_sections and top_v is not None and bottom_v is not None:
+        effective_sections = normalize_page_sections(page_sections, int(top_v), int(bottom_v))
+
     for engine in ("paddle", "tesseract", "lens"):
-        seq: list[tuple[int, dict[str, Any], str]] = []
+        seq: list[tuple[int, int, dict[str, Any], str]] = []
         for col in report_columns:
             diagnostics = (
                 col.get("candidates", []) if engine == "paddle"
                 else (col.get(engine, {}) or {}).get("candidates", [])
             )
+            col_idx = int(col.get("column", 0))
             for cand in _candidate_rows(diagnostics):
                 cand["alphabetical_warning"] = ""
                 if not cand.get("accepted"):
                     continue
                 lemma = str(cand.get("normalized_headword", ""))
                 key = _alphabetical_sort_key(lemma)
-                if key:
-                    seq.append((int(col.get("column", 0)), cand, key))
-        seq.sort(key=lambda item: (item[0], _candidate_axis_v(item[1]) or 0))
-        for i, (col_idx, cand, key) in enumerate(seq):
-            prev_key = seq[i - 1][2] if i > 0 else ""
-            next_key = seq[i + 1][2] if i + 1 < len(seq) else ""
-            prev_lemma = str(seq[i - 1][1].get("normalized_headword", "")) if i > 0 else ""
-            next_lemma = str(seq[i + 1][1].get("normalized_headword", "")) if i + 1 < len(seq) else ""
+                if not key:
+                    continue
+                axis_v = _candidate_axis_v(cand) or 0
+                section_idx = (
+                    section_index_for_v(
+                        axis_v, effective_sections, int(top_v), int(bottom_v),
+                    )
+                    if effective_sections is not None else 0
+                )
+                seq.append((section_idx, col_idx, cand, key))
+
+        seq.sort(key=lambda item: (
+            item[0], item[1], _candidate_axis_v(item[2]) or 0,
+        ))
+        for i, (section_idx, col_idx, cand, key) in enumerate(seq):
+            prev_key = seq[i - 1][3] if i > 0 else ""
+            next_key = seq[i + 1][3] if i + 1 < len(seq) else ""
+            prev_lemma = str(seq[i - 1][2].get("normalized_headword", "")) if i > 0 else ""
+            next_lemma = str(seq[i + 1][2].get("normalized_headword", "")) if i + 1 < len(seq) else ""
             warning = ""
             if prev_key and key < prev_key:
                 warning = f"alphabetical_backtrack_vs:{prev_lemma}"
@@ -3622,6 +3645,7 @@ def _annotate_alphabetical_warnings(report_columns: list[dict[str, Any]]) -> lis
                 cand["alphabetical_warning"] = warning
                 warnings.append({
                     "engine": engine,
+                    "section": section_idx + 1,
                     "column": col_idx,
                     "source_y": cand.get("source_y"),
                     "lemma": cand.get("normalized_headword", ""),
@@ -5200,6 +5224,7 @@ def detect_paddle_headwords(
     force_refresh: bool = False,
     engine: Any | None = None,
     filter_rules_path: Path | None = None,
+    page_sections: list[PageSection] | None = None,
 ) -> list[Entry]:
     """v2.1 multi-OCR dictionary headword pipeline.
 
@@ -5385,16 +5410,23 @@ def detect_paddle_headwords(
         lens_attempted = lens_mode in {"diagnostic", "full"} or (
             lens_mode == "conflict" and (_pairs_need_lens(pre_pairs) or not pre_pairs)
         )
+        # Lens language is deliberately derived from the active headword OCR
+        # language. Keep the persisted legacy field only for compatibility.
+        lens_language = str(
+            getattr(settings, "ocr_language", "")
+            or getattr(settings, "paddle_lens_language", "")
+            or ""
+        )
         lens_payload: dict[str, Any] = {
             "enabled": lens_mode != "off", "mode": lens_mode, "attempted": lens_attempted,
-            "language": settings.paddle_lens_language, "version": "", "full_text": "",
+            "language": lens_language, "version": "", "full_text": "",
             "records": [], "candidates": [], "accepted_count": 0, "error": "",
             "confidence_source": "neutral_default; typography_from_original_bbox",
         }
         if lens_attempted:
             try:
                 raw_lens_records, lens_full_text, lens_version = run_google_lens(
-                    band, language=settings.paddle_lens_language,
+                    band, language=lens_language,
                     timeout=settings.paddle_lens_timeout,
                     default_confidence=settings.paddle_lens_default_confidence,
                 )
@@ -5450,7 +5482,10 @@ def detect_paddle_headwords(
 
     # Alphabetical order remains a weak warning only. It is computed before OCR
     # arbitration so a suspicious engine result can contribute to review issues.
-    alphabetical_warnings = _annotate_alphabetical_warnings(report_columns)
+    alphabetical_warnings = _annotate_alphabetical_warnings(
+        report_columns, page_sections,
+        top_v=geometry.top, bottom_v=geometry.bottom,
+    )
 
     review_candidates: list[dict[str, Any]] = []
     for col in report_columns:
@@ -5594,7 +5629,7 @@ def detect_paddle_headwords(
                 "tesseract_auto_psm": bool(settings.paddle_tesseract_auto_psm),
                 "tesseract_status": tess_availability,
                 "google_lens_mode": lens_mode,
-                "google_lens_language": settings.paddle_lens_language,
+                "google_lens_language": lens_language,
             },
             "alphabetical_warnings": alphabetical_warnings,
             "page_quality": agreement,

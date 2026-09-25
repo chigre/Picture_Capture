@@ -146,27 +146,29 @@ class AppSettings:
     right_ratio_percent_version: int = 1
     horizontal_tolerance: int = 5
     marker_height: int = 2
-    guide_width: int = 4
-    # Main overlay colours. The classic Picture Capture visual language uses
-    # red guide/headword markers by default; PPP colours are independently configurable.
-    guide_color: str = "#ff0000"
+    guide_width: int = 2
+    # Main overlay colours: headword markers stay red; other structural lines use blue.
+    guide_color: str = "#1976d2"
+    page_section_color: str = "#1976d2"
+    page_section_width: int = 2
     headword_marker_color: str = "#ff0000"
-    illustration_outline_color: str = "#1565c0"
-    illustration_outline_width: int = 1
+    illustration_outline_color: str = "#1976d2"
+    illustration_outline_width: int = 2
     illustration_fill_color: str = "#ffe66d"
-    illustration_label_border_color: str = "#d81b60"
-    illustration_label_border_width: int = 1
-    illustration_label_fill_color: str = "#ffffff"
-    illustration_label_font_family: str = "Microsoft YaHei"
-    illustration_label_font_size: int = 32
+    illustration_label_border_color: str = "#1976d2"
+    illustration_label_border_width: int = 2
+    illustration_label_fill_color: str = "#e6e6e6"
+    illustration_label_font_family: str = "自动（系统推荐）"
+    illustration_label_font_size: int = 16
     illustration_label_font_bold: bool = False
     illustration_label_font_italic: bool = False
+    show_page_sections: bool = True
     show_column_guides: bool = True
     show_headword_markers: bool = True
     # Page-list optional columns can be hidden from the heading context menu.
     # The page-name column is intentionally permanent.
     page_list_show_lined: bool = True
-    page_list_show_fill_status: bool = True
+    page_list_show_fill_status: bool = False
     page_list_show_illustrations: bool = True
     page_bookmarks: list[str] = field(default_factory=list)
     darkness_threshold: int = 300
@@ -200,19 +202,19 @@ class AppSettings:
     image_suffix: str = ".png"
     # Overlay editor presentation at 100% page scale. The page zoom multiplies
     # the base font, so text boxes zoom together with the scanned page.
-    main_entry_font_family: str = "DengXian"
-    main_entry_font_size: int = 32
+    main_entry_font_family: str = "自动（系统推荐）"
+    main_entry_font_size: int = 16
     main_entry_font_bold: bool = False
     main_entry_font_italic: bool = False
     main_entry_width_chars: int = 18
     main_entry_x_ratio: float = 0.66
     main_entry_follow_zoom: bool = True
-    main_entry_default_color: str = "#ffffff"
-    # Review zoom and typography are independent from the main page viewer and
-    # are persisted per project. 64% is a practical default for large scans.
-    review_zoom_percent: int = 64
-    review_entry_font_family: str = "Cambria"
-    review_entry_font_size: int = 18
+    main_entry_default_color: str = "#e6e6e6"
+    # 0 = automatic proofreading crop fit: fill 99% of the actual left image area.
+    # Positive values are explicit/manual percentages and remain project-persisted.
+    review_zoom_percent: int = 0
+    review_entry_font_family: str = "自动（系统推荐）"
+    review_entry_font_size: int = 16
     # v2 means review_entry_font_size is the actual fixed editor font size.
     # Before v2.11.13 it represented a 100%-zoom base size and was multiplied
     # by review_zoom_percent while rendering.  The marker lets old projects be
@@ -223,8 +225,8 @@ class AppSettings:
     # Independent typography for the editable Simplified companion in the
     # proofreading window. Older projects inherit the ordinary headword style
     # once when loaded, then persist these values independently.
-    review_simplified_font_family: str = "Cambria"
-    review_simplified_font_size: int = 18
+    review_simplified_font_family: str = "自动（系统推荐）"
+    review_simplified_font_size: int = 16
     review_simplified_font_bold: bool = False
     review_simplified_font_italic: bool = False
     # Extra visual padding before review-entry text. This changes only the
@@ -317,6 +319,8 @@ class AppSettings:
     follow_column_deformation: bool = False
     # v2.12.12 resets the two layout-behavior checkboxes to safer opt-in defaults.
     layout_behavior_defaults_version: int = 1
+    # v2.14 refreshes visible/default workflow choices once for existing projects.
+    ui_workflow_defaults_version: int = 1
     column_track_radius: int = 80
     column_track_block_height: int = 120
     column_track_max_step: int = 28
@@ -381,7 +385,7 @@ class AppSettings:
     # v2.0 dual-OCR fusion.  When enabled and Tesseract comparison is available,
     # candidates are sequence-aligned (lemma order) with Y as a geometric guard,
     # then arbitrated instead of treating Tesseract as only a rescue pass.
-    paddle_dual_ocr_arbitration: bool = True
+    paddle_dual_ocr_arbitration: bool = False
     paddle_alignment_y_tolerance_ratio: float = 0.85
     paddle_alignment_min_similarity: float = 0.55
     paddle_conflict_review_margin: float = 0.75
@@ -391,7 +395,8 @@ class AppSettings:
     # ``full`` may influence otherwise non-conflicting decisions.
     paddle_enable_lens: bool = False
     paddle_lens_mode: str = "off"
-    paddle_lens_language: str = "es"
+    # Compatibility field; runtime Lens language follows ocr_language.
+    paddle_lens_language: str = ""
     paddle_lens_timeout: int = 60
     paddle_lens_default_confidence: float = 0.82
     # Overlay one checkbox for every left-edge OCR row.  A rejected/missed row can
@@ -532,7 +537,7 @@ class AppSettings:
         if int(raw.get("review_font_semantics_version", 1) or 1) < 2:
             try:
                 old_size = max(6, int(raw.get("review_entry_font_size", cls().review_entry_font_size)))
-                old_zoom = min(250, max(20, int(raw.get("review_zoom_percent", cls().review_zoom_percent))))
+                old_zoom = min(250, max(20, int(raw.get("review_zoom_percent", 64))))
                 if old_size > 36 and old_zoom < 100:
                     raw["review_entry_font_size"] = max(6, min(48, round(old_size * old_zoom / 100.0)))
             except (TypeError, ValueError):
@@ -561,6 +566,17 @@ class AppSettings:
             raw["manual_columns"] = False
             raw["follow_column_deformation"] = False
             raw["layout_behavior_defaults_version"] = 1
+
+        # v2.14: make the recommended OCR path single-engine by default and
+        # declutter the page list. Apply once to existing projects so persisted
+        # historical defaults do not mask the new UI defaults; later user edits
+        # are preserved because the version marker is then saved as 1.
+        if int(raw.get("ui_workflow_defaults_version", 0) or 0) < 1:
+            raw["paddle_use_paddleocr"] = True
+            raw["paddle_compare_tesseract"] = False
+            raw["paddle_dual_ocr_arbitration"] = False
+            raw["page_list_show_fill_status"] = False
+            raw["ui_workflow_defaults_version"] = 1
 
         # Project Profile A/B page-edge widths were split after the original
         # single profile_side_percent setting. Existing projects inherit their

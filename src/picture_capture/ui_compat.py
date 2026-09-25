@@ -15,6 +15,107 @@ def bind_context_menu(widget: tk.Misc, callback: Callable, *, add: str = "+") ->
         widget.bind("<Control-Button-1>", callback, add=add)
 
 
+AUTO_FONT_FAMILY = "自动（系统推荐）"
+
+
+def _content_script(ocr_language: str) -> str:
+    """Map OCR-language identifiers to the script family used for UI fonts."""
+    language = str(ocr_language or "").strip().lower().replace("-", "_")
+    if language.startswith(("jpn", "ja")):
+        return "japanese"
+    if language.startswith(("kor", "ko")):
+        return "korean"
+    if language.startswith(("chi_tra", "zh_tw", "zh_hk", "zh_hant", "zho_hant")):
+        return "chinese_traditional"
+    if language.startswith(("chi", "zh", "zho", "cmn")):
+        return "chinese_simplified"
+    return "latin"
+
+
+def recommended_content_font_candidates(
+    ocr_language: str,
+    system_name: str | None = None,
+) -> tuple[str, ...]:
+    """Return platform-native sans-serif choices for editable dictionary text."""
+    system = str(system_name or platform.system() or "").strip().lower()
+    script = _content_script(ocr_language)
+
+    if system == "windows":
+        choices = {
+            "chinese_simplified": (
+                "Microsoft YaHei UI", "Microsoft YaHei", "DengXian", "SimHei",
+                "Segoe UI", "Arial",
+            ),
+            "chinese_traditional": (
+                "Microsoft JhengHei UI", "Microsoft JhengHei",
+                "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", "Arial",
+            ),
+            "japanese": (
+                "Yu Gothic UI", "Yu Gothic", "Meiryo UI", "Meiryo",
+                "Segoe UI", "Arial",
+            ),
+            "korean": (
+                "Malgun Gothic", "Malgun Gothic Semilight", "Segoe UI", "Arial",
+            ),
+            "latin": ("Segoe UI", "Arial", "Calibri", "DejaVu Sans"),
+        }
+    elif system == "darwin":
+        choices = {
+            "chinese_simplified": (
+                "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", "Helvetica", "Arial",
+            ),
+            "chinese_traditional": (
+                "PingFang TC", "PingFang HK", "Heiti TC",
+                "Helvetica Neue", "Helvetica", "Arial",
+            ),
+            "japanese": (
+                "Hiragino Sans", "YuGothic", "Helvetica Neue", "Helvetica", "Arial",
+            ),
+            "korean": (
+                "Apple SD Gothic Neo", "Helvetica Neue", "Helvetica", "Arial",
+            ),
+            "latin": ("Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"),
+        }
+    else:
+        choices = {
+            "chinese_simplified": (
+                "Noto Sans CJK SC", "Noto Sans SC", "WenQuanYi Micro Hei",
+                "Noto Sans", "DejaVu Sans",
+            ),
+            "chinese_traditional": (
+                "Noto Sans CJK TC", "Noto Sans TC", "Noto Sans", "DejaVu Sans",
+            ),
+            "japanese": (
+                "Noto Sans CJK JP", "Noto Sans JP", "Noto Sans", "DejaVu Sans",
+            ),
+            "korean": (
+                "Noto Sans CJK KR", "Noto Sans KR", "Noto Sans", "DejaVu Sans",
+            ),
+            "latin": ("Noto Sans", "DejaVu Sans", "Liberation Sans", "Arial"),
+        }
+    return choices[script]
+
+
+def normalize_content_font_setting(value: str | None) -> str:
+    """Normalize empty/legacy auto spellings to the user-facing automatic sentinel."""
+    text = str(value or "").strip()
+    if not text or text.casefold() in {"auto", "system", "default"} or text.startswith("自动"):
+        return AUTO_FONT_FAMILY
+    return text
+
+
+def resolve_content_font_family(
+    widget: tk.Misc,
+    configured_family: str | None,
+    ocr_language: str,
+) -> str:
+    """Resolve manual font overrides first, otherwise choose by OS + OCR language."""
+    configured = normalize_content_font_setting(configured_family)
+    recommended = recommended_content_font_candidates(ocr_language)
+    candidates = recommended if configured == AUTO_FONT_FAMILY else (configured, *recommended)
+    return preferred_font_family(widget, candidates)
+
+
 def preferred_font_family(
     widget: tk.Misc,
     candidates: Iterable[str],

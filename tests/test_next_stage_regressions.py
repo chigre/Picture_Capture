@@ -6,7 +6,8 @@ from PIL import Image
 
 from picture_capture.app import (
     PictureCaptureApp, SettingsDialog, binary_preview_image, effective_main_overlay_font_size,
-    ReviewWindow, VerticalWordText, horizontal_ocr_menu_layout, horizontal_overlay_layout,
+    ReviewWindow, VerticalWordText, entry_index_label_layout,
+    horizontal_ocr_menu_layout, horizontal_overlay_layout,
     transformed_entry_anchor, vertical_marker_contact_gap, vertical_ocr_menu_layout,
     vertical_overlay_layout,
 )
@@ -256,7 +257,9 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     crop_end = source.index("class OldNewComparisonWindow", crop_start)
     crop = source[crop_start:crop_end]
     assert '"通用切图规则"' in crop
-    assert '"特殊页面覆盖"' in crop
+    assert '"特殊页面范围"' in crop
+    assert '主界面【六、页面列表】的 Section 列双击设置' in crop
+    assert '"特殊页面覆盖"' not in crop
     assert 'text="保存并关闭"' in crop
 
     compare_start = source.index("class OldNewComparisonWindow")
@@ -277,10 +280,12 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     settings = text[start:end]
 
     assert '"bottom_y", int' in settings
-    assert '"bottom_y": "正文结束 V（参考页规范坐标）"' in settings
+    assert '"bottom_y": "正文结束 V"' in settings
     assert '"columns": "正文栏数"' in settings
-    assert '"manual_x": "第一栏左缘 U（参考页规范坐标）"' in settings
+    assert '"manual_x": "第一栏左缘 U"' in settings
     assert '"paddle_band_width_ratio": "%"' in settings
+    assert '"paddle_left_tolerance": "参考页规范px"' in settings
+    assert '"paddle_separator_safety_px": "参考页规范px"' in settings
     assert '"columns": (1, 12, 1)' in settings
     assert "def _show_setting_help(" in settings
     assert 'text="设置说明"' in settings
@@ -297,7 +302,7 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert "label.configure(wraplength=wraplength)" in settings
     assert "control.columnconfigure(0, weight=1)" in settings
     assert 'widget.grid(row=0, column=0, sticky="ew")' in settings
-    assert "wraplength=180" in settings
+    assert "wraplength=0 if single_line_labels else 180" in settings
     assert 'justify="left"' in settings
     assert 'style="PC.Settings.TNotebook"' in settings
     assert '"PC.Settings.TNotebook.Tab"' in settings
@@ -633,6 +638,18 @@ def test_vertical_proxy_reuses_editor_membership_and_confidence_style():
     missing = PictureCaptureApp._entry_overlay_style(fake, Entry("missing", 0, 0, confidence=.5))
     assert known == ("#c8e6c9", "#b0b0b0", 1)
     assert missing == ("#ffcdd2", "#d32f2f", 2)
+
+
+def test_entry_sequence_label_sits_before_editor_in_reading_direction():
+    assert entry_index_label_layout(
+        500, 150, 180, 24, horizontal=True, rtl=False,
+    ) == (500.0, 150.0, "ne")
+    assert entry_index_label_layout(
+        500, 150, 180, 24, horizontal=True, rtl=True,
+    ) == (500.0, 150.0, "nw")
+    assert entry_index_label_layout(
+        0, 0, 28, 180, horizontal=False, vertical_box=(568, 200, 596, 380),
+    ) == (582.0, 200.0, "s")
 
 
 def test_horizontal_ltr_rtl_are_mirror_equivalent():

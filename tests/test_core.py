@@ -12,9 +12,17 @@ from picture_capture.app import (
     PictureCaptureApp, _candidate_choice_rows, _parse_words_of_pages_text, _fill_page_entries,
     _build_words_page_lookup, _resolve_words_page_token, _parse_merged_pdic_text, _write_pdic_atomic,
     _natural_text_key, _sorted_page_list_rows, project_language_from_ocr,
-    transformed_geometry_pending,
+    transformed_geometry_pending, scaled_overlay_line_width, review_auto_fit_zoom,
 )
 from picture_capture.models import AppSettings, Entry, PolygonRegion, ProjectState
+from picture_capture.ui_compat import (
+    AUTO_FONT_FAMILY, normalize_content_font_setting,
+    recommended_content_font_candidates,
+)
+from picture_capture.page_sections import (
+    PageSection, build_reading_lanes, read_page_sections, write_page_sections,
+)
+from picture_capture.project_storage import ensure_project_storage, page_sections_path_for_image
 from picture_capture.processing import Geometry, ColumnPath, sort_entries_reading_order, sort_entries_column_y
 from picture_capture.layout_detection import (
     _detect_persistent_vertical_rule,
@@ -28,7 +36,7 @@ from picture_capture.collation import available_profile_labels, collation_key, p
 from picture_capture.dictionary_profile import (
     PROFILE_FORMAT_V2, PROFILE_FORMAT_V3, available_dictionary_profiles, dictionary_profile_labels,
     dictionary_profile_preset, load_dictionary_profile, profile_effective_settings, profile_layout_summary,
-    write_project_profile,
+    write_project_profile, language_effective_settings,
 )
 from picture_capture.ocr_engines import _lens_payload_records, find_tesseract
 from picture_capture.paddle_headwords import (
@@ -351,8 +359,37 @@ class FormatTests(unittest.TestCase):
         self.assertEqual(settings.detection_method, "paddleocr")
         self.assertTrue(settings.paddle_use_paddleocr)
         self.assertFalse(settings.paddle_compare_tesseract)
+        self.assertFalse(settings.paddle_dual_ocr_arbitration)
         self.assertFalse(settings.paddle_enable_lens)
         self.assertEqual(settings.paddle_lens_mode, "off")
+
+    def test_v2140_refreshes_workflow_defaults_once_for_existing_projects(self) -> None:
+        import json
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "settings.json"
+            path.write_text(json.dumps({
+                "geometry_coordinate_version": 2,
+                "geometry_coordinate_space": "canonical_reference_page_pixels",
+                "paddle_use_paddleocr": False,
+                "paddle_compare_tesseract": True,
+                "paddle_dual_ocr_arbitration": True,
+                "page_list_show_fill_status": True,
+            }), encoding="utf-8")
+            settings = AppSettings.from_json(path)
+            self.assertTrue(settings.paddle_use_paddleocr)
+            self.assertFalse(settings.paddle_compare_tesseract)
+            self.assertFalse(settings.paddle_dual_ocr_arbitration)
+            self.assertFalse(settings.page_list_show_fill_status)
+            self.assertEqual(settings.ui_workflow_defaults_version, 1)
+
+            settings.paddle_compare_tesseract = True
+            settings.paddle_dual_ocr_arbitration = True
+            settings.page_list_show_fill_status = True
+            settings.to_json(path)
+            reopened = AppSettings.from_json(path)
+            self.assertTrue(reopened.paddle_compare_tesseract)
+            self.assertTrue(reopened.paddle_dual_ocr_arbitration)
+            self.assertTrue(reopened.page_list_show_fill_status)
 
     def test_legacy_settings_import(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -3391,9 +3428,10 @@ def test_v299_load_project_restores_word_fill_status_before_page_list_refresh():
 def test_v2910_page_list_has_persistent_fill_status_column():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'columns = ("bookmark", "page", "lined", "fill_status", "illustrations")' in text
+    assert 'columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")' in text
+    assert 'self.page_list.heading("section", text="Section", anchor="w")' in text
     assert 'self.page_list.heading("fill_status", text="填充状态", anchor="w")' in text
-    for column in ("bookmark", "page", "lined", "fill_status", "illustrations"):
+    for column in ("bookmark", "page", "section", "lined", "fill_status", "illustrations"):
         assert f'self.page_list.column("{column}",' in text
         column_call = text[text.index(f'self.page_list.column("{column}",'):][:140]
         assert 'anchor="w"' in column_call
@@ -3941,9 +3979,22 @@ def test_v2110_page_list_heading_context_menu_has_optional_columns_and_permanent
     text = source.read_text(encoding="utf-8")
     assert "bind_context_menu(self.page_list, self._page_list_right_click)" in text
     assert 'menu.add_checkbutton(label="页面", variable=page_var, state="disabled")' in text
+    assert 'menu.add_checkbutton(label="Section", variable=section_var, state="disabled")' in text
     assert 'label="画线"' in text and 'label="填充状态"' in text and 'label="插图"' in text
 
 
+
+
+def test_v2140_page_list_visible_column_order_places_illustrations_before_fill_status():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    def _apply_page_list_display_columns")
+    end = text.index("    def _page_list_right_click", start)
+    block = text[start:end]
+    assert 'columns = ["bookmark", "page", "section"]' in block
+    assert block.index('columns.append("lined")') < block.index('columns.append("illustrations")')
+    assert block.index('columns.append("illustrations")') < block.index('columns.append("fill_status")')
+    assert 'self.page_list.configure(displaycolumns=tuple(columns))' in block
 
 
 def test_v2116_page_list_has_illustration_count_column_and_sort():
@@ -3961,6 +4012,16 @@ def test_v2116_page_list_has_illustration_count_column_and_sort():
     desc = _sorted_page_list_rows(rows, "illustrations", True)
     assert [iid for iid, _ in asc] == ["1", "0", "2"]
     assert [iid for iid, _ in desc] == ["0", "1", "2"]
+
+
+def test_page_list_section_column_sorts_numeric_text_naturally():
+    rows = [
+        ("0", ("", "a.png", "10", "✓", "一致", "0")),
+        ("1", ("", "b.png", "2", "✓", "一致", "0")),
+        ("2", ("", "c.png", "0", "✓", "一致", "0")),
+    ]
+    ordered = _sorted_page_list_rows(rows, "section", False)
+    assert [iid for iid, _ in ordered] == ["2", "1", "0"]
 
 
 def test_v2116_page_illustration_count_uses_ppp_without_opening_page_pixels(tmp_path):
@@ -3991,7 +4052,7 @@ def test_v2110_main_crop_preview_replaces_old_width_only_checkbox():
     assert 'def _draw_crop_plan_preview' in text
 
 
-def test_page_list_uses_display_mode_selector_for_existing_view_states():
+def test_display_mode_and_dark_mode_live_at_bottom_of_auxiliary_options():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     assert 'text="显示模式："' in text
@@ -4000,10 +4061,14 @@ def test_page_list_uses_display_mode_selector_for_existing_view_states():
     page_start = text.index('page_panel = self._section_frame(sidebar, "六、页面列表"')
     page_end = text.index("        list_frame = ttk.Frame(page_panel)", page_start)
     page_toolbar = text[page_start:page_end]
-    assert 'text="页面范围："' not in page_toolbar
-    assert page_toolbar.index('text="显示模式："') < page_toolbar.index('text="当前页"')
-    assert 'display_mode_combo = ttk.Combobox(\n            range_row,' in page_toolbar
-    assert 'display_mode_combo = ttk.Combobox(\n            size_row,' not in page_toolbar
+    assert 'text="显示模式："' not in page_toolbar
+
+    aux_start = text.index('self._section_frame(parent, "三、辅助选项及框线色块"')
+    aux_end = text.index('actions = self._section_frame(parent, "四、画线与校对"', aux_start)
+    aux = text[aux_start:aux_end]
+    assert 'display_mode_combo = ttk.Combobox(\n            view_mode_row,' in aux
+    assert 'text="深色模式"' in aux
+    assert aux.index('save_row = ttk.Frame(aux)') < aux.index('view_mode_row = ttk.Frame(aux)')
     assert 'text="◧"' not in text
     assert '"原图+标注": (False, False, False)' in text
     assert '"二值+标注": (True, False, False)' in text
@@ -4153,7 +4218,7 @@ def test_bookmark_controls_and_project_switch_protect_project_settings():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     assert 'text="⨇"' in text and 'text="⨈"' in text
-    assert 'columns = ("bookmark", "page", "lined", "fill_status", "illustrations")' in text
+    assert 'columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")' in text
     assert '"●" if page.stem in self._bookmark_stems() else ""' in text
     load_start = text.index("    def _load_project(")
     load_end = text.index("    def on_page_select", load_start)
@@ -4294,7 +4359,8 @@ def test_v2114_repair_pdic_button_calls_column_y_sort_only():
     start = app_text.index("def repair_pdic_order_selected_scope")
     end = app_text.index("def backup_pdic", start)
     body = app_text[start:end]
-    assert "sort_entries_column_y(entries" in body
+    assert "sort_entries_column_y(" in body
+    assert "read_page_sections(page)" in body
     assert "栏号 → Y" in body
     assert "Y → X" not in body
 
@@ -4472,14 +4538,17 @@ def test_v2119_crop_controls_live_only_in_crop_settings_dialog():
     assert '("裁剪终点 Y", "bottom_y", int)' not in settings_class
     assert '"crop_parallel_workers"' not in settings_class
     assert '("使用裁剪终点 Y", "crop_to_bottom_y")' not in settings_class
-    # The unified dialog owns all actual crop parameters.
+    # The unified dialog owns shared crop parameters; per-page bounds live in Section.
     for token in (
         'self.general_top_var', 'self.general_bottom_var',
         'self.entry_left_padding_var', 'self.entry_right_padding_var',
         'self.integrate_illustrations_var', 'self.margin_var', 'self.workers_var',
-        'self.special_top_var', 'self.special_bottom_var',
     ):
         assert token in crop_class
+    assert 'self.special_top_var' not in crop_class
+    assert 'self.special_bottom_var' not in crop_class
+    assert 'text="特殊页面覆盖"' not in crop_class
+    assert '主界面【六、页面列表】的 Section 列双击设置' in crop_class
     assert '完整切图设置（词条切图 / 插图切图共用）' in crop_class
 
 
@@ -4495,10 +4564,12 @@ def test_crop_settings_v6_declares_reference_coordinate_space():
     assert '"entry_left_padding_u"' in crop_class
     assert '"entry_right_padding_u"' in crop_class
     assert "参考页规范像素" in crop_class
-    # start_y remains persisted layout geometry; the Settings Center labels its
-    # coordinate space explicitly instead of presenting it as an unqualified Y.
+    # Coordinate meaning is carried by the unit column, not repeated in labels.
     settings_class = text.split("class SettingsDialog", 1)[1].split("class CropSettingsDialog", 1)[0]
-    assert '"start_y": "正文起始 V（参考页规范坐标）"' in settings_class
+    assert '"start_y": "正文起始 V"' in settings_class
+    assert '"start_y": "正文起始 V（参考页规范坐标）"' not in settings_class
+    assert '"paddle_left_tolerance": "参考页规范px"' in settings_class
+    assert '"paddle_separator_safety_px": "参考页规范px"' in settings_class
 
 
 def test_v21110_backup_pdic_is_background_and_streaming():
@@ -4647,16 +4718,31 @@ def test_sidebar_has_collapsed_postproduction_section_and_project_details():
 
 def test_auxiliary_overlay_defaults_and_label_style_controls():
     settings = AppSettings()
-    assert settings.guide_color == "#ff0000"
+    assert settings.guide_color == "#1976d2"
+    assert settings.page_section_color == "#1976d2"
     assert settings.headword_marker_color == "#ff0000"
-    assert settings.guide_width == 4
+    assert settings.illustration_outline_color == "#1976d2"
+    assert settings.illustration_label_border_color == "#1976d2"
+    assert settings.main_entry_default_color == "#e6e6e6"
+    assert settings.illustration_label_fill_color == "#e6e6e6"
     assert settings.marker_height == 2
-    assert settings.illustration_outline_width == 1
-    assert settings.illustration_label_border_width == 1
+    assert settings.guide_width == 2
+    assert settings.page_section_width == 2
+    assert settings.illustration_outline_width == 2
+    assert settings.illustration_label_border_width == 2
     assert settings.main_entry_width_chars == 18
     assert settings.main_entry_x_ratio == 0.66
-    assert settings.main_entry_font_size == 32
-    assert settings.illustration_label_font_size == 32
+
+    # Fresh projects use one automatic platform/language font policy.
+    assert settings.main_entry_font_family == AUTO_FONT_FAMILY
+    assert settings.main_entry_font_size == 16
+    assert settings.illustration_label_font_family == AUTO_FONT_FAMILY
+    assert settings.illustration_label_font_size == 16
+    assert settings.review_entry_font_family == AUTO_FONT_FAMILY
+    assert settings.review_entry_font_size == 16
+    assert settings.review_simplified_font_family == AUTO_FONT_FAMILY
+    assert settings.review_simplified_font_size == 16
+
     assert settings.show_illustration_labels is False
     assert settings.batch_interval == 3.0
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
@@ -4669,6 +4755,59 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'self.quick_bool_vars["show_illustration_labels"]' in app_text
     assert 'show_shapes = bool(self.polygon_var.get() or self.polygon_draw_var.get())' in app_text
     assert 'show_labels = bool(self.settings.show_illustration_labels or self.polygon_draw_var.get())' in app_text
+
+    # All user-facing main-image line widths share one image->display ratio.
+    assert scaled_overlay_line_width(2, 1.0) == 2
+    assert scaled_overlay_line_width(2, 0.5) == 1
+    assert scaled_overlay_line_width(2, 1.5) == 3
+    assert 'scaled_overlay_line_width(self.settings.guide_width, overlay_scale)' in app_text
+    assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in app_text
+    assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
+    assert 'self.settings.illustration_label_border_width, overlay_scale' in app_text
+    # Sequence number is a widget immediately before the editor and shares its background.
+    assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in app_text
+    assert 'bg=str(editor.cget("bg"))' in app_text
+    assert 'record["index_widget"] = index_label' in app_text
+    assert 'index_widget.configure(bg=bg)' in app_text
+
+
+def test_platform_language_font_recommendations_and_auto_normalization():
+    assert normalize_content_font_setting("") == AUTO_FONT_FAMILY
+    assert normalize_content_font_setting("auto") == AUTO_FONT_FAMILY
+    assert normalize_content_font_setting("自动") == AUTO_FONT_FAMILY
+    assert normalize_content_font_setting("Cambria") == "Cambria"
+
+    assert recommended_content_font_candidates("chi_sim", "Windows")[0] == "Microsoft YaHei UI"
+    assert recommended_content_font_candidates("chi_tra", "Windows")[0] == "Microsoft JhengHei UI"
+    assert recommended_content_font_candidates("jpn", "Windows")[0] == "Yu Gothic UI"
+    assert recommended_content_font_candidates("kor", "Windows")[0] == "Malgun Gothic"
+    assert recommended_content_font_candidates("eng", "Windows")[0] == "Segoe UI"
+
+    assert recommended_content_font_candidates("chi_sim", "Darwin")[0] == "PingFang SC"
+    assert recommended_content_font_candidates("chi_tra", "Darwin")[0] == "PingFang TC"
+    assert recommended_content_font_candidates("jpn", "Darwin")[0] == "Hiragino Sans"
+    assert recommended_content_font_candidates("kor", "Darwin")[0] == "Apple SD Gothic Neo"
+    assert recommended_content_font_candidates("eng", "Darwin")[0] == "Helvetica Neue"
+
+    assert recommended_content_font_candidates("chi_sim", "Linux")[0] == "Noto Sans CJK SC"
+    assert recommended_content_font_candidates("chi_tra", "Linux")[0] == "Noto Sans CJK TC"
+    assert recommended_content_font_candidates("jpn", "Linux")[0] == "Noto Sans CJK JP"
+    assert recommended_content_font_candidates("kor", "Linux")[0] == "Noto Sans CJK KR"
+    assert recommended_content_font_candidates("eng", "Linux")[0] == "Noto Sans"
+
+
+def test_all_configurable_content_font_paths_use_shared_auto_resolver():
+    app_text = (
+        Path(__file__).parents[1] / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    assert "AUTO_FONT_FAMILY" in app_text
+    assert "resolve_content_font_family(" in app_text
+    assert "self.settings.main_entry_font_family,\n            self.settings.ocr_language" in app_text
+    assert "self.settings.illustration_label_font_family,\n                                self.settings.ocr_language" in app_text
+    assert "self.parent.settings.review_entry_font_family,\n                self.parent.settings.ocr_language" in app_text
+    assert '"review_simplified_font_family"' in app_text
+    assert "values=content_font_values" in app_text
+    assert "review_families = (AUTO_FONT_FAMILY" in app_text
 
 
 def test_v21112_picdic_index_has_no_percent_signs(tmp_path):
@@ -4712,6 +4851,32 @@ def test_review_crop_context_keeps_true_horizontal_columns():
     crop_lefts = [box[0] for box in boxes]
     assert crop_lefts[1] - crop_lefts[0] > 800
     assert crop_lefts[2] - crop_lefts[1] > 800
+
+
+def test_review_zoom_defaults_to_auto_99_percent_left_pane_fit():
+    settings = AppSettings()
+    assert settings.review_zoom_percent == 0
+    assert review_auto_fit_zoom(1000, 500) == 0.495
+    assert review_auto_fit_zoom(500, 1000) == 1.98
+
+    app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    assert 'text="自动", width=5, command=self.reset_review_zoom' in app_text
+    assert "self.review_zoom_auto = stored_review_zoom <= 0" in app_text
+    assert "widest_crop = max(crop.width for crop in raw_crops)" in app_text
+    assert "widest_crop, auto_image_area_width, 0.99" in app_text
+    assert "return 0 if self.review_zoom_auto else round(self.review_zoom * 100)" in app_text
+    assert "not self.review_zoom_auto" in app_text
+
+
+def test_google_lens_language_follows_headword_ocr_language():
+    settings = language_effective_settings("jpn", "horizontal-tb")
+    assert settings["ocr_language"] == "jpn"
+    assert settings["paddle_lens_language"] == "jpn"
+
+    source = (Path(__file__).parents[1] / "src" / "picture_capture" / "paddle_headwords.py").read_text(encoding="utf-8")
+    assert 'getattr(settings, "ocr_language", "")' in source
+    assert "band, language=lens_language" in source
+    assert '"google_lens_language": lens_language' in source
 
 
 def test_review_editor_font_size_is_independent_of_review_zoom():
@@ -4957,8 +5122,10 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
     build_start = review.index("    def _build(self) -> None:")
     build_end = review.index("    def _toggle_review_panel(", build_start)
     build = review[build_start:build_end]
-    assert 'panes.add(left, weight=3)' in build
-    assert 'panes.add(right, weight=2)' in build
+    assert 'panes.add(left, weight=0)' in build
+    assert 'panes.add(right, weight=1)' in build
+    assert 'self.review_panes = panes' in build
+    assert 'self._fit_review_left_pane_to_toolbar' in review
     assert 'text="上\\n一\\n页"' in build and 'text="下\\n一\\n页"' in build
     assert 'self._review_collapsible_section(' in build
     section_helper = review[
@@ -6410,7 +6577,9 @@ def test_v2140_review_left_pane_fits_complete_toolbar_and_right_gets_remaining_w
     review = text[start:end]
     assert "self.review_panes = panes" in review
     assert "self.review_control_row = row1" in review
-    assert "self.after_idle(self._fit_review_left_pane_to_toolbar)" in review
+    assert "self.after_idle(self._initialize_review_layout_and_rows)" in review
+    assert "def _initialize_review_layout_and_rows" in review
+    assert "self._fit_review_left_pane_to_toolbar()" in review
     fit_start = review.index("    def _fit_review_left_pane_to_toolbar")
     fit_end = review.index("    def _build(self) -> None:", fit_start)
     fit = review[fit_start:fit_end]
@@ -7030,6 +7199,46 @@ def test_crop_bounds_scale_reference_values_to_current_page():
     assert (ill_top, ill_bottom, margin) == (150, 2400, 30)
 
 
+def test_page_sections_override_general_and_legacy_crop_bounds():
+    from picture_capture.coordinate_space import CANONICAL_REFERENCE_SPACE
+    from picture_capture.models import AppSettings
+    from picture_capture.processing import build_page_crop_plan, illustration_crop_bounds
+
+    settings = AppSettings(
+        geometry_coordinate_version=2,
+        geometry_coordinate_space=CANONICAL_REFERENCE_SPACE,
+        geometry_reference_width=400,
+        columns=1,
+        manual_x=30,
+        column_width=320,
+        gutter=20,
+        start_y=20,
+        bottom_y=580,
+        crop_to_bottom_y=True,
+        character_height=20,
+        row_padding=0,
+        follow_column_deformation=False,
+    )
+    image = Image.new("RGB", (400, 600), "white")
+    sections = [PageSection(120, 420)]
+    entries = [Entry("alpha", 30, 150), Entry("beta", 30, 300)]
+
+    # Even deliberately conflicting general/legacy-style bounds are ignored
+    # once the page has an explicit Section sidecar.
+    plan = build_page_crop_plan(
+        image, entries, [], settings,
+        top_y=40, bottom_y=560, page_sections=sections,
+    )
+    assert plan.entry_pieces
+    assert all(piece.box[1] >= 120 and piece.box[3] <= 420 for piece in plan.entry_pieces)
+
+    top, bottom, _margin = illustration_crop_bounds(
+        image, settings, top_y=40, bottom_y=560, margin=0,
+        page_sections=sections,
+    )
+    assert (top, bottom) == (120, 420)
+
+
 def test_page_crop_plan_declares_source_coordinate_space():
     from picture_capture.coordinate_space import SOURCE_COORDINATE_SPACE
     from picture_capture.processing import PageCropPlan, page_crop_plan_dict
@@ -7038,3 +7247,248 @@ def test_page_crop_plan_declares_source_coordinate_space():
     assert payload["version"] == 3
     assert payload["coordinate_space"] == SOURCE_COORDINATE_SPACE
     assert payload["box_format"] == "source_xyxy"
+
+
+
+def test_page_sections_sidecar_roundtrip_uses_managed_storage(tmp_path):
+    root = tmp_path / "dictionary"
+    root.mkdir()
+    ensure_project_storage(root, "test")
+    page = root / "0001.png"
+    sections = [PageSection(100, 700), PageSection(820, 1400)]
+    path = write_page_sections(
+        page, sections, canonical_width=1200, canonical_height=1600,
+        layout_transform="identity",
+    )
+    assert path == page_sections_path_for_image(page)
+    assert path == root / "_PictureCapture" / "data" / "PageSections" / "0001.json"
+    assert read_page_sections(page) == sections
+    lanes = build_reading_lanes(2, 0, 1600, sections)
+    assert [(lane.section_index, lane.column_index) for lane in lanes] == [
+        (0, 0), (0, 1), (1, 0), (1, 1),
+    ]
+
+
+def test_page_sections_single_explicit_region_is_preserved(tmp_path):
+    root = tmp_path / "book"
+    root.mkdir()
+    ensure_project_storage(root, "test")
+    page = root / "0001.png"
+    Image.new("RGB", (1200, 1600), "white").save(page)
+    section = [PageSection(120, 1480)]
+    write_page_sections(
+        page, section, canonical_width=1200, canonical_height=1600,
+        layout_transform="identity",
+    )
+    assert read_page_sections(page) == section
+    write_page_sections(
+        page, [], canonical_width=1200, canonical_height=1600,
+        layout_transform="identity",
+    )
+    assert read_page_sections(page) == []
+
+
+def test_page_sections_reads_migrated_legacy_qt_fallback(tmp_path):
+    import json
+    from picture_capture.project_storage import qt_root
+
+    root = tmp_path / "dictionary"
+    root.mkdir()
+    ensure_project_storage(root, "test")
+    page = root / "0001.png"
+    legacy = qt_root(root) / "PageSections" / "0001.json"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(
+        json.dumps({
+            "format": "picture-capture-page-sections-v1",
+            "coordinate_space": "canonical_full_resolution_pixels",
+            "sections": [
+                {"index": 1, "top_v": 100, "bottom_v": 700},
+                {"index": 2, "top_v": 820, "bottom_v": 1400},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    assert not page_sections_path_for_image(page).exists()
+    assert read_page_sections(page) == [PageSection(100, 700), PageSection(820, 1400)]
+
+
+def test_page_sections_sort_section_before_column():
+    geometry = Geometry(
+        column_starts=[20, 520],
+        column_widths=[420, 420],
+        top=0,
+        bottom=1000,
+        column_paths=[
+            ColumnPath([(0, 20), (1000, 20)]),
+            ColumnPath([(0, 520), (1000, 520)]),
+        ],
+    )
+    sections = [PageSection(0, 400), PageSection(500, 900)]
+    entries = [
+        Entry("S2C1", 20, 600),
+        Entry("S1C2", 520, 120),
+        Entry("S2C2", 520, 620),
+        Entry("S1C1", 20, 100),
+    ]
+    ordered = sort_entries_reading_order(entries, geometry, sections)
+    assert [entry.word for entry in ordered] == ["S1C1", "S1C2", "S2C1", "S2C2"]
+
+
+def test_page_sections_whole_entry_crop_follows_lanes_and_skips_gap():
+    image = Image.new("RGB", (1000, 1000), "white")
+    settings = AppSettings(
+        geometry_coordinate_version=2,
+        geometry_coordinate_space="canonical_reference_page_pixels",
+        geometry_reference_width=1000,
+        columns=2,
+        manual_x=20,
+        column_width=420,
+        gutter=80,
+        start_y=0,
+        bottom_y=900,
+        follow_column_deformation=False,
+    )
+    sections = [PageSection(0, 400), PageSection(500, 900)]
+    entries = [
+        Entry("S2C2", 520, 620),
+        Entry("S1C1", 20, 100),
+        Entry("S2C1", 20, 600),
+        Entry("S1C2", 520, 120),
+    ]
+    plan = build_page_crop_plan(
+        image, entries, [], settings,
+        top_y=0, bottom_y=900, page_sections=sections,
+    )
+    assert plan.entry_pieces
+    assert all(
+        (piece.box[1] >= 0 and piece.box[3] <= 400)
+        or (piece.box[1] >= 500 and piece.box[3] <= 900)
+        for piece in plan.entry_pieces
+    )
+    s1c2_pieces = [piece for piece in plan.entry_pieces if piece.word == "S1C2"]
+    assert len(s1c2_pieces) >= 2
+    assert any(piece.box[3] == 400 for piece in s1c2_pieces)
+    assert any(piece.box[1] == 500 and piece.box[3] == 600 for piece in s1c2_pieces)
+
+
+def test_alphabetical_warning_uses_section_major_reading_order():
+    report = [
+        {
+            "column": 0,
+            "candidates": [
+                {"accepted": True, "normalized_headword": "alpha", "canonical_v": 100, "source_y": 100},
+                {"accepted": True, "normalized_headword": "charlie", "canonical_v": 600, "source_y": 600},
+            ],
+            "tesseract": {"candidates": []},
+            "lens": {"candidates": []},
+        },
+        {
+            "column": 1,
+            "candidates": [
+                {"accepted": True, "normalized_headword": "bravo", "canonical_v": 100, "source_y": 100},
+                {"accepted": True, "normalized_headword": "delta", "canonical_v": 600, "source_y": 600},
+            ],
+            "tesseract": {"candidates": []},
+            "lens": {"candidates": []},
+        },
+    ]
+    warnings = _annotate_alphabetical_warnings(
+        report, [PageSection(0, 400), PageSection(500, 900)],
+        top_v=0, bottom_v=900,
+    )
+    assert warnings == []
+
+
+def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    aux_start = text.index('self._section_frame(parent, "三、辅助选项及框线色块"')
+    aux_end = text.index('actions = self._section_frame(parent, "四、画线与校对"', aux_start)
+    aux = text[aux_start:aux_end]
+
+    assert 'text="显示Section"' in aux
+    assert '"page_section_color"' in aux
+    assert '"page_section_width"' in aux
+    assert aux.index('text="显示Section"') < aux.index('text="栏左垂线"')
+    assert aux.index('"review_main_show_ocr_background"') < aux.index('text="显示单行候选框"')
+    assert 'fill="#ffffff"' in text
+    assert 'fill=line_fill, outline=line_fill' in text
+    assert 'overlay_scale = self.view_scale / parameter_scale(self.image, self.settings)' in text
+    assert 'line_width = scaled_overlay_line_width(' in text
+    assert 'int(getattr(self.settings, "page_section_width", 2) or 2),' in text
+    assert 'label_x = ((top_start[0] + top_end[0]) / 2.0) * self.view_scale' in text
+    assert 'fill="#ffffff", anchor="s"' in text
+
+
+def test_settings_display_labels_stay_single_line_and_dark_mode_name_is_current():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'text="深色模式（夜间模式）"' in text
+    assert 'text="深色模式（夜间校对）"' not in text
+    assert "single_line_labels: bool = False" in text
+    assert "wraplength=0 if single_line_labels else 180" in text
+    assert "group.columnconfigure(0, minsize=longest_label_width + 4)" in text
+    display_call = text.index('self._add_setting_group(\n            display,\n            "界面与校对"')
+    assert 'single_line_labels=True' in text[display_call:display_call + 240]
+
+
+def test_page_list_context_menu_matches_visible_column_order():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    def _page_list_right_click")
+    end = text.index("    def _schedule_page_cell_overlay_refresh", start)
+    block = text[start:end]
+    assert block.index('label="书签"') < block.index('label="页面"')
+    assert block.index('label="页面"') < block.index('label="Section"')
+    assert block.index('label="Section"') < block.index('label="画线"')
+    assert 'menu.add_checkbutton(label="书签", variable=bookmark_var, state="disabled")' in block
+    assert block.index('label="画线"') < block.index('label="插图"')
+    assert block.index('label="插图"') < block.index('label="填充状态"')
+
+
+def test_page_list_fills_width_adaptively_and_fill_status_is_opt_in_by_default():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    models = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
+    assert 'self.page_list.bind("<Configure>", self._page_list_configured)' in text
+    assert "def _fit_page_list_columns(self) -> None:" in text
+    assert "widths[-1] += available - sum(widths)" in text
+    assert 'page_list_show_fill_status: bool = False' in models
+    assert 'getattr(self.settings, "page_list_show_fill_status", False)' in text
+
+
+def test_ocr_strategy_order_and_defaults_are_single_engine_first():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    OCR_COMMON_CHECKS = (")
+    end = text.index("    OCR_ADVANCED_CHECKS = (", start)
+    block = text[start:end]
+    assert block.index('"PaddleOCR 主识别"') < block.index('"同时运行 Tesseract 对照"')
+    assert block.index('"同时运行 Tesseract 对照"') < block.index('"多 OCR 自动融合"')
+    models = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
+    assert "paddle_use_paddleocr: bool = True" in models
+    assert "paddle_compare_tesseract: bool = False" in models
+    assert "paddle_dual_ocr_arbitration: bool = False" in models
+
+
+def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'self.page_list.heading("section", text="Section", anchor="w")' in text
+    assert 'self.page_list.bind("<Double-1>", self._page_list_section_double_click, add="+")' in text
+    assert "minvalue=0, maxvalue=10" in text
+    assert 'text="SECTION设置"' not in text
+    assert "def _drag_page_section_boundary_to" in text
+    assert "该位置位于 SECTION 间空白区，不添加词条。" in text
+    assert "page_sections=list(self.page_sections)" in text
+    assert 'self.canvas.configure(cursor="hand2" if self._section_editing else "")' in text
+    assert "if self.image is None or self._section_editing:" in text
+    assert 'self.canvas.delete("cursor-guide")' in text
+    assert 'text="双击进入Section编辑模式"' in text
+    assert '"确认后：拖动虚线定位Section，双击左键确认并退出编辑。"' in text
+    assert 'self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)' in text
+    assert "def canvas_left_double_click" in text
+    assert "self._finish_section_editing()" in text
+    assert "def _restore_cursor_guides_after_section_edit" in text
+    assert "self.draw_cursor_guides(canvas_x, canvas_y)" in text

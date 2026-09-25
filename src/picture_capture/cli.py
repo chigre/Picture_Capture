@@ -11,6 +11,7 @@ from .image_utils import normalize_page_rgb
 from .models import ProjectState
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from .project_storage import headword_filter_rules_path, ocr_cache_root, qt_root, replace_rules_path
+from .page_sections import read_page_sections
 from .processing import (
     append_crop_log,
     detect_entries,
@@ -81,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
                     image, project.settings, paddle_cache_path=cache_path,
                     paddle_filter_rules_path=headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME),
                     profile_page_index=project.images.index(page),
+                    page_sections=read_page_sections(page),
                 )
                 write_pdic(pdic_path(page), entries, image.width, _neighbors(project, page))
                 print(f"[{number}/{len(pages)}] {page.name}: {len(entries)} 个标记")
@@ -92,7 +94,10 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             if args.command == "ocr":
                 rules = load_replace_rules(replace_rules_path(project.root))
-                texts = ocr_entries(image, entries, project.settings, rules)
+                texts = ocr_entries(
+                    image, entries, project.settings, rules,
+                    page_sections=read_page_sections(page),
+                )
                 for entry, text in zip(entries, texts):
                     entry.word = text
                 export_ocred(qt_root(project.root) / f"{page.stem}.OCRed", texts)

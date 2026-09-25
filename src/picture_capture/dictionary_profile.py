@@ -374,11 +374,19 @@ def language_effective_settings(language: str, writing_mode: str = "horizontal-t
     key = _base_language(language)
     resource = dict((raw.get("languages") or {}).get(key) or {})
     if not resource:
-        return {"ocr_language": language, "tesseract_language": language}
+        return {
+            "ocr_language": language,
+            "paddle_lens_language": language,
+            "tesseract_language": language,
+        }
     vertical = writing_mode.startswith("vertical")
+    effective_ocr_language = language or str(resource.get("semantic_language") or key)
     return {
-        "ocr_language": language or str(resource.get("semantic_language") or key),
+        "ocr_language": effective_ocr_language,
         "paddle_language": str(resource.get("paddle_language") or ""),
+        # Google Lens is not an independent project language. It follows the
+        # headword OCR language so Profile/language changes stay synchronized.
+        "paddle_lens_language": effective_ocr_language,
         "tesseract_language": str(
             (resource.get("vertical_tesseract_language") if vertical else None)
             or resource.get("tesseract_language") or key
