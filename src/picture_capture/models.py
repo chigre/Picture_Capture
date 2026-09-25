@@ -146,7 +146,7 @@ class AppSettings:
     right_ratio_percent_version: int = 1
     horizontal_tolerance: int = 5
     marker_height: int = 2
-    guide_width: int = 4
+    guide_width: int = 2
     # Main overlay colours. The classic Picture Capture visual language uses
     # red guide/headword markers by default; PPP colours are independently configurable.
     guide_color: str = "#ff0000"
@@ -154,13 +154,13 @@ class AppSettings:
     page_section_width: int = 2
     headword_marker_color: str = "#ff0000"
     illustration_outline_color: str = "#1565c0"
-    illustration_outline_width: int = 1
+    illustration_outline_width: int = 2
     illustration_fill_color: str = "#ffe66d"
     illustration_label_border_color: str = "#d81b60"
-    illustration_label_border_width: int = 1
+    illustration_label_border_width: int = 2
     illustration_label_fill_color: str = "#ffffff"
-    illustration_label_font_family: str = "Microsoft YaHei"
-    illustration_label_font_size: int = 32
+    illustration_label_font_family: str = "DengXian"
+    illustration_label_font_size: int = 16
     illustration_label_font_bold: bool = False
     illustration_label_font_italic: bool = False
     show_page_sections: bool = True
@@ -204,18 +204,18 @@ class AppSettings:
     # Overlay editor presentation at 100% page scale. The page zoom multiplies
     # the base font, so text boxes zoom together with the scanned page.
     main_entry_font_family: str = "DengXian"
-    main_entry_font_size: int = 32
+    main_entry_font_size: int = 16
     main_entry_font_bold: bool = False
     main_entry_font_italic: bool = False
     main_entry_width_chars: int = 18
     main_entry_x_ratio: float = 0.66
     main_entry_follow_zoom: bool = True
     main_entry_default_color: str = "#ffffff"
-    # Review zoom and typography are independent from the main page viewer and
-    # are persisted per project. 64% is a practical default for large scans.
-    review_zoom_percent: int = 64
-    review_entry_font_family: str = "Cambria"
-    review_entry_font_size: int = 18
+    # 0 = automatic proofreading crop fit: fill 99% of the actual left image area.
+    # Positive values are explicit/manual percentages and remain project-persisted.
+    review_zoom_percent: int = 0
+    review_entry_font_family: str = "DengXian"
+    review_entry_font_size: int = 16
     # v2 means review_entry_font_size is the actual fixed editor font size.
     # Before v2.11.13 it represented a 100%-zoom base size and was multiplied
     # by review_zoom_percent while rendering.  The marker lets old projects be
@@ -226,8 +226,8 @@ class AppSettings:
     # Independent typography for the editable Simplified companion in the
     # proofreading window. Older projects inherit the ordinary headword style
     # once when loaded, then persist these values independently.
-    review_simplified_font_family: str = "Cambria"
-    review_simplified_font_size: int = 18
+    review_simplified_font_family: str = "DengXian"
+    review_simplified_font_size: int = 16
     review_simplified_font_bold: bool = False
     review_simplified_font_italic: bool = False
     # Extra visual padding before review-entry text. This changes only the
@@ -396,7 +396,8 @@ class AppSettings:
     # ``full`` may influence otherwise non-conflicting decisions.
     paddle_enable_lens: bool = False
     paddle_lens_mode: str = "off"
-    paddle_lens_language: str = "es"
+    # Compatibility field; runtime Lens language follows ocr_language.
+    paddle_lens_language: str = "eng"
     paddle_lens_timeout: int = 60
     paddle_lens_default_confidence: float = 0.82
     # Overlay one checkbox for every left-edge OCR row.  A rejected/missed row can
