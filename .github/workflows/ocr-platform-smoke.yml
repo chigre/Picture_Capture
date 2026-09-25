@@ -1,0 +1,46 @@
+name: OCR Platform Smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+      - "scripts/ocr_setup.py"
+      - "scripts/verify_ocr_environment.py"
+      - ".github/workflows/ocr-platform-smoke.yml"
+  push:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+      - "scripts/ocr_setup.py"
+      - "scripts/verify_ocr_environment.py"
+      - ".github/workflows/ocr-platform-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-ocr:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python 3.13
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install CPU OCR profile
+        run: uv sync --locked --no-dev --extra ocr-cpu
+
+      - name: Verify CPU OCR runtime
+        run: uv run --no-sync python scripts/verify_ocr_environment.py --expect cpu --profile ocr-cpu
