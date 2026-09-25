@@ -3395,9 +3395,10 @@ def test_v299_load_project_restores_word_fill_status_before_page_list_refresh():
 def test_v2910_page_list_has_persistent_fill_status_column():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'columns = ("bookmark", "page", "lined", "fill_status", "illustrations")' in text
+    assert 'columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")' in text
+    assert 'self.page_list.heading("section", text="Section", anchor="w")' in text
     assert 'self.page_list.heading("fill_status", text="填充状态", anchor="w")' in text
-    for column in ("bookmark", "page", "lined", "fill_status", "illustrations"):
+    for column in ("bookmark", "page", "section", "lined", "fill_status", "illustrations"):
         assert f'self.page_list.column("{column}",' in text
         column_call = text[text.index(f'self.page_list.column("{column}",'):][:140]
         assert 'anchor="w"' in column_call
@@ -3945,6 +3946,7 @@ def test_v2110_page_list_heading_context_menu_has_optional_columns_and_permanent
     text = source.read_text(encoding="utf-8")
     assert "bind_context_menu(self.page_list, self._page_list_right_click)" in text
     assert 'menu.add_checkbutton(label="页面", variable=page_var, state="disabled")' in text
+    assert 'menu.add_checkbutton(label="Section", variable=section_var, state="disabled")' in text
     assert 'label="画线"' in text and 'label="填充状态"' in text and 'label="插图"' in text
 
 
@@ -3956,6 +3958,7 @@ def test_v2140_page_list_visible_column_order_places_illustrations_before_fill_s
     start = text.index("    def _apply_page_list_display_columns")
     end = text.index("    def _page_list_right_click", start)
     block = text[start:end]
+    assert 'columns = ["bookmark", "page", "section"]' in block
     assert block.index('columns.append("lined")') < block.index('columns.append("illustrations")')
     assert block.index('columns.append("illustrations")') < block.index('columns.append("fill_status")')
     assert 'self.page_list.configure(displaycolumns=tuple(columns))' in block
@@ -3976,6 +3979,16 @@ def test_v2116_page_list_has_illustration_count_column_and_sort():
     desc = _sorted_page_list_rows(rows, "illustrations", True)
     assert [iid for iid, _ in asc] == ["1", "0", "2"]
     assert [iid for iid, _ in desc] == ["0", "1", "2"]
+
+
+def test_page_list_section_column_sorts_numeric_text_naturally():
+    rows = [
+        ("0", ("", "a.png", "10", "✓", "一致", "0")),
+        ("1", ("", "b.png", "2", "✓", "一致", "0")),
+        ("2", ("", "c.png", "0", "✓", "一致", "0")),
+    ]
+    ordered = _sorted_page_list_rows(rows, "section", False)
+    assert [iid for iid, _ in ordered] == ["2", "1", "0"]
 
 
 def test_v2116_page_illustration_count_uses_ppp_without_opening_page_pixels(tmp_path):
@@ -7078,6 +7091,25 @@ def test_page_sections_sidecar_roundtrip_uses_managed_storage(tmp_path):
     ]
 
 
+def test_page_sections_single_explicit_region_is_preserved(tmp_path):
+    root = tmp_path / "book"
+    root.mkdir()
+    ensure_project_storage(root)
+    page = root / "0001.png"
+    Image.new("RGB", (1200, 1600), "white").save(page)
+    section = [PageSection(120, 1480)]
+    write_page_sections(
+        page, section, canonical_width=1200, canonical_height=1600,
+        layout_transform="identity",
+    )
+    assert read_page_sections(page) == section
+    write_page_sections(
+        page, [], canonical_width=1200, canonical_height=1600,
+        layout_transform="identity",
+    )
+    assert read_page_sections(page) == []
+
+
 def test_page_sections_reads_migrated_legacy_qt_fallback(tmp_path):
     import json
     from picture_capture.project_storage import qt_root
@@ -7190,11 +7222,13 @@ def test_alphabetical_warning_uses_section_major_reading_order():
     assert warnings == []
 
 
-def test_page_section_editor_is_exposed_and_gap_clicks_are_guarded():
+def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'text="SECTION设置"' in text
-    assert "def toggle_page_section_editor" in text
+    assert 'self.page_list.heading("section", text="Section", anchor="w")' in text
+    assert 'self.page_list.bind("<Double-1>", self._page_list_section_double_click, add="+")' in text
+    assert "minvalue=0, maxvalue=10" in text
+    assert 'text="SECTION设置"' not in text
     assert "def _drag_page_section_boundary_to" in text
     assert "该位置位于 SECTION 间空白区，不添加词条。" in text
     assert "page_sections=list(self.page_sections)" in text
