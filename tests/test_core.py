@@ -3391,9 +3391,9 @@ def test_v299_load_project_restores_word_fill_status_before_page_list_refresh():
 def test_v2910_page_list_has_persistent_fill_status_column():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'columns = ("bookmark", "page", "lined", "fill_status", "illustrations")' in text
+    assert 'columns = ("bookmark", "page", "lined", "illustrations", "fill_status")' in text
     assert 'self.page_list.heading("fill_status", text="填充状态", anchor="w")' in text
-    for column in ("bookmark", "page", "lined", "fill_status", "illustrations"):
+    for column in ("bookmark", "page", "lined", "illustrations", "fill_status"):
         assert f'self.page_list.column("{column}",' in text
         column_call = text[text.index(f'self.page_list.column("{column}",'):][:140]
         assert 'anchor="w"' in column_call
@@ -3494,6 +3494,17 @@ class PageListSortTests(unittest.TestCase):
         desc = _sorted_page_list_rows(rows, "lined", True)
         self.assertEqual(asc[-1][0], "0")
         self.assertEqual(desc[-1][0], "0")
+
+
+def test_v2140_page_list_live_rows_match_new_visual_column_order():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'new_values = (bookmark, page.name, lined, illustrations, fill_status)' in text
+    assert '{"bookmark": 0, "page": 1, "lined": 2, "illustrations": 3, "fill_status": 4}' in text
+    display_start = text.index("    def _apply_page_list_display_columns")
+    display_end = text.index("    def _page_list_right_click", display_start)
+    display = text[display_start:display_end]
+    assert display.index('columns.append("illustrations")') < display.index('columns.append("fill_status")')
 
 
 def test_v2912_fill_status_cell_semantic_colors():
@@ -4153,7 +4164,7 @@ def test_bookmark_controls_and_project_switch_protect_project_settings():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     assert 'text="⨇"' in text and 'text="⨈"' in text
-    assert 'columns = ("bookmark", "page", "lined", "fill_status", "illustrations")' in text
+    assert 'columns = ("bookmark", "page", "lined", "illustrations", "fill_status")' in text
     assert '"●" if page.stem in self._bookmark_stems() else ""' in text
     load_start = text.index("    def _load_project(")
     load_end = text.index("    def on_page_select", load_start)
@@ -4760,23 +4771,80 @@ def test_v21114_review_font_marker_prevents_repeat_migration(tmp_path):
     assert settings.review_entry_font_size == 72
 
 
-def test_v21115_review_window_exposes_persisted_font_controls():
+def test_v21115_review_window_exposes_persisted_font_picker():
     from pathlib import Path
     import inspect
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    body = text[start:text.index("class ", start + 20) if "class " in text[start + 20:] else len(text)]
+    body = text[start:text.index("class OCRConflictReviewDialog", start)]
     assert 'text="词条字体："' in body
-    assert 'text="字号："' in body
-    assert 'text="粗体"' in body
-    assert 'text="斜体"' in body
+    assert 'text="选择字体…"' in body
+    assert "self.review_font_summary_var" in body
+    assert "def _open_review_font_picker" in body
+    assert "FontPickerDialog(" in body
+    assert "self.review_font_combo" not in body
+    assert "self.review_font_size_spin" not in body
     assert 'self.review_font_family_var' in body
     assert 'self.review_font_size_var' in body
     assert 'settings.review_entry_font_family = family' in body
     assert 'settings.review_entry_font_size = size' in body
     assert 'self.parent.save_settings()' in body
+
+
+def test_v2140_font_picker_combines_family_style_size_and_preview():
+    from pathlib import Path
+    import inspect
+    import picture_capture.app as app_module
+
+    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    start = text.index("class FontPickerDialog")
+    end = text.index("class SettingsDialog", start)
+    picker = text[start:end]
+    assert '("常规", False, False)' in picker
+    assert '("粗体", True, False)' in picker
+    assert '("斜体", False, True)' in picker
+    assert '("粗斜体", True, True)' in picker
+    assert 'text="字体"' in picker
+    assert 'text="字形"' in picker
+    assert 'text="大小"' in picker
+    assert 'text="示例"' in picker
+    assert 'AaBbYyZz  简体 繁體  áéíóú' in picker
+    assert 'text="确定"' in picker
+    assert 'text="取消"' in picker
+    assert 'text="应用"' in picker
+    assert 'self._populate_families(self.family_var.get(), query="")' in picker
+
+
+def test_v2140_main_and_settings_center_reuse_font_picker():
+    from pathlib import Path
+    import inspect
+    import picture_capture.app as app_module
+
+    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    assert "def _open_quick_font_picker(" in text
+    assert 'title="选择字体 — 主界面词条"' in text
+    assert 'title="选择字体 — 插图标签"' in text
+    assert 'self.quick_font_summary_vars["main_entry_font_family"]' in text
+    assert 'self.quick_font_summary_vars["illustration_label_font_family"]' in text
+
+    settings_start = text.index("class SettingsDialog")
+    settings_end = text.index("class ReviewWindow", settings_start)
+    settings = text[settings_start:settings_end]
+    assert "def _add_font_picker_group(" in settings
+    assert '"主界面词条字体"' in settings
+    assert '"校对词条字体"' in settings
+    assert 'text="选择字体…"' in settings
+    assert 'DISPLAY_STYLE_CHECKS: tuple[tuple[str, str], ...] = ()' in settings
+    display_fields = settings[
+        settings.index("    DISPLAY_FIELDS = ("):
+        settings.index("    PROJECT_RUNTIME_FIELDS", settings.index("    DISPLAY_FIELDS = ("))
+    ]
+    assert '"main_entry_font_family"' not in display_fields
+    assert '"main_entry_font_size"' not in display_fields
+    assert '"review_entry_font_family"' not in display_fields
+    assert '"review_entry_font_size"' not in display_fields
 
 
 def test_v21115_review_font_apply_does_not_change_review_zoom():
@@ -6093,16 +6161,20 @@ def test_v2128_review_network_toolbar_has_compact_source_badges():
     assert "install_cc_cedict_from_file(source)" in review
 
 
-def test_v2129_review_window_has_independent_simplified_font_controls():
+def test_v2129_review_window_has_independent_simplified_font_picker():
     from pathlib import Path
     import inspect
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    body = text[start:text.index("class ", start + 20) if "class " in text[start + 20:] else len(text)]
+    body = text[start:text.index("class OCRConflictReviewDialog", start)]
     assert 'text="词条字体："' in body
     assert 'text="简体字体："' in body
+    assert "self.review_simplified_font_summary_var" in body
+    assert 'command=lambda: self._open_review_font_picker(True)' in body
+    assert "self.review_simplified_font_combo" not in body
+    assert "self.review_simplified_font_size_spin" not in body
     assert 'self.review_simplified_font_family_var' in body
     assert 'self.review_simplified_font_size_var' in body
     assert 'self.review_simplified_font_bold_var' in body
