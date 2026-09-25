@@ -33,7 +33,7 @@ jobs:
         run: uv run --locked python run_tests.py
 
       - name: Compile Python sources
-        run: uv run --locked python -m compileall -q src run.py run_tests.py
+        run: uv run --locked python -m compileall -q src scripts run.py run_tests.py
 
       - name: Check undefined names
         run: uv run --locked ruff check --select F821 src tests scripts run.py run_tests.py
@@ -54,10 +54,18 @@ jobs:
           staging="$(mktemp -d)"
           mkdir -p "${staging}/${package}"
           cp -R \
-            src docs examples \
+            src scripts docs examples \
             README.md CHANGELOG.md LICENSE.txt pyproject.toml uv.lock .python-version \
-            run.py run_tests.py run_windows.bat install_ocr_windows.bat \
+            run.py run_tests.py \
+            run_windows.bat install_ocr_windows.bat \
+            run_linux.sh install_ocr_linux.sh \
+            run_macos.command install_ocr_macos.command \
             "${staging}/${package}/"
+          chmod +x \
+            "${staging}/${package}/run_linux.sh" \
+            "${staging}/${package}/install_ocr_linux.sh" \
+            "${staging}/${package}/run_macos.command" \
+            "${staging}/${package}/install_ocr_macos.command"
           (cd "${staging}" && zip -qr "${GITHUB_WORKSPACE}/dist/${package}-release.zip" "${package}")
 
       - name: Generate SHA256 checksums
