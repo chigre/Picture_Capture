@@ -1831,6 +1831,23 @@ def test_wizard_parser_controls_gate_cjk_bracket_and_marker_structures():
     assert marker.normalized == "同義"
 
 
+def test_v214_validated_examples_resolve_as_executable_profiles():
+    from picture_capture.dictionary_profile import dictionary_profile_preset
+
+    shueisha = dictionary_profile_preset("shueisha")
+    assert shueisha.family == "cjk_visual"
+    assert shueisha.default_language == "jpn"
+    assert shueisha.layout["writing_mode"] == "vertical-rl"
+    assert shueisha.layout["canonical_transform"] == "rotate_ccw90"
+    assert shueisha.headword["features"] == ["bracketed_compound"]
+
+    times = dictionary_profile_preset("TimesCED")
+    assert times.family == "cjk_visual"
+    assert times.headword["features"] == [
+        "large_single_character", "pinyin_after_headword",
+    ]
+
+
 def test_v214_shueisha_japanese_bracketed_headwords_accept_kana_reading_prefix():
     from picture_capture.dictionary_profile import load_dictionary_profile
     from picture_capture.models import AppSettings
