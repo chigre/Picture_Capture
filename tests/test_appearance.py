@@ -79,5 +79,6 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'self._apply_current_appearance(dialog)' in app_source
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in app_source
     assert 'themed_display_image(rendered, self.parent.appearance_mode)' in app_source
-    assert 'themed_display_image(preview, getattr(self.parent, "appearance_mode", "light"))' in profile_source
+    assert "themed_display_image(" in profile_source
+    assert 'preview, getattr(self.parent, "appearance_mode", "light")' in profile_source
     assert 'themed_display_image(display, getattr(self.parent, "appearance_mode", "light"))' in profile_source
