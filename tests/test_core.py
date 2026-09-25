@@ -3946,6 +3946,17 @@ def test_v2110_page_list_heading_context_menu_has_optional_columns_and_permanent
 
 
 
+def test_v2140_page_list_visible_column_order_places_illustrations_before_fill_status():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    def _apply_page_list_display_columns")
+    end = text.index("    def _page_list_right_click", start)
+    block = text[start:end]
+    assert block.index('columns.append("lined")') < block.index('columns.append("illustrations")')
+    assert block.index('columns.append("illustrations")') < block.index('columns.append("fill_status")')
+    assert 'self.page_list.configure(displaycolumns=tuple(columns))' in block
+
+
 def test_v2116_page_list_has_illustration_count_column_and_sort():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
