@@ -3844,10 +3844,10 @@ class SettingsDialog(tk.Toplevel):
 
 
 def _review_window_dimensions(screen_w: int, screen_h: int) -> tuple[int, int]:
-    """Default proofreading window size: 70% of the current screen in both axes."""
+    """Default proofreading window size: 60% screen width and 70% screen height."""
     screen_w = max(1, int(screen_w))
     screen_h = max(1, int(screen_h))
-    width = min(screen_w, max(560, int(round(screen_w * 0.70))))
+    width = min(screen_w, max(560, int(round(screen_w * 0.60))))
     height = min(screen_h, max(420, int(round(screen_h * 0.70))))
     return width, height
 
@@ -4032,6 +4032,7 @@ class ReviewWindow(tk.Toplevel):
         self.review_section_title_font.configure(weight="bold")
         self._configure_review_styles()
         self._build()
+        self.after_idle(self._fit_review_left_pane_to_toolbar)
         self.protocol("WM_DELETE_WINDOW", self._close_review)
         self._update_title()
         # Traces are installed after the widgets are built so construction does
@@ -4221,19 +4222,35 @@ class ReviewWindow(tk.Toplevel):
             body.pack_forget()
             frame.pack_configure(expand=False)
 
+    def _fit_review_left_pane_to_toolbar(self) -> None:
+        """Size the left pane just wide enough to show the complete top toolbar."""
+        panes = getattr(self, "review_panes", None)
+        row = getattr(self, "review_control_row", None)
+        if panes is None or row is None:
+            return
+        try:
+            self.update_idletasks()
+            required = int(row.winfo_reqwidth()) + 14
+            available = max(1, int(panes.winfo_width()) - 1)
+            panes.sashpos(0, min(required, available))
+        except (tk.TclError, ValueError):
+            return
+
     def _build(self) -> None:
         panes = ttk.Panedwindow(self, orient="horizontal")
         panes.pack(fill="both", expand=True)
+        self.review_panes = panes
         left = ttk.Frame(panes, style="PCR.Surface.TFrame")
         right = ttk.Frame(panes, padding=(8, 6), style="PCR.Surface.TFrame")
-        panes.add(left, weight=3)
-        panes.add(right, weight=2)
+        panes.add(left, weight=0)
+        panes.add(right, weight=1)
 
         # Left: high-frequency review actions first; low-frequency helpers stay folded.
         controls = ttk.Frame(left, padding=(7, 6, 7, 4), style="PCR.Toolbar.TFrame")
         controls.pack(fill="x")
         row1 = ttk.Frame(controls, style="PCR.Toolbar.TFrame")
         row1.pack(fill="x", pady=(0, 4))
+        self.review_control_row = row1
         self._review_flat_button(row1, "保存", self.save, role="primary").pack(side="left")
         self._sync_autosave_label()
         ttk.Checkbutton(
@@ -4500,9 +4517,13 @@ class ReviewWindow(tk.Toplevel):
             "<<ComboboxSelected>>", self._change_review_ocr_compare_source
         )
         ttk.Checkbutton(
-            ocr_compare_row, text="简化", variable=self.review_show_simplified_var,
+            ocr_compare_row, text="简体化词条", variable=self.review_show_simplified_var,
             command=self._toggle_review_simplified, style="PCR.Body.TCheckbutton",
         ).pack(side="left", padx=(8, 0))
+        ttk.Button(
+            ocr_compare_row, text="重新简体化", command=self.regenerate_simplified_current_page,
+            style="PCR.Compact.TButton",
+        ).pack(side="left", padx=(6, 0))
 
         ocr_row = ttk.Frame(ocr_box, style="PCR.Surface.TFrame")
         ocr_row.pack(fill="x", pady=(4, 0))
@@ -4510,7 +4531,7 @@ class ReviewWindow(tk.Toplevel):
         self.ocr_options.pack(side="left", fill="x", expand=True)
 
         network_box = self._review_collapsible_section(
-            right, "network", "网络词汇核验（免费，无需 Token）",
+            right, "network", "词条联网核验结果",
             padding=6, fill="x", pady=(0, 6),
         )
         network_actions = ttk.Frame(network_box, style="PCR.Surface.TFrame")
@@ -6339,6 +6360,55 @@ class ReviewWindow(tk.Toplevel):
     def _refresh_all_simplified(self) -> None:
         for index in range(min(len(self.vars), len(self.simplified_vars))):
             self._refresh_simplified_for_index(index)
+
+    def regenerate_simplified_current_page(self) -> None:
+        """Force OpenCC regeneration for every simplified headword on the current page."""
+        if not self.parent.current_page or not self.vars:
+            return
+        row_entries = self._bound_row_entries()
+        count = min(len(self.vars), len(self.simplified_vars), len(row_entries))
+        if count <= 0:
+            return
+        originals = [self.vars[index].get().strip() for index in range(count)]
+        regenerated = [simplify_text(original) for original in originals]
+        if any(value is None for value in regenerated):
+            messagebox.showerror(
+                "重新简体化",
+                "OpenCC不可用，未覆盖本页已有的简体化结果。",
+                parent=self,
+            )
+            return
+        if not self.parent._claim_page_for_manual_edit():
+            return
+
+        stem = self._rendered_page_stem or self.parent.current_page.stem
+        records = self._simplified_page_records(stem)
+        for index, (entry, original, actual) in enumerate(
+            zip(row_entries[:count], originals, regenerated)
+        ):
+            if index < len(self.simplified_actual_values):
+                self.simplified_actual_values[index] = actual
+            if index < len(self.simplified_manual_flags):
+                self.simplified_manual_flags[index] = False
+            if index < len(self.simplified_auto_refresh_flags):
+                self.simplified_auto_refresh_flags[index] = False
+            self.simplified_vars[index].set(
+                self._simplified_display_from_value(original, actual, False)
+            )
+            records[simplified_entry_key(entry.x, entry.y)] = {
+                "x": int(entry.x),
+                "y": int(entry.y),
+                "source_word": original,
+                "text": str(actual),
+                "manual": False,
+            }
+
+        self._simplified_dirty_pages.add(stem)
+        self._persist_simplified_page(stem)
+        self._refresh_cc_simplified_comparison(self.active_index)
+        self.parent.status_var.set(
+            f"已重新简体化当前页：{self.parent.current_page.name}｜覆盖 {count} 条简体结果"
+        )
 
     def _apply_simplified_visibility(self) -> None:
         show = bool(self.review_show_simplified_var.get())
