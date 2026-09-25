@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 
-from .project_storage import page_sections_path_for_image
+from .project_storage import page_sections_path_for_image, qt_root
 
 
 PAGE_SECTIONS_FORMAT = "picture-capture-page-sections-v1"
@@ -123,9 +123,14 @@ def reading_lane_index(
 
 def read_page_sections(image_path: Path) -> list[PageSection]:
     """Read explicit page SECTIONs. Missing/invalid sidecars safely mean one SECTION."""
-    path = page_sections_path_for_image(Path(image_path))
+    image_path = Path(image_path)
+    path = page_sections_path_for_image(image_path)
     if not path.exists():
-        return []
+        legacy_qt_path = qt_root(image_path.parent) / "PageSections" / f"{image_path.stem}.json"
+        if legacy_qt_path.exists():
+            path = legacy_qt_path
+        else:
+            return []
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError):
