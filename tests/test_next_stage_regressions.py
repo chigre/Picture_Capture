@@ -33,6 +33,7 @@ from picture_capture.paddle_headwords import (
 )
 from picture_capture.project_storage import profile_path, qt_root, settings_path
 from picture_capture.picdic import PicDicBuildCancelled, build_picdic_package
+from picture_capture.training_export import TrainingExportCancelled, make_training_zip
 from picture_capture.recent_projects import (
     load_recent_projects, recent_project_details, remove_recent_project, touch_recent_project,
 )
@@ -1478,3 +1479,81 @@ def test_round1_picdic_cancel_is_atomic(tmp_path):
     assert not list(out.glob("*.tmp")) if out.exists() else True
     assert not list(out.glob("*.dsl")) if out.exists() else True
     assert not list(out.glob("*.zip")) if out.exists() else True
+
+
+
+def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
+    root = Path(__file__).resolve().parents[1]
+    app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    profile_text = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+
+    app_start = app_text.index("class PictureCaptureApp")
+    training_start = app_text.index("    def export_training_package(", app_start)
+    training_end = app_text.index("\n    def show_help_dialog", training_start)
+    training = app_text[training_start:training_end]
+    assert 'items: list[object] = ["__prepare__"]' in training
+    assert "context_files[:] = copy_project_context(project.root, staging)" in training
+    assert "make_training_zip(" in training
+    assert "should_stop=self._batch_stop_event.is_set" in training
+    assert "shutil.rmtree(staging, ignore_errors=True)" in training
+    done_start = training.index("        def done(")
+    done = training[done_start:]
+    assert "shutil.rmtree(staging, ignore_errors=True)" not in done
+    assert 'self._start_ui_worker(' in done
+
+    layout_start = app_text.index("    def detect_layout_consistency_selected(", app_start)
+    layout_end = app_text.index("\n    @staticmethod\n    def _normalize_suffix", layout_start)
+    layout = app_text[layout_start:layout_end]
+    done_start = layout.index("        def done(")
+    layout_done = layout[done_start:]
+    assert "def finalize_report():" in layout_done
+    assert 'self._start_ui_worker(' in layout_done
+    finalized_start = layout_done.index("        def finalized(")
+    ui_finalized = layout_done[finalized_start:]
+    assert 'target.open("w"' not in ui_finalized
+    assert "statistics.fmean(" not in ui_finalized
+
+    review_start = app_text.index("class ReviewWindow")
+    review_end = app_text.index("class OCRConflictReviewDialog", review_start)
+    review = app_text[review_start:review_end]
+    request_start = review.index("    def _request_render_rows(")
+    render_start = review.index("    def render_rows(", request_start)
+    request = review[request_start:render_start]
+    render = review[render_start:]
+    assert "with Image.open(page) as opened:" in request
+    assert "Image.Resampling.LANCZOS" in request
+    assert "self.parent._start_ui_worker(" in request
+    assert "Image.Resampling.LANCZOS" not in render
+    assert "_review_line_box(" not in render
+    assert "ImageTk.PhotoImage(crop)" in render
+    assert "self.render_rows()" not in review
+
+    preview_start = profile_text.index("    def _refresh_template_preview(")
+    preview_end = profile_text.index("\n    @staticmethod\n    def _mode_row", preview_start)
+    preview = profile_text[preview_start:preview_end]
+    assert "with Image.open(path) as opened:" in preview
+    assert "derive_geometry(" in preview
+    assert "self.parent._start_ui_worker(" in preview
+    worker_start = preview.index("        def worker():")
+    done_start = preview.index("        def done(", worker_start)
+    worker = preview[worker_start:done_start]
+    assert "ImageTk.PhotoImage" not in worker
+    assert "ImageTk.PhotoImage(preview)" in preview[done_start:]
+
+
+def test_round2_training_zip_cancel_is_atomic(tmp_path):
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    (staging / "dataset_manifest.json").write_text("{}", encoding="utf-8")
+    (staging / "large.bin").write_bytes(b"x" * 1024)
+    target = tmp_path / "training.zip"
+
+    try:
+        make_training_zip(staging, target, should_stop=lambda: True)
+    except TrainingExportCancelled:
+        pass
+    else:
+        raise AssertionError("expected cooperative training ZIP cancellation")
+
+    assert not target.exists()
+    assert not target.with_name(f".{target.name}.tmp").exists()
