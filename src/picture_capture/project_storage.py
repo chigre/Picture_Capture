@@ -17,6 +17,8 @@ from typing import Iterable
 import json
 import shutil
 
+from .runtime_environment import case_insensitive_child
+
 
 STORAGE_DIRNAME = "_PictureCapture"
 MANIFEST_FILENAME = "project.json"
@@ -113,7 +115,9 @@ def pdic_path_for_image(image_path: Path) -> Path:
     root = image_path.parent
     if is_managed_project(root):
         return storage_root(root) / "data" / "PDIC" / f"{image_path.stem}.pdic"
-    return image_path.with_suffix(".pdic")
+    expected = image_path.with_suffix(".pdic")
+    match = case_insensitive_child(root, expected.name)
+    return match if match is not None and match.is_file() else expected
 
 
 
@@ -145,10 +149,8 @@ def ppp_read_path_for_image(image_path: Path) -> Path:
     if is_managed_project(root):
         return ppp_write_path_for_image(image_path)
     lower = image_path.with_suffix(".ppp")
-    if lower.exists():
-        return lower
-    upper = image_path.with_suffix(".PPP")
-    return upper if upper.exists() else lower
+    match = case_insensitive_child(image_path.parent, lower.name)
+    return match if match is not None and match.is_file() else lower
 
 
 def word_fill_status_path(project_root: Path) -> Path:
@@ -178,7 +180,7 @@ def words_of_pages_default_path(project_root: Path) -> Path:
     projects keep a generated copy under the software data root.
     """
     root = Path(project_root)
-    legacy = root / "_WordsOfPages.txt"
+    legacy = case_insensitive_child(root, "_WordsOfPages.txt") or (root / "_WordsOfPages.txt")
     if is_managed_project(root):
         # A root-level file can be user-supplied legacy data; do not relocate it
         # implicitly. Prefer it when it already exists, otherwise keep new
@@ -255,7 +257,7 @@ def has_legacy_project_data(project_root: Path) -> bool:
         LEGACY_SETTINGS_FILENAME, LEGACY_INI_FILENAME, PROFILE_FILENAME,
         "_Replace.txt", "headword_filter_rules.txt", "QT", "TrainingExports",
     )
-    if any((root / name).exists() for name in fixed):
+    if any(case_insensitive_child(root, name) is not None for name in fixed):
         return True
     if _legacy_page_artifacts(root):
         return True
@@ -324,11 +326,11 @@ def migrate_legacy_project(project_root: Path, software_version: str) -> Migrati
 
     try:
         # Core project metadata/settings.
-        copy_file(root / LEGACY_SETTINGS_FILENAME, stage / SETTINGS_FILENAME)
-        copy_file(root / PROFILE_FILENAME, stage / PROFILE_FILENAME)
-        copy_file(root / "_Replace.txt", stage / "rules" / "_Replace.txt")
-        copy_file(root / "headword_filter_rules.txt", stage / "rules" / "headword_filter_rules.txt")
-        copy_file(root / LEGACY_INI_FILENAME, stage / "legacy" / LEGACY_INI_FILENAME)
+        copy_file(case_insensitive_child(root, LEGACY_SETTINGS_FILENAME) or (root / LEGACY_SETTINGS_FILENAME), stage / SETTINGS_FILENAME)
+        copy_file(case_insensitive_child(root, PROFILE_FILENAME) or (root / PROFILE_FILENAME), stage / PROFILE_FILENAME)
+        copy_file(case_insensitive_child(root, "_Replace.txt") or (root / "_Replace.txt"), stage / "rules" / "_Replace.txt")
+        copy_file(case_insensitive_child(root, "headword_filter_rules.txt") or (root / "headword_filter_rules.txt"), stage / "rules" / "headword_filter_rules.txt")
+        copy_file(case_insensitive_child(root, LEGACY_INI_FILENAME) or (root / LEGACY_INI_FILENAME), stage / "legacy" / LEGACY_INI_FILENAME)
 
         # Page-level sidecars that previously polluted the scan directory.
         for source in _legacy_page_artifacts(root):
@@ -340,7 +342,7 @@ def migrate_legacy_project(project_root: Path, software_version: str) -> Migrati
 
         # Preserve the historical QT tree intact; internal code now resolves it
         # below the managed root, so no downstream format changes are required.
-        legacy_qt = root / "QT"
+        legacy_qt = case_insensitive_child(root, "QT") or (root / "QT")
         if legacy_qt.is_dir():
             target_qt = stage / "QT"
             shutil.copytree(legacy_qt, target_qt, dirs_exist_ok=True, copy_function=shutil.copy2)
@@ -349,7 +351,7 @@ def migrate_legacy_project(project_root: Path, software_version: str) -> Migrati
                 copied_pairs.append((source, target_qt / rel))
             cleanup_dirs.append(legacy_qt)
 
-        legacy_training = root / "TrainingExports"
+        legacy_training = case_insensitive_child(root, "TrainingExports") or (root / "TrainingExports")
         if legacy_training.is_dir():
             target_training = stage / "output" / "TrainingExports"
             shutil.copytree(legacy_training, target_training, dirs_exist_ok=True, copy_function=shutil.copy2)
