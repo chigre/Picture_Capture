@@ -11,6 +11,7 @@ Picture Capture 是一个面向**多栏词典扫描页**的桌面制作与校对
 - **OCR画线为推荐默认流程**：PaddleOCR 结合词头文字、位置与结构证据自动画线；`left_edge` 普通画线保留为规则版式或 OCR 暂不可用时的备用方案。
 - PaddleOCR / Tesseract / Google Lens 多引擎 OCR、融合结果与人工复核。
 - 校对窗口：参考词表定位、OpenCC 繁→简、简体独立编辑与保存。
+- 夜间校对：全局深色模式同时调整界面与扫描图显示；仅改变预览，不改原图、OCR、PDIC/PPP 或导出结果。
 - CC-CEDICT / 萌典 / Wiktionary 词条核验，并可比较 CC-CEDICT 与 OpenCC 的简体结果。
 - 原词条与简体词条逐行对齐，删除与保存同步。
 - 词条切图、插图多边形（PPP）、PicDic 制作、训练标注导出、PDIC 备份/恢复。
