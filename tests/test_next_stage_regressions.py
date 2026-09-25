@@ -377,7 +377,7 @@ def test_common_layout_settings_show_packaged_context_diagrams():
     assert '/ "data"' in settings
     assert '/ "layout_example"' in settings
     assert "Image.Resampling.LANCZOS" in settings
-    assert "ImageTk.PhotoImage(rendered)" in settings
+    assert "ImageTk.PhotoImage(themed_display_image(rendered, self.parent.appearance_mode))" in settings
 
     layout_dir = root / "src" / "picture_capture" / "data" / "layout_example"
     assert (layout_dir / "layout_col_number.png").is_file()
@@ -1527,7 +1527,7 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     assert "self.parent._start_ui_worker(" in request
     assert "Image.Resampling.LANCZOS" not in render
     assert "_review_line_box(" not in render
-    assert "ImageTk.PhotoImage(crop)" in render
+    assert "ImageTk.PhotoImage(themed_display_image(crop, self.parent.appearance_mode))" in render
     assert "self.render_rows()" not in review
 
     preview_start = profile_text.index("    def _refresh_template_preview(")
@@ -1540,7 +1540,8 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     done_start = preview.index("        def done(", worker_start)
     worker = preview[worker_start:done_start]
     assert "ImageTk.PhotoImage" not in worker
-    assert "ImageTk.PhotoImage(preview)" in preview[done_start:]
+    assert "themed_display_image(" in preview[done_start:]
+    assert 'preview, getattr(self.parent, "appearance_mode", "light")' in preview[done_start:]
 
 
 def test_round2_training_zip_cancel_is_atomic(tmp_path):
