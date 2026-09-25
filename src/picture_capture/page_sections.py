@@ -157,7 +157,7 @@ def read_page_sections(image_path: Path) -> list[PageSection]:
     sections.sort(key=lambda item: (item.top_v, item.bottom_v))
     if any(current.top_v < previous.bottom_v for previous, current in zip(sections, sections[1:])):
         return []
-    return sections if len(sections) > 1 else []
+    return sections
 
 
 def write_page_sections(
@@ -168,7 +168,7 @@ def write_page_sections(
     canonical_height: int | None = None,
     layout_transform: str = "identity",
 ) -> Path:
-    """Persist explicit SECTION bounds atomically; <=1 SECTION restores ordinary mode."""
+    """Persist explicit SECTION bounds atomically; an empty list restores ordinary mode."""
     path = page_sections_path_for_image(Path(image_path))
     rows = [
         PageSection(int(section.top_v), int(section.bottom_v))
@@ -177,7 +177,7 @@ def write_page_sections(
     ]
     if any(current.top_v < previous.bottom_v for previous, current in zip(rows, rows[1:])):
         raise ValueError("SECTION 区域不能互相重叠")
-    if len(rows) <= 1:
+    if not rows:
         path.unlink(missing_ok=True)
         return path
 
