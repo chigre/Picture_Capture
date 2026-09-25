@@ -6,6 +6,7 @@ from typing import Callable
 import os
 import re
 import zipfile
+import uuid
 
 from .project_storage import qt_root
 
@@ -109,9 +110,14 @@ def build_picdic_package(
         for filename in filenames:
             lines.append(f"    [s]{filename}[/s]")
         lines.append("")
-    temp_dsl = dsl_path.with_name(f".{dsl_path.name}.tmp")
-    temp_zip = zip_path.with_name(f".{zip_path.name}.tmp")
+    token = uuid.uuid4().hex
+    temp_dsl = dsl_path.with_name(f".{dsl_path.name}.{token}.tmp")
+    temp_zip = zip_path.with_name(f".{zip_path.name}.{token}.tmp")
+    backup_dsl = dsl_path.with_name(f".{dsl_path.name}.{token}.bak")
+    backup_zip = zip_path.with_name(f".{zip_path.name}.{token}.bak")
     unique_files = list(dict.fromkeys(used_files))
+    had_dsl = dsl_path.exists()
+    had_zip = zip_path.exists()
     try:
         check_stop()
         temp_dsl.write_text("\n".join(lines), encoding="utf-8-sig")
@@ -120,11 +126,36 @@ def build_picdic_package(
                 check_stop()
                 archive.write(pww_dir / filename, arcname=filename)
         check_stop()
-        os.replace(temp_dsl, dsl_path)
-        os.replace(temp_zip, zip_path)
+
+        # Preserve the previous complete pair until both new files have been
+        # published. A failure during the second replace rolls the pair back.
+        if had_dsl:
+            os.replace(dsl_path, backup_dsl)
+        if had_zip:
+            os.replace(zip_path, backup_zip)
+        try:
+            os.replace(temp_dsl, dsl_path)
+            os.replace(temp_zip, zip_path)
+        except Exception:
+            dsl_path.unlink(missing_ok=True)
+            zip_path.unlink(missing_ok=True)
+            if had_dsl and backup_dsl.exists():
+                os.replace(backup_dsl, dsl_path)
+            if had_zip and backup_zip.exists():
+                os.replace(backup_zip, zip_path)
+            raise
+        backup_dsl.unlink(missing_ok=True)
+        backup_zip.unlink(missing_ok=True)
     except Exception:
         temp_dsl.unlink(missing_ok=True)
         temp_zip.unlink(missing_ok=True)
+        # Also recover if the exception happened while creating backups.
+        if had_dsl and backup_dsl.exists() and not dsl_path.exists():
+            os.replace(backup_dsl, dsl_path)
+        if had_zip and backup_zip.exists() and not zip_path.exists():
+            os.replace(backup_zip, zip_path)
+        backup_dsl.unlink(missing_ok=True)
+        backup_zip.unlink(missing_ok=True)
         raise
 
     return dsl_path, zip_path, len(entries), len(unique_files)
