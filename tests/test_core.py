@@ -7078,6 +7078,31 @@ def test_page_sections_sidecar_roundtrip_uses_managed_storage(tmp_path):
     ]
 
 
+def test_page_sections_reads_migrated_legacy_qt_fallback(tmp_path):
+    import json
+    from picture_capture.project_storage import qt_root
+
+    root = tmp_path / "dictionary"
+    root.mkdir()
+    ensure_project_storage(root, "test")
+    page = root / "0001.png"
+    legacy = qt_root(root) / "PageSections" / "0001.json"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(
+        json.dumps({
+            "format": "picture-capture-page-sections-v1",
+            "coordinate_space": "canonical_full_resolution_pixels",
+            "sections": [
+                {"index": 1, "top_v": 100, "bottom_v": 700},
+                {"index": 2, "top_v": 820, "bottom_v": 1400},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    assert not page_sections_path_for_image(page).exists()
+    assert read_page_sections(page) == [PageSection(100, 700), PageSection(820, 1400)]
+
+
 def test_page_sections_sort_section_before_column():
     geometry = Geometry(
         column_starts=[20, 520],
