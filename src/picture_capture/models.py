@@ -147,18 +147,17 @@ class AppSettings:
     horizontal_tolerance: int = 5
     marker_height: int = 2
     guide_width: int = 2
-    # Main overlay colours. The classic Picture Capture visual language uses
-    # red guide/headword markers by default; PPP colours are independently configurable.
-    guide_color: str = "#ff0000"
+    # Main overlay colours: headword markers stay red; other structural lines use blue.
+    guide_color: str = "#1976d2"
     page_section_color: str = "#1976d2"
     page_section_width: int = 2
     headword_marker_color: str = "#ff0000"
-    illustration_outline_color: str = "#1565c0"
+    illustration_outline_color: str = "#1976d2"
     illustration_outline_width: int = 2
     illustration_fill_color: str = "#ffe66d"
-    illustration_label_border_color: str = "#d81b60"
+    illustration_label_border_color: str = "#1976d2"
     illustration_label_border_width: int = 2
-    illustration_label_fill_color: str = "#ffffff"
+    illustration_label_fill_color: str = "#e6e6e6"
     illustration_label_font_family: str = "DengXian"
     illustration_label_font_size: int = 16
     illustration_label_font_bold: bool = False
@@ -210,7 +209,7 @@ class AppSettings:
     main_entry_width_chars: int = 18
     main_entry_x_ratio: float = 0.66
     main_entry_follow_zoom: bool = True
-    main_entry_default_color: str = "#ffffff"
+    main_entry_default_color: str = "#e6e6e6"
     # 0 = automatic proofreading crop fit: fill 99% of the actual left image area.
     # Positive values are explicit/manual percentages and remain project-persisted.
     review_zoom_percent: int = 0
