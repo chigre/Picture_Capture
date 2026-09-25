@@ -2233,14 +2233,19 @@ def _cjk_visual_projection_runs(
 
 
 def _cjk_word_for_visual_run(
-    records: list[OCRRecord], run: tuple[int, int], zone_width: int, settings: AppSettings,
+    records: list[OCRRecord],
+    run: tuple[int, int],
+    zone_width: int,
+    settings: AppSettings,
+    profile: DictionaryProfile | None = None,
 ) -> tuple[str, float, OCRRecord | None]:
     """Pick an OCR token that physically represents one oversized CJK glyph.
 
-    A visual run is only a location hypothesis. It must be backed by an OCR
-    record whose own box substantially overlaps the run. Fallback extraction is
-    allowed only when the OCR record itself begins with the Han glyph; arbitrary
-    Han characters inside ordinary definition text are never promoted.
+    The active Project Profile is passed through so a short ``漢字 + pinyin``
+    OCR record can use the same structural parser as the ordinary OCR channel.
+    This matters when OCR crops the large glyph vertically: strong profile
+    structure may safely relax the visual-box gate, while unparsed fallback
+    candidates remain deliberately strict.
     """
     start, end = run
     center = (start + end) / 2.0
@@ -2251,25 +2256,46 @@ def _cjk_word_for_visual_run(
         if x0 > zone_width * 1.12:
             continue
         record_height = max(1, y1 - y0)
+        record_width = max(1, x1 - x0)
         overlap = max(0, min(end, y1) - max(start, y0))
         record_center = (y0 + y1) / 2.0
         distance = abs(record_center - center)
 
-        parsed = parse_headword_text(record.text, settings)
+        parsed = parse_headword_text(record.text, settings, profile=profile)
         parsed_single = bool(
             parsed and _is_single_cjk_ideograph(parsed.normalized)
+        )
+        profile_pinyin_single = bool(
+            parsed_single
+            and parsed is not None
+            and parsed.parser_stage == "cjk_single_with_pinyin"
+            and profile is not None
         )
         word = parsed.normalized if parsed_single else _leading_cjk_ideograph(record.text)
         if not word:
             continue
 
-        # A genuine large-glyph OCR box is vertically comparable with the visual
-        # run. Ordinary body lines near a merged/tall projection run are much
-        # shorter and therefore cannot rescue themselves into headwords.
-        minimum_height_ratio = 0.40 if parsed_single else 0.55
+        if profile_pinyin_single:
+            # A large TimesCED-style glyph may be recognized as a short
+            # ``漢 ba`` record whose box covers only part of the printed glyph.
+            # The profile parser supplies strong structure, so recover these
+            # clipped boxes without globally lowering the fallback thresholds.
+            minimum_height_ratio = 0.28
+            overlap_ratio = 0.22
+            if record_width > zone_width * 1.75:
+                continue
+            if distance > height * 0.72:
+                continue
+        elif parsed_single:
+            minimum_height_ratio = 0.40
+            overlap_ratio = 0.30
+        else:
+            minimum_height_ratio = 0.55
+            overlap_ratio = 0.45
+
         if record_height < height * minimum_height_ratio:
             continue
-        overlap_floor = min(record_height, height) * (0.30 if parsed_single else 0.45)
+        overlap_floor = min(record_height, height) * overlap_ratio
         if overlap < overlap_floor:
             continue
 
@@ -2278,7 +2304,7 @@ def _cjk_word_for_visual_run(
         if not parsed_single and x0 > zone_width * 0.95:
             continue
 
-        quality_rank = 0 if parsed_single else 1
+        quality_rank = 0 if profile_pinyin_single else (1 if parsed_single else 2)
         ranked.append((distance, quality_rank, -float(record.confidence), word, record))
     if not ranked:
         return "", 0.0, None
@@ -3306,7 +3332,7 @@ def filter_headword_records(
             gray, header_cutoff, settings, reference_scale
         )
         for run_start, run_end in visual_runs:
-            word, confidence, matched_record = _cjk_word_for_visual_run(records, (run_start, run_end), zone_width, settings)
+            word, confidence, matched_record = _cjk_word_for_visual_run(\n                records, (run_start, run_end), zone_width, settings, active_profile,\n            )
             if not word or matched_record is None:
                 continue
             coarse_band_y = max(header_cutoff, run_start - row_padding)
