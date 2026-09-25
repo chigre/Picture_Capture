@@ -1073,8 +1073,9 @@ class ProjectProfileWizard(tk.Toplevel):
             self.template_preview_caption_var.set("")
             return
 
-        self.template_preview_slot %= len(self.sample_indices)
+        self.template_preview_slot %= sample_count
         slot = int(self.template_preview_slot)
+        sample_count = len(self.sample_indices)
         index = int(self.sample_indices[slot])
         path = self.project.images[index]
         try:
@@ -1105,7 +1106,7 @@ class ProjectProfileWizard(tk.Toplevel):
             justify="center",
         ).grid(row=0, column=0, sticky="n", pady=30)
         self.template_preview_caption_var.set(
-            f"{slot + 1}/{len(self.sample_indices)} · {path.name} · 正在生成…"
+            f"{slot + 1}/{sample_count} · {path.name} · 正在生成…"
         )
         worker_key = f"profile-template-preview-{id(self)}"
 
@@ -1179,7 +1180,7 @@ class ProjectProfileWizard(tk.Toplevel):
             side_text = side or "无页边排除"
             region = ("前部", "中部", "后部")[min(2, slot // 2)]
             caption = (
-                f"{region} · {slot + 1}/{len(self.sample_indices)} · "
+                f"{region} · {slot + 1}/{sample_count} · "
                 f"{variant} 页 · {path.name} · 页边：{side_text}"
             )
             return preview, caption, index, slot
@@ -1193,7 +1194,7 @@ class ProjectProfileWizard(tk.Toplevel):
             preview, caption, result_index, result_slot = payload
             if (
                 result_slot != self.template_preview_slot
-                or result_slot >= len(self.sample_indices)
+                or result_slot >= sample_count
                 or self.sample_indices[result_slot] != result_index
             ):
                 return
@@ -1925,6 +1926,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._thumbnail_slot_generation[slot] = generation
         token = (slot, generation)
         self._thumbnail_slot_pending.add(token)
+        result_queue = self._thumbnail_slot_queue
 
         self.update_idletasks()
         right_w = int(getattr(self, "right_canvas", self).winfo_width())
@@ -1943,7 +1945,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 image.thumbnail((thumb_w, thumb_h), Image.Resampling.LANCZOS)
             except Exception as exc:
                 error = str(exc)
-            self._thumbnail_slot_queue.put(
+            result_queue.put(
                 (slot, generation, index, path.name, image, error)
             )
 
@@ -2117,12 +2119,15 @@ class ProjectProfileWizard(tk.Toplevel):
         self.analysis_suggestion_var.set("正在分析代表页版面…")
         settings = self._settings_from_ui()
         indices = list(self.sample_indices)
+        paths = {index: self.project.images[index] for index in indices}
+        result_queue: queue.Queue = queue.Queue(maxsize=1)
+        self._analysis_queue = result_queue
 
         def worker() -> None:
             estimates = []
             errors: list[str] = []
             for index in indices:
-                path = self.project.images[index]
+                path = paths[index]
                 try:
                     with Image.open(path) as opened:
                         image = normalize_page_rgb(opened)
@@ -2131,10 +2136,8 @@ class ProjectProfileWizard(tk.Toplevel):
                     estimates.append(detect_layout_parameters(analysis_image, page_settings))
                 except Exception as exc:
                     errors.append(f"{path.name}: {exc}")
-            assert self._analysis_queue is not None
-            self._analysis_queue.put((estimates, errors))
+            result_queue.put((estimates, errors))
 
-        self._analysis_queue = queue.Queue(maxsize=1)
         threading.Thread(target=worker, daemon=True).start()
         self.after(100, self._poll_analysis_queue)
 
