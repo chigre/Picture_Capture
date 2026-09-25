@@ -6534,17 +6534,22 @@ class ReviewWindow(tk.Toplevel):
         except OSError:
             return False, 0, 0
 
-    def _page_prefetch_signature(self, page: Path) -> tuple:
-        if not self.parent.project:
-            return ()
-        cache = ocr_cache_root(self.parent.project.root) / f"{page.stem}.json"
-        ppp = self.parent._ppp_read_path(page)
+    @classmethod
+    def _page_prefetch_signature_for(cls, project_root: Path, page: Path) -> tuple:
+        cache = ocr_cache_root(project_root) / f"{page.stem}.json"
+        ppp = ppp_read_path_for_image(page)
         return (
-            self._prefetch_path_signature(page),
-            self._prefetch_path_signature(pdic_path(page)),
-            self._prefetch_path_signature(ppp),
-            self._prefetch_path_signature(cache),
+            cls._prefetch_path_signature(page),
+            cls._prefetch_path_signature(pdic_path(page)),
+            cls._prefetch_path_signature(ppp),
+            cls._prefetch_path_signature(cache),
         )
+
+    def _page_prefetch_signature(self, page: Path) -> tuple:
+        project = self.parent.project
+        if project is None:
+            return ()
+        return self._page_prefetch_signature_for(project.root, page)
 
     def _review_prefetch_key(self) -> tuple:
         # repr(AppSettings) intentionally includes every persisted geometry and
@@ -6584,8 +6589,9 @@ class ReviewWindow(tk.Toplevel):
         viewer_width = max(1, int(self.parent.canvas.winfo_width()))
         review_key = self._review_prefetch_key()
         project_root = str(project.root)
+        anchor_index = int(self.parent.current_index)
         targets = [
-            i for i in (self.parent.current_index - 1, self.parent.current_index + 1)
+            i for i in (anchor_index - 1, anchor_index + 1)
             if 0 <= i < len(project.images)
         ]
         for index in targets:
@@ -6604,6 +6610,8 @@ class ReviewWindow(tk.Toplevel):
                 local_settings=settings_snapshot, local_review_zoom=review_zoom,
                 local_view_scale=view_scale, local_viewer_width=viewer_width,
                 local_review_key=review_key, local_project_root=project_root,
+                local_ppp_path=ppp_read_path_for_image(page),
+                local_anchor_index=anchor_index,
             ) -> None:
                 payload = None
                 try:
@@ -6618,8 +6626,7 @@ class ReviewWindow(tk.Toplevel):
                     )
                     geometry = derive_geometry(analysis_image, effective_settings)
                     entries = sort_entries_reading_order(entries, geometry)
-                    ppp_path = self.parent._ppp_read_path(page_path)
-                    polygons = read_ppp(ppp_path)
+                    polygons = read_ppp(local_ppp_path)
                     cache_path = ocr_cache_root(Path(local_project_root)) / f"{page_path.stem}.json"
                     ocr_payload: dict = {}
                     if cache_path.exists():
@@ -6654,7 +6661,9 @@ class ReviewWindow(tk.Toplevel):
                     display_image = image.resize(display_size, Image.Resampling.LANCZOS)
                     # A file rewritten while it was being prefetched is rejected
                     # rather than exposing a mixed old/new page snapshot.
-                    if expected_signature == self._page_prefetch_signature(page_path):
+                    if expected_signature == self._page_prefetch_signature_for(
+                        Path(local_project_root), page_path,
+                    ):
                         payload = {
                             "project_root": local_project_root,
                             "index": page_index,
@@ -6681,7 +6690,7 @@ class ReviewWindow(tk.Toplevel):
                             while len(self._prefetched_pages) > 4:
                                 stale = max(
                                     self._prefetched_pages,
-                                    key=lambda i: abs(i - self.parent.current_index),
+                                    key=lambda i: abs(i - local_anchor_index),
                                 )
                                 self._prefetched_pages.pop(stale, None)
 
