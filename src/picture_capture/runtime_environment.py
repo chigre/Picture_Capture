@@ -155,15 +155,28 @@ def case_insensitive_child(parent: Path, name: str) -> Path | None:
 
 
 def portable_project_file(root: Path, configured: str | Path | None, *, fallback_name: str) -> Path:
-    """Resolve project files without misreading another OS's absolute path."""
+    """Resolve project files without misreading stale/foreign absolute paths."""
     root = Path(root)
     raw = str(configured or fallback_name).strip() or fallback_name
-    if is_foreign_absolute_path(raw):
+
+    def local_fallback(preferred_name: str = "") -> Path:
+        if preferred_name:
+            match = case_insensitive_child(root, preferred_name)
+            if match is not None:
+                return match
         fallback = case_insensitive_child(root, fallback_name)
         return fallback if fallback is not None else root / fallback_name
+
+    if is_foreign_absolute_path(raw):
+        foreign_name = PureWindowsPath(raw).name or PurePosixPath(raw).name
+        return local_fallback(foreign_name)
+
     path = Path(raw).expanduser()
     if path.is_absolute():
-        return path
+        if path.exists():
+            return path
+        return local_fallback(path.name)
+
     direct = root / path
     if direct.exists():
         return direct
