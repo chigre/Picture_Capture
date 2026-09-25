@@ -506,14 +506,19 @@ def _sorted_page_list_rows(rows: list[tuple[str, tuple]], column: str, descendin
     ``rows`` contains ``(iid, values)`` pairs. Empty cells stay at the bottom in
     either direction, while visible values use natural text ordering.
     """
-    # Accept legacy four-value rows in unit callers/session migrations while
-    # the live Treeview uses the new leading bookmark column.
-    has_bookmark = any(len(values) >= 5 for _iid, values in rows)
-    mapping = (
-        {"bookmark": 0, "page": 1, "lined": 2, "fill_status": 3, "illustrations": 4}
-        if has_bookmark else
-        {"page": 0, "lined": 1, "fill_status": 2, "illustrations": 3}
-    )
+    # Accept older four/five-value rows in unit callers/session migrations.
+    max_values = max((len(values) for _iid, values in rows), default=0)
+    has_section = max_values >= 6
+    has_bookmark = max_values >= 5
+    if has_section:
+        mapping = {
+            "bookmark": 0, "page": 1, "section": 2, "lined": 3,
+            "fill_status": 4, "illustrations": 5,
+        }
+    elif has_bookmark:
+        mapping = {"bookmark": 0, "page": 1, "lined": 2, "fill_status": 3, "illustrations": 4}
+    else:
+        mapping = {"page": 0, "lined": 1, "fill_status": 2, "illustrations": 3}
     column_index = mapping.get(column, 1 if has_bookmark else 0)
     populated: list[tuple[str, tuple]] = []
     empty: list[tuple[str, tuple]] = []
@@ -7742,7 +7747,7 @@ class PictureCaptureApp(tk.Tk):
         self.page_sections: list[PageSection] = []
         self._section_editing = False
         self._drag_section_boundary: tuple[int, str] | None = None
-        self.section_edit_button: ttk.Button | None = None
+        self._pending_section_editor_index: int | None = None
         self.new_polygon: list[tuple[int, int]] = []
         self.overlay_widgets: list[tk.Widget] = []
         self.entry_editor_bindings: list[tuple[tk.Entry, WordEntry]] = []
@@ -8888,21 +8893,10 @@ class PictureCaptureApp(tk.Tk):
             size_row, text="下一页", width=6,
             command=lambda: self.change_page(1), style="PC.PageNav.TButton",
         ).pack(side="left")
-        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
-        self.section_edit_button = ttk.Button(
-            size_row, text="SECTION设置", width=10,
-            command=self.toggle_page_section_editor, style="PC.Compact.TButton",
-        )
-        self.section_edit_button.pack(side="left")
-        self._attach_tooltip(
-            self.section_edit_button,
-            "特殊页面可设多个 SECTION；阅读顺序按 SECTION→栏。编辑时拖动 SECTION 上下边界。",
-        )
-
         list_frame = ttk.Frame(page_panel)
         list_frame.grid(row=2, column=0, sticky="nsew")
         list_frame.columnconfigure(0, weight=1); list_frame.rowconfigure(0, weight=1)
-        columns = ("bookmark", "page", "lined", "fill_status", "illustrations")
+        columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")
         self.page_list = ttk.Treeview(
             list_frame,
             columns=columns,
@@ -8911,19 +8905,25 @@ class PictureCaptureApp(tk.Tk):
             height=12,
             style="PC.Treeview",
         )
-        self._page_list_heading_labels = {"bookmark": "书签", "page": "页面", "lined": "画线", "fill_status": "填充状态", "illustrations": "插图"}
+        self._page_list_heading_labels = {
+            "bookmark": "书签", "page": "页面", "section": "Section",
+            "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
+        }
         self.page_list.heading("bookmark", text="书签", anchor="w")
         self.page_list.heading("page", text="页面", anchor="w")
+        self.page_list.heading("section", text="Section", anchor="w")
         self.page_list.heading("lined", text="画线", anchor="w")
         self.page_list.heading("fill_status", text="填充状态", anchor="w")
         self.page_list.heading("illustrations", text="插图", anchor="w")
         self.page_list.heading("bookmark", command=lambda: self._sort_page_list("bookmark"))
         self.page_list.heading("page", command=lambda: self._sort_page_list("page"))
+        self.page_list.heading("section", command=lambda: self._sort_page_list("section"))
         self.page_list.heading("lined", command=lambda: self._sort_page_list("lined"))
         self.page_list.heading("fill_status", command=lambda: self._sort_page_list("fill_status"))
         self.page_list.heading("illustrations", command=lambda: self._sort_page_list("illustrations"))
         self.page_list.column("bookmark", width=44, anchor="w", stretch=False)
-        self.page_list.column("page", width=190, anchor="w", stretch=True)
+        self.page_list.column("page", width=180, anchor="w", stretch=True)
+        self.page_list.column("section", width=64, anchor="center", stretch=False)
         self.page_list.column("lined", width=68, anchor="w", stretch=False)
         self.page_list.column("fill_status", width=110, anchor="w", stretch=False)
         self.page_list.column("illustrations", width=58, anchor="w", stretch=False)
@@ -8933,6 +8933,7 @@ class PictureCaptureApp(tk.Tk):
         self.page_scroll.grid(row=0, column=1, sticky="ns")
         self.page_list.bind("<<TreeviewSelect>>", self.on_page_select)
         self.page_list.bind("<Button-1>", self._page_list_bookmark_click, add="+")
+        self.page_list.bind("<Double-1>", self._page_list_section_double_click, add="+")
         self.page_list.bind("<MouseWheel>", self._list_mousewheel)
         bind_context_menu(self.page_list, self._page_list_right_click)
         self.page_list.bind("<Configure>", lambda _e: self._schedule_page_cell_overlay_refresh())
@@ -9090,7 +9091,7 @@ class PictureCaptureApp(tk.Tk):
         """Apply optional Treeview columns while keeping 页面 permanently visible."""
         if not hasattr(self, "page_list"):
             return
-        columns = ["bookmark", "page"]
+        columns = ["bookmark", "page", "section"]
         if getattr(self, "_page_column_vars", {}).get("lined") is None or self._page_column_vars["lined"].get():
             columns.append("lined")
         if getattr(self, "_page_column_vars", {}).get("illustrations") is None or self._page_column_vars["illustrations"].get():
@@ -9117,6 +9118,8 @@ class PictureCaptureApp(tk.Tk):
         self._apply_current_appearance(menu)
         page_var = tk.BooleanVar(value=True)
         menu.add_checkbutton(label="页面", variable=page_var, state="disabled")
+        section_var = tk.BooleanVar(value=True)
+        menu.add_checkbutton(label="Section", variable=section_var, state="disabled")
         menu.add_checkbutton(
             label="画线", variable=self._page_column_vars["lined"],
             command=lambda: self._apply_page_list_display_columns(save=True),
@@ -9172,7 +9175,8 @@ class PictureCaptureApp(tk.Tk):
         if not hasattr(self, "page_list"):
             return
         labels = getattr(self, "_page_list_heading_labels", {
-            "bookmark": "书签", "page": "页面", "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
+            "bookmark": "书签", "page": "页面", "section": "Section",
+            "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
         })
         active = self._page_list_sort_column
         arrow = " ▼" if self._page_list_sort_descending else " ▲"
@@ -9211,7 +9215,7 @@ class PictureCaptureApp(tk.Tk):
         self._page_list_sort_job = self.after(80, run)
 
     def _sort_page_list(self, column: str) -> None:
-        if column not in {"bookmark", "page", "lined", "fill_status", "illustrations"}:
+        if column not in {"bookmark", "page", "section", "lined", "fill_status", "illustrations"}:
             return
         if self._page_list_sort_column == column:
             self._page_list_sort_descending = not self._page_list_sort_descending
@@ -9225,6 +9229,128 @@ class PictureCaptureApp(tk.Tk):
                 pass
             self._page_list_sort_job = None
         self._apply_page_list_sort(ensure_current_visible=True)
+
+    def _page_list_column_at(self, x: int) -> str | None:
+        """Return the logical Treeview column under a display-space X coordinate."""
+        token = str(self.page_list.identify_column(x) or "")
+        try:
+            display_index = int(token.lstrip("#")) - 1
+        except ValueError:
+            return None
+        raw = self.page_list.cget("displaycolumns")
+        display = tuple(self.tk.splitlist(raw))
+        if not display or display == ("#all",):
+            display = tuple(self.page_list.cget("columns"))
+        return str(display[display_index]) if 0 <= display_index < len(display) else None
+
+    def _page_section_count_text(self, index: int) -> str:
+        if not self.project or not (0 <= index < len(self.project.images)):
+            return "0"
+        return str(len(read_page_sections(self.project.images[index])))
+
+    def _set_page_section_count(self, index: int, count: int) -> None:
+        """Set a page's explicit SECTION count, preserving bounds when count is unchanged."""
+        if not self.project or not (0 <= index < len(self.project.images)):
+            return
+        count = max(0, min(10, int(count)))
+        page = self.project.images[index]
+        existing = read_page_sections(page)
+
+        if index == self.current_index and self.current_page == page and self.image is not None:
+            image = self.image
+            geometry = self._get_cached_display_geometry()
+            effective_settings = effective_page_settings(self.settings, image.size, index)
+        else:
+            with Image.open(page) as opened:
+                image = normalize_page_rgb(opened)
+            effective_settings = effective_page_settings(self.settings, image.size, index)
+            analysis_image = page_template_analysis_image(image, effective_settings, index)
+            geometry = derive_geometry(analysis_image, effective_settings)
+
+        if count == 0:
+            sections: list[PageSection] = []
+        elif len(existing) == count:
+            sections = existing
+        else:
+            span = max(1, int(geometry.bottom) - int(geometry.top))
+            bounds = [
+                round(int(geometry.top) + span * item / count)
+                for item in range(count + 1)
+            ]
+            sections = [
+                PageSection(bounds[item], max(bounds[item] + 1, bounds[item + 1]))
+                for item in range(count)
+            ]
+
+        transform = LayoutTransform(
+            str(getattr(effective_settings, "layout_transform", "identity") or "identity")
+        )
+        canonical_width, canonical_height = transform.canonical_size(image.size)
+        write_page_sections(
+            page, sections,
+            canonical_width=canonical_width,
+            canonical_height=canonical_height,
+            layout_transform=transform.kind,
+        )
+        iid = str(index)
+        if hasattr(self, "page_list") and self.page_list.exists(iid):
+            self.page_list.set(iid, "section", str(count))
+            if self._page_list_sort_column == "section":
+                self._schedule_page_list_resort()
+
+        if index == self.current_index and self.current_page == page:
+            self.page_sections = list(sections)
+            self._sort_entries_reading_order()
+            self._set_section_editing(count > 0)
+            self.redraw()
+            if count > 0:
+                self.status_var.set(
+                    f"SECTION 编辑：当前页 {count} 个；拖动蓝色上下边界，再次双击 Section 单元格结束。"
+                )
+            else:
+                self.status_var.set("当前页 SECTION 已关闭（Section = 0）")
+            return
+
+        if count > 0:
+            self._pending_section_editor_index = index
+            self._request_page_load(index)
+        else:
+            self._pending_section_editor_index = None
+
+    def _page_list_section_double_click(self, event: tk.Event) -> str | None:
+        """Edit the page-level Section count directly from the page list."""
+        if self.page_list.identify_region(event.x, event.y) != "cell":
+            return None
+        if self._page_list_column_at(event.x) != "section":
+            return None
+        iid = self.page_list.identify_row(event.y)
+        if not iid or not self.project:
+            return "break"
+        try:
+            index = int(iid)
+            page = self.project.images[index]
+        except (TypeError, ValueError, IndexError):
+            return "break"
+
+        if index == self.current_index and self._section_editing:
+            self._persist_current_page_sections()
+            self._set_section_editing(False)
+            self.status_var.set(
+                f"SECTION 编辑完成：当前页 {len(self.page_sections)} 个 SECTION"
+            )
+            self.redraw()
+            return "break"
+
+        current_count = len(read_page_sections(page))
+        count = simpledialog.askinteger(
+            "Section",
+            f"{page.name}\nSection 数量（0 = 关闭；1–10 = 启用）：",
+            parent=self, initialvalue=current_count, minvalue=0, maxvalue=10,
+        )
+        if count is None:
+            return "break"
+        self._set_page_section_count(index, count)
+        return "break"
 
     def _bookmark_stems(self) -> set[str]:
         settings = self.__dict__.get("settings")
@@ -12005,6 +12131,7 @@ class PictureCaptureApp(tk.Tk):
             self.page_sections = []
             self._section_editing = False
             self._drag_section_boundary = None
+            self._pending_section_editor_index = None
             self.current_index = -1
             self.ocr_review_candidates = []
             self.candidate_check_vars = {}
@@ -12059,7 +12186,8 @@ class PictureCaptureApp(tk.Tk):
                 self.page_list.insert(
                     "", "end", iid=str(index), values=(
                         "●" if page.stem in self._bookmark_stems() else "",
-                        page.name, "", self._word_fill_status_text(index), "",
+                        page.name, self._page_section_count_text(index),
+                        "", self._word_fill_status_text(index), "",
                     ),
                 )
             if self._page_list_sort_column:
@@ -12221,8 +12349,6 @@ class PictureCaptureApp(tk.Tk):
         self.new_polygon = []
         self._section_editing = False
         self._drag_section_boundary = None
-        if self.section_edit_button is not None:
-            self.section_edit_button.configure(text="SECTION设置", style="PC.Compact.TButton")
         self.update_idletasks()
         if reset_zoom:
             available = max(500, self.canvas.winfo_width() - 24)
@@ -12273,6 +12399,14 @@ class PictureCaptureApp(tk.Tk):
         quality = self._current_page_quality_text()
         suffix = f"｜{quality}" if quality else ""
         self.status_var.set(f"{self.current_page.name}｜{self.image.width}×{self.image.height}｜{len(self.entries)} 个词条{suffix}")
+        if self._pending_section_editor_index == index:
+            self._pending_section_editor_index = None
+            if self.page_sections:
+                self._set_section_editing(True)
+                self.redraw()
+                self.status_var.set(
+                    f"SECTION 编辑：当前页 {len(self.page_sections)} 个；拖动蓝色上下边界，再次双击 Section 单元格结束。"
+                )
         try:
             touch_recent_project(
                 self.project.root,
@@ -13448,67 +13582,6 @@ class PictureCaptureApp(tk.Tk):
     def _set_section_editing(self, active: bool) -> None:
         self._section_editing = bool(active)
         self._drag_section_boundary = None
-        if self.section_edit_button is not None:
-            self.section_edit_button.configure(
-                text="结束SECTION" if active else "SECTION设置",
-                style="PC.EditActive.TButton" if active else "PC.Compact.TButton",
-            )
-
-    def toggle_page_section_editor(self) -> None:
-        """Create/remove page SECTIONs, then edit their canonical-V boundaries."""
-        if not self.guard() or self.current_page is None or self.image is None:
-            return
-        if self._section_editing:
-            self._persist_current_page_sections()
-            self._set_section_editing(False)
-            self.status_var.set(
-                f"SECTION 编辑完成：当前页 {len(self.page_sections) if self.page_sections else 1} 个 SECTION"
-            )
-            self.redraw()
-            return
-
-        initial = len(self.page_sections) if self.page_sections else 2
-        count = simpledialog.askinteger(
-            "SECTION 设置",
-            "当前页 SECTION 数量（1 = 普通页面）：",
-            parent=self, initialvalue=initial, minvalue=1, maxvalue=12,
-        )
-        if count is None:
-            return
-        geometry = self._get_cached_display_geometry()
-        if count <= 1:
-            self.page_sections = []
-            self._persist_current_page_sections()
-            self._set_section_editing(False)
-            self._sort_entries_reading_order()
-            self.status_var.set("当前页已恢复为普通页面（1 SECTION）")
-            self.redraw()
-            return
-
-        if len(self.page_sections) != count:
-            span = max(1, geometry.bottom - geometry.top)
-            bounds = [
-                round(geometry.top + span * index / count)
-                for index in range(count + 1)
-            ]
-            self.page_sections = [
-                PageSection(bounds[index], max(bounds[index] + 1, bounds[index + 1]))
-                for index in range(count)
-            ]
-            self._persist_current_page_sections()
-
-        if self.polygon_draw_var.get():
-            self.polygon_draw_var.set(False)
-            self.new_polygon.clear()
-            if self.polygon_draw_button is not None:
-                self.polygon_draw_button.configure(
-                    text="编辑插图", style="PC.Compact.TButton"
-                )
-        self._set_section_editing(True)
-        self.status_var.set(
-            "SECTION 编辑：拖动蓝色上下边界；SECTION 间空白不参与词条顺序和整词条切图。"
-        )
-        self.redraw()
 
     def _draw_page_sections(self, geometry=None) -> None:
         """Draw page-local SECTION bounds in source space on the main canvas."""
@@ -14357,22 +14430,30 @@ class PictureCaptureApp(tk.Tk):
         if not self.page_list.exists(iid):
             return
         old_values = tuple(self.page_list.item(iid, "values"))
+        section = self._page_section_count_text(index)
         lined = self._page_metadata(index)
         fill_status = self._word_fill_status_text(index)
         illustrations = self._page_illustration_count_text(index)
         page = self.project.images[index]
         page_stem = str(getattr(page, "stem", Path(str(page.name)).stem))
         bookmark = "●" if page_stem in self._bookmark_stems() else ""
-        new_values = (bookmark, page.name, lined, fill_status, illustrations)
+        new_values = (bookmark, page.name, section, lined, fill_status, illustrations)
         self.page_list.item(iid, values=new_values)
         active_column = self._page_list_sort_column
         if active_column:
-            new_index = {"bookmark": 0, "page": 1, "lined": 2, "fill_status": 3, "illustrations": 4}.get(active_column, 1)
-            old_mapping = (
-                {"bookmark": 0, "page": 1, "lined": 2, "fill_status": 3, "illustrations": 4}
-                if len(old_values) >= 5 else
-                {"page": 0, "lined": 1, "fill_status": 2, "illustrations": 3}
-            )
+            new_index = {
+                "bookmark": 0, "page": 1, "section": 2, "lined": 3,
+                "fill_status": 4, "illustrations": 5,
+            }.get(active_column, 1)
+            if len(old_values) >= 6:
+                old_mapping = {
+                    "bookmark": 0, "page": 1, "section": 2, "lined": 3,
+                    "fill_status": 4, "illustrations": 5,
+                }
+            elif len(old_values) >= 5:
+                old_mapping = {"bookmark": 0, "page": 1, "lined": 2, "fill_status": 3, "illustrations": 4}
+            else:
+                old_mapping = {"page": 0, "lined": 1, "fill_status": 2, "illustrations": 3}
             old_index = old_mapping.get(active_column, 0)
             old_value = old_values[old_index] if old_index < len(old_values) else ""
             new_value = new_values[new_index]
