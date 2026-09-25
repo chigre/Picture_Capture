@@ -4115,6 +4115,11 @@ class ReviewWindow(tk.Toplevel):
             foreground=colors["text"],
         )
         style.configure(
+            "PCR.Black.TLabel",
+            background=colors["surface"],
+            foreground="#000000" if self.parent.appearance_mode != "dark" else colors["text"],
+        )
+        style.configure(
             "PCR.Body.TCheckbutton",
             background=colors["surface"],
             foreground=colors["text"],
@@ -4413,7 +4418,7 @@ class ReviewWindow(tk.Toplevel):
         padding_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         padding_row.pack(fill="x", pady=(4, 0))
         ttk.Label(
-            padding_row, text="文本左边距：", style="PCR.Body.TLabel"
+            padding_row, text="文本左边距：", style="PCR.Black.TLabel"
         ).pack(side="left")
         self.review_left_padding_spin = ttk.Spinbox(
             padding_row, from_=0, to=80, increment=1, width=4,
@@ -4424,7 +4429,7 @@ class ReviewWindow(tk.Toplevel):
             padding_row, text="px", style="PCR.Body.TLabel"
         ).pack(side="left", padx=(2, 9))
         ttk.Label(
-            padding_row, text="上下边距：", style="PCR.Body.TLabel"
+            padding_row, text="上下边距：", style="PCR.Black.TLabel"
         ).pack(side="left")
         self.review_vertical_padding_spin = ttk.Spinbox(
             padding_row, from_=0, to=30, increment=1, width=4,
@@ -4573,22 +4578,17 @@ class ReviewWindow(tk.Toplevel):
         )
         self.wordslist_locator_combo.pack(side="left")
         self.wordslist_locator_combo.bind("<<ComboboxSelected>>", self._change_wordslist_locator_mode)
-
-        ref_fill_row = ttk.Frame(ref_box, style="PCR.Surface.TFrame")
-        ref_fill_row.pack(fill="x", pady=(0, 3))
         ttk.Button(
-            ref_fill_row, text="从所选词开始填充至本页结束", command=self.fill_words,
+            ref_actions, text="从所选词开始填充至本页结束", command=self.fill_words,
             style="PCR.Compact.TButton",
-        ).pack(side="left")
-        self.wordslist_label_var = tk.StringVar(value="wordslist 参考词表")
-        ttk.Label(
-            ref_box, textvariable=self.wordslist_label_var,
-            style="PCR.Muted.TLabel",
-        ).pack(anchor="w")
+        ).pack(side="left", padx=(8, 0))
+
         word_nav = ttk.Frame(ref_box, style="PCR.Surface.TFrame")
-        word_nav.pack(fill="x", pady=(2, 0))
-        self.word_window_var = tk.StringVar(value="")
-        ttk.Label(word_nav, textvariable=self.word_window_var).pack(side="left", fill="x", expand=True)
+        word_nav.pack(fill="x", pady=(0, 0))
+        self.word_window_var = tk.StringVar(value="词表（wordslist.txt） | 显示 0-0 / 0")
+        ttk.Label(
+            word_nav, textvariable=self.word_window_var, style="PCR.Body.TLabel"
+        ).pack(side="left", fill="x", expand=True)
         ttk.Button(
             word_nav, text="前500", width=7, command=lambda: self.shift_wordslist_window(-1),
             style="PCR.Tool.TButton",
@@ -5179,15 +5179,9 @@ class ReviewWindow(tk.Toplevel):
 
         if self.parent.project:
             path = resolve_wordslist_path(self.parent.project.root, self.parent.settings.wordslist_path)
-            resolved = self._effective_wordslist_locator_mode()
-            mode_text = "外部索引排序定位" if resolved == "sorted" else "同源连续定位"
-            if self.WORDSLIST_LOCATOR_LABEL_TO_KEY.get(self.wordslist_locator_var.get(), "auto") == "auto":
-                mode_text += "（自动）"
-            self.wordslist_label_var.set(
-                f"wordslist：{path.name}（{len(reference_words)} 条；{mode_text}；右侧仅显示当前词附近）"
-            )
+            self.word_window_var.set(f"词表（{path.name}） | 显示 0-0 / {len(reference_words)}")
         else:
-            self.wordslist_label_var.set("wordslist 参考词表")
+            self.word_window_var.set("词表（未选择） | 显示 0-0 / 0")
         if reference_words:
             if self.vars and 0 <= self.active_index < len(self.vars):
                 self.locate_reference_word(self.vars[self.active_index].get())
@@ -5203,7 +5197,13 @@ class ReviewWindow(tk.Toplevel):
             self.word_window_start = 0
             self.word_highlight_index = None
             if hasattr(self, "word_window_var"):
-                self.word_window_var.set("")
+                if self.parent.project:
+                    path = resolve_wordslist_path(
+                        self.parent.project.root, self.parent.settings.wordslist_path
+                    )
+                    self.word_window_var.set(f"词表（{path.name}） | 显示 0-0 / 0")
+                else:
+                    self.word_window_var.set("词表（未选择） | 显示 0-0 / 0")
             return
         target = max(0, min(int(target), len(words) - 1))
         span = self.word_window_radius * 2 + 1
@@ -5213,7 +5213,12 @@ class ReviewWindow(tk.Toplevel):
         self.word_window_start = start
         self.word_window_indices = list(range(start, end))
         if hasattr(self, "word_window_var"):
-            self.word_window_var.set(f"显示 {start + 1}–{end} / {len(words)}")
+            path = resolve_wordslist_path(
+                self.parent.project.root, self.parent.settings.wordslist_path
+            )
+            self.word_window_var.set(
+                f"词表（{path.name}） | 显示 {start + 1}-{end} / {len(words)}"
+            )
         self.word_list.delete(0, "end")
         for i in self.word_window_indices:
             self.word_list.insert("end", words[i])
@@ -5249,7 +5254,7 @@ class ReviewWindow(tk.Toplevel):
         )
         if not chosen:
             return
-        self.wordslist_label_var.set("wordslist 参考词表（后台读取中…）")
+        self.word_window_var.set(f"词表（{Path(chosen).name}） | 正在读取…")
 
         def loaded(path: Path, count: int) -> None:
             try:
