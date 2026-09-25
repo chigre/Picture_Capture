@@ -17,7 +17,7 @@ paddleocr = ["paddleocr>=3.7,<4", "paddlepaddle==3.3.0"]
 lens = ["chrome-lens-py>=3.4,<4"]
 
 # Recommended OCR profiles. CPU/GPU runtimes are fully declared here so the
-# Windows installer only needs a standard locked uv sync.
+# cross-platform installer only needs a standard locked uv sync.
 ocr-cpu = ["paddleocr>=3.7,<4", "paddlepaddle==3.3.0", "chrome-lens-py>=3.4,<4"]
 ocr-gpu-cu118 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py>=3.4,<4"]
 ocr-gpu-cu126 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py>=3.4,<4", "nvidia-cudnn-cu12==9.5.1.17; sys_platform == 'win32'"]
