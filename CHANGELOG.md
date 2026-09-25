@@ -1,5 +1,13 @@
 ## v2.14.0
 
+### OCR 安装器自动推荐 GPU
+
+- Windows OCR 安装器启动时自动调用 `nvidia-smi` 检测 NVIDIA GPU、驱动版本与驱动报告的最高 CUDA 兼容版本；若存在可兼容 GPU，则自动推荐不高于该兼容上限的最高已声明 PaddlePaddle GPU profile。
+- 普通安装菜单不再要求用户先判断 CUDA 11.8 / 12.6 / 12.9；按 Enter 直接接受推荐项，具体 CUDA profile 收入 Advanced 手动选择。
+- 未检测到 NVIDIA GPU、无法可靠判断 CUDA 兼容性或兼容上限低于现有 GPU profile 时，安装器保守推荐 CPU OCR。
+- GPU 推荐仍保留安装后的 Paddle CUDA build 检查和真实 GPU `conv2d` smoke test；推荐不等同于跳过运行时验证。
+- 新增 CUDA 版本解析、最高兼容 profile 选择、Enter 接受 GPU/CPU 推荐及 Advanced 手动选择的回归测试。
+
 ### 全局深色模式与夜间校对
 
 - 新增应用级【深色模式】并保存为用户会话偏好；主界面、设置中心、词条校对、Project Profile、新旧比较、OCR 冲突复核及其他 Tk/ttk 二级窗口统一跟随，不写入单个词典项目的设置。
