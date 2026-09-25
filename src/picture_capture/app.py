@@ -45,6 +45,7 @@ from .paddle_headwords import (
     parse_headword_filter_rules,
 )
 from .ocr_engines import lens_status, tesseract_status
+from .environment_center import EnvironmentCenterWindow
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
 from .layout_transform import LayoutTransform
 from .coordinate_space import (
@@ -3837,36 +3838,9 @@ class SettingsDialog(tk.Toplevel):
             return False
 
     def check_ocr_engines(self) -> None:
-        executable = str(self.vars["ocr_executable"].get())
-        language = str(self.vars.get("tesseract_language", self.vars["ocr_language"]).get()).strip()
-        if not language:
-            language = str(self.vars["ocr_language"].get())
-        self._settings_save_status_var.set("正在后台检测 OCR 引擎…")
+        """Open the shared environment center instead of a transient status dialog."""
+        self.parent.show_environment_center()
 
-        def worker():
-            return tesseract_status(executable, language), lens_status()
-
-        def done(payload) -> None:
-            if not self.winfo_exists():
-                return
-            tess, lens = payload
-            if tess.get("available"):
-                tess_text = f"✓ {tess.get('version') or 'Tesseract'}\n路径：{tess.get('resolved')}\n语言：{', '.join(tess.get('requested_languages', []))}"
-                self.vars["ocr_executable"].set(str(tess.get("resolved")))
-            else:
-                tess_text = f"✗ Tesseract：{tess.get('error')}\n检测路径：{tess.get('resolved') or '无'}"
-            lens_text = f"✓ Google Lens / chrome-lens-py {lens.get('version')}" if lens.get("available") else f"✗ Google Lens：{lens.get('error')}"
-            self._settings_save_status_var.set("✓ OCR 引擎检测完成")
-            messagebox.showinfo("OCR 引擎状态", tess_text + "\n\n" + lens_text, parent=self)
-
-        def failed(exc, detail) -> None:
-            if detail:
-                print(detail)
-            if self.winfo_exists():
-                self._settings_save_status_var.set("⚠ OCR 引擎检测失败")
-                messagebox.showerror("OCR 引擎检测失败", str(exc), parent=self)
-
-        self.parent._start_ui_worker(f"settings-ocr-check-{id(self)}", worker, done, failed)
 
 
 def _review_window_dimensions(screen_w: int, screen_h: int) -> tuple[int, int]:
@@ -10262,65 +10236,31 @@ class PictureCaptureApp(tk.Tk):
             lines.append(f"Paddle runtime 检查失败：{exc}")
         return "\n".join(lines)
 
-    def check_ocr_engines(self) -> None:
-        self.status_var.set("正在后台检测 OCR / Paddle / OpenCC 环境…")
-        project = self.project
-        settings_snapshot = replace(self.settings)
-        executable = str(settings_snapshot.ocr_executable)
-        language = resolved_tesseract_language(settings_snapshot)
-
-        def worker():
-            paddle_text = self._paddle_environment_text(settings_snapshot)
-            tess = tesseract_status(executable, language)
-            lens = lens_status()
-            official_opencc = PictureCaptureApp._distribution_version("opencc")
-            legacy_opencc = PictureCaptureApp._distribution_version("opencc-python-reimplemented")
-            runtime = opencc_runtime_status(retry=True)
+    def show_environment_center(self) -> None:
+        existing = self.__dict__.get("_environment_center_window")
+        if existing is not None:
             try:
-                cedict = cc_cedict_status()
-                cedict_error = None
-            except Exception as exc:
-                cedict = None
-                cedict_error = str(exc)
-            return paddle_text, tess, lens, official_opencc, legacy_opencc, runtime, cedict, cedict_error
+                if existing.winfo_exists():
+                    existing.deiconify()
+                    existing.lift()
+                    existing.focus_force()
+                    existing.refresh()
+                    return
+            except tk.TclError:
+                pass
+        window = EnvironmentCenterWindow(self)
+        self._environment_center_window = window
+        window.bind(
+            "<Destroy>",
+            lambda event, w=window: self.__dict__.pop("_environment_center_window", None)
+            if event.widget is w else None,
+            add="+",
+        )
 
-        def done(payload) -> None:
-            paddle_text, tess, lens, official_opencc, legacy_opencc, runtime, cedict, cedict_error = payload
-            if tess.get("available"):
-                if self.project is project:
-                    self.settings.ocr_executable = str(tess.get("resolved"))
-                tess_text = f"✓ {tess.get('version') or 'Tesseract'}\n路径：{tess.get('resolved')}\n语言：{', '.join(tess.get('requested_languages', []))}"
-                if self.project is project:
-                    self.save_settings()
-            else:
-                tess_text = f"✗ Tesseract：{tess.get('error')}\n检测路径：{tess.get('resolved') or '无'}"
-            lens_text = f"✓ Google Lens / chrome-lens-py {lens.get('version')}" if lens.get("available") else f"✗ Google Lens：{lens.get('error')}"
-            if runtime.get("available") and official_opencc:
-                opencc_lines = [f"✓ OpenCC {official_opencc}（官方）：运行正常"]
-                if legacy_opencc:
-                    opencc_lines.append(f"⚠ 同时检测到旧版 opencc-python-reimplemented {legacy_opencc}；当前项目已使用 uv 隔离环境，建议在项目目录执行 uv sync 清理未声明包。")
-            elif official_opencc:
-                opencc_lines = [f"⚠ OpenCC {official_opencc}（官方）已安装，但运行不可用", f"初始化错误：{runtime.get('error') or '未知错误'}", "请在项目目录执行 uv sync --reinstall-package opencc；若仍异常，可删除 .venv 后重新运行 run_windows.bat。"]
-            elif legacy_opencc:
-                opencc_lines = [f"⚠ OpenCC：仅检测到旧版 opencc-python-reimplemented {legacy_opencc}", f"运行状态：{'可用' if runtime.get('available') else '不可用'}", "请在项目目录执行 uv sync；若仍残留旧包，可删除 .venv 后重新运行 run_windows.bat。"]
-            else:
-                opencc_lines = ["✗ OpenCC（官方）：未安装", f"运行检查：{runtime.get('error') or '不可用'}", "请在项目目录执行 uv sync；核心 OpenCC 依赖会由 uv 安装到项目 .venv。"]
-            opencc_text = "\n".join(opencc_lines) + "\n简化配置：t2s.json（词组优先）"
-            if cedict is not None and cedict.installed:
-                cedict_text = f"✓ CC-CEDICT：已安装（{cedict.entry_count:,} 条）\n位置：{cedict.path}"
-            elif cedict is not None:
-                cedict_text = "○ CC-CEDICT：未安装\n在校对界面点击 CC-CEDICT(未装)，可打开官方下载页或选择已下载文件安装。"
-            else:
-                cedict_text = f"⚠ CC-CEDICT 状态检查失败：{cedict_error or '未知错误'}"
-            self.status_var.set("OCR / 简化环境检测完成")
-            messagebox.showinfo("OCR / 简化环境状态", paddle_text + "\n\n" + tess_text + "\n\n" + lens_text + "\n\n" + opencc_text + "\n\n" + cedict_text, parent=self)
+    def check_ocr_engines(self) -> None:
+        """Backward-compatible action name: open the unified environment center."""
+        self.show_environment_center()
 
-        def failed(exc, detail) -> None:
-            if detail:
-                print(detail)
-            self.show_error("OCR / 简化环境检测失败", exc)
-
-        self._start_ui_worker("ocr-environment-check", worker, done, failed)
 
     def detect_layout_current(self) -> None:
         if not self.guard() or not self.apply_quick_settings(show_status=False): return
