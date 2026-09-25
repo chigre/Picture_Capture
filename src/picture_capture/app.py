@@ -9246,7 +9246,10 @@ class PictureCaptureApp(tk.Tk):
     def _page_section_count_text(self, index: int) -> str:
         if not self.project or not (0 <= index < len(self.project.images)):
             return "0"
-        return str(len(read_page_sections(self.project.images[index])))
+        try:
+            return str(len(read_page_sections(self.project.images[index])))
+        except (TypeError, ValueError, OSError, AttributeError):
+            return "0"
 
     def _set_page_section_count(self, index: int, count: int) -> None:
         """Set a page's explicit SECTION count, preserving bounds when count is unchanged."""
