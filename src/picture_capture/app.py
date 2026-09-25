@@ -25,7 +25,7 @@ from tkinter import colorchooser, filedialog, font, messagebox, simpledialog, tt
 
 from PIL import Image, ImageOps, ImageTk
 
-from .formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, read_picdic_index_records
+from .formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, write_text_atomic, read_picdic_index_records
 from .models import (
     AppSettings, Entry as WordEntry, PolygonRegion, ProjectState,
     natural_text_key, read_noncomment_lines, resolve_wordslist_path, resolved_tesseract_language,
@@ -9734,7 +9734,8 @@ class PictureCaptureApp(tk.Tk):
         width = max(len(parts), len(minimum))
         return tuple(parts + [0] * (width - len(parts))) >= tuple(minimum) + (0,) * (width - len(minimum))
 
-    def _paddle_environment_text(self) -> str:
+    def _paddle_environment_text(self, settings: AppSettings | None = None) -> str:
+        settings = settings or self.settings
         paddleocr_version = self._distribution_version("paddleocr")
         paddlex_version = self._distribution_version("paddlex")
         paddle_gpu_version = self._distribution_version("paddlepaddle-gpu")
@@ -9762,13 +9763,13 @@ class PictureCaptureApp(tk.Tk):
             lines.append("✗ PaddlePaddle runtime：未检测到")
 
         if self._version_at_least(paddleocr_version, (3, 7)):
-            lines.append(f"✓ PP-OCRv6：支持（配置：{self.settings.paddle_ocr_version or 'PP-OCRv6'}）")
+            lines.append(f"✓ PP-OCRv6：支持（配置：{settings.paddle_ocr_version or 'PP-OCRv6'}）")
         else:
             lines.append(
                 f"✗ PP-OCRv6：当前 PaddleOCR {paddleocr_version or '未知'} 不支持；请升级到 >= 3.7"
             )
 
-        lines.append(f"配置设备：{self.settings.paddle_device or 'cpu'}")
+        lines.append(f"配置设备：{settings.paddle_device or 'cpu'}")
         try:
             import paddle  # type: ignore
             compiled_cuda = bool(paddle.device.is_compiled_with_cuda())
@@ -9778,7 +9779,7 @@ class PictureCaptureApp(tk.Tk):
                 except Exception:
                     gpu_count = 0
                 lines.append(f"CUDA：可用（检测到 {gpu_count} 个 GPU）")
-                if str(self.settings.paddle_device).lower().startswith("cpu"):
+                if str(settings.paddle_device).lower().startswith("cpu"):
                     lines.append("提示：已安装 GPU 版 Paddle，但当前项目仍配置为 CPU；可将 PaddleOCR 设备改为 gpu。")
             elif paddle_gpu_version:
                 lines.append("CUDA：GPU 版 runtime 已安装，但当前进程未检测到可用 CUDA。")
@@ -9790,13 +9791,16 @@ class PictureCaptureApp(tk.Tk):
 
     def check_ocr_engines(self) -> None:
         self.status_var.set("正在后台检测 OCR / Paddle / OpenCC 环境…")
+        settings_snapshot = replace(self.settings)
+        executable = str(settings_snapshot.ocr_executable)
+        language = resolved_tesseract_language(settings_snapshot)
 
         def worker():
-            paddle_text = self._paddle_environment_text()
-            tess = tesseract_status(self.settings.ocr_executable, resolved_tesseract_language(self.settings))
+            paddle_text = self._paddle_environment_text(settings_snapshot)
+            tess = tesseract_status(executable, language)
             lens = lens_status()
-            official_opencc = self._distribution_version("opencc")
-            legacy_opencc = self._distribution_version("opencc-python-reimplemented")
+            official_opencc = PictureCaptureApp._distribution_version("opencc")
+            legacy_opencc = PictureCaptureApp._distribution_version("opencc-python-reimplemented")
             runtime = opencc_runtime_status(retry=True)
             try:
                 cedict = cc_cedict_status()
@@ -14787,7 +14791,7 @@ class PictureCaptureApp(tk.Tk):
         def worker(index: int, _position: int, _total: int):
             page = project.images[index]
             entries = read_pdic(pdic_path(page))
-            polygons = read_ppp(self._ppp_read_path(page))
+            polygons = read_ppp(ppp_read_path_for_image(page))
             special = specials.get(page.stem, {}) if isinstance(specials.get(page.stem, {}), dict) else {}
             top_y = int(special.get("top_v", general_top))
             bottom_y = int(special.get("bottom_v", general_bottom))
@@ -15145,6 +15149,7 @@ class PictureCaptureApp(tk.Tk):
             return
 
         project = self.project
+        settings_snapshot = replace(self.settings)
         pages = list(project.images)
         page_stems = [page.stem for page in pages]
         pages_meta = {i: self.pages_tuple(i) for i in indices}
@@ -15175,7 +15180,7 @@ class PictureCaptureApp(tk.Tk):
             with Image.open(page) as opened:
                 width, height = map(int, opened.size)
             entries = sort_entries_reading_order(
-                entries, derive_nominal_geometry(width, height, self.settings)
+                entries, derive_nominal_geometry(width, height, settings_snapshot)
             )
             _write_pdic_atomic(pdic_path(page), entries, width, pages_meta[index])
             return {
@@ -15528,8 +15533,8 @@ class PictureCaptureApp(tk.Tk):
                 groups = holder["groups"] if isinstance(holder["groups"], dict) else {}
                 rows = list(groups.get(page.stem, []))
                 if rows:
-                    pdic_path(page).write_text(
-                        "\n".join(rows) + "\n", encoding="utf-8",
+                    write_text_atomic(
+                        pdic_path(page), "\n".join(rows) + "\n", encoding="utf-8",
                     )
                     changed = True
             else:
