@@ -7772,6 +7772,20 @@ class PictureCaptureApp(tk.Tk):
         style = ttk.Style(self)
         mode = normalize_appearance_mode(self.appearance_mode)
         palette = appearance_palette(mode)
+
+        # ttk.Combobox popdowns are classic Tk Listboxes on common Tk builds;
+        # style.configure("TCombobox", ...) does not recolor that popup.
+        for pattern, value in (
+            ("*TCombobox*Listbox.background", palette["input_bg"]),
+            ("*TCombobox*Listbox.foreground", palette["input_fg"]),
+            ("*TCombobox*Listbox.selectBackground", palette["selection"]),
+            ("*TCombobox*Listbox.selectForeground", palette["selection_fg"]),
+        ):
+            try:
+                self.option_add(pattern, value)
+            except tk.TclError:
+                pass
+
         if mode == "light":
             try:
                 if self._light_ttk_theme in style.theme_names():
