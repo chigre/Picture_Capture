@@ -826,7 +826,7 @@ def run_tesseract(image: Image.Image, language: str, executable: str = "tesserac
     resolved = find_tesseract(executable)
     if not resolved:
         raise RuntimeError(
-            "未找到 Tesseract OCR。请安装 Tesseract，并在设置中填写 tesseract.exe 的完整路径。"
+            "未找到 Tesseract OCR。请在环境中心安装/选择 Tesseract 可执行程序，并检查当前项目所需语言包。"
         )
     payload = BytesIO()
     normalize_page_rgb(image).save(payload, format="PNG")
