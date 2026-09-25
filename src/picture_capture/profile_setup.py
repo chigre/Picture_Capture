@@ -11,6 +11,7 @@ from tkinter import messagebox, ttk
 
 from PIL import Image, ImageDraw, ImageTk
 
+from .appearance import themed_display_image
 from .dictionary_profile import (
     dictionary_profile_preset,
     language_effective_settings,
@@ -1201,7 +1202,9 @@ class ProjectProfileWizard(tk.Toplevel):
                 return
             for child in self.template_preview_frame.winfo_children():
                 child.destroy()
-            photo = ImageTk.PhotoImage(preview)
+            photo = ImageTk.PhotoImage(
+            themed_display_image(preview, getattr(self.parent, "appearance_mode", "light"))
+        )
             self._template_photos[:] = [photo]
             ttk.Label(
                 self.template_preview_frame, image=photo,
@@ -1658,7 +1661,9 @@ class ProjectProfileWizard(tk.Toplevel):
                 image.thumbnail(
                     (max(320, available - 20), 520), Image.Resampling.LANCZOS,
                 )
-                photo = ImageTk.PhotoImage(image)
+                photo = ImageTk.PhotoImage(
+                themed_display_image(image, getattr(self.parent, "appearance_mode", "light"))
+            )
                 self._headword_example_photos.append(photo)
                 ttk.Label(
                     self.headword_examples_frame, image=photo,
@@ -1893,7 +1898,9 @@ class ProjectProfileWizard(tk.Toplevel):
         for child in cell.winfo_children():
             child.destroy()
         if image is not None:
-            photo = ImageTk.PhotoImage(image)
+            photo = ImageTk.PhotoImage(
+                themed_display_image(image, getattr(self.parent, "appearance_mode", "light"))
+            )
             self._sample_photo_by_slot[slot] = photo
             ttk.Label(cell, image=photo, anchor="center").pack(fill="both", expand=True)
         else:
@@ -2710,7 +2717,9 @@ class ProjectProfileWizard(tk.Toplevel):
             )
             if target != display.size:
                 display = display.resize(target, Image.Resampling.LANCZOS)
-            photo = ImageTk.PhotoImage(display)
+            photo = ImageTk.PhotoImage(
+                themed_display_image(display, getattr(self.parent, "appearance_mode", "light"))
+            )
             self._validation_photos.append(photo)
             ttk.Label(cell, image=photo, anchor="n").pack(anchor="n")
             ttk.Label(
