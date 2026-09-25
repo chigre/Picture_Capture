@@ -8,6 +8,7 @@ import re
 from PIL import Image
 
 from .layout_transform import LayoutTransform
+from .runtime_environment import portable_project_file
 
 
 IMAGE_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp"}
@@ -322,7 +323,8 @@ class AppSettings:
     # PaddleOCR is optional and is loaded only when the dedicated headword
     # detection mode is selected.
     paddle_language: str = ""
-    paddle_device: str = "cpu"
+    # Retained only for backward-compatible project JSON reads; runtime device is machine-local.
+    paddle_device: str = "auto"
     paddle_ocr_version: str = "PP-OCRv6"
     paddle_use_textline_orientation: bool = False
     # Wider than v1.4 so long syllabified lemmas usually include the nearby
@@ -722,16 +724,8 @@ def resolved_tesseract_language(settings: AppSettings) -> str:
 
 
 def resolve_wordslist_path(root: Path, configured: str | Path | None) -> Path:
-    """Resolve the configured auxiliary wordslist path for one project.
-
-    ``wordslist.txt`` remains the portable default. Relative paths travel with
-    the project; an explicitly chosen outside file is stored as an absolute path.
-    """
-    raw = str(configured or "wordslist.txt").strip() or "wordslist.txt"
-    path = Path(raw).expanduser()
-    if not path.is_absolute():
-        path = root / path
-    return path
+    """Resolve a portable wordslist path and survive project moves across OSes."""
+    return portable_project_file(Path(root), configured, fallback_name="wordslist.txt")
 
 
 def read_noncomment_lines(path: Path) -> list[str]:
