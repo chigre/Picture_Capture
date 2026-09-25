@@ -29,6 +29,7 @@ from . import __version__
 from .appearance import (
     appearance_palette,
     apply_classic_widget_appearance,
+    apply_native_titlebar_appearance,
     normalize_appearance_mode,
     themed_display_image,
     usage_guide_palette,
@@ -1371,6 +1372,10 @@ class UsageGuideWindow(tk.Toplevel):
                 activebackground=colors["accent_soft"], activeforeground=colors["accent"],
                 cursor="hand2",
             )
+            # Navigation buttons manage their palette directly because their
+            # selected state changes frequently. Skipping the generic reversible
+            # classic mapper avoids a light-palette flash on every page switch.
+            button._pc_skip_classic_appearance = True
             button.pack(fill="x", pady=1)
             self._nav_buttons[key] = button
 
@@ -1488,7 +1493,9 @@ class UsageGuideWindow(tk.Toplevel):
         self._render_search(query, matches)
 
     def _set_nav_state(self, active: str | None) -> None:
-        colors = self._colors
+        colors = usage_guide_palette(
+            getattr(self.parent_app, "appearance_mode", "light")
+        )
         for key, button in self._nav_buttons.items():
             selected = key == active
             button.configure(
@@ -1519,7 +1526,9 @@ class UsageGuideWindow(tk.Toplevel):
             )
         for badge, card_title, body in cards:
             self._add_card(badge, card_title, body)
-        self.parent_app.after_idle(lambda: self.parent_app._apply_current_appearance(self))
+        # Apply before returning to Tk's event loop so newly built guide content
+        # is never painted once with the light palette in dark mode.
+        self.parent_app._apply_current_appearance(self)
 
     def _render_search(self, query: str, matches: list[tuple[str, str, str]]) -> None:
         self._set_nav_state(None)
@@ -1533,10 +1542,11 @@ class UsageGuideWindow(tk.Toplevel):
                 "没有找到匹配内容",
                 "可以尝试更短的关键词，例如“OCR”“校对”“切图”“插图”“PicDic”“缓存”或“版面”。",
             )
+            self.parent_app._apply_current_appearance(self)
             return
         for page_title, title, body in matches:
             self._add_card(page_title[:6], title, body)
-        self.parent_app.after_idle(lambda: self.parent_app._apply_current_appearance(self))
+        self.parent_app._apply_current_appearance(self)
 
     def _add_page_heading(self, title: str, subtitle: str) -> None:
         colors = self._colors
@@ -3984,6 +3994,7 @@ class ReviewWindow(tk.Toplevel):
         self._syncing_review_height_vars = False
         self.word_highlight_index: int | None = None
         self.word_list_default_bg = "white"
+        self.word_list_default_fg = "#111827"
         # The reference words may exceed 100k rows.  Keep the full data/index in
         # Python, but only render a small contiguous window in the Tk Listbox.
         self.word_window_radius = 250
@@ -4555,6 +4566,7 @@ class ReviewWindow(tk.Toplevel):
         )
         self.word_list.pack(fill="both", expand=True, pady=(4, 0))
         self.word_list_default_bg = str(self.word_list.cget("background"))
+        self.word_list_default_fg = str(self.word_list.cget("foreground"))
         self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)
         self.refresh_wordslist_display()
         self._request_render_rows(focus_index=0)
@@ -5875,12 +5887,20 @@ class ReviewWindow(tk.Toplevel):
         local = target - self.word_window_start
         if self.word_highlight_index is not None and self.word_highlight_index < self.word_list.size():
             try:
-                self.word_list.itemconfig(self.word_highlight_index, background=self.word_list_default_bg)
+                self.word_list.itemconfig(
+                    self.word_highlight_index,
+                    background=self.word_list_default_bg,
+                    foreground=self.word_list_default_fg,
+                )
             except tk.TclError:
                 pass
         self.word_highlight_index = local
         try:
-            self.word_list.itemconfig(local, background="#d9d9d9")
+            # The reference-location marker deliberately keeps a pale background
+            # in both themes, so its text must stay dark for readable contrast.
+            self.word_list.itemconfig(
+                local, background="#d9d9d9", foreground="#111827"
+            )
             self.word_list.see(local)
         except tk.TclError:
             pass
@@ -6159,6 +6179,13 @@ class ReviewWindow(tk.Toplevel):
             self.set_active(0)
         self._schedule_adjacent_preload()
         self.parent._apply_current_appearance(self.rows)
+        # Membership status intentionally uses pale green/red backgrounds even
+        # in dark mode. Re-apply it after generic theming so the text remains
+        # dark and legible instead of inheriting the dark-theme input foreground.
+        for row_index, row_entry in enumerate(self.row_entries):
+            self._set_editor_membership_color(
+                row_index, row_entry.word in words
+            )
 
     def _candidate_for_entry(self, entry: WordEntry) -> dict | None:
         return self.parent._candidate_for_entry(entry)
@@ -6403,7 +6430,14 @@ class ReviewWindow(tk.Toplevel):
         color = "#b3fddd" if in_wordslist else "#fce5e8"
         if 0 <= index < len(self.editors):
             try:
-                self.editors[index].configure(bg=color, disabledbackground=color)
+                self.editors[index].configure(
+                    bg=color,
+                    disabledbackground=color,
+                    foreground="#111827",
+                    disabledforeground="#111827",
+                    insertbackground="#111827",
+                    selectforeground="#111827",
+                )
             except tk.TclError:
                 pass
         if 0 <= index < len(self.editor_frames):
@@ -7900,6 +7934,8 @@ class PictureCaptureApp(tk.Tk):
             apply_classic_widget_appearance(root, self.appearance_mode)
         except tk.TclError:
             pass
+        if isinstance(root, (tk.Tk, tk.Toplevel)):
+            apply_native_titlebar_appearance(root, self.appearance_mode)
 
     def _appearance_toplevel_mapped(self, event: tk.Event) -> None:
         widget = getattr(event, "widget", None)
@@ -7944,6 +7980,7 @@ class PictureCaptureApp(tk.Tk):
             try:
                 if review.winfo_exists():
                     review.word_list_default_bg = palette["input_bg"]
+                    review.word_list_default_fg = palette["input_fg"]
                     review._configure_review_styles()
                     review._request_render_rows(focus_index=review.active_index)
             except tk.TclError:
