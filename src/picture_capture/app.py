@@ -13595,7 +13595,11 @@ class PictureCaptureApp(tk.Tk):
             return
         geometry = geometry or self._get_cached_display_geometry()
         canonical_width, _canonical_height = geometry.transform.canonical_size(self.image.size)
-        line_width = max(1, int(getattr(self.settings, "page_section_width", 2) or 2))
+        overlay_scale = self.view_scale / parameter_scale(self.image, self.settings)
+        line_width = max(
+            1,
+            round(int(getattr(self.settings, "page_section_width", 2) or 2) * overlay_scale),
+        )
         line_fill = str(getattr(self.settings, "page_section_color", "#1976d2") or "#1976d2")
         for index, section in enumerate(self.page_sections):
             for side, v in (("top", section.top_v), ("bottom", section.bottom_v)):
@@ -13607,15 +13611,20 @@ class PictureCaptureApp(tk.Tk):
                     fill=line_fill, width=line_width, dash=(7, 4),
                     tags=("page-section-overlay", f"page-section-{index}-{side}"),
                 )
-            label_point = geometry.canonical_to_source(
-                max(4, round(canonical_width * 0.01)),
-                min(section.bottom_v - 1, section.top_v + max(8, round((section.bottom_v - section.top_v) * 0.02))),
+            # Keep the SECTION badge centered above that SECTION's starting
+            # boundary. This makes the label read as the caption of the top
+            # boundary rather than as content inside the SECTION.
+            top_start = geometry.canonical_to_source(0, int(section.top_v))
+            top_end = geometry.canonical_to_source(canonical_width, int(section.top_v))
+            label_x = ((top_start[0] + top_end[0]) / 2.0) * self.view_scale
+            label_y = min(top_start[1], top_end[1]) * self.view_scale - max(
+                4, round(4 * self.view_scale)
             )
             text_item = self.canvas.create_text(
-                label_point[0] * self.view_scale,
-                label_point[1] * self.view_scale,
+                label_x,
+                label_y,
                 text=f"SECTION {index + 1}",
-                fill="#ffffff", anchor="nw",
+                fill="#ffffff", anchor="s",
                 font=("Microsoft YaHei", max(8, round(10 * self.view_scale)), "bold"),
                 tags=("page-section-overlay",),
             )
