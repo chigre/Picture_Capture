@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 import json
 import shutil
 import zipfile
@@ -406,13 +406,40 @@ def write_training_manifest(
     return path
 
 
-def make_training_zip(staging_root: Path, zip_path: Path) -> Path:
-    """Create a deterministic-ish zip from the staging directory."""
+class TrainingExportCancelled(RuntimeError):
+    """Raised when a training-package build is cooperatively stopped."""
+
+
+def make_training_zip(
+    staging_root: Path,
+    zip_path: Path,
+    *,
+    should_stop: Callable[[], bool] | None = None,
+) -> Path:
+    """Create the training ZIP off to the side and publish it only when complete."""
     staging_root = Path(staging_root)
     zip_path = Path(zip_path)
     zip_path.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
-        for path in sorted(staging_root.rglob("*"), key=lambda p: p.as_posix().casefold()):
-            if path.is_file():
-                zf.write(path, arcname=path.relative_to(staging_root).as_posix())
+    temp_zip = zip_path.with_name(f".{zip_path.name}.tmp")
+
+    def check_stop() -> None:
+        if should_stop is not None and should_stop():
+            raise TrainingExportCancelled("训练标记包导出已停止")
+
+    try:
+        temp_zip.unlink(missing_ok=True)
+        paths = sorted(staging_root.rglob("*"), key=lambda p: p.as_posix().casefold())
+        check_stop()
+        with zipfile.ZipFile(
+            temp_zip, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6,
+        ) as zf:
+            for path in paths:
+                check_stop()
+                if path.is_file():
+                    zf.write(path, arcname=path.relative_to(staging_root).as_posix())
+        check_stop()
+        temp_zip.replace(zip_path)
+    except Exception:
+        temp_zip.unlink(missing_ok=True)
+        raise
     return zip_path
