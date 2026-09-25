@@ -7338,8 +7338,10 @@ def test_page_list_context_menu_matches_visible_column_order():
     start = text.index("    def _page_list_right_click")
     end = text.index("    def _schedule_page_cell_overlay_refresh", start)
     block = text[start:end]
+    assert block.index('label="书签"') < block.index('label="页面"')
     assert block.index('label="页面"') < block.index('label="Section"')
     assert block.index('label="Section"') < block.index('label="画线"')
+    assert 'menu.add_checkbutton(label="书签", variable=bookmark_var, state="disabled")' in block
     assert block.index('label="画线"') < block.index('label="插图"')
     assert block.index('label="插图"') < block.index('label="填充状态"')
 
