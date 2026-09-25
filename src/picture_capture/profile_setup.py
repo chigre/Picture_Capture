@@ -247,6 +247,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._validation_queue: queue.Queue | None = None
         self._validation_stop_event = threading.Event()
         self._validation_close_requested = False
+        self._closing = False
         if not str(getattr(self.working, "dictionary_body_page_range", "") or "").strip():
             self.working.dictionary_body_page_range = suggested_body_page_range(self.project.images)
         configured_body = configured_body_page_indices(
@@ -1829,7 +1830,7 @@ class ProjectProfileWizard(tk.Toplevel):
             ).pack(anchor="center", pady=(3, 0))
 
     def _start_sample_thumbnail_load(self) -> None:
-        if not self.winfo_exists():
+        if self._closing or not self.winfo_exists():
             return
         self._thumbnail_load_generation += 1
         generation = self._thumbnail_load_generation
@@ -1863,6 +1864,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self.after(50, self._poll_sample_thumbnail_load)
 
     def _poll_sample_thumbnail_load(self) -> None:
+        if self._closing:
+            self._thumbnail_queue = None
+            return
         if self._thumbnail_queue is None:
             return
         try:
@@ -1918,7 +1922,7 @@ class ProjectProfileWizard(tk.Toplevel):
 
     def _start_sample_thumbnail_slot_load(self, slot: int) -> None:
         """Decode only one replacement thumbnail and keep all other cells intact."""
-        if not self.winfo_exists() or not (0 <= slot < len(self.sample_indices)):
+        if self._closing or not self.winfo_exists() or not (0 <= slot < len(self.sample_indices)):
             return
         index = self.sample_indices[slot]
         path = self.project.images[index]
@@ -1953,6 +1957,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self.after(50, self._poll_sample_thumbnail_slot_load)
 
     def _poll_sample_thumbnail_slot_load(self) -> None:
+        if self._closing:
+            self._thumbnail_slot_pending.clear()
+            return
         processed = False
         while True:
             try:
@@ -2110,7 +2117,7 @@ class ProjectProfileWizard(tk.Toplevel):
             self.analyze_representative_pages(auto_apply=True)
 
     def analyze_representative_pages(self, auto_apply: bool = False) -> None:
-        if self._analysis_running or not self.sample_indices:
+        if self._closing or self._analysis_running or not self.sample_indices:
             return
         self._analysis_running = True
         self._analysis_revision_started = self._profile_revision
@@ -2142,6 +2149,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self.after(100, self._poll_analysis_queue)
 
     def _poll_analysis_queue(self) -> None:
+        if self._closing:
+            self._analysis_queue = None
+            return
         if self._analysis_queue is None:
             return
         try:
@@ -2407,7 +2417,10 @@ class ProjectProfileWizard(tk.Toplevel):
         self._set_feedback_buttons("disabled")
 
     def validate_profile(self) -> None:
-        if self._validation_running:
+        if self._closing or self._validation_running:
+            return
+        if self.parent._batch_active:
+            self.validation_status_var.set("批量任务运行中；结束或停止后再测试 Project Profile。")
             return
         if self.parent._ui_worker_key_active("profile-validation"):
             self.validation_status_var.set("上一轮 Profile 测试仍在安全结束，请稍后重试。")
@@ -2767,6 +2780,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 status="Project Profile 已保存并应用",
             ):
                 return
+            self._closing = True
             if self._validation_running:
                 self._validation_close_requested = True
                 self._validation_stop_event.set()
@@ -2794,6 +2808,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 parent=self,
             ):
                 return
+        self._closing = True
         if self._validation_running:
             self._validation_close_requested = True
             self._validation_stop_event.set()

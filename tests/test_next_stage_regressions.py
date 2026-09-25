@@ -1841,3 +1841,55 @@ def test_concurrency_review_workers_use_snapshots_not_live_app_state():
     assert "self.project" not in worker
     assert "self._analysis_queue" not in worker
     assert "result_queue.put" in worker
+
+
+
+def test_concurrency_audit_p0_p1_guards_are_present():
+    root = Path(__file__).resolve().parents[1]
+    app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    profile = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+    training = (root / "src" / "picture_capture" / "training_export.py").read_text(encoding="utf-8")
+
+    poll_start = app.index("    def _poll_ui_worker_queue(")
+    poll_end = app.index("\n    def _configure_main_workspace_styles", poll_start)
+    assert "_ui_worker_active" in app[poll_start:poll_end]
+
+    load_start = app.index("    def _load_project(")
+    load_end = app.index("\n    def on_page_select", load_start)
+    load = app[load_start:load_end]
+    assert "root == Path(self.project.root).expanduser().resolve()" in load
+    assert load.index("root == Path(self.project.root).expanduser().resolve()") < load.index("def worker():")
+
+    profile_open_start = app.index("    def open_project_profile(")
+    profile_open_end = app.index("\n    def open_project_details", profile_open_start)
+    assert "if self._batch_active:" in app[profile_open_start:profile_open_end]
+
+    validate_start = profile.index("    def validate_profile(")
+    validate_end = profile.index("\n    def _poll_validation_queue", validate_start)
+    assert "if self.parent._batch_active:" in profile[validate_start:validate_end]
+
+    export_start = app.index("    def export_training_package(")
+    export_end = app.index("\n    def show_help_dialog", export_start)
+    export = app[export_start:export_end]
+    assert 'startswith("training-cleanup-")' in export
+    assert '%Y%m%d_%H%M%S_%f' in export
+    assert "uuid.uuid4().hex" in training
+
+
+def test_project_profile_legacy_workers_drop_results_while_closing():
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+    assert "self._closing = False" in text
+    for name in (
+        "_start_sample_thumbnail_load",
+        "_poll_sample_thumbnail_load",
+        "_start_sample_thumbnail_slot_load",
+        "_poll_sample_thumbnail_slot_load",
+        "analyze_representative_pages",
+        "_poll_analysis_queue",
+        "validate_profile",
+    ):
+        start = text.index(f"    def {name}(")
+        next_def = text.find("\n    def ", start + 8)
+        block = text[start: next_def if next_def >= 0 else len(text)]
+        assert "_closing" in block

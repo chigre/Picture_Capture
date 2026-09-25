@@ -7353,7 +7353,7 @@ class OldNewComparisonWindow(tk.Toplevel):
                 str(item.get("new") or "").replace("\t", " "),
             ]
             rows.append("\t".join(values))
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         page_order = [str(item) for item in list(self.payload.get("page_order") or []) if str(item)]
         first = page_order[0] if page_order else "unknown"
         last = page_order[-1] if page_order else first
@@ -7666,7 +7666,7 @@ class PictureCaptureApp(tk.Tk):
             self.after_idle(self.on_close)
             return
         if (
-            (self._ui_worker_handlers or self._ui_worker_close_wait)
+            (self._ui_worker_handlers or self._ui_worker_close_wait or self._ui_worker_active)
             and not self._ui_worker_shutdown
         ):
             self._ui_worker_poll_job = self.after(
@@ -9571,6 +9571,12 @@ class PictureCaptureApp(tk.Tk):
             if self._batch_active:
                 self.status_var.set("已有批量任务正在运行，请结束后再导出训练标记包。")
             return
+        if any(
+            str(token[0]).startswith("training-cleanup-")
+            for token in self._ui_worker_active
+        ):
+            self.status_var.set("上一轮训练导出仍在清理临时文件；清理完成后再重新导出。")
+            return
         try:
             if self.current_page is not None and self.image is not None:
                 self._save_current_page_by_mode()
@@ -9597,7 +9603,7 @@ class PictureCaptureApp(tk.Tk):
             return
 
         export_root = training_exports_root(project.root)
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         base_name = f"{project.root.name}_training_{stamp}"
         staging = export_root / f".{base_name}_building"
         zip_path = export_root / f"{base_name}.zip"
@@ -11193,6 +11199,10 @@ class PictureCaptureApp(tk.Tk):
         if self._ui_worker_key_active("profile-validation"):
             self.status_var.set("Project Profile 测试仍在安全结束；完成后再切换项目。")
             return
+        root = root.expanduser().resolve()
+        if self.project is not None and root == Path(self.project.root).expanduser().resolve():
+            self.status_var.set("当前项目已经打开；保留当前编辑状态，不执行后台重载。")
+            return
         self._flush_deferred_page_save()
         for job_name in ("_page_meta_job", "_page_list_sort_job"):
             job = getattr(self, job_name, None)
@@ -11217,7 +11227,6 @@ class PictureCaptureApp(tk.Tk):
             write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
             self.settings.to_json(settings_path(self.project.root))
 
-        root = root.expanduser().resolve()
         migrate = False
         if has_legacy_project_data(root) and not is_managed_project(root):
             migrate = messagebox.askyesno(
@@ -14077,6 +14086,9 @@ class PictureCaptureApp(tk.Tk):
         if not self.project:
             messagebox.showinfo("尚未打开", "请先打开或新建词典项目。", parent=self)
             return
+        if self._batch_active:
+            self.status_var.set("批量任务运行中，结束或停止后再打开 Project Profile。")
+            return
         # Keep the wizard's working copy aligned with any unsaved/debounced
         # quick-panel edits made immediately before opening Project Profile.
         if not self.apply_quick_settings(show_status=False, persist=False, silent_errors=True):
@@ -14929,7 +14941,7 @@ class PictureCaptureApp(tk.Tk):
             messagebox.showinfo("导出PicDic索引", "当前项目没有可导出的 PDIC 文件。", parent=self)
             return
 
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         target = exports_root(project.root) / f"PicDic_index_{stamp}.txt"
         temp = target.with_name(f".{target.name}.tmp")
         state: dict[str, object] = {"stream": None, "page_count": 0, "record_count": 0}
@@ -15027,7 +15039,7 @@ class PictureCaptureApp(tk.Tk):
             messagebox.showinfo("备份PDIC", "当前项目没有可备份的 PDIC 文件。", parent=self)
             return
 
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         target = exports_root(project.root) / f"all_pdic_backup_{stamp}.txt"
         temp = target.with_name(f".{target.name}.tmp")
         state: dict[str, object] = {"stream": None, "page_count": 0, "record_count": 0}

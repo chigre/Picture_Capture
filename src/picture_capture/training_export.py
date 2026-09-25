@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable
 import json
 import shutil
+import uuid
 import zipfile
 
 from PIL import Image, ImageOps
@@ -420,7 +421,7 @@ def make_training_zip(
     staging_root = Path(staging_root)
     zip_path = Path(zip_path)
     zip_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_zip = zip_path.with_name(f".{zip_path.name}.tmp")
+    temp_zip = zip_path.with_name(f".{zip_path.name}.{uuid.uuid4().hex}.tmp")
 
     def check_stop() -> None:
         if should_stop is not None and should_stop():

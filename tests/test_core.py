@@ -5861,7 +5861,7 @@ def test_v2126_environment_dialog_reports_official_opencc():
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     assert 'PictureCaptureApp._distribution_version("opencc")' in text
     assert "settings_snapshot = replace(self.settings)" in text
-    assert 'self._distribution_version("opencc-python-reimplemented")' in text
+    assert 'PictureCaptureApp._distribution_version("opencc-python-reimplemented")' in text
     assert '简化配置：t2s.json（词组优先）' in text
     assert '"OCR / 简化环境状态"' in text
 
