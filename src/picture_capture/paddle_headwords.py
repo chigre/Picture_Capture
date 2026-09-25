@@ -2149,8 +2149,15 @@ def _leading_cjk_ideograph(text: str) -> str:
     first_tail = tail[0]
     if _is_single_cjk_ideograph(first_tail):
         return ""
-    if first_tail.isalpha() or first_tail in "([（［/·,，:：":
+    if first_tail.isalpha():
         return normalized[0]
+    if first_tail in "([（［/·,，:：":
+        remainder = tail[1:].lstrip(" 	([（［/·,，:：")
+        if not remainder or (
+            remainder[0].isalpha()
+            and not _is_single_cjk_ideograph(remainder[0])
+        ):
+            return normalized[0]
     return ""
 
 
