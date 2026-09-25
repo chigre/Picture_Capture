@@ -1798,17 +1798,17 @@ class SettingsDialog(tk.Toplevel):
     # unchanged; this layer only reorganizes the settings experience.
     SETTING_LABELS = {
         "columns": "正文栏数",
-        "start_y": "正文起始 V（参考页规范坐标）",
-        "bottom_y": "正文结束 V（参考页规范坐标）",
-        "manual_x": "第一栏左缘 U（参考页规范坐标）",
-        "column_width": "单栏正文宽度（参考页规范坐标）",
-        "gutter": "栏间空白（参考页规范坐标）",
+        "start_y": "正文起始 V",
+        "bottom_y": "正文结束 V",
+        "manual_x": "第一栏左缘 U",
+        "column_width": "单栏正文宽度",
+        "gutter": "栏间空白",
         "character_height": "典型行高（参考页规范坐标）",
         "row_padding": "典型行间空白（参考页规范坐标）",
         "ocr_language": "词头 OCR 语言",
         "analysis_threshold_mode": "墨迹判断方式",
-        "body_indent": "左缘检测宽度（参考页规范坐标）",
-        "character_height": "典型单行字高（参考页规范坐标）",
+        "body_indent": "左缘检测宽度",
+        "character_height": "典型单行字高",
         "row_padding": "典型行间空白",
         "darkness_threshold": "固定黑度阈值",
         "horizontal_tolerance": "横向微调容差",
@@ -1987,8 +1987,8 @@ class SettingsDialog(tk.Toplevel):
         "darkness_threshold": "RGB 和", "column_track_radius": "参考页规范px",
         "column_track_block_height": "参考页规范px", "column_track_max_step": "参考页规范px",
         "paddle_band_width_ratio": "%", "paddle_band_left_margin": "参考px@1400",
-        "paddle_left_tolerance": "参考px@1400", "paddle_max_input_side": "px",
-        "paddle_separator_safety_px": "参考px@1400", "paddle_separator_band_radius": "参考px@1400",
+        "paddle_left_tolerance": "参考页规范px", "paddle_max_input_side": "px",
+        "paddle_separator_safety_px": "参考页规范px", "paddle_separator_band_radius": "参考px@1400",
         "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "参考px@1400",
         "paddle_header_search_height": "参考px@1400", "paddle_header_rule_margin": "参考px@1400",
         "batch_interval": "秒", "illustration_detect_padding": "参考页规范px",
@@ -2078,11 +2078,11 @@ class SettingsDialog(tk.Toplevel):
     )
     OCR_COMMON_CHECKS = (
         ("PaddleOCR 主识别", "paddle_use_paddleocr"),
+        ("同时运行 Tesseract 对照", "paddle_compare_tesseract"),
+        ("多 OCR 自动融合", "paddle_dual_ocr_arbitration"),
         ("要求结构/视觉提示", "paddle_require_visual_cue"),
         ("要求词性/变形/词条符号", "paddle_require_pos_or_symbol"),
         ("自动精修横线 Y", "paddle_refine_separator_y"),
-        ("同时运行 Tesseract 对照", "paddle_compare_tesseract"),
-        ("多 OCR 自动融合", "paddle_dual_ocr_arbitration"),
     )
     OCR_ADVANCED_CHECKS = (
         ("启用文字行方向识别", "paddle_use_textline_orientation"),
@@ -8728,19 +8728,6 @@ class PictureCaptureApp(tk.Tk):
 
         range_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
         range_row.grid(row=0, column=0, sticky="ew", pady=(0, 3))
-        ttk.Label(range_row, text="显示模式：").pack(side="left")
-        display_mode_combo = ttk.Combobox(
-            range_row,
-            textvariable=self.display_mode_var,
-            values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览"),
-            state="readonly",
-            width=10,
-        )
-        display_mode_combo.pack(side="left", padx=(0, 3))
-        display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)
-        ttk.Separator(range_row, orient="vertical").pack(
-            side="left", fill="y", padx=4, pady=3
-        )
         ttk.Radiobutton(range_row, text="当前页", variable=self.page_range_var, value="current").pack(side="left")
         ttk.Radiobutton(range_row, text="当前至末页", variable=self.page_range_var, value="to_end").pack(side="left", padx=(4, 0))
         ttk.Radiobutton(range_row, text="指定：", variable=self.page_range_var, value="specified").pack(side="left", padx=(4, 0))
@@ -8839,7 +8826,7 @@ class PictureCaptureApp(tk.Tk):
         self.page_list.heading("fill_status", command=lambda: self._sort_page_list("fill_status"))
         self.page_list.heading("illustrations", command=lambda: self._sort_page_list("illustrations"))
         self.page_list.column("bookmark", width=44, anchor="w", stretch=False)
-        self.page_list.column("page", width=180, anchor="w", stretch=True)
+        self.page_list.column("page", width=180, anchor="w", stretch=False)
         self.page_list.column("section", width=64, anchor="center", stretch=False)
         self.page_list.column("lined", width=68, anchor="w", stretch=False)
         self.page_list.column("fill_status", width=110, anchor="w", stretch=False)
@@ -8853,10 +8840,10 @@ class PictureCaptureApp(tk.Tk):
         self.page_list.bind("<Double-1>", self._page_list_section_double_click, add="+")
         self.page_list.bind("<MouseWheel>", self._list_mousewheel)
         bind_context_menu(self.page_list, self._page_list_right_click)
-        self.page_list.bind("<Configure>", lambda _e: self._schedule_page_cell_overlay_refresh())
+        self.page_list.bind("<Configure>", self._page_list_configured)
         self._page_column_vars = {
             "lined": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_lined", True))),
-            "fill_status": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_fill_status", True))),
+            "fill_status": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_fill_status", False))),
             "illustrations": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_illustrations", True))),
         }
         self._apply_page_list_display_columns(save=False)
@@ -8900,7 +8887,7 @@ class PictureCaptureApp(tk.Tk):
 
         parameter_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
         parameter_row.pack(fill="x", pady=(4, 0))
-        for col in range(5):
+        for col in range(4):
             parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
         for col, (label, command, role) in enumerate((
             ("项目Profile", self.open_project_profile, "config"),
@@ -8921,19 +8908,6 @@ class PictureCaptureApp(tk.Tk):
             )
             if label == "使用指南":
                 self._attach_tooltip(button, "打开使用指南：推荐流程、各功能用途、快捷操作与常见排错。")
-        dark_toggle = ttk.Checkbutton(
-            parameter_row,
-            text="深色模式",
-            variable=self.dark_mode_var,
-            command=self._toggle_dark_mode,
-            style="PC.Footer.TCheckbutton",
-        )
-        dark_toggle.grid(row=0, column=4, sticky="ew", padx=(4, 0))
-        self._attach_tooltip(
-            dark_toggle,
-            "夜间显示：同步深色界面和扫描图夜间预览；不修改原图、OCR、PDIC/PPP 或导出文件。",
-        )
-
         self.canvas = tk.Canvas(
             viewer, bg=self._main_ui_colors["canvas"], highlightthickness=0
         )
@@ -9016,6 +8990,7 @@ class PictureCaptureApp(tk.Tk):
         if getattr(self, "_page_column_vars", {}).get("fill_status") is None or self._page_column_vars["fill_status"].get():
             columns.append("fill_status")
         self.page_list.configure(displaycolumns=tuple(columns))
+        self.after_idle(self._fit_page_list_columns)
         if hasattr(self, "settings"):
             self.settings.page_list_show_lined = "lined" in columns
             self.settings.page_list_show_fill_status = "fill_status" in columns
@@ -9026,6 +9001,62 @@ class PictureCaptureApp(tk.Tk):
                 except Exception:
                     pass
         self._schedule_page_cell_overlay_refresh()
+
+    def _page_list_configured(self, _event=None) -> None:
+        """Keep visible page-list columns filling the full Treeview width."""
+        self._fit_page_list_columns()
+        self._schedule_page_cell_overlay_refresh()
+
+    def _fit_page_list_columns(self) -> None:
+        if not hasattr(self, "page_list"):
+            return
+        try:
+            raw = self.page_list.cget("displaycolumns")
+            visible = tuple(self.tk.splitlist(raw))
+            if not visible or visible == ("#all",):
+                visible = tuple(self.tk.splitlist(self.page_list.cget("columns")))
+            if not visible:
+                return
+            available = max(1, int(self.page_list.winfo_width()) - 2)
+        except (tk.TclError, ValueError):
+            return
+
+        base = {
+            "bookmark": 44, "page": 120, "section": 62,
+            "lined": 58, "illustrations": 58, "fill_status": 88,
+        }
+        weights = {
+            "bookmark": 0.4, "page": 4.0, "section": 0.8,
+            "lined": 0.8, "illustrations": 0.8, "fill_status": 1.4,
+        }
+        minimum = [base.get(column, 60) for column in visible]
+        base_total = sum(minimum)
+        widths: list[int]
+        if available <= base_total:
+            # Extremely narrow panes still fill exactly; preserve relative widths.
+            scale = available / max(1, base_total)
+            widths = [max(24, int(round(value * scale))) for value in minimum]
+        else:
+            extra = available - base_total
+            total_weight = sum(weights.get(column, 1.0) for column in visible) or 1.0
+            widths = [
+                minimum[index] + int(round(extra * weights.get(column, 1.0) / total_weight))
+                for index, column in enumerate(visible)
+            ]
+        # Correct rounding so the visible headings span the full Treeview width.
+        widths[-1] += available - sum(widths)
+        if widths[-1] < 24:
+            deficit = 24 - widths[-1]
+            widths[-1] = 24
+            for index in range(len(widths) - 2, -1, -1):
+                spare = max(0, widths[index] - 24)
+                take = min(spare, deficit)
+                widths[index] -= take
+                deficit -= take
+                if deficit <= 0:
+                    break
+        for column, width in zip(visible, widths):
+            self.page_list.column(column, width=max(24, int(width)), stretch=False)
 
     def _page_list_right_click(self, event: tk.Event) -> str | None:
         """Right-click a heading to choose which optional list columns are visible."""
@@ -9789,12 +9820,15 @@ class PictureCaptureApp(tk.Tk):
 
         aux = self._section_frame(parent, "三、辅助选项及框线色块", padding=5, section_key="aux")
         aux.pack(fill="x", pady=(4, 0))
+        section_var = tk.BooleanVar(value=bool(self.settings.show_page_sections))
         guide_var = tk.BooleanVar(value=bool(self.settings.show_column_guides))
         marker_var = tk.BooleanVar(value=bool(self.settings.show_headword_markers))
+        self.quick_bool_vars["show_page_sections"] = section_var
         self.quick_bool_vars["show_column_guides"] = guide_var
         self.quick_bool_vars["show_headword_markers"] = marker_var
         self.quick_color_buttons: dict[str, tk.Button] = {}
         self.quick_color_vars: dict[str, tk.StringVar] = {
+            "page_section_color": tk.StringVar(value=self.settings.page_section_color),
             "guide_color": tk.StringVar(value=self.settings.guide_color),
             "headword_marker_color": tk.StringVar(value=self.settings.headword_marker_color),
             "illustration_outline_color": tk.StringVar(value=self.settings.illustration_outline_color),
@@ -9812,7 +9846,21 @@ class PictureCaptureApp(tk.Tk):
             self._style_color_button(button, str(self.quick_color_vars[name].get()))
             return button
 
-        line_row = ttk.Frame(aux); line_row.grid(row=0, column=0, columnspan=4, sticky="ew")
+        section_row = ttk.Frame(aux); section_row.grid(row=0, column=0, columnspan=4, sticky="ew")
+        ttk.Checkbutton(
+            section_row, text="显示Section", variable=section_var,
+            command=lambda: self._apply_overlay_visibility_toggle("show_page_sections", section_var),
+        ).pack(side="left")
+        color_button(section_row, "page_section_color")
+        ttk.Label(section_row, text="粗细：").pack(side="left")
+        section_width_var = tk.StringVar(value=str(self.settings.page_section_width))
+        self.quick_vars["page_section_width"] = section_width_var
+        self.quick_field_casts["page_section_width"] = int
+        ttk.Entry(
+            section_row, textvariable=section_width_var, width=4, justify="left"
+        ).pack(side="left", padx=(2, 10))
+
+        line_row = ttk.Frame(aux); line_row.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(2, 0))
         ttk.Checkbutton(line_row, text="栏左垂线", variable=guide_var, command=self._quick_parameter_changed).pack(side="left")
         color_button(line_row, "guide_color")
         ttk.Label(line_row, text="宽度：").pack(side="left")
@@ -9830,7 +9878,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Label(line_row, text="背景").pack(side="left")
         color_button(line_row, "illustration_fill_color")
 
-        marker_row = ttk.Frame(aux); marker_row.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(2, 0))
+        marker_row = ttk.Frame(aux); marker_row.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(2, 0))
         ttk.Checkbutton(marker_row, text="词头横线", variable=marker_var, command=self._quick_parameter_changed).pack(side="left")
         color_button(marker_row, "headword_marker_color")
         ttk.Label(marker_row, text="高度：").pack(side="left")
@@ -9850,7 +9898,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Label(marker_row, text="背景").pack(side="left")
         color_button(marker_row, "illustration_label_fill_color")
 
-        entry_row = ttk.Frame(aux); entry_row.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(2, 0))
+        entry_row = ttk.Frame(aux); entry_row.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(2, 0))
         ttk.Label(entry_row, text="词条文本框：宽度(字符)").pack(side="left")
         for name, width in (("main_entry_width_chars", 5), ("main_entry_x_ratio", 5)):
             shown = getattr(self.settings, name) * 100 if name == "main_entry_x_ratio" else getattr(self.settings, name)
@@ -9864,7 +9912,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Label(entry_row, text="默认").pack(side="left", padx=(8, 0))
         color_button(entry_row, "main_entry_default_color")
 
-        font_row = ttk.Frame(aux); font_row.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(2, 0))
+        font_row = ttk.Frame(aux); font_row.grid(row=4, column=0, columnspan=4, sticky="ew", pady=(2, 0))
         ttk.Label(font_row, text="词条字体").pack(side="left")
         family_var = tk.StringVar(value=self.settings.main_entry_font_family); self.quick_vars["main_entry_font_family"] = family_var; self.quick_field_casts["main_entry_font_family"] = str
         ttk.Combobox(font_row, textvariable=family_var, values=tuple(sorted(set(font.families()), key=str.casefold)), width=16).pack(side="left")
@@ -9877,7 +9925,7 @@ class PictureCaptureApp(tk.Tk):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
 
-        label_font_row = ttk.Frame(aux); label_font_row.grid(row=4, column=0, columnspan=4, sticky="ew", pady=(2, 0))
+        label_font_row = ttk.Frame(aux); label_font_row.grid(row=5, column=0, columnspan=4, sticky="ew", pady=(2, 0))
         ttk.Label(label_font_row, text="标签字体").pack(side="left")
         label_family_var = tk.StringVar(value=self.settings.illustration_label_font_family); self.quick_vars["illustration_label_font_family"] = label_family_var; self.quick_field_casts["illustration_label_font_family"] = str
         ttk.Combobox(label_font_row, textvariable=label_family_var, values=tuple(sorted(set(font.families()), key=str.casefold)), width=16).pack(side="left")
@@ -9890,7 +9938,7 @@ class PictureCaptureApp(tk.Tk):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(label_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
 
-        ocr_display_row = ttk.Frame(aux); ocr_display_row.grid(row=5, column=0, columnspan=4, sticky="ew")
+        ocr_display_row = ttk.Frame(aux); ocr_display_row.grid(row=6, column=0, columnspan=4, sticky="ew")
         for label, name in (("显示OCR内容选择", "review_main_show_ocr_choices"), ("显示OCR比对底色结果", "review_main_show_ocr_background")):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(
@@ -9899,13 +9947,14 @@ class PictureCaptureApp(tk.Tk):
             ).pack(side="left", padx=(0, 8))
 
         candidate_var = tk.BooleanVar(value=bool(self.settings.paddle_show_candidate_checkboxes)); self.quick_bool_vars["paddle_show_candidate_checkboxes"] = candidate_var
-        option_row = ttk.Frame(aux); option_row.grid(row=6, column=0, columnspan=4, sticky="ew")
         ttk.Checkbutton(
-            option_row, text="显示单行候选框", variable=candidate_var,
+            ocr_display_row, text="显示单行候选框", variable=candidate_var,
             command=lambda: self._apply_overlay_visibility_toggle(
                 "paddle_show_candidate_checkboxes", candidate_var,
             ),
-        ).pack(side="left")
+        ).pack(side="left", padx=(0, 8))
+
+        option_row = ttk.Frame(aux); option_row.grid(row=7, column=0, columnspan=4, sticky="ew")
         ttk.Checkbutton(
             option_row, text="显示切图预览", variable=self.crop_preview_var,
             command=self._toggle_crop_preview,
@@ -9914,7 +9963,7 @@ class PictureCaptureApp(tk.Tk):
             option_row, text="隐藏线框(插图除外)", variable=self.hide_var,
             command=self._toggle_hide_overlays,
         ).pack(side="left", padx=(8, 0))
-        save_row = ttk.Frame(aux); save_row.grid(row=7, column=0, columnspan=4, sticky="ew")
+        save_row = ttk.Frame(aux); save_row.grid(row=8, column=0, columnspan=4, sticky="ew")
         ttk.Checkbutton(save_row, text="自动保存", variable=self.autosave_var, command=self.toggle_autosave).pack(side="left")
         ttk.Label(save_row, text="间隔时间(秒)").pack(side="left", padx=(8, 2))
         interval_var = tk.StringVar(value=str(self.settings.batch_interval)); self.quick_vars["batch_interval"] = interval_var; self.quick_field_casts["batch_interval"] = float
@@ -9926,6 +9975,29 @@ class PictureCaptureApp(tk.Tk):
         ttk.Entry(
             save_row, textvariable=ratio_var, width=6, justify="left"
         ).pack(side="left")
+
+        display_row = ttk.Frame(aux); display_row.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(2, 0))
+        ttk.Label(display_row, text="显示模式：").pack(side="left")
+        display_mode_combo = ttk.Combobox(
+            display_row,
+            textvariable=self.display_mode_var,
+            values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览"),
+            state="readonly",
+            width=10,
+        )
+        display_mode_combo.pack(side="left", padx=(0, 8))
+        display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)
+        dark_toggle = ttk.Checkbutton(
+            display_row,
+            text="深色模式",
+            variable=self.dark_mode_var,
+            command=self._toggle_dark_mode,
+        )
+        dark_toggle.pack(side="left")
+        self._attach_tooltip(
+            dark_toggle,
+            "夜间显示：同步深色界面和扫描图夜间预览；不修改原图、OCR、PDIC/PPP 或导出文件。",
+        )
         aux.columnconfigure(1, weight=1); aux.columnconfigure(3, weight=1)
 
         actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
@@ -10206,8 +10278,8 @@ class PictureCaptureApp(tk.Tk):
                     if not 0 <= float(value) <= 125:
                         raise ValueError("词条文本框偏移必须在 0–125% 之间。")
                     value = float(value) / 100.0
-                if name in {"illustration_outline_width", "illustration_label_border_width"} and not 1 <= int(value) <= 20:
-                    raise ValueError("插图轮廓/标签外框粗细必须在 1–20 之间。")
+                if name in {"illustration_outline_width", "illustration_label_border_width", "page_section_width"} and not 1 <= int(value) <= 20:
+                    raise ValueError("线条/外框粗细必须在 1–20 之间。")
                 if name == "illustration_label_font_size" and not 5 <= int(value) <= 200:
                     raise ValueError("插图标签字号必须在 5–200 之间。")
                 setattr(self.settings, name, value)
@@ -13505,10 +13577,13 @@ class PictureCaptureApp(tk.Tk):
         self.canvas.delete("page-section-overlay")
         if not self.page_sections or self.image is None:
             return
+        show_sections = bool(getattr(self.settings, "show_page_sections", True))
+        if not show_sections and not self._section_editing:
+            return
         geometry = geometry or self._get_cached_display_geometry()
         canonical_width, _canonical_height = geometry.transform.canonical_size(self.image.size)
-        line_width = 3 if self._section_editing else 2
-        line_fill = "#1565c0" if self._section_editing else "#1976d2"
+        line_width = max(1, int(getattr(self.settings, "page_section_width", 2) or 2))
+        line_fill = str(getattr(self.settings, "page_section_color", "#1976d2") or "#1976d2")
         for index, section in enumerate(self.page_sections):
             for side, v in (("top", section.top_v), ("bottom", section.bottom_v)):
                 start = geometry.canonical_to_source(0, int(v))
@@ -13523,14 +13598,24 @@ class PictureCaptureApp(tk.Tk):
                 max(4, round(canonical_width * 0.01)),
                 min(section.bottom_v - 1, section.top_v + max(8, round((section.bottom_v - section.top_v) * 0.02))),
             )
-            self.canvas.create_text(
+            text_item = self.canvas.create_text(
                 label_point[0] * self.view_scale,
                 label_point[1] * self.view_scale,
                 text=f"SECTION {index + 1}",
-                fill=line_fill, anchor="nw",
+                fill="#ffffff", anchor="nw",
                 font=("Microsoft YaHei", max(8, round(10 * self.view_scale)), "bold"),
                 tags=("page-section-overlay",),
             )
+            bbox = self.canvas.bbox(text_item)
+            if bbox:
+                pad_x, pad_y = 4, 2
+                label_bg = self.canvas.create_rectangle(
+                    bbox[0] - pad_x, bbox[1] - pad_y,
+                    bbox[2] + pad_x, bbox[3] + pad_y,
+                    fill=line_fill, outline=line_fill,
+                    tags=("page-section-overlay",),
+                )
+                self.canvas.tag_lower(label_bg, text_item)
         try:
             self.canvas.tag_raise("page-section-overlay")
         except tk.TclError:
