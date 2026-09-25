@@ -12,6 +12,7 @@ from PIL import Image, ImageDraw, ImageTk
 
 from .ui_compat import screen_work_area
 from .appearance import themed_display_image
+from .coordinate_space import stored_geometry_to_canonical
 from .dictionary_profile import (
     dictionary_profile_preset,
     language_effective_settings,
@@ -208,6 +209,10 @@ class ProjectProfileWizard(tk.Toplevel):
         self._thumbnail_slot_pending: set[tuple[int, int]] = set()
         self._validation_photos: list[ImageTk.PhotoImage] = []
         self._template_photos: list[ImageTk.PhotoImage] = []
+        self._template_preview_canvas: tk.Canvas | None = None
+        self._template_line_items: list[int] = []
+        self._template_line_paths: list[list[tuple[float, float]]] = []
+        self._template_nudge_vector: tuple[float, float] = (0.0, 0.0)
         self._thumbnail_queue: queue.Queue | None = None
         self._thumbnail_load_generation = 0
         self._validation_results: list[tuple] = []
@@ -1063,33 +1068,75 @@ class ProjectProfileWizard(tk.Toplevel):
             f"当前：第 {index + 1} 栏｜人工偏移 {offsets[index]:+d} px"
         )
 
+    def _update_template_column_highlight(self) -> None:
+        canvas = getattr(self, "_template_preview_canvas", None)
+        if canvas is None:
+            return
+        selected = self._selected_column_index()
+        for index, item in enumerate(getattr(self, "_template_line_items", [])):
+            if item < 0:
+                continue
+            try:
+                canvas.itemconfigure(
+                    item,
+                    fill="#ee7c00" if index == selected else "#1e78d2",
+                    width=4 if index == selected else 2,
+                )
+            except tk.TclError:
+                return
+
+    def _nudge_template_column_preview(self, index: int, delta: int) -> None:
+        """Move only the cached overlay line; do not reload/re-render the page image."""
+        if not delta:
+            return
+        canvas = getattr(self, "_template_preview_canvas", None)
+        items = getattr(self, "_template_line_items", [])
+        paths = getattr(self, "_template_line_paths", [])
+        if canvas is None or index >= len(items) or index >= len(paths) or items[index] < 0:
+            return
+        dx = float(self._template_nudge_vector[0]) * int(delta)
+        dy = float(self._template_nudge_vector[1]) * int(delta)
+        try:
+            canvas.move(items[index], dx, dy)
+        except tk.TclError:
+            return
+        paths[index] = [(x + dx, y + dy) for x, y in paths[index]]
+
     def _shift_selected_column(self, delta: int) -> None:
         index = self._selected_column_index()
         offsets = self._column_offsets_for_count()
-        # Keep the UI nudge a precision correction rather than a second layout
-        # editor. Runtime geometry also guards against crossed columns.
-        offsets[index] = max(-250, min(250, offsets[index] + int(delta)))
+        old_value = offsets[index]
+        offsets[index] = max(-250, min(250, old_value + int(delta)))
+        actual_delta = offsets[index] - old_value
+        if not actual_delta:
+            return
         self.working.column_start_offsets = offsets
         self._refresh_column_adjust_status()
-        self._profile_input_changed()
+        self._nudge_template_column_preview(index, actual_delta)
+        self._profile_input_changed(refresh_preview=False)
 
     def _reset_selected_column(self) -> None:
         index = self._selected_column_index()
         offsets = self._column_offsets_for_count()
-        if offsets[index] == 0:
+        old_value = offsets[index]
+        if old_value == 0:
             return
         offsets[index] = 0
         self.working.column_start_offsets = offsets
         self._refresh_column_adjust_status()
-        self._profile_input_changed()
+        self._nudge_template_column_preview(index, -old_value)
+        self._profile_input_changed(refresh_preview=False)
 
     def _reset_all_column_offsets(self) -> None:
         offsets = self._column_offsets_for_count()
         if not any(offsets):
             return
+        for index, value in enumerate(offsets):
+            if value:
+                self._nudge_template_column_preview(index, -value)
         self.working.column_start_offsets = [0] * len(offsets)
         self._refresh_column_adjust_status()
-        self._profile_input_changed()
+        self._profile_input_changed(refresh_preview=False)
 
     @staticmethod
     def _preview_path_distance_sq(
@@ -1127,7 +1174,7 @@ class ProjectProfileWizard(tk.Toplevel):
             return
         self.selected_column_index = index
         self._refresh_column_adjust_status()
-        self.after_idle(self._refresh_template_preview)
+        self._update_template_column_highlight()
 
 
     def _refresh_template_controls(self) -> None:
@@ -1266,21 +1313,30 @@ class ProjectProfileWizard(tk.Toplevel):
                     fill=(255, 215, 0, 105),
                 )
             line_paths: list[list[tuple[float, float]]] = []
-            for column_index, path_points in enumerate(geometry.column_paths):
+            for path_points in geometry.column_paths:
                 points = [
                     geometry.canonical_to_source(x, y)
                     for y, x in path_points.points
                 ]
-                preview_points = [(px * sx, py * sy) for px, py in points]
-                line_paths.append(preview_points)
-                coords = [coordinate for point in preview_points for coordinate in point]
-                if len(coords) >= 4:
-                    selected = column_index == selected_column
-                    draw.line(
-                        coords,
-                        fill=(238, 124, 0, 235) if selected else (30, 120, 210, 210),
-                        width=4 if selected else 2,
-                    )
+                line_paths.append([(px * sx, py * sy) for px, py in points])
+
+            # One saved reference-page pixel can correspond to a different
+            # number/direction of source pixels on scaled, mirrored or rotated
+            # pages. Cache that vector so button nudges move only the line
+            # overlay without reloading the image or re-running layout analysis.
+            canonical_step = (
+                stored_geometry_to_canonical(100, canonical_w, effective) / 100.0
+            )
+            if abs(canonical_step) < 0.001:
+                canonical_step = 1.0
+            anchor_u = canonical_w / 2.0
+            anchor_v = canonical_h / 2.0
+            p0 = geometry.canonical_to_source(anchor_u, anchor_v)
+            p1 = geometry.canonical_to_source(anchor_u + canonical_step, anchor_v)
+            nudge_vector = (
+                (p1[0] - p0[0]) * sx,
+                (p1[1] - p0[1]) * sy,
+            )
 
             variant = page_variant(settings, index)
             side_text = side or "无页边排除"
@@ -1289,7 +1345,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 f"{region} · {slot + 1}/{sample_count} · "
                 f"{variant} 页 · {path.name} · 页边：{side_text}"
             )
-            return preview, caption, index, slot, line_paths
+            return preview, caption, index, slot, line_paths, nudge_vector
 
         def done(payload) -> None:
             try:
@@ -1297,7 +1353,7 @@ class ProjectProfileWizard(tk.Toplevel):
                     return
             except tk.TclError:
                 return
-            preview, caption, result_index, result_slot, line_paths = payload
+            preview, caption, result_index, result_slot, line_paths, nudge_vector = payload
             if (
                 result_slot != self.template_preview_slot
                 or result_slot >= sample_count
@@ -1312,11 +1368,37 @@ class ProjectProfileWizard(tk.Toplevel):
                 )
             )
             self._template_photos[:] = [photo]
-            preview_label = ttk.Label(self.template_preview_frame, image=photo)
-            preview_label.grid(row=0, column=0, sticky="n")
-            preview_label.bind(
+            canvas = tk.Canvas(
+                self.template_preview_frame,
+                width=preview.width, height=preview.height,
+                highlightthickness=0, borderwidth=0,
+            )
+            canvas.grid(row=0, column=0, sticky="n")
+            canvas.create_image(0, 0, image=photo, anchor="nw")
+            self._template_preview_canvas = canvas
+            self._template_line_paths = [
+                [(float(x), float(y)) for x, y in points] for points in line_paths
+            ]
+            self._template_nudge_vector = (
+                float(nudge_vector[0]), float(nudge_vector[1])
+            )
+            self._template_line_items = []
+            for column_index, points in enumerate(self._template_line_paths):
+                coords = [coordinate for point in points for coordinate in point]
+                if len(coords) < 4:
+                    self._template_line_items.append(-1)
+                    continue
+                item = canvas.create_line(
+                    *coords,
+                    fill="#ee7c00" if column_index == selected_column else "#1e78d2",
+                    width=4 if column_index == selected_column else 2,
+                )
+                self._template_line_items.append(item)
+            canvas.bind(
                 "<Button-1>",
-                lambda event, paths=line_paths: self._select_template_column(event, paths),
+                lambda event: self._select_template_column(
+                    event, self._template_line_paths
+                ),
             )
             self.template_preview_caption_var.set(caption)
 
@@ -1583,12 +1665,12 @@ class ProjectProfileWizard(tk.Toplevel):
             ):
                 button.configure(state="disabled")
 
-    def _profile_input_changed(self) -> None:
+    def _profile_input_changed(self, *, refresh_preview: bool = True) -> None:
         self._profile_revision += 1
         self._mark_validation_stale()
         self._refresh_summary()
         self._refresh_column_adjust_status()
-        if hasattr(self, "template_preview_frame"):
+        if refresh_preview and hasattr(self, "template_preview_frame"):
             self.after_idle(self._refresh_template_preview)
 
     def _reading_changed(self) -> None:
@@ -2688,9 +2770,12 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         thumb = source.resize(
             (target_width, target_height), Image.Resampling.LANCZOS,
-        ).convert("RGBA")
+        ).convert("RGB")
         sx = thumb.width / max(1, source.width)
         sy = thumb.height / max(1, source.height)
+        # Drawing an RGBA fill onto an RGB image alpha-composites the mask.
+        # Drawing onto an RGBA image and then converting to RGB would instead
+        # discard alpha and make the validation masks look fully opaque.
         draw = ImageDraw.Draw(thumb, "RGBA")
 
         def shade_source_box(box: tuple[int, int, int, int]) -> None:
