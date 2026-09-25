@@ -150,7 +150,7 @@ Profile 是一组“版面 + 语言语法 + OCR 判定 + 横线定位”的预�
 
 ### OCR 基础
 
-- **Tesseract 路径**：`tesseract` 或完整 `tesseract.exe` 路径。
+- **Tesseract 路径**：`tesseract` 或完整可执行程序路径；更推荐从【环境中心】自动检测/选择。
 - **PaddleOCR 设备**：通常 `cpu`；具备兼容环境时可按 Paddle 支持方式调整。
 - **PaddleOCR 模型版本**：当前默认 PP-OCRv6。
 - **自动保存间隔（秒）**：自动保存相关间隔；过短会增加频繁磁盘写入。
