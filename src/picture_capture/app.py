@@ -11481,7 +11481,9 @@ class PictureCaptureApp(tk.Tk):
 
         self._recent_projects_rebuild = rebuild
 
-        def clear_recent_refs(_event=None) -> None:
+        def clear_recent_refs(event=None) -> None:
+            if event is not None and getattr(event, "widget", None) is not dialog:
+                return
             if self.__dict__.get("_recent_projects_dialog") is dialog:
                 self.__dict__.pop("_recent_projects_dialog", None)
                 self.__dict__.pop("_recent_projects_rebuild", None)
