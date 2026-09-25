@@ -3032,7 +3032,9 @@ def filter_headword_records(
             getattr(settings, "profile_parser_controls_version", 0) or 0
         ) >= 1
         cjk_profile_active = bool(
-            getattr(active_profile, "key", "") == "cjk_visual" or parser_controls
+            getattr(active_profile, "family", "") == "cjk_visual"
+            or getattr(active_profile, "key", "") == "cjk_visual"
+            or parser_controls
         )
         cjk_bracketed = bool(
             cjk_profile_active
