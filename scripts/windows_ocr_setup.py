@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import csv
+import io
 import re
 import shutil
 import subprocess
@@ -9,6 +11,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = ROOT / ".picture_capture_ocr_extra"
+PADDLE_MIN_COMPUTE_CAPABILITY = (7, 5)
 
 CPU_PROFILE = {"label": "CPU - PaddleOCR + Google Lens", "extra": "ocr-cpu", "expect": "cpu"}
 LENS_PROFILE = {"label": "Google Lens only", "extra": "lens", "expect": "lens"}
@@ -75,27 +78,81 @@ def parse_cuda_version(text: str) -> tuple[int, int] | None:
     return int(match.group(1)), int(match.group(2))
 
 
+def parse_compute_capability(text: str) -> tuple[int, int] | None:
+    match = re.fullmatch(r"\s*(\d+)\.(\d+)\s*", text)
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def parse_gpu_query_rows(text: str, *, with_compute_cap: bool) -> list[dict[str, object]]:
+    gpus: list[dict[str, object]] = []
+    for row in csv.reader(io.StringIO(text)):
+        if not row or not any(part.strip() for part in row):
+            continue
+        parts = [part.strip() for part in row]
+        expected = 4 if with_compute_cap else 3
+        if len(parts) < expected:
+            continue
+        index, name, driver = parts[:3]
+        compute_cap = parse_compute_capability(parts[3]) if with_compute_cap else None
+        gpus.append({
+            "index": index,
+            "name": name,
+            "driver": driver,
+            "compute_cap": compute_cap,
+        })
+    return gpus
+
+
+def primary_gpu(gpu_info: dict[str, object] | None) -> dict[str, object] | None:
+    if not gpu_info:
+        return None
+    gpus = gpu_info.get("gpus")
+    if not isinstance(gpus, list):
+        return None
+    for item in gpus:
+        if isinstance(item, dict) and str(item.get("index", "")).strip() == "0":
+            return item
+    for item in gpus:
+        if isinstance(item, dict):
+            return item
+    return None
+
+
 def detect_nvidia_gpu() -> dict[str, object] | None:
     nvidia_smi = shutil.which("nvidia-smi")
     if not nvidia_smi:
         return None
 
     query = subprocess.run(
-        [nvidia_smi, "--query-gpu=name,driver_version", "--format=csv,noheader"],
+        [
+            nvidia_smi,
+            "--query-gpu=index,name,driver_version,compute_cap",
+            "--format=csv,noheader,nounits",
+        ],
         cwd=ROOT,
         check=False,
         capture_output=True,
         text=True,
         errors="replace",
     )
-    rows = [line.strip() for line in query.stdout.splitlines() if line.strip()]
-    gpus: list[dict[str, str]] = []
-    for row in rows:
-        name, separator, driver = row.rpartition(",")
-        if separator:
-            gpus.append({"name": name.strip(), "driver": driver.strip()})
-        else:
-            gpus.append({"name": row, "driver": ""})
+    gpus = parse_gpu_query_rows(query.stdout, with_compute_cap=True) if query.returncode == 0 else []
+
+    capability_query_ok = query.returncode == 0 and bool(gpus)
+    if not capability_query_ok:
+        basic_query = subprocess.run(
+            [nvidia_smi, "--query-gpu=index,name,driver_version", "--format=csv,noheader,nounits"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            errors="replace",
+        )
+        gpus = parse_gpu_query_rows(basic_query.stdout, with_compute_cap=False)
+        query_ok = basic_query.returncode == 0 and bool(gpus)
+    else:
+        query_ok = True
 
     details = subprocess.run(
         [nvidia_smi],
@@ -110,16 +167,24 @@ def detect_nvidia_gpu() -> dict[str, object] | None:
     return {
         "gpus": gpus,
         "cuda": cuda,
-        "query_ok": query.returncode == 0,
+        "query_ok": query_ok,
+        "capability_query_ok": capability_query_ok,
         "details_ok": details.returncode == 0,
     }
 
 
 def recommended_profile(gpu_info: dict[str, object] | None) -> dict[str, object]:
-    if not gpu_info:
+    gpu = primary_gpu(gpu_info)
+    if gpu is None:
         return CPU_PROFILE
 
-    cuda = gpu_info.get("cuda")
+    compute_cap = gpu.get("compute_cap")
+    if not isinstance(compute_cap, tuple) or len(compute_cap) != 2:
+        return CPU_PROFILE
+    if compute_cap <= PADDLE_MIN_COMPUTE_CAPABILITY:
+        return CPU_PROFILE
+
+    cuda = gpu_info.get("cuda") if gpu_info else None
     if not isinstance(cuda, tuple) or len(cuda) != 2:
         return CPU_PROFILE
 
@@ -142,10 +207,16 @@ def show_hardware_recommendation(gpu_info: dict[str, object] | None, profile: di
     if isinstance(gpus, list) and gpus:
         for item in gpus:
             if isinstance(item, dict):
+                index = item.get("index") or "?"
                 name = item.get("name") or "NVIDIA GPU"
                 driver = item.get("driver") or "unknown"
-                print(f"  NVIDIA GPU: {name}")
+                compute_cap = item.get("compute_cap")
+                print(f"  NVIDIA GPU {index}: {name}")
                 print(f"  Driver: {driver}")
+                if isinstance(compute_cap, tuple) and len(compute_cap) == 2:
+                    print(f"  Compute Capability: {compute_cap[0]}.{compute_cap[1]}")
+                else:
+                    print("  Compute Capability: could not determine")
     else:
         print("  NVIDIA GPU: nvidia-smi detected, GPU details unavailable")
 
@@ -160,7 +231,20 @@ def show_hardware_recommendation(gpu_info: dict[str, object] | None, profile: di
         print("  PaddleOCR will use the supported NVIDIA GPU path; installation is verified by a real GPU test.")
     else:
         print("  Recommended: CPU OCR")
-        print("  A usable NVIDIA CUDA profile could not be selected automatically.")
+        gpu = primary_gpu(gpu_info)
+        compute_cap = gpu.get("compute_cap") if gpu else None
+        if not isinstance(compute_cap, tuple):
+            print(
+                "  GPU Compute Capability could not be verified. "
+                "Automatic GPU recommendation requires PaddlePaddle's documented capability > 7.5."
+            )
+        elif compute_cap <= PADDLE_MIN_COMPUTE_CAPABILITY:
+            print(
+                f"  GPU Compute Capability {compute_cap[0]}.{compute_cap[1]} does not satisfy "
+                "PaddlePaddle's documented requirement > 7.5."
+            )
+        else:
+            print("  A compatible CUDA profile could not be selected automatically from the current driver.")
 
 
 def choose_advanced_gpu_profile() -> dict[str, object] | None:
