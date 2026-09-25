@@ -1665,3 +1665,178 @@ def test_round3_wordslist_reader_does_not_materialize_full_text_source():
     assert "iter_text_lines_detected" in block
     assert "read_text_detected" not in block
     assert ".splitlines()" not in block
+
+
+
+def test_concurrency_atomic_text_replace_failure_preserves_previous_file(tmp_path, monkeypatch):
+    import pytest
+    import picture_capture.formats as formats
+
+    target = tmp_path / "page.pdic"
+    target.write_text("old-complete\n", encoding="utf-8")
+    original_replace = formats.os.replace
+
+    def fail_publish(src, dst):
+        if Path(dst) == target:
+            raise OSError("injected replace failure")
+        return original_replace(src, dst)
+
+    monkeypatch.setattr(formats.os, "replace", fail_publish)
+    with pytest.raises(OSError, match="injected replace failure"):
+        formats.write_text_atomic(target, "new-complete\n")
+
+    assert target.read_text(encoding="utf-8") == "old-complete\n"
+    assert not list(tmp_path.glob(".page.pdic.*.tmp"))
+
+
+def test_concurrency_picdic_pair_rolls_back_when_second_publish_fails(tmp_path, monkeypatch):
+    import pytest
+    import picture_capture.picdic as picdic
+
+    root = tmp_path / "dictionary"
+    pww = qt_root(root) / "PWW"
+    pww.mkdir(parents=True)
+    Image.new("RGB", (8, 8), "white").save(pww / "0001_0001.png")
+    (pww / "0001.PWWords").write_text(
+        "0001|1|alpha|0001_0001.png\n", encoding="utf-8"
+    )
+
+    out = qt_root(root) / "PicDic"
+    out.mkdir(parents=True)
+    dsl = out / "PicDic_dictionary.dsl"
+    archive = out / "PicDic_dictionary.dsl.files.zip"
+    dsl.write_text("old-dsl", encoding="utf-8")
+    archive.write_bytes(b"old-zip")
+
+    original_replace = picdic.os.replace
+
+    def fail_second_publish(src, dst):
+        src_path = Path(src)
+        dst_path = Path(dst)
+        if dst_path == archive and src_path.suffix == ".tmp":
+            raise OSError("injected zip publish failure")
+        return original_replace(src, dst)
+
+    monkeypatch.setattr(picdic.os, "replace", fail_second_publish)
+    with pytest.raises(OSError, match="injected zip publish failure"):
+        picdic.build_picdic_package(root)
+
+    assert dsl.read_text(encoding="utf-8") == "old-dsl"
+    assert archive.read_bytes() == b"old-zip"
+    assert not list(out.glob("*.tmp"))
+    assert not list(out.glob("*.bak"))
+
+
+def test_concurrency_review_tracks_critical_workers_and_stale_results():
+    root = Path(__file__).resolve().parents[1]
+    app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    profile = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+
+    worker_start = app.index("    def _ui_worker_key_active(")
+    worker_end = app.index("\n    def _configure_main_workspace_styles", worker_start)
+    workers = app[worker_start:worker_end]
+    assert "_ui_worker_active" in workers
+    assert "_ui_worker_close_wait" in workers
+    assert "generation == self._ui_worker_generations.get(key)" in workers
+    assert "not self._ui_close_requested" in workers
+    assert "self._ui_worker_active.discard(token)" in workers
+    assert "self._ui_worker_close_wait.discard(token)" in workers
+    assert "if self._ui_close_requested and not self._ui_worker_close_wait:" in workers
+
+    close_start = app.index("    def on_close(")
+    close_end = app.index("\n    def _build_ui", close_start)
+    close = app[close_start:close_end]
+    assert "if self._ui_worker_close_wait:" in close
+    assert "self.withdraw()" in close
+    assert "正在完成后台文件操作" in close
+
+    project_start = app.index("    def _load_project(")
+    project_end = app.index("\n    def on_page_select", project_start)
+    project = app[project_start:project_end]
+    assert 'self._ui_worker_key_active("project-load")' in project
+    assert 'self._ui_worker_key_active("profile-validation")' in project
+    assert 'wait_on_close=True' in project
+
+    sequential = app[app.index("    def _start_batch_task("):app.index("    def _start_parallel_batch_task(")]
+    parallel = app[app.index("    def _start_parallel_batch_task("):app.index("    def _poll_batch_queue(")]
+    for block in (sequential, parallel):
+        assert 'self._ui_worker_key_active("project-load")' in block
+        assert 'self._ui_worker_key_active("profile-validation")' in block
+        assert "self._ui_close_requested" in block
+
+    validate_start = profile.index("    def validate_profile(")
+    validate_end = profile.index("\n    def _poll_validation_queue", validate_start)
+    validate = profile[validate_start:validate_end]
+    assert 'self.parent._start_ui_worker(' in validate
+    assert '"profile-validation"' in validate
+    assert "wait_on_close=True" in validate
+    assert "stop_event.is_set()" in validate
+    assert "self.project.images[index]" not in validate[validate.index("        def worker():"):]
+
+    close_profile = profile[profile.index("    def _close_without_save("):]
+    assert "self._validation_close_requested = True" in close_profile
+    assert "self._validation_stop_event.set()" in close_profile
+    assert "正在安全结束当前测试页" in close_profile
+
+
+def test_concurrency_review_atomic_ocr_cache_and_timeouts_are_enforced():
+    root = Path(__file__).resolve().parents[1]
+    paddle = (root / "src" / "picture_capture" / "paddle_headwords.py").read_text(encoding="utf-8")
+    processing = (root / "src" / "picture_capture" / "processing.py").read_text(encoding="utf-8")
+
+    assert "_QUALITY_SUMMARY_LOCK = threading.Lock()" in paddle
+    assert "with _QUALITY_SUMMARY_LOCK:" in paddle
+    assert "_atomic_write_json(cache_path, payload)" in paddle
+    for suffix in (
+        "_ocr_diagnostics.txt", "_ocr_comparison.txt", "_issues.tsv",
+        "_ocr_engines.tsv", "_fusion.tsv",
+    ):
+        assert suffix in paddle
+    assert "timeout=120" in paddle
+    assert "except subprocess.TimeoutExpired" in paddle
+    assert "timeout=120" in processing
+    assert "except subprocess.TimeoutExpired" in processing
+
+
+def test_concurrency_review_workers_use_snapshots_not_live_app_state():
+    root = Path(__file__).resolve().parents[1]
+    app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    profile = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+
+    check_start = app.index("    def check_ocr_engines(self) -> None:", app.index("class PictureCaptureApp"))
+    check_end = app.index("\n    def detect_layout_current", check_start)
+    check = app[check_start:check_end]
+    assert "settings_snapshot = replace(self.settings)" in check
+    worker = check[check.index("        def worker():"):check.index("        def done(", check.index("        def worker():"))]
+    assert "self.settings" not in worker
+    assert "tesseract_status(executable, language)" in worker
+
+    split_start = app.index("    def batch_split_whole(")
+    split_end = app.index("\n    def repair_pdic_order_selected_scope", split_start)
+    split = app[split_start:split_end]
+    worker = split[split.index("        def worker("):split.index("        def done(", split.index("        def worker("))]
+    assert "self._ppp_read_path" not in worker
+    assert "ppp_read_path_for_image(page)" in worker
+
+    restore_start = app.index("    def restore_from_pdic_backup(")
+    restore_end = app.index("\n    def restore_from_merged_pdic", restore_start)
+    restore = app[restore_start:restore_end]
+    assert "settings_snapshot = replace(self.settings)" in restore
+    worker = restore[restore.index("        def worker("):restore.index("        def done(", restore.index("        def worker("))]
+    assert "self.settings" not in worker
+    assert "derive_nominal_geometry(width, height, settings_snapshot)" in worker
+
+    preview_start = profile.index("    def _refresh_template_preview(")
+    preview_end = profile.index("\n    @staticmethod\n    def _mode_row", preview_start)
+    preview = profile[preview_start:preview_end]
+    worker = preview[preview.index("        def worker():"):preview.index("        def done(", preview.index("        def worker():"))]
+    assert "len(self.sample_indices)" not in worker
+    assert "sample_count" in worker
+
+    analysis_start = profile.index("    def analyze_representative_pages(")
+    analysis_end = profile.index("\n    def _poll_analysis_queue", analysis_start)
+    analysis = profile[analysis_start:analysis_end]
+    worker = analysis[analysis.index("        def worker()"):analysis.index("        threading.Thread", analysis.index("        def worker()"))]
+    assert "self.project" not in worker
+    assert "self._analysis_queue" not in worker
+    assert "result_queue.put" in worker
