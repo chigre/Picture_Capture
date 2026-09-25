@@ -75,6 +75,7 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'normalize_appearance_mode(preloaded.get("appearance_mode")) == self.appearance_mode' in app_source
     assert 'appearance_mode = self.appearance_mode' in app_source
     assert 'self._recent_projects_rebuild = rebuild' in app_source
+    assert 'getattr(event, "widget", None) is not dialog' in app_source
     assert 'self._apply_current_appearance(dialog)' in app_source
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in app_source
     assert 'themed_display_image(rendered, self.parent.appearance_mode)' in app_source
