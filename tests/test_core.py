@@ -4890,7 +4890,8 @@ def test_review_toolbar_controls_are_grouped_by_function():
     assert 'text="文本左边距："' not in row1
     assert 'text="上下边距："' not in row1
     assert 'text="与OCR比较："' not in row1
-    assert 'text="简化"' not in row1
+    assert 'text="简体化词条"' not in row1
+    assert 'text="重新简体化"' not in row1
 
     display_start = build.index('right, "display", "显示设置"')
     display_end = build.index('right, "ocr", "OCR结果"', display_start)
@@ -4902,11 +4903,13 @@ def test_review_toolbar_controls_are_grouped_by_function():
     assert 'foreground="#000000" if self.parent.appearance_mode != "dark" else colors["text"]' in review
 
     ocr_start = build.index('right, "ocr", "OCR结果"')
-    ocr_end = build.index('right, "network", "网络词汇核验（免费，无需 Token）"', ocr_start)
+    ocr_end = build.index('right, "network", "词条联网核验结果"', ocr_start)
     ocr = build[ocr_start:ocr_end]
     assert ocr.index("ocr_compare_row = ttk.Frame(") < ocr.index("ocr_row = ttk.Frame(")
     assert 'text="与OCR比较：", style="PCR.Body.TLabel"' in ocr
-    assert 'text="简化"' in ocr
+    assert 'text="简体化词条"' in ocr
+    assert 'text="重新简体化"' in ocr
+    assert ocr.index('text="简体化词条"') < ocr.index('text="重新简体化"')
     assert 'style="PCR.Body.TCheckbutton"' in ocr
 
 
@@ -4924,7 +4927,7 @@ def test_review_right_sections_are_collapsible_and_default_expanded():
     for key, title in (
         ("display", "显示设置"),
         ("ocr", "OCR结果"),
-        ("network", "网络词汇核验（免费，无需 Token）"),
+        ("network", "词条联网核验结果"),
         ("reference", "参考词表"),
     ):
         assert f'right, "{key}", "{title}"' in review
@@ -5719,7 +5722,8 @@ def test_v2122_review_ui_has_free_network_check_and_locator_mode():
     start = text.index("class ReviewWindow")
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
-    assert "网络词汇核验（免费，无需 Token）" in review
+    assert "词条联网核验结果" in review
+    assert 'right, "network", "网络词汇核验（免费，无需 Token）"' not in review
     assert "外部索引（拼音/字母）" in review
     assert "同源连续词表" in review
     assert "def _schedule_network_lookup" in review
@@ -5736,7 +5740,7 @@ def test_v2123_review_simplified_setting_persists(tmp_path):
     assert AppSettings.from_json(path).review_show_simplified is True
 
 
-def test_v2123_review_ui_renames_sort_controls_and_adds_simplify_after_ocr_compare():
+def test_v2123_review_ui_renames_sort_controls_and_adds_simplified_controls_after_ocr_compare():
     from pathlib import Path
     import inspect
     import picture_capture.app as app_module
@@ -5750,10 +5754,12 @@ def test_v2123_review_ui_renames_sort_controls_and_adds_simplify_after_ocr_compa
     assert 'text="词条排序检查："' not in review
     assert 'text="排序检查"' in review
     compare_pos = review.index('text="与OCR比较："')
-    simplify_pos = review.index('text="简化"')
-    assert compare_pos < simplify_pos
+    simplify_pos = review.index('text="简体化词条"')
+    regenerate_pos = review.index('text="重新简体化"')
+    assert compare_pos < simplify_pos < regenerate_pos
     assert 'variable=self.review_show_simplified_var' in review
     assert 'command=self._toggle_review_simplified' in review
+    assert 'command=self.regenerate_simplified_current_page' in review
 
 
 def test_v2123_review_simplified_rows_use_equal_columns_and_expand_original_when_hidden():
@@ -6315,11 +6321,84 @@ def test_v21211_new_unsaved_simplified_can_still_follow_original_during_session(
     assert "0001" in review._simplified_dirty_pages
 
 
-def test_v21212_review_window_defaults_to_seventy_percent_of_screen():
+def test_v2140_regenerate_simplified_current_page_overwrites_saved_and_manual_results(monkeypatch):
+    from types import SimpleNamespace
+    import picture_capture.app as app_module
+
+    class Var:
+        def __init__(self, value): self.value = value
+        def get(self): return self.value
+        def set(self, value): self.value = value
+
+    entries = [SimpleNamespace(x=10, y=20), SimpleNamespace(x=30, y=40)]
+    records = {
+        "10,20": {"x": 10, "y": 20, "source_word": "舊詞", "text": "人工旧值", "manual": True},
+        "30,40": {"x": 30, "y": 40, "source_word": "測試", "text": "旧测试", "manual": False},
+    }
+    persisted = []
+    statuses = []
+    review = object.__new__(app_module.ReviewWindow)
+    review.vars = [Var("舊詞"), Var("測試")]
+    review.simplified_vars = [Var("人工旧值"), Var("旧测试")]
+    review.simplified_actual_values = ["人工旧值", "旧测试"]
+    review.simplified_manual_flags = [True, False]
+    review.simplified_auto_refresh_flags = [False, False]
+    review._simplified_dirty_pages = set()
+    review._rendered_page_stem = "0001"
+    review.active_index = 0
+    review._bound_row_entries = lambda: entries
+    review._simplified_page_records = lambda stem: records
+    review._persist_simplified_page = lambda stem: persisted.append(stem)
+    review._refresh_cc_simplified_comparison = lambda index: None
+    review.parent = SimpleNamespace(
+        current_page=SimpleNamespace(stem="0001", name="0001.png"),
+        _claim_page_for_manual_edit=lambda: True,
+        status_var=SimpleNamespace(set=lambda value: statuses.append(value)),
+    )
+    monkeypatch.setattr(
+        app_module, "simplify_text",
+        lambda text: {"舊詞": "旧词", "測試": "测试"}[text],
+    )
+
+    app_module.ReviewWindow.regenerate_simplified_current_page(review)
+
+    assert [var.get() for var in review.simplified_vars] == ["旧词", "测试"]
+    assert review.simplified_actual_values == ["旧词", "测试"]
+    assert review.simplified_manual_flags == [False, False]
+    assert review.simplified_auto_refresh_flags == [False, False]
+    assert records["10,20"]["text"] == "旧词"
+    assert records["10,20"]["manual"] is False
+    assert records["30,40"]["text"] == "测试"
+    assert persisted == ["0001"]
+    assert statuses and "覆盖 2 条简体结果" in statuses[-1]
+
+
+def test_v2140_review_window_defaults_to_sixty_percent_width_and_seventy_percent_height():
     from picture_capture.app import _review_window_dimensions
 
-    assert _review_window_dimensions(1920, 1080) == (1344, 756)
-    assert _review_window_dimensions(1366, 768) == (956, 538)
+    assert _review_window_dimensions(1920, 1080) == (1152, 756)
+    assert _review_window_dimensions(1366, 768) == (820, 538)
+
+
+def test_v2140_review_left_pane_fits_complete_toolbar_and_right_gets_remaining_width():
+    from pathlib import Path
+    import inspect
+    import picture_capture.app as app_module
+
+    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    start = text.index("class ReviewWindow")
+    end = text.index("class OCRConflictReviewDialog", start)
+    review = text[start:end]
+    assert "self.review_panes = panes" in review
+    assert "self.review_control_row = row1" in review
+    assert "self.after_idle(self._fit_review_left_pane_to_toolbar)" in review
+    fit_start = review.index("    def _fit_review_left_pane_to_toolbar")
+    fit_end = review.index("    def _build(self) -> None:", fit_start)
+    fit = review[fit_start:fit_end]
+    assert "row.winfo_reqwidth()" in fit
+    assert "panes.sashpos(0, min(required, available))" in fit
+    assert "panes.add(left, weight=0)" in review
+    assert "panes.add(right, weight=1)" in review
 
 
 def test_v21212_layout_behavior_fresh_defaults_are_both_off():
