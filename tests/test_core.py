@@ -2017,12 +2017,14 @@ def test_v214_visual_single_cjk_rescue_uses_profile_for_clipped_pinyin_head():
     assert confidence == 0.99
     assert record is clipped_head[0]
 
-    # Without the active profile the same clipped box remains below the strict
-    # fallback threshold; this keeps the recall relaxation profile-specific.
+    # Turning off the user-facing "大字单字" control disables the
+    # relaxed structural rescue even though the same OCR text is present.
+    settings.profile_cjk_allow_single_headword = False
     word, _confidence, record = _cjk_word_for_visual_run(
-        clipped_head, run, 100, settings, None,
+        clipped_head, run, 100, settings, profile,
     )
     assert word == "" and record is None
+    settings.profile_cjk_allow_single_headword = True
 
     # Even a profile-parsed candidate is rejected if it is a wide definition
     # line rather than the compact headword + pinyin record.
