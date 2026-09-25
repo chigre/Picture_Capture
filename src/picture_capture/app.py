@@ -14811,6 +14811,7 @@ class PictureCaptureApp(tk.Tk):
                 force_paddle_refresh=force_refresh,
                 paddle_filter_rules_path=filter_path,
                 profile_page_index=index,
+                page_sections=read_page_sections(page),
             )
             write_pdic(pdic_path(page), entries, image.width, pages_info[index])
             return {"index": int(index), "count": len(entries)}
