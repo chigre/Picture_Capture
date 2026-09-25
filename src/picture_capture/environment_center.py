@@ -10,6 +10,7 @@ import webbrowser
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from .appearance import appearance_palette, apply_classic_widget_appearance, apply_native_titlebar_appearance
 from .cc_cedict import (
     DOWNLOAD_PAGE_URL as CC_CEDICT_DOWNLOAD_PAGE_URL,
     install_from_file as install_cc_cedict_from_file,
@@ -174,7 +175,9 @@ class EnvironmentCenterWindow(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self._status_labels: dict[str, ttk.Label] = {}
         self._diagnostic_text = ""
+        self._canvas: tk.Canvas | None = None
         self._build()
+        self._apply_appearance()
         self.after(10, self.refresh)
 
     def _build(self) -> None:
@@ -199,6 +202,7 @@ class EnvironmentCenterWindow(tk.Toplevel):
         ttk.Label(outer, textvariable=self.status_var).pack(anchor="w", pady=(0, 6))
 
         canvas = tk.Canvas(outer, highlightthickness=0)
+        self._canvas = canvas
         scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
         body = ttk.Frame(canvas)
         body.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
@@ -227,6 +231,14 @@ class EnvironmentCenterWindow(tk.Toplevel):
         self._add_card(body, "opencc", "OpenCC", [("修复核心环境", self._show_opencc_help)])
         self._add_card(body, "cedict", "CC-CEDICT", [("安装 / 更新", self._install_cedict)])
         self._add_card(body, "network", "网络词典", [("说明", self._show_network_help)])
+
+    def _apply_appearance(self) -> None:
+        mode = getattr(self.app, "appearance_mode", "light")
+        palette = appearance_palette(mode)
+        if self._canvas is not None:
+            self._canvas.configure(background=palette["surface"])
+        apply_classic_widget_appearance(self, mode)
+        self.after_idle(lambda: apply_native_titlebar_appearance(self, mode))
 
     def _add_card(self, parent: ttk.Frame, key: str, title: str, actions) -> None:
         card = ttk.LabelFrame(parent, text=title, padding=10)
