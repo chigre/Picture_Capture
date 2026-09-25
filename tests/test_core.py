@@ -4309,7 +4309,8 @@ def test_v2114_repair_pdic_button_calls_column_y_sort_only():
     start = app_text.index("def repair_pdic_order_selected_scope")
     end = app_text.index("def backup_pdic", start)
     body = app_text[start:end]
-    assert "sort_entries_column_y(entries" in body
+    assert "sort_entries_column_y(" in body
+    assert "read_page_sections(page)" in body
     assert "栏号 → Y" in body
     assert "Y → X" not in body
 
@@ -4972,8 +4973,10 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
     build_start = review.index("    def _build(self) -> None:")
     build_end = review.index("    def _toggle_review_panel(", build_start)
     build = review[build_start:build_end]
-    assert 'panes.add(left, weight=3)' in build
-    assert 'panes.add(right, weight=2)' in build
+    assert 'panes.add(left, weight=0)' in build
+    assert 'panes.add(right, weight=1)' in build
+    assert 'self.review_panes = panes' in build
+    assert 'self._fit_review_left_pane_to_toolbar' in review
     assert 'text="上\\n一\\n页"' in build and 'text="下\\n一\\n页"' in build
     assert 'self._review_collapsible_section(' in build
     section_helper = review[
