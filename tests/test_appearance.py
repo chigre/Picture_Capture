@@ -116,6 +116,7 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert '"*TCombobox*Listbox.background"' in app_source
     assert '"*TCombobox*Listbox.selectBackground"' in app_source
     assert 'apply_native_titlebar_appearance(root, self.appearance_mode)' in app_source
+    assert 'if isinstance(widget, tk.Toplevel)' in app_source
     assert 'button._pc_skip_classic_appearance = True' in app_source
     assert 'activebackground=colors["accent_soft"]' in app_source
     assert 'highlightthickness=0, takefocus=False' in app_source
