@@ -5550,9 +5550,7 @@ class ReviewWindow(tk.Toplevel):
         self.parent.save_settings()
         self._commit_edits()
         active = self.active_index
-        self.render_rows()
-        if self.editors:
-            self.focus_index(min(active, len(self.editors) - 1))
+        self._request_render_rows(focus_index=active)
 
     def _apply_review_main_ocr_display_options(self) -> None:
         self.parent.settings.review_main_show_ocr_choices = bool(self.review_main_ocr_choices_var.get())
@@ -5566,9 +5564,7 @@ class ReviewWindow(tk.Toplevel):
         self.parent.settings.review_zoom_percent = round(self.review_zoom * 100)
         self.review_zoom_var.set(f"{round(self.review_zoom * 100):d}%")
         active = self.active_index
-        self.render_rows()
-        if self.editors:
-            self.focus_index(min(active, len(self.editors) - 1))
+        self._request_render_rows(focus_index=active)
 
     def apply_review_zoom_text(self, _event=None) -> None:
         try:
@@ -5581,9 +5577,7 @@ class ReviewWindow(tk.Toplevel):
         self.parent.settings.review_zoom_percent = round(self.review_zoom * 100)
         self.review_zoom_var.set(f"{round(self.review_zoom * 100):d}%")
         active = self.active_index
-        self.render_rows()
-        if self.editors:
-            self.focus_index(min(active, len(self.editors) - 1))
+        self._request_render_rows(focus_index=active)
 
     def reset_review_zoom(self) -> None:
         self._commit_edits()
@@ -5591,9 +5585,7 @@ class ReviewWindow(tk.Toplevel):
         self.parent.settings.review_zoom_percent = 100
         self.review_zoom_var.set("100%")
         active = self.active_index
-        self.render_rows()
-        if self.editors:
-            self.focus_index(min(active, len(self.editors) - 1))
+        self._request_render_rows(focus_index=active)
 
     def _exact_reference_position(self, word: str, near: int | None = None) -> int | None:
         key = (word or "").strip().casefold()
@@ -6389,13 +6381,9 @@ class ReviewWindow(tk.Toplevel):
 
         next_index = min(int(index), max(0, len(self.parent.entries) - 1))
         deleted_word = entry.word or "（空白词条）"
-        self.render_rows()
-        if self.editors:
-            next_index = min(next_index, len(self.editors) - 1)
-            self.set_active(next_index)
-            self.focus_index(next_index)
-        else:
-            self.active_index = 0
+        self.active_index = next_index if self.parent.entries else 0
+        self._request_render_rows(focus_index=self.active_index)
+        if not self.parent.entries:
             self._show_ocr_options(None)
             self._update_title()
         self.parent.status_var.set(f"已删除词条：{deleted_word}")
