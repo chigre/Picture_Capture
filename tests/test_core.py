@@ -1984,6 +1984,40 @@ def test_v281_cjk_visual_projection_recovers_oversized_single_character_row():
     assert any(start <= 130 and end >= 178 for start, end in runs)
 
 
+def test_v214_visual_single_cjk_rescue_rejects_definition_text_near_tall_run():
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import OCRRecord, _cjk_word_for_visual_run
+
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_single_headword=True,
+        profile_cjk_allow_bracketed_headword=False,
+    )
+    run = (80, 145)
+    # This is the failure pattern from a definition line: the Han character is
+    # inside ordinary prose and its OCR box is far shorter than the tall visual
+    # projection run. It must not be mined as a single-character headword.
+    body = [OCRRecord("Âm: 波 ba (ba). 普通正文", 0.99, (5, 101, 190, 123))]
+    word, _confidence, record = _cjk_word_for_visual_run(body, run, 100, settings)
+    assert word == "" and record is None
+
+    # A real oversized head record may contain pinyin after the display glyph;
+    # its OCR box itself spans the visual run and remains recoverable.
+    head = [OCRRecord("波 ba", 0.99, (8, 82, 88, 143))]
+    word, confidence, record = _cjk_word_for_visual_run(head, run, 100, settings)
+    assert word == "波"
+    assert confidence == 0.99
+    assert record is head[0]
+
+    # Chinese prose that merely starts with a Han character is also not a
+    # fallback headword when the record is an ordinary body-height line.
+    prose = [OCRRecord("波羅蜜正文說明", 0.99, (5, 101, 180, 123))]
+    word, _confidence, record = _cjk_word_for_visual_run(prose, run, 100, settings)
+    assert word == "" and record is None
+
+
 def test_v282_alignment_key_preserves_cjk_characters():
     from picture_capture.paddle_headwords import _alignment_key, _lemma_similarity
 
