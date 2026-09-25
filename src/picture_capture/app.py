@@ -2222,9 +2222,7 @@ class SettingsDialog(tk.Toplevel):
     )
     DISPLAY_FIELDS = (
         "marker_height", "guide_width",
-        "main_entry_font_family", "main_entry_font_size",
         "main_entry_width_chars", "main_entry_x_ratio",
-        "review_entry_font_family", "review_entry_font_size",
         "review_entry_vertical_padding", "review_single_cjk_line_height",
         "review_zoom_percent", "wordslist_path",
     )
@@ -2354,12 +2352,7 @@ class SettingsDialog(tk.Toplevel):
         ("Tesseract 自动比较 PSM 4/6", "paddle_tesseract_auto_psm"),
         ("显示每个 OCR 候选复选框", "paddle_show_candidate_checkboxes"),
     )
-    DISPLAY_STYLE_CHECKS = (
-        ("主界面词条粗体", "main_entry_font_bold"),
-        ("主界面词条斜体", "main_entry_font_italic"),
-        ("校对词条粗体", "review_entry_font_bold"),
-        ("校对词条斜体", "review_entry_font_italic"),
-    )
+    DISPLAY_STYLE_CHECKS: tuple[tuple[str, str], ...] = ()
     DISPLAY_CHECKS = (
         ("校对时主界面显示 OCR 候选", "review_main_show_ocr_choices"),
         ("校对时主界面显示 OCR 置信度底色", "review_main_show_ocr_background"),
@@ -2650,6 +2643,96 @@ class SettingsDialog(tk.Toplevel):
             self._bind_help_widget(info, callback)
             info.bind("<Button-1>", lambda _e, n=name: self._show_setting_help(n), add="+")
             row += 1
+        return group
+
+    def _add_font_picker_group(self, parent: ttk.Frame) -> ttk.LabelFrame:
+        """Expose complete font choices as two compact picker rows."""
+        group = ttk.LabelFrame(parent, text="字体", padding=(12, 9))
+        group.pack(fill="x", pady=(0, 10))
+        group.columnconfigure(1, weight=1)
+        self._settings_font_summary_vars: dict[str, tk.StringVar] = {}
+
+        specs = (
+            (
+                "主界面词条字体",
+                "main_entry_font_family", "main_entry_font_size",
+                "main_entry_font_bold", "main_entry_font_italic",
+                5, 200,
+            ),
+            (
+                "校对词条字体",
+                "review_entry_font_family", "review_entry_font_size",
+                "review_entry_font_bold", "review_entry_font_italic",
+                6, 200,
+            ),
+        )
+        for row, (
+            label, family_name, size_name, bold_name, italic_name, min_size, max_size
+        ) in enumerate(specs):
+            family_var = self._setting_var(family_name)
+            size_var = self._setting_var(size_name)
+            if bold_name not in self.vars:
+                self.vars[bold_name] = tk.BooleanVar(
+                    value=bool(getattr(self.parent.settings, bold_name))
+                )
+            if italic_name not in self.vars:
+                self.vars[italic_name] = tk.BooleanVar(
+                    value=bool(getattr(self.parent.settings, italic_name))
+                )
+            bold_var = self.vars[bold_name]
+            italic_var = self.vars[italic_name]
+            summary_var = tk.StringVar(
+                value=_font_choice_summary(
+                    family_var.get(), size_var.get(), bold_var.get(), italic_var.get()
+                )
+            )
+            self._settings_font_summary_vars[family_name] = summary_var
+
+            ttk.Label(group, text=f"{label}：", anchor="e").grid(
+                row=row, column=0, sticky="e", padx=(0, 10), pady=5
+            )
+            ttk.Label(group, textvariable=summary_var).grid(
+                row=row, column=1, sticky="w", pady=5
+            )
+
+            def open_picker(
+                *,
+                title=label,
+                family_var=family_var,
+                size_var=size_var,
+                bold_var=bold_var,
+                italic_var=italic_var,
+                summary_var=summary_var,
+                min_size=min_size,
+                max_size=max_size,
+            ) -> None:
+                try:
+                    current_size = int(float(size_var.get()))
+                except (TypeError, ValueError):
+                    current_size = max(min_size, 12)
+
+                def apply_choice(family: str, size: int, bold: bool, italic: bool) -> None:
+                    family_var.set(family)
+                    size_var.set(str(size))
+                    bold_var.set(bool(bold))
+                    italic_var.set(bool(italic))
+                    summary_var.set(_font_choice_summary(family, size, bold, italic))
+
+                FontPickerDialog(
+                    self,
+                    title=f"选择字体 — {title}",
+                    family=str(family_var.get()),
+                    size=current_size,
+                    bold=bool(bold_var.get()),
+                    italic=bool(italic_var.get()),
+                    on_apply=apply_choice,
+                    min_size=min_size,
+                    max_size=max_size,
+                )
+
+            ttk.Button(group, text="选择字体…", command=open_picker).grid(
+                row=row, column=2, sticky="e", padx=(10, 0), pady=5
+            )
         return group
 
     def _add_check_group(
@@ -3143,6 +3226,7 @@ class SettingsDialog(tk.Toplevel):
             wraplength=720,
             justify="left",
         ).pack(anchor="w", fill="x", pady=(4, 0))
+        self._add_font_picker_group(display)
         self._add_setting_group(display, "界面与校对", self.DISPLAY_FIELDS)
         self._add_check_group(
             display,
