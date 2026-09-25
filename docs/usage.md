@@ -80,10 +80,11 @@ Ctrl＋滚轮只改变查看倍率，不改变任何持久化几何或 PDIC/PPP 
 
 少数词典页面会在同一页内上下分成一个或多个独立阅读区域。每个 SECTION 仍使用项目原有栏数，但阅读顺序必须先读完 SECTION 1 的全部栏，再进入 SECTION 2。主界面【六、页面列表】中有常驻 `Section` 列：
 
-- `0` 表示普通页面，不启用页面级 SECTION；
+- `0` 表示普通页面，不启用页面级 SECTION；此时切图使用【切图设置】中的一般页上下边界；
 - `1–10` 表示显式 SECTION 数量；双击 `Section` 单元格即可修改；
+- `Section=1` 可作为单个特殊页面的可拖动上/下边界，直接接管该页词条切图与插图切图的有效范围，替代旧版【特殊页面覆盖】手工输入；
 - 保存为 `1–10` 后会进入该页 SECTION 边界编辑，拖动蓝色虚线上下边界；再次双击同一 `Section` 单元格结束编辑；
-- SECTION 之间允许保留空白；空白不会参与词条新增、阅读排序或整词条切图；
+- `Section≥2` 时，各 SECTION 之间允许保留空白；空白不会参与词条新增、阅读排序或整词条切图；
 - 阅读顺序统一为 `SECTION 1 / 栏1 → 栏2 → … → SECTION 2 / 栏1 → 栏2 → …`；
 - 边界保存为当前页 **canonical full-resolution V**，位于 `_PictureCapture/data/PageSections/<page>.json`；旧项目使用 `QT/PageSections/<page>.json`；
 - PDIC 仍只保存词条与 source XY，不新增 SECTION 字段；把 `Section` 改回 `0` 即删除 sidecar 并恢复普通页面行为。
