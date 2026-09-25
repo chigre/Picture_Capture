@@ -1401,10 +1401,17 @@ def _base_entry_crop_pieces(
         effective.row_padding, canonical_width, effective,
     )
     row_height = max(1, character_height + row_padding)
-    top, bottom = entry_crop_bounds(
-        source, effective, top_y=top_y, bottom_y=bottom_y,
-    )
-    sections = normalize_page_sections(page_sections, top, bottom)
+    if page_sections:
+        # Explicit page SECTIONs are the authoritative crop range for that page.
+        # This lets Section=1 replace the former per-page crop top/bottom override
+        # while Section>=2 additionally contributes reading-lane gaps/order.
+        sections = normalize_page_sections(page_sections, geometry.top, geometry.bottom)
+        top, bottom = sections[0].top_v, sections[-1].bottom_v
+    else:
+        top, bottom = entry_crop_bounds(
+            source, effective, top_y=top_y, bottom_y=bottom_y,
+        )
+        sections = normalize_page_sections(None, top, bottom)
     column_count = max(1, len(geometry.column_starts))
     lanes = build_reading_lanes(column_count, top, bottom, sections)
     ordered = sort_entries_reading_order(entries, geometry, sections)
@@ -1530,7 +1537,10 @@ def build_page_crop_plan(
     effective = effective_page_settings(settings, image.size, profile_page_index)
     illustration_top = effective.start_y if top_y is None else int(top_y)
     illustration_bottom = 0 if bottom_y is None else int(bottom_y)
-    top,bottom,margin_px=illustration_crop_bounds(image,effective,top_y=illustration_top,bottom_y=illustration_bottom,margin=illustration_margin)
+    top,bottom,margin_px=illustration_crop_bounds(
+        image, effective, top_y=illustration_top, bottom_y=illustration_bottom,
+        margin=illustration_margin, page_sections=page_sections,
+    )
     illustrations: list[IllustrationCropPlan] = []
     linked_inside: dict[int,list[int]] = {}
     partial_merge: dict[int,list[int]] = {}
@@ -2095,6 +2105,7 @@ def illustration_crop_bounds(
     top_y: int = 0,
     bottom_y: int = 0,
     margin: int = 0,
+    page_sections: list[PageSection] | None = None,
 ) -> tuple[int, int, int]:
     """Resolve persisted crop settings to current source-image pixels.
 
@@ -2109,14 +2120,19 @@ def illustration_crop_bounds(
     transform = LayoutTransform(
         str(getattr(effective, "layout_transform", "identity") or "identity")
     )
-    canonical_width, _canonical_height = transform.canonical_size(image.size)
-    top_canonical = stored_geometry_to_canonical(
-        max(0, int(top_y)), canonical_width, effective,
-    )
-    bottom_canonical = (
-        stored_geometry_to_canonical(max(0, int(bottom_y)), canonical_width, effective)
-        if int(bottom_y) > 0 else 0
-    )
+    canonical_width, canonical_height = transform.canonical_size(image.size)
+    if page_sections:
+        effective_sections = normalize_page_sections(page_sections, 0, canonical_height)
+        top_canonical = effective_sections[0].top_v
+        bottom_canonical = effective_sections[-1].bottom_v
+    else:
+        top_canonical = stored_geometry_to_canonical(
+            max(0, int(top_y)), canonical_width, effective,
+        )
+        bottom_canonical = (
+            stored_geometry_to_canonical(max(0, int(bottom_y)), canonical_width, effective)
+            if int(bottom_y) > 0 else 0
+        )
     margin_px = max(
         0, stored_geometry_to_canonical(max(0, int(margin)), canonical_width, effective),
     )
