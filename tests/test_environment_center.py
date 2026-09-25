@@ -5,6 +5,7 @@ from pathlib import Path
 from picture_capture.environment_center import (
     _apt_language_package,
     ocr_installer_path,
+    source_checkout_root,
     tesseract_install_plan,
 )
 
@@ -74,3 +75,32 @@ def test_ocr_installer_path_is_platform_specific(tmp_path: Path):
     assert ocr_installer_path(tmp_path, "Linux") == linux
     assert ocr_installer_path(tmp_path, "Darwin") == mac
     assert ocr_installer_path(tmp_path, "Plan9") is None
+
+
+def test_source_checkout_root_does_not_assume_site_packages_depth(tmp_path: Path):
+    root = tmp_path / "Picture Capture $test"
+    package = root / "src" / "picture_capture"
+    package.mkdir(parents=True)
+    (root / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+    scripts = root / "scripts"
+    scripts.mkdir()
+    (scripts / "ocr_setup.py").write_text("", encoding="utf-8")
+    module = package / "environment_center.py"
+    module.write_text("", encoding="utf-8")
+    assert source_checkout_root(module) == root
+
+    installed = tmp_path / "site-packages" / "picture_capture" / "environment_center.py"
+    installed.parent.mkdir(parents=True)
+    installed.write_text("", encoding="utf-8")
+    assert source_checkout_root(installed) is None
+
+
+def test_linux_installer_command_uses_shell_quoting():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "environment_center.py"
+    ).read_text(encoding="utf-8")
+    assert "shlex.quote(str(root))" in source
+    assert "shlex.quote(script.name)" in source
