@@ -830,7 +830,13 @@ def run_tesseract(image: Image.Image, language: str, executable: str = "tesserac
     payload = BytesIO()
     normalize_page_rgb(image).save(payload, format="PNG")
     command = [str(resolved), "stdin", "stdout", "-l", language, "--psm", str(psm)]
-    result = subprocess.run(command, input=payload.getvalue(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        result = subprocess.run(
+            command, input=payload.getvalue(), stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=120,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Tesseract OCR 超时（120 秒）；已终止本次识别。") from exc
     if result.returncode:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         raise RuntimeError(f"Tesseract OCR 失败：{detail}")
