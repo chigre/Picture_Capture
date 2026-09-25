@@ -1370,7 +1370,7 @@ class UsageGuideWindow(tk.Toplevel):
                 anchor="w", relief="flat", bd=0, padx=10, pady=8,
                 bg=colors["sidebar"], fg=colors["text"],
                 activebackground=colors["accent_soft"], activeforeground=colors["accent"],
-                cursor="hand2",
+                highlightthickness=0, takefocus=False, cursor="hand2",
             )
             # Navigation buttons manage their palette directly because their
             # selected state changes frequently. Skipping the generic reversible
@@ -1501,6 +1501,8 @@ class UsageGuideWindow(tk.Toplevel):
             button.configure(
                 bg=colors["accent_soft"] if selected else colors["sidebar"],
                 fg=colors["accent"] if selected else colors["text"],
+                activebackground=colors["accent_soft"],
+                activeforeground=colors["accent"],
                 font=(font.nametofont("TkDefaultFont").actual("family"), 9, "bold" if selected else "normal"),
             )
 
@@ -4591,6 +4593,18 @@ class ReviewWindow(tk.Toplevel):
             return
         self.word_list_default_bg = palette["input_bg"]
         self.word_list_default_fg = palette["input_fg"]
+        if (
+            self.word_highlight_index is not None
+            and self.word_highlight_index < self.word_list.size()
+        ):
+            try:
+                self.word_list.itemconfig(
+                    self.word_highlight_index,
+                    background="#d9d9d9",
+                    foreground="#111827",
+                )
+            except tk.TclError:
+                pass
 
 
     def _toggle_review_panel(self, panel: str) -> None:
@@ -5163,7 +5177,9 @@ class ReviewWindow(tk.Toplevel):
         local = target - start
         self.word_highlight_index = local
         try:
-            self.word_list.itemconfig(local, background="#d9d9d9")
+            self.word_list.itemconfig(
+                local, background="#d9d9d9", foreground="#111827"
+            )
             self.word_list.see(local)
         except tk.TclError:
             pass
@@ -6089,6 +6105,9 @@ class ReviewWindow(tk.Toplevel):
                 highlightbackground=editor_bg,
                 highlightcolor=editor_bg,
             )
+            # Membership colors are intentionally pale status colors in both
+            # themes. Keep this frame out of the generic dark mapper.
+            editor_frame._pc_skip_classic_appearance = True
             delete_button = tk.Button(
                 editor_frame, text="[X]", width=3, takefocus=False,
                 relief="flat", bd=0, padx=1, pady=0, cursor="hand2",
@@ -6102,8 +6121,20 @@ class ReviewWindow(tk.Toplevel):
                     review_family, editor_font_size,
                     self.parent.settings.review_entry_font_bold, self.parent.settings.review_entry_font_italic,
                 ),
-                bg=editor_bg, disabledbackground=editor_bg, relief="flat", bd=0, highlightthickness=0,
+                bg=editor_bg,
+                disabledbackground=editor_bg,
+                foreground="#111827",
+                disabledforeground="#111827",
+                insertbackground="#111827",
+                selectbackground="#c7d5e3",
+                selectforeground="#111827",
+                relief="flat",
+                bd=0,
+                highlightthickness=0,
             )
+            # The light green/pink membership surface needs dark text even while
+            # the rest of the proofreading window uses the dark palette.
+            editor._pc_skip_classic_appearance = True
             editor.grid(
                 row=0, column=1, sticky="nsew",
                 padx=(max(0, int(self.parent.settings.review_entry_left_padding)), 0),
@@ -6458,6 +6489,7 @@ class ReviewWindow(tk.Toplevel):
                     foreground="#111827",
                     disabledforeground="#111827",
                     insertbackground="#111827",
+                    selectbackground="#c7d5e3",
                     selectforeground="#111827",
                 )
             except tk.TclError:
