@@ -1831,6 +1831,70 @@ def test_wizard_parser_controls_gate_cjk_bracket_and_marker_structures():
     assert marker.normalized == "同義"
 
 
+def test_v214_shueisha_japanese_bracketed_headwords_accept_kana_reading_prefix():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import parse_headword_text
+
+    profile = load_dictionary_profile(preset="shueisha", language="jpn")
+    settings = AppSettings(
+        ocr_language="jpn", paddle_language="japan",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_single_headword=False,
+        profile_cjk_allow_bracketed_headword=True,
+    )
+
+    for text, expected, reading in [
+        ("【愛】", "愛", ""),
+        ("あい【愛】", "愛", "あい"),
+        ("あい【藍】説明", "藍", "あい"),
+        ("アイ【哀】", "哀", "アイ"),
+    ]:
+        parsed = parse_headword_text(text, settings, profile=profile)
+        assert parsed is not None
+        assert parsed.normalized == expected
+        assert parsed.descriptor_text == "chinese_bracketed_headword"
+        if reading:
+            assert f"japanese_reading_prefix:{reading}" in parsed.parser_trace
+
+    # The kana-prefix relaxation belongs to the explicit Japanese CJK profile;
+    # a non-CJK language does not gain a generic bracket parser.
+    spanish = AppSettings(ocr_language="spa")
+    assert parse_headword_text("ai【愛】", spanish) is None
+
+
+def test_v214_shueisha_bracketed_headword_is_accepted_by_filter():
+    from PIL import Image
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import OCRRecord, filter_headword_records
+
+    profile = load_dictionary_profile(preset="shueisha", language="jpn")
+    settings = AppSettings(
+        ocr_language="jpn", paddle_language="japan",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_single_headword=False,
+        profile_cjk_allow_bracketed_headword=True,
+        profile_cjk_require_left_edge=True,
+        paddle_band_width=180, paddle_band_width_ratio=100,
+        paddle_band_left_margin=0, paddle_left_tolerance=18,
+        paddle_rec_score_threshold=0.1, paddle_auto_header_rule=False,
+        paddle_refine_separator_y=False, paddle_require_pos_or_symbol=False,
+        paddle_require_visual_cue=False, character_height=18, row_padding=4,
+    )
+    band = Image.new("RGB", (180, 120), "white")
+    records = [OCRRecord("あい【愛】", 0.99, (4, 30, 86, 52))]
+    entries, diagnostics = filter_headword_records(
+        records, band, 0, 0, settings, profile=profile,
+    )
+    assert [entry.word for entry in entries] == ["愛"]
+    row = next(item for item in diagnostics if item.get("text") == "あい【愛】")
+    assert row["accepted"] is True
+    assert row["features"]["cjk_bracketed"] is True
+
+
 def test_v280_cjk_bracket_body_option_requires_extra_visual_evidence():
     from PIL import Image
     from picture_capture.dictionary_profile import load_dictionary_profile
