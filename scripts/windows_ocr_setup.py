@@ -20,6 +20,18 @@ GPU_PROFILES = (
 )
 
 
+# Backward-compatible profile mapping used by existing tests and external callers.
+# The interactive installer no longer exposes these numeric keys directly.
+PROFILES = {
+    "1": CPU_PROFILE,
+    "2": GPU_PROFILES[2],
+    "3": GPU_PROFILES[1],
+    "4": GPU_PROFILES[0],
+    "5": LENS_PROFILE,
+    "6": CORE_PROFILE,
+}
+
+
 def venv_python() -> Path:
     if sys.platform.startswith("win"):
         return ROOT / ".venv" / "Scripts" / "python.exe"
