@@ -3484,6 +3484,22 @@ class PageListSortTests(unittest.TestCase):
         self.assertEqual([iid for iid, _ in ordered], ["0", "1", "9"])
         self.assertEqual([vals[0] for _, vals in ordered], ["page1.png", "page2.png", "page10.png"])
 
+    def test_v2140_live_five_column_rows_sort_with_illustration_before_fill_status(self) -> None:
+        rows = [
+            ("0", ("", "a.png", "✓", "12", "一致")),
+            ("1", ("●", "b.png", "✓", "2", "少 1")),
+            ("2", ("", "c.png", "✓", "", "多 1")),
+        ]
+        asc = _sorted_page_list_rows(rows, "illustrations", False)
+        desc = _sorted_page_list_rows(rows, "illustrations", True)
+        self.assertEqual([iid for iid, _ in asc], ["1", "0", "2"])
+        self.assertEqual([iid for iid, _ in desc], ["0", "1", "2"])
+        by_fill = _sorted_page_list_rows(rows, "fill_status", False)
+        self.assertEqual(
+            sorted(vals[4] for _iid, vals in by_fill),
+            sorted(["一致", "少 1", "多 1"]),
+        )
+
     def test_v2911_empty_cells_stay_last_in_both_directions(self) -> None:
         rows = [
             ("0", ("a.png", "", "一致")),
