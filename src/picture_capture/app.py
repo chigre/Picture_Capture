@@ -330,6 +330,16 @@ def scaled_overlay_line_width(value: int | float, overlay_scale: float) -> int:
     return max(1, round(max(1.0, float(value)) * max(0.01, float(overlay_scale))))
 
 
+def review_auto_fit_zoom(
+    crop_width: int | float, image_area_width: int | float, fill_ratio: float = 0.99,
+) -> float:
+    """Scale one proofreading strip to occupy the requested left-pane width."""
+    source_width = max(1.0, float(crop_width))
+    available_width = max(1.0, float(image_area_width))
+    ratio = min(1.0, max(0.01, float(fill_ratio)))
+    return max(0.01, available_width * ratio / source_width)
+
+
 def binary_preview_image(source: Image.Image) -> Image.Image:
     """Create a display-only Otsu black/white preview without mutating source."""
     gray = ImageOps.grayscale(source)
@@ -3929,11 +3939,17 @@ class ReviewWindow(tk.Toplevel):
         self.geometry(f"{width}x{height}+{x}+{y}")
         self.minsize(min(560, width), min(420, height))
         self.active_index = 0
-        # Review zoom is intentionally independent from the main page viewer.
-        # It persists per project so a comfortable crop size remains stable even
-        # when the main page is repeatedly fitted to width/height.
-        self.review_zoom = max(0.20, min(2.5, float(parent.settings.review_zoom_percent) / 100.0))
-        self.review_zoom_var = tk.StringVar(value=f"{round(self.review_zoom * 100):d}%")
+        # A stored 0 means automatic fit-to-left-pane. Positive values retain
+        # the historical explicit/manual percentage mode.
+        stored_review_zoom = int(getattr(parent.settings, "review_zoom_percent", 0) or 0)
+        self.review_zoom_auto = stored_review_zoom <= 0
+        self.review_zoom = (
+            1.0 if self.review_zoom_auto
+            else max(0.20, min(2.5, float(stored_review_zoom) / 100.0))
+        )
+        self.review_zoom_var = tk.StringVar(
+            value="自动" if self.review_zoom_auto else f"{round(self.review_zoom * 100):d}%"
+        )
         # Review typography is deliberately independent from the image zoom.
         # Expose the same persisted font settings directly in the review window
         # so users do not need to return to the detailed-settings dialog.
@@ -4068,11 +4084,13 @@ class ReviewWindow(tk.Toplevel):
         self._prefetch_closed = False
         self._review_render_worker_key = f"review-render-{id(self)}"
         self._review_render_focus_index = 0
+        self._review_auto_zoom_job: str | None = None
+        self._review_auto_zoom_width = 0
         self.review_section_title_font = font.nametofont("TkDefaultFont").copy()
         self.review_section_title_font.configure(weight="bold")
         self._configure_review_styles()
         self._build()
-        self.after_idle(self._fit_review_left_pane_to_toolbar)
+        self.after_idle(self._initialize_review_layout_and_rows)
         self.protocol("WM_DELETE_WINDOW", self._close_review)
         self._update_title()
         # Traces are installed after the widgets are built so construction does
@@ -4276,6 +4294,59 @@ class ReviewWindow(tk.Toplevel):
         except (tk.TclError, ValueError):
             return
 
+    def _initialize_review_layout_and_rows(self) -> None:
+        """Finalize pane geometry before the first proofreading crop render."""
+        try:
+            if not self.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        self._fit_review_left_pane_to_toolbar()
+        try:
+            self.update_idletasks()
+        except tk.TclError:
+            return
+        self._review_auto_zoom_width = self._review_image_area_width()
+        self._request_render_rows(focus_index=0)
+
+    def _review_image_area_width(self) -> int:
+        """Return the usable crop-image width inside the proofreading left pane."""
+        try:
+            canvas_width = int(self.canvas.winfo_width())
+        except (AttributeError, tk.TclError, TypeError, ValueError):
+            return 1
+        # Crop labels use padx=6 on both sides. Keeping that 12 px outside the
+        # 99% image target prevents a nominally fitted strip from overflowing.
+        return max(1, canvas_width - 12)
+
+    def _review_canvas_configured(self, event: tk.Event) -> None:
+        try:
+            self.canvas.itemconfigure(self.rows_window, width=event.width)
+        except tk.TclError:
+            return
+        if not self.review_zoom_auto:
+            return
+        usable_width = max(1, int(event.width) - 12)
+        # Ignore geometry noise that cannot change the rounded crop width.
+        if abs(usable_width - int(self._review_auto_zoom_width or 0)) <= 1:
+            return
+        self._review_auto_zoom_width = usable_width
+        if self._review_auto_zoom_job is not None:
+            try:
+                self.after_cancel(self._review_auto_zoom_job)
+            except tk.TclError:
+                pass
+        self._review_auto_zoom_job = self.after(120, self._apply_auto_review_zoom_resize)
+
+    def _apply_auto_review_zoom_resize(self) -> None:
+        self._review_auto_zoom_job = None
+        if not self.review_zoom_auto:
+            return
+        self._request_render_rows(focus_index=self.active_index)
+
+    def _stored_review_zoom_percent(self) -> int:
+        return 0 if self.review_zoom_auto else round(self.review_zoom * 100)
+
     def _build(self) -> None:
         panes = ttk.Panedwindow(self, orient="horizontal")
         panes.pack(fill="both", expand=True)
@@ -4406,7 +4477,7 @@ class ReviewWindow(tk.Toplevel):
         self.rows = ttk.Frame(self.canvas, style="PCR.Surface.TFrame")
         self.rows_window = self.canvas.create_window((0, 0), window=self.rows, anchor="nw")
         self.rows.bind("<Configure>", lambda _e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self.rows_window, width=e.width))
+        self.canvas.bind("<Configure>", self._review_canvas_configured)
         for widget in (self.canvas, self.rows):
             widget.bind("<MouseWheel>", self.scroll_rows)
             widget.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
@@ -4457,7 +4528,7 @@ class ReviewWindow(tk.Toplevel):
             style="PCR.Tool.TButton",
         ).pack(side="left")
         review_zoom_entry = ttk.Entry(
-            zoom_row, textvariable=self.review_zoom_var, width=6, justify="center",
+            zoom_row, textvariable=self.review_zoom_var, width=10, justify="center",
             style="PCR.Compact.TEntry",
         )
         review_zoom_entry.pack(side="left", padx=2)
@@ -4468,7 +4539,7 @@ class ReviewWindow(tk.Toplevel):
             style="PCR.Tool.TButton",
         ).pack(side="left")
         ttk.Button(
-            zoom_row, text="100%", width=5, command=self.reset_review_zoom,
+            zoom_row, text="自动", width=5, command=self.reset_review_zoom,
             style="PCR.Compact.TButton",
         ).pack(side="left", padx=(4, 0))
 
@@ -4695,7 +4766,6 @@ class ReviewWindow(tk.Toplevel):
         self._configure_word_list_appearance()
         self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)
         self.refresh_wordslist_display()
-        self._request_render_rows(focus_index=0)
 
     def _configure_word_list_appearance(self) -> None:
         palette = appearance_palette(self.parent.appearance_mode)
@@ -4822,6 +4892,12 @@ class ReviewWindow(tk.Toplevel):
                 self.parent.review_window = None
             self._prefetch_closed = True
             self.parent._invalidate_ui_worker(self._review_render_worker_key)
+            if self._review_auto_zoom_job is not None:
+                try:
+                    self.after_cancel(self._review_auto_zoom_job)
+                except tk.TclError:
+                    pass
+                self._review_auto_zoom_job = None
             self._network_lookup_serial += 1
             if self._network_lookup_job is not None:
                 try:
@@ -4862,7 +4938,7 @@ class ReviewWindow(tk.Toplevel):
         if not dirty:
             return True
         self._commit_edits()
-        self.parent.settings.review_zoom_percent = round(self.review_zoom * 100)
+        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         self.parent.save_pdic(silent=True, sync_editors=False)
         self._persist_simplified_page(current_stem)
         return True
@@ -5865,30 +5941,40 @@ class ReviewWindow(tk.Toplevel):
 
     def change_review_zoom(self, factor: float) -> None:
         self._commit_edits()
+        self.review_zoom_auto = False
         self.review_zoom = max(0.20, min(2.5, self.review_zoom * factor))
-        self.parent.settings.review_zoom_percent = round(self.review_zoom * 100)
+        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         self.review_zoom_var.set(f"{round(self.review_zoom * 100):d}%")
         active = self.active_index
         self._request_render_rows(focus_index=active)
 
     def apply_review_zoom_text(self, _event=None) -> None:
+        raw = self.review_zoom_var.get().strip()
+        if not raw or raw.casefold().startswith(("自动", "auto")):
+            self.reset_review_zoom()
+            return
         try:
-            percent = float(self.review_zoom_var.get().strip().rstrip("%"))
+            percent = float(raw.rstrip("%"))
         except ValueError:
-            self.review_zoom_var.set(f"{round(self.review_zoom * 100):d}%")
+            self.review_zoom_var.set(
+                f"自动 {round(self.review_zoom * 100):d}%"
+                if self.review_zoom_auto else f"{round(self.review_zoom * 100):d}%"
+            )
             return
         self._commit_edits()
+        self.review_zoom_auto = False
         self.review_zoom = min(2.5, max(0.20, percent / 100.0))
-        self.parent.settings.review_zoom_percent = round(self.review_zoom * 100)
+        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         self.review_zoom_var.set(f"{round(self.review_zoom * 100):d}%")
         active = self.active_index
         self._request_render_rows(focus_index=active)
 
     def reset_review_zoom(self) -> None:
         self._commit_edits()
-        self.review_zoom = 1.0
-        self.parent.settings.review_zoom_percent = 100
-        self.review_zoom_var.set("100%")
+        self.review_zoom_auto = True
+        self.parent.settings.review_zoom_percent = 0
+        self.review_zoom_var.set("自动")
+        self._review_auto_zoom_width = self._review_image_area_width()
         active = self.active_index
         self._request_render_rows(focus_index=active)
 
@@ -6127,7 +6213,9 @@ class ReviewWindow(tk.Toplevel):
         page = self.parent.current_page
         page_index = int(self.parent.current_index)
         settings = replace(self.parent.settings)
-        review_zoom = max(0.05, min(2.5, float(self.review_zoom)))
+        requested_auto_zoom = bool(self.review_zoom_auto)
+        review_zoom = max(0.01, float(self.review_zoom))
+        auto_image_area_width = self._review_image_area_width()
         viewer_width = max(1, int(self.parent.canvas.winfo_width()))
         ordered_snapshot = [
             replace(entry) for entry in self.parent._ordered_entries_reading_order()
@@ -6144,7 +6232,7 @@ class ReviewWindow(tk.Toplevel):
             review_settings, geometry = _review_crop_context(
                 image, settings, viewer_width, page_index,
             )
-            crops: list[Image.Image] = []
+            raw_crops: list[Image.Image] = []
             for index, entry in enumerate(ordered_snapshot):
                 next_entry = (
                     ordered_snapshot[index + 1]
@@ -6153,16 +6241,24 @@ class ReviewWindow(tk.Toplevel):
                 box = _review_line_box(
                     entry, geometry, image, review_settings, next_entry,
                 )
-                crop = image.crop(box).convert("RGB")
-                crop = crop.resize(
+                raw_crops.append(image.crop(box).convert("RGB"))
+            effective_zoom = review_zoom
+            if requested_auto_zoom and raw_crops:
+                widest_crop = max(crop.width for crop in raw_crops)
+                effective_zoom = review_auto_fit_zoom(
+                    widest_crop, auto_image_area_width, 0.99,
+                )
+            crops = [
+                crop.resize(
                     (
-                        max(1, round(crop.width * review_zoom)),
-                        max(1, round(crop.height * review_zoom)),
+                        max(1, round(crop.width * effective_zoom)),
+                        max(1, round(crop.height * effective_zoom)),
                     ),
                     Image.Resampling.LANCZOS,
                 )
-                crops.append(crop)
-            return page_stem, signature, crops
+                for crop in raw_crops
+            ]
+            return page_stem, signature, crops, effective_zoom, requested_auto_zoom
 
         def done(payload) -> None:
             try:
@@ -6170,7 +6266,10 @@ class ReviewWindow(tk.Toplevel):
                     return
             except tk.TclError:
                 return
-            result_stem, result_signature, crops = payload
+            result_stem, result_signature, crops, effective_zoom, requested_auto_zoom = payload
+            if requested_auto_zoom != bool(self.review_zoom_auto):
+                self._request_render_rows(focus_index=self._review_render_focus_index)
+                return
             if not self.parent.current_page or self.parent.current_page.stem != result_stem:
                 return
             current_signature = tuple(
@@ -6180,6 +6279,10 @@ class ReviewWindow(tk.Toplevel):
             if current_signature != result_signature:
                 self._request_render_rows(focus_index=self._review_render_focus_index)
                 return
+            if requested_auto_zoom:
+                self.review_zoom = max(0.01, float(effective_zoom))
+                self.review_zoom_var.set(f"自动 {round(self.review_zoom * 100):d}%")
+                self.parent.settings.review_zoom_percent = 0
             target_focus = self._review_render_focus_index
             self.render_rows(preloaded_crops=crops)
             if reset_scroll:
@@ -6861,12 +6964,12 @@ class ReviewWindow(tk.Toplevel):
             dirty = word_dirty or simplified_dirty
             if not dirty:
                 # Browsing a pending page must not accidentally reserve it.
-                self.parent.settings.review_zoom_percent = round(self.review_zoom * 100)
+                self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
                 return
             if not self.parent._claim_page_for_manual_edit():
                 return
         self._commit_edits()
-        self.parent.settings.review_zoom_percent = round(self.review_zoom * 100)
+        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         self.parent.save_pdic(sync_editors=False)
         if self.parent.current_page:
             self._persist_simplified_page(self.parent.current_page.stem)
@@ -6953,7 +7056,7 @@ class ReviewWindow(tk.Toplevel):
         # Capture every Tk-derived value on the UI thread. The worker below
         # touches only filesystem/PIL/pure-Python geometry functions.
         settings_snapshot = replace(self.parent.settings)
-        review_zoom = max(0.05, min(2.5, float(self.review_zoom)))
+        review_zoom = max(0.01, float(self.review_zoom))
         view_scale = float(self.parent.view_scale)
         viewer_width = max(1, int(self.parent.canvas.winfo_width()))
         review_key = self._review_prefetch_key()
@@ -7080,7 +7183,11 @@ class ReviewWindow(tk.Toplevel):
             delta, preloaded=preloaded, current_already_saved=True, async_allowed=False
         ):
             crops = None
-            if preloaded is not None and preloaded.get("review_key") == self._review_prefetch_key():
+            if (
+                not self.review_zoom_auto
+                and preloaded is not None
+                and preloaded.get("review_key") == self._review_prefetch_key()
+            ):
                 crops = list(preloaded.get("review_crops") or [])
             if crops is None:
                 self._request_render_rows(focus_index=0, reset_scroll=True)
