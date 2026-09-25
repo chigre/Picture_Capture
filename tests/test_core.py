@@ -3392,7 +3392,12 @@ def test_v2910_page_list_has_persistent_fill_status_column():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     assert 'columns = ("bookmark", "page", "lined", "fill_status", "illustrations")' in text
-    assert 'self.page_list.heading("fill_status", text="填充状态")' in text
+    assert 'self.page_list.heading("fill_status", text="填充状态", anchor="w")' in text
+    for column in ("bookmark", "page", "lined", "fill_status", "illustrations"):
+        assert f'self.page_list.column("{column}",' in text
+        column_call = text[text.index(f'self.page_list.column("{column}",'):][:140]
+        assert 'anchor="w"' in column_call
+    assert 'bd=0, highlightthickness=0, anchor="w", padx=4, pady=0' in text
     assert 'self._word_fill_status_text(index)' in text
 
 
@@ -3615,6 +3620,47 @@ def test_v2914_programmatic_page_selection_replaces_stale_selection():
     assert app.page_list.selection() == ("9",)
     assert app.page_list.focus() == "9"
     assert app.page_list.seen == ["9"]
+
+
+def test_page_list_current_row_is_centered_after_programmatic_selection():
+    class FakeTree:
+        def __init__(self):
+            self._selection = []
+            self._focus = ""
+            self.moves = []
+            self.seen = []
+            self.rows = tuple(str(i) for i in range(100))
+        def exists(self, iid):
+            return iid in self.rows
+        def selection(self):
+            return tuple(self._selection)
+        def selection_remove(self, *items):
+            self._selection = [x for x in self._selection if x not in items]
+        def selection_set(self, iid):
+            self._selection = [iid]
+        def focus(self, iid=None):
+            if iid is not None:
+                self._focus = iid
+            return self._focus
+        def see(self, iid):
+            self.seen.append(iid)
+        def get_children(self, _parent=""):
+            return self.rows
+        def update_idletasks(self):
+            return None
+        def yview(self):
+            return (0.20, 0.40)
+        def yview_moveto(self, fraction):
+            self.moves.append(fraction)
+
+    app = PictureCaptureApp.__new__(PictureCaptureApp)
+    app.page_list = FakeTree()
+    app._schedule_page_cell_overlay_refresh = lambda: None
+    PictureCaptureApp._set_page_list_selection(app, 50, ensure_visible=True)
+    assert app.page_list.seen == ["50"]
+    assert app.page_list.moves
+    # Row 50 center is at 0.505; with a 20% viewport, the top should be ~0.405.
+    assert abs(app.page_list.moves[-1] - 0.405) < 1e-9
 
 
 def test_v2914_lined_metadata_update_does_not_resort_fill_status_sort():
@@ -3903,7 +3949,7 @@ def test_v2110_page_list_heading_context_menu_has_optional_columns_and_permanent
 def test_v2116_page_list_has_illustration_count_column_and_sort():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'self.page_list.heading("illustrations", text="插图")' in text
+    assert 'self.page_list.heading("illustrations", text="插图", anchor="w")' in text
     assert 'command=lambda: self._sort_page_list("illustrations")' in text
     assert 'page_list_show_illustrations' in text
     rows = [
@@ -4810,13 +4856,36 @@ def test_v21117_review_layout_matches_compact_workflow():
     assert 'text="当前页"' in review and 'text="所有页"' in review
     assert 'text="上\\n一\\n页"' in review and 'text="下\\n一\\n页"' in review
     assert 'text="词条切图显示大小："' in review
-    assert 'text="OCR结果："' in review
-    assert 'self._review_section_frame(right, "参考词表", padding=6)' in review
+    assert 'right, "ocr", "OCR结果"' in review
+    assert 'right, "reference", "参考词表"' in review
     assert 'text="选择文件"' in review
     assert 'text="从所选词开始填充至本页结束"' in review
     assert 'self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)' in review
     assert 'self.digit_panel_title = tk.StringVar(value="▸ 数字替换映射")' in review
     assert 'self.accent_panel_title = tk.StringVar(value="▸ 变音字符")' in review
+
+
+def test_review_right_sections_are_collapsible_and_default_expanded():
+    from pathlib import Path
+    import inspect
+    import picture_capture.app as app_module
+
+    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    start = text.index("class ReviewWindow")
+    end = text.index("class OCRConflictReviewDialog", start)
+    review = text[start:end]
+    assert 'for key in ("display", "ocr", "network", "reference")' in review
+    assert 'key: tk.BooleanVar(value=True)' in review
+    for key, title in (
+        ("display", "显示设置"),
+        ("ocr", "OCR结果"),
+        ("network", "网络词汇核验（免费，无需 Token）"),
+        ("reference", "参考词表"),
+    ):
+        assert f'right, "{key}", "{title}"' in review
+    assert 'def _toggle_review_right_section(self, key: str) -> None:' in review
+    assert 'title_var.set(("▾ " if expanded else "▸ ") + title)' in review
+    assert "body.pack_forget()" in review
 
 
 def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
@@ -4843,8 +4912,12 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
     assert 'panes.add(left, weight=3)' in build
     assert 'panes.add(right, weight=2)' in build
     assert 'text="上\\n一\\n页"' in build and 'text="下\\n一\\n页"' in build
-    assert 'self._review_section_frame(' in build
-    assert 'style="PCR.Header.TLabel"' in build
+    assert 'self._review_collapsible_section(' in build
+    section_helper = review[
+        review.index("    def _review_collapsible_section("):
+        review.index("    def _build(self) -> None:")
+    ]
+    assert 'style="PCR.Header.TLabel"' in section_helper
     assert 'relief="sunken"' not in build
     assert 'relief="groove"' not in build
 
@@ -4867,11 +4940,12 @@ def test_review_screenshot_polish_prevents_right_pane_clipping():
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
 
-    section_start = review.index("    def _review_section_frame(")
+    section_start = review.index("    def _review_collapsible_section(")
     section_end = review.index("    def _build(self) -> None:", section_start)
     section = review[section_start:section_end]
     assert "ttk.LabelFrame(" not in section
-    assert "ttk.Separator(frame, orient=\"horizontal\")" in section
+    assert 'ttk.Separator(frame, orient="horizontal")' in section
+    assert "body.pack_forget()" in section
 
     build_start = review.index("    def _build(self) -> None:")
     build_end = review.index("    def _toggle_review_panel(", build_start)
@@ -6016,7 +6090,7 @@ def test_v2129_ocr_results_are_compact_single_row():
     start = text.index("class ReviewWindow")
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
-    assert 'text="OCR结果："' in review
+    assert 'right, "ocr", "OCR结果"' in review
     assert 'slots = (("P", "paddle"), ("T", "tesseract"), ("L", "lens"), ("融", "fusion"))' in review
     assert 'grid(row=0, column=slot_index' in review
     assert 'text="当前OCR结果"' not in review

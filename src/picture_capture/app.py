@@ -4007,6 +4007,11 @@ class ReviewWindow(tk.Toplevel):
         self.order_scope_var = tk.StringVar(value="current")
         self.digit_map_expanded = tk.BooleanVar(value=False)
         self.accent_panel_expanded = tk.BooleanVar(value=False)
+        self.review_right_section_expanded = {
+            key: tk.BooleanVar(value=True)
+            for key in ("display", "ocr", "network", "reference")
+        }
+        self._review_right_sections: dict[str, dict[str, object]] = {}
         self.autosave_label_var = tk.StringVar(value="")
         saved_digit_map = list(getattr(parent.settings, "review_digit_map", []) or [])
         defaults = list("áéíóúãçñõü")
@@ -4155,14 +4160,51 @@ class ReviewWindow(tk.Toplevel):
             options["width"] = width
         return tk.Button(parent, **options)
 
-    def _review_section_frame(
-        self, parent: tk.Misc, title: str, *, padding: int = 6
+    def _review_collapsible_section(
+        self, parent: tk.Misc, key: str, title: str, *, padding: int = 6,
+        fill: str = "x", expand: bool = False, pady=(0, 6),
     ) -> ttk.Frame:
-        """Return a truly flat titled section independent of native LabelFrame chrome."""
-        frame = ttk.Frame(parent, padding=padding, style="PCR.Surface.TFrame")
-        ttk.Label(frame, text=title, style="PCR.Header.TLabel").pack(anchor="w")
+        """Create one flat right-pane section; all sections start expanded."""
+        frame = ttk.Frame(parent, padding=(padding, 2), style="PCR.Surface.TFrame")
+        frame.pack(fill=fill, expand=expand, pady=pady)
+        title_var = tk.StringVar(value=f"▾ {title}")
+        toggle = ttk.Label(
+            frame, textvariable=title_var, style="PCR.Header.TLabel", cursor="hand2",
+        )
+        toggle.pack(fill="x")
+        toggle.bind(
+            "<Button-1>", lambda _event, section_key=key: self._toggle_review_right_section(section_key)
+        )
         ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=(3, 5))
-        return frame
+        body = ttk.Frame(frame, style="PCR.Surface.TFrame")
+        body.pack(fill="both", expand=True)
+        self._review_right_sections[key] = {
+            "frame": frame,
+            "body": body,
+            "title": title,
+            "title_var": title_var,
+            "expand_when_open": bool(expand),
+        }
+        return body
+
+    def _toggle_review_right_section(self, key: str) -> None:
+        section = self._review_right_sections.get(key)
+        state = self.review_right_section_expanded.get(key)
+        if section is None or state is None:
+            return
+        expanded = not bool(state.get())
+        state.set(expanded)
+        title = str(section["title"])
+        title_var = section["title_var"]
+        body = section["body"]
+        frame = section["frame"]
+        title_var.set(("▾ " if expanded else "▸ ") + title)
+        if expanded:
+            body.pack(fill="both", expand=True)
+            frame.pack_configure(expand=bool(section["expand_when_open"]))
+        else:
+            body.pack_forget()
+            frame.pack_configure(expand=False)
 
     def _build(self) -> None:
         panes = ttk.Panedwindow(self, orient="horizontal")
@@ -4329,9 +4371,10 @@ class ReviewWindow(tk.Toplevel):
             widget.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
             widget.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))
 
-        # Right: display controls, OCR choices, then the reference word list.
-        review_info = ttk.Frame(right, style="PCR.Surface.TFrame")
-        review_info.pack(fill="x", pady=(0, 6))
+        # Right: every logical block is collapsible; all start expanded.
+        review_info = self._review_collapsible_section(
+            right, "display", "显示设置", padding=6, fill="x", pady=(0, 6)
+        )
 
         height_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         height_row.pack(fill="x")
@@ -4428,19 +4471,20 @@ class ReviewWindow(tk.Toplevel):
             simplified_font_row, text="斜体", variable=self.review_simplified_font_italic_var
         ).pack(side="left", padx=(5, 0))
 
-        # Keep the four OCR sources on a single compact line.  Each available
+        # Keep the four OCR sources on a single compact line. Each available
         # result remains clickable, preserving the previous quick-fill workflow.
-        ttk.Separator(right, orient="horizontal").pack(fill="x", pady=(1, 5))
-        ocr_row = ttk.Frame(right, style="PCR.Surface.TFrame")
-        ocr_row.pack(fill="x", pady=(0, 6))
-        ttk.Label(ocr_row, text="OCR结果：", style="PCR.Header.TLabel").pack(side="left")
+        ocr_box = self._review_collapsible_section(
+            right, "ocr", "OCR结果", padding=6, fill="x", pady=(0, 6)
+        )
+        ocr_row = ttk.Frame(ocr_box, style="PCR.Surface.TFrame")
+        ocr_row.pack(fill="x")
         self.ocr_options = ttk.Frame(ocr_row, style="PCR.Surface.TFrame")
         self.ocr_options.pack(side="left", fill="x", expand=True)
 
-        network_box = self._review_section_frame(
-            right, "网络词汇核验（免费，无需 Token）", padding=6
+        network_box = self._review_collapsible_section(
+            right, "network", "网络词汇核验（免费，无需 Token）",
+            padding=6, fill="x", pady=(0, 6),
         )
-        network_box.pack(fill="x", pady=(0, 6))
         network_actions = ttk.Frame(network_box, style="PCR.Surface.TFrame")
         network_actions.pack(fill="x")
         ttk.Checkbutton(
@@ -4488,8 +4532,10 @@ class ReviewWindow(tk.Toplevel):
         self.network_status_label.pack(fill="x", pady=(4, 0))
         self._refresh_cc_cedict_button_idle()
 
-        ref_box = self._review_section_frame(right, "参考词表", padding=6)
-        ref_box.pack(fill="both", expand=True)
+        ref_box = self._review_collapsible_section(
+            right, "reference", "参考词表",
+            padding=6, fill="both", expand=True, pady=(0, 0),
+        )
         ref_actions = ttk.Frame(ref_box, style="PCR.Surface.TFrame")
         ref_actions.pack(fill="x", pady=(0, 3))
         ttk.Button(
@@ -8704,21 +8750,21 @@ class PictureCaptureApp(tk.Tk):
             style="PC.Treeview",
         )
         self._page_list_heading_labels = {"bookmark": "书签", "page": "页面", "lined": "画线", "fill_status": "填充状态", "illustrations": "插图"}
-        self.page_list.heading("bookmark", text="书签")
-        self.page_list.heading("page", text="页面")
-        self.page_list.heading("lined", text="画线")
-        self.page_list.heading("fill_status", text="填充状态")
-        self.page_list.heading("illustrations", text="插图")
+        self.page_list.heading("bookmark", text="书签", anchor="w")
+        self.page_list.heading("page", text="页面", anchor="w")
+        self.page_list.heading("lined", text="画线", anchor="w")
+        self.page_list.heading("fill_status", text="填充状态", anchor="w")
+        self.page_list.heading("illustrations", text="插图", anchor="w")
         self.page_list.heading("bookmark", command=lambda: self._sort_page_list("bookmark"))
         self.page_list.heading("page", command=lambda: self._sort_page_list("page"))
         self.page_list.heading("lined", command=lambda: self._sort_page_list("lined"))
         self.page_list.heading("fill_status", command=lambda: self._sort_page_list("fill_status"))
         self.page_list.heading("illustrations", command=lambda: self._sort_page_list("illustrations"))
-        self.page_list.column("bookmark", width=44, anchor="center", stretch=False)
+        self.page_list.column("bookmark", width=44, anchor="w", stretch=False)
         self.page_list.column("page", width=190, anchor="w", stretch=True)
-        self.page_list.column("lined", width=68, anchor="center", stretch=False)
-        self.page_list.column("fill_status", width=110, anchor="center", stretch=False)
-        self.page_list.column("illustrations", width=58, anchor="center", stretch=False)
+        self.page_list.column("lined", width=68, anchor="w", stretch=False)
+        self.page_list.column("fill_status", width=110, anchor="w", stretch=False)
+        self.page_list.column("illustrations", width=58, anchor="w", stretch=False)
         self.page_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self._page_list_scroll)
         self.page_list.configure(yscrollcommand=self._page_list_yscroll)
         self.page_list.grid(row=0, column=0, sticky="nsew")
@@ -8990,6 +9036,7 @@ class PictureCaptureApp(tk.Tk):
             iid = str(self.current_index)
             if self.page_list.exists(iid):
                 self.page_list.see(iid)
+                self._center_page_list_iid(iid)
 
     def _schedule_page_list_resort(self) -> None:
         if not self._page_list_sort_column or not hasattr(self, "page_list"):
@@ -9068,6 +9115,26 @@ class PictureCaptureApp(tk.Tk):
             return
         self._request_page_load(max(candidates) if direction < 0 else min(candidates))
 
+    def _center_page_list_iid(self, iid: str) -> None:
+        """Place one page row as close as possible to the vertical viewport center."""
+        try:
+            children = tuple(self.page_list.get_children(""))
+            if not children or iid not in children:
+                return
+            self.page_list.update_idletasks()
+            first, last = self.page_list.yview()
+            visible_fraction = max(0.0, min(1.0, float(last) - float(first)))
+            if visible_fraction <= 0.0:
+                return
+            position = children.index(iid)
+            row_center = (position + 0.5) / len(children)
+            target = row_center - visible_fraction / 2.0
+            max_start = max(0.0, 1.0 - visible_fraction)
+            self.page_list.yview_moveto(max(0.0, min(max_start, target)))
+            self._schedule_page_cell_overlay_refresh()
+        except (AttributeError, ValueError, tk.TclError):
+            return
+
     def _set_page_list_selection(self, index: int, *, ensure_visible: bool = True) -> None:
         """Synchronize the Treeview to exactly one page iid.
 
@@ -9087,6 +9154,7 @@ class PictureCaptureApp(tk.Tk):
         self.page_list.focus(iid)
         if ensure_visible:
             self.page_list.see(iid)
+            self._center_page_list_iid(iid)
 
     def _select_page_from_lined_overlay(self, index: int) -> None:
         if not self.project or not (0 <= index < len(self.project.images)):
@@ -9170,7 +9238,7 @@ class PictureCaptureApp(tk.Tk):
             text = str(self.page_list.set(iid, "lined"))
             label = tk.Label(
                 self.page_list, text=text, bg="#f8d7da", fg="#6b1f25",
-                bd=0, highlightthickness=0, anchor="center", padx=0, pady=0,
+                bd=0, highlightthickness=0, anchor="w", padx=4, pady=0,
             )
             label.place(x=x, y=y, width=width, height=height)
             label.bind("<Button-1>", lambda _e, i=index: self._select_page_from_lined_overlay(i))
@@ -9198,7 +9266,7 @@ class PictureCaptureApp(tk.Tk):
             bg, fg = style
             label = tk.Label(
                 self.page_list, text=status_text, bg=bg, fg=fg,
-                bd=0, highlightthickness=0, anchor="center", padx=0, pady=0,
+                bd=0, highlightthickness=0, anchor="w", padx=4, pady=0,
             )
             label.place(x=x, y=y, width=width, height=height)
             label.bind("<Button-1>", lambda _e, i=index: self._select_page_from_lined_overlay(i))
