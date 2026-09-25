@@ -147,7 +147,7 @@ def _get_text_detector(settings: AppSettings) -> Any:
         from paddleocr import TextDetection
     except ImportError as exc:
         raise RuntimeError(
-            "尚未安装 PaddleOCR。Windows 请运行 install_ocr_windows.bat；CPU 用户也可执行：uv sync --extra ocr-cpu"
+            "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或在受支持平台执行：uv sync --extra ocr-cpu"
         ) from exc
 
     kwargs: dict[str, Any] = {"enable_mkldnn": False}
