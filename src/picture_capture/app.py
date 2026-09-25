@@ -9116,6 +9116,8 @@ class PictureCaptureApp(tk.Tk):
             return None
         menu = tk.Menu(self, tearoff=False)
         self._apply_current_appearance(menu)
+        bookmark_var = tk.BooleanVar(value=True)
+        menu.add_checkbutton(label="书签", variable=bookmark_var, state="disabled")
         page_var = tk.BooleanVar(value=True)
         menu.add_checkbutton(label="页面", variable=page_var, state="disabled")
         section_var = tk.BooleanVar(value=True)
