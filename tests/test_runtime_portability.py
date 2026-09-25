@@ -39,7 +39,8 @@ def test_foreign_wordslist_path_falls_back_to_project_local_case_insensitively(t
         r"D:\\old-machine\\wordslist.txt",
         fallback_name="wordslist.txt",
     )
-    assert resolved == local
+    assert resolved.is_file()
+    assert resolved.samefile(local)
 
 
 def test_runtime_setting_is_machine_local_and_atomic(tmp_path: Path):
@@ -81,8 +82,10 @@ def test_legacy_pdic_and_ppp_casing_resolves_on_case_sensitive_filesystem(tmp_pa
     image.write_bytes(b"")
     (tmp_path / "Page001.PDIC").write_text("", encoding="utf-8")
     (tmp_path / "Page001.PpP").write_text("", encoding="utf-8")
-    assert pdic_path_for_image(image).name == "Page001.PDIC"
-    assert ppp_read_path_for_image(image).name == "Page001.PpP"
+    pdic = pdic_path_for_image(image)
+    ppp = ppp_read_path_for_image(image)
+    assert pdic.is_file() and pdic.samefile(tmp_path / "Page001.PDIC")
+    assert ppp.is_file() and ppp.samefile(tmp_path / "Page001.PpP")
 
 
 def test_picdic_accepts_legacy_manifest_and_image_case(tmp_path: Path):
