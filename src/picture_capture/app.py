@@ -319,6 +319,17 @@ def effective_main_overlay_font_size(
     return max(5, min(72, font_size))
 
 
+def scaled_overlay_line_width(value: int | float, overlay_scale: float) -> int:
+    """Convert a 100%-image line width to the current canvas display width.
+
+    Main overlay line settings are defined against the image/reference scale.
+    Rendering applies exactly one display ratio so Section, column guides,
+    headword markers and illustration outlines/borders all respond identically
+    when the page is zoomed.
+    """
+    return max(1, round(max(1.0, float(value)) * max(0.01, float(overlay_scale))))
+
+
 def binary_preview_image(source: Image.Image) -> Image.Image:
     """Create a display-only Otsu black/white preview without mutating source."""
     gray = ImageOps.grayscale(source)
@@ -1689,7 +1700,6 @@ class SettingsDialog(tk.Toplevel):
         ("横线Y精修横向分析范围（%）", "paddle_separator_roi_width_ratio", int),
         ("横线Y精修栏边余量（px）", "paddle_separator_column_margin", int),
         ("Tesseract 对照 PSM", "paddle_tesseract_psm", int),
-        ("Google Lens OCR语言", "paddle_lens_language", str),
         ("Google Lens 超时（秒）", "paddle_lens_timeout", int),
         ("Lens无置信度默认值", "paddle_lens_default_confidence", float),
         ("双OCR Y容差（行高比）", "paddle_alignment_y_tolerance_ratio", float),
@@ -1706,7 +1716,7 @@ class SettingsDialog(tk.Toplevel):
         ("校对界面字号", "review_entry_font_size", int),
         ("校对文本框上下边距（px）", "review_entry_vertical_padding", int),
         ("校对单字行高（0=中文自动2.5×）", "review_single_cjk_line_height", int),
-        ("校对默认缩放（%）", "review_zoom_percent", int),
+        ("校对缩放（0=自动适宽）", "review_zoom_percent", int),
         ("wordslist.txt 位置", "wordslist_path", str),
     ]
 
@@ -1764,7 +1774,7 @@ class SettingsDialog(tk.Toplevel):
             "paddle_header_rule_margin",
         ]),
         ("多 OCR / Google Lens", [
-            "paddle_tesseract_psm", "paddle_lens_language", "paddle_lens_timeout",
+            "paddle_tesseract_psm", "paddle_lens_timeout",
             "paddle_lens_default_confidence", "paddle_alignment_y_tolerance_ratio",
             "paddle_alignment_min_similarity", "paddle_conflict_review_margin",
         ]),
@@ -1882,7 +1892,7 @@ class SettingsDialog(tk.Toplevel):
         "paddle_separator_roi_width_ratio": "作用：横线 Y 精修时，只分析当前栏左侧一定百分比的横向区域，而不是整栏释义。这样可减少右侧长定义、插图或其他墨迹干扰。\n\n调整：减小更聚焦词头附近；太小可能只看到少量字符而不稳定。增大提供更多墨迹统计，但正文干扰也增加。",
         "paddle_separator_column_margin": "作用：横线精修分析时，从栏最左边缘跳过一小段区域，避免栏边线、装订阴影、竖直装饰线被误当作文字墨迹。\n\n调整：存在明显栏线/黑边时可增大；过大会跳过真正贴边的词头。单位按 1400 canonical 宽参考像素换算。",
         "paddle_tesseract_psm": "作用：Tesseract 对照 OCR 的 Page Segmentation Mode。当前词头候选带常见 PSM 6（单一均匀文本块）与 PSM 4（单栏但行/字号更灵活）；若开启【自动比较 PSM 4/6】，程序会自行比较，不必手动固定。\n\n调整：只有 Tesseract 对照结果明显分行错误且自动比较关闭时才改。它不影响 PaddleOCR。",
-        "paddle_lens_language": "作用：发送给 Google Lens OCR 的语言提示，用于第三意见路径；只有 Lens 已启用且实际被调用时才生效。它不是项目的主 OCR 语言，也不会修改 Paddle/Tesseract 设置。\n\n调整：填写与词头文字最接近的语言提示。若 Lens 仅作诊断，修改它不会改变本地 OCR。",
+        "paddle_lens_language": "Google Lens OCR 语言自动跟随【词头 OCR 语言】，不再单独配置。Profile 或 OCR 语言变化时会同步更新。",
         "paddle_lens_timeout": "作用：一次 Google Lens 网络 OCR 最长等待时间。超时后该次 Lens 结果会失败/缺失，但本地 Paddle/Tesseract 流程仍可继续。\n\n调整：网络慢而频繁超时时可增大；过大则在服务不可达时等待更久。Lens 是可选网络依赖，不建议用超长超时掩盖网络配置问题。",
         "paddle_lens_default_confidence": "作用：Lens 没有提供可直接比较的真实置信度时，给它一个用于多 OCR 质量比较的默认值。这个数会影响 Lens 在可投票模式下的相对权重。\n\n调整：提高会让无置信度 Lens 结果更容易与本地 OCR 竞争；降低则更保守。除非已系统评估 Lens 在本项目上的可靠性，否则保持默认。",
         "paddle_alignment_y_tolerance_ratio": "作用：Paddle 与 Tesseract/Lens 候选做跨引擎配对时，允许它们在 canonical 阅读轴 V 上相差多少个典型行高。只有位置足够接近的候选才可能被认为是同一词头。\n\n调整：增大可配对 Y 偏差较大的结果，但可能把相邻两条词头错配；减小更严格但会增加“各自独立候选”。",
@@ -1905,7 +1915,7 @@ class SettingsDialog(tk.Toplevel):
         "review_entry_font_size": "作用：校对窗口原词条编辑框固定字号；校对图片缩放不会自动把这个字号一起放大/缩小。这样可独立控制图片细节和文字编辑可读性。\n\n调整：增大便于阅读，但同一宽度能显示的字符数减少；减小反之。只影响界面。",
         "review_entry_vertical_padding": "作用：校对文本框内部上下对称留白（像素），主要用于避免重音、上标/下延部或特殊字体被单行 Entry 裁切。\n\n调整：字符顶/底被切时增大；过大会让每行校对控件显得过高。它不改变行高模型、图片裁图或 PDIC。",
         "review_single_cjk_line_height": "作用：校对窗口针对中文单字词条使用的特殊裁图行高。0 表示自动按项目典型行高的约 2.5 倍计算；非 0 时使用显式参考页规范高度。\n\n调整：单字大字头被上下裁掉时增大；留白过多时减小。只影响校对裁图展示，不改变词头检测位置。",
-        "review_zoom_percent": "作用：校对窗口打开时词条切图片的默认缩放比例。它只改变图片显示尺寸；校对文本字体大小由独立字体设置控制。\n\n调整：高分辨率扫描可适当降低以一次看更多行，小字难辨可提高。不会改变实际切图文件或坐标。",
+        "review_zoom_percent": "校对切条图片默认使用自动适宽：0 表示按校对窗口左侧实际图片区宽度自动计算，使切条图片占约 99%。手动输入百分比或使用 +/- 后切换为手动缩放；点击【自动】可恢复自动适宽。",
         "wordslist_path": "作用：指定参考 wordslist.txt，用于主界面/校对界面的“是否已在词表中”、定位和新旧比较等辅助判断。程序使用成员索引，不要求把整份大词表一次渲染到 GUI。\n\n路径：项目内文件优先保存相对路径便于迁移；项目外文件使用绝对路径。它是校对参考源，不会反向修改 OCR 识别结果。",
         "illustration_detect_padding": "作用：自动插图检测得到初始 PPP 轮廓/边界后，四周统一额外扩出的参考页规范像素，用于避免图像主体贴边被裁掉。\n\n调整：插图边缘经常缺失可增大；过大会吞入正文。它只影响自动生成的初始插图区域，之后人工编辑的 PPP 仍是最终依据。",
         "illustration_detect_right_padding": "作用：在通用插图外扩之外，右侧再额外扩展的参考页规范像素。用于某些词典插图常向栏间或右侧空白延伸的版式。\n\n调整：只在右侧经常被截时增加；过大会把邻近文字纳入插图。它不会修改已经人工确认过的 PPP 顶点，除非重新运行自动检测生成新的初始结果。",
@@ -1974,7 +1984,7 @@ class SettingsDialog(tk.Toplevel):
     EXPERT_FIELDS = (
         "layout_writing_mode", "layout_text_direction", "layout_transform",
         "layout_columns_policy", "layout_column_separator_mode",
-        "paddle_language", "paddle_lens_language", "paddle_lens_timeout",
+        "paddle_language", "paddle_lens_timeout",
         "paddle_lens_default_confidence",
         "paddle_headword_regex", "paddle_pos_regex", "paddle_special_symbol_regex",
     )
@@ -2017,7 +2027,7 @@ class SettingsDialog(tk.Toplevel):
         "illustration_detect_right_padding": (0, 5000, 1),
         "main_entry_font_size": (5, 200, 1), "review_entry_font_size": (6, 200, 1),
         "review_entry_vertical_padding": (0, 30, 1),
-        "review_single_cjk_line_height": (0, 500, 1), "review_zoom_percent": (20, 250, 5),
+        "review_single_cjk_line_height": (0, 500, 1), "review_zoom_percent": (0, 250, 5),
     }
 
     SETTING_HELP_IMAGES = {
@@ -3811,15 +3821,18 @@ class SettingsDialog(tk.Toplevel):
                     # are replaced automatically.
                     if name not in previous_backend or getattr(self.parent.settings, name) == previous_backend[name]:
                         setattr(self.parent.settings, name, value)
+            self.parent.settings.paddle_lens_language = str(
+                getattr(self.parent.settings, "ocr_language", "") or ""
+            )
             self.parent.settings.main_entry_font_family = str(self.parent.settings.main_entry_font_family).strip() or "DengXian"
             self.parent.settings.main_entry_font_size = max(5, int(self.parent.settings.main_entry_font_size))
             self.parent.settings.main_entry_width_chars = max(4, int(self.parent.settings.main_entry_width_chars))
             self.parent.settings.main_entry_x_ratio = min(1.25, max(0.0, float(self.parent.settings.main_entry_x_ratio)))
-            self.parent.settings.review_entry_font_family = str(self.parent.settings.review_entry_font_family).strip() or "Cambria"
+            self.parent.settings.review_entry_font_family = str(self.parent.settings.review_entry_font_family).strip() or "DengXian"
             self.parent.settings.review_entry_font_size = max(6, int(self.parent.settings.review_entry_font_size))
             self.parent.settings.review_entry_vertical_padding = min(30, max(0, int(self.parent.settings.review_entry_vertical_padding)))
             self.parent.settings.review_single_cjk_line_height = min(500, max(0, int(self.parent.settings.review_single_cjk_line_height)))
-            self.parent.settings.review_zoom_percent = min(250, max(20, int(self.parent.settings.review_zoom_percent)))
+            review_zoom_percent = int(self.parent.settings.review_zoom_percent)\n            self.parent.settings.review_zoom_percent = (\n                0 if review_zoom_percent <= 0 else min(250, max(20, review_zoom_percent))\n            )
             if not 0 <= int(self.parent.settings.crop_parallel_workers) <= 8:
                 raise ValueError("切图并行进程数必须为 0–8；0 表示自动，1 表示串行。")
             if not 1 <= int(self.parent.settings.paddle_band_width_ratio) <= 100:
@@ -3921,12 +3934,12 @@ class ReviewWindow(tk.Toplevel):
         # Review typography is deliberately independent from the image zoom.
         # Expose the same persisted font settings directly in the review window
         # so users do not need to return to the detailed-settings dialog.
-        self.review_font_family_var = tk.StringVar(value=str(parent.settings.review_entry_font_family or "Cambria"))
+        self.review_font_family_var = tk.StringVar(value=str(parent.settings.review_entry_font_family or "DengXian"))
         self.review_font_size_var = tk.StringVar(value=str(_review_editor_font_size(parent.settings)))
         self.review_font_bold_var = tk.BooleanVar(value=bool(parent.settings.review_entry_font_bold))
         self.review_font_italic_var = tk.BooleanVar(value=bool(parent.settings.review_entry_font_italic))
         self.review_simplified_font_family_var = tk.StringVar(
-            value=str(getattr(parent.settings, "review_simplified_font_family", parent.settings.review_entry_font_family) or "Cambria")
+            value=str(getattr(parent.settings, "review_simplified_font_family", parent.settings.review_entry_font_family) or "DengXian")
         )
         self.review_simplified_font_size_var = tk.StringVar(
             value=str(max(6, int(getattr(parent.settings, "review_simplified_font_size", _review_editor_font_size(parent.settings)))))
@@ -5579,7 +5592,7 @@ class ReviewWindow(tk.Toplevel):
 
     def _apply_review_font_settings(self) -> None:
         self._review_font_apply_job = None
-        family = self.review_font_family_var.get().strip() or "Cambria"
+        family = self.review_font_family_var.get().strip() or "DengXian"
         try:
             size = int(float(self.review_font_size_var.get().strip()))
         except (TypeError, ValueError):
@@ -5626,7 +5639,7 @@ class ReviewWindow(tk.Toplevel):
 
     def _apply_review_simplified_font_settings(self) -> None:
         self._review_simplified_font_apply_job = None
-        family = self.review_simplified_font_family_var.get().strip() or "Cambria"
+        family = self.review_simplified_font_family_var.get().strip() or "DengXian"
         try:
             size = int(float(self.review_simplified_font_size_var.get().strip()))
         except (TypeError, ValueError):
@@ -6226,7 +6239,7 @@ class ReviewWindow(tk.Toplevel):
                 self,
                 (
                     self.parent.settings.review_entry_font_family,
-                    "Cambria", "Times New Roman", "Times", "Noto Serif CJK SC", "DejaVu Serif",
+                    "DengXian", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
                 ),
             )
             review_weight = "bold" if self.parent.settings.review_entry_font_bold else "normal"
@@ -10340,6 +10353,9 @@ class PictureCaptureApp(tk.Tk):
                 ).items():
                     if hasattr(self.settings, setting_name):
                         setattr(self.settings, setting_name, setting_value)
+            # Lens always follows the active headword OCR language, including
+            # old projects that still carry a historical independent value.
+            self.settings.paddle_lens_language = current_ocr_language
             for name, var in self.quick_bool_vars.items(): setattr(self.settings, name, bool(var.get()))
             for name, var in getattr(self, "quick_color_vars", {}).items():
                 value = str(var.get()).strip()
@@ -12641,7 +12657,7 @@ class PictureCaptureApp(tk.Tk):
             geometry.source_size,
         )
 
-        marker_line_width = max(2, round(self.settings.marker_height * overlay_scale))
+        marker_line_width = scaled_overlay_line_width(self.settings.marker_height, overlay_scale)
         show_markers = (
             self.quick_bool_vars.get("show_headword_markers").get()
             if hasattr(self, "quick_bool_vars") and "show_headword_markers" in self.quick_bool_vars
@@ -13098,7 +13114,7 @@ class PictureCaptureApp(tk.Tk):
                         self.canvas.create_line(
                             *coords,
                             fill=self.settings.guide_color,
-                            width=max(1, round(self.settings.guide_width * overlay_scale)),
+                            width=scaled_overlay_line_width(self.settings.guide_width, overlay_scale),
                             smooth=True,
                         )
             self._draw_page_sections(geometry)
@@ -13169,7 +13185,7 @@ class PictureCaptureApp(tk.Tk):
                     polygon_item = self.canvas.create_polygon(
                         coords, fill=self.settings.illustration_fill_color, stipple="gray50",
                         outline=self.settings.illustration_outline_color,
-                        width=max(1, int(self.settings.illustration_outline_width)),
+                        width=scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale),
                         tags=("ppp-overlay", f"ppp-region-{region_index}"),
                     )
                 handles: list[int] = []
@@ -13203,7 +13219,7 @@ class PictureCaptureApp(tk.Tk):
                 label_item = None
                 label_frame = None
                 if show_labels:
-                    label_border_width = max(1, int(self.settings.illustration_label_border_width))
+                    label_border_width = scaled_overlay_line_width(\n                        self.settings.illustration_label_border_width, overlay_scale\n                    )
                     label_frame = tk.Frame(
                         self.canvas, bg=self.settings.illustration_label_border_color,
                         bd=0, padx=label_border_width, pady=label_border_width,
@@ -13689,9 +13705,9 @@ class PictureCaptureApp(tk.Tk):
         geometry = geometry or self._get_cached_display_geometry()
         canonical_width, _canonical_height = geometry.transform.canonical_size(self.image.size)
         overlay_scale = self.view_scale / parameter_scale(self.image, self.settings)
-        line_width = max(
-            1,
-            round(int(getattr(self.settings, "page_section_width", 2) or 2) * overlay_scale),
+        line_width = scaled_overlay_line_width(
+            int(getattr(self.settings, "page_section_width", 2) or 2),
+            overlay_scale,
         )
         line_fill = str(getattr(self.settings, "page_section_color", "#1976d2") or "#1976d2")
         for index, section in enumerate(self.page_sections):
