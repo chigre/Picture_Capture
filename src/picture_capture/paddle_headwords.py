@@ -2265,12 +2265,13 @@ def _cjk_word_for_visual_run(
         profile_pinyin = None
         if (
             profile is not None
-            and "pinyin_after_headword" in set(profile.headword_features)
+            and profile.family == "cjk_visual"
+            and bool(getattr(settings, "profile_cjk_allow_single_headword", True))
         ):
-            # The visual rescue must honor the same explicit Project Profile
-            # feature even when the generic parser path declines the short OCR
-            # fragment.  This direct structural check remains narrow: one Han
-            # glyph at the record start followed by romanization.
+            # The visual-headword family explicitly treats one large Han glyph
+            # followed by romanization as the same single-character entry
+            # family.  Run that narrow parser directly even if the generic
+            # parser path declined the clipped OCR fragment.
             profile_pinyin = _parse_cjk_single_with_pinyin(record.text, settings)
         if profile_pinyin is not None:
             parsed = profile_pinyin
