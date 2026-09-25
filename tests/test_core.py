@@ -7314,6 +7314,10 @@ def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order()
     assert aux.index('"review_main_show_ocr_background"') < aux.index('text="显示单行候选框"')
     assert 'fill="#ffffff"' in text
     assert 'fill=line_fill, outline=line_fill' in text
+    assert 'overlay_scale = self.view_scale / parameter_scale(self.image, self.settings)' in text
+    assert 'round(int(getattr(self.settings, "page_section_width", 2) or 2) * overlay_scale)' in text
+    assert 'label_x = ((top_start[0] + top_end[0]) / 2.0) * self.view_scale' in text
+    assert 'fill="#ffffff", anchor="s"' in text
 
 
 def test_page_list_fills_width_adaptively_and_fill_status_is_opt_in_by_default():
