@@ -1540,7 +1540,8 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     done_start = preview.index("        def done(", worker_start)
     worker = preview[worker_start:done_start]
     assert "ImageTk.PhotoImage" not in worker
-    assert 'themed_display_image(preview, getattr(self.parent, "appearance_mode", "light"))' in preview[done_start:]
+    assert "themed_display_image(" in preview[done_start:]
+    assert 'preview, getattr(self.parent, "appearance_mode", "light")' in preview[done_start:]
 
 
 def test_round2_training_zip_cancel_is_atomic(tmp_path):
