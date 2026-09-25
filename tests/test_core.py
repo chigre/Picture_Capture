@@ -7332,6 +7332,18 @@ def test_settings_display_labels_stay_single_line_and_dark_mode_name_is_current(
     assert 'single_line_labels=True' in text[display_call:display_call + 240]
 
 
+def test_page_list_context_menu_matches_visible_column_order():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    def _page_list_right_click")
+    end = text.index("    def _schedule_page_cell_overlay_refresh", start)
+    block = text[start:end]
+    assert block.index('label="页面"') < block.index('label="Section"')
+    assert block.index('label="Section"') < block.index('label="画线"')
+    assert block.index('label="画线"') < block.index('label="插图"')
+    assert block.index('label="插图"') < block.index('label="填充状态"')
+
+
 def test_page_list_fills_width_adaptively_and_fill_status_is_opt_in_by_default():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
