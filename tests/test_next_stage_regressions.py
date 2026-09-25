@@ -6,7 +6,8 @@ from PIL import Image
 
 from picture_capture.app import (
     PictureCaptureApp, SettingsDialog, binary_preview_image, effective_main_overlay_font_size,
-    ReviewWindow, VerticalWordText, horizontal_ocr_menu_layout, horizontal_overlay_layout,
+    ReviewWindow, VerticalWordText, entry_index_label_layout,
+    horizontal_ocr_menu_layout, horizontal_overlay_layout,
     transformed_entry_anchor, vertical_marker_contact_gap, vertical_ocr_menu_layout,
     vertical_overlay_layout,
 )
@@ -637,6 +638,18 @@ def test_vertical_proxy_reuses_editor_membership_and_confidence_style():
     missing = PictureCaptureApp._entry_overlay_style(fake, Entry("missing", 0, 0, confidence=.5))
     assert known == ("#c8e6c9", "#b0b0b0", 1)
     assert missing == ("#ffcdd2", "#d32f2f", 2)
+
+
+def test_entry_sequence_label_sits_before_editor_in_reading_direction():
+    assert entry_index_label_layout(
+        500, 150, 180, 24, horizontal=True, rtl=False,
+    ) == (498.0, 150.0, "ne")
+    assert entry_index_label_layout(
+        500, 150, 180, 24, horizontal=True, rtl=True,
+    ) == (502.0, 150.0, "nw")
+    assert entry_index_label_layout(
+        0, 0, 28, 180, horizontal=False, vertical_box=(568, 200, 596, 380),
+    ) == (582.0, 198.0, "s")
 
 
 def test_horizontal_ltr_rtl_are_mirror_equivalent():
