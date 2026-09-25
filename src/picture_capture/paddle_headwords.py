@@ -2263,15 +2263,20 @@ def _cjk_word_for_visual_run(
 
         parsed = parse_headword_text(record.text, settings, profile=profile)
         profile_pinyin = None
-        if (
-            profile is not None
-            and profile.family == "cjk_visual"
-            and bool(getattr(settings, "profile_cjk_allow_single_headword", True))
-        ):
-            # The visual-headword family explicitly treats one large Han glyph
-            # followed by romanization as the same single-character entry
-            # family.  Run that narrow parser directly even if the generic
-            # parser path declined the clipped OCR fragment.
+        parser_controls = int(
+            getattr(settings, "profile_parser_controls_version", 0) or 0
+        ) >= 1
+        single_enabled = (
+            bool(getattr(settings, "profile_cjk_allow_single_headword", True))
+            if parser_controls else True
+        )
+        if single_enabled:
+            # "大字单字" is the user-facing Project Profile contract.  Inside an
+            # already detected oversized visual run, a record that starts with
+            # one Han glyph plus romanization is strong structure even when the
+            # generic parser/profile metadata did not return a parsed object.
+            # The compact-width and overlap gates below still prevent ordinary
+            # definition lines from using this relaxed path.
             profile_pinyin = _parse_cjk_single_with_pinyin(record.text, settings)
         if profile_pinyin is not None:
             parsed = profile_pinyin
