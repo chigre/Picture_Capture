@@ -4306,6 +4306,12 @@ class ReviewWindow(tk.Toplevel):
             self.update_idletasks()
         except tk.TclError:
             return
+        if self._review_auto_zoom_job is not None:
+            try:
+                self.after_cancel(self._review_auto_zoom_job)
+            except tk.TclError:
+                pass
+            self._review_auto_zoom_job = None
         self._review_auto_zoom_width = self._review_image_area_width()
         self._request_render_rows(focus_index=0)
 
@@ -5944,6 +5950,7 @@ class ReviewWindow(tk.Toplevel):
         self.review_zoom_auto = False
         self.review_zoom = max(0.20, min(2.5, self.review_zoom * factor))
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+        self.parent.save_settings()
         self.review_zoom_var.set(f"{round(self.review_zoom * 100):d}%")
         active = self.active_index
         self._request_render_rows(focus_index=active)
@@ -5951,6 +5958,8 @@ class ReviewWindow(tk.Toplevel):
     def apply_review_zoom_text(self, _event=None) -> None:
         raw = self.review_zoom_var.get().strip()
         if not raw or raw.casefold().startswith(("自动", "auto")):
+            if self.review_zoom_auto:
+                return
             self.reset_review_zoom()
             return
         try:
@@ -5965,6 +5974,7 @@ class ReviewWindow(tk.Toplevel):
         self.review_zoom_auto = False
         self.review_zoom = min(2.5, max(0.20, percent / 100.0))
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+        self.parent.save_settings()
         self.review_zoom_var.set(f"{round(self.review_zoom * 100):d}%")
         active = self.active_index
         self._request_render_rows(focus_index=active)
@@ -5973,6 +5983,7 @@ class ReviewWindow(tk.Toplevel):
         self._commit_edits()
         self.review_zoom_auto = True
         self.parent.settings.review_zoom_percent = 0
+        self.parent.save_settings()
         self.review_zoom_var.set("自动")
         self._review_auto_zoom_width = self._review_image_area_width()
         active = self.active_index
