@@ -4983,9 +4983,10 @@ def test_v21118_review_page_change_resets_crop_text_scroll_to_top():
     assert "self.after_idle(reset_after_layout)" in body
     change_start = body.index("    def change_page")
     change = body[change_start:]
-    assert "self.render_rows()" in change
+    assert "self._request_render_rows(focus_index=0, reset_scroll=True)" in change
+    assert "self.render_rows(preloaded_crops=crops)" in change
     assert "self._reset_rows_scroll_top()" in change
-    assert change.index("self.render_rows()") < change.index("self._reset_rows_scroll_top()")
+    assert change.index("self.render_rows(preloaded_crops=crops)") < change.index("self._reset_rows_scroll_top()")
 
 
 def test_v21119_review_text_similarity_normalizes_spacing_punctuation_and_case():
