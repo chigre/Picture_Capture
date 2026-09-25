@@ -1,5 +1,14 @@
 ## v2.14.0
 
+### 跨平台安装与验证
+
+- OCR 安装逻辑统一到 `scripts/ocr_setup.py`；Windows 旧入口保留兼容包装，新增 Linux `install_ocr_linux.sh/run_linux.sh` 与 macOS `install_ocr_macos.command/run_macos.command`。
+- 平台支持矩阵纳入运行时判定：Windows/Linux x86_64 支持 Paddle CPU 与 NVIDIA GPU profile，Linux arm64 与 macOS arm64 自动限定 Paddle CPU，Intel macOS 不再误尝试安装当前无官方 x86_64 wheel 的 PaddlePaddle 3.3.x。
+- NVIDIA GPU 自动推荐从 Windows 扩展到 Linux x86_64，并继续执行 Compute Capability、驱动 CUDA compatibility 与真实 Paddle GPU `conv2d` 三层校验。
+- GitHub Actions CI 从单一 Ubuntu 扩展为 Ubuntu/Windows/macOS matrix；每个平台检查核心 uv 环境、Tkinter、平台支持契约、受支持时的 OCR CPU profile dry-run、pytest、compatibility runner、compileall、Ruff 与 wheel build。
+- Release ZIP 现在显式包含 `scripts/` 与三平台安装/启动入口，并在打包阶段保留 Unix/macOS 启动脚本的可执行权限，修复此前 Release 打包未包含安装器所依赖 `scripts/` 的问题。
+- 新增 `docs/platform-support.md`，并将 README/OCR 安装文档改为跨平台说明。
+
 ### OCR 安装器自动推荐 GPU
 
 - Windows OCR 安装器启动时自动调用 `nvidia-smi` 检测 NVIDIA GPU、GPU Compute Capability、驱动版本与驱动报告的最高 CUDA 兼容版本；自动推荐 GPU 现在同时要求主 GPU（GPU 0）Compute Capability > 7.5，并自动选择不高于驱动兼容上限的最高已声明 PaddlePaddle GPU profile。
