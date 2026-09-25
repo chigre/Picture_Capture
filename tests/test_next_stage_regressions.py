@@ -301,7 +301,7 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert "label.configure(wraplength=wraplength)" in settings
     assert "control.columnconfigure(0, weight=1)" in settings
     assert 'widget.grid(row=0, column=0, sticky="ew")' in settings
-    assert "wraplength=180" in settings
+    assert "wraplength=0 if single_line_labels else 180" in settings
     assert 'justify="left"' in settings
     assert 'style="PC.Settings.TNotebook"' in settings
     assert '"PC.Settings.TNotebook.Tab"' in settings
