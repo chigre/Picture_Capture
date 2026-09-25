@@ -1948,11 +1948,11 @@ class SettingsDialog(tk.Toplevel):
         "batch_interval": "作用：自动保存/批量相关状态写盘的节流间隔，用来避免每次微小编辑都立即写文件。它影响保存频率，不是 OCR 批量任务“每隔几秒处理一页”的间隔。\n\n调整：过短增加磁盘写入和界面抖动风险；过长则异常退出时可能丢失更多最近改动。通常保持数秒级即可。",
         "marker_height": "作用：主界面词头横线的显示线宽/可视厚度，绘制时会按当前界面缩放和旧项目兼容比例调整。它影响视觉与点击辨识，不改变词头 Y 坐标或 OCR 判定。\n\n调整：高 DPI/高缩放下看不清可适当增大；过粗会遮挡文字。属于纯显示参数。",
         "guide_width": "作用：主界面栏左参考线/列路径的显示宽度。只控制视觉叠加层，不改变列跟踪、栏位置或切图数据。\n\n调整：为了在高分辨率屏幕上更易观察可增大；如果参考线遮挡正文则减小。识别结果不应随它变化。",
-        "main_entry_font_family": "作用：主界面可编辑词条文本框与部分预览标签使用的字体族。只改变显示/编辑体验，不修改 PDIC 文本、OCR 结果或排序。\n\n选择：优先使用能完整覆盖项目字符集的字体；若出现方框/缺字，应换字体而不是修改 OCR。",
+        "main_entry_font_family": "作用：主界面可编辑词条文本框与部分预览标签使用的字体族。只改变显示/编辑体验，不修改 PDIC 文本、OCR 结果或排序。\n\n选择：【自动（系统推荐）】会根据当前 OCR 语言和操作系统选择原生/常用无衬线字体；手动选择任一已安装字体后则固定使用该字体。若出现方框/缺字，应换字体而不是修改 OCR。",
         "main_entry_font_size": "作用：主界面词条编辑框在 100% 视图下的基础字号；实际显示会结合当前视图缩放。只影响界面文字大小，不改变图像坐标、词条线或切图。\n\n调整：增大便于校对但会占更多画布空间；过小影响阅读。它与图片缩放是两套独立概念。",
         "main_entry_width_chars": "作用：主界面词条编辑控件的目标宽度，以字符数估算；横排时主要控制 Entry 宽度，竖排模式则用于窄 Text 控件的可见长度/高度语义。\n\n调整：长词头经常看不全可增大；过大会遮挡原图。只影响编辑控件，不改变词条内容。",
         "main_entry_x_ratio": "作用：主界面词条编辑框相对当前栏宽的横向放置比例，用来把文本框挪到更不遮挡原图的位置。位置换算会考虑 layout transform/RTL。\n\n调整：只改变 GUI 叠加位置；不会修改 entry.x/PDIC 坐标或识别结果。不同版式遮挡严重时再调。",
-        "review_entry_font_family": "作用：校对窗口中“原词条”编辑框使用的字体，与主界面字体和简体伴随列字体相互独立。只影响显示和字符宽度测量。\n\n选择：应完整覆盖重音字母/CJK/特殊符号；字体变化可能改变编辑框按裁图宽度换算出的可见字符数，但不会修改保存文字。",
+        "review_entry_font_family": "作用：校对窗口中“原词条”编辑框使用的字体，与主界面字体和简体伴随列字体相互独立。只影响显示和字符宽度测量。\n\n选择：【自动（系统推荐）】会根据当前 OCR 语言和操作系统选择字体；手动选择后固定使用该字体。字体应完整覆盖重音字母/CJK/特殊符号；字体变化可能改变编辑框按裁图宽度换算出的可见字符数，但不会修改保存文字。",
         "review_entry_font_size": "作用：校对窗口原词条编辑框固定字号；校对图片缩放不会自动把这个字号一起放大/缩小。这样可独立控制图片细节和文字编辑可读性。\n\n调整：增大便于阅读，但同一宽度能显示的字符数减少；减小反之。只影响界面。",
         "review_entry_vertical_padding": "作用：校对文本框内部上下对称留白（像素），主要用于避免重音、上标/下延部或特殊字体被单行 Entry 裁切。\n\n调整：字符顶/底被切时增大；过大会让每行校对控件显得过高。它不改变行高模型、图片裁图或 PDIC。",
         "review_single_cjk_line_height": "作用：校对窗口针对中文单字词条使用的特殊裁图行高。0 表示自动按项目典型行高的约 2.5 倍计算；非 0 时使用显式参考页规范高度。\n\n调整：单字大字头被上下裁掉时增大；留白过多时减小。只影响校对裁图展示，不改变词头检测位置。",
@@ -2335,7 +2335,10 @@ class SettingsDialog(tk.Toplevel):
             widget.bind("<FocusOut>", lambda _e: self._refresh_sort_choices())
             return widget
         if name in {"main_entry_font_family", "review_entry_font_family"}:
-            families = tuple(sorted(set(font.families()), key=str.casefold))
+            families = (
+                AUTO_FONT_FAMILY,
+                *tuple(sorted(set(font.families()), key=str.casefold)),
+            )
             return ttk.Combobox(
                 parent, textvariable=var, values=families, state="normal", width=26,
             )
@@ -10419,6 +10422,13 @@ class PictureCaptureApp(tk.Tk):
                         value = self._quick_geometry_value(name)
                     if name == "main_entry_x_ratio":
                         value = round(float(value) * 100)
+                    if name in {
+                        "main_entry_font_family",
+                        "illustration_label_font_family",
+                        "review_entry_font_family",
+                        "review_simplified_font_family",
+                    }:
+                        value = normalize_content_font_setting(value)
                     var.set(str(value))
             for name, var in getattr(self, "quick_bool_vars", {}).items():
                 if hasattr(self.settings, name):
