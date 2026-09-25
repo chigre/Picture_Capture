@@ -3893,7 +3893,7 @@ def test_v2110_entry_crop_whitens_standalone_ppp_but_preserves_linked_ppp(tmp_pa
 def test_v2110_page_list_heading_context_menu_has_optional_columns_and_permanent_page():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'self.page_list.bind("<Button-3>", self._page_list_right_click)' in text
+    assert "bind_context_menu(self.page_list, self._page_list_right_click)" in text
     assert 'menu.add_checkbutton(label="页面", variable=page_var, state="disabled")' in text
     assert 'label="画线"' in text and 'label="填充状态"' in text and 'label="插图"' in text
 
