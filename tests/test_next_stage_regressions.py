@@ -643,13 +643,13 @@ def test_vertical_proxy_reuses_editor_membership_and_confidence_style():
 def test_entry_sequence_label_sits_before_editor_in_reading_direction():
     assert entry_index_label_layout(
         500, 150, 180, 24, horizontal=True, rtl=False,
-    ) == (498.0, 150.0, "ne")
+    ) == (500.0, 150.0, "ne")
     assert entry_index_label_layout(
         500, 150, 180, 24, horizontal=True, rtl=True,
-    ) == (502.0, 150.0, "nw")
+    ) == (500.0, 150.0, "nw")
     assert entry_index_label_layout(
         0, 0, 28, 180, horizontal=False, vertical_box=(568, 200, 596, 380),
-    ) == (582.0, 198.0, "s")
+    ) == (582.0, 200.0, "s")
 
 
 def test_horizontal_ltr_rtl_are_mirror_equivalent():
