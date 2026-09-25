@@ -17,7 +17,10 @@ from picture_capture.models import (
 )
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
-from picture_capture.processing import _left_edge_ink_mask, derive_geometry, refine_existing_entries
+from picture_capture.processing import (
+    _left_edge_ink_mask, apply_column_start_offsets, derive_geometry,
+    derive_nominal_geometry, refine_existing_entries,
+)
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
     effective_page_settings,
@@ -1268,6 +1271,86 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "下半页候选" in text
     assert "左缘最大漂移" in text
     assert "原始OCR完整但词头在中途停止" in text
+
+
+def test_project_profile_column_left_nudges_persist_and_drive_geometry(tmp_path):
+    settings = AppSettings(
+        columns=2,
+        manual_x=40,
+        column_width=300,
+        gutter=40,
+        geometry_coordinate_version=2,
+        geometry_reference_width=800,
+        column_start_offsets=[0, 12],
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(800, 1000, settings)
+    assert geometry.column_starts == [40, 392]
+
+    # Offsets live in reference-page pixels just like the other persisted
+    # Project Profile geometry fields, so they scale with scan resolution.
+    larger = derive_nominal_geometry(1600, 2000, settings)
+    assert larger.column_starts == [80, 784]
+
+    path = tmp_path / "settings.json"
+    settings.to_json(path)
+    reopened = AppSettings.from_json(path)
+    assert reopened.column_start_offsets == [0, 12]
+
+    # Corrupt/extreme nudges are clipped before columns can cross.
+    guarded = apply_column_start_offsets(
+        [40, 380], [250, -250], gutter=40, max_x=799,
+    )
+    assert guarded[0] < guarded[1]
+    assert guarded[1] - guarded[0] >= 50
+
+
+def test_project_profile_exposes_clickable_column_left_line_nudging():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'text="栏左线微调"' in text
+    assert "点击右侧预览中的栏左线选择；选中线显示为橙色" in text
+    assert 'text="← 左移"' in text
+    assert 'text="右移 →"' in text
+    assert 'text="重置当前"' in text
+    assert 'text="重置全部"' in text
+    assert "def _shift_selected_column" in text
+    assert "self.working.column_start_offsets = offsets" in text
+    assert "s.column_start_offsets = self._column_offsets_for_count(s.columns)" in text
+    assert 'canvas.bind(\n                "<Button-1>"' in text
+    assert 'fill="#ee7c00" if column_index == selected_column else "#1e78d2"' in text
+    assert "self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))" in text
+    assert "def _nudge_template_column_preview" in text
+    assert "canvas.move(items[index], dx, dy)" in text
+    assert "self._profile_input_changed(refresh_preview=False)" in text
+    select_start = text.index("    def _select_template_column(")
+    select_end = text.index("\n\n    def _refresh_template_controls", select_start)
+    assert "_refresh_template_preview" not in text[select_start:select_end]
+    assert "self._update_template_column_highlight()" in text[select_start:select_end]
+    assert "canvas.create_image(0, 0, image=photo, anchor=\"nw\")" in text
+
+
+def test_project_profile_validation_masks_remain_translucent():
+    from picture_capture.processing import ColumnPath, Geometry
+    from picture_capture.profile_setup import ProjectProfileWizard
+
+    image = Image.new("RGB", (100, 100), "white")
+    geometry = Geometry(
+        column_starts=[10], column_widths=[80], top=20, bottom=100,
+        column_paths=[ColumnPath([(20, 10), (100, 10)])],
+    )
+    settings = AppSettings(
+        profile_header_mode="present", profile_header_percent=20.0,
+        profile_footer_mode="none", profile_side_content_mode="none",
+    )
+    preview = ProjectProfileWizard._marker_preview(
+        image, [], geometry, settings, 0, 100,
+    )
+    pixel = preview.getpixel((50, 10))
+    assert pixel != (255, 215, 0)
+    assert pixel != (255, 255, 255)
+    assert pixel[0] == 255 and 215 < pixel[1] < 255 and 0 < pixel[2] < 255
+
 
 
 def test_project_profile_wizard_is_the_normal_entry_path():

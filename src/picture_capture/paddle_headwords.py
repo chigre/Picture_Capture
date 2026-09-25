@@ -2129,10 +2129,35 @@ def match_ocr_lines_to_image_boundaries(
     return matches
 
 
-def _first_cjk_ideograph(text: str) -> str:
-    for ch in unicodedata.normalize("NFKC", text or ""):
-        if _is_single_cjk_ideograph(ch):
-            return ch
+def _leading_cjk_ideograph(text: str) -> str:
+    """Return a CJK glyph only when it is the actual leading token.
+
+    Visual single-character rescue must never mine an arbitrary Han character
+    from the middle of an ordinary definition line (for example "Âm: 波 ba ...").
+    The oversized glyph may be followed by pinyin/variants, but it must itself
+    start the OCR record.
+    """
+    normalized = unicodedata.normalize("NFKC", text or "").lstrip()
+    if not normalized or not _is_single_cjk_ideograph(normalized[0]):
+        return ""
+    tail = normalized[1:].lstrip()
+    if not tail:
+        return normalized[0]
+    # A rescue record may append pinyin/pronunciation to the display glyph, but
+    # ordinary Chinese prose beginning with several Han characters is not a
+    # single-character headword record.
+    first_tail = tail[0]
+    if _is_single_cjk_ideograph(first_tail):
+        return ""
+    if first_tail.isalpha():
+        return normalized[0]
+    if first_tail in "([（［/·,，:：":
+        remainder = tail[1:].lstrip(" 	([（［/·,，:：")
+        if not remainder or (
+            remainder[0].isalpha()
+            and not _is_single_cjk_ideograph(remainder[0])
+        ):
+            return normalized[0]
     return ""
 
 
@@ -2210,7 +2235,13 @@ def _cjk_visual_projection_runs(
 def _cjk_word_for_visual_run(
     records: list[OCRRecord], run: tuple[int, int], zone_width: int, settings: AppSettings,
 ) -> tuple[str, float, OCRRecord | None]:
-    """Pick the best OCR token associated with one visual single-character run."""
+    """Pick an OCR token that physically represents one oversized CJK glyph.
+
+    A visual run is only a location hypothesis. It must be backed by an OCR
+    record whose own box substantially overlaps the run. Fallback extraction is
+    allowed only when the OCR record itself begins with the Han glyph; arbitrary
+    Han characters inside ordinary definition text are never promoted.
+    """
     start, end = run
     center = (start + end) / 2.0
     height = max(1, end - start)
@@ -2219,22 +2250,35 @@ def _cjk_word_for_visual_run(
         x0, y0, x1, y1 = record.box
         if x0 > zone_width * 1.12:
             continue
+        record_height = max(1, y1 - y0)
         overlap = max(0, min(end, y1) - max(start, y0))
         record_center = (y0 + y1) / 2.0
-        if overlap <= 0 and abs(record_center - center) > height * 0.68:
-            continue
-        parsed = parse_headword_text(record.text, settings)
-        word = ""
-        quality_rank = 2
-        if parsed and _is_single_cjk_ideograph(parsed.normalized):
-            word = parsed.normalized
-            quality_rank = 0
-        if not word:
-            word = _first_cjk_ideograph(record.text)
-            quality_rank = 1 if word else 2
-        if not word:
-            continue
         distance = abs(record_center - center)
+
+        parsed = parse_headword_text(record.text, settings)
+        parsed_single = bool(
+            parsed and _is_single_cjk_ideograph(parsed.normalized)
+        )
+        word = parsed.normalized if parsed_single else _leading_cjk_ideograph(record.text)
+        if not word:
+            continue
+
+        # A genuine large-glyph OCR box is vertically comparable with the visual
+        # run. Ordinary body lines near a merged/tall projection run are much
+        # shorter and therefore cannot rescue themselves into headwords.
+        minimum_height_ratio = 0.40 if parsed_single else 0.55
+        if record_height < height * minimum_height_ratio:
+            continue
+        overlap_floor = min(record_height, height) * (0.30 if parsed_single else 0.45)
+        if overlap < overlap_floor:
+            continue
+
+        # The unparsed fallback is intentionally stricter: it must start inside
+        # the left visual zone instead of merely containing a Han character.
+        if not parsed_single and x0 > zone_width * 0.95:
+            continue
+
+        quality_rank = 0 if parsed_single else 1
         ranked.append((distance, quality_rank, -float(record.confidence), word, record))
     if not ranked:
         return "", 0.0, None
