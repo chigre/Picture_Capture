@@ -8888,6 +8888,16 @@ class PictureCaptureApp(tk.Tk):
             size_row, text="下一页", width=6,
             command=lambda: self.change_page(1), style="PC.PageNav.TButton",
         ).pack(side="left")
+        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
+        self.section_edit_button = ttk.Button(
+            size_row, text="SECTION设置", width=10,
+            command=self.toggle_page_section_editor, style="PC.Compact.TButton",
+        )
+        self.section_edit_button.pack(side="left")
+        self._attach_tooltip(
+            self.section_edit_button,
+            "特殊页面可设多个 SECTION；阅读顺序按 SECTION→栏。编辑时拖动 SECTION 上下边界。",
+        )
 
         list_frame = ttk.Frame(page_panel)
         list_frame.grid(row=2, column=0, sticky="nsew")
@@ -12892,6 +12902,7 @@ class PictureCaptureApp(tk.Tk):
         self.canvas.create_image(0, 0, image=photo, anchor="nw", tags="page")
         if self.crop_preview_var.get():
             self._draw_crop_plan_preview()
+            self._draw_page_sections(self._get_cached_display_geometry())
             self.canvas.configure(scrollregion=(0, 0, size[0], size[1]))
             if self.cursor_canvas_xy is not None:
                 self.draw_cursor_guides(*self.cursor_canvas_xy)
@@ -12917,6 +12928,7 @@ class PictureCaptureApp(tk.Tk):
                             width=max(1, round(self.settings.guide_width * overlay_scale)),
                             smooth=True,
                         )
+            self._draw_page_sections(geometry)
             processing_readonly = self._foreground_batch_state(self.current_index) == "processing"
             for index, entry in enumerate(self._ordered_entries_reading_order()):
                 self._draw_entry_overlay(
@@ -12970,6 +12982,8 @@ class PictureCaptureApp(tk.Tk):
                     )
                     self.overlay_widgets.append(check)
                     self.canvas.create_window(cx, cy, window=check, anchor="nw")
+        if hidden and self._section_editing:
+            self._draw_page_sections(self._get_cached_display_geometry())
         show_shapes = bool(self.polygon_var.get() or self.polygon_draw_var.get())
         show_labels = bool(self.settings.show_illustration_labels or self.polygon_draw_var.get())
         if show_shapes or show_labels:
@@ -13415,11 +13429,180 @@ class PictureCaptureApp(tk.Tk):
         except tk.TclError:
             pass
 
+    def _persist_current_page_sections(self) -> None:
+        """Save explicit SECTION bounds without touching PDIC/PPP."""
+        if self.current_page is None or self.image is None:
+            return
+        transform = LayoutTransform(
+            str(getattr(self.settings, "layout_transform", "identity") or "identity")
+        )
+        canonical_width, canonical_height = transform.canonical_size(self.image.size)
+        write_page_sections(
+            self.current_page,
+            list(self.page_sections),
+            canonical_width=canonical_width,
+            canonical_height=canonical_height,
+            layout_transform=transform.kind,
+        )
+
+    def _set_section_editing(self, active: bool) -> None:
+        self._section_editing = bool(active)
+        self._drag_section_boundary = None
+        if self.section_edit_button is not None:
+            self.section_edit_button.configure(
+                text="结束SECTION" if active else "SECTION设置",
+                style="PC.EditActive.TButton" if active else "PC.Compact.TButton",
+            )
+
+    def toggle_page_section_editor(self) -> None:
+        """Create/remove page SECTIONs, then edit their canonical-V boundaries."""
+        if not self.guard() or self.current_page is None or self.image is None:
+            return
+        if self._section_editing:
+            self._persist_current_page_sections()
+            self._set_section_editing(False)
+            self.status_var.set(
+                f"SECTION 编辑完成：当前页 {len(self.page_sections) if self.page_sections else 1} 个 SECTION"
+            )
+            self.redraw()
+            return
+
+        initial = len(self.page_sections) if self.page_sections else 2
+        count = simpledialog.askinteger(
+            "SECTION 设置",
+            "当前页 SECTION 数量（1 = 普通页面）：",
+            parent=self, initialvalue=initial, minvalue=1, maxvalue=12,
+        )
+        if count is None:
+            return
+        geometry = self._get_cached_display_geometry()
+        if count <= 1:
+            self.page_sections = []
+            self._persist_current_page_sections()
+            self._set_section_editing(False)
+            self._sort_entries_reading_order()
+            self.status_var.set("当前页已恢复为普通页面（1 SECTION）")
+            self.redraw()
+            return
+
+        if len(self.page_sections) != count:
+            span = max(1, geometry.bottom - geometry.top)
+            bounds = [
+                round(geometry.top + span * index / count)
+                for index in range(count + 1)
+            ]
+            self.page_sections = [
+                PageSection(bounds[index], max(bounds[index] + 1, bounds[index + 1]))
+                for index in range(count)
+            ]
+            self._persist_current_page_sections()
+
+        if self.polygon_draw_var.get():
+            self.polygon_draw_var.set(False)
+            self.new_polygon.clear()
+            if self.polygon_draw_button is not None:
+                self.polygon_draw_button.configure(
+                    text="编辑插图", style="PC.Compact.TButton"
+                )
+        self._set_section_editing(True)
+        self.status_var.set(
+            "SECTION 编辑：拖动蓝色上下边界；SECTION 间空白不参与词条顺序和整词条切图。"
+        )
+        self.redraw()
+
+    def _draw_page_sections(self, geometry=None) -> None:
+        """Draw page-local SECTION bounds in source space on the main canvas."""
+        self.canvas.delete("page-section-overlay")
+        if not self.page_sections or self.image is None:
+            return
+        geometry = geometry or self._get_cached_display_geometry()
+        canonical_width, _canonical_height = geometry.transform.canonical_size(self.image.size)
+        line_width = 3 if self._section_editing else 2
+        line_fill = "#1565c0" if self._section_editing else "#1976d2"
+        for index, section in enumerate(self.page_sections):
+            for side, v in (("top", section.top_v), ("bottom", section.bottom_v)):
+                start = geometry.canonical_to_source(0, int(v))
+                end = geometry.canonical_to_source(canonical_width, int(v))
+                self.canvas.create_line(
+                    start[0] * self.view_scale, start[1] * self.view_scale,
+                    end[0] * self.view_scale, end[1] * self.view_scale,
+                    fill=line_fill, width=line_width, dash=(7, 4),
+                    tags=("page-section-overlay", f"page-section-{index}-{side}"),
+                )
+            label_point = geometry.canonical_to_source(
+                max(4, round(canonical_width * 0.01)),
+                min(section.bottom_v - 1, section.top_v + max(8, round((section.bottom_v - section.top_v) * 0.02))),
+            )
+            self.canvas.create_text(
+                label_point[0] * self.view_scale,
+                label_point[1] * self.view_scale,
+                text=f"SECTION {index + 1}",
+                fill=line_fill, anchor="nw",
+                font=("Microsoft YaHei", max(8, round(10 * self.view_scale)), "bold"),
+                tags=("page-section-overlay",),
+            )
+        try:
+            self.canvas.tag_raise("page-section-overlay")
+        except tk.TclError:
+            pass
+
+    def _nearest_section_boundary(self, source_x: int, source_y: int) -> tuple[int, str] | None:
+        if not self.page_sections or self.image is None:
+            return None
+        geometry = self._get_cached_display_geometry()
+        _u, v = geometry.source_to_canonical(int(source_x), int(source_y))
+        tolerance = max(4, round(10 / max(self.view_scale, 0.05)))
+        candidates: list[tuple[int, int, str]] = []
+        for index, section in enumerate(self.page_sections):
+            candidates.append((abs(v - section.top_v), index, "top"))
+            candidates.append((abs(v - section.bottom_v), index, "bottom"))
+        distance, index, side = min(candidates, default=(10**9, -1, "top"))
+        return (index, side) if distance <= tolerance else None
+
+    def _drag_page_section_boundary_to(self, source_x: int, source_y: int) -> None:
+        target = self._drag_section_boundary
+        if target is None or self.image is None:
+            return
+        index, side = target
+        if not (0 <= index < len(self.page_sections)):
+            return
+        geometry = self._get_cached_display_geometry()
+        _u, v = geometry.source_to_canonical(int(source_x), int(source_y))
+        sections = list(self.page_sections)
+        current = sections[index]
+        min_height = max(6, round((geometry.bottom - geometry.top) * 0.005))
+        if side == "top":
+            lower = geometry.top if index == 0 else sections[index - 1].bottom_v
+            upper = current.bottom_v - min_height
+            new_top = max(lower, min(upper, int(v)))
+            sections[index] = PageSection(new_top, current.bottom_v)
+        else:
+            lower = current.top_v + min_height
+            upper = geometry.bottom if index + 1 == len(sections) else sections[index + 1].top_v
+            new_bottom = max(lower, min(upper, int(v)))
+            sections[index] = PageSection(current.top_v, new_bottom)
+        self.page_sections = sections
+        self._draw_page_sections(geometry)
+
+    def _section_gap_entry_count(self) -> int:
+        if not self.page_sections:
+            return 0
+        geometry = self._get_cached_display_geometry()
+        return sum(
+            1 for entry in self.entries
+            if not v_is_inside_sections(
+                geometry.source_to_canonical(entry.x, entry.y)[1],
+                self.page_sections, geometry.top, geometry.bottom,
+            )
+        )
+
     def toggle_polygon_drawing(self) -> None:
         if not self.guard(): return
         active = not self.polygon_draw_var.get()
         self.polygon_draw_var.set(active)
         if active:
+            if self._section_editing:
+                self._set_section_editing(False)
             # Drawing must remain visible even if the ordinary display checkbox
             # was previously off. Keep saved polygons visible as context.
             self.polygon_var.set(True)
@@ -13442,6 +13625,16 @@ class PictureCaptureApp(tk.Tk):
             return
         x, y = self.original_xy(event)
         if not (0 <= x < self.image.width and 0 <= y < self.image.height):
+            return
+        if self._section_editing:
+            target = self._nearest_section_boundary(x, y)
+            if target is None:
+                self.status_var.set("SECTION 编辑：请按住并拖动蓝色虚线上下边界。")
+                return
+            self._drag_section_boundary = target
+            section_index, side = target
+            side_text = "上边界" if side == "top" else "下边界"
+            self.status_var.set(f"正在调整 SECTION {section_index + 1} {side_text}")
             return
         if self.polygon_draw_var.get():
             existing = self._nearest_polygon_vertex(x, y)
@@ -13473,6 +13666,11 @@ class PictureCaptureApp(tk.Tk):
         if canonical_y < geometry.top or canonical_y >= geometry.bottom:
             self.status_var.set("该位置位于正文区域之外，不添加词条。")
             return
+        if self.page_sections and not v_is_inside_sections(
+            canonical_y, self.page_sections, geometry.top, geometry.bottom,
+        ):
+            self.status_var.set("该位置位于 SECTION 间空白区，不添加词条。")
+            return
         col = column_index_for_click(x, geometry, y)
         source_x, source_y = geometry.canonical_to_source(geometry.column_starts[col], canonical_y)
         self.entries.append(WordEntry("", source_x, source_y))
@@ -13480,9 +13678,16 @@ class PictureCaptureApp(tk.Tk):
         self.redraw()
 
     def canvas_left_drag(self, event: tk.Event) -> str | None:
-        if not self.polygon_draw_var.get() or self.image is None:
+        if self.image is None:
             return None
         x, y = self.original_xy(event)
+        if self._drag_section_boundary is not None:
+            x = max(0, min(self.image.width - 1, x))
+            y = max(0, min(self.image.height - 1, y))
+            self._drag_page_section_boundary_to(x, y)
+            return "break"
+        if not self.polygon_draw_var.get():
+            return None
         x = max(0, min(self.image.width - 1, x))
         y = max(0, min(self.image.height - 1, y))
         if self._drag_polygon_vertex is not None:
@@ -13504,6 +13709,22 @@ class PictureCaptureApp(tk.Tk):
         return None
 
     def canvas_left_release(self, _event: tk.Event) -> str | None:
+        if self._drag_section_boundary is not None:
+            self._drag_section_boundary = None
+            try:
+                self._persist_current_page_sections()
+                self._sort_entries_reading_order()
+                gap_count = self._section_gap_entry_count()
+                self.redraw()
+                if gap_count:
+                    self.status_var.set(
+                        f"SECTION 边界已保存；有 {gap_count} 条现有词条落在 SECTION 间空白，请调整边界。"
+                    )
+                else:
+                    self.status_var.set("SECTION 边界已保存")
+            except Exception as exc:
+                self.show_error("保存 SECTION 边界失败", exc)
+            return "break"
         target_vertex = self._drag_polygon_vertex
         target_edge = self._drag_polygon_edge
         if target_vertex is None and target_edge is None:
@@ -13520,6 +13741,9 @@ class PictureCaptureApp(tk.Tk):
         return "break"
 
     def canvas_right_click(self, event: tk.Event) -> None:
+        if self._section_editing:
+            self.status_var.set("SECTION 编辑中；点击【结束SECTION】保存并退出。")
+            return
         if self.polygon_draw_var.get():
             if not self.guard(): return
             if len(self.new_polygon) >= 3:
