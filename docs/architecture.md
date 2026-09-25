@@ -38,7 +38,7 @@ Path resolution is centralized: `pdic_path()` is storage-aware, PPP uses dedicat
 
 A page may optionally define one to ten explicit vertical reading regions in `data/PageSections/<page>.json` (legacy projects use `QT/PageSections/`). The page-list `Section` value is `0` when no sidecar is enabled and `1–10` for the explicit region count. The sidecar stores canonical full-resolution V bounds only; PDIC remains unchanged.
 
-All ordering-sensitive paths resolve the page into SECTION-major reading lanes: `S1C1 → S1C2 → … → S2C1 → S2C2 → …`. Entry sorting, OCR text assignment, proofreading preload, page-aware word filling, PDIC repair/restore and whole-entry crop planning use this same lane order. Whole-entry crop pieces are clipped to each lane, so whitespace between SECTIONs is never swallowed by a cross-section crop.
+All ordering-sensitive paths resolve the page into SECTION-major reading lanes: `S1C1 → S1C2 → … → S2C1 → S2C2 → …`. Entry sorting, OCR text assignment, proofreading preload, page-aware word filling, PDIC repair/restore and whole-entry crop planning use this same lane order. When a page has explicit SECTIONs, their outer bounds are authoritative for entry and illustration cropping; the shared general crop top/bottom applies only to pages with `Section=0`. Thus `Section=1` replaces the former per-page special crop-bound override, while `Section≥2` additionally clips whole-entry pieces to each lane so inter-SECTION whitespace is never swallowed. Legacy `special_pages` crop settings remain a read-only fallback only when the page has no SECTION sidecar.
 
 
 ## v2.12.4 editable simplified review sidecar
