@@ -65,7 +65,7 @@ uv --version
 install_ocr_windows.bat
 ```
 
-安装器会先自动检测 NVIDIA GPU、驱动版本以及 `nvidia-smi` 报告的最高 CUDA 兼容版本。
+安装器会先自动检测 NVIDIA GPU、**Compute Capability**、驱动版本以及 `nvidia-smi` 报告的最高 CUDA 兼容版本。
 
 如果检测到可兼容的 NVIDIA GPU，会显示类似：
 
@@ -73,6 +73,7 @@ install_ocr_windows.bat
 Hardware check:
   NVIDIA GPU: GeForce RTX ...
   Driver: ...
+  Compute Capability: 8.9
   Driver CUDA compatibility: 12.9
   Recommended: GPU accelerated OCR (ocr-gpu-cu129)
 
@@ -83,9 +84,9 @@ Hardware check:
 5. Advanced: choose CUDA profile manually
 ```
 
-此时直接按 **Enter** 即接受 GPU 推荐。安装器会在已声明的 CUDA 11.8 / 12.6 / 12.9 profile 中，自动选择**不高于驱动兼容上限的最高版本**；普通用户不需要自己判断 CUDA profile。
+此时直接按 **Enter** 即接受 GPU 推荐。自动推荐 GPU 需要同时满足：主 GPU（GPU 0）的 **Compute Capability > 7.5**，以及驱动 CUDA 兼容上限能够覆盖至少一个已声明的 CUDA 11.8 / 12.6 / 12.9 profile；满足后自动选择**不高于驱动兼容上限的最高版本**。普通用户不需要自己判断 CUDA profile。
 
-如果未检测到 NVIDIA GPU、无法可靠取得 CUDA 兼容信息，或驱动兼容上限低于当前 GPU profile，则默认推荐 **CPU OCR**，同样直接按 Enter 即可。
+如果未检测到 NVIDIA GPU、Compute Capability 不超过 7.5、旧驱动无法可靠返回 Compute Capability、无法取得 CUDA 兼容信息，或驱动兼容上限低于当前 GPU profile，则默认推荐 **CPU OCR**，同样直接按 Enter 即可。
 
 ### CPU 用户
 
@@ -99,7 +100,7 @@ Hardware check:
 
 检测成功时，推荐直接按 **Enter** 接受 GPU profile。安装器会自动：
 
-1. 根据 NVIDIA 驱动报告的 CUDA 兼容上限选择最高兼容的已声明 GPU profile；
+1. 核验主 GPU 的 Compute Capability > 7.5，并根据 NVIDIA 驱动报告的 CUDA 兼容上限选择最高兼容的已声明 GPU profile；
 2. 使用所选 uv profile 同步项目 `.venv`；
 3. 由 `pyproject.toml + uv.lock` 选择对应 PaddlePaddle 官方 CUDA 索引；
 4. 一次性安装 PaddleOCR、Google Lens 与对应 GPU runtime；Windows CUDA 12.6/12.9 profile 还会安装项目内的 NVIDIA cuDNN wheel；

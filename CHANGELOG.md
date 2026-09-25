@@ -2,9 +2,9 @@
 
 ### OCR 安装器自动推荐 GPU
 
-- Windows OCR 安装器启动时自动调用 `nvidia-smi` 检测 NVIDIA GPU、驱动版本与驱动报告的最高 CUDA 兼容版本；若存在可兼容 GPU，则自动推荐不高于该兼容上限的最高已声明 PaddlePaddle GPU profile。
+- Windows OCR 安装器启动时自动调用 `nvidia-smi` 检测 NVIDIA GPU、GPU Compute Capability、驱动版本与驱动报告的最高 CUDA 兼容版本；自动推荐 GPU 现在同时要求主 GPU（GPU 0）Compute Capability > 7.5，并自动选择不高于驱动兼容上限的最高已声明 PaddlePaddle GPU profile。
 - 普通安装菜单不再要求用户先判断 CUDA 11.8 / 12.6 / 12.9；按 Enter 直接接受推荐项，具体 CUDA profile 收入 Advanced 手动选择。
-- 未检测到 NVIDIA GPU、无法可靠判断 CUDA 兼容性或兼容上限低于现有 GPU profile 时，安装器保守推荐 CPU OCR。
+- 未检测到 NVIDIA GPU、Compute Capability 不满足/无法可靠读取、无法判断 CUDA 兼容性或兼容上限低于现有 GPU profile 时，安装器保守推荐 CPU OCR。
 - GPU 推荐仍保留安装后的 Paddle CUDA build 检查和真实 GPU `conv2d` smoke test；推荐不等同于跳过运行时验证。
 - 新增 CUDA 版本解析、最高兼容 profile 选择、Enter 接受 GPU/CPU 推荐及 Advanced 手动选择的回归测试。
 
