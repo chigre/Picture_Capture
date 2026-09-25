@@ -530,7 +530,7 @@ def entry_index_label_layout(
     horizontal: bool,
     rtl: bool = False,
     vertical_box: tuple[int, int, int, int] | None = None,
-    gap: int = 2,
+    gap: int = 0,
 ) -> tuple[float, float, str]:
     """Place the entry sequence label immediately before the editor.
 
