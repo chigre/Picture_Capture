@@ -10,16 +10,22 @@ Picture Capture v2.13.2 起，Windows 提供 `install_ocr_windows.bat`，用于�
 install_ocr_windows.bat
 ```
 
-安装器提供以下配置：
+安装器会先调用 `nvidia-smi` 检测 NVIDIA GPU、驱动版本以及驱动报告的最高 CUDA 兼容版本，并自动选择不高于该兼容版本的最高已声明 GPU profile。检测到可兼容 GPU 时，GPU OCR 会作为默认推荐项，直接按 Enter 即可接受；未检测到兼容 GPU 或无法可靠判断 CUDA 兼容性时，则默认推荐 CPU OCR。
 
-| 选项 | uv profile | 内容 |
-| --- | --- | --- |
-| CPU | `ocr-cpu` | PaddleOCR + PaddlePaddle CPU 3.3.0 + Google Lens |
-| GPU CUDA 11.8 | `ocr-gpu-cu118` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens |
-| GPU CUDA 12.6 | `ocr-gpu-cu126` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens + Windows cuDNN 9 |
-| GPU CUDA 12.9 | `ocr-gpu-cu129` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens + Windows cuDNN 9 |
-| Lens only | `lens` | Google Lens / chrome-lens-py |
-| Core only | 无 | 删除可选 OCR profile，仅保留核心环境 |
+普通用户不再需要先判断 CUDA 11.8 / 12.6 / 12.9。主菜单只显示“推荐项 / CPU / Lens only / Core only”，具体 CUDA profile 收入 Advanced 手动选择，主要用于兼容性排查或已明确知道目标 runtime 的用户。
+
+当前可用 profile 为：
+
+| uv profile | 内容 |
+| --- | --- |
+| `ocr-cpu` | PaddleOCR + PaddlePaddle CPU 3.3.0 + Google Lens |
+| `ocr-gpu-cu118` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens |
+| `ocr-gpu-cu126` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens + Windows cuDNN 9 |
+| `ocr-gpu-cu129` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens + Windows cuDNN 9 |
+| `lens` | Google Lens / chrome-lens-py |
+| 无 | Core only，仅保留核心环境 |
+
+自动推荐只依据 NVIDIA 驱动公开报告的 CUDA 兼容上限，不依赖用户是否另外安装系统 CUDA Toolkit；最终是否真正可用仍由安装后的 Paddle GPU 实测决定。
 
 GPU 模式下，`paddlepaddle-gpu==3.3.0` 与 CUDA 11.8 / 12.6 / 12.9 对应的 PaddlePaddle 官方索引都直接声明在 `pyproject.toml` 中。CPU/GPU profile 在 uv 中声明为互斥，安装器只执行标准的锁定同步，不再手工卸载 runtime、拼接下载 URL 或运行 `uv pip install`。
 
