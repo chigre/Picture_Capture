@@ -225,6 +225,15 @@ def dictionary_profile_preset(key: str | None) -> DictionaryProfilePreset:
         if profile.key == wanted:
             return profile
     raw = _load_profile_library_raw()
+    # Named validated examples are executable regression configurations, not
+    # documentation-only labels. Resolve them exactly like compatibility
+    # configurations so real test dictionaries (TimesCED/HZYLDZD/XDHYCD/
+    # shueisha) exercise their declared language, layout and headword features.
+    example = (raw.get("validated_examples") or {}).get(wanted)
+    if isinstance(example, dict):
+        base_key = str(example.get("headword_profile") or DEFAULT_PROFILE_ID)
+        base = next((profile for profile in profiles if profile.key == base_key), profiles[0])
+        return _preset_for_configuration(wanted, base, example, raw)
     alias = (raw.get("compatibility_aliases") or {}).get(wanted)
     if isinstance(alias, dict):
         base_key = str(alias.get("headword_profile") or DEFAULT_PROFILE_ID)
