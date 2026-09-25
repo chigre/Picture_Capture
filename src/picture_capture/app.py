@@ -4564,12 +4564,34 @@ class ReviewWindow(tk.Toplevel):
             selectbackground="#dce8f7",
             selectforeground="#30343b",
         )
+        # This Listbox keeps a deliberately pale current/selected row in dark
+        # mode, so it manages its own contrast rather than using the generic
+        # classic-Tk selection colors.
+        self.word_list._pc_skip_classic_appearance = True
         self.word_list.pack(fill="both", expand=True, pady=(4, 0))
-        self.word_list_default_bg = str(self.word_list.cget("background"))
-        self.word_list_default_fg = str(self.word_list.cget("foreground"))
+        self._configure_word_list_appearance()
         self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)
         self.refresh_wordslist_display()
         self._request_render_rows(focus_index=0)
+
+    def _configure_word_list_appearance(self) -> None:
+        palette = appearance_palette(self.parent.appearance_mode)
+        dark = self.parent.appearance_mode == "dark"
+        selection_bg = "#d9d9d9" if dark else "#dce8f7"
+        try:
+            self.word_list.configure(
+                background=palette["input_bg"],
+                foreground=palette["input_fg"],
+                selectbackground=selection_bg,
+                selectforeground="#111827",
+                highlightbackground=palette["border"],
+                highlightcolor=palette["border"],
+            )
+        except tk.TclError:
+            return
+        self.word_list_default_bg = palette["input_bg"]
+        self.word_list_default_fg = palette["input_fg"]
+
 
     def _toggle_review_panel(self, panel: str) -> None:
         if panel == "digit":
@@ -7979,8 +8001,7 @@ class PictureCaptureApp(tk.Tk):
         if review is not None:
             try:
                 if review.winfo_exists():
-                    review.word_list_default_bg = palette["input_bg"]
-                    review.word_list_default_fg = palette["input_fg"]
+                    review._configure_word_list_appearance()
                     review._configure_review_styles()
                     review._request_render_rows(focus_index=review.active_index)
             except tk.TclError:
