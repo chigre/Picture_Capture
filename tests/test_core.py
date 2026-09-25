@@ -7351,3 +7351,6 @@ def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded(
     assert "def _drag_page_section_boundary_to" in text
     assert "该位置位于 SECTION 间空白区，不添加词条。" in text
     assert "page_sections=list(self.page_sections)" in text
+    assert 'self.canvas.configure(cursor="hand2" if self._section_editing else "")' in text
+    assert "if self.image is None or self._section_editing:" in text
+    assert 'self.canvas.delete("cursor-guide")' in text
