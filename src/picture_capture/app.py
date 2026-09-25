@@ -14443,88 +14443,138 @@ class PictureCaptureApp(tk.Tk):
         if all_pages:
             project = self.project
             pages = list(project.images)
+            indices = list(range(len(pages)))
             sort_mode = getattr(self.settings, "headword_sort_mode", "auto")
             language = getattr(self.settings, "ocr_language", "eng")
             custom_order = getattr(self.settings, "headword_custom_order", LATIN_ORDER)
             fold_accents = getattr(self.settings, "headword_custom_fold_accents", True)
             rule = profile_label(sort_mode, language)
-            self.status_var.set(f"正在后台核对全部 {len(pages)} 页词头顺序…")
 
-            def worker():
-                sequence: list[tuple[str, str, tuple, str]] = []
-                for page in pages:
-                    for entry in read_pdic(pdic_path(page)):
-                        word = entry.word.strip()
-                        if not word:
-                            continue
-                        key = collation_key(
+            def worker(index: int, _position: int, _total: int):
+                page = pages[index]
+                rows: list[tuple[str, str, tuple, str]] = []
+                for entry in read_pdic(pdic_path(page)):
+                    word = entry.word.strip()
+                    if not word:
+                        continue
+                    rows.append((
+                        page.name,
+                        word,
+                        collation_key(
                             word, sort_mode, language, custom_order, fold_accents,
-                        )
-                        shown = display_key(
+                        ),
+                        display_key(
                             word, sort_mode, language, custom_order, fold_accents,
+                        ),
+                    ))
+                return rows
+
+            def done(completed, total_pages, stopped, results, error):
+                if error is not None:
+                    return
+                page_results = list(results)
+                self.status_var.set(
+                    f"词头读取完成 {completed}/{total_pages} 页；正在后台汇总排序…"
+                )
+
+                def finalize():
+                    sequence = [
+                        row
+                        for page_rows in page_results
+                        if isinstance(page_rows, list)
+                        for row in page_rows
+                    ]
+                    if len(sequence) < 2:
+                        return {
+                            "count": len(sequence), "inversions": 0,
+                            "mismatches": 0, "rule": rule, "report": "",
+                            "stopped": bool(stopped), "completed": completed,
+                            "total": total_pages,
+                        }
+                    inversions: list[
+                        tuple[
+                            tuple[str, str, tuple, str],
+                            tuple[str, str, tuple, str],
+                        ]
+                    ] = []
+                    for i in range(1, len(sequence)):
+                        if sequence[i][2] < sequence[i - 1][2]:
+                            inversions.append((sequence[i - 1], sequence[i]))
+                    expected = sorted(sequence, key=lambda item: item[2])
+                    mismatches = sum(
+                        1 for actual, wanted in zip(sequence, expected)
+                        if actual[:3] != wanted[:3]
+                    )
+                    lines = [
+                        f"共核对 {len(sequence)} 个非空词头；发现 {len(inversions)} 处相邻逆序，"
+                        f"排序后有 {mismatches} 个位置变化。",
+                        f"排序规则：{rule}",
+                    ]
+                    if stopped:
+                        lines.extend([
+                            f"注意：任务提前停止，仅统计已完成的 {completed}/{total_pages} 页。",
+                            "",
+                        ])
+                    else:
+                        lines.append("")
+                    lines.append("以下为相邻逆序（前一词 > 后一词）：")
+                    for number, (prev, cur) in enumerate(inversions[:200], 1):
+                        lines.append(
+                            f"{number}. {prev[0]}  {prev[1]} [{prev[3]}]  >  "
+                            f"{cur[0]}  {cur[1]} [{cur[3]}]"
                         )
-                        sequence.append((page.name, word, key, shown))
-                if len(sequence) < 2:
+                    if len(inversions) > 200:
+                        lines.append(f"…另有 {len(inversions) - 200} 处未显示")
                     return {
-                        "count": len(sequence), "inversions": [], "mismatches": 0,
-                        "rule": rule, "report": "",
+                        "count": len(sequence), "inversions": len(inversions),
+                        "mismatches": mismatches, "rule": rule,
+                        "report": "\n".join(lines), "stopped": bool(stopped),
+                        "completed": completed, "total": total_pages,
                     }
 
-                inversions: list[tuple[tuple[str, str, tuple, str], tuple[str, str, tuple, str]]] = []
-                for i in range(1, len(sequence)):
-                    if sequence[i][2] < sequence[i - 1][2]:
-                        inversions.append((sequence[i - 1], sequence[i]))
-                expected = sorted(sequence, key=lambda item: item[2])
-                mismatches = sum(
-                    1 for actual, wanted in zip(sequence, expected)
-                    if actual[:3] != wanted[:3]
+                def finalized(result) -> None:
+                    if self.project is not project:
+                        return
+                    count = int(result["count"])
+                    inversions = int(result["inversions"])
+                    stopped_suffix = (
+                        f"（提前停止，仅完成 {result['completed']}/{result['total']} 页）"
+                        if result["stopped"] else ""
+                    )
+                    if count < 2:
+                        messagebox.showinfo(
+                            title,
+                            f"可核对的非空词头不足 2 个。{stopped_suffix}",
+                            parent=self,
+                        )
+                    elif not inversions:
+                        messagebox.showinfo(
+                            title,
+                            f"顺序正常。\n共核对 {count} 个非空词头。\n"
+                            f"排序规则：{result['rule']}\n{stopped_suffix}",
+                            parent=self,
+                        )
+                    else:
+                        self._show_text_report(title, str(result["report"]))
+                    self.status_var.set(
+                        f"{title}完成：核对 {count} 个非空词头{stopped_suffix}"
+                    )
+
+                def finalize_failed(exc, detail) -> None:
+                    if detail:
+                        print(detail)
+                    if self.project is project:
+                        self.show_error(f"{title}汇总失败", exc)
+
+                self._start_ui_worker(
+                    "headword-order-finalize", finalize, finalized, finalize_failed,
                 )
-                lines = [
-                    f"共核对 {len(sequence)} 个非空词头；发现 {len(inversions)} 处相邻逆序，"
-                    f"排序后有 {mismatches} 个位置变化。",
-                    f"排序规则：{rule}",
-                    "",
-                    "以下为相邻逆序（前一词 > 后一词）：",
-                ]
-                for number, (prev, cur) in enumerate(inversions[:200], 1):
-                    lines.append(
-                        f"{number}. {prev[0]}  {prev[1]} [{prev[3]}]  >  "
-                        f"{cur[0]}  {cur[1]} [{cur[3]}]"
-                    )
-                if len(inversions) > 200:
-                    lines.append(f"…另有 {len(inversions) - 200} 处未显示")
-                return {
-                    "count": len(sequence), "inversions": inversions,
-                    "mismatches": mismatches, "rule": rule,
-                    "report": "\n".join(lines),
-                }
 
-            def done(result) -> None:
-                if self.project is not project:
-                    return
-                count = int(result["count"])
-                inversions = result["inversions"]
-                if count < 2:
-                    messagebox.showinfo(
-                        title, "可核对的非空词头不足 2 个。", parent=self,
-                    )
-                elif not inversions:
-                    messagebox.showinfo(
-                        title,
-                        f"顺序正常。\n共核对 {count} 个非空词头。\n排序规则：{result['rule']}",
-                        parent=self,
-                    )
-                else:
-                    self._show_text_report(title, str(result["report"]))
-                self.status_var.set(f"{title}完成：核对 {count} 个非空词头")
-
-            def failed(exc, detail) -> None:
-                if detail:
-                    print(detail)
-                if self.project is project:
-                    self.show_error(f"{title}失败", exc)
-
-            self._start_ui_worker("headword-order-all", worker, done, failed)
+            self._start_batch_task(
+                "所有词头顺序核对", indices, worker, done,
+                item_label=lambda i: pages[i].name,
+                refresh_page_quality=False,
+            )
             return
 
         sequence: list[tuple[str, str, tuple]] = []
