@@ -7320,6 +7320,18 @@ def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order()
     assert 'fill="#ffffff", anchor="s"' in text
 
 
+def test_settings_display_labels_stay_single_line_and_dark_mode_name_is_current():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'text="深色模式（夜间模式）"' in text
+    assert 'text="深色模式（夜间校对）"' not in text
+    assert "single_line_labels: bool = False" in text
+    assert "wraplength=0 if single_line_labels else 180" in text
+    assert "group.columnconfigure(0, minsize=longest_label_width + 4)" in text
+    display_call = text.index('self._add_setting_group(\n            display,\n            "界面与校对"')
+    assert 'single_line_labels=True' in text[display_call:display_call + 240]
+
+
 def test_page_list_fills_width_adaptively_and_fill_status_is_opt_in_by_default():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
@@ -7358,3 +7370,10 @@ def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded(
     assert 'self.canvas.configure(cursor="hand2" if self._section_editing else "")' in text
     assert "if self.image is None or self._section_editing:" in text
     assert 'self.canvas.delete("cursor-guide")' in text
+    assert 'text="双击进入Section编辑模式"' in text
+    assert '"确认后：拖动虚线定位Section，双击左键确认并退出编辑。"' in text
+    assert 'self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)' in text
+    assert "def canvas_left_double_click" in text
+    assert "self._finish_section_editing()" in text
+    assert "def _restore_cursor_guides_after_section_edit" in text
+    assert "self.draw_cursor_guides(canvas_x, canvas_y)" in text
