@@ -9791,6 +9791,7 @@ class PictureCaptureApp(tk.Tk):
 
     def check_ocr_engines(self) -> None:
         self.status_var.set("正在后台检测 OCR / Paddle / OpenCC 环境…")
+        project = self.project
         settings_snapshot = replace(self.settings)
         executable = str(settings_snapshot.ocr_executable)
         language = resolved_tesseract_language(settings_snapshot)
@@ -9813,9 +9814,11 @@ class PictureCaptureApp(tk.Tk):
         def done(payload) -> None:
             paddle_text, tess, lens, official_opencc, legacy_opencc, runtime, cedict, cedict_error = payload
             if tess.get("available"):
-                self.settings.ocr_executable = str(tess.get("resolved"))
+                if self.project is project:
+                    self.settings.ocr_executable = str(tess.get("resolved"))
                 tess_text = f"✓ {tess.get('version') or 'Tesseract'}\n路径：{tess.get('resolved')}\n语言：{', '.join(tess.get('requested_languages', []))}"
-                self.save_settings()
+                if self.project is project:
+                    self.save_settings()
             else:
                 tess_text = f"✗ Tesseract：{tess.get('error')}\n检测路径：{tess.get('resolved') or '无'}"
             lens_text = f"✓ Google Lens / chrome-lens-py {lens.get('version')}" if lens.get("available") else f"✗ Google Lens：{lens.get('error')}"
@@ -11239,7 +11242,7 @@ class PictureCaptureApp(tk.Tk):
             project = ProjectState.open(root)
             if not project.images:
                 raise ValueError("目录中没有 tif/tiff/png/jpg/jpeg/bmp 图片")
-            suffix = self._normalize_suffix(requested_suffix) if requested_suffix else self._normalize_suffix(project.settings.image_suffix)
+            suffix = PictureCaptureApp._normalize_suffix(requested_suffix) if requested_suffix else PictureCaptureApp._normalize_suffix(project.settings.image_suffix)
             matching = [page for page in project.images if page.suffix.lower() == suffix]
             if matching:
                 project.images = matching
