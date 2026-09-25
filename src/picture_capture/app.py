@@ -14304,19 +14304,105 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def check_headword_order(self, all_pages: bool = False) -> None:
-        if not self.guard(): return
+        if not self.guard():
+            return
         self.save_pdic(silent=True)
+        title = "所有词头顺序核对" if all_pages else "当前页词头顺序核对"
+
+        if all_pages:
+            project = self.project
+            pages = list(project.images)
+            sort_mode = getattr(self.settings, "headword_sort_mode", "auto")
+            language = getattr(self.settings, "ocr_language", "eng")
+            custom_order = getattr(self.settings, "headword_custom_order", LATIN_ORDER)
+            fold_accents = getattr(self.settings, "headword_custom_fold_accents", True)
+            rule = profile_label(sort_mode, language)
+            self.status_var.set(f"正在后台核对全部 {len(pages)} 页词头顺序…")
+
+            def worker():
+                sequence: list[tuple[str, str, tuple, str]] = []
+                for page in pages:
+                    for entry in read_pdic(pdic_path(page)):
+                        word = entry.word.strip()
+                        if not word:
+                            continue
+                        key = collation_key(
+                            word, sort_mode, language, custom_order, fold_accents,
+                        )
+                        shown = display_key(
+                            word, sort_mode, language, custom_order, fold_accents,
+                        )
+                        sequence.append((page.name, word, key, shown))
+                if len(sequence) < 2:
+                    return {
+                        "count": len(sequence), "inversions": [], "mismatches": 0,
+                        "rule": rule, "report": "",
+                    }
+
+                inversions: list[tuple[tuple[str, str, tuple, str], tuple[str, str, tuple, str]]] = []
+                for i in range(1, len(sequence)):
+                    if sequence[i][2] < sequence[i - 1][2]:
+                        inversions.append((sequence[i - 1], sequence[i]))
+                expected = sorted(sequence, key=lambda item: item[2])
+                mismatches = sum(
+                    1 for actual, wanted in zip(sequence, expected)
+                    if actual[:3] != wanted[:3]
+                )
+                lines = [
+                    f"共核对 {len(sequence)} 个非空词头；发现 {len(inversions)} 处相邻逆序，"
+                    f"排序后有 {mismatches} 个位置变化。",
+                    f"排序规则：{rule}",
+                    "",
+                    "以下为相邻逆序（前一词 > 后一词）：",
+                ]
+                for number, (prev, cur) in enumerate(inversions[:200], 1):
+                    lines.append(
+                        f"{number}. {prev[0]}  {prev[1]} [{prev[3]}]  >  "
+                        f"{cur[0]}  {cur[1]} [{cur[3]}]"
+                    )
+                if len(inversions) > 200:
+                    lines.append(f"…另有 {len(inversions) - 200} 处未显示")
+                return {
+                    "count": len(sequence), "inversions": inversions,
+                    "mismatches": mismatches, "rule": rule,
+                    "report": "\n".join(lines),
+                }
+
+            def done(result) -> None:
+                if self.project is not project:
+                    return
+                count = int(result["count"])
+                inversions = result["inversions"]
+                if count < 2:
+                    messagebox.showinfo(
+                        title, "可核对的非空词头不足 2 个。", parent=self,
+                    )
+                elif not inversions:
+                    messagebox.showinfo(
+                        title,
+                        f"顺序正常。\n共核对 {count} 个非空词头。\n排序规则：{result['rule']}",
+                        parent=self,
+                    )
+                else:
+                    self._show_text_report(title, str(result["report"]))
+                self.status_var.set(f"{title}完成：核对 {count} 个非空词头")
+
+            def failed(exc, detail) -> None:
+                if detail:
+                    print(detail)
+                if self.project is project:
+                    self.show_error(f"{title}失败", exc)
+
+            self._start_ui_worker("headword-order-all", worker, done, failed)
+            return
+
         sequence: list[tuple[str, str, tuple]] = []
-        indices = list(range(len(self.project.images))) if all_pages else [self.current_index]
-        for index in indices:
-            page = self.project.images[index]
-            entries = self.entries if index == self.current_index else read_pdic(pdic_path(page))
-            for entry in entries:
-                word = entry.word.strip()
-                if word:
-                    sequence.append((page.name, word, self._order_key(word)))
+        for entry in self.entries:
+            word = entry.word.strip()
+            if word:
+                sequence.append((self.current_page.name, word, self._order_key(word)))
         if len(sequence) < 2:
-            messagebox.showinfo("词头顺序核对", "可核对的非空词头不足 2 个。", parent=self)
+            messagebox.showinfo(title, "可核对的非空词头不足 2 个。", parent=self)
             return
         inversions: list[tuple[int, tuple[str, str, tuple], tuple[str, str, tuple]]] = []
         for i in range(1, len(sequence)):
@@ -14324,10 +14410,13 @@ class PictureCaptureApp(tk.Tk):
                 inversions.append((i, sequence[i - 1], sequence[i]))
         expected = sorted(sequence, key=lambda item: item[2])
         mismatches = sum(1 for actual, wanted in zip(sequence, expected) if actual != wanted)
-        title = "所有词头顺序核对" if all_pages else "当前页词头顺序核对"
         if not inversions:
             rule = profile_label(self.settings.headword_sort_mode, self.settings.ocr_language)
-            messagebox.showinfo(title, f"顺序正常。\n共核对 {len(sequence)} 个非空词头。\n排序规则：{rule}", parent=self)
+            messagebox.showinfo(
+                title,
+                f"顺序正常。\n共核对 {len(sequence)} 个非空词头。\n排序规则：{rule}",
+                parent=self,
+            )
             return
         rule = profile_label(self.settings.headword_sort_mode, self.settings.ocr_language)
         lines = [
@@ -14341,7 +14430,8 @@ class PictureCaptureApp(tk.Tk):
                 f"{number}. {prev[0]}  {prev[1]} [{self._order_display_key(prev[1])}]  >  "
                 f"{cur[0]}  {cur[1]} [{self._order_display_key(cur[1])}]"
             )
-        if len(inversions) > 200: lines.append(f"…另有 {len(inversions)-200} 处未显示")
+        if len(inversions) > 200:
+            lines.append(f"…另有 {len(inversions)-200} 处未显示")
         self._show_text_report(title, "\n".join(lines))
 
     def _show_text_report(self, title: str, text: str) -> None:
