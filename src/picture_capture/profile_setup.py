@@ -264,6 +264,8 @@ class ProjectProfileWizard(tk.Toplevel):
         self.dictionary_body_page_range_var = tk.StringVar(value=str(s.dictionary_body_page_range or ""))
         self.reading_var = tk.StringVar(value=reading_choice_from_settings(s))
         self.columns_var = tk.IntVar(value=max(1, int(s.columns)))
+        self.selected_column_index = 0
+        self.column_adjust_status_var = tk.StringVar(value="")
         self.separator_var = tk.StringVar(value=_label_for_value(
             SEPARATOR_LABEL_TO_VALUE, str(s.layout_column_separator_mode or "auto"), "自动判断",
         ))
@@ -917,6 +919,33 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         self.apply_analysis_button.pack(side="left", padx=(6, 0))
 
+        column_adjust = ttk.LabelFrame(body, text="栏左线微调", padding=(8, 6))
+        column_adjust.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        column_adjust.columnconfigure(0, weight=1)
+        ttk.Label(
+            column_adjust,
+            text="点击右侧预览中的栏左线选择；选中线显示为橙色。每次移动 1 个参考页规范 px。",
+            foreground="#666666", wraplength=self._wizard_left_width,
+        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 5))
+        ttk.Label(
+            column_adjust, textvariable=self.column_adjust_status_var,
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 5))
+        ttk.Button(
+            column_adjust, text="← 左移",
+            command=lambda: self._shift_selected_column(-1),
+        ).grid(row=2, column=0, sticky="w")
+        ttk.Button(
+            column_adjust, text="右移 →",
+            command=lambda: self._shift_selected_column(1),
+        ).grid(row=2, column=1, sticky="w", padx=(6, 0))
+        ttk.Button(
+            column_adjust, text="重置当前", command=self._reset_selected_column,
+        ).grid(row=2, column=2, sticky="w", padx=(12, 0))
+        ttk.Button(
+            column_adjust, text="重置全部", command=self._reset_all_column_offsets,
+        ).grid(row=2, column=3, sticky="w", padx=(6, 0))
+        self._refresh_column_adjust_status()
+
         edges = ttk.LabelFrame(
             tab, text="页眉 / 页尾 / 页边", padding=9,
         )
@@ -1007,6 +1036,100 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_template_controls()
 
 
+    def _selected_column_index(self) -> int:
+        count = max(1, int(self.columns_var.get()))
+        self.selected_column_index = max(
+            0, min(count - 1, int(getattr(self, "selected_column_index", 0)))
+        )
+        return self.selected_column_index
+
+    def _column_offsets_for_count(self, count: int | None = None) -> list[int]:
+        count = max(1, int(self.columns_var.get() if count is None else count))
+        raw = list(getattr(self.working, "column_start_offsets", []) or [])
+        offsets: list[int] = []
+        for index in range(count):
+            try:
+                offsets.append(int(round(float(raw[index]))) if index < len(raw) else 0)
+            except (TypeError, ValueError):
+                offsets.append(0)
+        return offsets
+
+    def _refresh_column_adjust_status(self) -> None:
+        if not hasattr(self, "column_adjust_status_var"):
+            return
+        index = self._selected_column_index()
+        offsets = self._column_offsets_for_count()
+        self.column_adjust_status_var.set(
+            f"当前：第 {index + 1} 栏｜人工偏移 {offsets[index]:+d} px"
+        )
+
+    def _shift_selected_column(self, delta: int) -> None:
+        index = self._selected_column_index()
+        offsets = self._column_offsets_for_count()
+        # Keep the UI nudge a precision correction rather than a second layout
+        # editor. Runtime geometry also guards against crossed columns.
+        offsets[index] = max(-250, min(250, offsets[index] + int(delta)))
+        self.working.column_start_offsets = offsets
+        self._refresh_column_adjust_status()
+        self._profile_input_changed()
+
+    def _reset_selected_column(self) -> None:
+        index = self._selected_column_index()
+        offsets = self._column_offsets_for_count()
+        if offsets[index] == 0:
+            return
+        offsets[index] = 0
+        self.working.column_start_offsets = offsets
+        self._refresh_column_adjust_status()
+        self._profile_input_changed()
+
+    def _reset_all_column_offsets(self) -> None:
+        offsets = self._column_offsets_for_count()
+        if not any(offsets):
+            return
+        self.working.column_start_offsets = [0] * len(offsets)
+        self._refresh_column_adjust_status()
+        self._profile_input_changed()
+
+    @staticmethod
+    def _preview_path_distance_sq(
+        points: list[tuple[float, float]], x: float, y: float,
+    ) -> float:
+        if not points:
+            return float("inf")
+        if len(points) == 1:
+            dx, dy = x - points[0][0], y - points[0][1]
+            return dx * dx + dy * dy
+        best = float("inf")
+        for (x0, y0), (x1, y1) in zip(points, points[1:]):
+            dx, dy = x1 - x0, y1 - y0
+            denom = dx * dx + dy * dy
+            if denom <= 0:
+                px, py = x0, y0
+            else:
+                t = max(0.0, min(1.0, ((x - x0) * dx + (y - y0) * dy) / denom))
+                px, py = x0 + t * dx, y0 + t * dy
+            ex, ey = x - px, y - py
+            best = min(best, ex * ex + ey * ey)
+        return best
+
+    def _select_template_column(
+        self, event: tk.Event, line_paths: list[list[tuple[float, float]]],
+    ) -> None:
+        if not line_paths:
+            return
+        distances = [
+            self._preview_path_distance_sq(points, float(event.x), float(event.y))
+            for points in line_paths
+        ]
+        index = min(range(len(distances)), key=distances.__getitem__)
+        if distances[index] > 18.0 * 18.0:
+            return
+        self.selected_column_index = index
+        self._refresh_column_adjust_status()
+        self.after_idle(self._refresh_template_preview)
+
+
     def _refresh_template_controls(self) -> None:
         """Enable only page-template controls that currently have meaning."""
         if not hasattr(self, "header_percent_spin"):
@@ -1087,6 +1210,7 @@ class ProjectProfileWizard(tk.Toplevel):
             f"{slot + 1}/{sample_count} · {path.name} · 正在生成…"
         )
         worker_key = f"profile-template-preview-{id(self)}"
+        selected_column = self._selected_column_index()
 
         def worker():
             with Image.open(path) as opened:
@@ -1141,18 +1265,22 @@ class ProjectProfileWizard(tk.Toplevel):
                     (x0 * sx, y0 * sy, x1 * sx, y1 * sy),
                     fill=(255, 215, 0, 105),
                 )
-            for path_points in geometry.column_paths:
+            line_paths: list[list[tuple[float, float]]] = []
+            for column_index, path_points in enumerate(geometry.column_paths):
                 points = [
                     geometry.canonical_to_source(x, y)
                     for y, x in path_points.points
                 ]
-                coords = [
-                    coordinate
-                    for px, py in points
-                    for coordinate in (px * sx, py * sy)
-                ]
+                preview_points = [(px * sx, py * sy) for px, py in points]
+                line_paths.append(preview_points)
+                coords = [coordinate for point in preview_points for coordinate in point]
                 if len(coords) >= 4:
-                    draw.line(coords, fill=(30, 120, 210, 210), width=2)
+                    selected = column_index == selected_column
+                    draw.line(
+                        coords,
+                        fill=(238, 124, 0, 235) if selected else (30, 120, 210, 210),
+                        width=4 if selected else 2,
+                    )
 
             variant = page_variant(settings, index)
             side_text = side or "无页边排除"
@@ -1161,7 +1289,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 f"{region} · {slot + 1}/{sample_count} · "
                 f"{variant} 页 · {path.name} · 页边：{side_text}"
             )
-            return preview, caption, index, slot
+            return preview, caption, index, slot, line_paths
 
         def done(payload) -> None:
             try:
@@ -1169,7 +1297,7 @@ class ProjectProfileWizard(tk.Toplevel):
                     return
             except tk.TclError:
                 return
-            preview, caption, result_index, result_slot = payload
+            preview, caption, result_index, result_slot, line_paths = payload
             if (
                 result_slot != self.template_preview_slot
                 or result_slot >= sample_count
@@ -1184,9 +1312,12 @@ class ProjectProfileWizard(tk.Toplevel):
                 )
             )
             self._template_photos[:] = [photo]
-            ttk.Label(
-                self.template_preview_frame, image=photo,
-            ).grid(row=0, column=0, sticky="n")
+            preview_label = ttk.Label(self.template_preview_frame, image=photo)
+            preview_label.grid(row=0, column=0, sticky="n")
+            preview_label.bind(
+                "<Button-1>",
+                lambda event, paths=line_paths: self._select_template_column(event, paths),
+            )
             self.template_preview_caption_var.set(caption)
 
         def failed(exc, detail) -> None:
@@ -1456,6 +1587,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._profile_revision += 1
         self._mark_validation_stale()
         self._refresh_summary()
+        self._refresh_column_adjust_status()
         if hasattr(self, "template_preview_frame"):
             self.after_idle(self._refresh_template_preview)
 
@@ -1708,6 +1840,7 @@ class ProjectProfileWizard(tk.Toplevel):
         # analysis above is a setup aid, not a hidden per-page detector.
         s.layout_columns_policy = "fixed"
         s.columns = max(1, int(self.columns_var.get()))
+        s.column_start_offsets = self._column_offsets_for_count(s.columns)
         s.layout_column_separator_mode = SEPARATOR_LABEL_TO_VALUE.get(
             self.separator_var.get(), "auto"
         )
@@ -2198,6 +2331,11 @@ class ProjectProfileWizard(tk.Toplevel):
         if not self._analysis_suggestion:
             return
         self.columns_var.set(int(self._analysis_suggestion.get("columns", self.columns_var.get())))
+        self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))
+        self.selected_column_index = min(
+            self._selected_column_index(), max(0, int(self.columns_var.get()) - 1)
+        )
+        self._refresh_column_adjust_status()
         for name in (
             "start_y", "bottom_y", "manual_x", "column_width", "gutter",
             "character_height", "row_padding", "geometry_reference_width",
