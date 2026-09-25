@@ -5410,16 +5410,23 @@ def detect_paddle_headwords(
         lens_attempted = lens_mode in {"diagnostic", "full"} or (
             lens_mode == "conflict" and (_pairs_need_lens(pre_pairs) or not pre_pairs)
         )
+        # Lens language is deliberately derived from the active headword OCR
+        # language. Keep the persisted legacy field only for compatibility.
+        lens_language = str(
+            getattr(settings, "ocr_language", "")
+            or getattr(settings, "paddle_lens_language", "")
+            or ""
+        )
         lens_payload: dict[str, Any] = {
             "enabled": lens_mode != "off", "mode": lens_mode, "attempted": lens_attempted,
-            "language": settings.paddle_lens_language, "version": "", "full_text": "",
+            "language": lens_language, "version": "", "full_text": "",
             "records": [], "candidates": [], "accepted_count": 0, "error": "",
             "confidence_source": "neutral_default; typography_from_original_bbox",
         }
         if lens_attempted:
             try:
                 raw_lens_records, lens_full_text, lens_version = run_google_lens(
-                    band, language=settings.paddle_lens_language,
+                    band, language=lens_language,
                     timeout=settings.paddle_lens_timeout,
                     default_confidence=settings.paddle_lens_default_confidence,
                 )
@@ -5622,7 +5629,7 @@ def detect_paddle_headwords(
                 "tesseract_auto_psm": bool(settings.paddle_tesseract_auto_psm),
                 "tesseract_status": tess_availability,
                 "google_lens_mode": lens_mode,
-                "google_lens_language": settings.paddle_lens_language,
+                "google_lens_language": lens_language,
             },
             "alphabetical_warnings": alphabetical_warnings,
             "page_quality": agreement,
