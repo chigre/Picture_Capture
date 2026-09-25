@@ -158,7 +158,7 @@ class AppSettings:
     illustration_label_border_color: str = "#1976d2"
     illustration_label_border_width: int = 2
     illustration_label_fill_color: str = "#e6e6e6"
-    illustration_label_font_family: str = "DengXian"
+    illustration_label_font_family: str = "自动（系统推荐）"
     illustration_label_font_size: int = 16
     illustration_label_font_bold: bool = False
     illustration_label_font_italic: bool = False
@@ -202,7 +202,7 @@ class AppSettings:
     image_suffix: str = ".png"
     # Overlay editor presentation at 100% page scale. The page zoom multiplies
     # the base font, so text boxes zoom together with the scanned page.
-    main_entry_font_family: str = "DengXian"
+    main_entry_font_family: str = "自动（系统推荐）"
     main_entry_font_size: int = 16
     main_entry_font_bold: bool = False
     main_entry_font_italic: bool = False
@@ -213,7 +213,7 @@ class AppSettings:
     # 0 = automatic proofreading crop fit: fill 99% of the actual left image area.
     # Positive values are explicit/manual percentages and remain project-persisted.
     review_zoom_percent: int = 0
-    review_entry_font_family: str = "DengXian"
+    review_entry_font_family: str = "自动（系统推荐）"
     review_entry_font_size: int = 16
     # v2 means review_entry_font_size is the actual fixed editor font size.
     # Before v2.11.13 it represented a 100%-zoom base size and was multiplied
@@ -225,7 +225,7 @@ class AppSettings:
     # Independent typography for the editable Simplified companion in the
     # proofreading window. Older projects inherit the ordinary headword style
     # once when loaded, then persist these values independently.
-    review_simplified_font_family: str = "DengXian"
+    review_simplified_font_family: str = "自动（系统推荐）"
     review_simplified_font_size: int = 16
     review_simplified_font_bold: bool = False
     review_simplified_font_italic: bool = False
