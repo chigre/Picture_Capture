@@ -4,7 +4,7 @@ import tkinter as tk
 
 
 def main() -> int:
-    from picture_capture.app import PictureCaptureApp, SettingsDialog, UsageGuideWindow
+    from picture_capture.app import FontPickerDialog, PictureCaptureApp, SettingsDialog, UsageGuideWindow
     from picture_capture.environment_center import EnvironmentCenterWindow
 
     app = PictureCaptureApp()
@@ -17,6 +17,15 @@ def main() -> int:
             lambda: EnvironmentCenterWindow(app),
             lambda: SettingsDialog(app),
             lambda: UsageGuideWindow(app),
+            lambda: FontPickerDialog(
+                app,
+                title="字体选择 smoke",
+                family="Arial",
+                size=12,
+                bold=False,
+                italic=False,
+                on_apply=lambda *_args: None,
+            ),
         ):
             window = factory()
             windows.append(window)
