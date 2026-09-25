@@ -4439,7 +4439,8 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
-def _tsv_clean(value: Any) -> str:    if value is None:
+def _tsv_clean(value: Any) -> str:
+    if value is None:
         return ""
     if isinstance(value, (list, tuple)):
         value = ",".join(str(x) for x in value)
