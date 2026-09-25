@@ -1655,8 +1655,7 @@ def test_round3_wordslist_reader_does_not_materialize_full_text_source():
         / "src" / "picture_capture" / "models.py"
     ).read_text(encoding="utf-8")
     start = source.index("def read_noncomment_lines(")
-    end = source.index("\n\n", start)
-    block = source[start:end]
+    block = source[start:]
     assert "iter_text_lines_detected" in block
     assert "read_text_detected" not in block
     assert ".splitlines()" not in block
