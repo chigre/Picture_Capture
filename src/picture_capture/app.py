@@ -10257,10 +10257,16 @@ class PictureCaptureApp(tk.Tk):
         if self._ui_worker_key_active("project-load"):
             self.status_var.set("项目仍在后台打开；完成后再启动批量任务。")
             return False
+        if self._ui_worker_key_active("profile-validation"):
+            self.status_var.set("Project Profile 测试仍在运行或安全结束中；完成后再启动批量任务。")
+            return False
         if self._ui_close_requested:
             return False
         if self._ui_worker_key_active("project-load"):
             self.status_var.set("项目仍在后台打开；完成后再启动批量任务。")
+            return False
+        if self._ui_worker_key_active("profile-validation"):
+            self.status_var.set("Project Profile 测试仍在运行或安全结束中；完成后再启动批量任务。")
             return False
         if self._ui_close_requested:
             return False
@@ -11168,6 +11174,9 @@ class PictureCaptureApp(tk.Tk):
             return
         if self._ui_worker_key_active("project-load"):
             self.status_var.set("已有项目正在后台打开，请完成后再选择其他项目。")
+            return
+        if self._ui_worker_key_active("profile-validation"):
+            self.status_var.set("Project Profile 测试仍在安全结束；完成后再切换项目。")
             return
         self._flush_deferred_page_save()
         for job_name in ("_page_meta_job", "_page_list_sort_job"):
