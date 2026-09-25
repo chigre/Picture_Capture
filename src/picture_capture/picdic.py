@@ -9,6 +9,7 @@ import zipfile
 import uuid
 
 from .project_storage import qt_root
+from .runtime_environment import case_insensitive_child
 
 
 _LANGUAGE_NAMES = {
@@ -48,7 +49,7 @@ def build_picdic_package(
     pww_dir = qt_root(root) / "PWW"
     if not pww_dir.is_dir():
         raise RuntimeError("尚未找到项目数据目录中的 PWW；请先执行“词条切图”。")
-    manifests = sorted(pww_dir.glob("*.PWWords"), key=lambda path: path.name.casefold())
+    manifests = sorted((path for path in pww_dir.iterdir() if path.is_file() and path.suffix.casefold() == ".pwwords"), key=lambda path: path.name.casefold())
     if not manifests:
         raise RuntimeError("项目数据目录的 PWW 中没有 .PWWords 清单；请先执行“词条切图”。")
 
@@ -58,7 +59,7 @@ def build_picdic_package(
 
     entries: "OrderedDict[str, list[str]]" = OrderedDict()
     last_word = ""
-    used_files: list[str] = []
+    used_files: dict[str, Path] = {}
     missing: list[str] = []
     for manifest in manifests:
         check_stop()
@@ -79,12 +80,12 @@ def build_picdic_package(
             if not word:
                 continue
             last_word = word
-            image_path = pww_dir / filename
+            image_path = case_insensitive_child(pww_dir, filename) or (pww_dir / filename)
             if not image_path.is_file():
                 missing.append(filename)
                 continue
             entries.setdefault(word, []).append(filename)
-            used_files.append(filename)
+            used_files.setdefault(filename, image_path)
 
     if not entries:
         detail = f"；缺失图片 {len(missing)} 张" if missing else ""
@@ -115,7 +116,7 @@ def build_picdic_package(
     temp_zip = zip_path.with_name(f".{zip_path.name}.{token}.tmp")
     backup_dsl = dsl_path.with_name(f".{dsl_path.name}.{token}.bak")
     backup_zip = zip_path.with_name(f".{zip_path.name}.{token}.bak")
-    unique_files = list(dict.fromkeys(used_files))
+    unique_files = list(used_files)
     had_dsl = dsl_path.exists()
     had_zip = zip_path.exists()
     try:
@@ -124,7 +125,7 @@ def build_picdic_package(
         with zipfile.ZipFile(temp_zip, "w", compression=zipfile.ZIP_STORED) as archive:
             for filename in unique_files:
                 check_stop()
-                archive.write(pww_dir / filename, arcname=filename)
+                archive.write(used_files[filename], arcname=filename)
         check_stop()
 
         # Preserve the previous complete pair until both new files have been

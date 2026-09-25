@@ -6,6 +6,7 @@ import gzip
 import json
 import os
 from pathlib import Path
+from .runtime_environment import legacy_user_data_roots, user_data_root
 import re
 import shutil
 import threading
@@ -63,19 +64,19 @@ _INDEX_ERROR = ""
 
 
 def data_root() -> Path:
-    """Return the user-level shared dictionary directory.
+    """Return the platform-native shared dictionary directory.
 
-    CC-CEDICT is not project data, so it lives outside _PictureCapture and is
-    shared by all projects for the current OS user.
+    Existing macOS installs from the historical Unix-style data directory remain
+    readable; new installs use the native Application Support location.
     """
-    local = os.environ.get("LOCALAPPDATA")
-    if local:
-        base = Path(local)
-    elif os.name == "nt":
-        base = Path.home() / "AppData" / "Local"
-    else:
-        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-    return base / "PictureCapture" / "dictionaries" / "cc-cedict"
+    current = user_data_root() / "dictionaries" / "cc-cedict"
+    if (current / DATA_FILENAME).is_file() or (current / METADATA_FILENAME).is_file():
+        return current
+    for legacy in legacy_user_data_roots():
+        candidate = legacy / "dictionaries" / "cc-cedict"
+        if (candidate / DATA_FILENAME).is_file() or (candidate / METADATA_FILENAME).is_file():
+            return candidate
+    return current
 
 
 def data_path() -> Path:

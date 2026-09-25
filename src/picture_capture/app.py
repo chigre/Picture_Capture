@@ -45,6 +45,8 @@ from .paddle_headwords import (
     parse_headword_filter_rules,
 )
 from .environment_center import EnvironmentCenterWindow
+from .runtime_environment import legacy_user_config_files, resolve_paddle_device, user_config_root
+from .ui_compat import bind_context_menu, fit_window_to_work_area, preferred_font_family
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
 from .layout_transform import LayoutTransform
 from .coordinate_space import (
@@ -1653,12 +1655,10 @@ class SettingsDialog(tk.Toplevel):
         ("栏数策略", "layout_columns_policy", str),
         ("中央分隔线", "layout_column_separator_mode", str),
         ("分析阈值", "analysis_threshold_mode", str),
-        ("Tesseract 路径", "ocr_executable", str),
         ("列跟踪搜索半径", "column_track_radius", int),
         ("列跟踪分块高度", "column_track_block_height", int),
         ("列跟踪最大步移", "column_track_max_step", int),
         ("PaddleOCR 语言", "paddle_language", str),
-        ("PaddleOCR 设备", "paddle_device", str),
         ("PaddleOCR 模型版本", "paddle_ocr_version", str),
         ("OCR图像预处理", "paddle_preprocessing", str),
         ("OCR输入最大长边（px）", "paddle_max_input_side", int),
@@ -1747,7 +1747,7 @@ class SettingsDialog(tk.Toplevel):
         ("列跟踪", ["column_track_radius", "column_track_block_height", "column_track_max_step"]),
         ("插图识别", ["illustration_detect_padding", "illustration_detect_right_padding"]),
         ("OCR 基础", [
-            "ocr_executable", "paddle_device", "paddle_ocr_version",
+            "paddle_ocr_version",
             "paddle_preprocessing", "paddle_max_input_side", "batch_interval",
         ]),
         ("PaddleOCR 候选与版面（高级）", [
@@ -1852,7 +1852,7 @@ class SettingsDialog(tk.Toplevel):
         "column_track_block_height": "作用：开启列跟踪后，沿阅读轴把页面切成多高的块来重新估计栏左缘。块越小，路径能更细地跟随局部弯曲；块越大，路径更平滑稳定。\n\n调整：太小容易受单个粗字、插图、污点影响；太大则跟不上快速变化的书脊弯曲。应与搜索半径、最大步移一起理解。",
         "column_track_max_step": "作用：限制相邻列跟踪锚点之间允许的最大水平跳变，避免某个分块突然追到正文或邻栏。\n\n调整：过小会把真实的快速弯曲强行拉直；过大则失去防跳栏作用。仅在已开启列跟踪且诊断显示路径被过度限制/突然跳变时调整。",
         "ocr_language": "作用：项目的主要词头/OCR语言，是多个组件的上层语义入口：用于选择/映射 PaddleOCR 与 Tesseract 语言、Dictionary Profile 默认结构、排序预设以及部分 CJK/拉丁解析路径。\n\n调整：应填写词头语言而不是释义语言。改变后可能导致 OCR 模型、Profile 和排序语义变化，已有 OCR 缓存/结果不应默认视为仍可比较，稳定项目中不要频繁切换。",
-        "paddle_device": "作用：指定 PaddleOCR 运行设备，例如 CPU/GPU。它影响推理速度、显存/内存和运行环境要求，不改变词头规则本身。\n\n调整：GPU 只有在 PaddlePaddle GPU、CUDA/cuDNN 与当前环境真正可用时才应选择；CPU 更通用。切换设备后如果出现 DLL/CUDA 错误，先运行 OCR 环境检测，而不是调识别阈值。",
+        "paddle_device": "兼容字段：旧项目中的 CPU/GPU 值继续读取，但运行时设备现在由本机环境自动决定，不再作为可迁移的项目参数。高级用户可用 PICTURE_CAPTURE_PADDLE_DEVICE=cpu/gpu 临时强制本机设备。",
         "paddle_preprocessing": "作用：决定送入 PaddleOCR 前的图像预处理。original 保留原图；grayscale 转灰度；auto_contrast 拉伸对比度；binary 强制二值化。\n\n选择：默认优先 original，因为 OCR 模型通常能利用原始灰度/颜色信息。只有扫描发灰、底色不均或模型确有改善证据时再改；过度二值化可能损失细笔画和重音符号。",
         "paddle_max_input_side": "作用：限制送入 PaddleOCR 的图像最大长边，超出时按比例缩小。它主要平衡小字细节、推理速度、内存/显存和模型稳定性。\n\n调整：增大可保留更多细节，但会更慢、更占显存；减小更省资源但可能让小字号/附加符号变糊。改变此项会改变 OCR 输入图像，应视为可能需要重新 OCR，而不仅是重新评分候选。",
         "paddle_band_width_ratio": "作用：每栏左侧有多少百分比宽度进入 OCR 候选带。程序不是把整栏全文都送去做词头判断，而是优先截取栏左区域以减少正文干扰。\n\n调整：太小会截断长词头、性别变体或紧随其后的 POS；太大则会引入更多释义正文、增加耗时和误候选。先以“能完整覆盖词头 + 近邻语法标签”为目标。",
@@ -1883,7 +1883,7 @@ class SettingsDialog(tk.Toplevel):
         "paddle_headword_regex": "作用：从每个合并后的 OCR 候选行开头提取 lemma（词头文字）。匹配成功后，若正则含捕获组，程序取第 1 个捕获组作为原始词头；它只是“词头像不像一个合法字符串”这一关，最终是否接受仍会结合栏左位置、词性/变形/符号、视觉分数和 Profile 规则。\n\n默认：允许行首空格及可选的 • ◆ ◇ ► ▶ * † ‡ § ¶；允许前/后置连字符、Unicode 字母、音节分隔点 · • ∙ ‧，并容忍 OCR 把分隔点识成 . : + -；也允许撇号连接。例如“• a·ga·rrón s. m.”提取 a·ga·rrón，“anti- adj.”提取 anti-。\n\n修改：第 1 捕获组应只包住 lemma。写得过宽会把逗号、POS/正文吞入词头；过窄会在后续评分前直接漏词。默认 Latin Profile 还会把通用 Unicode 字母范围收窄为拉丁字母；项目特例优先用 Profile 或过滤规则。",
         "paddle_pos_regex": "作用：识别 lemma 后面的 POS/语法标签，作为“这一行确实是词条起始行”的强结构证据；它不负责提取 lemma，搜索范围还受【AI 词性搜索字符数】限制。\n\n默认兼容：可覆盖 s.、s. m./f./amb./pl.、adj./adj. inv.、adv.、v./y.、v. prnl.、prep.、conj.、pron. 子类、det.、interj.、art.、num.、loc.、superlat. 等；y. 是容忍 OCR 把 v. 识成 y.。\n\n重要：主程序加载活动 Dictionary Profile 时，实际 POS 正则由 Profile 的 pos_labels 动态生成，本字段主要是兼容/低层 fallback。当前项目要增删词性缩写应优先改 Profile grammar。",
         "paddle_special_symbol_regex": "作用：判断 OCR 行首是否出现“可作为新词条起始证据”的项目符号。命中只增加一项结构证据，不会无条件把该行接受为词头。\n\n默认只在行首（允许前导空格）识别 • ◆ ◇ ► ▶ * † ‡ § ¶。正文中间出现同样符号不会命中。\n\n修改：只加入真正表示新词条/新条目起始的符号。词条内部释义标记、交叉引用或文章结构符号应交给 Dictionary Profile；例如某些词典中的 ■、□、||、~、→ 属于内部结构，不应因此触发新 lemma。",
-        "ocr_executable": "作用：Tesseract 可执行程序路径。可填写系统 PATH 中可直接调用的 tesseract，或完整 tesseract.exe 路径。只有普通文本 OCR、Tesseract 对照/补漏等路径需要它。\n\n调整：若“环境中心”提示找不到 Tesseract，应先修这里或系统安装；路径正确但语言缺失时还需安装对应 tessdata。PaddleOCR 单独运行不依赖此字段。",
+        "ocr_executable": "兼容字段：旧项目中的 Tesseract 路径仍会作为发现提示读取，但新的可执行程序选择保存为本机 runtime 设置，不再随项目迁移。请在【环境中心】中选择或重新检测 Tesseract。",
         "paddle_ocr_version": "作用：选择 PaddleOCR 使用的模型系列/版本。不同模型可能改变文字框、识别字符、速度和缓存签名，因此它属于后端级设置而不是单纯阈值。\n\n调整：项目一旦稳定不建议频繁切换。更换模型后应重新生成 OCR，而不是继续沿用旧缓存来比较候选规则。",
         "tesseract_language": "作用：Tesseract 使用的语言包代码，可与项目 OCR 语言不同但通常应对应词头语言。它用于普通文本 OCR和 Tesseract 对照/补漏路径。\n\n调整：若语言包未安装，Tesseract 会不可用或报错；多语言可按 Tesseract 语法组合。仅使用 PaddleOCR 时不会因为这个值改变 Paddle 结果。",
         "batch_interval": "作用：自动保存/批量相关状态写盘的节流间隔，用来避免每次微小编辑都立即写文件。它影响保存频率，不是 OCR 批量任务“每隔几秒处理一页”的间隔。\n\n调整：过短增加磁盘写入和界面抖动风险；过长则异常退出时可能丢失更多最近改动。通常保持数秒级即可。",
@@ -1934,7 +1934,7 @@ class SettingsDialog(tk.Toplevel):
         "column_track_radius", "column_track_block_height", "column_track_max_step",
     )
     OCR_COMMON_FIELDS = (
-        "ocr_language", "paddle_device", "paddle_preprocessing",
+        "ocr_language", "paddle_preprocessing",
         "paddle_band_width_ratio", "paddle_left_tolerance",
         "paddle_separator_safety_px",
     )
@@ -1959,7 +1959,7 @@ class SettingsDialog(tk.Toplevel):
         "review_zoom_percent", "wordslist_path",
     )
     PROJECT_RUNTIME_FIELDS = (
-        "batch_interval", "ocr_executable", "tesseract_language",
+        "batch_interval", "tesseract_language",
         "paddle_ocr_version", "paddle_max_input_side",
         "illustration_detect_padding", "illustration_detect_right_padding",
     )
@@ -2571,12 +2571,13 @@ class SettingsDialog(tk.Toplevel):
         self.update_idletasks()
         screen_w = max(900, self.winfo_screenwidth())
         screen_h = max(650, self.winfo_screenheight())
-        width = min(1120, max(840, int(screen_w * 0.80)))
-        height = max(560, int(screen_h * 0.75))
-        x = max(0, (screen_w - width) // 2)
-        y = max(0, (screen_h - height) // 2)
-        self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(min(840, width), min(560, height))
+        fit_window_to_work_area(
+            self,
+            min(1120, max(840, int(screen_w * 0.80))),
+            max(560, int(screen_h * 0.75)),
+            min_width=840,
+            min_height=560,
+        )
         self.resizable(True, True)
         self.vars: dict[str, tk.Variable] = {}
         self._casts = {name: cast for _, name, cast in self.FIELDS}
@@ -3050,7 +3051,7 @@ class SettingsDialog(tk.Toplevel):
         rules_editor_frame = ttk.Frame(rules_tab, padding=(12, 0, 12, 6))
         rules_editor_frame.grid(row=1, column=0, sticky="nsew")
         rules_editor_frame.columnconfigure(0, weight=1); rules_editor_frame.rowconfigure(0, weight=1)
-        self.rules_text = tk.Text(rules_editor_frame, wrap="none", undo=True, font=("Consolas", 10), padx=8, pady=8, height=18)
+        self.rules_text = tk.Text(rules_editor_frame, wrap="none", undo=True, font=(preferred_font_family(self, ("Consolas", "Menlo", "DejaVu Sans Mono"), fallback_named_font="TkFixedFont"), 10), padx=8, pady=8, height=18)
         rules_ybar = ttk.Scrollbar(rules_editor_frame, orient="vertical", command=self.rules_text.yview)
         rules_xbar = ttk.Scrollbar(rules_editor_frame, orient="horizontal", command=self.rules_text.xview)
         self.rules_text.configure(yscrollcommand=rules_ybar.set, xscrollcommand=rules_xbar.set)
@@ -4530,7 +4531,7 @@ class ReviewWindow(tk.Toplevel):
         self.word_list = tk.Listbox(
             ref_box,
             exportselection=False,
-            font=("Cambria", 14),
+            font=(preferred_font_family(self, ("Cambria", "Times New Roman", "Times", "DejaVu Serif")), 14),
             relief="flat",
             bd=0,
             highlightthickness=1,
@@ -6056,10 +6057,22 @@ class ReviewWindow(tk.Toplevel):
             # Review zoom changes only the cropped line image.  Text-entry font
             # size is a user setting and remains fixed while zooming the image.
             editor_font_size = _review_editor_font_size(self.parent.settings)
-            review_family = self.parent.settings.review_entry_font_family
+            review_family = preferred_font_family(
+                self,
+                (
+                    self.parent.settings.review_entry_font_family,
+                    "Cambria", "Times New Roman", "Times", "Noto Serif CJK SC", "DejaVu Serif",
+                ),
+            )
             review_weight = "bold" if self.parent.settings.review_entry_font_bold else "normal"
             review_slant = "italic" if self.parent.settings.review_entry_font_italic else "roman"
-            simplified_family = str(getattr(self.parent.settings, "review_simplified_font_family", review_family) or review_family)
+            simplified_family = preferred_font_family(
+                self,
+                (
+                    str(getattr(self.parent.settings, "review_simplified_font_family", review_family) or review_family),
+                    "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
+                ),
+            )
             simplified_font_size = max(6, int(getattr(self.parent.settings, "review_simplified_font_size", editor_font_size)))
             simplified_bold = bool(getattr(self.parent.settings, "review_simplified_font_bold", self.parent.settings.review_entry_font_bold))
             simplified_italic = bool(getattr(self.parent.settings, "review_simplified_font_italic", self.parent.settings.review_entry_font_italic))
@@ -6853,8 +6866,7 @@ class OCRConflictReviewDialog(tk.Toplevel):
         super().__init__(parent)
         self.parent = parent
         self.title("OCR词头冲突复核")
-        self.geometry("1180x680")
-        self.minsize(900, 520)
+        fit_window_to_work_area(self, 1180, 680, min_width=900, min_height=520)
         self.only_issues = tk.BooleanVar(value=True)
         self.status_var = tk.StringVar(value="")
         self._row_ids: list[str] = []
@@ -7020,8 +7032,7 @@ class CropSettingsDialog(tk.Toplevel):
         self.parent = parent
         self.indices = list(indices)
         self.title("切图设置")
-        self.geometry("780x690")
-        self.minsize(700, 600)
+        fit_window_to_work_area(self, 780, 690, min_width=700, min_height=600)
         self.transient(parent)
         self.grab_set()
         self.general_top_var = tk.StringVar()
@@ -7296,8 +7307,7 @@ class OldNewComparisonWindow(tk.Toplevel):
         self.parent = parent
         self.payload = payload
         self.title("新旧比较")
-        self.geometry("1180x760")
-        self.minsize(900, 560)
+        fit_window_to_work_area(self, 1180, 760, min_width=900, min_height=560)
         self.transient(parent)
         self.protocol("WM_DELETE_WINDOW", self._close)
 
@@ -7524,8 +7534,7 @@ class PictureCaptureApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title(f"Picture Capture v{__version__} — OCR 词头定位")
-        self.geometry("1440x900")
-        self.minsize(1080, 680)
+        fit_window_to_work_area(self, 1440, 900, min_width=1080, min_height=680)
         self.project: ProjectState | None = None
         self._project_words: set[str] = set()
         self.settings = AppSettings()
@@ -7712,9 +7721,8 @@ class PictureCaptureApp(tk.Tk):
             self.attributes("-zoomed", True)
         except tk.TclError:
             try:
-                self.geometry(
-                    f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0"
-                )
+                work_x, work_y, work_w, work_h = _screen_work_area(self)
+                self.geometry(f"{work_w}x{work_h}+{work_x}+{work_y}")
             except tk.TclError:
                 pass
 
@@ -8373,17 +8381,18 @@ class PictureCaptureApp(tk.Tk):
 
     @staticmethod
     def _default_session_state_path() -> Path:
-        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
-        root = Path(base).expanduser() if base else (Path.home() / ".picture_capture")
-        return root / "PictureCapture" / SESSION_STATE_FILENAME if base else root / SESSION_STATE_FILENAME
+        return user_config_root() / SESSION_STATE_FILENAME
 
     def _read_session_state(self) -> dict:
-        try:
-            if self._session_path.exists():
-                raw = json.loads(self._session_path.read_text(encoding="utf-8"))
-                return raw if isinstance(raw, dict) else {}
-        except (OSError, ValueError, TypeError):
-            pass
+        candidates = (self._session_path, *legacy_user_config_files(SESSION_STATE_FILENAME))
+        for candidate in candidates:
+            try:
+                if candidate.exists():
+                    raw = json.loads(candidate.read_text(encoding="utf-8"))
+                    if isinstance(raw, dict):
+                        return raw
+            except (OSError, ValueError, TypeError):
+                continue
         return {}
 
     def _save_session_state(self) -> None:
@@ -8717,7 +8726,7 @@ class PictureCaptureApp(tk.Tk):
         self.page_list.bind("<<TreeviewSelect>>", self.on_page_select)
         self.page_list.bind("<Button-1>", self._page_list_bookmark_click, add="+")
         self.page_list.bind("<MouseWheel>", self._list_mousewheel)
-        self.page_list.bind("<Button-3>", self._page_list_right_click)
+        bind_context_menu(self.page_list, self._page_list_right_click)
         self.page_list.bind("<Configure>", lambda _e: self._schedule_page_cell_overlay_refresh())
         self._page_column_vars = {
             "lined": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_lined", True))),
@@ -8811,7 +8820,7 @@ class PictureCaptureApp(tk.Tk):
         self.canvas.bind("<Button-1>", self.canvas_left_click)
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
-        self.canvas.bind("<Button-3>", self.canvas_right_click)
+        bind_context_menu(self.canvas, self.canvas_right_click)
         self.canvas.bind("<Motion>", self.canvas_motion)
         self.canvas.bind("<Leave>", self.canvas_leave)
         self.canvas.bind("<MouseWheel>", self.canvas_mousewheel)
@@ -10215,7 +10224,10 @@ class PictureCaptureApp(tk.Tk):
                 f"✗ PP-OCRv6：当前 PaddleOCR {paddleocr_version or '未知'} 不支持；请升级到 >= 3.7"
             )
 
-        lines.append(f"配置设备：{settings.paddle_device or 'cpu'}")
+        runtime_device = resolve_paddle_device()
+        lines.append(f"本机运行设备：{runtime_device}（自动；项目不再固定 CPU/GPU）")
+        if str(getattr(settings, "paddle_device", "auto") or "auto").lower() not in {"", "auto"}:
+            lines.append("提示：项目中的旧 paddle_device 值仅保留兼容读取，当前运行已忽略该项目级设备设置。")
         try:
             import paddle  # type: ignore
             compiled_cuda = bool(paddle.device.is_compiled_with_cuda())
@@ -10225,8 +10237,6 @@ class PictureCaptureApp(tk.Tk):
                 except Exception:
                     gpu_count = 0
                 lines.append(f"CUDA：可用（检测到 {gpu_count} 个 GPU）")
-                if str(settings.paddle_device).lower().startswith("cpu"):
-                    lines.append("提示：已安装 GPU 版 Paddle，但当前项目仍配置为 CPU；可将 PaddleOCR 设备改为 gpu。")
             elif paddle_gpu_version:
                 lines.append("CUDA：GPU 版 runtime 已安装，但当前进程未检测到可用 CUDA。")
             else:
@@ -12238,8 +12248,15 @@ class PictureCaptureApp(tk.Tk):
         horizontal = self.settings.layout_writing_mode == "horizontal-tb"
         vertical = not horizontal
         rtl = horizontal and self.settings.layout_text_direction == "rtl"
+        main_family = preferred_font_family(
+            self.canvas,
+            (
+                self.settings.main_entry_font_family,
+                "DengXian", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
+            ),
+        )
         editor_font = _entry_font_spec(
-            self.settings.main_entry_font_family, editor_font_size,
+            main_family, editor_font_size,
             self.settings.main_entry_font_bold, self.settings.main_entry_font_italic,
         )
         if horizontal:
@@ -12559,8 +12576,15 @@ class PictureCaptureApp(tk.Tk):
         # Entry pieces: cyan = ordinary crop; green = entry carrying a linked
         # illustration. Orange is used when the rectangle is unioned with a PPP.
         illustrated_entries = {p.entry_ref_index for p in plan.entry_pieces if p.source_mode == "linked_original" and p.entry_ref_index is not None}
+        preview_family = preferred_font_family(
+            self.canvas,
+            (
+                self.settings.main_entry_font_family,
+                "DengXian", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
+            ),
+        )
         preview_font = _entry_font_spec(
-            self.settings.main_entry_font_family,
+            preview_family,
             effective_main_overlay_font_size(self.image.width, scale, self.settings),
             # helper reads self.settings.main_entry_font_size consistently with editors
             self.settings.main_entry_font_bold,
@@ -12767,7 +12791,13 @@ class PictureCaptureApp(tk.Tk):
                         label_frame, width=18, relief="flat", bd=0, highlightthickness=0,
                         bg=self.settings.illustration_label_fill_color,
                         font=_entry_font_spec(
-                            self.settings.illustration_label_font_family,
+                            preferred_font_family(
+                                self.canvas,
+                                (
+                                    self.settings.illustration_label_font_family,
+                                    "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
+                                ),
+                            ),
                             max(7, round(self.settings.illustration_label_font_size * self.view_scale)),
                             self.settings.illustration_label_font_bold,
                             self.settings.illustration_label_font_italic,
@@ -15163,9 +15193,9 @@ class PictureCaptureApp(tk.Tk):
         self._show_text_report(title, "\n".join(lines))
 
     def _show_text_report(self, title: str, text: str) -> None:
-        win = tk.Toplevel(self); win.title(title); win.geometry("900x650")
+        win = tk.Toplevel(self); win.title(title); fit_window_to_work_area(win, 900, 650, min_width=640, min_height=460)
         frame = ttk.Frame(win, padding=6); frame.pack(fill="both", expand=True)
-        box = tk.Text(frame, wrap="none", font=("Consolas", 11))
+        box = tk.Text(frame, wrap="none", font=(preferred_font_family(win, ("Consolas", "Menlo", "DejaVu Sans Mono"), fallback_named_font="TkFixedFont"), 11))
         ybar = ttk.Scrollbar(frame, orient="vertical", command=box.yview)
         xbar = ttk.Scrollbar(frame, orient="horizontal", command=box.xview)
         box.configure(yscrollcommand=ybar.set, xscrollcommand=xbar.set)

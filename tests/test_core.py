@@ -3893,7 +3893,7 @@ def test_v2110_entry_crop_whitens_standalone_ppp_but_preserves_linked_ppp(tmp_pa
 def test_v2110_page_list_heading_context_menu_has_optional_columns_and_permanent_page():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'self.page_list.bind("<Button-3>", self._page_list_right_click)' in text
+    assert "bind_context_menu(self.page_list, self._page_list_right_click)" in text
     assert 'menu.add_checkbutton(label="页面", variable=page_var, state="disabled")' in text
     assert 'label="画线"' in text and 'label="填充状态"' in text and 'label="插图"' in text
 
@@ -5843,6 +5843,8 @@ def test_v2133_windows_launcher_is_runtime_only_and_never_installs():
     folded = bat.casefold()
     assert '".venv\\Scripts\\python.exe" "run.py"' in bat
     assert "install_ocr_windows.bat" in bat
+    assert 'pushd "%~dp0"' in bat
+    assert "popd" in bat
     for suspicious in (
         "uv ", "pip ", "powershell", "curl ", "wget ", "certutil", "bitsadmin",
         "invoke-webrequest", "http://", "https://", "pythonw.exe", "start ",
@@ -5875,7 +5877,8 @@ def test_v2128_cc_cedict_local_install_and_lookup(tmp_path, monkeypatch):
     import zipfile
     import picture_capture.cc_cedict as cedict
 
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    monkeypatch.setattr(cedict, "user_data_root", lambda: tmp_path / "local" / "PictureCapture")
+    monkeypatch.setattr(cedict, "legacy_user_data_roots", lambda: ())
     cedict.clear_cache()
     source = tmp_path / "cedict.zip"
     lines = ["# synthetic test"]
@@ -6022,7 +6025,8 @@ def test_v2129_ocr_results_are_compact_single_row():
 def test_v21210_cc_cedict_exposes_traditional_to_simplified_candidates(tmp_path, monkeypatch):
     import picture_capture.cc_cedict as cedict
 
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    monkeypatch.setattr(cedict, "user_data_root", lambda: tmp_path / "local" / "PictureCapture")
+    monkeypatch.setattr(cedict, "legacy_user_data_roots", lambda: ())
     root = cedict.data_root()
     root.mkdir(parents=True, exist_ok=True)
     cedict.data_path().write_text(
@@ -6325,6 +6329,8 @@ def test_windows_batch_launcher_is_visible_foreground_and_minimal():
     run_py = Path("run.py").read_text(encoding="utf-8")
 
     assert '".venv\\scripts\\python.exe" "run.py"' in batch
+    assert 'pushd "%~dp0"' in batch
+    assert "popd" in batch
     for suspicious in (
         "uv ", "pip ", "powershell", "curl ", "wget ", "certutil", "bitsadmin",
         "invoke-webrequest", "http://", "https://", "pythonw.exe", "start ",

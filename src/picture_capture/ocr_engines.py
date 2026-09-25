@@ -3,6 +3,8 @@ from __future__ import annotations
 from importlib import metadata, util
 from pathlib import Path
 from typing import Any
+
+from .runtime_environment import effective_tesseract_configured
 import asyncio
 import os
 import shutil
@@ -15,21 +17,40 @@ from .image_utils import normalize_page_rgb
 
 
 def find_tesseract(executable: str = "tesseract") -> str | None:
-    """Resolve Tesseract from an explicit value, PATH, and Windows defaults."""
-    explicit = Path(executable).expanduser()
+    """Resolve Tesseract from machine override, project hint, PATH, and OS defaults."""
+    configured = effective_tesseract_configured(executable)
+    explicit = Path(configured).expanduser()
     if explicit.is_file():
         return str(explicit.resolve())
-    found = shutil.which(executable)
+
+    # First honor a portable command name or a still-valid configured path.
+    found = shutil.which(configured)
     if found:
         return found
+
+    # A project may carry a stale absolute path from another operating system.
+    # Never let that suppress discovery of this machine's normal Tesseract.
+    if configured != "tesseract":
+        found = shutil.which("tesseract")
+        if found:
+            return found
+
     candidates: list[Path] = []
-    for key in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
-        root = os.environ.get(key)
-        if root:
-            candidates.extend([
-                Path(root) / "Tesseract-OCR" / "tesseract.exe",
-                Path(root) / "Programs" / "Tesseract-OCR" / "tesseract.exe",
-            ])
+    if os.name == "nt":
+        for key in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
+            root = os.environ.get(key)
+            if root:
+                candidates.extend([
+                    Path(root) / "Tesseract-OCR" / "tesseract.exe",
+                    Path(root) / "Programs" / "Tesseract-OCR" / "tesseract.exe",
+                ])
+    else:
+        # GUI processes on macOS may not inherit Homebrew's shell PATH.
+        candidates.extend([
+            Path("/opt/homebrew/bin/tesseract"),
+            Path("/usr/local/bin/tesseract"),
+            Path("/usr/bin/tesseract"),
+        ])
     for candidate in candidates:
         if candidate.is_file():
             return str(candidate.resolve())

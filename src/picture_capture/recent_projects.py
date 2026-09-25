@@ -8,21 +8,26 @@ from pathlib import Path
 
 from .models import project_cover_path, project_page_images
 from .project_storage import settings_path
+from .runtime_environment import legacy_user_config_files, user_config_root
 
 
 def default_recent_projects_path() -> Path:
-    base = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA")
-    root = Path(base).expanduser() if base else Path.home() / ".picture_capture"
-    return root / "PictureCapture" / "recent_projects.json" if base else root / "recent_projects.json"
+    return user_config_root() / "recent_projects.json"
 
 
 def load_recent_projects(path: Path | None = None) -> list[dict[str, object]]:
     target = path or default_recent_projects_path()
-    try:
-        value = json.loads(target.read_text(encoding="utf-8"))
-        return [row for row in value if isinstance(row, dict) and row.get("path")] if isinstance(value, list) else []
-    except (OSError, ValueError, TypeError):
-        return []
+    candidates = (target,) if path is not None else (
+        target, *legacy_user_config_files("recent_projects.json")
+    )
+    for candidate in candidates:
+        try:
+            value = json.loads(candidate.read_text(encoding="utf-8"))
+            if isinstance(value, list):
+                return [row for row in value if isinstance(row, dict) and row.get("path")]
+        except (OSError, ValueError, TypeError):
+            continue
+    return []
 
 
 def save_recent_projects(rows: list[dict[str, object]], path: Path | None = None) -> None:

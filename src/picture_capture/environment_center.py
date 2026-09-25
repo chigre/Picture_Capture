@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 import platform
+import shlex
 import shutil
 import subprocess
 import webbrowser
@@ -19,6 +20,8 @@ from .cc_cedict import (
 from .chinese_simplify import opencc_runtime_status
 from .ocr_engines import lens_status, tesseract_status
 from .models import resolved_tesseract_language
+from .runtime_environment import effective_tesseract_configured, save_runtime_setting
+from .ui_compat import fit_window_to_work_area
 
 
 TESSERACT_DOC_URL = "https://tesseract-ocr.github.io/tessdoc/Installation.html"
@@ -109,6 +112,15 @@ def tesseract_install_plan(
     )
 
 
+def source_checkout_root(start: Path | None = None) -> Path | None:
+    """Find a source/Release checkout without assuming package/site-packages depth."""
+    origin = Path(start) if start is not None else Path(__file__).resolve()
+    for parent in (origin, *origin.parents):
+        if (parent / "pyproject.toml").is_file() and (parent / "scripts" / "ocr_setup.py").is_file():
+            return parent
+    return None
+
+
 def ocr_installer_path(root: Path, system: str | None = None) -> Path | None:
     system_name = (system or platform.system()).strip()
     if system_name == "Windows":
@@ -142,7 +154,7 @@ def launch_ocr_installer(root: Path, *, parent: tk.Misc | None = None) -> bool:
             return True
         # Linux desktop terminals differ widely. Avoid launching an interactive
         # shell invisibly; provide one explicit command for the user instead.
-        command = f'cd "{root}" && ./{script.name}'
+        command = f"cd {shlex.quote(str(root))} && ./{shlex.quote(script.name)}"
         if parent is not None:
             try:
                 parent.clipboard_clear()
@@ -169,8 +181,7 @@ class EnvironmentCenterWindow(tk.Toplevel):
         super().__init__(app)
         self.app = app
         self.title("Picture Capture 环境中心")
-        self.geometry("860x650")
-        self.minsize(720, 520)
+        fit_window_to_work_area(self, 860, 650, min_width=720, min_height=520)
         self.transient(app)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self._status_labels: dict[str, ttk.Label] = {}
@@ -255,7 +266,7 @@ class EnvironmentCenterWindow(tk.Toplevel):
         self.status_var.set("正在后台检测环境…")
         settings = self.app.settings
         language = resolved_tesseract_language(settings)
-        executable = str(settings.ocr_executable)
+        executable = effective_tesseract_configured(str(settings.ocr_executable))
 
         def worker():
             paddle_text = self.app._paddle_environment_text(settings)
@@ -295,9 +306,8 @@ class EnvironmentCenterWindow(tk.Toplevel):
                     f"路径：{tess.get('resolved')}\n"
                     f"当前项目语言：{', '.join(requested) or '未指定'}"
                 )
-                self.app.settings.ocr_executable = str(tess.get("resolved") or executable)
-                if self.app.project:
-                    self.app.save_settings()
+                # The resolved executable is machine-local; never persist it into
+                # project settings, which may travel to another operating system.
             elif tess.get("resolved"):
                 missing = ", ".join(tess.get("missing_languages", [])) or "未知"
                 tess_text = (
@@ -356,11 +366,21 @@ class EnvironmentCenterWindow(tk.Toplevel):
         self.app.open_settings()
 
     def _launch_ocr_installer(self) -> None:
-        root = Path(__file__).resolve().parents[2]
+        root = source_checkout_root()
+        if root is None:
+            messagebox.showinfo(
+                "OCR 安装 / 切换",
+                "当前 Picture Capture 从已安装的 Python 包/wheel 运行，没有附带仓库级 OCR 安装脚本。\n\n"
+                "请使用安装该包时的包管理方式安装/切换 optional extra（例如 ocr-cpu 或 lens），"
+                "或使用包含 install_ocr_* 脚本的 Release/source 目录。\n\n"
+                "环境中心仍可正常检测当前 OCR 运行环境。",
+                parent=self,
+            )
+            return
         launch_ocr_installer(root, parent=self)
 
     def _choose_tesseract(self) -> None:
-        initial = str(getattr(self.app.settings, "ocr_executable", "") or "")
+        initial = effective_tesseract_configured(str(getattr(self.app.settings, "ocr_executable", "") or ""))
         initialdir = str(Path(initial).expanduser().parent) if Path(initial).expanduser().is_file() else ""
         path = filedialog.askopenfilename(
             parent=self,
@@ -370,9 +390,7 @@ class EnvironmentCenterWindow(tk.Toplevel):
         )
         if not path:
             return
-        self.app.settings.ocr_executable = path
-        if self.app.project:
-            self.app.save_settings()
+        save_runtime_setting("tesseract_executable", str(Path(path).expanduser().resolve()))
         self.refresh()
 
     def _copy(self, text: str) -> None:

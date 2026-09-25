@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
 from .models import AppSettings
+from .runtime_environment import resolve_paddle_device
 from .image_utils import normalize_page_rgb
 from .layout_transform import LayoutTransform
 from .coordinate_space import (
@@ -133,7 +134,8 @@ def _get_text_detector(settings: AppSettings) -> Any:
     detection models.  Layout detection values compatibility over peak speed,
     so explicitly disable that acceleration path here.
     """
-    key = f"{settings.paddle_device or 'cpu'}|nomkldnn"
+    device = resolve_paddle_device()
+    key = f"{device}|nomkldnn"
     if key in _TEXT_DETECTION_CACHE:
         return _TEXT_DETECTION_CACHE[key]
 
@@ -150,16 +152,14 @@ def _get_text_detector(settings: AppSettings) -> Any:
             "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或在受支持平台执行：uv sync --extra ocr-cpu"
         ) from exc
 
-    kwargs: dict[str, Any] = {"enable_mkldnn": False}
-    if settings.paddle_device:
-        kwargs["device"] = settings.paddle_device
+    kwargs: dict[str, Any] = {"enable_mkldnn": False, "device": device}
 
     # Newer PaddleOCR 3.x exposes enable_mkldnn directly.  Keep compatibility
     # with older 3.x signatures by progressively dropping unsupported kwargs.
     attempts = [
         kwargs,
         {k: v for k, v in kwargs.items() if k != "device"},
-        {"device": settings.paddle_device} if settings.paddle_device else {},
+        {"device": device},
         {},
     ]
     seen: set[tuple[tuple[str, str], ...]] = set()
