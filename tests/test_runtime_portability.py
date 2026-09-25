@@ -4,7 +4,8 @@ from pathlib import Path
 
 import picture_capture.runtime_environment as runtime
 from picture_capture.ocr_engines import find_tesseract
-from picture_capture.project_storage import pdic_path_for_image, ppp_read_path_for_image
+from picture_capture.picdic import build_picdic_package
+from picture_capture.project_storage import pdic_path_for_image, ppp_read_path_for_image, qt_root
 
 
 def test_platform_native_user_roots(tmp_path: Path):
@@ -82,3 +83,24 @@ def test_legacy_pdic_and_ppp_casing_resolves_on_case_sensitive_filesystem(tmp_pa
     (tmp_path / "Page001.PpP").write_text("", encoding="utf-8")
     assert pdic_path_for_image(image).name == "Page001.PDIC"
     assert ppp_read_path_for_image(image).name == "Page001.PpP"
+
+
+def test_picdic_accepts_legacy_manifest_and_image_case(tmp_path: Path):
+    pww = qt_root(tmp_path) / "PWW"
+    pww.mkdir(parents=True)
+    actual_image = pww / "Page_0001.PNG"
+    actual_image.write_bytes(b"synthetic")
+    (pww / "PAGE.PWWORDS").write_text(
+        "page|1|alpha|page_0001.png\n",
+        encoding="utf-8",
+    )
+
+    dsl, archive, words, images = build_picdic_package(tmp_path, "eng")
+    assert dsl.is_file()
+    assert archive.is_file()
+    assert words == 1
+    assert images == 1
+
+    import zipfile
+    with zipfile.ZipFile(archive) as zf:
+        assert zf.namelist() == ["page_0001.png"]
