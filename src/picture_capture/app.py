@@ -6056,10 +6056,22 @@ class ReviewWindow(tk.Toplevel):
             # Review zoom changes only the cropped line image.  Text-entry font
             # size is a user setting and remains fixed while zooming the image.
             editor_font_size = _review_editor_font_size(self.parent.settings)
-            review_family = self.parent.settings.review_entry_font_family
+            review_family = preferred_font_family(
+                self,
+                (
+                    self.parent.settings.review_entry_font_family,
+                    "Cambria", "Times New Roman", "Times", "Noto Serif CJK SC", "DejaVu Serif",
+                ),
+            )
             review_weight = "bold" if self.parent.settings.review_entry_font_bold else "normal"
             review_slant = "italic" if self.parent.settings.review_entry_font_italic else "roman"
-            simplified_family = str(getattr(self.parent.settings, "review_simplified_font_family", review_family) or review_family)
+            simplified_family = preferred_font_family(
+                self,
+                (
+                    str(getattr(self.parent.settings, "review_simplified_font_family", review_family) or review_family),
+                    "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
+                ),
+            )
             simplified_font_size = max(6, int(getattr(self.parent.settings, "review_simplified_font_size", editor_font_size)))
             simplified_bold = bool(getattr(self.parent.settings, "review_simplified_font_bold", self.parent.settings.review_entry_font_bold))
             simplified_italic = bool(getattr(self.parent.settings, "review_simplified_font_italic", self.parent.settings.review_entry_font_italic))
@@ -12237,8 +12249,15 @@ class PictureCaptureApp(tk.Tk):
         horizontal = self.settings.layout_writing_mode == "horizontal-tb"
         vertical = not horizontal
         rtl = horizontal and self.settings.layout_text_direction == "rtl"
+        main_family = preferred_font_family(
+            self.canvas,
+            (
+                self.settings.main_entry_font_family,
+                "DengXian", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
+            ),
+        )
         editor_font = _entry_font_spec(
-            self.settings.main_entry_font_family, editor_font_size,
+            main_family, editor_font_size,
             self.settings.main_entry_font_bold, self.settings.main_entry_font_italic,
         )
         if horizontal:
@@ -12558,8 +12577,15 @@ class PictureCaptureApp(tk.Tk):
         # Entry pieces: cyan = ordinary crop; green = entry carrying a linked
         # illustration. Orange is used when the rectangle is unioned with a PPP.
         illustrated_entries = {p.entry_ref_index for p in plan.entry_pieces if p.source_mode == "linked_original" and p.entry_ref_index is not None}
+        preview_family = preferred_font_family(
+            self.canvas,
+            (
+                self.settings.main_entry_font_family,
+                "DengXian", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
+            ),
+        )
         preview_font = _entry_font_spec(
-            self.settings.main_entry_font_family,
+            preview_family,
             effective_main_overlay_font_size(self.image.width, scale, self.settings),
             # helper reads self.settings.main_entry_font_size consistently with editors
             self.settings.main_entry_font_bold,
@@ -12766,7 +12792,13 @@ class PictureCaptureApp(tk.Tk):
                         label_frame, width=18, relief="flat", bd=0, highlightthickness=0,
                         bg=self.settings.illustration_label_fill_color,
                         font=_entry_font_spec(
-                            self.settings.illustration_label_font_family,
+                            preferred_font_family(
+                                self.canvas,
+                                (
+                                    self.settings.illustration_label_font_family,
+                                    "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Arial", "DejaVu Sans",
+                                ),
+                            ),
                             max(7, round(self.settings.illustration_label_font_size * self.view_scale)),
                             self.settings.illustration_label_font_bold,
                             self.settings.illustration_label_font_italic,
