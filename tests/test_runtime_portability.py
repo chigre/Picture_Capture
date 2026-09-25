@@ -4,7 +4,7 @@ from pathlib import Path
 
 import picture_capture.runtime_environment as runtime
 from picture_capture.ocr_engines import find_tesseract
-from picture_capture.project_storage import pdic_read_path_for_image, ppp_read_path_for_image
+from picture_capture.project_storage import pdic_path_for_image, ppp_read_path_for_image
 
 
 def test_platform_native_user_roots(tmp_path: Path):
@@ -80,5 +80,5 @@ def test_legacy_pdic_and_ppp_casing_resolves_on_case_sensitive_filesystem(tmp_pa
     image.write_bytes(b"")
     (tmp_path / "Page001.PDIC").write_text("", encoding="utf-8")
     (tmp_path / "Page001.PpP").write_text("", encoding="utf-8")
-    assert pdic_read_path_for_image(tmp_path, image).name == "Page001.PDIC"
-    assert ppp_read_path_for_image(tmp_path, image).name == "Page001.PpP"
+    assert pdic_path_for_image(image).name == "Page001.PDIC"
+    assert ppp_read_path_for_image(image).name == "Page001.PpP"
