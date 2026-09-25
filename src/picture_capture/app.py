@@ -7990,6 +7990,18 @@ class PictureCaptureApp(tk.Tk):
             pass
         if isinstance(root, (tk.Tk, tk.Toplevel)):
             apply_native_titlebar_appearance(root, self.appearance_mode)
+            # Theme switches can happen while secondary windows are already
+            # mapped. Refresh every descendant Toplevel as well; the <Map> hook
+            # below handles windows created after the switch.
+            stack = list(root.winfo_children())
+            while stack:
+                widget = stack.pop()
+                if isinstance(widget, tk.Toplevel):
+                    apply_native_titlebar_appearance(widget, self.appearance_mode)
+                try:
+                    stack.extend(widget.winfo_children())
+                except tk.TclError:
+                    pass
 
     def _appearance_toplevel_mapped(self, event: tk.Event) -> None:
         widget = getattr(event, "widget", None)
