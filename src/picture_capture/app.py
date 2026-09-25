@@ -7335,7 +7335,7 @@ class OldNewComparisonWindow(tk.Toplevel):
         self.parent.status_var.set(f"已保存：{chosen}")
 
     def _save_new_snapshot(self) -> None:
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         self._save_text_payload(
             title="保存当前 PDIC 合集",
             initialfile=f"PDIC_words_{stamp}.txt",
@@ -7515,7 +7515,10 @@ class PictureCaptureApp(tk.Tk):
         self._ui_worker_poll_job: str | None = None
         self._ui_worker_generations: dict[str, int] = {}
         self._ui_worker_handlers: dict[tuple[str, int], tuple] = {}
+        self._ui_worker_active: set[tuple[str, int]] = set()
+        self._ui_worker_close_wait: set[tuple[str, int]] = set()
         self._ui_worker_shutdown = False
+        self._ui_close_requested = False
         self._pending_page_index: int | None = None
         self._session_path = self._default_session_state_path()
         self._last_session = self._read_session_state()
@@ -7574,16 +7577,30 @@ class PictureCaptureApp(tk.Tk):
         except (tk.TclError, ValueError):
             return
 
-    def _start_ui_worker(self, key: str, worker, on_done, on_error=None) -> int:
-        """Run one replaceable blocking operation without letting its worker touch Tk."""
-        if self._ui_worker_shutdown:
+    def _ui_worker_key_active(self, key: str) -> bool:
+        return any(token[0] == key for token in self._ui_worker_active)
+
+    def _start_ui_worker(
+        self, key: str, worker, on_done, on_error=None, *, wait_on_close: bool = False,
+    ) -> int:
+        """Run one replaceable blocking operation without letting its worker touch Tk.
+
+        wait_on_close is reserved for workers that may mutate durable files.
+        A close request suppresses their UI callback but defers destroy() until
+        the worker has reached its own success/error cleanup boundary.
+        """
+        if self._ui_worker_shutdown or self._ui_close_requested:
             return -1
         stale = [token for token in self._ui_worker_handlers if token[0] == key]
         for token in stale:
             self._ui_worker_handlers.pop(token, None)
         generation = int(self._ui_worker_generations.get(key, 0)) + 1
         self._ui_worker_generations[key] = generation
-        self._ui_worker_handlers[(key, generation)] = (on_done, on_error)
+        token = (key, generation)
+        self._ui_worker_handlers[token] = (on_done, on_error)
+        self._ui_worker_active.add(token)
+        if wait_on_close:
+            self._ui_worker_close_wait.add(token)
 
         def runner() -> None:
             try:
@@ -7617,28 +7634,41 @@ class PictureCaptureApp(tk.Tk):
             except queue.Empty:
                 break
             processed += 1
-            handler = self._ui_worker_handlers.pop((key, generation), None)
-            if generation != self._ui_worker_generations.get(key) or handler is None:
-                continue
-            on_done, on_error = handler
-            try:
-                if kind == "done":
-                    on_done(result)
-                elif on_error is not None:
-                    on_error(exc, detail)
-                else:
-                    if detail:
-                        print(detail)
-                    self.show_error(f"{key}失败", exc)
-            except tk.TclError:
-                pass
-            except Exception as callback_exc:
-                traceback.print_exc()
+            token = (key, generation)
+            self._ui_worker_active.discard(token)
+            self._ui_worker_close_wait.discard(token)
+            handler = self._ui_worker_handlers.pop(token, None)
+            if (
+                not self._ui_close_requested
+                and generation == self._ui_worker_generations.get(key)
+                and handler is not None
+            ):
+                on_done, on_error = handler
                 try:
-                    self.show_error(f"{key}完成处理失败", callback_exc)
+                    if kind == "done":
+                        on_done(result)
+                    elif on_error is not None:
+                        on_error(exc, detail)
+                    else:
+                        if detail:
+                            print(detail)
+                        self.show_error(f"{key}失败", exc)
                 except tk.TclError:
                     pass
-        if self._ui_worker_handlers and not self._ui_worker_shutdown:
+                except Exception as callback_exc:
+                    traceback.print_exc()
+                    try:
+                        self.show_error(f"{key}完成处理失败", callback_exc)
+                    except tk.TclError:
+                        pass
+
+        if self._ui_close_requested and not self._ui_worker_close_wait:
+            self.after_idle(self.on_close)
+            return
+        if (
+            (self._ui_worker_handlers or self._ui_worker_close_wait)
+            and not self._ui_worker_shutdown
+        ):
             self._ui_worker_poll_job = self.after(
                 8 if processed >= 48 else 60, self._poll_ui_worker_queue
             )
@@ -7993,8 +8023,26 @@ class PictureCaptureApp(tk.Tk):
             self._batch_close_after_stop = True
             self._request_batch_stop()
             return
+
+        # Durable one-shot workers must finish their success/error cleanup
+        # boundary before the process can disappear.
+        if self._ui_worker_close_wait:
+            if not self._ui_close_requested:
+                self._ui_close_requested = True
+                for key in tuple(self._ui_worker_generations):
+                    self._invalidate_ui_worker(key)
+                self.status_var.set("正在完成后台文件操作，完成后自动退出…")
+                try:
+                    self.withdraw()
+                except tk.TclError:
+                    pass
+                if self._ui_worker_poll_job is None:
+                    self._ui_worker_poll_job = self.after(40, self._poll_ui_worker_queue)
+            return
+
         try:
             self._ui_worker_shutdown = True
+            self._ui_close_requested = True
             for key in tuple(self._ui_worker_generations):
                 self._invalidate_ui_worker(key)
             if self._ui_worker_poll_job is not None:
@@ -9639,6 +9687,7 @@ class PictureCaptureApp(tk.Tk):
                     f"training-cleanup-{base_name}",
                     cleanup_worker, cleanup_done,
                     lambda exc, detail: print(detail or str(exc)),
+                    wait_on_close=True,
                 )
 
         self._start_batch_task(
@@ -9915,7 +9964,7 @@ class PictureCaptureApp(tk.Tk):
             self.status_var.set("版面扫描完成；正在后台生成 CSV 与统计报告…")
 
             def finalize_report():
-                base = f"layout_consistency_{range_name}_{datetime.now():%Y%m%d_%H%M%S}"
+                base = f"layout_consistency_{range_name}_{datetime.now():%Y%m%d_%H%M%S_%f}"
                 target = export_dir / f"{base}.csv"
                 report = export_dir / f"{base}_report.txt"
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -10030,6 +10079,7 @@ class PictureCaptureApp(tk.Tk):
             self._start_ui_worker(
                 "layout-consistency-finalize",
                 finalize_report, finalized, finalize_failed,
+                wait_on_close=True,
             )
 
         self._start_batch_task("检测版面一致性", indices, worker, done, item_label=lambda i: pages[i].name)
@@ -10203,6 +10253,16 @@ class PictureCaptureApp(tk.Tk):
         """
         if self._batch_active:
             messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
+            return False
+        if self._ui_worker_key_active("project-load"):
+            self.status_var.set("项目仍在后台打开；完成后再启动批量任务。")
+            return False
+        if self._ui_close_requested:
+            return False
+        if self._ui_worker_key_active("project-load"):
+            self.status_var.set("项目仍在后台打开；完成后再启动批量任务。")
+            return False
+        if self._ui_close_requested:
             return False
         self._flush_deferred_page_save()
         items = list(items)
@@ -11103,6 +11163,12 @@ class PictureCaptureApp(tk.Tk):
         launch_profile_setup: bool = False,
     ) -> None:
         """Prepare project files off-thread and commit the prepared state on Tk."""
+        if self._batch_active:
+            self.status_var.set("批量任务运行中，结束或停止后再切换项目。")
+            return
+        if self._ui_worker_key_active("project-load"):
+            self.status_var.set("已有项目正在后台打开，请完成后再选择其他项目。")
+            return
         self._flush_deferred_page_save()
         for job_name in ("_page_meta_job", "_page_list_sort_job"):
             job = getattr(self, job_name, None)
@@ -11309,7 +11375,9 @@ class PictureCaptureApp(tk.Tk):
                 print(detail)
             self.show_error("无法打开项目", exc)
 
-        self._start_ui_worker("project-load", worker, done, failed)
+        self._start_ui_worker(
+            "project-load", worker, done, failed, wait_on_close=True,
+        )
 
     def on_page_select(self, _event: tk.Event) -> None:
         if getattr(self, "_batch_active", False) and not self._batch_foreground_pages:
