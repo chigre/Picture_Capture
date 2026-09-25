@@ -5126,7 +5126,7 @@ class ReviewWindow(tk.Toplevel):
                         page = candidate
                         break
             if page is None and self.parent.current_page and self.parent.current_page.stem == stem:
-                page = self.parent.current_page
+                page = current_page
             records = read_simplified_records(simplified_review_path_for_image(page)) if page else {}
             self._simplified_page_cache[stem] = records
         return self._simplified_page_cache[stem]
@@ -5810,9 +5810,19 @@ class ReviewWindow(tk.Toplevel):
         self.canvas.yview_scroll(direction * 3, "units")
         return "break"
 
-    def _request_render_rows(self, *, focus_index: int | None = None) -> None:
+    def _request_render_rows(
+        self, *, focus_index: int | None = None, reset_scroll: bool = False,
+    ) -> None:
         """Prepare proofreading crops off-thread; materialize Tk widgets only on Tk."""
-        if not self.parent.project or not self.parent.current_page or self.parent.image is None:
+        project = getattr(self.parent, "project", None)
+        current_page = getattr(self.parent, "current_page", None)
+        parent_image = getattr(self.parent, "image", None)
+        if project is None or current_page is None or parent_image is None:
+            # Keep lightweight unit/embedding stubs compatible without ever
+            # making the production path fall back to synchronous image work.
+            fallback = self.__dict__.get("render_rows")
+            if callable(fallback):
+                fallback()
             return
         if focus_index is None:
             focus_index = self.active_index
@@ -5876,6 +5886,8 @@ class ReviewWindow(tk.Toplevel):
                 return
             target_focus = self._review_render_focus_index
             self.render_rows(preloaded_crops=crops)
+            if reset_scroll:
+                self._reset_rows_scroll_top()
             if self.editors:
                 self.focus_index(min(target_focus, len(self.editors) - 1))
 
@@ -6674,10 +6686,10 @@ class ReviewWindow(tk.Toplevel):
             if preloaded is not None and preloaded.get("review_key") == self._review_prefetch_key():
                 crops = list(preloaded.get("review_crops") or [])
             if crops is None:
-                self._request_render_rows(focus_index=0)
+                self._request_render_rows(focus_index=0, reset_scroll=True)
             else:
                 self.render_rows(preloaded_crops=crops)
-            self._reset_rows_scroll_top()
+                self._reset_rows_scroll_top()
             self._update_title()
 
 class OCRConflictReviewDialog(tk.Toplevel):
