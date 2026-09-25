@@ -4292,7 +4292,9 @@ def test_v2115_pdic_repair_and_restore_use_header_only_geometry():
     restore_start = app_text.index("    def restore_from_pdic_backup")
     restore_end = app_text.index("    def restore_from_merged_pdic", restore_start)
     restore = app_text[restore_start:restore_end]
-    assert "derive_nominal_geometry(width, height, self.settings)" in restore
+    assert "settings_snapshot = replace(self.settings)" in restore
+    assert "derive_nominal_geometry(width, height, settings_snapshot)" in restore
+    assert "derive_nominal_geometry(width, height, self.settings)" not in restore
     assert "normalize_page_rgb(opened)" not in restore
 
 
@@ -5857,7 +5859,8 @@ def test_v2126_environment_dialog_reports_official_opencc():
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    assert 'self._distribution_version("opencc")' in text
+    assert 'PictureCaptureApp._distribution_version("opencc")' in text
+    assert "settings_snapshot = replace(self.settings)" in text
     assert 'self._distribution_version("opencc-python-reimplemented")' in text
     assert '简化配置：t2s.json（词组优先）' in text
     assert '"OCR / 简化环境状态"' in text
