@@ -9295,22 +9295,25 @@ class PictureCaptureApp(tk.Tk):
             height=12,
             style="PC.Treeview",
         )
-        self._page_list_heading_labels = {"bookmark": "书签", "page": "页面", "lined": "画线", "fill_status": "填充状态", "illustrations": "插图"}
+        self._page_list_heading_labels = {
+            "bookmark": "书签", "page": "页面", "lined": "画线",
+            "illustrations": "插图", "fill_status": "填充状态",
+        }
         self.page_list.heading("bookmark", text="书签", anchor="w")
         self.page_list.heading("page", text="页面", anchor="w")
         self.page_list.heading("lined", text="画线", anchor="w")
-        self.page_list.heading("fill_status", text="填充状态", anchor="w")
         self.page_list.heading("illustrations", text="插图", anchor="w")
+        self.page_list.heading("fill_status", text="填充状态", anchor="w")
         self.page_list.heading("bookmark", command=lambda: self._sort_page_list("bookmark"))
         self.page_list.heading("page", command=lambda: self._sort_page_list("page"))
         self.page_list.heading("lined", command=lambda: self._sort_page_list("lined"))
-        self.page_list.heading("fill_status", command=lambda: self._sort_page_list("fill_status"))
         self.page_list.heading("illustrations", command=lambda: self._sort_page_list("illustrations"))
+        self.page_list.heading("fill_status", command=lambda: self._sort_page_list("fill_status"))
         self.page_list.column("bookmark", width=44, anchor="w", stretch=False)
         self.page_list.column("page", width=190, anchor="w", stretch=True)
         self.page_list.column("lined", width=68, anchor="w", stretch=False)
-        self.page_list.column("fill_status", width=110, anchor="w", stretch=False)
         self.page_list.column("illustrations", width=58, anchor="w", stretch=False)
+        self.page_list.column("fill_status", width=110, anchor="w", stretch=False)
         self.page_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self._page_list_scroll)
         self.page_list.configure(yscrollcommand=self._page_list_yscroll)
         self.page_list.grid(row=0, column=0, sticky="nsew")
@@ -9556,7 +9559,8 @@ class PictureCaptureApp(tk.Tk):
         if not hasattr(self, "page_list"):
             return
         labels = getattr(self, "_page_list_heading_labels", {
-            "bookmark": "书签", "page": "页面", "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
+            "bookmark": "书签", "page": "页面", "lined": "画线",
+            "illustrations": "插图", "fill_status": "填充状态",
         })
         active = self._page_list_sort_column
         arrow = " ▼" if self._page_list_sort_descending else " ▲"
