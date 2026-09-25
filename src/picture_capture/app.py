@@ -3832,7 +3832,10 @@ class SettingsDialog(tk.Toplevel):
             self.parent.settings.review_entry_font_size = max(6, int(self.parent.settings.review_entry_font_size))
             self.parent.settings.review_entry_vertical_padding = min(30, max(0, int(self.parent.settings.review_entry_vertical_padding)))
             self.parent.settings.review_single_cjk_line_height = min(500, max(0, int(self.parent.settings.review_single_cjk_line_height)))
-            review_zoom_percent = int(self.parent.settings.review_zoom_percent)\n            self.parent.settings.review_zoom_percent = (\n                0 if review_zoom_percent <= 0 else min(250, max(20, review_zoom_percent))\n            )
+            review_zoom_percent = int(self.parent.settings.review_zoom_percent)
+            self.parent.settings.review_zoom_percent = (
+                0 if review_zoom_percent <= 0 else min(250, max(20, review_zoom_percent))
+            )
             if not 0 <= int(self.parent.settings.crop_parallel_workers) <= 8:
                 raise ValueError("切图并行进程数必须为 0–8；0 表示自动，1 表示串行。")
             if not 1 <= int(self.parent.settings.paddle_band_width_ratio) <= 100:
@@ -13219,7 +13222,9 @@ class PictureCaptureApp(tk.Tk):
                 label_item = None
                 label_frame = None
                 if show_labels:
-                    label_border_width = scaled_overlay_line_width(\n                        self.settings.illustration_label_border_width, overlay_scale\n                    )
+                    label_border_width = scaled_overlay_line_width(
+                        self.settings.illustration_label_border_width, overlay_scale
+                    )
                     label_frame = tk.Frame(
                         self.canvas, bg=self.settings.illustration_label_border_color,
                         bd=0, padx=label_border_width, pady=label_border_width,
