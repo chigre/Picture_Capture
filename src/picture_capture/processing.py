@@ -1037,6 +1037,7 @@ def _publish_file_transaction(
 
     backups: list[tuple[Path, Path]] = []
     published: list[Path] = []
+    preserve_backups = False
     try:
         for target in old_candidates:
             if not target.exists():
@@ -1062,15 +1063,17 @@ def _publish_file_transaction(
             except Exception as exc:
                 restore_error = restore_error or exc
         if restore_error is not None:
+            preserve_backups = True
             raise RuntimeError(
-                "切图发布失败，且回滚旧文件时发生错误；请检查隐藏 .bak 文件。"
+                "切图发布失败，且回滚旧文件时发生错误；已保留隐藏 .bak 恢复副本。"
             ) from restore_error
         raise
     finally:
         for temp, _target in pairs:
             temp.unlink(missing_ok=True)
-        for _target, backup in backups:
-            backup.unlink(missing_ok=True)
+        if not preserve_backups:
+            for _target, backup in backups:
+                backup.unlink(missing_ok=True)
 
 
 def _stage_crop(

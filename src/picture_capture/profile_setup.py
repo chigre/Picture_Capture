@@ -1074,9 +1074,9 @@ class ProjectProfileWizard(tk.Toplevel):
             self.template_preview_caption_var.set("")
             return
 
+        sample_count = len(self.sample_indices)
         self.template_preview_slot %= sample_count
         slot = int(self.template_preview_slot)
-        sample_count = len(self.sample_indices)
         index = int(self.sample_indices[slot])
         path = self.project.images[index]
         try:

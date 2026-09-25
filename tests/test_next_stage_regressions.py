@@ -1965,3 +1965,61 @@ def test_crop_exports_stage_pngs_manifest_and_crop_plan_before_publish():
     assert "_stage_page_crop_plan(" in illustrations
     assert "_publish_file_transaction(" in illustrations
     assert '.PPPictures"' in illustrations
+
+
+
+def test_crop_transaction_preserves_backup_when_rollback_itself_fails(tmp_path, monkeypatch):
+    from picture_capture.processing import _publish_file_transaction
+
+    first = tmp_path / "page_SW_000.png"
+    second = tmp_path / "page.PSWords"
+    first.write_text("old-image", encoding="utf-8")
+    second.write_text("old-manifest", encoding="utf-8")
+    first_tmp = tmp_path / ".first.tmp"
+    second_tmp = tmp_path / ".second.tmp"
+    first_tmp.write_text("new-image", encoding="utf-8")
+    second_tmp.write_text("new-manifest", encoding="utf-8")
+
+    import os
+    real_replace = os.replace
+    restore_attempted = False
+
+    def fail_publish_and_one_restore(src, dst):
+        nonlocal restore_attempted
+        src_path = Path(src)
+        dst_path = Path(dst)
+        if src_path == second_tmp:
+            raise OSError("injected publish failure")
+        if src_path.name.startswith(f".{first.name}.") and src_path.suffix == ".bak":
+            restore_attempted = True
+            raise OSError("injected rollback failure")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(
+        "picture_capture.processing.os.replace", fail_publish_and_one_restore,
+    )
+    try:
+        _publish_file_transaction([(first_tmp, first), (second_tmp, second)])
+    except RuntimeError as exc:
+        assert "已保留隐藏 .bak 恢复副本" in str(exc)
+    else:
+        raise AssertionError("expected rollback RuntimeError")
+
+    assert restore_attempted
+    backups = list(tmp_path.glob(".*.bak"))
+    assert backups
+    assert any(path.read_text(encoding="utf-8") == "old-image" for path in backups)
+
+
+def test_headword_order_finalizer_blocks_new_batches_until_snapshot_report_finishes():
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+
+    sequential_start = text.index("    def _start_batch_task(")
+    parallel_start = text.index("    def _start_parallel_batch_task(", sequential_start)
+    sequential = text[sequential_start:parallel_start]
+    parallel_end = text.index("\n    def _poll_batch_queue", parallel_start)
+    parallel = text[parallel_start:parallel_end]
+    expected = 'self._ui_worker_key_active("headword-order-finalize")'
+    assert expected in sequential
+    assert expected in parallel

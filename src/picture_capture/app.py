@@ -10281,6 +10281,9 @@ class PictureCaptureApp(tk.Tk):
         if self._ui_worker_key_active("profile-validation"):
             self.status_var.set("Project Profile 测试仍在运行或安全结束中；完成后再启动批量任务。")
             return False
+        if self._ui_worker_key_active("headword-order-finalize"):
+            self.status_var.set("全项目词头顺序报告仍在汇总；完成后再启动新的批量任务。")
+            return False
         if self._ui_close_requested:
             return False
         self._flush_deferred_page_save()
@@ -10390,6 +10393,9 @@ class PictureCaptureApp(tk.Tk):
             return False
         if self._ui_worker_key_active("profile-validation"):
             self.status_var.set("Project Profile 测试仍在运行或安全结束中；完成后再启动批量任务。")
+            return False
+        if self._ui_worker_key_active("headword-order-finalize"):
+            self.status_var.set("全项目词头顺序报告仍在汇总；完成后再启动新的批量任务。")
             return False
         if self._ui_close_requested:
             return False
