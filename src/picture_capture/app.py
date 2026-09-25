@@ -3990,6 +3990,8 @@ class ReviewWindow(tk.Toplevel):
         self._prefetched_pages: dict[int, dict] = {}
         self._prefetch_inflight: set[int] = set()
         self._prefetch_closed = False
+        self._review_render_worker_key = f"review-render-{id(self)}"
+        self._review_render_focus_index = 0
         self.review_section_title_font = font.nametofont("TkDefaultFont").copy()
         self.review_section_title_font.configure(weight="bold")
         self._configure_review_styles()
@@ -4490,7 +4492,7 @@ class ReviewWindow(tk.Toplevel):
         self.word_list_default_bg = str(self.word_list.cget("background"))
         self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)
         self.refresh_wordslist_display()
-        self.render_rows()
+        self._request_render_rows(focus_index=0)
 
     def _toggle_review_panel(self, panel: str) -> None:
         if panel == "digit":
@@ -4541,6 +4543,7 @@ class ReviewWindow(tk.Toplevel):
             if self.parent.review_window is self:
                 self.parent.review_window = None
             self._prefetch_closed = True
+            self.parent._invalidate_ui_worker(self._review_render_worker_key)
             self._network_lookup_serial += 1
             if self._network_lookup_job is not None:
                 try:
@@ -5460,9 +5463,7 @@ class ReviewWindow(tk.Toplevel):
         self.parent.save_settings()
         self._commit_edits()
         active = self.active_index
-        self.render_rows()
-        if self.editors:
-            self.focus_index(min(active, len(self.editors) - 1))
+        self._request_render_rows(focus_index=active)
         self.parent.redraw()
 
     def _schedule_review_row_padding_apply(self) -> None:
@@ -5496,7 +5497,7 @@ class ReviewWindow(tk.Toplevel):
         self.parent.sync_quick_settings()
         self.parent.save_settings()
         self._commit_edits()
-        self.render_rows()
+        self._request_render_rows(focus_index=self.active_index)
         self.parent.redraw()
 
     def _schedule_review_regular_crop_height_apply(self) -> None:
@@ -5523,7 +5524,7 @@ class ReviewWindow(tk.Toplevel):
         self.parent.settings.review_regular_crop_height = height
         self.parent.save_settings()
         self._commit_edits()
-        self.render_rows()
+        self._request_render_rows(focus_index=self.active_index)
 
     def _schedule_review_single_cjk_height_apply(self) -> None:
         if self._syncing_review_height_vars:
@@ -5816,6 +5817,93 @@ class ReviewWindow(tk.Toplevel):
     def scroll_rows_linux(self, direction: int) -> str:
         self.canvas.yview_scroll(direction * 3, "units")
         return "break"
+
+    def _request_render_rows(self, *, focus_index: int | None = None) -> None:
+        """Prepare proofreading crops off-thread; materialize Tk widgets only on Tk."""
+        if not self.parent.project or not self.parent.current_page or self.parent.image is None:
+            return
+        if focus_index is None:
+            focus_index = self.active_index
+        self._review_render_focus_index = max(0, int(focus_index))
+
+        page = self.parent.current_page
+        page_index = int(self.parent.current_index)
+        settings = replace(self.parent.settings)
+        review_zoom = max(0.05, min(2.5, float(self.review_zoom)))
+        viewer_width = max(1, int(self.parent.canvas.winfo_width()))
+        ordered_snapshot = [
+            replace(entry) for entry in self.parent._ordered_entries_reading_order()
+        ]
+        signature = tuple(
+            (int(entry.x), int(entry.y), str(entry.word))
+            for entry in ordered_snapshot
+        )
+        page_stem = page.stem
+
+        def worker():
+            with Image.open(page) as opened:
+                image = normalize_page_rgb(opened)
+            review_settings, geometry = _review_crop_context(
+                image, settings, viewer_width, page_index,
+            )
+            crops: list[Image.Image] = []
+            for index, entry in enumerate(ordered_snapshot):
+                next_entry = (
+                    ordered_snapshot[index + 1]
+                    if index + 1 < len(ordered_snapshot) else None
+                )
+                box = _review_line_box(
+                    entry, geometry, image, review_settings, next_entry,
+                )
+                crop = image.crop(box).convert("RGB")
+                crop = crop.resize(
+                    (
+                        max(1, round(crop.width * review_zoom)),
+                        max(1, round(crop.height * review_zoom)),
+                    ),
+                    Image.Resampling.LANCZOS,
+                )
+                crops.append(crop)
+            return page_stem, signature, crops
+
+        def done(payload) -> None:
+            try:
+                if not self.winfo_exists() or self._prefetch_closed:
+                    return
+            except tk.TclError:
+                return
+            result_stem, result_signature, crops = payload
+            if not self.parent.current_page or self.parent.current_page.stem != result_stem:
+                return
+            current_signature = tuple(
+                (int(entry.x), int(entry.y), str(entry.word))
+                for entry in self.parent._ordered_entries_reading_order()
+            )
+            if current_signature != result_signature:
+                self._request_render_rows(focus_index=self._review_render_focus_index)
+                return
+            target_focus = self._review_render_focus_index
+            self.render_rows(preloaded_crops=crops)
+            if self.editors:
+                self.focus_index(min(target_focus, len(self.editors) - 1))
+
+        def failed(exc, detail) -> None:
+            if detail:
+                print(detail)
+            try:
+                if not self.winfo_exists() or self._prefetch_closed:
+                    return
+            except tk.TclError:
+                return
+            self.parent.status_var.set(f"校对裁剪生成失败：{exc}")
+            if not self.rows.winfo_children():
+                ttk.Label(
+                    self.rows, text=f"校对裁剪生成失败：{exc}",
+                ).grid(row=0, column=0, sticky="ew", padx=8, pady=20)
+
+        self.parent._start_ui_worker(
+            self._review_render_worker_key, worker, done, failed,
+        )
 
     def render_rows(self, preloaded_crops: list[Image.Image] | None = None) -> None:
         current_stem = self.parent.current_page.stem if self.parent.current_page else ""
@@ -6606,7 +6694,7 @@ class ReviewWindow(tk.Toplevel):
             if preloaded is not None and preloaded.get("review_key") == self._review_prefetch_key():
                 crops = list(preloaded.get("review_crops") or [])
             if crops is None:
-                self.render_rows()
+                self._request_render_rows(focus_index=0)
             else:
                 self.render_rows(preloaded_crops=crops)
             self._reset_rows_scroll_top()
