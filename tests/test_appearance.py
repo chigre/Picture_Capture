@@ -23,13 +23,13 @@ def test_normalize_appearance_mode_is_conservative() -> None:
 def test_dark_display_transform_preserves_source_and_reverses_paper_contrast() -> None:
     source = Image.new("RGB", (3, 1))
     source.putdata([(255, 255, 255), (0, 0, 0), (255, 0, 0)])
-    before = list(source.getdata())
+    before = [source.getpixel((x, 0)) for x in range(3)]
 
     rendered = themed_display_image(source, "dark")
 
-    assert list(source.getdata()) == before
+    assert [source.getpixel((x, 0)) for x in range(3)] == before
     assert rendered is not source
-    white_paper, black_print, red_ink = list(rendered.getdata())
+    white_paper, black_print, red_ink = [rendered.getpixel((x, 0)) for x in range(3)]
     assert max(white_paper) <= 40
     assert min(black_print) >= 220
     # Saturated artwork keeps its hue identity instead of becoming a cyan
@@ -45,8 +45,8 @@ def test_dark_display_transform_preserves_alpha() -> None:
     rendered = themed_display_image(source, "dark")
 
     assert rendered.mode == "RGBA"
-    assert [pixel[3] for pixel in rendered.getdata()] == [17, 231]
-    assert [pixel[3] for pixel in source.getdata()] == [17, 231]
+    assert [rendered.getpixel((x, 0))[3] for x in range(2)] == [17, 231]
+    assert [source.getpixel((x, 0))[3] for x in range(2)] == [17, 231]
 
 
 def test_light_display_path_is_zero_copy() -> None:
