@@ -4731,42 +4731,39 @@ class ReviewWindow(tk.Toplevel):
         font_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         font_row.pack(fill="x", pady=(5, 0))
         ttk.Label(font_row, text="词条字体：").pack(side="left")
-        review_families = tuple(sorted(set(font.families()), key=str.casefold))
-        self.review_font_combo = ttk.Combobox(
-            font_row, textvariable=self.review_font_family_var, values=review_families,
-            state="normal", width=15, style="PCR.Compact.TCombobox",
+        self.review_font_summary_var = tk.StringVar(
+            value=_font_choice_summary(
+                self.review_font_family_var.get(), self.review_font_size_var.get(),
+                self.review_font_bold_var.get(), self.review_font_italic_var.get(),
+            )
         )
-        self.review_font_combo.pack(side="left")
-        ttk.Label(font_row, text="字号：").pack(side="left", padx=(7, 2))
-        self.review_font_size_spin = ttk.Spinbox(
-            font_row, from_=6, to=96, increment=1, width=4,
-            textvariable=self.review_font_size_var, style="PCR.Compact.TSpinbox",
-        )
-        self.review_font_size_spin.pack(side="left")
-        ttk.Checkbutton(font_row, text="粗体", variable=self.review_font_bold_var).pack(side="left", padx=(7, 0))
-        ttk.Checkbutton(font_row, text="斜体", variable=self.review_font_italic_var).pack(side="left", padx=(5, 0))
+        ttk.Label(
+            font_row, textvariable=self.review_font_summary_var, style="PCR.Body.TLabel"
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(
+            font_row, text="选择字体…",
+            command=lambda: self._open_review_font_picker(False),
+            style="PCR.Compact.TButton",
+        ).pack(side="right", padx=(8, 0))
 
         simplified_font_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         simplified_font_row.pack(fill="x", pady=(4, 0))
         ttk.Label(simplified_font_row, text="简体字体：").pack(side="left")
-        self.review_simplified_font_combo = ttk.Combobox(
-            simplified_font_row, textvariable=self.review_simplified_font_family_var,
-            values=review_families, state="normal", width=15,
-            style="PCR.Compact.TCombobox",
+        self.review_simplified_font_summary_var = tk.StringVar(
+            value=_font_choice_summary(
+                self.review_simplified_font_family_var.get(), self.review_simplified_font_size_var.get(),
+                self.review_simplified_font_bold_var.get(), self.review_simplified_font_italic_var.get(),
+            )
         )
-        self.review_simplified_font_combo.pack(side="left")
-        ttk.Label(simplified_font_row, text="字号：").pack(side="left", padx=(7, 2))
-        self.review_simplified_font_size_spin = ttk.Spinbox(
-            simplified_font_row, from_=6, to=96, increment=1, width=4,
-            textvariable=self.review_simplified_font_size_var, style="PCR.Compact.TSpinbox",
-        )
-        self.review_simplified_font_size_spin.pack(side="left")
-        ttk.Checkbutton(
-            simplified_font_row, text="粗体", variable=self.review_simplified_font_bold_var
-        ).pack(side="left", padx=(7, 0))
-        ttk.Checkbutton(
-            simplified_font_row, text="斜体", variable=self.review_simplified_font_italic_var
-        ).pack(side="left", padx=(5, 0))
+        ttk.Label(
+            simplified_font_row, textvariable=self.review_simplified_font_summary_var,
+            style="PCR.Body.TLabel",
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(
+            simplified_font_row, text="选择字体…",
+            command=lambda: self._open_review_font_picker(True),
+            style="PCR.Compact.TButton",
+        ).pack(side="right", padx=(8, 0))
 
         # Keep the four OCR sources on a single compact line. Each available
         # result remains clickable, preserving the previous quick-fill workflow.
@@ -5815,6 +5812,46 @@ class ReviewWindow(tk.Toplevel):
         if index == self.active_index:
             self._refresh_cc_simplified_comparison(index)
 
+    def _open_review_font_picker(self, simplified: bool = False) -> None:
+        if simplified:
+            family_var = self.review_simplified_font_family_var
+            size_var = self.review_simplified_font_size_var
+            bold_var = self.review_simplified_font_bold_var
+            italic_var = self.review_simplified_font_italic_var
+            summary_var = self.review_simplified_font_summary_var
+            title = "选择字体 — 简体字体"
+        else:
+            family_var = self.review_font_family_var
+            size_var = self.review_font_size_var
+            bold_var = self.review_font_bold_var
+            italic_var = self.review_font_italic_var
+            summary_var = self.review_font_summary_var
+            title = "选择字体 — 词条字体"
+
+        try:
+            size = int(float(size_var.get()))
+        except (TypeError, ValueError):
+            size = 18
+
+        def apply_choice(family: str, selected_size: int, bold: bool, italic: bool) -> None:
+            family_var.set(family)
+            size_var.set(str(selected_size))
+            bold_var.set(bool(bold))
+            italic_var.set(bool(italic))
+            summary_var.set(_font_choice_summary(family, selected_size, bold, italic))
+
+        FontPickerDialog(
+            self,
+            title=title,
+            family=family_var.get(),
+            size=size,
+            bold=bool(bold_var.get()),
+            italic=bool(italic_var.get()),
+            on_apply=apply_choice,
+            min_size=6,
+            max_size=96,
+        )
+
     def _schedule_review_font_apply(self) -> None:
         """Apply review-font edits quickly while coalescing rapid Spinbox typing."""
         if self._review_font_apply_job is not None:
@@ -5845,6 +5882,8 @@ class ReviewWindow(tk.Toplevel):
         settings.review_font_semantics_version = 2
         settings.review_entry_font_bold = bold
         settings.review_entry_font_italic = italic
+        if hasattr(self, "review_font_summary_var"):
+            self.review_font_summary_var.set(_font_choice_summary(family, size, bold, italic))
 
         spec = _entry_font_spec(family, size, bold, italic)
         measure_font = font.Font(
@@ -5889,6 +5928,10 @@ class ReviewWindow(tk.Toplevel):
         settings.review_simplified_font_size = size
         settings.review_simplified_font_bold = bold
         settings.review_simplified_font_italic = italic
+        if hasattr(self, "review_simplified_font_summary_var"):
+            self.review_simplified_font_summary_var.set(
+                _font_choice_summary(family, size, bold, italic)
+            )
 
         spec = _entry_font_spec(family, size, bold, italic)
         measure_font = font.Font(
