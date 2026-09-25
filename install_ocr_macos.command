@@ -21,6 +21,7 @@ if [ ! -x ".venv/bin/python" ]; then
     read _answer
     exit 1
   fi
+fi
 
 ".venv/bin/python" "scripts/ocr_setup.py"
 status=$?
