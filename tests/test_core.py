@@ -359,6 +359,33 @@ class FormatTests(unittest.TestCase):
         self.assertFalse(settings.paddle_enable_lens)
         self.assertEqual(settings.paddle_lens_mode, "off")
 
+    def test_v2140_refreshes_workflow_defaults_once_for_existing_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "settings.json"
+            path.write_text(json.dumps({
+                "geometry_coordinate_version": 2,
+                "geometry_coordinate_space": "canonical_reference_page_pixels",
+                "paddle_use_paddleocr": False,
+                "paddle_compare_tesseract": True,
+                "paddle_dual_ocr_arbitration": True,
+                "page_list_show_fill_status": True,
+            }), encoding="utf-8")
+            settings = AppSettings.from_json(path)
+            self.assertTrue(settings.paddle_use_paddleocr)
+            self.assertFalse(settings.paddle_compare_tesseract)
+            self.assertFalse(settings.paddle_dual_ocr_arbitration)
+            self.assertFalse(settings.page_list_show_fill_status)
+            self.assertEqual(settings.ui_workflow_defaults_version, 1)
+
+            settings.paddle_compare_tesseract = True
+            settings.paddle_dual_ocr_arbitration = True
+            settings.page_list_show_fill_status = True
+            settings.to_json(path)
+            reopened = AppSettings.from_json(path)
+            self.assertTrue(reopened.paddle_compare_tesseract)
+            self.assertTrue(reopened.paddle_dual_ocr_arbitration)
+            self.assertTrue(reopened.page_list_show_fill_status)
+
     def test_legacy_settings_import(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / "_Mysettings.ini"
