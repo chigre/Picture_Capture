@@ -25,6 +25,14 @@ from tkinter import colorchooser, filedialog, font, messagebox, simpledialog, tt
 
 from PIL import Image, ImageOps, ImageTk
 
+from . import __version__
+from .appearance import (
+    appearance_palette,
+    apply_classic_widget_appearance,
+    normalize_appearance_mode,
+    themed_display_image,
+    usage_guide_palette,
+)
 from .formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, write_text_atomic, read_picdic_index_records
 from .models import (
     AppSettings, Entry as WordEntry, PolygonRegion, ProjectState,
@@ -1273,21 +1281,11 @@ class UsageGuideWindow(tk.Toplevel):
         self.geometry(f"{width}x{height}+{x}+{y}")
         self.minsize(min(820, width), min(600, height))
         self.transient(parent)
-        self.configure(bg="#f5f7fb")
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self.bind("<Escape>", lambda _event: self.destroy())
 
-        self._colors = {
-            "bg": "#f5f7fb",
-            "surface": "#ffffff",
-            "sidebar": "#eef2f6",
-            "border": "#dde3ea",
-            "text": "#111827",
-            "muted": "#667085",
-            "accent": "#4F7CAC",
-            "accent_soft": "#e9f1f9",
-            "tip": "#f7f9fc",
-        }
+        self._colors = usage_guide_palette(getattr(parent, "appearance_mode", "light"))
+        self.configure(bg=self._colors["bg"])
         base = font.nametofont("TkDefaultFont").copy()
         self._title_font = base.copy()
         self._title_font.configure(size=max(16, abs(int(base.cget("size"))) + 7), weight="bold")
@@ -1306,6 +1304,17 @@ class UsageGuideWindow(tk.Toplevel):
         self._show_page("quick")
         self._refresh_context()
         self.bind("<FocusIn>", lambda _event: self._refresh_context(), add="+")
+
+    def refresh_appearance(self) -> None:
+        """Refresh the guide palette without losing the current page/search."""
+        self._colors = usage_guide_palette(getattr(self.parent_app, "appearance_mode", "light"))
+        self.configure(bg=self._colors["bg"])
+        query = self.search_var.get().strip()
+        if query:
+            self._search_changed()
+        else:
+            self._show_page(self._current_page)
+        self.parent_app._apply_current_appearance(self)
 
     def _build(self) -> None:
         colors = self._colors
@@ -2147,7 +2156,7 @@ class SettingsDialog(tk.Toplevel):
             width = max(1, int(round(original.width * scale)))
             height = max(1, int(round(original.height * scale)))
             rendered = original.resize((width, height), Image.Resampling.LANCZOS)
-            photo = ImageTk.PhotoImage(rendered)
+            photo = ImageTk.PhotoImage(themed_display_image(rendered, self.parent.appearance_mode))
             label.configure(image=photo)
             label.image = photo
             label.pack(
@@ -3939,7 +3948,7 @@ class ReviewWindow(tk.Toplevel):
         self._review_single_cjk_height_apply_job: str | None = None
         self._syncing_review_height_vars = False
         self.word_highlight_index: int | None = None
-        self.word_list_default_bg = "white"
+        self.word_list_default_bg = appearance_palette(parent.appearance_mode)["input_bg"]
         # The reference words may exceed 100k rows.  Keep the full data/index in
         # Python, but only render a small contiguous window in the Tk Listbox.
         self.word_window_radius = 250
@@ -4020,23 +4029,42 @@ class ReviewWindow(tk.Toplevel):
     def _configure_review_styles(self) -> None:
         """Configure dense, opt-in styles for the proofreading workspace only."""
         style = ttk.Style(self)
-        native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
-        colors = {
-            "surface": native_background,
-            "toolbar": "#f3f4f6",
-            "panel": "#f7f8fa",
-            "border": "#d8dde5",
-            "text": "#30343b",
-            "muted": "#68707b",
-            "button": "#eceff3",
-            "button_hover": "#e1e5ea",
-            "primary": "#5e9f69",
-            "primary_hover": "#4f8e5c",
-            "danger": "#9b3a3a",
-            "danger_hover": "#f4d9d9",
-            "selection": "#dce8f7",
-            "neutral_entry": "#f4f4f4",
-        }
+        base = appearance_palette(self.parent.appearance_mode)
+        if self.parent.appearance_mode == "dark":
+            colors = {
+                "surface": base["surface"],
+                "toolbar": base["surface_alt"],
+                "panel": base["panel"],
+                "border": base["border"],
+                "text": base["text"],
+                "muted": base["muted"],
+                "button": base["button"],
+                "button_hover": base["button_hover"],
+                "primary": base["success"],
+                "primary_hover": base["success_hover"],
+                "danger": base["danger"],
+                "danger_hover": "#4a2b30",
+                "selection": base["selection"],
+                "neutral_entry": base["input_bg"],
+            }
+        else:
+            native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
+            colors = {
+                "surface": native_background,
+                "toolbar": "#f3f4f6",
+                "panel": "#f7f8fa",
+                "border": "#d8dde5",
+                "text": "#30343b",
+                "muted": "#68707b",
+                "button": "#eceff3",
+                "button_hover": "#e1e5ea",
+                "primary": "#5e9f69",
+                "primary_hover": "#4f8e5c",
+                "danger": "#9b3a3a",
+                "danger_hover": "#f4d9d9",
+                "selection": "#dce8f7",
+                "neutral_entry": "#f4f4f4",
+            }
         self._review_ui_colors = colors
 
         style.configure("PCR.Surface.TFrame", background=colors["surface"])
@@ -5951,7 +5979,7 @@ class ReviewWindow(tk.Toplevel):
             # Crop and LANCZOS resize are completed by a worker before this
             # UI-only materialization step. ImageTk creation stays on Tk.
             crop = preloaded_crops[index]
-            photo = ImageTk.PhotoImage(crop)
+            photo = ImageTk.PhotoImage(themed_display_image(crop, self.parent.appearance_mode))
             self.thumbnails.append(photo)
             self.editor_crop_widths.append(crop.width)
             picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
@@ -5972,7 +6000,10 @@ class ReviewWindow(tk.Toplevel):
             )
             char_px = max(1, measure_font.measure("0"))
             editor_width_chars = max(8, min(140, round(crop.width / char_px)))
-            editor_bg = "#b3fddd" if entry.word in words else "#fce5e8"
+            if self.parent.appearance_mode == "dark":
+                editor_bg = "#21483b" if entry.word in words else "#512f35"
+            else:
+                editor_bg = "#b3fddd" if entry.word in words else "#fce5e8"
             editor_frame = tk.Frame(
                 self.rows,
                 bg=editor_bg,
@@ -7381,7 +7412,7 @@ class OldNewComparisonWindow(tk.Toplevel):
 class PictureCaptureApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Picture Capture v2.13.2 — OCR 词头定位")
+        self.title(f"Picture Capture v{__version__} — OCR 词头定位")
         self.geometry("1440x900")
         self.minsize(1080, 680)
         self.project: ProjectState | None = None
@@ -7522,6 +7553,10 @@ class PictureCaptureApp(tk.Tk):
         self._pending_page_index: int | None = None
         self._session_path = self._default_session_state_path()
         self._last_session = self._read_session_state()
+        self.appearance_mode = normalize_appearance_mode(self._last_session.get("appearance_mode"))
+        self.dark_mode_var = tk.BooleanVar(value=self.appearance_mode == "dark")
+        self._light_ttk_theme = str(ttk.Style(self).theme_use())
+        self._configure_global_appearance()
         self.section_expanded = {
             "normal": True,
             "ocr": True,
@@ -7540,6 +7575,8 @@ class PictureCaptureApp(tk.Tk):
         self.section_title_font.configure(weight="bold")
         self._configure_main_workspace_styles()
         self._build_ui()
+        self.bind_class("Toplevel", "<Map>", self._appearance_toplevel_mapped, add="+")
+        self.after_idle(lambda: self._apply_current_appearance(self))
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.toggle_autosave()
         self.after_idle(self._maximize_main_window)
@@ -7673,6 +7710,179 @@ class PictureCaptureApp(tk.Tk):
                 8 if processed >= 48 else 60, self._poll_ui_worker_queue
             )
 
+    def _configure_global_appearance(self) -> None:
+        """Configure the active ttk theme for the global light/dark appearance."""
+        style = ttk.Style(self)
+        mode = normalize_appearance_mode(self.appearance_mode)
+        palette = appearance_palette(mode)
+        if mode == "light":
+            try:
+                if self._light_ttk_theme in style.theme_names():
+                    style.theme_use(self._light_ttk_theme)
+            except tk.TclError:
+                pass
+            return
+
+        try:
+            if "clam" in style.theme_names():
+                style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        style.configure(".", background=palette["surface"], foreground=palette["text"])
+        style.configure("TFrame", background=palette["surface"])
+        style.configure("TLabel", background=palette["surface"], foreground=palette["text"])
+        style.configure("TLabelframe", background=palette["surface"], foreground=palette["text"])
+        style.configure("TLabelframe.Label", background=palette["surface"], foreground=palette["text"])
+        style.configure(
+            "TButton", background=palette["button"], foreground=palette["text"],
+            bordercolor=palette["border"], lightcolor=palette["button"], darkcolor=palette["button"],
+        )
+        style.map(
+            "TButton",
+            background=[("active", palette["button_hover"]), ("pressed", palette["selection"])],
+            foreground=[("disabled", palette["muted"]), ("!disabled", palette["text"])],
+        )
+        for style_name in ("TCheckbutton", "TRadiobutton"):
+            style.configure(style_name, background=palette["surface"], foreground=palette["text"])
+            style.map(
+                style_name,
+                background=[("active", palette["surface_alt"])],
+                foreground=[("disabled", palette["muted"]), ("!disabled", palette["text"])],
+            )
+        for style_name in ("TEntry", "TSpinbox", "TCombobox"):
+            style.configure(
+                style_name,
+                fieldbackground=palette["input_bg"],
+                foreground=palette["input_fg"],
+                background=palette["button"],
+                bordercolor=palette["border"],
+                insertcolor=palette["input_fg"],
+                arrowcolor=palette["text"],
+            )
+            style.map(
+                style_name,
+                fieldbackground=[("readonly", palette["surface_alt"]), ("disabled", palette["surface_alt"])],
+                foreground=[("readonly", palette["text"]), ("disabled", palette["muted"])],
+            )
+        style.configure("TNotebook", background=palette["bg"], bordercolor=palette["border"])
+        style.configure(
+            "TNotebook.Tab", background=palette["surface_alt"], foreground=palette["muted"],
+            padding=(10, 5),
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", palette["surface"]), ("active", palette["button_hover"])],
+            foreground=[("selected", palette["text"]), ("active", palette["text"])],
+        )
+        style.configure(
+            "Treeview",
+            background=palette["surface"],
+            fieldbackground=palette["surface"],
+            foreground=palette["text"],
+            bordercolor=palette["border"],
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", palette["selection"])],
+            foreground=[("selected", palette["selection_fg"])],
+        )
+        style.configure(
+            "Treeview.Heading",
+            background=palette["surface_alt"], foreground=palette["text"],
+            bordercolor=palette["border"], relief="flat",
+        )
+        style.map("Treeview.Heading", background=[("active", palette["button_hover"])])
+        style.configure("TSeparator", background=palette["border"])
+        style.configure(
+            "TProgressbar", background=palette["accent"], troughcolor=palette["surface_alt"],
+            bordercolor=palette["border"],
+        )
+        self.configure(bg=palette["bg"])
+
+    def _apply_current_appearance(self, root: tk.Misc) -> None:
+        try:
+            apply_classic_widget_appearance(root, self.appearance_mode)
+        except tk.TclError:
+            pass
+
+    def _appearance_toplevel_mapped(self, event: tk.Event) -> None:
+        widget = getattr(event, "widget", None)
+        if widget is None:
+            return
+        try:
+            self.after_idle(lambda w=widget: self._apply_current_appearance(w))
+        except tk.TclError:
+            pass
+
+    def _toggle_dark_mode(self) -> None:
+        self.set_appearance_mode("dark" if self.dark_mode_var.get() else "light")
+
+    def set_appearance_mode(self, mode: object, *, persist: bool = True) -> None:
+        """Switch the whole application appearance without changing project data."""
+        normalized = normalize_appearance_mode(mode)
+        self.appearance_mode = normalized
+        if self.dark_mode_var.get() != (normalized == "dark"):
+            self.dark_mode_var.set(normalized == "dark")
+
+        self._configure_global_appearance()
+        self._configure_main_workspace_styles()
+
+        palette = appearance_palette(normalized)
+        for name, color_key in (
+            ("sidebar_canvas", "bg"),
+            ("canvas", "canvas"),
+        ):
+            widget = self.__dict__.get(name)
+            if widget is not None:
+                try:
+                    widget.configure(bg=palette[color_key])
+                except tk.TclError:
+                    pass
+
+        review = self.__dict__.get("review_window")
+        if review is not None:
+            try:
+                if review.winfo_exists():
+                    review.word_list_default_bg = palette["input_bg"]
+                    review._configure_review_styles()
+                    review._request_render_rows(focus_index=review.active_index)
+            except tk.TclError:
+                pass
+
+        settings_dialog = self.__dict__.get("_settings_dialog")
+        if settings_dialog is not None:
+            try:
+                if settings_dialog.winfo_exists():
+                    settings_dialog.refresh_appearance()
+            except tk.TclError:
+                pass
+
+        guide = self.__dict__.get("_usage_guide_window")
+        if guide is not None:
+            try:
+                if guide.winfo_exists():
+                    guide.refresh_appearance()
+            except tk.TclError:
+                pass
+
+        comparison = self.__dict__.get("old_new_compare_window")
+        if comparison is not None:
+            try:
+                if comparison.winfo_exists():
+                    comparison.refresh_appearance()
+            except tk.TclError:
+                pass
+
+        self.photo = None
+        self._display_photo_cache_key = None
+        self._apply_current_appearance(self)
+        self._schedule_page_cell_overlay_refresh()
+        if self.image is not None:
+            self.redraw()
+        if persist:
+            self._save_session_state()
+
     def _configure_main_workspace_styles(self) -> None:
         """Configure a scoped, dense visual system for the main workspace only.
 
@@ -7681,25 +7891,46 @@ class PictureCaptureApp(tk.Tk):
         below is opt-in through a PC.* style name.
         """
         style = ttk.Style(self)
-        native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
-        colors = {
-            "sidebar": native_background,
-            "footer": "#f1f3f6",
-            "status": "#f6f7f9",
-            "batch": "#eef2f6",
-            "border": "#d8dde5",
-            "text": "#000000",
-            "muted": "#68707b",
-            "button": "#f4f5f7",
-            "button_hover": "#e7eaee",
-            "button_border": "#d3d8df",
-            "primary": "#4F7CAC",
-            "primary_hover": "#416A94",
-            "success": "#69A875",
-            "success_hover": "#588F64",
-            "tree_selected": "#dce8f7",
-            "canvas": "#30343b",
-        }
+        base = appearance_palette(self.appearance_mode)
+        if self.appearance_mode == "dark":
+            colors = {
+                "sidebar": base["bg"],
+                "footer": base["surface"],
+                "status": base["bg"],
+                "batch": base["surface_alt"],
+                "border": base["border"],
+                "text": base["text"],
+                "muted": base["muted"],
+                "button": base["button"],
+                "button_hover": base["button_hover"],
+                "button_border": base["border"],
+                "primary": base["accent"],
+                "primary_hover": base["accent_hover"],
+                "success": base["success"],
+                "success_hover": base["success_hover"],
+                "tree_selected": base["selection"],
+                "canvas": base["canvas"],
+            }
+        else:
+            native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
+            colors = {
+                "sidebar": native_background,
+                "footer": "#f1f3f6",
+                "status": "#f6f7f9",
+                "batch": "#eef2f6",
+                "border": "#d8dde5",
+                "text": "#000000",
+                "muted": "#68707b",
+                "button": "#f4f5f7",
+                "button_hover": "#e7eaee",
+                "button_border": "#d3d8df",
+                "primary": "#4F7CAC",
+                "primary_hover": "#416A94",
+                "success": "#69A875",
+                "success_hover": "#588F64",
+                "tree_selected": "#dce8f7",
+                "canvas": "#30343b",
+            }
         self._main_ui_colors = colors
 
         style.configure("PC.Sidebar.TFrame", background=colors["sidebar"])
@@ -7756,6 +7987,17 @@ class PictureCaptureApp(tk.Tk):
         style.configure("PC.Tool.TButton", padding=(4, 2))
         style.configure("PC.PageNav.TButton", padding=(2, 2))
         style.configure("PC.Footer.TButton", padding=(7, 3))
+        style.configure(
+            "PC.Footer.TCheckbutton",
+            background=colors["footer"],
+            foreground=colors["text"],
+            padding=(5, 2),
+        )
+        style.map(
+            "PC.Footer.TCheckbutton",
+            background=[("active", colors["footer"])],
+            foreground=[("disabled", colors["muted"]), ("!disabled", colors["text"])],
+        )
         style.configure("PC.Compact.TEntry", padding=(4, 2))
         style.configure("PC.Footer.TEntry", padding=(4, 2))
 
@@ -7764,8 +8006,8 @@ class PictureCaptureApp(tk.Tk):
             rowheight=26,
             borderwidth=0,
             relief="flat",
-            background="#ffffff",
-            fieldbackground="#ffffff",
+            background=base["surface"],
+            fieldbackground=base["surface"],
             foreground=colors["text"],
         )
         style.configure(
@@ -7972,6 +8214,7 @@ class PictureCaptureApp(tk.Tk):
                 "page_range": self.page_range_var.get() if hasattr(self, "page_range_var") else "current",
                 "page_range_spec": self.page_range_spec_var.get() if hasattr(self, "page_range_spec_var") else "",
                 "view_zoom_percent": round(self.view_scale * 100),
+                "appearance_mode": self.appearance_mode,
                 "section_expanded": dict(self.section_expanded),
             }
             tmp = self._session_path.with_suffix(".tmp")
@@ -8339,7 +8582,7 @@ class PictureCaptureApp(tk.Tk):
 
         parameter_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
         parameter_row.pack(fill="x", pady=(4, 0))
-        for col in range(4):
+        for col in range(5):
             parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
         for col, (label, command, role) in enumerate((
             ("项目Profile", self.open_project_profile, "config"),
@@ -8360,6 +8603,18 @@ class PictureCaptureApp(tk.Tk):
             )
             if label == "使用指南":
                 self._attach_tooltip(button, "打开使用指南：推荐流程、各功能用途、快捷操作与常见排错。")
+        dark_toggle = ttk.Checkbutton(
+            parameter_row,
+            text="深色模式",
+            variable=self.dark_mode_var,
+            command=self._toggle_dark_mode,
+            style="PC.Footer.TCheckbutton",
+        )
+        dark_toggle.grid(row=0, column=4, sticky="ew", padx=(4, 0))
+        self._attach_tooltip(
+            dark_toggle,
+            "夜间显示：同步深色界面和扫描图夜间预览；不修改原图、OCR、PDIC/PPP 或导出文件。",
+        )
 
         self.canvas = tk.Canvas(
             viewer, bg=self._main_ui_colors["canvas"], highlightthickness=0
@@ -8459,6 +8714,7 @@ class PictureCaptureApp(tk.Tk):
         if not hasattr(self, "page_list") or self.page_list.identify_region(event.x, event.y) != "heading":
             return None
         menu = tk.Menu(self, tearoff=False)
+        self._apply_current_appearance(menu)
         page_var = tk.BooleanVar(value=True)
         menu.add_checkbutton(label="页面", variable=page_var, state="disabled")
         menu.add_checkbutton(
@@ -10937,6 +11193,7 @@ class PictureCaptureApp(tk.Tk):
 
         def card_menu(button: ttk.Button, root: Path) -> None:
             menu = tk.Menu(dialog, tearoff=False)
+            self._apply_current_appearance(menu)
             menu.add_command(label="复制项目路径", command=lambda: copy_path(root))
             menu.add_separator()
             menu.add_command(
@@ -11009,7 +11266,9 @@ class PictureCaptureApp(tk.Tk):
                 tile.place(x=0, y=0, relwidth=1, relheight=1)
                 cover_image = covers.get(str(root))
                 if isinstance(cover_image, Image.Image):
-                    cover_photo = ImageTk.PhotoImage(cover_image)
+                    cover_photo = ImageTk.PhotoImage(
+                        themed_display_image(cover_image, self.appearance_mode)
+                    )
                     state["cover_photos"].append(cover_photo)
                     tile.configure(image=cover_photo)
                 else:
@@ -11313,7 +11572,7 @@ class PictureCaptureApp(tk.Tk):
                 "project_root": str(project.root), "index": selected_index, "image": image,
                 "entries": entries, "polygons": polygons, "ocr_payload": ocr_payload,
                 "display_size": display_size, "display_image": display_image,
-                "view_scale": view_scale,
+                "view_scale": view_scale, "appearance_mode": appearance_mode,
             }
             try:
                 touch_recent_project(project.root)
@@ -11457,6 +11716,7 @@ class PictureCaptureApp(tk.Tk):
         page = project.images[index]
         project_root = project.root
         view_scale = float(self.view_scale)
+        appearance_mode = self.appearance_mode
         self._pending_page_index = index
         self.status_var.set(f"正在后台加载 {page.name}…")
 
@@ -11478,7 +11738,10 @@ class PictureCaptureApp(tk.Tk):
                 max(1, round(image.width * view_scale)),
                 max(1, round(image.height * view_scale)),
             )
-            display_image = image.resize(display_size, Image.Resampling.LANCZOS)
+            display_image = themed_display_image(
+                image.resize(display_size, Image.Resampling.LANCZOS),
+                appearance_mode,
+            )
             return {
                 "project_root": str(project_root), "index": index, "image": image,
                 "entries": entries, "polygons": polygons, "ocr_payload": ocr_payload,
@@ -11574,9 +11837,13 @@ class PictureCaptureApp(tk.Tk):
                 preloaded.get("display_size") == expected_size
                 and abs(float(preloaded.get("view_scale", -1.0)) - float(self.view_scale)) < 1e-9
                 and isinstance(preloaded.get("display_image"), Image.Image)
+                and normalize_appearance_mode(preloaded.get("appearance_mode")) == self.appearance_mode
+                and not self.binary_preview_var.get()
             ):
                 self.photo = ImageTk.PhotoImage(preloaded["display_image"])
-                self._display_photo_cache_key = (id(self.image), expected_size[0], expected_size[1])
+                self._display_photo_cache_key = (
+                    id(self.image), expected_size[0], expected_size[1], False, self.appearance_mode,
+                )
         self.redraw()
         self._set_idle_cursor_status()
         # A new page always starts from its top-left corner.  Keep the current
@@ -11633,13 +11900,13 @@ class PictureCaptureApp(tk.Tk):
         if self.image is None:
             raise RuntimeError("没有可显示的页面图像")
         binary = bool(self.binary_preview_var.get())
-        key = (id(self.image), int(size[0]), int(size[1]))
-        key = key + (binary,)
+        key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)
         if self.photo is None or self._display_photo_cache_key != key:
             display = (
                 binary_preview_image(self.image).resize(size, Image.Resampling.LANCZOS)
                 if binary else self.image.resize(size, Image.Resampling.LANCZOS)
             )
+            display = themed_display_image(display, self.appearance_mode)
             self.photo = ImageTk.PhotoImage(display)
             self._display_photo_cache_key = key
         return self.photo
@@ -12373,6 +12640,8 @@ class PictureCaptureApp(tk.Tk):
         if self.cursor_canvas_xy is not None:
             self.draw_cursor_guides(*self.cursor_canvas_xy)
 
+        self._apply_current_appearance(self.canvas)
+
     def _update_view_zoom_label(self) -> None:
         if hasattr(self, "view_zoom_var"):
             self.view_zoom_var.set(f"{round(self.view_scale * 100):d}%")
@@ -12996,6 +13265,7 @@ class PictureCaptureApp(tk.Tk):
             font=("TkDefaultFont", 8), cursor="hand2",
         )
         menu = tk.Menu(button, tearoff=False)
+        self._apply_current_appearance(menu)
         final_separator_added = False
         for engine, label, word, confidence, is_final in rows:
             if is_final and not final_separator_added:
