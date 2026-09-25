@@ -1439,7 +1439,8 @@ def test_round1_blocking_ui_paths_use_background_workers():
     assert worker_pos < project_block.index("migrate_legacy_project(", worker_pos) < done_pos
     assert worker_pos < project_block.index("ProjectState.open(root)", worker_pos) < done_pos
     assert worker_pos < project_block.index("with Image.open(page) as opened:", worker_pos) < done_pos
-    assert 'self._start_ui_worker("project-load"' in project_block
+    assert "self._start_ui_worker(" in project_block
+    assert '"project-load", worker, done, failed, wait_on_close=True' in project_block
 
     recent_start = text.index("    def open_recent_project(", app_start)
     recent_end = text.index("\n    @staticmethod\n    def _attach_tooltip", recent_start)
