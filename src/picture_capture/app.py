@@ -3770,7 +3770,7 @@ class SettingsDialog(tk.Toplevel):
                 rules_path = headword_filter_rules_path(self.parent.project.root, HEADWORD_FILTER_RULES_FILENAME)
                 rules_path.parent.mkdir(parents=True, exist_ok=True)
                 rules_path.write_text(rules_text.rstrip() + "\n", encoding="utf-8")
-                self.parent.reload_wordslist_reference(persist=False, redraw=False)
+                self.parent._request_wordslist_reload(persist=False, redraw=False)
             self.parent.sync_quick_settings(); self.parent.redraw()
             if close:
                 self.destroy()
@@ -5091,16 +5091,34 @@ class ReviewWindow(tk.Toplevel):
         )
         if not chosen:
             return
-        try:
-            path, count = self.parent.reload_wordslist_reference(Path(chosen), persist=True, redraw=True)
-        except Exception as exc:
-            messagebox.showerror("wordslist 读取失败", str(exc), parent=self)
-            return
-        self.refresh_wordslist_display()
-        words = self.parent._project_words
-        for i, _editor in enumerate(self.editors):
-            self._set_editor_membership_color(i, self.vars[i].get().strip() in words)
-        self.parent.status_var.set(f"已选择 wordslist：{path}｜{count} 条；校对右侧参考词表已更新。")
+        self.wordslist_label_var.set("wordslist 参考词表（后台读取中…）")
+
+        def loaded(path: Path, count: int) -> None:
+            try:
+                if not self.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            self.refresh_wordslist_display()
+            words = self.parent._project_words
+            for i, _editor in enumerate(self.editors):
+                self._set_editor_membership_color(i, self.vars[i].get().strip() in words)
+            self.parent.status_var.set(
+                f"已选择 wordslist：{path}｜{count} 条；校对右侧参考词表已更新。"
+            )
+
+        def failed(exc: Exception) -> None:
+            try:
+                if self.winfo_exists():
+                    self.refresh_wordslist_display()
+                    messagebox.showerror("wordslist 读取失败", str(exc), parent=self)
+            except tk.TclError:
+                pass
+
+        self.parent._request_wordslist_reload(
+            Path(chosen), persist=True, redraw=True,
+            on_done=loaded, on_error=failed,
+        )
 
     def _commit_edits(self) -> None:
         for entry, var in zip(self._bound_row_entries(), self.vars):
@@ -10610,6 +10628,67 @@ class PictureCaptureApp(tk.Tk):
         if redraw and self.current_page is not None and self.image is not None:
             self.redraw()
         return path, len(words)
+
+    def _request_wordslist_reload(
+        self, selected_path: Path | None = None, *, persist: bool = True,
+        redraw: bool = True, on_done=None, on_error=None,
+    ) -> None:
+        """Read a potentially huge wordslist off-thread, then commit it on Tk."""
+        project = self.project
+        if project is None:
+            if on_error is not None:
+                on_error(ValueError("尚未打开项目"))
+            return
+
+        configured = self.settings.wordslist_path
+        stored_value: str | None = None
+        if selected_path is not None:
+            selected_path = selected_path.expanduser().resolve()
+            if not selected_path.is_file():
+                if on_error is not None:
+                    on_error(FileNotFoundError(selected_path))
+                return
+            try:
+                stored_value = selected_path.relative_to(project.root.resolve()).as_posix()
+            except ValueError:
+                stored_value = str(selected_path)
+            configured = stored_value
+
+        path = resolve_wordslist_path(project.root, configured)
+        self.status_var.set(f"正在后台读取 wordslist：{path.name}…")
+
+        def worker():
+            words = read_noncomment_lines(path) if path.exists() else []
+            return words
+
+        def done(words) -> None:
+            if self.project is not project:
+                return
+            if stored_value is not None:
+                self.settings.wordslist_path = stored_value
+                project.settings.wordslist_path = stored_value
+            project.words = list(words)
+            self._project_words = set(words)
+            if persist:
+                self.settings.to_json(settings_path(project.root))
+            if redraw and self.current_page is not None and self.image is not None:
+                self.redraw()
+            self.status_var.set(f"wordslist 已载入：{path.name}｜{len(words)} 条")
+            if on_done is not None:
+                on_done(path, len(words))
+
+        def failed(exc, detail) -> None:
+            if detail:
+                print(detail)
+            if self.project is project:
+                self.status_var.set(f"wordslist 读取失败：{exc}")
+                if on_error is not None:
+                    on_error(exc)
+                else:
+                    self.show_error("wordslist 读取失败", exc)
+
+        self._start_ui_worker("wordslist-reload", worker, done, failed)
+
 
     def open_recent_project(self) -> None:
         """Show recent projects as a modern, information-focused card list."""
