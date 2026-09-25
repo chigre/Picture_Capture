@@ -735,16 +735,15 @@ def resolve_wordslist_path(root: Path, configured: str | Path | None) -> Path:
 
 
 def read_noncomment_lines(path: Path) -> list[str]:
-    """Read one-word-per-line reference files without duplicating the whole file in memory.
+    """Read one-word-per-line reference files with bounded decode memory.
 
-    Large wordslist files can contain hundreds of thousands of entries.  Iterating the
-    text stream avoids the temporary giant string + ``splitlines()`` copy created by
-    ``Path.read_text`` and keeps project opening responsive and memory-predictable.
+    Large wordslist files can contain hundreds of thousands of entries. Encoding
+    is detected from a bounded prefix and the file is then consumed line by line,
+    avoiding a second full-file text buffer alongside the returned list.
     """
-    from .text_encoding import read_text_detected
+    from .text_encoding import iter_text_lines_detected
     rows: list[str] = []
-    text, _encoding = read_text_detected(path)
-    for raw in text.splitlines():
+    for raw in iter_text_lines_detected(path):
         line = raw.strip()
         if line and not raw.lstrip().startswith("'"):
             rows.append(line)

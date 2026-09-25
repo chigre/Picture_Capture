@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from pathlib import Path
+from typing import Callable
+import os
 import re
 import zipfile
+import uuid
 
 from .project_storage import qt_root
 
@@ -29,7 +32,13 @@ def _language_name(ocr_language: str) -> str:
     return _LANGUAGE_NAMES.get(first.casefold(), "English")
 
 
-def build_picdic_package(root: Path, ocr_language: str = "eng") -> tuple[Path, Path, int, int]:
+class PicDicBuildCancelled(RuntimeError):
+    """Raised when a cooperative PicDic build stop is requested."""
+
+
+def build_picdic_package(
+    root: Path, ocr_language: str = "eng", *, should_stop: Callable[[], bool] | None = None,
+) -> tuple[Path, Path, int, int]:
     """Build a GoldenDict/ABBYY DSL picture dictionary from PWW crops.
 
     The whole-entry crop manifests are treated as the source of truth. Top-of-page
@@ -43,12 +52,18 @@ def build_picdic_package(root: Path, ocr_language: str = "eng") -> tuple[Path, P
     if not manifests:
         raise RuntimeError("项目数据目录的 PWW 中没有 .PWWords 清单；请先执行“词条切图”。")
 
+    def check_stop() -> None:
+        if should_stop is not None and should_stop():
+            raise PicDicBuildCancelled("PicDic 制作已停止")
+
     entries: "OrderedDict[str, list[str]]" = OrderedDict()
     last_word = ""
     used_files: list[str] = []
     missing: list[str] = []
     for manifest in manifests:
+        check_stop()
         for raw in manifest.read_text(encoding="utf-8-sig").splitlines():
+            check_stop()
             if not raw.strip():
                 continue
             parts = raw.split("|", 3)
@@ -95,10 +110,52 @@ def build_picdic_package(root: Path, ocr_language: str = "eng") -> tuple[Path, P
         for filename in filenames:
             lines.append(f"    [s]{filename}[/s]")
         lines.append("")
-    dsl_path.write_text("\n".join(lines), encoding="utf-8-sig")
+    token = uuid.uuid4().hex
+    temp_dsl = dsl_path.with_name(f".{dsl_path.name}.{token}.tmp")
+    temp_zip = zip_path.with_name(f".{zip_path.name}.{token}.tmp")
+    backup_dsl = dsl_path.with_name(f".{dsl_path.name}.{token}.bak")
+    backup_zip = zip_path.with_name(f".{zip_path.name}.{token}.bak")
+    unique_files = list(dict.fromkeys(used_files))
+    had_dsl = dsl_path.exists()
+    had_zip = zip_path.exists()
+    try:
+        check_stop()
+        temp_dsl.write_text("\n".join(lines), encoding="utf-8-sig")
+        with zipfile.ZipFile(temp_zip, "w", compression=zipfile.ZIP_STORED) as archive:
+            for filename in unique_files:
+                check_stop()
+                archive.write(pww_dir / filename, arcname=filename)
+        check_stop()
 
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED) as archive:
-        for filename in dict.fromkeys(used_files):
-            archive.write(pww_dir / filename, arcname=filename)
+        # Preserve the previous complete pair until both new files have been
+        # published. A failure during the second replace rolls the pair back.
+        if had_dsl:
+            os.replace(dsl_path, backup_dsl)
+        if had_zip:
+            os.replace(zip_path, backup_zip)
+        try:
+            os.replace(temp_dsl, dsl_path)
+            os.replace(temp_zip, zip_path)
+        except Exception:
+            dsl_path.unlink(missing_ok=True)
+            zip_path.unlink(missing_ok=True)
+            if had_dsl and backup_dsl.exists():
+                os.replace(backup_dsl, dsl_path)
+            if had_zip and backup_zip.exists():
+                os.replace(backup_zip, zip_path)
+            raise
+        backup_dsl.unlink(missing_ok=True)
+        backup_zip.unlink(missing_ok=True)
+    except Exception:
+        temp_dsl.unlink(missing_ok=True)
+        temp_zip.unlink(missing_ok=True)
+        # Also recover if the exception happened while creating backups.
+        if had_dsl and backup_dsl.exists() and not dsl_path.exists():
+            os.replace(backup_dsl, dsl_path)
+        if had_zip and backup_zip.exists() and not zip_path.exists():
+            os.replace(backup_zip, zip_path)
+        backup_dsl.unlink(missing_ok=True)
+        backup_zip.unlink(missing_ok=True)
+        raise
 
-    return dsl_path, zip_path, len(entries), len(dict.fromkeys(used_files))
+    return dsl_path, zip_path, len(entries), len(unique_files)

@@ -10,6 +10,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import unicodedata
 from io import BytesIO
@@ -831,10 +832,13 @@ def run_tesseract_band_records(
         resolved, "stdin", "stdout", "-l", resolved_tesseract_language(settings),
         "--psm", str(max(3, int(psm_override if psm_override is not None else settings.paddle_tesseract_psm))), "tsv",
     ]
-    proc = subprocess.run(
-        command, input=payload.getvalue(), stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, check=False,
-    )
+    try:
+        proc = subprocess.run(
+            command, input=payload.getvalue(), stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False, timeout=120,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Tesseract OCR 超时（120 秒）；本栏已放弃 Tesseract 结果。") from exc
     if proc.returncode:
         detail = proc.stderr.decode("utf-8", errors="replace").strip()
         raise RuntimeError(f"Tesseract OCR 失败：{detail}")
@@ -4406,6 +4410,35 @@ def _agreement_summary(review_candidates: list[dict[str, Any]]) -> dict[str, Any
     }
 
 
+_QUALITY_SUMMARY_LOCK = threading.Lock()
+
+
+def _atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Publish OCR/cache text atomically and remove failed temporary files."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding=encoding, dir=path.parent,
+            prefix=f".{path.name}.", suffix=".tmp", delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    except Exception:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+        raise
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    _atomic_write_text(
+        path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8",
+    )
+
+
 def _tsv_clean(value: Any) -> str:
     if value is None:
         return ""
@@ -5126,31 +5159,35 @@ def _entries_from_review_candidates(review_candidates: list[dict[str, Any]]) -> 
     return entries
 
 
-def _update_project_quality_summary(cache_path: Path, summary: dict[str, Any], review_candidates: list[dict[str, Any]]) -> None:
+def _update_project_quality_summary(
+    cache_path: Path, summary: dict[str, Any], review_candidates: list[dict[str, Any]],
+) -> None:
     path = cache_path.parent / "_quality_summary.tsv"
-    rows: dict[str, list[str]] = {}
-    if path.exists():
-        try:
-            for line in path.read_text(encoding="utf-8-sig").splitlines()[1:]:
-                cols = line.split("\t")
-                if cols and cols[0]: rows[cols[0]] = cols
-        except Exception:
-            rows = {}
-    page = cache_path.stem
-    issues = sum(1 for x in review_candidates if x.get("issue_types"))
-    needs_review = sum(1 for x in review_candidates if x.get("needs_review"))
-    selected = sum(1 for x in review_candidates if x.get("selected"))
-    vals = [
-        page, f"{float(summary.get('agreement', 0.0)):.4f}", summary.get("candidate_union", 0),
-        summary.get("paired", 0), summary.get("exact", 0), summary.get("similar", 0),
-        summary.get("conflict", 0), summary.get("paddle_only", 0), summary.get("tesseract_only", 0),
-        summary.get("lens_used", 0), summary.get("lens_only", 0), summary.get("triple_agree", 0),
-        summary.get("multi_engine_majority", 0),
-        selected, issues, needs_review,
-    ]
-    rows[page] = [_tsv_clean(v) for v in vals]
-    output = [_QUALITY_HEADER] + ["\t".join(rows[key]) for key in sorted(rows)]
-    path.write_text("\n".join(output) + "\n", encoding="utf-8")
+    with _QUALITY_SUMMARY_LOCK:
+        rows: dict[str, list[str]] = {}
+        if path.exists():
+            try:
+                for line in path.read_text(encoding="utf-8-sig").splitlines()[1:]:
+                    cols = line.split("\t")
+                    if cols and cols[0]:
+                        rows[cols[0]] = cols
+            except Exception:
+                rows = {}
+        page = cache_path.stem
+        issues = sum(1 for x in review_candidates if x.get("issue_types"))
+        needs_review = sum(1 for x in review_candidates if x.get("needs_review"))
+        selected = sum(1 for x in review_candidates if x.get("selected"))
+        vals = [
+            page, f"{float(summary.get('agreement', 0.0)):.4f}", summary.get("candidate_union", 0),
+            summary.get("paired", 0), summary.get("exact", 0), summary.get("similar", 0),
+            summary.get("conflict", 0), summary.get("paddle_only", 0), summary.get("tesseract_only", 0),
+            summary.get("lens_used", 0), summary.get("lens_only", 0), summary.get("triple_agree", 0),
+            summary.get("multi_engine_majority", 0),
+            selected, issues, needs_review,
+        ]
+        rows[page] = [_tsv_clean(v) for v in vals]
+        output = [_QUALITY_HEADER] + ["\t".join(rows[key]) for key in sorted(rows)]
+        _atomic_write_text(path, "\n".join(output) + "\n", encoding="utf-8")
 
 
 def detect_paddle_headwords(
@@ -5564,22 +5601,26 @@ def detect_paddle_headwords(
             "final_entries": [asdict(entry) for entry in all_entries],
             "columns": report_columns,
         }
-        with cache_path.open("w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
-        cache_path.with_name(f"{cache_path.stem}_ocr_diagnostics.txt").write_text(
-            _diagnostic_text(report_columns), encoding="utf-8"
+        _atomic_write_json(cache_path, payload)
+        _atomic_write_text(
+            cache_path.with_name(f"{cache_path.stem}_ocr_diagnostics.txt"),
+            _diagnostic_text(report_columns), encoding="utf-8",
         )
-        cache_path.with_name(f"{cache_path.stem}_ocr_comparison.txt").write_text(
-            _comparison_text(report_columns), encoding="utf-8"
+        _atomic_write_text(
+            cache_path.with_name(f"{cache_path.stem}_ocr_comparison.txt"),
+            _comparison_text(report_columns), encoding="utf-8",
         )
-        cache_path.with_name(f"{cache_path.stem}_issues.tsv").write_text(
-            _issues_text(review_candidates), encoding="utf-8"
+        _atomic_write_text(
+            cache_path.with_name(f"{cache_path.stem}_issues.tsv"),
+            _issues_text(review_candidates), encoding="utf-8",
         )
-        cache_path.with_name(f"{cache_path.stem}_ocr_engines.tsv").write_text(
-            _engines_long_text(report_columns), encoding="utf-8"
+        _atomic_write_text(
+            cache_path.with_name(f"{cache_path.stem}_ocr_engines.tsv"),
+            _engines_long_text(report_columns), encoding="utf-8",
         )
-        cache_path.with_name(f"{cache_path.stem}_fusion.tsv").write_text(
-            _fusion_text(review_candidates), encoding="utf-8"
+        _atomic_write_text(
+            cache_path.with_name(f"{cache_path.stem}_fusion.tsv"),
+            _fusion_text(review_candidates), encoding="utf-8",
         )
         _update_project_quality_summary(cache_path, agreement, review_candidates)
 

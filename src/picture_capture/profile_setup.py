@@ -245,6 +245,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self._analysis_auto_apply = False
         self._analysis_queue: queue.Queue | None = None
         self._validation_queue: queue.Queue | None = None
+        self._validation_stop_event = threading.Event()
+        self._validation_close_requested = False
+        self._closing = False
         if not str(getattr(self.working, "dictionary_body_page_range", "") or "").strip():
             self.working.dictionary_body_page_range = suggested_body_page_range(self.project.images)
         configured_body = configured_body_page_indices(
@@ -1060,7 +1063,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_template_preview()
 
     def _refresh_template_preview(self) -> None:
-        """Render one representative page with the current exclusion template."""
+        """Render the representative-page template preview without blocking Tk."""
         if not hasattr(self, "template_preview_frame"):
             return
         for child in self.template_preview_frame.winfo_children():
@@ -1070,14 +1073,18 @@ class ProjectProfileWizard(tk.Toplevel):
             ttk.Label(self.template_preview_frame, text="没有可预览页面").grid(row=0, column=0)
             self.template_preview_caption_var.set("")
             return
-        self.template_preview_slot %= len(self.sample_indices)
-        index = self.sample_indices[self.template_preview_slot]
+
+        sample_count = len(self.sample_indices)
+        self.template_preview_slot %= sample_count
+        slot = int(self.template_preview_slot)
+        index = int(self.sample_indices[slot])
         path = self.project.images[index]
         try:
             settings = self._settings_from_ui()
-            with Image.open(path) as opened:
-                source = normalize_page_rgb(opened)
-            preview = source.copy()
+            header_mode = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get(), "auto")
+            footer_mode = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get(), "none")
+            header_percent = max(0.0, min(35.0, float(self.header_percent_var.get())))
+            footer_percent = max(0.0, min(35.0, float(self.footer_percent_var.get())))
             self.update_idletasks()
             right_width = int(getattr(self, "right_canvas", self).winfo_width())
             target_width = max(
@@ -1086,18 +1093,42 @@ class ProjectProfileWizard(tk.Toplevel):
                 else (self._wizard_image_width - 24),
             )
             target_height = max(420, int(self._wizard_height * 0.72))
+        except Exception as exc:
+            ttk.Label(
+                self.template_preview_frame,
+                text=f"{path.name}\n预览参数无效：{exc}",
+            ).grid(row=0, column=0)
+            self.template_preview_caption_var.set(path.name)
+            return
+
+        ttk.Label(
+            self.template_preview_frame,
+            text=f"正在后台生成预览…\n{path.name}",
+            justify="center",
+        ).grid(row=0, column=0, sticky="n", pady=30)
+        self.template_preview_caption_var.set(
+            f"{slot + 1}/{sample_count} · {path.name} · 正在生成…"
+        )
+        worker_key = f"profile-template-preview-{id(self)}"
+
+        def worker():
+            with Image.open(path) as opened:
+                source = normalize_page_rgb(opened)
+            preview = source.copy()
             preview.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
             draw = ImageDraw.Draw(preview, "RGBA")
             w, h = preview.size
 
-            header_mode = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get(), "auto")
             if header_mode == "present":
-                hp = max(0.0, min(35.0, float(self.header_percent_var.get())))
-                draw.rectangle((0, 0, w, round(h * hp / 100.0)), fill=(255, 215, 0, 105))
-            footer_mode = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get(), "none")
+                draw.rectangle(
+                    (0, 0, w, round(h * header_percent / 100.0)),
+                    fill=(255, 215, 0, 105),
+                )
             if footer_mode == "present":
-                fp = max(0.0, min(35.0, float(self.footer_percent_var.get())))
-                draw.rectangle((0, round(h * (1.0 - fp / 100.0)), w, h), fill=(255, 215, 0, 105))
+                draw.rectangle(
+                    (0, round(h * (1.0 - footer_percent / 100.0)), w, h),
+                    fill=(255, 215, 0, 105),
+                )
 
             side = excluded_source_side(settings, index)
             if side:
@@ -1113,11 +1144,8 @@ class ProjectProfileWizard(tk.Toplevel):
             geometry = derive_geometry(analysis_image, effective)
             sx = w / max(1, source.width)
             sy = h / max(1, source.height)
-
-            # Keep step 2 and validation overlays semantically identical:
-            # explicit modes show the configured percentages; AUTO shows the
-            # geometry-detected region.
             canonical_w, canonical_h = geometry.transform.canonical_size(source.size)
+
             if header_mode == "auto" and geometry.top > 0:
                 x0, y0, x1, y1 = geometry.transform.canonical_box_to_source(
                     (0, 0, canonical_w, min(canonical_h, geometry.top)),
@@ -1149,22 +1177,54 @@ class ProjectProfileWizard(tk.Toplevel):
                 if len(coords) >= 4:
                     draw.line(coords, fill=(30, 120, 210, 210), width=2)
 
-            photo = ImageTk.PhotoImage(preview)
-            self._template_photos.append(photo)
-            ttk.Label(self.template_preview_frame, image=photo).grid(row=0, column=0, sticky="n")
             variant = page_variant(settings, index)
-            side_text = excluded_source_side(settings, index) or "无页边排除"
-            region = ("前部", "中部", "后部")[min(2, self.template_preview_slot // 2)]
-            self.template_preview_caption_var.set(
-                f"{region} · {self.template_preview_slot + 1}/{len(self.sample_indices)} · "
+            side_text = side or "无页边排除"
+            region = ("前部", "中部", "后部")[min(2, slot // 2)]
+            caption = (
+                f"{region} · {slot + 1}/{sample_count} · "
                 f"{variant} 页 · {path.name} · 页边：{side_text}"
             )
-        except Exception as exc:
+            return preview, caption, index, slot
+
+        def done(payload) -> None:
+            try:
+                if not self.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            preview, caption, result_index, result_slot = payload
+            if (
+                result_slot != self.template_preview_slot
+                or result_slot >= sample_count
+                or self.sample_indices[result_slot] != result_index
+            ):
+                return
+            for child in self.template_preview_frame.winfo_children():
+                child.destroy()
+            photo = ImageTk.PhotoImage(preview)
+            self._template_photos[:] = [photo]
+            ttk.Label(
+                self.template_preview_frame, image=photo,
+            ).grid(row=0, column=0, sticky="n")
+            self.template_preview_caption_var.set(caption)
+
+        def failed(exc, detail) -> None:
+            if detail:
+                print(detail)
+            try:
+                if not self.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            for child in self.template_preview_frame.winfo_children():
+                child.destroy()
             ttk.Label(
                 self.template_preview_frame,
                 text=f"{path.name}\n预览失败：{exc}",
             ).grid(row=0, column=0)
             self.template_preview_caption_var.set(path.name)
+
+        self.parent._start_ui_worker(worker_key, worker, done, failed)
 
     @staticmethod
     def _mode_row(
@@ -1770,7 +1830,7 @@ class ProjectProfileWizard(tk.Toplevel):
             ).pack(anchor="center", pady=(3, 0))
 
     def _start_sample_thumbnail_load(self) -> None:
-        if not self.winfo_exists():
+        if self._closing or not self.winfo_exists():
             return
         self._thumbnail_load_generation += 1
         generation = self._thumbnail_load_generation
@@ -1804,6 +1864,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self.after(50, self._poll_sample_thumbnail_load)
 
     def _poll_sample_thumbnail_load(self) -> None:
+        if self._closing:
+            self._thumbnail_queue = None
+            return
         if self._thumbnail_queue is None:
             return
         try:
@@ -1859,7 +1922,7 @@ class ProjectProfileWizard(tk.Toplevel):
 
     def _start_sample_thumbnail_slot_load(self, slot: int) -> None:
         """Decode only one replacement thumbnail and keep all other cells intact."""
-        if not self.winfo_exists() or not (0 <= slot < len(self.sample_indices)):
+        if self._closing or not self.winfo_exists() or not (0 <= slot < len(self.sample_indices)):
             return
         index = self.sample_indices[slot]
         path = self.project.images[index]
@@ -1867,6 +1930,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._thumbnail_slot_generation[slot] = generation
         token = (slot, generation)
         self._thumbnail_slot_pending.add(token)
+        result_queue = self._thumbnail_slot_queue
 
         self.update_idletasks()
         right_w = int(getattr(self, "right_canvas", self).winfo_width())
@@ -1885,7 +1949,7 @@ class ProjectProfileWizard(tk.Toplevel):
                 image.thumbnail((thumb_w, thumb_h), Image.Resampling.LANCZOS)
             except Exception as exc:
                 error = str(exc)
-            self._thumbnail_slot_queue.put(
+            result_queue.put(
                 (slot, generation, index, path.name, image, error)
             )
 
@@ -1893,6 +1957,9 @@ class ProjectProfileWizard(tk.Toplevel):
         self.after(50, self._poll_sample_thumbnail_slot_load)
 
     def _poll_sample_thumbnail_slot_load(self) -> None:
+        if self._closing:
+            self._thumbnail_slot_pending.clear()
+            return
         processed = False
         while True:
             try:
@@ -2050,7 +2117,7 @@ class ProjectProfileWizard(tk.Toplevel):
             self.analyze_representative_pages(auto_apply=True)
 
     def analyze_representative_pages(self, auto_apply: bool = False) -> None:
-        if self._analysis_running or not self.sample_indices:
+        if self._closing or self._analysis_running or not self.sample_indices:
             return
         self._analysis_running = True
         self._analysis_revision_started = self._profile_revision
@@ -2059,12 +2126,15 @@ class ProjectProfileWizard(tk.Toplevel):
         self.analysis_suggestion_var.set("正在分析代表页版面…")
         settings = self._settings_from_ui()
         indices = list(self.sample_indices)
+        paths = {index: self.project.images[index] for index in indices}
+        result_queue: queue.Queue = queue.Queue(maxsize=1)
+        self._analysis_queue = result_queue
 
         def worker() -> None:
             estimates = []
             errors: list[str] = []
             for index in indices:
-                path = self.project.images[index]
+                path = paths[index]
                 try:
                     with Image.open(path) as opened:
                         image = normalize_page_rgb(opened)
@@ -2073,14 +2143,15 @@ class ProjectProfileWizard(tk.Toplevel):
                     estimates.append(detect_layout_parameters(analysis_image, page_settings))
                 except Exception as exc:
                     errors.append(f"{path.name}: {exc}")
-            assert self._analysis_queue is not None
-            self._analysis_queue.put((estimates, errors))
+            result_queue.put((estimates, errors))
 
-        self._analysis_queue = queue.Queue(maxsize=1)
         threading.Thread(target=worker, daemon=True).start()
         self.after(100, self._poll_analysis_queue)
 
     def _poll_analysis_queue(self) -> None:
+        if self._closing:
+            self._analysis_queue = None
+            return
         if self._analysis_queue is None:
             return
         try:
@@ -2346,18 +2417,25 @@ class ProjectProfileWizard(tk.Toplevel):
         self._set_feedback_buttons("disabled")
 
     def validate_profile(self) -> None:
-        if self._validation_running:
+        if self._closing or self._validation_running:
+            return
+        if self.parent._batch_active:
+            self.validation_status_var.set("批量任务运行中；结束或停止后再测试 Project Profile。")
+            return
+        if self.parent._ui_worker_key_active("profile-validation"):
+            self.validation_status_var.set("上一轮 Profile 测试仍在安全结束，请稍后重试。")
             return
         settings = self._settings_from_ui()
         # Project Profile validates the normal OCR-based workflow even when an
         # old project last saved "普通画线" as its active detection method.
-        # This is a temporary validation copy and does not overwrite that saved
-        # project preference.
         settings.detection_method = "paddleocr"
         settings.paddle_use_paddleocr = True
         indices = list(self.sample_indices)
         if not indices:
             return
+        project = self.project
+        project_root = Path(project.root)
+        paths = {index: project.images[index] for index in indices}
         self.update_idletasks()
         frame_width = int(self.validation_frame.winfo_width())
         preview_width = max(
@@ -2367,6 +2445,8 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         self._validation_running = True
         self._validation_revision_started = self._profile_revision
+        self._validation_stop_event.clear()
+        stop_event = self._validation_stop_event
         self.validate_button.configure(state="disabled")
         self.validation_status_var.set("正在强制重新识别并测试代表页…")
         self._validation_results = []
@@ -2384,17 +2464,19 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Label(self.validation_frame, text="正在生成测试结果…").grid(
             row=0, column=0, sticky="n", pady=30,
         )
-        filter_path = headword_filter_rules_path(self.project.root, HEADWORD_FILTER_RULES_FILENAME)
+        filter_path = headword_filter_rules_path(project_root, HEADWORD_FILTER_RULES_FILENAME)
 
-        def worker() -> None:
+        def worker():
             results = []
             for index in indices:
-                path = self.project.images[index]
+                if stop_event.is_set():
+                    break
+                path = paths[index]
                 try:
                     with Image.open(path) as opened:
                         image = normalize_page_rgb(opened)
                     cache_path = (
-                        ocr_cache_root(self.project.root) / f"{path.stem}.json"
+                        ocr_cache_root(project_root) / f"{path.stem}.json"
                         if settings.detection_method == "paddleocr" else None
                     )
                     entries, geometry = detect_entries(
@@ -2404,10 +2486,10 @@ class ProjectProfileWizard(tk.Toplevel):
                         paddle_filter_rules_path=filter_path,
                         profile_page_index=index,
                     )
-                    preview = self._marker_preview(
+                    preview = ProjectProfileWizard._marker_preview(
                         image, entries, geometry, settings, index, preview_width,
                     )
-                    coverage = self._validation_coverage_summary(
+                    coverage = ProjectProfileWizard._validation_coverage_summary(
                         cache_path, entries, geometry, settings,
                     )
                     results.append((
@@ -2416,12 +2498,44 @@ class ProjectProfileWizard(tk.Toplevel):
                     ))
                 except Exception as exc:
                     results.append((index, path.name, 0, 0, None, "", str(exc)))
-            assert self._validation_queue is not None
-            self._validation_queue.put(results)
+                if stop_event.is_set():
+                    break
+            return results
 
-        self._validation_queue = queue.Queue(maxsize=1)
-        threading.Thread(target=worker, daemon=True).start()
-        self.after(100, self._poll_validation_queue)
+        def done(results) -> None:
+            try:
+                if not self.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            self._validation_running = False
+            if stop_event.is_set():
+                if self._validation_close_requested:
+                    self.after_idle(self.destroy)
+                    return
+                self.validation_status_var.set("Profile 测试已安全停止。")
+                self.validate_button.configure(state="normal")
+                return
+            self._finish_validation(results)
+
+        def failed(exc, detail) -> None:
+            if detail:
+                print(detail)
+            try:
+                if not self.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            self._validation_running = False
+            if self._validation_close_requested:
+                self.after_idle(self.destroy)
+                return
+            self.validate_button.configure(state="normal")
+            self.validation_status_var.set(f"Profile 测试失败：{exc}")
+
+        self.parent._start_ui_worker(
+            "profile-validation", worker, done, failed, wait_on_close=True,
+        )
 
     def _poll_validation_queue(self) -> None:
         if self._validation_queue is None:
@@ -2666,6 +2780,12 @@ class ProjectProfileWizard(tk.Toplevel):
                 status="Project Profile 已保存并应用",
             ):
                 return
+            self._closing = True
+            if self._validation_running:
+                self._validation_close_requested = True
+                self._validation_stop_event.set()
+                self.validation_status_var.set("正在安全结束当前测试页，完成后关闭…")
+                return
             self.destroy()
         except Exception as exc:
             messagebox.showerror("Project Profile 保存失败", str(exc), parent=self)
@@ -2688,4 +2808,10 @@ class ProjectProfileWizard(tk.Toplevel):
                 parent=self,
             ):
                 return
+        self._closing = True
+        if self._validation_running:
+            self._validation_close_requested = True
+            self._validation_stop_event.set()
+            self.validation_status_var.set("正在安全结束当前测试页，完成后关闭…")
+            return
         self.destroy()

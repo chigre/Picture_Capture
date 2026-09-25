@@ -4275,7 +4275,9 @@ def test_v2115_large_existing_word_fill_avoids_full_image_decode_and_bulk_tree_u
     start = app_text.index("    def fill_existing_headwords(self) -> None:")
     end = app_text.index("    def import_legacy_words(self) -> bool:", start)
     body = app_text[start:end]
-    assert "derive_nominal_geometry(width, height, self.settings)" in body
+    assert "settings_snapshot = replace(self.settings)" in body
+    assert "derive_nominal_geometry(width, height, settings_snapshot)" in body
+    assert "derive_nominal_geometry(width, height, self.settings)" not in body
     assert "page_image = normalize_page_rgb(opened)" not in body
     assert "refresh_row=False" in body
 
@@ -4290,7 +4292,9 @@ def test_v2115_pdic_repair_and_restore_use_header_only_geometry():
     restore_start = app_text.index("    def restore_from_pdic_backup")
     restore_end = app_text.index("    def restore_from_merged_pdic", restore_start)
     restore = app_text[restore_start:restore_end]
-    assert "derive_nominal_geometry(width, height, self.settings)" in restore
+    assert "settings_snapshot = replace(self.settings)" in restore
+    assert "derive_nominal_geometry(width, height, settings_snapshot)" in restore
+    assert "derive_nominal_geometry(width, height, self.settings)" not in restore
     assert "normalize_page_rgb(opened)" not in restore
 
 
@@ -4983,9 +4987,10 @@ def test_v21118_review_page_change_resets_crop_text_scroll_to_top():
     assert "self.after_idle(reset_after_layout)" in body
     change_start = body.index("    def change_page")
     change = body[change_start:]
-    assert "self.render_rows()" in change
+    assert "self._request_render_rows(focus_index=0, reset_scroll=True)" in change
+    assert "self.render_rows(preloaded_crops=crops)" in change
     assert "self._reset_rows_scroll_top()" in change
-    assert change.index("self.render_rows()") < change.index("self._reset_rows_scroll_top()")
+    assert change.index("self.render_rows(preloaded_crops=crops)") < change.index("self._reset_rows_scroll_top()")
 
 
 def test_v21119_review_text_similarity_normalizes_spacing_punctuation_and_case():
@@ -5854,8 +5859,9 @@ def test_v2126_environment_dialog_reports_official_opencc():
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    assert 'self._distribution_version("opencc")' in text
-    assert 'self._distribution_version("opencc-python-reimplemented")' in text
+    assert 'PictureCaptureApp._distribution_version("opencc")' in text
+    assert "settings_snapshot = replace(self.settings)" in text
+    assert 'PictureCaptureApp._distribution_version("opencc-python-reimplemented")' in text
     assert '简化配置：t2s.json（词组优先）' in text
     assert '"OCR / 简化环境状态"' in text
 

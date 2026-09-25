@@ -8,6 +8,7 @@ import re
 import json
 import subprocess
 import unicodedata
+import uuid
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
@@ -830,7 +831,13 @@ def run_tesseract(image: Image.Image, language: str, executable: str = "tesserac
     payload = BytesIO()
     normalize_page_rgb(image).save(payload, format="PNG")
     command = [str(resolved), "stdin", "stdout", "-l", language, "--psm", str(psm)]
-    result = subprocess.run(command, input=payload.getvalue(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        result = subprocess.run(
+            command, input=payload.getvalue(), stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=120,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Tesseract OCR 超时（120 秒）；已终止本次识别。") from exc
     if result.returncode:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         raise RuntimeError(f"Tesseract OCR 失败：{detail}")
@@ -993,6 +1000,94 @@ def _save_crop(image: Image.Image, output: Path, box: tuple[int, int, int, int])
     return box
 
 
+def _publish_temp_path(target: Path) -> Path:
+    """Return a same-filesystem temporary path for one eventual atomic publish."""
+    target = Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
+
+
+def _stage_text_file(target: Path, text: str, *, encoding: str = "utf-8") -> Path:
+    temp = _publish_temp_path(target)
+    try:
+        with temp.open("w", encoding=encoding, newline="") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        return temp
+    except Exception:
+        temp.unlink(missing_ok=True)
+        raise
+
+
+def _publish_file_transaction(
+    replacements: list[tuple[Path, Path]], *, stale_paths: list[Path] | None = None,
+) -> None:
+    """Publish a page file set together and restore the previous set on failure."""
+    pairs = [(Path(temp), Path(target)) for temp, target in replacements]
+    token = uuid.uuid4().hex
+    old_candidates: list[Path] = []
+    seen: set[str] = set()
+    for path in [*(target for _temp, target in pairs), *(stale_paths or [])]:
+        key = os.fspath(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        old_candidates.append(path)
+
+    backups: list[tuple[Path, Path]] = []
+    published: list[Path] = []
+    preserve_backups = False
+    try:
+        for target in old_candidates:
+            if not target.exists():
+                continue
+            backup = target.with_name(f".{target.name}.{token}.bak")
+            backup.unlink(missing_ok=True)
+            os.replace(target, backup)
+            backups.append((target, backup))
+
+        for temp, target in pairs:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(temp, target)
+            published.append(target)
+    except Exception:
+        for target in reversed(published):
+            target.unlink(missing_ok=True)
+        restore_error: Exception | None = None
+        for target, backup in reversed(backups):
+            if not backup.exists():
+                continue
+            try:
+                os.replace(backup, target)
+            except Exception as exc:
+                restore_error = restore_error or exc
+        if restore_error is not None:
+            preserve_backups = True
+            raise RuntimeError(
+                "切图发布失败，且回滚旧文件时发生错误；已保留隐藏 .bak 恢复副本。"
+            ) from restore_error
+        raise
+    finally:
+        for temp, _target in pairs:
+            temp.unlink(missing_ok=True)
+        if not preserve_backups:
+            for _target, backup in backups:
+                backup.unlink(missing_ok=True)
+
+
+def _stage_crop(
+    image: Image.Image, target: Path, box: tuple[int, int, int, int],
+) -> tuple[tuple[int, int, int, int], Path]:
+    temp = _publish_temp_path(target)
+    try:
+        saved_box = _save_crop(image, temp, box)
+        return saved_box, temp
+    except Exception:
+        temp.unlink(missing_ok=True)
+        raise
+
+
 def split_single_lines(
     image_path: Path, entries: list[Entry], settings: AppSettings, output_dir: Path,
     *, profile_page_index: int = 0,
@@ -1004,12 +1099,31 @@ def split_single_lines(
     )
     records: list[CropRecord] = []
     manifest: list[str] = []
-    for index, entry in enumerate(sort_entries_reading_order(entries, geometry)):
-        filename = f"{image_path.stem}_SW_{index:03d}.png"
-        box = _save_crop(source, output_dir / filename, line_box(entry, geometry, source, effective))
-        records.append(CropRecord(image_path.name, index, entry.word, filename, box))
-        manifest.append(filename)
-    (output_dir / f"{image_path.stem}.PSWords").write_text("\n".join(manifest) + ("\n" if manifest else ""), encoding="utf-8")
+    replacements: list[tuple[Path, Path]] = []
+    staged: list[Path] = []
+    try:
+        for index, entry in enumerate(sort_entries_reading_order(entries, geometry)):
+            filename = f"{image_path.stem}_SW_{index:03d}.png"
+            target = output_dir / filename
+            box, temp = _stage_crop(
+                source, target, line_box(entry, geometry, source, effective),
+            )
+            staged.append(temp)
+            replacements.append((temp, target))
+            records.append(CropRecord(image_path.name, index, entry.word, filename, box))
+            manifest.append(filename)
+        manifest_target = output_dir / f"{image_path.stem}.PSWords"
+        manifest_temp = _stage_text_file(
+            manifest_target, "\n".join(manifest) + ("\n" if manifest else ""),
+        )
+        staged.append(manifest_temp)
+        replacements.append((manifest_temp, manifest_target))
+        stale = list(output_dir.glob(f"{image_path.stem}_SW_*.png"))
+        _publish_file_transaction(replacements, stale_paths=stale)
+    except Exception:
+        for temp in staged:
+            temp.unlink(missing_ok=True)
+        raise
     return records
 
 
@@ -1398,13 +1512,21 @@ def page_crop_plan_dict(plan: PageCropPlan) -> dict:
     }
 
 
-def write_page_crop_plan(root: Path, page_stem: str, plan: PageCropPlan) -> Path:
+def _stage_page_crop_plan(
+    root: Path, page_stem: str, plan: PageCropPlan,
+) -> tuple[Path, Path]:
     folder = qt_root(Path(root)) / "CropPlan"
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{page_stem}.json"
-    tmp = folder / f".{page_stem}.json.tmp"
-    tmp.write_text(json.dumps(page_crop_plan_dict(plan), ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(path)
+    temp = _stage_text_file(
+        path, json.dumps(page_crop_plan_dict(plan), ensure_ascii=False, indent=2),
+    )
+    return temp, path
+
+
+def write_page_crop_plan(root: Path, page_stem: str, plan: PageCropPlan) -> Path:
+    temp, path = _stage_page_crop_plan(root, page_stem, plan)
+    _publish_file_transaction([(temp, path)])
     return path
 
 
@@ -1427,7 +1549,7 @@ def _save_union_crop(image: Image.Image, path: Path, base_box: tuple[int,int,int
     d.rectangle((base_box[0]-union[0],base_box[1]-union[1],base_box[2]-union[0],base_box[3]-union[1]),fill=255)
     for region in regions:
         d.polygon([(x-union[0],y-union[1]) for x,y in region.points],fill=255)
-    white=Image.new("RGB",crop.size,"white"); white.paste(crop,(0,0),mask); path.parent.mkdir(parents=True,exist_ok=True); white.save(path)
+    white=Image.new("RGB",crop.size,"white"); white.paste(crop,(0,0),mask); path.parent.mkdir(parents=True,exist_ok=True); white.save(path, "PNG")
     crop.close(); mask.close(); white.close()
     return union
 
@@ -1447,70 +1569,113 @@ def split_whole_entries(
         integrate_illustrations=integrate_illustrations,
         profile_page_index=profile_page_index,
     )
-    write_page_crop_plan(image_path.parent, image_path.stem, plan)
     output_dir.mkdir(parents=True, exist_ok=True)
     records: list[CropRecord] = []
+    replacements: list[tuple[Path, Path]] = []
+    staged: list[Path] = []
 
-    if not integrate_illustrations:
-        # The user explicitly requested pure headword geometry.  PPPs neither
-        # expand/union entry crops nor alter the crop order, and are not white-
-        # filled from headword images.  Illustrations already inside an entry
-        # therefore remain naturally visible in that headword crop.
-        for piece in plan.entry_pieces:
-            filename = entry_crop_piece_filename(image_path.stem, piece)
-            saved = _save_crop(image, output_dir / filename, piece.box)
-            records.append(CropRecord(image_path.name, piece.output_index, piece.word, filename, saved))
-        image.close()
-    else:
-        # Linked-illustration entries are exported first. Keep only their own linked
-        # PPPs; unrelated PPPs are whitened even at this stage.
-        illustrated_entries = sorted({p.entry_ref_index for p in plan.entry_pieces if p.source_mode == "linked_original" and p.entry_ref_index is not None})
-        completed_positions: set[int] = set()
-        for entry_ref in illustrated_entries:
-            keep = {i.polygon_index for i in plan.illustrations if i.associated_entry_index == entry_ref and i.relation in {"contained", "partial"}}
-            source = _whitefill_polygons(image, polygons, skip=keep)
+    try:
+        if not integrate_illustrations:
+            for piece in plan.entry_pieces:
+                filename = entry_crop_piece_filename(image_path.stem, piece)
+                target = output_dir / filename
+                saved, temp = _stage_crop(image, target, piece.box)
+                staged.append(temp)
+                replacements.append((temp, target))
+                records.append(CropRecord(
+                    image_path.name, piece.output_index, piece.word, filename, saved,
+                ))
+        else:
+            illustrated_entries = sorted({
+                p.entry_ref_index for p in plan.entry_pieces
+                if p.source_mode == "linked_original" and p.entry_ref_index is not None
+            })
+            completed_positions: set[int] = set()
+            for entry_ref in illustrated_entries:
+                keep = {
+                    i.polygon_index for i in plan.illustrations
+                    if i.associated_entry_index == entry_ref
+                    and i.relation in {"contained", "partial"}
+                }
+                source = _whitefill_polygons(image, polygons, skip=keep)
+                try:
+                    for pos, piece in enumerate(plan.entry_pieces):
+                        if piece.entry_ref_index != entry_ref:
+                            continue
+                        filename = entry_crop_piece_filename(image_path.stem, piece)
+                        target = output_dir / filename
+                        temp = _publish_temp_path(target)
+                        merge_regions = [
+                            polygons[i] for i in piece.merge_polygon_indices
+                            if 0 <= i < len(polygons)
+                        ]
+                        try:
+                            if merge_regions:
+                                saved_box = _save_union_crop(
+                                    source, temp, piece.box, merge_regions,
+                                )
+                            else:
+                                saved_box = _save_crop(source, temp, piece.box)
+                        except Exception:
+                            temp.unlink(missing_ok=True)
+                            raise
+                        staged.append(temp)
+                        replacements.append((temp, target))
+                        records.append(CropRecord(
+                            image_path.name, piece.output_index, piece.word,
+                            filename, saved_box,
+                        ))
+                        completed_positions.add(pos)
+                finally:
+                    source.close()
+
+            cleaned = _whitefill_polygons(image, polygons)
             try:
                 for pos, piece in enumerate(plan.entry_pieces):
-                    if piece.entry_ref_index != entry_ref:
+                    if pos in completed_positions:
                         continue
                     filename = entry_crop_piece_filename(image_path.stem, piece)
-                    merge_regions = [polygons[i] for i in piece.merge_polygon_indices if 0 <= i < len(polygons)]
-                    if merge_regions:
-                        saved_box = _save_union_crop(source, output_dir / filename, piece.box, merge_regions)
-                    else:
-                        saved_box = _save_crop(source, output_dir / filename, piece.box)
-                    records.append(CropRecord(image_path.name, piece.output_index, piece.word, filename, saved_box))
-                    completed_positions.add(pos)
+                    target = output_dir / filename
+                    saved, temp = _stage_crop(cleaned, target, piece.box)
+                    staged.append(temp)
+                    replacements.append((temp, target))
+                    records.append(CropRecord(
+                        image_path.name, piece.output_index, piece.word,
+                        filename, saved,
+                    ))
             finally:
-                source.close()
+                cleaned.close()
 
-        # All PPPs are then removed before ordinary headword crops are produced.
-        cleaned = _whitefill_polygons(image, polygons)
-        try:
-            for pos, piece in enumerate(plan.entry_pieces):
-                if pos in completed_positions:
-                    continue
-                filename = entry_crop_piece_filename(image_path.stem, piece)
-                saved = _save_crop(cleaned, output_dir / filename, piece.box)
-                records.append(CropRecord(image_path.name, piece.output_index, piece.word, filename, saved))
-        finally:
-            cleaned.close(); image.close()
+        by_filename = {r.filename: r for r in records}
+        ordered_records: list[CropRecord] = []
+        for piece in plan.entry_pieces:
+            filename = entry_crop_piece_filename(image_path.stem, piece)
+            record = by_filename.get(filename)
+            if record is not None:
+                ordered_records.append(record)
 
-    # Pixel operations intentionally run illustrated entries first, but the
-    # manifest and returned record order remain the dictionary/page order.
-    # This preserves downstream PicDic expectations while retaining the safe
-    # white-fill execution sequence.
-    by_filename = {r.filename: r for r in records}
-    ordered_records: list[CropRecord] = []
-    for piece in plan.entry_pieces:
-        filename = entry_crop_piece_filename(image_path.stem, piece)
-        record = by_filename.get(filename)
-        if record is not None:
-            ordered_records.append(record)
-    manifest = "".join(f"{r.page}|{r.index:03d}|{r.word}|{r.filename}\n" for r in ordered_records)
-    (output_dir / f"{image_path.stem}.PWWords").write_text(manifest, encoding="utf-8")
-    return ordered_records
-
+        manifest = "".join(
+            f"{r.page}|{r.index:03d}|{r.word}|{r.filename}\n"
+            for r in ordered_records
+        )
+        manifest_target = output_dir / f"{image_path.stem}.PWWords"
+        manifest_temp = _stage_text_file(manifest_target, manifest)
+        staged.append(manifest_temp)
+        replacements.append((manifest_temp, manifest_target))
+        plan_temp, plan_target = _stage_page_crop_plan(
+            image_path.parent, image_path.stem, plan,
+        )
+        staged.append(plan_temp)
+        replacements.append((plan_temp, plan_target))
+        stale = list(output_dir.glob(f"{image_path.stem}_WW_*.png"))
+        _publish_file_transaction(replacements, stale_paths=stale)
+        return ordered_records
+    except Exception:
+        for temp in staged:
+            temp.unlink(missing_ok=True)
+        raise
+    finally:
+        image.close()
 
 def append_crop_log(root: Path, records: list[CropRecord]) -> None:
     """Append crop boxes in original-image pixels with a self-describing header."""
@@ -1932,46 +2097,110 @@ def split_illustrations(
         )
     finally:
         rgb_for_plan.close()
-    write_page_crop_plan(image_path.parent, image_path.stem, plan)
+
     output_dir.mkdir(parents=True, exist_ok=True)
     records: list[CropRecord] = []
     events: list[IllustrationCropEvent] = []
     manifest: list[str] = []
-    p_counter: dict[int,int] = {}
-    for decision in plan.illustrations:
-        region=polygons[decision.polygon_index]
-        if not decision.standalone:
-            action="跳过：已完整包含于词条切图" if decision.relation=="contained" else "跳过：与词条切图部分相交，已合并到词条切图"
-            events.append(IllustrationCropEvent(image_path.name,decision.polygon_index+1,decision.name,decision.associated_word,decision.relation,action,""))
-            manifest.append(f"{decision.polygon_index+1:03d}|{decision.name}|SKIP|{decision.relation}|{decision.associated_word}")
-            continue
-        box=decision.box
-        if box is None:
-            events.append(IllustrationCropEvent(image_path.name,decision.polygon_index+1,decision.name,decision.associated_word,decision.relation,"跳过：超出有效切图范围",""))
-            continue
-        crop=image.crop(box)
-        mask=Image.new("L",crop.size,0); draw=ImageDraw.Draw(mask)
-        draw.polygon([(x-box[0],y-box[1]) for x,y in region.points],fill=255)
-        crop.putalpha(mask)
-        if decision.associated_entry_index is not None:
-            ei=decision.associated_entry_index
-            p_counter[ei]=p_counter.get(ei,0)+1
-            filename=f"{image_path.stem}_WW_{ei:03d}(P{p_counter[ei]}).png"
-        else:
-            filename=f"{image_path.stem}_PIC_{decision.polygon_index+1:03d}.png"
-        crop.save(output_dir/filename); crop.close(); mask.close()
-        label=region.label or f"{image_path.stem}|P_{decision.polygon_index+1:02d}|1|{image_path.stem}|"
-        records.append(CropRecord(image_path.name,decision.polygon_index+1,decision.associated_word or label,filename,box))
-        if decision.relation == "partial" and not integrate_illustrations:
-            action = "单独插图切图（部分超出词条；未综合插图）"
-        else:
-            action="单独插图切图（关联词条外部）" if decision.associated_entry_index is not None else "单独插图切图（未关联词条）"
-        events.append(IllustrationCropEvent(image_path.name,decision.polygon_index+1,decision.name,decision.associated_word,decision.relation,action,filename))
-        manifest.append(f"{decision.polygon_index+1:03d}|{label}|{filename}|{decision.relation}|{decision.associated_word}")
-    (output_dir/f"{image_path.stem}.PPPictures").write_text("\n".join(manifest)+("\n" if manifest else ""),encoding="utf-8")
-    image.close()
-    return IllustrationSplitResult(records,events)
+    replacements: list[tuple[Path, Path]] = []
+    staged: list[Path] = []
+    p_counter: dict[int, int] = {}
+    try:
+        for decision in plan.illustrations:
+            region = polygons[decision.polygon_index]
+            if not decision.standalone:
+                action = (
+                    "跳过：已完整包含于词条切图"
+                    if decision.relation == "contained"
+                    else "跳过：与词条切图部分相交，已合并到词条切图"
+                )
+                events.append(IllustrationCropEvent(
+                    image_path.name, decision.polygon_index + 1, decision.name,
+                    decision.associated_word, decision.relation, action, "",
+                ))
+                manifest.append(
+                    f"{decision.polygon_index+1:03d}|{decision.name}|SKIP|"
+                    f"{decision.relation}|{decision.associated_word}"
+                )
+                continue
+            box = decision.box
+            if box is None:
+                events.append(IllustrationCropEvent(
+                    image_path.name, decision.polygon_index + 1, decision.name,
+                    decision.associated_word, decision.relation,
+                    "跳过：超出有效切图范围", "",
+                ))
+                continue
+            crop = image.crop(box)
+            mask = Image.new("L", crop.size, 0)
+            draw = ImageDraw.Draw(mask)
+            draw.polygon([(x-box[0], y-box[1]) for x, y in region.points], fill=255)
+            crop.putalpha(mask)
+            if decision.associated_entry_index is not None:
+                ei = decision.associated_entry_index
+                p_counter[ei] = p_counter.get(ei, 0) + 1
+                filename = f"{image_path.stem}_WW_{ei:03d}(P{p_counter[ei]}).png"
+            else:
+                filename = f"{image_path.stem}_PIC_{decision.polygon_index+1:03d}.png"
+            target = output_dir / filename
+            temp = _publish_temp_path(target)
+            try:
+                crop.save(temp, "PNG")
+            except Exception:
+                temp.unlink(missing_ok=True)
+                raise
+            finally:
+                crop.close()
+                mask.close()
+            staged.append(temp)
+            replacements.append((temp, target))
+            label = region.label or (
+                f"{image_path.stem}|P_{decision.polygon_index+1:02d}|1|{image_path.stem}|"
+            )
+            records.append(CropRecord(
+                image_path.name, decision.polygon_index + 1,
+                decision.associated_word or label, filename, box,
+            ))
+            if decision.relation == "partial" and not integrate_illustrations:
+                action = "单独插图切图（部分超出词条；未综合插图）"
+            else:
+                action = (
+                    "单独插图切图（关联词条外部）"
+                    if decision.associated_entry_index is not None
+                    else "单独插图切图（未关联词条）"
+                )
+            events.append(IllustrationCropEvent(
+                image_path.name, decision.polygon_index + 1, decision.name,
+                decision.associated_word, decision.relation, action, filename,
+            ))
+            manifest.append(
+                f"{decision.polygon_index+1:03d}|{label}|{filename}|"
+                f"{decision.relation}|{decision.associated_word}"
+            )
 
+        manifest_target = output_dir / f"{image_path.stem}.PPPictures"
+        manifest_temp = _stage_text_file(
+            manifest_target, "\n".join(manifest) + ("\n" if manifest else ""),
+        )
+        staged.append(manifest_temp)
+        replacements.append((manifest_temp, manifest_target))
+        plan_temp, plan_target = _stage_page_crop_plan(
+            image_path.parent, image_path.stem, plan,
+        )
+        staged.append(plan_temp)
+        replacements.append((plan_temp, plan_target))
+        stale = [
+            *output_dir.glob(f"{image_path.stem}_WW_*.png"),
+            *output_dir.glob(f"{image_path.stem}_PIC_*.png"),
+        ]
+        _publish_file_transaction(replacements, stale_paths=stale)
+    except Exception:
+        for temp in staged:
+            temp.unlink(missing_ok=True)
+        raise
+    finally:
+        image.close()
+    return IllustrationSplitResult(records, events)
 
 def append_illustration_crop_log(root: Path, events: list[IllustrationCropEvent]) -> None:
     if not events: return
