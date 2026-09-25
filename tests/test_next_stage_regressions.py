@@ -279,10 +279,12 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     settings = text[start:end]
 
     assert '"bottom_y", int' in settings
-    assert '"bottom_y": "正文结束 V（参考页规范坐标）"' in settings
+    assert '"bottom_y": "正文结束 V"' in settings
     assert '"columns": "正文栏数"' in settings
-    assert '"manual_x": "第一栏左缘 U（参考页规范坐标）"' in settings
+    assert '"manual_x": "第一栏左缘 U"' in settings
     assert '"paddle_band_width_ratio": "%"' in settings
+    assert '"paddle_left_tolerance": "参考页规范px"' in settings
+    assert '"paddle_separator_safety_px": "参考页规范px"' in settings
     assert '"columns": (1, 12, 1)' in settings
     assert "def _show_setting_help(" in settings
     assert 'text="设置说明"' in settings
