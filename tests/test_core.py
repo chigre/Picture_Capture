@@ -4501,14 +4501,17 @@ def test_v2119_crop_controls_live_only_in_crop_settings_dialog():
     assert '("裁剪终点 Y", "bottom_y", int)' not in settings_class
     assert '"crop_parallel_workers"' not in settings_class
     assert '("使用裁剪终点 Y", "crop_to_bottom_y")' not in settings_class
-    # The unified dialog owns all actual crop parameters.
+    # The unified dialog owns shared crop parameters; per-page bounds live in Section.
     for token in (
         'self.general_top_var', 'self.general_bottom_var',
         'self.entry_left_padding_var', 'self.entry_right_padding_var',
         'self.integrate_illustrations_var', 'self.margin_var', 'self.workers_var',
-        'self.special_top_var', 'self.special_bottom_var',
     ):
         assert token in crop_class
+    assert 'self.special_top_var' not in crop_class
+    assert 'self.special_bottom_var' not in crop_class
+    assert 'text="特殊页面覆盖"' not in crop_class
+    assert '主界面【六、页面列表】的 Section 列双击设置' in crop_class
     assert '完整切图设置（词条切图 / 插图切图共用）' in crop_class
 
 
@@ -7059,6 +7062,46 @@ def test_crop_bounds_scale_reference_values_to_current_page():
         image, settings, top_y=100, bottom_y=1600, margin=20,
     )
     assert (ill_top, ill_bottom, margin) == (150, 2400, 30)
+
+
+def test_page_sections_override_general_and_legacy_crop_bounds():
+    from picture_capture.coordinate_space import CANONICAL_REFERENCE_SPACE
+    from picture_capture.models import AppSettings
+    from picture_capture.processing import build_page_crop_plan, illustration_crop_bounds
+
+    settings = AppSettings(
+        geometry_coordinate_version=2,
+        geometry_coordinate_space=CANONICAL_REFERENCE_SPACE,
+        geometry_reference_width=400,
+        columns=1,
+        manual_x=30,
+        column_width=320,
+        gutter=20,
+        start_y=20,
+        bottom_y=580,
+        crop_to_bottom_y=True,
+        character_height=20,
+        row_padding=0,
+        follow_column_deformation=False,
+    )
+    image = Image.new("RGB", (400, 600), "white")
+    sections = [PageSection(120, 420)]
+    entries = [Entry("alpha", 30, 150), Entry("beta", 30, 300)]
+
+    # Even deliberately conflicting general/legacy-style bounds are ignored
+    # once the page has an explicit Section sidecar.
+    plan = build_page_crop_plan(
+        image, entries, [], settings,
+        top_y=40, bottom_y=560, page_sections=sections,
+    )
+    assert plan.entry_pieces
+    assert all(piece.box[1] >= 120 and piece.box[3] <= 420 for piece in plan.entry_pieces)
+
+    top, bottom, _margin = illustration_crop_bounds(
+        image, settings, top_y=40, bottom_y=560, margin=0,
+        page_sections=sections,
+    )
+    assert (top, bottom) == (120, 420)
 
 
 def test_page_crop_plan_declares_source_coordinate_space():
