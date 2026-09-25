@@ -77,7 +77,8 @@ from .cc_cedict import (
 from .chinese_simplify import simplify_text, opencc_runtime_status
 from .simplified_review import entry_key as simplified_entry_key, read_records as read_simplified_records, write_records as write_simplified_records
 from .training_export import (
-    copy_project_context, export_training_page, make_training_zip, write_training_manifest,
+    TrainingExportCancelled, copy_project_context, export_training_page,
+    make_training_zip, write_training_manifest,
 )
 from .text_encoding import read_text_detected
 from .project_storage import (
@@ -9416,8 +9417,6 @@ class PictureCaptureApp(tk.Tk):
                 self.status_var.set("已有批量任务正在运行，请结束后再导出训练标记包。")
             return
         try:
-            # Commit the current page first so the package reflects what the user
-            # is actually looking at. The active editing mode decides PDIC/PPP.
             if self.current_page is not None and self.image is not None:
                 self._save_current_page_by_mode()
         except Exception as exc:
@@ -9433,7 +9432,6 @@ class PictureCaptureApp(tk.Tk):
                 parent=self,
             )
             return
-
         if not messagebox.askyesno(
             "导出训练标记包",
             f"将把 {len(indices)} 个已有 .pdic 的页面作为人工最终标注导出。\n\n"
@@ -9444,65 +9442,97 @@ class PictureCaptureApp(tk.Tk):
             return
 
         export_root = training_exports_root(project.root)
-        export_root.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_name = f"{project.root.name}_training_{stamp}"
         staging = export_root / f".{base_name}_building"
         zip_path = export_root / f"{base_name}.zip"
-        if staging.exists():
-            shutil.rmtree(staging, ignore_errors=True)
-        staging.mkdir(parents=True, exist_ok=True)
-
         settings = replace(self.settings)
         page_records: list[dict] = []
-        context_files = copy_project_context(project.root, staging)
-        items: list[object] = list(indices) + ["__finalize__"]
+        context_files: list[str] = []
+        items: list[object] = ["__prepare__"] + list(indices) + ["__finalize__"]
+
+        def cleanup_partial() -> None:
+            shutil.rmtree(staging, ignore_errors=True)
+            zip_path.with_name(f".{zip_path.name}.tmp").unlink(missing_ok=True)
 
         def worker(item, _position: int, _total: int):
-            if item == "__finalize__":
-                from . import __version__
-                write_training_manifest(
-                    staging,
-                    project_name=project.root.name,
-                    settings=settings,
-                    pages=page_records,
-                    context_files=context_files,
-                    software_version=__version__,
+            try:
+                if item == "__prepare__":
+                    export_root.mkdir(parents=True, exist_ok=True)
+                    cleanup_partial()
+                    staging.mkdir(parents=True, exist_ok=True)
+                    context_files[:] = copy_project_context(project.root, staging)
+                    return {"prepared": True}
+                if item == "__finalize__":
+                    from . import __version__
+                    if self._batch_stop_event.is_set():
+                        raise TrainingExportCancelled("训练标记包导出已停止")
+                    write_training_manifest(
+                        staging,
+                        project_name=project.root.name,
+                        settings=settings,
+                        pages=page_records,
+                        context_files=context_files,
+                        software_version=__version__,
+                    )
+                    make_training_zip(
+                        staging, zip_path,
+                        should_stop=self._batch_stop_event.is_set,
+                    )
+                    shutil.rmtree(staging, ignore_errors=True)
+                    return {"final_zip": str(zip_path)}
+                index = int(item)
+                record = export_training_page(
+                    project.images[index], project.root, settings, staging, index,
                 )
-                make_training_zip(staging, zip_path)
-                return {"final_zip": str(zip_path)}
-            index = int(item)
-            record = export_training_page(
-                project.images[index], project.root, settings, staging, index,
-            )
-            page_records.append(record)
-            return record
+                page_records.append(record)
+                return record
+            except TrainingExportCancelled:
+                cleanup_partial()
+                return {"cancelled": True}
+            except Exception:
+                cleanup_partial()
+                raise
 
         def labeler(item) -> str:
+            if item == "__prepare__":
+                return "准备 staging 并复制项目上下文"
             if item == "__finalize__":
                 return "生成 dataset_manifest.json 和 ZIP"
             return project.images[int(item)].name
 
-        def done(completed, total, stopped, results, error):
-            try:
-                if error is not None:
-                    return
-                produced = zip_path.exists()
-                if stopped and not produced:
-                    shutil.rmtree(staging, ignore_errors=True)
-                    self.status_var.set("训练标记包导出已停止；未生成不完整数据包。")
-                    return
-                if produced:
-                    shutil.rmtree(staging, ignore_errors=True)
-                    self.status_var.set(f"训练标记包已导出：{zip_path.name}")
-                    messagebox.showinfo(
-                        "导出训练标记包完成",
-                        f"已导出 {len(page_records)} 页。\n\n{zip_path}",
-                        parent=self,
-                    )
-            finally:
-                if error is not None:
-                    shutil.rmtree(staging, ignore_errors=True)
+        def done(_completed, _total, stopped, results, error):
+            if error is not None:
+                return
+            produced = next(
+                (str(row.get("final_zip")) for row in reversed(results)
+                 if isinstance(row, dict) and row.get("final_zip")),
+                "",
+            )
+            if produced:
+                self.status_var.set(f"训练标记包已导出：{Path(produced).name}")
+                messagebox.showinfo(
+                    "导出训练标记包完成",
+                    f"已导出 {len(page_records)} 页。\n\n{produced}",
+                    parent=self,
+                )
+                return
+            if stopped:
+                self.status_var.set("训练标记包已停止；正在后台清理 staging…")
+
+                def cleanup_worker():
+                    cleanup_partial()
+                    return True
+
+                def cleanup_done(_result) -> None:
+                    if self.project is project:
+                        self.status_var.set("训练标记包导出已停止；未生成不完整数据包。")
+
+                self._start_ui_worker(
+                    f"training-cleanup-{base_name}",
+                    cleanup_worker, cleanup_done,
+                    lambda exc, detail: print(detail or str(exc)),
+                )
 
         self._start_batch_task(
             "导出训练标记包", items, worker, done, item_label=labeler,
@@ -9715,7 +9745,8 @@ class PictureCaptureApp(tk.Tk):
             parent=self,
         ):
             return
-        pages = list(self.project.images); settings = replace(self.settings)
+        project = self.project
+        pages = list(project.images); settings = replace(self.settings)
         range_name = pages[indices[0]].stem if len(indices) == 1 else f"{pages[indices[0]].stem}-{pages[indices[-1]].stem}"
         range_name = re.sub(r'[^0-9A-Za-z_.-]+', "_", range_name)
 
@@ -9769,76 +9800,130 @@ class PictureCaptureApp(tk.Tk):
             )
 
         def done(_completed, _total, stopped, results, error) -> None:
-            if error or not results: return
-            base = f"layout_consistency_{range_name}_{datetime.now():%Y%m%d_%H%M%S}"
-            target = exports_root(self.project.root) / f"{base}.csv"
-            report = exports_root(self.project.root) / f"{base}_report.txt"
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with target.open("w", encoding="utf-8-sig", newline="") as handle:
-                writer = csv.writer(handle)
-                writer.writerow((
-                    "page",
-                    "header_rule_source_segment_xyxy",
-                    "body_left_source_segment_xyxy",
-                    "source_coordinate_space",
-                    "header_rule_v_canonical_page",
-                    "body_left_u_canonical_page",
-                    "header_rule_v_reference",
-                    "body_left_u_reference",
-                    "runtime_coordinate_space",
-                    "reference_coordinate_space",
-                    "geometry_reference_width",
-                    "page_canonical_width",
-                    "layout_transform",
-                    "status",
-                ))
+            if error or not results:
+                return
+            rows = list(results)
+            stopped_early = bool(stopped)
+            export_dir = exports_root(project.root)
+            self.status_var.set("版面扫描完成；正在后台生成 CSV 与统计报告…")
+
+            def finalize_report():
+                base = f"layout_consistency_{range_name}_{datetime.now():%Y%m%d_%H%M%S}"
+                target = export_dir / f"{base}.csv"
+                report = export_dir / f"{base}_report.txt"
+                target.parent.mkdir(parents=True, exist_ok=True)
+                temp_csv = target.with_name(f".{target.name}.tmp")
+                temp_report = report.with_name(f".{report.name}.tmp")
+
                 def segment_text(segment) -> str:
                     if not segment:
                         return ""
                     (x0, y0), (x1, y1) = segment
                     return f"{x0},{y0}->{x1},{y1}"
-                writer.writerows((
-                    row[0],
-                    segment_text(row[9]),
-                    segment_text(row[10]),
-                    SOURCE_COORDINATE_SPACE,
-                    row[1], row[2], row[3], row[4],
-                    row[6], CANONICAL_REFERENCE_SPACE,
-                    _geometry_reference_width(settings), row[8], row[7],
-                    "blank_skipped" if row[5] else "analyzed",
-                ) for row in results)
-            analyzed = [row for row in results if not row[5]]
-            blanks = [row[0] for row in results if row[5]]
-            # Cross-page consistency must use one common reference space. Raw
-            # full-resolution canonical values differ when page resolutions do.
-            header_values = [row[3] for row in analyzed if row[3] is not None]
-            left_values = [row[4] for row in analyzed if row[4] is not None]
-            def summary(values) -> str:
-                return "无有效值" if not values else f"均值 {statistics.fmean(values):.1f}，范围 {min(values)}–{max(values)}，标准差 {statistics.pstdev(values):.1f}"
-            def outliers(column: int) -> list[str]:
-                pairs = [(row[0], row[column]) for row in analyzed if row[column] is not None]
-                if len(pairs) < 3: return []
-                values = [value for _name, value in pairs]; mean = statistics.fmean(values); deviation = statistics.pstdev(values)
-                tolerance = max(3.0, deviation * 2.5)
-                return [name for name, value in pairs if abs(value - mean) > tolerance]
-            abnormal = sorted(set(outliers(3) + outliers(4)))
-            report_text = (
-                f"页面范围：{range_name}\n总页数：{len(results)}\n有效分析：{len(analyzed)}\n"
-                f"空白页跳过：{len(blanks)}（{', '.join(blanks) or '无'}）\n"
-                f"页眉横线 V（参考页规范px）：{summary(header_values)}\n正文起始 U（参考页规范px）：{summary(left_values)}\n"
-                f"异常页面：{', '.join(abnormal) or '无'}\n"
+
+                try:
+                    with temp_csv.open("w", encoding="utf-8-sig", newline="") as handle:
+                        writer = csv.writer(handle)
+                        writer.writerow((
+                            "page",
+                            "header_rule_source_segment_xyxy",
+                            "body_left_source_segment_xyxy",
+                            "source_coordinate_space",
+                            "header_rule_v_canonical_page",
+                            "body_left_u_canonical_page",
+                            "header_rule_v_reference",
+                            "body_left_u_reference",
+                            "runtime_coordinate_space",
+                            "reference_coordinate_space",
+                            "geometry_reference_width",
+                            "page_canonical_width",
+                            "layout_transform",
+                            "status",
+                        ))
+                        writer.writerows((
+                            row[0],
+                            segment_text(row[9]),
+                            segment_text(row[10]),
+                            SOURCE_COORDINATE_SPACE,
+                            row[1], row[2], row[3], row[4],
+                            row[6], CANONICAL_REFERENCE_SPACE,
+                            _geometry_reference_width(settings), row[8], row[7],
+                            "blank_skipped" if row[5] else "analyzed",
+                        ) for row in rows)
+
+                    analyzed = [row for row in rows if not row[5]]
+                    blanks = [row[0] for row in rows if row[5]]
+                    header_values = [row[3] for row in analyzed if row[3] is not None]
+                    left_values = [row[4] for row in analyzed if row[4] is not None]
+
+                    def summary(values) -> str:
+                        return (
+                            "无有效值" if not values
+                            else f"均值 {statistics.fmean(values):.1f}，范围 {min(values)}–{max(values)}，标准差 {statistics.pstdev(values):.1f}"
+                        )
+
+                    def outliers(column: int) -> list[str]:
+                        pairs = [(row[0], row[column]) for row in analyzed if row[column] is not None]
+                        if len(pairs) < 3:
+                            return []
+                        values = [value for _name, value in pairs]
+                        mean = statistics.fmean(values)
+                        deviation = statistics.pstdev(values)
+                        tolerance = max(3.0, deviation * 2.5)
+                        return [name for name, value in pairs if abs(value - mean) > tolerance]
+
+                    abnormal = sorted(set(outliers(3) + outliers(4)))
+                    header_summary = summary(header_values)
+                    left_summary = summary(left_values)
+                    report_text = (
+                        f"页面范围：{range_name}\n总页数：{len(rows)}\n有效分析：{len(analyzed)}\n"
+                        f"空白页跳过：{len(blanks)}（{', '.join(blanks) or '无'}）\n"
+                        f"页眉横线 V（参考页规范px）：{header_summary}\n"
+                        f"正文起始 U（参考页规范px）：{left_summary}\n"
+                        f"异常页面：{', '.join(abnormal) or '无'}\n"
+                    )
+                    temp_report.write_text(report_text, encoding="utf-8-sig")
+                    temp_csv.replace(target)
+                    temp_report.replace(report)
+                    return {
+                        "target": target, "report": report,
+                        "analyzed": len(analyzed), "blanks": len(blanks),
+                        "header_summary": header_summary, "left_summary": left_summary,
+                        "abnormal": abnormal, "total": len(rows),
+                    }
+                except Exception:
+                    temp_csv.unlink(missing_ok=True)
+                    temp_report.unlink(missing_ok=True)
+                    raise
+
+            def finalized(payload) -> None:
+                if self.project is not project:
+                    return
+                abnormal_text = ", ".join(payload["abnormal"]) or "无"
+                messagebox.showinfo(
+                    "版面一致性统计",
+                    f"完成 {payload['total']} 页，有效 {payload['analyzed']} 页，跳过空白页 {payload['blanks']} 页"
+                    f"{'（提前停止）' if stopped_early else ''}\n"
+                    f"页眉横线 V（参考页规范px）：{payload['header_summary']}\n"
+                    f"正文起始 U（参考页规范px）：{payload['left_summary']}\n"
+                    f"异常页面：{abnormal_text}\n\n"
+                    "CSV 同时保存原图像素中的边界线段、当前页 canonical 值与统一参考页值；"
+                    "统计/异常判断使用参考页坐标。\n"
+                    f"结果：{payload['target']}\n报告：{payload['report']}",
+                    parent=self,
+                )
+                self.status_var.set(f"版面一致性检测完成：{payload['target'].name}")
+
+            def finalize_failed(exc, detail) -> None:
+                if detail:
+                    print(detail)
+                if self.project is project:
+                    self.show_error("生成版面一致性报告失败", exc)
+
+            self._start_ui_worker(
+                "layout-consistency-finalize",
+                finalize_report, finalized, finalize_failed,
             )
-            report.write_text(report_text, encoding="utf-8-sig")
-            messagebox.showinfo(
-                "版面一致性统计",
-                f"完成 {len(results)} 页，有效 {len(analyzed)} 页，跳过空白页 {len(blanks)} 页"
-                f"{'（提前停止）' if stopped else ''}\n页眉横线 V（参考页规范px）：{summary(header_values)}\n"
-                f"正文起始 U（参考页规范px）：{summary(left_values)}\n异常页面：{', '.join(abnormal) or '无'}\n\n"
-                f"CSV 同时保存原图像素中的边界线段、当前页 canonical 值与统一参考页值；"
-                f"统计/异常判断使用参考页坐标。\n结果：{target}\n报告：{report}",
-                parent=self,
-            )
-            self.status_var.set(f"版面一致性检测完成：{target.name}")
 
         self._start_batch_task("检测版面一致性", indices, worker, done, item_label=lambda i: pages[i].name)
 
