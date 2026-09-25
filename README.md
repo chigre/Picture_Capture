@@ -65,26 +65,31 @@ uv --version
 install_ocr_windows.bat
 ```
 
-安装器会显示：
+安装器会先自动检测 NVIDIA GPU、驱动版本以及 `nvidia-smi` 报告的最高 CUDA 兼容版本。
+
+如果检测到可兼容的 NVIDIA GPU，会显示类似：
 
 ```text
-1. CPU       - PaddleOCR + Google Lens
-2. GPU cu118 - PaddleOCR + Google Lens + PaddlePaddle GPU 3.3.0
-3. GPU cu126 - PaddleOCR + Google Lens + PaddlePaddle GPU 3.3.0
-4. GPU cu129 - PaddleOCR + Google Lens + PaddlePaddle GPU 3.3.0
-5. Lens only - Google Lens only
-6. Core only - 不安装可选 OCR 组件
+Hardware check:
+  NVIDIA GPU: GeForce RTX ...
+  Driver: ...
+  Driver CUDA compatibility: 12.9
+  Recommended: GPU accelerated OCR (ocr-gpu-cu129)
+
+1. GPU accelerated OCR (Recommended)
+2. CPU OCR
+3. Google Lens only
+4. Core only
+5. Advanced: choose CUDA profile manually
 ```
+
+此时直接按 **Enter** 即接受 GPU 推荐。安装器会在已声明的 CUDA 11.8 / 12.6 / 12.9 profile 中，自动选择**不高于驱动兼容上限的最高版本**；普通用户不需要自己判断 CUDA profile。
+
+如果未检测到 NVIDIA GPU、无法可靠取得 CUDA 兼容信息，或驱动兼容上限低于当前 GPU profile，则默认推荐 **CPU OCR**，同样直接按 Enter 即可。
 
 ### CPU 用户
 
-选择：
-
-```text
-1. CPU
-```
-
-安装器会一次安装：
+没有可自动选择的兼容 GPU 时，直接接受 **CPU OCR (Recommended)** 即可。安装器会一次安装：
 
 - PaddleOCR
 - PaddlePaddle CPU 3.3.0
@@ -92,44 +97,29 @@ install_ocr_windows.bat
 
 ### NVIDIA GPU 用户
 
-根据自己的环境选择：
+检测成功时，推荐直接按 **Enter** 接受 GPU profile。安装器会自动：
 
-```text
-2. CUDA 11.8
-3. CUDA 12.6
-4. CUDA 12.9
-```
-
-安装器会自动：
-
-1. 使用所选 uv profile 同步项目 `.venv`；
-2. 由 `pyproject.toml + uv.lock` 选择对应 PaddlePaddle 官方 CPU/CUDA 索引；
-3. 一次性安装 PaddleOCR、Google Lens 与对应 CPU/GPU runtime；Windows CUDA 12.6/12.9 profile 还会安装项目内的 NVIDIA cuDNN wheel；
-4. 在进程内自动加入项目 `.venv` 中 NVIDIA DLL 目录，无需手工修改系统 PATH；
-5. 实际执行一次 GPU 卷积 smoke test，确认 CUDA + cuDNN 均可用；
-6. 保存当前 OCR profile。
+1. 根据 NVIDIA 驱动报告的 CUDA 兼容上限选择最高兼容的已声明 GPU profile；
+2. 使用所选 uv profile 同步项目 `.venv`；
+3. 由 `pyproject.toml + uv.lock` 选择对应 PaddlePaddle 官方 CUDA 索引；
+4. 一次性安装 PaddleOCR、Google Lens 与对应 GPU runtime；Windows CUDA 12.6/12.9 profile 还会安装项目内的 NVIDIA cuDNN wheel；
+5. 在进程内自动加入项目 `.venv` 中 NVIDIA DLL 目录，无需手工修改系统 PATH；
+6. 实际执行一次 GPU 卷积 smoke test，确认 CUDA + cuDNN 均可用；
+7. 验证成功后保存当前 OCR profile。
 
 **GPU 用户不需要再手工执行 `uv pip uninstall/install`，也不需要自己填写 CUDA 索引。**
+
+只有在兼容性排查或明确知道目标 runtime 时，才需要进入 **Advanced** 手动选择 CUDA 11.8 / 12.6 / 12.9。
 
 > GPU 用户不要再额外执行旧的 `uv sync --extra paddleocr`。该兼容 extra 是 CPU 预设，可能重新引入 CPU Paddle runtime。
 
 ### 只使用 Google Lens
 
-选择：
-
-```text
-5. Lens only
-```
+在安装器中选择 **Google Lens only**。
 
 ### 不使用 PaddleOCR / Google Lens
 
-选择：
-
-```text
-6. Core only
-```
-
-Picture Capture 仍然可以启动；如果系统已经安装 Tesseract，也可以继续使用 Tesseract。
+在安装器中选择 **Core only**。Picture Capture 仍然可以启动；如果系统已经安装 Tesseract，也可以继续使用 Tesseract。
 
 ## 4. 启动程序
 
