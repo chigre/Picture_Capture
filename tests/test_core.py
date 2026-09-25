@@ -2074,7 +2074,10 @@ def test_v214_single_only_profile_visual_rescue_keeps_large_head_not_body_line()
         OCRRecord("後續正文", 0.99, (4, 300, 92, 320)),
         OCRRecord("末行正文", 0.99, (4, 340, 92, 360)),
     ]
-    profile = load_dictionary_profile(preset="TimesCED", language="chi_tra")\n    entries, diagnostics = filter_headword_records(\n        records, band, 0, 0, settings, profile=profile,\n    )
+    profile = load_dictionary_profile(preset="TimesCED", language="chi_tra")
+    entries, diagnostics = filter_headword_records(
+        records, band, 0, 0, settings, profile=profile,
+    )
     assert [entry.word for entry in entries] == ["波"]
     false_rows = [row for row in diagnostics if row.get("text", "").startswith("Âm: 花")]
     assert false_rows and false_rows[0]["accepted"] is False
