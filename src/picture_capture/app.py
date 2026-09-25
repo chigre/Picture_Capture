@@ -9240,7 +9240,7 @@ class PictureCaptureApp(tk.Tk):
         raw = self.page_list.cget("displaycolumns")
         display = tuple(self.tk.splitlist(raw))
         if not display or display == ("#all",):
-            display = tuple(self.page_list.cget("columns"))
+            display = tuple(self.tk.splitlist(self.page_list.cget("columns")))
         return str(display[display_index]) if 0 <= display_index < len(display) else None
 
     def _page_section_count_text(self, index: int) -> str:
@@ -9311,11 +9311,8 @@ class PictureCaptureApp(tk.Tk):
                 self.status_var.set("当前页 SECTION 已关闭（Section = 0）")
             return
 
-        if count > 0:
-            self._pending_section_editor_index = index
-            self._request_page_load(index)
-        else:
-            self._pending_section_editor_index = None
+        self._pending_section_editor_index = index if count > 0 else None
+        self._request_page_load(index, force=True)
 
     def _page_list_section_double_click(self, event: tk.Event) -> str | None:
         """Edit the page-level Section count directly from the page list."""
@@ -12249,7 +12246,7 @@ class PictureCaptureApp(tk.Tk):
             self._invalidate_ui_worker("page-load")
             self._set_page_list_selection(index, ensure_visible=True)
             return True
-        if self._pending_page_index == index:
+        if self._pending_page_index == index and not force:
             return True
         project = self.project
         page = project.images[index]
