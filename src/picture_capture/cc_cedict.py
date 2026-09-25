@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import gzip
 import json
+import os
 from pathlib import Path
 from .runtime_environment import legacy_user_data_roots, user_data_root
 import re
