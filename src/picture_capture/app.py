@@ -9976,10 +9976,10 @@ class PictureCaptureApp(tk.Tk):
             save_row, textvariable=ratio_var, width=6, justify="left"
         ).pack(side="left")
 
-        display_row = ttk.Frame(aux); display_row.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(2, 0))
-        ttk.Label(display_row, text="显示模式：").pack(side="left")
+        view_mode_row = ttk.Frame(aux); view_mode_row.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(2, 0))
+        ttk.Label(view_mode_row, text="显示模式：").pack(side="left")
         display_mode_combo = ttk.Combobox(
-            display_row,
+            view_mode_row,
             textvariable=self.display_mode_var,
             values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览"),
             state="readonly",
@@ -9988,7 +9988,7 @@ class PictureCaptureApp(tk.Tk):
         display_mode_combo.pack(side="left", padx=(0, 8))
         display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)
         dark_toggle = ttk.Checkbutton(
-            display_row,
+            view_mode_row,
             text="深色模式",
             variable=self.dark_mode_var,
             command=self._toggle_dark_mode,
