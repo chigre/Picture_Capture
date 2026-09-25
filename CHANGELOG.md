@@ -1,5 +1,13 @@
 ## v2.14.0
 
+### 环境中心
+
+- 将原来的 OCR/简化状态 messagebox 升级为可复用【环境中心】窗口，统一显示 PaddleOCR/PaddlePaddle、Google Lens、Tesseract、OpenCC、CC-CEDICT 与网络词典状态。
+- Tesseract 新增可操作安装引导：按 Windows/WinGet、macOS/Homebrew、Linux apt/dnf/pacman 给出保守安装建议；当前项目语言包缺失时可直接查看/复制对应语言包命令或打开 tessdata_fast。
+- 环境中心支持直接选择 Tesseract 可执行程序、启动/提示当前平台 OCR 安装器、进入 OCR 设置、安装/更新 CC-CEDICT、复制完整诊断信息。
+- 系统级 Tesseract 安装保持显式用户操作，不在后台静默执行 winget/brew/apt；Paddle/Google Lens/OpenCC 仍由项目 uv 环境管理。
+- 新环境中心跟随全局深色模式与 Windows 原生标题栏外观，并继续把耗时环境检测放到后台 worker。
+
 ### 跨平台安装与验证
 
 - OCR 安装逻辑统一到 `scripts/ocr_setup.py`；Windows 旧入口保留兼容包装，新增 Linux `install_ocr_linux.sh/run_linux.sh` 与 macOS `install_ocr_macos.command/run_macos.command`。
@@ -133,7 +141,7 @@
 - 【使用提示】不再弹出一整段 messagebox 文本，改为独立的现代化使用指南窗口：左侧任务导航、右侧卡片式说明、当前项目状态与滚动内容区。
 - 指南按“快速开始 / 画线与 OCR / 校对与词表 / 插图与切图 / 后期制作 / 导航与排错”组织，直接对应 Picture Capture 的真实工作流，而不是按内部参数罗列。
 - 新增指南内搜索，可按 OCR、校对、切图、插图、PicDic、缓存等关键词快速定位说明。
-- 底部提供【项目Profile】【检测版面参数】【检测 OCR 引擎】【设置中心】快捷入口；未打开项目时会自动禁用需要项目上下文的入口。
+- 底部提供【项目Profile】【检测版面参数】【环境中心】【设置中心】快捷入口；未打开项目时会自动禁用需要项目上下文的入口。
 - 【使用提示】按钮新增悬停说明；指南窗口复用同一实例，支持 Esc 关闭，并根据当前项目/页码动态更新状态。
 - 清理旧的 `OCR_USAGE_HELP` 长文本和未实际使用的悬浮提示代码，避免帮助内容继续分散维护。
 
@@ -157,7 +165,7 @@
 - 【常用】补回与主界面一致的“正文结束 Y”，并明确它是正文识别下界，不等同于【切图设置】中的切图下边界。
 - 有明确范围的数值设置改为 Spinbox，并直接显示 px / % / 秒 / 栏等单位，降低首次使用时对数值含义和合法范围的猜测。
 - 【默认画线方式】由内部术语下拉框改为“普通画线（左缘规则）/ OCR画线（识别词头）”两项直观选择，并直接说明各自适用场景。
-- 设置中心底部移除重复的【检测 OCR 引擎】和语义冲突的【保存并关闭】；改为“自动保存状态 + 校验当前设置 + 关闭”。关闭、Esc 和窗口关闭按钮都会先校验，避免无效值静默未保存。
+- 设置中心底部移除重复的【环境中心】和语义冲突的【保存并关闭】；改为“自动保存状态 + 校验当前设置 + 关闭”。关闭、Esc 和窗口关闭按钮都会先校验，避免无效值静默未保存。
 - Ctrl+S 不再关闭设置中心，而是执行当前设置校验并保存。
 
 ### 画线准确率、效率与设置中心重构
@@ -219,7 +227,7 @@
 - 保留 v2.13.0 的 `uv` / `.venv` / Python 3.13 / `uv.lock` 安装体系，不恢复旧版全局 pip、requirements 或多个安装脚本。
 - Windows 启动改为 `uv run --locked python run.py`，确保日常运行直接使用项目锁文件与项目专属 `.venv`。
 - 修正文档中 GPU Paddle 安装说明：`paddleocr` extra 是 CPU 预设，会安装 `paddlepaddle==3.3.0`；GPU 用户不应与该 CPU extra 叠加，避免 CPU/GPU runtime 同时提供 `paddle` 模块。
-- 修正【OCR / 简化环境状态】里仍遗留的旧 `pip/run_windows 自动修复 OpenCC` 提示，统一改为 uv 环境下的 `uv sync` / `uv sync --reinstall-package opencc` 处理方式。
+- 修正【环境中心】里仍遗留的旧 `pip/run_windows 自动修复 OpenCC` 提示，统一改为 uv 环境下的 `uv sync` / `uv sync --reinstall-package opencc` 处理方式。
 
 ### CC-CEDICT 繁体→简体词形比较
 
@@ -290,7 +298,7 @@
 - CC-CEDICT 为全用户项目共享资源，默认安装在 `%LOCALAPPDATA%\PictureCapture\dictionaries\cc-cedict\`，不写入项目目录 `_PictureCapture`。
 - 程序不会自动抓取 MDBG 网站；点击 `CC-CEDICT(未装)` 后，可选择已下载的官方 ZIP/GZ/TXT/U8 文件安装，或打开官方下载页。
 - 安装时先验证 CC-CEDICT 格式与条目数量，再原子替换本地数据库；保留来源、许可和安装时间元数据。
-- 【OCR / 简化环境状态】新增 CC-CEDICT 安装状态、条目数与本地路径显示。
+- 【环境中心】新增 CC-CEDICT 安装状态、条目数与本地路径显示。
 - CC-CEDICT 数据遵循 CC BY-SA 4.0；程序仅本地读取，不修改词典内容。
 
 ### 回归验证
@@ -299,7 +307,7 @@
 - 传统 `run_tests.py`：**70 passed**。
 ## v2.12.7
 
-- 修复【OCR / 简化环境状态】显示 OpenCC 已安装、但校对界面却显示“OpenCC未安装”的矛盾状态。此前环境窗口只检查 pip 分发包元数据，而校对模块会把任何 OpenCC 初始化异常都误标为“未安装”。
+- 修复【环境中心】显示 OpenCC 已安装、但校对界面却显示“OpenCC未安装”的矛盾状态。此前环境窗口只检查 pip 分发包元数据，而校对模块会把任何 OpenCC 初始化异常都误标为“未安装”。
 - 环境检测现在执行真实运行测试：导入 `opencc`、加载 `t2s.json` 并完成一次实际转换；若失败会显示具体初始化错误。
 - 校对界面的错误提示改为“OpenCC不可用”，准确区分“包未安装”和“运行初始化失败”。
 - 修复官方 OpenCC 与旧 `opencc-python-reimplemented` 共享模块名时的迁移隐患：卸载旧包后强制重装官方 OpenCC，避免 pip 元数据仍存在但共享 `opencc` 模块文件已被旧包卸载过程删除。
@@ -311,7 +319,7 @@
 - 简化引擎从第三方 `opencc-python-reimplemented` 切换为 OpenCC 官方 Python 包 `opencc>=1.4.2,<2`。
 - 转换配置改为官方标准 `t2s.json`，继续使用 OpenCC 的词组/上下文优先转换规则，而不是逐字机械替换。
 - `run_windows.bat` 会先检测并卸载旧的 `opencc-python-reimplemented`，再安装官方 OpenCC，避免两个发行包都提供 `opencc` 同名模块造成环境混用。
-- 【检测引擎】窗口扩展为【OCR / 简化环境状态】，显示官方 OpenCC 版本与 `t2s.json（词组优先）` 配置；若仍检测到旧兼容包会明确警告。
+- 【检测引擎】窗口扩展为【环境中心】，显示官方 OpenCC 版本与 `t2s.json（词组优先）` 配置；若仍检测到旧兼容包会明确警告。
 - 校对界面的简化数据格式、自动保存、人工编辑、网络查询以及与原词条的逐行同步逻辑均保持不变。
 
 ### 兼容性
