@@ -1,5 +1,20 @@
 ## v2.14.0
 
+### Runtime portability hardening
+
+- PaddleOCR 的 CPU/GPU 设备从“项目参数”改为**本机运行时自动解析**；旧项目中的 `paddle_device` 继续兼容读取但不再决定当前机器设备，避免 GPU 项目迁移到 macOS/CPU 机器后错误尝试 GPU，也避免已安装 GPU runtime 却因项目保存 `cpu` 而继续走 CPU。
+- Tesseract 可执行程序改为本机 runtime 设置；项目里残留的 Windows/macOS/Linux 绝对路径失效时，会继续尝试当前机器 PATH 与常见安装位置。环境中心选择 Tesseract 后不再回写项目 settings。
+- 外部 `wordslist_path` 若是另一操作系统的绝对路径，不再错误拼到当前项目路径；项目内 `wordslist.txt` 存在时自动回退，并加入唯一大小写不敏感解析。
+- 旧 Windows 项目的 PDIC/PPP、`_WordsOfPages.txt`、QT/TrainingExports 及 PicDic `.PWWords` 等增加大小写兼容读取，降低迁移到 Linux/macOS 大小写敏感文件系统后的“文件存在但找不到”问题。
+- Windows 启动/安装 BAT 改用 `pushd/popd`，支持从 UNC/NAS 网络共享路径运行；Linux 环境中心复制安装命令改用 shell-safe quoting。
+- 环境中心不再假设 `environment_center.py` 一定位于源码仓库固定层级；Release/source 可发现安装脚本，wheel/site-packages 安装则给出对应说明，不再查错目录。
+- 新增跨平台 secondary-click helper，macOS 同时兼容 Button-2/Button-3/Control-click；主画布与页面列表右键菜单统一使用该入口。
+- 主界面、校对、插图标签与等宽文本控件增加“配置字体 → 平台候选字体 → Tk 默认字体”运行时 fallback，项目字体配置本身不被改写。
+- 主窗口、设置中心与主要 Toplevel 使用可用工作区约束；Windows 使用真实 work area，macOS/Linux 预留菜单栏/Dock/panel 安全边距。
+- 用户级会话/最近项目/runtime 配置迁入平台原生配置目录，并保留旧路径读取；macOS CC-CEDICT 新安装使用 `~/Library/Application Support/PictureCapture`，旧 Unix 风格目录仍可读取。
+- CI 新增真实 Tk GUI construction smoke：三平台创建主窗口、环境中心、设置中心与使用指南；Linux 通过 Xvfb 运行。
+- 新增 runtime portability 回归测试，覆盖 foreign absolute path、Tesseract stale path fallback、平台原生用户目录、UNC launcher、大小写 sidecar 与 wheel/source 布局。
+
 ### 环境中心
 
 - 将原来的 OCR/简化状态 messagebox 升级为可复用【环境中心】窗口，统一显示 PaddleOCR/PaddlePaddle、Google Lens、Tesseract、OpenCC、CC-CEDICT 与网络词典状态。
