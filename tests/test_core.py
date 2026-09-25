@@ -3857,9 +3857,9 @@ def test_v2103_review_wordslist_uses_virtual_window_and_cached_membership():
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
     assert "self.word_window_radius = 250" in review
-    assert 'text="前500"' in review and 'text="后500"' in review
+    assert 'text="前100"' in review and 'text="后100"' in review
+    assert "step = 100" in review
     assert "def _show_wordslist_window" in review
-    assert "右侧仅显示当前词附近" in review
     assert "words = self.parent._project_words if self.parent.project else set()" in review
     assert "set(self.parent.project.words if self.parent.project else [])" not in review
 
@@ -6046,9 +6046,28 @@ def test_review_network_status_uses_single_line_result_block():
     assert "wraplength=" not in network_label
 
     assert "self.wordslist_label_var" not in review
-    assert 'self.word_window_var = tk.StringVar(value="词表（wordslist.txt） | 显示 0-0 / 0")' in review
-    assert 'f"词表（{path.name}） | 显示 {start + 1}-{end} / {len(words)}"' in review
-    assert "右侧仅显示当前词附近" not in review
+    assert 'self.word_window_var = tk.StringVar(value="wordslist.txt | 0-0 / 0")' in review
+    assert 'f"{path.name} | {start + 1}-{end} / {len(words)}"' in review
+    assert 'text="前100"' in review and 'text="后100"' in review
+    assert "词表（" not in review
+    assert "| 显示 " not in review
+
+
+def test_v2140_reference_list_shows_smaller_line_numbers_before_words():
+    from pathlib import Path
+    import inspect
+    import picture_capture.app as app_module
+
+    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    start = text.index("class ReviewWindow")
+    end = text.index("class OCRConflictReviewDialog", start)
+    review = text[start:end]
+    assert "self.word_list = tk.Text(" in review
+    assert '"wordslist_number", font=(number_family, 10)' in review
+    assert 'f"{global_index + 1:>{digits}}", ("wordslist_number",)' in review
+    assert 'f"  {words[global_index]}", ("wordslist_word",)' in review
+    assert "def _word_list_local_index_from_event" in review
+    assert "self.word_selected_local_index" in review
 
 
 def test_v2128_review_network_toolbar_has_compact_source_badges():
