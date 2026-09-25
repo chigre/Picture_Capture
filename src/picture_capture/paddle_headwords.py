@@ -2138,7 +2138,20 @@ def _leading_cjk_ideograph(text: str) -> str:
     start the OCR record.
     """
     normalized = unicodedata.normalize("NFKC", text or "").lstrip()
-    return normalized[0] if normalized and _is_single_cjk_ideograph(normalized[0]) else ""
+    if not normalized or not _is_single_cjk_ideograph(normalized[0]):
+        return ""
+    tail = normalized[1:].lstrip()
+    if not tail:
+        return normalized[0]
+    # A rescue record may append pinyin/pronunciation to the display glyph, but
+    # ordinary Chinese prose beginning with several Han characters is not a
+    # single-character headword record.
+    first_tail = tail[0]
+    if _is_single_cjk_ideograph(first_tail):
+        return ""
+    if first_tail.isalpha() or first_tail in "([（［/·,，:：":
+        return normalized[0]
+    return ""
 
 
 def _cjk_visual_projection_runs(
