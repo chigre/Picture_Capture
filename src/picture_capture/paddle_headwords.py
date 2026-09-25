@@ -2262,14 +2262,23 @@ def _cjk_word_for_visual_run(
         distance = abs(record_center - center)
 
         parsed = parse_headword_text(record.text, settings, profile=profile)
+        profile_pinyin = None
+        if (
+            profile is not None
+            and "pinyin_after_headword" in set(profile.headword_features)
+        ):
+            # The visual rescue must honor the same explicit Project Profile
+            # feature even when the generic parser path declines the short OCR
+            # fragment.  This direct structural check remains narrow: one Han
+            # glyph at the record start followed by romanization.
+            profile_pinyin = _parse_cjk_single_with_pinyin(record.text, settings)
+        if profile_pinyin is not None:
+            parsed = profile_pinyin
         parsed_single = bool(
             parsed and _is_single_cjk_ideograph(parsed.normalized)
         )
         profile_pinyin_single = bool(
-            parsed_single
-            and parsed is not None
-            and parsed.parser_stage == "cjk_single_with_pinyin"
-            and profile is not None
+            profile_pinyin is not None and parsed_single
         )
         word = parsed.normalized if parsed_single else _leading_cjk_ideograph(record.text)
         if not word:
