@@ -217,9 +217,7 @@ def apply_classic_widget_appearance(root: tk.Misc, mode: object) -> None:
             stack.extend(widget.winfo_children())
         except tk.TclError:
             continue
-        if isinstance(widget, ttk.Widget):
-            continue
-
+        is_ttk = isinstance(widget, ttk.Widget)
         original = getattr(widget, "_pc_light_theme_options", None)
         if normalized == "light":
             if isinstance(original, dict):
@@ -240,13 +238,23 @@ def apply_classic_widget_appearance(root: tk.Misc, mode: object) -> None:
                 keys = set(widget.keys())
             except tk.TclError:
                 keys = set()
-            for option in _CLASSIC_COLOR_OPTIONS:
+            candidate_options = (
+                ("foreground",)
+                if is_ttk
+                else _CLASSIC_COLOR_OPTIONS
+            )
+            for option in candidate_options:
                 if option not in keys:
                     continue
                 try:
-                    original[option] = widget.cget(option)
+                    value = widget.cget(option)
                 except tk.TclError:
-                    pass
+                    continue
+                # Empty ttk foreground/background values mean “inherit from
+                # Style”; leave those to the global ttk theme.
+                if is_ttk and not str(value or "").strip():
+                    continue
+                original[option] = value
             try:
                 setattr(widget, "_pc_light_theme_options", original)
             except Exception:
