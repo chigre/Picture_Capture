@@ -9125,11 +9125,11 @@ class PictureCaptureApp(tk.Tk):
             command=lambda: self._apply_page_list_display_columns(save=True),
         )
         menu.add_checkbutton(
-            label="填充状态", variable=self._page_column_vars["fill_status"],
+            label="插图", variable=self._page_column_vars["illustrations"],
             command=lambda: self._apply_page_list_display_columns(save=True),
         )
         menu.add_checkbutton(
-            label="插图", variable=self._page_column_vars["illustrations"],
+            label="填充状态", variable=self._page_column_vars["fill_status"],
             command=lambda: self._apply_page_list_display_columns(save=True),
         )
         try:
