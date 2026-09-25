@@ -2340,10 +2340,20 @@ class SettingsDialog(tk.Toplevel):
         *,
         intro: str = "",
         help_images: bool = False,
+        single_line_labels: bool = False,
     ) -> ttk.LabelFrame:
         group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
         group.pack(fill="x", pady=(0, 10))
         group.columnconfigure(1, weight=1)
+        if single_line_labels and names:
+            label_font = font.nametofont("TkDefaultFont")
+            longest_label_width = max(
+                label_font.measure(
+                    f"{self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])}："
+                )
+                for name in names
+            )
+            group.columnconfigure(0, minsize=longest_label_width + 4)
         row = 0
         if intro:
             intro_label = ttk.Label(
@@ -2363,7 +2373,7 @@ class SettingsDialog(tk.Toplevel):
                 text=f"{label}：",
                 justify="right",
                 anchor="e",
-                wraplength=180,
+                wraplength=0 if single_line_labels else 180,
             )
             label_widget.grid(row=row, column=0, sticky="e", padx=(0, 10), pady=5)
 
@@ -2870,7 +2880,7 @@ class SettingsDialog(tk.Toplevel):
         appearance_group.pack(fill="x", pady=(0, 10))
         ttk.Checkbutton(
             appearance_group,
-            text="深色模式（夜间校对）",
+            text="深色模式（夜间模式）",
             variable=self.parent.dark_mode_var,
             command=self.parent._toggle_dark_mode,
         ).pack(anchor="w")
@@ -2881,7 +2891,12 @@ class SettingsDialog(tk.Toplevel):
             wraplength=720,
             justify="left",
         ).pack(anchor="w", fill="x", pady=(4, 0))
-        self._add_setting_group(display, "界面与校对", self.DISPLAY_FIELDS)
+        self._add_setting_group(
+            display,
+            "界面与校对",
+            self.DISPLAY_FIELDS,
+            single_line_labels=True,
+        )
         self._add_check_group(
             display,
             "显示行为",
@@ -8841,6 +8856,8 @@ class PictureCaptureApp(tk.Tk):
         self.page_list.bind("<MouseWheel>", self._list_mousewheel)
         bind_context_menu(self.page_list, self._page_list_right_click)
         self.page_list.bind("<Configure>", self._page_list_configured)
+        self.page_list.bind("<Motion>", self._page_list_section_heading_motion, add="+")
+        self.page_list.bind("<Leave>", self._hide_page_list_section_heading_hint, add="+")
         self._page_column_vars = {
             "lined": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_lined", True))),
             "fill_status": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_fill_status", False))),
@@ -8918,6 +8935,7 @@ class PictureCaptureApp(tk.Tk):
         vbar.grid(row=0, column=1, sticky="ns"); hbar.grid(row=1, column=0, sticky="ew")
         viewer.rowconfigure(0, weight=1); viewer.columnconfigure(0, weight=1)
         self.canvas.bind("<Button-1>", self.canvas_left_click)
+        self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
         bind_context_menu(self.canvas, self.canvas_right_click)
@@ -9057,6 +9075,40 @@ class PictureCaptureApp(tk.Tk):
                     break
         for column, width in zip(visible, widths):
             self.page_list.column(column, width=max(24, int(width)), stretch=False)
+
+    def _hide_page_list_section_heading_hint(self, _event=None) -> None:
+        popup = getattr(self, "_page_list_section_heading_hint", None)
+        if popup is not None:
+            try:
+                popup.destroy()
+            except tk.TclError:
+                pass
+        self._page_list_section_heading_hint = None
+
+    def _page_list_section_heading_motion(self, event: tk.Event) -> None:
+        """Show the SECTION edit hint only while the pointer is over its heading."""
+        try:
+            over_section = (
+                self.page_list.identify_region(event.x, event.y) == "heading"
+                and self._page_list_column_at(event.x) == "section"
+            )
+        except tk.TclError:
+            over_section = False
+        if not over_section:
+            self._hide_page_list_section_heading_hint()
+            return
+        if getattr(self, "_page_list_section_heading_hint", None) is not None:
+            return
+        tip = tk.Toplevel(self.page_list)
+        tip.wm_overrideredirect(True)
+        tip.wm_geometry(f"+{event.x_root + 12}+{event.y_root + 18}")
+        ttk.Label(
+            tip,
+            text="双击进入Section编辑模式",
+            padding=(7, 4),
+            relief="solid",
+        ).pack()
+        self._page_list_section_heading_hint = tip
 
     def _page_list_right_click(self, event: tk.Event) -> str | None:
         """Right-click a heading to choose which optional list columns are visible."""
@@ -9256,7 +9308,7 @@ class PictureCaptureApp(tk.Tk):
             self.redraw()
             if count > 0:
                 self.status_var.set(
-                    f"SECTION 编辑：当前页 {count} 个；拖动蓝色上下边界，再次双击 Section 单元格结束。"
+                    f"SECTION 编辑：当前页 {count} 个；拖动虚线定位Section，双击左键确认并退出编辑。"
                 )
             else:
                 self.status_var.set("当前页 SECTION 已关闭（Section = 0）")
@@ -9281,18 +9333,14 @@ class PictureCaptureApp(tk.Tk):
             return "break"
 
         if index == self.current_index and self._section_editing:
-            self._persist_current_page_sections()
-            self._set_section_editing(False)
-            self.status_var.set(
-                f"SECTION 编辑完成：当前页 {len(self.page_sections)} 个 SECTION"
-            )
-            self.redraw()
+            self._finish_section_editing()
             return "break"
 
         current_count = len(read_page_sections(page))
         count = simpledialog.askinteger(
             "Section",
-            f"{page.name}\nSection 数量（0 = 关闭；1–10 = 启用）：",
+            f"{page.name}\nSection 数量（0 = 关闭；1–10 = 启用）：\n\n"
+            "确认后：拖动虚线定位Section，双击左键确认并退出编辑。",
             parent=self, initialvalue=current_count, minvalue=0, maxvalue=10,
         )
         if count is None:
@@ -12394,7 +12442,7 @@ class PictureCaptureApp(tk.Tk):
                 self._set_section_editing(True)
                 self.redraw()
                 self.status_var.set(
-                    f"SECTION 编辑：当前页 {len(self.page_sections)} 个；拖动蓝色上下边界，再次双击 Section 单元格结束。"
+                    f"SECTION 编辑：当前页 {len(self.page_sections)} 个；拖动虚线定位Section，双击左键确认并退出编辑。"
                 )
         try:
             touch_recent_project(
@@ -13569,6 +13617,7 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def _set_section_editing(self, active: bool) -> None:
+        was_editing = bool(getattr(self, "_section_editing", False))
         self._section_editing = bool(active)
         self._drag_section_boundary = None
         try:
@@ -13584,6 +13633,48 @@ class PictureCaptureApp(tk.Tk):
                 self.canvas.delete("cursor-guide")
             except tk.TclError:
                 pass
+        elif was_editing:
+            # Restore the ordinary pointer and coordinate crosshair immediately
+            # at the current pointer position; the user should not have to move
+            # the mouse once just to make the guides reappear.
+            try:
+                self.after_idle(self._restore_cursor_guides_after_section_edit)
+            except tk.TclError:
+                pass
+
+    def _restore_cursor_guides_after_section_edit(self) -> None:
+        if self._section_editing or self.image is None:
+            return
+        try:
+            self.canvas.configure(cursor="")
+            widget_x = self.canvas.winfo_pointerx() - self.canvas.winfo_rootx()
+            widget_y = self.canvas.winfo_pointery() - self.canvas.winfo_rooty()
+            if not (
+                0 <= widget_x < self.canvas.winfo_width()
+                and 0 <= widget_y < self.canvas.winfo_height()
+            ):
+                return
+            canvas_x = self.canvas.canvasx(widget_x)
+            canvas_y = self.canvas.canvasy(widget_y)
+            display_width = self.image.width * self.view_scale
+            display_height = self.image.height * self.view_scale
+            if not (0 <= canvas_x < display_width and 0 <= canvas_y < display_height):
+                return
+            self.cursor_canvas_xy = (canvas_x, canvas_y)
+            self.draw_cursor_guides(canvas_x, canvas_y)
+        except tk.TclError:
+            return
+
+    def _finish_section_editing(self) -> bool:
+        if not self._section_editing:
+            return False
+        self._persist_current_page_sections()
+        self._set_section_editing(False)
+        self.status_var.set(
+            f"SECTION 编辑完成：当前页 {len(self.page_sections)} 个 SECTION"
+        )
+        self.redraw()
+        return True
 
     def _draw_page_sections(self, geometry=None) -> None:
         """Draw page-local SECTION bounds in source space on the main canvas."""
@@ -13716,6 +13807,16 @@ class PictureCaptureApp(tk.Tk):
                 )
             self.status_var.set("已退出插图多边形绘制模式")
         self.redraw()
+
+    def canvas_left_double_click(self, event: tk.Event) -> str | None:
+        """Finish SECTION editing by double-clicking anywhere on the page image."""
+        if not self._section_editing or self.image is None:
+            return None
+        x, y = self.original_xy(event)
+        if not (0 <= x < self.image.width and 0 <= y < self.image.height):
+            return None
+        self._finish_section_editing()
+        return "break"
 
     def canvas_left_click(self, event: tk.Event) -> None:
         if not self.guard():
