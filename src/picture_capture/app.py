@@ -3134,12 +3134,6 @@ class SettingsDialog(tk.Toplevel):
     def refresh_appearance(self) -> None:
         """Apply the global appearance without touching unsaved setting values."""
         self._configure_settings_appearance_styles()
-        base = appearance_palette(self.parent.appearance_mode)
-        for canvas in getattr(self, "_settings_canvases", {}).values():
-            try:
-                canvas.configure(bg=base["surface"] if self.parent.appearance_mode == "dark" else "")
-            except tk.TclError:
-                pass
         self.parent._apply_current_appearance(self)
         self._schedule_settings_help_image_render()
 
@@ -7894,6 +7888,10 @@ class PictureCaptureApp(tk.Tk):
         self._configure_global_appearance()
         self._configure_main_workspace_styles()
 
+        # First let the reversible classic-Tk mapper capture/restore the stable
+        # light baselines. Only then apply the few surfaces whose desired dark
+        # colour is intentionally different from the generic mapping.
+        self._apply_current_appearance(self)
         palette = appearance_palette(normalized)
         for name, color_key in (
             ("sidebar_canvas", "bg"),
@@ -7942,12 +7940,12 @@ class PictureCaptureApp(tk.Tk):
 
         self.photo = None
         self._display_photo_cache_key = None
-        self._apply_current_appearance(self)
         self._schedule_page_cell_overlay_refresh()
         if self.image is not None:
             self.redraw()
         if persist:
             self._save_session_state()
+
 
     def _configure_main_workspace_styles(self) -> None:
         """Configure a scoped, dense visual system for the main workspace only.
