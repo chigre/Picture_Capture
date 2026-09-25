@@ -1893,3 +1893,75 @@ def test_project_profile_legacy_workers_drop_results_while_closing():
         next_def = text.find("\n    def ", start + 8)
         block = text[start: next_def if next_def >= 0 else len(text)]
         assert "_closing" in block
+
+
+
+def test_crop_file_transaction_rolls_back_complete_previous_set(tmp_path, monkeypatch):
+    from picture_capture.processing import _publish_file_transaction
+
+    first = tmp_path / "page_SW_000.png"
+    second = tmp_path / "page.PSWords"
+    stale = tmp_path / "page_SW_999.png"
+    first.write_text("old-image", encoding="utf-8")
+    second.write_text("old-manifest", encoding="utf-8")
+    stale.write_text("old-stale", encoding="utf-8")
+    first_tmp = tmp_path / ".first.tmp"
+    second_tmp = tmp_path / ".second.tmp"
+    first_tmp.write_text("new-image", encoding="utf-8")
+    second_tmp.write_text("new-manifest", encoding="utf-8")
+
+    import os
+    real_replace = os.replace
+
+    def fail_second_publish(src, dst):
+        if Path(src) == second_tmp:
+            raise OSError("injected manifest publish failure")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr("picture_capture.processing.os.replace", fail_second_publish)
+    try:
+        _publish_file_transaction(
+            [(first_tmp, first), (second_tmp, second)],
+            stale_paths=[stale],
+        )
+    except OSError:
+        pass
+    else:
+        raise AssertionError("expected injected publish failure")
+
+    assert first.read_text(encoding="utf-8") == "old-image"
+    assert second.read_text(encoding="utf-8") == "old-manifest"
+    assert stale.read_text(encoding="utf-8") == "old-stale"
+    assert not list(tmp_path.glob(".*.bak"))
+    assert not first_tmp.exists()
+    assert not second_tmp.exists()
+
+
+def test_crop_exports_stage_pngs_manifest_and_crop_plan_before_publish():
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "src" / "picture_capture" / "processing.py").read_text(encoding="utf-8")
+
+    assert "def _publish_file_transaction(" in text
+    assert "def _stage_page_crop_plan(" in text
+    assert "uuid.uuid4().hex" in text
+
+    single_start = text.index("def split_single_lines(")
+    single_end = text.index("\ndef _special_bounds", single_start)
+    single = text[single_start:single_end]
+    assert "_stage_crop(" in single
+    assert "_stage_text_file(" in single
+    assert "_publish_file_transaction(" in single
+
+    whole_start = text.index("def split_whole_entries(")
+    whole_end = text.index("\ndef append_crop_log", whole_start)
+    whole = text[whole_start:whole_end]
+    assert "_stage_page_crop_plan(" in whole
+    assert "_publish_file_transaction(" in whole
+    assert '.PWWords"' in whole
+
+    ill_start = text.index("def split_illustrations(")
+    ill_end = text.index("\ndef append_illustration_crop_log", ill_start)
+    illustrations = text[ill_start:ill_end]
+    assert "_stage_page_crop_plan(" in illustrations
+    assert "_publish_file_transaction(" in illustrations
+    assert '.PPPictures"' in illustrations
