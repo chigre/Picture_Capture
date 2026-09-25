@@ -4897,8 +4897,9 @@ def test_review_toolbar_controls_are_grouped_by_function():
     display = build[display_start:display_end]
     assert display.index("zoom_row = ttk.Frame(") < display.index("padding_row = ttk.Frame(")
     assert display.index("padding_row = ttk.Frame(") < display.index("font_row = ttk.Frame(")
-    assert 'text="文本左边距：", style="PCR.Body.TLabel"' in display
-    assert 'text="上下边距：", style="PCR.Body.TLabel"' in display
+    assert 'text="文本左边距：", style="PCR.Black.TLabel"' in display
+    assert 'text="上下边距：", style="PCR.Black.TLabel"' in display
+    assert 'foreground="#000000" if self.parent.appearance_mode != "dark" else colors["text"]' in review
 
     ocr_start = build.index('right, "ocr", "OCR结果"')
     ocr_end = build.index('right, "network", "网络词汇核验（免费，无需 Token）"', ocr_start)
@@ -4997,8 +4998,9 @@ def test_review_screenshot_polish_prevents_right_pane_clipping():
     assert "crop_height_row = ttk.Frame(" in build
     assert 'text="普通词条行切图高："' in build
     assert 'text="单字行高："' in build
-    assert "ref_fill_row = ttk.Frame(" in build
-    assert 'ref_fill_row, text="从所选词开始填充至本页结束"' in build
+    assert "ref_fill_row = ttk.Frame(" not in build
+    assert 'ref_actions, text="从所选词开始填充至本页结束"' in build
+    assert build.index('text="定位："') < build.index('ref_actions, text="从所选词开始填充至本页结束"')
 
     network_start = build.index("        network_actions = ttk.Frame(")
     network_end = build.index("        self.network_status_label", network_start)
@@ -6037,10 +6039,10 @@ def test_review_network_status_uses_single_line_result_block():
     assert "height=2" not in network_label
     assert "wraplength=" not in network_label
 
-    wordslist_label_start = review.index("        self.wordslist_label_var = tk.StringVar")
-    wordslist_label_end = review.index("        word_nav = ttk.Frame(", wordslist_label_start)
-    wordslist_label = review[wordslist_label_start:wordslist_label_end]
-    assert "wraplength=" not in wordslist_label
+    assert "self.wordslist_label_var" not in review
+    assert 'self.word_window_var = tk.StringVar(value="词表（wordslist.txt） | 显示 0-0 / 0")' in review
+    assert 'f"词表（{path.name}） | 显示 {start + 1}-{end} / {len(words)}"' in review
+    assert "右侧仅显示当前词附近" not in review
 
 
 def test_v2128_review_network_toolbar_has_compact_source_badges():
