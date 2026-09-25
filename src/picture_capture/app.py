@@ -7959,6 +7959,15 @@ class PictureCaptureApp(tk.Tk):
             except tk.TclError:
                 pass
 
+        recent_dialog = self.__dict__.get("_recent_projects_dialog")
+        recent_rebuild = self.__dict__.get("_recent_projects_rebuild")
+        if recent_dialog is not None and callable(recent_rebuild):
+            try:
+                if recent_dialog.winfo_exists():
+                    recent_rebuild()
+            except tk.TclError:
+                pass
+
         self.photo = None
         self._display_photo_cache_key = None
         self._schedule_page_cell_overlay_refresh()
@@ -11139,6 +11148,7 @@ class PictureCaptureApp(tk.Tk):
         dialog = tk.Toplevel(self)
         dialog.title("已有项目")
         dialog.transient(self)
+        self._recent_projects_dialog = dialog
 
         screen_w = max(900, int(dialog.winfo_screenwidth()))
         screen_h = max(650, int(dialog.winfo_screenheight()))
@@ -11417,6 +11427,7 @@ class PictureCaptureApp(tk.Tk):
                 content.bind("<Configure>", update_wrap, add="+")
                 self._attach_tooltip(path_label, "项目路径；单击打开项目。" if exists else "该路径当前不存在。")
             canvas.yview_moveto(0.0)
+            self._apply_current_appearance(dialog)
 
         def refresh_recent_data() -> None:
             count_var.set("正在后台读取最近项目…")
@@ -11468,6 +11479,14 @@ class PictureCaptureApp(tk.Tk):
                     pass
             self._start_ui_worker(key, worker, done, failed)
 
+        self._recent_projects_rebuild = rebuild
+
+        def clear_recent_refs(_event=None) -> None:
+            if self.__dict__.get("_recent_projects_dialog") is dialog:
+                self.__dict__.pop("_recent_projects_dialog", None)
+                self.__dict__.pop("_recent_projects_rebuild", None)
+
+        dialog.bind("<Destroy>", clear_recent_refs, add="+")
         search_var.trace_add("write", rebuild)
         search_entry.bind("<Escape>", lambda _event: search_var.set(""))
         dialog.bind(
