@@ -15,6 +15,10 @@ from picture_capture.app import (
     transformed_geometry_pending, scaled_overlay_line_width, review_auto_fit_zoom,
 )
 from picture_capture.models import AppSettings, Entry, PolygonRegion, ProjectState
+from picture_capture.ui_compat import (
+    AUTO_FONT_FAMILY, normalize_content_font_setting,
+    recommended_content_font_candidates,
+)
 from picture_capture.page_sections import (
     PageSection, build_reading_lanes, read_page_sections, write_page_sections,
 )
@@ -4729,14 +4733,14 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert settings.main_entry_width_chars == 18
     assert settings.main_entry_x_ratio == 0.66
 
-    # Fresh-project content typography is deliberately consistent.
-    assert settings.main_entry_font_family == "DengXian"
+    # Fresh projects use one automatic platform/language font policy.
+    assert settings.main_entry_font_family == AUTO_FONT_FAMILY
     assert settings.main_entry_font_size == 16
-    assert settings.illustration_label_font_family == "DengXian"
+    assert settings.illustration_label_font_family == AUTO_FONT_FAMILY
     assert settings.illustration_label_font_size == 16
-    assert settings.review_entry_font_family == "DengXian"
+    assert settings.review_entry_font_family == AUTO_FONT_FAMILY
     assert settings.review_entry_font_size == 16
-    assert settings.review_simplified_font_family == "DengXian"
+    assert settings.review_simplified_font_family == AUTO_FONT_FAMILY
     assert settings.review_simplified_font_size == 16
 
     assert settings.show_illustration_labels is False
@@ -4765,6 +4769,45 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'bg=str(editor.cget("bg"))' in app_text
     assert 'record["index_widget"] = index_label' in app_text
     assert 'index_widget.configure(bg=bg)' in app_text
+
+
+def test_platform_language_font_recommendations_and_auto_normalization():
+    assert normalize_content_font_setting("") == AUTO_FONT_FAMILY
+    assert normalize_content_font_setting("auto") == AUTO_FONT_FAMILY
+    assert normalize_content_font_setting("自动") == AUTO_FONT_FAMILY
+    assert normalize_content_font_setting("Cambria") == "Cambria"
+
+    assert recommended_content_font_candidates("chi_sim", "Windows")[0] == "Microsoft YaHei UI"
+    assert recommended_content_font_candidates("chi_tra", "Windows")[0] == "Microsoft JhengHei UI"
+    assert recommended_content_font_candidates("jpn", "Windows")[0] == "Yu Gothic UI"
+    assert recommended_content_font_candidates("kor", "Windows")[0] == "Malgun Gothic"
+    assert recommended_content_font_candidates("eng", "Windows")[0] == "Segoe UI"
+
+    assert recommended_content_font_candidates("chi_sim", "Darwin")[0] == "PingFang SC"
+    assert recommended_content_font_candidates("chi_tra", "Darwin")[0] == "PingFang TC"
+    assert recommended_content_font_candidates("jpn", "Darwin")[0] == "Hiragino Sans"
+    assert recommended_content_font_candidates("kor", "Darwin")[0] == "Apple SD Gothic Neo"
+    assert recommended_content_font_candidates("eng", "Darwin")[0] == "Helvetica Neue"
+
+    assert recommended_content_font_candidates("chi_sim", "Linux")[0] == "Noto Sans CJK SC"
+    assert recommended_content_font_candidates("chi_tra", "Linux")[0] == "Noto Sans CJK TC"
+    assert recommended_content_font_candidates("jpn", "Linux")[0] == "Noto Sans CJK JP"
+    assert recommended_content_font_candidates("kor", "Linux")[0] == "Noto Sans CJK KR"
+    assert recommended_content_font_candidates("eng", "Linux")[0] == "Noto Sans"
+
+
+def test_all_configurable_content_font_paths_use_shared_auto_resolver():
+    app_text = (
+        Path(__file__).parents[1] / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    assert "AUTO_FONT_FAMILY" in app_text
+    assert "resolve_content_font_family(" in app_text
+    assert "self.settings.main_entry_font_family,\n            self.settings.ocr_language" in app_text
+    assert "self.settings.illustration_label_font_family,\n                                self.settings.ocr_language" in app_text
+    assert "self.parent.settings.review_entry_font_family,\n                self.parent.settings.ocr_language" in app_text
+    assert '"review_simplified_font_family"' in app_text
+    assert "values=content_font_values" in app_text
+    assert "review_families = (AUTO_FONT_FAMILY" in app_text
 
 
 def test_v21112_picdic_index_has_no_percent_signs(tmp_path):
