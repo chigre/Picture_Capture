@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import queue
-import sys
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -11,6 +10,7 @@ from tkinter import messagebox, ttk
 
 from PIL import Image, ImageDraw, ImageTk
 
+from .ui_compat import screen_work_area
 from .appearance import themed_display_image
 from .dictionary_profile import (
     dictionary_profile_preset,
@@ -161,32 +161,8 @@ def _ocr_language_code(value: str) -> str:
 
 
 def _screen_work_area(widget: tk.Misc) -> tuple[int, int, int, int]:
-    """Return usable desktop x/y/width/height, excluding the Windows taskbar."""
-    screen_w = max(800, int(widget.winfo_screenwidth()))
-    screen_h = max(600, int(widget.winfo_screenheight()))
-    if sys.platform.startswith("win"):
-        try:
-            import ctypes
-
-            class RECT(ctypes.Structure):
-                _fields_ = [
-                    ("left", ctypes.c_long),
-                    ("top", ctypes.c_long),
-                    ("right", ctypes.c_long),
-                    ("bottom", ctypes.c_long),
-                ]
-
-            rect = RECT()
-            # SPI_GETWORKAREA excludes the taskbar and other app bars.
-            if ctypes.windll.user32.SystemParametersInfoW(
-                0x0030, 0, ctypes.byref(rect), 0
-            ):
-                width = max(1, int(rect.right - rect.left))
-                height = max(1, int(rect.bottom - rect.top))
-                return int(rect.left), int(rect.top), width, height
-        except Exception:
-            pass
-    return 0, 0, screen_w, screen_h
+    """Backward-compatible wrapper around the shared cross-platform work area."""
+    return screen_work_area(widget)
 
 
 class ProjectProfileWizard(tk.Toplevel):
