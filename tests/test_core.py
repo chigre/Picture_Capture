@@ -360,6 +360,7 @@ class FormatTests(unittest.TestCase):
         self.assertEqual(settings.paddle_lens_mode, "off")
 
     def test_v2140_refreshes_workflow_defaults_once_for_existing_projects(self) -> None:
+        import json
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / "settings.json"
             path.write_text(json.dumps({
@@ -4061,9 +4062,9 @@ def test_display_mode_and_dark_mode_live_at_bottom_of_auxiliary_options():
     aux_start = text.index('self._section_frame(parent, "三、辅助选项及框线色块"')
     aux_end = text.index('actions = self._section_frame(parent, "四、画线与校对"', aux_start)
     aux = text[aux_start:aux_end]
-    assert 'display_mode_combo = ttk.Combobox(\n            display_row,' in aux
+    assert 'display_mode_combo = ttk.Combobox(\n            view_mode_row,' in aux
     assert 'text="深色模式"' in aux
-    assert aux.index('save_row = ttk.Frame(aux)') < aux.index('display_row = ttk.Frame(aux)')
+    assert aux.index('save_row = ttk.Frame(aux)') < aux.index('view_mode_row = ttk.Frame(aux)')
     assert 'text="◧"' not in text
     assert '"原图+标注": (False, False, False)' in text
     assert '"二值+标注": (True, False, False)' in text
