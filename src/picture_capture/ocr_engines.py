@@ -50,7 +50,7 @@ def tesseract_status(executable: str = "tesseract", language: str = "spa+eng") -
         "error": "",
     }
     if not resolved:
-        result["error"] = "未找到 tesseract.exe"
+        result["error"] = "未找到 Tesseract 可执行程序"
         return result
     try:
         version_proc = subprocess.run(

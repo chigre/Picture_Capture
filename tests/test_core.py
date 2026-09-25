@@ -5853,17 +5853,22 @@ def test_v2133_windows_launcher_is_runtime_only_and_never_installs():
     assert not (project_root / "requirements.txt").exists()
 
 
-def test_v2126_environment_dialog_reports_official_opencc():
+def test_environment_center_reports_opencc_and_actionable_components():
     from pathlib import Path
     import inspect
     import picture_capture.app as app_module
+    import picture_capture.environment_center as center_module
 
-    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    assert 'PictureCaptureApp._distribution_version("opencc")' in text
-    assert "settings_snapshot = replace(self.settings)" in text
-    assert 'PictureCaptureApp._distribution_version("opencc-python-reimplemented")' in text
-    assert '简化配置：t2s.json（词组优先）' in text
-    assert '"OCR / 简化环境状态"' in text
+    app_text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    center_text = Path(inspect.getsourcefile(center_module)).read_text(encoding="utf-8")
+    assert "EnvironmentCenterWindow" in app_text
+    assert "show_environment_center" in app_text
+    assert '"环境中心"' in app_text
+    assert 'self.app._distribution_version("opencc")' in center_text
+    assert 'self.app._distribution_version("opencc-python-reimplemented")' in center_text
+    assert "简化配置：t2s.json（词组优先）" in center_text
+    for label in ("PaddleOCR / PaddlePaddle", "Google Lens", "Tesseract", "OpenCC", "CC-CEDICT", "网络词典"):
+        assert label in center_text
 
 
 def test_v2128_cc_cedict_local_install_and_lookup(tmp_path, monkeypatch):

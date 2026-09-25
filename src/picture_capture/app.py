@@ -44,7 +44,7 @@ from .paddle_headwords import (
     HEADWORD_FILTER_RULES_FILENAME,
     parse_headword_filter_rules,
 )
-from .ocr_engines import lens_status, tesseract_status
+from .environment_center import EnvironmentCenterWindow
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
 from .layout_transform import LayoutTransform
 from .coordinate_space import (
@@ -83,7 +83,7 @@ from .cc_cedict import (
     simplified_candidates as cc_cedict_simplified_candidates,
     status as cc_cedict_status,
 )
-from .chinese_simplify import simplify_text, opencc_runtime_status
+from .chinese_simplify import simplify_text
 from .simplified_review import entry_key as simplified_entry_key, read_records as read_simplified_records, write_records as write_simplified_records
 from .training_export import (
     TrainingExportCancelled, copy_project_context, export_training_page,
@@ -1246,7 +1246,7 @@ class UsageGuideWindow(tk.Toplevel):
                 ),
                 (
                     "2", "OCR 完全不可用：先检测环境",
-                    "点击【检测 OCR 引擎】查看 PaddleOCR / PaddlePaddle、Tesseract、Google Lens、OpenCC 和 CC-CEDICT 状态。"
+                    "点击【环境中心】查看 PaddleOCR / PaddlePaddle、Tesseract、Google Lens、OpenCC 和 CC-CEDICT 状态。"
                     "环境问题应先修复安装或设备配置，再判断识别算法。"
                 ),
                 (
@@ -1441,7 +1441,7 @@ class UsageGuideWindow(tk.Toplevel):
 
         self._profile_button = action_button("项目Profile", self.parent_app.open_project_profile)
         self._layout_button = action_button("检测版面参数", self.parent_app.detect_layout_current)
-        action_button("检测 OCR 引擎", self.parent_app.check_ocr_engines)
+        action_button("环境中心", self.parent_app.check_ocr_engines)
         action_button("设置中心", self.parent_app.open_settings)
         tk.Button(
             footer, text="关闭", command=self.destroy,
@@ -1883,7 +1883,7 @@ class SettingsDialog(tk.Toplevel):
         "paddle_headword_regex": "作用：从每个合并后的 OCR 候选行开头提取 lemma（词头文字）。匹配成功后，若正则含捕获组，程序取第 1 个捕获组作为原始词头；它只是“词头像不像一个合法字符串”这一关，最终是否接受仍会结合栏左位置、词性/变形/符号、视觉分数和 Profile 规则。\n\n默认：允许行首空格及可选的 • ◆ ◇ ► ▶ * † ‡ § ¶；允许前/后置连字符、Unicode 字母、音节分隔点 · • ∙ ‧，并容忍 OCR 把分隔点识成 . : + -；也允许撇号连接。例如“• a·ga·rrón s. m.”提取 a·ga·rrón，“anti- adj.”提取 anti-。\n\n修改：第 1 捕获组应只包住 lemma。写得过宽会把逗号、POS/正文吞入词头；过窄会在后续评分前直接漏词。默认 Latin Profile 还会把通用 Unicode 字母范围收窄为拉丁字母；项目特例优先用 Profile 或过滤规则。",
         "paddle_pos_regex": "作用：识别 lemma 后面的 POS/语法标签，作为“这一行确实是词条起始行”的强结构证据；它不负责提取 lemma，搜索范围还受【AI 词性搜索字符数】限制。\n\n默认兼容：可覆盖 s.、s. m./f./amb./pl.、adj./adj. inv.、adv.、v./y.、v. prnl.、prep.、conj.、pron. 子类、det.、interj.、art.、num.、loc.、superlat. 等；y. 是容忍 OCR 把 v. 识成 y.。\n\n重要：主程序加载活动 Dictionary Profile 时，实际 POS 正则由 Profile 的 pos_labels 动态生成，本字段主要是兼容/低层 fallback。当前项目要增删词性缩写应优先改 Profile grammar。",
         "paddle_special_symbol_regex": "作用：判断 OCR 行首是否出现“可作为新词条起始证据”的项目符号。命中只增加一项结构证据，不会无条件把该行接受为词头。\n\n默认只在行首（允许前导空格）识别 • ◆ ◇ ► ▶ * † ‡ § ¶。正文中间出现同样符号不会命中。\n\n修改：只加入真正表示新词条/新条目起始的符号。词条内部释义标记、交叉引用或文章结构符号应交给 Dictionary Profile；例如某些词典中的 ■、□、||、~、→ 属于内部结构，不应因此触发新 lemma。",
-        "ocr_executable": "作用：Tesseract 可执行程序路径。可填写系统 PATH 中可直接调用的 tesseract，或完整 tesseract.exe 路径。只有普通文本 OCR、Tesseract 对照/补漏等路径需要它。\n\n调整：若“检测 OCR 引擎”提示找不到 Tesseract，应先修这里或系统安装；路径正确但语言缺失时还需安装对应 tessdata。PaddleOCR 单独运行不依赖此字段。",
+        "ocr_executable": "作用：Tesseract 可执行程序路径。可填写系统 PATH 中可直接调用的 tesseract，或完整 tesseract.exe 路径。只有普通文本 OCR、Tesseract 对照/补漏等路径需要它。\n\n调整：若“环境中心”提示找不到 Tesseract，应先修这里或系统安装；路径正确但语言缺失时还需安装对应 tessdata。PaddleOCR 单独运行不依赖此字段。",
         "paddle_ocr_version": "作用：选择 PaddleOCR 使用的模型系列/版本。不同模型可能改变文字框、识别字符、速度和缓存签名，因此它属于后端级设置而不是单纯阈值。\n\n调整：项目一旦稳定不建议频繁切换。更换模型后应重新生成 OCR，而不是继续沿用旧缓存来比较候选规则。",
         "tesseract_language": "作用：Tesseract 使用的语言包代码，可与项目 OCR 语言不同但通常应对应词头语言。它用于普通文本 OCR和 Tesseract 对照/补漏路径。\n\n调整：若语言包未安装，Tesseract 会不可用或报错；多语言可按 Tesseract 语法组合。仅使用 PaddleOCR 时不会因为这个值改变 Paddle 结果。",
         "batch_interval": "作用：自动保存/批量相关状态写盘的节流间隔，用来避免每次微小编辑都立即写文件。它影响保存频率，不是 OCR 批量任务“每隔几秒处理一页”的间隔。\n\n调整：过短增加磁盘写入和界面抖动风险；过长则异常退出时可能丢失更多最近改动。通常保持数秒级即可。",
@@ -2679,7 +2679,7 @@ class SettingsDialog(tk.Toplevel):
             workflow, text="检测当前页版面参数", command=parent.detect_layout_current
         ).pack(side="left", padx=(6, 0))
         ttk.Button(
-            workflow, text="检测 OCR 引擎", command=self.check_ocr_engines
+            workflow, text="环境中心", command=self.check_ocr_engines
         ).pack(side="left", padx=(6, 0))
 
         mode_group = ttk.LabelFrame(common, text="默认画线方式", padding=(12, 9))
@@ -3837,36 +3837,9 @@ class SettingsDialog(tk.Toplevel):
             return False
 
     def check_ocr_engines(self) -> None:
-        executable = str(self.vars["ocr_executable"].get())
-        language = str(self.vars.get("tesseract_language", self.vars["ocr_language"]).get()).strip()
-        if not language:
-            language = str(self.vars["ocr_language"].get())
-        self._settings_save_status_var.set("正在后台检测 OCR 引擎…")
+        """Open the shared environment center instead of a transient status dialog."""
+        self.parent.show_environment_center()
 
-        def worker():
-            return tesseract_status(executable, language), lens_status()
-
-        def done(payload) -> None:
-            if not self.winfo_exists():
-                return
-            tess, lens = payload
-            if tess.get("available"):
-                tess_text = f"✓ {tess.get('version') or 'Tesseract'}\n路径：{tess.get('resolved')}\n语言：{', '.join(tess.get('requested_languages', []))}"
-                self.vars["ocr_executable"].set(str(tess.get("resolved")))
-            else:
-                tess_text = f"✗ Tesseract：{tess.get('error')}\n检测路径：{tess.get('resolved') or '无'}"
-            lens_text = f"✓ Google Lens / chrome-lens-py {lens.get('version')}" if lens.get("available") else f"✗ Google Lens：{lens.get('error')}"
-            self._settings_save_status_var.set("✓ OCR 引擎检测完成")
-            messagebox.showinfo("OCR 引擎状态", tess_text + "\n\n" + lens_text, parent=self)
-
-        def failed(exc, detail) -> None:
-            if detail:
-                print(detail)
-            if self.winfo_exists():
-                self._settings_save_status_var.set("⚠ OCR 引擎检测失败")
-                messagebox.showerror("OCR 引擎检测失败", str(exc), parent=self)
-
-        self.parent._start_ui_worker(f"settings-ocr-check-{id(self)}", worker, done, failed)
 
 
 def _review_window_dimensions(screen_w: int, screen_h: int) -> tuple[int, int]:
@@ -9522,7 +9495,7 @@ class PictureCaptureApp(tk.Tk):
         ocr_tools = ttk.Frame(ocr)
         ocr_tools.grid(row=4, column=0, columnspan=6, sticky="ew", pady=(4, 0))
         ttk.Button(
-            ocr_tools, text="检测 OCR 引擎", command=self.check_ocr_engines,
+            ocr_tools, text="环境中心", command=self.check_ocr_engines,
             style="PC.Compact.TButton",
         ).pack(side="left", fill="x", expand=True)
         ttk.Button(
@@ -10262,65 +10235,31 @@ class PictureCaptureApp(tk.Tk):
             lines.append(f"Paddle runtime 检查失败：{exc}")
         return "\n".join(lines)
 
-    def check_ocr_engines(self) -> None:
-        self.status_var.set("正在后台检测 OCR / Paddle / OpenCC 环境…")
-        project = self.project
-        settings_snapshot = replace(self.settings)
-        executable = str(settings_snapshot.ocr_executable)
-        language = resolved_tesseract_language(settings_snapshot)
-
-        def worker():
-            paddle_text = self._paddle_environment_text(settings_snapshot)
-            tess = tesseract_status(executable, language)
-            lens = lens_status()
-            official_opencc = PictureCaptureApp._distribution_version("opencc")
-            legacy_opencc = PictureCaptureApp._distribution_version("opencc-python-reimplemented")
-            runtime = opencc_runtime_status(retry=True)
+    def show_environment_center(self) -> None:
+        existing = self.__dict__.get("_environment_center_window")
+        if existing is not None:
             try:
-                cedict = cc_cedict_status()
-                cedict_error = None
-            except Exception as exc:
-                cedict = None
-                cedict_error = str(exc)
-            return paddle_text, tess, lens, official_opencc, legacy_opencc, runtime, cedict, cedict_error
+                if existing.winfo_exists():
+                    existing.deiconify()
+                    existing.lift()
+                    existing.focus_force()
+                    existing.refresh()
+                    return
+            except tk.TclError:
+                pass
+        window = EnvironmentCenterWindow(self)
+        self._environment_center_window = window
+        window.bind(
+            "<Destroy>",
+            lambda event, w=window: self.__dict__.pop("_environment_center_window", None)
+            if event.widget is w else None,
+            add="+",
+        )
 
-        def done(payload) -> None:
-            paddle_text, tess, lens, official_opencc, legacy_opencc, runtime, cedict, cedict_error = payload
-            if tess.get("available"):
-                if self.project is project:
-                    self.settings.ocr_executable = str(tess.get("resolved"))
-                tess_text = f"✓ {tess.get('version') or 'Tesseract'}\n路径：{tess.get('resolved')}\n语言：{', '.join(tess.get('requested_languages', []))}"
-                if self.project is project:
-                    self.save_settings()
-            else:
-                tess_text = f"✗ Tesseract：{tess.get('error')}\n检测路径：{tess.get('resolved') or '无'}"
-            lens_text = f"✓ Google Lens / chrome-lens-py {lens.get('version')}" if lens.get("available") else f"✗ Google Lens：{lens.get('error')}"
-            if runtime.get("available") and official_opencc:
-                opencc_lines = [f"✓ OpenCC {official_opencc}（官方）：运行正常"]
-                if legacy_opencc:
-                    opencc_lines.append(f"⚠ 同时检测到旧版 opencc-python-reimplemented {legacy_opencc}；当前项目已使用 uv 隔离环境，建议在项目目录执行 uv sync 清理未声明包。")
-            elif official_opencc:
-                opencc_lines = [f"⚠ OpenCC {official_opencc}（官方）已安装，但运行不可用", f"初始化错误：{runtime.get('error') or '未知错误'}", "请在项目目录执行 uv sync --reinstall-package opencc；若仍异常，可删除 .venv 后重新运行 run_windows.bat。"]
-            elif legacy_opencc:
-                opencc_lines = [f"⚠ OpenCC：仅检测到旧版 opencc-python-reimplemented {legacy_opencc}", f"运行状态：{'可用' if runtime.get('available') else '不可用'}", "请在项目目录执行 uv sync；若仍残留旧包，可删除 .venv 后重新运行 run_windows.bat。"]
-            else:
-                opencc_lines = ["✗ OpenCC（官方）：未安装", f"运行检查：{runtime.get('error') or '不可用'}", "请在项目目录执行 uv sync；核心 OpenCC 依赖会由 uv 安装到项目 .venv。"]
-            opencc_text = "\n".join(opencc_lines) + "\n简化配置：t2s.json（词组优先）"
-            if cedict is not None and cedict.installed:
-                cedict_text = f"✓ CC-CEDICT：已安装（{cedict.entry_count:,} 条）\n位置：{cedict.path}"
-            elif cedict is not None:
-                cedict_text = "○ CC-CEDICT：未安装\n在校对界面点击 CC-CEDICT(未装)，可打开官方下载页或选择已下载文件安装。"
-            else:
-                cedict_text = f"⚠ CC-CEDICT 状态检查失败：{cedict_error or '未知错误'}"
-            self.status_var.set("OCR / 简化环境检测完成")
-            messagebox.showinfo("OCR / 简化环境状态", paddle_text + "\n\n" + tess_text + "\n\n" + lens_text + "\n\n" + opencc_text + "\n\n" + cedict_text, parent=self)
+    def check_ocr_engines(self) -> None:
+        """Backward-compatible action name: open the unified environment center."""
+        self.show_environment_center()
 
-        def failed(exc, detail) -> None:
-            if detail:
-                print(detail)
-            self.show_error("OCR / 简化环境检测失败", exc)
-
-        self._start_ui_worker("ocr-environment-check", worker, done, failed)
 
     def detect_layout_current(self) -> None:
         if not self.guard() or not self.apply_quick_settings(show_status=False): return
