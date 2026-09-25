@@ -2571,12 +2571,13 @@ class SettingsDialog(tk.Toplevel):
         self.update_idletasks()
         screen_w = max(900, self.winfo_screenwidth())
         screen_h = max(650, self.winfo_screenheight())
-        width = min(1120, max(840, int(screen_w * 0.80)))
-        height = max(560, int(screen_h * 0.75))
-        x = max(0, (screen_w - width) // 2)
-        y = max(0, (screen_h - height) // 2)
-        self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(min(840, width), min(560, height))
+        fit_window_to_work_area(
+            self,
+            min(1120, max(840, int(screen_w * 0.80))),
+            max(560, int(screen_h * 0.75)),
+            min_width=840,
+            min_height=560,
+        )
         self.resizable(True, True)
         self.vars: dict[str, tk.Variable] = {}
         self._casts = {name: cast for _, name, cast in self.FIELDS}
@@ -7533,8 +7534,7 @@ class PictureCaptureApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title(f"Picture Capture v{__version__} — OCR 词头定位")
-        self.geometry("1440x900")
-        self.minsize(1080, 680)
+        fit_window_to_work_area(self, 1440, 900, min_width=1080, min_height=680)
         self.project: ProjectState | None = None
         self._project_words: set[str] = set()
         self.settings = AppSettings()
@@ -7721,9 +7721,8 @@ class PictureCaptureApp(tk.Tk):
             self.attributes("-zoomed", True)
         except tk.TclError:
             try:
-                self.geometry(
-                    f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0"
-                )
+                work_x, work_y, work_w, work_h = _screen_work_area(self)
+                self.geometry(f"{work_w}x{work_h}+{work_x}+{work_y}")
             except tk.TclError:
                 pass
 
