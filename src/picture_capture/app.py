@@ -507,7 +507,7 @@ def _sorted_page_list_rows(rows: list[tuple[str, tuple]], column: str, descendin
     # the live Treeview uses the new leading bookmark column.
     has_bookmark = any(len(values) >= 5 for _iid, values in rows)
     mapping = (
-        {"bookmark": 0, "page": 1, "lined": 2, "fill_status": 3, "illustrations": 4}
+        {"bookmark": 0, "page": 1, "lined": 2, "illustrations": 3, "fill_status": 4}
         if has_bookmark else
         {"page": 0, "lined": 1, "fill_status": 2, "illustrations": 3}
     )
@@ -9501,11 +9501,11 @@ class PictureCaptureApp(tk.Tk):
             command=lambda: self._apply_page_list_display_columns(save=True),
         )
         menu.add_checkbutton(
-            label="填充状态", variable=self._page_column_vars["fill_status"],
+            label="插图", variable=self._page_column_vars["illustrations"],
             command=lambda: self._apply_page_list_display_columns(save=True),
         )
         menu.add_checkbutton(
-            label="插图", variable=self._page_column_vars["illustrations"],
+            label="填充状态", variable=self._page_column_vars["fill_status"],
             command=lambda: self._apply_page_list_display_columns(save=True),
         )
         try:
@@ -12509,7 +12509,7 @@ class PictureCaptureApp(tk.Tk):
                 self.page_list.insert(
                     "", "end", iid=str(index), values=(
                         "●" if page.stem in self._bookmark_stems() else "",
-                        page.name, "", self._word_fill_status_text(index), "",
+                        page.name, "", "", self._word_fill_status_text(index),
                     ),
                 )
             if self._page_list_sort_column:
@@ -14590,13 +14590,13 @@ class PictureCaptureApp(tk.Tk):
         page = self.project.images[index]
         page_stem = str(getattr(page, "stem", Path(str(page.name)).stem))
         bookmark = "●" if page_stem in self._bookmark_stems() else ""
-        new_values = (bookmark, page.name, lined, fill_status, illustrations)
+        new_values = (bookmark, page.name, lined, illustrations, fill_status)
         self.page_list.item(iid, values=new_values)
         active_column = self._page_list_sort_column
         if active_column:
-            new_index = {"bookmark": 0, "page": 1, "lined": 2, "fill_status": 3, "illustrations": 4}.get(active_column, 1)
+            new_index = {"bookmark": 0, "page": 1, "lined": 2, "illustrations": 3, "fill_status": 4}.get(active_column, 1)
             old_mapping = (
-                {"bookmark": 0, "page": 1, "lined": 2, "fill_status": 3, "illustrations": 4}
+                {"bookmark": 0, "page": 1, "lined": 2, "illustrations": 3, "fill_status": 4}
                 if len(old_values) >= 5 else
                 {"page": 0, "lined": 1, "fill_status": 2, "illustrations": 3}
             )
