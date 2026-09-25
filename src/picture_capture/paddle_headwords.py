@@ -423,7 +423,7 @@ def _parse_chinese_bracketed_headword(
         # us a reliable boundary, so a wider limit is safe here.
         if not raw_inner or len(raw_inner) > 64:
             return None
-        match_end = opener.start(2) + close_match.end()
+        match_end = opener.start("remainder") + close_match.end()
         definition_text = remainder[close_match.end():].lstrip()
         descriptor = "chinese_bracketed_headword"
         parser_stage = "chinese_bracketed_headword"
