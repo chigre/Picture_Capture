@@ -3969,6 +3969,7 @@ class ReviewWindow(tk.Toplevel):
         self._review_single_cjk_height_apply_job: str | None = None
         self._syncing_review_height_vars = False
         self.word_highlight_index: int | None = None
+        self.word_selected_local_index: int | None = None
         self.word_list_default_bg = "white"
         self.word_list_default_fg = "#111827"
         # The reference words may exceed 100k rows.  Keep the full data/index in
@@ -4606,22 +4607,32 @@ class ReviewWindow(tk.Toplevel):
 
         word_nav = ttk.Frame(ref_box, style="PCR.Surface.TFrame")
         word_nav.pack(fill="x", pady=(0, 0))
-        self.word_window_var = tk.StringVar(value="词表（wordslist.txt） | 显示 0-0 / 0")
+        self.word_window_var = tk.StringVar(value="wordslist.txt | 0-0 / 0")
         ttk.Label(
             word_nav, textvariable=self.word_window_var, style="PCR.Body.TLabel"
         ).pack(side="left", fill="x", expand=True)
         ttk.Button(
-            word_nav, text="前500", width=7, command=lambda: self.shift_wordslist_window(-1),
+            word_nav, text="前100", width=7, command=lambda: self.shift_wordslist_window(-1),
             style="PCR.Tool.TButton",
         ).pack(side="right", padx=(4, 0))
         ttk.Button(
-            word_nav, text="后500", width=7, command=lambda: self.shift_wordslist_window(1),
+            word_nav, text="后100", width=7, command=lambda: self.shift_wordslist_window(1),
             style="PCR.Tool.TButton",
         ).pack(side="right")
-        self.word_list = tk.Listbox(
+
+        word_family = preferred_font_family(
+            self, ("Cambria", "Times New Roman", "Times", "DejaVu Serif")
+        )
+        number_family = preferred_font_family(
+            self, ("Segoe UI", "Arial", "Helvetica", "DejaVu Sans")
+        )
+        self.word_list = tk.Text(
             ref_box,
             exportselection=False,
-            font=(preferred_font_family(self, ("Cambria", "Times New Roman", "Times", "DejaVu Serif")), 14),
+            font=(word_family, 14),
+            wrap="none",
+            state="disabled",
+            cursor="hand2",
             relief="flat",
             bd=0,
             highlightthickness=1,
@@ -4630,9 +4641,14 @@ class ReviewWindow(tk.Toplevel):
             selectbackground="#dce8f7",
             selectforeground="#30343b",
         )
-        # This Listbox keeps a deliberately pale current/selected row in dark
-        # mode, so it manages its own contrast rather than using the generic
-        # classic-Tk selection colors.
+        self.word_list.tag_configure(
+            "wordslist_number", font=(number_family, 10), foreground="#6b7280"
+        )
+        self.word_list.tag_configure("wordslist_word", font=(word_family, 14))
+        self.word_list.tag_configure(
+            "wordslist_target", background="#d9d9d9", foreground="#111827"
+        )
+        # The reference list owns its row highlighting and mixed typography.
         self.word_list._pc_skip_classic_appearance = True
         self.word_list.pack(fill="both", expand=True, pady=(4, 0))
         self._configure_word_list_appearance()
@@ -4653,22 +4669,66 @@ class ReviewWindow(tk.Toplevel):
                 highlightbackground=palette["border"],
                 highlightcolor=palette["border"],
             )
+            self.word_list.tag_configure("wordslist_number", foreground=palette["muted"])
+            self.word_list.tag_configure(
+                "wordslist_target", background="#d9d9d9", foreground="#111827"
+            )
         except tk.TclError:
             return
         self.word_list_default_bg = palette["input_bg"]
         self.word_list_default_fg = palette["input_fg"]
-        if (
-            self.word_highlight_index is not None
-            and self.word_highlight_index < self.word_list.size()
-        ):
-            try:
-                self.word_list.itemconfig(
-                    self.word_highlight_index,
-                    background="#d9d9d9",
-                    foreground="#111827",
+
+    def _clear_word_list_rows(self) -> None:
+        self.word_selected_local_index = None
+        try:
+            self.word_list.configure(state="normal")
+            self.word_list.delete("1.0", "end")
+            self.word_list.configure(state="disabled")
+        except tk.TclError:
+            return
+
+    def _render_word_list_rows(self, words: list[str]) -> None:
+        self.word_selected_local_index = None
+        try:
+            self.word_list.configure(state="normal")
+            self.word_list.delete("1.0", "end")
+            digits = max(1, len(str(len(words))))
+            for offset, global_index in enumerate(self.word_window_indices):
+                self.word_list.insert(
+                    "end", f"{global_index + 1:>{digits}}", ("wordslist_number",)
                 )
-            except tk.TclError:
-                pass
+                self.word_list.insert(
+                    "end", f"  {words[global_index]}", ("wordslist_word",)
+                )
+                if offset + 1 < len(self.word_window_indices):
+                    self.word_list.insert("end", "\n")
+            self.word_list.configure(state="disabled")
+        except tk.TclError:
+            return
+
+    def _set_word_list_highlight(self, local: int | None) -> None:
+        try:
+            self.word_list.tag_remove("wordslist_target", "1.0", "end")
+            if local is None or not (0 <= int(local) < len(self.word_window_indices)):
+                return
+            line = int(local) + 1
+            self.word_list.tag_add(
+                "wordslist_target", f"{line}.0", f"{line}.end"
+            )
+            self.word_list.tag_raise("wordslist_target")
+            self.word_list.see(f"{line}.0")
+        except tk.TclError:
+            return
+
+    def _word_list_local_index_from_event(self, event: tk.Event) -> int | None:
+        try:
+            line = int(str(self.word_list.index(f"@{event.x},{event.y}")).split(".", 1)[0])
+        except (tk.TclError, ValueError):
+            return None
+        local = line - 1
+        if not (0 <= local < len(self.word_window_indices)):
+            return None
+        return local
 
 
     def _toggle_review_panel(self, panel: str) -> None:
@@ -5170,7 +5230,7 @@ class ReviewWindow(tk.Toplevel):
 
     def refresh_wordslist_display(self) -> None:
         reference_words = self.parent.project.words if self.parent.project else []
-        self.word_list.delete(0, "end")
+        self._clear_word_list_rows()
         self.word_highlight_index = None
         self.word_window_start = 0
         self.word_window_indices = []
@@ -5200,9 +5260,9 @@ class ReviewWindow(tk.Toplevel):
 
         if self.parent.project:
             path = resolve_wordslist_path(self.parent.project.root, self.parent.settings.wordslist_path)
-            self.word_window_var.set(f"词表（{path.name}） | 显示 0-0 / {len(reference_words)}")
+            self.word_window_var.set(f"{path.name} | 0-0 / {len(reference_words)}")
         else:
-            self.word_window_var.set("词表（未选择） | 显示 0-0 / 0")
+            self.word_window_var.set("未选择 | 0-0 / 0")
         if reference_words:
             if self.vars and 0 <= self.active_index < len(self.vars):
                 self.locate_reference_word(self.vars[self.active_index].get())
@@ -5213,7 +5273,7 @@ class ReviewWindow(tk.Toplevel):
         """Render only a small window around one global wordslist index."""
         words = self.parent.project.words if self.parent.project else []
         if not words:
-            self.word_list.delete(0, "end")
+            self._clear_word_list_rows()
             self.word_window_indices = []
             self.word_window_start = 0
             self.word_highlight_index = None
@@ -5222,9 +5282,9 @@ class ReviewWindow(tk.Toplevel):
                     path = resolve_wordslist_path(
                         self.parent.project.root, self.parent.settings.wordslist_path
                     )
-                    self.word_window_var.set(f"词表（{path.name}） | 显示 0-0 / 0")
+                    self.word_window_var.set(f"{path.name} | 0-0 / 0")
                 else:
-                    self.word_window_var.set("词表（未选择） | 显示 0-0 / 0")
+                    self.word_window_var.set("未选择 | 0-0 / 0")
             return
         target = max(0, min(int(target), len(words) - 1))
         span = self.word_window_radius * 2 + 1
@@ -5238,29 +5298,31 @@ class ReviewWindow(tk.Toplevel):
                 self.parent.project.root, self.parent.settings.wordslist_path
             )
             self.word_window_var.set(
-                f"词表（{path.name}） | 显示 {start + 1}-{end} / {len(words)}"
+                f"{path.name} | {start + 1}-{end} / {len(words)}"
             )
-        self.word_list.delete(0, "end")
-        for i in self.word_window_indices:
-            self.word_list.insert("end", words[i])
+        self._render_word_list_rows(words)
         local = target - start
         self.word_highlight_index = local
-        try:
-            self.word_list.itemconfig(
-                local, background="#d9d9d9", foreground="#111827"
-            )
-            self.word_list.see(local)
-        except tk.TclError:
-            pass
+        self._set_word_list_highlight(local)
 
     def shift_wordslist_window(self, direction: int) -> None:
-        """Browse the large reference list by one virtual chunk without bulk rendering."""
+        """Browse the large reference list by 100 rows without bulk rendering."""
         words = self.parent.project.words if self.parent.project else []
         if not words:
             return
         span = self.word_window_radius * 2 + 1
-        start = max(0, min(self.word_window_start + int(direction) * span, max(0, len(words) - span)))
-        target = min(len(words) - 1, start + min(self.word_window_radius, max(0, len(words) - 1 - start)))
+        step = 100
+        start = max(
+            0,
+            min(
+                self.word_window_start + int(direction) * step,
+                max(0, len(words) - span),
+            ),
+        )
+        target = min(
+            len(words) - 1,
+            start + min(self.word_window_radius, max(0, len(words) - 1 - start)),
+        )
         self._show_wordslist_window(target)
 
     def choose_wordslist_file(self) -> None:
@@ -5275,7 +5337,7 @@ class ReviewWindow(tk.Toplevel):
         )
         if not chosen:
             return
-        self.word_window_var.set(f"词表（{Path(chosen).name}） | 正在读取…")
+        self.word_window_var.set(f"{Path(chosen).name} | 正在读取…")
 
         def loaded(path: Path, count: int) -> None:
             try:
@@ -5992,25 +6054,8 @@ class ReviewWindow(tk.Toplevel):
             self._show_wordslist_window(target)
             return
         local = target - self.word_window_start
-        if self.word_highlight_index is not None and self.word_highlight_index < self.word_list.size():
-            try:
-                self.word_list.itemconfig(
-                    self.word_highlight_index,
-                    background=self.word_list_default_bg,
-                    foreground=self.word_list_default_fg,
-                )
-            except tk.TclError:
-                pass
         self.word_highlight_index = local
-        try:
-            # The reference-location marker deliberately keeps a pale background
-            # in both themes, so its text must stay dark for readable contrast.
-            self.word_list.itemconfig(
-                local, background="#d9d9d9", foreground="#111827"
-            )
-            self.word_list.see(local)
-        except tk.TclError:
-            pass
+        self._set_word_list_highlight(local)
 
     def scroll_rows(self, event: tk.Event) -> str:
         self.canvas.yview_scroll((-1 if event.delta > 0 else 1) * 3, "units")
@@ -6706,15 +6751,14 @@ class ReviewWindow(tk.Toplevel):
             self.on_key(type("_Event", (), {"char": ""})(), self.active_index)
 
     def _selected_wordslist_global_index(self) -> int | None:
-        selection = self.word_list.curselection()
-        if not selection:
-            return None
-        local = int(selection[0])
-        if 0 <= local < len(self.word_window_indices):
-            return self.word_window_indices[local]
+        local = self.word_selected_local_index
+        if local is not None and 0 <= int(local) < len(self.word_window_indices):
+            return self.word_window_indices[int(local)]
         return None
 
-    def use_selected_word(self, _event: tk.Event | None = None) -> None:
+    def use_selected_word(self, event: tk.Event | None = None) -> None:
+        if event is not None:
+            self.word_selected_local_index = self._word_list_local_index_from_event(event)
         source = self._selected_wordslist_global_index()
         words = self.parent.project.words if self.parent.project else []
         if source is None or source >= len(words) or not self.editors:
