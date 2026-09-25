@@ -4327,7 +4327,7 @@ class ReviewWindow(tk.Toplevel):
             editor_area,
             highlightthickness=0,
             borderwidth=0,
-            bg=self._review_ui_colors["surface"],
+            bg="#f6f7f9",
         )
         scroll = ttk.Scrollbar(editor_area, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=scroll.set)
@@ -4496,7 +4496,7 @@ class ReviewWindow(tk.Toplevel):
             anchor="w",
             justify="left",
             fg="#555555",
-            bg=self._review_ui_colors["surface"],
+            bg="#f6f7f9",
         )
         self.network_status_label.pack(fill="x", pady=(4, 0))
         self._refresh_cc_cedict_button_idle()
@@ -4548,10 +4548,10 @@ class ReviewWindow(tk.Toplevel):
             relief="flat",
             bd=0,
             highlightthickness=1,
-            highlightbackground=self._review_ui_colors["border"],
-            highlightcolor=self._review_ui_colors["border"],
-            selectbackground=self._review_ui_colors["selection"],
-            selectforeground=self._review_ui_colors["text"],
+            highlightbackground="#d8dde5",
+            highlightcolor="#d8dde5",
+            selectbackground="#dce8f7",
+            selectforeground="#30343b",
         )
         self.word_list.pack(fill="both", expand=True, pady=(4, 0))
         self.word_list_default_bg = str(self.word_list.cget("background"))
@@ -7854,6 +7854,27 @@ class PictureCaptureApp(tk.Tk):
         )
         style.map("Treeview.Heading", background=[("active", palette["button_hover"])])
         style.configure("TSeparator", background=palette["border"])
+        style.configure("TPanedwindow", background=palette["border"])
+        style.configure(
+            "TScrollbar",
+            background=palette["button"],
+            troughcolor=palette["surface_alt"],
+            bordercolor=palette["border"],
+            arrowcolor=palette["text"],
+            lightcolor=palette["button"],
+            darkcolor=palette["button"],
+        )
+        style.map("TScrollbar", background=[("active", palette["button_hover"])])
+        style.configure(
+            "TMenubutton",
+            background=palette["button"], foreground=palette["text"],
+            bordercolor=palette["border"], arrowcolor=palette["text"],
+        )
+        style.configure(
+            "TScale",
+            background=palette["surface"], troughcolor=palette["surface_alt"],
+            bordercolor=palette["border"],
+        )
         style.configure(
             "TProgressbar", background=palette["accent"], troughcolor=palette["surface_alt"],
             bordercolor=palette["border"],
@@ -12309,7 +12330,7 @@ class PictureCaptureApp(tk.Tk):
             index_x,
             index_y,
             text=str(index),
-            fill="#222",
+            fill=("#e6edf3" if self.appearance_mode == "dark" else "#222"),
             anchor=index_anchor,
             font=("Arial", 8),
         )
