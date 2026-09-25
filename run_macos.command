@@ -1,5 +1,5 @@
 #!/bin/sh
-set -eu
+set -u
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$ROOT"
