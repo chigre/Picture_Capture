@@ -1518,8 +1518,9 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     review = app_text[review_start:review_end]
     request_start = review.index("    def _request_render_rows(")
     render_start = review.index("    def render_rows(", request_start)
+    render_end = review.index("\n    def _candidate_for_entry", render_start)
     request = review[request_start:render_start]
-    render = review[render_start:]
+    render = review[render_start:render_end]
     assert "with Image.open(page) as opened:" in request
     assert "Image.Resampling.LANCZOS" in request
     assert "self.parent._start_ui_worker(" in request
