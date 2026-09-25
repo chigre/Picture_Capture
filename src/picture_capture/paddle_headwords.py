@@ -825,7 +825,7 @@ def run_tesseract_band_records(
     """
     resolved = _tesseract_executable(settings.ocr_executable)
     if not resolved:
-        raise RuntimeError("未找到 Tesseract OCR；请在设置中填写 tesseract.exe 路径。")
+        raise RuntimeError("未找到 Tesseract OCR；请在环境中心选择 Tesseract 可执行程序或查看安装帮助。")
     payload = BytesIO()
     normalize_page_rgb(band).save(payload, format="PNG")
     command = [
