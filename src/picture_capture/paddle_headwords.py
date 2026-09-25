@@ -3332,7 +3332,9 @@ def filter_headword_records(
             gray, header_cutoff, settings, reference_scale
         )
         for run_start, run_end in visual_runs:
-            word, confidence, matched_record = _cjk_word_for_visual_run(\n                records, (run_start, run_end), zone_width, settings, active_profile,\n            )
+            word, confidence, matched_record = _cjk_word_for_visual_run(
+                records, (run_start, run_end), zone_width, settings, active_profile,
+            )
             if not word or matched_record is None:
                 continue
             coarse_band_y = max(header_cutoff, run_start - row_padding)
