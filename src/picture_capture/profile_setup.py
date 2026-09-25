@@ -1060,7 +1060,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_template_preview()
 
     def _refresh_template_preview(self) -> None:
-        """Render one representative page with the current exclusion template."""
+        """Render the representative-page template preview without blocking Tk."""
         if not hasattr(self, "template_preview_frame"):
             return
         for child in self.template_preview_frame.winfo_children():
@@ -1070,14 +1070,17 @@ class ProjectProfileWizard(tk.Toplevel):
             ttk.Label(self.template_preview_frame, text="没有可预览页面").grid(row=0, column=0)
             self.template_preview_caption_var.set("")
             return
+
         self.template_preview_slot %= len(self.sample_indices)
-        index = self.sample_indices[self.template_preview_slot]
+        slot = int(self.template_preview_slot)
+        index = int(self.sample_indices[slot])
         path = self.project.images[index]
         try:
             settings = self._settings_from_ui()
-            with Image.open(path) as opened:
-                source = normalize_page_rgb(opened)
-            preview = source.copy()
+            header_mode = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get(), "auto")
+            footer_mode = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get(), "none")
+            header_percent = max(0.0, min(35.0, float(self.header_percent_var.get())))
+            footer_percent = max(0.0, min(35.0, float(self.footer_percent_var.get())))
             self.update_idletasks()
             right_width = int(getattr(self, "right_canvas", self).winfo_width())
             target_width = max(
@@ -1086,18 +1089,42 @@ class ProjectProfileWizard(tk.Toplevel):
                 else (self._wizard_image_width - 24),
             )
             target_height = max(420, int(self._wizard_height * 0.72))
+        except Exception as exc:
+            ttk.Label(
+                self.template_preview_frame,
+                text=f"{path.name}\n预览参数无效：{exc}",
+            ).grid(row=0, column=0)
+            self.template_preview_caption_var.set(path.name)
+            return
+
+        ttk.Label(
+            self.template_preview_frame,
+            text=f"正在后台生成预览…\n{path.name}",
+            justify="center",
+        ).grid(row=0, column=0, sticky="n", pady=30)
+        self.template_preview_caption_var.set(
+            f"{slot + 1}/{len(self.sample_indices)} · {path.name} · 正在生成…"
+        )
+        worker_key = f"profile-template-preview-{id(self)}"
+
+        def worker():
+            with Image.open(path) as opened:
+                source = normalize_page_rgb(opened)
+            preview = source.copy()
             preview.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
             draw = ImageDraw.Draw(preview, "RGBA")
             w, h = preview.size
 
-            header_mode = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get(), "auto")
             if header_mode == "present":
-                hp = max(0.0, min(35.0, float(self.header_percent_var.get())))
-                draw.rectangle((0, 0, w, round(h * hp / 100.0)), fill=(255, 215, 0, 105))
-            footer_mode = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get(), "none")
+                draw.rectangle(
+                    (0, 0, w, round(h * header_percent / 100.0)),
+                    fill=(255, 215, 0, 105),
+                )
             if footer_mode == "present":
-                fp = max(0.0, min(35.0, float(self.footer_percent_var.get())))
-                draw.rectangle((0, round(h * (1.0 - fp / 100.0)), w, h), fill=(255, 215, 0, 105))
+                draw.rectangle(
+                    (0, round(h * (1.0 - footer_percent / 100.0)), w, h),
+                    fill=(255, 215, 0, 105),
+                )
 
             side = excluded_source_side(settings, index)
             if side:
@@ -1113,11 +1140,8 @@ class ProjectProfileWizard(tk.Toplevel):
             geometry = derive_geometry(analysis_image, effective)
             sx = w / max(1, source.width)
             sy = h / max(1, source.height)
-
-            # Keep step 2 and validation overlays semantically identical:
-            # explicit modes show the configured percentages; AUTO shows the
-            # geometry-detected region.
             canonical_w, canonical_h = geometry.transform.canonical_size(source.size)
+
             if header_mode == "auto" and geometry.top > 0:
                 x0, y0, x1, y1 = geometry.transform.canonical_box_to_source(
                     (0, 0, canonical_w, min(canonical_h, geometry.top)),
@@ -1149,22 +1173,54 @@ class ProjectProfileWizard(tk.Toplevel):
                 if len(coords) >= 4:
                     draw.line(coords, fill=(30, 120, 210, 210), width=2)
 
-            photo = ImageTk.PhotoImage(preview)
-            self._template_photos.append(photo)
-            ttk.Label(self.template_preview_frame, image=photo).grid(row=0, column=0, sticky="n")
             variant = page_variant(settings, index)
-            side_text = excluded_source_side(settings, index) or "无页边排除"
-            region = ("前部", "中部", "后部")[min(2, self.template_preview_slot // 2)]
-            self.template_preview_caption_var.set(
-                f"{region} · {self.template_preview_slot + 1}/{len(self.sample_indices)} · "
+            side_text = side or "无页边排除"
+            region = ("前部", "中部", "后部")[min(2, slot // 2)]
+            caption = (
+                f"{region} · {slot + 1}/{len(self.sample_indices)} · "
                 f"{variant} 页 · {path.name} · 页边：{side_text}"
             )
-        except Exception as exc:
+            return preview, caption, index, slot
+
+        def done(payload) -> None:
+            try:
+                if not self.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            preview, caption, result_index, result_slot = payload
+            if (
+                result_slot != self.template_preview_slot
+                or result_slot >= len(self.sample_indices)
+                or self.sample_indices[result_slot] != result_index
+            ):
+                return
+            for child in self.template_preview_frame.winfo_children():
+                child.destroy()
+            photo = ImageTk.PhotoImage(preview)
+            self._template_photos[:] = [photo]
+            ttk.Label(
+                self.template_preview_frame, image=photo,
+            ).grid(row=0, column=0, sticky="n")
+            self.template_preview_caption_var.set(caption)
+
+        def failed(exc, detail) -> None:
+            if detail:
+                print(detail)
+            try:
+                if not self.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            for child in self.template_preview_frame.winfo_children():
+                child.destroy()
             ttk.Label(
                 self.template_preview_frame,
                 text=f"{path.name}\n预览失败：{exc}",
             ).grid(row=0, column=0)
             self.template_preview_caption_var.set(path.name)
+
+        self.parent._start_ui_worker(worker_key, worker, done, failed)
 
     @staticmethod
     def _mode_row(
