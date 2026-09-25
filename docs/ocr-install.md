@@ -1,98 +1,158 @@
 # OCR 可选组件安装
 
-Picture Capture v2.13.2 起，Windows 提供 `install_ocr_windows.bat`，用于统一管理 PaddleOCR、PaddlePaddle CPU/GPU runtime 与 Google Lens。项目继续使用 uv 管理 `.venv`，不会把依赖安装到系统 Python。
+Picture Capture 使用 uv 管理项目专属 `.venv`。Windows、Linux 和 macOS 现在共享同一套 OCR 安装核心：
 
-## Windows 推荐方式
+```text
+scripts/ocr_setup.py
+```
 
-在程序根目录双击或从命令行运行：
+各平台入口只负责准备核心环境并调用该脚本，不再各自维护 Paddle/CUDA 安装逻辑。
 
-```bat
+## 平台入口
+
+### Windows
+
+```text
 install_ocr_windows.bat
 ```
 
-安装器会先调用 `nvidia-smi` 检测 NVIDIA GPU、GPU Compute Capability、驱动版本以及驱动报告的最高 CUDA 兼容版本。自动推荐 GPU 必须同时满足两层条件：主 GPU（GPU 0）的 Compute Capability **超过 7.5**，并且驱动 CUDA 兼容上限能够覆盖至少一个项目已声明的 GPU profile。满足时自动选择不高于该兼容上限的最高 profile；任一条件无法确认或不满足时，默认推荐 CPU OCR。
+### Linux
 
-普通用户不再需要先判断 CUDA 11.8 / 12.6 / 12.9。主菜单只显示“推荐项 / CPU / Lens only / Core only”，具体 CUDA profile 收入 Advanced 手动选择，主要用于兼容性排查或已明确知道目标 runtime 的用户。
+```bash
+chmod +x install_ocr_linux.sh
+./install_ocr_linux.sh
+```
 
-当前可用 profile 为：
+### macOS
 
-| uv profile | 内容 |
+```bash
+chmod +x install_ocr_macos.command
+./install_ocr_macos.command
+```
+
+Apple Silicon 可安装 PaddleOCR CPU；macOS 当前不提供 Paddle NVIDIA/CUDA 路径。Intel macOS 不自动安装 PaddlePaddle 3.3.x，因为当前官方 macOS wheel 是 arm64。
+
+## 平台判定
+
+安装器先识别操作系统与 CPU 架构，再决定可显示的 profile：
+
+| 平台 | CPU Paddle | NVIDIA GPU profile |
+| --- | --- | --- |
+| Windows x86_64 | 是 | 是 |
+| Linux x86_64 | 是 | 是 |
+| Linux arm64 | 是 | 否 |
+| macOS arm64 | 是 | 否 |
+| macOS x86_64 | 否 | 否 |
+
+不受支持的平台不会“尝试后再报错”，而是在 profile 推荐阶段直接隐藏/阻止不适用的 Paddle runtime。
+
+## NVIDIA GPU 自动推荐
+
+Windows/Linux x86_64 会调用 `nvidia-smi`，读取：
+
+- GPU index/name；
+- driver version；
+- Compute Capability；
+- 驱动报告的最高 CUDA compatibility。
+
+自动推荐 GPU 需要主 GPU（GPU 0）的 **Compute Capability > 7.5**，并且驱动兼容上限至少覆盖一个项目 GPU profile。
+
+当前 profile：
+
+| uv profile | Paddle runtime |
 | --- | --- |
-| `ocr-cpu` | PaddleOCR + PaddlePaddle CPU 3.3.0 + Google Lens |
-| `ocr-gpu-cu118` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens |
-| `ocr-gpu-cu126` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens + Windows cuDNN 9 |
-| `ocr-gpu-cu129` | PaddleOCR + PaddlePaddle GPU 3.3.0 + Google Lens + Windows cuDNN 9 |
-| `lens` | Google Lens / chrome-lens-py |
-| 无 | Core only，仅保留核心环境 |
+| `ocr-cpu` | `paddlepaddle==3.3.0` |
+| `ocr-gpu-cu118` | `paddlepaddle-gpu==3.3.0`, CUDA 11.8 index |
+| `ocr-gpu-cu126` | `paddlepaddle-gpu==3.3.0`, CUDA 12.6 index |
+| `ocr-gpu-cu129` | `paddlepaddle-gpu==3.3.0`, CUDA 12.9 index |
+| `lens` | Google Lens only |
+| Core only | 不安装可选 OCR runtime |
 
-自动推荐不依赖用户是否另外安装系统 CUDA Toolkit：Compute Capability 直接由 NVIDIA 驱动提供的 `nvidia-smi --query-gpu=...compute_cap` 读取，CUDA profile 则依据驱动公开报告的 CUDA 兼容上限选择。Picture Capture 按 PaddlePaddle 当前 Windows 安装要求，将 **Compute Capability > 7.5** 作为自动推荐 GPU 的硬件门槛；若旧驱动无法返回该字段，则保守推荐 CPU，Advanced 中仍保留手动 GPU profile。最终是否真正可用仍由安装后的 Paddle GPU 实测决定。
+若驱动报告 CUDA 12.9 或更高，推荐 `ocr-gpu-cu129`；12.6–12.8 推荐 `ocr-gpu-cu126`；11.8–12.5 推荐 `ocr-gpu-cu118`。无法可靠确认 Compute Capability/CUDA compatibility 时保守推荐 CPU。
 
-GPU 模式下，`paddlepaddle-gpu==3.3.0` 与 CUDA 11.8 / 12.6 / 12.9 对应的 PaddlePaddle 官方索引都直接声明在 `pyproject.toml` 中。CPU/GPU profile 在 uv 中声明为互斥，安装器只执行标准的锁定同步，不再手工卸载 runtime、拼接下载 URL 或运行 `uv pip install`。
+普通用户只需按 Enter 接受推荐值。具体 CUDA profile 仅放在 Advanced 中供兼容性排查。
 
-Windows 上 Paddle 3.3.0 的 CUDA 12.6/12.9 wheel 需要 cuDNN 9 DLL，但其 wheel 元数据不会像 Linux 一样自动声明 NVIDIA cuDNN runtime。因此这两个 profile 显式加入 Windows `nvidia-cudnn-cu12`。Picture Capture 在导入 PaddleOCR 前会自动发现 `.venv\Lib\site-packages\nvidia\*\bin` 并加入当前进程 DLL 搜索路径，不要求用户修改系统 PATH。
+## macOS 与 ARM 平台
 
-## profile 持久化
+Apple Silicon macOS 以及 Linux arm64 会直接推荐 `ocr-cpu`，不会运行 NVIDIA GPU 检测。
 
-安装成功后，根目录会生成：
+Intel macOS 不会自动安装 PaddlePaddle 3.3.x；安装器推荐 Core only，并允许选择 Google Lens。系统 Tesseract 仍可独立使用。
+
+## Windows cuDNN
+
+Windows CUDA 12.6/12.9 profile 显式加入项目内 `nvidia-cudnn-cu12`。运行前：
+
+```text
+src/picture_capture/windows_gpu_runtime.py
+```
+
+会发现 `.venv\Lib\site-packages\nvidia\*\bin` 并加入当前进程 DLL 搜索路径。Linux/macOS 不执行该 Windows DLL 逻辑。
+
+## 安装后验证
+
+除 Core only 外，安装器会调用：
+
+```text
+scripts/verify_ocr_environment.py
+```
+
+CPU profile 会验证：
+
+- PaddleOCR 可导入；
+- Google Lens 可导入；
+- 只存在一个 Paddle runtime；
+- Paddle 为 CPU build。
+
+GPU profile额外验证：
+
+- Paddle 为 CUDA build；
+- `paddle.set_device("gpu:0")` 成功；
+- 实际执行 GPU `conv2d`；
+- 结果可回传到 NumPy；
+- Windows 下项目内 cuDNN DLL 可发现。
+
+只有验证成功后才写入：
 
 ```text
 .picture_capture_ocr_extra
 ```
 
-文件只保存当前 profile 名，例如：
+因此“安装了 GPU wheel”不等于“GPU 已可用”；最终以真实计算 smoke test 为准。
+
+## 日常启动
+
+Windows：
 
 ```text
-ocr-gpu-cu126
+run_windows.bat
 ```
 
-该文件记录最近一次成功安装的 profile，主要用于诊断和切换提示。日常 `run_windows.bat` 不再读取它，也不会在每次启动时重新同步环境；启动脚本只直接运行已经准备好的项目 `.venv`。该 profile 文件属于本机环境设置，已加入 `.gitignore`。
+Linux：
 
-## 为什么 GPU runtime 由安装器处理
-
-PaddlePaddle GPU 的 wheel 使用 CUDA 专用索引。项目通过 uv 的 extra-specific source 配置，让 `ocr-gpu-cu118`、`ocr-gpu-cu126`、`ocr-gpu-cu129` 各自绑定对应官方索引，并将 CPU/GPU runtime profile 声明为互斥。
-
-因此 PaddleOCR、Google Lens 和 Paddle runtime 都由同一份 `pyproject.toml + uv.lock` 管理，不再需要安装器对环境做额外的 pip 式修改。
-
-## 验证
-
-安装器会自动运行：
-
-```text
-.venv\Scripts\python.exe scripts\verify_ocr_environment.py --expect gpu --profile <profile>
+```bash
+./run_linux.sh
 ```
 
-GPU 模式会检查：
+macOS：
 
-- PaddleOCR 是否可导入；
-- Google Lens / chrome-lens-py 是否可导入；
-- 是否只存在一个 Paddle runtime；
-- Paddle 是否为 CUDA build；
-- 安装前已核验主 GPU 的 Compute Capability > 7.5；
-- 当前 Paddle 设备信息；
-- Windows 项目内 NVIDIA DLL 目录是否可发现；
-- 实际运行一次 GPU `conv2d`，确保 cuDNN DLL 能被加载。
+```bash
+./run_macos.command
+```
 
-也可在软件内点击【OCR / 简化环境状态】再次确认。
+日常启动器都不执行安装、更新或依赖同步，只运行已经准备好的项目 `.venv`。
 
-## 切换 CUDA 配置
+## 手动命令
 
-直接重新运行 `install_ocr_windows.bat` 并选择新的 CUDA profile 即可。uv 会按所选互斥 profile 同步环境、移除不属于该 profile 的旧 runtime，再安装锁定的目标 runtime；验证成功后才更新 `.picture_capture_ocr_extra`。
+受支持平台也可直接执行 CPU OCR profile：
 
-不建议同时手工选择多个 GPU profile，也不要在 GPU 环境中叠加旧的 `paddleocr` CPU extra。
+```bash
+uv sync --locked --no-dev --extra ocr-cpu
+```
 
-## Windows BAT 的安全收敛
-
-两个 Windows BAT 都只保留最小包装逻辑：
-
-- `run_windows.bat` 以前台 `python.exe` 直接运行主程序，不使用 `start`、`pythonw.exe`、隐藏窗口或后台重启；同时不再执行 `uv sync`、`uv run`、pip 或任何下载/安装命令。若 `.venv` 不存在，启动器只提示先运行安装器并退出。
-- `install_ocr_windows.bat` 只负责确保核心 `.venv` 存在并调用 `scripts/windows_ocr_setup.py`；BAT 本身不包含 GPU 下载索引、包卸载、动态安装命令或交互式 profile 解析。
-
-这种结构让批处理文件本身保持简单、可审计，同时把依赖选择交给 uv 的声明式配置。
+GPU 用户不应再叠加旧的 `paddleocr` CPU extra，因为 CPU/GPU runtime 在 uv 中声明为互斥。
 
 ## Tesseract
 
-Tesseract 仍是系统级程序，不由 uv 管理。Windows 可使用：
+Tesseract 是系统级程序，不由 uv 管理。Picture Capture 会检查其路径与语言包；没有 PaddleOCR 时仍可继续使用 Tesseract 相关功能。
 
-```bat
-winget install tesseract-ocr.tesseract
-```
+更完整的平台边界见 [platform-support.md](platform-support.md)。
