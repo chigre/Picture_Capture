@@ -137,7 +137,11 @@ class AppSettings:
     start_y: int = 55
     bottom_y: int = 0
     manual_x: int = 28
-    # Per-column manual corrections relative to the automatically detected\n    # column starts. Values use the same persisted canonical reference-page\n    # pixel space as the other Project Profile geometry fields.\n    column_start_offsets: list[int] = field(default_factory=list)\n    manual_y: int = 400
+    # Per-column manual corrections relative to the automatically detected
+    # column starts. Values use the same persisted canonical reference-page
+    # pixel space as the other Project Profile geometry fields.
+    column_start_offsets: list[int] = field(default_factory=list)
+    manual_y: int = 400
     body_indent: int = 28
     character_height: int = 26
     row_padding: int = 1
