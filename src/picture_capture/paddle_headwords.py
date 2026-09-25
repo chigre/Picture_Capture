@@ -832,10 +832,13 @@ def run_tesseract_band_records(
         resolved, "stdin", "stdout", "-l", resolved_tesseract_language(settings),
         "--psm", str(max(3, int(psm_override if psm_override is not None else settings.paddle_tesseract_psm))), "tsv",
     ]
-    proc = subprocess.run(
-        command, input=payload.getvalue(), stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, check=False,
-    )
+    try:
+        proc = subprocess.run(
+            command, input=payload.getvalue(), stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False, timeout=120,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Tesseract OCR 超时（120 秒）；本栏已放弃 Tesseract 结果。") from exc
     if proc.returncode:
         detail = proc.stderr.decode("utf-8", errors="replace").strip()
         raise RuntimeError(f"Tesseract OCR 失败：{detail}")
