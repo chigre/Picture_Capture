@@ -397,7 +397,7 @@ class AppSettings:
     paddle_enable_lens: bool = False
     paddle_lens_mode: str = "off"
     # Compatibility field; runtime Lens language follows ocr_language.
-    paddle_lens_language: str = "eng"
+    paddle_lens_language: str = ""
     paddle_lens_timeout: int = 60
     paddle_lens_default_confidence: float = 0.82
     # Overlay one checkbox for every left-edge OCR row.  A rejected/missed row can
@@ -538,7 +538,7 @@ class AppSettings:
         if int(raw.get("review_font_semantics_version", 1) or 1) < 2:
             try:
                 old_size = max(6, int(raw.get("review_entry_font_size", cls().review_entry_font_size)))
-                old_zoom = min(250, max(20, int(raw.get("review_zoom_percent", cls().review_zoom_percent))))
+                old_zoom = min(250, max(20, int(raw.get("review_zoom_percent", 64))))
                 if old_size > 36 and old_zoom < 100:
                     raw["review_entry_font_size"] = max(6, min(48, round(old_size * old_zoom / 100.0)))
             except (TypeError, ValueError):
