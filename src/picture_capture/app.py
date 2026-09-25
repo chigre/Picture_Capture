@@ -11589,6 +11589,7 @@ class PictureCaptureApp(tk.Tk):
                 parent=self,
             )
         canvas_available = max(500, int(self.canvas.winfo_width()) - 24)
+        appearance_mode = self.appearance_mode
         self.status_var.set(f"正在后台打开项目：{root}")
 
         def worker():
@@ -11653,7 +11654,10 @@ class PictureCaptureApp(tk.Tk):
                 max(1, round(image.width * view_scale)),
                 max(1, round(image.height * view_scale)),
             )
-            display_image = image.resize(display_size, Image.Resampling.LANCZOS)
+            display_image = themed_display_image(
+                image.resize(display_size, Image.Resampling.LANCZOS),
+                appearance_mode,
+            )
             payload = {
                 "project_root": str(project.root), "index": selected_index, "image": image,
                 "entries": entries, "polygons": polygons, "ocr_payload": ocr_payload,
