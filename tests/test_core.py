@@ -4714,8 +4714,13 @@ def test_sidebar_has_collapsed_postproduction_section_and_project_details():
 
 def test_auxiliary_overlay_defaults_and_label_style_controls():
     settings = AppSettings()
-    assert settings.guide_color == "#ff0000"
+    assert settings.guide_color == "#1976d2"
+    assert settings.page_section_color == "#1976d2"
     assert settings.headword_marker_color == "#ff0000"
+    assert settings.illustration_outline_color == "#1976d2"
+    assert settings.illustration_label_border_color == "#1976d2"
+    assert settings.main_entry_default_color == "#e6e6e6"
+    assert settings.illustration_label_fill_color == "#e6e6e6"
     assert settings.marker_height == 2
     assert settings.guide_width == 2
     assert settings.page_section_width == 2
@@ -4755,6 +4760,11 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in app_text
     assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
     assert 'self.settings.illustration_label_border_width, overlay_scale' in app_text
+    # Sequence number is a widget immediately before the editor and shares its background.
+    assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in app_text
+    assert 'bg=str(editor.cget("bg"))' in app_text
+    assert 'record["index_widget"] = index_label' in app_text
+    assert 'index_widget.configure(bg=bg)' in app_text
 
 
 def test_v21112_picdic_index_has_no_percent_signs(tmp_path):
