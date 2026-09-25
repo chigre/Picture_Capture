@@ -4181,7 +4181,7 @@ def test_bookmark_controls_and_project_switch_protect_project_settings():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     assert 'text="⨇"' in text and 'text="⨈"' in text
-    assert 'columns = ("bookmark", "page", "lined", "fill_status", "illustrations")' in text
+    assert 'columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")' in text
     assert '"●" if page.stem in self._bookmark_stems() else ""' in text
     load_start = text.index("    def _load_project(")
     load_end = text.index("    def on_page_select", load_start)
@@ -7094,7 +7094,7 @@ def test_page_sections_sidecar_roundtrip_uses_managed_storage(tmp_path):
 def test_page_sections_single_explicit_region_is_preserved(tmp_path):
     root = tmp_path / "book"
     root.mkdir()
-    ensure_project_storage(root)
+    ensure_project_storage(root, "test")
     page = root / "0001.png"
     Image.new("RGB", (1200, 1600), "white").save(page)
     section = [PageSection(120, 1480)]
