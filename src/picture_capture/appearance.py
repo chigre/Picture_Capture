@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import colorsys
+import ctypes
+import sys
 import tkinter as tk
 from tkinter import ttk
 
@@ -148,6 +150,7 @@ def _dark_option_value(
     background_options = {
         "background", "activebackground", "selectbackground",
         "highlightbackground", "highlightcolor", "troughcolor",
+        "disabledbackground", "readonlybackground", "buttonbackground",
     }
     foreground_options = {
         "foreground", "activeforeground", "disabledforeground",
@@ -156,8 +159,13 @@ def _dark_option_value(
 
     if option in background_options:
         if saturation < 0.16:
-            if widget_class in {"Entry", "Text", "Listbox", "Spinbox"} and option == "background":
+            if (
+                widget_class in {"Entry", "Text", "Listbox", "Spinbox"}
+                and option in {"background", "disabledbackground", "readonlybackground"}
+            ):
                 return palette["input_bg"]
+            if widget_class == "Spinbox" and option == "buttonbackground":
+                return palette["button"]
             if widget_class == "Button":
                 return palette["button_hover"] if option == "activebackground" else palette["button"]
             if option == "selectbackground":
@@ -191,6 +199,9 @@ _CLASSIC_COLOR_OPTIONS = (
     "foreground",
     "activebackground",
     "activeforeground",
+    "disabledbackground",
+    "readonlybackground",
+    "buttonbackground",
     "disabledforeground",
     "insertbackground",
     "selectbackground",
@@ -218,6 +229,8 @@ def apply_classic_widget_appearance(root: tk.Misc, mode: object) -> None:
         except tk.TclError:
             continue
         is_ttk = isinstance(widget, ttk.Widget)
+        if bool(getattr(widget, "_pc_skip_classic_appearance", False)):
+            continue
         original = getattr(widget, "_pc_light_theme_options", None)
         if normalized == "light":
             if isinstance(original, dict):
@@ -271,6 +284,38 @@ def apply_classic_widget_appearance(root: tk.Misc, mode: object) -> None:
                 widget.configure(**{option: themed})
             except tk.TclError:
                 pass
+
+
+def apply_native_titlebar_appearance(window: tk.Misc, mode: object) -> None:
+    """Ask Windows DWM to match an app Toplevel title bar to light/dark mode.
+
+    Tk's client window is wrapped by a native top-level HWND on Windows, so the
+    DWM attribute must be applied to the parent HWND. Unsupported Windows builds
+    and non-Windows platforms intentionally fall back to the operating-system
+    title-bar appearance.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        window.update_idletasks()
+        client_hwnd = int(window.winfo_id())
+        user32 = ctypes.windll.user32
+        dwmapi = ctypes.windll.dwmapi
+        native_hwnd = int(user32.GetParent(client_hwnd)) or client_hwnd
+        enabled = ctypes.c_int(1 if normalize_appearance_mode(mode) == "dark" else 0)
+        # Attribute 20 is used by current Windows 10/11. Attribute 19 is the
+        # compatibility value used by earlier Windows 10 builds.
+        result = int(
+            dwmapi.DwmSetWindowAttribute(
+                native_hwnd, 20, ctypes.byref(enabled), ctypes.sizeof(enabled)
+            )
+        )
+        if result != 0:
+            dwmapi.DwmSetWindowAttribute(
+                native_hwnd, 19, ctypes.byref(enabled), ctypes.sizeof(enabled)
+            )
+    except (AttributeError, OSError, TypeError, ValueError, tk.TclError):
+        return
 
 
 def usage_guide_palette(mode: object) -> dict[str, str]:
