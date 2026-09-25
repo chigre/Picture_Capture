@@ -11333,12 +11333,13 @@ class PictureCaptureApp(tk.Tk):
             self._invalidate_ui_worker("page-load")
 
     def _request_page_load(
-        self, index: int, *, reset_zoom: bool = False, current_already_saved: bool = False,
+        self, index: int, *, reset_zoom: bool = False,
+        current_already_saved: bool = False, force: bool = False,
     ) -> bool:
         """Decode/read a target page off-thread, then commit it on the Tk thread."""
         if not self.project or not (0 <= index < len(self.project.images)):
             return False
-        if index == self.current_index and self.image is not None:
+        if index == self.current_index and self.image is not None and not force:
             self._pending_page_index = None
             self._invalidate_ui_worker("page-load")
             self._set_page_list_selection(index, ensure_visible=True)
