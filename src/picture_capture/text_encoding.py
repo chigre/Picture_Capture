@@ -62,3 +62,61 @@ def decode_text_bytes(data: bytes) -> tuple[str, str]:
 def read_text_detected(path: str | Path) -> tuple[str, str]:
     """Read a user-supplied text file and return ``(text, detected_encoding)``."""
     return decode_text_bytes(Path(path).read_bytes())
+
+
+def detect_text_file_encoding(
+    path: str | Path, *, sample_size: int = 512 * 1024,
+) -> str:
+    """Detect a text file encoding from a bounded prefix suitable for streaming reads.
+
+    Incremental decoders use final=False so a multibyte character split at
+    the sample boundary is not mistaken for an invalid encoding.
+    """
+    path = Path(path)
+    with path.open("rb") as handle:
+        data = handle.read(max(4096, int(sample_size)))
+
+    if data.startswith(codecs.BOM_UTF8):
+        return "utf-8-sig"
+    if data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        return "utf-16"
+    if data.startswith((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE)):
+        return "utf-32"
+    if data:
+        even_nulls = data[0::2].count(0) / max(1, len(data[0::2]))
+        odd_nulls = data[1::2].count(0) / max(1, len(data[1::2]))
+        if max(even_nulls, odd_nulls) > 0.35:
+            return "utf-16-be" if even_nulls > odd_nulls else "utf-16-le"
+
+    try:
+        decoder = codecs.getincrementaldecoder("utf-8")("strict")
+        decoder.decode(data, final=False)
+        return "utf-8"
+    except UnicodeDecodeError:
+        pass
+
+    legacy_candidates: list[tuple[int, str]] = []
+    for encoding in ("gb18030", "big5"):
+        try:
+            decoder = codecs.getincrementaldecoder(encoding)("strict")
+            text = decoder.decode(data, final=False)
+        except UnicodeDecodeError:
+            continue
+        legacy_candidates.append((_cjk_likelihood(text), encoding))
+    if legacy_candidates:
+        score, encoding = max(legacy_candidates, key=lambda item: item[0])
+        if score > 0:
+            return encoding
+
+    match = from_bytes(data).best()
+    if match is not None and match.encoding:
+        return str(match.encoding).lower()
+    return "cp1252"
+
+
+def iter_text_lines_detected(path: str | Path):
+    """Yield decoded lines without materializing the entire file in memory."""
+    path = Path(path)
+    encoding = detect_text_file_encoding(path)
+    with path.open("r", encoding=encoding, newline=None) as handle:
+        yield from handle
