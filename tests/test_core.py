@@ -6524,7 +6524,9 @@ def test_v2140_review_left_pane_fits_complete_toolbar_and_right_gets_remaining_w
     review = text[start:end]
     assert "self.review_panes = panes" in review
     assert "self.review_control_row = row1" in review
-    assert "self.after_idle(self._fit_review_left_pane_to_toolbar)" in review
+    assert "self.after_idle(self._initialize_review_layout_and_rows)" in review
+    assert "def _initialize_review_layout_and_rows" in review
+    assert "self._fit_review_left_pane_to_toolbar()" in review
     fit_start = review.index("    def _fit_review_left_pane_to_toolbar")
     fit_end = review.index("    def _build(self) -> None:", fit_start)
     fit = review[fit_start:fit_end]
