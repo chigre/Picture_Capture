@@ -45,6 +45,8 @@ from .paddle_headwords import (
     parse_headword_filter_rules,
 )
 from .environment_center import EnvironmentCenterWindow
+from .runtime_environment import resolve_paddle_device, user_config_root
+from .ui_compat import bind_context_menu, fit_window_to_work_area, preferred_font_family
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
 from .layout_transform import LayoutTransform
 from .coordinate_space import (
@@ -1658,7 +1660,6 @@ class SettingsDialog(tk.Toplevel):
         ("列跟踪分块高度", "column_track_block_height", int),
         ("列跟踪最大步移", "column_track_max_step", int),
         ("PaddleOCR 语言", "paddle_language", str),
-        ("PaddleOCR 设备", "paddle_device", str),
         ("PaddleOCR 模型版本", "paddle_ocr_version", str),
         ("OCR图像预处理", "paddle_preprocessing", str),
         ("OCR输入最大长边（px）", "paddle_max_input_side", int),
@@ -1747,7 +1748,7 @@ class SettingsDialog(tk.Toplevel):
         ("列跟踪", ["column_track_radius", "column_track_block_height", "column_track_max_step"]),
         ("插图识别", ["illustration_detect_padding", "illustration_detect_right_padding"]),
         ("OCR 基础", [
-            "ocr_executable", "paddle_device", "paddle_ocr_version",
+            "ocr_executable", "paddle_ocr_version",
             "paddle_preprocessing", "paddle_max_input_side", "batch_interval",
         ]),
         ("PaddleOCR 候选与版面（高级）", [
@@ -1852,7 +1853,7 @@ class SettingsDialog(tk.Toplevel):
         "column_track_block_height": "作用：开启列跟踪后，沿阅读轴把页面切成多高的块来重新估计栏左缘。块越小，路径能更细地跟随局部弯曲；块越大，路径更平滑稳定。\n\n调整：太小容易受单个粗字、插图、污点影响；太大则跟不上快速变化的书脊弯曲。应与搜索半径、最大步移一起理解。",
         "column_track_max_step": "作用：限制相邻列跟踪锚点之间允许的最大水平跳变，避免某个分块突然追到正文或邻栏。\n\n调整：过小会把真实的快速弯曲强行拉直；过大则失去防跳栏作用。仅在已开启列跟踪且诊断显示路径被过度限制/突然跳变时调整。",
         "ocr_language": "作用：项目的主要词头/OCR语言，是多个组件的上层语义入口：用于选择/映射 PaddleOCR 与 Tesseract 语言、Dictionary Profile 默认结构、排序预设以及部分 CJK/拉丁解析路径。\n\n调整：应填写词头语言而不是释义语言。改变后可能导致 OCR 模型、Profile 和排序语义变化，已有 OCR 缓存/结果不应默认视为仍可比较，稳定项目中不要频繁切换。",
-        "paddle_device": "作用：指定 PaddleOCR 运行设备，例如 CPU/GPU。它影响推理速度、显存/内存和运行环境要求，不改变词头规则本身。\n\n调整：GPU 只有在 PaddlePaddle GPU、CUDA/cuDNN 与当前环境真正可用时才应选择；CPU 更通用。切换设备后如果出现 DLL/CUDA 错误，先运行 OCR 环境检测，而不是调识别阈值。",
+        "paddle_device": "兼容字段：旧项目中的 CPU/GPU 值继续读取，但运行时设备现在由本机环境自动决定，不再作为可迁移的项目参数。高级用户可用 PICTURE_CAPTURE_PADDLE_DEVICE=cpu/gpu 临时强制本机设备。",
         "paddle_preprocessing": "作用：决定送入 PaddleOCR 前的图像预处理。original 保留原图；grayscale 转灰度；auto_contrast 拉伸对比度；binary 强制二值化。\n\n选择：默认优先 original，因为 OCR 模型通常能利用原始灰度/颜色信息。只有扫描发灰、底色不均或模型确有改善证据时再改；过度二值化可能损失细笔画和重音符号。",
         "paddle_max_input_side": "作用：限制送入 PaddleOCR 的图像最大长边，超出时按比例缩小。它主要平衡小字细节、推理速度、内存/显存和模型稳定性。\n\n调整：增大可保留更多细节，但会更慢、更占显存；减小更省资源但可能让小字号/附加符号变糊。改变此项会改变 OCR 输入图像，应视为可能需要重新 OCR，而不仅是重新评分候选。",
         "paddle_band_width_ratio": "作用：每栏左侧有多少百分比宽度进入 OCR 候选带。程序不是把整栏全文都送去做词头判断，而是优先截取栏左区域以减少正文干扰。\n\n调整：太小会截断长词头、性别变体或紧随其后的 POS；太大则会引入更多释义正文、增加耗时和误候选。先以“能完整覆盖词头 + 近邻语法标签”为目标。",
@@ -1934,7 +1935,7 @@ class SettingsDialog(tk.Toplevel):
         "column_track_radius", "column_track_block_height", "column_track_max_step",
     )
     OCR_COMMON_FIELDS = (
-        "ocr_language", "paddle_device", "paddle_preprocessing",
+        "ocr_language", "paddle_preprocessing",
         "paddle_band_width_ratio", "paddle_left_tolerance",
         "paddle_separator_safety_px",
     )
@@ -3050,7 +3051,7 @@ class SettingsDialog(tk.Toplevel):
         rules_editor_frame = ttk.Frame(rules_tab, padding=(12, 0, 12, 6))
         rules_editor_frame.grid(row=1, column=0, sticky="nsew")
         rules_editor_frame.columnconfigure(0, weight=1); rules_editor_frame.rowconfigure(0, weight=1)
-        self.rules_text = tk.Text(rules_editor_frame, wrap="none", undo=True, font=("Consolas", 10), padx=8, pady=8, height=18)
+        self.rules_text = tk.Text(rules_editor_frame, wrap="none", undo=True, font=(preferred_font_family(self, ("Consolas", "Menlo", "DejaVu Sans Mono"), fallback_named_font="TkFixedFont"), 10), padx=8, pady=8, height=18)
         rules_ybar = ttk.Scrollbar(rules_editor_frame, orient="vertical", command=self.rules_text.yview)
         rules_xbar = ttk.Scrollbar(rules_editor_frame, orient="horizontal", command=self.rules_text.xview)
         self.rules_text.configure(yscrollcommand=rules_ybar.set, xscrollcommand=rules_xbar.set)
@@ -4530,7 +4531,7 @@ class ReviewWindow(tk.Toplevel):
         self.word_list = tk.Listbox(
             ref_box,
             exportselection=False,
-            font=("Cambria", 14),
+            font=(preferred_font_family(self, ("Cambria", "Times New Roman", "Times", "DejaVu Serif")), 14),
             relief="flat",
             bd=0,
             highlightthickness=1,
@@ -6853,8 +6854,7 @@ class OCRConflictReviewDialog(tk.Toplevel):
         super().__init__(parent)
         self.parent = parent
         self.title("OCR词头冲突复核")
-        self.geometry("1180x680")
-        self.minsize(900, 520)
+        fit_window_to_work_area(self, 1180, 680, min_width=900, min_height=520)
         self.only_issues = tk.BooleanVar(value=True)
         self.status_var = tk.StringVar(value="")
         self._row_ids: list[str] = []
@@ -7020,8 +7020,7 @@ class CropSettingsDialog(tk.Toplevel):
         self.parent = parent
         self.indices = list(indices)
         self.title("切图设置")
-        self.geometry("780x690")
-        self.minsize(700, 600)
+        fit_window_to_work_area(self, 780, 690, min_width=700, min_height=600)
         self.transient(parent)
         self.grab_set()
         self.general_top_var = tk.StringVar()
@@ -7296,8 +7295,7 @@ class OldNewComparisonWindow(tk.Toplevel):
         self.parent = parent
         self.payload = payload
         self.title("新旧比较")
-        self.geometry("1180x760")
-        self.minsize(900, 560)
+        fit_window_to_work_area(self, 1180, 760, min_width=900, min_height=560)
         self.transient(parent)
         self.protocol("WM_DELETE_WINDOW", self._close)
 
@@ -8373,9 +8371,7 @@ class PictureCaptureApp(tk.Tk):
 
     @staticmethod
     def _default_session_state_path() -> Path:
-        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
-        root = Path(base).expanduser() if base else (Path.home() / ".picture_capture")
-        return root / "PictureCapture" / SESSION_STATE_FILENAME if base else root / SESSION_STATE_FILENAME
+        return user_config_root() / SESSION_STATE_FILENAME
 
     def _read_session_state(self) -> dict:
         try:
@@ -8717,7 +8713,7 @@ class PictureCaptureApp(tk.Tk):
         self.page_list.bind("<<TreeviewSelect>>", self.on_page_select)
         self.page_list.bind("<Button-1>", self._page_list_bookmark_click, add="+")
         self.page_list.bind("<MouseWheel>", self._list_mousewheel)
-        self.page_list.bind("<Button-3>", self._page_list_right_click)
+        bind_context_menu(self.page_list, self._page_list_right_click)
         self.page_list.bind("<Configure>", lambda _e: self._schedule_page_cell_overlay_refresh())
         self._page_column_vars = {
             "lined": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_lined", True))),
@@ -8811,7 +8807,7 @@ class PictureCaptureApp(tk.Tk):
         self.canvas.bind("<Button-1>", self.canvas_left_click)
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
-        self.canvas.bind("<Button-3>", self.canvas_right_click)
+        bind_context_menu(self.canvas, self.canvas_right_click)
         self.canvas.bind("<Motion>", self.canvas_motion)
         self.canvas.bind("<Leave>", self.canvas_leave)
         self.canvas.bind("<MouseWheel>", self.canvas_mousewheel)
@@ -10215,7 +10211,10 @@ class PictureCaptureApp(tk.Tk):
                 f"✗ PP-OCRv6：当前 PaddleOCR {paddleocr_version or '未知'} 不支持；请升级到 >= 3.7"
             )
 
-        lines.append(f"配置设备：{settings.paddle_device or 'cpu'}")
+        runtime_device = resolve_paddle_device()
+        lines.append(f"本机运行设备：{runtime_device}（自动；项目不再固定 CPU/GPU）")
+        if str(getattr(settings, "paddle_device", "auto") or "auto").lower() not in {"", "auto"}:
+            lines.append("提示：项目中的旧 paddle_device 值仅保留兼容读取，当前运行已忽略该项目级设备设置。")
         try:
             import paddle  # type: ignore
             compiled_cuda = bool(paddle.device.is_compiled_with_cuda())
@@ -10225,8 +10224,6 @@ class PictureCaptureApp(tk.Tk):
                 except Exception:
                     gpu_count = 0
                 lines.append(f"CUDA：可用（检测到 {gpu_count} 个 GPU）")
-                if str(settings.paddle_device).lower().startswith("cpu"):
-                    lines.append("提示：已安装 GPU 版 Paddle，但当前项目仍配置为 CPU；可将 PaddleOCR 设备改为 gpu。")
             elif paddle_gpu_version:
                 lines.append("CUDA：GPU 版 runtime 已安装，但当前进程未检测到可用 CUDA。")
             else:
@@ -15163,9 +15160,9 @@ class PictureCaptureApp(tk.Tk):
         self._show_text_report(title, "\n".join(lines))
 
     def _show_text_report(self, title: str, text: str) -> None:
-        win = tk.Toplevel(self); win.title(title); win.geometry("900x650")
+        win = tk.Toplevel(self); win.title(title); fit_window_to_work_area(win, 900, 650, min_width=640, min_height=460)
         frame = ttk.Frame(win, padding=6); frame.pack(fill="both", expand=True)
-        box = tk.Text(frame, wrap="none", font=("Consolas", 11))
+        box = tk.Text(frame, wrap="none", font=(preferred_font_family(win, ("Consolas", "Menlo", "DejaVu Sans Mono"), fallback_named_font="TkFixedFont"), 11))
         ybar = ttk.Scrollbar(frame, orient="vertical", command=box.yview)
         xbar = ttk.Scrollbar(frame, orient="horizontal", command=box.xview)
         box.configure(yscrollcommand=ybar.set, xscrollcommand=xbar.set)
