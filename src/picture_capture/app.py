@@ -9930,6 +9930,54 @@ class PictureCaptureApp(tk.Tk):
                 self._update_page_row(i)
             self._schedule_page_cell_overlay_refresh()
 
+    def _open_quick_font_picker(
+        self,
+        *,
+        title: str,
+        family_name: str,
+        size_name: str,
+        bold_name: str,
+        italic_name: str,
+        summary_var: tk.StringVar,
+        min_size: int = 5,
+        max_size: int = 200,
+    ) -> None:
+        family_var = self.quick_vars[family_name]
+        size_var = self.quick_vars[size_name]
+        bold_var = self.quick_bool_vars[bold_name]
+        italic_var = self.quick_bool_vars[italic_name]
+        try:
+            current_size = int(float(size_var.get()))
+        except (TypeError, ValueError):
+            current_size = max(min_size, 12)
+
+        def apply_choice(family: str, size: int, bold: bool, italic: bool) -> None:
+            family_var.set(family)
+            size_var.set(str(size))
+            bold_var.set(bool(bold))
+            italic_var.set(bool(italic))
+            setattr(self.settings, family_name, family)
+            setattr(self.settings, size_name, int(size))
+            setattr(self.settings, bold_name, bool(bold))
+            setattr(self.settings, italic_name, bool(italic))
+            summary_var.set(_font_choice_summary(family, size, bold, italic))
+            if self.project is not None:
+                self.save_settings()
+            self.redraw()
+            self.status_var.set(f"{title.replace('选择字体 — ', '')}字体已更新")
+
+        FontPickerDialog(
+            self,
+            title=title,
+            family=str(family_var.get()),
+            size=current_size,
+            bold=bool(bold_var.get()),
+            italic=bool(italic_var.get()),
+            on_apply=apply_choice,
+            min_size=min_size,
+            max_size=max_size,
+        )
+
     def _build_quick_settings(self, parent: ttk.Frame) -> None:
         self.quick_vars: dict[str, tk.Variable] = {}
         self.quick_bool_vars: dict[str, tk.BooleanVar] = {}
@@ -10119,28 +10167,56 @@ class PictureCaptureApp(tk.Tk):
         font_row = ttk.Frame(aux); font_row.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(2, 0))
         ttk.Label(font_row, text="词条字体").pack(side="left")
         family_var = tk.StringVar(value=self.settings.main_entry_font_family); self.quick_vars["main_entry_font_family"] = family_var; self.quick_field_casts["main_entry_font_family"] = str
-        ttk.Combobox(font_row, textvariable=family_var, values=tuple(sorted(set(font.families()), key=str.casefold)), width=16).pack(side="left")
-        ttk.Label(font_row, text="字号").pack(side="left", padx=(8, 2))
         size_var = tk.StringVar(value=str(self.settings.main_entry_font_size)); self.quick_vars["main_entry_font_size"] = size_var; self.quick_field_casts["main_entry_font_size"] = int
-        ttk.Entry(
-            font_row, textvariable=size_var, width=5, justify="left"
-        ).pack(side="left")
-        for label, name in (("粗体", "main_entry_font_bold"), ("斜体", "main_entry_font_italic")):
-            var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
-            ttk.Checkbutton(font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
+        main_bold_var = tk.BooleanVar(value=bool(self.settings.main_entry_font_bold)); self.quick_bool_vars["main_entry_font_bold"] = main_bold_var
+        main_italic_var = tk.BooleanVar(value=bool(self.settings.main_entry_font_italic)); self.quick_bool_vars["main_entry_font_italic"] = main_italic_var
+        main_font_summary_var = tk.StringVar(
+            value=_font_choice_summary(
+                family_var.get(), size_var.get(), main_bold_var.get(), main_italic_var.get()
+            )
+        )
+        ttk.Label(font_row, textvariable=main_font_summary_var).pack(side="left", fill="x", expand=True, padx=(6, 0))
+        ttk.Button(
+            font_row, text="选择字体…",
+            command=lambda: self._open_quick_font_picker(
+                title="选择字体 — 主界面词条",
+                family_name="main_entry_font_family",
+                size_name="main_entry_font_size",
+                bold_name="main_entry_font_bold",
+                italic_name="main_entry_font_italic",
+                summary_var=main_font_summary_var,
+                min_size=5,
+                max_size=200,
+            ),
+            style="PC.Compact.TButton",
+        ).pack(side="right", padx=(8, 0))
 
         label_font_row = ttk.Frame(aux); label_font_row.grid(row=4, column=0, columnspan=4, sticky="ew", pady=(2, 0))
         ttk.Label(label_font_row, text="标签字体").pack(side="left")
         label_family_var = tk.StringVar(value=self.settings.illustration_label_font_family); self.quick_vars["illustration_label_font_family"] = label_family_var; self.quick_field_casts["illustration_label_font_family"] = str
-        ttk.Combobox(label_font_row, textvariable=label_family_var, values=tuple(sorted(set(font.families()), key=str.casefold)), width=16).pack(side="left")
-        ttk.Label(label_font_row, text="字号").pack(side="left", padx=(8, 2))
         label_size_var = tk.StringVar(value=str(self.settings.illustration_label_font_size)); self.quick_vars["illustration_label_font_size"] = label_size_var; self.quick_field_casts["illustration_label_font_size"] = int
-        ttk.Entry(
-            label_font_row, textvariable=label_size_var, width=5, justify="left"
-        ).pack(side="left")
-        for label, name in (("粗体", "illustration_label_font_bold"), ("斜体", "illustration_label_font_italic")):
-            var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
-            ttk.Checkbutton(label_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
+        label_bold_var = tk.BooleanVar(value=bool(self.settings.illustration_label_font_bold)); self.quick_bool_vars["illustration_label_font_bold"] = label_bold_var
+        label_italic_var = tk.BooleanVar(value=bool(self.settings.illustration_label_font_italic)); self.quick_bool_vars["illustration_label_font_italic"] = label_italic_var
+        label_font_summary_var = tk.StringVar(
+            value=_font_choice_summary(
+                label_family_var.get(), label_size_var.get(), label_bold_var.get(), label_italic_var.get()
+            )
+        )
+        ttk.Label(label_font_row, textvariable=label_font_summary_var).pack(side="left", fill="x", expand=True, padx=(6, 0))
+        ttk.Button(
+            label_font_row, text="选择字体…",
+            command=lambda: self._open_quick_font_picker(
+                title="选择字体 — 插图标签",
+                family_name="illustration_label_font_family",
+                size_name="illustration_label_font_size",
+                bold_name="illustration_label_font_bold",
+                italic_name="illustration_label_font_italic",
+                summary_var=label_font_summary_var,
+                min_size=5,
+                max_size=200,
+            ),
+            style="PC.Compact.TButton",
+        ).pack(side="right", padx=(8, 0))
 
         ocr_display_row = ttk.Frame(aux); ocr_display_row.grid(row=5, column=0, columnspan=4, sticky="ew")
         for label, name in (("显示OCR内容选择", "review_main_show_ocr_choices"), ("显示OCR比对底色结果", "review_main_show_ocr_background")):
