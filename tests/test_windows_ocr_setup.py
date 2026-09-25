@@ -11,10 +11,11 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC is not None and SPEC.loader is not None
 SETUP = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SETUP)
+PLATFORM_SUPPORT = SETUP.platform_support
 
 
 def windows_support():
-    return SETUP.platform_support("Windows", "AMD64")
+    return PLATFORM_SUPPORT("Windows", "AMD64")
 
 
 def gpu_info(cuda=(12, 9), compute_cap=(8, 6)):
