@@ -9,6 +9,7 @@ import zipfile
 import uuid
 
 from .project_storage import qt_root
+from .runtime_environment import case_insensitive_child
 
 
 _LANGUAGE_NAMES = {
@@ -48,7 +49,7 @@ def build_picdic_package(
     pww_dir = qt_root(root) / "PWW"
     if not pww_dir.is_dir():
         raise RuntimeError("尚未找到项目数据目录中的 PWW；请先执行“词条切图”。")
-    manifests = sorted(pww_dir.glob("*.PWWords"), key=lambda path: path.name.casefold())
+    manifests = sorted((path for path in pww_dir.iterdir() if path.is_file() and path.suffix.casefold() == ".pwwords"), key=lambda path: path.name.casefold())
     if not manifests:
         raise RuntimeError("项目数据目录的 PWW 中没有 .PWWords 清单；请先执行“词条切图”。")
 
@@ -79,7 +80,7 @@ def build_picdic_package(
             if not word:
                 continue
             last_word = word
-            image_path = pww_dir / filename
+            image_path = case_insensitive_child(pww_dir, filename) or (pww_dir / filename)
             if not image_path.is_file():
                 missing.append(filename)
                 continue
