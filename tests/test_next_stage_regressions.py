@@ -1317,8 +1317,8 @@ def test_project_profile_exposes_clickable_column_left_line_nudging():
     assert "def _shift_selected_column" in text
     assert "self.working.column_start_offsets = offsets" in text
     assert "s.column_start_offsets = self._column_offsets_for_count(s.columns)" in text
-    assert 'preview_label.bind(\n                "<Button-1>"' in text
-    assert "fill=(238, 124, 0, 235) if selected" in text
+    assert 'canvas.bind(\n                "<Button-1>"' in text
+    assert 'fill="#ee7c00" if column_index == selected_column else "#1e78d2"' in text
     assert "self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))" in text
     assert "def _nudge_template_column_preview" in text
     assert "canvas.move(items[index], dx, dy)" in text
