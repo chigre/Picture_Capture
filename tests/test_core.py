@@ -15,6 +15,10 @@ from picture_capture.app import (
     transformed_geometry_pending,
 )
 from picture_capture.models import AppSettings, Entry, PolygonRegion, ProjectState
+from picture_capture.page_sections import (
+    PageSection, build_reading_lanes, read_page_sections, write_page_sections,
+)
+from picture_capture.project_storage import ensure_project_storage, page_sections_path_for_image
 from picture_capture.processing import Geometry, ColumnPath, sort_entries_reading_order, sort_entries_column_y
 from picture_capture.layout_detection import (
     _detect_persistent_vertical_rule,
@@ -7049,3 +7053,120 @@ def test_page_crop_plan_declares_source_coordinate_space():
     assert payload["version"] == 3
     assert payload["coordinate_space"] == SOURCE_COORDINATE_SPACE
     assert payload["box_format"] == "source_xyxy"
+
+
+
+def test_page_sections_sidecar_roundtrip_uses_managed_storage(tmp_path):
+    root = tmp_path / "dictionary"
+    root.mkdir()
+    ensure_project_storage(root, "test")
+    page = root / "0001.png"
+    sections = [PageSection(100, 700), PageSection(820, 1400)]
+    path = write_page_sections(
+        page, sections, canonical_width=1200, canonical_height=1600,
+        layout_transform="identity",
+    )
+    assert path == page_sections_path_for_image(page)
+    assert path == root / "_PictureCapture" / "data" / "PageSections" / "0001.json"
+    assert read_page_sections(page) == sections
+    lanes = build_reading_lanes(2, 0, 1600, sections)
+    assert [(lane.section_index, lane.column_index) for lane in lanes] == [
+        (0, 0), (0, 1), (1, 0), (1, 1),
+    ]
+
+
+def test_page_sections_sort_section_before_column():
+    geometry = Geometry(
+        column_starts=[20, 520],
+        column_widths=[420, 420],
+        top=0,
+        bottom=1000,
+        column_paths=[
+            ColumnPath([(0, 20), (1000, 20)]),
+            ColumnPath([(0, 520), (1000, 520)]),
+        ],
+    )
+    sections = [PageSection(0, 400), PageSection(500, 900)]
+    entries = [
+        Entry("S2C1", 20, 600),
+        Entry("S1C2", 520, 120),
+        Entry("S2C2", 520, 620),
+        Entry("S1C1", 20, 100),
+    ]
+    ordered = sort_entries_reading_order(entries, geometry, sections)
+    assert [entry.word for entry in ordered] == ["S1C1", "S1C2", "S2C1", "S2C2"]
+
+
+def test_page_sections_whole_entry_crop_follows_lanes_and_skips_gap():
+    image = Image.new("RGB", (1000, 1000), "white")
+    settings = AppSettings(
+        geometry_coordinate_version=2,
+        geometry_coordinate_space="canonical_reference_page_pixels",
+        geometry_reference_width=1000,
+        columns=2,
+        manual_x=20,
+        column_width=420,
+        gutter=80,
+        start_y=0,
+        bottom_y=900,
+        follow_column_deformation=False,
+    )
+    sections = [PageSection(0, 400), PageSection(500, 900)]
+    entries = [
+        Entry("S2C2", 520, 620),
+        Entry("S1C1", 20, 100),
+        Entry("S2C1", 20, 600),
+        Entry("S1C2", 520, 120),
+    ]
+    plan = build_page_crop_plan(
+        image, entries, [], settings,
+        top_y=0, bottom_y=900, page_sections=sections,
+    )
+    assert plan.entry_pieces
+    assert all(
+        (piece.box[1] >= 0 and piece.box[3] <= 400)
+        or (piece.box[1] >= 500 and piece.box[3] <= 900)
+        for piece in plan.entry_pieces
+    )
+    s1c2_pieces = [piece for piece in plan.entry_pieces if piece.word == "S1C2"]
+    assert len(s1c2_pieces) >= 2
+    assert any(piece.box[3] == 400 for piece in s1c2_pieces)
+    assert any(piece.box[1] == 500 and piece.box[3] == 600 for piece in s1c2_pieces)
+
+
+def test_alphabetical_warning_uses_section_major_reading_order():
+    report = [
+        {
+            "column": 0,
+            "candidates": [
+                {"accepted": True, "normalized_headword": "alpha", "canonical_v": 100, "source_y": 100},
+                {"accepted": True, "normalized_headword": "charlie", "canonical_v": 600, "source_y": 600},
+            ],
+            "tesseract": {"candidates": []},
+            "lens": {"candidates": []},
+        },
+        {
+            "column": 1,
+            "candidates": [
+                {"accepted": True, "normalized_headword": "bravo", "canonical_v": 100, "source_y": 100},
+                {"accepted": True, "normalized_headword": "delta", "canonical_v": 600, "source_y": 600},
+            ],
+            "tesseract": {"candidates": []},
+            "lens": {"candidates": []},
+        },
+    ]
+    warnings = _annotate_alphabetical_warnings(
+        report, [PageSection(0, 400), PageSection(500, 900)],
+        top_v=0, bottom_v=900,
+    )
+    assert warnings == []
+
+
+def test_page_section_editor_is_exposed_and_gap_clicks_are_guarded():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'text="SECTION设置"' in text
+    assert "def toggle_page_section_editor" in text
+    assert "def _drag_page_section_boundary_to" in text
+    assert "该位置位于 SECTION 间空白区，不添加词条。" in text
+    assert "page_sections=list(self.page_sections)" in text
