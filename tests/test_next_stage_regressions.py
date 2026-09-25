@@ -1320,6 +1320,37 @@ def test_project_profile_exposes_clickable_column_left_line_nudging():
     assert 'preview_label.bind(\n                "<Button-1>"' in text
     assert "fill=(238, 124, 0, 235) if selected" in text
     assert "self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))" in text
+    assert "def _nudge_template_column_preview" in text
+    assert "canvas.move(items[index], dx, dy)" in text
+    assert "self._profile_input_changed(refresh_preview=False)" in text
+    select_start = text.index("    def _select_template_column(")
+    select_end = text.index("\n\n    def _refresh_template_controls", select_start)
+    assert "_refresh_template_preview" not in text[select_start:select_end]
+    assert "self._update_template_column_highlight()" in text[select_start:select_end]
+    assert "canvas.create_image(0, 0, image=photo, anchor=\"nw\")" in text
+
+
+def test_project_profile_validation_masks_remain_translucent():
+    from picture_capture.processing import ColumnPath, Geometry
+    from picture_capture.profile_setup import ProjectProfileWizard
+
+    image = Image.new("RGB", (100, 100), "white")
+    geometry = Geometry(
+        column_starts=[10], column_widths=[80], top=20, bottom=100,
+        column_paths=[ColumnPath([(20, 10), (100, 10)])],
+    )
+    settings = AppSettings(
+        profile_header_mode="present", profile_header_percent=20.0,
+        profile_footer_mode="none", profile_side_content_mode="none",
+    )
+    preview = ProjectProfileWizard._marker_preview(
+        image, [], geometry, settings, 0, 100,
+    )
+    pixel = preview.getpixel((50, 10))
+    assert pixel != (255, 215, 0)
+    assert pixel != (255, 255, 255)
+    assert pixel[0] == 255 and 215 < pixel[1] < 255 and 0 < pixel[2] < 255
+
 
 
 def test_project_profile_wizard_is_the_normal_entry_path():
