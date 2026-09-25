@@ -9939,7 +9939,7 @@ class PictureCaptureApp(tk.Tk):
             ttk.Checkbutton(label_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
 
         ocr_display_row = ttk.Frame(aux); ocr_display_row.grid(row=6, column=0, columnspan=4, sticky="ew")
-        for label, name in (("显示OCR内容选择", "review_main_show_ocr_choices"), ("显示OCR比对底色结果", "review_main_show_ocr_background")):
+        for label, name in (("显示OCR内容选择", "review_main_show_ocr_choices"), ("显示OCR对比底色结果", "review_main_show_ocr_background")):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(
                 ocr_display_row, text=label, variable=var,
