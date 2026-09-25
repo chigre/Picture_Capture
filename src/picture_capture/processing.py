@@ -344,6 +344,48 @@ def _estimate_column_paths(
     return paths
 
 
+def _column_start_offsets_canonical(
+    settings: AppSettings, count: int, canonical_width: int,
+) -> list[int]:
+    """Resolve persisted per-column nudges into current-page canonical pixels."""
+    raw = list(getattr(settings, "column_start_offsets", []) or [])
+    resolved: list[int] = []
+    for index in range(max(0, int(count))):
+        try:
+            value = float(raw[index]) if index < len(raw) else 0.0
+        except (TypeError, ValueError):
+            value = 0.0
+        resolved.append(
+            stored_geometry_to_canonical(value, canonical_width, settings)
+        )
+    return resolved
+
+
+def apply_column_start_offsets(
+    base_starts: list[int], offsets: list[int], *, gutter: int, max_x: int,
+) -> list[int]:
+    """Apply independent column-left nudges while preserving usable column order."""
+    if not base_starts:
+        return []
+    limit = max(0, int(max_x))
+    starts = [
+        max(0, min(limit, int(base) + (int(offsets[i]) if i < len(offsets) else 0)))
+        for i, base in enumerate(base_starts)
+    ]
+    # Keep enough room for the configured gutter plus a minimal usable body band.
+    # Normal small corrections are unchanged; only pathological/corrupt offsets
+    # are clipped so columns can never cross each other.
+    min_step = max(11, max(0, int(gutter)) + 10)
+    for _ in range(2):
+        for index in range(1, len(starts)):
+            starts[index] = max(starts[index], starts[index - 1] + min_step)
+        starts[-1] = min(limit, starts[-1])
+        for index in range(len(starts) - 2, -1, -1):
+            starts[index] = min(starts[index], starts[index + 1] - min_step)
+        starts[0] = max(0, starts[0])
+    return [max(0, min(limit, int(value))) for value in starts]
+
+
 def _derive_nominal_geometry_canonical(
     image_width: int, image_height: int, settings: AppSettings,
 ) -> Geometry:
@@ -370,9 +412,14 @@ def _derive_nominal_geometry_canonical(
             10, (analysis_width - 2 * left - (count - 1) * gutter) // count
         )
 
-    starts_analysis = [
+    base_starts_analysis = [
         left + i * (column_width + gutter) for i in range(count)
     ]
+    offsets_canonical = _column_start_offsets_canonical(settings, count, width)
+    offsets_analysis = [round(value * analysis_scale) for value in offsets_canonical]
+    starts_analysis = apply_column_start_offsets(
+        base_starts_analysis, offsets_analysis, gutter=gutter, max_x=analysis_width - 1,
+    )
     starts = [
         min(width - 1, max(0, round(x / analysis_scale)))
         for x in starts_analysis
@@ -434,9 +481,17 @@ def _derive_geometry_canonical(image: Image.Image, settings: AppSettings) -> Geo
             (analysis_width - 2 * left - (count - 1) * gutter) // count,
         )
 
-    starts_analysis = [
+    base_starts_analysis = [
         left + i * (column_width + gutter) for i in range(count)
     ]
+    offsets_canonical = _column_start_offsets_canonical(
+        settings, count, canonical_width,
+    )
+    offsets_analysis = [round(value * analysis_scale) for value in offsets_canonical]
+    starts_analysis = apply_column_start_offsets(
+        base_starts_analysis, offsets_analysis,
+        gutter=gutter, max_x=analysis_width - 1,
+    )
     widths_analysis: list[int] = []
     for i, start_x in enumerate(starts_analysis):
         if i + 1 < len(starts_analysis):
