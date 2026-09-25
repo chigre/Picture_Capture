@@ -45,7 +45,7 @@ from .paddle_headwords import (
     parse_headword_filter_rules,
 )
 from .environment_center import EnvironmentCenterWindow
-from .runtime_environment import resolve_paddle_device, user_config_root
+from .runtime_environment import legacy_user_config_files, resolve_paddle_device, user_config_root
 from .ui_compat import bind_context_menu, fit_window_to_work_area, preferred_font_family
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
 from .layout_transform import LayoutTransform
@@ -8374,12 +8374,15 @@ class PictureCaptureApp(tk.Tk):
         return user_config_root() / SESSION_STATE_FILENAME
 
     def _read_session_state(self) -> dict:
-        try:
-            if self._session_path.exists():
-                raw = json.loads(self._session_path.read_text(encoding="utf-8"))
-                return raw if isinstance(raw, dict) else {}
-        except (OSError, ValueError, TypeError):
-            pass
+        candidates = (self._session_path, *legacy_user_config_files(SESSION_STATE_FILENAME))
+        for candidate in candidates:
+            try:
+                if candidate.exists():
+                    raw = json.loads(candidate.read_text(encoding="utf-8"))
+                    if isinstance(raw, dict):
+                        return raw
+            except (OSError, ValueError, TypeError):
+                continue
         return {}
 
     def _save_session_state(self) -> None:
