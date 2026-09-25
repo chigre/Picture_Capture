@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import shutil
+import subprocess
 
 
 SPEC = importlib.util.spec_from_file_location(
@@ -113,3 +115,32 @@ def test_legacy_windows_wrapper_exports_cross_platform_api():
     wrapper_spec.loader.exec_module(wrapper)
     assert wrapper.PROFILES["2"]["extra"] == "ocr-gpu-cu118"
     assert wrapper.platform_support("Linux", "x86_64")["paddle_gpu"] is True
+
+
+def test_cross_platform_ci_and_release_packaging():
+    root = Path(__file__).resolve().parents[1]
+    ci = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    for runner in ("ubuntu-latest", "windows-latest", "macos-latest"):
+        assert runner in ci
+    assert "scripts/ci_platform_check.py" in ci
+
+    release = (root / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert "src scripts docs examples" in release
+    for name in (
+        "run_windows.bat", "install_ocr_windows.bat",
+        "run_linux.sh", "install_ocr_linux.sh",
+        "run_macos.command", "install_ocr_macos.command",
+    ):
+        assert name in release
+
+
+def test_posix_launcher_shell_syntax_when_shell_is_available():
+    shell = shutil.which("sh")
+    if shell is None:
+        return
+    root = Path(__file__).resolve().parents[1]
+    for name in (
+        "run_linux.sh", "install_ocr_linux.sh",
+        "run_macos.command", "install_ocr_macos.command",
+    ):
+        subprocess.run([shell, "-n", str(root / name)], check=True)
