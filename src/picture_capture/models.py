@@ -150,6 +150,8 @@ class AppSettings:
     # Main overlay colours. The classic Picture Capture visual language uses
     # red guide/headword markers by default; PPP colours are independently configurable.
     guide_color: str = "#ff0000"
+    page_section_color: str = "#1976d2"
+    page_section_width: int = 2
     headword_marker_color: str = "#ff0000"
     illustration_outline_color: str = "#1565c0"
     illustration_outline_width: int = 1
@@ -161,12 +163,13 @@ class AppSettings:
     illustration_label_font_size: int = 32
     illustration_label_font_bold: bool = False
     illustration_label_font_italic: bool = False
+    show_page_sections: bool = True
     show_column_guides: bool = True
     show_headword_markers: bool = True
     # Page-list optional columns can be hidden from the heading context menu.
     # The page-name column is intentionally permanent.
     page_list_show_lined: bool = True
-    page_list_show_fill_status: bool = True
+    page_list_show_fill_status: bool = False
     page_list_show_illustrations: bool = True
     page_bookmarks: list[str] = field(default_factory=list)
     darkness_threshold: int = 300
@@ -381,7 +384,7 @@ class AppSettings:
     # v2.0 dual-OCR fusion.  When enabled and Tesseract comparison is available,
     # candidates are sequence-aligned (lemma order) with Y as a geometric guard,
     # then arbitrated instead of treating Tesseract as only a rescue pass.
-    paddle_dual_ocr_arbitration: bool = True
+    paddle_dual_ocr_arbitration: bool = False
     paddle_alignment_y_tolerance_ratio: float = 0.85
     paddle_alignment_min_similarity: float = 0.55
     paddle_conflict_review_margin: float = 0.75
