@@ -9075,10 +9075,10 @@ class PictureCaptureApp(tk.Tk):
         columns = ["bookmark", "page"]
         if getattr(self, "_page_column_vars", {}).get("lined") is None or self._page_column_vars["lined"].get():
             columns.append("lined")
-        if getattr(self, "_page_column_vars", {}).get("fill_status") is None or self._page_column_vars["fill_status"].get():
-            columns.append("fill_status")
         if getattr(self, "_page_column_vars", {}).get("illustrations") is None or self._page_column_vars["illustrations"].get():
             columns.append("illustrations")
+        if getattr(self, "_page_column_vars", {}).get("fill_status") is None or self._page_column_vars["fill_status"].get():
+            columns.append("fill_status")
         self.page_list.configure(displaycolumns=tuple(columns))
         if hasattr(self, "settings"):
             self.settings.page_list_show_lined = "lined" in columns
