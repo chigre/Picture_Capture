@@ -15088,6 +15088,7 @@ class PictureCaptureApp(tk.Tk):
             return
 
         project = self.project
+        settings_snapshot = replace(self.settings)
         pages = list(project.images)
         page_stems = [page.stem for page in pages]
         pages_meta = [
@@ -15110,10 +15111,6 @@ class PictureCaptureApp(tk.Tk):
                 mapping = _parse_words_of_pages_text(text_data, page_stems, present_pages=present)
                 mapping_holder["value"] = mapping
                 mapping_holder["present"] = present
-                # Safe here: only one sequential batch worker calls this code.
-                # Keep the parsed source for later mismatch-only refill batches.
-                self._word_fill_source_mapping = mapping
-                self._word_fill_source_present_pages = present
             return mapping, present
 
         def worker(index: int, _position: int, _total: int):
@@ -15123,7 +15120,7 @@ class PictureCaptureApp(tk.Tk):
             with Image.open(page) as opened:
                 width, height = map(int, opened.size)
             entries = sort_entries_reading_order(
-                entries, derive_nominal_geometry(width, height, self.settings)
+                entries, derive_nominal_geometry(width, height, settings_snapshot)
             )
             has_data = page.stem in present_pages
             words = list(mapping.get(page.stem, [])) if has_data else []
@@ -15145,6 +15142,16 @@ class PictureCaptureApp(tk.Tk):
         def done(completed, total_pages, stopped, results, error):
             if error is not None:
                 return
+            if (
+                self.project is project
+                and self._word_fill_source_path == txt_path
+                and self._word_fill_source_signature == current_signature
+            ):
+                mapping = mapping_holder.get("value")
+                present = mapping_holder.get("present")
+                if isinstance(mapping, dict) and isinstance(present, set):
+                    self._word_fill_source_mapping = mapping
+                    self._word_fill_source_present_pages = present
             filled_total = 0
             mismatch_count = 0
             no_data_count = 0
