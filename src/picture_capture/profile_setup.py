@@ -1203,8 +1203,10 @@ class ProjectProfileWizard(tk.Toplevel):
             for child in self.template_preview_frame.winfo_children():
                 child.destroy()
             photo = ImageTk.PhotoImage(
-            themed_display_image(preview, getattr(self.parent, "appearance_mode", "light"))
-        )
+                themed_display_image(
+                    preview, getattr(self.parent, "appearance_mode", "light")
+                )
+            )
             self._template_photos[:] = [photo]
             ttk.Label(
                 self.template_preview_frame, image=photo,
@@ -1662,8 +1664,10 @@ class ProjectProfileWizard(tk.Toplevel):
                     (max(320, available - 20), 520), Image.Resampling.LANCZOS,
                 )
                 photo = ImageTk.PhotoImage(
-                themed_display_image(image, getattr(self.parent, "appearance_mode", "light"))
-            )
+                    themed_display_image(
+                        image, getattr(self.parent, "appearance_mode", "light")
+                    )
+                )
                 self._headword_example_photos.append(photo)
                 ttk.Label(
                     self.headword_examples_frame, image=photo,
@@ -1899,7 +1903,9 @@ class ProjectProfileWizard(tk.Toplevel):
             child.destroy()
         if image is not None:
             photo = ImageTk.PhotoImage(
-                themed_display_image(image, getattr(self.parent, "appearance_mode", "light"))
+                themed_display_image(
+                    image, getattr(self.parent, "appearance_mode", "light")
+                )
             )
             self._sample_photo_by_slot[slot] = photo
             ttk.Label(cell, image=photo, anchor="center").pack(fill="both", expand=True)
@@ -2718,7 +2724,9 @@ class ProjectProfileWizard(tk.Toplevel):
             if target != display.size:
                 display = display.resize(target, Image.Resampling.LANCZOS)
             photo = ImageTk.PhotoImage(
-                themed_display_image(display, getattr(self.parent, "appearance_mode", "light"))
+                themed_display_image(
+                    display, getattr(self.parent, "appearance_mode", "light")
+                )
             )
             self._validation_photos.append(photo)
             ttk.Label(cell, image=photo, anchor="n").pack(anchor="n")
