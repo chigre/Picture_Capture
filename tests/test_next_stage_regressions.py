@@ -17,7 +17,10 @@ from picture_capture.models import (
 )
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
-from picture_capture.processing import _left_edge_ink_mask, derive_geometry, refine_existing_entries
+from picture_capture.processing import (
+    _left_edge_ink_mask, apply_column_start_offsets, derive_geometry,
+    derive_nominal_geometry, refine_existing_entries,
+)
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
     effective_page_settings,
@@ -1268,6 +1271,55 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "下半页候选" in text
     assert "左缘最大漂移" in text
     assert "原始OCR完整但词头在中途停止" in text
+
+
+def test_project_profile_column_left_nudges_persist_and_drive_geometry(tmp_path):
+    settings = AppSettings(
+        columns=2,
+        manual_x=40,
+        column_width=300,
+        gutter=40,
+        geometry_coordinate_version=2,
+        geometry_reference_width=800,
+        column_start_offsets=[0, 12],
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(800, 1000, settings)
+    assert geometry.column_starts == [40, 392]
+
+    # Offsets live in reference-page pixels just like the other persisted
+    # Project Profile geometry fields, so they scale with scan resolution.
+    larger = derive_nominal_geometry(1600, 2000, settings)
+    assert larger.column_starts == [80, 784]
+
+    path = tmp_path / "settings.json"
+    settings.to_json(path)
+    reopened = AppSettings.from_json(path)
+    assert reopened.column_start_offsets == [0, 12]
+
+    # Corrupt/extreme nudges are clipped before columns can cross.
+    guarded = apply_column_start_offsets(
+        [40, 380], [250, -250], gutter=40, max_x=799,
+    )
+    assert guarded[0] < guarded[1]
+    assert guarded[1] - guarded[0] >= 50
+
+
+def test_project_profile_exposes_clickable_column_left_line_nudging():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
+    text = source.read_text(encoding="utf-8")
+    assert 'text="栏左线微调"' in text
+    assert "点击右侧预览中的栏左线选择；选中线显示为橙色" in text
+    assert 'text="← 左移"' in text
+    assert 'text="右移 →"' in text
+    assert 'text="重置当前"' in text
+    assert 'text="重置全部"' in text
+    assert "def _shift_selected_column" in text
+    assert "self.working.column_start_offsets = offsets" in text
+    assert "s.column_start_offsets = self._column_offsets_for_count(s.columns)" in text
+    assert 'preview_label.bind(\n                "<Button-1>"' in text
+    assert "fill=(238, 124, 0, 235) if selected" in text
+    assert "self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))" in text
 
 
 def test_project_profile_wizard_is_the_normal_entry_path():
