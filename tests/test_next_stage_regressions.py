@@ -470,7 +470,7 @@ def test_usage_guide_is_modern_task_oriented_and_centered():
     assert '"推荐原则"' in guide
     assert '"项目Profile"' in guide
     assert '"检测版面参数"' in guide
-    assert '"检测 OCR 引擎"' in guide
+    assert '"环境中心"' in guide
     assert '"设置中心"' in guide
     assert "OCR画线是默认推荐模式" in guide
     assert "普通画线降为备用" in guide
