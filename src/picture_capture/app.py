@@ -1655,7 +1655,6 @@ class SettingsDialog(tk.Toplevel):
         ("栏数策略", "layout_columns_policy", str),
         ("中央分隔线", "layout_column_separator_mode", str),
         ("分析阈值", "analysis_threshold_mode", str),
-        ("Tesseract 路径", "ocr_executable", str),
         ("列跟踪搜索半径", "column_track_radius", int),
         ("列跟踪分块高度", "column_track_block_height", int),
         ("列跟踪最大步移", "column_track_max_step", int),
@@ -1748,7 +1747,7 @@ class SettingsDialog(tk.Toplevel):
         ("列跟踪", ["column_track_radius", "column_track_block_height", "column_track_max_step"]),
         ("插图识别", ["illustration_detect_padding", "illustration_detect_right_padding"]),
         ("OCR 基础", [
-            "ocr_executable", "paddle_ocr_version",
+            "paddle_ocr_version",
             "paddle_preprocessing", "paddle_max_input_side", "batch_interval",
         ]),
         ("PaddleOCR 候选与版面（高级）", [
@@ -1884,7 +1883,7 @@ class SettingsDialog(tk.Toplevel):
         "paddle_headword_regex": "作用：从每个合并后的 OCR 候选行开头提取 lemma（词头文字）。匹配成功后，若正则含捕获组，程序取第 1 个捕获组作为原始词头；它只是“词头像不像一个合法字符串”这一关，最终是否接受仍会结合栏左位置、词性/变形/符号、视觉分数和 Profile 规则。\n\n默认：允许行首空格及可选的 • ◆ ◇ ► ▶ * † ‡ § ¶；允许前/后置连字符、Unicode 字母、音节分隔点 · • ∙ ‧，并容忍 OCR 把分隔点识成 . : + -；也允许撇号连接。例如“• a·ga·rrón s. m.”提取 a·ga·rrón，“anti- adj.”提取 anti-。\n\n修改：第 1 捕获组应只包住 lemma。写得过宽会把逗号、POS/正文吞入词头；过窄会在后续评分前直接漏词。默认 Latin Profile 还会把通用 Unicode 字母范围收窄为拉丁字母；项目特例优先用 Profile 或过滤规则。",
         "paddle_pos_regex": "作用：识别 lemma 后面的 POS/语法标签，作为“这一行确实是词条起始行”的强结构证据；它不负责提取 lemma，搜索范围还受【AI 词性搜索字符数】限制。\n\n默认兼容：可覆盖 s.、s. m./f./amb./pl.、adj./adj. inv.、adv.、v./y.、v. prnl.、prep.、conj.、pron. 子类、det.、interj.、art.、num.、loc.、superlat. 等；y. 是容忍 OCR 把 v. 识成 y.。\n\n重要：主程序加载活动 Dictionary Profile 时，实际 POS 正则由 Profile 的 pos_labels 动态生成，本字段主要是兼容/低层 fallback。当前项目要增删词性缩写应优先改 Profile grammar。",
         "paddle_special_symbol_regex": "作用：判断 OCR 行首是否出现“可作为新词条起始证据”的项目符号。命中只增加一项结构证据，不会无条件把该行接受为词头。\n\n默认只在行首（允许前导空格）识别 • ◆ ◇ ► ▶ * † ‡ § ¶。正文中间出现同样符号不会命中。\n\n修改：只加入真正表示新词条/新条目起始的符号。词条内部释义标记、交叉引用或文章结构符号应交给 Dictionary Profile；例如某些词典中的 ■、□、||、~、→ 属于内部结构，不应因此触发新 lemma。",
-        "ocr_executable": "作用：Tesseract 可执行程序路径。可填写系统 PATH 中可直接调用的 tesseract，或完整 tesseract.exe 路径。只有普通文本 OCR、Tesseract 对照/补漏等路径需要它。\n\n调整：若“环境中心”提示找不到 Tesseract，应先修这里或系统安装；路径正确但语言缺失时还需安装对应 tessdata。PaddleOCR 单独运行不依赖此字段。",
+        "ocr_executable": "兼容字段：旧项目中的 Tesseract 路径仍会作为发现提示读取，但新的可执行程序选择保存为本机 runtime 设置，不再随项目迁移。请在【环境中心】中选择或重新检测 Tesseract。",
         "paddle_ocr_version": "作用：选择 PaddleOCR 使用的模型系列/版本。不同模型可能改变文字框、识别字符、速度和缓存签名，因此它属于后端级设置而不是单纯阈值。\n\n调整：项目一旦稳定不建议频繁切换。更换模型后应重新生成 OCR，而不是继续沿用旧缓存来比较候选规则。",
         "tesseract_language": "作用：Tesseract 使用的语言包代码，可与项目 OCR 语言不同但通常应对应词头语言。它用于普通文本 OCR和 Tesseract 对照/补漏路径。\n\n调整：若语言包未安装，Tesseract 会不可用或报错；多语言可按 Tesseract 语法组合。仅使用 PaddleOCR 时不会因为这个值改变 Paddle 结果。",
         "batch_interval": "作用：自动保存/批量相关状态写盘的节流间隔，用来避免每次微小编辑都立即写文件。它影响保存频率，不是 OCR 批量任务“每隔几秒处理一页”的间隔。\n\n调整：过短增加磁盘写入和界面抖动风险；过长则异常退出时可能丢失更多最近改动。通常保持数秒级即可。",
@@ -1960,7 +1959,7 @@ class SettingsDialog(tk.Toplevel):
         "review_zoom_percent", "wordslist_path",
     )
     PROJECT_RUNTIME_FIELDS = (
-        "batch_interval", "ocr_executable", "tesseract_language",
+        "batch_interval", "tesseract_language",
         "paddle_ocr_version", "paddle_max_input_side",
         "illustration_detect_padding", "illustration_detect_right_padding",
     )
