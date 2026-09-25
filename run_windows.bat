@@ -1,6 +1,11 @@
 @echo off
 setlocal EnableExtensions
-cd /d "%~dp0"
+pushd "%~dp0" >nul
+if errorlevel 1 (
+  echo [Picture Capture] Could not enter the application directory.
+  pause
+  exit /b 1
+)
 
 rem Foreground launcher only.
 rem This file never installs, downloads, updates, or selects dependency profiles.
@@ -10,6 +15,7 @@ if not exist ".venv\Scripts\python.exe" (
   echo Run install_ocr_windows.bat once before starting Picture Capture.
   echo Choose "Core only" there if you do not need optional OCR components.
   pause
+  popd
   exit /b 2
 )
 
@@ -20,4 +26,5 @@ if not "%PC_EXIT%"=="0" (
   echo [Picture Capture] Startup failed with exit code %PC_EXIT%.
   pause
 )
+popd
 exit /b %PC_EXIT%
