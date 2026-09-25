@@ -117,8 +117,14 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert '"*TCombobox*Listbox.selectBackground"' in app_source
     assert 'apply_native_titlebar_appearance(root, self.appearance_mode)' in app_source
     assert 'button._pc_skip_classic_appearance = True' in app_source
+    assert 'activebackground=colors["accent_soft"]' in app_source
+    assert 'highlightthickness=0, takefocus=False' in app_source
     assert 'self.parent_app._apply_current_appearance(self)' in app_source
     assert 'word_list_default_fg = palette["input_fg"]' in app_source
+    assert 'background="#d9d9d9", foreground="#111827"' in app_source
+    assert 'editor_frame._pc_skip_classic_appearance = True' in app_source
+    assert 'editor._pc_skip_classic_appearance = True' in app_source
+    assert 'selectbackground="#c7d5e3"' in app_source
     assert 'foreground="#111827"' in app_source
     assert 'self._apply_current_appearance(dialog)' in app_source
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in app_source
