@@ -355,6 +355,7 @@ class FormatTests(unittest.TestCase):
         self.assertEqual(settings.detection_method, "paddleocr")
         self.assertTrue(settings.paddle_use_paddleocr)
         self.assertFalse(settings.paddle_compare_tesseract)
+        self.assertFalse(settings.paddle_dual_ocr_arbitration)
         self.assertFalse(settings.paddle_enable_lens)
         self.assertEqual(settings.paddle_lens_mode, "off")
 
@@ -4019,7 +4020,7 @@ def test_v2110_main_crop_preview_replaces_old_width_only_checkbox():
     assert 'def _draw_crop_plan_preview' in text
 
 
-def test_page_list_uses_display_mode_selector_for_existing_view_states():
+def test_display_mode_and_dark_mode_live_at_bottom_of_auxiliary_options():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     assert 'text="显示模式："' in text
@@ -4028,10 +4029,14 @@ def test_page_list_uses_display_mode_selector_for_existing_view_states():
     page_start = text.index('page_panel = self._section_frame(sidebar, "六、页面列表"')
     page_end = text.index("        list_frame = ttk.Frame(page_panel)", page_start)
     page_toolbar = text[page_start:page_end]
-    assert 'text="页面范围："' not in page_toolbar
-    assert page_toolbar.index('text="显示模式："') < page_toolbar.index('text="当前页"')
-    assert 'display_mode_combo = ttk.Combobox(\n            range_row,' in page_toolbar
-    assert 'display_mode_combo = ttk.Combobox(\n            size_row,' not in page_toolbar
+    assert 'text="显示模式："' not in page_toolbar
+
+    aux_start = text.index('self._section_frame(parent, "三、辅助选项及框线色块"')
+    aux_end = text.index('actions = self._section_frame(parent, "四、画线与校对"', aux_start)
+    aux = text[aux_start:aux_end]
+    assert 'display_mode_combo = ttk.Combobox(\n            display_row,' in aux
+    assert 'text="深色模式"' in aux
+    assert aux.index('save_row = ttk.Frame(aux)') < aux.index('display_row = ttk.Frame(aux)')
     assert 'text="◧"' not in text
     assert '"原图+标注": (False, False, False)' in text
     assert '"二值+标注": (True, False, False)' in text
@@ -4527,10 +4532,12 @@ def test_crop_settings_v6_declares_reference_coordinate_space():
     assert '"entry_left_padding_u"' in crop_class
     assert '"entry_right_padding_u"' in crop_class
     assert "参考页规范像素" in crop_class
-    # start_y remains persisted layout geometry; the Settings Center labels its
-    # coordinate space explicitly instead of presenting it as an unqualified Y.
+    # Coordinate meaning is carried by the unit column, not repeated in labels.
     settings_class = text.split("class SettingsDialog", 1)[1].split("class CropSettingsDialog", 1)[0]
-    assert '"start_y": "正文起始 V（参考页规范坐标）"' in settings_class
+    assert '"start_y": "正文起始 V"' in settings_class
+    assert '"start_y": "正文起始 V（参考页规范坐标）"' not in settings_class
+    assert '"paddle_left_tolerance": "参考页规范px"' in settings_class
+    assert '"paddle_separator_safety_px": "参考页规范px"' in settings_class
 
 
 def test_v21110_backup_pdic_is_background_and_streaming():
@@ -7263,6 +7270,47 @@ def test_alphabetical_warning_uses_section_major_reading_order():
         top_v=0, bottom_v=900,
     )
     assert warnings == []
+
+
+def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    aux_start = text.index('self._section_frame(parent, "三、辅助选项及框线色块"')
+    aux_end = text.index('actions = self._section_frame(parent, "四、画线与校对"', aux_start)
+    aux = text[aux_start:aux_end]
+
+    assert 'text="显示Section"' in aux
+    assert '"page_section_color"' in aux
+    assert '"page_section_width"' in aux
+    assert aux.index('text="显示Section"') < aux.index('text="栏左垂线"')
+    assert aux.index('"review_main_show_ocr_background"') < aux.index('text="显示单行候选框"')
+    assert 'fill="#ffffff"' in text
+    assert 'fill=line_fill, outline=line_fill' in text
+
+
+def test_page_list_fills_width_adaptively_and_fill_status_is_opt_in_by_default():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    models = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
+    assert 'self.page_list.bind("<Configure>", self._page_list_configured)' in text
+    assert "def _fit_page_list_columns(self) -> None:" in text
+    assert "widths[-1] += available - sum(widths)" in text
+    assert 'page_list_show_fill_status: bool = False' in models
+    assert 'getattr(self.settings, "page_list_show_fill_status", False)' in text
+
+
+def test_ocr_strategy_order_and_defaults_are_single_engine_first():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    OCR_COMMON_CHECKS = (")
+    end = text.index("    OCR_ADVANCED_CHECKS = (", start)
+    block = text[start:end]
+    assert block.index('"PaddleOCR 主识别"') < block.index('"同时运行 Tesseract 对照"')
+    assert block.index('"同时运行 Tesseract 对照"') < block.index('"多 OCR 自动融合"')
+    models = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
+    assert "paddle_use_paddleocr: bool = True" in models
+    assert "paddle_compare_tesseract: bool = False" in models
+    assert "paddle_dual_ocr_arbitration: bool = False" in models
 
 
 def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded():
