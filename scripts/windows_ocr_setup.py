@@ -90,7 +90,7 @@ def parse_gpu_query_rows(text: str, *, with_compute_cap: bool) -> list[dict[str,
     for row in csv.reader(io.StringIO(text)):
         if not row or not any(part.strip() for part in row):
             continue
-        parts = [part.strip() for part in row]
+        parts = [part.strip().strip('"') for part in row]
         expected = 4 if with_compute_cap else 3
         if len(parts) < expected:
             continue
