@@ -1588,13 +1588,19 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
     order_end = text.index("\n    def _show_text_report", order_start)
     order = text[order_start:order_end]
     all_pages_branch = order[order.index("        if all_pages:"):]
-    assert 'self._start_ui_worker("headword-order-all"' in all_pages_branch
-    worker_start = all_pages_branch.index("            def worker():")
+    assert 'self._start_batch_task(' in all_pages_branch
+    assert '"所有词头顺序核对"' in all_pages_branch
+    assert 'self._start_ui_worker(' in all_pages_branch
+    assert '"headword-order-finalize"' in all_pages_branch
+    worker_start = all_pages_branch.index("            def worker(")
     worker_done = all_pages_branch.index("            def done(", worker_start)
     worker = all_pages_branch[worker_start:worker_done]
     assert "read_pdic(pdic_path(page))" in worker
-    assert "sorted(sequence" in worker
     assert "self.settings" not in worker
+    finalize_start = all_pages_branch.index("                def finalize():")
+    finalized_start = all_pages_branch.index("                def finalized(", finalize_start)
+    finalize = all_pages_branch[finalize_start:finalized_start]
+    assert "sorted(sequence" in finalize
 
     for name, next_name in (
         ("auto_detect_current", "paddle_detect_current"),
