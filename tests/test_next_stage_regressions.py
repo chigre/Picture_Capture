@@ -238,7 +238,7 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     assert 'text="校验当前设置"' in settings
     assert 'command=self._close_validated' in settings
     assert 'text="保存并关闭"' not in settings
-    assert 'text="检测 OCR 引擎"' in settings
+    assert 'text="环境中心"' in settings
 
     review_start = source.index("class ReviewWindow")
     review_end = source.index("class OCRConflictReviewDialog", review_start)
@@ -1416,12 +1416,21 @@ def test_round1_blocking_ui_paths_use_background_workers():
     settings_check = text.index("    def check_ocr_engines(self) -> None:", settings_start)
     settings_check_end = text.index("\n\ndef _review_window_dimensions", settings_check)
     settings_block = text[settings_check:settings_check_end]
-    assert "self.parent._start_ui_worker(" in settings_block
+    assert "self.parent.show_environment_center()" in settings_block
 
     app_start = text.index("class PictureCaptureApp")
     main_check = text.index("    def check_ocr_engines(self) -> None:", app_start)
     main_check_end = text.index("\n    def detect_layout_current", main_check)
-    assert 'self._start_ui_worker("ocr-environment-check"' in text[main_check:main_check_end]
+    assert "self.show_environment_center()" in text[main_check:main_check_end]
+
+    environment_center = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "environment_center.py"
+    ).read_text(encoding="utf-8")
+    refresh_start = environment_center.index("    def refresh(self) -> None:")
+    refresh_end = environment_center.index("\n    def _open_ocr_settings", refresh_start)
+    refresh = environment_center[refresh_start:refresh_end]
+    assert "def worker():" in refresh
+    assert 'self.app._start_ui_worker(f"environment-center-' in refresh
 
     page_request = text.index("    def _request_page_load(", app_start)
     page_load = text.index("    def load_page(", page_request)
@@ -1808,10 +1817,15 @@ def test_concurrency_review_workers_use_snapshots_not_live_app_state():
     check_start = app.index("    def check_ocr_engines(self) -> None:", app.index("class PictureCaptureApp"))
     check_end = app.index("\n    def detect_layout_current", check_start)
     check = app[check_start:check_end]
-    assert "settings_snapshot = replace(self.settings)" in check
-    worker = check[check.index("        def worker():"):check.index("        def done(", check.index("        def worker():"))]
-    assert "self.settings" not in worker
+    assert "self.show_environment_center()" in check
+
+    environment_center = (root / "src" / "picture_capture" / "environment_center.py").read_text(encoding="utf-8")
+    refresh_start = environment_center.index("    def refresh(self) -> None:")
+    refresh_end = environment_center.index("\n    def _open_ocr_settings", refresh_start)
+    refresh = environment_center[refresh_start:refresh_end]
+    worker = refresh[refresh.index("        def worker():"):refresh.index("        def done(", refresh.index("        def worker():"))]
     assert "tesseract_status(executable, language)" in worker
+    assert "opencc_runtime_status(retry=True)" in worker
 
     split_start = app.index("    def batch_split_whole(")
     split_end = app.index("\n    def repair_pdic_order_selected_scope", split_start)
