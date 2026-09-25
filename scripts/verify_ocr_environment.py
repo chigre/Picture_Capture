@@ -4,6 +4,7 @@ import argparse
 import importlib.util
 from importlib import metadata
 from pathlib import Path
+import platform
 import sys
 
 
@@ -37,6 +38,7 @@ def main() -> int:
     parser.add_argument("--profile", default="")
     args = parser.parse_args()
 
+    print(f"Platform: {platform.system()} {platform.machine()}")
     print(f"Python: {sys.version.split()[0]}")
     if args.profile:
         print(f"OCR profile: {args.profile}")
@@ -105,8 +107,8 @@ def main() -> int:
                 print(f"Paddle GPU/cuDNN smoke test: OK ({detail})")
             except Exception as exc:
                 errors.append(
-                    "GPU/cuDNN smoke test failed. On Windows this commonly means the "
-                    f"required cudnn DLL is missing or not discoverable: {exc}"
+                    "GPU/cuDNN smoke test failed. Verify the NVIDIA driver and the selected "
+                    f"Paddle CUDA runtime; on Windows also check cuDNN DLL discovery: {exc}"
                 )
         if args.expect == "cpu" and compiled_cuda:
             errors.append("CPU profile selected but CUDA Paddle runtime is active")
