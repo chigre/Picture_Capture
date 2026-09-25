@@ -10040,7 +10040,13 @@ class PictureCaptureApp(tk.Tk):
                     )
                     temp_report.write_text(report_text, encoding="utf-8-sig")
                     temp_csv.replace(target)
-                    temp_report.replace(report)
+                    try:
+                        temp_report.replace(report)
+                    except Exception:
+                        # Both paths are timestamp-unique. If the second publish
+                        # fails, remove the first so callers never see a half-pair.
+                        target.unlink(missing_ok=True)
+                        raise
                     return {
                         "target": target, "report": report,
                         "analyzed": len(analyzed), "blanks": len(blanks),
@@ -10050,6 +10056,8 @@ class PictureCaptureApp(tk.Tk):
                 except Exception:
                     temp_csv.unlink(missing_ok=True)
                     temp_report.unlink(missing_ok=True)
+                    target.unlink(missing_ok=True)
+                    report.unlink(missing_ok=True)
                     raise
 
             def finalized(payload) -> None:
