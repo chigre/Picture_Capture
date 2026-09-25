@@ -1877,7 +1877,12 @@ def test_v214_shueisha_japanese_bracketed_headwords_accept_kana_reading_prefix()
 
     # The kana-prefix relaxation belongs to the explicit Japanese CJK profile;
     # a non-CJK language does not gain a generic bracket parser.
-    spanish = AppSettings(ocr_language="spa")
+    spanish = AppSettings(
+        ocr_language="spa",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_bracketed_headword=True,
+    )
     assert parse_headword_text("ai【愛】", spanish) is None
 
 
