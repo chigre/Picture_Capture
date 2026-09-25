@@ -5898,6 +5898,9 @@ class ReviewWindow(tk.Toplevel):
         )
 
     def render_rows(self, preloaded_crops: list[Image.Image] | None = None) -> None:
+        if preloaded_crops is None:
+            self._request_render_rows(focus_index=self.active_index)
+            return
         current_stem = self.parent.current_page.stem if self.parent.current_page else ""
         if self._rendered_page_stem and self._rendered_page_stem == current_stem:
             self._capture_simplified_edits(self._rendered_page_stem)
@@ -5908,27 +5911,16 @@ class ReviewWindow(tk.Toplevel):
         simplified_records = self._simplified_page_records(current_stem) if current_stem else {}
         if not self.parent.image:
             return
-        review_settings, geometry = _review_crop_context(
-            self.parent.image, self.parent.settings, self.parent.canvas.winfo_width(),
-            self.parent.current_index,
-        )
         ordered = self.parent._ordered_entries_reading_order()
+        if len(preloaded_crops) < len(ordered):
+            self._request_render_rows(focus_index=self.active_index)
+            return
         words = self.parent._project_words if self.parent.project else set()
         for index, entry in enumerate(ordered):
             next_entry = ordered[index + 1] if index + 1 < len(ordered) else None
-            if preloaded_crops is not None and index < len(preloaded_crops):
-                # The worker already performed the expensive crop + LANCZOS
-                # resize for the adjacent page. Copy the PIL object so the
-                # prefetch cache can be released immediately after navigation.
-                crop = preloaded_crops[index].copy()
-            else:
-                box = _review_line_box(entry, geometry, self.parent.image, review_settings, next_entry)
-                crop = self.parent.image.crop(box).convert("RGB")
-                effective_scale = max(0.05, min(2.5, self.review_zoom))
-                crop = crop.resize(
-                    (max(1, round(crop.width * effective_scale)), max(1, round(crop.height * effective_scale))),
-                    Image.Resampling.LANCZOS,
-                )
+            # Crop and LANCZOS resize are completed by a worker before this
+            # UI-only materialization step. ImageTk creation stays on Tk.
+            crop = preloaded_crops[index]
             photo = ImageTk.PhotoImage(crop)
             self.thumbnails.append(photo)
             self.editor_crop_widths.append(crop.width)
