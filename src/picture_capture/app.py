@@ -7231,7 +7231,7 @@ class CropSettingsDialog(tk.Toplevel):
         self.parent = parent
         self.indices = list(indices)
         self.title("切图设置")
-        fit_window_to_work_area(self, 780, 690, min_width=700, min_height=600)
+        fit_window_to_work_area(self, 780, 560, min_width=700, min_height=500)
         self.transient(parent)
         self.grab_set()
         self.general_top_var = tk.StringVar()
@@ -7241,9 +7241,6 @@ class CropSettingsDialog(tk.Toplevel):
         self.integrate_illustrations_var = tk.BooleanVar(value=True)
         self.margin_var = tk.StringVar()
         self.workers_var = tk.StringVar()
-        self.special_page_var = tk.StringVar()
-        self.special_top_var = tk.StringVar()
-        self.special_bottom_var = tk.StringVar()
         self.status_var = tk.StringVar(value="")
         self._load_initial_values()
         self._build()
@@ -7270,12 +7267,10 @@ class CropSettingsDialog(tk.Toplevel):
         self.integrate_illustrations_var.set(bool(saved.get("integrate_illustrations", True)))
         self.margin_var.set(str(saved.get("polygon_margin", 0)))
         self.workers_var.set(str(saved.get("parallel_workers", self.parent.settings.crop_parallel_workers)))
-        self._saved_specials = (
-            saved.get("special_pages", {})
+        self._legacy_specials = (
+            dict(saved.get("special_pages", {}))
             if isinstance(saved.get("special_pages", {}), dict) else {}
         )
-        if self.parent.current_page:
-            self.special_page_var.set(self.parent.current_page.stem)
 
     def _build(self) -> None:
         outer = ttk.Frame(self, padding=(18, 14, 18, 12))
@@ -7283,7 +7278,7 @@ class CropSettingsDialog(tk.Toplevel):
         _build_modern_dialog_heading(
             outer,
             "切图设置",
-            "完整切图设置（词条切图 / 插图切图共用）。常规页面使用通用规则，只有确实不同的页面才放到“特殊页面覆盖”。",
+            "完整切图设置（词条切图 / 插图切图共用）。Section=0 页面使用通用上下边界；Section>0 页面由主界面 Section 边界接管。",
         )
 
         general = ttk.LabelFrame(
@@ -7302,7 +7297,11 @@ class CropSettingsDialog(tk.Toplevel):
         ttk.Entry(general, textvariable=self.general_top_var, width=10).grid(row=1, column=1, sticky="w", pady=(7, 2))
         ttk.Label(general, text="一般页切图下边界 V（参考页）：").grid(row=1, column=2, sticky="w", padx=(14, 0), pady=(7, 2))
         ttk.Entry(general, textvariable=self.general_bottom_var, width=10).grid(row=1, column=3, sticky="w", pady=(7, 2))
-        ttk.Label(general, text="单位：参考页规范像素；0 = 页面底部。横排时 V 与原图 Y 一致；竖排时 V 是阅读轴。", foreground="#666666").grid(row=2, column=0, columnspan=5, sticky="w")
+        ttk.Label(
+            general,
+            text="单位：参考页规范像素；0 = 页面底部。仅用于 Section=0 页面；Section>0 时以页面 Section 边界为准。",
+            foreground="#666666",
+        ).grid(row=2, column=0, columnspan=5, sticky="w")
 
         ttk.Label(general, text="词条 U 负向额外留白：").grid(row=3, column=0, sticky="w", pady=(8, 2))
         ttk.Entry(general, textvariable=self.entry_left_padding_var, width=10).grid(row=3, column=1, sticky="w", pady=(8, 2))
@@ -7331,40 +7330,21 @@ class CropSettingsDialog(tk.Toplevel):
         ttk.Entry(general, textvariable=self.workers_var, width=10).grid(row=7, column=1, sticky="w", pady=2)
         ttk.Label(general, text="0 = 自动；词条/插图切图共用").grid(row=7, column=2, columnspan=3, sticky="w", pady=2)
 
-        special = ttk.LabelFrame(
-            outer, text="特殊页面覆盖", padding=(12, 10),
+        section_info = ttk.LabelFrame(
+            outer, text="特殊页面范围", padding=(12, 10),
         )
-        special.pack(fill="both", expand=True, pady=(10, 0))
-        form = ttk.Frame(special)
-        form.pack(fill="x")
-        ttk.Label(form, text="页面：").grid(row=0, column=0, sticky="w")
-        ttk.Entry(form, textvariable=self.special_page_var, width=18).grid(row=0, column=1, sticky="ew")
-        ttk.Button(form, text="当前页", command=self.use_current_page).grid(row=0, column=2, padx=(5, 12))
-        ttk.Label(form, text="上边界V：").grid(row=0, column=3, sticky="w")
-        ttk.Entry(form, textvariable=self.special_top_var, width=9).grid(row=0, column=4, sticky="w")
-        ttk.Label(form, text="下边界V：").grid(row=0, column=5, sticky="w", padx=(8, 0))
-        ttk.Entry(form, textvariable=self.special_bottom_var, width=9).grid(row=0, column=6, sticky="w")
-        form.columnconfigure(1, weight=1)
-
-        buttons = ttk.Frame(special)
-        buttons.pack(fill="x", pady=(7, 5))
-        ttk.Button(buttons, text="添加/更新", command=self.add_special).pack(side="left")
-        ttk.Button(buttons, text="删除所选", command=self.remove_special).pack(side="left", padx=5)
-        ttk.Label(buttons, text="特殊页面只覆盖切图上下边界，其余切图设置仍共用。", foreground="#666666").pack(side="left", padx=(8, 0))
-
-        cols = ("page", "top", "bottom")
-        self.special_tree = ttk.Treeview(special, columns=cols, show="headings", height=10, selectmode="browse")
-        for col, text, width in (("page", "页面", 190), ("top", "上边界V", 90), ("bottom", "下边界V", 90)):
-            self.special_tree.heading(col, text=text)
-            self.special_tree.column(col, width=width, anchor="w" if col == "page" else "center")
-        bar = ttk.Scrollbar(special, orient="vertical", command=self.special_tree.yview)
-        self.special_tree.configure(yscrollcommand=bar.set)
-        self.special_tree.pack(side="left", fill="both", expand=True)
-        bar.pack(side="right", fill="y")
-        self.special_tree.bind("<<TreeviewSelect>>", self.on_special_select)
-        for page, values in sorted(self._saved_specials.items()):
-            if isinstance(values, dict):
-                self.special_tree.insert("", "end", iid=str(page), values=(page, values.get("top_v", ""), values.get("bottom_v", 0)))
+        section_info.pack(fill="x", pady=(10, 0))
+        ttk.Label(
+            section_info,
+            text="特殊页面请在主界面【六、页面列表】的 Section 列双击设置；Section=1 可直接拖动单一上/下边界，Section≥2 可设置多个阅读区。",
+            wraplength=720, justify="left",
+        ).pack(anchor="w")
+        if self._legacy_specials:
+            ttk.Label(
+                section_info,
+                text=f"检测到 {len(self._legacy_specials)} 个旧版“特殊页面覆盖”。仅在对应页面 Section=0 时继续兼容生效；一旦设置 Section，Section 自动优先。",
+                foreground="#8a5a00", wraplength=720, justify="left",
+            ).pack(anchor="w", pady=(6, 0))
 
         bottom = ttk.Frame(self, padding=(18, 0, 18, 12))
         bottom.pack(fill="x")
@@ -7377,14 +7357,6 @@ class CropSettingsDialog(tk.Toplevel):
             bottom, text="保存并关闭", command=self.save_settings
         ).pack(side="right", padx=(0, 6))
 
-    def _known_page_stem(self, token: str) -> str:
-        if not self.parent.project:
-            raise ValueError("尚未打开项目")
-        page = _resolve_words_page_token(token, [p.stem for p in self.parent.project.images])
-        if page is None:
-            raise ValueError(f"找不到页面：{token}")
-        return page
-
     @staticmethod
     def _nonnegative_int(value: str, label: str) -> int:
         try:
@@ -7394,16 +7366,6 @@ class CropSettingsDialog(tk.Toplevel):
         if number < 0:
             raise ValueError(f"{label}不能小于0")
         return number
-
-    def _special_mapping(self) -> dict[str, dict[str, int]]:
-        result = {}
-        for iid in self.special_tree.get_children():
-            page, top, bottom = self.special_tree.item(iid, "values")
-            result[str(page)] = {
-                "top_v": self._nonnegative_int(str(top), f"{page} 上边界V"),
-                "bottom_v": self._nonnegative_int(str(bottom), f"{page} 下边界V"),
-            }
-        return result
 
     def _payload(self) -> dict:
         top = self._nonnegative_int(self.general_top_var.get(), "一般页眉Y")
@@ -7416,10 +7378,6 @@ class CropSettingsDialog(tk.Toplevel):
             raise ValueError("并行进程数必须为 0–8")
         if bottom and bottom <= top:
             raise ValueError("一般底部Y必须大于页眉Y，或填0表示图片底部")
-        specials = self._special_mapping()
-        for page, values in specials.items():
-            if values["bottom_v"] and values["bottom_v"] <= values["top_v"]:
-                raise ValueError(f"{page} 的底部Y必须大于页眉Y，或填0")
         return {
             "version": CROP_SETTINGS_VERSION,
             "coordinate_space": CANONICAL_REFERENCE_SPACE,
@@ -7431,51 +7389,10 @@ class CropSettingsDialog(tk.Toplevel):
             "integrate_illustrations": bool(self.integrate_illustrations_var.get()),
             "polygon_margin": margin,
             "parallel_workers": workers,
-            "special_pages": specials,
+            # Read-only compatibility for old projects. New per-page ranges live
+            # in PageSections sidecars and take precedence during crop planning.
+            "special_pages": dict(self._legacy_specials),
         }
-
-    def add_special(self) -> None:
-        try:
-            page = self._known_page_stem(self.special_page_var.get())
-            top = self._nonnegative_int(self.special_top_var.get(), "特殊页页眉Y")
-            bottom = self._nonnegative_int(self.special_bottom_var.get(), "特殊页底部Y")
-            if bottom and bottom <= top:
-                raise ValueError("特殊页底部Y必须大于页眉Y，或填0")
-            if self.special_tree.exists(page):
-                self.special_tree.item(page, values=(page, top, bottom))
-            else:
-                self.special_tree.insert("", "end", iid=page, values=(page, top, bottom))
-            self.special_page_var.set(page)
-            self.status_var.set(f"已更新特殊页面：{page}")
-        except Exception as exc:
-            messagebox.showerror("特殊页面参数无效", str(exc), parent=self)
-
-    def use_current_page(self) -> None:
-        if not self.parent.current_page:
-            return
-        page = self.parent.current_page.stem
-        self.special_page_var.set(page)
-        if self.special_tree.exists(page):
-            _p, top, bottom = self.special_tree.item(page, "values")
-            self.special_top_var.set(str(top))
-            self.special_bottom_var.set(str(bottom))
-        else:
-            self.special_top_var.set(self.general_top_var.get())
-            self.special_bottom_var.set(self.general_bottom_var.get())
-
-    def remove_special(self) -> None:
-        for iid in self.special_tree.selection():
-            self.special_tree.delete(iid)
-        self.status_var.set("已移除所选特殊页面设置")
-
-    def on_special_select(self, _event=None) -> None:
-        selection = self.special_tree.selection()
-        if not selection:
-            return
-        page, top, bottom = self.special_tree.item(selection[0], "values")
-        self.special_page_var.set(str(page))
-        self.special_top_var.set(str(top))
-        self.special_bottom_var.set(str(bottom))
 
     def save_settings(self) -> None:
         try:
@@ -7490,7 +7407,7 @@ class CropSettingsDialog(tk.Toplevel):
             self.parent.save_settings()
             if self.parent.crop_preview_var.get():
                 self.parent.redraw()
-            self.parent.status_var.set("切图设置已保存；词条切图与插图切图将共用这些参数。")
+            self.parent.status_var.set("切图设置已保存；Section=0 页面使用通用边界，Section>0 页面使用各自 Section 边界。")
             self.destroy()
         except Exception as exc:
             messagebox.showerror("切图设置无效", str(exc), parent=self)
