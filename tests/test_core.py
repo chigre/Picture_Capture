@@ -1984,7 +1984,7 @@ def test_v281_cjk_visual_projection_recovers_oversized_single_character_row():
     assert any(start <= 130 and end >= 178 for start, end in runs)
 
 
-def test_v214_visual_single_cjk_rescue_rejects_definition_text_near_tall_run():
+def test_v214_visual_single_cjk_rescue_uses_profile_for_clipped_pinyin_head():
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import OCRRecord, _cjk_word_for_visual_run
 
@@ -1995,26 +1995,41 @@ def test_v214_visual_single_cjk_rescue_rejects_definition_text_near_tall_run():
         profile_cjk_allow_single_headword=True,
         profile_cjk_allow_bracketed_headword=False,
     )
+    profile = load_dictionary_profile(preset="TimesCED", language="chi_tra")
     run = (80, 145)
-    # This is the failure pattern from a definition line: the Han character is
-    # inside ordinary prose and its OCR box is far shorter than the tall visual
-    # projection run. It must not be mined as a single-character headword.
+
+    # Definition text still cannot donate an arbitrary Han character to the
+    # visual rescue path.
     body = [OCRRecord("Âm: 波 ba (ba). 普通正文", 0.99, (5, 101, 190, 123))]
-    word, _confidence, record = _cjk_word_for_visual_run(body, run, 100, settings)
+    word, _confidence, record = _cjk_word_for_visual_run(
+        body, run, 100, settings, profile,
+    )
     assert word == "" and record is None
 
-    # A real oversized head record may contain pinyin after the display glyph;
-    # its OCR box itself spans the visual run and remains recoverable.
-    head = [OCRRecord("波 ba", 0.99, (8, 82, 88, 143))]
-    word, confidence, record = _cjk_word_for_visual_run(head, run, 100, settings)
+    # Real scans may crop a visually large glyph to a body-height OCR box. The
+    # active TimesCED profile recognizes "波 ba" structurally, so the visual
+    # run may use a narrower box gate without relaxing the generic fallback.
+    clipped_head = [OCRRecord("波 ba", 0.99, (8, 101, 82, 123))]
+    word, confidence, record = _cjk_word_for_visual_run(
+        clipped_head, run, 100, settings, profile,
+    )
     assert word == "波"
     assert confidence == 0.99
-    assert record is head[0]
+    assert record is clipped_head[0]
 
-    # Chinese prose that merely starts with a Han character is also not a
-    # fallback headword when the record is an ordinary body-height line.
-    prose = [OCRRecord("波羅蜜正文說明", 0.99, (5, 101, 180, 123))]
-    word, _confidence, record = _cjk_word_for_visual_run(prose, run, 100, settings)
+    # Without the active profile the same clipped box remains below the strict
+    # fallback threshold; this keeps the recall relaxation profile-specific.
+    word, _confidence, record = _cjk_word_for_visual_run(
+        clipped_head, run, 100, settings, None,
+    )
+    assert word == "" and record is None
+
+    # Even a profile-parsed candidate is rejected if it is a wide definition
+    # line rather than the compact headword + pinyin record.
+    wide = [OCRRecord("波 ba ordinary definition text", 0.99, (5, 101, 195, 123))]
+    word, _confidence, record = _cjk_word_for_visual_run(
+        wide, run, 100, settings, profile,
+    )
     assert word == "" and record is None
 
 
@@ -2055,11 +2070,11 @@ def test_v214_single_only_profile_visual_rescue_keeps_large_head_not_body_line()
         OCRRecord("普通正文", 0.99, (4, 20, 92, 40)),
         OCRRecord("另一正文", 0.99, (4, 60, 92, 80)),
         OCRRecord("Âm: 花 ba (ba). 普通釋義", 0.99, (5, 118, 190, 140)),
-        OCRRecord("波 ba", 0.99, (8, 207, 88, 263)),
+        OCRRecord("波 ba", 0.99, (8, 224, 82, 246)),
         OCRRecord("後續正文", 0.99, (4, 300, 92, 320)),
         OCRRecord("末行正文", 0.99, (4, 340, 92, 360)),
     ]
-    entries, diagnostics = filter_headword_records(records, band, 0, 0, settings)
+    profile = load_dictionary_profile(preset="TimesCED", language="chi_tra")\n    entries, diagnostics = filter_headword_records(\n        records, band, 0, 0, settings, profile=profile,\n    )
     assert [entry.word for entry in entries] == ["波"]
     false_rows = [row for row in diagnostics if row.get("text", "").startswith("Âm: 花")]
     assert false_rows and false_rows[0]["accepted"] is False
