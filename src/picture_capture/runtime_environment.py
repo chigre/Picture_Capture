@@ -43,6 +43,34 @@ def runtime_settings_path() -> Path:
     return user_config_root() / RUNTIME_SETTINGS_FILENAME
 
 
+def legacy_user_config_files(filename: str, *, system: str | None = None) -> tuple[Path, ...]:
+    """Return pre-portability locations that may still contain user state."""
+    system_name = (system or platform.system()).strip()
+    candidates: list[Path] = []
+    if system_name == "Windows":
+        for key in ("APPDATA", "LOCALAPPDATA"):
+            base = os.environ.get(key)
+            if base:
+                candidates.append(Path(base).expanduser() / APP_DIRNAME / filename)
+    else:
+        candidates.append(Path.home() / ".picture_capture" / filename)
+    current = user_config_root(system=system_name) / filename
+    return tuple(path for path in dict.fromkeys(candidates) if path != current)
+
+
+def legacy_user_data_roots(*, system: str | None = None) -> tuple[Path, ...]:
+    """Return historical data roots used before native macOS paths were added."""
+    system_name = (system or platform.system()).strip()
+    candidates: list[Path] = []
+    if system_name == "Darwin":
+        candidates.append(
+            Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+            / APP_DIRNAME
+        )
+    current = user_data_root(system=system_name)
+    return tuple(path for path in dict.fromkeys(candidates) if path != current)
+
+
 def load_runtime_settings(path: Path | None = None) -> dict[str, Any]:
     target = Path(path) if path is not None else runtime_settings_path()
     try:
