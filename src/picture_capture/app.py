@@ -5126,7 +5126,7 @@ class ReviewWindow(tk.Toplevel):
                         page = candidate
                         break
             if page is None and self.parent.current_page and self.parent.current_page.stem == stem:
-                page = current_page
+                page = self.parent.current_page
             records = read_simplified_records(simplified_review_path_for_image(page)) if page else {}
             self._simplified_page_cache[stem] = records
         return self._simplified_page_cache[stem]
