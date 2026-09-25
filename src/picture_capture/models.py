@@ -320,6 +320,8 @@ class AppSettings:
     follow_column_deformation: bool = False
     # v2.12.12 resets the two layout-behavior checkboxes to safer opt-in defaults.
     layout_behavior_defaults_version: int = 1
+    # v2.14 refreshes visible/default workflow choices once for existing projects.
+    ui_workflow_defaults_version: int = 1
     column_track_radius: int = 80
     column_track_block_height: int = 120
     column_track_max_step: int = 28
@@ -564,6 +566,17 @@ class AppSettings:
             raw["manual_columns"] = False
             raw["follow_column_deformation"] = False
             raw["layout_behavior_defaults_version"] = 1
+
+        # v2.14: make the recommended OCR path single-engine by default and
+        # declutter the page list. Apply once to existing projects so persisted
+        # historical defaults do not mask the new UI defaults; later user edits
+        # are preserved because the version marker is then saved as 1.
+        if int(raw.get("ui_workflow_defaults_version", 0) or 0) < 1:
+            raw["paddle_use_paddleocr"] = True
+            raw["paddle_compare_tesseract"] = False
+            raw["paddle_dual_ocr_arbitration"] = False
+            raw["page_list_show_fill_status"] = False
+            raw["ui_workflow_defaults_version"] = 1
 
         # Project Profile A/B page-edge widths were split after the original
         # single profile_side_percent setting. Existing projects inherit their
