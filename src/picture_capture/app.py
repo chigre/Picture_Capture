@@ -13285,7 +13285,7 @@ class PictureCaptureApp(tk.Tk):
     def draw_cursor_guides(self, canvas_x: float, canvas_y: float) -> None:
         """Draw the blue dashed crosshair in the current canvas view."""
         self.canvas.delete("cursor-guide")
-        if self.image is None:
+        if self.image is None or self._section_editing:
             return
         width = self.image.width * self.view_scale
         height = self.image.height * self.view_scale
@@ -13571,6 +13571,19 @@ class PictureCaptureApp(tk.Tk):
     def _set_section_editing(self, active: bool) -> None:
         self._section_editing = bool(active)
         self._drag_section_boundary = None
+        try:
+            self.canvas.configure(cursor="hand2" if self._section_editing else "")
+        except tk.TclError:
+            pass
+        if self._section_editing:
+            # SECTION dragging uses the page boundary lines themselves as the
+            # pointer target. Hide the ordinary coordinate crosshair so it
+            # cannot be confused with a SECTION boundary.
+            self.cursor_canvas_xy = None
+            try:
+                self.canvas.delete("cursor-guide")
+            except tk.TclError:
+                pass
 
     def _draw_page_sections(self, geometry=None) -> None:
         """Draw page-local SECTION bounds in source space on the main canvas."""
@@ -13839,8 +13852,12 @@ class PictureCaptureApp(tk.Tk):
             display_width = self.image.width * self.view_scale
             display_height = self.image.height * self.view_scale
             if 0 <= canvas_x < display_width and 0 <= canvas_y < display_height:
-                self.cursor_canvas_xy = (canvas_x, canvas_y)
-                self.draw_cursor_guides(canvas_x, canvas_y)
+                if self._section_editing:
+                    self.cursor_canvas_xy = None
+                    self.canvas.delete("cursor-guide")
+                else:
+                    self.cursor_canvas_xy = (canvas_x, canvas_y)
+                    self.draw_cursor_guides(canvas_x, canvas_y)
                 source_x = round(canvas_x / self.view_scale)
                 source_y = round(canvas_y / self.view_scale)
                 transform = LayoutTransform(
