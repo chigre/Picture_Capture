@@ -298,23 +298,40 @@ def apply_native_titlebar_appearance(window: tk.Misc, mode: object) -> None:
         return
     try:
         window.update_idletasks()
-        client_hwnd = int(window.winfo_id())
+        client_hwnd_value = int(window.winfo_id())
         user32 = ctypes.windll.user32
         dwmapi = ctypes.windll.dwmapi
-        native_hwnd = int(user32.GetParent(client_hwnd)) or client_hwnd
+
+        # Declare pointer-sized signatures explicitly. Without these ctypes
+        # defaults HWND arguments/return values to 32-bit c_int, which can
+        # truncate handles in the 64-bit Windows build used by most users.
+        get_parent = user32.GetParent
+        get_parent.argtypes = [ctypes.c_void_p]
+        get_parent.restype = ctypes.c_void_p
+        parent_hwnd_value = get_parent(ctypes.c_void_p(client_hwnd_value))
+        native_hwnd = ctypes.c_void_p(parent_hwnd_value or client_hwnd_value)
+
+        set_attribute = dwmapi.DwmSetWindowAttribute
+        set_attribute.argtypes = [
+            ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_uint,
+        ]
+        set_attribute.restype = ctypes.c_long
+
         enabled = ctypes.c_int(1 if normalize_appearance_mode(mode) == "dark" else 0)
         # Attribute 20 is used by current Windows 10/11. Attribute 19 is the
         # compatibility value used by earlier Windows 10 builds.
         result = int(
-            dwmapi.DwmSetWindowAttribute(
+            set_attribute(
                 native_hwnd, 20, ctypes.byref(enabled), ctypes.sizeof(enabled)
             )
         )
         if result != 0:
-            dwmapi.DwmSetWindowAttribute(
+            set_attribute(
                 native_hwnd, 19, ctypes.byref(enabled), ctypes.sizeof(enabled)
             )
-    except (AttributeError, OSError, TypeError, ValueError, tk.TclError):
+    except (
+        AttributeError, OSError, TypeError, ValueError, ctypes.ArgumentError, tk.TclError
+    ):
         return
 
 
