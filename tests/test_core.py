@@ -4275,7 +4275,9 @@ def test_v2115_large_existing_word_fill_avoids_full_image_decode_and_bulk_tree_u
     start = app_text.index("    def fill_existing_headwords(self) -> None:")
     end = app_text.index("    def import_legacy_words(self) -> bool:", start)
     body = app_text[start:end]
-    assert "derive_nominal_geometry(width, height, self.settings)" in body
+    assert "settings_snapshot = replace(self.settings)" in body
+    assert "derive_nominal_geometry(width, height, settings_snapshot)" in body
+    assert "derive_nominal_geometry(width, height, self.settings)" not in body
     assert "page_image = normalize_page_rgb(opened)" not in body
     assert "refresh_row=False" in body
 
