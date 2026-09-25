@@ -1558,3 +1558,105 @@ def test_round2_training_zip_cancel_is_atomic(tmp_path):
 
     assert not target.exists()
     assert not target.with_name(f".{target.name}.tmp").exists()
+
+
+
+def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+
+    app_start = text.index("class PictureCaptureApp")
+
+    reload_start = text.index("    def _request_wordslist_reload(", app_start)
+    reload_end = text.index("\n    def open_recent_project", reload_start)
+    reload_block = text[reload_start:reload_end]
+    assert "read_noncomment_lines(path)" in reload_block
+    assert 'self._start_ui_worker("wordslist-reload"' in reload_block
+
+    settings_start = text.index("class SettingsDialog")
+    settings_end = text.index("class ReviewWindow", settings_start)
+    settings = text[settings_start:settings_end]
+    assert "self.parent._request_wordslist_reload(persist=False, redraw=False)" in settings
+
+    review_start = text.index("class ReviewWindow")
+    review_end = text.index("class OCRConflictReviewDialog", review_start)
+    review = text[review_start:review_end]
+    assert "self.parent._request_wordslist_reload(" in review
+    assert "reload_wordslist_reference(Path(chosen)" not in review
+
+    order_start = text.index("    def check_headword_order(", app_start)
+    order_end = text.index("\n    def _show_text_report", order_start)
+    order = text[order_start:order_end]
+    all_pages_branch = order[order.index("        if all_pages:"):]
+    assert 'self._start_ui_worker("headword-order-all"' in all_pages_branch
+    worker_start = all_pages_branch.index("            def worker():")
+    worker_done = all_pages_branch.index("            def done(", worker_start)
+    worker = all_pages_branch[worker_start:worker_done]
+    assert "read_pdic(pdic_path(page))" in worker
+    assert "sorted(sequence" in worker
+    assert "self.settings" not in worker
+
+    for name, next_name in (
+        ("auto_detect_current", "paddle_detect_current"),
+        ("ocr_current", "export_text"),
+        ("split_lines_current", "split_whole_current"),
+        ("split_whole_current", "_crop_settings_defaults"),
+        ("import_legacy_words", "_default_old_new_compare_source"),
+    ):
+        start = text.index(f"    def {name}(", app_start)
+        end = text.index(f"\n    def {next_name}(", start)
+        block = text[start:end]
+        assert "self._start_batch_task(" in block
+
+    fill_start = text.index("    def fill_existing_headwords(", app_start)
+    fill_end = text.index("\n    def import_legacy_words", fill_start)
+    fill = text[fill_start:fill_end]
+    ensure_start = fill.index("        def ensure_mapping()")
+    worker_start = fill.index("        def worker(", ensure_start)
+    ensure = fill[ensure_start:worker_start]
+    assert "self._word_fill_source_mapping =" not in ensure
+    assert "settings_snapshot = replace(self.settings)" in fill
+    assert "derive_nominal_geometry(width, height, settings_snapshot)" in fill
+    done_start = fill.index("        def done(", worker_start)
+    assert "self._word_fill_source_mapping = mapping" in fill[done_start:]
+
+    prefetch_start = review.index("    def _schedule_adjacent_preload(")
+    prefetch_end = review.index("\n    def change_page(", prefetch_start)
+    prefetch = review[prefetch_start:prefetch_end]
+    worker_start = prefetch.index("            def worker(")
+    worker = prefetch[worker_start:]
+    assert "local_anchor_index=anchor_index" in worker
+    assert "self.parent.current_index" not in worker
+    assert "self.parent._ppp_read_path" not in worker
+
+
+def test_round3_wordslist_stream_reader_supports_legacy_encodings(tmp_path):
+    from picture_capture.models import read_noncomment_lines
+
+    samples = {
+        "utf8.txt": ("alpha\n'comment\nβeta\n", "utf-8"),
+        "utf16.txt": ("繁體\n詞條\n", "utf-16"),
+        "gb.txt": ("简体\n词条\n", "gb18030"),
+        "big5.txt": ("繁體\n詞條\n", "big5"),
+    }
+    for name, (content, encoding) in samples.items():
+        path = tmp_path / name
+        path.write_bytes(content.encode(encoding))
+        expected = [
+            line for line in content.splitlines()
+            if line.strip() and not line.lstrip().startswith("'")
+        ]
+        assert read_noncomment_lines(path) == expected
+
+
+def test_round3_wordslist_reader_does_not_materialize_full_text_source():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "models.py"
+    ).read_text(encoding="utf-8")
+    start = source.index("def read_noncomment_lines(")
+    end = source.index("\n\n", start)
+    block = source[start:end]
+    assert "iter_text_lines_detected" in block
+    assert "read_text_detected" not in block
+    assert ".splitlines()" not in block
