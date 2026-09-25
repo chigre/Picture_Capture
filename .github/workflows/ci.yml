@@ -35,6 +35,14 @@ jobs:
       - name: Run pytest
         run: uv run --locked pytest
 
+      - name: GUI construction smoke (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a uv run --locked python scripts/gui_smoke.py
+
+      - name: GUI construction smoke (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: uv run --locked python scripts/gui_smoke.py
+
       - name: Run compatibility test runner
         run: uv run --locked python run_tests.py
 
