@@ -118,6 +118,8 @@ GPU profile 将 `paddlepaddle-gpu==3.3.0` 与对应 Paddle 官方 CUDA 索引声
 
 详细平台边界见 [docs/platform-support.md](docs/platform-support.md)，OCR 安装与验证见 [docs/ocr-install.md](docs/ocr-install.md)。
 
+> **跨机器迁移**：项目文件不再决定本机 CPU/GPU 或 Tesseract 程序路径。Paddle 设备按当前机器自动解析，Tesseract 由【环境中心】保存为用户级 runtime 设置；项目从 Windows/Linux/macOS 之间复制时无需手动清理旧设备路径。旧 Windows 项目中的大小写文件名和 foreign absolute wordslist 路径也有兼容回退。
+
 ---
 
 # Tesseract
