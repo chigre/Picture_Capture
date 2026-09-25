@@ -256,7 +256,9 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     crop_end = source.index("class OldNewComparisonWindow", crop_start)
     crop = source[crop_start:crop_end]
     assert '"通用切图规则"' in crop
-    assert '"特殊页面覆盖"' in crop
+    assert '"特殊页面范围"' in crop
+    assert '主界面【六、页面列表】的 Section 列双击设置' in crop
+    assert '"特殊页面覆盖"' not in crop
     assert 'text="保存并关闭"' in crop
 
     compare_start = source.index("class OldNewComparisonWindow")
