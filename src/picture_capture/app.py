@@ -521,6 +521,34 @@ def horizontal_ocr_menu_layout(
     return editor_x + editor_width + 3, editor_y, "nw"
 
 
+def entry_index_label_layout(
+    editor_x: float,
+    editor_y: float,
+    editor_width: int,
+    editor_height: int,
+    *,
+    horizontal: bool,
+    rtl: bool = False,
+    vertical_box: tuple[int, int, int, int] | None = None,
+    gap: int = 2,
+) -> tuple[float, float, str]:
+    """Place the entry sequence label immediately before the editor.
+
+    Horizontal labels respect reading direction (left of LTR, right of RTL).
+    Vertical labels sit immediately above the text box because vertical reading
+    proceeds from top to bottom.
+    """
+    gap = max(0, int(gap))
+    if horizontal:
+        if rtl:
+            return float(editor_x + gap), float(editor_y), "nw"
+        return float(editor_x - gap), float(editor_y), "ne"
+    if vertical_box is None:
+        raise ValueError("vertical_box is required for vertical entry labels")
+    left, top, right, _bottom = vertical_box
+    return float((left + right) / 2.0), float(top - gap), "s"
+
+
 def _sorted_page_list_rows(rows: list[tuple[str, tuple]], column: str, descending: bool = False) -> list[tuple[str, tuple]]:
     """Sort Treeview-like page rows without changing their stable page iids.
 
@@ -12771,7 +12799,7 @@ class PictureCaptureApp(tk.Tk):
         col = column_index(entry.x, geometry, entry.y)
         canonical_x = geometry.x_at(col, entry_v)
         width = geometry.column_widths[col] * self.view_scale
-        record = {"widgets": [], "canvas_items": [], "index_item": None}
+        record = {"widgets": [], "canvas_items": [], "index_widget": None}
         marker_start, marker_end = geometry.transform.canonical_marker_to_source(
             (canonical_x, entry_v),
             (canonical_x + round(geometry.column_widths[col] * 0.95), entry_v),
@@ -12964,29 +12992,40 @@ class PictureCaptureApp(tk.Tk):
             )
             record["canvas_items"].append(item)
 
-        # 编号位置与 OCR 菜单无关，必须放在 if ocr_menu is not None 外面。
-        if horizontal:
-            assert horizontal_index is not None
-            index_x, index_y = horizontal_index
-            index_anchor = horizontal_index_anchor
-        elif self.settings.layout_writing_mode != "horizontal-tb":
-            assert vertical_index is not None
-            index_x, index_y = vertical_index
-            index_anchor = vertical_index_anchor_name
-        else:
-            raise AssertionError("unreachable overlay layout")
-
-        index_item = self.canvas.create_text(
-            index_x,
-            index_y,
-            text=str(index),
-            fill=("#e6edf3" if self.appearance_mode == "dark" else "#222"),
-            anchor=index_anchor,
-            font=("Arial", 8),
+        # The sequence number belongs to the entry editor rather than to the
+        # column edge. Use a real Label so its background can exactly follow the
+        # editor background (including optional OCR-confidence colouring).
+        index_x, index_y, index_anchor = entry_index_label_layout(
+            editor_x,
+            editor_y,
+            editor_req_width,
+            editor_req_height,
+            horizontal=horizontal,
+            rtl=rtl,
+            vertical_box=vertical_box,
         )
-
-        record["canvas_items"].append(index_item)
-        record["index_item"] = index_item
+        index_label = tk.Label(
+            self.canvas,
+            text=str(index),
+            bg=str(editor.cget("bg")),
+            fg="#222222",
+            bd=0,
+            padx=2,
+            pady=0,
+            font=_entry_font_spec(
+                main_family, max(8, round(editor_font_size * 0.65)), False, False,
+            ),
+        )
+        # Preserve the editor-matching light status/background colour even
+        # when the rest of the application is using dark appearance.
+        index_label._pc_skip_classic_appearance = True
+        self.overlay_widgets.append(index_label)
+        record["widgets"].append(index_label)
+        record["index_widget"] = index_label
+        index_window = self.canvas.create_window(
+            index_x, index_y, window=index_label, anchor=index_anchor,
+        )
+        record["canvas_items"].append(index_window)
 
         if self.crop_preview_var.get():
             left, top, right, bottom = line_box(entry, geometry, self.image, self.settings)
@@ -13028,10 +13067,10 @@ class PictureCaptureApp(tk.Tk):
     def _refresh_entry_index_labels(self) -> None:
         for index, entry in enumerate(self._ordered_entries_reading_order()):
             record = self._entry_visuals.get(id(entry))
-            item = record.get("index_item") if record else None
-            if item is not None:
+            widget = record.get("index_widget") if record else None
+            if widget is not None:
                 try:
-                    self.canvas.itemconfigure(item, text=str(index))
+                    widget.configure(text=str(index))
                 except tk.TclError:
                     pass
 
@@ -14163,6 +14202,16 @@ class PictureCaptureApp(tk.Tk):
         else:
             options["disabledbackground"] = bg
         widget.configure(**options)
+        # The sequence label is visually part of the editor: whenever OCR
+        # background or the configured default background changes, keep both
+        # surfaces identical.
+        record = self.__dict__.get("_entry_visuals", {}).get(id(entry))
+        index_widget = record.get("index_widget") if record else None
+        if index_widget is not None:
+            try:
+                index_widget.configure(bg=bg)
+            except tk.TclError:
+                pass
 
     def _entry_overlay_style(
         self, entry: WordEntry, displayed_word: str | None = None,
