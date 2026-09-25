@@ -3949,7 +3949,7 @@ def test_v2110_page_list_heading_context_menu_has_optional_columns_and_permanent
 def test_v2116_page_list_has_illustration_count_column_and_sort():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'self.page_list.heading("illustrations", text="插图")' in text
+    assert 'self.page_list.heading("illustrations", text="插图", anchor="w")' in text
     assert 'command=lambda: self._sort_page_list("illustrations")' in text
     assert 'page_list_show_illustrations' in text
     rows = [
