@@ -19,6 +19,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from .models import AppSettings, Entry, resolved_tesseract_language
+from .runtime_environment import resolve_paddle_device
 from .coordinate_space import (
     REFERENCE_CANONICAL_WIDTH,
     reference_to_canonical,
@@ -554,7 +555,8 @@ def get_paddle_engine(settings: AppSettings) -> Any:
     """Lazily create and reuse one active PaddleOCR 3.x general OCR pipeline."""
     language = _paddle_language(settings)
     orientation = bool(settings.paddle_use_textline_orientation)
-    key = (language, settings.paddle_device, settings.paddle_ocr_version, orientation)
+    device = resolve_paddle_device()
+    key = (language, device, settings.paddle_ocr_version, orientation)
     with _ENGINE_CACHE_LOCK:
         cached = _ENGINE_CACHE.get(key)
     if cached is not None:
@@ -579,7 +581,7 @@ def get_paddle_engine(settings: AppSettings) -> Any:
         kwargs = dict(
             lang=language,
             ocr_version=settings.paddle_ocr_version,
-            device=settings.paddle_device,
+            device=device,
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=orientation,
@@ -594,7 +596,7 @@ def get_paddle_engine(settings: AppSettings) -> Any:
             engine = PaddleOCR(**kwargs)
     except Exception as exc:
         raise RuntimeError(
-            f"PaddleOCR 初始化失败（语言={language}，设备={settings.paddle_device}，"
+            f"PaddleOCR 初始化失败（语言={language}，设备={device}，"
             f"版本={settings.paddle_ocr_version}）：{exc}"
         ) from exc
     # Only one configuration needs to remain strongly referenced by the cache.
