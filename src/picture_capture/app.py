@@ -10262,14 +10262,6 @@ class PictureCaptureApp(tk.Tk):
             return False
         if self._ui_close_requested:
             return False
-        if self._ui_worker_key_active("project-load"):
-            self.status_var.set("项目仍在后台打开；完成后再启动批量任务。")
-            return False
-        if self._ui_worker_key_active("profile-validation"):
-            self.status_var.set("Project Profile 测试仍在运行或安全结束中；完成后再启动批量任务。")
-            return False
-        if self._ui_close_requested:
-            return False
         self._flush_deferred_page_save()
         items = list(items)
         if not items:
@@ -10371,6 +10363,14 @@ class PictureCaptureApp(tk.Tk):
         """
         if self._batch_active:
             messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
+            return False
+        if self._ui_worker_key_active("project-load"):
+            self.status_var.set("项目仍在后台打开；完成后再启动批量任务。")
+            return False
+        if self._ui_worker_key_active("profile-validation"):
+            self.status_var.set("Project Profile 测试仍在运行或安全结束中；完成后再启动批量任务。")
+            return False
+        if self._ui_close_requested:
             return False
         self._flush_deferred_page_save()
         items = list(items)
