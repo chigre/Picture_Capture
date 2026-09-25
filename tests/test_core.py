@@ -3015,13 +3015,13 @@ def test_v294_candidate_checkbox_uses_local_overlay_update_and_deferred_save():
     assert "defer=True" in block
 
 
-def test_v294_background_photo_cache_key_includes_page_object_and_display_size():
+def test_v294_background_photo_cache_key_includes_page_size_binary_and_appearance():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     start = text.index("    def _get_cached_display_photo(")
     end = text.index("    def _draw_entry_overlay(", start)
     block = text[start:end]
-    assert "key = (id(self.image), int(size[0]), int(size[1]))" in block
+    assert "key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)" in block
     assert "self._display_photo_cache_key != key" in block
 
 
