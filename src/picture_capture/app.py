@@ -4168,9 +4168,9 @@ class ReviewWindow(tk.Toplevel):
         self.replace_digits = tk.BooleanVar(value=False)
         self.order_scope_var = tk.StringVar(value="current")
         self.review_mode_var = tk.StringVar(value="single")
-        self.focused_page_range_var = tk.StringVar(
-            value=str(getattr(parent.settings, "focused_review_page_range", "") or "")
-        )
+        # Reuse the main-window 【指定】 text directly so proofreading and
+        # every other batch action see the exact same page-range string.
+        self.focused_page_range_var = parent.page_range_spec_var
         self.focused_include_mismatch_var = tk.BooleanVar(
             value=bool(getattr(parent.settings, "focused_review_include_ocr_mismatch", True))
         )
@@ -4997,7 +4997,6 @@ class ReviewWindow(tk.Toplevel):
 
     def _persist_focused_filter_settings(self) -> None:
         settings = self.parent.settings
-        settings.focused_review_page_range = self.focused_page_range_var.get().strip()
         settings.focused_review_include_ocr_mismatch = bool(
             self.focused_include_mismatch_var.get()
         )
@@ -11064,13 +11063,30 @@ class PictureCaptureApp(tk.Tk):
 
         option_row = ttk.Frame(aux); option_row.grid(row=7, column=0, columnspan=4, sticky="ew")
         ttk.Checkbutton(
-            option_row, text="显示切图预览", variable=self.crop_preview_var,
-            command=self._toggle_crop_preview,
-        ).pack(side="left", padx=(8, 0))
-        ttk.Checkbutton(
             option_row, text="隐藏线框(插图除外)", variable=self.hide_var,
             command=self._toggle_hide_overlays,
         ).pack(side="left", padx=(8, 0))
+        ttk.Label(option_row, text="显示模式：").pack(side="left", padx=(10, 2))
+        display_mode_combo = ttk.Combobox(
+            option_row,
+            textvariable=self.display_mode_var,
+            values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览"),
+            state="readonly",
+            width=10,
+        )
+        display_mode_combo.pack(side="left", padx=(0, 8))
+        display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)
+        dark_toggle = ttk.Checkbutton(
+            option_row,
+            text="深色模式",
+            variable=self.dark_mode_var,
+            command=self._toggle_dark_mode,
+        )
+        dark_toggle.pack(side="left")
+        self._attach_tooltip(
+            dark_toggle,
+            "夜间显示：同步深色界面和扫描图夜间预览；不修改原图、OCR、PDIC/PPP 或导出文件。",
+        )
         save_row = ttk.Frame(aux); save_row.grid(row=8, column=0, columnspan=4, sticky="ew")
         ttk.Checkbutton(save_row, text="自动保存", variable=self.autosave_var, command=self.toggle_autosave).pack(side="left")
         ttk.Label(save_row, text="间隔时间(秒)").pack(side="left", padx=(8, 2))
@@ -11084,28 +11100,6 @@ class PictureCaptureApp(tk.Tk):
             save_row, textvariable=ratio_var, width=6, justify="left"
         ).pack(side="left")
 
-        view_mode_row = ttk.Frame(aux); view_mode_row.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(2, 0))
-        ttk.Label(view_mode_row, text="显示模式：").pack(side="left")
-        display_mode_combo = ttk.Combobox(
-            view_mode_row,
-            textvariable=self.display_mode_var,
-            values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览"),
-            state="readonly",
-            width=10,
-        )
-        display_mode_combo.pack(side="left", padx=(0, 8))
-        display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)
-        dark_toggle = ttk.Checkbutton(
-            view_mode_row,
-            text="深色模式",
-            variable=self.dark_mode_var,
-            command=self._toggle_dark_mode,
-        )
-        dark_toggle.pack(side="left")
-        self._attach_tooltip(
-            dark_toggle,
-            "夜间显示：同步深色界面和扫描图夜间预览；不修改原图、OCR、PDIC/PPP 或导出文件。",
-        )
         aux.columnconfigure(1, weight=1); aux.columnconfigure(3, weight=1)
 
         actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
@@ -13877,30 +13871,44 @@ class PictureCaptureApp(tk.Tk):
         )
         record["canvas_items"].append(index_window)
 
-        if vertical and vertical_box is not None:
-            delete_x = float(vertical_box[0] - 1)
-            delete_y = float(vertical_box[1])
+        index_width = max(1, index_label.winfo_reqwidth())
+        index_height = max(1, index_label.winfo_reqheight())
+        if horizontal:
+            delete_x = float(index_x - index_width - 1) if index_anchor == "ne" else float(index_x - 1)
+            delete_y = float(index_y)
             delete_anchor = "ne"
         else:
-            delete_x = float(index_x)
-            delete_y = float(index_y + max(1, index_label.winfo_reqheight()) + 1)
-            delete_anchor = index_anchor
-        delete_item = self.canvas.create_text(
-            delete_x,
-            delete_y,
-            text="X",
-            fill=marker_control_bg,
-            anchor=delete_anchor,
-            font=_entry_font_spec(
-                main_family, max(8, round(editor_font_size * 0.65)), False, False,
-            ),
+            delete_x = float(index_x - index_width / 2.0 - 1)
+            delete_y = float(index_y - index_height / 2.0)
+            delete_anchor = "e"
+        delete_button = tk.Button(
+            self.canvas,
+            text="[X]",
+            width=3,
+            takefocus=False,
+            relief="flat",
+            bd=0,
+            highlightthickness=0,
+            padx=1,
+            pady=0,
+            cursor="hand2",
+            fg="#ffffff",
+            bg="#9d042f",
+            activeforeground="#ffffff",
+            activebackground="#9d042f",
+            command=lambda e=entry: self.delete_entry(e),
         )
-        if not processing_readonly:
-            self.canvas.tag_bind(
-                delete_item, "<Button-1>", lambda _event, e=entry: self.delete_entry(e)
-            )
-        record["delete_item"] = delete_item
-        record["canvas_items"].append(delete_item)
+        delete_button._pc_skip_classic_appearance = True
+        if processing_readonly:
+            delete_button.configure(state="disabled")
+        self._attach_tooltip(delete_button, "点击删除该画线!")
+        self.overlay_widgets.append(delete_button)
+        record["widgets"].append(delete_button)
+        record["delete_widget"] = delete_button
+        delete_window = self.canvas.create_window(
+            delete_x, delete_y, window=delete_button, anchor=delete_anchor,
+        )
+        record["canvas_items"].append(delete_window)
 
         if self.crop_preview_var.get():
             left, top, right, bottom = line_box(entry, geometry, self.image, self.settings)
@@ -15066,8 +15074,8 @@ class PictureCaptureApp(tk.Tk):
         else:
             options["disabledbackground"] = bg
         widget.configure(**options)
-        # Sequence remains marker-filled; the delete X is a true canvas-text
-        # overlay with no background and uses the headword-marker colour.
+        # Sequence follows the headword marker colour; [X] keeps a fixed
+        # destructive-control colour independent of OCR/editor backgrounds.
         record = self.__dict__.get("_entry_visuals", {}).get(id(entry))
         marker_bg = str(self.settings.headword_marker_color)
         index_control = record.get("index_widget") if record else None
@@ -15076,10 +15084,13 @@ class PictureCaptureApp(tk.Tk):
                 index_control.configure(bg=marker_bg, fg="#ffffff")
             except tk.TclError:
                 pass
-        delete_item = record.get("delete_item") if record else None
-        if delete_item is not None:
+        delete_control = record.get("delete_widget") if record else None
+        if delete_control is not None:
             try:
-                self.canvas.itemconfigure(delete_item, fill=marker_bg)
+                delete_control.configure(
+                    bg="#9d042f", fg="#ffffff",
+                    activebackground="#9d042f", activeforeground="#ffffff",
+                )
             except tk.TclError:
                 pass
 
