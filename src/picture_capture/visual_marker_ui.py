@@ -39,9 +39,13 @@ class VisualMarkerCaptureDialog(tk.Toplevel):
         self.on_saved = on_saved
         self.source_image: Image.Image | None = None
         self.photo: ImageTk.PhotoImage | None = None
+        # Marker capture is deliberately shown at 100% source-pixel scale by
+        # default. Small dictionary symbols are easy to miss when a full page is
+        # auto-fitted into the dialog; explicit zoom + scroll keeps source-pixel
+        # geometry inspectable and makes sample boxes precise.
+        self.zoom_percent = 100
         self.display_scale = 1.0
-        self.display_offset = (0, 0)
-        self.selection_canvas: tuple[int, int, int, int] | None = None
+        self.selection_source: tuple[int, int, int, int] | None = None
         self.selection_item: int | None = None
         self.drag_start: tuple[int, int] | None = None
         self._render_job: str | None = None
@@ -54,7 +58,7 @@ class VisualMarkerCaptureDialog(tk.Toplevel):
 
         outer = ttk.Frame(self, padding=10)
         outer.pack(fill="both", expand=True)
-        outer.rowconfigure(2, weight=1)
+        outer.rowconfigure(3, weight=1)
         outer.columnconfigure(0, weight=1)
 
         nav = ttk.Frame(outer)
@@ -92,17 +96,70 @@ class VisualMarkerCaptureDialog(tk.Toplevel):
             foreground="#666666",
         ).pack(side="left")
 
+        zoom_bar = ttk.Frame(outer)
+        zoom_bar.grid(row=2, column=0, sticky="ew", pady=(0, 6))
+        ttk.Label(
+            zoom_bar,
+            text="图片缩放（默认 100% 原始像素）：",
+        ).pack(side="left")
+        ttk.Button(
+            zoom_bar, text="−", width=3, command=lambda: self._zoom_by(-25),
+        ).pack(side="left", padx=(6, 2))
+        ttk.Button(
+            zoom_bar, text="100%", command=lambda: self._set_zoom(100),
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            zoom_bar, text="+", width=3, command=lambda: self._zoom_by(25),
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            zoom_bar, text="适合窗口", command=self._fit_window,
+        ).pack(side="left", padx=(6, 0))
+        self.zoom_var = tk.StringVar(value="100%")
+        ttk.Label(zoom_bar, textvariable=self.zoom_var).pack(side="left", padx=(10, 0))
+        ttk.Label(
+            zoom_bar,
+            text="Ctrl+滚轮可缩放；滚动条用于移动页面。",
+            foreground="#666666",
+        ).pack(side="left", padx=(12, 0))
+
+        canvas_host = ttk.Frame(outer)
+        canvas_host.grid(row=3, column=0, sticky="nsew")
+        canvas_host.rowconfigure(0, weight=1)
+        canvas_host.columnconfigure(0, weight=1)
         self.canvas = tk.Canvas(
-            outer, background="#d9d9d9", highlightthickness=1, relief="sunken"
+            canvas_host,
+            background="#d9d9d9",
+            highlightthickness=1,
+            relief="sunken",
+            xscrollincrement=1,
+            yscrollincrement=1,
         )
-        self.canvas.grid(row=2, column=0, sticky="nsew")
+        xscroll = ttk.Scrollbar(
+            canvas_host, orient="horizontal", command=self.canvas.xview
+        )
+        yscroll = ttk.Scrollbar(
+            canvas_host, orient="vertical", command=self.canvas.yview
+        )
+        self.canvas.configure(
+            xscrollcommand=xscroll.set,
+            yscrollcommand=yscroll.set,
+        )
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        yscroll.grid(row=0, column=1, sticky="ns")
+        xscroll.grid(row=1, column=0, sticky="ew")
         self.canvas.bind("<ButtonPress-1>", self._start_drag)
         self.canvas.bind("<B1-Motion>", self._drag)
         self.canvas.bind("<ButtonRelease-1>", self._finish_drag)
-        self.canvas.bind("<Configure>", self._schedule_render, add="+")
+        self.canvas.bind("<Control-MouseWheel>", self._mousewheel_zoom, add="+")
+        self.canvas.bind(
+            "<Control-Button-4>", lambda _event: self._zoom_by(25), add="+"
+        )
+        self.canvas.bind(
+            "<Control-Button-5>", lambda _event: self._zoom_by(-25), add="+"
+        )
 
         footer = ttk.Frame(outer)
-        footer.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        footer.grid(row=4, column=0, sticky="ew", pady=(8, 0))
         self.selection_var = tk.StringVar(value="尚未框选")
         ttk.Label(footer, textvariable=self.selection_var).pack(side="left")
         ttk.Button(footer, text="取消", command=self.destroy).pack(side="right")
@@ -137,11 +194,11 @@ class VisualMarkerCaptureDialog(tk.Toplevel):
         self.page_var.set(
             f"{self.page_index + 1}/{len(self.images)} · {path.name}"
         )
-        self.selection_canvas = None
+        self.selection_source = None
         self.selection_item = None
         self.drag_start = None
         self.selection_var.set("尚未框选")
-        self._render()
+        self._render(reset_view=True)
 
     def _schedule_render(self, _event=None) -> None:
         if self._render_job is not None:
@@ -151,48 +208,106 @@ class VisualMarkerCaptureDialog(tk.Toplevel):
                 pass
         self._render_job = self.after(40, self._render)
 
-    def _render(self) -> None:
+    def _set_zoom(self, percent: int | float) -> None:
+        if self.source_image is None:
+            return
+        target = max(25, min(800, int(round(float(percent)))))
+        if target == self.zoom_percent:
+            return
+        # Keep the same relative viewport position while changing scale.
+        try:
+            x_fraction = float(self.canvas.xview()[0])
+            y_fraction = float(self.canvas.yview()[0])
+        except (tk.TclError, IndexError):
+            x_fraction = y_fraction = 0.0
+        self.zoom_percent = target
+        self._render()
+        try:
+            self.canvas.xview_moveto(x_fraction)
+            self.canvas.yview_moveto(y_fraction)
+        except tk.TclError:
+            pass
+
+    def _zoom_by(self, delta: int) -> None:
+        self._set_zoom(self.zoom_percent + int(delta))
+
+    def _fit_window(self) -> None:
+        if self.source_image is None:
+            return
+        self.update_idletasks()
+        width = max(1, int(self.canvas.winfo_width()) - 4)
+        height = max(1, int(self.canvas.winfo_height()) - 4)
+        percent = 100.0 * min(
+            width / max(1, self.source_image.width),
+            height / max(1, self.source_image.height),
+        )
+        self._set_zoom(percent)
+
+    def _mousewheel_zoom(self, event: tk.Event):
+        delta = int(getattr(event, "delta", 0) or 0)
+        if delta:
+            self._zoom_by(25 if delta > 0 else -25)
+        return "break"
+
+    def _render(self, *, reset_view: bool = False) -> None:
         self._render_job = None
         if self.source_image is None or not self.winfo_exists():
             return
         self.update_idletasks()
-        width = max(200, int(self.canvas.winfo_width()) - 16)
-        height = max(200, int(self.canvas.winfo_height()) - 16)
-        scale = min(
-            width / max(1, self.source_image.width),
-            height / max(1, self.source_image.height),
-        )
+        scale = max(0.25, min(8.0, float(self.zoom_percent) / 100.0))
         target = (
             max(1, round(self.source_image.width * scale)),
             max(1, round(self.source_image.height * scale)),
         )
-        display = self.source_image.resize(target, Image.Resampling.LANCZOS)
+        if target == self.source_image.size:
+            display = self.source_image
+        else:
+            display = self.source_image.resize(target, Image.Resampling.LANCZOS)
         self.photo = ImageTk.PhotoImage(display)
         self.canvas.delete("all")
-        canvas_w = max(1, int(self.canvas.winfo_width()))
-        canvas_h = max(1, int(self.canvas.winfo_height()))
-        ox = max(0, (canvas_w - target[0]) // 2)
-        oy = max(0, (canvas_h - target[1]) // 2)
-        self.canvas.create_image(ox, oy, image=self.photo, anchor="nw")
-        self.display_scale = max(1e-9, scale)
-        self.display_offset = (ox, oy)
-        self.selection_canvas = None
+        self.canvas.create_image(0, 0, image=self.photo, anchor="nw")
+        self.canvas.configure(scrollregion=(0, 0, target[0], target[1]))
+        self.display_scale = scale
+        self.zoom_var.set(f"{self.zoom_percent}%")
+
         self.selection_item = None
         self.drag_start = None
-        self.selection_var.set("尚未框选")
+        if self.selection_source is not None:
+            x0, y0, x1, y1 = self.selection_source
+            self.selection_item = self.canvas.create_rectangle(
+                round(x0 * scale),
+                round(y0 * scale),
+                round(x1 * scale),
+                round(y1 * scale),
+                outline="#e53935",
+                width=2,
+            )
+        if reset_view:
+            try:
+                self.canvas.xview_moveto(0.0)
+                self.canvas.yview_moveto(0.0)
+            except tk.TclError:
+                pass
+
+    def _event_canvas_point(self, event: tk.Event) -> tuple[int, int]:
+        return (
+            int(round(float(self.canvas.canvasx(event.x)))),
+            int(round(float(self.canvas.canvasy(event.y)))),
+        )
 
     def _clamp_point(self, x: int, y: int) -> tuple[int, int]:
         if self.source_image is None:
             return x, y
-        ox, oy = self.display_offset
-        x1 = ox + round(self.source_image.width * self.display_scale)
-        y1 = oy + round(self.source_image.height * self.display_scale)
-        return max(ox, min(x1, x)), max(oy, min(y1, y))
+        x1 = round(self.source_image.width * self.display_scale)
+        y1 = round(self.source_image.height * self.display_scale)
+        return max(0, min(x1, x)), max(0, min(y1, y))
 
     def _start_drag(self, event: tk.Event) -> None:
         if self.source_image is None:
             return
-        self.drag_start = self._clamp_point(int(event.x), int(event.y))
+        canvas_x, canvas_y = self._event_canvas_point(event)
+        self.drag_start = self._clamp_point(canvas_x, canvas_y)
+        self.selection_source = None
         if self.selection_item is not None:
             self.canvas.delete(self.selection_item)
         x, y = self.drag_start
@@ -203,7 +318,8 @@ class VisualMarkerCaptureDialog(tk.Toplevel):
     def _drag(self, event: tk.Event) -> None:
         if self.drag_start is None or self.selection_item is None:
             return
-        x, y = self._clamp_point(int(event.x), int(event.y))
+        canvas_x, canvas_y = self._event_canvas_point(event)
+        x, y = self._clamp_point(canvas_x, canvas_y)
         self.canvas.coords(
             self.selection_item,
             self.drag_start[0],
@@ -213,34 +329,37 @@ class VisualMarkerCaptureDialog(tk.Toplevel):
         )
 
     def _finish_drag(self, event: tk.Event) -> None:
-        if self.drag_start is None:
+        if self.drag_start is None or self.source_image is None:
             return
-        x, y = self._clamp_point(int(event.x), int(event.y))
+        canvas_x, canvas_y = self._event_canvas_point(event)
+        x, y = self._clamp_point(canvas_x, canvas_y)
         x0, y0 = self.drag_start
         left, right = sorted((x0, x))
         top, bottom = sorted((y0, y))
         if right - left < 3 or bottom - top < 3:
-            self.selection_canvas = None
+            self.selection_source = None
             self.selection_var.set("框选区域太小，请重新框选。")
             return
-        self.selection_canvas = (left, top, right, bottom)
+
+        scale = max(1e-9, self.display_scale)
+        source_box = (
+            max(0, min(self.source_image.width, round(left / scale))),
+            max(0, min(self.source_image.height, round(top / scale))),
+            max(0, min(self.source_image.width, round(right / scale))),
+            max(0, min(self.source_image.height, round(bottom / scale))),
+        )
+        if source_box[2] <= source_box[0] or source_box[3] <= source_box[1]:
+            self.selection_source = None
+            self.selection_var.set("框选区域太小，请重新框选。")
+            return
+        self.selection_source = source_box
         self.selection_var.set(
-            f"已框选 {right - left}×{bottom - top} 显示像素"
+            f"已框选原图 {source_box[2] - source_box[0]}×"
+            f"{source_box[3] - source_box[1]} px ｜ 当前缩放 {self.zoom_percent}%"
         )
 
     def _source_box(self) -> tuple[int, int, int, int] | None:
-        if self.selection_canvas is None or self.source_image is None:
-            return None
-        ox, oy = self.display_offset
-        left, top, right, bottom = self.selection_canvas
-        scale = self.display_scale
-        x0 = max(0, min(self.source_image.width, round((left - ox) / scale)))
-        y0 = max(0, min(self.source_image.height, round((top - oy) / scale)))
-        x1 = max(0, min(self.source_image.width, round((right - ox) / scale)))
-        y1 = max(0, min(self.source_image.height, round((bottom - oy) / scale)))
-        if x1 <= x0 or y1 <= y0:
-            return None
-        return x0, y0, x1, y1
+        return self.selection_source
 
     def _save(self) -> None:
         if self.source_image is None or not self.images:
