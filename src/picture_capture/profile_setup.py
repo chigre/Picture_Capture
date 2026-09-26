@@ -1616,11 +1616,16 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 4))
 
         structures = ttk.LabelFrame(
-            tab, text="允许的词头结构（决定哪些 parser 通道开放）", padding=10,
+            tab, text="完整词头结构（词头前 + 词头本体 + 词头后）", padding=10,
         )
         structures.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         structures.columnconfigure(0, weight=1)
         self.headword_structure_frame = structures
+        ttk.Label(
+            structures,
+            text="词头前 / 词头本体：",
+            font=("TkDefaultFont", 10, "bold"),
+        ).grid(row=0, column=0, sticky="w", pady=(0, 4))
         for row, (label, variable) in enumerate((
             ("普通左缘短词可以作为词头", self.ordinary_left_edge_var),
             ("【括号词】可以作为词头", self.cjk_allow_bracketed_var),
@@ -1631,22 +1636,66 @@ class ProjectProfileWizard(tk.Toplevel):
             ttk.Checkbutton(
                 structures, text=label, variable=variable,
                 command=self._headword_structure_changed,
-            ).grid(row=row, column=0, sticky="w", pady=2)
+            ).grid(row=row + 1, column=0, sticky="w", pady=2)
         ttk.Label(
             structures,
             text="这里决定“谁有资格成为候选”。取消某一项后，该结构不会再靠后续阈值被误救回来。",
             foreground="#666666", wraplength=self._wizard_content_width,
-        ).grid(row=5, column=0, sticky="w", pady=(6, 0))
+        ).grid(row=6, column=0, sticky="w", pady=(6, 0))
         self.headword_structure_summary_var = tk.StringVar(value="")
         ttk.Label(
             structures, textvariable=self.headword_structure_summary_var,
             foreground="#555555", wraplength=self._wizard_content_width,
-        ).grid(row=6, column=0, sticky="w", pady=(4, 0))
+        ).grid(row=7, column=0, sticky="w", pady=(4, 0))
+
+        self.tail_structure_frame = ttk.LabelFrame(
+            structures, text="词头后结构（哪些内容可以作为新词条证据）", padding=8,
+        )
+        self.tail_structure_frame.grid(row=8, column=0, sticky="ew", pady=(8, 0))
+        self.tail_structure_frame.columnconfigure(0, weight=1)
+        for tail_row, (label, variable) in enumerate((
+            ("词性 POS（s.m. / v.tr. / agg. / adj. …）", self.tail_allow_pos_var),
+            ("词形 / 屈折变化（复数、阴阳性、变位提示等）", self.tail_allow_inflection_var),
+            ("变体 / 性数变化（如 , da / , ria 等紧随词头的变体）", self.tail_allow_variant_var),
+            ("发音 / 音标（[...] 或 /.../）可以作为结构证据", self.tail_allow_pronunciation_var),
+            ("描述型结构（前缀、后缀、缩写、sigla/abbreviazione 等）", self.tail_allow_descriptor_var),
+        )):
+            ttk.Checkbutton(
+                self.tail_structure_frame,
+                text=label,
+                variable=variable,
+                command=self._headword_structure_changed,
+            ).grid(row=tail_row, column=0, sticky="w", pady=2)
+        ttk.Separator(
+            self.tail_structure_frame, orient="horizontal",
+        ).grid(row=5, column=0, sticky="ew", pady=6)
+        ttk.Checkbutton(
+            self.tail_structure_frame,
+            text="普通左缘词至少需要命中一种上面勾选的词后结构",
+            variable=self.tail_require_selected_var,
+            command=self._headword_structure_changed,
+        ).grid(row=6, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(
+            self.tail_structure_frame,
+            text="词后结构 OCR 失败时，允许“严格左缘 + 明显粗体”视觉补救",
+            variable=self.tail_allow_visual_rescue_var,
+            command=self._headword_structure_changed,
+        ).grid(row=7, column=0, sticky="w", pady=2)
+        ttk.Label(
+            self.tail_structure_frame,
+            text="固定符号、编号等已勾选的强前缀仍可独立作为边界证据；此处主要控制普通左缘词的词后证据。",
+            foreground="#666666", wraplength=self._wizard_content_width,
+        ).grid(row=8, column=0, sticky="w", pady=(5, 2))
+        ttk.Label(
+            self.tail_structure_frame,
+            textvariable=self.tail_structure_summary_var,
+            foreground="#555555", wraplength=self._wizard_content_width,
+        ).grid(row=9, column=0, sticky="w", pady=(3, 0))
 
         self.symbol_inventory_frame = ttk.LabelFrame(
             structures, text="本词典固定词头符号集", padding=8,
         )
-        self.symbol_inventory_frame.grid(row=7, column=0, sticky="ew", pady=(8, 0))
+        self.symbol_inventory_frame.grid(row=9, column=0, sticky="ew", pady=(8, 0))
         self.symbol_inventory_frame.columnconfigure(1, weight=1)
         ttk.Checkbutton(
             self.symbol_inventory_frame,
