@@ -385,10 +385,9 @@ class AppSettings:
     layout_behavior_defaults_version: int = 1
     # v2.14 refreshes visible/default workflow choices once for existing projects.
     ui_workflow_defaults_version: int = 1
-    # v2.14+ column-following controls are dimensionless percentages:
+    # Column-following controls are dimensionless percentages:
     # radius = % of current column width; block height = % of effective body
     # height; max step = % of the current tracking block height.
-    column_track_percent_version: int = 1
     column_track_radius: float = 5.0
     column_track_block_height: float = 3.0
     column_track_max_step: float = 8.0
@@ -639,16 +638,6 @@ class AppSettings:
             raw["manual_columns"] = False
             raw["follow_column_deformation"] = False
             raw["layout_behavior_defaults_version"] = 1
-
-        # v2.14+: column tracking moved from absolute source pixels to
-        # page-relative percentages.  The old 80/120/28 px values cannot be
-        # converted reliably without a concrete page/column size, so existing
-        # projects migrate once to the new stable 5% / 3% / 8% semantics.
-        if int(raw.get("column_track_percent_version", 0) or 0) < 1:
-            raw["column_track_radius"] = 5.0
-            raw["column_track_block_height"] = 3.0
-            raw["column_track_max_step"] = 8.0
-            raw["column_track_percent_version"] = 1
 
         # v2.14: make the recommended OCR path single-engine by default and
         # declutter the page list. Apply once to existing projects so persisted
