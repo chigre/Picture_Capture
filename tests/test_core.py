@@ -5327,6 +5327,7 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
 
     assert settings.review_show_simplified is False
     assert settings.focused_review_characters == "椿,彝,壯,鳥,傅,顔,彝,榖,歴,内,脱,書,鳴"
+    assert settings.focused_review_batch_size == 20
 
     assert settings.show_illustration_labels is False
     assert settings.batch_interval == 3.0
