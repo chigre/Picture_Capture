@@ -526,7 +526,7 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     ui = text[ui_start:ui_end]
     assert 'style="PC.Treeview"' in ui
     assert 'style="PC.Footer.TFrame"' in ui
-    assert '"一、版面参数（规范全分辨率坐标；横排 U/X、V/Y 与原图一致）"' in text
+    assert '"一、版面参数"' in text
     assert '"二、OCR画线（推荐默认）"' in text
     assert 'text="普通画线设置（备用）…"' in text
     assert 'ttk.Separator(size_row, orient="vertical")' in ui
