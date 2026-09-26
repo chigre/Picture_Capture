@@ -4984,6 +4984,7 @@ class ReviewWindow(tk.Toplevel):
         self._filter_rows_active = False
         self._set_filter_navigation(False)
         self.parent._invalidate_ui_worker(f"focused-filter-scan-{id(self)}")
+        self.parent._invalidate_ui_worker(f"focused-filter-scan-rest-{id(self)}")
         self.parent._invalidate_ui_worker(f"focused-filter-render-{id(self)}")
         self._request_render_rows(focus_index=0, reset_scroll=True)
 
@@ -5044,13 +5045,16 @@ class ReviewWindow(tk.Toplevel):
             self.rows.columnconfigure(0, weight=1)
 
     def run_focused_filter(self) -> None:
-        """Scan filter metadata off-thread, then render only the first requested batch."""
+        """Render the first filtered batch early, then finish scanning in back."""
         project = self.parent.project
         if project is None:
             return
         try:
-            indices = _focused_review_page_indices(
-                self.focused_page_range_var.get(), len(project.images)
+            # Reuse the main-window 【指定】 parser exactly. This preserves
+            # filename-number matching, leading zeroes, mixed comma ranges and
+            # all accepted hyphen/tilde variants without a second parser.
+            indices = self.parent._parse_page_spec(
+                self.focused_page_range_var.get()
             )
             self._persist_focused_filter_settings()
         except Exception as exc:
@@ -5070,136 +5074,200 @@ class ReviewWindow(tk.Toplevel):
             )
             return
 
-        # Commit the normal page before replacing its widgets. Merely selecting
-        # the 筛选 radio never reaches this path; only the explicit button does.
         if not getattr(self, "_filter_rows_active", False):
             self.save(redraw_main=False)
         self.review_mode_var.set("filter")
         self._filter_rows_active = True
         self._set_filter_navigation(True)
         self.parent._invalidate_ui_worker(self._review_render_worker_key)
-        self._clear_review_workspace("正在异步筛选…")
-        self.filter_batch_var.set("正在筛选…")
+        self.parent._invalidate_ui_worker(f"focused-filter-scan-rest-{id(self)}")
+        self._clear_review_workspace("正在快速筛选首批…")
+        self.filter_batch_var.set("正在筛选首批…")
         self._filter_scan_serial += 1
         serial = self._filter_scan_serial
 
         pages = list(project.images)
-        settings = replace(self.parent.settings)
         project_root = project.root
         reference_words = set(self.parent._project_words) if exclude_reference else set()
-        y_tolerance = max(6, round(max(1, int(settings.character_height)) * 0.55))
+        y_tolerance = max(
+            6, round(max(1, int(self.parent.settings.character_height)) * 0.55)
+        )
         ocr_compare_key = self.OCR_COMPARE_LABEL_TO_KEY.get(
             self.review_ocr_compare_var.get(), "fusion"
         )
-        viewer_width = max(1, int(self.parent.canvas.winfo_width()))
+        first_batch_size = self._focused_batch_size()
 
-        def worker():
+        def scan_page(page_index: int) -> tuple[list[dict], bool]:
+            """Fast filter pass using only PDIC and OCR JSON, never page pixels."""
+            page = pages[page_index]
+            entries = read_pdic(pdic_path(page))
+            if not entries:
+                return [], False
+
+            candidates: list[dict] = []
+            missing_ocr = False
+            cache = ocr_cache_root(project_root) / f"{page.stem}.json"
+            if cache.exists():
+                try:
+                    payload = json.loads(cache.read_text(encoding="utf-8"))
+                    if isinstance(payload, dict):
+                        candidates = [
+                            row for row in payload.get("review_candidates", [])
+                            if isinstance(row, dict)
+                        ]
+                except Exception:
+                    candidates = []
+            elif include_mismatch:
+                missing_ocr = True
+
+            targets: list[dict] = []
+            has_positive_filter = include_mismatch or include_chars
+            for entry in entries:
+                word = str(entry.word or "").strip()
+                if exclude_single and _focused_review_is_single_character(word):
+                    continue
+                if exclude_reference and word in reference_words:
+                    continue
+
+                candidate = _candidate_for_entry_from_list(
+                    entry, candidates, y_tolerance=y_tolerance
+                )
+                ocr_words = {
+                    source: _candidate_word_for_ocr_source(candidate, source)
+                    for source in ("fusion", "paddle", "tesseract", "lens")
+                }
+                ocr_word = ocr_words.get(ocr_compare_key, "")
+                mismatch = bool(
+                    include_mismatch
+                    and ocr_word
+                    and _review_similarity_key(word)
+                    != _review_similarity_key(ocr_word)
+                )
+                matched_tokens = tuple(
+                    token for token in tokens if token and token in word
+                ) if include_chars else ()
+                if has_positive_filter and not mismatch and not matched_tokens:
+                    continue
+
+                reasons: list[str] = []
+                if mismatch:
+                    reasons.append(f"OCR不匹配（OCR结果：{ocr_word}）")
+                if matched_tokens:
+                    reasons.append("含字符：" + "、".join(matched_tokens))
+                if not has_positive_filter:
+                    reasons.append("符合排除条件后的剩余词条")
+                targets.append({
+                    "page_index": int(page_index),
+                    "page_name": page.name,
+                    "page_stem": page.stem,
+                    # Filled from reading-order geometry only when the row is
+                    # actually rendered; this keeps the scan path image-free.
+                    "column_number": 1,
+                    "sequence_number": 0,
+                    "x": int(entry.x),
+                    "y": int(entry.y),
+                    "original_word": word,
+                    "current_word": word,
+                    "ocr_source_key": ocr_compare_key,
+                    "ocr_word": ocr_word,
+                    "ocr_words": ocr_words,
+                    "reasons": tuple(reasons),
+                })
+            return targets, missing_ocr
+
+        def first_worker():
             targets: list[dict] = []
             pages_without_ocr = 0
-            has_positive_filter = include_mismatch or include_chars
-            for page_index in indices:
-                page = pages[page_index]
-                entries = read_pdic(pdic_path(page))
-                if not entries:
-                    continue
-                try:
-                    with Image.open(page) as opened:
-                        image = normalize_page_rgb(opened)
-                    _review_settings, geometry = _review_crop_context(
-                        image, settings, viewer_width, page_index
-                    )
-                    entries = sort_entries_reading_order(
-                        entries, geometry, read_page_sections(page)
-                    )
-                except Exception:
-                    geometry = None
-                candidates: list[dict] = []
-                cache = ocr_cache_root(project_root) / f"{page.stem}.json"
-                if cache.exists():
-                    try:
-                        payload = json.loads(cache.read_text(encoding="utf-8"))
-                        if isinstance(payload, dict):
-                            candidates = [
-                                row for row in payload.get("review_candidates", [])
-                                if isinstance(row, dict)
-                            ]
-                    except Exception:
-                        candidates = []
-                elif include_mismatch:
-                    pages_without_ocr += 1
-                for sequence_number, entry in enumerate(entries, start=1):
-                    word = str(entry.word or "").strip()
-                    if exclude_single and _focused_review_is_single_character(word):
-                        continue
-                    if exclude_reference and word in reference_words:
-                        continue
+            next_position = len(indices)
+            for position, page_index in enumerate(indices):
+                page_targets, missing_ocr = scan_page(page_index)
+                targets.extend(page_targets)
+                pages_without_ocr += int(missing_ocr)
+                # Stop at a page boundary as soon as one complete UI batch is
+                # available. The remaining pages continue in a second worker.
+                if len(targets) >= first_batch_size:
+                    next_position = position + 1
+                    break
+            return targets, pages_without_ocr, next_position
 
-                    candidate = _candidate_for_entry_from_list(
-                        entry, candidates, y_tolerance=y_tolerance
-                    )
-                    ocr_words = {
-                        source: _candidate_word_for_ocr_source(candidate, source)
-                        for source in ("fusion", "paddle", "tesseract", "lens")
-                    }
-                    ocr_word = ocr_words.get(ocr_compare_key, "")
-                    mismatch = bool(
-                        include_mismatch
-                        and ocr_word
-                        and _review_similarity_key(word)
-                        != _review_similarity_key(ocr_word)
-                    )
-                    matched_tokens = tuple(
-                        token for token in tokens if token and token in word
-                    ) if include_chars else ()
-                    if has_positive_filter and not mismatch and not matched_tokens:
-                        continue
-
-                    reasons: list[str] = []
-                    if mismatch:
-                        reasons.append("OCR不匹配")
-                    if matched_tokens:
-                        reasons.append("含字符：" + "、".join(matched_tokens))
-                    if not has_positive_filter:
-                        reasons.append("符合排除条件后的剩余词条")
-                    column_number = 1
-                    if geometry is not None:
-                        try:
-                            column_number = column_index(
-                                int(entry.x), geometry, int(entry.y)
-                            ) + 1
-                        except Exception:
-                            column_number = 1
-                    targets.append({
-                        "page_index": int(page_index),
-                        "page_name": page.name,
-                        "page_stem": page.stem,
-                        "column_number": int(column_number),
-                        "sequence_number": int(sequence_number),
-                        "x": int(entry.x),
-                        "y": int(entry.y),
-                        "original_word": word,
-                        "current_word": word,
-                        "ocr_source_key": ocr_compare_key,
-                        "ocr_word": ocr_word,
-                        "ocr_words": ocr_words,
-                        "reasons": tuple(reasons),
-                    })
-            return targets, pages_without_ocr, len(indices)
-
-        def done(payload) -> None:
-            if serial != self._filter_scan_serial or not getattr(self, "_filter_rows_active", False):
+        def start_remaining_scan(
+            start_position: int, pages_without_ocr: int, initial_count: int,
+        ) -> None:
+            if start_position >= len(indices):
+                extra = (
+                    f"；{pages_without_ocr} 页无 OCR 缓存"
+                    if include_mismatch and pages_without_ocr else ""
+                )
+                self.parent.status_var.set(
+                    f"筛选完成：{len(indices)} 页共 {initial_count} 条{extra}"
+                )
+                self._update_title()
                 return
-            targets, pages_without_ocr, page_count = payload
+
+            def remaining_worker():
+                additions: list[dict] = []
+                missing_total = pages_without_ocr
+                for page_index in indices[start_position:]:
+                    page_targets, missing_ocr = scan_page(page_index)
+                    additions.extend(page_targets)
+                    missing_total += int(missing_ocr)
+                return additions, missing_total
+
+            def remaining_done(payload) -> None:
+                if (
+                    serial != self._filter_scan_serial
+                    or not getattr(self, "_filter_rows_active", False)
+                ):
+                    return
+                additions, missing_total = payload
+                had_targets = bool(self.filtered_targets)
+                self.filtered_targets.extend(additions)
+                extra = (
+                    f"；{missing_total} 页无 OCR 缓存"
+                    if include_mismatch and missing_total else ""
+                )
+                self.parent.status_var.set(
+                    f"筛选完成：{len(indices)} 页共 {len(self.filtered_targets)} 条{extra}"
+                )
+                self._update_title()
+                if not had_targets and self.filtered_targets:
+                    self.filtered_batch_index = 0
+                    self._request_filter_batch_render()
+                elif not self.filtered_targets:
+                    self._request_filter_batch_render()
+
+            def remaining_failed(exc, detail) -> None:
+                if detail:
+                    print(detail)
+                if serial != self._filter_scan_serial:
+                    return
+                self.parent.status_var.set(f"后续页面筛选失败：{exc}")
+
+            self.parent._start_ui_worker(
+                f"focused-filter-scan-rest-{id(self)}",
+                remaining_worker, remaining_done, remaining_failed,
+            )
+
+        def first_done(payload) -> None:
+            if (
+                serial != self._filter_scan_serial
+                or not getattr(self, "_filter_rows_active", False)
+            ):
+                return
+            targets, pages_without_ocr, next_position = payload
             self.filtered_targets = list(targets)
             self.filtered_batch_index = 0
-            extra = (
-                f"；{pages_without_ocr} 页无 OCR 缓存"
-                if include_mismatch and pages_without_ocr else ""
+            if self.filtered_targets:
+                self.parent.status_var.set(
+                    f"首批已就绪：已扫描 {next_position}/{len(indices)} 页，"
+                    f"当前命中 {len(self.filtered_targets)} 条；后台继续筛选…"
+                )
+                self._request_filter_batch_render()
+            else:
+                self._clear_review_workspace("首段暂无命中，正在继续筛选…")
+            start_remaining_scan(
+                next_position, pages_without_ocr, len(self.filtered_targets)
             )
-            self.parent.status_var.set(
-                f"筛选完成：{page_count} 页共 {len(targets)} 条{extra}"
-            )
-            self._request_filter_batch_render()
 
         def failed(exc, detail) -> None:
             if detail:
@@ -5211,7 +5279,7 @@ class ReviewWindow(tk.Toplevel):
             messagebox.showerror("重点筛选失败", str(exc), parent=self)
 
         self.parent._start_ui_worker(
-            f"focused-filter-scan-{id(self)}", worker, done, failed
+            f"focused-filter-scan-{id(self)}", first_worker, first_done, failed
         )
 
     def _focused_batch_size(self) -> int:
@@ -5786,6 +5854,7 @@ class ReviewWindow(tk.Toplevel):
         self._prefetch_closed = True
         self.parent._invalidate_ui_worker(self._review_render_worker_key)
         self.parent._invalidate_ui_worker(f"focused-filter-scan-{id(self)}")
+        self.parent._invalidate_ui_worker(f"focused-filter-scan-rest-{id(self)}")
         self.parent._invalidate_ui_worker(f"focused-filter-render-{id(self)}")
         if self._filter_save_job is not None:
             try:
