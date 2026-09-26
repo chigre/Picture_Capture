@@ -214,13 +214,18 @@ def _smooth_track(
         return [value]
 
     median_filtered: list[int] = []
-    for index in range(len(values)):
+    for index, raw_candidate in enumerate(values):
         left = max(0, index - 2)
         right = min(len(values), index + 3)
         window = sorted(int(value) for value in values[left:right])
-        # Indentation is a rightward contaminant. For even windows, the lower
-        # median avoids averaging the true edge toward ordinary body text.
-        median_filtered.append(window[(len(window) - 1) // 2])
+        # Preserve a genuine monotonic slope. The local median is used only to
+        # replace a block that is an actual outlier; substituting the median for
+        # every block would flatten the top/bottom of a real slanted column.
+        local_median = window[(len(window) - 1) // 2]
+        candidate = int(raw_candidate)
+        if abs(candidate - local_median) > max_step:
+            candidate = int(local_median)
+        median_filtered.append(candidate)
 
     # Seed from the actual first block rather than its forward-looking median;
     # this preserves a genuine gradual slope at the top of the page. The
