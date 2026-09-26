@@ -80,6 +80,44 @@ def _otsu_threshold(gray: np.ndarray) -> int:
     return int(best)
 
 
+def _principal_component(mask: np.ndarray) -> np.ndarray:
+    """Keep the dominant connected ink component from a user crop.
+
+    Tight crops normally contain one marker. If nearby text leaks into the
+    selection, retaining the dominant component prevents that text from becoming
+    part of the reusable template.
+    """
+    ink = np.asarray(mask, dtype=bool)
+    h, w = ink.shape
+    seen = np.zeros_like(ink, dtype=bool)
+    best: list[tuple[int, int]] = []
+    for y in range(h):
+        for x in range(w):
+            if not ink[y, x] or seen[y, x]:
+                continue
+            component: list[tuple[int, int]] = []
+            stack = [(y, x)]
+            while stack:
+                yy, xx = stack.pop()
+                if not (0 <= yy < h and 0 <= xx < w):
+                    continue
+                if seen[yy, xx] or not ink[yy, xx]:
+                    continue
+                seen[yy, xx] = True
+                component.append((yy, xx))
+                stack.extend(
+                    ((yy - 1, xx), (yy + 1, xx), (yy, xx - 1), (yy, xx + 1))
+                )
+            if len(component) > len(best):
+                best = component
+    if not best:
+        return ink
+    result = np.zeros_like(ink, dtype=bool)
+    for y, x in best:
+        result[y, x] = True
+    return result
+
+
 def _hole_count(mask: np.ndarray) -> int:
     """Count background components enclosed by ink on a normalized mask."""
     ink = np.asarray(mask, dtype=bool)
@@ -182,7 +220,7 @@ def normalize_visual_marker_crop(
     if gray.size == 0:
         raise ValueError("empty marker crop")
     threshold = _otsu_threshold(gray)
-    ink = gray <= threshold
+    ink = _principal_component(gray <= threshold)
     normalized = _normalize_ink_mask(ink, canvas_size=canvas_size)
     normalized["threshold"] = int(threshold)
     return normalized
