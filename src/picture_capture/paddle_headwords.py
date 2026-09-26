@@ -2925,7 +2925,7 @@ def _accepted_cjk_row_for_visual_run(
         # because this relaxed window is still bounded to roughly one glyph.
         same_word_shifted_box = bool(
             same_word
-            and center_distance <= max(run_h * 1.35, box_h * 1.6)
+            and center_distance <= max(run_h * 1.45, box_h * 1.6)
         )
         if (
             (same_physical_row and (same_word or features.get("cjk_single_visual")))
