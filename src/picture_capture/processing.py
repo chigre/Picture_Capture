@@ -192,21 +192,59 @@ def _adaptive_dark_mask(gray_image: Image.Image, block_size: int, c_value: int) 
     return gray < (local_mean - max(0, int(c_value)))
 
 
-def _smooth_track(values: list[int], max_step: int) -> list[int]:
-    """Median-filter anchors and constrain implausible block-to-block jumps."""
-    if len(values) < 2:
-        return values
-    median_filtered: list[int] = []
-    for index in range(len(values)):
-        window = values[max(0, index - 1):min(len(values), index + 2)]
-        median_filtered.append(round(float(np.median(window))))
+def _smooth_track(
+    values: list[int], max_step: int, *, nominal_x: int | None = None,
+) -> list[int]:
+    """Robustly smooth one column-left track without walking into body text.
+
+    A dictionary block can contain only indented definition lines. In that
+    case its first-ink estimate is to the right of the true column edge. The
+    old implementation clipped a large jump to max_step and therefore walked
+    toward that false edge over several blocks. A five-block median suppresses
+    short runs of indentation, and a jump beyond the allowed step is rejected
+    instead of accumulated.
+    """
+    if not values:
+        return []
     max_step = max(1, int(max_step))
-    forward = median_filtered.copy()
-    for index in range(1, len(forward)):
-        forward[index] = min(forward[index - 1] + max_step, max(forward[index - 1] - max_step, forward[index]))
-    for index in range(len(forward) - 2, -1, -1):
-        forward[index] = min(forward[index + 1] + max_step, max(forward[index + 1] - max_step, forward[index]))
-    return forward
+    if len(values) == 1:
+        value = int(values[0])
+        if nominal_x is not None and abs(value - int(nominal_x)) > max_step:
+            return [int(nominal_x)]
+        return [value]
+
+    median_filtered: list[int] = []
+    for index, raw_candidate in enumerate(values):
+        left = max(0, index - 2)
+        right = min(len(values), index + 3)
+        window = sorted(int(value) for value in values[left:right])
+        # Preserve a genuine monotonic slope. The local median is used only to
+        # replace a block that is an actual outlier; substituting the median for
+        # every block would flatten the top/bottom of a real slanted column.
+        local_median = window[(len(window) - 1) // 2]
+        candidate = int(raw_candidate)
+        if abs(candidate - local_median) > max_step:
+            candidate = int(local_median)
+        median_filtered.append(candidate)
+
+    # Seed from the actual first block rather than its forward-looking median;
+    # this preserves a genuine gradual slope at the top of the page. The
+    # nominal start still rejects a first block that is already an implausible
+    # rightward indentation.
+    start = int(values[0])
+    if nominal_x is not None and abs(start - int(nominal_x)) > max_step:
+        start = int(nominal_x)
+
+    stable = [start]
+    for candidate in median_filtered[1:]:
+        previous = stable[-1]
+        if abs(int(candidate) - previous) <= max_step:
+            stable.append(int(candidate))
+        else:
+            # Holding is deliberate: clipping toward an implausible candidate
+            # lets several body-only blocks accumulate into a fake curve.
+            stable.append(previous)
+    return stable
 
 
 def _estimate_column_paths(
@@ -307,9 +345,17 @@ def _estimate_column_paths(
                     key=lambda j: abs(j - index),
                 )
                 filled.append(int(raw_x[nearest]))  # type: ignore[arg-type]
+        configured_step = max(
+            1, round(max_step_value * geometry_to_analysis)
+        )
+        # A genuine page tilt/curve changes gradually. Independently of an
+        # overly permissive saved max-step value, one vertical block must not
+        # drag the path by more than about 15% of that block's height. This
+        # rejects the common false signal from indented definition paragraphs.
+        geometric_step = max(2, round(block_height * 0.15))
+        stable_step = min(configured_step, geometric_step)
         filled = _smooth_track(
-            filled,
-            max(1, round(max_step_value * geometry_to_analysis)),
+            filled, stable_step, nominal_x=int(nominal_x),
         )
         source_points = [
             (round(y / scale), round(x / scale)) for y, x in zip(anchors_y, filled)
@@ -856,11 +902,19 @@ def column_index_for_click(x: int, geometry: Geometry, y: int = 0) -> int:
     nearest column start. If the click is genuinely in a gutter or outside all
     columns, choose the interval boundary nearest to the click.
     """
-    x, _canonical_y = geometry.source_to_canonical(int(x), int(y))
+    x, canonical_y = geometry.source_to_canonical(int(x), int(y))
     if not geometry.column_starts:
         return 0
     intervals: list[tuple[int, int]] = []
-    for i, start in enumerate(geometry.column_starts):
+    for i, nominal_start in enumerate(geometry.column_starts):
+        # Use the same Y-dependent path that drawing, OCR and cropping use.
+        # The previous nominal-only classifier could assign a marker to the
+        # adjacent column after the visible left edge had curved away.
+        start = (
+            geometry.x_at(i, int(canonical_y))
+            if i < len(geometry.column_paths)
+            else int(nominal_start)
+        )
         width = geometry.column_widths[i] if i < len(geometry.column_widths) else 1
         right = int(start) + max(1, int(width))
         intervals.append((int(start), right))
