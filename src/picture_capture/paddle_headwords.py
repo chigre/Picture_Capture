@@ -20,11 +20,6 @@ from PIL import Image, ImageOps
 
 from .models import AppSettings, Entry, resolved_tesseract_language
 from .runtime_environment import resolve_paddle_device
-from .coordinate_space import (
-    REFERENCE_CANONICAL_WIDTH,
-    reference_to_canonical,
-    stored_geometry_to_canonical,
-)
 from .image_utils import normalize_page_rgb
 from .page_sections import PageSection, normalize_page_sections, section_index_for_v
 from .dictionary_profile import (
@@ -927,27 +922,16 @@ def unwrap_column_band(
             raise ValueError("source_rgb 尺寸必须与当前原始页面一致，禁止跨页复用")
         if source.shape[2] != 3:
             source = source[:, :, :3]
-    canonical_width = geometry.transform.canonical_size(image.size)[0]
     band_ratio = max(
         1, min(100, int(getattr(settings, "paddle_band_width_ratio", 100)))
     ) / 100.0
-    left_margin = max(
-        0,
-        reference_to_canonical(
-            settings.paddle_band_left_margin, canonical_width,
-        ),
-    )
+    left_margin = max(0, int(settings.paddle_band_left_margin))
     if source_width is not None:
         band_width = max(24, int(source_width))
     else:
         configured_band_width = max(
             24,
-            round(
-                reference_to_canonical(
-                    settings.paddle_band_width, canonical_width,
-                )
-                * band_ratio
-            ),
+            round(max(0, int(settings.paddle_band_width)) * band_ratio),
         )
         # Never let the OCR candidate strip spill into the next dictionary
         # column. This mattered little on wide two-column Latin pages but is
@@ -2277,7 +2261,7 @@ def _otsu_threshold(gray: np.ndarray) -> int:
 def _separator_analysis_x_bounds(
     width: int,
     settings: AppSettings,
-    reference_to_canonical_scale: float = 1.0,
+    pixel_scale: float = 1.0,
 ) -> tuple[int, int]:
     """Return the left-local X ROI used for separator/boundary analysis.
 
@@ -2287,7 +2271,7 @@ def _separator_analysis_x_bounds(
     therefore limit refinement to a percentage of the left side of the column.
     """
     width = max(1, int(width))
-    margin = max(0, round(max(0, settings.paddle_separator_column_margin) * reference_to_canonical_scale))
+    margin = max(0, round(max(0, settings.paddle_separator_column_margin) * pixel_scale))
     margin = min(margin, max(0, width // 4))
     ratio = max(10, min(100, int(getattr(settings, "paddle_separator_roi_width_ratio", 60)))) / 100.0
     usable = max(1, width - margin * 2)
@@ -2302,7 +2286,7 @@ def detect_image_separator_candidates(
     gray: np.ndarray,
     reference_line_height: int,
     settings: AppSettings,
-    reference_to_canonical_scale: float = 1.0,
+    pixel_scale: float = 1.0,
     lower_bound: int = 0,
 ) -> list[dict[str, Any]]:
     """Detect image-only entry-boundary candidates from blank-to-ink transitions.
@@ -2318,7 +2302,7 @@ def detect_image_separator_candidates(
     if height < 4 or width < 12:
         return []
     lower = max(0, min(height - 1, int(lower_bound)))
-    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, pixel_scale)
     roi = gray[lower:, x0:x1]
     if roi.size == 0 or roi.shape[0] < 4 or roi.shape[1] < 8:
         return []
@@ -2356,7 +2340,7 @@ def detect_image_separator_candidates(
     min_blank = max(3, round(line_h * 0.12))
     min_ink = max(2, round(line_h * 0.07))
     configured_safety = max(0, int(getattr(settings, "paddle_separator_safety_px", 2)))
-    safety = max(0, round(configured_safety * max(0.5, float(reference_to_canonical_scale))))
+    safety = max(0, round(configured_safety * max(0.5, float(pixel_scale))))
 
     result: list[dict[str, Any]] = []
     for run_start, run_end in _true_runs(blank_mask):
@@ -3020,7 +3004,7 @@ def _leading_cjk_ideograph(text: str) -> str:
 
 
 def _cjk_visual_projection_runs(
-    gray: np.ndarray, header_cutoff: int, settings: AppSettings, reference_to_canonical_scale: float,
+    gray: np.ndarray, header_cutoff: int, settings: AppSettings, pixel_scale: float,
 ) -> tuple[int, list[tuple[int, int]]]:
     """Locate oversized single-character rows from image geometry alone.
 
@@ -3033,7 +3017,7 @@ def _cjk_visual_projection_runs(
     """
     if gray.size == 0:
         return 0, []
-    ratio = max(0.25, float(reference_to_canonical_scale))
+    ratio = max(0.25, float(pixel_scale))
     zone_width = min(gray.shape[1], max(48, round(100 * ratio)))
     if zone_width <= 0:
         return 0, []
@@ -3058,14 +3042,10 @@ def _cjk_visual_projection_runs(
         index = end
 
     runs = _true_runs(np.asarray(active_list, dtype=bool))
-    canonical_width = max(1, round(REFERENCE_CANONICAL_WIDTH * ratio))
+    runtime_width = max(1, int(gray.shape[1]))
     expected_body = max(
         8.0,
-        float(
-            stored_geometry_to_canonical(
-                settings.character_height, canonical_width, settings,
-            )
-        ),
+        float(settings.character_height),
     )
     body_heights = [
         end - start for start, end in runs
@@ -3464,7 +3444,7 @@ def refine_separator_y(
     coarse_y: int,
     line_height: int,
     settings: AppSettings,
-    reference_to_canonical_scale: float = 1.0,
+    pixel_scale: float = 1.0,
     lower_bound: int = 0,
 ) -> tuple[int, dict[str, Any]]:
     """Refine a coarse headword marker using a local horizontal ink valley.
@@ -3495,7 +3475,7 @@ def refine_separator_y(
     if bottom <= top:
         return coarse_y, {"enabled": True, "reason": "empty_search"}
 
-    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, pixel_scale)
 
     roi = gray[top:bottom + 1, x0:x1]
     threshold = _otsu_threshold(roi)
@@ -3511,7 +3491,7 @@ def refine_separator_y(
             ink[:, rule_columns] = False
 
     row_ink = ink.mean(axis=1).astype(np.float64)
-    band_radius = max(0, round(max(0, settings.paddle_separator_band_radius) * reference_to_canonical_scale))
+    band_radius = max(0, round(max(0, settings.paddle_separator_band_radius) * pixel_scale))
     band_radius = min(band_radius, max(0, (len(row_ink) - 1) // 3))
     if band_radius > 0:
         kernel = np.ones(2 * band_radius + 1, dtype=np.float64) / (2 * band_radius + 1)
@@ -3582,7 +3562,7 @@ def refine_separator_y_adaptive(
     coarse_y: int,
     reference_line_height: int,
     settings: AppSettings,
-    reference_to_canonical_scale: float = 1.0,
+    pixel_scale: float = 1.0,
     lower_bound: int = 0,
     content_top: int | None = None,
     preceding_gap_hint: int | None = None,
@@ -3613,16 +3593,8 @@ def refine_separator_y_adaptive(
     line_h = max(3, int(round(reference_line_height)))
     coarse_y = int(min(height - 1, max(lower_bound, coarse_y)))
     if content_top is None:
-        canonical_width = max(
-            1,
-            round(
-                REFERENCE_CANONICAL_WIDTH
-                * max(0.01, reference_to_canonical_scale)
-            ),
-        )
-        row_padding = stored_geometry_to_canonical(
-            settings.row_padding, canonical_width, settings,
-        )
+        runtime_width = max(1, int(gray.shape[1]))
+        row_padding = int(settings.row_padding)
         content_top = coarse_y + max(0, row_padding)
     content_top = int(min(height - 1, max(lower_bound, content_top)))
 
@@ -3638,7 +3610,7 @@ def refine_separator_y_adaptive(
     if bottom <= top:
         return coarse_y, {"enabled": True, "reason": "empty_search", "adaptive_mode": "fallback"}
 
-    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, pixel_scale)
     roi = gray[top:bottom + 1, x0:x1]
     threshold = _otsu_threshold(roi)
     ink = roi <= threshold
@@ -3682,12 +3654,11 @@ def refine_separator_y_adaptive(
     target_local = int(min(len(smooth) - 1, max(0, content_top - top)))
     min_ink_rows = max(2, round(line_h * 0.07))
     min_blank_rows = max(2, round(line_h * 0.08))
-    # User-configurable safety clearance uses 1400-width reference pixels and
-    # is scaled to the current canonical resolution. A value of 0 is
-    # allowed when the user deliberately wants the rule to touch the detected
-    # ink boundary.
+    # User-configurable safety clearance is a literal source-pixel distance.
+    # A value of 0 is allowed when the user deliberately wants the rule to
+    # touch the detected ink boundary.
     configured_safety = max(0, int(getattr(settings, "paddle_separator_safety_px", 2)))
-    safety = max(0, round(configured_safety * max(0.5, float(reference_to_canonical_scale))))
+    safety = max(0, round(configured_safety * max(0.5, float(pixel_scale))))
 
     # Step 1: establish an image-derived ink onset rather than blindly trusting
     # OCR box.y.  OCR can occasionally merge the preceding definition line into
@@ -3817,7 +3788,7 @@ def refine_separator_y_adaptive(
     # a bounded valley, use its lower edge so the marker still hugs the entry.
     refined, legacy = refine_separator_y(
         gray, coarse_y, line_h, settings,
-        reference_to_canonical_scale=reference_to_canonical_scale,
+        pixel_scale=pixel_scale,
         lower_bound=lower_bound,
     )
     if legacy.get("reason") == "bounded_low_ink_valley" and legacy.get("valley_end") is not None:
@@ -3847,7 +3818,7 @@ def refine_first_content_y(
     coarse_y: int,
     line_height: int,
     settings: AppSettings,
-    reference_to_canonical_scale: float = 1.0,
+    pixel_scale: float = 1.0,
     lower_bound: int = 0,
 ) -> tuple[int, dict[str, Any]]:
     """Place the first entry marker at the onset of the first sustained ink run.
@@ -3874,7 +3845,7 @@ def refine_first_content_y(
     if bottom <= top:
         return coarse_y, {"enabled": True, "reason": "empty_search"}
 
-    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, pixel_scale)
     roi = gray[top:bottom + 1, x0:x1]
     threshold = _otsu_threshold(roi)
     ink = roi <= threshold
@@ -3892,7 +3863,7 @@ def refine_first_content_y(
     local_low = float(np.percentile(positive, 20)) if positive.size else 0.0
     active_threshold = max(quantization * 3.0, min(0.004, local_low * 0.55 if local_low else 0.002))
     active = row_ink >= active_threshold
-    min_run = max(2, round(max(1, settings.paddle_separator_band_radius) * reference_to_canonical_scale) + 1)
+    min_run = max(2, round(max(1, settings.paddle_separator_band_radius) * pixel_scale) + 1)
     runs = [(a, b) for a, b in _true_runs(active) if (b - a) >= min_run]
 
     # Prefer the first sustained run whose centre is not implausibly far above
@@ -3916,7 +3887,7 @@ def refine_first_content_y(
             2,
             round(
                 max(1.0, line_height * 0.12)
-                + max(0, settings.row_padding) * 0.35 * reference_to_canonical_scale
+                + max(0, settings.row_padding) * 0.35 * pixel_scale
             ),
         )
         refined = max(int(lower_bound), ink_onset - clearance)
@@ -4170,7 +4141,7 @@ def filter_headword_records(
     user_rules: list[HeadwordFilterRule] | None = None,
     engine_name: str = "paddle",
     profile: DictionaryProfile | None = None,
-    reference_to_canonical_scale: float | None = None,
+    pixel_scale: float | None = None,
 ) -> tuple[list[Entry], list[dict[str, Any]]]:
     """Select dictionary headwords using structure, geometry and visual cues.
 
@@ -4193,25 +4164,17 @@ def filter_headword_records(
     # Merge first, then actively repair the special case where OCR split a
     # left-edge bold lemma from its right-side gender/POS fragments.
     lines = group_ocr_records([record for record in records if record.text], settings.paddle_line_merge_y_ratio)
-    configured_width = max(1, settings.paddle_band_width)
-    reference_scale = (
-        max(0.01, float(reference_to_canonical_scale))
-        if reference_to_canonical_scale is not None
-        else band.width / configured_width
-    )
-    canonical_width = max(
-        1, round(REFERENCE_CANONICAL_WIDTH * reference_scale),
-    )
-    row_padding = stored_geometry_to_canonical(
-        settings.row_padding, canonical_width, settings,
-    )
-    character_height = stored_geometry_to_canonical(
-        settings.character_height, canonical_width, settings,
-    )
+    # All visible/profile pixel settings are literal original-image pixels.
+    # OCR engines may resize internally, but OCR boxes are mapped back to this
+    # full-resolution band before candidate filtering.
+    pixel_scale = max(0.01, float(pixel_scale)) if pixel_scale is not None else 1.0
+    runtime_width = max(1, band.width)
+    row_padding = int(settings.row_padding)
+    character_height = int(settings.character_height)
     row_height = max(1, character_height + row_padding)
     left_limit = round(
         (settings.paddle_band_left_margin + settings.paddle_left_tolerance)
-        * reference_scale
+        * pixel_scale
     )
     lines = _repair_split_headword_lines(lines, settings, left_limit, patterns)
     lines = _repair_wrapped_headword_structure(lines, settings, left_limit, patterns)
@@ -4229,10 +4192,9 @@ def filter_headword_records(
     heights = np.asarray([line.box[3] - line.box[1] for line in lines], dtype=float)
     median_height = max(1.0, float(np.median(heights)))
 
-    # Profile/OCR tuning distances use fixed reference pixels at canonical
-    # width 1400; project line geometry itself is full-resolution canonical.
+    # Profile/OCR tuning distances are direct full-resolution image pixels.
     gap_threshold = row_height * settings.paddle_gap_ratio
-    header_cutoff = _header_cutoff(gray, settings, reference_scale)
+    header_cutoff = _header_cutoff(gray, settings, pixel_scale)
 
     # Independent image-only separator candidates.  OCR lines and boundaries
     # are paired with a mutual-nearest rule, so the image validates OCR geometry
@@ -4242,7 +4204,7 @@ def filter_headword_records(
         separator_gray,
         max(2, round(median_height)),
         settings,
-        reference_to_canonical_scale=reference_scale,
+        pixel_scale=pixel_scale,
         lower_bound=header_cutoff,
     )
     image_boundary_matches = match_ocr_lines_to_image_boundaries(
@@ -4744,7 +4706,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                reference_to_canonical_scale=reference_scale,
+                pixel_scale=pixel_scale,
                 lower_bound=header_cutoff,
             )
         elif is_headword and _is_chinese_ocr(settings):
@@ -4753,7 +4715,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                reference_to_canonical_scale=reference_scale,
+                pixel_scale=pixel_scale,
                 lower_bound=header_cutoff,
                 content_top=(int(image_boundary.get("ink_onset_y", y0)) if image_boundary else y0),
                 preceding_gap_hint=preceding_gap,
@@ -4764,7 +4726,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, y1 - y0),
                 settings,
-                reference_to_canonical_scale=reference_scale,
+                pixel_scale=pixel_scale,
                 lower_bound=header_cutoff,
             )
         else:
@@ -4983,7 +4945,7 @@ def filter_headword_records(
         or bool(getattr(settings, "profile_cjk_allow_single_headword", True))
     ):
         zone_width, visual_runs = _cjk_visual_projection_runs(
-            gray, header_cutoff, settings, reference_scale
+            gray, header_cutoff, settings, pixel_scale
         )
         for run_start, run_end in visual_runs:
             right_context = _cjk_right_context_metrics(
@@ -5014,7 +4976,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                reference_to_canonical_scale=reference_scale,
+                pixel_scale=pixel_scale,
                 lower_bound=header_cutoff,
                 content_top=run_start,
                 preceding_gap_hint=visual_gap_hint,
@@ -5188,7 +5150,7 @@ def filter_headword_records(
     diagnostics.insert(0, {
         "meta": {
             "header_cutoff_band_y": header_cutoff,
-            "header_cutoff_canonical_v": source_top + header_cutoff,
+            "_header_cutoff_axis_v": source_top + header_cutoff,
             "line_count": len(lines),
             "left_limit_band_x": left_limit,
             "separator_band_width": int(separator_gray.shape[1]),
@@ -5206,63 +5168,54 @@ def _attach_source_candidate_coordinates(
     geometry: "Geometry",
     column: int,
 ) -> None:
-    """Attach explicit canonical and original-image coordinates to candidates."""
+    """Attach original-image X/Y while keeping reading-axis values private."""
     for item in diagnostics:
         if "meta" in item:
             meta = item.get("meta") or {}
-            meta["candidate_coordinate_space"] = "canonical_full_resolution_pixels"
-            meta["source_coordinate_space"] = "source_image_pixels"
-            meta["ocr_box_coordinate_space"] = "ocr_band_local_pixels"
-            if meta.get("header_cutoff_canonical_v") is not None:
+            meta["coordinate_space"] = "source_image_pixels"
+            if meta.get("_header_cutoff_axis_v") is not None:
                 try:
-                    cutoff_v = int(meta["header_cutoff_canonical_v"])
-                    cutoff_u = int(geometry.x_at(column, cutoff_v))
-                    sx, sy = geometry.canonical_to_source(cutoff_u, cutoff_v)
-                    meta["header_cutoff_source_point"] = [int(sx), int(sy)]
+                    axis_v = int(meta["_header_cutoff_axis_v"])
+                    axis_u = int(geometry.x_at(column, axis_v))
+                    sx, sy = geometry.canonical_to_source(axis_u, axis_v)
+                    meta["header_cutoff_source_x"] = int(sx)
+                    meta["header_cutoff_source_y"] = int(sy)
                 except (TypeError, ValueError):
                     pass
             continue
 
-        # Low-level filtering historically called these values source_y even
-        # though they were reading-axis canonical V. Convert them once here.
+        # Low-level filtering works on a temporary transformed reading axis.
+        # Keep that fact private; every public/cache coordinate is source X/Y.
         try:
-            canonical_v = int(item.get("canonical_v", item.get("source_y", 0)))
+            axis_v = int(item.get("_axis_v", item.get("_axis_v", item.get("source_y", 0))))
         except (TypeError, ValueError):
-            canonical_v = 0
+            axis_v = 0
         try:
-            coarse_v = int(
-                item.get(
-                    "coarse_canonical_v",
-                    item.get("coarse_source_y", canonical_v),
-                )
-            )
+            coarse_axis_v = int(item.get("_coarse_axis_v", item.get("coarse_canonical_v", item.get("coarse_source_y", axis_v))))
         except (TypeError, ValueError):
-            coarse_v = canonical_v
+            coarse_axis_v = axis_v
         try:
-            anchor_v = int(
-                item.get(
-                    "anchor_canonical_v",
-                    item.get("anchor_source_y", coarse_v),
-                )
-            )
+            anchor_axis_v = int(item.get("_anchor_axis_v", item.get("anchor_canonical_v", item.get("anchor_source_y", coarse_axis_v))))
         except (TypeError, ValueError):
-            anchor_v = coarse_v
+            anchor_axis_v = coarse_axis_v
 
-        canonical_u = int(geometry.x_at(column, canonical_v))
-        source_x, source_y = geometry.canonical_to_source(canonical_u, canonical_v)
-        coarse_u = int(geometry.x_at(column, coarse_v))
+        axis_u = int(geometry.x_at(column, axis_v))
+        source_x, source_y = geometry.canonical_to_source(axis_u, axis_v)
+        coarse_axis_u = int(geometry.x_at(column, coarse_axis_v))
         coarse_source_x, coarse_source_y = geometry.canonical_to_source(
-            coarse_u, coarse_v
+            coarse_axis_u, coarse_axis_v
         )
-        anchor_u = int(geometry.x_at(column, anchor_v))
+        anchor_axis_u = int(geometry.x_at(column, anchor_axis_v))
         anchor_source_x, anchor_source_y = geometry.canonical_to_source(
-            anchor_u, anchor_v
+            anchor_axis_u, anchor_axis_v
         )
 
-        item["canonical_u"] = canonical_u
-        item["canonical_v"] = canonical_v
-        item["coarse_canonical_v"] = coarse_v
-        item["anchor_canonical_v"] = anchor_v
+        item["_axis_v"] = axis_v
+        item["_coarse_axis_v"] = coarse_axis_v
+        item["_anchor_axis_v"] = anchor_axis_v
+        for key in ("canonical_u", "canonical_v", "coarse_canonical_v", "anchor_canonical_v", "canonical_coordinate_space"):
+            item.pop(key, None)
+        item["coordinate_space"] = "source_image_pixels"
         item["source_x"] = int(source_x)
         item["source_y"] = int(source_y)
         item["coarse_source_x"] = int(coarse_source_x)
@@ -5274,11 +5227,49 @@ def _attach_source_candidate_coordinates(
 def _candidate_axis_v(candidate: dict[str, Any] | None) -> int | None:
     if not candidate:
         return None
-    value = candidate.get("canonical_v", candidate.get("source_y"))
+    value = candidate.get("_axis_v", candidate.get("source_y"))
     try:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _source_only_persistence(value: Any) -> Any:
+    """Strip temporary transformed-axis fields before writing cache/debug JSON."""
+    if isinstance(value, list):
+        return [_source_only_persistence(item) for item in value]
+    if isinstance(value, tuple):
+        return [_source_only_persistence(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    result: dict[str, Any] = {}
+    for key, item in value.items():
+        name = str(key)
+        if name.startswith("_") or "canonical" in name.casefold():
+            continue
+        if name in {"column_coordinate_space", "coordinate_spaces"}:
+            continue
+        result[name] = _source_only_persistence(item)
+
+    # Engine/member Y fields are page coordinates in persisted output and must
+    # therefore equal their explicit source-image Y.
+    if result.get("source_y") is not None and "y" in result:
+        result["y"] = result["source_y"]
+    for prefix in ("paddle", "tesseract", "lens"):
+        source_key = f"{prefix}_source_y"
+        axis_key = f"{prefix}_y"
+        if result.get(source_key) is not None and axis_key in result:
+            result[axis_key] = result[source_key]
+        coarse_source_key = f"{prefix}_coarse_source_y"
+        coarse_key = f"{prefix}_coarse_y"
+        if result.get(coarse_source_key) is not None and coarse_key in result:
+            result[coarse_key] = result[coarse_source_key]
+        anchor_source_key = f"{prefix}_anchor_source_y"
+        anchor_key = f"{prefix}_anchor_y"
+        if result.get(anchor_source_key) is not None and anchor_key in result:
+            result[anchor_key] = result[anchor_source_key]
+    return result
 
 
 def _image_cache_fingerprint(image: Image.Image) -> str:
@@ -5299,9 +5290,6 @@ def _cache_signature(image: Image.Image, geometry: "Geometry", settings: AppSett
         "image_size": list(image.size),
         "image_fingerprint": _image_cache_fingerprint(image),
         "layout_transform": geometry.transform.kind,
-        "geometry_coordinate_version": int(
-            getattr(settings, "geometry_coordinate_version", 0) or 0
-        ),
         "paths": [path.points for path in geometry.column_paths],
         "geometry_top": int(geometry.top),
         "geometry_bottom": int(geometry.bottom),
@@ -5604,11 +5592,15 @@ def _make_ocr_pair(
         "paddle_y": py,
         "paddle_source_x": p.get("source_x") if p else None,
         "paddle_source_y": p.get("source_y") if p else None,
+        "paddle_coarse_source_x": p.get("coarse_source_x") if p else None,
+        "paddle_coarse_source_y": p.get("coarse_source_y") if p else None,
+        "paddle_anchor_source_x": p.get("anchor_source_x") if p else None,
+        "paddle_anchor_source_y": p.get("anchor_source_y") if p else None,
         "paddle_coarse_y": (
-            int(p.get("coarse_canonical_v", py)) if p and py is not None else None
+            int(p.get("_coarse_axis_v", py)) if p and py is not None else None
         ),
         "paddle_anchor_y": (
-            int(p.get("anchor_canonical_v", py)) if p and py is not None else None
+            int(p.get("_anchor_axis_v", py)) if p and py is not None else None
         ),
         "paddle_separator_refinement": dict(p.get("separator_refinement", {}) or {}) if p else {},
         "paddle_image_boundary_match": dict(p.get("image_boundary_match", {}) or {}) if p else {},
@@ -5630,11 +5622,15 @@ def _make_ocr_pair(
         "tesseract_y": ty,
         "tesseract_source_x": t.get("source_x") if t else None,
         "tesseract_source_y": t.get("source_y") if t else None,
+        "tesseract_coarse_source_x": t.get("coarse_source_x") if t else None,
+        "tesseract_coarse_source_y": t.get("coarse_source_y") if t else None,
+        "tesseract_anchor_source_x": t.get("anchor_source_x") if t else None,
+        "tesseract_anchor_source_y": t.get("anchor_source_y") if t else None,
         "tesseract_coarse_y": (
-            int(t.get("coarse_canonical_v", ty)) if t and ty is not None else None
+            int(t.get("_coarse_axis_v", ty)) if t and ty is not None else None
         ),
         "tesseract_anchor_y": (
-            int(t.get("anchor_canonical_v", ty)) if t and ty is not None else None
+            int(t.get("_anchor_axis_v", ty)) if t and ty is not None else None
         ),
         "tesseract_separator_refinement": dict(t.get("separator_refinement", {}) or {}) if t else {},
         "tesseract_image_boundary_match": dict(t.get("image_boundary_match", {}) or {}) if t else {},
@@ -5685,21 +5681,17 @@ def _make_ocr_pair(
 
 
 def _copy_candidate_to_pair(pair: dict[str, Any], prefix: str, candidate: dict[str, Any]) -> None:
-    canonical_v = _candidate_axis_v(candidate)
-    if canonical_v is None:
-        canonical_v = 0
-    pair[f"{prefix}_y"] = canonical_v
-    pair[f"{prefix}_coarse_y"] = int(
-        candidate.get("coarse_canonical_v", canonical_v)
-    )
-    pair[f"{prefix}_anchor_y"] = int(
-        candidate.get(
-            "anchor_canonical_v",
-            candidate.get("coarse_canonical_v", canonical_v),
-        )
-    )
-    pair[f"{prefix}_source_x"] = candidate.get("source_x")
-    pair[f"{prefix}_source_y"] = candidate.get("source_y")
+    axis_v = _candidate_axis_v(candidate)
+    if axis_v is None:
+        axis_v = 0
+    pair[f"{prefix}_y"] = axis_v
+    pair[f"{prefix}_coarse_y"] = int(candidate.get("_coarse_axis_v", axis_v))
+    pair[f"{prefix}_anchor_y"] = int(candidate.get("_anchor_axis_v", candidate.get("_coarse_axis_v", axis_v)))
+    for suffix in (
+        "source_x", "source_y", "coarse_source_x", "coarse_source_y",
+        "anchor_source_x", "anchor_source_y",
+    ):
+        pair[f"{prefix}_{suffix}"] = candidate.get(suffix)
     pair[f"{prefix}_box"] = candidate.get("box")
     pair[f"{prefix}_separator_refinement"] = dict(candidate.get("separator_refinement", {}) or {})
     pair[f"{prefix}_image_boundary_match"] = dict(candidate.get("image_boundary_match", {}) or {})
@@ -6015,11 +6007,10 @@ def _arbitrate_pair(
         "candidate_id": candidate_id,
         "column": column,
         "coordinate_space": "source_image_pixels",
-        "canonical_coordinate_space": "canonical_full_resolution_pixels",
-        "canonical_u": int(refined_u),
-        "canonical_v": int(y),
-        "coarse_canonical_v": int(coarse_y),
-        "anchor_canonical_v": int(anchor_y),
+        "_axis_u": int(refined_u),
+        "_axis_v": int(y),
+        "_coarse_axis_v": int(coarse_y),
+        "_anchor_axis_v": int(anchor_y),
         "source_x": int(source_x),
         "source_y": int(source_y),
         "refined_source_y": int(source_y),
@@ -6046,10 +6037,17 @@ def _arbitrate_pair(
         "alphabetical_warning": str(pair.get(f"{chosen}_alphabetical_warning", "")) if chosen else "",
         "lemma_similarity": sim,
         "paddle": {
-            "canonical_v": pair.get("paddle_y"),
             "source_x": pair.get("paddle_source_x"),
-            "source_y": pair.get("paddle_source_y"),
-            "y": pair.get("paddle_y"),
+            "source_y": (
+                pair.get("paddle_source_y")
+                if pair.get("paddle_source_y") is not None
+                else pair.get("paddle_y")
+            ),
+            "y": (
+                pair.get("paddle_source_y")
+                if pair.get("paddle_source_y") is not None
+                else pair.get("paddle_y")
+            ),
             "box": pair.get("paddle_box"), "confidence": pair.get("paddle_conf"),
             "accepted": pair.get("paddle_accepted"), "score": pair.get("paddle_score"), "lemma": pair.get("paddle_lemma"),
             "raw": pair.get("paddle_raw"), "corrected": pair.get("paddle_corrected"), "POS": pair.get("paddle_pos"),
@@ -6057,10 +6055,17 @@ def _arbitrate_pair(
             "parser_trace": pair.get("paddle_parser_trace"),
         },
         "tesseract": {
-            "canonical_v": pair.get("tesseract_y"),
             "source_x": pair.get("tesseract_source_x"),
-            "source_y": pair.get("tesseract_source_y"),
-            "y": pair.get("tesseract_y"),
+            "source_y": (
+                pair.get("tesseract_source_y")
+                if pair.get("tesseract_source_y") is not None
+                else pair.get("tesseract_y")
+            ),
+            "y": (
+                pair.get("tesseract_source_y")
+                if pair.get("tesseract_source_y") is not None
+                else pair.get("tesseract_y")
+            ),
             "box": pair.get("tesseract_box"), "confidence": pair.get("tesseract_conf"),
             "accepted": pair.get("tesseract_accepted"), "score": pair.get("tesseract_score"), "lemma": pair.get("tesseract_lemma"),
             "raw": pair.get("tesseract_raw"), "corrected": pair.get("tesseract_corrected"), "POS": pair.get("tesseract_pos"),
@@ -6068,10 +6073,17 @@ def _arbitrate_pair(
             "parser_trace": pair.get("tesseract_parser_trace"),
         },
         "lens": {
-            "canonical_v": pair.get("lens_y"),
             "source_x": pair.get("lens_source_x"),
-            "source_y": pair.get("lens_source_y"),
-            "y": pair.get("lens_y"),
+            "source_y": (
+                pair.get("lens_source_y")
+                if pair.get("lens_source_y") is not None
+                else pair.get("lens_y")
+            ),
+            "y": (
+                pair.get("lens_source_y")
+                if pair.get("lens_source_y") is not None
+                else pair.get("lens_y")
+            ),
             "box": pair.get("lens_box"), "confidence": pair.get("lens_conf"),
             "accepted": pair.get("lens_accepted"), "score": pair.get("lens_score"), "lemma": pair.get("lens_lemma"),
             "raw": pair.get("lens_raw"), "corrected": pair.get("lens_corrected"), "POS": pair.get("lens_pos"),
@@ -6091,7 +6103,7 @@ def _apply_pair_engine_position(
     canonical_u: int,
     geometry: "Geometry" | None,
 ) -> None:
-    """Apply one engine's position without mixing canonical V and source Y."""
+    """Apply one engine's position without mixing temporary reading axis and source Y."""
     raw_v = pair.get(f"{prefix}_y")
     if raw_v is None:
         return
@@ -6122,10 +6134,10 @@ def _apply_pair_engine_position(
         anchor_source_x, anchor_source_y = source_x, anchor_v
 
     item.update({
-        "canonical_u": int(refined_u),
-        "canonical_v": int(canonical_v),
-        "coarse_canonical_v": int(coarse_v),
-        "anchor_canonical_v": int(anchor_v),
+        "_axis_u": int(refined_u),
+        "_axis_v": int(canonical_v),
+        "_coarse_axis_v": int(coarse_v),
+        "_anchor_axis_v": int(anchor_v),
         "source_x": int(source_x),
         "source_y": int(source_y),
         "refined_source_y": int(source_y),
@@ -6293,11 +6305,11 @@ def _candidate_tsv_row(
 
 _DIAGNOSTIC_HEADER = "column\tbox_band_xyxy\tconf\ttext\taccept/reject\tscore\tlemma\traw\tcorrected\tPOS\trepairs\treason"
 _COMPARISON_HEADER = (
-    "column\tpaddle_canonical_v\tpaddle_box_band_xyxy\tpaddle_conf\tpaddle_accept/reject\tpaddle_score\t"
+    "column\tpaddle_source_y\tpaddle_box_band_xyxy\tpaddle_conf\tpaddle_accept/reject\tpaddle_score\t"
     "paddle_lemma\tpaddle_raw\tpaddle_corrected\tpaddle_POS\tpaddle_repairs\tpaddle_text\t"
-    "tesseract_canonical_v\ttesseract_box_band_xyxy\ttesseract_conf\ttesseract_accept/reject\ttesseract_score\t"
+    "tesseract_source_y\ttesseract_box_band_xyxy\ttesseract_conf\ttesseract_accept/reject\ttesseract_score\t"
     "tesseract_lemma\ttesseract_raw\ttesseract_corrected\ttesseract_POS\ttesseract_repairs\t"
-    "tesseract_text\tdelta_v_canonical\tlemma_compare\tstatus_compare\treason"
+    "tesseract_text\tdelta_source_y\tlemma_compare\tstatus_compare\treason"
 )
 
 
@@ -6384,11 +6396,11 @@ def _comparison_text(report_columns: list[dict[str, Any]]) -> str:
         for pair in col.get("ocr_y_comparison", []) or []:
             values = [
                 n,
-                pair.get("paddle_y"), pair.get("paddle_box"), pair.get("paddle_conf"),
+                pair.get("paddle_source_y"), pair.get("paddle_box"), pair.get("paddle_conf"),
                 "accept" if pair.get("paddle_accepted") is True else ("reject" if pair.get("paddle_accepted") is False else ""),
                 pair.get("paddle_score"), pair.get("paddle_lemma"), pair.get("paddle_raw"),
                 pair.get("paddle_corrected"), pair.get("paddle_pos"), pair.get("paddle_repairs"), pair.get("paddle_text"),
-                pair.get("tesseract_y"), pair.get("tesseract_box"), pair.get("tesseract_conf"),
+                pair.get("tesseract_source_y"), pair.get("tesseract_box"), pair.get("tesseract_conf"),
                 "accept" if pair.get("tesseract_accepted") is True else ("reject" if pair.get("tesseract_accepted") is False else ""),
                 pair.get("tesseract_score"), pair.get("tesseract_lemma"), pair.get("tesseract_raw"),
                 pair.get("tesseract_corrected"), pair.get("tesseract_pos"), pair.get("tesseract_repairs"), pair.get("tesseract_text"),
@@ -6399,7 +6411,7 @@ def _comparison_text(report_columns: list[dict[str, Any]]) -> str:
 
 
 _ENGINES_LONG_HEADER = (
-    "pair_id\tcolumn\tcanonical_v\tengine\tconf\ttext\tlemma\tPOS\tscore\trepairs\tparser_trace\taccepted\treason"
+    "pair_id\tcolumn\tsource_y\tengine\tconf\ttext\tlemma\tPOS\tscore\trepairs\tparser_trace\taccepted\treason"
 )
 
 
@@ -6415,7 +6427,7 @@ def _engines_long_text(report_columns: list[dict[str, Any]]) -> str:
                 if side.get("y") is None:
                     continue
                 values = [
-                    pair_id, column, side.get("y"), engine, side.get("confidence"),
+                    pair_id, column, side.get("source_y"), engine, side.get("confidence"),
                     side.get("text", ""), side.get("lemma", ""), side.get("POS", ""),
                     side.get("score", ""), side.get("repairs", []), side.get("parser_trace", []),
                     "1" if side.get("accepted") else "0", side.get("reason", ""),
@@ -6501,9 +6513,9 @@ def _expand_original_y_fallback_candidates(review_candidates: list[dict[str, Any
             coarse_x = int(item.get("coarse_source_x", refined_x))
             anchor_y = int(item.get("anchor_source_y", coarse_y))
             anchor_x = int(item.get("anchor_source_x", coarse_x))
-            refined_v = int(item.get("canonical_v", refined_y))
-            coarse_v = int(item.get("coarse_canonical_v", refined_v))
-            anchor_v = int(item.get("anchor_canonical_v", coarse_v))
+            refined_v = int(item.get("_axis_v", refined_y))
+            coarse_v = int(item.get("_coarse_axis_v", refined_v))
+            anchor_v = int(item.get("_anchor_axis_v", coarse_v))
         except (TypeError, ValueError):
             continue
         if refined_y <= 0 or anchor_y <= 0 or anchor_y == refined_y:
@@ -6522,14 +6534,14 @@ def _expand_original_y_fallback_candidates(review_candidates: list[dict[str, Any
         fallback["candidate_id"] = f"{base_id}-rawy"
         fallback["source_x"] = anchor_x
         fallback["source_y"] = anchor_y
-        fallback["canonical_v"] = anchor_v
+        fallback["_axis_v"] = anchor_v
         fallback["refined_source_y"] = refined_y
         fallback["coarse_source_x"] = coarse_x
         fallback["coarse_source_y"] = coarse_y
-        fallback["coarse_canonical_v"] = coarse_v
+        fallback["_coarse_axis_v"] = coarse_v
         fallback["anchor_source_x"] = anchor_x
         fallback["anchor_source_y"] = anchor_y
-        fallback["anchor_canonical_v"] = anchor_v
+        fallback["_anchor_axis_v"] = anchor_v
         fallback["position_group_id"] = group_id
         fallback["position_variant"] = "original"
         fallback["selected"] = False
@@ -6641,8 +6653,8 @@ def _review_candidates_same_cjk_glyph(left: dict[str, Any], right: dict[str, Any
     rh = _review_candidate_box_height(right)
     max_h = max(lh, rh, 1)
     dy = abs(
-        int(left.get("canonical_v", left.get("source_y", 0)))
-        - int(right.get("canonical_v", right.get("source_y", 0)))
+        int(left.get("_axis_v", left.get("source_y", 0)))
+        - int(right.get("_axis_v", right.get("source_y", 0)))
     )
 
     box_same_row = False
@@ -6720,8 +6732,8 @@ def _review_candidates_same_cjk_compound(left: dict[str, Any], right: dict[str, 
     rh = _review_candidate_box_height(right)
     max_h = max(lh, rh, 1)
     dy = abs(
-        int(left.get("canonical_v", left.get("source_y", 0)))
-        - int(right.get("canonical_v", right.get("source_y", 0)))
+        int(left.get("_axis_v", left.get("source_y", 0)))
+        - int(right.get("_axis_v", right.get("source_y", 0)))
     )
 
     if not (isinstance(lbox, (list, tuple)) and len(lbox) == 4 and isinstance(rbox, (list, tuple)) and len(rbox) == 4):
@@ -6802,8 +6814,8 @@ def _single_cjk_duplicate_pair(left: dict[str, Any], right: dict[str, Any]) -> b
         return False
     normal_line = max(_candidate_line_height(left), _candidate_line_height(right), 1.0)
     dy = abs(
-        int(left.get("canonical_v", left.get("source_y", 0)))
-        - int(right.get("canonical_v", right.get("source_y", 0)))
+        int(left.get("_axis_v", left.get("source_y", 0)))
+        - int(right.get("_axis_v", right.get("source_y", 0)))
     )
     tolerance = max(4, round(normal_line * _SINGLE_CJK_LINE_DEDUP_RATIO))
     return dy <= tolerance and _boxes_same_large_cjk_region(left, right)
@@ -6850,21 +6862,21 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
         left: dict[str, Any], right: dict[str, Any], *, single_cjk_special: bool = False,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         keeper, loser = (left, right) if _review_candidate_priority(left) >= _review_candidate_priority(right) else (right, left)
-        # Copy one complete canonical+source point; never mix individual
+        # Copy one complete temporary-axis+source point; never mix individual
         # coordinates after rotation. Ordinary duplicates keep the lower/closer
         # marker, but oversized single-CJK duplicates keep the upper entry-start
         # boundary so a lower visual confirmation cannot move the separator into
         # pronunciation/radical metadata inside the same entry.
-        left_v = int(left.get("canonical_v", left.get("source_y", 0)))
-        right_v = int(right.get("canonical_v", right.get("source_y", 0)))
+        left_v = int(left.get("_axis_v", left.get("source_y", 0)))
+        right_v = int(right.get("_axis_v", right.get("source_y", 0)))
         if single_cjk_special:
             position_row = left if left_v <= right_v else right
         else:
             position_row = left if left_v >= right_v else right
         for key in (
-            "canonical_u", "canonical_v", "source_x", "source_y",
-            "refined_source_y", "coarse_canonical_v", "coarse_source_x",
-            "coarse_source_y", "anchor_canonical_v", "anchor_source_x",
+            "_axis_u", "_axis_v", "source_x", "source_y",
+            "refined_source_y", "_coarse_axis_v", "coarse_source_x",
+            "coarse_source_y", "_anchor_axis_v", "anchor_source_x",
             "anchor_source_y",
         ):
             if position_row.get(key) is not None:
@@ -6892,15 +6904,15 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
     for rows in by_column.values():
         rows.sort(
             key=lambda item: int(
-                item.get("canonical_v", item.get("source_y", 0))
+                item.get("_axis_v", item.get("source_y", 0))
             )
         )
         i = 0
         while i < len(rows) - 1:
             left, right = rows[i], rows[i + 1]
             dy = abs(
-        int(left.get("canonical_v", left.get("source_y", 0)))
-        - int(right.get("canonical_v", right.get("source_y", 0)))
+        int(left.get("_axis_v", left.get("source_y", 0)))
+        - int(right.get("_axis_v", right.get("source_y", 0)))
     )
             single_cjk_special = _single_cjk_duplicate_pair(left, right)
             tolerance = _threshold(left, right)
@@ -6914,7 +6926,7 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
             rows.remove(loser)
             rows.sort(
             key=lambda item: int(
-                item.get("canonical_v", item.get("source_y", 0))
+                item.get("_axis_v", item.get("source_y", 0))
             )
         )
             i = max(0, i - 1)
@@ -6926,8 +6938,8 @@ def _entries_from_review_candidates(review_candidates: list[dict[str, Any]]) -> 
     selected = [item for item in review_candidates if item.get("selected")]
     selected.sort(key=lambda item: (
         int(item.get("column", 0)),
-        int(item.get("canonical_v", item.get("source_y", 0))),
-        int(item.get("canonical_u", item.get("source_x", 0))),
+        int(item.get("_axis_v", item.get("source_y", 0))),
+        int(item.get("_axis_u", item.get("source_x", 0))),
     ))
     for item in selected:
         entries.append(Entry(
@@ -7000,13 +7012,9 @@ def detect_paddle_headwords(
     Paddle candidate sequence when the secondary engine is unavailable.
     """
     signature = _cache_signature(image, geometry, settings)
-    canonical_width = geometry.transform.canonical_size(image.size)[0]
-    reference_to_canonical_scale = (
-        canonical_width / REFERENCE_CANONICAL_WIDTH
-    )
-    canonical_character_height = stored_geometry_to_canonical(
-        settings.character_height, canonical_width, settings,
-    )
+    runtime_width = geometry.transform.canonical_size(image.size)[0]
+    pixel_scale = 1.0
+    canonical_character_height = int(settings.character_height)
     user_rules = load_headword_filter_rules(filter_rules_path)
     profile_path = filter_rules_path.parent / PROFILE_FILENAME if filter_rules_path else None
     profile = load_dictionary_profile(
@@ -7075,7 +7083,7 @@ def detect_paddle_headwords(
         paddle_entries, diagnostics = filter_headword_records(
             records, analysis_band, source_top, canonical_u, settings,
             separator_band=analysis_separator_band, user_rules=user_rules, engine_name="paddle", profile=profile,
-            reference_to_canonical_scale=reference_to_canonical_scale,
+            pixel_scale=pixel_scale,
         )
         _attach_source_candidate_coordinates(diagnostics, geometry, col)
         for entry in paddle_entries:
@@ -7117,7 +7125,7 @@ def detect_paddle_headwords(
                         candidate_records, analysis_band, source_top, canonical_u, settings,
                         separator_band=analysis_separator_band, user_rules=user_rules,
                         engine_name="tesseract", profile=profile,
-                        reference_to_canonical_scale=reference_to_canonical_scale,
+                        pixel_scale=pixel_scale,
                     )
                     _attach_source_candidate_coordinates(
                         candidate_diagnostics, geometry, col,
@@ -7215,9 +7223,8 @@ def detect_paddle_headwords(
 
         report_columns.append({
             "column": col,
-            "canonical_column_u": int(canonical_u),
-            "canonical_top_v": int(source_top),
-            "column_coordinate_space": "canonical_full_resolution_pixels",
+            "_column_axis_u": int(canonical_u),
+            "_top_axis_v": int(source_top),
             "band_size": list(band.size),
             "ocr_records": [asdict(record) for record in records],
             "paddle_full_text": paddle_full_text,
@@ -7251,7 +7258,7 @@ def detect_paddle_headwords(
     review_candidates: list[dict[str, Any]] = []
     for col in report_columns:
         col_index = int(col.get("column", 0))
-        canonical_u = int(col.get("canonical_column_u", 0))
+        canonical_u = int(col.get("_column_axis_u", 0))
         band_width = max(
             1,
             int((col.get("band_size") or [settings.paddle_band_width])[0]),
@@ -7362,13 +7369,7 @@ def detect_paddle_headwords(
         payload = {
             "format": "picture-capture-headwords-v3",
             "signature": signature,
-            "coordinate_spaces": {
-                "final_entries": "source_image_pixels",
-                "candidate_source": "source_image_pixels",
-                "candidate_canonical": "canonical_full_resolution_pixels",
-                "ocr_record_box": "ocr_band_local_pixels",
-                "layout_transform": geometry.transform.kind,
-            },
+            "coordinate_space": "source_image_pixels",
             "filter_rules_path": str(filter_rules_path) if filter_rules_path else "",
             "filter_rule_count": len(user_rules),
             "dictionary_profile": {
@@ -7399,6 +7400,7 @@ def detect_paddle_headwords(
             "final_entries": [asdict(entry) for entry in all_entries],
             "columns": report_columns,
         }
+        payload = _source_only_persistence(payload)
         _atomic_write_json(cache_path, payload)
         _atomic_write_text(
             cache_path.with_name(f"{cache_path.stem}_ocr_diagnostics.txt"),

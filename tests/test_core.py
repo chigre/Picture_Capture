@@ -125,7 +125,6 @@ class FormatTests(unittest.TestCase):
         estimate = detect_layout_parameters(
             image,
             AppSettings(
-                parameter_display_width=400,
                 columns=2,
                 layout_columns_policy="fixed",
                 layout_transform="mirror_x",
@@ -256,7 +255,6 @@ class FormatTests(unittest.TestCase):
                     draw.rectangle((x, y, min(x + width, right), y + 14), fill="black")
                     x += width + 12
         settings = AppSettings()
-        settings.parameter_display_width = 1200
 
         estimate = _projection_layout_estimate(image, settings)
 
@@ -275,9 +273,6 @@ class FormatTests(unittest.TestCase):
                     draw.rectangle((x, y, min(x + 20, right), y + 12), fill="black")
         draw.rectangle((497, 100, 502, 1099), fill="black")
         settings = AppSettings(
-            geometry_coordinate_version=1,
-            geometry_coordinate_space="legacy_display_pixels",
-            parameter_display_width=1000,
             columns=2,
             layout_columns_policy="fixed",
             layout_column_separator_mode="present",
@@ -368,8 +363,6 @@ class FormatTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / "settings.json"
             path.write_text(json.dumps({
-                "geometry_coordinate_version": 2,
-                "geometry_coordinate_space": "canonical_reference_page_pixels",
                 "paddle_use_paddleocr": False,
                 "paddle_compare_tesseract": True,
                 "paddle_dual_ocr_arbitration": True,
@@ -390,17 +383,6 @@ class FormatTests(unittest.TestCase):
             self.assertTrue(reopened.paddle_compare_tesseract)
             self.assertTrue(reopened.paddle_dual_ocr_arbitration)
             self.assertTrue(reopened.page_list_show_fill_status)
-
-    def test_legacy_settings_import(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            path = Path(raw) / "_Mysettings.ini"
-            fields = ["root", "page", "3", "44", "500", "60", "400", "31", "28", "4", "1.2", "6", "2", "4", "320", "88", "7", "6", "1"]
-            path.write_text("@".join(fields), encoding="utf-8")
-            settings = AppSettings.from_legacy(path)
-            self.assertEqual(settings.columns, 3)
-            self.assertEqual(settings.gutter, 44)
-            self.assertEqual(settings.column_width, 500)
-            self.assertEqual(settings.ocr_language, "spa")
 
     def test_v14_paddle_defaults_migrate_without_touching_custom_values(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -529,49 +511,6 @@ class ProcessingTests(unittest.TestCase):
             self.assertEqual(len(geometry.column_starts), 2)
             self.assertEqual(len(entries), 6)
             self.assertTrue(all(entry.word == "" for entry in entries))
-
-    def test_geometry_parameters_use_displayed_image_pixels(self) -> None:
-        image = Image.new("RGB", (2000, 1200), "white")
-        settings = AppSettings(
-            geometry_coordinate_version=1,
-            geometry_coordinate_space="legacy_display_pixels",
-            parameter_display_width=1000,
-            columns=2,
-            manual_x=50,
-            column_width=400,
-            gutter=50,
-            start_y=25,
-            character_height=20,
-            row_padding=3,
-            follow_column_deformation=False,
-        )
-        geometry = derive_geometry(image, settings)
-        self.assertEqual(geometry.column_starts, [100, 1000])
-        self.assertEqual(geometry.top, 50)
-        box = line_box(Entry("word", 100, 200), geometry, image, settings)
-        self.assertEqual(box[1], 194)
-        self.assertEqual(box[3] - box[1], 52)
-
-    def test_detection_converts_display_parameters_to_source_pixels(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            small = self.make_page(Path(raw) / "small.png")
-            image = small.resize((2400, 1800), Image.Resampling.NEAREST)
-            settings = AppSettings(
-                geometry_coordinate_version=1,
-                geometry_coordinate_space="legacy_display_pixels",
-                parameter_display_width=1200,
-                columns=2,
-                manual_x=30,
-                column_width=550,
-                gutter=50,
-                start_y=40,
-                detection_method="left_edge",
-                follow_column_deformation=False,
-            )
-            entries, geometry = detect_entries(image, settings)
-            self.assertEqual(geometry.column_starts, [60, 1260])
-            self.assertEqual(len(entries), 6)
-            self.assertTrue(all(entry.y >= 190 for entry in entries))
 
     def test_deformed_column_tracking(self) -> None:
         image = Image.new("RGB", (800, 700), "white")
@@ -721,7 +660,7 @@ class ProcessingTests(unittest.TestCase):
 
     def test_active_right_fragment_absorption_recovers_pos(self) -> None:
         settings = AppSettings(
-            ocr_language="spa", parameter_display_width=360, paddle_band_width=360,
+            ocr_language="spa", paddle_band_width=360,
             paddle_auto_header_rule=False, paddle_rec_score_threshold=0.20,
         )
         band = Image.new("RGB", (360, 120), "white")
@@ -767,7 +706,7 @@ class ProcessingTests(unittest.TestCase):
         gray[58:76, 20:285] = 35
         refined, details = refine_separator_y(
             gray, coarse_y=50, line_height=24, settings=settings,
-            reference_to_canonical_scale=1.0,
+            pixel_scale=1.0,
         )
         self.assertGreater(refined, 50)
         self.assertLess(refined, 58)
@@ -805,7 +744,7 @@ class ProcessingTests(unittest.TestCase):
 
     def test_false_continuation_fragments_are_rejected_as_headwords(self) -> None:
         settings = AppSettings(
-            ocr_language="spa", parameter_display_width=320, paddle_band_width=320,
+            ocr_language="spa", paddle_band_width=320,
             paddle_min_candidate_score=5.0, paddle_auto_header_rule=False,
         )
         band = Image.new("RGB", (320, 180), "white")
@@ -826,7 +765,7 @@ class ProcessingTests(unittest.TestCase):
 
     def test_first_content_headword_uses_whitespace_before_first_ink(self) -> None:
         settings = AppSettings(
-            ocr_language="spa", parameter_display_width=300, paddle_band_width=300,
+            ocr_language="spa", paddle_band_width=300,
             row_padding=3, paddle_auto_header_rule=False, paddle_refine_separator_y=True,
             paddle_separator_search_ratio=0.30, paddle_separator_band_radius=2,
         )
@@ -849,7 +788,7 @@ class ProcessingTests(unittest.TestCase):
 
     def test_page53_gender_variants_and_bound_morphemes_pass_structure_rules(self) -> None:
         settings = AppSettings(
-            ocr_language="spa", parameter_display_width=600, paddle_band_width=600,
+            ocr_language="spa", paddle_band_width=600,
             paddle_auto_header_rule=False, paddle_min_candidate_score=5.0,
         )
         band = Image.new("RGB", (600, 360), "white")
@@ -880,7 +819,7 @@ class ProcessingTests(unittest.TestCase):
 
     def test_paddle_running_header_rule_is_ignored(self) -> None:
         settings = AppSettings(
-            ocr_language="spa", parameter_display_width=300, paddle_band_width=300,
+            ocr_language="spa", paddle_band_width=300,
             paddle_header_search_height=80, paddle_header_rule_ink_ratio=0.5,
             paddle_header_rule_margin=4, paddle_min_candidate_score=5.0,
         )
@@ -1018,7 +957,7 @@ class ProcessingTests(unittest.TestCase):
     def test_marker_glyph_noise_is_not_accepted_as_short_lemma(self) -> None:
         settings = AppSettings(
             ocr_language="spa", paddle_auto_header_rule=False,
-            parameter_display_width=300, paddle_band_width=300,
+            paddle_band_width=300,
             paddle_refine_separator_y=False,
         )
         band = Image.new("RGB", (300, 100), "white")
@@ -1094,16 +1033,16 @@ class ProcessingTests(unittest.TestCase):
         self.assertEqual(comp_counts, {27})
         self.assertIn("\tsame\tsame\tagree", comparison)
 
-    def test_coordinate_pairing_uses_canonical_v_not_source_y(self) -> None:
-        def cand(canonical_v, source_y, lemma):
+    def test_coordinate_pairing_uses_private_reading_axis_without_persisting_it(self) -> None:
+        def cand(axis_v, source_y, lemma):
             return {
-                "canonical_v": canonical_v,
+                "_axis_v": axis_v,
                 "source_x": 20,
                 "source_y": source_y,
                 "accepted": True,
                 "score": 8.0,
                 "confidence": 0.95,
-                "box": [5, canonical_v, 100, canonical_v + 20],
+                "box": [5, axis_v, 100, axis_v + 20],
                 "normalized_headword": lemma,
                 "raw_headword": lemma,
                 "corrected_headword": lemma,
@@ -1116,8 +1055,8 @@ class ProcessingTests(unittest.TestCase):
                 "bug_types": [],
             }
 
-        # Same reading-axis row but very different physical source Y. This is
-        # normal after a 90-degree transform; source Y must not drive pairing.
+        # Temporary reading-axis values may be used inside one OCR call, but
+        # the page coordinates carried by the candidate remain source X/Y.
         pairs = _pair_ocr_candidates(
             [cand(100, 420, "alpha")],
             [cand(104, 30, "alfa")],
@@ -1151,8 +1090,8 @@ class ProcessingTests(unittest.TestCase):
         _apply_pair_engine_position(item, pair, "paddle", 0, 100, geometry)
         expected = transform.canonical_to_source_point(100, 200, source_size)
         self.assertEqual((item["source_x"], item["source_y"]), expected)
-        self.assertEqual(item["canonical_v"], 200)
-        self.assertNotEqual(item["source_y"], item["canonical_v"])
+        self.assertEqual(item["_axis_v"], 200)
+        self.assertNotIn("canonical_v", item)
 
     def test_v159_legacy_comma_swallowing_regex_is_hardened(self) -> None:
         # Some existing projects carried a legacy/custom regex that included
@@ -1223,7 +1162,7 @@ class ProcessingTests(unittest.TestCase):
 
     def test_v159_wrapped_pos_on_next_printed_line_is_attached_logically(self) -> None:
         settings = AppSettings(
-            ocr_language="spa", parameter_display_width=600, paddle_band_width=600,
+            ocr_language="spa", paddle_band_width=600,
             paddle_auto_header_rule=False, paddle_refine_separator_y=False,
             paddle_rec_score_threshold=0.20, paddle_left_tolerance=80,
         )
@@ -1738,17 +1677,14 @@ def test_review_crop_settings_ignores_stale_main_zoom_reference():
 
     image = Image.new("RGB", (3000, 4000), "white")
     settings = AppSettings()
-    settings.parameter_display_width = 450  # stale/small reference: would make crop too tall
     settings.character_height = 26
     settings.row_padding = 3
     local = _review_crop_settings(image, settings, 1000)
-    assert local.parameter_display_width == 450
     geometry = derive_geometry(image, local)
     box = line_box(Entry(word="test", x=100, y=500), geometry, image, local)
     # Modern review crops use the persisted full-resolution canonical geometry
     # directly; stale historical display width cannot enlarge the crop.
     assert box[3] - box[1] == 32
-    assert settings.parameter_display_width == 450
 
 
 def test_load_page_resets_scroll_position_without_resetting_zoom():
@@ -2420,14 +2356,13 @@ def test_v281_candidate_band_is_capped_to_current_column_width():
         ],
     )
     settings = AppSettings()
-    settings.parameter_display_width = 900
     settings.paddle_band_width = 600
     settings.paddle_band_width_ratio = 100
     settings.paddle_band_left_margin = 12
 
     band, _top, left_margin = unwrap_column_band(image, geometry, 0, settings)
-    assert left_margin == 8
-    assert band.width == 278
+    assert left_margin == 12
+    assert band.width == 282
 
 
 def test_v281_cjk_visual_projection_recovers_oversized_single_character_row():
@@ -2653,7 +2588,7 @@ def test_v282_large_cjk_duplicate_keeps_entry_start_not_internal_metadata_line()
     rows = [
         {
             "candidate_id": "upper", "column": 1, "source_y": 100,
-            "canonical_v": 100, "box": [8, 112, 70, 166],
+            "box": [8, 112, 70, 166],
             "selected": True, "word": "播", "score": 6.8, "confidence": 0.94,
             "line_height_reference": 70.0, "line_dedup_tolerance": 8,
             "issue_types": [], "decision_reason": "ocr_headword",
@@ -2661,7 +2596,7 @@ def test_v282_large_cjk_duplicate_keeps_entry_start_not_internal_metadata_line()
         },
         {
             "candidate_id": "lower", "column": 1, "source_y": 134,
-            "canonical_v": 134, "box": [8, 118, 72, 168],
+            "box": [8, 118, 72, 168],
             "selected": True, "word": "播", "score": 8.0, "confidence": 0.98,
             "line_height_reference": 70.0, "line_dedup_tolerance": 8,
             "issue_types": [], "decision_reason": "visual_projection",
@@ -2676,7 +2611,7 @@ def test_v282_large_cjk_duplicate_keeps_entry_start_not_internal_metadata_line()
     # Even though the lower visual candidate has the higher score, it is an
     # internal duplicate. Preserve the earlier separator above the headword.
     assert selected[0]["source_y"] == 100
-    assert selected[0]["canonical_v"] == 100
+    assert "canonical_v" not in selected[0]
 
 
 def test_v288_selected_bracketed_cjk_duplicates_are_merged():
@@ -3211,12 +3146,12 @@ def test_v2817_separator_safety_is_configurable():
     settings.paddle_separator_safety_px = 2
     y2, d2 = refine_separator_y_adaptive(
         gray, coarse_y=70, reference_line_height=20, settings=settings,
-        reference_to_canonical_scale=1.0, lower_bound=0, content_top=70,
+        pixel_scale=1.0, lower_bound=0, content_top=70,
     )
     settings.paddle_separator_safety_px = 6
     y6, d6 = refine_separator_y_adaptive(
         gray, coarse_y=70, reference_line_height=20, settings=settings,
-        reference_to_canonical_scale=1.0, lower_bound=0, content_top=70,
+        pixel_scale=1.0, lower_bound=0, content_top=70,
     )
 
     assert d2["configured_safety_pixels"] == 2
@@ -3226,7 +3161,7 @@ def test_v2817_separator_safety_is_configurable():
     assert y6 <= y2 - 4
 
 
-def test_v2817_separator_safety_scales_with_page_geometry():
+def test_v2817_separator_safety_is_literal_source_pixels():
     import numpy as np
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import refine_separator_y_adaptive
@@ -3239,10 +3174,10 @@ def test_v2817_separator_safety_scales_with_page_geometry():
     settings.paddle_separator_safety_px = 3
     _, diag = refine_separator_y_adaptive(
         gray, coarse_y=90, reference_line_height=24, settings=settings,
-        reference_to_canonical_scale=2.0, lower_bound=0, content_top=90,
+        pixel_scale=1.0, lower_bound=0, content_top=90,
     )
     assert diag["configured_safety_pixels"] == 3
-    assert diag["safety_pixels"] == 6
+    assert diag["safety_pixels"] == 3
 
 
 def test_v2818_refinement_preserves_original_y_as_checkbox_fallback():
@@ -3364,7 +3299,7 @@ def test_v2819_adaptive_refine_can_relocate_box_top_from_previous_line():
     gray[39:61, 8:70] = 0
     refined, meta = refine_separator_y_adaptive(
         gray, coarse_y=24, reference_line_height=24, settings=settings,
-        reference_to_canonical_scale=1.0, lower_bound=0, content_top=24,
+        pixel_scale=1.0, lower_bound=0, content_top=24,
     )
     assert meta["relocated_from_prior_ink"] is True
     assert 38 <= meta["current_ink_onset"] <= 41
@@ -3399,7 +3334,6 @@ def test_v290_image_boundary_and_ocr_headword_are_mutually_matched():
     settings.ocr_language = "chi_tra"
     settings.paddle_auto_header_rule = False
     settings.paddle_band_width = 220
-    settings.parameter_display_width = 220
     settings.paddle_band_left_margin = 0
     settings.paddle_left_tolerance = 20
     settings.paddle_rec_score_threshold = 0.1
@@ -3450,7 +3384,7 @@ def test_v291_training_export_keeps_images_labels_and_ocr_provenance(tmp_path):
     root.mkdir()
     page = root / "0001.png"
     Image.new("RGB", (600, 900), "white").save(page)
-    settings = AppSettings(columns=2, manual_x=20, column_width=250, gutter=40, parameter_display_width=600)
+    settings = AppSettings(columns=2, manual_x=20, column_width=250, gutter=40)
     settings.to_json(root / "picture_capture_settings.json")
     (root / "wordslist.txt").write_text("alpha\nbeta\n", encoding="utf-8")
     entries = [Entry(word="alpha", x=20, y=120), Entry(word="beta", x=310, y=300)]
@@ -3536,7 +3470,6 @@ def test_v292_shared_rgb_source_preserves_unwrapped_band_pixels_exactly():
         ],
     )
     settings = AppSettings()
-    settings.parameter_display_width = 320
     settings.paddle_band_width = 110
     settings.paddle_band_width_ratio = 83
     settings.paddle_band_left_margin = 9
@@ -3573,7 +3506,6 @@ def test_v292_shared_rgb_source_cannot_be_reused_across_pages():
         column_paths=[ColumnPath([(0, 10), (160, 10)])],
     )
     settings = AppSettings()
-    settings.parameter_display_width = 200
     wrong_page = np.zeros((159, 200, 3), dtype=np.uint8)
     with pytest.raises(ValueError, match="禁止跨页复用"):
         unwrap_column_band(image, geometry, 0, settings, source_rgb=wrong_page)
@@ -3815,10 +3747,6 @@ def test_v294_display_geometry_cache_invalidates_when_layout_parameters_change()
     key3 = PictureCaptureApp._display_geometry_key(app)
     assert key3 != key1
     app.settings.column_track_radius -= 2
-    app.settings.geometry_reference_width += 100
-    key4 = PictureCaptureApp._display_geometry_key(app)
-    assert key4 != key1
-    app.settings.geometry_reference_width -= 100
     app.settings.profile_side_percent_a += 1.0
     key5 = PictureCaptureApp._display_geometry_key(app)
     assert key5 != key1
@@ -3871,7 +3799,7 @@ def test_v295_illustration_crop_bounds_clip_to_header_without_mutating_polygon(t
     Image.new("RGB", (200, 300), "white").save(page)
     region = PolygonRegion("pic", [(20, 30), (120, 30), (120, 160), (20, 160)])
     original = list(region.points)
-    settings = AppSettings(parameter_display_width=200)
+    settings = AppSettings()
     top, bottom, margin = illustration_crop_bounds(
         Image.new("RGB", (200, 300), "white"), settings, top_y=80, bottom_y=250, margin=5
     )
@@ -4441,8 +4369,7 @@ def test_v2101_auto_illustration_detection_writes_ppp_and_preserves_manual(tmp_p
     write_ppp(page.with_suffix(".ppp"), [manual], page.stem)
     settings = AppSettings(
         columns=2, gutter=20, column_width=450, start_y=50, bottom_y=1350,
-        parameter_display_width=1000,
-    )
+        )
     first = detect_illustrations_to_ppp(page, settings)
     saved = read_ppp(page.with_suffix(".ppp"))
     assert first["manual"] == 1
@@ -4559,7 +4486,7 @@ def test_v2103_review_wordslist_uses_virtual_window_and_cached_membership():
 def test_v2110_crop_plan_links_ppp_by_headword_and_classifies_geometry():
     image = Image.new("RGB", (400, 600), "white")
     settings = AppSettings(
-        parameter_display_width=400, columns=1, column_width=300, gutter=20,
+        columns=1, column_width=300, gutter=20,
         start_y=20, bottom_y=580, manual_x=20, follow_column_deformation=False,
     )
     entries = [Entry("alpha", 20, 100), Entry("beta", 20, 300)]
@@ -4583,7 +4510,7 @@ def test_v2110_illustration_split_skips_embedded_and_names_external_like_headwor
     page = tmp_path / "0001.png"
     Image.new("RGB", (400, 600), "white").save(page)
     settings = AppSettings(
-        parameter_display_width=400, columns=1, column_width=300, gutter=20,
+        columns=1, column_width=300, gutter=20,
         start_y=20, bottom_y=580, manual_x=20, follow_column_deformation=False,
     )
     entries = [Entry("alpha", 20, 100), Entry("beta", 20, 300)]
@@ -4608,7 +4535,7 @@ def test_v2110_entry_crop_whitens_standalone_ppp_but_preserves_linked_ppp(tmp_pa
     draw.rectangle((200, 430, 260, 480), fill="black")  # standalone PPP in beta crop
     image.save(page)
     settings = AppSettings(
-        parameter_display_width=400, columns=1, column_width=300, gutter=20,
+        columns=1, column_width=300, gutter=20,
         start_y=20, bottom_y=580, manual_x=20, follow_column_deformation=False,
     )
     entries = [Entry("alpha", 20, 100), Entry("beta", 20, 300)]
@@ -4910,7 +4837,6 @@ def test_crop_preview_uses_export_filename_and_centered_entry_typography():
 def test_v2111_entry_crop_width_uses_gutter_midlines_not_raw_column_edge():
     image = Image.new("RGB", (1800, 1200), "white")
     settings = AppSettings(
-        parameter_display_width=1800,
         columns=3,
         manual_x=30,
         column_width=540,
@@ -4933,7 +4859,6 @@ def test_v2111_entry_crop_width_uses_gutter_midlines_not_raw_column_edge():
 def test_v2111_entry_crop_extra_horizontal_padding_is_applied():
     image = Image.new("RGB", (1200, 800), "white")
     settings = AppSettings(
-        parameter_display_width=1200,
         columns=2,
         manual_x=30,
         column_width=540,
@@ -5025,7 +4950,6 @@ def test_v2115_nominal_geometry_matches_full_geometry_column_intervals():
     settings.manual_x = 28
     settings.gutter = 34
     settings.column_width = 620
-    settings.parameter_display_width = 1400
     settings.start_y = 75
     image = Image.new("RGB", (2400, 3400), "white")
     full = derive_geometry(image, settings)
@@ -5094,7 +5018,7 @@ def test_v2118_crop_settings_exposes_integrate_illustrations_toggle():
 def test_v2118_crop_plan_can_ignore_ppp_for_entry_geometry_but_keep_relations():
     image = Image.new("RGB", (400, 600), "white")
     settings = AppSettings(
-        parameter_display_width=400, columns=1, column_width=300, gutter=20,
+        columns=1, column_width=300, gutter=20,
         start_y=20, bottom_y=580, manual_x=20, follow_column_deformation=False,
     )
     entries = [Entry("alpha", 20, 100), Entry("beta", 20, 300)]
@@ -5123,7 +5047,7 @@ def test_v2118_entry_crop_without_illustration_integration_keeps_ppp_pixels(tmp_
     draw.rectangle((200, 430, 260, 480), fill="black")
     image.save(page)
     settings = AppSettings(
-        parameter_display_width=400, columns=1, column_width=300, gutter=20,
+        columns=1, column_width=300, gutter=20,
         start_y=20, bottom_y=580, manual_x=20, follow_column_deformation=False,
     )
     entries = [Entry("alpha", 20, 100), Entry("beta", 20, 300)]
@@ -5150,7 +5074,7 @@ def test_v2118_illustration_export_still_deduplicates_contained_ppp_when_integra
     page = tmp_path / "0001.png"
     Image.new("RGB", (400, 600), "white").save(page)
     settings = AppSettings(
-        parameter_display_width=400, columns=1, column_width=300, gutter=20,
+        columns=1, column_width=300, gutter=20,
         start_y=20, bottom_y=580, manual_x=20, follow_column_deformation=False,
     )
     entries = [Entry("alpha", 20, 100)]
@@ -5168,7 +5092,7 @@ def test_v2118_partial_ppp_exports_standalone_when_entry_integration_off(tmp_pat
     page = tmp_path / "0001.png"
     Image.new("RGB", (400, 600), "white").save(page)
     settings = AppSettings(
-        parameter_display_width=400, columns=1, column_width=300, gutter=20,
+        columns=1, column_width=300, gutter=20,
         start_y=20, bottom_y=580, manual_x=20, follow_column_deformation=False,
     )
     entries = [Entry("beta", 20, 300)]
@@ -5206,24 +5130,22 @@ def test_v2119_crop_controls_live_only_in_crop_settings_dialog():
     assert '完整切图设置（词条切图 / 插图切图共用）' in crop_class
 
 
-def test_crop_settings_v6_declares_reference_coordinate_space():
+def test_crop_settings_v7_declares_source_coordinate_space():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     crop_class = text.split("class CropSettingsDialog", 1)[1].split("class PictureCaptureApp", 1)[0]
     assert '"version": CROP_SETTINGS_VERSION' in crop_class
-    assert '"coordinate_space": CANONICAL_REFERENCE_SPACE' in crop_class
-    assert '"geometry_reference_width"' in crop_class
-    assert '"general_top_v"' in crop_class
-    assert '"general_bottom_v"' in crop_class
-    assert '"entry_left_padding_u"' in crop_class
-    assert '"entry_right_padding_u"' in crop_class
-    assert "参考页规范像素" in crop_class
-    # Coordinate meaning is carried by the unit column, not repeated in labels.
+    assert '"coordinate_space": SOURCE_COORDINATE_SPACE' in crop_class
+    assert '"general_top_y"' in crop_class
+    assert '"general_bottom_y"' in crop_class
+    assert '"entry_left_padding_x"' in crop_class
+    assert '"entry_right_padding_x"' in crop_class
+    assert "原图像素" in crop_class
     settings_class = text.split("class SettingsDialog", 1)[1].split("class CropSettingsDialog", 1)[0]
-    assert '"start_y": "正文起始 V"' in settings_class
-    assert '"start_y": "正文起始 V（参考页规范坐标）"' not in settings_class
-    assert '"paddle_left_tolerance": "参考页规范px"' in settings_class
-    assert '"paddle_separator_safety_px": "参考页规范px"' in settings_class
+    assert '"start_y": "正文起始 Y"' in settings_class
+    assert '"manual_x": "第一栏左缘 X"' in settings_class
+    assert '"paddle_left_tolerance": "原图px"' in settings_class
+    assert '"paddle_separator_safety_px": "原图px"' in settings_class
 
 
 def test_v21110_backup_pdic_is_background_and_streaming():
@@ -5479,7 +5401,6 @@ def test_review_crop_context_keeps_true_horizontal_columns():
 
     image = Image.new("RGB", (3000, 4000), "white")
     settings = AppSettings(
-        parameter_display_width=450,
         columns=3,
         manual_x=15,
         column_width=130,
@@ -5493,7 +5414,6 @@ def test_review_crop_context_keeps_true_horizontal_columns():
     true_geometry = derive_geometry(image, settings)
     assert geometry.column_starts == true_geometry.column_starts
     assert geometry.column_widths == true_geometry.column_widths
-    assert review_settings.parameter_display_width == 450
 
     # If review_display_width were incorrectly reused for horizontal geometry,
     # later columns would shift progressively.  The review crop must stay close
@@ -5503,8 +5423,9 @@ def test_review_crop_context_keeps_true_horizontal_columns():
         for i, x in enumerate(geometry.column_starts)
     ]
     crop_lefts = [box[0] for box in boxes]
-    assert crop_lefts[1] - crop_lefts[0] > 800
-    assert crop_lefts[2] - crop_lefts[1] > 800
+    expected_step = settings.column_width + settings.gutter
+    assert crop_lefts[1] - crop_lefts[0] == expected_step
+    assert crop_lefts[2] - crop_lefts[1] == expected_step
 
 
 def test_review_zoom_defaults_to_auto_99_percent_left_pane_fit():
@@ -5985,7 +5906,7 @@ def test_v21120_review_single_cjk_crop_expands_but_normal_word_does_not():
 
     image = Image.new("RGB", (1000, 1400), "white")
     settings = AppSettings(
-        parameter_display_width=1000, columns=1, column_width=600,
+        columns=1, column_width=600,
         character_height=40, row_padding=4, ocr_language="chi_tra",
     )
     geometry = Geometry([100], [600], 50, 1300, [ColumnPath([(50, 100), (1300, 100)])])
@@ -6006,7 +5927,7 @@ def test_review_regular_crop_uses_half_spacing_top_and_full_spacing_height():
     from picture_capture.app import _effective_review_regular_crop_height, _review_line_box
 
     settings = AppSettings(
-        parameter_display_width=600, columns=1, manual_x=20, column_width=500,
+        columns=1, manual_x=20, column_width=500,
         character_height=32, row_padding=10, review_regular_crop_height=0,
     )
     assert _effective_review_regular_crop_height(settings) == 42
@@ -6047,7 +5968,7 @@ def test_v21120_review_single_cjk_crop_no_longer_caps_at_next_marker():
 
     image = Image.new("RGB", (1000, 1400), "white")
     settings = AppSettings(
-        parameter_display_width=1000, columns=1, column_width=600,
+        columns=1, column_width=600,
         character_height=40, row_padding=4, ocr_language="chi_sim",
     )
     geometry = Geometry([100], [600], 50, 1300, [ColumnPath([(50, 100), (1300, 100)])])
@@ -6772,10 +6693,7 @@ def test_v2133_redraw_parameter_scale_is_bound_after_coordinate_refactor():
 
     image = Image.new("RGB", (1200, 1600), "white")
     settings = AppSettings(
-        geometry_coordinate_version=2,
-        geometry_coordinate_space="canonical_reference_page_pixels",
-        geometry_reference_width=1200,
-    )
+        )
     assert app_module.parameter_scale is processing_module.parameter_scale
     assert app_module.parameter_scale(image, settings) == 1.0
 
@@ -7396,7 +7314,6 @@ def test_rtl_geometry_orders_source_right_column_first_and_keeps_source_crop_pix
     draw = ImageDraw.Draw(image)
     draw.rectangle((300, 80, 360, 100), fill=(220, 20, 20))
     settings = AppSettings(
-        parameter_display_width=400,
         columns=2,
         manual_x=30,
         column_width=150,
@@ -7430,7 +7347,6 @@ def test_rtl_ordinary_drawing_detects_source_physical_right_edge():
         draw.rectangle((30, y, 55, y + 12), fill="black")
     source = canonical.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
     settings = AppSettings(
-        parameter_display_width=400,
         columns=1,
         manual_x=30,
         column_width=330,
@@ -7453,7 +7369,6 @@ def test_vertical_geometry_maps_markers_boxes_and_whole_crops_back_to_source():
 
     image = Image.new("RGB", (300, 500), "white")
     settings = AppSettings(
-        parameter_display_width=500,
         columns=3,
         manual_x=20,
         column_width=130,
@@ -7486,7 +7401,6 @@ def test_transformed_ocr_band_uses_original_source_orientation_and_box_adapter()
     image = Image.new("RGB", (120, 200), "white")
     image.putpixel((110, 80), (1, 2, 3))
     settings = AppSettings(
-        parameter_display_width=120,
         columns=1,
         manual_x=5,
         column_width=100,
@@ -7502,59 +7416,7 @@ def test_transformed_ocr_band_uses_original_source_orientation_and_box_adapter()
     assert records[0].box[0] < records[0].box[2] <= band.width
 
 
-def test_coordinate_contract_legacy_migration_preserves_runtime_geometry():
-    from copy import deepcopy
-    from PIL import Image
-    from picture_capture.coordinate_space import (
-        CANONICAL_REFERENCE_SPACE,
-        migrate_legacy_geometry_settings,
-    )
-    from picture_capture.models import AppSettings
-    from picture_capture.processing import derive_geometry
-
-    image = Image.new("RGB", (2000, 1200), "white")
-    legacy = AppSettings(
-        geometry_coordinate_version=1,
-        geometry_coordinate_space="legacy_display_pixels",
-        parameter_display_width=1000,
-        columns=2,
-        manual_x=50,
-        column_width=400,
-        gutter=50,
-        start_y=25,
-        bottom_y=0,
-        character_height=20,
-        row_padding=3,
-        follow_column_deformation=False,
-    )
-    before = derive_geometry(image, legacy)
-    migrated = deepcopy(legacy)
-    assert migrate_legacy_geometry_settings(migrated, image.size) is True
-    assert migrated.geometry_coordinate_version == 2
-    assert migrated.geometry_coordinate_space == CANONICAL_REFERENCE_SPACE
-    assert migrated.geometry_reference_width == 2000
-    assert migrated.manual_x == 100
-    assert migrated.column_width == 800
-    assert migrated.gutter == 100
-    assert migrated.start_y == 50
-    assert migrated.bottom_y == 0  # sentinel remains a sentinel
-    after = derive_geometry(image, migrated)
-    assert after.column_starts == before.column_starts
-    assert after.column_widths == before.column_widths
-    assert after.top == before.top
-    assert after.bottom == before.bottom
-    # The reference width also preserves the old width-normalized behavior on a
-    # differently sized scan without reintroducing GUI display coordinates.
-    larger = Image.new("RGB", (3000, 1800), "white")
-    legacy_large = derive_geometry(larger, legacy)
-    migrated_large = derive_geometry(larger, migrated)
-    assert migrated_large.column_starts == legacy_large.column_starts
-    assert migrated_large.column_widths == legacy_large.column_widths
-    assert migrated_large.top == legacy_large.top
-    assert migrate_legacy_geometry_settings(migrated, image.size) is False
-
-
-def test_coordinate_contract_source_canonical_points_round_trip_for_all_transforms():
+def test_internal_layout_transform_round_trips_source_points():
     from picture_capture.layout_transform import LayoutTransform
 
     source_size = (1234, 1642)
@@ -7567,13 +7429,12 @@ def test_coordinate_contract_source_canonical_points_round_trip_for_all_transfor
             assert restored == point
 
 
-def test_coordinate_contract_profile_percent_resolves_to_source_pixels_across_reference_width():
+def test_profile_percent_resolves_directly_to_source_y_pixels():
     from picture_capture.models import AppSettings
     from picture_capture.profile_semantics import effective_page_settings
     from picture_capture.processing import derive_nominal_geometry
 
     settings = AppSettings(
-        geometry_reference_width=1400,
         profile_header_mode="present",
         profile_header_percent=3.0,
         profile_footer_mode="present",
@@ -7583,13 +7444,9 @@ def test_coordinate_contract_profile_percent_resolves_to_source_pixels_across_re
         column_width=800,
     )
     effective = effective_page_settings(settings, (1000, 1642), 0)
+    assert effective.start_y == 49
+    assert effective.bottom_y == 1576
 
-    # Persisted layout bounds remain reference-page values, not source Y.
-    assert effective.start_y != 49
-    assert effective.bottom_y != 1576
-
-    # Runtime geometry and the public quick panel must resolve the physical
-    # Profile percentages against the current original image.
     geometry = derive_nominal_geometry(1000, 1642, effective)
     assert geometry.top == 49
     assert geometry.bottom == 1576
@@ -7601,21 +7458,17 @@ def test_coordinate_contract_profile_percent_resolves_to_source_pixels_across_re
     assert PictureCaptureApp._quick_geometry_value(app, "bottom_y") == 1576
 
 
-
-
-
-def test_coordinate_contract_crop_plan_uses_same_profile_boundaries_as_main_geometry():
+def test_crop_plan_uses_same_source_y_profile_boundaries_as_main_geometry():
     from picture_capture.processing import build_page_crop_plan
     from picture_capture.models import AppSettings
 
     image = Image.new("RGB", (1000, 1642), "white")
     settings = AppSettings(
-        geometry_reference_width=1400,
         columns=1,
         manual_x=70,
-        column_width=1120,
+        column_width=800,
         start_y=130,
-        bottom_y=2000,
+        bottom_y=1500,
         crop_to_bottom_y=True,
         follow_column_deformation=False,
         profile_header_mode="present",
@@ -7623,24 +7476,20 @@ def test_coordinate_contract_crop_plan_uses_same_profile_boundaries_as_main_geom
         profile_footer_mode="present",
         profile_footer_percent=4.0,
     )
-    plan = build_page_crop_plan(
-        image, [], [], settings, profile_page_index=0,
-    )
+    plan = build_page_crop_plan(image, [], [], settings, profile_page_index=0)
     assert len(plan.entry_pieces) == 1
     box = plan.entry_pieces[0].box
     assert box[1] == 49
     assert box[3] == 1576
 
 
-def test_coordinate_contract_training_export_separates_source_and_canonical(tmp_path):
+def test_training_export_uses_source_coordinates_only(tmp_path):
     import json
     from PIL import Image
     from picture_capture.formats import write_pdic, write_ppp
     from picture_capture.models import AppSettings, Entry, PolygonRegion
     from picture_capture.training_export import export_training_page
-    from picture_capture.coordinate_space import (
-        SOURCE_COORDINATE_SPACE, CANONICAL_COORDINATE_SPACE,
-    )
+    from picture_capture.coordinate_space import SOURCE_COORDINATE_SPACE
 
     root = tmp_path / "dict"
     root.mkdir()
@@ -7671,82 +7520,49 @@ def test_coordinate_contract_training_export_separates_source_and_canonical(tmp_
         (staging / "annotations" / "0001.json").read_text(encoding="utf-8")
     )
 
-    assert annotation["format"] == "picture-capture-training-v2"
-    assert annotation["coordinate_contract"]["annotations"] == SOURCE_COORDINATE_SPACE
-    assert annotation["coordinate_contract"]["layout_geometry_runtime"] == CANONICAL_COORDINATE_SPACE
+    contract = annotation["coordinate_contract"]
+    assert contract["annotations"] == SOURCE_COORDINATE_SPACE
+    assert contract["settings_geometry"] == SOURCE_COORDINATE_SPACE
+    assert contract["tuning_distances"] == SOURCE_COORDINATE_SPACE
     assert annotation["ground_truth_lines"][0]["x"] == 20
     assert annotation["ground_truth_lines"][0]["y"] == 120
     assert annotation["page_template"]["coordinate_space"] == SOURCE_COORDINATE_SPACE
     assert annotation["page_template"]["header_boundary_y"] == 27
     assert annotation["page_template"]["footer_boundary_y"] == 864
     layout = annotation["layout"]
-    assert layout["coordinate_space"] == CANONICAL_COORDINATE_SPACE
-    # The exported runtime layout must use the same Profile-resolved boundaries
-    # as detection/display, not the raw persisted start_y/bottom_y values.
-    assert layout["top_v"] == 27
-    assert layout["bottom_v"] == 864
-    assert "column_starts_u" in layout and "column_paths_vu" in layout
-    assert "header_y" not in layout
-    assert "derived_top" not in layout
+    assert layout["coordinate_space"] == SOURCE_COORDINATE_SPACE
+    assert "source_column_paths_xy" in layout
+    assert "top_v" not in layout
+    assert "column_starts_u" not in layout
 
 
-def test_new_project_initializes_explicit_reference_without_changing_1400_default_meaning(tmp_path):
-    from picture_capture.coordinate_space import stored_geometry_to_canonical
-    from picture_capture.models import AppSettings, ProjectState
+def test_new_project_keeps_literal_source_pixel_defaults(tmp_path):
+    from picture_capture.models import ProjectState
 
-    # A bare settings object remains page-local for library/test callers.
-    assert AppSettings().geometry_reference_width == 0
-
-    # A real project establishes an explicit reference only after a source page
-    # is known. Historical untouched defaults still retain their old 1400px
-    # physical meaning: 700 at 1400 becomes 1500 on a 3000px reference page.
     Image.new("RGB", (3000, 1800), "white").save(tmp_path / "0001.png")
     project = ProjectState.open(tmp_path)
-    modern = project.settings
-    assert modern.geometry_reference_width == 3000
-    assert modern.column_width == 1500
-    assert stored_geometry_to_canonical(modern.column_width, 3000, modern) == 1500
-
-    legacy = AppSettings(
-        geometry_coordinate_version=1,
-        geometry_coordinate_space="legacy_display_pixels",
-        geometry_reference_width=0,
-        parameter_display_width=0,
-    )
-    assert stored_geometry_to_canonical(legacy.column_width, 3000, legacy) == 1500
+    assert project.settings.column_width == 700
+    assert project.settings.manual_x == 28
 
 
-def test_coordinate_contract_parameter_display_width_is_legacy_only_in_core_runtime():
-    from pathlib import Path
-
+def test_no_legacy_coordinate_fields_or_migration_helpers_remain():
     package = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    allowed = {
-        "app.py",             # legacy project/crop-settings adapters + viewer compatibility
-        "coordinate_space.py", # single migration/conversion authority
-        "models.py",          # persisted legacy field + one-time project migration
-        "processing.py",      # compatibility scale for unmigrated old settings
-    }
+    forbidden = (
+        "parameter_display_width",
+        "geometry_reference_width",
+        "geometry_coordinate_version",
+        "geometry_coordinate_space",
+        "migrate_legacy_geometry_settings",
+        "legacy_parameter_scale",
+        "canonical_reference_page_pixels",
+    )
     offenders = []
     for source in package.glob("*.py"):
         text = source.read_text(encoding="utf-8")
-        if "parameter_display_width" in text and source.name not in allowed:
-            offenders.append(source.name)
+        for token in forbidden:
+            if token in text:
+                offenders.append((source.name, token))
     assert offenders == []
-
-    coordinate_text = (package / "coordinate_space.py").read_text(encoding="utf-8")
-    models_text = (package / "models.py").read_text(encoding="utf-8")
-    assert "parameter_display_width" in coordinate_text
-    assert "parameter_display_width" in models_text
-    assert "parameter_display_width" not in (
-        package / "paddle_headwords.py"
-    ).read_text(encoding="utf-8")
-    assert "parameter_display_width" not in (
-        package / "profile_semantics.py"
-    ).read_text(encoding="utf-8")
-    assert "parameter_display_width" not in (
-        package / "training_export.py"
-    ).read_text(encoding="utf-8")
-
 
 def test_crop_log_declares_source_image_coordinate_space(tmp_path):
     (tmp_path / "QT").mkdir()
@@ -7761,82 +7577,31 @@ def test_crop_log_declares_source_image_coordinate_space(tmp_path):
     assert rows[1] == "0001.png\t0001_SW_001.png\t10\t20\t100\t50"
 
 
-def test_crop_settings_v5_migrates_to_reference_page_pixels():
+def test_old_crop_coordinate_formats_are_ignored():
     from picture_capture.app import _normalize_crop_settings_payload
-    from picture_capture.coordinate_space import CANONICAL_REFERENCE_SPACE
+    from picture_capture.coordinate_space import SOURCE_COORDINATE_SPACE
     from picture_capture.models import AppSettings
 
-    settings = AppSettings(
-        geometry_coordinate_version=2,
-        geometry_coordinate_space=CANONICAL_REFERENCE_SPACE,
-        geometry_reference_width=2000,
-        parameter_display_width=1000,
-        start_y=100,
-        bottom_y=1800,
-        crop_to_bottom_y=True,
-    )
-    legacy = {
-        "version": 5,
-        "general_top_y": 50,
-        "general_bottom_y": 900,
-        "entry_left_padding": 12,
-        "entry_right_padding": 18,
-        "polygon_margin": 8,
-        "special_pages": {
-            "0010": {"top_y": 60, "bottom_y": 880},
-        },
-    }
-    migrated = _normalize_crop_settings_payload(legacy, settings)
-    assert migrated["version"] == 6
-    assert migrated["coordinate_space"] == CANONICAL_REFERENCE_SPACE
-    assert migrated["geometry_reference_width"] == 2000
-    assert migrated["general_top_v"] == 100
-    assert migrated["general_bottom_v"] == 1800
-    assert migrated["entry_left_padding_u"] == 24
-    assert migrated["entry_right_padding_u"] == 36
-    assert migrated["polygon_margin"] == 16
-    assert migrated["special_pages"]["0010"] == {"top_v": 120, "bottom_v": 1760}
-
-
-def test_crop_settings_v6_rescales_when_reference_page_changes():
-    from picture_capture.app import _normalize_crop_settings_payload
-    from picture_capture.coordinate_space import CANONICAL_REFERENCE_SPACE
-    from picture_capture.models import AppSettings
-
-    settings = AppSettings(
-        geometry_reference_width=3000,
-        geometry_coordinate_space=CANONICAL_REFERENCE_SPACE,
-    )
-    saved = {
+    settings = AppSettings(start_y=100, bottom_y=1800, crop_to_bottom_y=True)
+    old = {
         "version": 6,
-        "coordinate_space": CANONICAL_REFERENCE_SPACE,
-        "geometry_reference_width": 2000,
-        "general_top_v": 100,
-        "general_bottom_v": 1800,
-        "entry_left_padding_u": 20,
-        "entry_right_padding_u": 30,
-        "polygon_margin": 10,
-        "special_pages": {"p": {"top_v": 120, "bottom_v": 1750}},
+        "coordinate_space": "old_reference_space",
+        "general_top_v": 50,
+        "general_bottom_v": 900,
     }
-    normalized = _normalize_crop_settings_payload(saved, settings)
-    assert normalized["geometry_reference_width"] == 3000
-    assert normalized["general_top_v"] == 150
-    assert normalized["general_bottom_v"] == 2700
-    assert normalized["entry_left_padding_u"] == 30
-    assert normalized["entry_right_padding_u"] == 45
-    assert normalized["polygon_margin"] == 15
-    assert normalized["special_pages"]["p"] == {"top_v": 180, "bottom_v": 2625}
+    normalized = _normalize_crop_settings_payload(old, settings)
+    assert normalized["coordinate_space"] == SOURCE_COORDINATE_SPACE
+    assert normalized["general_top_y"] == 100
+    assert normalized["general_bottom_y"] == 1800
+    assert "general_top_v" not in normalized
 
 
-def test_crop_bounds_scale_reference_values_to_current_page():
+def test_crop_bounds_use_literal_source_pixel_values():
     from PIL import Image
-    from picture_capture.coordinate_space import CANONICAL_REFERENCE_SPACE
     from picture_capture.models import AppSettings
     from picture_capture.processing import entry_crop_bounds, illustration_crop_bounds
 
     settings = AppSettings(
-        geometry_coordinate_space=CANONICAL_REFERENCE_SPACE,
-        geometry_reference_width=2000,
         columns=1,
         manual_x=100,
         column_width=1600,
@@ -7846,22 +7611,18 @@ def test_crop_bounds_scale_reference_values_to_current_page():
     )
     image = Image.new("RGB", (3000, 2700), "white")
     top, bottom = entry_crop_bounds(image, settings, top_y=100, bottom_y=1800)
-    assert (top, bottom) == (150, 2700)
+    assert (top, bottom) == (100, 1800)
     ill_top, ill_bottom, margin = illustration_crop_bounds(
         image, settings, top_y=100, bottom_y=1600, margin=20,
     )
-    assert (ill_top, ill_bottom, margin) == (150, 2400, 30)
+    assert (ill_top, ill_bottom, margin) == (100, 1600, 20)
 
 
-def test_page_sections_override_general_and_legacy_crop_bounds():
-    from picture_capture.coordinate_space import CANONICAL_REFERENCE_SPACE
+def test_page_sections_override_general_crop_bounds():
     from picture_capture.models import AppSettings
     from picture_capture.processing import build_page_crop_plan, illustration_crop_bounds
 
     settings = AppSettings(
-        geometry_coordinate_version=2,
-        geometry_coordinate_space=CANONICAL_REFERENCE_SPACE,
-        geometry_reference_width=400,
         columns=1,
         manual_x=30,
         column_width=320,
@@ -7876,16 +7637,12 @@ def test_page_sections_override_general_and_legacy_crop_bounds():
     image = Image.new("RGB", (400, 600), "white")
     sections = [PageSection(120, 420)]
     entries = [Entry("alpha", 30, 150), Entry("beta", 30, 300)]
-
-    # Even deliberately conflicting general/legacy-style bounds are ignored
-    # once the page has an explicit Section sidecar.
     plan = build_page_crop_plan(
         image, entries, [], settings,
         top_y=40, bottom_y=560, page_sections=sections,
     )
     assert plan.entry_pieces
     assert all(piece.box[1] >= 120 and piece.box[3] <= 420 for piece in plan.entry_pieces)
-
     top, bottom, _margin = illustration_crop_bounds(
         image, settings, top_y=40, bottom_y=560, margin=0,
         page_sections=sections,
@@ -7905,10 +7662,14 @@ def test_page_crop_plan_declares_source_coordinate_space():
 
 
 def test_page_sections_sidecar_roundtrip_uses_managed_storage(tmp_path):
+    import json
+    from picture_capture.coordinate_space import SOURCE_COORDINATE_SPACE
+
     root = tmp_path / "dictionary"
     root.mkdir()
     ensure_project_storage(root, "test")
     page = root / "0001.png"
+    Image.new("RGB", (1200, 1600), "white").save(page)
     sections = [PageSection(100, 700), PageSection(820, 1400)]
     path = write_page_sections(
         page, sections, canonical_width=1200, canonical_height=1600,
@@ -7916,6 +7677,11 @@ def test_page_sections_sidecar_roundtrip_uses_managed_storage(tmp_path):
     )
     assert path == page_sections_path_for_image(page)
     assert path == root / "_PictureCapture" / "data" / "PageSections" / "0001.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["coordinate_space"] == SOURCE_COORDINATE_SPACE
+    assert "top_v" not in path.read_text(encoding="utf-8")
+    assert payload["sections"][0]["top_source_segment_xyxy"] == [[0, 100], [1199, 100]]
+    assert payload["sections"][0]["bottom_source_segment_xyxy"] == [[0, 700], [1199, 700]]
     assert read_page_sections(page) == sections
     lanes = build_reading_lanes(2, 0, 1600, sections)
     assert [(lane.section_index, lane.column_index) for lane in lanes] == [
@@ -7942,30 +7708,25 @@ def test_page_sections_single_explicit_region_is_preserved(tmp_path):
     assert read_page_sections(page) == []
 
 
-def test_page_sections_reads_migrated_legacy_qt_fallback(tmp_path):
+def test_page_sections_reject_non_source_coordinate_sidecar(tmp_path):
     import json
-    from picture_capture.project_storage import qt_root
 
     root = tmp_path / "dictionary"
     root.mkdir()
     ensure_project_storage(root, "test")
     page = root / "0001.png"
-    legacy = qt_root(root) / "PageSections" / "0001.json"
-    legacy.parent.mkdir(parents=True, exist_ok=True)
-    legacy.write_text(
+    Image.new("RGB", (1200, 1600), "white").save(page)
+    path = page_sections_path_for_image(page)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
         json.dumps({
-            "format": "picture-capture-page-sections-v1",
-            "coordinate_space": "canonical_full_resolution_pixels",
-            "sections": [
-                {"index": 1, "top_v": 100, "bottom_v": 700},
-                {"index": 2, "top_v": 820, "bottom_v": 1400},
-            ],
+            "format": "old-page-sections",
+            "coordinate_space": "old_reference_space",
+            "sections": [{"top_v": 100, "bottom_v": 700}],
         }),
         encoding="utf-8",
     )
-    assert not page_sections_path_for_image(page).exists()
-    assert read_page_sections(page) == [PageSection(100, 700), PageSection(820, 1400)]
-
+    assert read_page_sections(page) == []
 
 def test_page_sections_sort_section_before_column():
     geometry = Geometry(
@@ -7992,9 +7753,6 @@ def test_page_sections_sort_section_before_column():
 def test_page_sections_whole_entry_crop_follows_lanes_and_skips_gap():
     image = Image.new("RGB", (1000, 1000), "white")
     settings = AppSettings(
-        geometry_coordinate_version=2,
-        geometry_coordinate_space="canonical_reference_page_pixels",
-        geometry_reference_width=1000,
         columns=2,
         manual_x=20,
         column_width=420,

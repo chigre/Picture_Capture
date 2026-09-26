@@ -12,7 +12,6 @@ from PIL import Image, ImageDraw, ImageTk
 
 from .ui_compat import screen_work_area
 from .appearance import themed_display_image
-from .coordinate_space import stored_geometry_to_canonical
 from .dictionary_profile import (
     dictionary_profile_preset,
     language_effective_settings,
@@ -1083,7 +1082,7 @@ class ProjectProfileWizard(tk.Toplevel):
         column_adjust.columnconfigure(0, weight=1)
         ttk.Label(
             column_adjust,
-            text="点击右侧预览中的栏左线选择；选中线显示为橙色。每次移动 1 个参考页规范 px。",
+            text="点击右侧预览中的栏左线选择；选中线显示为橙色。每次移动 1 个原图 px。",
             foreground="#666666", wraplength=self._wizard_left_width,
         ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 5))
         ttk.Label(
@@ -1478,15 +1477,9 @@ class ProjectProfileWizard(tk.Toplevel):
                 ]
                 line_paths.append([(px * sx, py * sy) for px, py in points])
 
-            # One saved reference-page pixel can correspond to a different
-            # number/direction of source pixels on scaled, mirrored or rotated
-            # pages. Cache that vector so button nudges move only the line
-            # overlay without reloading the image or re-running layout analysis.
-            canonical_step = (
-                stored_geometry_to_canonical(100, canonical_w, effective) / 100.0
-            )
-            if abs(canonical_step) < 0.001:
-                canonical_step = 1.0
+            # One nudge is exactly one full-resolution image pixel. Cache only
+            # the direction induced by an internal mirror/rotation transform.
+            canonical_step = 1.0
             anchor_u = canonical_w / 2.0
             anchor_v = canonical_h / 2.0
             p0 = geometry.canonical_to_source(anchor_u, anchor_v)
@@ -3039,7 +3032,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_column_adjust_status()
         for name in (
             "start_y", "bottom_y", "manual_x", "column_width", "gutter",
-            "character_height", "row_padding", "geometry_reference_width",
+            "character_height", "row_padding",
         ):
             if name in self._analysis_suggestion:
                 setattr(self.working, name, int(self._analysis_suggestion[name]))

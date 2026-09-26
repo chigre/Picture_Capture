@@ -112,20 +112,10 @@ class AppSettings:
     dictionary_index_language: str = ""
     dictionary_content_language: str = ""
     dictionary_body_page_range: str = ""
-    # Coordinate contract:
-    # - saved PDIC/PPP/exports use original-image pixels;
-    # - project layout scalars use pixels of an explicit canonical reference page;
-    # - OCR/profile tuning distances use fixed 1400px-reference units;
-    # - parameter_display_width is retained only to migrate old display-scaled projects.
-    geometry_coordinate_version: int = 2
-    geometry_coordinate_space: str = "canonical_reference_page_pixels"
-    # Canonical width of the page whose pixels define the persisted layout
-    # scalars. Runtime geometry scales these values to the current page width.
-    geometry_reference_width: int = 0
-    parameter_display_width: int = 0
+    # All geometry values below are literal original-image X/Y pixel values.
     columns: int = 2
-    # Profile v3 layout semantics. Geometry is measured in canonical space;
-    # source images and PDIC entry coordinates are never rewritten.
+    # Profile v3 layout semantics. Saved geometry remains in original-image
+    # pixel units; temporary layout transforms never change settings semantics.
     layout_writing_mode: str = "horizontal-tb"
     layout_text_direction: str = "ltr"
     layout_transform: str = "identity"
@@ -138,8 +128,7 @@ class AppSettings:
     bottom_y: int = 0
     manual_x: int = 28
     # Per-column manual corrections relative to the automatically detected
-    # column starts. Values use the same persisted canonical reference-page
-    # pixel space as the other Project Profile geometry fields.
+    # column starts. Values are direct original-image pixel offsets.
     column_start_offsets: list[int] = field(default_factory=list)
     manual_y: int = 400
     body_indent: int = 28
@@ -426,9 +415,8 @@ class AppSettings:
     paddle_refine_separator_y: bool = True
     paddle_separator_search_ratio: float = 0.30
     paddle_separator_band_radius: int = 2
-    # Downward-biased Y-refinement safety clearance. The value follows the
-    # program's historical display-pixel convention and is converted to source
-    # pixels at runtime. 0 allows the separator to touch the detected ink edge.
+    # Downward-biased Y-refinement safety clearance in original-image pixels.
+    # 0 allows the separator to touch the detected ink edge.
     paddle_separator_safety_px: int = 2
     # Width of the left-side local X ROI used by image-boundary/Y-refinement
     # analysis, expressed as a percentage of the current straightened column.
@@ -502,12 +490,6 @@ class AppSettings:
     @classmethod
     def from_json(cls, path: Path) -> "AppSettings":
         raw = json.loads(path.read_text(encoding="utf-8"))
-        # Settings written before the coordinate-contract migration stored page
-        # geometry in GUI display pixels. Mark them explicitly so ProjectState
-        # can upgrade them once the first source-image size is known.
-        if "geometry_coordinate_version" not in raw:
-            raw["geometry_coordinate_version"] = 1
-            raw["geometry_coordinate_space"] = "legacy_display_pixels"
         if int(raw.get("right_ratio_percent_version", 0) or 0) < 1:
             old_divisor = max(0.01, float(raw.get("right_ratio", 1.0) or 1.0))
             raw["right_ratio"] = 100.0 / old_divisor
@@ -649,45 +631,6 @@ class AppSettings:
         known = cls.__dataclass_fields__
         return cls(**{key: value for key, value in raw.items() if key in known})
 
-    @classmethod
-    def from_legacy(cls, path: Path) -> "AppSettings":
-        """Read the positional _Mysettings.ini format emitted by Form1.vb."""
-        parts = path.read_text(encoding="utf-8-sig").split("@")
-        settings = cls()
-        settings.geometry_coordinate_version = 1
-        settings.geometry_coordinate_space = "legacy_display_pixels"
-        converters = {
-            2: ("columns", int),
-            3: ("gutter", int),
-            4: ("column_width", int),
-            5: ("start_y", int),
-            6: ("manual_y", int),
-            7: ("manual_x", int),
-            8: ("body_indent", int),
-            9: ("character_height", int),
-            10: ("row_padding", int),
-            11: ("right_ratio", float),
-            12: ("horizontal_tolerance", int),
-            13: ("marker_height", int),
-            14: ("guide_width", int),
-            15: ("darkness_threshold", int),
-            16: ("dark_area_percent", int),
-            17: ("batch_interval", float),
-        }
-        for index, (name, cast) in converters.items():
-            if len(parts) > index and parts[index].strip():
-                try:
-                    setattr(settings, name, cast(parts[index]))
-                except ValueError:
-                    pass
-        if len(parts) > 18 and parts[18].strip().isdigit():
-            # Old ComboBox used the language string, not a stable numeric enum.
-            legacy_languages = ["eng", "spa", "ita", "fra", "por", "deu", "chi_sim", "chi_tra"]
-            idx = int(parts[18])
-            if 0 <= idx < len(legacy_languages):
-                settings.ocr_language = legacy_languages[idx]
-        settings.right_ratio = 100.0 / max(0.01, float(settings.right_ratio))
-        return settings
 
 
 @dataclass
@@ -711,7 +654,7 @@ class ProjectState:
         # Do not create anything in an empty/non-project folder selected by mistake.
         from .project_storage import (
             ensure_project_storage, has_legacy_project_data, is_managed_project,
-            legacy_ini_path, profile_path as active_profile_path,
+            profile_path as active_profile_path,
             qt_root, settings_path as active_settings_path,
         )
         if images and (is_managed_project(root) or not has_legacy_project_data(root)):
@@ -721,11 +664,8 @@ class ProjectState:
                 __version__ = "unknown"
             ensure_project_storage(root, __version__)
         json_settings = active_settings_path(root)
-        legacy_settings = legacy_ini_path(root)
         if json_settings.exists():
             settings = AppSettings.from_json(json_settings)
-        elif legacy_settings.exists():
-            settings = AppSettings.from_legacy(legacy_settings)
         else:
             settings = AppSettings()
             # A v3 profile sidecar can bootstrap a project that predates
@@ -757,33 +697,6 @@ class ProjectState:
                 )
             except Exception:
                 pass
-        # Upgrade legacy display-scaled geometry once a real source page is known.
-        # The migration is deterministic and idempotent; modern projects remain
-        # untouched. Persist immediately for modern JSON projects so a copied
-        # project no longer depends on the original GUI display width.
-        if images:
-            try:
-                from .coordinate_space import (
-                    initialize_geometry_reference,
-                    migrate_legacy_geometry_settings,
-                )
-                with Image.open(images[0]) as first_page:
-                    source_size = first_page.size
-                migrated = migrate_legacy_geometry_settings(settings, source_size)
-                clean_project_defaults = not json_settings.exists() and not legacy_settings.exists()
-                initialized_reference = initialize_geometry_reference(
-                    settings,
-                    source_size,
-                    historical_1400_values=clean_project_defaults,
-                )
-                if (migrated or initialized_reference) and json_settings.exists():
-                    settings.to_json(json_settings)
-            except Exception:
-                # Coordinate migration must never make an otherwise readable
-                # project impossible to open. The legacy runtime path remains
-                # available until the project can be migrated successfully.
-                pass
-
         words_path = resolve_wordslist_path(root, settings.wordslist_path)
         words = read_noncomment_lines(words_path) if words_path.exists() else []
         active_qt = qt_root(root)

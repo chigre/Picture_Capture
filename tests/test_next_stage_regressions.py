@@ -210,7 +210,6 @@ def test_refine_existing_entries_never_changes_count_or_exceeds_safe_delta(monke
         gutter=0,
         start_y=0,
         bottom_y=160,
-        parameter_display_width=120,
         character_height=10,
         paddle_separator_search_ratio=0.30,
         paddle_refine_separator_y=True,
@@ -296,12 +295,12 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     settings = text[start:end]
 
     assert '"bottom_y", int' in settings
-    assert '"bottom_y": "正文结束 V"' in settings
+    assert '"bottom_y": "正文结束 Y"' in settings
     assert '"columns": "正文栏数"' in settings
-    assert '"manual_x": "第一栏左缘 U"' in settings
+    assert '"manual_x": "第一栏左缘 X"' in settings
     assert '"paddle_band_width_ratio": "%"' in settings
-    assert '"paddle_left_tolerance": "参考页规范px"' in settings
-    assert '"paddle_separator_safety_px": "参考页规范px"' in settings
+    assert '"paddle_left_tolerance": "原图px"' in settings
+    assert '"paddle_separator_safety_px": "原图px"' in settings
     assert '"columns": (1, 12, 1)' in settings
     assert "def _show_setting_help(" in settings
     assert 'text="设置说明"' in settings
@@ -990,7 +989,6 @@ def test_page_template_alternating_ab_side_widths_are_independent():
 
 def test_page_template_auto_footer_uses_learned_body_bottom():
     settings = AppSettings(
-        parameter_display_width=1000,
         bottom_y=1800,
         profile_footer_mode="auto",
     )
@@ -1005,7 +1003,6 @@ def test_page_template_auto_footer_uses_learned_body_bottom():
 
 def test_page_template_applies_header_footer_and_ab_side_exclusion():
     settings = AppSettings(
-        parameter_display_width=1000,
         profile_header_mode="present",
         profile_header_percent=10,
         profile_footer_mode="present",
@@ -1807,24 +1804,22 @@ def test_project_profile_column_left_nudges_persist_and_drive_geometry(tmp_path)
         manual_x=40,
         column_width=300,
         gutter=40,
-        geometry_coordinate_version=2,
-        geometry_reference_width=800,
         column_start_offsets=[0, 12],
         follow_column_deformation=False,
     )
     geometry = derive_nominal_geometry(800, 1000, settings)
     assert geometry.column_starts == [40, 392]
 
-    # Offsets live in reference-page pixels just like the other persisted
-    # Project Profile geometry fields, so they scale with scan resolution.
+    # Version-3 values are literal image pixels. A wider image must not silently
+    # double the user's X positions or per-column corrections.
     larger = derive_nominal_geometry(1600, 2000, settings)
-    assert larger.column_starts == [80, 784]
+    assert larger.column_starts == [40, 392]
 
     path = tmp_path / "settings.json"
     settings.to_json(path)
+    saved = path.read_text(encoding="utf-8")
     reopened = AppSettings.from_json(path)
     assert reopened.column_start_offsets == [0, 12]
-
     # Corrupt/extreme nudges are clipped before columns can cross.
     guarded = apply_column_start_offsets(
         [40, 380], [250, -250], gutter=40, max_x=799,
@@ -1833,11 +1828,24 @@ def test_project_profile_column_left_nudges_persist_and_drive_geometry(tmp_path)
     assert guarded[1] - guarded[0] >= 50
 
 
+def test_source_pixel_settings_never_scale_against_page_width():
+    settings = AppSettings(
+        paddle_left_tolerance=34,
+        paddle_separator_safety_px=2,
+    )
+    assert settings.paddle_left_tolerance == 34
+    assert settings.paddle_separator_safety_px == 2
+    geometry_1400 = derive_nominal_geometry(1400, 1800, settings)
+    geometry_4200 = derive_nominal_geometry(4200, 5400, settings)
+    assert geometry_1400.column_starts[0] == geometry_4200.column_starts[0]
+    assert geometry_1400.top == geometry_4200.top
+
 def test_project_profile_exposes_clickable_column_left_line_nudging():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
     text = source.read_text(encoding="utf-8")
     assert 'text="栏左线微调"' in text
     assert "点击右侧预览中的栏左线选择；选中线显示为橙色" in text
+    assert "每次移动 1 个原图 px" in text
     assert 'text="← 左移"' in text
     assert 'text="右移 →"' in text
     assert 'text="重置当前"' in text

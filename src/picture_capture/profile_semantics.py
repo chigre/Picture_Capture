@@ -2,10 +2,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from .coordinate_space import (
-    canonical_geometry_to_stored,
-    geometry_uses_canonical_pixels,
-)
 import re
 from typing import Iterable
 
@@ -445,11 +441,8 @@ def excluded_source_side_percent(settings: AppSettings, page_index: int) -> floa
 def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], page_index: int = 0) -> AppSettings:
     """Return a per-page copy with the confirmed page template applied.
 
-    Explicit physical header/footer percentages are converted at one boundary
-    only. Modern settings store full-resolution canonical pixels; legacy
-    settings receive the old display-scaled representation through the shared
-    compatibility helper. Vertical dictionaries keep physical top/bottom masks
-    separate from canonical reading-axis V.
+    Explicit physical header/footer percentages are resolved once to original-
+    image Y pixels. No reference-width/display-width conversion is performed.
     """
     current = replace(settings)
     source_width = max(1, int(image_size[0]))
@@ -465,9 +458,7 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
             0.0, min(35.0, float(getattr(current, "profile_header_percent", 6.0)))
         )
         source_top = round(source_height * pct / 100.0)
-        current.start_y = canonical_geometry_to_stored(
-            source_top, source_width, current,
-        )
+        current.start_y = int(source_top)
         current.paddle_auto_header_rule = False
     elif header_mode == "auto" and horizontal:
         current.paddle_auto_header_rule = True
@@ -480,9 +471,7 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
             0.0, min(35.0, float(getattr(current, "profile_footer_percent", 5.0)))
         )
         source_bottom = round(source_height * (1.0 - pct / 100.0))
-        current.bottom_y = canonical_geometry_to_stored(
-            source_bottom, source_width, current,
-        )
+        current.bottom_y = int(source_bottom)
         current.crop_to_bottom_y = True
     elif footer_mode == "auto":
         current.crop_to_bottom_y = int(getattr(current, "bottom_y", 0) or 0) > 0

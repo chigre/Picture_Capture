@@ -52,17 +52,7 @@ from .ui_compat import (
 )
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
 from .layout_transform import LayoutTransform
-from .coordinate_space import (
-    CANONICAL_COORDINATE_SPACE,
-    CANONICAL_REFERENCE_SPACE,
-    REFERENCE_CANONICAL_WIDTH,
-    SOURCE_COORDINATE_SPACE,
-    canonical_geometry_to_stored,
-    coordinate_contract,
-    geometry_uses_canonical_pixels,
-    legacy_parameter_scale,
-    stored_geometry_to_canonical,
-)
+from .coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
 from .collation import (
     LATIN_ORDER, available_profile_labels, collation_key, display_key,
     parse_custom_order, profile_label,
@@ -188,102 +178,60 @@ def transformed_geometry_pending(settings: AppSettings) -> bool:
     }
 
 
-CROP_SETTINGS_VERSION = 6
-
-
-def _geometry_reference_width(settings: AppSettings) -> int:
-    """Return the persisted canonical reference-page width for project rules."""
-    value = int(getattr(settings, "geometry_reference_width", 0) or 0)
-    if value > 0:
-        return value
-    legacy = int(getattr(settings, "parameter_display_width", 0) or 0)
-    return legacy if legacy > 0 else REFERENCE_CANONICAL_WIDTH
+CROP_SETTINGS_VERSION = 7
 
 
 def _normalize_crop_settings_payload(
-    raw: dict | None, settings: AppSettings,
+    raw: dict | None,
+    settings: AppSettings,
 ) -> dict:
-    """Normalize historical crop settings to the v6 reference-page contract."""
-    raw = raw if isinstance(raw, dict) else {}
-    reference_width = _geometry_reference_width(settings)
+    """Read crop settings only when they already use original-image X/Y."""
     default_bottom = int(settings.bottom_y) if settings.crop_to_bottom_y else 0
+    defaults = {
+        "version": CROP_SETTINGS_VERSION,
+        "coordinate_space": SOURCE_COORDINATE_SPACE,
+        "general_top_y": int(settings.start_y),
+        "general_bottom_y": default_bottom,
+        "entry_left_padding_x": 0,
+        "entry_right_padding_x": 0,
+        "integrate_illustrations": True,
+        "polygon_margin": 0,
+        "parallel_workers": int(settings.crop_parallel_workers),
+        "special_pages": {},
+    }
+    if not isinstance(raw, dict):
+        return defaults
+    if int(raw.get("version", 0) or 0) != CROP_SETTINGS_VERSION:
+        return defaults
+    if str(raw.get("coordinate_space") or "") != SOURCE_COORDINATE_SPACE:
+        return defaults
 
-    if not raw:
-        return {
-            "version": CROP_SETTINGS_VERSION,
-            "coordinate_space": CANONICAL_REFERENCE_SPACE,
-            "geometry_reference_width": reference_width,
-            "general_top_v": int(settings.start_y),
-            "general_bottom_v": default_bottom,
-            "entry_left_padding_u": 0,
-            "entry_right_padding_u": 0,
-            "integrate_illustrations": True,
-            "polygon_margin": 0,
-            "parallel_workers": int(settings.crop_parallel_workers),
-            "special_pages": {},
-        }
-
-    version = int(raw.get("version", 0) or 0)
-    source_space = str(raw.get("coordinate_space") or "")
-    source_reference = int(raw.get("geometry_reference_width", 0) or 0)
-
-    if version >= CROP_SETTINGS_VERSION and source_space == CANONICAL_REFERENCE_SPACE:
-        source_reference = source_reference if source_reference > 0 else reference_width
-        factor = reference_width / max(1, source_reference)
-        old_names = False
-    else:
-        # Crop Settings <= v5 used the same legacy display-pixel convention as
-        # old layout geometry. ProjectState may already have migrated AppSettings,
-        # but parameter_display_width is intentionally retained for this adapter.
-        factor = 1.0 / max(
-            0.01, legacy_parameter_scale(reference_width, settings),
-        )
-        old_names = True
-
-    def scalar(new_name: str, old_name: str, default: int = 0) -> int:
-        key = old_name if old_names else new_name
-        if key not in raw:
-            return int(default)
+    result = dict(defaults)
+    for key in (
+        "general_top_y", "general_bottom_y",
+        "entry_left_padding_x", "entry_right_padding_x",
+        "polygon_margin", "parallel_workers",
+    ):
         try:
-            value = int(raw.get(key, 0) or 0)
+            result[key] = max(0, int(raw.get(key, result[key]) or 0))
         except (TypeError, ValueError):
-            return int(default)
-        if value == 0:
-            return 0
-        return max(0, round(value * factor))
-
-    specials_raw = raw.get("special_pages")
-    specials: dict[str, dict[str, int]] = {}
-    if isinstance(specials_raw, dict):
-        for page, values in specials_raw.items():
+            pass
+    result["integrate_illustrations"] = bool(raw.get("integrate_illustrations", True))
+    specials = raw.get("special_pages")
+    if isinstance(specials, dict):
+        cleaned: dict[str, dict[str, int]] = {}
+        for page, values in specials.items():
             if not isinstance(values, dict):
                 continue
-            if old_names:
-                top = values.get("top_y", 0)
-                bottom = values.get("bottom_y", 0)
-            else:
-                top = values.get("top_v", 0)
-                bottom = values.get("bottom_v", 0)
             try:
-                top_v = max(0, round(int(top or 0) * factor))
-                bottom_v = max(0, round(int(bottom or 0) * factor))
+                top = max(0, int(values.get("top_y", 0) or 0))
+                bottom = max(0, int(values.get("bottom_y", 0) or 0))
             except (TypeError, ValueError):
                 continue
-            specials[str(page)] = {"top_v": top_v, "bottom_v": bottom_v}
+            cleaned[str(page)] = {"top_y": top, "bottom_y": bottom}
+        result["special_pages"] = cleaned
+    return result
 
-    return {
-        "version": CROP_SETTINGS_VERSION,
-        "coordinate_space": CANONICAL_REFERENCE_SPACE,
-        "geometry_reference_width": reference_width,
-        "general_top_v": scalar("general_top_v", "general_top_y", int(settings.start_y)),
-        "general_bottom_v": scalar("general_bottom_v", "general_bottom_y", default_bottom),
-        "entry_left_padding_u": scalar("entry_left_padding_u", "entry_left_padding", 0),
-        "entry_right_padding_u": scalar("entry_right_padding_u", "entry_right_padding", 0),
-        "integrate_illustrations": bool(raw.get("integrate_illustrations", True)),
-        "polygon_margin": scalar("polygon_margin", "polygon_margin", 0),
-        "parallel_workers": int(raw.get("parallel_workers", settings.crop_parallel_workers) or 0),
-        "special_pages": specials,
-    }
 
 OCR_SCOPE_LABELS = {"current": "当前页", "all": "全部页面"}
 OCR_SCOPE_VALUES = {label: value for value, label in OCR_SCOPE_LABELS.items()}
@@ -603,18 +551,8 @@ def _fill_status_cell_style(status_text: object) -> tuple[str, str] | None:
 
 
 def _review_crop_settings(image: Image.Image, settings: AppSettings, viewer_width: int) -> AppSettings:
-    """Return stable single-line crop geometry for the review panel.
-
-    Modern projects already store full-resolution canonical geometry, so review
-    crops must not depend on the viewer width. The fitted-display reference is
-    retained only for an unmigrated legacy settings object.
-    """
-    local = replace(settings)
-    if not geometry_uses_canonical_pixels(local):
-        available = max(500, int(viewer_width) - 24)
-        fit_scale = min(1.0, available / max(1, image.width))
-        local.parameter_display_width = max(1, round(image.width * fit_scale))
-    return local
+    """Return review settings unchanged; geometry is already source pixels."""
+    return replace(settings)
 
 
 def _review_crop_context(
@@ -712,17 +650,10 @@ def _review_line_box(
             regular_settings.character_height = _effective_review_regular_crop_height(settings)
             return line_box(entry, geometry, image, regular_settings)
         left, _old_top, right, _bottom = line_box(entry, geometry, image, settings)
-        canonical_width = geometry.transform.canonical_size(image.size)[0]
-        row_padding = stored_geometry_to_canonical(
-            max(0, int(settings.row_padding)), canonical_width, settings,
-        )
-        regular_height = stored_geometry_to_canonical(
-            _effective_review_regular_crop_height(settings),
-            canonical_width,
-            settings,
-        )
+        row_padding = max(0, int(settings.row_padding))
+        regular_height = _effective_review_regular_crop_height(settings)
         half_spacing = round(0.5 * row_padding)
-        # Identity layout: source Y and canonical V are the same coordinate.
+        # Identity layout: source Y and 原图位置 are the same coordinate.
         top = max(geometry.top, int(entry.y) - half_spacing)
         return left, top, right, min(image.height, top + max(1, regular_height))
 
@@ -1711,7 +1642,7 @@ class SettingsDialog(tk.Toplevel):
         ("Tesseract 语言", "tesseract_language", str),
         ("书写模式", "layout_writing_mode", str),
         ("文字方向", "layout_text_direction", str),
-        ("Canonical 变换", "layout_transform", str),
+        ("内部版面变换", "layout_transform", str),
         ("栏数策略", "layout_columns_policy", str),
         ("中央分隔线", "layout_column_separator_mode", str),
         ("分析阈值", "analysis_threshold_mode", str),
@@ -1849,9 +1780,9 @@ class SettingsDialog(tk.Toplevel):
     # unchanged; this layer only reorganizes the settings experience.
     SETTING_LABELS = {
         "columns": "正文栏数",
-        "start_y": "正文起始 V",
-        "bottom_y": "正文结束 V",
-        "manual_x": "第一栏左缘 U",
+        "start_y": "正文起始 Y",
+        "bottom_y": "正文结束 Y",
+        "manual_x": "第一栏左缘 X",
         "column_width": "单栏正文宽度",
         "gutter": "栏间空白",
         "character_height": "典型行高",
@@ -1895,19 +1826,19 @@ class SettingsDialog(tk.Toplevel):
 
     SETTING_HELP = {
         "columns": "作用：正文栏数，是版面几何、阅读顺序、OCR 候选带和后续切图共同使用的基础参数。若【栏数策略】为自动检测，程序会在版面分析时估计栏数；若为固定，则这里的值是权威值。\n\n调整：栏数设错会让栏左缘、词条归栏、阅读顺序和切图边界整体错位。优先用【检测当前页版面参数】和 Project Profile 的代表页结果确认，不建议为修一个局部页面临时改全项目栏数。",
-        "gutter": "作用：相邻正文栏之间的典型空白宽度，保存为参考页规范坐标。它参与栏位置推导、栏间区域判断和部分切图边界计算；并不等同于印刷中央分隔线本身的线宽。\n\n调整：过小会让相邻栏靠得过近，过大则可能把正文有效区域压窄。不同分辨率页面会按参考页坐标自动换算，通常应由版面检测或 Profile 代表页确定。",
-        "column_width": "作用：单栏正文的典型宽度，保存为参考页规范坐标。它决定栏几何的水平范围，并间接影响 OCR 候选带、词条矩形和相邻栏边界。\n\n调整：过小可能截掉长词头/释义并让切图偏窄；过大可能侵入栏间空白甚至邻栏。优先使用检测结果，不要用它去补偿单个页面的扫描偏移。",
-        "start_y": "作用：正文在参考页 canonical 阅读坐标中的起始 V。横排、identity 页面上通常可直观理解为正文起始 Y；旋转/竖排项目应按 canonical V 理解，而不是原图 Y。\n\n生效：运行时会按当前页尺寸换算；若 Project Profile 明确设置页眉模式/页眉比例，页面模板得到的有效正文上界可覆盖这个基础值。它影响画线/OCR 的正文范围，不是【切图设置】里的最终切图上边界。",
-        "bottom_y": "作用：正文在参考页 canonical 阅读坐标中的结束 V，用来限制版面分析和词头识别的有效正文区。横排时通常近似原图 Y，旋转/竖排时仍应按 canonical V 理解。\n\n调整：过小会漏掉页尾词条，过大可能把页码/脚注吸入正文。若 Project Profile 明确设置页尾模板，则有效页面下界可由模板覆盖；它也不是最终切图的下边界设置。",
-        "manual_x": "作用：第一栏左缘在参考页 canonical 坐标中的 U 位置。其余栏位置会结合栏宽、栏间距、方向/变换等推导。\n\n注意：镜像、RTL、竖排或旋转项目中，U 是规范阅读坐标，不应直接把它理解为原图左上角系的 X。只有确认自动版面检测不能稳定定位栏左缘时才手动修改。",
+        "gutter": "作用：相邻正文栏之间的典型空白宽度，单位为原图像素。它参与栏位置推导、栏间区域判断和部分切图边界计算；不会按页面宽度、窗口宽度或任何参考宽度自动缩放。\n\n调整：过小会让相邻栏靠得过近，过大则可能把正文有效区域压窄。通常应由版面检测或 Profile 代表页确定。",
+        "column_width": "作用：单栏正文的典型宽度，单位为原图像素。它决定栏几何的水平范围，并间接影响 OCR 候选带、词条矩形和相邻栏边界。该数值在运行时原样使用，不按页面宽度换算。\n\n调整：过小可能截掉长词头/释义并让切图偏窄；过大可能侵入栏间空白甚至邻栏。",
+        "start_y": "作用：正文起始 Y，单位为原图像素，原点在扫描图左上角，Y 向下。运行时直接使用该像素值，不按页面宽度或显示缩放换算。\n\n若 Project Profile 明确设置页眉模式/页眉比例，页面模板可以为当前页计算实际正文上界；最终保存/显示的坐标仍使用原图 X/Y。",
+        "bottom_y": "作用：正文结束 Y，单位为原图像素，用来限制版面分析和词头识别的有效正文区。运行时直接使用该像素值，不按页面宽度或显示缩放换算。\n\n调整：过小会漏掉页尾词条，过大可能把页码/脚注吸入正文。",
+        "manual_x": "作用：第一栏左缘 X，单位为原图像素，原点在扫描图左上角，X 向右。其余栏位置结合栏宽、栏间距推导；该值不会因窗口缩放或页面宽度而改变。\n\n镜像、RTL、竖排等阅读方向只影响内部读取顺序/临时变换，不改变这里保存的原图 X/Y 坐标语义。",
         "body_indent": "作用：主要服务【普通画线（备用）】的栏左墨迹搜索，表示从栏左缘向正文内部允许检查的宽度。它也会参与列跟踪搜索区的右侧范围。\n\n调整：太小会漏掉缩进词头；太大则更容易把释义正文开头当成词头。OCR画线主要依赖文字/结构证据，本项不是其首要调节项。",
-        "character_height": "作用：项目的典型单行字高（参考页规范坐标）。普通画线用它估计行尺度；OCR画线的行距/空白判断、横线 Y 精修和部分 CJK 视觉逻辑也会以它作为尺度基准。\n\n调整：应接近正文常规印刷行高，而不是某个特别大的词头字高。设得明显过大/过小会让行间关系、精修搜索尺度和部分切图高度失真。",
+        "character_height": "作用：项目的典型单行字高，单位为原图像素。普通画线用它估计行尺度；OCR画线的行距/空白判断、横线 Y 精修和部分 CJK 视觉逻辑也会以它作为尺度基准。\n\n调整：应接近正文常规印刷行高，而不是某个特别大的词头字高。",
         "row_padding": "作用：典型行周围的额外留白尺度。它参与普通画线行盒、词条单行框高度以及 OCR 词头前空白/分隔位置等计算。\n\n调整：增大可给文字上下更多安全空间，但过大会让相邻行更容易重叠/合并；过小则可能让横线或单行切图贴字过紧。应和【典型行高】一起校准。",
         "right_ratio": "作用：词条单行矩形向右覆盖当前栏宽的百分比；当前实现会限制在 1%–100%。它主要影响词条矩形/单行切图的水平覆盖，不决定 OCR 是否把某行识别为词头。\n\n调整：减小可避免把过多释义或邻近内容纳入单行框；增大可保留更完整的同行上下文。它属于历史兼容参数，目前不在设置中心常用分组中，最终导出范围仍应以【切图设置】为准。",
         "horizontal_tolerance": "兼容状态：该字段仍随项目保存并参与旧坐标迁移，但当前 v2.13.3 的普通画线/OCR画线主算法没有读取它来做实际判定。\n\n因此：修改这里通常不会改变当前识别结果。保留它主要是为了旧项目兼容和配置格式稳定；若需要修正栏左偏移，应优先调整版面几何、列跟踪或 OCR 左缘容差，而不是依赖此项。",
         "analysis_threshold_mode": "作用：决定【普通画线（备用）】如何把页面灰度转换成“墨迹/背景”。auto 等同推荐的全页 Otsu；adaptive 适合底色、阴影或书脊亮度不均；fixed 使用固定 RGB 和阈值，主要用于旧项目或可控扫描。\n\n选择：普通扫描先用 auto/Otsu；只有明显局部底色不均时再试 adaptive。该项主要影响图像墨迹分析，不会改变 PaddleOCR 的文字模型。",
         "darkness_threshold": "作用：仅在【分析阈值 = fixed】时作为固定黑度阈值使用，以 RGB 三通道和判断像素是否属于墨迹。auto/Otsu/adaptive 模式下它基本不参与当前判定。\n\n调整：阈值提高会让更浅的灰字/污点也被当作墨迹，召回可能增加但噪声也增加；阈值降低则更严格，可能漏掉浅色印刷。除旧项目外通常无需手调。",
-        "column_track_radius": "作用：开启【跟随栏左缘倾斜/弯曲】后，每个纵向分块允许在名义栏左缘附近向左右搜索真实墨迹边缘的半径，使用参考页规范坐标。\n\n调整：过小跟不上明显弯曲/斜拍；过大可能把搜索吸到正文内部或邻栏。平直扫描通常无需增加，先确认确实存在几何形变再改。",
+        "column_track_radius": "作用：开启【跟随栏左缘倾斜/弯曲】后，每个纵向分块允许在名义栏左缘附近向左右搜索真实墨迹边缘的半径，单位为原图像素。\n\n调整：过小跟不上明显弯曲/斜拍；过大可能把搜索吸到正文内部或邻栏。",
         "column_track_block_height": "作用：开启列跟踪后，沿阅读轴把页面切成多高的块来重新估计栏左缘。块越小，路径能更细地跟随局部弯曲；块越大，路径更平滑稳定。\n\n调整：太小容易受单个粗字、插图、污点影响；太大则跟不上快速变化的书脊弯曲。应与搜索半径、最大步移一起理解。",
         "column_track_max_step": "作用：限制相邻列跟踪锚点之间允许的最大水平跳变，避免某个分块突然追到正文或邻栏。\n\n调整：过小会把真实的快速弯曲强行拉直；过大则失去防跳栏作用。仅在已开启列跟踪且诊断显示路径被过度限制/突然跳变时调整。",
         "ocr_language": "作用：项目的主要词头/OCR语言，是多个组件的上层语义入口：用于选择/映射 PaddleOCR 与 Tesseract 语言、Dictionary Profile 默认结构、排序预设以及部分 CJK/拉丁解析路径。\n\n调整：应填写词头语言而不是释义语言。改变后可能导致 OCR 模型、Profile 和排序语义变化，已有 OCR 缓存/结果不应默认视为仍可比较，稳定项目中不要频繁切换。",
@@ -1915,28 +1846,28 @@ class SettingsDialog(tk.Toplevel):
         "paddle_preprocessing": "作用：决定送入 PaddleOCR 前的图像预处理。original 保留原图；grayscale 转灰度；auto_contrast 拉伸对比度；binary 强制二值化。\n\n选择：默认优先 original，因为 OCR 模型通常能利用原始灰度/颜色信息。只有扫描发灰、底色不均或模型确有改善证据时再改；过度二值化可能损失细笔画和重音符号。",
         "paddle_max_input_side": "作用：限制送入 PaddleOCR 的图像最大长边，超出时按比例缩小。它主要平衡小字细节、推理速度、内存/显存和模型稳定性。\n\n调整：增大可保留更多细节，但会更慢、更占显存；减小更省资源但可能让小字号/附加符号变糊。改变此项会改变 OCR 输入图像，应视为可能需要重新 OCR，而不仅是重新评分候选。",
         "paddle_band_width_ratio": "作用：每栏左侧有多少百分比宽度进入 OCR 候选带。程序不是把整栏全文都送去做词头判断，而是优先截取栏左区域以减少正文干扰。\n\n调整：太小会截断长词头、性别变体或紧随其后的 POS；太大则会引入更多释义正文、增加耗时和误候选。先以“能完整覆盖词头 + 近邻语法标签”为目标。",
-        "paddle_band_left_margin": "作用：在 OCR 候选带左侧额外向外扩出的参考像素（以 canonical 1400 宽基准缩放），用于保留略越出估计栏左缘、装饰符号或列跟踪误差附近的文字。\n\n调整：增加可救回被左边界裁切的词头；过大则会纳入页边线、污点或上一栏区域。它改变 OCR 输入带几何，必要时会导致 OCR 缓存失效。",
-        "paddle_left_tolerance": "作用：词头候选允许偏离估计栏左缘的最大程度（固定 1400 canonical 宽下的参考像素，运行时按页尺度换算）。这是“候选位置是否仍算栏左”的关键阈值。\n\n调整：增大可容纳缩进词头，但也更容易把正文缩进行吸进候选；减小更严格，但可能漏掉真实缩进或版面轻微漂移。优先结合候选诊断里的 X/归栏信息判断。",
+        "paddle_band_left_margin": "作用：在 OCR 候选带左侧额外向外扩出的距离，单位为原图像素，用于保留略越出估计栏左缘、装饰符号或列跟踪误差附近的文字。运行时不做 1400px 或页面宽度归一化。\n\n调整：增加可救回被左边界裁切的词头；过大则会纳入页边线、污点或上一栏区域。",
+        "paddle_left_tolerance": "作用：词头候选允许偏离估计栏左缘的最大距离，单位为原图像素。这是“候选位置是否仍算栏左”的关键阈值；设置 34 就是原图 34 px，不会在宽图上自动变成 68/102 px。\n\n调整：增大可容纳缩进词头，但也更容易把正文缩进行吸进候选；减小更严格。",
         "paddle_rec_score_threshold": "作用：在 OCR 碎片完成必要的同行/结构修复后，按识别置信度过滤低质量 OCR 行。低于阈值的行不会继续进入词头候选评分。\n\n调整：降低可提高召回、救回难字/粗体/重音符号，但会带入更多噪声；提高则更干净但更容易漏词。它和【词头候选最低分】不同：前者是 OCR 文字质量门槛，后者是综合结构评分门槛。",
         "paddle_line_merge_y_ratio": "作用：将同一印刷行被 OCR 拆成多个 box 时，允许多大的垂直差仍合并为一行。词头、性别变体和 POS 经常被模型拆成多个片段，因此这一步发生在后续语法解析之前。\n\n调整：增大可合并错开的碎片，但过大会把上下两行粘在一起；减小可避免串行，却可能让词头与 POS 分离。出现“同一行被拆开/上下行被合并”时才针对性调整。",
         "paddle_height_ratio": "作用：把候选行字高与页面候选行中位字高比较；达到该比例后获得“较大字”视觉提示并增加候选分。它是辅助证据，不是独立接受条件。\n\n调整：提高会让“字大”证据更难触发；降低会让更多正文也被视为大字。仅当词头确实通过字号区别于正文时才值得调，结构证据通常比字号更可靠。",
         "paddle_boldness_ratio": "作用：比较候选行前部墨迹密度与页面局部基准，达到该比例后获得“粗体/更黑”视觉提示并增加候选分。正文中的标签也可能粗体，所以它不是最强证据。\n\n调整：提高更严格、误触发少；降低更敏感，但扫描阴影/对比度变化会带来假粗体。应结合诊断中的 boldness_ratio，而不是仅凭肉眼猜测。",
         "paddle_gap_ratio": "作用：以“典型行高 + 行间空白”为尺度，判断当前候选前方是否存在足够大的纵向空白；满足时作为词条起始的弱视觉证据加分。\n\n调整：提高意味着需要更大的前置空白才算 separated；降低会让较小行距也触发该证据。它只贡献较弱分值，不应拿它替代 POS/变形等结构证据。",
         "paddle_min_candidate_score": "作用：候选在完成 lemma 解析、栏左位置、POS/变形/描述符、特殊符号、字高、粗体和行前空白等加权后，必须达到的综合最低分。\n\n调整：提高会减少误检但增加漏检；降低会提高召回但放入更多边缘候选。不要在不知道 reject_reason/score 构成时盲目下调；优先看 diagnostics 是缺结构、位置不对还是单纯分数不足。",
-        "paddle_header_search_height": "作用：自动页眉横线检测只在页面顶部这段高度内搜索；单位是固定 1400 canonical 宽下的参考像素。超出范围的横线不会被当作页眉规则线。\n\n调整：页眉线较低时可增大；太大可能把正文中的表格线/装饰线误当页眉。若项目由 Profile 明确给出页眉模板，优先使用模板语义。",
+        "paddle_header_search_height": "作用：自动页眉横线检测只在页面顶部这段高度内搜索，单位为原图像素。超出范围的横线不会被当作页眉规则线；该值不再按 1400px 基准缩放。\n\n调整：页眉线较低时可增大；太大可能把正文中的表格线/装饰线误当页眉。",
         "paddle_header_rule_ink_ratio": "作用：在页眉搜索区逐行计算黑色墨迹占比，达到该比例的行才有资格被视为贯穿式页眉横线。当前实现会把输入限制在合理范围后使用。\n\n调整：提高更严格，需要更长/更实的横线；降低可识别断裂或浅色横线，但也更容易把文字行误判为横线。只有【自动忽略页眉横线以上】开启时才有意义。",
-        "paddle_header_rule_margin": "作用：识别到页眉横线后，再向正文方向额外留出的安全距离，避免横线本身及其附近文字进入候选区；按 1400 canonical 宽参考像素缩放。\n\n调整：增大可避免页眉残留，但可能吃掉第一条正文词头；减小则更贴近横线。第一条词头被漏掉时应同时检查页眉线位置和这个余量。",
+        "paddle_header_rule_margin": "作用：识别到页眉横线后，再向正文方向额外留出的安全距离，单位为原图像素。该值不再按页面宽度缩放。\n\n调整：增大可避免页眉残留，但可能吃掉第一条正文词头；减小则更贴近横线。",
         "paddle_pos_search_chars": "作用：lemma 提取后，语法解析在其后的多长文本范围内寻找 POS/变形等结构提示。这样可利用近邻语法标签，同时避免把很后面的释义正文缩写误当词头证据。\n\n调整：长词头、长性别变体或 POS 距离较远时可适当增大；过大可能在定义正文里误命中缩写。存在活动 Dictionary Profile 时，POS 标签集合通常由 Profile 的 pos_labels 决定。",
         "paddle_separator_search_ratio": "作用：OCR 粗定位词头 Y 后，以典型行高为尺度，在其附近上下搜索更合理的空白带/分隔位置，从而把横线从文字框位置精修到视觉上的行间空白。\n\n调整：增大搜索更宽，能修正较大的 OCR Y 偏差，但更可能跳到相邻行；减小更保守。只有【自动精修横线 Y】开启时才直接影响结果。",
-        "paddle_separator_band_radius": "作用：横线 Y 精修时，对局部墨迹/空白曲线做平滑的半径（1400 canonical 宽参考像素）。目的是降低单个字符笔画、噪点造成的尖锐波动。\n\n调整：增大更平滑但可能抹掉窄空白带；减小更敏感但更受噪声影响。一般不应单独调，除非诊断显示精修曲线过躁或过度平滑。",
-        "paddle_separator_safety_px": "作用：横线精修后与当前词头墨迹之间保留的额外安全距离（1400 canonical 宽参考像素），防止横线压到字符。\n\n调整：文字被线贴住/穿过时增大；横线与词头间距明显过大时减小。它改变最终显示/词条边界位置，不改变 OCR 文本本身。",
+        "paddle_separator_band_radius": "作用：横线 Y 精修时，对局部墨迹/空白曲线做平滑的半径，单位为原图像素。该值不再使用 1400px 参考宽度。\n\n调整：增大更平滑但可能抹掉窄空白带；减小更敏感但更受噪声影响。",
+        "paddle_separator_safety_px": "作用：横线精修后与当前词头墨迹之间保留的额外安全距离，单位为原图像素。设置 2 就始终是原图 2 px，不随页面宽度变化。\n\n调整：文字被线贴住/穿过时增大；横线与词头间距明显过大时减小。",
         "paddle_separator_roi_width_ratio": "作用：横线 Y 精修时，只分析当前栏左侧一定百分比的横向区域，而不是整栏释义。这样可减少右侧长定义、插图或其他墨迹干扰。\n\n调整：减小更聚焦词头附近；太小可能只看到少量字符而不稳定。增大提供更多墨迹统计，但正文干扰也增加。",
-        "paddle_separator_column_margin": "作用：横线精修分析时，从栏最左边缘跳过一小段区域，避免栏边线、装订阴影、竖直装饰线被误当作文字墨迹。\n\n调整：存在明显栏线/黑边时可增大；过大会跳过真正贴边的词头。单位按 1400 canonical 宽参考像素换算。",
+        "paddle_separator_column_margin": "作用：横线精修分析时，从栏最左边缘跳过一小段区域，避免栏边线、装订阴影、竖直装饰线被误当作文字墨迹。单位为原图像素，不按页面宽度缩放。\n\n调整：存在明显栏线/黑边时可增大；过大会跳过真正贴边的词头。",
         "paddle_tesseract_psm": "作用：Tesseract 对照 OCR 的 Page Segmentation Mode。当前词头候选带常见 PSM 6（单一均匀文本块）与 PSM 4（单栏但行/字号更灵活）；若开启【自动比较 PSM 4/6】，程序会自行比较，不必手动固定。\n\n调整：只有 Tesseract 对照结果明显分行错误且自动比较关闭时才改。它不影响 PaddleOCR。",
         "paddle_lens_language": "Google Lens OCR 语言自动跟随【词头 OCR 语言】，不再单独配置。Profile 或 OCR 语言变化时会同步更新。",
         "paddle_lens_timeout": "作用：一次 Google Lens 网络 OCR 最长等待时间。超时后该次 Lens 结果会失败/缺失，但本地 Paddle/Tesseract 流程仍可继续。\n\n调整：网络慢而频繁超时时可增大；过大则在服务不可达时等待更久。Lens 是可选网络依赖，不建议用超长超时掩盖网络配置问题。",
         "paddle_lens_default_confidence": "作用：Lens 没有提供可直接比较的真实置信度时，给它一个用于多 OCR 质量比较的默认值。这个数会影响 Lens 在可投票模式下的相对权重。\n\n调整：提高会让无置信度 Lens 结果更容易与本地 OCR 竞争；降低则更保守。除非已系统评估 Lens 在本项目上的可靠性，否则保持默认。",
-        "paddle_alignment_y_tolerance_ratio": "作用：Paddle 与 Tesseract/Lens 候选做跨引擎配对时，允许它们在 canonical 阅读轴 V 上相差多少个典型行高。只有位置足够接近的候选才可能被认为是同一词头。\n\n调整：增大可配对 Y 偏差较大的结果，但可能把相邻两条词头错配；减小更严格但会增加“各自独立候选”。",
+        "paddle_alignment_y_tolerance_ratio": "作用：Paddle 与 Tesseract/Lens 候选做跨引擎配对时，允许它们在 内部阅读方向 上相差多少个典型行高。只有位置足够接近的候选才可能被认为是同一词头。\n\n调整：增大可配对 Y 偏差较大的结果，但可能把相邻两条词头错配；减小更严格但会增加“各自独立候选”。",
         "paddle_alignment_min_similarity": "作用：跨 OCR 候选除位置外，lemma 文本相似度还需达到该最低值才优先视为同一候选。它帮助避免 Y 相近但实际上是不同词头的错误合并。\n\n调整：提高更严格、错配少但 OCR 字符误差较大时难配对；降低能容忍更多识别差异但可能错误合并。应结合 comparison/fusion 报告调。",
         "paddle_conflict_review_margin": "作用：当多个 OCR 给出的质量分接近时，用这个“质量差阈值”决定是否把结果标成需要人工复核。当前逻辑中，质量差小于该值更容易进入 review。\n\n调整：增大意味着更多近似甚至中等差异的冲突进入人工复核；减小则只有非常接近的结果才提示 review。它影响复核负担，不是 OCR 字符识别阈值。",
         "paddle_headword_regex": "作用：从每个合并后的 OCR 候选行开头提取 lemma（词头文字）。匹配成功后，若正则含捕获组，程序取第 1 个捕获组作为原始词头；它只是“词头像不像一个合法字符串”这一关，最终是否接受仍会结合栏左位置、词性/变形/符号、视觉分数和 Profile 规则。\n\n默认：允许行首空格及可选的 • ◆ ◇ ► ▶ * † ‡ § ¶；允许前/后置连字符、Unicode 字母、音节分隔点 · • ∙ ‧，并容忍 OCR 把分隔点识成 . : + -；也允许撇号连接。例如“• a·ga·rrón s. m.”提取 a·ga·rrón，“anti- adj.”提取 anti-。\n\n修改：第 1 捕获组应只包住 lemma。写得过宽会把逗号、POS/正文吞入词头；过窄会在后续评分前直接漏词。默认 Latin Profile 还会把通用 Unicode 字母范围收窄为拉丁字母；项目特例优先用 Profile 或过滤规则。",
@@ -1955,11 +1886,11 @@ class SettingsDialog(tk.Toplevel):
         "review_entry_font_family": "作用：校对窗口中“原词条”编辑框使用的字体，与主界面字体和简体伴随列字体相互独立。只影响显示和字符宽度测量。\n\n选择：【自动（系统推荐）】会根据当前 OCR 语言和操作系统选择字体；手动选择后固定使用该字体。字体应完整覆盖重音字母/CJK/特殊符号；字体变化可能改变编辑框按裁图宽度换算出的可见字符数，但不会修改保存文字。",
         "review_entry_font_size": "作用：校对窗口原词条编辑框固定字号；校对图片缩放不会自动把这个字号一起放大/缩小。这样可独立控制图片细节和文字编辑可读性。\n\n调整：增大便于阅读，但同一宽度能显示的字符数减少；减小反之。只影响界面。",
         "review_entry_vertical_padding": "作用：校对文本框内部上下对称留白（像素），主要用于避免重音、上标/下延部或特殊字体被单行 Entry 裁切。\n\n调整：字符顶/底被切时增大；过大会让每行校对控件显得过高。它不改变行高模型、图片裁图或 PDIC。",
-        "review_single_cjk_line_height": "作用：校对窗口针对中文单字词条使用的特殊裁图行高。0 表示自动按项目典型行高的约 2.5 倍计算；非 0 时使用显式参考页规范高度。\n\n调整：单字大字头被上下裁掉时增大；留白过多时减小。只影响校对裁图展示，不改变词头检测位置。",
+        "review_single_cjk_line_height": "作用：校对窗口针对中文单字词条使用的特殊裁图行高。0 表示自动按项目典型行高约 2.5 倍计算；非 0 时单位为原图像素。\n\n调整：单字大字头被上下裁掉时增大；留白过多时减小。只影响校对裁图展示，不改变词头检测位置。",
         "review_zoom_percent": "校对切条图片默认使用自动适宽：0 表示按校对窗口左侧实际图片区宽度自动计算，使切条图片占约 99%。手动输入百分比或使用 +/- 后切换为手动缩放；点击【自动】可恢复自动适宽。",
         "wordslist_path": "作用：指定参考 wordslist.txt，用于主界面/校对界面的“是否已在词表中”、定位和新旧比较等辅助判断。程序使用成员索引，不要求把整份大词表一次渲染到 GUI。\n\n路径：项目内文件优先保存相对路径便于迁移；项目外文件使用绝对路径。它是校对参考源，不会反向修改 OCR 识别结果。",
-        "illustration_detect_padding": "作用：自动插图检测得到初始 PPP 轮廓/边界后，四周统一额外扩出的参考页规范像素，用于避免图像主体贴边被裁掉。\n\n调整：插图边缘经常缺失可增大；过大会吞入正文。它只影响自动生成的初始插图区域，之后人工编辑的 PPP 仍是最终依据。",
-        "illustration_detect_right_padding": "作用：在通用插图外扩之外，右侧再额外扩展的参考页规范像素。用于某些词典插图常向栏间或右侧空白延伸的版式。\n\n调整：只在右侧经常被截时增加；过大会把邻近文字纳入插图。它不会修改已经人工确认过的 PPP 顶点，除非重新运行自动检测生成新的初始结果。",
+        "illustration_detect_padding": "作用：自动插图检测得到初始 PPP 轮廓/边界后，四周统一额外扩出的原图像素，用于避免图像主体贴边被裁掉。\n\n调整：插图边缘经常缺失可增大；过大会吞入正文。",
+        "illustration_detect_right_padding": "作用：在通用插图外扩之外，右侧再额外扩展的原图像素。用于某些词典插图常向栏间或右侧空白延伸的版式。\n\n调整：只在右侧经常被截时增加；过大会把邻近文字纳入插图。",
         "dictionary_full_name": "作用：当前词典的完整名称，属于项目元数据，用于项目详情、后期词典制作和导出信息。不会改变 OCR、画线或排序算法。\n\n填写：建议使用正式书名而不是本地文件夹名；后续打包/共享项目时更容易识别来源。",
         "dictionary_abbreviation": "作用：词典缩写/短名，供 PicDic、导出命名或项目元数据使用。它不参与识别。\n\n填写：应稳定、简短且避免频繁变化；如果下游格式使用它作为标识，修改后需注意旧导出物与新导出物的一致性。",
         "dictionary_isbn": "作用：可选的 ISBN 项目资料，用于来源记录和后期词典元数据，不参与任何 OCR/版面判断。\n\n填写：没有 ISBN 或版本不确定时可留空；不要为了通过设置校验填伪值。",
@@ -1967,9 +1898,9 @@ class SettingsDialog(tk.Toplevel):
         "dictionary_content_language": "作用：释义/正文内容语言的 ISO 639-1 两位代码，用于后期词典元数据。双语词典中它通常和索引语言不同。\n\n注意：它不负责选择 OCR 模型，也不会改变词头排序；请按词典内容语义填写。",
         "dictionary_body_page_range": "作用：记录词典正文的页码范围，例如 1-1250。Project Profile 选择代表页、批量工作流或后续制作步骤可据此区分正文与前后附页。\n\n填写：使用逻辑正文页范围，而不是操作系统文件序号；范围错误可能让代表页/批量流程包含封面、索引或附录。",
         "dictionary_custom_profile_name": "作用：仅给当前项目的“自定义结构”Profile 一个更易读的显示名称；底层 Profile key 仍保持 custom，解析器和持久化身份不会因此改变。\n\n适用：当你为某本特殊词典建立了自定义结构时，可用书名/版式名标记。它不是新建一个新的内置 Profile，也不会自动改变任何识别规则。",
-        "layout_writing_mode": "作用：定义页面文字的书写轴，例如横排 horizontal-tb 或竖排。它决定 canonical 阅读坐标如何解释，并影响栏排序、阅读轴和若干几何转换。\n\n修改：应由 Project Profile 根据真实版式确定。错误设置会造成坐标轴、阅读顺序、OCR 配对和切图语义整体错误，不应作为局部识别率微调项。",
-        "layout_text_direction": "作用：定义同一书写模式下的阅读方向，例如横排 LTR/RTL。它影响 canonical 栏顺序、阅读顺序和某些界面/导出排序，而不是把图片像素简单翻转。\n\n修改：应与词典实际阅读方向一致；阿拉伯/希伯来等 RTL 项目尤其重要。通常由 Project Profile 管理。",
-        "layout_transform": "作用：把原始扫描页面映射到内部 canonical 阅读坐标的变换，例如 identity、mirror_x、rotate_ccw90/rotate_cw90。它是坐标契约的一部分。\n\n修改：一般由书写模式/方向自动推导，不建议手动试错。错误 transform 会让 source X/Y 与 canonical U/V 对应关系整体错位，属于高风险专家项。",
+        "layout_writing_mode": "作用：定义页面文字的书写方式，例如横排或竖排，并影响阅读顺序和内部图像分析方向。\n\n坐标规则：无论选择哪种书写方式，用户设置、PDIC/PPP 和对外坐标始终只保存原图 X/Y；内部临时旋转/镜像不会建立第二套持久化坐标。",
+        "layout_text_direction": "作用：定义阅读方向，例如横排 LTR/RTL。它影响栏顺序、阅读顺序和某些界面/导出排序。\n\n坐标规则：阅读方向不会改变设置值的原图 X/Y 语义。",
+        "layout_transform": "作用：内部分析时可对原图做临时 identity/mirror/rotate 变换，以统一阅读顺序。\n\n坐标规则：这是内部处理方式，不是第二套用户坐标。所有设置和最终结果在离开内部处理边界前都回到原图 X/Y。",
         "layout_columns_policy": "作用：决定栏数是由版面检测自动估计（detect）还是固定使用项目设置值（fixed）。\n\n选择：不同页面栏数稳定且检测容易受插图/空白干扰时可固定；版式可能变化或希望按实际页面估计时用 detect。fixed 下【正文栏数】尤为关键。",
         "layout_column_separator_mode": "作用：告诉版面检测中央/栏间是否存在明显分隔线：auto 自动判断，present 明确存在，absent 明确没有。该信息会改变栏边搜索区域和分隔线检测策略。\n\n选择：有稳定印刷竖线时 present 可减少歧义；明确无竖线时 absent 避免程序为不存在的线留搜索空间；不确定保持 auto。",
         "paddle_language": "作用：PaddleOCR 后端使用的语言/模型代码。通常由上层【OCR 语言】映射得到，属于后端专家覆盖项。\n\n修改：只有默认映射不适合当前模型或在调试 PaddleOCR 后端时才手动指定。与项目主语言不一致可能显著降低识别率，并可能改变 OCR 缓存签名。",
@@ -2032,20 +1963,20 @@ class SettingsDialog(tk.Toplevel):
 
     SETTING_UNITS = {
         "columns": "栏",
-        "start_y": "参考页规范px", "bottom_y": "参考页规范px", "manual_x": "参考页规范px",
-        "column_width": "参考页规范px", "gutter": "参考页规范px", "body_indent": "参考页规范px",
-        "character_height": "参考页规范px", "row_padding": "参考页规范px", "horizontal_tolerance": "参考页规范px",
-        "darkness_threshold": "RGB 和", "column_track_radius": "参考页规范px",
-        "column_track_block_height": "参考页规范px", "column_track_max_step": "参考页规范px",
-        "paddle_band_width_ratio": "%", "paddle_band_left_margin": "参考px@1400",
-        "paddle_left_tolerance": "参考页规范px", "paddle_max_input_side": "px",
-        "paddle_separator_safety_px": "参考页规范px", "paddle_separator_band_radius": "参考px@1400",
-        "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "参考px@1400",
-        "paddle_header_search_height": "参考px@1400", "paddle_header_rule_margin": "参考px@1400",
-        "batch_interval": "秒", "illustration_detect_padding": "参考页规范px",
-        "illustration_detect_right_padding": "参考页规范px", "main_entry_font_size": "pt",
+        "start_y": "原图px", "bottom_y": "原图px", "manual_x": "原图px",
+        "column_width": "原图px", "gutter": "原图px", "body_indent": "原图px",
+        "character_height": "原图px", "row_padding": "原图px", "horizontal_tolerance": "原图px",
+        "darkness_threshold": "RGB 和", "column_track_radius": "原图px",
+        "column_track_block_height": "原图px", "column_track_max_step": "原图px",
+        "paddle_band_width_ratio": "%", "paddle_band_left_margin": "原图px",
+        "paddle_left_tolerance": "原图px", "paddle_max_input_side": "px",
+        "paddle_separator_safety_px": "原图px", "paddle_separator_band_radius": "原图px",
+        "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "原图px",
+        "paddle_header_search_height": "原图px", "paddle_header_rule_margin": "原图px",
+        "batch_interval": "秒", "illustration_detect_padding": "原图px",
+        "illustration_detect_right_padding": "原图px", "main_entry_font_size": "pt",
         "review_entry_font_size": "pt", "review_entry_vertical_padding": "px",
-        "review_single_cjk_line_height": "参考页规范px", "review_zoom_percent": "%",
+        "review_single_cjk_line_height": "原图px", "review_zoom_percent": "%",
     }
     SETTING_SPIN = {
         "columns": (1, 12, 1),
@@ -2111,7 +2042,7 @@ class SettingsDialog(tk.Toplevel):
         "paddle_compare_tesseract": "开启：对同一候选带额外运行 Tesseract，作为 PaddleOCR 的第二意见并进入比较/诊断；需要 Tesseract 程序和相应语言包。\n\n影响：运行时间增加，但可暴露系统性字符差异。它本身不等于“允许 Tesseract 独有结果补线”，后者由【Tesseract 可补漏 Paddle】控制。",
         "paddle_tesseract_rescue": "开启：允许满足结构/位置条件的 Tesseract 独有候选补回 Paddle 漏掉的词头，而不只是做诊断对照。\n\n风险：可提高召回，也会引入 Tesseract 特有误检。建议先开启对照看 comparison/issues，再决定是否让其参与补漏。",
         "paddle_tesseract_auto_psm": "开启：程序自动比较 Tesseract PSM 4 与 PSM 6，选择更适合当前候选带的结果；减少手动猜 Page Segmentation Mode。\n\n关闭：固定使用【Tesseract 对照 PSM】。只有已验证某本词典某个 PSM 明显更稳定、且自动选择反复选错时才关闭。",
-        "paddle_dual_ocr_arbitration": "开启：对 Paddle/Tesseract（以及可投票的 Lens）候选按 canonical V、lemma 相似度、结构与质量做融合/仲裁，而不是让某个引擎简单覆盖另一个。\n\n关闭：更接近单引擎/诊断式工作流。正常多 OCR 项目建议开启；需要复现实验性的单引擎结果时再关闭。",
+        "paddle_dual_ocr_arbitration": "开启：对 Paddle/Tesseract（以及可投票的 Lens）候选按 原图位置、lemma 相似度、结构与质量做融合/仲裁，而不是让某个引擎简单覆盖另一个。\n\n关闭：更接近单引擎/诊断式工作流。正常多 OCR 项目建议开启；需要复现实验性的单引擎结果时再关闭。",
         "paddle_show_candidate_checkboxes": "开启：主图为栏左 OCR 候选显示人工复选框，可把自动拒绝但合理的候选手工加入，也可取消自动接受结果；人工决定保存到独立 sidecar，便于追溯。\n\n关闭：界面更干净，但失去逐候选快速覆盖入口。只影响人工复核 UI，不重新运行 OCR。",
         "ocr_replace": "开启：普通文本 OCR 完成后执行项目替换规则，用于已知 OCR 拼写/字符归一化。这里说的是“已有词条线后的文本 OCR”，不是 OCR画线的词头 parser。\n\n关闭：保留 OCR 原始文本。排查替换规则是否误改内容时可暂时关闭。",
         "lowercase_ocr": "开启：普通文本 OCR 输出统一转为小写。只影响文本内容，不改变词头横线、坐标或 OCR画线候选。\n\n注意：专名、缩写或大小写具有词典意义的项目不应开启。它不是排序时的大小写折叠选项。",
@@ -3813,20 +3744,12 @@ class SettingsDialog(tk.Toplevel):
             if self.parent.image is not None and not str(
                 getattr(self.parent.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
             ).startswith("vertical"):
-                transform = LayoutTransform(
-                    str(getattr(self.parent.settings, "layout_transform", "identity") or "identity")
-                )
-                canonical_width = transform.canonical_size(self.parent.image.size)[0]
                 if (
                     "start_y" in self.vars
                     and str(getattr(self.parent.settings, "profile_header_mode", "auto") or "auto")
                     == "present"
                 ):
-                    source_y = stored_geometry_to_canonical(
-                        int(self.parent.settings.start_y),
-                        canonical_width,
-                        self.parent.settings,
-                    )
+                    source_y = int(self.parent.settings.start_y)
                     source_y = max(0, min(self.parent.image.height, source_y))
                     percent = source_y * 100.0 / max(1, self.parent.image.height)
                     if percent > 35.0:
@@ -3837,11 +3760,7 @@ class SettingsDialog(tk.Toplevel):
                     and str(getattr(self.parent.settings, "profile_footer_mode", "auto") or "auto")
                     == "present"
                 ):
-                    source_y = stored_geometry_to_canonical(
-                        int(self.parent.settings.bottom_y),
-                        canonical_width,
-                        self.parent.settings,
-                    )
+                    source_y = int(self.parent.settings.bottom_y)
                     source_y = max(0, min(self.parent.image.height, source_y))
                     percent = (
                         (self.parent.image.height - source_y)
@@ -7427,7 +7346,6 @@ class CropSettingsDialog(tk.Toplevel):
     """Unified crop settings used by both whole-entry and PPP illustration export."""
 
     CONFIG_NAME = "_CropSettings.json"
-    LEGACY_CONFIG_NAME = "_IllustrationCropSettings.json"
 
     def __init__(self, parent: "PictureCaptureApp", indices: list[int]) -> None:
         super().__init__(parent)
@@ -7454,23 +7372,17 @@ class CropSettingsDialog(tk.Toplevel):
             return None
         return qt_root(self.parent.project.root) / self.CONFIG_NAME
 
-    @property
-    def _legacy_config_path(self) -> Path | None:
-        if not self.parent.project:
-            return None
-        return qt_root(self.parent.project.root) / self.LEGACY_CONFIG_NAME
-
     def _load_initial_values(self) -> None:
         saved = self.parent._load_crop_settings()
-        self.general_top_var.set(str(saved.get("general_top_v", self.parent.settings.start_y)))
+        self.general_top_var.set(str(saved.get("general_top_y", self.parent.settings.start_y)))
         default_bottom = self.parent.settings.bottom_y if self.parent.settings.crop_to_bottom_y else 0
-        self.general_bottom_var.set(str(saved.get("general_bottom_v", default_bottom)))
-        self.entry_left_padding_var.set(str(saved.get("entry_left_padding_u", 0)))
-        self.entry_right_padding_var.set(str(saved.get("entry_right_padding_u", 0)))
+        self.general_bottom_var.set(str(saved.get("general_bottom_y", default_bottom)))
+        self.entry_left_padding_var.set(str(saved.get("entry_left_padding_x", 0)))
+        self.entry_right_padding_var.set(str(saved.get("entry_right_padding_x", 0)))
         self.integrate_illustrations_var.set(bool(saved.get("integrate_illustrations", True)))
         self.margin_var.set(str(saved.get("polygon_margin", 0)))
         self.workers_var.set(str(saved.get("parallel_workers", self.parent.settings.crop_parallel_workers)))
-        self._legacy_specials = (
+        self._specials = (
             dict(saved.get("special_pages", {}))
             if isinstance(saved.get("special_pages", {}), dict) else {}
         )
@@ -7496,23 +7408,23 @@ class CropSettingsDialog(tk.Toplevel):
             scope += f"（{first} → {last}）"
         ttk.Label(general, text=scope).grid(row=0, column=1, columnspan=4, sticky="w")
 
-        ttk.Label(general, text="一般页切图上边界 V（参考页）：").grid(row=1, column=0, sticky="w", pady=(7, 2))
+        ttk.Label(general, text="一般页切图上边界 Y（原图）：").grid(row=1, column=0, sticky="w", pady=(7, 2))
         ttk.Entry(general, textvariable=self.general_top_var, width=10).grid(row=1, column=1, sticky="w", pady=(7, 2))
-        ttk.Label(general, text="一般页切图下边界 V（参考页）：").grid(row=1, column=2, sticky="w", padx=(14, 0), pady=(7, 2))
+        ttk.Label(general, text="一般页切图下边界 Y（原图）：").grid(row=1, column=2, sticky="w", padx=(14, 0), pady=(7, 2))
         ttk.Entry(general, textvariable=self.general_bottom_var, width=10).grid(row=1, column=3, sticky="w", pady=(7, 2))
         ttk.Label(
             general,
-            text="单位：参考页规范像素；0 = 页面底部。仅用于 Section=0 页面；Section>0 时以页面 Section 边界为准。",
+            text="单位：原图像素；0 = 页面底部。仅用于 Section=0 页面；Section>0 时以页面 Section 边界为准。",
             foreground="#666666",
         ).grid(row=2, column=0, columnspan=5, sticky="w")
 
-        ttk.Label(general, text="词条 U 负向额外留白：").grid(row=3, column=0, sticky="w", pady=(8, 2))
+        ttk.Label(general, text="词条 X 左侧额外留白：").grid(row=3, column=0, sticky="w", pady=(8, 2))
         ttk.Entry(general, textvariable=self.entry_left_padding_var, width=10).grid(row=3, column=1, sticky="w", pady=(8, 2))
-        ttk.Label(general, text="词条 U 正向额外留白：").grid(row=3, column=2, sticky="w", padx=(14, 0), pady=(8, 2))
+        ttk.Label(general, text="词条 X 右侧额外留白：").grid(row=3, column=2, sticky="w", padx=(14, 0), pady=(8, 2))
         ttk.Entry(general, textvariable=self.entry_right_padding_var, width=10).grid(row=3, column=3, sticky="w", pady=(8, 2))
         ttk.Label(
             general,
-            text="单位：参考页规范像素；运行时按当前页面分辨率缩放。",
+            text="单位：原图像素；运行时不按页面宽度缩放。",
         ).grid(row=4, column=0, columnspan=5, sticky="w")
 
         ttk.Checkbutton(
@@ -7526,9 +7438,9 @@ class CropSettingsDialog(tk.Toplevel):
             foreground="#666666",
         ).grid(row=5, column=2, columnspan=3, sticky="w", pady=(8, 2))
 
-        ttk.Label(general, text="PPP多边形外扩（参考页）：").grid(row=6, column=0, sticky="w", pady=(8, 2))
+        ttk.Label(general, text="PPP多边形外扩（原图）：").grid(row=6, column=0, sticky="w", pady=(8, 2))
         ttk.Entry(general, textvariable=self.margin_var, width=10).grid(row=6, column=1, sticky="w", pady=(8, 2))
-        ttk.Label(general, text="参考页像素（只影响插图导出，不改PPP原图坐标）").grid(row=6, column=2, columnspan=3, sticky="w", pady=(8, 2))
+        ttk.Label(general, text="原图像素（只影响插图导出，不改PPP原图坐标）").grid(row=6, column=2, columnspan=3, sticky="w", pady=(8, 2))
         ttk.Label(general, text="并行进程：").grid(row=7, column=0, sticky="w", pady=2)
         ttk.Entry(general, textvariable=self.workers_var, width=10).grid(row=7, column=1, sticky="w", pady=2)
         ttk.Label(general, text="0 = 自动；词条/插图切图共用").grid(row=7, column=2, columnspan=3, sticky="w", pady=2)
@@ -7542,12 +7454,6 @@ class CropSettingsDialog(tk.Toplevel):
             text="特殊页面请在主界面【六、页面列表】的 Section 列双击设置；Section=1 可直接拖动单一上/下边界，Section≥2 可设置多个阅读区。",
             wraplength=720, justify="left",
         ).pack(anchor="w")
-        if self._legacy_specials:
-            ttk.Label(
-                section_info,
-                text=f"检测到 {len(self._legacy_specials)} 个旧版“特殊页面覆盖”。仅在对应页面 Section=0 时继续兼容生效；一旦设置 Section，Section 自动优先。",
-                foreground="#8a5a00", wraplength=720, justify="left",
-            ).pack(anchor="w", pady=(6, 0))
 
         bottom = ttk.Frame(self, padding=(18, 0, 18, 12))
         bottom.pack(fill="x")
@@ -7583,18 +7489,17 @@ class CropSettingsDialog(tk.Toplevel):
             raise ValueError("一般底部Y必须大于页眉Y，或填0表示图片底部")
         return {
             "version": CROP_SETTINGS_VERSION,
-            "coordinate_space": CANONICAL_REFERENCE_SPACE,
-            "geometry_reference_width": _geometry_reference_width(self.parent.settings),
-            "general_top_v": top,
-            "general_bottom_v": bottom,
-            "entry_left_padding_u": entry_left,
-            "entry_right_padding_u": entry_right,
+            "coordinate_space": SOURCE_COORDINATE_SPACE,
+            "general_top_y": top,
+            "general_bottom_y": bottom,
+            "entry_left_padding_x": entry_left,
+            "entry_right_padding_x": entry_right,
             "integrate_illustrations": bool(self.integrate_illustrations_var.get()),
             "polygon_margin": margin,
             "parallel_workers": workers,
             # Read-only compatibility for old projects. New per-page ranges live
             # in PageSections sidecars and take precedence during crop planning.
-            "special_pages": dict(self._legacy_specials),
+            "special_pages": dict(self._specials),
         }
 
     def save_settings(self) -> None:
@@ -10042,7 +9947,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Entry(
             lens_row, textvariable=safety_var, width=4, justify="left"
         ).pack(side="left", padx=(2, 2))
-        ttk.Label(lens_row, text="参考px@1400").pack(side="left")
+        ttk.Label(lens_row, text="原图px").pack(side="left")
         ocr_tools = ttk.Frame(ocr)
         ocr_tools.grid(row=4, column=0, columnspan=6, sticky="ew", pady=(4, 0))
         ttk.Button(
@@ -10361,11 +10266,6 @@ class PictureCaptureApp(tk.Tk):
         raw = int(getattr(self.settings, name, 0) or 0)
         if self.image is None:
             return raw
-        transform = LayoutTransform(
-            str(getattr(self.settings, "layout_transform", "identity") or "identity")
-        )
-        canonical_width, _canonical_height = transform.canonical_size(self.image.size)
-
         horizontal = not str(
             getattr(self.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
         ).startswith("vertical")
@@ -10388,18 +10288,15 @@ class PictureCaptureApp(tk.Tk):
                     / 100.0
                 )
             )
-        return stored_geometry_to_canonical(raw, canonical_width, self.settings)
+        return raw
 
     def _refresh_quick_coordinate_labels(self) -> None:
         if not hasattr(self, "quick_field_labels"):
             return
-        vertical = str(
-            getattr(self.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
-        ).startswith("vertical")
         labels = {
-            "start_y": "正文起始V：" if vertical else "页眉Y(原图)：",
-            "bottom_y": "正文结束V：" if vertical else "页尾Y(原图)：",
-            "manual_x": "首栏U：",
+            "start_y": "正文起始Y(原图)：",
+            "bottom_y": "正文结束Y(原图)：",
+            "manual_x": "首栏X(原图)：",
         }
         for name, label in labels.items():
             widget = self.quick_field_labels.get(name)
@@ -10499,19 +10396,7 @@ class PictureCaptureApp(tk.Tk):
                             if not 0.0 <= percent <= 35.0:
                                 raise ValueError("页尾必须位于原图底部 35% 范围内。")
                             self.settings.profile_footer_percent = round(percent, 6)
-                    # Persist against the project's explicit canonical
-                    # reference page. On the reference page this is identity;
-                    # on a differently sized scan it removes current-page scaling.
-                    if self.image is not None:
-                        transform = LayoutTransform(
-                            str(getattr(self.settings, "layout_transform", "identity") or "identity")
-                        )
-                        canonical_width = transform.canonical_size(self.image.size)[0]
-                        value = canonical_geometry_to_stored(
-                            value, canonical_width, self.settings,
-                        )
-                    else:
-                        value = int(value)
+                    value = int(value)
                 if name == "paddle_band_width_ratio" and not 1 <= int(value) <= 100:
                     raise ValueError("候选带宽比例必须在 1–100 之间；100 即原候选带宽。")
                 if name == "paddle_separator_safety_px" and not 0 <= int(value) <= 50:
@@ -10930,7 +10815,7 @@ class PictureCaptureApp(tk.Tk):
             return
         if not messagebox.askyesno(
             "检测版面一致性",
-            f"将快速扫描当前所选 {len(indices)} 页，检测规范坐标中的页眉横线 V 和正文最左 U。\n\n"
+            f"将快速扫描当前所选 {len(indices)} 页，输出原图 X/Y 中的页眉边界与正文左缘。\n\n"
             "此任务使用灰度投影而非 PaddleVL/OCR，以便高效处理数千页。是否继续？",
             parent=self,
         ):
@@ -10944,49 +10829,36 @@ class PictureCaptureApp(tk.Tk):
             with Image.open(pages[index]) as opened:
                 image_size = opened.size
                 estimate = detect_layout_consistency(opened, settings)
-            transform_kind = str(
-                getattr(settings, "layout_transform", "identity") or "identity"
-            )
+            transform_kind = str(getattr(settings, "layout_transform", "identity") or "identity")
             transform = LayoutTransform(transform_kind)
             canonical_width, canonical_height = transform.canonical_size(image_size)
-            header_ref = (
-                canonical_geometry_to_stored(
-                    estimate.header_rule_y, canonical_width, settings,
-                )
-                if estimate.header_rule_y is not None else None
-            )
-            left_ref = (
-                canonical_geometry_to_stored(
-                    estimate.body_left_x, canonical_width, settings,
-                )
-                if estimate.body_left_x is not None else None
-            )
-            header_source_segment = None
+            header_segment = None
             if estimate.header_rule_y is not None:
-                header_source_segment = transform.canonical_marker_to_source(
+                header_segment = transform.canonical_marker_to_source(
                     (0, int(estimate.header_rule_y)),
                     (max(0, canonical_width - 1), int(estimate.header_rule_y)),
                     image_size,
                 )
-            left_source_segment = None
+            left_segment = None
             if estimate.body_left_x is not None:
-                left_source_segment = transform.canonical_marker_to_source(
+                left_segment = transform.canonical_marker_to_source(
                     (int(estimate.body_left_x), 0),
                     (int(estimate.body_left_x), max(0, canonical_height - 1)),
                     image_size,
                 )
+            header_y = (
+                int(header_segment[0][1])
+                if header_segment and int(header_segment[0][1]) == int(header_segment[1][1])
+                else None
+            )
+            left_x = (
+                int(left_segment[0][0])
+                if left_segment and int(left_segment[0][0]) == int(left_segment[1][0])
+                else None
+            )
             return (
-                pages[index].name,
-                estimate.header_rule_y,
-                estimate.body_left_x,
-                header_ref,
-                left_ref,
-                estimate.is_blank,
-                estimate.coordinate_space,
-                transform_kind,
-                canonical_width,
-                header_source_segment,
-                left_source_segment,
+                pages[index].name, header_segment, left_segment,
+                header_y, left_x, estimate.is_blank, transform_kind,
             )
 
         def done(_completed, _total, stopped, results, error) -> None:
@@ -11018,26 +10890,15 @@ class PictureCaptureApp(tk.Tk):
                             "page",
                             "header_rule_source_segment_xyxy",
                             "body_left_source_segment_xyxy",
-                            "source_coordinate_space",
-                            "header_rule_v_canonical_page",
-                            "body_left_u_canonical_page",
-                            "header_rule_v_reference",
-                            "body_left_u_reference",
-                            "runtime_coordinate_space",
-                            "reference_coordinate_space",
-                            "geometry_reference_width",
-                            "page_canonical_width",
-                            "layout_transform",
+                            "header_rule_source_y",
+                            "body_left_source_x",
+                            "coordinate_space",
+                            "layout_transform_internal",
                             "status",
                         ))
                         writer.writerows((
-                            row[0],
-                            segment_text(row[9]),
-                            segment_text(row[10]),
-                            SOURCE_COORDINATE_SPACE,
-                            row[1], row[2], row[3], row[4],
-                            row[6], CANONICAL_REFERENCE_SPACE,
-                            _geometry_reference_width(settings), row[8], row[7],
+                            row[0], segment_text(row[1]), segment_text(row[2]),
+                            row[3], row[4], SOURCE_COORDINATE_SPACE, row[6],
                             "blank_skipped" if row[5] else "analyzed",
                         ) for row in rows)
 
@@ -11048,7 +10909,7 @@ class PictureCaptureApp(tk.Tk):
 
                     def summary(values) -> str:
                         return (
-                            "无有效值" if not values
+                            "无可比较的同轴值" if not values
                             else f"均值 {statistics.fmean(values):.1f}，范围 {min(values)}–{max(values)}，标准差 {statistics.pstdev(values):.1f}"
                         )
 
@@ -11068,8 +10929,8 @@ class PictureCaptureApp(tk.Tk):
                     report_text = (
                         f"页面范围：{range_name}\n总页数：{len(rows)}\n有效分析：{len(analyzed)}\n"
                         f"空白页跳过：{len(blanks)}（{', '.join(blanks) or '无'}）\n"
-                        f"页眉横线 V（参考页规范px）：{header_summary}\n"
-                        f"正文起始 U（参考页规范px）：{left_summary}\n"
+                        f"页眉横线 Y（原图px）：{header_summary}\n"
+                        f"正文左缘 X（原图px）：{left_summary}\n"
                         f"异常页面：{', '.join(abnormal) or '无'}\n"
                     )
                     temp_report.write_text(report_text, encoding="utf-8-sig")
@@ -11077,8 +10938,6 @@ class PictureCaptureApp(tk.Tk):
                     try:
                         temp_report.replace(report)
                     except Exception:
-                        # Both paths are timestamp-unique. If the second publish
-                        # fails, remove the first so callers never see a half-pair.
                         target.unlink(missing_ok=True)
                         raise
                     return {
@@ -11102,11 +10961,10 @@ class PictureCaptureApp(tk.Tk):
                     "版面一致性统计",
                     f"完成 {payload['total']} 页，有效 {payload['analyzed']} 页，跳过空白页 {payload['blanks']} 页"
                     f"{'（提前停止）' if stopped_early else ''}\n"
-                    f"页眉横线 V（参考页规范px）：{payload['header_summary']}\n"
-                    f"正文起始 U（参考页规范px）：{payload['left_summary']}\n"
+                    f"页眉横线 Y（原图px）：{payload['header_summary']}\n"
+                    f"正文左缘 X（原图px）：{payload['left_summary']}\n"
                     f"异常页面：{abnormal_text}\n\n"
-                    "CSV 同时保存原图像素中的边界线段、当前页 canonical 值与统一参考页值；"
-                    "统计/异常判断使用参考页坐标。\n"
+                    "CSV 只保存原图 X/Y 边界线段与可直接比较的 source X/Y 数值。\n"
                     f"结果：{payload['target']}\n报告：{payload['report']}",
                     parent=self,
                 )
@@ -12602,23 +12460,9 @@ class PictureCaptureApp(tk.Tk):
         if reset_zoom:
             available = max(500, self.canvas.winfo_width() - 24)
             self.view_scale = min(1.0, available / self.image.width)
-        # Viewer zoom is presentation-only. Modern geometry is full-resolution
-        # canonical and must never be rewritten when the canvas fit changes.
-        if (
-            not geometry_uses_canonical_pixels(self.settings)
-            and (reset_zoom or self.settings.parameter_display_width <= 0)
-        ):
-            self.settings.parameter_display_width = round(
-                self.image.width * self.view_scale
-            )
+        # Viewer zoom is presentation-only and never changes source-pixel settings.
         if self.settings.bottom_y <= 0:
-            transform = LayoutTransform(
-                str(getattr(self.settings, "layout_transform", "identity") or "identity")
-            )
-            canonical_width, canonical_height = transform.canonical_size(self.image.size)
-            self.settings.bottom_y = canonical_geometry_to_stored(
-                canonical_height, canonical_width, self.settings,
-            )
+            self.settings.bottom_y = int(self.image.height)
         self.cursor_canvas_xy = None
         self.sync_quick_settings()
         self._update_view_zoom_label()
@@ -12789,9 +12633,7 @@ class PictureCaptureApp(tk.Tk):
         s = self.settings
         return (
             id(self.image), int(self.__dict__.get("current_index", 0) or 0),
-            int(getattr(s, "geometry_coordinate_version", 0) or 0),
-            str(getattr(s, "geometry_coordinate_space", "") or ""),
-            int(getattr(s, "geometry_reference_width", 0) or 0), int(s.columns),
+            int(s.columns),
             str(s.layout_columns_policy), str(s.layout_column_separator_mode),
             str(s.analysis_threshold_mode),
             float(s.manual_x), float(s.gutter), float(s.column_width),
@@ -12951,7 +12793,7 @@ class PictureCaptureApp(tk.Tk):
             )
         else:
             # Match horizontal semantics: apply main_entry_x_ratio within the
-            # canonical column first, then transform that point to source space.
+            # 当前栏 first, then transform that point to source space.
             editor_x, editor_y = transformed_entry_anchor(
                 geometry.transform, canonical_x, entry_v, geometry.column_widths[col],
                 float(self.settings.main_entry_x_ratio), geometry.source_size, self.view_scale,
@@ -13182,11 +13024,11 @@ class PictureCaptureApp(tk.Tk):
             return None
         config = self._load_crop_settings()
         special = config.get("special_pages", {}).get(self.current_page.stem, {}) if isinstance(config.get("special_pages", {}), dict) else {}
-        top_y = int(special.get("top_v", config.get("general_top_v", self.settings.start_y)))
-        bottom_y = int(special.get("bottom_v", config.get("general_bottom_v", 0)))
+        top_y = int(special.get("top_y", config.get("general_top_y", self.settings.start_y)))
+        bottom_y = int(special.get("bottom_y", config.get("general_bottom_y", 0)))
         margin = int(config.get("polygon_margin", 0))
-        entry_left = int(config.get("entry_left_padding_u", 0))
-        entry_right = int(config.get("entry_right_padding_u", 0))
+        entry_left = int(config.get("entry_left_padding_x", 0))
+        entry_right = int(config.get("entry_right_padding_x", 0))
         integrate_illustrations = bool(config.get("integrate_illustrations", True))
         return build_page_crop_plan(
             self.image, list(self.entries), list(self.polygons), self.settings,
@@ -14189,15 +14031,8 @@ class PictureCaptureApp(tk.Tk):
                     self.draw_cursor_guides(canvas_x, canvas_y)
                 source_x = round(canvas_x / self.view_scale)
                 source_y = round(canvas_y / self.view_scale)
-                transform = LayoutTransform(
-                    str(getattr(self.settings, "layout_transform", "identity") or "identity")
-                )
-                canonical_u, canonical_v = transform.source_to_canonical_point(
-                    source_x, source_y, self.image.size,
-                )
                 self.cursor_status_var.set(
                     f"原图 X,Y {source_x}, {source_y}｜"
-                    f"规范 U,V {canonical_u}, {canonical_v}｜"
                     f"缩放 {round(self.view_scale * 100)}%｜词条 {len(self.entries)}"
                 )
             else:
@@ -14996,7 +14831,7 @@ class PictureCaptureApp(tk.Tk):
         if not transformed_geometry_pending(self.settings):
             return True
         message = (
-            f"{action}尚未启用 {self.settings.layout_transform} 的完整 source/canonical 坐标适配；"
+            f"{action}尚未启用 {self.settings.layout_transform} 的完整 原图坐标适配；"
             "为避免写入错误 PDIC 或方向错误的切图，本次操作已取消。"
         )
         self.status_var.set(message)
@@ -15614,10 +15449,10 @@ class PictureCaptureApp(tk.Tk):
         settings = replace(self.settings)
         config = self._load_crop_settings()
         special = config.get("special_pages", {}).get(page.stem, {})
-        top_y = int(special.get("top_v", config.get("general_top_v", settings.start_y)))
-        bottom_y = int(special.get("bottom_v", config.get("general_bottom_v", 0)))
-        entry_left = int(config.get("entry_left_padding_u", 0))
-        entry_right = int(config.get("entry_right_padding_u", 0))
+        top_y = int(special.get("top_y", config.get("general_top_y", settings.start_y)))
+        bottom_y = int(special.get("bottom_y", config.get("general_bottom_y", 0)))
+        entry_left = int(config.get("entry_left_padding_x", 0))
+        entry_right = int(config.get("entry_right_padding_x", 0))
         integrate_illustrations = bool(config.get("integrate_illustrations", True))
         out_dir = qt_root(project.root) / "PWW"
 
@@ -15646,12 +15481,11 @@ class PictureCaptureApp(tk.Tk):
         default_bottom = self.settings.bottom_y if self.settings.crop_to_bottom_y else 0
         return {
             "version": CROP_SETTINGS_VERSION,
-            "coordinate_space": CANONICAL_REFERENCE_SPACE,
-            "geometry_reference_width": _geometry_reference_width(self.settings),
-            "general_top_v": int(self.settings.start_y),
-            "general_bottom_v": int(default_bottom),
-            "entry_left_padding_u": 0,
-            "entry_right_padding_u": 0,
+            "coordinate_space": SOURCE_COORDINATE_SPACE,
+            "general_top_y": int(self.settings.start_y),
+            "general_bottom_y": int(default_bottom),
+            "entry_left_padding_x": 0,
+            "entry_right_padding_x": 0,
             "integrate_illustrations": True,
             "polygon_margin": 0,
             "parallel_workers": int(self.settings.crop_parallel_workers),
@@ -15661,9 +15495,7 @@ class PictureCaptureApp(tk.Tk):
     def _load_crop_settings(self) -> dict:
         if not self.project:
             return self._crop_settings_defaults()
-        new_path = qt_root(self.project.root) / CropSettingsDialog.CONFIG_NAME
-        legacy_path = qt_root(self.project.root) / CropSettingsDialog.LEGACY_CONFIG_NAME
-        path = new_path if new_path.exists() else legacy_path
+        path = qt_root(self.project.root) / CropSettingsDialog.CONFIG_NAME
         raw: dict = {}
         if path.exists():
             try:
@@ -15673,6 +15505,7 @@ class PictureCaptureApp(tk.Tk):
             except (OSError, ValueError, TypeError):
                 raw = {}
         return _normalize_crop_settings_payload(raw, self.settings)
+
 
     def open_crop_settings(self) -> None:
         if not self.project or not self.current_page or self.image is None:
@@ -15701,10 +15534,10 @@ class PictureCaptureApp(tk.Tk):
         settings = replace(self.settings)
         config = self._load_crop_settings()
         out_dir = qt_root(project.root) / "PWW"
-        general_top = int(config.get("general_top_v", settings.start_y))
-        general_bottom = int(config.get("general_bottom_v", 0))
-        entry_left = int(config.get("entry_left_padding_u", 0))
-        entry_right = int(config.get("entry_right_padding_u", 0))
+        general_top = int(config.get("general_top_y", settings.start_y))
+        general_bottom = int(config.get("general_bottom_y", 0))
+        entry_left = int(config.get("entry_left_padding_x", 0))
+        entry_right = int(config.get("entry_right_padding_x", 0))
         integrate_illustrations = bool(config.get("integrate_illustrations", True))
         specials = config.get("special_pages", {}) if isinstance(config.get("special_pages", {}), dict) else {}
         workers = int(config.get("parallel_workers", settings.crop_parallel_workers))
@@ -15712,7 +15545,7 @@ class PictureCaptureApp(tk.Tk):
         def job_builder(index: int, _position: int, _total: int):
             page = project.images[index]
             special = specials.get(page.stem, {}) if isinstance(specials.get(page.stem, {}), dict) else {}
-            top_y = int(special.get("top_v", general_top)); bottom_y = int(special.get("bottom_v", general_bottom))
+            top_y = int(special.get("top_y", general_top)); bottom_y = int(special.get("bottom_y", general_bottom))
             return (
                 str(page), str(pdic_path(page)), settings, str(out_dir), top_y, bottom_y,
                 str(self._ppp_read_path(page)), entry_left, entry_right, integrate_illustrations,
@@ -15816,11 +15649,11 @@ class PictureCaptureApp(tk.Tk):
         project = self.project
         settings = replace(self.settings)
         out_dir = qt_root(project.root) / "PIC"
-        general_top = int(config.get("general_top_v", settings.start_y))
-        general_bottom = int(config.get("general_bottom_v", 0))
+        general_top = int(config.get("general_top_y", settings.start_y))
+        general_bottom = int(config.get("general_bottom_y", 0))
         margin = int(config.get("polygon_margin", 0))
-        entry_left = int(config.get("entry_left_padding_u", 0))
-        entry_right = int(config.get("entry_right_padding_u", 0))
+        entry_left = int(config.get("entry_left_padding_x", 0))
+        entry_right = int(config.get("entry_right_padding_x", 0))
         integrate_illustrations = bool(config.get("integrate_illustrations", True))
         specials = config.get("special_pages", {}) if isinstance(config.get("special_pages", {}), dict) else {}
         workers = int(config.get("parallel_workers", settings.crop_parallel_workers))
@@ -15828,8 +15661,8 @@ class PictureCaptureApp(tk.Tk):
         def job_builder(index: int, _position: int, _total: int):
             page = project.images[index]
             special = specials.get(page.stem, {}) if isinstance(specials.get(page.stem, {}), dict) else {}
-            top_y = int(special.get("top_v", general_top))
-            bottom_y = int(special.get("bottom_v", general_bottom))
+            top_y = int(special.get("top_y", general_top))
+            bottom_y = int(special.get("bottom_y", general_bottom))
             return (
                 str(page), str(self._ppp_read_path(page)), str(out_dir), settings,
                 top_y, bottom_y, margin, str(pdic_path(page)), entry_left, entry_right, integrate_illustrations,
@@ -16174,10 +16007,10 @@ class PictureCaptureApp(tk.Tk):
         indices = list(range(len(project.images)))
         out_dir = qt_root(project.root) / "PWW"
         config = self._load_crop_settings()
-        general_top = int(config.get("general_top_v", settings.start_y))
-        general_bottom = int(config.get("general_bottom_v", 0))
-        entry_left = int(config.get("entry_left_padding_u", 0))
-        entry_right = int(config.get("entry_right_padding_u", 0))
+        general_top = int(config.get("general_top_y", settings.start_y))
+        general_bottom = int(config.get("general_bottom_y", 0))
+        entry_left = int(config.get("entry_left_padding_x", 0))
+        entry_right = int(config.get("entry_right_padding_x", 0))
         integrate_illustrations = bool(config.get("integrate_illustrations", True))
         specials = config.get("special_pages", {}) if isinstance(config.get("special_pages", {}), dict) else {}
 
@@ -16186,8 +16019,8 @@ class PictureCaptureApp(tk.Tk):
             entries = read_pdic(pdic_path(page))
             polygons = read_ppp(ppp_read_path_for_image(page))
             special = specials.get(page.stem, {}) if isinstance(specials.get(page.stem, {}), dict) else {}
-            top_y = int(special.get("top_v", general_top))
-            bottom_y = int(special.get("bottom_v", general_bottom))
+            top_y = int(special.get("top_y", general_top))
+            bottom_y = int(special.get("bottom_y", general_bottom))
             records = split_whole_entries(
                 page, entries, settings, out_dir, top_y=top_y, bottom_y=bottom_y, polygons=polygons,
                 entry_left_padding=entry_left, entry_right_padding=entry_right,
