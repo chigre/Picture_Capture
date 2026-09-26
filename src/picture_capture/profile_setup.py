@@ -2350,7 +2350,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_headword_structure_summary()
         self._refresh_headword_specificity_visibility()
         hints = {
-            "latin_regular": "常规边缘：栏边位置是主证据；字号、粗体和词后结构辅助判断。",
+            "latin_regular": "常规边缘：严格栏左缘定位词头；下方勾选的 POS/词形/变体等词后结构是显式证据，必要时可启用粗体视觉补救。",
             "cjk_visual": "视觉型：大字/括号结构及视觉突出程度是主证据；大字单字还可结合右侧留白/稀疏度。",
             "numbered_prefix": "编号型：编号前缀是主证据；字号/粗体属于辅助证据。",
             "marker_prefixed": "符号型：○ / ● / ◆ 等固定符号是主证据；字号/粗体属于辅助证据。",
