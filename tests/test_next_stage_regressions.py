@@ -23,7 +23,7 @@ from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
     _left_edge_ink_mask, apply_column_start_offsets, derive_geometry,
-    derive_nominal_geometry, refine_existing_entries,
+    derive_nominal_geometry, detect_entries, refine_existing_entries,
 )
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
@@ -1928,6 +1928,72 @@ def test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only():
     assert settings.paddle_compare_tesseract is False
     assert settings.paddle_enable_lens is False
     assert settings.paddle_lens_mode == "off"
+
+def test_ordinary_drawing_auto_refine_y_is_shared_and_switchable(monkeypatch):
+    import picture_capture.paddle_headwords as paddle_headwords
+
+    calls: list[int] = []
+
+    def fake_refiner(_gray, coarse_y, _line_height, _settings, **_kwargs):
+        calls.append(int(coarse_y))
+        return int(coarse_y) + 3, {"reason": "test"}
+
+    monkeypatch.setattr(paddle_headwords, "refine_separator_y", fake_refiner)
+
+    image = Image.new("RGB", (220, 220), "white")
+    draw = ImageDraw.Draw(image)
+    for y in (35, 85, 135, 185):
+        draw.rectangle((20, y, 115, y + 12), fill="black")
+
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=180,
+        gutter=0,
+        start_y=0,
+        body_indent=30,
+        character_height=16,
+        row_padding=2,
+        detection_method="left_edge",
+        follow_column_deformation=False,
+        paddle_refine_separator_y=True,
+    )
+    refined, _ = detect_entries(image, settings)
+    assert refined
+    assert calls
+    refined_calls = len(calls)
+
+    calls.clear()
+    settings.paddle_refine_separator_y = False
+    coarse, _ = detect_entries(image, settings)
+    assert coarse
+    assert calls == []
+    assert len(refined) == len(coarse)
+    assert [entry.y for entry in refined] == [entry.y + 3 for entry in coarse]
+    assert refined_calls == len(refined)
+
+
+def test_auto_refine_y_is_exposed_as_shared_ordinary_drawing_control():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+
+    settings_start = source.index("class SettingsDialog")
+    settings_end = source.index("class ReviewWindow", settings_start)
+    settings_text = source[settings_start:settings_end]
+
+    normal_checks_start = settings_text.index("    NORMAL_CHECKS = (")
+    normal_checks_end = settings_text.index("    OCR_COMMON_CHECKS = (", normal_checks_start)
+    normal_checks = settings_text[normal_checks_start:normal_checks_end]
+    assert '("自动精修横线 Y", "paddle_refine_separator_y")' in normal_checks
+
+    quick_start = source.index("    def _build_quick_settings(")
+    quick_end = source.index("\n    def ", quick_start + 10)
+    quick = source[quick_start:quick_end]
+    assert 'text="自动精修横线Y（普通/OCR共用）"' in quick
+    assert 'self.quick_bool_vars["paddle_refine_separator_y"] = refine_y_var' in quick
+
 
 def test_ordinary_drawing_uses_shared_threshold_policy():
     import numpy as np

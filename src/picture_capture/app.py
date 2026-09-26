@@ -2177,7 +2177,7 @@ class SettingsDialog(tk.Toplevel):
         "paddle_enable_lens": "开启：允许 Google Lens 作为网络第三意见；实际何时调用、是否投票由【Lens 运行模式】决定。\n\n注意：会产生网络等待且依赖外部服务可用性。默认不应把 Lens 当成本地 OCR 的必需依赖，推荐仅在冲突模式下使用。",
         "paddle_require_visual_cue": "名称是历史遗留。当前实现并不是“必须有纯视觉证据”，而是要求候选至少有一个结构或视觉 fallback cue：POS/变形/描述符/特殊符号，或字高/粗体/行前空白之一。\n\n开启可抑制只有合法字母形态、却没有任何词条特征的正文行；关闭会放宽候选门槛，除非 diagnostics 明确显示真实词头因此被拒，否则不建议关闭。",
         "paddle_require_pos_or_symbol": "开启：普通词头候选必须具有至少一个强结构提示：POS、变形、结构描述符或可作为新词条证据的特殊符号。能显著抑制栏左正文误检。\n\n关闭：允许仅靠位置/视觉分数通过，召回更高但假阳性更多。对结构化拉丁词典通常建议开启；CJK/特殊 Profile 还会有自己的专用接受逻辑。",
-        "paddle_refine_separator_y": "开启：OCR 先提供词头粗 Y，再在当前栏左局部墨迹中寻找更合理的行间空白位置，把横线精修到视觉分隔处。\n\n关闭：更接近直接使用 OCR 粗定位，速度/逻辑更简单但线可能贴字。若精修总跳到相邻行，再检查搜索范围、平滑半径、安全距离，而不是直接永久关闭。",
+        "paddle_refine_separator_y": "开启：普通画线和 OCR画线都会先得到一个粗略横线 Y，再在当前栏的局部墨迹中寻找更合理的行间空白位置，把横线精修到视觉分隔处。普通画线的粗 Y 来自栏左墨迹投影，OCR画线的粗 Y 来自 OCR/词头定位；两种模式随后共用同一套 Y 精修参数。\n\n关闭：两种自动画线都保留各自的粗 Y，不再执行局部空白谷精修。若精修总跳到相邻行，再检查搜索范围、平滑半径和 Y 安全空间。",
         "paddle_compare_tesseract": "开启：对同一候选带额外运行 Tesseract，作为 PaddleOCR 的第二意见并进入比较/诊断；需要 Tesseract 程序和相应语言包。\n\n影响：运行时间增加，但可暴露系统性字符差异。它本身不等于“允许 Tesseract 独有结果补线”，后者由【Tesseract 可补漏 Paddle】控制。",
         "paddle_tesseract_rescue": "开启：允许满足结构/位置条件的 Tesseract 独有候选补回 Paddle 漏掉的词头，而不只是做诊断对照。\n\n风险：可提高召回，也会引入 Tesseract 特有误检。建议先开启对照看 comparison/issues，再决定是否让其参与补漏。",
         "paddle_tesseract_auto_psm": "开启：程序自动比较 Tesseract PSM 4 与 PSM 6，选择更适合当前候选带的结果；减少手动猜 Page Segmentation Mode。\n\n关闭：固定使用【Tesseract 对照 PSM】。只有已验证某本词典某个 PSM 明显更稳定、且自动选择反复选错时才关闭。",
@@ -2194,6 +2194,7 @@ class SettingsDialog(tk.Toplevel):
     }
 
     NORMAL_CHECKS = (
+        ("自动精修横线 Y", "paddle_refine_separator_y"),
         ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
         ("手动分栏", "manual_columns"),
     )
@@ -2916,7 +2917,7 @@ class SettingsDialog(tk.Toplevel):
             normal,
             "版面行为",
             self.NORMAL_CHECKS,
-            intro="只有扫描页确实弯曲/倾斜或自动分栏失败时才需要改变。",
+            intro="自动精修横线 Y 直接参与普通画线流程；其余两项只在扫描页确实弯曲/倾斜或自动分栏失败时调整。",
         )
         self._add_collapsible_settings(
             normal,
@@ -10942,7 +10943,22 @@ class PictureCaptureApp(tk.Tk):
         add_field(normal, 1, 2, "栏间空：", "gutter", int)
         add_field(normal, 1, 4, "单行高：", "character_height", int)
         add_field(normal, 1, 6, "行间空：", "row_padding", int)
-        row = ttk.Frame(normal); row.grid(row=2, column=0, columnspan=8, sticky="ew", pady=(4, 0))
+        shared_draw_row = ttk.Frame(normal)
+        shared_draw_row.grid(
+            row=2, column=0, columnspan=8, sticky="ew", pady=(4, 0)
+        )
+        refine_y_var = tk.BooleanVar(
+            value=bool(self.settings.paddle_refine_separator_y)
+        )
+        self.quick_bool_vars["paddle_refine_separator_y"] = refine_y_var
+        ttk.Checkbutton(
+            shared_draw_row,
+            text="自动精修横线Y（普通/OCR共用）",
+            variable=refine_y_var,
+            command=self._quick_parameter_changed,
+        ).pack(side="left")
+
+        row = ttk.Frame(normal); row.grid(row=3, column=0, columnspan=8, sticky="ew", pady=(4, 0))
         ttk.Button(
             row, text="检测版面参数", command=self.detect_layout_current,
             style="PC.Compact.TButton",

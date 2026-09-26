@@ -675,9 +675,11 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
             )
             y_source = round(y_analysis / scale)
             if settings.paddle_refine_separator_y:
-                # Reuse the OCR mode's horizontal-valley refinement for the
-                # coarse Y produced by left-edge projection. Restrict analysis
-                # to this column so neighbouring columns cannot influence it.
+                # Shared automatic Y refinement: ordinary drawing first gets a
+                # coarse separator Y from left-edge projection, then runs the
+                # same local ink-valley refiner used by OCR drawing. Restrict
+                # analysis to this column so neighbouring columns cannot
+                # influence the final marker Y.
                 from .paddle_headwords import refine_separator_y
                 source_pixel_scale = 1.0
                 column_x = max(0, round(geometry.x_at(col, y_source)))
