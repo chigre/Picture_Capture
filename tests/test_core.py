@@ -5343,11 +5343,14 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in app_text
     assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
     assert 'self.settings.illustration_label_border_width, overlay_scale' in app_text
-    # Sequence number is a widget immediately before the editor and shares its background.
+    # Sequence number and delete control use the configured headword-marker colour.
     assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in app_text
-    assert 'bg=str(editor.cget("bg"))' in app_text
+    assert 'marker_control_bg = str(self.settings.headword_marker_color)' in app_text
+    assert 'bg=marker_control_bg' in app_text
+    assert 'fg="#ffffff"' in app_text
     assert 'record["index_widget"] = index_label' in app_text
-    assert 'index_widget.configure(bg=bg)' in app_text
+    assert 'record["delete_widget"] = delete_button' in app_text
+    assert 'for control_name in ("index_widget", "delete_widget")' in app_text
 
 
 def test_platform_language_font_recommendations_and_auto_normalization():
@@ -5556,8 +5559,10 @@ def test_v21116_review_ui_exposes_editable_digit_map_and_grouped_vowels():
     start = text.index("class ReviewWindow")
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
-    assert 'text="数字替换映射"' in review
-    assert 'self.accent_panel_title = tk.StringVar(value="▸ 变音字符")' in review
+    assert 'right, "digit", "数字替换映射"' in review
+    assert 'text="启用", variable=self.replace_digits' in review
+    assert 'right, "accent", "变音字符"' in review
+    assert '"<Button-3>", lambda _event, c=char: self.copy_char(c)' in review
     assert 'DIGIT_KEYS = "1234567890"' in review
     assert '("´", ("á", "é", "í", "ó", "ú"))' in review
     assert '("`", ("à", "è", "ì", "ò", "ù"))' in review
@@ -5592,7 +5597,9 @@ def test_v21117_review_layout_matches_compact_workflow():
     review = text[start:end]
     assert 'self._review_flat_button(row1, "保存", self.save, role="primary")' in review
     assert 'textvariable=self.autosave_label_var' in review
-    assert 'text="数字替换映射"' in review
+    assert 'text="校对模式："' in review
+    assert 'right, "digit", "数字替换映射"' in review
+    assert 'right, "accent", "变音字符"' in review
     assert 'text="排序规则"' in review
     assert 'text="词条排序规则"' not in review
     assert 'text="词条排序检查："' not in review
@@ -5604,8 +5611,9 @@ def test_v21117_review_layout_matches_compact_workflow():
     assert 'text="选择文件"' in review
     assert 'text="从所选词开始填充至本页结束"' in review
     assert 'self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)' in review
-    assert 'self.digit_panel_title = tk.StringVar(value="▸ 数字替换映射")' in review
-    assert 'self.accent_panel_title = tk.StringVar(value="▸ 变音字符")' in review
+    assert 'right, "digit", "数字替换映射"' in review
+    assert 'text="启用", variable=self.replace_digits' in review
+    assert 'right, "accent", "变音字符"' in review
 
 
 def test_review_toolbar_controls_are_grouped_by_function():
@@ -5624,8 +5632,9 @@ def test_review_toolbar_controls_are_grouped_by_function():
     row1_start = build.index('row1 = ttk.Frame(controls')
     row1_end = build.index('ttk.Separator(controls, orient="horizontal")', row1_start)
     row1 = build[row1_start:row1_end]
-    assert 'text="数字替换映射"' in row1
-    assert row1.index('text="数字替换映射"') < row1.index('text="排序规则"')
+    assert 'text="数字替换映射"' not in row1
+    assert 'text="校对模式："' in row1
+    assert row1.index('text="筛选"') < row1.index('text="排序规则"')
     assert row1.index('text="排序规则"') < row1.index('text="当前页"')
     assert row1.index('text="当前页"') < row1.index('text="所有页"')
     assert row1.index('text="所有页"') < row1.index('text="排序检查"')
@@ -5665,10 +5674,12 @@ def test_review_right_sections_are_collapsible_and_default_expanded():
     start = text.index("class ReviewWindow")
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
-    assert 'for key in ("display", "ocr", "network", "reference")' in review
+    assert 'for key in ("display", "digit", "accent", "ocr", "network", "reference")' in review
     assert 'key: tk.BooleanVar(value=True)' in review
     for key, title in (
         ("display", "显示设置"),
+        ("digit", "数字替换映射"),
+        ("accent", "变音字符"),
         ("ocr", "OCR结果"),
         ("network", "词条联网核验结果"),
         ("reference", "参考词表"),
