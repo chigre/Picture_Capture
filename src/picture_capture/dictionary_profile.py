@@ -337,6 +337,27 @@ def _preset_for_configuration(
     )
 
 
+def profile_tail_structure_defaults(key: str | None) -> dict[str, bool]:
+    """Return normalized user-facing post-lemma evidence defaults.
+
+    These are semantic Profile choices, not low-level parser thresholds.  A
+    preset seeds the checkboxes; once a project saves Profile step 3 the user's
+    explicit choices become authoritative.
+    """
+    profile = dictionary_profile_preset(key)
+    headword = dict(profile.headword or {})
+    tail = dict(headword.get("tail_structure") or {})
+    return {
+        "allow_pos": bool(tail.get("allow_pos", True)),
+        "allow_inflection": bool(tail.get("allow_inflection", True)),
+        "allow_variant": bool(tail.get("allow_variant", True)),
+        "allow_pronunciation": bool(tail.get("allow_pronunciation", False)),
+        "allow_descriptor": bool(tail.get("allow_descriptor", True)),
+        "require_selected": bool(tail.get("require_selected", False)),
+        "allow_visual_rescue": bool(tail.get("allow_visual_rescue", False)),
+    }
+
+
 def profile_symbol_inventory_defaults(key: str | None) -> dict[str, Any]:
     """Return normalized symbol-inventory defaults for one dictionary/profile."""
     profile = dictionary_profile_preset(key)
