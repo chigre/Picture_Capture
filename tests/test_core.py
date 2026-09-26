@@ -1440,6 +1440,76 @@ class DictionaryProfileV2Tests(unittest.TestCase):
         self.assertEqual(parsed.normalized, "阿爸")
         self.assertEqual(parsed.descriptor_text, "cjk_marker_pinyin")
 
+    def test_v210_marker_parser_keeps_mixed_cjk_ascii_headword_token(self) -> None:
+        profile = load_dictionary_profile(preset="cjk_marker_pinyin", language="chi_sim")
+        parsed = parse_headword_text(
+            "●阿Q精神 A Kiu jingshen",
+            AppSettings(
+                ocr_language="chi_sim",
+                profile_parser_controls_version=1,
+                profile_allow_marker_prefix=True,
+                profile_allow_ordinary_left_edge=False,
+            ),
+            profile=profile,
+        )
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed.normalized, "阿Q精神")
+
+    def test_v210_visual_circle_marker_detector_distinguishes_open_and_filled(self) -> None:
+        from picture_capture.paddle_headwords import _detect_visual_entry_markers
+
+        image = Image.new("L", (180, 150), "white")
+        draw = ImageDraw.Draw(image)
+        draw.ellipse((8, 28, 44, 64), outline="black", width=4)
+        draw.ellipse((10, 88, 42, 120), fill="black")
+        gray = np.asarray(image, dtype=np.uint8)
+        markers = _detect_visual_entry_markers(
+            gray, median_height=40.0, left_limit=40, lower_bound=0,
+        )
+        self.assertEqual([item["type"] for item in markers], [
+            "open_circle", "filled_circle",
+        ])
+        self.assertEqual([item["symbol"] for item in markers], ["○", "●"])
+
+    def test_v210_visual_marker_rescues_entry_when_ocr_drops_circle(self) -> None:
+        profile = load_dictionary_profile(preset="cjk_marker_pinyin", language="chi_sim")
+        settings = AppSettings(
+            ocr_language="chi_sim",
+            profile_parser_controls_version=1,
+            profile_allow_ordinary_left_edge=False,
+            profile_allow_marker_prefix=True,
+            profile_cjk_allow_single_headword=False,
+            profile_cjk_allow_bracketed_headword=False,
+            paddle_band_width=180,
+            paddle_band_width_ratio=100,
+            paddle_band_left_margin=0,
+            paddle_left_tolerance=20,
+            paddle_rec_score_threshold=0.1,
+            paddle_auto_header_rule=False,
+            paddle_refine_separator_y=False,
+            paddle_require_pos_or_symbol=False,
+            paddle_require_visual_cue=False,
+            character_height=26,
+            row_padding=4,
+        )
+        band = Image.new("RGB", (180, 130), "white")
+        draw = ImageDraw.Draw(band)
+        # The printed open circle is present, but OCR starts at the lemma and has
+        # completely dropped the marker.
+        draw.ellipse((8, 40, 42, 74), outline="black", width=4)
+        records = [
+            OCRRecord("阿Q精神 A Kiu jingshen", 0.99, (50, 40, 172, 74)),
+        ]
+        entries, diagnostics = filter_headword_records(
+            records, band, 0, 0, settings, profile=profile,
+        )
+        self.assertEqual([entry.word for entry in entries], ["阿Q精神"])
+        row = next(item for item in diagnostics if item.get("accepted"))
+        self.assertTrue(row["features"]["visual_entry_marker"])
+        self.assertEqual(row["features"]["visual_entry_marker_type"], "open_circle")
+        self.assertEqual(row["parser_stage"], "cjk_visual_marker_rescue")
+
     def test_v210_latin_profile_does_not_enable_cjk_parser_from_definition_language(self) -> None:
         profile = load_dictionary_profile(preset="latin_pos_classic", language="por+chi_sim")
         parsed = parse_headword_text(
