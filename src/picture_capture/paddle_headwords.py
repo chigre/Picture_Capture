@@ -20,11 +20,7 @@ from PIL import Image, ImageOps
 
 from .models import AppSettings, Entry, resolved_tesseract_language
 from .runtime_environment import resolve_paddle_device
-from .coordinate_space import (
-    REFERENCE_CANONICAL_WIDTH,
-    reference_to_canonical,
-    stored_geometry_to_canonical,
-)
+from .coordinate_space import setting_pixels
 from .image_utils import normalize_page_rgb
 from .page_sections import PageSection, normalize_page_sections, section_index_for_v
 from .dictionary_profile import (
@@ -927,27 +923,16 @@ def unwrap_column_band(
             raise ValueError("source_rgb 尺寸必须与当前原始页面一致，禁止跨页复用")
         if source.shape[2] != 3:
             source = source[:, :, :3]
-    canonical_width = geometry.transform.canonical_size(image.size)[0]
     band_ratio = max(
         1, min(100, int(getattr(settings, "paddle_band_width_ratio", 100)))
     ) / 100.0
-    left_margin = max(
-        0,
-        reference_to_canonical(
-            settings.paddle_band_left_margin, canonical_width,
-        ),
-    )
+    left_margin = max(0, int(settings.paddle_band_left_margin))
     if source_width is not None:
         band_width = max(24, int(source_width))
     else:
         configured_band_width = max(
             24,
-            round(
-                reference_to_canonical(
-                    settings.paddle_band_width, canonical_width,
-                )
-                * band_ratio
-            ),
+            round(max(0, int(settings.paddle_band_width)) * band_ratio),
         )
         # Never let the OCR candidate strip spill into the next dictionary
         # column. This mattered little on wide two-column Latin pages but is
@@ -2277,7 +2262,7 @@ def _otsu_threshold(gray: np.ndarray) -> int:
 def _separator_analysis_x_bounds(
     width: int,
     settings: AppSettings,
-    reference_to_canonical_scale: float = 1.0,
+    pixel_scale: float = 1.0,
 ) -> tuple[int, int]:
     """Return the left-local X ROI used for separator/boundary analysis.
 
@@ -2287,7 +2272,7 @@ def _separator_analysis_x_bounds(
     therefore limit refinement to a percentage of the left side of the column.
     """
     width = max(1, int(width))
-    margin = max(0, round(max(0, settings.paddle_separator_column_margin) * reference_to_canonical_scale))
+    margin = max(0, round(max(0, settings.paddle_separator_column_margin) * pixel_scale))
     margin = min(margin, max(0, width // 4))
     ratio = max(10, min(100, int(getattr(settings, "paddle_separator_roi_width_ratio", 60)))) / 100.0
     usable = max(1, width - margin * 2)
@@ -2302,7 +2287,7 @@ def detect_image_separator_candidates(
     gray: np.ndarray,
     reference_line_height: int,
     settings: AppSettings,
-    reference_to_canonical_scale: float = 1.0,
+    pixel_scale: float = 1.0,
     lower_bound: int = 0,
 ) -> list[dict[str, Any]]:
     """Detect image-only entry-boundary candidates from blank-to-ink transitions.
@@ -2318,7 +2303,7 @@ def detect_image_separator_candidates(
     if height < 4 or width < 12:
         return []
     lower = max(0, min(height - 1, int(lower_bound)))
-    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, pixel_scale)
     roi = gray[lower:, x0:x1]
     if roi.size == 0 or roi.shape[0] < 4 or roi.shape[1] < 8:
         return []
@@ -2356,7 +2341,7 @@ def detect_image_separator_candidates(
     min_blank = max(3, round(line_h * 0.12))
     min_ink = max(2, round(line_h * 0.07))
     configured_safety = max(0, int(getattr(settings, "paddle_separator_safety_px", 2)))
-    safety = max(0, round(configured_safety * max(0.5, float(reference_to_canonical_scale))))
+    safety = max(0, round(configured_safety * max(0.5, float(pixel_scale))))
 
     result: list[dict[str, Any]] = []
     for run_start, run_end in _true_runs(blank_mask):
@@ -3020,7 +3005,7 @@ def _leading_cjk_ideograph(text: str) -> str:
 
 
 def _cjk_visual_projection_runs(
-    gray: np.ndarray, header_cutoff: int, settings: AppSettings, reference_to_canonical_scale: float,
+    gray: np.ndarray, header_cutoff: int, settings: AppSettings, pixel_scale: float,
 ) -> tuple[int, list[tuple[int, int]]]:
     """Locate oversized single-character rows from image geometry alone.
 
@@ -3033,7 +3018,7 @@ def _cjk_visual_projection_runs(
     """
     if gray.size == 0:
         return 0, []
-    ratio = max(0.25, float(reference_to_canonical_scale))
+    ratio = max(0.25, float(pixel_scale))
     zone_width = min(gray.shape[1], max(48, round(100 * ratio)))
     if zone_width <= 0:
         return 0, []
@@ -3058,12 +3043,12 @@ def _cjk_visual_projection_runs(
         index = end
 
     runs = _true_runs(np.asarray(active_list, dtype=bool))
-    canonical_width = max(1, round(REFERENCE_CANONICAL_WIDTH * ratio))
+    runtime_width = max(1, int(gray.shape[1]))
     expected_body = max(
         8.0,
         float(
-            stored_geometry_to_canonical(
-                settings.character_height, canonical_width, settings,
+            setting_pixels(
+                settings.character_height, runtime_width, settings,
             )
         ),
     )
@@ -3464,7 +3449,7 @@ def refine_separator_y(
     coarse_y: int,
     line_height: int,
     settings: AppSettings,
-    reference_to_canonical_scale: float = 1.0,
+    pixel_scale: float = 1.0,
     lower_bound: int = 0,
 ) -> tuple[int, dict[str, Any]]:
     """Refine a coarse headword marker using a local horizontal ink valley.
@@ -3495,7 +3480,7 @@ def refine_separator_y(
     if bottom <= top:
         return coarse_y, {"enabled": True, "reason": "empty_search"}
 
-    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, pixel_scale)
 
     roi = gray[top:bottom + 1, x0:x1]
     threshold = _otsu_threshold(roi)
@@ -3511,7 +3496,7 @@ def refine_separator_y(
             ink[:, rule_columns] = False
 
     row_ink = ink.mean(axis=1).astype(np.float64)
-    band_radius = max(0, round(max(0, settings.paddle_separator_band_radius) * reference_to_canonical_scale))
+    band_radius = max(0, round(max(0, settings.paddle_separator_band_radius) * pixel_scale))
     band_radius = min(band_radius, max(0, (len(row_ink) - 1) // 3))
     if band_radius > 0:
         kernel = np.ones(2 * band_radius + 1, dtype=np.float64) / (2 * band_radius + 1)
@@ -3582,7 +3567,7 @@ def refine_separator_y_adaptive(
     coarse_y: int,
     reference_line_height: int,
     settings: AppSettings,
-    reference_to_canonical_scale: float = 1.0,
+    pixel_scale: float = 1.0,
     lower_bound: int = 0,
     content_top: int | None = None,
     preceding_gap_hint: int | None = None,
@@ -3613,15 +3598,9 @@ def refine_separator_y_adaptive(
     line_h = max(3, int(round(reference_line_height)))
     coarse_y = int(min(height - 1, max(lower_bound, coarse_y)))
     if content_top is None:
-        canonical_width = max(
-            1,
-            round(
-                REFERENCE_CANONICAL_WIDTH
-                * max(0.01, reference_to_canonical_scale)
-            ),
-        )
-        row_padding = stored_geometry_to_canonical(
-            settings.row_padding, canonical_width, settings,
+        runtime_width = max(1, int(gray.shape[1]))
+        row_padding = setting_pixels(
+            settings.row_padding, runtime_width, settings,
         )
         content_top = coarse_y + max(0, row_padding)
     content_top = int(min(height - 1, max(lower_bound, content_top)))
@@ -3638,7 +3617,7 @@ def refine_separator_y_adaptive(
     if bottom <= top:
         return coarse_y, {"enabled": True, "reason": "empty_search", "adaptive_mode": "fallback"}
 
-    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, pixel_scale)
     roi = gray[top:bottom + 1, x0:x1]
     threshold = _otsu_threshold(roi)
     ink = roi <= threshold
@@ -3682,12 +3661,11 @@ def refine_separator_y_adaptive(
     target_local = int(min(len(smooth) - 1, max(0, content_top - top)))
     min_ink_rows = max(2, round(line_h * 0.07))
     min_blank_rows = max(2, round(line_h * 0.08))
-    # User-configurable safety clearance uses 1400-width reference pixels and
-    # is scaled to the current canonical resolution. A value of 0 is
-    # allowed when the user deliberately wants the rule to touch the detected
-    # ink boundary.
+    # User-configurable safety clearance is a literal source-pixel distance.
+    # A value of 0 is allowed when the user deliberately wants the rule to
+    # touch the detected ink boundary.
     configured_safety = max(0, int(getattr(settings, "paddle_separator_safety_px", 2)))
-    safety = max(0, round(configured_safety * max(0.5, float(reference_to_canonical_scale))))
+    safety = max(0, round(configured_safety * max(0.5, float(pixel_scale))))
 
     # Step 1: establish an image-derived ink onset rather than blindly trusting
     # OCR box.y.  OCR can occasionally merge the preceding definition line into
@@ -3817,7 +3795,7 @@ def refine_separator_y_adaptive(
     # a bounded valley, use its lower edge so the marker still hugs the entry.
     refined, legacy = refine_separator_y(
         gray, coarse_y, line_h, settings,
-        reference_to_canonical_scale=reference_to_canonical_scale,
+        pixel_scale=pixel_scale,
         lower_bound=lower_bound,
     )
     if legacy.get("reason") == "bounded_low_ink_valley" and legacy.get("valley_end") is not None:
@@ -3847,7 +3825,7 @@ def refine_first_content_y(
     coarse_y: int,
     line_height: int,
     settings: AppSettings,
-    reference_to_canonical_scale: float = 1.0,
+    pixel_scale: float = 1.0,
     lower_bound: int = 0,
 ) -> tuple[int, dict[str, Any]]:
     """Place the first entry marker at the onset of the first sustained ink run.
@@ -3874,7 +3852,7 @@ def refine_first_content_y(
     if bottom <= top:
         return coarse_y, {"enabled": True, "reason": "empty_search"}
 
-    x0, x1 = _separator_analysis_x_bounds(width, settings, reference_to_canonical_scale)
+    x0, x1 = _separator_analysis_x_bounds(width, settings, pixel_scale)
     roi = gray[top:bottom + 1, x0:x1]
     threshold = _otsu_threshold(roi)
     ink = roi <= threshold
@@ -3892,7 +3870,7 @@ def refine_first_content_y(
     local_low = float(np.percentile(positive, 20)) if positive.size else 0.0
     active_threshold = max(quantization * 3.0, min(0.004, local_low * 0.55 if local_low else 0.002))
     active = row_ink >= active_threshold
-    min_run = max(2, round(max(1, settings.paddle_separator_band_radius) * reference_to_canonical_scale) + 1)
+    min_run = max(2, round(max(1, settings.paddle_separator_band_radius) * pixel_scale) + 1)
     runs = [(a, b) for a, b in _true_runs(active) if (b - a) >= min_run]
 
     # Prefer the first sustained run whose centre is not implausibly far above
@@ -3916,7 +3894,7 @@ def refine_first_content_y(
             2,
             round(
                 max(1.0, line_height * 0.12)
-                + max(0, settings.row_padding) * 0.35 * reference_to_canonical_scale
+                + max(0, settings.row_padding) * 0.35 * pixel_scale
             ),
         )
         refined = max(int(lower_bound), ink_onset - clearance)
@@ -4170,7 +4148,7 @@ def filter_headword_records(
     user_rules: list[HeadwordFilterRule] | None = None,
     engine_name: str = "paddle",
     profile: DictionaryProfile | None = None,
-    reference_to_canonical_scale: float | None = None,
+    pixel_scale: float | None = None,
 ) -> tuple[list[Entry], list[dict[str, Any]]]:
     """Select dictionary headwords using structure, geometry and visual cues.
 
@@ -4193,25 +4171,21 @@ def filter_headword_records(
     # Merge first, then actively repair the special case where OCR split a
     # left-edge bold lemma from its right-side gender/POS fragments.
     lines = group_ocr_records([record for record in records if record.text], settings.paddle_line_merge_y_ratio)
-    configured_width = max(1, settings.paddle_band_width)
-    reference_scale = (
-        max(0.01, float(reference_to_canonical_scale))
-        if reference_to_canonical_scale is not None
-        else band.width / configured_width
+    # All visible/profile pixel settings are literal original-image pixels.
+    # OCR engines may resize internally, but OCR boxes are mapped back to this
+    # full-resolution band before candidate filtering.
+    pixel_scale = max(0.01, float(pixel_scale)) if pixel_scale is not None else 1.0
+    runtime_width = max(1, band.width)
+    row_padding = setting_pixels(
+        settings.row_padding, runtime_width, settings,
     )
-    canonical_width = max(
-        1, round(REFERENCE_CANONICAL_WIDTH * reference_scale),
-    )
-    row_padding = stored_geometry_to_canonical(
-        settings.row_padding, canonical_width, settings,
-    )
-    character_height = stored_geometry_to_canonical(
-        settings.character_height, canonical_width, settings,
+    character_height = setting_pixels(
+        settings.character_height, runtime_width, settings,
     )
     row_height = max(1, character_height + row_padding)
     left_limit = round(
         (settings.paddle_band_left_margin + settings.paddle_left_tolerance)
-        * reference_scale
+        * pixel_scale
     )
     lines = _repair_split_headword_lines(lines, settings, left_limit, patterns)
     lines = _repair_wrapped_headword_structure(lines, settings, left_limit, patterns)
@@ -4229,10 +4203,9 @@ def filter_headword_records(
     heights = np.asarray([line.box[3] - line.box[1] for line in lines], dtype=float)
     median_height = max(1.0, float(np.median(heights)))
 
-    # Profile/OCR tuning distances use fixed reference pixels at canonical
-    # width 1400; project line geometry itself is full-resolution canonical.
+    # Profile/OCR tuning distances are direct full-resolution image pixels.
     gap_threshold = row_height * settings.paddle_gap_ratio
-    header_cutoff = _header_cutoff(gray, settings, reference_scale)
+    header_cutoff = _header_cutoff(gray, settings, pixel_scale)
 
     # Independent image-only separator candidates.  OCR lines and boundaries
     # are paired with a mutual-nearest rule, so the image validates OCR geometry
@@ -4242,7 +4215,7 @@ def filter_headword_records(
         separator_gray,
         max(2, round(median_height)),
         settings,
-        reference_to_canonical_scale=reference_scale,
+        pixel_scale=pixel_scale,
         lower_bound=header_cutoff,
     )
     image_boundary_matches = match_ocr_lines_to_image_boundaries(
@@ -4744,7 +4717,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                reference_to_canonical_scale=reference_scale,
+                pixel_scale=pixel_scale,
                 lower_bound=header_cutoff,
             )
         elif is_headword and _is_chinese_ocr(settings):
@@ -4753,7 +4726,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                reference_to_canonical_scale=reference_scale,
+                pixel_scale=pixel_scale,
                 lower_bound=header_cutoff,
                 content_top=(int(image_boundary.get("ink_onset_y", y0)) if image_boundary else y0),
                 preceding_gap_hint=preceding_gap,
@@ -4764,7 +4737,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, y1 - y0),
                 settings,
-                reference_to_canonical_scale=reference_scale,
+                pixel_scale=pixel_scale,
                 lower_bound=header_cutoff,
             )
         else:
@@ -4983,7 +4956,7 @@ def filter_headword_records(
         or bool(getattr(settings, "profile_cjk_allow_single_headword", True))
     ):
         zone_width, visual_runs = _cjk_visual_projection_runs(
-            gray, header_cutoff, settings, reference_scale
+            gray, header_cutoff, settings, pixel_scale
         )
         for run_start, run_end in visual_runs:
             right_context = _cjk_right_context_metrics(
@@ -5014,7 +4987,7 @@ def filter_headword_records(
                 coarse_band_y,
                 max(2, round(median_height)),
                 settings,
-                reference_to_canonical_scale=reference_scale,
+                pixel_scale=pixel_scale,
                 lower_bound=header_cutoff,
                 content_top=run_start,
                 preceding_gap_hint=visual_gap_hint,
@@ -7000,12 +6973,10 @@ def detect_paddle_headwords(
     Paddle candidate sequence when the secondary engine is unavailable.
     """
     signature = _cache_signature(image, geometry, settings)
-    canonical_width = geometry.transform.canonical_size(image.size)[0]
-    reference_to_canonical_scale = (
-        canonical_width / REFERENCE_CANONICAL_WIDTH
-    )
-    canonical_character_height = stored_geometry_to_canonical(
-        settings.character_height, canonical_width, settings,
+    runtime_width = geometry.transform.canonical_size(image.size)[0]
+    pixel_scale = 1.0
+    canonical_character_height = setting_pixels(
+        settings.character_height, runtime_width, settings,
     )
     user_rules = load_headword_filter_rules(filter_rules_path)
     profile_path = filter_rules_path.parent / PROFILE_FILENAME if filter_rules_path else None
@@ -7075,7 +7046,7 @@ def detect_paddle_headwords(
         paddle_entries, diagnostics = filter_headword_records(
             records, analysis_band, source_top, canonical_u, settings,
             separator_band=analysis_separator_band, user_rules=user_rules, engine_name="paddle", profile=profile,
-            reference_to_canonical_scale=reference_to_canonical_scale,
+            pixel_scale=pixel_scale,
         )
         _attach_source_candidate_coordinates(diagnostics, geometry, col)
         for entry in paddle_entries:
@@ -7117,7 +7088,7 @@ def detect_paddle_headwords(
                         candidate_records, analysis_band, source_top, canonical_u, settings,
                         separator_band=analysis_separator_band, user_rules=user_rules,
                         engine_name="tesseract", profile=profile,
-                        reference_to_canonical_scale=reference_to_canonical_scale,
+                        pixel_scale=pixel_scale,
                     )
                     _attach_source_candidate_coordinates(
                         candidate_diagnostics, geometry, col,

@@ -5,20 +5,24 @@ from typing import Any
 from .layout_transform import LayoutTransform
 
 
+# Public/persisted coordinate contract: one coordinate space only.
 SOURCE_COORDINATE_SPACE = "source_image_pixels"
+
+# Internal processing may rotate/resize/crop an image temporarily. Those
+# coordinates are implementation details and are never persisted as settings.
 CANONICAL_COORDINATE_SPACE = "canonical_full_resolution_pixels"
-CANONICAL_REFERENCE_SPACE = "canonical_reference_page_pixels"
 ANALYSIS_COORDINATE_SPACE = "analysis_resized_pixels"
 BAND_COORDINATE_SPACE = "ocr_band_local_pixels"
-REFERENCE_PIXEL_SPACE = "reference_pixels_at_1400_canonical_width"
 LEGACY_PARAMETER_SPACE = "legacy_display_pixels"
+LEGACY_REFERENCE_SPACE = "canonical_reference_page_pixels"
 
-GEOMETRY_COORDINATE_VERSION = 2
-REFERENCE_CANONICAL_WIDTH = 1400
+GEOMETRY_COORDINATE_VERSION = 3
 
-# These project-specific values describe full-resolution canonical page geometry.
-# They are persisted in canonical pixels from geometry_coordinate_version >= 2.
-CANONICAL_GEOMETRY_FIELDS = (
+# Project geometry settings are literal full-resolution image-pixel values.
+# With the ordinary identity layout these are exactly original-image X/Y pixels.
+# No runtime scaling by viewer width, page width, or a fixed reference width is
+# permitted for version-3 settings.
+SOURCE_GEOMETRY_FIELDS = (
     "gutter",
     "column_width",
     "start_y",
@@ -37,94 +41,93 @@ CANONICAL_GEOMETRY_FIELDS = (
     "review_single_cjk_line_height",
     "review_regular_crop_height",
 )
+# Compatibility import name for extensions that used the pre-v3 symbol.
+CANONICAL_GEOMETRY_FIELDS = SOURCE_GEOMETRY_FIELDS
+
+
+def _coordinate_version(settings: Any) -> int:
+    try:
+        return int(getattr(settings, "geometry_coordinate_version", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def geometry_uses_source_pixels(settings: Any) -> bool:
+    """True when persisted geometry is already direct full-resolution pixels."""
+    return _coordinate_version(settings) >= GEOMETRY_COORDINATE_VERSION
 
 
 def geometry_uses_canonical_pixels(settings: Any) -> bool:
-    try:
-        return int(getattr(settings, "geometry_coordinate_version", 0) or 0) >= GEOMETRY_COORDINATE_VERSION
-    except (TypeError, ValueError):
-        return False
+    """Compatibility predicate for old full-resolution layout code.
 
-
-def legacy_parameter_scale(canonical_width: int, settings: Any) -> float:
-    """Return legacy displayed-parameter pixels per canonical full-resolution pixel.
-
-    This exists only for migration/backward compatibility. New runtime geometry
-    must not depend on GUI zoom or parameter_display_width.
+    v2 values were reference-page pixels but layout detection itself already ran
+    at full resolution. Keep this predicate true for v2 so a not-yet-migrated
+    object never falls back to GUI-display scaling.
     """
-    width = max(1, int(canonical_width))
+    return _coordinate_version(settings) >= 2
+
+
+def legacy_parameter_scale(current_width: int, settings: Any) -> float:
+    """Legacy GUI-display scale used only while opening pre-v2 projects.
+
+    There is deliberately no 1400px fallback. If an old project did not save a
+    display width, migration uses 1:1 instead of inventing another coordinate
+    system.
+    """
+    width = max(1, int(current_width))
     try:
-        reference = int(getattr(settings, "parameter_display_width", 0) or 0)
+        display_width = int(getattr(settings, "parameter_display_width", 0) or 0)
     except (TypeError, ValueError):
-        reference = 0
-    if reference > 0:
-        return max(0.01, reference / width)
-    return min(1.0, REFERENCE_CANONICAL_WIDTH / width)
+        display_width = 0
+    return max(0.01, display_width / width) if display_width > 0 else 1.0
 
 
-def _modern_reference_scale(canonical_width: int, settings: Any) -> float:
-    """Current-page canonical pixels per persisted reference-page pixel."""
-    width = max(1, int(canonical_width))
+def _legacy_reference_scale(current_width: int, settings: Any) -> float:
+    """Read a v2 reference-page width only for one-time migration."""
+    width = max(1, int(current_width))
     try:
-        reference = int(getattr(settings, "geometry_reference_width", 0) or 0)
+        reference_width = int(getattr(settings, "geometry_reference_width", 0) or 0)
     except (TypeError, ValueError):
-        reference = 0
-    return width / reference if reference > 0 else 1.0
+        reference_width = 0
+    return width / reference_width if reference_width > 0 else 1.0
 
 
-def stored_geometry_to_canonical(
-    value: int | float,
-    canonical_width: int,
-    settings: Any,
-) -> int:
-    """Convert persisted layout geometry to this page's canonical pixels.
+def setting_pixels(value: int | float, current_width: int, settings: Any) -> int:
+    """Resolve one saved geometry value to full-resolution pixels.
 
-    Modern projects store geometry in pixels of an explicit canonical reference
-    page. This preserves the convenience of real pixel values while remaining
-    stable when scans in one project have different resolutions. Legacy projects
-    use their historical display-width scale until migrated.
+    Version-3 values are already direct pixels and return unchanged. Older
+    coordinate systems are converted only for backward compatibility.
     """
     numeric = float(value)
-    if geometry_uses_canonical_pixels(settings):
-        return round(numeric * _modern_reference_scale(canonical_width, settings))
-    return round(numeric / legacy_parameter_scale(canonical_width, settings))
+    version = _coordinate_version(settings)
+    if version >= GEOMETRY_COORDINATE_VERSION:
+        return round(numeric)
+    if version == 2:
+        return round(numeric * _legacy_reference_scale(current_width, settings))
+    return round(numeric / legacy_parameter_scale(current_width, settings))
 
 
-def canonical_geometry_to_stored(
-    value: int | float,
-    canonical_width: int,
-    settings: Any,
-) -> int:
-    """Convert current-page canonical pixels to persisted reference-page pixels."""
-    numeric = float(value)
-    if geometry_uses_canonical_pixels(settings):
-        return round(numeric / _modern_reference_scale(canonical_width, settings))
-    return round(numeric * legacy_parameter_scale(canonical_width, settings))
+def pixels_to_setting(value: int | float, current_width: int, settings: Any) -> int:
+    """Convert runtime pixels back to the saved setting representation.
 
-
-def reference_to_canonical(
-    value: int | float,
-    canonical_width: int,
-) -> int:
-    """Scale one resolution-normalized tuning distance to canonical pixels.
-
-    OCR/profile tuning distances are defined at a fixed 1400-pixel canonical
-    width. This keeps their meaning independent from GUI zoom and source scan
-    resolution without pretending they are page coordinates.
+    For version 3 this is intentionally an identity conversion.
     """
-    width = max(1, int(canonical_width))
-    return round(float(value) * width / REFERENCE_CANONICAL_WIDTH)
+    numeric = float(value)
+    version = _coordinate_version(settings)
+    if version >= GEOMETRY_COORDINATE_VERSION:
+        return round(numeric)
+    if version == 2:
+        return round(numeric / _legacy_reference_scale(current_width, settings))
+    return round(numeric * legacy_parameter_scale(current_width, settings))
 
 
-def reference_to_analysis(
-    value: int | float,
-    analysis_width: int,
-) -> int:
-    width = max(1, int(analysis_width))
-    return round(float(value) * width / REFERENCE_CANONICAL_WIDTH)
+# Compatibility aliases: old imports now inherit the v3 identity semantics.
+stored_geometry_to_canonical = setting_pixels
+canonical_geometry_to_stored = pixels_to_setting
 
 
 def canonical_to_analysis_scale(canonical_width: int, analysis_width: int) -> float:
+    """Temporary processing scale only; never a settings-coordinate scale."""
     return max(1, int(analysis_width)) / max(1, int(canonical_width))
 
 
@@ -132,26 +135,35 @@ def migrate_legacy_geometry_settings(
     settings: Any,
     source_size: tuple[int, int],
 ) -> bool:
-    """Upgrade old display-scaled layout geometry to canonical reference-page px.
+    """Migrate pre-v3 geometry once to direct full-resolution image pixels.
 
-    The conversion intentionally reproduces the old runtime interpretation using
-    the saved parameter_display_width. It is idempotent and does not alter
-    resolution-normalized OCR/profile tuning distances.
+    v2 projects stored geometry against an explicit reference-page width; v1
+    projects used GUI/display pixels. Both are resolved once using the first
+    real project page. After migration neither legacy width participates in
+    runtime behavior.
     """
-    if geometry_uses_canonical_pixels(settings):
+    version = _coordinate_version(settings)
+    if version >= GEOMETRY_COORDINATE_VERSION:
         if hasattr(settings, "geometry_coordinate_space"):
-            settings.geometry_coordinate_space = CANONICAL_REFERENCE_SPACE
+            settings.geometry_coordinate_space = SOURCE_COORDINATE_SPACE
+        if hasattr(settings, "geometry_reference_width"):
+            settings.geometry_reference_width = 0
+        if hasattr(settings, "parameter_display_width"):
+            settings.parameter_display_width = 0
         return False
 
     transform = LayoutTransform(
         str(getattr(settings, "layout_transform", "identity") or "identity")
     )
-    canonical_width, _canonical_height = transform.canonical_size(
+    current_width, _current_height = transform.canonical_size(
         (max(1, int(source_size[0])), max(1, int(source_size[1])))
     )
-    scale = legacy_parameter_scale(canonical_width, settings)
+    if version == 2:
+        factor = _legacy_reference_scale(current_width, settings)
+    else:
+        factor = 1.0 / max(legacy_parameter_scale(current_width, settings), 1e-9)
 
-    for name in CANONICAL_GEOMETRY_FIELDS:
+    for name in SOURCE_GEOMETRY_FIELDS:
         if not hasattr(settings, name):
             continue
         raw = getattr(settings, name)
@@ -159,83 +171,37 @@ def migrate_legacy_geometry_settings(
             numeric = float(raw)
         except (TypeError, ValueError):
             continue
-        # Zero is a sentinel for several optional dimensions; preserve it.
         if numeric == 0:
             continue
-        setattr(settings, name, round(numeric / scale))
+        setattr(settings, name, round(numeric * factor))
+
+    raw_offsets = list(getattr(settings, "column_start_offsets", []) or [])
+    if raw_offsets:
+        migrated_offsets: list[int] = []
+        for raw in raw_offsets:
+            try:
+                migrated_offsets.append(round(float(raw) * factor))
+            except (TypeError, ValueError):
+                migrated_offsets.append(0)
+        settings.column_start_offsets = migrated_offsets
 
     settings.geometry_coordinate_version = GEOMETRY_COORDINATE_VERSION
     if hasattr(settings, "geometry_coordinate_space"):
-        settings.geometry_coordinate_space = CANONICAL_REFERENCE_SPACE
+        settings.geometry_coordinate_space = SOURCE_COORDINATE_SPACE
     if hasattr(settings, "geometry_reference_width"):
-        settings.geometry_reference_width = int(canonical_width)
+        settings.geometry_reference_width = 0
+    if hasattr(settings, "parameter_display_width"):
+        settings.parameter_display_width = 0
     return True
 
-
-def initialize_geometry_reference(
-    settings: Any,
-    source_size: tuple[int, int],
-    *,
-    historical_1400_values: bool = False,
-) -> bool:
-    """Initialize an explicit canonical reference width once a real page is known.
-
-    AppSettings intentionally keeps geometry_reference_width=0 so library callers
-    can construct page-local geometry without an implicit scale. A real project,
-    however, needs a portable persisted reference width.
-
-    Clean projects inherit numeric defaults from the historical 1400px display
-    convention. When historical_1400_values is true, preserve their physical
-    meaning by resolving those values to the first page before storing that page
-    as the project's canonical reference. Existing modern JSON with a missing
-    reference width keeps its current numeric values unchanged.
-    """
-    if not geometry_uses_canonical_pixels(settings):
-        return False
-    try:
-        existing = int(getattr(settings, "geometry_reference_width", 0) or 0)
-    except (TypeError, ValueError):
-        existing = 0
-    if existing > 0:
-        if hasattr(settings, "geometry_coordinate_space"):
-            settings.geometry_coordinate_space = CANONICAL_REFERENCE_SPACE
-        return False
-
-    transform = LayoutTransform(
-        str(getattr(settings, "layout_transform", "identity") or "identity")
-    )
-    canonical_width, _canonical_height = transform.canonical_size(
-        (max(1, int(source_size[0])), max(1, int(source_size[1])))
-    )
-
-    if historical_1400_values:
-        scale = min(1.0, REFERENCE_CANONICAL_WIDTH / max(1, canonical_width))
-        for name in CANONICAL_GEOMETRY_FIELDS:
-            if not hasattr(settings, name):
-                continue
-            raw = getattr(settings, name)
-            try:
-                numeric = float(raw)
-            except (TypeError, ValueError):
-                continue
-            if numeric == 0:
-                continue
-            setattr(settings, name, round(numeric / max(scale, 1e-9)))
-
-    settings.geometry_reference_width = int(canonical_width)
-    if hasattr(settings, "geometry_coordinate_space"):
-        settings.geometry_coordinate_space = CANONICAL_REFERENCE_SPACE
-    return True
 
 def coordinate_contract() -> dict[str, str | int]:
-    """Machine-readable coordinate contract used by exports and diagnostics."""
+    """Machine-readable public/persisted coordinate contract."""
     return {
-        "version": 2,
+        "version": GEOMETRY_COORDINATE_VERSION,
+        "coordinates": SOURCE_COORDINATE_SPACE,
         "annotations": SOURCE_COORDINATE_SPACE,
-        "layout_geometry_runtime": CANONICAL_COORDINATE_SPACE,
-        "layout_geometry_persisted": CANONICAL_REFERENCE_SPACE,
-        "analysis": ANALYSIS_COORDINATE_SPACE,
-        "ocr_band": BAND_COORDINATE_SPACE,
-        "tuning_distances": REFERENCE_PIXEL_SPACE,
-        "reference_width": REFERENCE_CANONICAL_WIDTH,
+        "settings_geometry": SOURCE_COORDINATE_SPACE,
+        "tuning_distances": SOURCE_COORDINATE_SPACE,
+        "temporary_processing": "internal_only_not_persisted",
     }

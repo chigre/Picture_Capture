@@ -18,10 +18,9 @@ from .coordinate_space import (
     SOURCE_COORDINATE_SPACE,
     canonical_to_analysis_scale,
     geometry_uses_canonical_pixels,
+    geometry_uses_source_pixels,
     legacy_parameter_scale,
-    reference_to_analysis,
-    reference_to_canonical,
-    stored_geometry_to_canonical,
+    setting_pixels,
 )
 from .image_utils import normalize_page_rgb
 from .layout_transform import LayoutTransform
@@ -39,6 +38,7 @@ from .project_storage import crop_log_path, pdic_path_for_image, ppp_read_path_f
 
 _COLUMN_TRACK_ADAPTIVE_BLOCK = 19
 _COLUMN_TRACK_ADAPTIVE_C = 20
+_ANALYSIS_MAX_WIDTH = 1600
 
 
 @dataclass(slots=True)
@@ -171,7 +171,7 @@ class IllustrationSplitResult:
         return self.records[index]
 
 
-def _analysis_image(image: Image.Image, max_width: int = 1400) -> tuple[Image.Image, float]:
+def _analysis_image(image: Image.Image, max_width: int = _ANALYSIS_MAX_WIDTH) -> tuple[Image.Image, float]:
     source = normalize_page_rgb(image)
     if source.width <= max_width:
         return source.copy(), 1.0
@@ -244,16 +244,16 @@ def _estimate_column_paths(
         ]
 
     canonical_width = max(1, round(analysis.width / max(scale, 1e-9)))
-    body_indent = stored_geometry_to_canonical(
+    body_indent = setting_pixels(
         settings.body_indent, canonical_width, settings,
     )
-    block_height_value = stored_geometry_to_canonical(
+    block_height_value = setting_pixels(
         settings.column_track_block_height, canonical_width, settings,
     )
-    radius_value = stored_geometry_to_canonical(
+    radius_value = setting_pixels(
         settings.column_track_radius, canonical_width, settings,
     )
-    max_step_value = stored_geometry_to_canonical(
+    max_step_value = setting_pixels(
         settings.column_track_max_step, canonical_width, settings,
     )
     dark = _adaptive_dark_mask(
@@ -356,7 +356,7 @@ def _column_start_offsets_canonical(
         except (TypeError, ValueError):
             value = 0.0
         resolved.append(
-            stored_geometry_to_canonical(value, canonical_width, settings)
+            setting_pixels(value, canonical_width, settings)
         )
     return resolved
 
@@ -392,11 +392,11 @@ def _derive_nominal_geometry_canonical(
     """Return nominal geometry in full-resolution canonical pixels."""
     width = max(1, int(image_width))
     height = max(1, int(image_height))
-    analysis_scale = min(1.0, 1400.0 / width)
+    analysis_scale = min(1.0, float(_ANALYSIS_MAX_WIDTH) / width)
     analysis_width = max(1, round(width * analysis_scale))
 
     def canonical_value(name: str) -> int:
-        return stored_geometry_to_canonical(
+        return setting_pixels(
             getattr(settings, name), width, settings,
         )
 
@@ -405,7 +405,9 @@ def _derive_nominal_geometry_canonical(
     gutter = max(0, round(canonical_value("gutter") * analysis_scale))
     column_width = max(10, round(canonical_value("column_width") * analysis_scale))
     configured_right = left + count * column_width + (count - 1) * gutter
-    if configured_right > analysis_width * 1.08 or configured_right < analysis_width * 0.55:
+    if (not geometry_uses_source_pixels(settings)) and (
+        configured_right > analysis_width * 1.08 or configured_right < analysis_width * 0.55
+    ):
         left = max(2, round(analysis_width * 0.025))
         gutter = max(4, round(analysis_width * 0.035)) if count > 1 else 0
         column_width = max(
@@ -464,7 +466,7 @@ def _derive_geometry_canonical(image: Image.Image, settings: AppSettings) -> Geo
     canonical_width, canonical_height = image.size
 
     def canonical_value(name: str) -> int:
-        return stored_geometry_to_canonical(
+        return setting_pixels(
             getattr(settings, name), canonical_width, settings,
         )
 
@@ -473,7 +475,9 @@ def _derive_geometry_canonical(image: Image.Image, settings: AppSettings) -> Geo
     gutter = max(0, round(canonical_value("gutter") * analysis_scale))
     column_width = max(10, round(canonical_value("column_width") * analysis_scale))
     configured_right = left + count * column_width + (count - 1) * gutter
-    if configured_right > analysis_width * 1.08 or configured_right < analysis_width * 0.55:
+    if (not geometry_uses_source_pixels(settings)) and (
+        configured_right > analysis_width * 1.08 or configured_right < analysis_width * 0.55
+    ):
         left = max(2, round(analysis_width * 0.025))
         gutter = max(4, round(analysis_width * 0.035)) if count > 1 else 0
         column_width = max(
@@ -629,13 +633,13 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
     canonical = geometry.transform.canonical_image_for_analysis(source)
     analysis, scale = _analysis_image(canonical)
     canonical_width = canonical.width
-    body_indent = stored_geometry_to_canonical(
+    body_indent = setting_pixels(
         settings.body_indent, canonical_width, settings,
     )
-    character_height = stored_geometry_to_canonical(
+    character_height = setting_pixels(
         settings.character_height, canonical_width, settings,
     )
-    row_padding = stored_geometry_to_canonical(
+    row_padding = setting_pixels(
         settings.row_padding, canonical_width, settings,
     )
     row_height = max(1, character_height + row_padding)
@@ -708,7 +712,7 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
                 # coarse Y produced by left-edge projection. Restrict analysis
                 # to this column so neighbouring columns cannot influence it.
                 from .paddle_headwords import refine_separator_y
-                reference_to_source = canonical.width / 1400.0
+                source_pixel_scale = 1.0
                 column_x = max(0, round(geometry.x_at(col, y_source)))
                 column_right = min(
                     gray.shape[1],
@@ -720,7 +724,7 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
                         y_source,
                         max(2, character_height),
                         settings,
-                        reference_to_canonical_scale=reference_to_source,
+                        pixel_scale=source_pixel_scale,
                         lower_bound=max(0, geometry.top),
                     )
             if y_source - last_y < round(min_gap / scale):
@@ -802,11 +806,11 @@ def refine_existing_entries(
     canonical_width = canonical.width
     line_height = max(
         2,
-        stored_geometry_to_canonical(
+        setting_pixels(
             effective.character_height, canonical_width, effective,
         ),
     )
-    source_per_reference = canonical_width / 1400.0
+    source_pixel_scale = 1.0
     search_ratio = max(0.05, min(0.80, float(effective.paddle_separator_search_ratio)))
     max_delta = max(2, round(line_height * search_ratio))
 
@@ -828,7 +832,7 @@ def refine_existing_entries(
                 int(canonical_v),
                 line_height,
                 effective,
-                reference_to_canonical_scale=source_per_reference,
+                pixel_scale=source_pixel_scale,
                 lower_bound=max(0, int(geometry.top)),
             )
             delta = int(candidate_v) - int(canonical_v)
@@ -1020,10 +1024,10 @@ def line_box(entry: Entry, geometry: Geometry, image: Image.Image, settings: App
     _entry_u, entry_v = geometry.source_to_canonical(entry.x, entry.y)
     idx = column_index(entry.x, geometry, entry.y)
     canonical_width = geometry.transform.canonical_size(image.size)[0]
-    row_padding = stored_geometry_to_canonical(
+    row_padding = setting_pixels(
         settings.row_padding, canonical_width, settings,
     )
-    character_height = stored_geometry_to_canonical(
+    character_height = setting_pixels(
         settings.character_height, canonical_width, settings,
     )
     vertical_pad = abs(row_padding)
@@ -1255,13 +1259,13 @@ def entry_crop_bounds(
         return max(0, top), min(canonical_height, bottom)
 
     top_value = (
-        stored_geometry_to_canonical(settings.start_y, canonical_width, settings)
+        setting_pixels(settings.start_y, canonical_width, settings)
         if top_y is None
-        else stored_geometry_to_canonical(max(0, int(top_y)), canonical_width, settings)
+        else setting_pixels(max(0, int(top_y)), canonical_width, settings)
     )
     if bottom_y is None:
         bottom_value = (
-            stored_geometry_to_canonical(
+            setting_pixels(
                 max(0, int(settings.bottom_y)), canonical_width, settings,
             )
             if bool(getattr(settings, "crop_to_bottom_y", False))
@@ -1272,7 +1276,7 @@ def entry_crop_bounds(
         bottom_value = (
             0
             if int(bottom_y) <= 0
-            else stored_geometry_to_canonical(
+            else setting_pixels(
                 max(0, int(bottom_y)), canonical_width, settings,
             )
         )
@@ -1302,10 +1306,10 @@ def _entry_crop_box_for_column(
     col = max(0, min(len(geometry.column_starts) - 1, int(col)))
     canonical_width = geometry.transform.canonical_size(image.size)[0]
     extra_left_px = max(
-        0, stored_geometry_to_canonical(int(extra_left), canonical_width, settings),
+        0, setting_pixels(int(extra_left), canonical_width, settings),
     )
     extra_right_px = max(
-        0, stored_geometry_to_canonical(int(extra_right), canonical_width, settings),
+        0, setting_pixels(int(extra_right), canonical_width, settings),
     )
 
     # Use the robust width of the ordinary columns. derive_geometry intentionally
@@ -1315,7 +1319,7 @@ def _entry_crop_box_for_column(
     nominal_width = max(1, round(float(np.median(widths or geometry.column_widths or [image.width]))))
     gutter_px = max(
         0,
-        stored_geometry_to_canonical(settings.gutter, canonical_width, settings),
+        setting_pixels(settings.gutter, canonical_width, settings),
     )
     half_gutter = gutter_px // 2
     outer_margin = max(0, geometry.column_starts[0] // 2)
@@ -1449,10 +1453,10 @@ def _base_entry_crop_pieces(
         image, settings, profile_page_index,
     )
     canonical_width = geometry.transform.canonical_size(source.size)[0]
-    character_height = stored_geometry_to_canonical(
+    character_height = setting_pixels(
         effective.character_height, canonical_width, effective,
     )
-    row_padding = stored_geometry_to_canonical(
+    row_padding = setting_pixels(
         effective.row_padding, canonical_width, effective,
     )
     row_height = max(1, character_height + row_padding)
@@ -2008,7 +2012,7 @@ def detect_illustration_regions(
         canonical_width = geometry.transform.canonical_size(source.size)[0]
         source_margin = max(
             2,
-            stored_geometry_to_canonical(
+            setting_pixels(
                 max(0, int(getattr(effective, "illustration_detect_padding", 8))),
                 canonical_width,
                 effective,
@@ -2016,7 +2020,7 @@ def detect_illustration_regions(
         )
         source_margin_right = max(
             source_margin,
-            stored_geometry_to_canonical(
+            setting_pixels(
                 max(0, int(getattr(effective, "illustration_detect_right_padding", 16))),
                 canonical_width,
                 effective,
@@ -2181,15 +2185,15 @@ def illustration_crop_bounds(
         top_canonical = effective_sections[0].top_v
         bottom_canonical = effective_sections[-1].bottom_v
     else:
-        top_canonical = stored_geometry_to_canonical(
+        top_canonical = setting_pixels(
             max(0, int(top_y)), canonical_width, effective,
         )
         bottom_canonical = (
-            stored_geometry_to_canonical(max(0, int(bottom_y)), canonical_width, effective)
+            setting_pixels(max(0, int(bottom_y)), canonical_width, effective)
             if int(bottom_y) > 0 else 0
         )
     margin_px = max(
-        0, stored_geometry_to_canonical(max(0, int(margin)), canonical_width, effective),
+        0, setting_pixels(max(0, int(margin)), canonical_width, effective),
     )
     # Illustration polygons are persisted in source XY. Horizontal layouts are
     # the supported physical top/bottom crop convention; rotated layouts keep

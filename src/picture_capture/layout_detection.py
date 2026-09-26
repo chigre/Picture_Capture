@@ -17,7 +17,7 @@ from .coordinate_space import (
     CANONICAL_COORDINATE_SPACE,
     geometry_uses_canonical_pixels,
     legacy_parameter_scale,
-    stored_geometry_to_canonical,
+    setting_pixels,
 )
 
 
@@ -64,10 +64,10 @@ class VerticalRuleEstimate:
 def aggregate_layout_estimates(
     estimates: Iterable[LayoutEstimate], *, columns_policy: str = "detect", fixed_columns: int | None = None
 ) -> tuple[dict[str, int], str]:
-    """Robustly combine page estimates and report column consistency.
+    """Robustly combine page estimates in literal full-resolution pixels.
 
-    Columns use a mode (or the Profile's fixed prior); continuous geometry uses
-    a median after conservative MAD outlier rejection.
+    No estimate is normalized to another page width. Suggested values are the
+    actual pixels measured on the representative source pages.
     """
     rows = list(estimates)
     if not rows:
@@ -77,17 +77,8 @@ def aggregate_layout_estimates(
     mode_columns = min(counts, key=lambda value: (-counts[value], value))
     columns = max(1, int(fixed_columns or mode_columns)) if columns_policy == "fixed" else mode_columns
 
-    widths = [max(1, int(getattr(row, "canonical_width", 0) or 0)) for row in rows]
-    known_widths = [width for width in widths if width > 1]
-    reference_width = round(statistics.median(known_widths)) if known_widths else 0
-
     def robust_median(name: str) -> int:
-        values: list[float] = []
-        for row, row_width in zip(rows, widths):
-            value = float(getattr(row, name))
-            if reference_width > 0 and row_width > 1:
-                value *= reference_width / row_width
-            values.append(value)
+        values = [float(getattr(row, name)) for row in rows]
         center = statistics.median(values)
         deviations = [abs(value - center) for value in values]
         mad = statistics.median(deviations)
@@ -95,13 +86,9 @@ def aggregate_layout_estimates(
         return round(statistics.median(kept or values))
 
     result = {"columns": columns}
-    if reference_width > 0:
-        result["geometry_reference_width"] = reference_width
     for field in ("start_y", "bottom_y", "manual_x", "column_width", "gutter", "character_height", "row_padding"):
         result[field] = robust_median(field)
-    # Keep a small resolution-aware safety margin above the first body line.
-    safety = max(1, round(5 * reference_width / 1400)) if reference_width > 0 else 5
-    result["start_y"] = max(0, result["start_y"] - safety)
+    result["start_y"] = max(0, result["start_y"] - 5)
     result["row_padding"] = max(1, result["row_padding"])
     return result, f"{columns}栏: {counts.get(columns, 0)}/{len(rows)} pages"
 
@@ -839,7 +826,7 @@ def detect_layout_consistency(image: Image.Image, settings: AppSettings) -> Layo
         )
     start_y_canonical = max(
         0,
-        stored_geometry_to_canonical(settings.start_y, source.width, settings),
+        setting_pixels(settings.start_y, source.width, settings),
     )
     header_limit = min(
         ink.shape[0], max(1, round(start_y_canonical * scale))

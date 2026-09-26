@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from .coordinate_space import (
-    canonical_geometry_to_stored,
-    geometry_uses_canonical_pixels,
-)
+from .coordinate_space import pixels_to_setting
 import re
 from typing import Iterable
 
@@ -446,10 +443,10 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
     """Return a per-page copy with the confirmed page template applied.
 
     Explicit physical header/footer percentages are converted at one boundary
-    only. Modern settings store full-resolution canonical pixels; legacy
-    settings receive the old display-scaled representation through the shared
-    compatibility helper. Vertical dictionaries keep physical top/bottom masks
-    separate from canonical reading-axis V.
+    only. Version-3 settings store the resulting full-resolution image pixel
+    value directly; older projects use compatibility conversion only while
+    being migrated. Vertical dictionaries keep physical top/bottom masks
+    separate from the internal reading-axis transform.
     """
     current = replace(settings)
     source_width = max(1, int(image_size[0]))
@@ -465,7 +462,7 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
             0.0, min(35.0, float(getattr(current, "profile_header_percent", 6.0)))
         )
         source_top = round(source_height * pct / 100.0)
-        current.start_y = canonical_geometry_to_stored(
+        current.start_y = pixels_to_setting(
             source_top, source_width, current,
         )
         current.paddle_auto_header_rule = False
@@ -480,7 +477,7 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
             0.0, min(35.0, float(getattr(current, "profile_footer_percent", 5.0)))
         )
         source_bottom = round(source_height * (1.0 - pct / 100.0))
-        current.bottom_y = canonical_geometry_to_stored(
+        current.bottom_y = pixels_to_setting(
             source_bottom, source_width, current,
         )
         current.crop_to_bottom_y = True

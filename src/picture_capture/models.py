@@ -112,20 +112,18 @@ class AppSettings:
     dictionary_index_language: str = ""
     dictionary_content_language: str = ""
     dictionary_body_page_range: str = ""
-    # Coordinate contract:
-    # - saved PDIC/PPP/exports use original-image pixels;
-    # - project layout scalars use pixels of an explicit canonical reference page;
-    # - OCR/profile tuning distances use fixed 1400px-reference units;
-    # - parameter_display_width is retained only to migrate old display-scaled projects.
-    geometry_coordinate_version: int = 2
-    geometry_coordinate_space: str = "canonical_reference_page_pixels"
-    # Canonical width of the page whose pixels define the persisted layout
-    # scalars. Runtime geometry scales these values to the current page width.
+    # Coordinate contract: every user-facing/persisted geometry value is an
+    # original/full-resolution image pixel value. No setting is normalized to
+    # viewer width, page width, or a fixed reference width.
+    geometry_coordinate_version: int = 3
+    geometry_coordinate_space: str = "source_image_pixels"
+    # Migration-only fields for pre-v3 project JSON. They are cleared on open
+    # and omitted from newly saved settings.
     geometry_reference_width: int = 0
     parameter_display_width: int = 0
     columns: int = 2
-    # Profile v3 layout semantics. Geometry is measured in canonical space;
-    # source images and PDIC entry coordinates are never rewritten.
+    # Profile v3 layout semantics. Saved geometry remains in original-image
+    # pixel units; temporary layout transforms never change settings semantics.
     layout_writing_mode: str = "horizontal-tb"
     layout_text_direction: str = "ltr"
     layout_transform: str = "identity"
@@ -138,8 +136,7 @@ class AppSettings:
     bottom_y: int = 0
     manual_x: int = 28
     # Per-column manual corrections relative to the automatically detected
-    # column starts. Values use the same persisted canonical reference-page
-    # pixel space as the other Project Profile geometry fields.
+    # column starts. Values are direct original-image pixel offsets.
     column_start_offsets: list[int] = field(default_factory=list)
     manual_y: int = 400
     body_indent: int = 28
@@ -426,9 +423,8 @@ class AppSettings:
     paddle_refine_separator_y: bool = True
     paddle_separator_search_ratio: float = 0.30
     paddle_separator_band_radius: int = 2
-    # Downward-biased Y-refinement safety clearance. The value follows the
-    # program's historical display-pixel convention and is converted to source
-    # pixels at runtime. 0 allows the separator to touch the detected ink edge.
+    # Downward-biased Y-refinement safety clearance in original-image pixels.
+    # 0 allows the separator to touch the detected ink edge.
     paddle_separator_safety_px: int = 2
     # Width of the left-side local X ROI used by image-boundary/Y-refinement
     # analysis, expressed as a percentage of the current straightened column.
@@ -497,7 +493,11 @@ class AppSettings:
 
     def to_json(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(asdict(self), ensure_ascii=False, indent=2), encoding="utf-8")
+        payload = asdict(self)
+        if int(payload.get("geometry_coordinate_version", 0) or 0) >= 3:
+            payload.pop("geometry_reference_width", None)
+            payload.pop("parameter_display_width", None)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     @classmethod
     def from_json(cls, path: Path) -> "AppSettings":
@@ -757,31 +757,19 @@ class ProjectState:
                 )
             except Exception:
                 pass
-        # Upgrade legacy display-scaled geometry once a real source page is known.
-        # The migration is deterministic and idempotent; modern projects remain
-        # untouched. Persist immediately for modern JSON projects so a copied
-        # project no longer depends on the original GUI display width.
+        # Resolve any pre-v3 display/reference-page geometry once to direct
+        # original/full-resolution pixels. Version-3 projects are never scaled.
         if images:
             try:
-                from .coordinate_space import (
-                    initialize_geometry_reference,
-                    migrate_legacy_geometry_settings,
-                )
+                from .coordinate_space import migrate_legacy_geometry_settings
                 with Image.open(images[0]) as first_page:
                     source_size = first_page.size
                 migrated = migrate_legacy_geometry_settings(settings, source_size)
-                clean_project_defaults = not json_settings.exists() and not legacy_settings.exists()
-                initialized_reference = initialize_geometry_reference(
-                    settings,
-                    source_size,
-                    historical_1400_values=clean_project_defaults,
-                )
-                if (migrated or initialized_reference) and json_settings.exists():
+                if migrated and json_settings.exists():
                     settings.to_json(json_settings)
             except Exception:
-                # Coordinate migration must never make an otherwise readable
-                # project impossible to open. The legacy runtime path remains
-                # available until the project can be migrated successfully.
+                # Migration must never make an otherwise readable project
+                # impossible to open; retry remains possible on a later open.
                 pass
 
         words_path = resolve_wordslist_path(root, settings.wordslist_path)
