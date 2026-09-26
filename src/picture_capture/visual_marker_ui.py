@@ -10,7 +10,7 @@ from tkinter import messagebox, ttk
 from PIL import Image, ImageTk
 
 from .image_utils import normalize_page_rgb
-from .visual_marker_templates import build_visual_marker_sample
+from .visual_marker_templates import build_visual_marker_sample, trim_visual_marker_crop
 
 
 _ROLE_LABEL_TO_VALUE = {
@@ -51,7 +51,13 @@ class VisualMarkerCaptureDialog(tk.Toplevel):
         self._render_job: str | None = None
 
         self.title("添加视觉标记样本")
-        self.geometry("980x780")
+        width, height = 980, 780
+        screen_w = max(1, int(self.winfo_screenwidth()))
+        screen_h = max(1, int(self.winfo_screenheight()))
+        self.geometry(
+            f"{width}x{height}+{max(0, (screen_w - width) // 2)}+"
+            f"{max(0, (screen_h - height) // 2)}"
+        )
         self.minsize(720, 560)
         self.transient(parent)
         self.grab_set()
@@ -372,19 +378,25 @@ class VisualMarkerCaptureDialog(tk.Toplevel):
             return
         role = _ROLE_LABEL_TO_VALUE.get(self.role_var.get(), "entry_marker")
         path = self.images[self.page_index]
-        crop = self.source_image.crop(box)
-        sample_id = (
-            f"{role}:{path.stem}:"
-            + "-".join(str(value) for value in box)
-        )
         try:
+            crop, trim_box = trim_visual_marker_crop(self.source_image.crop(box))
+            trimmed_box = (
+                int(box[0] + trim_box[0]),
+                int(box[1] + trim_box[1]),
+                int(box[0] + trim_box[2]),
+                int(box[1] + trim_box[3]),
+            )
+            sample_id = (
+                f"{role}:{path.stem}:"
+                + "-".join(str(value) for value in trimmed_box)
+            )
             sample = build_visual_marker_sample(
                 crop,
                 role=role,
                 literal=self.literal_var.get().strip(),
                 sample_id=sample_id,
                 source_page=path.name,
-                source_box=box,
+                source_box=trimmed_box,
             )
         except Exception as exc:
             messagebox.showerror(
