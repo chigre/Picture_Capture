@@ -587,7 +587,29 @@ def profile_summary_tags(settings: AppSettings) -> list[str]:
     custom = str(getattr(settings, "dictionary_custom_profile_name", "") or "").strip()
     if settings.dictionary_profile_id == "custom" and custom:
         headword = f"{custom}（自定义）"
-    return [reading, columns, separator, header, footer, side, settings.ocr_language, headword]
+    tags = [reading, columns, separator, header, footer, side, settings.ocr_language, headword]
+    if int(getattr(settings, "profile_tail_structure_version", 0) or 0) >= 1:
+        tail_names: list[str] = []
+        if bool(getattr(settings, "profile_tail_allow_pos", False)):
+            tail_names.append("POS")
+        if bool(getattr(settings, "profile_tail_allow_inflection", False)):
+            tail_names.append("词形")
+        if bool(getattr(settings, "profile_tail_allow_variant", False)):
+            tail_names.append("变体")
+        if bool(getattr(settings, "profile_tail_allow_pronunciation", False)):
+            tail_names.append("发音")
+        if bool(getattr(settings, "profile_tail_allow_descriptor", False)):
+            tail_names.append("描述")
+        requirement = (
+            "至少一项"
+            if bool(getattr(settings, "profile_tail_require_selected", False))
+            else "可选"
+        )
+        tail_label = "词后:" + ("/".join(tail_names) if tail_names else "无") + f"({requirement})"
+        if bool(getattr(settings, "profile_tail_allow_visual_rescue", False)):
+            tail_label += "+视觉补救"
+        tags.append(tail_label)
+    return tags
 
 
 def copy_settings(dst: AppSettings, src: AppSettings) -> None:
