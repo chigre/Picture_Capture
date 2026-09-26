@@ -37,7 +37,8 @@ from picture_capture.profile_semantics import (
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
     _detect_visual_entry_markers, _headword_script_compatibility,
-    _ordinary_strong_edge_visual_rescue, _repair_multiline_headword_state_machine,
+    _ordinary_strong_edge_visual_rescue, _ordinary_visual_rescue_thresholds,
+    _repair_multiline_headword_state_machine,
     _selected_tail_structure_evidence, filter_headword_records, HeadwordParse,
     parse_headword_filter_rules, parse_headword_text, prepare_ocr_band,
     run_paddle_band,
@@ -1517,7 +1518,8 @@ def test_profile_setup_exposes_complete_headword_structure_controls():
     assert "发音 / 音标" in text
     assert "描述型结构" in text
     assert "普通左缘词至少需要命中一种上面勾选的词后结构" in text
-    assert "允许“严格左缘 + 明显粗体”视觉补救" in text
+    assert "允许“严格左缘 + 粗体”视觉补救" in text
+    assert "不再另设隐藏的粗体/行高门槛" in text
     assert "profile_tail_structure_version = 1" in text
 
 
@@ -1548,6 +1550,75 @@ def test_latin_regular_profile_enables_conservative_strong_edge_visual_rescue():
     assert settings.paddle_allow_strong_edge_visual_rescue is True
     assert settings.paddle_strong_edge_visual_boldness_ratio == 1.22
     assert settings.paddle_strong_edge_visual_height_ratio == 0.90
+
+
+def test_explicit_tail_visual_rescue_uses_visible_profile_thresholds_only():
+    settings = AppSettings(
+        ocr_language="ita",
+        profile_tail_structure_version=1,
+        profile_tail_allow_visual_rescue=True,
+        paddle_boldness_ratio=1.00,
+        paddle_rec_score_threshold=0.20,
+        # Deliberately impossible legacy thresholds: explicit Profile mode must
+        # ignore them instead of silently overriding the visible UI.
+        paddle_strong_edge_visual_boldness_ratio=2.80,
+        paddle_strong_edge_visual_height_ratio=2.20,
+        paddle_strong_edge_visual_min_confidence=0.99,
+    )
+    profile = load_dictionary_profile(preset="latin_regular", language="ita")
+    patterns = _compile_patterns(settings, profile)
+    parsed = parse_headword_text(
+        "addomesticare vti. addomesticare qualcosa",
+        settings,
+        patterns,
+        profile,
+    )
+    assert parsed is not None
+    assert not parsed.has_pos
+
+    thresholds = _ordinary_visual_rescue_thresholds(settings)
+    assert thresholds["source"] == "visible_profile_specificity"
+    assert thresholds["boldness"] == 1.00
+    assert thresholds["height"] == 0.0
+    assert thresholds["confidence"] == 0.20
+
+    assert _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.04,
+        height_ratio=0.78,
+        confidence=0.85,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
+
+    # Raising the visible UI boldness threshold must immediately tighten the
+    # same rescue path; no second hidden threshold participates.
+    settings.paddle_boldness_ratio = 1.10
+    assert not _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.04,
+        height_ratio=1.10,
+        confidence=0.85,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
+    assert _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.12,
+        height_ratio=0.78,
+        confidence=0.85,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
 
 
 def test_strong_edge_visual_rescue_recovers_pos_ocr_failure_but_not_body_text():
