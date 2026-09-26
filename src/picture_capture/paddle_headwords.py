@@ -2412,6 +2412,278 @@ def _parse_cjk_visual_marker_line(
     return parsed
 
 
+def _binary_rle_components(
+    mask: np.ndarray,
+) -> list[tuple[int, int, int, int, int]]:
+    """Dependency-free 8-connected components for visual marker analysis."""
+    mask = np.asarray(mask, dtype=bool)
+    if mask.ndim != 2 or mask.size == 0:
+        return []
+    height, _width = mask.shape
+    parent: list[int] = []
+    rank: list[int] = []
+    boxes: list[list[int]] = []
+
+    def make(x0: int, x1: int, y: int) -> int:
+        index = len(parent)
+        parent.append(index)
+        rank.append(0)
+        boxes.append([x0, y, x1, y + 1, x1 - x0])
+        return index
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra == rb:
+            return
+        if rank[ra] < rank[rb]:
+            ra, rb = rb, ra
+        parent[rb] = ra
+        if rank[ra] == rank[rb]:
+            rank[ra] += 1
+
+    previous: list[tuple[int, int, int]] = []
+    for y in range(height):
+        padded = np.r_[False, mask[y], False].astype(np.int8)
+        changes = np.diff(padded)
+        starts = np.flatnonzero(changes == 1)
+        ends = np.flatnonzero(changes == -1)
+        current: list[tuple[int, int, int]] = []
+        cursor = 0
+        for x0, x1 in zip(starts.tolist(), ends.tolist()):
+            component = make(x0, x1, y)
+            while cursor < len(previous) and previous[cursor][1] < x0 - 1:
+                cursor += 1
+            k = cursor
+            while k < len(previous) and previous[k][0] <= x1 + 1:
+                px0, px1, prior = previous[k]
+                if px1 >= x0 - 1:
+                    union(component, prior)
+                k += 1
+            current.append((x0, x1, component))
+        previous = current
+
+    merged: dict[int, list[int]] = {}
+    for index, box in enumerate(boxes):
+        root = find(index)
+        target = merged.setdefault(root, [box[0], box[1], box[2], box[3], 0])
+        target[0] = min(target[0], box[0])
+        target[1] = min(target[1], box[1])
+        target[2] = max(target[2], box[2])
+        target[3] = max(target[3], box[3])
+        target[4] += box[4]
+    return [tuple(value) for value in merged.values()]
+
+
+def _visual_marker_shape_metrics(mask: np.ndarray) -> dict[str, float]:
+    """Shape descriptors for a hollow or filled circular entry marker."""
+    mask = np.asarray(mask, dtype=bool)
+    if mask.ndim != 2 or mask.size == 0 or not mask.any():
+        return {"density": 0.0, "central_ink": 1.0, "outer_ink_fraction": 1.0}
+    height, width = mask.shape
+    density = float(mask.mean())
+    y0, y1 = round(height * 0.30), round(height * 0.70)
+    x0, x1 = round(width * 0.30), round(width * 0.70)
+    central = mask[max(0, y0):max(y0 + 1, y1), max(0, x0):max(x0 + 1, x1)]
+    central_ink = float(central.mean()) if central.size else 1.0
+
+    yy, xx = np.indices(mask.shape, dtype=np.float64)
+    xn = (xx - (width - 1) / 2.0) / max(1.0, width / 2.0)
+    yn = (yy - (height - 1) / 2.0) / max(1.0, height / 2.0)
+    radius = np.sqrt(xn * xn + yn * yn)
+    dark_radius = radius[mask]
+    outer_ink_fraction = (
+        float(np.mean(dark_radius > 1.05)) if dark_radius.size else 1.0
+    )
+    return {
+        "density": round(density, 4),
+        "central_ink": round(central_ink, 4),
+        "outer_ink_fraction": round(outer_ink_fraction, 4),
+    }
+
+
+def _detect_visual_entry_markers(
+    gray: np.ndarray,
+    median_height: float,
+    left_limit: int,
+    *,
+    lower_bound: int = 0,
+) -> list[dict[str, Any]]:
+    """Detect CNIT-style ○/● entry markers directly from page pixels.
+
+    PaddleOCR often drops or substitutes the small circle itself.  On the
+    supplied CNIT pages the visual marker is much more stable: compact, nearly
+    square, aligned to a narrow left marker lane, and either a hollow ring or a
+    dense disk.  A robust lane estimate removes incidental round glyphs inside
+    definitions.
+    """
+    if gray.size == 0 or gray.ndim != 2:
+        return []
+    height, width = gray.shape
+    line_h = max(8.0, float(median_height))
+    zone_width = min(
+        width,
+        max(int(left_limit + round(line_h * 1.6)), round(line_h * 2.2), 48),
+    )
+    lower = max(0, min(height - 1, int(lower_bound)))
+    if zone_width < 12 or lower >= height - 2:
+        return []
+
+    roi = gray[lower:, :zone_width]
+    threshold = _otsu_threshold(roi)
+    dark = roi <= threshold
+    candidates: list[dict[str, Any]] = []
+    broad_left = max(int(left_limit), round(line_h * 1.50))
+
+    for x0, y0, x1, y1, _area in _binary_rle_components(dark):
+        box_w = x1 - x0
+        box_h = y1 - y0
+        if box_w <= 0 or box_h <= 0 or x0 > broad_left:
+            continue
+        aspect = box_w / max(1.0, float(box_h))
+        if not 0.72 <= aspect <= 1.30:
+            continue
+
+        shape = _visual_marker_shape_metrics(dark[y0:y1, x0:x1])
+        density = float(shape["density"])
+        central_ink = float(shape["central_ink"])
+        outer_fraction = float(shape["outer_ink_fraction"])
+        marker_type = ""
+
+        # Tuned against CNIT_0013–0032: real hollow markers are consistently
+        # close to one body-line high and have a genuinely empty centre.
+        if (
+            line_h * 0.84 <= box_w <= line_h * 1.25
+            and line_h * 0.80 <= box_h <= line_h * 1.25
+            and 0.25 <= density <= 0.38
+            and central_ink <= 0.06
+            and outer_fraction <= 0.04
+        ):
+            marker_type = "open_circle"
+        # Filled sub-entry bullets are slightly smaller but remain compact and
+        # centrally solid.
+        elif (
+            line_h * 0.55 <= box_w <= line_h * 1.10
+            and line_h * 0.66 <= box_h <= line_h * 1.15
+            and 0.70 <= density <= 0.90
+            and central_ink >= 0.80
+            and outer_fraction <= 0.04
+        ):
+            marker_type = "filled_circle"
+        if not marker_type:
+            continue
+
+        candidates.append({
+            "type": marker_type,
+            "symbol": "○" if marker_type == "open_circle" else "●",
+            "x0": int(x0),
+            "x1": int(x1),
+            "y0": int(lower + y0),
+            "y1": int(lower + y1),
+            "center_y": round(float(lower + (y0 + y1) / 2.0), 2),
+            "width": int(box_w),
+            "height": int(box_h),
+            "density": density,
+            "central_ink": central_ink,
+            "outer_ink_fraction": outer_fraction,
+            "threshold": int(threshold),
+        })
+
+    # True entry markers occupy one gently drifting lane.  Use the median lane
+    # only when enough markers exist; this rejects small round letters/punctuation
+    # inside body text without assuming a fixed pixel X.
+    if len(candidates) >= 3:
+        lane_x = float(np.median([item["x0"] for item in candidates]))
+        lane_tolerance = max(8.0, line_h * 0.50)
+        candidates = [
+            item for item in candidates
+            if abs(float(item["x0"]) - lane_x) <= lane_tolerance
+        ]
+        for item in candidates:
+            item["lane_x"] = round(lane_x, 2)
+            item["lane_delta"] = round(abs(float(item["x0"]) - lane_x), 2)
+    return candidates
+
+
+def _match_visual_entry_markers_to_lines(
+    lines: list[OCRLine],
+    markers: list[dict[str, Any]],
+    median_height: float,
+) -> dict[int, dict[str, Any]]:
+    """Pair visual ○/● markers with OCR rows on the same physical line."""
+    if not lines or not markers:
+        return {}
+    line_h = max(8.0, float(median_height))
+    max_delta = max(8.0, line_h * 0.80)
+    proposals: list[tuple[float, int, int]] = []
+    for marker_index, marker in enumerate(markers):
+        marker_center = float(marker["center_y"])
+        marker_x1 = int(marker["x1"])
+        for line_index, line in enumerate(lines):
+            x0, y0, _x1, y1 = line.box
+            line_center = (y0 + y1) / 2.0
+            delta = abs(line_center - marker_center)
+            if delta > max_delta:
+                continue
+            if x0 > marker_x1 + line_h * 3.2:
+                continue
+            overlap = max(
+                0, min(int(marker["y1"]), y1) - max(int(marker["y0"]), y0)
+            )
+            if overlap <= 0 and delta > line_h * 0.55:
+                continue
+            proposals.append((delta, marker_index, line_index))
+
+    matches: dict[int, dict[str, Any]] = {}
+    used_markers: set[int] = set()
+    used_lines: set[int] = set()
+    for delta, marker_index, line_index in sorted(proposals):
+        if marker_index in used_markers or line_index in used_lines:
+            continue
+        item = dict(markers[marker_index])
+        item["match_method"] = "visual_marker_nearest_row"
+        item["ocr_line_index"] = int(line_index)
+        item["center_delta"] = round(float(delta), 2)
+        matches[line_index] = item
+        used_markers.add(marker_index)
+        used_lines.add(line_index)
+    return matches
+
+
+def _parse_cjk_visual_marker_line(
+    text: str,
+    marker_symbol: str,
+    settings: AppSettings,
+    profile: DictionaryProfile,
+) -> HeadwordParse | None:
+    """Recover a marker-led CJK head when OCR omitted/misread the visual marker."""
+    parse_text, _repairs = _repair_headword_ocr(text)
+    # At most a few OCR junk glyphs may precede the Han lemma where the circle
+    # was.  The visual marker itself supplies the strong boundary evidence.
+    match = re.search(
+        r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]",
+        parse_text[:10],
+    )
+    if match is None or match.start() > 4:
+        return None
+    synthetic = marker_symbol + parse_text[match.start():]
+    parsed = _parse_cjk_marker_pinyin_headword(synthetic, settings, profile)
+    if parsed is None:
+        return None
+    parsed.parser_stage = "cjk_visual_marker_rescue"
+    parsed.descriptor_text = "cjk_marker_pinyin"
+    parsed.parser_trace = (
+        f"visual_entry_marker:{marker_symbol}",
+        "cjk_visual_marker_rescue",
+    )
+    return parsed
+
+
 def _leading_cjk_ideograph(text: str) -> str:
     """Return a CJK glyph only when it is the actual leading token.
 
