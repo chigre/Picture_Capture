@@ -2057,6 +2057,16 @@ class ProjectProfileWizard(tk.Toplevel):
         self.marker_prefix_var.set(defaults["marker_prefix"])
         self.numbered_prefix_var.set(defaults["numbered_prefix"])
 
+    def _set_tail_defaults_for_profile(self, key: str) -> None:
+        defaults = profile_tail_structure_defaults(key)
+        self.tail_allow_pos_var.set(bool(defaults["allow_pos"]))
+        self.tail_allow_inflection_var.set(bool(defaults["allow_inflection"]))
+        self.tail_allow_variant_var.set(bool(defaults["allow_variant"]))
+        self.tail_allow_pronunciation_var.set(bool(defaults["allow_pronunciation"]))
+        self.tail_allow_descriptor_var.set(bool(defaults["allow_descriptor"]))
+        self.tail_require_selected_var.set(bool(defaults["require_selected"]))
+        self.tail_allow_visual_rescue_var.set(bool(defaults["allow_visual_rescue"]))
+
     def _set_symbol_defaults_for_profile(self, key: str) -> None:
         defaults = profile_symbol_inventory_defaults(key)
         self.symbol_inventory_enabled_var.set(bool(defaults["enabled"]))
@@ -2095,6 +2105,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_tuning_level_var.set(0)
         key = self._current_profile_key()
         self._set_structure_defaults_for_profile(key)
+        self._set_tail_defaults_for_profile(key)
         self._set_symbol_defaults_for_profile(key)
         self._reset_specificity_for_profile(key)
         self._profile_revision += 1
@@ -2234,7 +2245,33 @@ class ProjectProfileWizard(tk.Toplevel):
         if self.numbered_prefix_var.get():
             active.append("编号前缀")
         self.headword_structure_summary_var.set(
-            "当前允许：" + ("、".join(active) if active else "无（不会自动生成词头）")
+            "当前词头前/本体：" + ("、".join(active) if active else "无（不会自动生成词头）")
+        )
+        tail_active: list[str] = []
+        if self.tail_allow_pos_var.get():
+            tail_active.append("POS")
+        if self.tail_allow_inflection_var.get():
+            tail_active.append("词形/屈折")
+        if self.tail_allow_variant_var.get():
+            tail_active.append("变体/性数")
+        if self.tail_allow_pronunciation_var.get():
+            tail_active.append("发音/音标")
+        if self.tail_allow_descriptor_var.get():
+            tail_active.append("描述型结构")
+        require_text = (
+            "普通左缘词必须命中其一"
+            if self.tail_require_selected_var.get()
+            else "词后结构仅作加分证据"
+        )
+        rescue_text = (
+            "；允许粗体左缘补救"
+            if self.tail_allow_visual_rescue_var.get()
+            else ""
+        )
+        self.tail_structure_summary_var.set(
+            "当前词后证据："
+            + ("、".join(tail_active) if tail_active else "无")
+            + f"｜{require_text}{rescue_text}"
         )
 
     def _refresh_headword_specificity_visibility(self) -> None:
@@ -2447,6 +2484,18 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_allow_ordinary_left_edge = bool(self.ordinary_left_edge_var.get())
         s.profile_allow_numbered_prefix = bool(self.numbered_prefix_var.get())
         s.profile_allow_marker_prefix = bool(self.marker_prefix_var.get())
+        s.profile_tail_structure_version = 1
+        s.profile_tail_allow_pos = bool(self.tail_allow_pos_var.get())
+        s.profile_tail_allow_inflection = bool(self.tail_allow_inflection_var.get())
+        s.profile_tail_allow_variant = bool(self.tail_allow_variant_var.get())
+        s.profile_tail_allow_pronunciation = bool(
+            self.tail_allow_pronunciation_var.get()
+        )
+        s.profile_tail_allow_descriptor = bool(self.tail_allow_descriptor_var.get())
+        s.profile_tail_require_selected = bool(self.tail_require_selected_var.get())
+        s.profile_tail_allow_visual_rescue = bool(
+            self.tail_allow_visual_rescue_var.get()
+        )
         s.profile_symbol_inventory_version = 1
         s.profile_symbol_inventory_enabled = bool(
             self.symbol_inventory_enabled_var.get()
@@ -2501,6 +2550,11 @@ class ProjectProfileWizard(tk.Toplevel):
             if hasattr(s, name):
                 setattr(s, name, value)
         apply_headword_tuning(s, profile_key, s.profile_headword_tuning_level)
+        # The preset may seed the hidden legacy rescue setting, but after Profile
+        # step 3 the user's explicit tail-structure choice is authoritative.
+        s.paddle_allow_strong_edge_visual_rescue = bool(
+            s.profile_tail_allow_visual_rescue
+        )
         # Wizard specificity values are explicit project overrides and therefore
         # take precedence over preset/tuning defaults.
         s.paddle_left_tolerance = max(
