@@ -767,7 +767,7 @@ class ProcessingTests(unittest.TestCase):
         gray[58:76, 20:285] = 35
         refined, details = refine_separator_y(
             gray, coarse_y=50, line_height=24, settings=settings,
-            reference_to_canonical_scale=1.0,
+            pixel_scale=1.0,
         )
         self.assertGreater(refined, 50)
         self.assertLess(refined, 58)
@@ -3211,12 +3211,12 @@ def test_v2817_separator_safety_is_configurable():
     settings.paddle_separator_safety_px = 2
     y2, d2 = refine_separator_y_adaptive(
         gray, coarse_y=70, reference_line_height=20, settings=settings,
-        reference_to_canonical_scale=1.0, lower_bound=0, content_top=70,
+        pixel_scale=1.0, lower_bound=0, content_top=70,
     )
     settings.paddle_separator_safety_px = 6
     y6, d6 = refine_separator_y_adaptive(
         gray, coarse_y=70, reference_line_height=20, settings=settings,
-        reference_to_canonical_scale=1.0, lower_bound=0, content_top=70,
+        pixel_scale=1.0, lower_bound=0, content_top=70,
     )
 
     assert d2["configured_safety_pixels"] == 2
@@ -3226,7 +3226,7 @@ def test_v2817_separator_safety_is_configurable():
     assert y6 <= y2 - 4
 
 
-def test_v2817_separator_safety_scales_with_page_geometry():
+def test_v2817_separator_safety_is_literal_source_pixels():
     import numpy as np
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import refine_separator_y_adaptive
@@ -3239,10 +3239,10 @@ def test_v2817_separator_safety_scales_with_page_geometry():
     settings.paddle_separator_safety_px = 3
     _, diag = refine_separator_y_adaptive(
         gray, coarse_y=90, reference_line_height=24, settings=settings,
-        reference_to_canonical_scale=2.0, lower_bound=0, content_top=90,
+        pixel_scale=1.0, lower_bound=0, content_top=90,
     )
     assert diag["configured_safety_pixels"] == 3
-    assert diag["safety_pixels"] == 6
+    assert diag["safety_pixels"] == 3
 
 
 def test_v2818_refinement_preserves_original_y_as_checkbox_fallback():
@@ -3364,7 +3364,7 @@ def test_v2819_adaptive_refine_can_relocate_box_top_from_previous_line():
     gray[39:61, 8:70] = 0
     refined, meta = refine_separator_y_adaptive(
         gray, coarse_y=24, reference_line_height=24, settings=settings,
-        reference_to_canonical_scale=1.0, lower_bound=0, content_top=24,
+        pixel_scale=1.0, lower_bound=0, content_top=24,
     )
     assert meta["relocated_from_prior_ink"] is True
     assert 38 <= meta["current_ink_onset"] <= 41
@@ -3817,7 +3817,7 @@ def test_v294_display_geometry_cache_invalidates_when_layout_parameters_change()
     app.settings.column_track_radius -= 2
     app.settings.geometry_reference_width += 100
     key4 = PictureCaptureApp._display_geometry_key(app)
-    assert key4 != key1
+    assert key4 == key1
     app.settings.geometry_reference_width -= 100
     app.settings.profile_side_percent_a += 1.0
     key5 = PictureCaptureApp._display_geometry_key(app)
@@ -5206,24 +5206,23 @@ def test_v2119_crop_controls_live_only_in_crop_settings_dialog():
     assert '完整切图设置（词条切图 / 插图切图共用）' in crop_class
 
 
-def test_crop_settings_v6_declares_reference_coordinate_space():
+def test_crop_settings_v7_declares_source_coordinate_space():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     crop_class = text.split("class CropSettingsDialog", 1)[1].split("class PictureCaptureApp", 1)[0]
     assert '"version": CROP_SETTINGS_VERSION' in crop_class
-    assert '"coordinate_space": CANONICAL_REFERENCE_SPACE' in crop_class
-    assert '"geometry_reference_width"' in crop_class
-    assert '"general_top_v"' in crop_class
-    assert '"general_bottom_v"' in crop_class
-    assert '"entry_left_padding_u"' in crop_class
-    assert '"entry_right_padding_u"' in crop_class
-    assert "参考页规范像素" in crop_class
-    # Coordinate meaning is carried by the unit column, not repeated in labels.
+    assert '"coordinate_space": SOURCE_COORDINATE_SPACE' in crop_class
+    assert '"geometry_reference_width"' not in crop_class
+    assert '"general_top_y"' in crop_class
+    assert '"general_bottom_y"' in crop_class
+    assert '"entry_left_padding_x"' in crop_class
+    assert '"entry_right_padding_x"' in crop_class
+    assert "原图像素" in crop_class
     settings_class = text.split("class SettingsDialog", 1)[1].split("class CropSettingsDialog", 1)[0]
-    assert '"start_y": "正文起始 V"' in settings_class
-    assert '"start_y": "正文起始 V（参考页规范坐标）"' not in settings_class
-    assert '"paddle_left_tolerance": "参考页规范px"' in settings_class
-    assert '"paddle_separator_safety_px": "参考页规范px"' in settings_class
+    assert '"start_y": "正文起始 Y"' in settings_class
+    assert '"manual_x": "第一栏左缘 X"' in settings_class
+    assert '"paddle_left_tolerance": "原图px"' in settings_class
+    assert '"paddle_separator_safety_px": "原图px"' in settings_class
 
 
 def test_v21110_backup_pdic_is_background_and_streaming():
