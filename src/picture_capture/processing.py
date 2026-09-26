@@ -222,7 +222,11 @@ def _smooth_track(
         # median avoids averaging the true edge toward ordinary body text.
         median_filtered.append(window[(len(window) - 1) // 2])
 
-    start = int(median_filtered[0])
+    # Seed from the actual first block rather than its forward-looking median;
+    # this preserves a genuine gradual slope at the top of the page. The
+    # nominal start still rejects a first block that is already an implausible
+    # rightward indentation.
+    start = int(values[0])
     if nominal_x is not None and abs(start - int(nominal_x)) > max_step:
         start = int(nominal_x)
 
