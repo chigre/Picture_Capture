@@ -250,6 +250,16 @@ class AppSettings:
     # Review-window numeric shortcuts. Order is 1..9,0. Each entry is the
     # replacement string inserted when “数字转变音字母” is enabled.
     review_digit_map: list[str] = field(default_factory=lambda: list("áéíóúãçñõü"))
+    # Cross-page focused proofreading. Page ranges are 1-based project indices;
+    # an empty range means all project pages. Filtering is opt-in and never
+    # replaces the normal single-page review until the user presses 【筛选】.
+    focused_review_page_range: str = ""
+    focused_review_include_ocr_mismatch: bool = True
+    focused_review_include_characters: bool = False
+    focused_review_exclude_single_character: bool = False
+    focused_review_exclude_reference_words: bool = False
+    focused_review_characters: str = ""
+    focused_review_batch_size: int = 40
     # Auxiliary headword reference list used by the review window and main-view membership styling.
     # Relative paths are resolved from the project root; absolute paths are also supported.
     wordslist_path: str = "wordslist.txt"
