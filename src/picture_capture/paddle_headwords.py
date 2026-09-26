@@ -2346,10 +2346,15 @@ def _binary_rle_components(
 
 
 def _visual_marker_shape_metrics(mask: np.ndarray) -> dict[str, float]:
-    """Shape descriptors for a hollow or filled circular entry marker."""
+    """Geometry descriptors shared by configured visual symbol families."""
     mask = np.asarray(mask, dtype=bool)
     if mask.ndim != 2 or mask.size == 0 or not mask.any():
-        return {"density": 0.0, "central_ink": 1.0, "outer_ink_fraction": 1.0}
+        return {
+            "density": 0.0, "central_ink": 1.0, "outer_ink_fraction": 1.0,
+            "top_ink": 0.0, "bottom_ink": 0.0, "left_ink": 0.0, "right_ink": 0.0,
+            "corner_ink": 0.0, "midrow_width": 0.0, "toprow_width": 0.0,
+            "bottomrow_width": 0.0,
+        }
     height, width = mask.shape
     density = float(mask.mean())
     y0, y1 = round(height * 0.30), round(height * 0.70)
@@ -2365,11 +2370,134 @@ def _visual_marker_shape_metrics(mask: np.ndarray) -> dict[str, float]:
     outer_ink_fraction = (
         float(np.mean(dark_radius > 1.05)) if dark_radius.size else 1.0
     )
+    edge_h = max(1, round(height * 0.22))
+    edge_w = max(1, round(width * 0.22))
+    top_ink = float(mask[:edge_h, :].mean())
+    bottom_ink = float(mask[-edge_h:, :].mean())
+    left_ink = float(mask[:, :edge_w].mean())
+    right_ink = float(mask[:, -edge_w:].mean())
+    corners = np.concatenate([
+        mask[:edge_h, :edge_w].ravel(),
+        mask[:edge_h, -edge_w:].ravel(),
+        mask[-edge_h:, :edge_w].ravel(),
+        mask[-edge_h:, -edge_w:].ravel(),
+    ])
+    corner_ink = float(corners.mean()) if corners.size else 0.0
+
+    def _row_width_ratio(y: int) -> float:
+        row = mask[max(0, min(height - 1, y))]
+        positions = np.flatnonzero(row)
+        if positions.size == 0:
+            return 0.0
+        return float((positions[-1] - positions[0] + 1) / max(1, width))
+
     return {
         "density": round(density, 4),
         "central_ink": round(central_ink, 4),
         "outer_ink_fraction": round(outer_ink_fraction, 4),
+        "top_ink": round(top_ink, 4),
+        "bottom_ink": round(bottom_ink, 4),
+        "left_ink": round(left_ink, 4),
+        "right_ink": round(right_ink, 4),
+        "corner_ink": round(corner_ink, 4),
+        "midrow_width": round(_row_width_ratio(height // 2), 4),
+        "toprow_width": round(_row_width_ratio(max(0, round(height * 0.18))), 4),
+        "bottomrow_width": round(_row_width_ratio(min(height - 1, round(height * 0.82))), 4),
     }
+
+
+def _visual_family_symbol(
+    inventory: dict[str, Any], family: str,
+) -> tuple[str, str] | None:
+    """Return (literal, role) for one configured visual family."""
+    for role, key in (("entry_marker", "entry_markers"), ("bracket_open", "bracket_openers")):
+        for symbol in inventory.get(key, ()):
+            if _SYMBOL_FAMILY_BY_LITERAL.get(str(symbol)) == family:
+                return str(symbol), role
+    return None
+
+
+def _classify_visual_symbol_component(
+    mask: np.ndarray,
+    line_h: float,
+    inventory: dict[str, Any],
+) -> tuple[str, str, str, dict[str, float]] | None:
+    """Classify a connected component only into configured symbol families."""
+    height, width = mask.shape
+    if width <= 0 or height <= 0:
+        return None
+    aspect = width / max(1.0, float(height))
+    metrics = _visual_marker_shape_metrics(mask)
+    density = float(metrics["density"])
+    central = float(metrics["central_ink"])
+    outer = float(metrics["outer_ink_fraction"])
+    corner = float(metrics["corner_ink"])
+    top = float(metrics["top_ink"])
+    bottom = float(metrics["bottom_ink"])
+    left = float(metrics["left_ink"])
+    right = float(metrics["right_ink"])
+    mid_width = float(metrics["midrow_width"])
+    top_width = float(metrics["toprow_width"])
+    bottom_width = float(metrics["bottomrow_width"])
+    families = set(inventory.get("visual_families") or ())
+
+    checks: list[tuple[str, bool]] = [
+        ("circle_open",
+         0.72 <= aspect <= 1.30
+         and line_h * 0.78 <= width <= line_h * 1.30
+         and line_h * 0.76 <= height <= line_h * 1.30
+         and 0.22 <= density <= 0.42 and central <= 0.10 and outer <= 0.08),
+        ("circle_filled",
+         0.70 <= aspect <= 1.32
+         and line_h * 0.46 <= width <= line_h * 1.16
+         and line_h * 0.58 <= height <= line_h * 1.22
+         and 0.60 <= density <= 0.94 and central >= 0.58 and outer <= 0.11),
+        ("square_open",
+         0.72 <= aspect <= 1.30
+         and line_h * 0.55 <= height <= line_h * 1.30
+         and 0.18 <= density <= 0.55 and central <= 0.18
+         and min(top, bottom, left, right) >= 0.16 and corner >= 0.08),
+        ("square_filled",
+         0.72 <= aspect <= 1.30
+         and line_h * 0.45 <= height <= line_h * 1.25
+         and density >= 0.72 and central >= 0.70 and corner >= 0.45),
+        ("diamond_open",
+         0.70 <= aspect <= 1.35
+         and line_h * 0.55 <= height <= line_h * 1.35
+         and 0.14 <= density <= 0.50 and central <= 0.18
+         and corner <= 0.16 and mid_width >= max(top_width, bottom_width) * 1.15),
+        ("diamond_filled",
+         0.70 <= aspect <= 1.35
+         and line_h * 0.50 <= height <= line_h * 1.30
+         and 0.45 <= density <= 0.82 and central >= 0.45
+         and corner <= 0.32 and mid_width >= max(top_width, bottom_width) * 1.10),
+        ("triangle_open",
+         0.65 <= aspect <= 1.50
+         and line_h * 0.52 <= height <= line_h * 1.35
+         and 0.12 <= density <= 0.48 and central <= 0.35
+         and bottom_width >= top_width * 1.35),
+        ("triangle_filled",
+         0.65 <= aspect <= 1.50
+         and line_h * 0.48 <= height <= line_h * 1.30
+         and density >= 0.38 and central >= 0.35
+         and bottom_width >= top_width * 1.25),
+        ("bracket_open",
+         0.18 <= aspect <= 0.95
+         and line_h * 0.55 <= height <= line_h * 1.55
+         and 0.12 <= density <= 0.68
+         and max(left, right) >= 0.20
+         and top >= 0.12 and bottom >= 0.12
+         and central <= 0.60),
+    ]
+    for family, passed in checks:
+        if family not in families or not passed:
+            continue
+        resolved = _visual_family_symbol(inventory, family)
+        if resolved is None:
+            continue
+        symbol, role = resolved
+        return family, symbol, role, metrics
+    return None
 
 
 def _detect_visual_entry_markers(
@@ -2378,22 +2506,27 @@ def _detect_visual_entry_markers(
     left_limit: int,
     *,
     lower_bound: int = 0,
+    inventory: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Detect CNIT-style ○/● entry markers directly from page pixels.
+    """Detect configured entry/bracket symbols directly from page pixels.
 
-    PaddleOCR often drops or substitutes the small circle itself.  On the
-    supplied CNIT pages the visual marker is much more stable: compact, nearly
-    square, aligned to a narrow left marker lane, and either a hollow ring or a
-    dense disk.  A robust lane estimate removes incidental round glyphs inside
-    definitions.
+    The detector is dictionary-specific: only visual families implied by the
+    active symbol inventory are considered. Unknown/custom literals remain OCR-
+    only rather than being guessed from generic shapes.
     """
     if gray.size == 0 or gray.ndim != 2:
         return []
+    inventory = dict(inventory or {})
+    if not inventory.get("enabled", True) or not inventory.get("visual_rescue", True):
+        return []
+    if not inventory.get("visual_families"):
+        return []
+
     height, width = gray.shape
     line_h = max(8.0, float(median_height))
     zone_width = min(
         width,
-        max(int(left_limit + round(line_h * 1.6)), round(line_h * 2.2), 48),
+        max(int(left_limit + round(line_h * 2.0)), round(line_h * 2.8), 56),
     )
     lower = max(0, min(height - 1, int(lower_bound)))
     if zone_width < 12 or lower >= height - 2:
@@ -2403,76 +2536,57 @@ def _detect_visual_entry_markers(
     threshold = _otsu_threshold(roi)
     dark = roi <= threshold
     candidates: list[dict[str, Any]] = []
-    broad_left = max(int(left_limit), round(line_h * 1.50))
+    broad_left = max(int(left_limit), round(line_h * 1.80))
 
     for x0, y0, x1, y1, _area in _binary_rle_components(dark):
         box_w = x1 - x0
         box_h = y1 - y0
         if box_w <= 0 or box_h <= 0 or x0 > broad_left:
             continue
-        aspect = box_w / max(1.0, float(box_h))
-        if not 0.72 <= aspect <= 1.30:
+        classified = _classify_visual_symbol_component(
+            dark[y0:y1, x0:x1], line_h, inventory
+        )
+        if classified is None:
             continue
-
-        shape = _visual_marker_shape_metrics(dark[y0:y1, x0:x1])
-        density = float(shape["density"])
-        central_ink = float(shape["central_ink"])
-        outer_fraction = float(shape["outer_ink_fraction"])
-        marker_type = ""
-
-        # Tuned against CNIT_0013–0032: real hollow markers are consistently
-        # close to one body-line high and have a genuinely empty centre.
-        if (
-            line_h * 0.84 <= box_w <= line_h * 1.25
-            and line_h * 0.80 <= box_h <= line_h * 1.25
-            and 0.24 <= density <= 0.39
-            and central_ink <= 0.08
-            and outer_fraction <= 0.07
-        ):
-            marker_type = "open_circle"
-        # Filled sub-entry bullets are slightly smaller and can be mildly
-        # deformed/connected to a neighbouring stroke in scans.  Keep the
-        # compact lane/size constraints strict, but tolerate that edge tail.
-        elif (
-            line_h * 0.52 <= box_w <= line_h * 1.10
-            and line_h * 0.66 <= box_h <= line_h * 1.15
-            and 0.68 <= density <= 0.92
-            and central_ink >= 0.70
-            and outer_fraction <= 0.09
-        ):
-            marker_type = "filled_circle"
-        if not marker_type:
-            continue
-
-        candidates.append({
-            "type": marker_type,
-            "symbol": "○" if marker_type == "open_circle" else "●",
-            "x0": int(x0),
-            "x1": int(x1),
-            "y0": int(lower + y0),
-            "y1": int(lower + y1),
+        family, symbol, role, metrics = classified
+        item: dict[str, Any] = {
+            "type": family, "family": family, "symbol": symbol, "role": role,
+            "x0": int(x0), "x1": int(x1),
+            "y0": int(lower + y0), "y1": int(lower + y1),
             "center_y": round(float(lower + (y0 + y1) / 2.0), 2),
-            "width": int(box_w),
-            "height": int(box_h),
-            "density": density,
-            "central_ink": central_ink,
-            "outer_ink_fraction": outer_fraction,
+            "width": int(box_w), "height": int(box_h),
             "threshold": int(threshold),
-        })
+        }
+        item.update(metrics)
+        candidates.append(item)
 
-    # True entry markers occupy one gently drifting lane.  Use the median lane
-    # only when enough markers exist; this rejects small round letters/punctuation
-    # inside body text without assuming a fixed pixel X.
-    if len(candidates) >= 3:
-        lane_x = float(np.median([item["x0"] for item in candidates]))
-        lane_tolerance = max(8.0, line_h * 0.50)
-        candidates = [
-            item for item in candidates
-            if abs(float(item["x0"]) - lane_x) <= lane_tolerance
-        ]
-        for item in candidates:
-            item["lane_x"] = round(lane_x, 2)
-            item["lane_delta"] = round(abs(float(item["x0"]) - lane_x), 2)
+    if not candidates:
+        return []
+
+    # Lane filtering is role-aware. A dictionary can therefore keep one marker
+    # lane for ○/● and a nearby bracket lane without forcing both onto one X.
+    if bool(inventory.get("lane_required", False)):
+        tolerance = max(
+            6.0,
+            line_h * max(20, min(120, int(inventory.get("lane_tolerance_percent") or 50))) / 100.0,
+        )
+        filtered: list[dict[str, Any]] = []
+        for role in ("entry_marker", "bracket_open"):
+            group = [item for item in candidates if item.get("role") == role]
+            if not group:
+                continue
+            if len(group) >= 3:
+                lane_x = float(np.median([item["x0"] for item in group]))
+                group = [
+                    item for item in group
+                    if abs(float(item["x0"]) - lane_x) <= tolerance
+                ]
+                for item in group:
+                    item["lane_x"] = round(lane_x, 2)
+                    item["lane_delta"] = round(abs(float(item["x0"]) - lane_x), 2)
+                    item["lane_required"] = True
+            filtered.extend(group)
+        candidates = filtered
     return candidates
 
 
