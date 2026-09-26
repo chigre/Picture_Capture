@@ -7,12 +7,14 @@ import unittest
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture.formats import read_pdic, read_ppp, write_pdic, write_ppp, read_picdic_index_records
+from picture_capture.formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, read_picdic_index_records
 from picture_capture.app import (
     PictureCaptureApp, _candidate_choice_rows, _parse_words_of_pages_text, _fill_page_entries,
     _build_words_page_lookup, _resolve_words_page_token, _parse_merged_pdic_text, _write_pdic_atomic,
     _natural_text_key, _sorted_page_list_rows, project_language_from_ocr,
     transformed_geometry_pending, scaled_overlay_line_width, review_auto_fit_zoom,
+    _focused_review_character_tokens, _focused_review_page_indices,
+    _focused_review_is_single_character, _apply_focused_review_page_updates,
 )
 from picture_capture.models import AppSettings, Entry, PolygonRegion, ProjectState
 from picture_capture.ui_compat import (
@@ -60,6 +62,7 @@ from picture_capture.paddle_headwords import (
     _pair_with_lens_candidates,
     _apply_pair_engine_position,
 )
+from picture_capture.visual_marker_templates import trim_visual_marker_crop
 from picture_capture.processing import (
     clamp_box,
     derive_geometry, derive_nominal_geometry,
@@ -5340,11 +5343,14 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in app_text
     assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
     assert 'self.settings.illustration_label_border_width, overlay_scale' in app_text
-    # Sequence number is a widget immediately before the editor and shares its background.
+    # Sequence number and delete control use the configured headword-marker colour.
     assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in app_text
-    assert 'bg=str(editor.cget("bg"))' in app_text
+    assert 'marker_control_bg = str(self.settings.headword_marker_color)' in app_text
+    assert 'bg=marker_control_bg' in app_text
+    assert 'fg="#ffffff"' in app_text
     assert 'record["index_widget"] = index_label' in app_text
-    assert 'index_widget.configure(bg=bg)' in app_text
+    assert 'record["delete_widget"] = delete_button' in app_text
+    assert 'for control_name in ("index_widget", "delete_widget")' in app_text
 
 
 def test_platform_language_font_recommendations_and_auto_normalization():
@@ -5553,8 +5559,10 @@ def test_v21116_review_ui_exposes_editable_digit_map_and_grouped_vowels():
     start = text.index("class ReviewWindow")
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
-    assert 'text="数字替换映射"' in review
-    assert 'self.accent_panel_title = tk.StringVar(value="▸ 变音字符")' in review
+    assert 'right, "digit", "数字替换映射"' in review
+    assert 'text="启用", variable=self.replace_digits' in review
+    assert 'right, "accent", "变音字符"' in review
+    assert '"<Button-3>", lambda _event, c=char: self.copy_char(c)' in review
     assert 'DIGIT_KEYS = "1234567890"' in review
     assert '("´", ("á", "é", "í", "ó", "ú"))' in review
     assert '("`", ("à", "è", "ì", "ò", "ù"))' in review
@@ -5589,7 +5597,9 @@ def test_v21117_review_layout_matches_compact_workflow():
     review = text[start:end]
     assert 'self._review_flat_button(row1, "保存", self.save, role="primary")' in review
     assert 'textvariable=self.autosave_label_var' in review
-    assert 'text="数字替换映射"' in review
+    assert 'text="校对模式："' in review
+    assert 'right, "digit", "数字替换映射"' in review
+    assert 'right, "accent", "变音字符"' in review
     assert 'text="排序规则"' in review
     assert 'text="词条排序规则"' not in review
     assert 'text="词条排序检查："' not in review
@@ -5601,8 +5611,9 @@ def test_v21117_review_layout_matches_compact_workflow():
     assert 'text="选择文件"' in review
     assert 'text="从所选词开始填充至本页结束"' in review
     assert 'self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)' in review
-    assert 'self.digit_panel_title = tk.StringVar(value="▸ 数字替换映射")' in review
-    assert 'self.accent_panel_title = tk.StringVar(value="▸ 变音字符")' in review
+    assert 'right, "digit", "数字替换映射"' in review
+    assert 'text="启用", variable=self.replace_digits' in review
+    assert 'right, "accent", "变音字符"' in review
 
 
 def test_review_toolbar_controls_are_grouped_by_function():
@@ -5621,8 +5632,9 @@ def test_review_toolbar_controls_are_grouped_by_function():
     row1_start = build.index('row1 = ttk.Frame(controls')
     row1_end = build.index('ttk.Separator(controls, orient="horizontal")', row1_start)
     row1 = build[row1_start:row1_end]
-    assert 'text="数字替换映射"' in row1
-    assert row1.index('text="数字替换映射"') < row1.index('text="排序规则"')
+    assert 'text="数字替换映射"' not in row1
+    assert 'text="校对模式："' in row1
+    assert row1.index('text="筛选"') < row1.index('text="排序规则"')
     assert row1.index('text="排序规则"') < row1.index('text="当前页"')
     assert row1.index('text="当前页"') < row1.index('text="所有页"')
     assert row1.index('text="所有页"') < row1.index('text="排序检查"')
@@ -5662,10 +5674,12 @@ def test_review_right_sections_are_collapsible_and_default_expanded():
     start = text.index("class ReviewWindow")
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
-    assert 'for key in ("display", "ocr", "network", "reference")' in review
+    assert 'for key in ("display", "digit", "accent", "ocr", "network", "reference")' in review
     assert 'key: tk.BooleanVar(value=True)' in review
     for key, title in (
         ("display", "显示设置"),
+        ("digit", "数字替换映射"),
+        ("accent", "变音字符"),
         ("ocr", "OCR结果"),
         ("network", "词条联网核验结果"),
         ("reference", "参考词表"),
@@ -7904,3 +7918,86 @@ def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded(
     assert "self._finish_section_editing()" in text
     assert "def _restore_cursor_guides_after_section_edit" in text
     assert "self.draw_cursor_guides(canvas_x, canvas_y)" in text
+
+
+def test_focused_review_filter_helpers_parse_ranges_tokens_and_single_characters():
+    assert _focused_review_character_tokens("傅, 裹，傅,鳥") == ("傅", "裹", "鳥")
+    assert _focused_review_page_indices("", 5) == [0, 1, 2, 3, 4]
+    assert _focused_review_page_indices("1-2, 4, 5", 5) == [0, 1, 3, 4]
+    assert _focused_review_page_indices("4-2", 5) == [1, 2, 3]
+    with unittest.TestCase().assertRaisesRegex(ValueError, "页面范围"):
+        _focused_review_page_indices("0-2", 5)
+    assert _focused_review_is_single_character("鳥") is True
+    assert _focused_review_is_single_character(" A ") is True
+    assert _focused_review_is_single_character("AB") is False
+
+
+def test_focused_review_page_update_writes_only_exact_source_xy():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        page1 = root / "0001.png"
+        page2 = root / "0002.png"
+        Image.new("RGB", (120, 180), "white").save(page1)
+        Image.new("RGB", (120, 180), "white").save(page2)
+        entries = [Entry("甲", 12, 34), Entry("乙", 56, 78)]
+        write_pdic(pdic_path(page1), entries, 120, ("0001", "@", "0002"))
+
+        saved, conflicts = _apply_focused_review_page_updates(
+            page1, [page1, page2], 0,
+            [{"x": 56, "y": 78, "original_word": "乙", "new_word": "乙改"}],
+        )
+        assert conflicts == []
+        assert saved == [(0, 56, 78, "乙改")]
+        reread = read_pdic(pdic_path(page1))
+        assert [(entry.word, entry.x, entry.y) for entry in reread] == [
+            ("甲", 12, 34), ("乙改", 56, 78)
+        ]
+
+        saved, conflicts = _apply_focused_review_page_updates(
+            page1, [page1, page2], 0,
+            [{"x": 57, "y": 78, "original_word": "乙改", "new_word": "错误"}],
+        )
+        assert saved == []
+        assert conflicts
+        reread = read_pdic(pdic_path(page1))
+        assert reread[1].word == "乙改"
+
+
+def test_visual_marker_crop_trims_white_margin_to_dominant_ink():
+    image = Image.new("RGB", (40, 30), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((11, 7, 22, 18), fill="black")
+    cropped, box = trim_visual_marker_crop(image)
+    assert box == (11, 7, 23, 19)
+    assert cropped.size == (12, 12)
+
+
+def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+
+    assert '"一、版面参数"' in text
+    assert "页眉Y(原图)" not in text
+    assert "页尾Y(原图)" not in text
+    assert "正文起始Y(原图)" not in text
+    assert "正文结束Y(原图)" not in text
+    assert 'text="  Y安全空间："' in text
+    safety = text.index('text="  Y安全空间："')
+    assert 'text="px"' in text[safety:safety + 900]
+
+    assert 'text="校对模式："' in text
+    assert 'text="重点筛选校对"' in text
+    assert 'text="OCR不匹配"' in text
+    assert 'text="含特定字符"' in text
+    assert 'text="排除单字符"' in text
+    assert 'text="排除参考词表"' in text
+    assert 'text="单批显示数量："' in text
+    assert 'text="上一批"' in text and 'text="下一批"' in text
+    assert 'right, "digit", "数字替换映射"' in text
+    assert 'text="启用", variable=self.replace_digits' in text
+    assert 'right, "accent", "变音字符"' in text
+    assert 'accent_button.bind(' in text and '"<Button-3>"' in text
+    assert "def copy_char(self, char: str)" in text
+    assert "marker_control_bg = str(self.settings.headword_marker_color)" in text
+    assert 'text="[X]"' in text
+    assert 'fg="#ffffff"' in text

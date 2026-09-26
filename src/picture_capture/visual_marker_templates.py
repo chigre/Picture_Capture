@@ -212,6 +212,28 @@ def _normalize_ink_mask(
     }
 
 
+def trim_visual_marker_crop(
+    image: Image.Image,
+) -> tuple[Image.Image, tuple[int, int, int, int]]:
+    """Remove surrounding white space using the same dominant-ink logic as templates.
+
+    The returned box is relative to the input crop and can therefore be added
+    to the original source selection to keep source_box truthful after trimming.
+    """
+    gray = np.asarray(image.convert("L"), dtype=np.uint8)
+    if gray.size == 0:
+        raise ValueError("empty marker crop")
+    threshold = _otsu_threshold(gray)
+    ink = _principal_component(gray <= threshold)
+    ys, xs = np.nonzero(ink)
+    if xs.size < 3 or ys.size < 3:
+        raise ValueError("marker selection contains too little ink")
+    left = int(xs.min())
+    top = int(ys.min())
+    right = int(xs.max()) + 1
+    bottom = int(ys.max()) + 1
+    return image.crop((left, top, right, bottom)), (left, top, right, bottom)
+
 def normalize_visual_marker_crop(
     image: Image.Image, *, canvas_size: int = DEFAULT_TEMPLATE_SIZE
 ) -> dict[str, Any]:
