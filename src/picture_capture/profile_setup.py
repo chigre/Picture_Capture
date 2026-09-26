@@ -1629,7 +1629,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=1, column=1, sticky="ew", pady=3)
         ttk.Label(
             self.symbol_inventory_frame,
-            text="例如 ○ ● ◇ ◆ □ ■ △ ▲ ※；空格/逗号分隔",
+            text="例如 ○●◉◯；可连续输入，也可用空格/逗号分隔",
             foreground="#666666",
         ).grid(row=1, column=2, sticky="w", padx=(6, 0), pady=3)
         ttk.Label(
@@ -1669,6 +1669,97 @@ class ProjectProfileWizard(tk.Toplevel):
             text="% 行高（越小越严格；默认 50%）",
             foreground="#666666",
         ).grid(row=5, column=2, sticky="w", padx=(6, 0), pady=3)
+
+        effective = ttk.Frame(self.symbol_inventory_frame)
+        effective.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(4, 2))
+        ttk.Label(
+            effective, textvariable=self.effective_entry_markers_var,
+            foreground="#555555",
+        ).pack(anchor="w")
+        ttk.Label(
+            effective, textvariable=self.effective_bracket_markers_var,
+            foreground="#555555",
+        ).pack(anchor="w")
+
+        visual_templates = ttk.LabelFrame(
+            self.symbol_inventory_frame, text="本词典视觉标记样本", padding=7,
+        )
+        visual_templates.grid(
+            row=7, column=0, columnspan=3, sticky="ew", pady=(8, 0)
+        )
+        visual_templates.columnconfigure(1, weight=1)
+
+        ttk.Label(visual_templates, text="识别方式：").grid(
+            row=0, column=0, sticky="e", padx=(0, 6), pady=3
+        )
+        ttk.Combobox(
+            visual_templates,
+            textvariable=self.symbol_template_mode_var,
+            values=tuple(VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE),
+            state="readonly",
+            width=22,
+        ).grid(row=0, column=1, sticky="w", pady=3)
+
+        ttk.Label(visual_templates, text="样本组织：").grid(
+            row=1, column=0, sticky="e", padx=(0, 6), pady=3
+        )
+        ttk.Combobox(
+            visual_templates,
+            textvariable=self.symbol_template_group_var,
+            values=tuple(VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE),
+            state="readonly",
+            width=22,
+        ).grid(row=1, column=1, sticky="w", pady=3)
+
+        ttk.Label(visual_templates, text="最低匹配分数：").grid(
+            row=2, column=0, sticky="e", padx=(0, 6), pady=3
+        )
+        tk.Spinbox(
+            visual_templates,
+            from_=0.35, to=0.95, increment=0.02, width=7,
+            textvariable=self.symbol_template_threshold_var,
+            format="%.2f",
+        ).grid(row=2, column=1, sticky="w", pady=3)
+        ttk.Label(
+            visual_templates,
+            text="默认 0.68；真实扫描差异较大时可适度降低",
+            foreground="#666666",
+        ).grid(row=2, column=2, sticky="w", padx=(6, 0), pady=3)
+
+        ttk.Checkbutton(
+            visual_templates,
+            text="在 OCR 诊断中记录模板匹配分数与样本来源",
+            variable=self.symbol_template_debug_var,
+            command=self._headword_specificity_changed,
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
+
+        ttk.Label(
+            visual_templates,
+            textvariable=self.visual_marker_sample_count_var,
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(5, 3))
+
+        sample_buttons = ttk.Frame(visual_templates)
+        sample_buttons.grid(row=5, column=0, columnspan=3, sticky="w")
+        ttk.Button(
+            sample_buttons,
+            text="从页面采样…",
+            command=self._capture_visual_marker_sample,
+        ).pack(side="left")
+        ttk.Button(
+            sample_buttons,
+            text="查看/删除样本",
+            command=self._show_visual_marker_samples,
+        ).pack(side="left", padx=(6, 0))
+        ttk.Button(
+            sample_buttons,
+            text="清空样本",
+            command=self._clear_visual_marker_samples,
+        ).pack(side="left", padx=(6, 0))
+        ttk.Label(
+            visual_templates,
+            text="直接框选这本词典真实印刷的入口标记；每类建议采 2–5 个不同页面样本。",
+            foreground="#666666",
+        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
         specificity = ttk.LabelFrame(
             tab, text="词头专属性（当前结构的视觉证据）", padding=10,
