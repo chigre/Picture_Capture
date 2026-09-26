@@ -83,10 +83,37 @@ def aggregate_layout_estimates(
         result[field] = robust_median(field)
     result["start_y"] = max(0, result["start_y"] - 5)
     result["row_padding"] = max(1, result["row_padding"])
+
+    # The 2016 VB workflow tuned ordinary drawing in relation to the printed
+    # line scale rather than as tiny fixed source-pixel defaults.  Its typical
+    # setup used 正文缩进 28 / 单行字高 25 and 微调判距 20 / 单行字高 25.
+    # Recreate those priors whenever layout detection is explicitly requested,
+    # so high-resolution scans do not keep stale 20/10-style values after the
+    # detected character height has grown to 30–40 px.
+    body_indent, horizontal_tolerance = ordinary_layout_priors_from_character_height(
+        result["character_height"]
+    )
+    result["body_indent"] = body_indent
+    result["horizontal_tolerance"] = horizontal_tolerance
     return result, f"{columns}栏: {counts.get(columns, 0)}/{len(rows)} pages"
 
 
 _TEXT_DETECTION_CACHE: dict[str, Any] = {}
+
+
+def ordinary_layout_priors_from_character_height(character_height: int) -> tuple[int, int]:
+    """Return VB-style ordinary-drawing starting values from detected line scale.
+
+    These are only layout-detection suggestions.  Users can still override both
+    fields afterwards.  The ratios reproduce the practical 2016 defaults:
+    正文缩进 28 / 单行字高 25 ≈ 1.12 and 微调判距 20 / 25 = 0.80.
+    """
+    line_height = max(1, int(character_height))
+    body_indent = max(2, round(line_height * 1.12))
+    horizontal_tolerance = max(
+        1, min(body_indent - 1, round(line_height * 0.80))
+    )
+    return body_indent, horizontal_tolerance
 
 
 def clear_text_detection_cache() -> None:
