@@ -16,6 +16,7 @@ from .coordinate_space import stored_geometry_to_canonical
 from .dictionary_profile import (
     dictionary_profile_preset,
     language_effective_settings,
+    profile_symbol_inventory_defaults,
     write_project_profile,
 )
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
@@ -342,6 +343,43 @@ class ProjectProfileWizard(tk.Toplevel):
             bool(getattr(s, "profile_allow_marker_prefix", False))
             if parser_controls_saved else structure_defaults["marker_prefix"]
         ))
+        symbol_defaults = profile_symbol_inventory_defaults(s.dictionary_profile_id)
+        symbol_inventory_saved = int(
+            getattr(s, "profile_symbol_inventory_version", 0) or 0
+        ) >= 1
+        self.symbol_inventory_enabled_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_symbol_inventory_enabled", True))
+            if symbol_inventory_saved else bool(symbol_defaults["enabled"])
+        ))
+        self.entry_marker_symbols_var = tk.StringVar(value=(
+            str(getattr(s, "profile_entry_marker_symbols", "") or "")
+            if symbol_inventory_saved
+            else " ".join(symbol_defaults["entry_markers"])
+        ))
+        self.bracket_open_symbols_var = tk.StringVar(value=(
+            str(getattr(s, "profile_bracket_open_symbols", "") or "")
+            if symbol_inventory_saved
+            else " ".join(symbol_defaults["bracket_openers"])
+        ))
+        self.symbol_visual_rescue_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_symbol_visual_rescue_enabled", True))
+            if symbol_inventory_saved else bool(symbol_defaults["visual_rescue"])
+        ))
+        self.symbol_lane_required_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_symbol_lane_required", True))
+            if symbol_inventory_saved else bool(symbol_defaults["lane_required"])
+        ))
+        self.symbol_lane_tolerance_var = tk.IntVar(value=(
+            max(
+                20,
+                min(
+                    120,
+                    int(getattr(s, "profile_symbol_lane_tolerance_percent", 50) or 50),
+                ),
+            )
+            if symbol_inventory_saved
+            else int(symbol_defaults["lane_tolerance_percent"])
+        ))
         self.cjk_allow_single_var = tk.BooleanVar(value=(
             bool(getattr(s, "profile_cjk_allow_single_headword", True))
             if parser_controls_saved else structure_defaults["cjk_single_visual"]
@@ -396,6 +434,9 @@ class ProjectProfileWizard(tk.Toplevel):
             self.headword_boldness_ratio_var,
             self.headword_min_score_var,
             self.cjk_right_context_width_var,
+            self.entry_marker_symbols_var,
+            self.bracket_open_symbols_var,
+            self.symbol_lane_tolerance_var,
         ):
             var.trace_add(
                 "write", lambda *_args: self.after_idle(self._headword_specificity_changed)
