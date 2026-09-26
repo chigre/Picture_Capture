@@ -3920,6 +3920,65 @@ def _accepted_cjk_row_for_visual_run(
     return None
 
 
+def _selected_tail_structure_evidence(
+    settings: AppSettings,
+    parsed: HeadwordParse | None,
+    *,
+    pos_allowed_by_rules: bool = True,
+) -> tuple[tuple[str, ...], dict[str, bool]]:
+    """Return only the post-lemma evidence families selected by the user.
+
+    Version 0 mirrors the historical hidden gate (POS / inflection /
+    descriptor). Version 1 makes each family explicit in Project Profile.
+    """
+    pronunciation = bool(
+        parsed
+        and any(
+            str(item).startswith("pronunciation:")
+            for item in parsed.parser_trace
+        )
+    )
+    available = {
+        "pos": bool(parsed and parsed.has_pos and pos_allowed_by_rules),
+        "inflection": bool(parsed and parsed.has_inflection),
+        "variant": bool(parsed and parsed.variants),
+        "pronunciation": pronunciation,
+        "descriptor": bool(parsed and parsed.has_descriptor),
+    }
+    if int(getattr(settings, "profile_tail_structure_version", 0) or 0) < 1:
+        selected = {
+            "pos": available["pos"],
+            "inflection": available["inflection"],
+            "variant": False,
+            "pronunciation": False,
+            "descriptor": available["descriptor"],
+        }
+    else:
+        selected = {
+            "pos": available["pos"] and bool(
+                getattr(settings, "profile_tail_allow_pos", True)
+            ),
+            "inflection": available["inflection"] and bool(
+                getattr(settings, "profile_tail_allow_inflection", True)
+            ),
+            "variant": available["variant"] and bool(
+                getattr(settings, "profile_tail_allow_variant", True)
+            ),
+            "pronunciation": available["pronunciation"] and bool(
+                getattr(settings, "profile_tail_allow_pronunciation", False)
+            ),
+            "descriptor": available["descriptor"] and bool(
+                getattr(settings, "profile_tail_allow_descriptor", True)
+            ),
+        }
+    names = tuple(name for name, present in selected.items() if present)
+    diagnostics = {
+        **{f"available_{name}": value for name, value in available.items()},
+        **{f"selected_{name}": value for name, value in selected.items()},
+    }
+    return names, diagnostics
+
+
 def _ordinary_strong_edge_visual_rescue(
     settings: AppSettings,
     parsed: HeadwordParse | None,
@@ -4175,6 +4234,16 @@ def filter_headword_records(
         )
         has_pos = bool(parsed and parsed.has_pos and not rule_result["pos_excluded"])
         has_inflection = bool(parsed and parsed.has_inflection)
+        tail_evidence, tail_evidence_features = _selected_tail_structure_evidence(
+            settings,
+            parsed,
+            pos_allowed_by_rules=not bool(rule_result["pos_excluded"]),
+        )
+        selected_pos = "pos" in tail_evidence
+        selected_inflection = "inflection" in tail_evidence
+        selected_variant = "variant" in tail_evidence
+        selected_pronunciation = "pronunciation" in tail_evidence
+        selected_descriptor = "descriptor" in tail_evidence
         cjk_marker_prefixed = bool(
             parsed and parsed.descriptor_text == "cjk_marker_pinyin"
         )
@@ -4226,6 +4295,11 @@ def filter_headword_records(
         # (large display glyph) rather than the mere fact that it is one CJK
         # character.  Bracketed Chinese compounds remain structural cues.
         has_descriptor = bool(parsed and parsed.has_descriptor and not cjk_single_visual)
+        if cjk_single_visual:
+            selected_descriptor = False
+            tail_evidence = tuple(
+                name for name in tail_evidence if name != "descriptor"
+            )
         internal_locution = bool(
             parsed and parsed.descriptor_text in {"parallel_gloss", "parallel_gloss_ocr"}
         )
@@ -4268,19 +4342,55 @@ def filter_headword_records(
 
         # Structure carries most of the evidence. POS is deliberately stronger
         # than boldness because body text can also be bold (ANT., FAM., etc.).
+        tail_controls_active = int(
+            getattr(settings, "profile_tail_structure_version", 0) or 0
+        ) >= 1
+        numbered_prefix_evidence = False
+        if parser_controls and bool(
+            getattr(settings, "profile_allow_numbered_prefix", False)
+        ):
+            prefix_pattern = (
+                active_profile.prefix_regex
+                or r"^\s*\d{1,4}(?:\s*[.．]\s*|\s+)"
+            )
+            try:
+                numbered_prefix_evidence = bool(
+                    re.match(prefix_pattern, line.text, flags=re.UNICODE)
+                )
+            except re.error:
+                numbered_prefix_evidence = False
+        configured_marker_evidence = bool(
+            marker_prefix_enabled
+            and (
+                visual_entry_marker is not None
+                or special_pattern.search(line.text)
+            )
+        )
+        front_structure_cue = bool(
+            numbered_prefix_evidence
+            or configured_marker_evidence
+            or cjk_marker_prefixed
+        )
+        tail_structure_cue = bool(tail_evidence)
+
         score = (
             (2.0 if parsed else 0.0)
             + (2.0 if (cjk_at_left if cjk_single_visual else at_left) else 0.0)
-            + (3.0 if has_pos else 0.0)
-            + (2.0 if has_inflection else 0.0)
-            + (3.0 if has_descriptor else 0.0)
-            + (1.0 if special else 0.0)
+            + (3.0 if selected_pos else 0.0)
+            + (2.0 if selected_inflection else 0.0)
+            + (1.5 if selected_variant else 0.0)
+            + (1.5 if selected_pronunciation else 0.0)
+            + (3.0 if selected_descriptor else 0.0)
+            + (1.0 if front_structure_cue else 0.0)
             + (0.75 if large else 0.0)
             + (1.0 if bold else 0.0)
             + (0.5 if separated else 0.0)
             + (0.75 if cjk_candidate_right_sparse else 0.0)
         )
-        structural_cue = has_pos or has_inflection or has_descriptor or special
+        if tail_controls_active:
+            structural_cue = tail_structure_cue or front_structure_cue
+        else:
+            structural_cue = has_pos or has_inflection or has_descriptor or special
         visual_cue = large or bold or separated
         fallback_cue = structural_cue or visual_cue
         # Character dictionaries use oversized single glyphs as entry heads.
@@ -4350,6 +4460,23 @@ def filter_headword_records(
             cjk_bracketed
             and (cjk_brackets_in_body or cjk_require_visual_evidence)
         )
+        tail_required = bool(
+            tail_controls_active
+            and getattr(settings, "profile_tail_require_selected", False)
+        )
+        tail_visual_rescue_enabled = bool(
+            tail_controls_active
+            and getattr(settings, "profile_tail_allow_visual_rescue", False)
+        )
+        tail_requirement_ok = bool(
+            not tail_required
+            or tail_structure_cue
+            or front_structure_cue
+            or (
+                tail_visual_rescue_enabled
+                and ordinary_strong_edge_visual_rescue
+            )
+        )
         ordinary_accept = bool(
             base_eligible
             and not cjk_single_visual
@@ -4362,9 +4489,13 @@ def filter_headword_records(
             and not marker_noise
             and score >= settings.paddle_min_candidate_score
             and (
-                structural_cue
-                or not settings.paddle_require_pos_or_symbol
-                or ordinary_strong_edge_visual_rescue
+                tail_requirement_ok
+                if tail_controls_active
+                else (
+                    structural_cue
+                    or not settings.paddle_require_pos_or_symbol
+                    or ordinary_strong_edge_visual_rescue
+                )
             )
             and (fallback_cue or not settings.paddle_require_visual_cue)
         )
@@ -4441,6 +4572,8 @@ def filter_headword_records(
             reject_reason = "marker_glyph_ocr_noise"
         elif cjk_single_visual and not cjk_single_prominent:
             reject_reason = "cjk_single_not_visually_prominent"
+        elif tail_controls_active and tail_required and not tail_requirement_ok:
+            reject_reason = "missing_selected_tail_structure"
         elif settings.paddle_require_pos_or_symbol and not structural_cue:
             reject_reason = "missing_pos_inflection_descriptor_or_symbol"
         elif score < settings.paddle_min_candidate_score:
@@ -4563,6 +4696,13 @@ def filter_headword_records(
                 "has_inflection": has_inflection,
                 "has_descriptor": has_descriptor,
                 "structural_cue": structural_cue,
+                "tail_structure_evidence": list(tail_evidence),
+                "tail_structure_required": tail_required,
+                "tail_structure_satisfied": tail_requirement_ok,
+                "front_structure_cue": front_structure_cue,
+                "numbered_prefix_evidence": numbered_prefix_evidence,
+                "configured_marker_evidence": configured_marker_evidence,
+                **tail_evidence_features,
                 "cjk_single_visual": cjk_single_visual,
                 "cjk_at_left": cjk_at_left,
                 "cjk_single_prominent": cjk_single_prominent,
