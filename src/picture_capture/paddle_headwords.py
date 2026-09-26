@@ -278,6 +278,98 @@ def evaluate_headword_filter_rules(
 
 
 
+def _ocr_language_parts(settings: AppSettings) -> set[str]:
+    """Return the user-selected semantic OCR language components.
+
+    ocr_language is authoritative. paddle_language is only a fallback for older
+    callers with no semantic language, because a stale backend model name must
+    not silently disable the script guard.
+    """
+    raw = str(getattr(settings, "ocr_language", "") or "").strip()
+    if not raw:
+        raw = str(getattr(settings, "paddle_language", "") or "").strip()
+    return {
+        part.strip()
+        for part in raw.lower().replace(",", "+").split("+")
+        if part.strip()
+    }
+
+
+def _leading_script_family(text: str) -> str:
+    """Classify the first meaningful headword character into a script family."""
+    normalized = unicodedata.normalize("NFKC", str(text or "")).lstrip()
+    if not normalized:
+        return ""
+    for char in normalized:
+        if char.isspace() or char in "-'’·•∙‧":
+            continue
+        code = ord(char)
+        if (
+            0x3400 <= code <= 0x4DBF
+            or 0x4E00 <= code <= 0x9FFF
+            or 0xF900 <= code <= 0xFAFF
+            or 0x20000 <= code <= 0x2FA1F
+        ):
+            return "han"
+        if (
+            0x3040 <= code <= 0x309F
+            or 0x30A0 <= code <= 0x30FF
+            or 0x31F0 <= code <= 0x31FF
+        ):
+            return "kana"
+        if (
+            0x1100 <= code <= 0x11FF
+            or 0x3130 <= code <= 0x318F
+            or 0xAC00 <= code <= 0xD7AF
+        ):
+            return "hangul"
+        return "other"
+    return ""
+
+
+def _headword_script_compatibility(
+    settings: AppSettings, parsed: HeadwordParse | None,
+) -> tuple[bool, str]:
+    """Reject CJK-script headwords when the selected OCR language cannot use them.
+
+    This is deliberately language/script compatibility rather than the naive
+    rule "non-Chinese => reject Han": Japanese headwords legitimately begin
+    with Kanji, and Korean dictionaries may contain Hanja. The guard therefore
+    allows Han for Chinese/Japanese/Korean OCR, Kana only for Japanese OCR, and
+    Hangul only for Korean OCR. Other scripts are left unchanged here.
+    """
+    active = int(
+        getattr(settings, "profile_headword_script_guard_version", 0) or 0
+    ) >= 1 and bool(
+        getattr(settings, "profile_headword_script_guard_enabled", True)
+    )
+    if not active or parsed is None or not parsed.normalized:
+        return True, ""
+
+    family = _leading_script_family(parsed.normalized)
+    if family not in {"han", "kana", "hangul"}:
+        return True, family
+
+    parts = _ocr_language_parts(settings)
+    chinese = bool(
+        parts.intersection({"chi_sim", "chi_tra", "ch", "chinese_cht", "zh", "zho"})
+    )
+    japanese = bool(
+        parts.intersection({"jpn", "jpn_vert", "japan", "ja", "japanese"})
+    )
+    korean = bool(
+        parts.intersection({"kor", "korean", "ko"})
+    )
+
+    if family == "han":
+        return bool(chinese or japanese or korean), family
+    if family == "kana":
+        return bool(japanese), family
+    if family == "hangul":
+        return bool(korean), family
+    return True, family
+
+
 def _is_chinese_ocr(settings: AppSettings) -> bool:
     """Return True when the active OCR language is Simplified/Traditional Chinese."""
     lang = (settings.ocr_language or "").lower()
@@ -3920,6 +4012,154 @@ def _accepted_cjk_row_for_visual_run(
     return None
 
 
+def _selected_tail_structure_evidence(
+    settings: AppSettings,
+    parsed: HeadwordParse | None,
+    *,
+    pos_allowed_by_rules: bool = True,
+) -> tuple[tuple[str, ...], dict[str, bool]]:
+    """Return only the post-lemma evidence families selected by the user.
+
+    Version 0 mirrors the historical hidden gate (POS / inflection /
+    descriptor). Version 1 makes each family explicit in Project Profile.
+    """
+    pronunciation = bool(
+        parsed
+        and any(
+            str(item).startswith("pronunciation:")
+            for item in parsed.parser_trace
+        )
+    )
+    available = {
+        "pos": bool(parsed and parsed.has_pos and pos_allowed_by_rules),
+        "inflection": bool(parsed and parsed.has_inflection),
+        "variant": bool(parsed and parsed.variants),
+        "pronunciation": pronunciation,
+        "descriptor": bool(parsed and parsed.has_descriptor),
+    }
+    if int(getattr(settings, "profile_tail_structure_version", 0) or 0) < 1:
+        selected = {
+            "pos": available["pos"],
+            "inflection": available["inflection"],
+            "variant": False,
+            "pronunciation": False,
+            "descriptor": available["descriptor"],
+        }
+    else:
+        selected = {
+            "pos": available["pos"] and bool(
+                getattr(settings, "profile_tail_allow_pos", True)
+            ),
+            "inflection": available["inflection"] and bool(
+                getattr(settings, "profile_tail_allow_inflection", True)
+            ),
+            "variant": available["variant"] and bool(
+                getattr(settings, "profile_tail_allow_variant", True)
+            ),
+            "pronunciation": available["pronunciation"] and bool(
+                getattr(settings, "profile_tail_allow_pronunciation", False)
+            ),
+            "descriptor": available["descriptor"] and bool(
+                getattr(settings, "profile_tail_allow_descriptor", True)
+            ),
+        }
+    names = tuple(name for name, present in selected.items() if present)
+    diagnostics = {
+        **{f"available_{name}": value for name, value in available.items()},
+        **{f"selected_{name}": value for name, value in selected.items()},
+    }
+    return names, diagnostics
+
+
+def _ordinary_visual_rescue_thresholds(
+    settings: AppSettings,
+) -> dict[str, float | str]:
+    """Resolve thresholds used by ordinary left-edge visual rescue.
+
+    Saved Project Profile tail controls (version >= 1) are fully explicit:
+    rescue uses the same visible boldness threshold shown in the headword
+    specificity panel. Left-edge tolerance and candidate-score thresholds are
+    already applied by the ordinary candidate gate. No extra hidden height,
+    boldness, or confidence threshold is added for saved explicit Profiles.
+
+    Version 0 keeps the historical thresholds only for backward compatibility
+    with projects that have not yet saved the new Profile controls.
+    """
+    explicit = int(
+        getattr(settings, "profile_tail_structure_version", 0) or 0
+    ) >= 1
+    if explicit:
+        return {
+            "source": "visible_profile_specificity",
+            "boldness": float(settings.paddle_boldness_ratio),
+            "height": 0.0,
+            "confidence": float(settings.paddle_rec_score_threshold),
+        }
+    return {
+        "source": "legacy_hidden_thresholds",
+        "boldness": max(
+            float(getattr(settings, "paddle_strong_edge_visual_boldness_ratio", 1.22) or 1.22),
+            float(settings.paddle_boldness_ratio) * 1.03,
+        ),
+        "height": max(
+            0.75,
+            float(getattr(settings, "paddle_strong_edge_visual_height_ratio", 0.90) or 0.90),
+        ),
+        "confidence": max(
+            float(settings.paddle_rec_score_threshold),
+            float(getattr(settings, "paddle_strong_edge_visual_min_confidence", 0.55) or 0.55),
+        ),
+    }
+
+
+def _ordinary_strong_edge_visual_rescue(
+    settings: AppSettings,
+    parsed: HeadwordParse | None,
+    *,
+    at_left: bool,
+    below_header: bool,
+    boldness_ratio: float,
+    height_ratio: float,
+    confidence: float,
+    looks_like_continuation: bool,
+    marker_noise: bool,
+) -> bool:
+    """Recover a left-edge head when selected post-lemma OCR evidence fails.
+
+    For saved explicit Profiles this path obeys the user-visible specificity
+    controls instead of layering another hidden strong-edge threshold on top.
+    Semantic guards remain: parsed lemma, strict left edge, body region, and
+    no continuation/noise signal.
+    """
+    tail_controls_active = int(
+        getattr(settings, "profile_tail_structure_version", 0) or 0
+    ) >= 1
+    rescue_enabled = (
+        bool(getattr(settings, "profile_tail_allow_visual_rescue", False))
+        if tail_controls_active
+        else bool(getattr(settings, "paddle_allow_strong_edge_visual_rescue", False))
+    )
+    if not rescue_enabled:
+        return False
+    if (
+        parsed is None
+        or not parsed.normalized
+        or len(parsed.normalized.strip("-")) < 3
+        or not at_left
+        or not below_header
+        or looks_like_continuation
+        or marker_noise
+    ):
+        return False
+
+    thresholds = _ordinary_visual_rescue_thresholds(settings)
+    return bool(
+        boldness_ratio >= float(thresholds["boldness"])
+        and height_ratio >= float(thresholds["height"])
+        and confidence >= float(thresholds["confidence"])
+    )
+
+
 def filter_headword_records(
     records: list[OCRRecord],
     band: Image.Image,
@@ -4119,8 +4359,21 @@ def filter_headword_records(
             line_text=line.text,
             pos_text=parsed.pos_text if parsed else "",
         )
+        script_compatible, leading_script = _headword_script_compatibility(
+            settings, parsed
+        )
         has_pos = bool(parsed and parsed.has_pos and not rule_result["pos_excluded"])
         has_inflection = bool(parsed and parsed.has_inflection)
+        tail_evidence, tail_evidence_features = _selected_tail_structure_evidence(
+            settings,
+            parsed,
+            pos_allowed_by_rules=not bool(rule_result["pos_excluded"]),
+        )
+        selected_pos = "pos" in tail_evidence
+        selected_inflection = "inflection" in tail_evidence
+        selected_variant = "variant" in tail_evidence
+        selected_pronunciation = "pronunciation" in tail_evidence
+        selected_descriptor = "descriptor" in tail_evidence
         cjk_marker_prefixed = bool(
             parsed and parsed.descriptor_text == "cjk_marker_pinyin"
         )
@@ -4172,6 +4425,11 @@ def filter_headword_records(
         # (large display glyph) rather than the mere fact that it is one CJK
         # character.  Bracketed Chinese compounds remain structural cues.
         has_descriptor = bool(parsed and parsed.has_descriptor and not cjk_single_visual)
+        if cjk_single_visual:
+            selected_descriptor = False
+            tail_evidence = tuple(
+                name for name in tail_evidence if name != "descriptor"
+            )
         internal_locution = bool(
             parsed and parsed.descriptor_text in {"parallel_gloss", "parallel_gloss_ocr"}
         )
@@ -4214,19 +4472,55 @@ def filter_headword_records(
 
         # Structure carries most of the evidence. POS is deliberately stronger
         # than boldness because body text can also be bold (ANT., FAM., etc.).
+        tail_controls_active = int(
+            getattr(settings, "profile_tail_structure_version", 0) or 0
+        ) >= 1
+        numbered_prefix_evidence = False
+        if parser_controls and bool(
+            getattr(settings, "profile_allow_numbered_prefix", False)
+        ):
+            prefix_pattern = (
+                active_profile.prefix_regex
+                or r"^\s*\d{1,4}(?:\s*[.．]\s*|\s+)"
+            )
+            try:
+                numbered_prefix_evidence = bool(
+                    re.match(prefix_pattern, line.text, flags=re.UNICODE)
+                )
+            except re.error:
+                numbered_prefix_evidence = False
+        configured_marker_evidence = bool(
+            marker_prefix_enabled
+            and (
+                visual_entry_marker is not None
+                or special_pattern.search(line.text)
+            )
+        )
+        front_structure_cue = bool(
+            numbered_prefix_evidence
+            or configured_marker_evidence
+            or cjk_marker_prefixed
+        )
+        tail_structure_cue = bool(tail_evidence)
+
         score = (
             (2.0 if parsed else 0.0)
             + (2.0 if (cjk_at_left if cjk_single_visual else at_left) else 0.0)
-            + (3.0 if has_pos else 0.0)
-            + (2.0 if has_inflection else 0.0)
-            + (3.0 if has_descriptor else 0.0)
-            + (1.0 if special else 0.0)
+            + (3.0 if selected_pos else 0.0)
+            + (2.0 if selected_inflection else 0.0)
+            + (1.5 if selected_variant else 0.0)
+            + (1.5 if selected_pronunciation else 0.0)
+            + (3.0 if selected_descriptor else 0.0)
+            + (1.0 if front_structure_cue else 0.0)
             + (0.75 if large else 0.0)
             + (1.0 if bold else 0.0)
             + (0.5 if separated else 0.0)
             + (0.75 if cjk_candidate_right_sparse else 0.0)
         )
-        structural_cue = has_pos or has_inflection or has_descriptor or special
+        if tail_controls_active:
+            structural_cue = tail_structure_cue or front_structure_cue
+        else:
+            structural_cue = has_pos or has_inflection or has_descriptor or special
         visual_cue = large or bold or separated
         fallback_cue = structural_cue or visual_cue
         # Character dictionaries use oversized single glyphs as entry heads.
@@ -4263,10 +4557,31 @@ def filter_headword_records(
         )
         looks_like_continuation = bool(parsed and parsed.looks_like_continuation)
         marker_noise = _looks_like_marker_noise_lemma(parsed)
-        strong_visual = bool(
-            parsed and len(parsed.normalized.strip("-")) >= 3 and at_left and below_header
-            and boldness_ratio >= max(1.25, settings.paddle_boldness_ratio * 1.08)
-            and height_ratio >= 0.92
+        visual_rescue_thresholds = _ordinary_visual_rescue_thresholds(settings)
+        ordinary_strong_edge_visual_rescue = _ordinary_strong_edge_visual_rescue(
+            settings,
+            parsed,
+            at_left=at_left,
+            below_header=below_header,
+            boldness_ratio=boldness_ratio,
+            height_ratio=height_ratio,
+            confidence=line.confidence,
+            looks_like_continuation=looks_like_continuation,
+            marker_noise=marker_noise,
+        )
+        # For saved explicit Profiles the old diagnostic/fusion feature must
+        # describe the same visible rescue decision, not a second hidden gate.
+        strong_visual = (
+            ordinary_strong_edge_visual_rescue
+            if tail_controls_active
+            else bool(
+                parsed
+                and len(parsed.normalized.strip("-")) >= 3
+                and at_left
+                and below_header
+                and boldness_ratio >= max(1.25, settings.paddle_boldness_ratio * 1.08)
+                and height_ratio >= 0.92
+            )
         )
         # "普通左缘短词" always means left-edge. The optional
         # relaxation applies only to the explicitly CJK structural channels.
@@ -4278,12 +4593,33 @@ def filter_headword_records(
         else:
             position_ok = at_left
         base_eligible = bool(
-            parsed and parsed.normalized and below_header and position_ok
+            parsed
+            and parsed.normalized
+            and below_header
+            and position_ok
+            and script_compatible
         )
         cjk_bracket_visual_supported = bool(large or bold)
         cjk_bracket_extra_required = bool(
             cjk_bracketed
             and (cjk_brackets_in_body or cjk_require_visual_evidence)
+        )
+        tail_required = bool(
+            tail_controls_active
+            and getattr(settings, "profile_tail_require_selected", False)
+        )
+        tail_visual_rescue_enabled = bool(
+            tail_controls_active
+            and getattr(settings, "profile_tail_allow_visual_rescue", False)
+        )
+        tail_requirement_ok = bool(
+            not tail_required
+            or tail_structure_cue
+            or front_structure_cue
+            or (
+                tail_visual_rescue_enabled
+                and ordinary_strong_edge_visual_rescue
+            )
         )
         ordinary_accept = bool(
             base_eligible
@@ -4296,7 +4632,15 @@ def filter_headword_records(
             and not looks_like_continuation
             and not marker_noise
             and score >= settings.paddle_min_candidate_score
-            and (structural_cue or not settings.paddle_require_pos_or_symbol)
+            and (
+                tail_requirement_ok
+                if tail_controls_active
+                else (
+                    structural_cue
+                    or not settings.paddle_require_pos_or_symbol
+                    or ordinary_strong_edge_visual_rescue
+                )
+            )
             and (fallback_cue or not settings.paddle_require_visual_cue)
         )
         cjk_single_strong_visual = bool(
@@ -4348,6 +4692,8 @@ def filter_headword_records(
             reject_reason = "user_reject_rule"
         elif not parsed:
             reject_reason = "lemma_parse_failed"
+        elif not script_compatible:
+            reject_reason = "incompatible_headword_script"
         elif cjk_profile_active and cjk_single_visual and not cjk_allow_single:
             reject_reason = "cjk_single_headword_disabled"
         elif cjk_bracketed and not cjk_allow_bracketed:
@@ -4372,6 +4718,8 @@ def filter_headword_records(
             reject_reason = "marker_glyph_ocr_noise"
         elif cjk_single_visual and not cjk_single_prominent:
             reject_reason = "cjk_single_not_visually_prominent"
+        elif tail_controls_active and tail_required and not tail_requirement_ok:
+            reject_reason = "missing_selected_tail_structure"
         elif settings.paddle_require_pos_or_symbol and not structural_cue:
             reject_reason = "missing_pos_inflection_descriptor_or_symbol"
         elif score < settings.paddle_min_candidate_score:
@@ -4494,6 +4842,30 @@ def filter_headword_records(
                 "has_inflection": has_inflection,
                 "has_descriptor": has_descriptor,
                 "structural_cue": structural_cue,
+                "tail_structure_evidence": list(tail_evidence),
+                "tail_structure_required": tail_required,
+                "tail_structure_satisfied": tail_requirement_ok,
+                "front_structure_cue": front_structure_cue,
+                "headword_script_guard_enabled": bool(
+                    int(
+                        getattr(
+                            settings,
+                            "profile_headword_script_guard_version",
+                            0,
+                        )
+                        or 0
+                    ) >= 1
+                    and getattr(
+                        settings,
+                        "profile_headword_script_guard_enabled",
+                        True,
+                    )
+                ),
+                "headword_leading_script": leading_script,
+                "headword_script_compatible": script_compatible,
+                "numbered_prefix_evidence": numbered_prefix_evidence,
+                "configured_marker_evidence": configured_marker_evidence,
+                **tail_evidence_features,
                 "cjk_single_visual": cjk_single_visual,
                 "cjk_at_left": cjk_at_left,
                 "cjk_single_prominent": cjk_single_prominent,
@@ -4557,6 +4929,23 @@ def filter_headword_records(
                 "cjk_allow_bracketed": cjk_allow_bracketed,
                 "cjk_require_left_edge": cjk_require_left_edge,
                 "strong_visual_fallback": strong_visual,
+                "ordinary_strong_edge_visual_rescue": ordinary_strong_edge_visual_rescue,
+                "visual_rescue_threshold_source": str(
+                    visual_rescue_thresholds["source"]
+                ),
+                "visual_rescue_boldness_threshold": round(
+                    float(visual_rescue_thresholds["boldness"]), 4
+                ),
+                "visual_rescue_height_threshold": round(
+                    float(visual_rescue_thresholds["height"]), 4
+                ),
+                "visual_rescue_confidence_threshold": round(
+                    float(visual_rescue_thresholds["confidence"]), 4
+                ),
+                "visual_rescue_left_tolerance": int(settings.paddle_left_tolerance),
+                "visual_rescue_candidate_score_threshold": round(
+                    float(settings.paddle_min_candidate_score), 4
+                ),
                 "image_boundary_supported": bool(image_boundary is not None),
                 "marker_noise": marker_noise,
                 "ordinary_accept": ordinary_accept,

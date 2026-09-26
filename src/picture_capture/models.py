@@ -309,6 +309,24 @@ class AppSettings:
     profile_allow_ordinary_left_edge: bool = True
     profile_allow_numbered_prefix: bool = False
     profile_allow_marker_prefix: bool = False
+    # Script compatibility is version-gated so existing projects retain their
+    # historical candidate set until Project Profile is explicitly saved.
+    # Version 1 rejects headwords whose leading script is incompatible with the
+    # selected OCR language (e.g. Han/Kana in an Italian/English dictionary).
+    profile_headword_script_guard_version: int = 0
+    profile_headword_script_guard_enabled: bool = True
+    # User-visible evidence after the lemma. Version 0 preserves the historical
+    # all-in-one POS/inflection/descriptor gate. Project Profile saves version 1
+    # so every evidence family becomes an explicit part of the dictionary
+    # structure rather than a hidden parser rule.
+    profile_tail_structure_version: int = 0
+    profile_tail_allow_pos: bool = True
+    profile_tail_allow_inflection: bool = True
+    profile_tail_allow_variant: bool = True
+    profile_tail_allow_pronunciation: bool = False
+    profile_tail_allow_descriptor: bool = True
+    profile_tail_require_selected: bool = True
+    profile_tail_allow_visual_rescue: bool = False
     # Dictionary-specific headword symbol inventory.  Version 0 preserves the
     # historical profile-derived symbol sets; Project Profile saves version 1
     # together with the explicit per-dictionary symbol lists below.
@@ -386,6 +404,15 @@ class AppSettings:
     # For ordinary dictionary pages, a nearby POS label (or an explicit entry
     # symbol) is the safest way to reject indented definition lines.
     paddle_require_pos_or_symbol: bool = True
+    # Legacy (Profile tail structure version 0) visual-rescue settings.
+    # Saved explicit Profiles use the visible paddle_left_tolerance,
+    # paddle_boldness_ratio and paddle_min_candidate_score instead; these hidden
+    # thresholds are retained only so older projects keep their historical
+    # behavior until the Profile is resaved.
+    paddle_allow_strong_edge_visual_rescue: bool = False
+    paddle_strong_edge_visual_boldness_ratio: float = 1.22
+    paddle_strong_edge_visual_height_ratio: float = 0.90
+    paddle_strong_edge_visual_min_confidence: float = 0.55
     paddle_remove_syllable_separators: bool = True
     paddle_auto_header_rule: bool = True
     paddle_header_search_height: int = 100

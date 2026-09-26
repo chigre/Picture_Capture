@@ -12,7 +12,10 @@ from picture_capture.app import (
     transformed_entry_anchor, vertical_marker_contact_gap, vertical_ocr_menu_layout,
     vertical_overlay_layout,
 )
-from picture_capture.dictionary_profile import effective_project_profile_id, load_dictionary_profile
+from picture_capture.dictionary_profile import (
+    apply_project_profile_components, effective_project_profile_id,
+    load_dictionary_profile, profile_tail_structure_defaults, write_project_profile,
+)
 from picture_capture.models import (
     AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
 )
@@ -33,8 +36,12 @@ from picture_capture.profile_semantics import (
 )
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
-    _detect_visual_entry_markers, _repair_multiline_headword_state_machine,
-    parse_headword_text, prepare_ocr_band, run_paddle_band,
+    _detect_visual_entry_markers, _headword_script_compatibility,
+    _ordinary_strong_edge_visual_rescue, _ordinary_visual_rescue_thresholds,
+    _repair_multiline_headword_state_machine,
+    _selected_tail_structure_evidence, filter_headword_records, HeadwordParse,
+    parse_headword_filter_rules, parse_headword_text, prepare_ocr_band,
+    run_paddle_band,
 )
 from picture_capture.visual_marker_templates import (
     build_visual_marker_sample, match_visual_marker_template,
@@ -1228,7 +1235,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "recommended_current" not in text
     assert 'root / "extended"' not in text
     assert "fill=(255, 0, 0, 255), width=1" in text
-    assert "允许的词头结构（决定哪些 parser 通道开放）" in text
+    assert "完整词头结构（词头前 + 词头本体 + 词头后）" in text
     assert "普通左缘短词可以作为词头" in text
     assert "【括号词】可以作为词头" in text
     assert "大字单字可以作为词头" in text
@@ -1300,6 +1307,385 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "下半页候选" in text
     assert "左缘最大漂移" in text
     assert "原始OCR完整但词头在中途停止" in text
+
+
+def _parsed_headword_for_script_test(value: str) -> HeadwordParse:
+    return HeadwordParse(
+        raw=value,
+        normalized=value,
+        has_pos=False,
+        pos_text="",
+        has_inflection=False,
+        inflection_text="",
+        has_descriptor=False,
+        descriptor_text="",
+        match_end=max(1, len(value)),
+    )
+
+
+def test_headword_script_guard_rejects_cjk_for_non_cjk_ocr_but_keeps_japanese_kanji():
+    han = _parsed_headword_for_script_test("波")
+    kana = _parsed_headword_for_script_test("あい")
+    latin = _parsed_headword_for_script_test("abbassare")
+
+    ita = AppSettings(
+        ocr_language="ita",
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=True,
+    )
+    assert _headword_script_compatibility(ita, han) == (False, "han")
+    assert _headword_script_compatibility(ita, kana) == (False, "kana")
+    assert _headword_script_compatibility(ita, latin) == (True, "other")
+
+    jpn = AppSettings(
+        ocr_language="jpn",
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=True,
+    )
+    assert _headword_script_compatibility(jpn, han) == (True, "han")
+    assert _headword_script_compatibility(jpn, kana) == (True, "kana")
+
+    chi = AppSettings(
+        ocr_language="chi_sim",
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=True,
+    )
+    assert _headword_script_compatibility(chi, han) == (True, "han")
+    assert _headword_script_compatibility(chi, kana) == (False, "kana")
+
+
+def test_headword_script_guard_is_a_hard_candidate_gate():
+    settings = AppSettings(
+        ocr_language="ita",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=True,
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=True,
+        paddle_auto_header_rule=False,
+        paddle_left_tolerance=40,
+        paddle_band_left_margin=12,
+        paddle_rec_score_threshold=0.20,
+    )
+    profile = load_dictionary_profile(preset="latin_regular", language="ita")
+    records = [
+        OCRRecord(text="波 s.m. definizione", confidence=0.99, box=(2, 20, 95, 38))
+    ]
+    entries, diagnostics = filter_headword_records(
+        records,
+        Image.new("RGB", (160, 100), "white"),
+        0,
+        0,
+        settings,
+        user_rules=parse_headword_filter_rules("accept_lemma_exact: 波"),
+        profile=profile,
+    )
+    assert entries == []
+    rows = [row for row in diagnostics if "meta" not in row]
+    assert rows
+    assert rows[0]["normalized_headword"] == "波"
+    assert rows[0]["reject_reason"] == "incompatible_headword_script"
+    assert rows[0]["features"]["headword_leading_script"] == "han"
+    assert rows[0]["features"]["headword_script_compatible"] is False
+
+
+def test_headword_script_guard_can_be_disabled_for_special_bilingual_projects():
+    han = _parsed_headword_for_script_test("波")
+    settings = AppSettings(
+        ocr_language="ita",
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=False,
+    )
+    assert _headword_script_compatibility(settings, han) == (True, "")
+
+
+def test_headword_profiles_seed_explicit_tail_structure_defaults():
+    latin = profile_tail_structure_defaults("latin_regular")
+    assert latin == {
+        "allow_pos": True,
+        "allow_inflection": True,
+        "allow_variant": True,
+        "allow_pronunciation": False,
+        "allow_descriptor": True,
+        "require_selected": True,
+        "allow_visual_rescue": True,
+    }
+    numbered = profile_tail_structure_defaults("numbered_prefix")
+    assert numbered["require_selected"] is False
+    assert numbered["allow_visual_rescue"] is False
+    cjk = profile_tail_structure_defaults("cjk_visual")
+    assert not any(
+        cjk[name]
+        for name in (
+            "allow_pos", "allow_inflection", "allow_variant",
+            "allow_pronunciation", "allow_descriptor",
+            "require_selected", "allow_visual_rescue",
+        )
+    )
+
+
+def test_selected_tail_structure_evidence_obeys_project_checkboxes():
+    settings = AppSettings(
+        ocr_language="ita",
+        profile_tail_structure_version=1,
+        profile_tail_allow_pos=False,
+        profile_tail_allow_inflection=False,
+        profile_tail_allow_variant=True,
+        profile_tail_allow_pronunciation=False,
+        profile_tail_allow_descriptor=False,
+    )
+    profile = load_dictionary_profile(preset="latin_regular", language="ita")
+    patterns = _compile_patterns(settings, profile)
+    parsed = parse_headword_text(
+        "abbandonata, da agg. forma femminile",
+        settings, patterns, profile,
+    )
+    assert parsed is not None
+    assert parsed.has_pos
+    assert parsed.variants
+    evidence, features = _selected_tail_structure_evidence(settings, parsed)
+    assert evidence == ("variant",)
+    assert features["available_pos"] is True
+    assert features["selected_pos"] is False
+    assert features["selected_variant"] is True
+
+
+def test_complete_headword_structure_round_trips_in_v3_sidecar(tmp_path):
+    path = tmp_path / "dictionary_profile.json"
+    settings = AppSettings(
+        dictionary_profile_id="latin_regular",
+        ocr_language="ita",
+        profile_parser_controls_version=1,
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=True,
+        profile_allow_ordinary_left_edge=True,
+        profile_allow_numbered_prefix=False,
+        profile_allow_marker_prefix=True,
+        profile_cjk_allow_single_headword=False,
+        profile_cjk_allow_bracketed_headword=False,
+        profile_tail_structure_version=1,
+        profile_tail_allow_pos=True,
+        profile_tail_allow_inflection=False,
+        profile_tail_allow_variant=True,
+        profile_tail_allow_pronunciation=True,
+        profile_tail_allow_descriptor=False,
+        profile_tail_require_selected=True,
+        profile_tail_allow_visual_rescue=True,
+        profile_symbol_inventory_version=1,
+        profile_symbol_inventory_enabled=True,
+        profile_entry_marker_symbols="◆ ◇",
+        profile_bracket_open_symbols="",
+        profile_symbol_visual_rescue_enabled=True,
+        profile_symbol_lane_required=True,
+        profile_symbol_lane_tolerance_percent=45,
+    )
+    write_project_profile(path, settings, "latin_regular", force=True)
+    payload = __import__("json").loads(path.read_text(encoding="utf-8"))
+    assert payload["headword_structure"]["tail"]["allow_pronunciation"] is True
+    assert payload["headword_structure"]["script_guard_enabled"] is True
+    assert payload["headword_structure"]["starts"]["marker_prefix"] is True
+    assert payload["headword_structure"]["symbol_inventory"]["entry_markers"] == "◆ ◇"
+
+    restored = AppSettings()
+    apply_project_profile_components(path, restored)
+    assert restored.profile_headword_script_guard_version == 1
+    assert restored.profile_headword_script_guard_enabled is True
+    assert restored.profile_tail_structure_version == 1
+    assert restored.profile_tail_allow_pos is True
+    assert restored.profile_tail_allow_inflection is False
+    assert restored.profile_tail_allow_variant is True
+    assert restored.profile_tail_allow_pronunciation is True
+    assert restored.profile_tail_allow_descriptor is False
+    assert restored.profile_tail_require_selected is True
+    assert restored.profile_tail_allow_visual_rescue is True
+    assert restored.profile_allow_marker_prefix is True
+    assert restored.profile_entry_marker_symbols == "◆ ◇"
+
+
+def test_profile_setup_exposes_complete_headword_structure_controls():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "profile_setup.py"
+    )
+    text = source.read_text(encoding="utf-8")
+    assert "完整词头结构（词头前 + 词头本体 + 词头后）" in text
+    assert "按 OCR 语言排除不兼容的词头首字符（推荐）" in text
+    assert "日语允许汉字/假名，中文允许汉字" in text
+    assert "profile_headword_script_guard_version = 1" in text
+    assert "词头后结构（哪些内容可以作为新词条证据）" in text
+    assert "词性 POS（s.m. / v.tr. / agg. / adj. …）" in text
+    assert "词形 / 屈折变化" in text
+    assert "变体 / 性数变化" in text
+    assert "发音 / 音标" in text
+    assert "描述型结构" in text
+    assert "普通左缘词至少需要命中一种上面勾选的词后结构" in text
+    assert "允许“严格左缘 + 粗体”视觉补救" in text
+    assert "不再另设隐藏的粗体/行高门槛" in text
+    assert "profile_tail_structure_version = 1" in text
+
+
+def test_latin_regular_italian_pos_labels_tolerate_ocr_dot_spacing():
+    settings = AppSettings(
+        ocr_language="ita",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=True,
+    )
+    profile = load_dictionary_profile(preset="latin_regular", language="ita")
+    patterns = _compile_patterns(settings, profile)
+    examples = (
+        "abbassare v. tr. abbassare qualcosa",
+        "abbarbagliare vtr. la mente",
+        "abbandono s. m. stato di abbandono",
+        "abbattere v. intr. forma rara",
+    )
+    for text in examples:
+        parsed = parse_headword_text(text, settings, patterns, profile)
+        assert parsed is not None, text
+        assert parsed.has_pos, text
+
+
+def test_latin_regular_profile_enables_conservative_strong_edge_visual_rescue():
+    settings = AppSettings(ocr_language="ita")
+    apply_headword_profile(settings, "latin_regular")
+    assert settings.paddle_require_pos_or_symbol is True
+    assert settings.paddle_allow_strong_edge_visual_rescue is True
+    assert settings.paddle_strong_edge_visual_boldness_ratio == 1.22
+    assert settings.paddle_strong_edge_visual_height_ratio == 0.90
+
+
+def test_explicit_tail_visual_rescue_uses_visible_profile_thresholds_only():
+    settings = AppSettings(
+        ocr_language="ita",
+        profile_tail_structure_version=1,
+        profile_tail_allow_visual_rescue=True,
+        paddle_boldness_ratio=1.00,
+        paddle_rec_score_threshold=0.20,
+        # Deliberately impossible legacy thresholds: explicit Profile mode must
+        # ignore them instead of silently overriding the visible UI.
+        paddle_strong_edge_visual_boldness_ratio=2.80,
+        paddle_strong_edge_visual_height_ratio=2.20,
+        paddle_strong_edge_visual_min_confidence=0.99,
+    )
+    profile = load_dictionary_profile(preset="latin_regular", language="ita")
+    patterns = _compile_patterns(settings, profile)
+    parsed = parse_headword_text(
+        "addomesticare vti. addomesticare qualcosa",
+        settings,
+        patterns,
+        profile,
+    )
+    assert parsed is not None
+    assert not parsed.has_pos
+
+    thresholds = _ordinary_visual_rescue_thresholds(settings)
+    assert thresholds["source"] == "visible_profile_specificity"
+    assert thresholds["boldness"] == 1.00
+    assert thresholds["height"] == 0.0
+    assert thresholds["confidence"] == 0.20
+
+    assert _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.04,
+        height_ratio=0.78,
+        confidence=0.85,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
+
+    # Raising the visible UI boldness threshold must immediately tighten the
+    # same rescue path; no second hidden threshold participates.
+    settings.paddle_boldness_ratio = 1.10
+    assert not _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.04,
+        height_ratio=1.10,
+        confidence=0.85,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
+    assert _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.12,
+        height_ratio=0.78,
+        confidence=0.85,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
+
+
+def test_strong_edge_visual_rescue_recovers_pos_ocr_failure_but_not_body_text():
+    settings = AppSettings(
+        ocr_language="ita",
+        paddle_allow_strong_edge_visual_rescue=True,
+        paddle_strong_edge_visual_boldness_ratio=1.22,
+        paddle_strong_edge_visual_height_ratio=0.90,
+        paddle_strong_edge_visual_min_confidence=0.55,
+        paddle_boldness_ratio=1.12,
+        paddle_rec_score_threshold=0.20,
+    )
+    profile = load_dictionary_profile(preset="latin_regular", language="ita")
+    patterns = _compile_patterns(settings, profile)
+    parsed = parse_headword_text(
+        "abbarbagliamento sim. 眩眼，迷乱",
+        settings,
+        patterns,
+        profile,
+    )
+    assert parsed is not None
+    assert not parsed.has_pos
+
+    assert _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.34,
+        height_ratio=0.96,
+        confidence=0.91,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
+    assert not _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.08,
+        height_ratio=0.96,
+        confidence=0.91,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
+    assert not _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.34,
+        height_ratio=0.96,
+        confidence=0.91,
+        looks_like_continuation=True,
+        marker_noise=False,
+    )
+    assert not _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=False,
+        below_header=True,
+        boldness_ratio=1.34,
+        height_ratio=0.96,
+        confidence=0.91,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
 
 
 def test_visual_marker_symbol_inventory_accepts_contiguous_input():

@@ -17,6 +17,7 @@ from .dictionary_profile import (
     dictionary_profile_preset,
     language_effective_settings,
     profile_symbol_inventory_defaults,
+    profile_tail_structure_defaults,
     write_project_profile,
 )
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
@@ -107,8 +108,8 @@ OCR_TO_INDEX_LANGUAGE = {
 
 HEADWORD_HELP_LINES = {
     "latin_regular": (
-        "识别对象：词头位于正文栏起始边，依靠边缘位置及视觉/结构线索识别。",
-        "主要依据：栏边位置是主证据，字号、粗体及词头后的结构线索作为辅助。",
+        "识别对象：词头位于正文栏起始边，通常为明显粗体拉丁词，并常紧跟词性/语法标记。",
+        "主要依据：严格栏左缘 + 词性/词后结构优先；若小号斜体词性被 OCR 漏掉或错认，可由明显粗体词形保守补救，普通定义续行仍排除。",
     ),
     "cjk_visual": (
         "识别对象：大字单字、【】/〔〕/［］括号词等视觉上明显突出的词头。",
@@ -362,6 +363,46 @@ class ProjectProfileWizard(tk.Toplevel):
             bool(getattr(s, "profile_allow_marker_prefix", False))
             if parser_controls_saved else structure_defaults["marker_prefix"]
         ))
+        script_guard_saved = int(
+            getattr(s, "profile_headword_script_guard_version", 0) or 0
+        ) >= 1
+        self.headword_script_guard_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_headword_script_guard_enabled", True))
+            if script_guard_saved else True
+        ))
+        tail_defaults = profile_tail_structure_defaults(s.dictionary_profile_id)
+        tail_controls_saved = int(
+            getattr(s, "profile_tail_structure_version", 0) or 0
+        ) >= 1
+        self.tail_allow_pos_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_pos", True))
+            if tail_controls_saved else tail_defaults["allow_pos"]
+        ))
+        self.tail_allow_inflection_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_inflection", True))
+            if tail_controls_saved else tail_defaults["allow_inflection"]
+        ))
+        self.tail_allow_variant_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_variant", True))
+            if tail_controls_saved else tail_defaults["allow_variant"]
+        ))
+        self.tail_allow_pronunciation_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_pronunciation", False))
+            if tail_controls_saved else tail_defaults["allow_pronunciation"]
+        ))
+        self.tail_allow_descriptor_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_descriptor", True))
+            if tail_controls_saved else tail_defaults["allow_descriptor"]
+        ))
+        self.tail_require_selected_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_require_selected", True))
+            if tail_controls_saved else tail_defaults["require_selected"]
+        ))
+        self.tail_allow_visual_rescue_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_visual_rescue", False))
+            if tail_controls_saved else tail_defaults["allow_visual_rescue"]
+        ))
+        self.tail_structure_summary_var = tk.StringVar(value="")
         symbol_defaults = profile_symbol_inventory_defaults(s.dictionary_profile_id)
         symbol_inventory_saved = int(
             getattr(s, "profile_symbol_inventory_version", 0) or 0
@@ -1582,11 +1623,16 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 4))
 
         structures = ttk.LabelFrame(
-            tab, text="允许的词头结构（决定哪些 parser 通道开放）", padding=10,
+            tab, text="完整词头结构（词头前 + 词头本体 + 词头后）", padding=10,
         )
         structures.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         structures.columnconfigure(0, weight=1)
         self.headword_structure_frame = structures
+        ttk.Label(
+            structures,
+            text="词头前 / 词头本体：",
+            font=("TkDefaultFont", 10, "bold"),
+        ).grid(row=0, column=0, sticky="w", pady=(0, 4))
         for row, (label, variable) in enumerate((
             ("普通左缘短词可以作为词头", self.ordinary_left_edge_var),
             ("【括号词】可以作为词头", self.cjk_allow_bracketed_var),
@@ -1597,22 +1643,82 @@ class ProjectProfileWizard(tk.Toplevel):
             ttk.Checkbutton(
                 structures, text=label, variable=variable,
                 command=self._headword_structure_changed,
-            ).grid(row=row, column=0, sticky="w", pady=2)
+            ).grid(row=row + 1, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(
+            structures,
+            text="按 OCR 语言排除不兼容的词头首字符（推荐）",
+            variable=self.headword_script_guard_var,
+            command=self._headword_structure_changed,
+        ).grid(row=6, column=0, sticky="w", pady=(5, 2))
+        ttk.Label(
+            structures,
+            text="例如英语/意大利语等会排除汉字、假名、韩文开头；日语允许汉字/假名，中文允许汉字。",
+            foreground="#666666", wraplength=self._wizard_content_width,
+        ).grid(row=7, column=0, sticky="w", pady=(0, 4))
         ttk.Label(
             structures,
             text="这里决定“谁有资格成为候选”。取消某一项后，该结构不会再靠后续阈值被误救回来。",
             foreground="#666666", wraplength=self._wizard_content_width,
-        ).grid(row=5, column=0, sticky="w", pady=(6, 0))
+        ).grid(row=8, column=0, sticky="w", pady=(6, 0))
         self.headword_structure_summary_var = tk.StringVar(value="")
         ttk.Label(
             structures, textvariable=self.headword_structure_summary_var,
             foreground="#555555", wraplength=self._wizard_content_width,
-        ).grid(row=6, column=0, sticky="w", pady=(4, 0))
+        ).grid(row=9, column=0, sticky="w", pady=(4, 0))
+
+        self.tail_structure_frame = ttk.LabelFrame(
+            structures, text="词头后结构（哪些内容可以作为新词条证据）", padding=8,
+        )
+        self.tail_structure_frame.grid(row=10, column=0, sticky="ew", pady=(8, 0))
+        self.tail_structure_frame.columnconfigure(0, weight=1)
+        for tail_row, (label, variable) in enumerate((
+            ("词性 POS（s.m. / v.tr. / agg. / adj. …）", self.tail_allow_pos_var),
+            ("词形 / 屈折变化（复数、阴阳性、变位提示等）", self.tail_allow_inflection_var),
+            ("变体 / 性数变化（如 , da / , ria 等紧随词头的变体）", self.tail_allow_variant_var),
+            ("发音 / 音标（[...] 或 /.../）可以作为结构证据", self.tail_allow_pronunciation_var),
+            ("描述型结构（前缀、后缀、缩写、sigla/abbreviazione 等）", self.tail_allow_descriptor_var),
+        )):
+            ttk.Checkbutton(
+                self.tail_structure_frame,
+                text=label,
+                variable=variable,
+                command=self._headword_structure_changed,
+            ).grid(row=tail_row, column=0, sticky="w", pady=2)
+        ttk.Separator(
+            self.tail_structure_frame, orient="horizontal",
+        ).grid(row=5, column=0, sticky="ew", pady=6)
+        ttk.Checkbutton(
+            self.tail_structure_frame,
+            text="普通左缘词至少需要命中一种上面勾选的词后结构",
+            variable=self.tail_require_selected_var,
+            command=self._headword_structure_changed,
+        ).grid(row=6, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(
+            self.tail_structure_frame,
+            text="词后结构 OCR 失败时，允许“严格左缘 + 粗体”视觉补救",
+            variable=self.tail_allow_visual_rescue_var,
+            command=self._headword_structure_changed,
+        ).grid(row=7, column=0, sticky="w", pady=2)
+        ttk.Label(
+            self.tail_structure_frame,
+            text="视觉补救使用下方可见的【栏左缘容差】【粗体倍率】【候选强度】；不再另设隐藏的粗体/行高门槛。",
+            foreground="#666666", wraplength=self._wizard_content_width,
+        ).grid(row=8, column=0, sticky="w", pady=(2, 2))
+        ttk.Label(
+            self.tail_structure_frame,
+            text="固定符号、编号等已勾选的强前缀仍可独立作为边界证据；此处主要控制普通左缘词的词后证据。",
+            foreground="#666666", wraplength=self._wizard_content_width,
+        ).grid(row=9, column=0, sticky="w", pady=(5, 2))
+        ttk.Label(
+            self.tail_structure_frame,
+            textvariable=self.tail_structure_summary_var,
+            foreground="#555555", wraplength=self._wizard_content_width,
+        ).grid(row=10, column=0, sticky="w", pady=(3, 0))
 
         self.symbol_inventory_frame = ttk.LabelFrame(
             structures, text="本词典固定词头符号集", padding=8,
         )
-        self.symbol_inventory_frame.grid(row=7, column=0, sticky="ew", pady=(8, 0))
+        self.symbol_inventory_frame.grid(row=11, column=0, sticky="ew", pady=(8, 0))
         self.symbol_inventory_frame.columnconfigure(1, weight=1)
         ttk.Checkbutton(
             self.symbol_inventory_frame,
@@ -1974,6 +2080,16 @@ class ProjectProfileWizard(tk.Toplevel):
         self.marker_prefix_var.set(defaults["marker_prefix"])
         self.numbered_prefix_var.set(defaults["numbered_prefix"])
 
+    def _set_tail_defaults_for_profile(self, key: str) -> None:
+        defaults = profile_tail_structure_defaults(key)
+        self.tail_allow_pos_var.set(bool(defaults["allow_pos"]))
+        self.tail_allow_inflection_var.set(bool(defaults["allow_inflection"]))
+        self.tail_allow_variant_var.set(bool(defaults["allow_variant"]))
+        self.tail_allow_pronunciation_var.set(bool(defaults["allow_pronunciation"]))
+        self.tail_allow_descriptor_var.set(bool(defaults["allow_descriptor"]))
+        self.tail_require_selected_var.set(bool(defaults["require_selected"]))
+        self.tail_allow_visual_rescue_var.set(bool(defaults["allow_visual_rescue"]))
+
     def _set_symbol_defaults_for_profile(self, key: str) -> None:
         defaults = profile_symbol_inventory_defaults(key)
         self.symbol_inventory_enabled_var.set(bool(defaults["enabled"]))
@@ -2012,6 +2128,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_tuning_level_var.set(0)
         key = self._current_profile_key()
         self._set_structure_defaults_for_profile(key)
+        self._set_tail_defaults_for_profile(key)
         self._set_symbol_defaults_for_profile(key)
         self._reset_specificity_for_profile(key)
         self._profile_revision += 1
@@ -2150,8 +2267,41 @@ class ProjectProfileWizard(tk.Toplevel):
             )
         if self.numbered_prefix_var.get():
             active.append("编号前缀")
+        script_guard_text = (
+            "；按OCR语言过滤首字符"
+            if self.headword_script_guard_var.get()
+            else "；不限制首字符脚本"
+        )
         self.headword_structure_summary_var.set(
-            "当前允许：" + ("、".join(active) if active else "无（不会自动生成词头）")
+            "当前词头前/本体："
+            + ("、".join(active) if active else "无（不会自动生成词头）")
+            + script_guard_text
+        )
+        tail_active: list[str] = []
+        if self.tail_allow_pos_var.get():
+            tail_active.append("POS")
+        if self.tail_allow_inflection_var.get():
+            tail_active.append("词形/屈折")
+        if self.tail_allow_variant_var.get():
+            tail_active.append("变体/性数")
+        if self.tail_allow_pronunciation_var.get():
+            tail_active.append("发音/音标")
+        if self.tail_allow_descriptor_var.get():
+            tail_active.append("描述型结构")
+        require_text = (
+            "普通左缘词必须命中其一"
+            if self.tail_require_selected_var.get()
+            else "词后结构仅作加分证据"
+        )
+        rescue_text = (
+            "；允许粗体左缘补救"
+            if self.tail_allow_visual_rescue_var.get()
+            else ""
+        )
+        self.tail_structure_summary_var.set(
+            "当前词后证据："
+            + ("、".join(tail_active) if tail_active else "无")
+            + f"｜{require_text}{rescue_text}"
         )
 
     def _refresh_headword_specificity_visibility(self) -> None:
@@ -2230,7 +2380,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_headword_structure_summary()
         self._refresh_headword_specificity_visibility()
         hints = {
-            "latin_regular": "常规边缘：栏边位置是主证据；字号、粗体和词后结构辅助判断。",
+            "latin_regular": "常规边缘：严格栏左缘定位词头；POS/词形/变体等词后结构是显式证据。视觉补救直接使用本页可见的栏左缘容差、粗体倍率和候选强度，不再叠加隐藏阈值。",
             "cjk_visual": "视觉型：大字/括号结构及视觉突出程度是主证据；大字单字还可结合右侧留白/稀疏度。",
             "numbered_prefix": "编号型：编号前缀是主证据；字号/粗体属于辅助证据。",
             "marker_prefixed": "符号型：○ / ● / ◆ 等固定符号是主证据；字号/粗体属于辅助证据。",
@@ -2364,6 +2514,22 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_allow_ordinary_left_edge = bool(self.ordinary_left_edge_var.get())
         s.profile_allow_numbered_prefix = bool(self.numbered_prefix_var.get())
         s.profile_allow_marker_prefix = bool(self.marker_prefix_var.get())
+        s.profile_headword_script_guard_version = 1
+        s.profile_headword_script_guard_enabled = bool(
+            self.headword_script_guard_var.get()
+        )
+        s.profile_tail_structure_version = 1
+        s.profile_tail_allow_pos = bool(self.tail_allow_pos_var.get())
+        s.profile_tail_allow_inflection = bool(self.tail_allow_inflection_var.get())
+        s.profile_tail_allow_variant = bool(self.tail_allow_variant_var.get())
+        s.profile_tail_allow_pronunciation = bool(
+            self.tail_allow_pronunciation_var.get()
+        )
+        s.profile_tail_allow_descriptor = bool(self.tail_allow_descriptor_var.get())
+        s.profile_tail_require_selected = bool(self.tail_require_selected_var.get())
+        s.profile_tail_allow_visual_rescue = bool(
+            self.tail_allow_visual_rescue_var.get()
+        )
         s.profile_symbol_inventory_version = 1
         s.profile_symbol_inventory_enabled = bool(
             self.symbol_inventory_enabled_var.get()
@@ -2418,6 +2584,11 @@ class ProjectProfileWizard(tk.Toplevel):
             if hasattr(s, name):
                 setattr(s, name, value)
         apply_headword_tuning(s, profile_key, s.profile_headword_tuning_level)
+        # The preset may seed the hidden legacy rescue setting, but after Profile
+        # step 3 the user's explicit tail-structure choice is authoritative.
+        s.paddle_allow_strong_edge_visual_rescue = bool(
+            s.profile_tail_allow_visual_rescue
+        )
         # Wizard specificity values are explicit project overrides and therefore
         # take precedence over preset/tuning defaults.
         s.paddle_left_tolerance = max(
@@ -2918,6 +3089,7 @@ class ProjectProfileWizard(tk.Toplevel):
             lower_accepted = 0
             template_matches = 0
             template_scores: list[float] = []
+            strong_edge_rescues = 0
             reject_counts: dict[str, int] = {}
             if index < len(columns):
                 column = columns[index] or {}
@@ -2954,6 +3126,10 @@ class ProjectProfileWizard(tk.Toplevel):
                         if template_score > 0:
                             template_matches += 1
                             template_scores.append(template_score)
+                        if bool(
+                            features.get("ordinary_strong_edge_visual_rescue")
+                        ):
+                            strong_edge_rescues += 1
                     if center_y < band_height * 0.50:
                         continue
                     lower_total += 1
@@ -3003,10 +3179,14 @@ class ProjectProfileWizard(tk.Toplevel):
                 template_text = (
                     f"｜模板命中{template_matches}（最高{best_template:.2f}）"
                 )
+            rescue_text = (
+                f"｜强粗体左缘补救{strong_edge_rescues}"
+                if strong_edge_rescues else ""
+            )
             parts.append(
                 f"{index + 1}栏：原始OCR至{raw_pct}%｜词头至{selected_pct}%｜"
                 f"下半页候选{lower_total}（通过{lower_accepted}；拒绝主因：{reason_text}）｜"
-                f"左缘最大漂移{drift}px{template_text}{warning}"
+                f"左缘最大漂移{drift}px{rescue_text}{template_text}{warning}"
             )
         return "\n".join(parts)
 
