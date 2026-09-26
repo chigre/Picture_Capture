@@ -1824,6 +1824,15 @@ class ProjectProfileWizard(tk.Toplevel):
         self.marker_prefix_var.set(defaults["marker_prefix"])
         self.numbered_prefix_var.set(defaults["numbered_prefix"])
 
+    def _set_symbol_defaults_for_profile(self, key: str) -> None:
+        defaults = profile_symbol_inventory_defaults(key)
+        self.symbol_inventory_enabled_var.set(bool(defaults["enabled"]))
+        self.entry_marker_symbols_var.set(" ".join(defaults["entry_markers"]))
+        self.bracket_open_symbols_var.set(" ".join(defaults["bracket_openers"]))
+        self.symbol_visual_rescue_var.set(bool(defaults["visual_rescue"]))
+        self.symbol_lane_required_var.set(bool(defaults["lane_required"]))
+        self.symbol_lane_tolerance_var.set(int(defaults["lane_tolerance_percent"]))
+
     def _specificity_defaults_for_profile(self, key: str) -> tuple[int, float, float, float]:
         temp = replace(self.working)
         temp.ocr_language = _ocr_language_code(self.ocr_language_var.get())
@@ -1853,6 +1862,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_tuning_level_var.set(0)
         key = self._current_profile_key()
         self._set_structure_defaults_for_profile(key)
+        self._set_symbol_defaults_for_profile(key)
         self._reset_specificity_for_profile(key)
         self._profile_revision += 1
         self._mark_validation_stale()
@@ -1883,7 +1893,10 @@ class ProjectProfileWizard(tk.Toplevel):
         if self.cjk_allow_single_var.get():
             active.append("大字单字")
         if self.marker_prefix_var.get():
-            active.append("固定符号")
+            markers = self.entry_marker_symbols_var.get().strip()
+            active.append(
+                "固定符号" + (f"（{markers}）" if markers else "")
+            )
         if self.numbered_prefix_var.get():
             active.append("编号前缀")
         self.headword_structure_summary_var.set(
@@ -1902,6 +1915,14 @@ class ProjectProfileWizard(tk.Toplevel):
                 self.cjk_specificity_frame.grid()
             else:
                 self.cjk_specificity_frame.grid_remove()
+        if hasattr(self, "symbol_inventory_frame"):
+            show_symbols = bool(
+                self.marker_prefix_var.get() or self.cjk_allow_bracketed_var.get()
+            )
+            if show_symbols:
+                self.symbol_inventory_frame.grid()
+            else:
+                self.symbol_inventory_frame.grid_remove()
 
     def _refresh_headword_tuning_status(self) -> None:
         if not hasattr(self, "headword_tuning_status_var"):
@@ -2092,6 +2113,21 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_allow_ordinary_left_edge = bool(self.ordinary_left_edge_var.get())
         s.profile_allow_numbered_prefix = bool(self.numbered_prefix_var.get())
         s.profile_allow_marker_prefix = bool(self.marker_prefix_var.get())
+        s.profile_symbol_inventory_version = 1
+        s.profile_symbol_inventory_enabled = bool(
+            self.symbol_inventory_enabled_var.get()
+        )
+        s.profile_entry_marker_symbols = self.entry_marker_symbols_var.get().strip()
+        s.profile_bracket_open_symbols = self.bracket_open_symbols_var.get().strip()
+        s.profile_symbol_visual_rescue_enabled = bool(
+            self.symbol_visual_rescue_var.get()
+        )
+        s.profile_symbol_lane_required = bool(
+            self.symbol_lane_required_var.get()
+        )
+        s.profile_symbol_lane_tolerance_percent = max(
+            20, min(120, int(self.symbol_lane_tolerance_var.get()))
+        )
         s.profile_cjk_allow_single_headword = bool(self.cjk_allow_single_var.get())
         s.profile_cjk_allow_bracketed_headword = bool(self.cjk_allow_bracketed_var.get())
         s.profile_cjk_require_left_edge = bool(self.cjk_require_left_edge_var.get())
