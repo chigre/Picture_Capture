@@ -354,6 +354,15 @@ def _configured_symbol_inventory(
         lane_tolerance = max(
             20, min(120, int(base.get("lane_tolerance_percent") or 50))
         )
+        # Parser-controls v1 predates dictionary-specific inventories. Preserve
+        # its documented "固定符号" checkbox semantics until the Project Profile
+        # explicitly saves an inventory (version 1).
+        if (
+            not entry
+            and int(getattr(settings, "profile_parser_controls_version", 0) or 0) >= 1
+            and bool(getattr(settings, "profile_allow_marker_prefix", False))
+        ):
+            entry = ("○", "●", "◦", "•", "〓", "◆", "◇", "►", "▶")
     families = {
         _SYMBOL_FAMILY_BY_LITERAL[symbol]
         for symbol in entry + bracket
@@ -371,6 +380,34 @@ def _configured_symbol_inventory(
         "lane_tolerance_percent": lane_tolerance,
         "visual_families": tuple(sorted(families)),
     }
+
+
+def _starts_with_unconfigured_headword_symbol(
+    text: str,
+    settings: AppSettings,
+    profile: DictionaryProfile,
+) -> bool:
+    """Reject known symbol-led rows that are outside an explicitly saved set."""
+    if int(getattr(settings, "profile_symbol_inventory_version", 0) or 0) < 1:
+        return False
+    inventory = _configured_symbol_inventory(settings, profile)
+    if not inventory.get("enabled", True):
+        return False
+    stripped = unicodedata.normalize("NFKC", str(text or "")).lstrip()
+    if not stripped:
+        return False
+    configured = tuple(inventory["entry_markers"]) + tuple(inventory["bracket_openers"])
+    if any(stripped.startswith(symbol) for symbol in configured if symbol):
+        return False
+    known = tuple(
+        sorted(
+            set(_SYMBOL_FAMILY_BY_LITERAL)
+            | {"〓", "※", "*", "†", "‡", "§", "¶"},
+            key=len,
+            reverse=True,
+        )
+    )
+    return any(stripped.startswith(symbol) for symbol in known)
 
 
 def _parse_cjk_marker_pinyin_headword(
@@ -1882,6 +1919,12 @@ def parse_headword_text(
         if chinese_single is not None:
             return chinese_single
 
+    # A Project Profile with an explicit symbol inventory is exact: a row
+    # starting with a known-but-unconfigured headword symbol must not silently
+    # fall through to the generic lemma parser after that symbol is skipped.
+    if _starts_with_unconfigured_headword_symbol(text, settings, active_profile):
+        return None
+
     # The generic lemma parser is the "普通左缘短词" structure. A numbered
     # prefix is also allowed to continue through it because the prefix itself
     # already supplied the strong structural cue.
@@ -2516,7 +2559,20 @@ def _detect_visual_entry_markers(
     """
     if gray.size == 0 or gray.ndim != 2:
         return []
-    inventory = dict(inventory or {})
+    if inventory is None:
+        # Low-level historical API/tests called this detector without a profile.
+        # Keep that behavior as the original ○/● detector.
+        inventory = {
+            "enabled": True,
+            "entry_markers": ("○", "●"),
+            "bracket_openers": (),
+            "visual_rescue": True,
+            "lane_required": False,
+            "lane_tolerance_percent": 50,
+            "visual_families": ("circle_open", "circle_filled"),
+        }
+    else:
+        inventory = dict(inventory)
     if not inventory.get("enabled", True) or not inventory.get("visual_rescue", True):
         return []
     if not inventory.get("visual_families"):
@@ -2549,8 +2605,12 @@ def _detect_visual_entry_markers(
         if classified is None:
             continue
         family, symbol, role, metrics = classified
+        legacy_type = {
+            "circle_open": "open_circle",
+            "circle_filled": "filled_circle",
+        }.get(family, family)
         item: dict[str, Any] = {
-            "type": family, "family": family, "symbol": symbol, "role": role,
+            "type": legacy_type, "family": family, "symbol": symbol, "role": role,
             "x0": int(x0), "x1": int(x1),
             "y0": int(lower + y0), "y1": int(lower + y1),
             "center_y": round(float(lower + (y0 + y1) / 2.0), 2),
