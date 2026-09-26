@@ -2079,7 +2079,7 @@ def test_auto_refine_y_is_exposed_as_shared_ordinary_drawing_control():
 def test_ordinary_backup_checkbox_defaults_and_two_row_auto_layout_grid():
     settings = AppSettings()
     assert settings.paddle_refine_separator_y is True
-    assert settings.follow_column_deformation is True
+    assert settings.follow_column_deformation is False
     assert settings.ordinary_auto_layout is True
     assert settings.ordinary_auto_columns is False
     assert settings.ordinary_auto_start_y is True
