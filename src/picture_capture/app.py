@@ -7409,6 +7409,10 @@ class FocusedReviewWindow(tk.Toplevel):
         )
         self.minsize(min(700, width), min(500, height))
         self.transient(parent)
+        # Cross-page focused review edits PDICs from disk rather than sharing
+        # one page's live Entry objects. Keep it modal so main-page editors
+        # cannot create a stale competing save while this window is open.
+        self.grab_set()
 
         total = len(parent.project.images) if parent.project else 0
         valid = sorted(
@@ -7895,7 +7899,8 @@ class FocusedReviewWindow(tk.Toplevel):
         self.parent.lift()
 
     def save(
-        self, *, rescan_after: bool = False, jump_after: int | None = None
+        self, *, rescan_after: bool = False, jump_after: int | None = None,
+        close_after: bool = False,
     ) -> None:
         if self._saving or not self.parent.project:
             return
@@ -7921,6 +7926,9 @@ class FocusedReviewWindow(tk.Toplevel):
             elif jump_after is not None:
                 self.parent.load_page(int(jump_after))
                 self.parent.lift()
+            elif close_after:
+                self.parent.__dict__.pop("focused_review_window", None)
+                self.destroy()
             return
 
         project = self.parent.project
@@ -8009,6 +8017,9 @@ class FocusedReviewWindow(tk.Toplevel):
             elif jump_after is not None:
                 self.parent.load_page(int(jump_after))
                 self.parent.lift()
+            elif close_after and not conflicts:
+                self.parent.__dict__.pop("focused_review_window", None)
+                self.destroy()
 
         def failed(exc, detail) -> None:
             self._saving = False
@@ -8044,7 +8055,7 @@ class FocusedReviewWindow(tk.Toplevel):
             if answer is None:
                 return
             if answer:
-                self.save()
+                self.save(close_after=True)
                 return
         self.parent.__dict__.pop("focused_review_window", None)
         self.destroy()
