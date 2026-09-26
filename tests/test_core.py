@@ -4863,7 +4863,7 @@ def test_bookmark_controls_and_project_switch_protect_project_settings():
     normal_end = processing.index("\ndef detect_entries", normal_start)
     normal_block = processing[normal_start:normal_end]
     assert "from .paddle_headwords import refine_separator_y" in normal_block
-    assert "y_source, _refinement = refine_separator_y(" in normal_block
+    assert "refined_y, _refinement = refine_separator_y(" in normal_block
 
 
 def test_crop_preview_uses_export_filename_and_centered_entry_typography():
