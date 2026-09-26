@@ -824,7 +824,7 @@ class ProcessingTests(unittest.TestCase):
         self.assertTrue(sa_diag["looks_like_continuation"])
         self.assertTrue(blacion_diag["looks_like_continuation"])
 
-    def test_first_content_headword_uses_first_sustained_ink_y(self) -> None:
+    def test_first_content_headword_uses_whitespace_before_first_ink(self) -> None:
         settings = AppSettings(
             ocr_language="spa", parameter_display_width=300, paddle_band_width=300,
             row_padding=3, paddle_auto_header_rule=False, paddle_refine_separator_y=True,
@@ -833,15 +833,18 @@ class ProcessingTests(unittest.TestCase):
         band = Image.new("RGB", (300, 150), "white")
         draw = ImageDraw.Draw(band)
         # OCR top is slightly early (36) while actual printed ink starts at 40.
-        # The first-entry rule should move down to the first sustained ink row,
-        # not into the blank top margin.
+        # The marker must sit in the blank gap immediately above the glyph rather
+        # than touch/cross the first stroke.
         draw.rectangle((15, 40, 280, 58), fill="black")
         records = [OCRRecord("a·ga·rrón (pl. agarrones) s.m.", 0.99, (10, 36, 270, 61))]
         entries, diagnostics = filter_headword_records(records, band, 0, 20, settings, separator_band=band)
         self.assertEqual(len(entries), 1)
-        self.assertEqual(entries[0].y, 40)
+        self.assertEqual(entries[0].y, 36)
         candidate = next(item for item in diagnostics[1:] if item.get("accepted"))
-        self.assertEqual(candidate["separator_refinement"]["reason"], "first_sustained_ink_onset")
+        self.assertEqual(
+            candidate["separator_refinement"]["reason"],
+            "whitespace_before_first_sustained_ink",
+        )
         self.assertGreater(candidate["separator_refinement"]["shift"], 0)
 
     def test_page53_gender_variants_and_bound_morphemes_pass_structure_rules(self) -> None:
@@ -2119,6 +2122,62 @@ def test_v214_visual_single_cjk_rescue_uses_profile_for_clipped_pinyin_head():
         wide, run, 100, settings, profile,
     )
     assert word == "" and record is None
+
+
+def test_v214_visual_rescue_accepts_clipped_single_han_box_when_large_single_enabled():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import OCRRecord, _cjk_word_for_visual_run
+
+    profile = load_dictionary_profile(preset="cjk_visual", language="chi_tra")
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_single_headword=True,
+        profile_cjk_allow_bracketed_headword=False,
+    )
+    run = (100, 150)
+    # OCR may segment the pinyin separately and leave only a vertically clipped
+    # single-Han box. The visual run + explicit large-single structure is enough
+    # to recover the separator.
+    clipped = [OCRRecord("巴", 0.99, (8, 117, 36, 131))]
+    word, confidence, record = _cjk_word_for_visual_run(
+        clipped, run, 100, settings, profile,
+    )
+    assert word == "巴"
+    assert confidence == 0.99
+    assert record is clipped[0]
+
+    settings.profile_cjk_allow_single_headword = False
+    word, _confidence, record = _cjk_word_for_visual_run(
+        clipped, run, 100, settings, profile,
+    )
+    assert word == "" and record is None
+
+
+def test_v214_visual_projection_dedupes_shifted_same_han_candidate():
+    from picture_capture.paddle_headwords import _accepted_cjk_row_for_visual_run
+
+    diagnostics = [{
+        "accepted": True,
+        "normalized_headword": "播",
+        # Simulate OCR anchoring the accepted box on a nearby baseline/pinyin
+        # fragment instead of the full oversized Han glyph.
+        "box": [6, 45, 54, 65],
+        "features": {"cjk_single_visual": True},
+    }]
+    matched = _accepted_cjk_row_for_visual_run(
+        diagnostics, 100, 150, "播",
+    )
+    assert matched is diagnostics[0]
+
+    # A repeated homograph a full entry away must stay distinct.
+    far = [{
+        "accepted": True, "normalized_headword": "播",
+        "box": [6, 5, 54, 25], "features": {"cjk_single_visual": True},
+    }]
+    assert _accepted_cjk_row_for_visual_run(far, 100, 150, "播") is None
 
 
 def test_v214_single_only_profile_visual_rescue_keeps_large_head_not_body_line():
