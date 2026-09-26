@@ -67,6 +67,7 @@ from picture_capture.processing import (
     clamp_box,
     derive_geometry, derive_nominal_geometry,
     detect_entries,
+    column_index,
     import_ocred,
     export_ocred,
     line_box,
@@ -538,6 +539,49 @@ class ProcessingTests(unittest.TestCase):
         fixed, _ = detect_entries(image, settings)
         self.assertEqual(len(tracked), 26)
         self.assertLess(len(fixed), len(tracked))
+
+    def test_deformed_column_tracking_does_not_follow_indented_body_blocks(self) -> None:
+        image = Image.new("RGB", (800, 800), "white")
+        draw = ImageDraw.Draw(image)
+        for base_x in (30, 430):
+            for y in range(70, 750, 30):
+                true_x = base_x + round(0.04 * y)
+                # Simulate a long definition paragraph in the first column:
+                # several successive rows start well inside the real left edge.
+                indent = 34 if base_x == 30 and 300 <= y < 480 else 0
+                x = true_x + indent
+                draw.rectangle((x, y, x + 115, y + 13), fill="black")
+
+        settings = AppSettings(
+            columns=2, manual_x=30, column_width=350, gutter=50,
+            start_y=50, body_indent=50, character_height=20,
+            detection_method="left_edge", follow_column_deformation=True,
+            column_track_radius=90, column_track_block_height=100,
+            column_track_max_step=28,
+        )
+        geometry = derive_geometry(image, settings)
+
+        # The path should follow the gentle page slope (~14 px by y=350), not
+        # the +34 px paragraph indentation in the middle blocks.
+        expected = 30 + round(0.04 * 350)
+        self.assertAlmostEqual(geometry.x_at(0, 350), expected, delta=12)
+        self.assertLess(geometry.x_at(0, 350), expected + 20)
+
+    def test_column_assignment_uses_curved_path_at_marker_y(self) -> None:
+        geometry = Geometry(
+            column_starts=[0, 100],
+            column_widths=[80, 80],
+            top=0,
+            bottom=200,
+            column_paths=[
+                ColumnPath([(0, 0), (200, 40)]),
+                ColumnPath([(0, 100), (200, 140)]),
+            ],
+        )
+        # At y=100 the tracked starts are 20 and 120. x=105 is therefore
+        # closer to column 1 (zero-based 0), even though nominal straight
+        # intervals would incorrectly put it inside column 2.
+        self.assertEqual(column_index(105, geometry, 100), 0)
 
     def test_paddle_result_parsing_and_headword_detection(self) -> None:
         class FakeResult:
