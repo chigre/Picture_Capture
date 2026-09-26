@@ -2474,6 +2474,41 @@ def _cjk_candidate_right_context_metrics(
     return metrics
 
 
+def _cjk_candidate_right_context_features(
+    metrics: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Candidate-local right-context diagnostics with a non-colliding prefix."""
+    if not metrics:
+        return {}
+    return {
+        "cjk_candidate_right_context_available": bool(
+            metrics.get("available", False)
+        ),
+        "cjk_candidate_right_context_sparse": bool(metrics.get("sparse", False)),
+        "cjk_candidate_right_blank_ratio": float(
+            metrics.get("blank_ratio", 0.0) or 0.0
+        ),
+        "cjk_candidate_lower_right_blank_ratio": float(
+            metrics.get("lower_blank_ratio", 0.0) or 0.0
+        ),
+        "cjk_candidate_right_row_occupancy": float(
+            metrics.get("row_occupancy", 0.0) or 0.0
+        ),
+        "cjk_candidate_right_density_ratio": float(
+            metrics.get("density_ratio", 1.0) or 1.0
+        ),
+        "cjk_candidate_right_sparse_votes": int(
+            metrics.get("sparse_votes", 0) or 0
+        ),
+        "cjk_candidate_right_context_x": int(
+            metrics.get("candidate_context_x", 0) or 0
+        ),
+        "cjk_candidate_expected_height": int(
+            metrics.get("candidate_expected_height", 0) or 0
+        ),
+    }
+
+
 def _cjk_word_for_visual_run(
     records: list[OCRRecord],
     run: tuple[int, int],
@@ -3655,9 +3690,8 @@ def filter_headword_records(
                 "cjk_single_accept": cjk_single_accept,
                 "cjk_single_strong_visual": cjk_single_strong_visual,
                 "cjk_single_sparse_context_rescue": cjk_single_sparse_context_rescue,
-                **(
-                    _cjk_right_context_features(cjk_candidate_right_context)
-                    if cjk_candidate_right_context is not None else {}
+                **_cjk_candidate_right_context_features(
+                    cjk_candidate_right_context
                 ),
                 "cjk_candidate_right_baseline_supported": bool(
                     cjk_candidate_right_context
