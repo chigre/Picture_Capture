@@ -528,7 +528,9 @@ class ProcessingTests(unittest.TestCase):
             columns=2, manual_x=30, column_width=350, gutter=50,
             start_y=50, body_indent=24, character_height=20,
             detection_method="left_edge", follow_column_deformation=True,
-            column_track_radius=90, column_track_block_height=100,
+            # Relative semantics: about the old 90 px radius / 100 px
+            # block / 20 px step for this 350×650 body geometry.
+            column_track_radius=26, column_track_block_height=15,
             column_track_max_step=20
         )
         geometry = derive_geometry(image, settings)
