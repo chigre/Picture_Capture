@@ -2616,7 +2616,15 @@ class SettingsDialog(tk.Toplevel):
             if name not in self.vars:
                 self.vars[name] = tk.BooleanVar(value=bool(getattr(self.parent.settings, name)))
             check = ttk.Checkbutton(group, text=label, variable=self.vars[name])
-            check.grid(row=row, column=0, sticky="w", pady=4)
+            child_indent = 22 if name in {
+                "ordinary_auto_columns", "ordinary_auto_start_y",
+                "ordinary_auto_manual_x", "ordinary_auto_column_width",
+                "ordinary_auto_gutter", "ordinary_auto_character_height",
+                "ordinary_auto_row_padding",
+            } else 0
+            check.grid(
+                row=row, column=0, sticky="w", pady=4, padx=(child_indent, 0)
+            )
             info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
             info.grid(row=row, column=1, sticky="w", padx=(8, 0))
             callback = lambda l=label, n=name: self._show_check_help(l, n)
