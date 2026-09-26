@@ -1207,7 +1207,7 @@ class UsageGuideWindow(tk.Toplevel):
             (
                 (
                     "01", "建立项目并完成【项目Profile】",
-                    "用【新建项目】或【已有项目】进入词典目录。新项目先完成词典信息、阅读方式、页面模板、"
+                    "从【项目中心】打开既有项目，或在项目中心搜索栏右侧点击【新建项目】。新项目先完成词典信息、阅读方式、页面模板、"
                     "词头结构和代表页测试。Project Profile 是配置入口，不建议一开始就逐个修改高级参数。"
                 ),
                 (
@@ -1404,7 +1404,7 @@ class UsageGuideWindow(tk.Toplevel):
     def __init__(self, parent: tk.Misc):
         super().__init__(parent)
         self.parent_app = parent
-        self.title("Picture Capture · 使用指南")
+        self.title("Picture Capture · 帮助中心")
         screen_w = max(900, self.winfo_screenwidth())
         screen_h = max(650, self.winfo_screenheight())
         work_x, work_y, work_w, work_h = _screen_work_area(self)
@@ -1458,7 +1458,7 @@ class UsageGuideWindow(tk.Toplevel):
         header = tk.Frame(shell, bg=colors["bg"])
         header.pack(fill="x", pady=(0, 14))
         tk.Label(
-            header, text="使用指南", bg=colors["bg"], fg=colors["text"],
+            header, text="帮助中心", bg=colors["bg"], fg=colors["text"],
             font=self._title_font, anchor="w",
         ).pack(anchor="w")
         tk.Label(
@@ -1572,7 +1572,7 @@ class UsageGuideWindow(tk.Toplevel):
             button.pack(side="left", padx=(7, 0))
             return button
 
-        self._profile_button = action_button("项目Profile", self.parent_app.open_project_profile)
+        self._profile_button = action_button("初始Profile", self.parent_app.open_project_profile)
         self._layout_button = action_button("检测版面参数", self.parent_app.detect_layout_current)
         action_button("环境中心", self.parent_app.check_ocr_engines)
         action_button("设置中心", self.parent_app.open_settings)
@@ -1587,7 +1587,7 @@ class UsageGuideWindow(tk.Toplevel):
     def _refresh_context(self) -> None:
         project = getattr(self.parent_app, "project", None)
         if project is None:
-            self._context_var.set("当前：尚未打开项目 · 可先从主界面的【新建项目】或【已有项目】开始")
+            self._context_var.set("当前：尚未打开项目 · 可先从主界面的【项目中心】开始")
             state = "disabled"
         else:
             settings = getattr(self.parent_app, "settings", None)
@@ -1670,7 +1670,7 @@ class UsageGuideWindow(tk.Toplevel):
         self._clear_content()
         self._add_page_heading(
             f"搜索：{self.search_var.get().strip()}",
-            f"在使用指南中找到 {len(matches)} 条匹配内容。",
+            f"在帮助中心中找到 {len(matches)} 条匹配内容。",
         )
         if not matches:
             self._add_callout(
