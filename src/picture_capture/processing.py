@@ -336,9 +336,17 @@ def _estimate_column_paths(
                     key=lambda j: abs(j - index),
                 )
                 filled.append(int(raw_x[nearest]))  # type: ignore[arg-type]
+        configured_step = max(
+            1, round(max_step_value * geometry_to_analysis)
+        )
+        # A genuine page tilt/curve changes gradually. Independently of an
+        # overly permissive saved max-step value, one vertical block must not
+        # drag the path by more than about 15% of that block's height. This
+        # rejects the common false signal from indented definition paragraphs.
+        geometric_step = max(2, round(block_height * 0.15))
+        stable_step = min(configured_step, geometric_step)
         filled = _smooth_track(
-            filled,
-            max(1, round(max_step_value * geometry_to_analysis)),
+            filled, stable_step, nominal_x=int(nominal_x),
         )
         source_points = [
             (round(y / scale), round(x / scale)) for y, x in zip(anchors_y, filled)
