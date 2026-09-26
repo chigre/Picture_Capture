@@ -773,6 +773,44 @@ def _review_text_similarity(left: object, right: object) -> float | None:
     return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio()
 
 
+def _focused_review_character_tokens(value: object) -> tuple[str, ...]:
+    """Parse the editable focused-review character list deterministically."""
+    parts = [
+        token.strip()
+        for token in re.split(r"[,，]+", str(value or ""))
+        if token.strip()
+    ]
+    return tuple(dict.fromkeys(parts))
+
+
+def _candidate_for_entry_from_list(
+    entry: WordEntry,
+    candidates: list[dict],
+    *,
+    y_tolerance: int,
+) -> dict | None:
+    """Match one PDIC row to OCR review metadata without changing current page."""
+    if entry.candidate_id:
+        for candidate in candidates:
+            if str(candidate.get("candidate_id", "")) == entry.candidate_id:
+                return candidate
+    nearby: list[tuple[float, dict]] = []
+    tolerance = max(4, int(y_tolerance))
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        if str(candidate.get("position_variant") or "refined") == "original":
+            continue
+        try:
+            dx = abs(int(candidate.get("source_x", entry.x)) - int(entry.x))
+            dy = abs(int(candidate.get("source_y", entry.y)) - int(entry.y))
+        except (TypeError, ValueError):
+            continue
+        if dx <= 20 and dy <= tolerance:
+            nearby.append((dy + dx * 0.1, candidate))
+    return min(nearby, key=lambda item: item[0])[1] if nearby else None
+
+
 def _review_similarity_color(score: float | None) -> str:
     """Semantic background colour for one OCR option in the review panel."""
     if score is None:
