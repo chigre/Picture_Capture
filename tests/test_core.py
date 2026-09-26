@@ -1396,7 +1396,8 @@ class DictionaryProfileV2Tests(unittest.TestCase):
         from picture_capture.dictionary_profile import profile_library_path
         raw = json.loads(profile_library_path().read_text(encoding="utf-8"))
         self.assertEqual(set(raw["validated_examples"]), {
-            "NewApproach", "LDER", "HZYLDZD", "XDHYCD", "TimesCED", "RUIGO", "XAHDCD", "shueisha",
+            "NewApproach", "LDER", "HZYLDZD", "XDHYCD", "TimesCED", "RUIGO",
+            "XAHDCD", "shueisha", "CNIT",
         })
 
     def test_v210_profile_defaults_keep_supported_language_variant(self) -> None:
