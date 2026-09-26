@@ -309,6 +309,18 @@ class AppSettings:
     profile_allow_ordinary_left_edge: bool = True
     profile_allow_numbered_prefix: bool = False
     profile_allow_marker_prefix: bool = False
+    # User-visible evidence after the lemma. Version 0 preserves the historical
+    # all-in-one POS/inflection/descriptor gate. Project Profile saves version 1
+    # so every evidence family becomes an explicit part of the dictionary
+    # structure rather than a hidden parser rule.
+    profile_tail_structure_version: int = 0
+    profile_tail_allow_pos: bool = True
+    profile_tail_allow_inflection: bool = True
+    profile_tail_allow_variant: bool = True
+    profile_tail_allow_pronunciation: bool = False
+    profile_tail_allow_descriptor: bool = True
+    profile_tail_require_selected: bool = True
+    profile_tail_allow_visual_rescue: bool = False
     # Dictionary-specific headword symbol inventory.  Version 0 preserves the
     # historical profile-derived symbol sets; Project Profile saves version 1
     # together with the explicit per-dictionary symbol lists below.
