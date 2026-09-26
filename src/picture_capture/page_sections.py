@@ -8,12 +8,11 @@ from PIL import Image, ImageOps
 
 from .coordinate_space import SOURCE_COORDINATE_SPACE
 from .layout_transform import LayoutTransform
-from .project_storage import page_sections_path_for_image, qt_root
+from .project_storage import page_sections_path_for_image
 
 
 PAGE_SECTIONS_FORMAT = "picture-capture-page-sections-v2"
 PAGE_SECTIONS_COORDINATE_SPACE = SOURCE_COORDINATE_SPACE
-_LEGACY_PAGE_SECTIONS_COORDINATE_SPACE = "canonical_full_resolution_pixels"
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,11 +152,7 @@ def read_page_sections(image_path: Path) -> list[PageSection]:
     image_path = Path(image_path)
     path = page_sections_path_for_image(image_path)
     if not path.exists():
-        legacy_qt_path = qt_root(image_path.parent) / "PageSections" / f"{image_path.stem}.json"
-        if legacy_qt_path.exists():
-            path = legacy_qt_path
-        else:
-            return []
+        return []
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError):
@@ -171,40 +166,30 @@ def read_page_sections(image_path: Path) -> list[PageSection]:
     coordinate_space = str(payload.get("coordinate_space") or "")
     sections: list[PageSection] = []
 
-    if coordinate_space in {"", _LEGACY_PAGE_SECTIONS_COORDINATE_SPACE}:
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            try:
-                top = int(row.get("top_v"))
-                bottom = int(row.get("bottom_v"))
-            except (TypeError, ValueError):
-                continue
-            if bottom > top:
-                sections.append(PageSection(top, bottom))
-    elif coordinate_space == SOURCE_COORDINATE_SPACE:
-        try:
-            source_size = (
-                int(payload.get("source_width") or 0),
-                int(payload.get("source_height") or 0),
-            )
-            if source_size[0] <= 0 or source_size[1] <= 0:
-                with Image.open(image_path) as opened:
-                    source_size = ImageOps.exif_transpose(opened).size
-            transform = LayoutTransform(
-                str(payload.get("layout_transform_internal") or "identity")
-            )
-        except Exception:
-            return []
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            top = _segment_v(row.get("top_source_segment_xyxy"), transform, source_size)
-            bottom = _segment_v(row.get("bottom_source_segment_xyxy"), transform, source_size)
-            if top is not None and bottom is not None and bottom > top:
-                sections.append(PageSection(top, bottom))
-    else:
+    if coordinate_space != SOURCE_COORDINATE_SPACE:
         return []
+
+    try:
+        source_size = (
+            int(payload.get("source_width") or 0),
+            int(payload.get("source_height") or 0),
+        )
+        if source_size[0] <= 0 or source_size[1] <= 0:
+            with Image.open(image_path) as opened:
+                source_size = ImageOps.exif_transpose(opened).size
+        transform = LayoutTransform(
+            str(payload.get("layout_transform_internal") or "identity")
+        )
+    except Exception:
+        return []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        top = _segment_v(row.get("top_source_segment_xyxy"), transform, source_size)
+        bottom = _segment_v(row.get("bottom_source_segment_xyxy"), transform, source_size)
+        if top is not None and bottom is not None and bottom > top:
+            sections.append(PageSection(top, bottom))
+
 
     sections.sort(key=lambda item: (item.top_v, item.bottom_v))
     if any(current.top_v < previous.bottom_v for previous, current in zip(sections, sections[1:])):
