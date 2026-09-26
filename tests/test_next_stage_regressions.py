@@ -38,8 +38,9 @@ from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
     _detect_visual_entry_markers, _headword_script_compatibility,
     _ordinary_strong_edge_visual_rescue, _repair_multiline_headword_state_machine,
-    _selected_tail_structure_evidence, HeadwordParse, parse_headword_text,
-    prepare_ocr_band, run_paddle_band,
+    _selected_tail_structure_evidence, filter_headword_records, HeadwordParse,
+    parse_headword_filter_rules, parse_headword_text, prepare_ocr_band,
+    run_paddle_band,
 )
 from picture_capture.visual_marker_templates import (
     build_visual_marker_sample, match_visual_marker_template,
@@ -1350,6 +1351,40 @@ def test_headword_script_guard_rejects_cjk_for_non_cjk_ocr_but_keeps_japanese_ka
     )
     assert _headword_script_compatibility(chi, han) == (True, "han")
     assert _headword_script_compatibility(chi, kana) == (False, "kana")
+
+
+def test_headword_script_guard_is_a_hard_candidate_gate():
+    settings = AppSettings(
+        ocr_language="ita",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=True,
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=True,
+        paddle_auto_header_rule=False,
+        paddle_left_tolerance=40,
+        paddle_band_left_margin=12,
+        paddle_rec_score_threshold=0.20,
+    )
+    profile = load_dictionary_profile(preset="latin_regular", language="ita")
+    records = [
+        OCRRecord(text="波 s.m. definizione", confidence=0.99, box=(2, 20, 95, 38))
+    ]
+    entries, diagnostics = filter_headword_records(
+        records,
+        Image.new("RGB", (160, 100), "white"),
+        0,
+        0,
+        settings,
+        user_rules=parse_headword_filter_rules("accept_lemma_exact: 波"),
+        profile=profile,
+    )
+    assert entries == []
+    rows = [row for row in diagnostics if "meta" not in row]
+    assert rows
+    assert rows[0]["normalized_headword"] == "波"
+    assert rows[0]["reject_reason"] == "incompatible_headword_script"
+    assert rows[0]["features"]["headword_leading_script"] == "han"
+    assert rows[0]["features"]["headword_script_compatible"] is False
 
 
 def test_headword_script_guard_can_be_disabled_for_special_bilingual_projects():
