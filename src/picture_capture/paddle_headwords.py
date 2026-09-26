@@ -2327,15 +2327,28 @@ def _cjk_word_for_visual_run(
         profile_pinyin_single = bool(
             profile_pinyin is not None and parsed_single
         )
+        profile_visual_single = bool(
+            parsed_single
+            and single_enabled
+            and profile is not None
+            and profile.family == "cjk_visual"
+            and parsed is not None
+            and parsed.parser_stage in {
+                "chinese_single_character",
+                "chinese_single_character_with_variant",
+            }
+        )
         word = parsed.normalized if parsed_single else _leading_cjk_ideograph(record.text)
         if not word:
             continue
 
-        if profile_pinyin_single:
-            # A large TimesCED-style glyph may be recognized as a short
-            # ``漢 ba`` record whose box covers only part of the printed glyph.
-            # The profile parser supplies strong structure, so recover these
-            # clipped boxes without globally lowering the fallback thresholds.
+        if profile_pinyin_single or profile_visual_single:
+            # A large TimesCED-style glyph may be recognized either as a short
+            # ``漢 ba`` record or as a clipped single-Han box with the nearby
+            # pinyin segmented separately.  In both cases the explicit
+            # 【大字单字】 profile plus the oversized visual run supplies strong
+            # structure, so recover the clipped OCR box without weakening the
+            # generic fallback used for definition text.
             minimum_height_ratio = 0.28
             overlap_ratio = 0.22
             if record_width > zone_width * 1.75:
@@ -2817,8 +2830,20 @@ def refine_first_content_y(
         refined = coarse_y
         reason = "no_sustained_ink_keep_coarse"
     else:
-        refined = int(top + onset)
-        reason = "first_sustained_ink_onset"
+        ink_onset = int(top + onset)
+        # A separator should mark the whitespace immediately *before* the first
+        # entry, not touch the top stroke/accent of the glyph.  Keep a small
+        # scale-aware clearance above the sustained-ink onset while respecting
+        # the header/lower bound.
+        clearance = max(
+            2,
+            round(
+                max(1.0, line_height * 0.12)
+                + max(0, settings.row_padding) * 0.35 * reference_to_canonical_scale
+            ),
+        )
+        refined = max(int(lower_bound), ink_onset - clearance)
+        reason = "whitespace_before_first_sustained_ink"
 
     return refined, {
         "enabled": True,
@@ -2892,7 +2917,20 @@ def _accepted_cjk_row_for_visual_run(
             overlap >= min(box_h, run_h) * 0.22
             or center_distance <= max(box_h, run_h) * 0.62
         )
-        if same_physical_row and (same_word or features.get("cjk_single_visual")):
+        # OCR sometimes places the accepted single-Han box on the pinyin/baseline
+        # rather than around the full display glyph.  If the normalized lemma is
+        # the same, allow a wider vertical association so the later visual rescue
+        # confirms the existing candidate instead of creating a second separator
+        # inside the same entry.  Nearby repeated homographs remain distinct
+        # because this relaxed window is still bounded to roughly one glyph.
+        same_word_shifted_box = bool(
+            same_word
+            and center_distance <= max(run_h * 1.35, box_h * 1.6)
+        )
+        if (
+            (same_physical_row and (same_word or features.get("cjk_single_visual")))
+            or same_word_shifted_box
+        ):
             return row
     return None
 
