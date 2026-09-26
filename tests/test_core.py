@@ -1033,16 +1033,16 @@ class ProcessingTests(unittest.TestCase):
         self.assertEqual(comp_counts, {27})
         self.assertIn("\tsame\tsame\tagree", comparison)
 
-    def test_coordinate_pairing_uses_canonical_v_not_source_y(self) -> None:
-        def cand(canonical_v, source_y, lemma):
+    def test_coordinate_pairing_uses_private_reading_axis_without_persisting_it(self) -> None:
+        def cand(axis_v, source_y, lemma):
             return {
-                "canonical_v": canonical_v,
+                "_axis_v": axis_v,
                 "source_x": 20,
                 "source_y": source_y,
                 "accepted": True,
                 "score": 8.0,
                 "confidence": 0.95,
-                "box": [5, canonical_v, 100, canonical_v + 20],
+                "box": [5, axis_v, 100, axis_v + 20],
                 "normalized_headword": lemma,
                 "raw_headword": lemma,
                 "corrected_headword": lemma,
@@ -1055,8 +1055,8 @@ class ProcessingTests(unittest.TestCase):
                 "bug_types": [],
             }
 
-        # Same reading-axis row but very different physical source Y. This is
-        # normal after a 90-degree transform; source Y must not drive pairing.
+        # Temporary reading-axis values may be used inside one OCR call, but
+        # the page coordinates carried by the candidate remain source X/Y.
         pairs = _pair_ocr_candidates(
             [cand(100, 420, "alpha")],
             [cand(104, 30, "alfa")],
@@ -1090,8 +1090,8 @@ class ProcessingTests(unittest.TestCase):
         _apply_pair_engine_position(item, pair, "paddle", 0, 100, geometry)
         expected = transform.canonical_to_source_point(100, 200, source_size)
         self.assertEqual((item["source_x"], item["source_y"]), expected)
-        self.assertEqual(item["canonical_v"], 200)
-        self.assertNotEqual(item["source_y"], item["canonical_v"])
+        self.assertEqual(item["_axis_v"], 200)
+        self.assertNotIn("canonical_v", item)
 
     def test_v159_legacy_comma_swallowing_regex_is_hardened(self) -> None:
         # Some existing projects carried a legacy/custom regex that included
@@ -2361,8 +2361,8 @@ def test_v281_candidate_band_is_capped_to_current_column_width():
     settings.paddle_band_left_margin = 12
 
     band, _top, left_margin = unwrap_column_band(image, geometry, 0, settings)
-    assert left_margin == 8
-    assert band.width == 278
+    assert left_margin == 12
+    assert band.width == 282
 
 
 def test_v281_cjk_visual_projection_recovers_oversized_single_character_row():
@@ -2588,7 +2588,7 @@ def test_v282_large_cjk_duplicate_keeps_entry_start_not_internal_metadata_line()
     rows = [
         {
             "candidate_id": "upper", "column": 1, "source_y": 100,
-            "canonical_v": 100, "box": [8, 112, 70, 166],
+            "box": [8, 112, 70, 166],
             "selected": True, "word": "播", "score": 6.8, "confidence": 0.94,
             "line_height_reference": 70.0, "line_dedup_tolerance": 8,
             "issue_types": [], "decision_reason": "ocr_headword",
@@ -2596,7 +2596,7 @@ def test_v282_large_cjk_duplicate_keeps_entry_start_not_internal_metadata_line()
         },
         {
             "candidate_id": "lower", "column": 1, "source_y": 134,
-            "canonical_v": 134, "box": [8, 118, 72, 168],
+            "box": [8, 118, 72, 168],
             "selected": True, "word": "播", "score": 8.0, "confidence": 0.98,
             "line_height_reference": 70.0, "line_dedup_tolerance": 8,
             "issue_types": [], "decision_reason": "visual_projection",
@@ -2611,7 +2611,7 @@ def test_v282_large_cjk_duplicate_keeps_entry_start_not_internal_metadata_line()
     # Even though the lower visual candidate has the higher score, it is an
     # internal duplicate. Preserve the earlier separator above the headword.
     assert selected[0]["source_y"] == 100
-    assert selected[0]["canonical_v"] == 100
+    assert "canonical_v" not in selected[0]
 
 
 def test_v288_selected_bracketed_cjk_duplicates_are_merged():
@@ -5423,8 +5423,9 @@ def test_review_crop_context_keeps_true_horizontal_columns():
         for i, x in enumerate(geometry.column_starts)
     ]
     crop_lefts = [box[0] for box in boxes]
-    assert crop_lefts[1] - crop_lefts[0] > 800
-    assert crop_lefts[2] - crop_lefts[1] > 800
+    expected_step = settings.column_width + settings.gutter
+    assert crop_lefts[1] - crop_lefts[0] == expected_step
+    assert crop_lefts[2] - crop_lefts[1] == expected_step
 
 
 def test_review_zoom_defaults_to_auto_99_percent_left_pane_fit():
