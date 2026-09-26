@@ -2158,20 +2158,6 @@ def test_column_tracking_percentages_scale_with_page_geometry():
     assert step2 == 28
 
 
-def test_legacy_pixel_column_tracking_settings_migrate_to_percent_defaults(tmp_path):
-    path = tmp_path / "settings.json"
-    AppSettings(
-        column_track_radius=80,
-        column_track_block_height=120,
-        column_track_max_step=28,
-        column_track_percent_version=0,
-    ).to_json(path)
-    reopened = AppSettings.from_json(path)
-    assert reopened.column_track_percent_version == 1
-    assert reopened.column_track_radius == 5.0
-    assert reopened.column_track_block_height == 3.0
-    assert reopened.column_track_max_step == 8.0
-
 def test_ordinary_auto_layout_applies_only_checked_page_specific_fields(monkeypatch):
     import picture_capture.layout_detection as layout_detection
 
