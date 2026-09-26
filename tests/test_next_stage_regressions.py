@@ -169,10 +169,12 @@ def test_recent_projects_dialog_uses_modern_card_information_hierarchy():
     end = source.index("\n    @staticmethod", start)
     text = source[start:end]
 
-    assert 'dialog.title("已有项目")' in text
-    assert 'text="最近项目"' in text
+    assert 'dialog.title("项目中心")' in text
+    assert 'text="项目中心"' in text
     assert 'text="搜索项目"' in text
     assert 'text="清理失效项"' in text
+    assert 'tools, "新建项目", create_project_from_center, role="project"' in text
+    assert 'new_project_button.grid(row=0, column=4' in text
     assert 'text="打开"' in text
     assert 'text="⋯"' in text
     assert '"可用" if exists else "路径失效"' in text
@@ -264,20 +266,22 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     assert '_build_modern_dialog_heading(' not in review
 
     conflict_start = source.index("class OCRConflictReviewDialog")
-    conflict_end = source.index("class CropSettingsDialog", conflict_start)
+    conflict_end = source.index("class OldNewComparisonWindow", conflict_start)
     conflict = source[conflict_start:conflict_end]
     assert '"OCR 词头冲突复核"' in conflict
     assert 'text="所选候选"' in conflict
     assert 'text="关闭"' in conflict
 
-    crop_start = source.index("class CropSettingsDialog")
-    crop_end = source.index("class OldNewComparisonWindow", crop_start)
-    crop = source[crop_start:crop_end]
-    assert '"通用切图规则"' in crop
-    assert '"特殊页面范围"' in crop
-    assert '主界面【六、页面列表】的 Section 列双击设置' in crop
-    assert '"特殊页面覆盖"' not in crop
-    assert 'text="保存并关闭"' in crop
+    assert "class CropSettingsDialog" not in source
+    settings_start = source.index("class SettingsDialog")
+    settings_end = source.index("class ReviewWindow", settings_start)
+    settings = source[settings_start:settings_end]
+    assert '(crop_tab, "切图设置")' in settings
+    assert 'def _build_crop_settings_tab' in settings
+    assert '"通用切图规则"' in settings
+    assert '"特殊页面范围"' in settings
+    assert "这些设置随设置中心一起自动保存" in settings
+    assert '"特殊页面覆盖"' not in settings
 
     compare_start = source.index("class OldNewComparisonWindow")
     compare_end = source.index("class PictureCaptureApp", compare_start)
@@ -297,6 +301,11 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     settings = text[start:end]
 
     assert '"bottom_y", int' in settings
+    assert '("图片后缀", "image_suffix", str)' in settings
+    assert '(crop_tab, "切图设置")' in settings
+    assert '"crop": crop_tab' in settings
+    assert "def _build_crop_settings_tab" in settings
+    assert "CROP_SETTINGS_FILENAME" in settings
     assert '"bottom_y": "正文结束 Y"' in settings
     assert '"columns": "正文栏数"' in settings
     assert '"manual_x": "第一栏左缘 X"' in settings
@@ -416,24 +425,36 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
 
-    project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
+    project_bar_start = text.index("        center_row = ttk.Frame(self.project_action_bar")
     project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
     project_bar = text[project_bar_start:project_bar_end]
-    assert project_bar.index('("已有项目", self.open_recent_project, "project")') < project_bar.index('("导出训练标记包", self.export_training_package, None)')
-    assert project_bar.index('("项目Profile", self.open_project_profile, "config")') < project_bar.index('("设置中心", self.open_settings, "config")')
-    assert project_bar.index('("设置中心", self.open_settings, "config")') < project_bar.index('("保存参数", self.save_main_parameters, None)')
-    assert project_bar.index('("保存参数", self.save_main_parameters, None)') < project_bar.index('("使用指南", self.show_help_dialog, None)')
-    assert '("项目Profile", self.open_project_profile, "config")' in project_bar
+    expected = (
+        '("项目中心", self.open_recent_project, "project")',
+        '("初始Profile", self.open_project_profile, "config")',
+        '("设置中心", self.open_settings, "config")',
+        '("帮助中心", self.show_help_dialog, "config")',
+    )
+    positions = [project_bar.index(item) for item in expected]
+    assert positions == sorted(positions)
+    assert project_bar.count("self._footer_action_button(") == 1
     assert 'uniform="project-footer-columns"' in project_bar
-    assert 'project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
-    assert 'parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
-    assert 'self._footer_action_button(' in project_bar
+    assert 'center_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
+    assert '"新建项目"' not in project_bar
+    assert '"导出训练标记包"' not in project_bar
+    assert '"保存参数"' not in project_bar
 
     actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
     actions = text[actions_start:actions_end]
     assert '("设置中心", self.open_settings)' not in actions
     assert '("导出训练标记包", self.export_training_package)' not in actions
+
+    post_start = text.index('        postproduction = self._section_frame(')
+    post_end = text.index('        # Main-panel parameters are live:', post_start)
+    post = text[post_start:post_end]
+    assert '("切图设置", self.open_crop_settings)' not in post
+    assert '("导出训练标记包", self.export_training_package)' in post
+    assert post.index('("导出训练标记包", self.export_training_package)') > post.index('("PicDic制作", self.build_picdic)')
 
     profile_start = text.index("    def _build_profile_tab(")
     profile_end = text.index("    def _build_profile_choice_labels(", profile_start)
@@ -460,16 +481,17 @@ def test_bottom_important_actions_follow_scheme_a_groups():
     assert 'highlightbackground=border' in helper
     assert 'highlightthickness=1' in helper
 
-    project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
+    project_bar_start = text.index("        center_row = ttk.Frame(self.project_action_bar")
     project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
     project_bar = text[project_bar_start:project_bar_end]
-    assert '("新建项目", self.open_project, "project")' in project_bar
-    assert '("已有项目", self.open_recent_project, "project")' in project_bar
-    assert '("导出训练标记包", self.export_training_package, None)' in project_bar
-    assert '("项目Profile", self.open_project_profile, "config")' in project_bar
+    assert '("项目中心", self.open_recent_project, "project")' in project_bar
+    assert '("初始Profile", self.open_project_profile, "config")' in project_bar
     assert '("设置中心", self.open_settings, "config")' in project_bar
-    assert '("保存参数", self.save_main_parameters, None)' in project_bar
-    assert '("使用指南", self.show_help_dialog, None)' in project_bar
+    assert '("帮助中心", self.show_help_dialog, "config")' in project_bar
+    assert '"新建项目"' not in project_bar
+    assert '"导出训练标记包"' not in project_bar
+    assert '"保存参数"' not in project_bar
+    assert project_bar.count('self._footer_action_button(') == 1
 
 
 def test_usage_guide_is_modern_task_oriented_and_centered():
@@ -511,7 +533,7 @@ def test_usage_guide_is_modern_task_oriented_and_centered():
     assert "messagebox.showinfo" not in show
     assert "show_help_popup" not in text
     assert "OCR_USAGE_HELP" not in text
-    assert "打开使用指南：推荐流程、各功能用途、快捷操作与常见排错。" in text
+    assert "打开帮助中心：推荐流程、各功能用途、快捷操作与常见排错。" in text
 
 
 def test_main_workspace_modern_styles_are_scoped_and_dense():
