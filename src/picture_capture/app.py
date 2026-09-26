@@ -830,6 +830,19 @@ def _candidate_for_entry_from_list(
             nearby.append((dy + dx * 0.1, candidate))
     return min(nearby, key=lambda item: item[0])[1] if nearby else None
 
+def _candidate_word_for_ocr_source(candidate: dict | None, source: str) -> str:
+    """Return the OCR lemma for one explicit review comparison source."""
+    if not candidate:
+        return ""
+    key = str(source or "fusion").strip().lower()
+    if key == "fusion":
+        return str(candidate.get("word") or "").strip()
+    side = candidate.get(key, {}) or {}
+    if not isinstance(side, dict):
+        return ""
+    return str(side.get("lemma") or "").strip()
+
+
 def _review_similarity_color(score: float | None) -> str:
     """Semantic background colour for one OCR option in the review panel."""
     if score is None:
@@ -4187,10 +4200,11 @@ class ReviewWindow(tk.Toplevel):
         self._filter_save_job: str | None = None
         self._filter_save_running = False
         self._filter_close_after_save = False
+        self.focused_panel_expanded = tk.BooleanVar(value=False)
         self.digit_map_expanded = tk.BooleanVar(value=False)
         self.accent_panel_expanded = tk.BooleanVar(value=False)
         self.review_right_section_expanded = {
-            key: tk.BooleanVar(value=True)
+            key: tk.BooleanVar(value=(key not in {"digit", "accent"}))
             for key in ("display", "digit", "accent", "ocr", "network", "reference")
         }
         self._review_right_sections: dict[str, dict[str, object]] = {}
@@ -4364,10 +4378,12 @@ class ReviewWindow(tk.Toplevel):
         self, parent: tk.Misc, key: str, title: str, *, padding: int = 6,
         fill: str = "x", expand: bool = False, pady=(0, 6),
     ) -> ttk.Frame:
-        """Create one flat right-pane section; all sections start expanded."""
+        """Create one flat right-pane section while honoring its initial state."""
         frame = ttk.Frame(parent, padding=(padding, 2), style="PCR.Surface.TFrame")
         frame.pack(fill=fill, expand=expand, pady=pady)
-        title_var = tk.StringVar(value=f"▾ {title}")
+        state = self.review_right_section_expanded.get(key)
+        expanded = True if state is None else bool(state.get())
+        title_var = tk.StringVar(value=("▾ " if expanded else "▸ ") + title)
         toggle = ttk.Label(
             frame, textvariable=title_var, style="PCR.Header.TLabel", cursor="hand2",
         )
@@ -4377,7 +4393,8 @@ class ReviewWindow(tk.Toplevel):
         )
         ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=(3, 5))
         body = ttk.Frame(frame, style="PCR.Surface.TFrame")
-        body.pack(fill="both", expand=True)
+        if expanded:
+            body.pack(fill="both", expand=True)
         self._review_right_sections[key] = {
             "frame": frame,
             "body": body,
@@ -4385,6 +4402,8 @@ class ReviewWindow(tk.Toplevel):
             "title_var": title_var,
             "expand_when_open": bool(expand),
         }
+        if not expanded:
+            frame.pack_configure(expand=False)
         return body
 
     def _toggle_review_right_section(self, key: str) -> None:
@@ -4405,6 +4424,15 @@ class ReviewWindow(tk.Toplevel):
         else:
             body.pack_forget()
             frame.pack_configure(expand=False)
+
+    def _toggle_focused_panel(self) -> None:
+        expanded = not bool(self.focused_panel_expanded.get())
+        self.focused_panel_expanded.set(expanded)
+        self.focused_panel_title.set(("▾ " if expanded else "▸ ") + "重点筛选校对")
+        if expanded:
+            self.focused_panel_body.pack(fill="x", pady=(4, 0))
+        else:
+            self.focused_panel_body.pack_forget()
 
     def _fit_review_left_pane_to_toolbar(self) -> None:
         """Size the left pane just wide enough to show the complete top toolbar."""
@@ -4527,11 +4555,20 @@ class ReviewWindow(tk.Toplevel):
         ).pack(side="left", padx=(5, 0))
         ttk.Separator(controls, orient="horizontal").pack(fill="x", pady=(5, 0))
 
-        focused = ttk.LabelFrame(
-            left, text="重点筛选校对", padding=(7, 5)
+        focused = ttk.Frame(
+            left, padding=(7, 3), style="PCR.Surface.TFrame"
         )
         focused.pack(fill="x", padx=(7, 7), pady=(0, 5))
-        filter_row1 = ttk.Frame(focused, style="PCR.Surface.TFrame")
+        self.focused_panel_title = tk.StringVar(value="▸ 重点筛选校对")
+        self.focused_panel_toggle = ttk.Label(
+            focused, textvariable=self.focused_panel_title,
+            style="PCR.Header.TLabel", cursor="hand2",
+        )
+        self.focused_panel_toggle.pack(fill="x")
+        self.focused_panel_toggle.bind("<Button-1>", lambda _event: self._toggle_focused_panel())
+        ttk.Separator(focused, orient="horizontal").pack(fill="x", pady=(3, 0))
+        self.focused_panel_body = ttk.Frame(focused, style="PCR.Surface.TFrame")
+        filter_row1 = ttk.Frame(self.focused_panel_body, style="PCR.Surface.TFrame")
         filter_row1.pack(fill="x")
         ttk.Button(
             filter_row1, text="筛选", command=self.run_focused_filter,
@@ -4555,7 +4592,7 @@ class ReviewWindow(tk.Toplevel):
             filter_row1, text="排除参考词表", variable=self.focused_exclude_reference_var,
         ).pack(side="left", padx=(7, 0))
 
-        filter_row2 = ttk.Frame(focused, style="PCR.Surface.TFrame")
+        filter_row2 = ttk.Frame(self.focused_panel_body, style="PCR.Surface.TFrame")
         filter_row2.pack(fill="x", pady=(4, 0))
         ttk.Label(filter_row2, text="特定字符（用','分隔）：").pack(side="left")
         ttk.Entry(
@@ -4584,20 +4621,6 @@ class ReviewWindow(tk.Toplevel):
         editor_area = ttk.Frame(strip, style="PCR.Surface.TFrame")
         editor_area.pack(side="left", fill="both", expand=True)
         self.review_editor_area = editor_area
-        self.filter_batch_top = ttk.Frame(editor_area, style="PCR.Toolbar.TFrame")
-        self.filter_batch_bottom = ttk.Frame(editor_area, style="PCR.Toolbar.TFrame")
-        for batch_bar in (self.filter_batch_top, self.filter_batch_bottom):
-            ttk.Button(
-                batch_bar, text="上一批", command=lambda d=-1: self.change_filter_batch(d),
-                style="PCR.Compact.TButton",
-            ).pack(side="left")
-            ttk.Label(
-                batch_bar, textvariable=self.filter_batch_var, style="PCR.Toolbar.TLabel",
-            ).pack(side="left", fill="x", expand=True, padx=8)
-            ttk.Button(
-                batch_bar, text="下一批", command=lambda d=1: self.change_filter_batch(d),
-                style="PCR.Compact.TButton",
-            ).pack(side="right")
         self.next_page_button = tk.Button(
             strip, text="下\n一\n页", width=3, command=lambda: self.change_page(1),
             bg=review_nav_bg, activebackground=review_nav_active_bg,
@@ -4962,24 +4985,10 @@ class ReviewWindow(tk.Toplevel):
         self._request_render_rows(focus_index=0, reset_scroll=True)
 
     def _set_filter_navigation(self, active: bool) -> None:
-        """Show batch navigation only while filtered results own the workspace."""
+        """Reuse the normal side navigation as batch navigation in filter mode."""
         try:
-            if active:
-                self.prev_page_button.pack_forget()
-                self.next_page_button.pack_forget()
-                if not self.filter_batch_top.winfo_manager():
-                    self.filter_batch_top.pack(fill="x", side="top", before=self.canvas)
-                if not self.filter_batch_bottom.winfo_manager():
-                    self.filter_batch_bottom.pack(fill="x", side="bottom")
-            else:
-                self.filter_batch_top.pack_forget()
-                self.filter_batch_bottom.pack_forget()
-                if not self.prev_page_button.winfo_manager():
-                    self.prev_page_button.pack(
-                        side="left", fill="y", padx=(0, 4), before=self.review_editor_area
-                    )
-                if not self.next_page_button.winfo_manager():
-                    self.next_page_button.pack(side="right", fill="y", padx=(4, 0))
+            self.prev_page_button.configure(text=("上\n一\n批" if active else "上\n一\n页"))
+            self.next_page_button.configure(text=("下\n一\n批" if active else "下\n一\n页"))
         except tk.TclError:
             return
 
@@ -5077,6 +5086,10 @@ class ReviewWindow(tk.Toplevel):
         project_root = project.root
         reference_words = set(self.parent._project_words) if exclude_reference else set()
         y_tolerance = max(6, round(max(1, int(settings.character_height)) * 0.55))
+        ocr_compare_key = self.OCR_COMPARE_LABEL_TO_KEY.get(
+            self.review_ocr_compare_var.get(), "fusion"
+        )
+        viewer_width = max(1, int(self.parent.canvas.winfo_width()))
 
         def worker():
             targets: list[dict] = []
@@ -5087,38 +5100,46 @@ class ReviewWindow(tk.Toplevel):
                 entries = read_pdic(pdic_path(page))
                 if not entries:
                     continue
+                try:
+                    with Image.open(page) as opened:
+                        image = normalize_page_rgb(opened)
+                    _review_settings, geometry = _review_crop_context(
+                        image, settings, viewer_width, page_index
+                    )
+                    entries = sort_entries_reading_order(
+                        entries, geometry, read_page_sections(page)
+                    )
+                except Exception:
+                    geometry = None
                 candidates: list[dict] = []
-                if include_mismatch:
-                    cache = ocr_cache_root(project_root) / f"{page.stem}.json"
-                    if cache.exists():
-                        try:
-                            payload = json.loads(cache.read_text(encoding="utf-8"))
-                            if isinstance(payload, dict):
-                                candidates = [
-                                    row for row in payload.get("review_candidates", [])
-                                    if isinstance(row, dict)
-                                ]
-                        except Exception:
-                            candidates = []
-                    else:
-                        pages_without_ocr += 1
-                for entry in entries:
+                cache = ocr_cache_root(project_root) / f"{page.stem}.json"
+                if cache.exists():
+                    try:
+                        payload = json.loads(cache.read_text(encoding="utf-8"))
+                        if isinstance(payload, dict):
+                            candidates = [
+                                row for row in payload.get("review_candidates", [])
+                                if isinstance(row, dict)
+                            ]
+                    except Exception:
+                        candidates = []
+                elif include_mismatch:
+                    pages_without_ocr += 1
+                for sequence_number, entry in enumerate(entries, start=1):
                     word = str(entry.word or "").strip()
                     if exclude_single and _focused_review_is_single_character(word):
                         continue
                     if exclude_reference and word in reference_words:
                         continue
 
-                    candidate = (
-                        _candidate_for_entry_from_list(
-                            entry, candidates, y_tolerance=y_tolerance
-                        )
-                        if include_mismatch else None
+                    candidate = _candidate_for_entry_from_list(
+                        entry, candidates, y_tolerance=y_tolerance
                     )
-                    ocr_word = (
-                        str(candidate.get("word") or "").strip()
-                        if candidate is not None else ""
-                    )
+                    ocr_words = {
+                        source: _candidate_word_for_ocr_source(candidate, source)
+                        for source in ("fusion", "paddle", "tesseract", "lens")
+                    }
+                    ocr_word = ocr_words.get(ocr_compare_key, "")
                     mismatch = bool(
                         include_mismatch
                         and ocr_word
@@ -5133,20 +5154,32 @@ class ReviewWindow(tk.Toplevel):
 
                     reasons: list[str] = []
                     if mismatch:
-                        reasons.append(f"OCR不匹配：{ocr_word}")
+                        reasons.append("OCR不匹配")
                     if matched_tokens:
                         reasons.append("含字符：" + "、".join(matched_tokens))
                     if not has_positive_filter:
                         reasons.append("符合排除条件后的剩余词条")
+                    column_number = 1
+                    if geometry is not None:
+                        try:
+                            column_number = column_index(
+                                int(entry.x), geometry, int(entry.y)
+                            ) + 1
+                        except Exception:
+                            column_number = 1
                     targets.append({
                         "page_index": int(page_index),
                         "page_name": page.name,
                         "page_stem": page.stem,
+                        "column_number": int(column_number),
+                        "sequence_number": int(sequence_number),
                         "x": int(entry.x),
                         "y": int(entry.y),
                         "original_word": word,
                         "current_word": word,
+                        "ocr_source_key": ocr_compare_key,
                         "ocr_word": ocr_word,
+                        "ocr_words": ocr_words,
                         "reasons": tuple(reasons),
                     })
             return targets, pages_without_ocr, len(indices)
@@ -5342,16 +5375,15 @@ class ReviewWindow(tk.Toplevel):
 
             header = ttk.Frame(row, style="PCR.Surface.TFrame")
             header.grid(row=0, column=0, sticky="ew")
-            reason = " ｜ ".join(str(value) for value in target.get("reasons", ()))
+            reason = "；".join(str(value) for value in target.get("reasons", ())) or "—"
             ttk.Label(
                 header,
-                text=f"{target['page_name']} · ({target['x']}, {target['y']})",
+                text=(
+                    f"{target['page_name']} | 第{int(target.get('column_number', 1))}栏 | "
+                    f"序号 {int(target.get('sequence_number', index + 1))} | 原因：{reason}"
+                ),
                 style="PCR.Header.TLabel",
             ).pack(side="left")
-            if reason:
-                ttk.Label(
-                    header, text=reason, foreground="#a33a2b",
-                ).pack(side="left", padx=(9, 0))
 
             crop = crops[index] if index < len(crops) else Image.new("RGB", (320, 36), "white")
             photo = ImageTk.PhotoImage(
@@ -5366,18 +5398,25 @@ class ReviewWindow(tk.Toplevel):
             variable = tk.StringVar(value=value)
             self.filter_vars.append(variable)
             editor_bg = "#b3fddd" if value in reference_words else "#fce5e8"
+            editor_row = ttk.Frame(row, style="PCR.Surface.TFrame")
+            editor_row.grid(row=2, column=0, sticky="ew")
             editor = tk.Entry(
-                row, textvariable=variable, font=font_spec,
+                editor_row, textvariable=variable, font=font_spec,
                 bg=editor_bg, foreground="#111827", insertbackground="#111827",
                 selectbackground="#c7d5e3", selectforeground="#111827",
                 relief="flat", bd=0, highlightthickness=1,
                 highlightbackground=editor_bg, highlightcolor=editor_bg,
             )
             editor._pc_skip_classic_appearance = True
-            editor.grid(
-                row=2, column=0, sticky="ew",
+            editor.pack(
+                side="left", fill="x", expand=True,
                 ipady=max(0, int(self.parent.settings.review_entry_vertical_padding)),
             )
+            ttk.Button(
+                editor_row, text="填充OCR结果",
+                command=lambda i=index: self._fill_filter_ocr_result(i),
+                style="PCR.Compact.TButton",
+            ).pack(side="right", padx=(5, 0))
             self.filter_editors.append(editor)
             editor.bind("<FocusIn>", lambda _event, i=index: self._set_filter_active(i))
             editor.bind("<KeyRelease>", lambda event, i=index: self._on_filter_key(event, i))
@@ -5411,6 +5450,47 @@ class ReviewWindow(tk.Toplevel):
                 pass
         return "break"
 
+    def _filter_ocr_word(self, target: dict) -> str:
+        key = self.OCR_COMPARE_LABEL_TO_KEY.get(
+            self.review_ocr_compare_var.get(), "fusion"
+        )
+        words = target.get("ocr_words") or {}
+        if not isinstance(words, dict):
+            return ""
+        return str(words.get(key) or "").strip()
+
+    def _fill_filter_ocr_result(self, index: int) -> None:
+        if not (0 <= index < len(getattr(self, "filter_vars", []))):
+            return
+        target = self._filter_current_batch_targets[index]
+        ocr_word = self._filter_ocr_word(target)
+        if not ocr_word:
+            source = self.review_ocr_compare_var.get()
+            self.parent.status_var.set(f"当前词条没有 {source} 结果可填充")
+            return
+        self.filter_vars[index].set(ocr_word)
+        self.filter_editors[index].focus_set()
+        self.filter_editors[index].icursor("end")
+        self._commit_filter_editor_value(index)
+
+    def _commit_filter_editor_value(self, index: int) -> None:
+        if not (0 <= index < len(getattr(self, "filter_vars", []))):
+            return
+        target = self._filter_current_batch_targets[index]
+        editor = self.filter_editors[index]
+        value = self.filter_vars[index].get().strip()
+        target["current_word"] = value
+        in_reference = value in set(self.parent._project_words)
+        color = "#b3fddd" if in_reference else "#fce5e8"
+        try:
+            editor.configure(
+                bg=color, foreground="#111827", insertbackground="#111827",
+                highlightbackground=color, highlightcolor=color,
+            )
+        except tk.TclError:
+            pass
+        self._queue_focused_change(target, value)
+
     def _on_filter_key(self, event: tk.Event, index: int) -> None:
         if not (0 <= index < len(getattr(self, "filter_vars", []))):
             return
@@ -5426,19 +5506,7 @@ class ReviewWindow(tk.Toplevel):
                 editor.delete(0, "end")
                 editor.insert(0, text[:start] + replacement + text[pos:])
                 editor.icursor(start + len(replacement))
-        target = self._filter_current_batch_targets[index]
-        value = self.filter_vars[index].get().strip()
-        target["current_word"] = value
-        in_reference = value in set(self.parent._project_words)
-        color = "#b3fddd" if in_reference else "#fce5e8"
-        try:
-            editor.configure(
-                bg=color, foreground="#111827", insertbackground="#111827",
-                highlightbackground=color, highlightcolor=color,
-            )
-        except tk.TclError:
-            pass
-        self._queue_focused_change(target, value)
+        self._commit_filter_editor_value(index)
 
     def _queue_focused_change(self, target: dict, value: str) -> None:
         page_index = int(target["page_index"])
@@ -7493,17 +7561,14 @@ class ReviewWindow(tk.Toplevel):
         self.parent.settings.review_ocr_compare_source = key
         self.parent.save_settings()
         self._refresh_editor_ocr_compare()
+        if getattr(self, "_filter_rows_active", False):
+            self.parent.status_var.set(
+                "已切换筛选 OCR 比较来源；点击【筛选】可按新来源重新筛选 OCR 不匹配。"
+            )
 
     def _ocr_compare_word(self, candidate: dict | None) -> str:
-        if not candidate:
-            return ""
         key = self.OCR_COMPARE_LABEL_TO_KEY.get(self.review_ocr_compare_var.get(), "fusion")
-        if key == "fusion":
-            return str(candidate.get("word") or "").strip()
-        side = candidate.get(key, {}) or {}
-        if not isinstance(side, dict):
-            return ""
-        return str(side.get("lemma") or "").strip()
+        return _candidate_word_for_ocr_source(candidate, key)
 
     def _refresh_editor_ocr_compare(self, index: int | None = None) -> None:
         """Outline review editors in red when they differ from the selected OCR source.
@@ -8050,6 +8115,7 @@ class ReviewWindow(tk.Toplevel):
 
     def change_page(self, delta: int) -> None:
         if getattr(self, "_filter_rows_active", False):
+            self.change_filter_batch(delta)
             return
         target = self.parent.current_index + delta
         # Commit review edits without repainting the page we are about to leave.
@@ -13809,25 +13875,29 @@ class PictureCaptureApp(tk.Tk):
         record["canvas_items"].append(index_window)
 
         if vertical and vertical_box is not None:
-            delete_x = float(vertical_box[0])
-            delete_y = float(vertical_box[3] + 1)
+            delete_x = float(vertical_box[0] - 1)
+            delete_y = float(vertical_box[1])
+            delete_anchor = "ne"
         else:
-            delete_x = float(editor_x - editor_req_width if rtl else editor_x)
-            delete_y = float(editor_y + editor_req_height + 1)
+            delete_x = float(index_x)
+            delete_y = float(index_y + max(1, index_label.winfo_reqheight()) + 1)
+            delete_anchor = index_anchor
+        delete_bg = str(self.canvas.cget("bg"))
         delete_button = tk.Button(
             self.canvas,
-            text="[X]",
-            width=3,
+            text="X",
+            width=2,
             takefocus=False,
             relief="flat",
             bd=0,
-            padx=1,
+            highlightthickness=0,
+            padx=0,
             pady=0,
             cursor="hand2",
-            fg="#ffffff",
-            bg=marker_control_bg,
-            activeforeground="#ffffff",
-            activebackground=marker_control_bg,
+            fg=marker_control_bg,
+            bg=delete_bg,
+            activeforeground=marker_control_bg,
+            activebackground=delete_bg,
             command=lambda e=entry: self.delete_entry(e),
         )
         delete_button._pc_skip_classic_appearance = True
@@ -13837,7 +13907,7 @@ class PictureCaptureApp(tk.Tk):
         record["widgets"].append(delete_button)
         record["delete_widget"] = delete_button
         delete_window = self.canvas.create_window(
-            delete_x, delete_y, window=delete_button, anchor="nw",
+            delete_x, delete_y, window=delete_button, anchor=delete_anchor,
         )
         record["canvas_items"].append(delete_window)
 
@@ -15005,20 +15075,26 @@ class PictureCaptureApp(tk.Tk):
         else:
             options["disabledbackground"] = bg
         widget.configure(**options)
-        # Sequence/delete controls belong to the headword marker visual group,
-        # not to transient editor membership/OCR backgrounds.
+        # Sequence remains marker-filled; the delete X is intentionally
+        # background-free and uses the headword-marker colour as its text.
         record = self.__dict__.get("_entry_visuals", {}).get(id(entry))
         marker_bg = str(self.settings.headword_marker_color)
-        for control_name in ("index_widget", "delete_widget"):
-            control = record.get(control_name) if record else None
-            if control is not None:
-                try:
-                    control.configure(
-                        bg=marker_bg, fg="#ffffff",
-                        activebackground=marker_bg, activeforeground="#ffffff",
-                    )
-                except tk.TclError:
-                    pass
+        index_control = record.get("index_widget") if record else None
+        if index_control is not None:
+            try:
+                index_control.configure(bg=marker_bg, fg="#ffffff")
+            except tk.TclError:
+                pass
+        delete_control = record.get("delete_widget") if record else None
+        if delete_control is not None:
+            try:
+                delete_bg = str(self.canvas.cget("bg"))
+                delete_control.configure(
+                    bg=delete_bg, fg=marker_bg,
+                    activebackground=delete_bg, activeforeground=marker_bg,
+                )
+            except tk.TclError:
+                pass
 
     def _entry_overlay_style(
         self, entry: WordEntry, displayed_word: str | None = None,
