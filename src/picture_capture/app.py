@@ -133,6 +133,7 @@ from .processing import (
     entry_crop_piece_filename,
     resolve_crop_worker_count,
     refine_existing_entries,
+    merge_combined_detection_entries,
     split_whole_entries_job,
     split_illustrations_job,
     detect_illustrations_job,
@@ -2164,6 +2165,7 @@ class SettingsDialog(tk.Toplevel):
     NORMAL_CHECKS = (
         ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
         ("手动分栏", "manual_columns"),
+        ("自动精修横线 Y（默认勾选）", "paddle_refine_separator_y"),
     )
     OCR_COMMON_CHECKS = (
         ("PaddleOCR 主识别", "paddle_use_paddleocr"),
@@ -8694,6 +8696,7 @@ class PictureCaptureApp(tk.Tk):
         self._pending_manual_override_payload: dict | None = None
         self.ocr_review_window: OCRConflictReviewDialog | None = None
         self.review_window: ReviewWindow | None = None
+        self.focused_review_window: FocusedReviewWindow | None = None
         # (page_index, x, y) of the proofreading row mirrored on the main canvas.
         self._review_entry_highlight_target: tuple[int, int, int] | None = None
         # Keep the RGBA PhotoImage alive while the translucent review marker is shown.
@@ -11022,10 +11025,10 @@ class PictureCaptureApp(tk.Tk):
         actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
         actions.pack(fill="x", pady=(4, 0))
         rows = [
-            (("运行普通画线（备用）", self.run_normal_draw_action), ("运行OCR画线（推荐）", self.run_ocr_draw_action)),
-            (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)),
+            (("运行普通画线（备用）", self.run_normal_draw_action), ("联合模式画线", self.run_combined_draw_action), ("运行OCR画线（推荐）", self.run_ocr_draw_action)),
+            (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("重点校对", self.open_focused_review), ("词条校对", self.open_review)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充词条", self.fill_existing_headwords), ("修复排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("恢复PDIC", self.restore_from_pdic_backup)),
-            (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
+            (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("新旧比较", self.compare_old_new_selected_scope), ("保存当前页", self.save_current_page)),
         ]
         for ri, specs in enumerate(rows):
             row = ttk.Frame(actions)
@@ -11036,7 +11039,7 @@ class PictureCaptureApp(tk.Tk):
                 role = (
                     "primary" if text == "运行OCR画线（推荐）"
                     else "success" if text == "保存当前页"
-                    else "primary" if text == "词条校对"
+                    else "primary" if text in {"重点校对", "词条校对"}
                     else "neutral"
                 )
                 button = self._sidebar_action_button(row, text, command, role=role)
@@ -11044,6 +11047,16 @@ class PictureCaptureApp(tk.Tk):
                     self._attach_tooltip(button, "推荐默认：结合 OCR 文字、位置与结构证据识别词头，并可复用有效缓存。")
                 elif text == "运行普通画线（备用）":
                     self._attach_tooltip(button, "备用模式：只依赖栏左几何和墨迹，适合左缘极稳定版式或 OCR 暂不可用时。")
+                elif text == "联合模式画线":
+                    self._attach_tooltip(
+                        button,
+                        "同页分别执行普通画线与 OCR 画线，再按栏/SECTION/Y 与 OCR 证据统一融合；OCR结果优先，普通结果只补救软拒绝候选，不做盲目并集，最后再次去重。",
+                    )
+                elif text == "重点校对":
+                    self._attach_tooltip(
+                        button,
+                        "在指定页面范围内集中校对 OCR 不匹配或包含指定字符的词条；每条显示其原页面切图，修改只安全写回对应页面 PDIC。",
+                    )
                 if text == "编辑插图":
                     self.polygon_draw_button = button
                 button.grid(
