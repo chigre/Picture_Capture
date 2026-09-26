@@ -36,6 +36,11 @@ from .dictionary_profile import (
     starts_with_internal_article_symbol,
 )
 from .ocr_engines import find_tesseract, run_google_lens, tesseract_status
+from .visual_marker_templates import (
+    match_visual_marker_template,
+    split_configured_symbols,
+    visual_marker_samples_from_settings,
+)
 
 if TYPE_CHECKING:
     from .processing import Geometry
@@ -310,11 +315,7 @@ _BRACKET_CLOSER_BY_OPENER = {
 
 
 def _split_configured_symbols(value: str | None) -> tuple[str, ...]:
-    text = str(value or "").strip()
-    if not text:
-        return ()
-    parts = re.split(r"[\s,，、;；]+", text)
-    return tuple(dict.fromkeys(part for part in parts if part))
+    return split_configured_symbols(value)
 
 
 def _configured_symbol_inventory(
@@ -376,6 +377,29 @@ def _configured_symbol_inventory(
     families.update(
         str(x) for x in base.get("visual_families", []) if str(x)
     )
+    template_mode = str(
+        getattr(settings, "profile_symbol_template_mode", "combined") or "combined"
+    )
+    if template_mode not in {"off", "combined", "template_first"}:
+        template_mode = "combined"
+    group_mode = str(
+        getattr(settings, "profile_symbol_template_group_mode", "role") or "role"
+    )
+    if group_mode not in {"role", "literal"}:
+        group_mode = "role"
+    template_threshold = max(
+        0.35,
+        min(
+            0.95,
+            float(getattr(settings, "profile_symbol_template_threshold", 0.68) or 0.68),
+        ),
+    )
+    templates = (
+        visual_marker_samples_from_settings(settings)
+        if int(getattr(settings, "profile_symbol_template_version", 0) or 0) >= 1
+        and template_mode != "off"
+        else []
+    )
     return {
         "enabled": enabled,
         "entry_markers": entry,
@@ -384,6 +408,10 @@ def _configured_symbol_inventory(
         "lane_required": lane_required,
         "lane_tolerance_percent": lane_tolerance,
         "visual_families": tuple(sorted(families)),
+        "visual_templates": templates,
+        "visual_template_mode": template_mode,
+        "visual_template_group_mode": group_mode,
+        "visual_template_threshold": template_threshold,
     }
 
 
@@ -2584,7 +2612,10 @@ def _detect_visual_entry_markers(
         inventory = dict(inventory)
     if not inventory.get("enabled", True) or not inventory.get("visual_rescue", True):
         return []
-    if not inventory.get("visual_families"):
+    templates = list(inventory.get("visual_templates") or [])
+    template_mode = str(inventory.get("visual_template_mode") or "combined")
+    template_enabled = bool(templates and template_mode != "off")
+    if not inventory.get("visual_families") and not template_enabled:
         return []
 
     height, width = gray.shape
@@ -2608,15 +2639,56 @@ def _detect_visual_entry_markers(
         box_h = y1 - y0
         if box_w <= 0 or box_h <= 0 or x0 > broad_left:
             continue
-        classified = _classify_visual_symbol_component(
-            dark[y0:y1, x0:x1], line_h, inventory
-        )
+        component = dark[y0:y1, x0:x1]
+        classified = None
+        template_match = None
+        if (
+            template_enabled
+            and line_h * 0.24 <= box_h <= line_h * 1.85
+            and line_h * 0.16 <= box_w <= line_h * 1.85
+        ):
+            try:
+                template_match = match_visual_marker_template(component, templates)
+            except ValueError:
+                template_match = None
+            if (
+                template_match is not None
+                and float(template_match.get("score") or 0.0)
+                >= float(inventory.get("visual_template_threshold") or 0.68)
+            ):
+                sample = dict(template_match.get("sample") or {})
+                role = str(sample.get("role") or "")
+                symbol = str(sample.get("literal") or "")
+                if not symbol:
+                    source = (
+                        inventory.get("entry_markers")
+                        if role == "entry_marker"
+                        else inventory.get("bracket_openers")
+                    )
+                    symbol = str(next(iter(source or ()), ""))
+                if role in {"entry_marker", "bracket_open"} and symbol:
+                    classified = (
+                        "dictionary_template",
+                        symbol,
+                        role,
+                        _visual_marker_shape_metrics(component),
+                    )
+
+        # In template-first mode a configured template set is authoritative:
+        # generic circle/square/triangle families are retained only when no
+        # templates exist. Combined mode uses the old family detector as a
+        # fallback when template similarity is insufficient.
+        if classified is None and not (template_enabled and template_mode == "template_first"):
+            classified = _classify_visual_symbol_component(
+                component, line_h, inventory
+            )
         if classified is None:
             continue
         family, symbol, role, metrics = classified
         legacy_type = {
             "circle_open": "open_circle",
             "circle_filled": "filled_circle",
+            "dictionary_template": "visual_template",
         }.get(family, family)
         item: dict[str, Any] = {
             "type": legacy_type, "family": family, "symbol": symbol, "role": role,
@@ -2627,6 +2699,18 @@ def _detect_visual_entry_markers(
             "threshold": int(threshold),
         }
         item.update(metrics)
+        if family == "dictionary_template" and template_match is not None:
+            matched_sample = dict(template_match.get("sample") or {})
+            item["template_score"] = float(template_match.get("score") or 0.0)
+            item["template_iou"] = float(template_match.get("iou") or 0.0)
+            item["template_projection"] = float(
+                template_match.get("projection") or 0.0
+            )
+            item["template_sample_id"] = str(matched_sample.get("id") or "")
+            item["template_source_page"] = str(
+                matched_sample.get("source_page") or ""
+            )
+            item["template_literal"] = str(matched_sample.get("literal") or "")
         candidates.append(item)
 
     if not candidates:
@@ -3911,12 +3995,29 @@ def filter_headword_records(
         if parser_controls else active_profile.uses_parser("cjk_bracketed")
     )
     symbol_inventory = _configured_symbol_inventory(settings, active_profile)
+    template_roles = {
+        str(sample.get("role") or "")
+        for sample in symbol_inventory.get("visual_templates", [])
+        if isinstance(sample, dict)
+    }
     visual_symbol_enabled = bool(
         symbol_inventory.get("enabled")
         and symbol_inventory.get("visual_rescue")
         and (
-            (marker_prefix_enabled and symbol_inventory.get("entry_markers"))
-            or (bracket_symbol_enabled and symbol_inventory.get("bracket_openers"))
+            (
+                marker_prefix_enabled
+                and (
+                    symbol_inventory.get("entry_markers")
+                    or "entry_marker" in template_roles
+                )
+            )
+            or (
+                bracket_symbol_enabled
+                and (
+                    symbol_inventory.get("bracket_openers")
+                    or "bracket_open" in template_roles
+                )
+            )
         )
     )
     visual_entry_markers = (
@@ -4409,6 +4510,18 @@ def filter_headword_records(
                 "visual_entry_marker_center_delta": (
                     float(visual_entry_marker.get("center_delta") or 0.0)
                     if visual_entry_marker else 0.0
+                ),
+                "visual_marker_template_score": (
+                    float(visual_entry_marker.get("template_score") or 0.0)
+                    if visual_entry_marker else 0.0
+                ),
+                "visual_marker_template_sample_id": (
+                    str(visual_entry_marker.get("template_sample_id") or "")
+                    if visual_entry_marker else ""
+                ),
+                "visual_marker_template_source_page": (
+                    str(visual_entry_marker.get("template_source_page") or "")
+                    if visual_entry_marker else ""
                 ),
                 "cjk_marker_prefixed": cjk_marker_prefixed,
                 "cjk_bracketed": cjk_bracketed,
