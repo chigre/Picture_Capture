@@ -192,21 +192,50 @@ def _adaptive_dark_mask(gray_image: Image.Image, block_size: int, c_value: int) 
     return gray < (local_mean - max(0, int(c_value)))
 
 
-def _smooth_track(values: list[int], max_step: int) -> list[int]:
-    """Median-filter anchors and constrain implausible block-to-block jumps."""
-    if len(values) < 2:
-        return values
+def _smooth_track(
+    values: list[int], max_step: int, *, nominal_x: int | None = None,
+) -> list[int]:
+    """Robustly smooth one column-left track without walking into body text.
+
+    A dictionary block can contain only indented definition lines. In that
+    case its first-ink estimate is to the right of the true column edge. The
+    old implementation clipped a large jump to max_step and therefore walked
+    toward that false edge over several blocks. A five-block median suppresses
+    short runs of indentation, and a jump beyond the allowed step is rejected
+    instead of accumulated.
+    """
+    if not values:
+        return []
+    max_step = max(1, int(max_step))
+    if len(values) == 1:
+        value = int(values[0])
+        if nominal_x is not None and abs(value - int(nominal_x)) > max_step:
+            return [int(nominal_x)]
+        return [value]
+
     median_filtered: list[int] = []
     for index in range(len(values)):
-        window = values[max(0, index - 1):min(len(values), index + 2)]
-        median_filtered.append(round(float(np.median(window))))
-    max_step = max(1, int(max_step))
-    forward = median_filtered.copy()
-    for index in range(1, len(forward)):
-        forward[index] = min(forward[index - 1] + max_step, max(forward[index - 1] - max_step, forward[index]))
-    for index in range(len(forward) - 2, -1, -1):
-        forward[index] = min(forward[index + 1] + max_step, max(forward[index + 1] - max_step, forward[index]))
-    return forward
+        left = max(0, index - 2)
+        right = min(len(values), index + 3)
+        window = sorted(int(value) for value in values[left:right])
+        # Indentation is a rightward contaminant. For even windows, the lower
+        # median avoids averaging the true edge toward ordinary body text.
+        median_filtered.append(window[(len(window) - 1) // 2])
+
+    start = int(median_filtered[0])
+    if nominal_x is not None and abs(start - int(nominal_x)) > max_step:
+        start = int(nominal_x)
+
+    stable = [start]
+    for candidate in median_filtered[1:]:
+        previous = stable[-1]
+        if abs(int(candidate) - previous) <= max_step:
+            stable.append(int(candidate))
+        else:
+            # Holding is deliberate: clipping toward an implausible candidate
+            # lets several body-only blocks accumulate into a fake curve.
+            stable.append(previous)
+    return stable
 
 
 def _estimate_column_paths(
