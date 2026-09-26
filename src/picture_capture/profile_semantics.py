@@ -43,6 +43,10 @@ HEADWORD_PROFILE_SETTING_NAMES = (
     "paddle_min_candidate_score",
     "paddle_require_visual_cue",
     "paddle_require_pos_or_symbol",
+    "paddle_allow_strong_edge_visual_rescue",
+    "paddle_strong_edge_visual_boldness_ratio",
+    "paddle_strong_edge_visual_height_ratio",
+    "paddle_strong_edge_visual_min_confidence",
     "paddle_remove_syllable_separators",
     "paddle_pos_search_chars",
 )
@@ -365,6 +369,15 @@ def apply_headword_tuning(
         settings.paddle_min_candidate_score = max(
             0.5, float(settings.paddle_min_candidate_score) + 0.50 * amount,
         )
+        # Keep the POS-less visual rescue aligned with the same user-facing
+        # precision/recall control. "偏多" requires stronger bold contrast;
+        # "偏少" lets slightly lighter printed heads pass.
+        if bool(getattr(settings, "paddle_allow_strong_edge_visual_rescue", False)):
+            settings.paddle_strong_edge_visual_boldness_ratio = max(
+                1.05,
+                float(settings.paddle_strong_edge_visual_boldness_ratio)
+                + 0.05 * amount,
+            )
     elif key in {"numbered_prefix", "marker_prefixed"}:
         # Explicit number/marker structure is already strong evidence. Avoid
         # weakening that grammar; only change how far from the column edge a
