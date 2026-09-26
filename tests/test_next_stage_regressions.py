@@ -7,7 +7,9 @@ from PIL import Image, ImageDraw
 
 from picture_capture.app import (
     PictureCaptureApp, SettingsDialog, binary_preview_image, effective_main_overlay_font_size,
-    ReviewWindow, VerticalWordText, entry_index_label_layout,
+    FocusedReviewWindow, ReviewWindow, VerticalWordText,
+    _apply_focused_review_page_updates, _focused_review_character_tokens,
+    entry_index_label_layout,
     horizontal_ocr_menu_layout, horizontal_overlay_layout,
     transformed_entry_anchor, vertical_marker_contact_gap, vertical_ocr_menu_layout,
     vertical_overlay_layout,
@@ -16,6 +18,7 @@ from picture_capture.dictionary_profile import (
     apply_project_profile_components, effective_project_profile_id,
     load_dictionary_profile, profile_tail_structure_defaults, write_project_profile,
 )
+from picture_capture.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import (
     AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
 )
@@ -23,7 +26,8 @@ from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
     _left_edge_ink_mask, apply_column_start_offsets, derive_geometry,
-    derive_nominal_geometry, refine_existing_entries,
+    derive_nominal_geometry, merge_combined_detection_entries,
+    refine_existing_entries,
 )
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
@@ -541,16 +545,25 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert '"primary" if text == "运行OCR画线（推荐）"' in actions
     assert '("运行OCR画线（推荐）", self.run_ocr_draw_action)' in actions
     assert '("运行普通画线（备用）", self.run_normal_draw_action)' in actions
-    assert actions.index('("运行普通画线（备用）", self.run_normal_draw_action)') < actions.index('("运行OCR画线（推荐）", self.run_ocr_draw_action)')
+    assert '("联合模式画线", self.run_combined_draw_action)' in actions
+    normal_pos = actions.index('("运行普通画线（备用）", self.run_normal_draw_action)')
+    combined_pos = actions.index('("联合模式画线", self.run_combined_draw_action)')
+    ocr_pos = actions.index('("运行OCR画线（推荐）", self.run_ocr_draw_action)')
+    assert normal_pos < combined_pos < ocr_pos
     assert '("填充词条", self.fill_existing_headwords)' in actions
     assert '("修复排序", self.repair_pdic_order_selected_scope)' in actions
     assert '("恢复PDIC", self.restore_from_pdic_backup)' in actions
     assert '"success" if text == "保存当前页"' in actions
-    assert '"primary" if text == "词条校对"' in actions
+    assert '"primary" if text in {"重点校对", "词条校对"}' in actions
     assert '"danger_soft"' not in actions
     assert '"refine_soft"' not in actions
     assert '"compare_soft"' not in actions
-    assert '("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)' in actions
+    focused_pos = actions.index('("重点校对", self.open_focused_review)')
+    review_pos = actions.index('("词条校对", self.open_review)')
+    assert focused_pos < review_pos
+    compare_pos = actions.index('("新旧比较", self.compare_old_new_selected_scope)')
+    save_pos = actions.index('("保存当前页", self.save_current_page)')
+    assert compare_pos < save_pos
     assert '"text": "#000000"' in styles
     assert '"primary": "#4F7CAC"' in styles
     assert '"primary_hover": "#416A94"' in styles
@@ -572,6 +585,151 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert "highlightbackground=border" in button
     assert "highlightcolor=border" in button
     assert '"PC.EditActive.TButton"' in styles
+
+
+def test_normal_settings_expose_separator_y_refinement_by_default():
+    assert AppSettings().paddle_refine_separator_y is True
+    assert (
+        "自动精修横线Y（默认勾选）",
+        "paddle_refine_separator_y",
+    ) in SettingsDialog.NORMAL_CHECKS
+
+
+def test_focused_review_character_tokens_are_editable_comma_separated():
+    assert _focused_review_character_tokens("傅,裹，歴,ー,傅") == (
+        "傅", "裹", "歴", "ー"
+    )
+    defaults = AppSettings().focused_review_characters
+    assert "傅" in defaults and "椿" in defaults
+
+
+def test_focused_review_safe_page_update_changes_only_exact_coordinate(tmp_path):
+    pages = [tmp_path / "001.png", tmp_path / "002.png"]
+    for page in pages:
+        Image.new("RGB", (400, 600), "white").save(page)
+    first_entries = [
+        Entry(word="alpha", x=20, y=100),
+        Entry(word="beta", x=20, y=150),
+    ]
+    second_entries = [Entry(word="gamma", x=20, y=110)]
+    write_pdic(pdic_path(pages[0]), first_entries, 400, ("001", "@", "002"))
+    write_pdic(pdic_path(pages[1]), second_entries, 400, ("002", "001", "@"))
+
+    saved, conflicts = _apply_focused_review_page_updates(
+        pages[0],
+        pages,
+        0,
+        [{
+            "x": 20,
+            "y": 150,
+            "original_word": "beta",
+            "new_word": "beta#fixed",
+        }],
+    )
+    assert conflicts == []
+    assert saved == [(0, 20, 150, "beta＃fixed")]
+    reread = read_pdic(pdic_path(pages[0]))
+    assert [(entry.x, entry.y, entry.word) for entry in reread] == [
+        (20, 100, "alpha"),
+        (20, 150, "beta＃fixed"),
+    ]
+    assert [entry.word for entry in read_pdic(pdic_path(pages[1]))] == ["gamma"]
+
+    before = pdic_path(pages[0]).read_bytes()
+    saved, conflicts = _apply_focused_review_page_updates(
+        pages[0],
+        pages,
+        0,
+        [{
+            "x": 999,
+            "y": 999,
+            "original_word": "missing",
+            "new_word": "must-not-write",
+        }],
+    )
+    assert saved == []
+    assert conflicts
+    assert pdic_path(pages[0]).read_bytes() == before
+
+
+def test_combined_detection_merge_deduplicates_and_only_rescues_soft_ocr_rows():
+    settings = AppSettings(
+        columns=1,
+        manual_columns=True,
+        manual_x=20,
+        column_width=320,
+        gutter=0,
+        start_y=0,
+        bottom_y=700,
+        character_height=30,
+        geometry_coordinate_version=2,
+        geometry_reference_width=400,
+        paddle_rec_score_threshold=0.20,
+        paddle_min_candidate_score=1.0,
+    )
+    geometry = derive_nominal_geometry(400, 700, settings)
+
+    normal = [
+        Entry(word="", x=20, y=101),
+        Entry(word="", x=20, y=200),
+        Entry(word="", x=20, y=300),
+        Entry(word="", x=20, y=400),
+    ]
+    ocr = [
+        Entry(
+            word="alpha", x=20, y=100, confidence=0.95,
+            ocr_source="paddle", candidate_id="alpha",
+            parser_score=4.0,
+        )
+    ]
+    candidates = [
+        {
+            "candidate_id": "alpha", "source_x": 20, "source_y": 100,
+            "column": 0, "selected": True, "word": "alpha",
+            "confidence": 0.95, "score": 4.0,
+        },
+        {
+            "candidate_id": "beta", "source_x": 20, "source_y": 201,
+            "column": 0, "selected": False, "word": "beta",
+            "confidence": 0.90, "score": 2.0,
+            "decision_reason": "missing_selected_tail_structure",
+        },
+        {
+            "candidate_id": "bad", "source_x": 20, "source_y": 301,
+            "column": 0, "selected": False, "word": "波",
+            "confidence": 0.99, "score": 5.0,
+            "decision_reason": "incompatible_headword_script",
+        },
+    ]
+
+    merged, stats = merge_combined_detection_entries(
+        normal, ocr, geometry, settings, review_candidates=candidates
+    )
+    assert [entry.word for entry in merged] == ["alpha", "beta"]
+    assert stats["co_supported"] == 1
+    assert stats["normal_rescued"] == 1
+    assert stats["hard_rejected"] == 1
+    assert stats["normal_only_rejected"] == 1
+    assert len({(entry.x, entry.y) for entry in merged}) == len(merged)
+
+
+def test_focused_review_window_is_cross_page_crop_text_workflow():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    start = source.index("class FocusedReviewWindow")
+    end = source.index("class OCRConflictReviewDialog", start)
+    focused = source[start:end]
+    assert 'self.title("重点校对")' in focused
+    assert 'text="OCR不匹配词条"' in focused
+    assert 'text="包含特定字符"' in focused
+    assert 'text="特定字符（用逗号分隔）：" ' not in focused
+    assert 'text="特定字符（用逗号分隔）："' in focused
+    assert "_review_line_box(" in focused
+    assert "_apply_focused_review_page_updates(" in focused
+    assert "page_index" in focused
+    assert "original_word" in focused
 
 
 def test_binary_preview_and_font_scaling_are_display_only():
