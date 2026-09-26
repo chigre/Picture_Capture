@@ -359,6 +359,18 @@ class ProjectProfileWizard(tk.Toplevel):
         self.cjk_require_visual_var = tk.BooleanVar(
             value=bool(getattr(s, "profile_cjk_require_visual_evidence", False))
         )
+        self.cjk_right_context_enabled_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_right_context_enabled", True))
+        )
+        self.cjk_right_context_width_var = tk.IntVar(
+            value=max(
+                30,
+                min(
+                    200,
+                    int(getattr(s, "profile_cjk_right_context_width_percent", 80) or 80),
+                ),
+            )
+        )
 
         detection_vars = (
             self.reading_var, self.columns_var, self.separator_var,
@@ -383,6 +395,7 @@ class ProjectProfileWizard(tk.Toplevel):
             self.headword_height_ratio_var,
             self.headword_boldness_ratio_var,
             self.headword_min_score_var,
+            self.cjk_right_context_width_var,
         ):
             var.trace_add(
                 "write", lambda *_args: self.after_idle(self._headword_specificity_changed)
@@ -1547,11 +1560,25 @@ class ProjectProfileWizard(tk.Toplevel):
             ("必须靠近栏左缘", self.cjk_require_left_edge_var),
             ("释义正文中也经常出现【括号词】", self.cjk_brackets_in_body_var),
             ("只有视觉明显突出时才把单字/括号词当词头", self.cjk_require_visual_var),
+            ("分析大字右侧留白（仅辅助“大字单字”判断）", self.cjk_right_context_enabled_var),
         )):
             ttk.Checkbutton(
                 self.cjk_specificity_frame, text=label, variable=variable,
                 command=self._headword_specificity_changed,
-            ).grid(row=row, column=0, sticky="w", pady=2)
+            ).grid(row=row, column=0, columnspan=3, sticky="w", pady=2)
+
+        ttk.Label(
+            self.cjk_specificity_frame, text="大字右侧检测宽度：",
+        ).grid(row=4, column=0, sticky="e", pady=(3, 0))
+        tk.Spinbox(
+            self.cjk_specificity_frame, from_=30, to=200, increment=5, width=7,
+            textvariable=self.cjk_right_context_width_var,
+        ).grid(row=4, column=1, sticky="w", pady=(3, 0))
+        ttk.Label(
+            self.cjk_specificity_frame,
+            text="% 大字高度（默认 80%；同时分析整体、下部留白和相对正文密度）",
+            foreground="#666666",
+        ).grid(row=4, column=2, sticky="w", pady=(3, 0))
 
         self.headword_tuning_status_var = tk.StringVar(value="")
         ttk.Label(
@@ -1830,7 +1857,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_headword_specificity_visibility()
         hints = {
             "latin_regular": "常规边缘：栏边位置是主证据；字号、粗体和词后结构辅助判断。",
-            "cjk_visual": "视觉型：大字/括号结构及视觉突出程度是主证据。",
+            "cjk_visual": "视觉型：大字/括号结构及视觉突出程度是主证据；大字单字还可结合右侧留白/稀疏度。",
             "numbered_prefix": "编号型：编号前缀是主证据；字号/粗体属于辅助证据。",
             "marker_prefixed": "符号型：○ / ● / ◆ 等固定符号是主证据；字号/粗体属于辅助证据。",
             "custom": "自定义：基础视觉门槛可配合上方 parser 勾选逐页测试。",
@@ -1968,6 +1995,12 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_cjk_require_left_edge = bool(self.cjk_require_left_edge_var.get())
         s.profile_cjk_brackets_in_body = bool(self.cjk_brackets_in_body_var.get())
         s.profile_cjk_require_visual_evidence = bool(self.cjk_require_visual_var.get())
+        s.profile_cjk_right_context_enabled = bool(
+            self.cjk_right_context_enabled_var.get()
+        )
+        s.profile_cjk_right_context_width_percent = max(
+            30, min(200, int(self.cjk_right_context_width_var.get()))
+        )
         profile_key = self._current_profile_key()
         apply_headword_profile(s, profile_key)
         for name, value in language_effective_settings(s.ocr_language, s.layout_writing_mode).items():
