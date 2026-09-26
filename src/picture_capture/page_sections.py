@@ -4,16 +4,24 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 
+from PIL import Image, ImageOps
+
+from .coordinate_space import SOURCE_COORDINATE_SPACE
+from .layout_transform import LayoutTransform
 from .project_storage import page_sections_path_for_image, qt_root
 
 
-PAGE_SECTIONS_FORMAT = "picture-capture-page-sections-v1"
-PAGE_SECTIONS_COORDINATE_SPACE = "canonical_full_resolution_pixels"
+PAGE_SECTIONS_FORMAT = "picture-capture-page-sections-v2"
+PAGE_SECTIONS_COORDINATE_SPACE = SOURCE_COORDINATE_SPACE
+_LEGACY_PAGE_SECTIONS_COORDINATE_SPACE = "canonical_full_resolution_pixels"
 
 
 @dataclass(frozen=True, slots=True)
 class PageSection:
-    """One page-local reading region expressed on the canonical V axis."""
+    """Runtime reading interval on temporary canonical V.
+
+    Persisted SECTION geometry uses original-image X/Y boundary segments only.
+    """
 
     top_v: int
     bottom_v: int
@@ -21,8 +29,6 @@ class PageSection:
 
 @dataclass(frozen=True, slots=True)
 class ReadingLane:
-    """One continuous SECTION × column lane in dictionary reading order."""
-
     section_index: int
     column_index: int
     top_v: int
@@ -34,7 +40,6 @@ def normalize_page_sections(
     top_v: int,
     bottom_v: int,
 ) -> list[PageSection]:
-    """Clamp/sort explicit sections; missing sections mean one ordinary page region."""
     top = int(top_v)
     bottom = max(top + 1, int(bottom_v))
     if not sections:
@@ -60,7 +65,6 @@ def section_index_for_v(
     top_v: int,
     bottom_v: int,
 ) -> int:
-    """Return the containing SECTION; gap markers attach to the nearest SECTION."""
     effective = normalize_page_sections(sections, top_v, bottom_v)
     value = int(v)
     for index, section in enumerate(effective):
@@ -84,7 +88,6 @@ def v_is_inside_sections(
     top_v: int,
     bottom_v: int,
 ) -> bool:
-    """True when V is inside a real reading SECTION (ordinary pages always pass)."""
     if not sections:
         return int(top_v) <= int(v) < int(bottom_v)
     value = int(v)
@@ -97,7 +100,6 @@ def build_reading_lanes(
     bottom_v: int,
     sections: list[PageSection] | tuple[PageSection, ...] | None = None,
 ) -> list[ReadingLane]:
-    """Expand page sections into SECTION-major, column-minor reading lanes."""
     count = max(1, int(column_count))
     effective = normalize_page_sections(sections, top_v, bottom_v)
     return [
@@ -121,8 +123,33 @@ def reading_lane_index(
     return section_index * count + column
 
 
+def _point(value: object) -> tuple[int, int] | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return None
+    try:
+        return int(value[0]), int(value[1])
+    except (TypeError, ValueError):
+        return None
+
+
+def _segment_v(
+    value: object,
+    transform: LayoutTransform,
+    source_size: tuple[int, int],
+) -> int | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return None
+    start = _point(value[0])
+    end = _point(value[1])
+    if start is None or end is None:
+        return None
+    c0, c1 = transform.source_segment_to_canonical(start, end, source_size)
+    if int(c0[1]) != int(c1[1]):
+        return None
+    return int(c0[1])
+
+
 def read_page_sections(image_path: Path) -> list[PageSection]:
-    """Read explicit page SECTIONs. Missing/invalid sidecars safely mean one SECTION."""
     image_path = Path(image_path)
     path = page_sections_path_for_image(image_path)
     if not path.exists():
@@ -137,23 +164,48 @@ def read_page_sections(image_path: Path) -> list[PageSection]:
         return []
     if not isinstance(payload, dict):
         return []
-    if payload.get("coordinate_space") not in {None, PAGE_SECTIONS_COORDINATE_SPACE}:
-        return []
     rows = payload.get("sections")
     if not isinstance(rows, list):
         return []
 
+    coordinate_space = str(payload.get("coordinate_space") or "")
     sections: list[PageSection] = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
+
+    if coordinate_space in {"", _LEGACY_PAGE_SECTIONS_COORDINATE_SPACE}:
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            try:
+                top = int(row.get("top_v"))
+                bottom = int(row.get("bottom_v"))
+            except (TypeError, ValueError):
+                continue
+            if bottom > top:
+                sections.append(PageSection(top, bottom))
+    elif coordinate_space == SOURCE_COORDINATE_SPACE:
         try:
-            top = int(row.get("top_v"))
-            bottom = int(row.get("bottom_v"))
-        except (TypeError, ValueError):
-            continue
-        if bottom > top:
-            sections.append(PageSection(top, bottom))
+            source_size = (
+                int(payload.get("source_width") or 0),
+                int(payload.get("source_height") or 0),
+            )
+            if source_size[0] <= 0 or source_size[1] <= 0:
+                with Image.open(image_path) as opened:
+                    source_size = ImageOps.exif_transpose(opened).size
+            transform = LayoutTransform(
+                str(payload.get("layout_transform_internal") or "identity")
+            )
+        except Exception:
+            return []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            top = _segment_v(row.get("top_source_segment_xyxy"), transform, source_size)
+            bottom = _segment_v(row.get("bottom_source_segment_xyxy"), transform, source_size)
+            if top is not None and bottom is not None and bottom > top:
+                sections.append(PageSection(top, bottom))
+    else:
+        return []
+
     sections.sort(key=lambda item: (item.top_v, item.bottom_v))
     if any(current.top_v < previous.bottom_v for previous, current in zip(sections, sections[1:])):
         return []
@@ -168,8 +220,9 @@ def write_page_sections(
     canonical_height: int | None = None,
     layout_transform: str = "identity",
 ) -> Path:
-    """Persist explicit SECTION bounds atomically; an empty list restores ordinary mode."""
-    path = page_sections_path_for_image(Path(image_path))
+    """Persist SECTION boundaries as original-image X/Y line segments."""
+    image_path = Path(image_path)
+    path = page_sections_path_for_image(image_path)
     rows = [
         PageSection(int(section.top_v), int(section.bottom_v))
         for section in sorted(sections, key=lambda item: (int(item.top_v), int(item.bottom_v)))
@@ -181,15 +234,35 @@ def write_page_sections(
         path.unlink(missing_ok=True)
         return path
 
+    transform = LayoutTransform(str(layout_transform or "identity"))
+    try:
+        with Image.open(image_path) as opened:
+            source_size = ImageOps.exif_transpose(opened).size
+    except Exception:
+        cw = max(1, int(canonical_width or 1))
+        ch = max(1, int(canonical_height or 1))
+        source_size = (ch, cw) if transform.kind.startswith("rotate_") else (cw, ch)
+    cw, _ch = transform.canonical_size(source_size)
+
+    def source_segment(v: int) -> list[list[int]]:
+        start, end = transform.canonical_segment_to_source(
+            (0, int(v)), (max(0, cw - 1), int(v)), source_size,
+        )
+        return [[int(start[0]), int(start[1])], [int(end[0]), int(end[1])]]
+
     payload = {
         "format": PAGE_SECTIONS_FORMAT,
-        "version": 1,
-        "coordinate_space": PAGE_SECTIONS_COORDINATE_SPACE,
-        "layout_transform": str(layout_transform or "identity"),
-        "canonical_width": int(canonical_width or 0),
-        "canonical_height": int(canonical_height or 0),
+        "version": 2,
+        "coordinate_space": SOURCE_COORDINATE_SPACE,
+        "source_width": int(source_size[0]),
+        "source_height": int(source_size[1]),
+        "layout_transform_internal": transform.kind,
         "sections": [
-            {"index": index + 1, "top_v": section.top_v, "bottom_v": section.bottom_v}
+            {
+                "index": index + 1,
+                "top_source_segment_xyxy": source_segment(section.top_v),
+                "bottom_source_segment_xyxy": source_segment(section.bottom_v),
+            }
             for index, section in enumerate(rows)
         ],
     }
