@@ -61,6 +61,9 @@ class DictionaryProfile:
     description: str = ""
     examples: tuple[ProfileExample, ...] = ()
     headword_features: tuple[str, ...] = ()
+    # Role-aware fixed-symbol metadata. Entry markers are standalone
+    # entry-boundary glyphs; bracket openers start enclosed headwords.
+    symbol_inventory: dict[str, Any] | None = None
     prefix_regex: str = ""
     prefix_required: bool = False
 
@@ -133,6 +136,7 @@ def _grammar_profile_from_blocks(
         description=description,
         examples=examples,
         headword_features=tuple(str(x) for x in headword.get("features", []) if str(x)),
+        symbol_inventory=dict(headword.get("symbol_inventory") or {}),
         prefix_regex=str(headword.get("prefix_regex") or ""),
         prefix_required=bool(headword.get("prefix_required", False)),
     )
@@ -285,6 +289,17 @@ def _preset_for_configuration(
     grammar_override = overrides.get("grammar") if isinstance(overrides, dict) else None
     if isinstance(grammar_override, dict):
         headword["grammar"] = dict(grammar_override)
+    symbol_override = (
+        overrides.get("symbol_inventory") if isinstance(overrides, dict) else None
+    )
+    if isinstance(symbol_override, dict):
+        symbol_inventory = dict(headword.get("symbol_inventory") or {})
+        for name, value in symbol_override.items():
+            if isinstance(value, list):
+                symbol_inventory[str(name)] = list(value)
+            elif value is not None:
+                symbol_inventory[str(name)] = value
+        headword["symbol_inventory"] = symbol_inventory
     if internal:
         grammar = dict(headword.get("grammar") or {})
         grammar["internal_not_new_entry"] = internal + list(grammar.get("internal_not_new_entry") or [])
@@ -316,6 +331,36 @@ def _preset_for_configuration(
         parser_modes=parser_modes, settings=settings, layout=layout, ocr=ocr,
         headword=headword, raw=config,
     )
+
+
+def profile_symbol_inventory_defaults(key: str | None) -> dict[str, Any]:
+    """Return normalized symbol-inventory defaults for one dictionary/profile."""
+    profile = dictionary_profile_preset(key)
+    headword = dict(profile.headword or {})
+    inventory = dict(headword.get("symbol_inventory") or {})
+    grammar = dict(headword.get("grammar") or {})
+    entry_markers = list(
+        inventory.get("entry_markers") or grammar.get("entry_markers") or []
+    )
+    bracket_openers = list(inventory.get("bracket_openers") or [])
+    if (
+        not bracket_openers
+        and "bracketed_compound" in set(headword.get("features") or [])
+    ):
+        bracket_openers = ["【", "〔", "［", "[", "「", "『", "〈", "《"]
+    return {
+        "enabled": bool(inventory.get("enabled", True)),
+        "entry_markers": [str(x) for x in entry_markers if str(x)],
+        "bracket_openers": [str(x) for x in bracket_openers if str(x)],
+        "visual_rescue": bool(inventory.get("visual_rescue", True)),
+        "lane_required": bool(inventory.get("lane_expected", False)),
+        "lane_tolerance_percent": max(
+            20, min(120, int(inventory.get("lane_tolerance_percent") or 50))
+        ),
+        "visual_families": [
+            str(x) for x in inventory.get("visual_families", []) if str(x)
+        ],
+    }
 
 
 def dictionary_profile_labels() -> dict[str, str]:
