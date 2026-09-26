@@ -1935,6 +1935,65 @@ def test_wizard_parser_controls_gate_cjk_bracket_and_marker_structures():
     assert marker.normalized == "同義"
 
 
+def test_v214_dictionary_symbol_inventory_is_exact_per_project():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import parse_headword_text
+
+    profile = load_dictionary_profile(preset="marker_prefixed", language="chi_sim")
+    settings = AppSettings(
+        ocr_language="chi_sim",
+        profile_parser_controls_version=1,
+        profile_allow_marker_prefix=True,
+        profile_symbol_inventory_version=1,
+        profile_symbol_inventory_enabled=True,
+        profile_entry_marker_symbols="○ ●",
+        profile_bracket_open_symbols="【",
+    )
+    parsed = parse_headword_text("●阿Q精神 mentality", settings, profile=profile)
+    assert parsed is not None
+    assert parsed.normalized == "阿Q精神"
+    assert parsed.parser_trace[0] == "entry_marker:●"
+    # ◆ exists in the generic marker profile, but this dictionary explicitly
+    # configured only ○/●, so it must not leak back in through a global set.
+    assert parse_headword_text("◆阿Q精神 mentality", settings, profile=profile) is None
+
+
+def test_v214_dictionary_bracket_inventory_limits_openers():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import parse_headword_text
+
+    profile = load_dictionary_profile(preset="cjk_visual", language="chi_sim")
+    settings = AppSettings(
+        ocr_language="chi_sim",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_bracketed_headword=True,
+        profile_symbol_inventory_version=1,
+        profile_symbol_inventory_enabled=True,
+        profile_entry_marker_symbols="",
+        profile_bracket_open_symbols="【",
+    )
+    assert parse_headword_text("【爱】释义", settings, profile=profile).normalized == "爱"
+    assert parse_headword_text("〔爱〕释义", settings, profile=profile) is None
+
+
+def test_v214_cnit_validated_profile_has_narrow_symbol_inventory():
+    from picture_capture.dictionary_profile import (
+        dictionary_profile_preset, profile_symbol_inventory_defaults,
+    )
+
+    preset = dictionary_profile_preset("CNIT")
+    assert preset.family == "marker_prefixed"
+    assert preset.layout["columns"] == 3
+    symbols = profile_symbol_inventory_defaults("CNIT")
+    assert symbols["entry_markers"] == ["○", "●"]
+    assert symbols["bracket_openers"] == []
+    assert symbols["lane_required"] is True
+    assert set(symbols["visual_families"]) == {"circle_open", "circle_filled"}
+
+
 def test_v214_validated_examples_resolve_as_executable_profiles():
     from picture_capture.dictionary_profile import dictionary_profile_preset
 
