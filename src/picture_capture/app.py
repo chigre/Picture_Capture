@@ -4528,7 +4528,7 @@ class ReviewWindow(tk.Toplevel):
         ttk.Separator(controls, orient="horizontal").pack(fill="x", pady=(5, 0))
 
         focused = ttk.LabelFrame(
-            left, text="重点筛选校对", padding=(7, 5), style="PCR.Surface.TFrame"
+            left, text="重点筛选校对", padding=(7, 5)
         )
         focused.pack(fill="x", padx=(7, 7), pady=(0, 5))
         filter_row1 = ttk.Frame(focused, style="PCR.Surface.TFrame")
@@ -10777,7 +10777,7 @@ class PictureCaptureApp(tk.Tk):
 
         normal = self._section_frame(
             parent,
-            "一、版面参数（规范全分辨率坐标；横排 U/X、V/Y 与原图一致）",
+            "一、版面参数",
             padding=5,
             section_key="normal",
         )
