@@ -217,6 +217,12 @@ class AppSettings:
     # 0 = automatic proofreading crop fit: fill 99% of the actual left image area.
     # Positive values are explicit/manual percentages and remain project-persisted.
     review_zoom_percent: int = 0
+    # Focused review scans a page range for risky rows instead of walking one
+    # page sequentially. The character list is project-level and intentionally
+    # editable because OCR trouble glyphs differ by dictionary/font.
+    focused_review_characters: str = "傅,裹,歴,ー,殼,鳥,縳,寶,内,刺,勝,𧰟,茶,顔,門,𧘲,㓕,椿"
+    focused_review_include_ocr_mismatch: bool = True
+    focused_review_include_characters: bool = True
     review_entry_font_family: str = "自动（系统推荐）"
     review_entry_font_size: int = 16
     # v2 means review_entry_font_size is the actual fixed editor font size.
