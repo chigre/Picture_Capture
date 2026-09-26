@@ -319,7 +319,7 @@ def _parse_cjk_marker_pinyin_headword(
             markers = ("○", "●", "◦", "•", "〓")
     marker_pattern = "|".join(re.escape(m) for m in markers)
     match = re.match(
-        rf"^\s*(?P<marker>{marker_pattern})\s*(?P<lemma>[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]{{1,24}})",
+        rf"^\s*(?P<marker>{marker_pattern})\s*(?P<lemma>[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff][\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaffA-Za-z0-9·-]{{0,23}})",
         parse_text,
         flags=re.UNICODE,
     )
@@ -3526,14 +3526,45 @@ def filter_headword_records(
         lines, image_separator_candidates, max(2, round(median_height))
     )
 
+    parser_controls = int(
+        getattr(settings, "profile_parser_controls_version", 0) or 0
+    ) >= 1
+    marker_prefix_enabled = (
+        bool(getattr(settings, "profile_allow_marker_prefix", False))
+        if parser_controls else active_profile.uses_parser("cjk_marker_pinyin")
+    )
+    visual_entry_markers = (
+        _detect_visual_entry_markers(
+            gray, median_height, left_limit, lower_bound=header_cutoff,
+        )
+        if marker_prefix_enabled and _is_chinese_ocr(settings) else []
+    )
+    visual_marker_matches = _match_visual_entry_markers_to_lines(
+        lines, visual_entry_markers, median_height,
+    )
+
     # Estimate a page-local reference density from leading text portions, not
     # from the whole line (which often mixes bold lemma with normal definition).
     leading_boxes: list[tuple[int, int, int, int]] = []
     parses: list[HeadwordParse | None] = []
-    for line in lines:
+    for line_index, line in enumerate(lines):
         parsed = parse_headword_text(line.text, settings, patterns, active_profile)
+        visual_marker = visual_marker_matches.get(line_index)
+        if visual_marker is not None and (
+            parsed is None or parsed.parser_stage != "cjk_marker_pinyin"
+        ):
+            rescued = _parse_cjk_visual_marker_line(
+                line.text,
+                str(visual_marker.get("symbol") or "○"),
+                settings,
+                active_profile,
+            )
+            if rescued is not None:
+                parsed = rescued
         parses.append(parsed)
-        leading_boxes.append(_leading_box(line, parsed.match_end if parsed else min(12, len(line.text))))
+        leading_boxes.append(
+            _leading_box(line, parsed.match_end if parsed else min(12, len(line.text)))
+        )
     densities = np.asarray([_ink_ratio(gray, box) for box in leading_boxes], dtype=float)
     positive_densities = densities[densities > 0]
     median_density = max(1e-6, float(np.median(positive_densities)) if positive_densities.size else 1e-6)
@@ -3545,12 +3576,15 @@ def filter_headword_records(
     for index, line in enumerate(lines):
         parsed = parses[index]
         image_boundary = image_boundary_matches.get(index)
+        visual_entry_marker = visual_marker_matches.get(index)
         height_ratio = heights[index] / median_height
         boldness_ratio = densities[index] / median_density
         x0, y0, _, y1 = line.box
-        at_left = x0 <= left_limit
+        at_left = bool(x0 <= left_limit or visual_entry_marker is not None)
         below_header = y0 >= header_cutoff
-        special = bool(special_pattern.search(line.text))
+        special = bool(
+            special_pattern.search(line.text) or visual_entry_marker is not None
+        )
         internal_symbol = starts_with_internal_article_symbol(line.text, active_profile)
         relation_label = leading_relation_label(line.text, active_profile)
         rule_result = evaluate_headword_filter_rules(
@@ -3818,6 +3852,11 @@ def filter_headword_records(
         else:
             reject_reason = "candidate_rejected"
         coarse_band_y = max(0, y0 - row_padding)
+        if visual_entry_marker is not None:
+            marker_coarse_y = max(
+                0, int(visual_entry_marker["y0"]) - max(1, int(row_padding))
+            )
+            coarse_band_y = min(coarse_band_y, marker_coarse_y)
         # The first printed entry is a special geometry case: there is no
         # preceding line and therefore no inter-line whitespace valley. Locate
         # the first sustained ink row instead of applying the ordinary valley rule.
@@ -3938,6 +3977,23 @@ def filter_headword_records(
                 "cjk_candidate_right_baseline_supported": bool(
                     cjk_candidate_right_context
                     and cjk_candidate_right_context.get("candidate_baseline_supported")
+                ),
+                "visual_entry_marker": bool(visual_entry_marker),
+                "visual_entry_marker_type": (
+                    str(visual_entry_marker.get("type") or "")
+                    if visual_entry_marker else ""
+                ),
+                "visual_entry_marker_symbol": (
+                    str(visual_entry_marker.get("symbol") or "")
+                    if visual_entry_marker else ""
+                ),
+                "visual_entry_marker_density": (
+                    float(visual_entry_marker.get("density") or 0.0)
+                    if visual_entry_marker else 0.0
+                ),
+                "visual_entry_marker_center_delta": (
+                    float(visual_entry_marker.get("center_delta") or 0.0)
+                    if visual_entry_marker else 0.0
                 ),
                 "cjk_bracketed": cjk_bracketed,
                 "cjk_bracket_visual_supported": cjk_bracket_visual_supported,
