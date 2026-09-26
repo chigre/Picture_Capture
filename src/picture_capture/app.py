@@ -2612,19 +2612,30 @@ class SettingsDialog(tk.Toplevel):
                 group, intro_label, horizontal_padding=24, min_wrap=150
             )
             row += 1
+
+        auto_child_names = (
+            "ordinary_auto_columns",
+            "ordinary_auto_start_y",
+            "ordinary_auto_manual_x",
+            "ordinary_auto_column_width",
+            "ordinary_auto_gutter",
+            "ordinary_auto_character_height",
+            "ordinary_auto_row_padding",
+        )
+        auto_child_set = set(auto_child_names)
+        auto_children = [
+            (label, name) for label, name in checks if name in auto_child_set
+        ]
+
         for label, name in checks:
+            if name in auto_child_set:
+                continue
             if name not in self.vars:
-                self.vars[name] = tk.BooleanVar(value=bool(getattr(self.parent.settings, name)))
+                self.vars[name] = tk.BooleanVar(
+                    value=bool(getattr(self.parent.settings, name))
+                )
             check = ttk.Checkbutton(group, text=label, variable=self.vars[name])
-            child_indent = 22 if name in {
-                "ordinary_auto_columns", "ordinary_auto_start_y",
-                "ordinary_auto_manual_x", "ordinary_auto_column_width",
-                "ordinary_auto_gutter", "ordinary_auto_character_height",
-                "ordinary_auto_row_padding",
-            } else 0
-            check.grid(
-                row=row, column=0, sticky="w", pady=4, padx=(child_indent, 0)
-            )
+            check.grid(row=row, column=0, sticky="w", pady=4)
             info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
             info.grid(row=row, column=1, sticky="w", padx=(8, 0))
             callback = lambda l=label, n=name: self._show_check_help(l, n)
@@ -2636,6 +2647,35 @@ class SettingsDialog(tk.Toplevel):
                 add="+",
             )
             row += 1
+
+            if name == "ordinary_auto_layout" and auto_children:
+                child_grid = ttk.Frame(group)
+                child_grid.grid(
+                    row=row, column=0, columnspan=2,
+                    sticky="w", padx=(22, 0), pady=(0, 4),
+                )
+                for index, (child_label, child_name) in enumerate(auto_children):
+                    if child_name not in self.vars:
+                        self.vars[child_name] = tk.BooleanVar(
+                            value=bool(getattr(self.parent.settings, child_name))
+                        )
+                    child_row = 0 if index < 3 else 1
+                    child_col = index if index < 3 else index - 3
+                    child = ttk.Checkbutton(
+                        child_grid,
+                        text=child_label,
+                        variable=self.vars[child_name],
+                    )
+                    child.grid(
+                        row=child_row, column=child_col,
+                        sticky="w", padx=(0, 16), pady=4,
+                    )
+                    child_callback = (
+                        lambda l=child_label, n=child_name:
+                        self._show_check_help(l, n)
+                    )
+                    self._bind_help_widget(child, child_callback)
+                row += 1
         return group
 
     def _add_collapsible_settings(
