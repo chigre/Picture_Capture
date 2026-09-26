@@ -5352,10 +5352,10 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'bg=marker_control_bg' in app_text
     assert 'fg="#ffffff"' in app_text
     assert 'record["index_widget"] = index_label' in app_text
-    assert 'record["delete_widget"] = delete_button' in app_text
+    assert 'record["delete_item"] = delete_item' in app_text
     assert 'text="X"' in app_text
-    assert 'fg=marker_control_bg' in app_text
-    assert 'delete_bg = str(self.canvas.cget("bg"))' in app_text
+    assert 'fill=marker_control_bg' in app_text
+    assert 'self.canvas.create_text(' in app_text
     assert 'delete_y = float(index_y + max(1, index_label.winfo_reqheight()) + 1)' in app_text
 
 
@@ -8019,4 +8019,5 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert "def _fill_filter_ocr_result(self, index: int) -> None:" in text
     assert "marker_control_bg = str(self.settings.headword_marker_color)" in text
     assert 'text="X"' in text
-    assert 'fg=marker_control_bg' in text
+    assert 'fill=marker_control_bg' in text
+    assert 'record["delete_item"] = delete_item' in text
