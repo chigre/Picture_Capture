@@ -2916,6 +2916,8 @@ class ProjectProfileWizard(tk.Toplevel):
             raw_pct = 0
             lower_total = 0
             lower_accepted = 0
+            template_matches = 0
+            template_scores: list[float] = []
             reject_counts: dict[str, int] = {}
             if index < len(columns):
                 column = columns[index] or {}
@@ -2941,6 +2943,17 @@ class ProjectProfileWizard(tk.Toplevel):
                         center_y = (float(box[1]) + float(box[3])) / 2.0
                     except (TypeError, ValueError):
                         continue
+                    features = row.get("features") if isinstance(row, dict) else None
+                    if isinstance(features, dict):
+                        try:
+                            template_score = float(
+                                features.get("visual_marker_template_score") or 0.0
+                            )
+                        except (TypeError, ValueError):
+                            template_score = 0.0
+                        if template_score > 0:
+                            template_matches += 1
+                            template_scores.append(template_score)
                     if center_y < band_height * 0.50:
                         continue
                     lower_total += 1
@@ -2984,10 +2997,16 @@ class ProjectProfileWizard(tk.Toplevel):
             warning = ""
             if raw_pct >= 85 and selected_pct <= 65:
                 warning = " ⚠原始OCR完整但词头在中途停止"
+            template_text = ""
+            if bool(getattr(settings, "profile_symbol_template_debug_enabled", False)):
+                best_template = max(template_scores) if template_scores else 0.0
+                template_text = (
+                    f"｜模板命中{template_matches}（最高{best_template:.2f}）"
+                )
             parts.append(
                 f"{index + 1}栏：原始OCR至{raw_pct}%｜词头至{selected_pct}%｜"
                 f"下半页候选{lower_total}（通过{lower_accepted}；拒绝主因：{reason_text}）｜"
-                f"左缘最大漂移{drift}px{warning}"
+                f"左缘最大漂移{drift}px{template_text}{warning}"
             )
         return "\n".join(parts)
 
