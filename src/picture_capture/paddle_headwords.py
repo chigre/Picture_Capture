@@ -20,7 +20,6 @@ from PIL import Image, ImageOps
 
 from .models import AppSettings, Entry, resolved_tesseract_language
 from .runtime_environment import resolve_paddle_device
-from .coordinate_space import setting_pixels
 from .image_utils import normalize_page_rgb
 from .page_sections import PageSection, normalize_page_sections, section_index_for_v
 from .dictionary_profile import (
@@ -3046,11 +3045,7 @@ def _cjk_visual_projection_runs(
     runtime_width = max(1, int(gray.shape[1]))
     expected_body = max(
         8.0,
-        float(
-            setting_pixels(
-                settings.character_height, runtime_width, settings,
-            )
-        ),
+        float(settings.character_height),
     )
     body_heights = [
         end - start for start, end in runs
@@ -3599,9 +3594,7 @@ def refine_separator_y_adaptive(
     coarse_y = int(min(height - 1, max(lower_bound, coarse_y)))
     if content_top is None:
         runtime_width = max(1, int(gray.shape[1]))
-        row_padding = setting_pixels(
-            settings.row_padding, runtime_width, settings,
-        )
+        row_padding = int(settings.row_padding)
         content_top = coarse_y + max(0, row_padding)
     content_top = int(min(height - 1, max(lower_bound, content_top)))
 
@@ -4176,12 +4169,8 @@ def filter_headword_records(
     # full-resolution band before candidate filtering.
     pixel_scale = max(0.01, float(pixel_scale)) if pixel_scale is not None else 1.0
     runtime_width = max(1, band.width)
-    row_padding = setting_pixels(
-        settings.row_padding, runtime_width, settings,
-    )
-    character_height = setting_pixels(
-        settings.character_height, runtime_width, settings,
-    )
+    row_padding = int(settings.row_padding)
+    character_height = int(settings.character_height)
     row_height = max(1, character_height + row_padding)
     left_limit = round(
         (settings.paddle_band_left_margin + settings.paddle_left_tolerance)
@@ -7001,9 +6990,7 @@ def detect_paddle_headwords(
     signature = _cache_signature(image, geometry, settings)
     runtime_width = geometry.transform.canonical_size(image.size)[0]
     pixel_scale = 1.0
-    canonical_character_height = setting_pixels(
-        settings.character_height, runtime_width, settings,
-    )
+    canonical_character_height = int(settings.character_height)
     user_rules = load_headword_filter_rules(filter_rules_path)
     profile_path = filter_rules_path.parent / PROFILE_FILENAME if filter_rules_path else None
     profile = load_dictionary_profile(
