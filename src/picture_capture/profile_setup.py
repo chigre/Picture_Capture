@@ -51,6 +51,15 @@ from .project_storage import (
     profile_path as project_profile_path,
     settings_path,
 )
+from .visual_marker_templates import (
+    parse_visual_marker_samples,
+    serialize_visual_marker_samples,
+    split_configured_symbols,
+)
+from .visual_marker_ui import (
+    VisualMarkerCaptureDialog,
+    VisualMarkerSamplesDialog,
+)
 
 
 OCR_LANGUAGE_LABEL_TO_VALUE = {
@@ -149,6 +158,16 @@ SIDE_LABEL_TO_VALUE = {
     "右侧固定": "right",
     "A/B 页外侧交替": "outer",
     "A/B 页内侧交替": "inner",
+}
+
+VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE = {
+    "字符符号集 + 视觉样本": "combined",
+    "仅字符符号集": "off",
+    "视觉样本优先": "template_first",
+}
+VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE = {
+    "按角色合并（推荐）": "role",
+    "按具体符号区分": "literal",
 }
 def _label_for_value(mapping: dict[str, str], value: str, fallback: str) -> str:
     for label, mapped in mapping.items():
