@@ -2918,6 +2918,7 @@ class ProjectProfileWizard(tk.Toplevel):
             lower_accepted = 0
             template_matches = 0
             template_scores: list[float] = []
+            strong_edge_rescues = 0
             reject_counts: dict[str, int] = {}
             if index < len(columns):
                 column = columns[index] or {}
@@ -2954,6 +2955,10 @@ class ProjectProfileWizard(tk.Toplevel):
                         if template_score > 0:
                             template_matches += 1
                             template_scores.append(template_score)
+                        if bool(
+                            features.get("ordinary_strong_edge_visual_rescue")
+                        ):
+                            strong_edge_rescues += 1
                     if center_y < band_height * 0.50:
                         continue
                     lower_total += 1
@@ -3003,10 +3008,14 @@ class ProjectProfileWizard(tk.Toplevel):
                 template_text = (
                     f"｜模板命中{template_matches}（最高{best_template:.2f}）"
                 )
+            rescue_text = (
+                f"｜强粗体左缘补救{strong_edge_rescues}"
+                if strong_edge_rescues else ""
+            )
             parts.append(
                 f"{index + 1}栏：原始OCR至{raw_pct}%｜词头至{selected_pct}%｜"
                 f"下半页候选{lower_total}（通过{lower_accepted}；拒绝主因：{reason_text}）｜"
-                f"左缘最大漂移{drift}px{template_text}{warning}"
+                f"左缘最大漂移{drift}px{rescue_text}{template_text}{warning}"
             )
         return "\n".join(parts)
 
