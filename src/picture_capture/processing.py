@@ -33,6 +33,54 @@ _COLUMN_TRACK_ADAPTIVE_BLOCK = 19
 _COLUMN_TRACK_ADAPTIVE_C = 20
 _ANALYSIS_MAX_WIDTH = 1600
 
+ORDINARY_AUTO_LAYOUT_FIELDS: tuple[tuple[str, str], ...] = (
+    ("columns", "ordinary_auto_columns"),
+    ("start_y", "ordinary_auto_start_y"),
+    ("manual_x", "ordinary_auto_manual_x"),
+    ("column_width", "ordinary_auto_column_width"),
+    ("gutter", "ordinary_auto_gutter"),
+    ("character_height", "ordinary_auto_character_height"),
+    ("row_padding", "ordinary_auto_row_padding"),
+)
+
+
+def ordinary_page_layout_settings(
+    image: Image.Image, settings: AppSettings
+) -> tuple[AppSettings, dict[str, int]]:
+    """Return page-specific ordinary settings after optional layout detection.
+
+    The project settings are never mutated.  When the master switch is enabled,
+    one layout estimate is made for this page and only explicitly selected
+    fields replace their project-level values.  bottom_y is deliberately absent:
+    the effective page bottom comes from the page height, Profile footer rule,
+    or Page SECTION bounds instead of a manually editable main-panel value.
+    """
+    current = replace(settings)
+    if not bool(getattr(current, "ordinary_auto_layout", False)):
+        return current, {}
+
+    from .layout_detection import detect_layout_parameters
+
+    detector_settings = replace(current)
+    if bool(getattr(current, "ordinary_auto_columns", True)):
+        # "Auto columns" must actually detect the page's column count even when
+        # the project Profile normally fixes it.
+        detector_settings.layout_columns_policy = "detect"
+    estimate = detect_layout_parameters(image, detector_settings)
+
+    applied: dict[str, int] = {}
+    for field_name, switch_name in ORDINARY_AUTO_LAYOUT_FIELDS:
+        if not bool(getattr(current, switch_name, True)):
+            continue
+        value = int(getattr(estimate, field_name))
+        setattr(current, field_name, value)
+        applied[field_name] = value
+
+    # The old manual-columns/manual-Y mode is retired.  Keep the persisted
+    # compatibility fields readable, but never let them alter the new flow.
+    current.manual_columns = False
+    return current, applied
+
 
 @dataclass(slots=True)
 class ColumnPath:
@@ -780,7 +828,11 @@ def _ordinary_source_column_edge(
     return int(source_x), direction
 
 
-def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tuple[list[Entry], Geometry]:
+def _detect_entries_left_edge(
+    image: Image.Image,
+    settings: AppSettings,
+    page_sections: list[PageSection] | None = None,
+) -> tuple[list[Entry], Geometry]:
     """Restore the 2016 VB.NET Draw_Auto ordinary-drawing algorithm.
 
     The complete candidate/separator chain runs directly on original
@@ -824,17 +876,19 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
         0, int(getattr(settings, "whitespace_adjustment", 2))
     )
 
-    top_source = (
-        _source_px(getattr(settings, "manual_y", geometry.top))
-        if bool(getattr(settings, "manual_columns", False))
-        else int(geometry.top)
-    )
-    top = max(0, min(image_height - 1, int(top_source)))
+    top = max(0, min(image_height - 1, int(geometry.top)))
     ordinary_bottom = min(image_height, int(geometry.bottom))
-    configured_bottom = _source_px(getattr(settings, "bottom_y", 0))
-    if configured_bottom > top:
-        ordinary_bottom = min(ordinary_bottom, configured_bottom)
     bottom = max(top + 1, ordinary_bottom)
+
+    # SECTION sidecars are the page-specific authority for exceptional body
+    # ranges.  Restrict the expensive scan to their outer envelope; the final
+    # entry filter below still excludes the gaps between multiple sections.
+    if page_sections:
+        sections = normalize_page_sections(page_sections, top, bottom)
+        if sections:
+            top = max(top, min(int(section.top_v) for section in sections))
+            bottom = min(bottom, max(int(section.bottom_v) for section in sections))
+            bottom = max(top + 1, bottom)
 
     analysis_left = int(getattr(settings, "analysis_left", 0) or 0)
     analysis_right = int(getattr(settings, "analysis_right", 0) or 0)
@@ -972,7 +1026,12 @@ def detect_entries(
             page_sections=page_sections,
         )
     else:
-        entries, geometry = _detect_entries_left_edge(analysis_source, effective)
+        ordinary_effective, _applied_layout = ordinary_page_layout_settings(
+            analysis_source, effective
+        )
+        entries, geometry = _detect_entries_left_edge(
+            analysis_source, ordinary_effective, page_sections=page_sections
+        )
 
     entries = [
         entry for entry in entries
