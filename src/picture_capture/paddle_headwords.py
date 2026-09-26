@@ -2658,15 +2658,18 @@ def _detect_visual_entry_markers(
             ):
                 sample = dict(template_match.get("sample") or {})
                 role = str(sample.get("role") or "")
-                symbol = str(sample.get("literal") or "")
-                if not symbol:
-                    source = (
-                        inventory.get("entry_markers")
-                        if role == "entry_marker"
-                        else inventory.get("bracket_openers")
-                    )
-                    symbol = str(next(iter(source or ()), ""))
-                if role in {"entry_marker", "bracket_open"} and symbol:
+                source = (
+                    inventory.get("entry_markers")
+                    if role == "entry_marker"
+                    else inventory.get("bracket_openers")
+                )
+                configured_symbol = str(next(iter(source or ()), ""))
+                sample_symbol = str(sample.get("literal") or "")
+                if str(inventory.get("visual_template_group_mode") or "role") == "literal":
+                    symbol = sample_symbol or configured_symbol
+                else:
+                    symbol = configured_symbol or sample_symbol
+                if role == "entry_marker" or (role == "bracket_open" and symbol):
                     classified = (
                         "dictionary_template",
                         symbol,
@@ -2794,27 +2797,52 @@ def _parse_cjk_visual_marker_line(
     settings: AppSettings,
     profile: DictionaryProfile,
 ) -> HeadwordParse | None:
-    """Recover a marker-led CJK head when OCR omitted/misread the visual marker."""
-    parse_text, _repairs = _repair_headword_ocr(text)
-    # At most a few OCR junk glyphs may precede the Han lemma where the circle
-    # was.  The visual marker itself supplies the strong boundary evidence.
+    """Recover a marker-led CJK head when OCR omitted/misread the visual marker.
+
+    The visual template itself supplies the entry-boundary evidence, so this
+    rescue path does not require OCR to recover the configured Unicode marker.
+    """
+    if not _is_chinese_ocr(settings):
+        return None
+    parse_text, repairs = _repair_headword_ocr(text)
+    # At most a few OCR junk glyphs may precede the Han lemma where the printed
+    # marker was. Keep the same compact CJK lemma grammar as marker-prefixed OCR.
     match = re.search(
-        r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]",
-        parse_text[:10],
+        r"(?P<lemma>[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]"
+        r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaffA-Za-z0-9·-]{0,23})",
+        parse_text[:72],
     )
-    if match is None or match.start() > 4:
+    if match is None or match.start("lemma") > 4:
         return None
-    synthetic = marker_symbol + parse_text[match.start():]
-    parsed = _parse_cjk_marker_pinyin_headword(synthetic, settings, profile)
-    if parsed is None:
-        return None
-    parsed.parser_stage = "cjk_visual_marker_rescue"
-    parsed.descriptor_text = "cjk_marker_pinyin"
-    parsed.parser_trace = (
-        f"visual_entry_marker:{marker_symbol}",
-        "cjk_visual_marker_rescue",
+    raw = match.group("lemma")
+    normalized = unicodedata.normalize("NFKC", raw).strip()
+    marker_label = marker_symbol or "visual-template"
+    return HeadwordParse(
+        raw=raw,
+        normalized=normalized,
+        has_pos=False,
+        pos_text="",
+        has_inflection=False,
+        inflection_text="",
+        has_descriptor=True,
+        descriptor_text="cjk_marker_pinyin",
+        match_end=max(1, match.end("lemma")),
+        looks_like_continuation=False,
+        continuation_reason="",
+        corrected_raw=raw,
+        parse_text=parse_text,
+        ocr_repairs=tuple(repairs),
+        variants=(),
+        plural_text="",
+        usage_text="",
+        definition_text=parse_text[match.end("lemma"):].strip(),
+        parser_stage="cjk_visual_marker_rescue",
+        parser_trace=(
+            f"visual_entry_marker:{marker_label}",
+            "cjk_visual_marker_rescue",
+        ),
+        bug_types=(),
     )
-    return parsed
 
 
 def _parse_visual_configured_symbol_line(
@@ -2826,11 +2854,9 @@ def _parse_visual_configured_symbol_line(
     """Recover a configured fixed-symbol head when OCR lost the symbol itself."""
     role = str(visual_symbol.get("role") or "")
     symbol = str(visual_symbol.get("symbol") or "")
-    if not symbol:
-        return None
     if role == "entry_marker":
         return _parse_cjk_visual_marker_line(text, symbol, settings, profile)
-    if role != "bracket_open":
+    if role != "bracket_open" or not symbol:
         return None
 
     parse_text, _repairs = _repair_headword_ocr(text)
