@@ -528,8 +528,11 @@ class ProcessingTests(unittest.TestCase):
             columns=2, manual_x=30, column_width=350, gutter=50,
             start_y=50, body_indent=24, character_height=20,
             detection_method="left_edge", follow_column_deformation=True,
-            column_track_radius=90, column_track_block_height=100,
-            column_track_max_step=20
+            # Same synthetic geometry as the historical 90 px radius /
+            # 100 px block / 20 px step, expressed directly in the new units.
+            column_track_radius=90 / 350 * 100,
+            column_track_block_height=100 / 650 * 100,
+            column_track_max_step=20,
         )
         geometry = derive_geometry(image, settings)
         self.assertAlmostEqual(geometry.x_at(0, 100), 38, delta=8)

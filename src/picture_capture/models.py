@@ -385,9 +385,12 @@ class AppSettings:
     layout_behavior_defaults_version: int = 1
     # v2.14 refreshes visible/default workflow choices once for existing projects.
     ui_workflow_defaults_version: int = 1
-    column_track_radius: int = 80
-    column_track_block_height: int = 120
-    column_track_max_step: int = 28
+    # Column-following controls are dimensionless percentages:
+    # radius = % of current column width; block height = % of effective body
+    # height; max step = % of the current tracking block height.
+    column_track_radius: float = 5.0
+    column_track_block_height: float = 3.0
+    column_track_max_step: float = 8.0
     # PaddleOCR is optional and is loaded only when the dedicated headword
     # detection mode is selected.
     paddle_language: str = ""

@@ -22,9 +22,10 @@ from picture_capture.models import (
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
-    _legacy_find_separator_y, _legacy_is_point, _left_edge_ink_mask,
-    apply_column_start_offsets, derive_geometry, derive_nominal_geometry,
-    detect_entries, ordinary_page_layout_settings, refine_existing_entries,
+    _column_tracking_dimensions, _legacy_find_separator_y, _legacy_is_point,
+    _left_edge_ink_mask, apply_column_start_offsets, derive_geometry,
+    derive_nominal_geometry, detect_entries, ordinary_page_layout_settings,
+    refine_existing_entries,
 )
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
@@ -302,6 +303,9 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert '"paddle_band_width_ratio": "%"' in settings
     assert '"paddle_left_tolerance": "原图px"' in settings
     assert '"paddle_separator_safety_px": "原图px"' in settings
+    assert '"column_track_radius": "% 单栏宽"' in settings
+    assert '"column_track_block_height": "% 正文高度"' in settings
+    assert '"column_track_max_step": "% 分块高度"' in settings
     assert '"columns": (1, 12, 1)' in settings
     assert "def _show_setting_help(" in settings
     assert 'text="设置说明"' in settings
@@ -2053,17 +2057,23 @@ def test_auto_refine_y_is_exposed_as_shared_ordinary_drawing_control():
     quick_start = source.index("    def _build_quick_settings(")
     quick_end = source.index("\n    def ", quick_start + 10)
     quick = source[quick_start:quick_end]
-    assert 'text="自动精修横线Y（普通/OCR共用）"' in quick
+    assert 'text="自动精修横线Y（通用）"' in quick
     assert 'self.quick_bool_vars["paddle_refine_separator_y"] = refine_y_var' in quick
     assert 'text="使用自动版面参数"' in quick
-    assert '"ordinary_auto_columns"' in quick
-    assert '"ordinary_auto_start_y"' in quick
-    assert '"ordinary_auto_manual_x"' in quick
-    assert '"ordinary_auto_column_width"' in quick
-    assert '"ordinary_auto_gutter"' in quick
-    assert '"ordinary_auto_character_height"' in quick
-    assert '"ordinary_auto_row_padding"' in quick
+    for name in (
+        "ordinary_auto_columns", "ordinary_auto_start_y", "ordinary_auto_manual_x",
+        "ordinary_auto_column_width", "ordinary_auto_gutter",
+        "ordinary_auto_character_height", "ordinary_auto_row_padding",
+    ):
+        assert name not in quick
+        assert name in normal_checks
     assert '"bottom_y"' not in quick
+
+    hide_line = 'option_row, text="隐藏线框(插图除外)", variable=self.hide_var'
+    hide_at = quick.index(hide_line)
+    hide_tail = quick[hide_at:hide_at + 260]
+    assert ').pack(side="left")' in hide_tail
+    assert 'padx=(8, 0)' not in hide_tail
 
 
 def test_ordinary_drawing_restores_vb_left_edge_gate():
@@ -2129,6 +2139,23 @@ def test_legacy_manual_columns_and_manual_y_no_longer_change_ordinary_start():
     )
     entries, _ = detect_entries(image, settings)
     assert len(entries) == 2
+
+
+def test_column_tracking_percentages_scale_with_page_geometry():
+    settings = AppSettings(
+        column_track_radius=5.0,
+        column_track_block_height=3.0,
+        column_track_max_step=8.0,
+    )
+    radius, block, step = _column_tracking_dimensions(2000, 5800, settings)
+    assert radius == 100
+    assert block == 174
+    assert step == 14
+
+    radius2, block2, step2 = _column_tracking_dimensions(4000, 11600, settings)
+    assert radius2 == 200
+    assert block2 == 348
+    assert step2 == 28
 
 
 def test_ordinary_auto_layout_applies_only_checked_page_specific_fields(monkeypatch):
