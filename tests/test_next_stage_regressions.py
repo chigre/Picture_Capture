@@ -1230,6 +1230,16 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "大字右侧检测宽度：" in text
     assert "profile_cjk_right_context_width_percent" in text
     assert "固定符号开头（○ / ● / ◆ …）可以作为词头" in text
+    assert "本词典固定词头符号集" in text
+    assert "启用本词典专用符号集" in text
+    assert "入口标记：" in text
+    assert "括号起始：" in text
+    assert "OCR 漏掉/错认符号时允许视觉形状补救" in text
+    assert "使用同栏 marker lane 过滤正文中的相似符号" in text
+    assert "profile_symbol_inventory_version" in text
+    assert "profile_entry_marker_symbols" in text
+    assert "profile_bracket_open_symbols" in text
+    assert "profile_symbol_lane_tolerance_percent" in text
     assert "编号开头（1. / 2. / …）可以作为词头" in text
     assert "词头专属性（当前结构的视觉证据）" in text
     assert 'text="栏左缘容差："' in text
