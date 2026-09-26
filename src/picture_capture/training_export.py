@@ -14,10 +14,9 @@ from .formats import pdic_path, read_pdic, read_ppp
 from .image_utils import normalize_page_rgb
 from .models import AppSettings
 from .coordinate_space import (
-    CANONICAL_COORDINATE_SPACE,
     SOURCE_COORDINATE_SPACE,
     coordinate_contract,
-    stored_geometry_to_canonical,
+    setting_pixels,
 )
 from .processing import column_index, derive_geometry
 from .profile_semantics import (
@@ -220,7 +219,7 @@ def export_training_page(
     canonical_width, canonical_height = geometry.transform.canonical_size(
         image.size
     )
-    canonical_line_height = stored_geometry_to_canonical(
+    canonical_line_height = setting_pixels(
         effective.character_height, canonical_width, effective,
     )
     candidates: list[dict[str, Any]] = []
@@ -306,22 +305,13 @@ def export_training_page(
             "side_boundary_x": side_boundary_x,
         },
         "layout": {
-            "coordinate_space": CANONICAL_COORDINATE_SPACE,
-            "transform": geometry.transform.kind,
-            "canonical_size": [int(canonical_width), int(canonical_height)],
+            "coordinate_space": SOURCE_COORDINATE_SPACE,
+            "transform_used_internally": geometry.transform.kind,
             "columns": int(len(geometry.column_starts)),
-            "top_v": int(geometry.top),
-            "bottom_v": int(geometry.bottom),
-            "column_starts_u": [int(v) for v in geometry.column_starts],
-            "column_widths": [int(v) for v in geometry.column_widths],
-            "column_paths_vu": [
-                [[int(v), int(u)] for v, u in path.points]
-                for path in geometry.column_paths
-            ],
             "source_column_paths_xy": source_column_paths,
-            "line_height": int(canonical_line_height),
-            "row_padding": int(
-                stored_geometry_to_canonical(
+            "line_height_px": int(canonical_line_height),
+            "row_padding_px": int(
+                setting_pixels(
                     effective.row_padding, canonical_width, effective,
                 )
             ),
@@ -384,6 +374,10 @@ def write_training_manifest(
     context_files: list[str],
     software_version: str,
 ) -> Path:
+    exported_settings = asdict(settings)
+    if int(exported_settings.get("geometry_coordinate_version", 0) or 0) >= 3:
+        exported_settings.pop("geometry_reference_width", None)
+        exported_settings.pop("parameter_display_width", None)
     manifest = {
         "format": TRAINING_EXPORT_FORMAT,
         "software_version": software_version,
@@ -392,11 +386,11 @@ def write_training_manifest(
             "ground_truth": "saved .pdic lines confirmed by the user at export time",
             "negative_candidates": "OCR review candidates not matched to a saved ground-truth line",
             "coordinates": "ground truth, illustration polygons and page-template boundaries use original-image pixels",
-            "layout_coordinates": "runtime layout geometry uses full-resolution canonical pixels with an explicit transform",
-            "persisted_geometry": "settings geometry uses canonical reference-page pixels and geometry_reference_width",
+            "layout_coordinates": "exported layout geometry uses original-image X/Y pixels",
+            "persisted_geometry": "settings geometry uses original-image pixels directly; no reference-width scaling",
             "page_split_rule": "future train/validation/test splits should be performed by dictionary, not adjacent pages",
         },
-        "settings": asdict(settings),
+        "settings": exported_settings,
         "page_count": len(pages),
         "ground_truth_line_count": sum(int(p.get("ground_truth_count", 0)) for p in pages),
         "page_records": pages,

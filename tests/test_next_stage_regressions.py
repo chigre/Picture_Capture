@@ -20,6 +20,7 @@ from picture_capture.models import (
     AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
 )
 from picture_capture.layout_transform import LayoutTransform
+from picture_capture.coordinate_space import migrate_legacy_geometry_settings, setting_pixels
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
     _left_edge_ink_mask, apply_column_start_offsets, derive_geometry,
@@ -300,8 +301,8 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert '"columns": "正文栏数"' in settings
     assert '"manual_x": "第一栏左缘 U"' in settings
     assert '"paddle_band_width_ratio": "%"' in settings
-    assert '"paddle_left_tolerance": "参考页规范px"' in settings
-    assert '"paddle_separator_safety_px": "参考页规范px"' in settings
+    assert '"paddle_left_tolerance": "原图px"' in settings
+    assert '"paddle_separator_safety_px": "原图px"' in settings
     assert '"columns": (1, 12, 1)' in settings
     assert "def _show_setting_help(" in settings
     assert 'text="设置说明"' in settings
@@ -1807,23 +1808,27 @@ def test_project_profile_column_left_nudges_persist_and_drive_geometry(tmp_path)
         manual_x=40,
         column_width=300,
         gutter=40,
-        geometry_coordinate_version=2,
-        geometry_reference_width=800,
+        geometry_coordinate_version=3,
+        geometry_coordinate_space="source_image_pixels",
         column_start_offsets=[0, 12],
         follow_column_deformation=False,
     )
     geometry = derive_nominal_geometry(800, 1000, settings)
     assert geometry.column_starts == [40, 392]
 
-    # Offsets live in reference-page pixels just like the other persisted
-    # Project Profile geometry fields, so they scale with scan resolution.
+    # Version-3 values are literal image pixels. A wider image must not silently
+    # double the user's X positions or per-column corrections.
     larger = derive_nominal_geometry(1600, 2000, settings)
-    assert larger.column_starts == [80, 784]
+    assert larger.column_starts == [40, 392]
 
     path = tmp_path / "settings.json"
     settings.to_json(path)
+    saved = path.read_text(encoding="utf-8")
+    assert '"geometry_reference_width"' not in saved
+    assert '"parameter_display_width"' not in saved
     reopened = AppSettings.from_json(path)
     assert reopened.column_start_offsets == [0, 12]
+    assert reopened.geometry_coordinate_version == 3
 
     # Corrupt/extreme nudges are clipped before columns can cross.
     guarded = apply_column_start_offsets(
@@ -1833,11 +1838,46 @@ def test_project_profile_column_left_nudges_persist_and_drive_geometry(tmp_path)
     assert guarded[1] - guarded[0] >= 50
 
 
+def test_source_pixel_settings_never_scale_against_page_width():
+    settings = AppSettings(
+        geometry_coordinate_version=3,
+        geometry_coordinate_space="source_image_pixels",
+        paddle_left_tolerance=34,
+        paddle_separator_safety_px=2,
+    )
+    assert setting_pixels(settings.paddle_left_tolerance, 1400, settings) == 34
+    assert setting_pixels(settings.paddle_left_tolerance, 2800, settings) == 34
+    assert setting_pixels(settings.paddle_left_tolerance, 4200, settings) == 34
+    assert setting_pixels(settings.paddle_separator_safety_px, 4200, settings) == 2
+
+
+def test_v2_reference_page_geometry_migrates_once_to_source_pixels():
+    settings = AppSettings(
+        geometry_coordinate_version=2,
+        geometry_coordinate_space="canonical_reference_page_pixels",
+        geometry_reference_width=800,
+        manual_x=40,
+        column_width=300,
+        gutter=40,
+        column_start_offsets=[0, 12],
+    )
+    assert migrate_legacy_geometry_settings(settings, (1600, 2000))
+    assert settings.geometry_coordinate_version == 3
+    assert settings.geometry_coordinate_space == "source_image_pixels"
+    assert settings.geometry_reference_width == 0
+    assert settings.parameter_display_width == 0
+    assert settings.manual_x == 80
+    assert settings.column_width == 600
+    assert settings.gutter == 80
+    assert settings.column_start_offsets == [0, 24]
+
+
 def test_project_profile_exposes_clickable_column_left_line_nudging():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
     text = source.read_text(encoding="utf-8")
     assert 'text="栏左线微调"' in text
     assert "点击右侧预览中的栏左线选择；选中线显示为橙色" in text
+    assert "每次移动 1 个原图 px" in text
     assert 'text="← 左移"' in text
     assert 'text="右移 →"' in text
     assert 'text="重置当前"' in text

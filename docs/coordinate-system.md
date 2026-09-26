@@ -1,121 +1,61 @@
 # Coordinate system contract
 
-Picture Capture uses several coordinate spaces internally. They are deliberately
-separated so projects, PDIC/PPP files, reports and training data remain portable
-when the GUI zoom, OCR resize, writing direction or page transform changes.
+Picture Capture 对用户、项目设置和持久化文件只保留一套坐标：**原图像素 X/Y（source_image_pixels）**。
 
-## Public and persisted spaces
+## 唯一持久化坐标：原图 X/Y
 
-### Source-image pixels
+- 原点：原始扫描图左上角。
+- X：向右增加。
+- Y：向下增加。
+- 单位：原图 1 个像素。
+- 适用：项目版式参数、OCR/画线像素阈值、PDIC、PPP、鼠标/人工标注、切图框、训练导出和所有用户可见页面坐标。
 
-**Use for:** PDIC points, PPP polygons, user-facing page coordinates, physical
-page-template boundaries, exported annotations and source-space diagnostic
-positions.
+因此，设置中写 `34 px` 就始终表示原图 34 px。它不会因为图片宽度是 1400、2800 或 4200 而自动乘除倍率，也不会受窗口大小、查看缩放或 `parameter_display_width` 影响。
 
-- origin: source image top-left
-- X increases to the right
-- Y increases downward
-- unit: one pixel in the original scanned image
+项目级几何参数（例如第一栏 X、正文起始/结束 Y、栏宽、栏间距、行高、行间空白、栏左微调）和 OCR/画线距离参数（例如候选带左余量、栏左容差、页眉搜索高度、横线安全距离、平滑半径）都遵守同一规则。
 
-Source-image coordinates must never depend on viewer zoom or
-`parameter_display_width`.
+## Profile 百分比
 
-### Canonical reference-page pixels
+页眉、页尾或页边若以百分比配置，百分比本身不是坐标。应用到某一页时，程序根据该页原图宽高计算一次边界，得到的实际位置随后使用原图 X/Y。
 
-**Use for:** persisted project layout geometry such as first-column U,
-column width, gutter, body start/end V, line height and row spacing.
+## 内部临时变换
 
-The persisted value is measured in pixels of one explicit canonical reference
-page. `geometry_reference_width` records that page's canonical width. At
-runtime, layout geometry is scaled to the current page's canonical width.
+为支持镜像、RTL、竖排、OCR 裁带或性能优化，算法内部可以临时旋转、镜像、裁剪或缩小图像。这些临时坐标只存在于函数内部：
 
-This keeps values human-readable as real full-resolution pixels while also
-preserving layout on projects whose page images have different resolutions.
+1. 进入内部处理前，从原图 X/Y 得到临时位置；
+2. 完成检测后，立即换回原图 X/Y；
+3. 不把临时 U/V、analysis、OCR-band 或缩放坐标写入项目设置；
+4. 不允许临时缩放倍率改变设置参数的含义。
 
-A bare `AppSettings` object has no implicit reference width. When a real new
-project is opened, the first page establishes the initial canonical reference
-width; the shipped numeric defaults are converted so their historical 1400px
-physical meaning is preserved. Representative-page layout analysis may later
-replace that reference with the detected aggregate reference width.
+换句话说，内部可以“怎么计算”，但对用户和文件只有原图 X/Y 一套坐标。
 
-### Percentages
+## 旧项目迁移
 
-**Use for:** physical Profile rules that should follow page size, including
-header, footer and page-edge exclusions.
+旧版本可能包含两类历史坐标：
 
-For example, a 3% header on a 1642-pixel-high source image resolves to
-`round(1642 * 0.03) = 49` source pixels.
+- v1：相对于 GUI/显示宽度的 `legacy_display_pixels`；
+- v2：带 `geometry_reference_width` 的参考页坐标。
 
-## Internal-only spaces
+打开旧项目并取得真实原图尺寸后，程序会把这些历史几何值**一次性换算成当前原图的全分辨率像素**，升级为 coordinate version 3。迁移后：
 
-### Canonical full-resolution pixels
+- `geometry_coordinate_space = source_image_pixels`；
+- `geometry_reference_width` 和 `parameter_display_width` 不再参与运行；
+- 新保存的 `settings.json` 不再写出这两个旧基准字段；
+- 后续运行不再进行 reference-width 或 1400px 归一化。
 
-Layout analysis normalizes reading direction into canonical U/V coordinates:
+旧字段只作为读取历史项目时的迁移输入，不是当前坐标系统的一部分。
 
-- U is the across-column axis.
-- V is the reading progression axis.
-- identity and mirror transforms keep the full source resolution.
-- 90-degree transforms swap canonical width/height.
+## 命名规则
 
-Canonical coordinates are runtime geometry. When a value is exposed externally,
-its coordinate space must be named explicitly or converted back to source
-coordinates.
+跨模块、持久化或导出边界统一使用能表达原图坐标的名称，例如 `source_x`、`source_y`、`source_xy`、`source_xyxy`。内部临时变量可以描述 analysis/band/transform，但不得作为用户设置或持久化坐标输出。
 
-### Analysis pixels
+## 导出契约
 
-Temporary downscaled images used for projections/layout analysis. These
-coordinates must be converted back to canonical full-resolution pixels before
-leaving the analysis function.
+机器可读 `coordinate_contract` 的持久化坐标版本为 3：
 
-### OCR-band local pixels
+- annotations: `source_image_pixels`
+- settings_geometry: `source_image_pixels`
+- tuning_distances: `source_image_pixels`
+- temporary_processing: internal only / not persisted
 
-Temporary coordinates inside a cropped/straightened OCR band. They must be
-mapped to canonical and then source coordinates before becoming PDIC markers or
-exported source positions.
-
-### 1400px reference units
-
-OCR/profile tuning distances such as candidate-band margins and left-edge
-tolerances use a fixed 1400-canonical-width reference. These are algorithmic
-tuning units, not page coordinates.
-
-## Legacy display pixels
-
-Older Picture Capture projects stored layout geometry relative to
-`parameter_display_width`, which depended on GUI display scaling.
-
-On first open, once a real page size is known, the project is migrated once to
-canonical reference-page pixels. `parameter_display_width` remains only as a
-compatibility input for unmigrated projects and must not be used by new
-features.
-
-Migration must preserve the page geometry produced before migration, including
-when later pages have a different resolution.
-
-## Naming rules
-
-Use coordinate-specific names at subsystem boundaries:
-
-- source: `source_x`, `source_y`, `*_xy`
-- canonical: `canonical_u`, `canonical_v`, `*_vu`
-- analysis: `analysis_x`, `analysis_y`
-- OCR band: `band_x`, `band_y`
-- reference-page persisted geometry: document the
-  `geometry_reference_width`
-
-Avoid ambiguous exported names such as a bare `header_y` when the coordinate
-space is not explicit.
-
-## Export contract
-
-Training annotations include a machine-readable `coordinate_contract`.
-
-- ground-truth PDIC points and PPP polygons: source-image pixels
-- physical Profile boundaries: source-image pixels
-- derived runtime layout: canonical full-resolution pixels with explicit
-  transform and canonical size
-- persisted settings: canonical reference-page pixels with an explicit
-  `geometry_reference_width`
-
-A single JSON object must never silently mix two coordinate spaces under
-unqualified field names.
+同一个持久化 JSON 不应再混用另一套页面坐标。

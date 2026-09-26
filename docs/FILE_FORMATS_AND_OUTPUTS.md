@@ -5,10 +5,10 @@
 跨机器、跨版本可复用的标注坐标统一以**原图像素**为对外标准；原点位于原图左上角，X 向右、Y 向下。
 
 - PDIC、PPP、最终 OCR 词头、Crop Plan 的 `source_xyxy`、切图日志：`source_image_pixels`。
-- 版式栏结构可使用 `canonical_full_resolution_pixels` 或 `canonical_reference_page_pixels`，但文件中必须同时保存坐标空间、变换类型和/或参考宽度。
+- 项目版式设置与对外栏结构统一使用 `source_image_pixels`；不再保存 reference-width/canonical U/V 作为第二套持久化坐标。
 - Profile 页眉/页尾/页边规则保存百分比，应用到具体页时解析为该页原图物理边界。
-- OCR band/analysis 坐标只属于中间计算，不应被外部工具当作原图坐标。
-- 旧 `parameter_display_width` 仅用于迁移历史项目。
+- OCR band/analysis/旋转坐标只属于函数内部临时计算，不作为项目设置或对外坐标。
+- 旧 `parameter_display_width` / `geometry_reference_width` 仅用于一次性迁移历史项目。
 
 完整定义见 [coordinate-system.md](coordinate-system.md)。
 
@@ -151,7 +151,7 @@ X/Y 直接读取 PDIC 已保存比例值，不重新从像素计算，也不带 
 
 ### `QT/PaddleOCR/`
 
-OCR 缓存与诊断。JSON v3 中保存 `coordinate_spaces` 元数据：最终词头与 `source_x/source_y` 为原图像素，`canonical_u/canonical_v` 为当前页规范全分辨率坐标，OCR `box` 为候选带局部坐标。不要把这三者混用。
+OCR 缓存与诊断。最终词头与所有对外坐标使用 `source_x/source_y` 原图像素；OCR box 等临时坐标仅用于内部诊断，不得回写为项目设置。
 
 主要文件：
 
