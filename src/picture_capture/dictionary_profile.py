@@ -587,6 +587,7 @@ def apply_project_profile_components(path: Path | None, settings: Any) -> None:
         return
     layout = raw.get("layout") or {}
     ocr = raw.get("ocr") or {}
+    visual_templates = raw.get("visual_marker_templates") or {}
     mapping = {
         "layout_writing_mode": layout.get("writing_mode"),
         "layout_text_direction": layout.get("text_direction"),
@@ -598,7 +599,19 @@ def apply_project_profile_components(path: Path | None, settings: Any) -> None:
         "paddle_language": ocr.get("paddle_language"),
         "tesseract_language": ocr.get("tesseract_language"),
         "paddle_use_textline_orientation": ocr.get("use_textline_orientation"),
+        "profile_symbol_template_version": visual_templates.get("version"),
+        "profile_symbol_template_mode": visual_templates.get("mode"),
+        "profile_symbol_template_group_mode": visual_templates.get("group_mode"),
+        "profile_symbol_template_threshold": visual_templates.get("threshold"),
+        "profile_symbol_template_debug_enabled": visual_templates.get("debug"),
     }
+    samples = visual_templates.get("samples")
+    if isinstance(samples, list):
+        mapping["profile_symbol_templates_json"] = json.dumps(
+            {"version": 1, "samples": samples},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
     writing = str(mapping["layout_writing_mode"] or getattr(settings, "layout_writing_mode", "horizontal-tb"))
     direction = str(mapping["layout_text_direction"] or getattr(settings, "layout_text_direction", "ltr"))
     mapping["layout_transform"] = _canonical_transform(writing, direction)
@@ -637,6 +650,15 @@ def write_project_profile(
         # an explicit Profile selection (force=True) creates v3 instead.
         if isinstance(existing, dict) and existing.get("format") != PROFILE_FORMAT_V3:
             return
+    try:
+        template_payload = json.loads(
+            str(getattr(settings, "profile_symbol_templates_json", "") or "")
+        )
+    except (TypeError, ValueError, json.JSONDecodeError):
+        template_payload = {"version": 1, "samples": []}
+    if not isinstance(template_payload, dict):
+        template_payload = {"version": 1, "samples": []}
+
     payload = {
         "format": PROFILE_FORMAT_V3,
         "schema_version": 3,
@@ -657,6 +679,27 @@ def write_project_profile(
             "use_textline_orientation": bool(getattr(settings, "paddle_use_textline_orientation", False)),
         },
         "headword": selected_profile.headword,
+        "visual_marker_templates": {
+            "version": int(
+                getattr(settings, "profile_symbol_template_version", 0) or 0
+            ),
+            "mode": str(
+                getattr(settings, "profile_symbol_template_mode", "combined")
+                or "combined"
+            ),
+            "group_mode": str(
+                getattr(settings, "profile_symbol_template_group_mode", "role")
+                or "role"
+            ),
+            "threshold": float(
+                getattr(settings, "profile_symbol_template_threshold", 0.68)
+                or 0.68
+            ),
+            "debug": bool(
+                getattr(settings, "profile_symbol_template_debug_enabled", False)
+            ),
+            "samples": list(template_payload.get("samples") or []),
+        },
         "overrides": {
             "settings": profile_settings_overrides(settings, selected),
             "grammar": {},

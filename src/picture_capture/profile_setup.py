@@ -51,6 +51,15 @@ from .project_storage import (
     profile_path as project_profile_path,
     settings_path,
 )
+from .visual_marker_templates import (
+    parse_visual_marker_samples,
+    serialize_visual_marker_samples,
+    split_configured_symbols,
+)
+from .visual_marker_ui import (
+    VisualMarkerCaptureDialog,
+    VisualMarkerSamplesDialog,
+)
 
 
 OCR_LANGUAGE_LABEL_TO_VALUE = {
@@ -149,6 +158,16 @@ SIDE_LABEL_TO_VALUE = {
     "右侧固定": "right",
     "A/B 页外侧交替": "outer",
     "A/B 页内侧交替": "inner",
+}
+
+VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE = {
+    "字符符号集 + 视觉样本": "combined",
+    "仅字符符号集": "off",
+    "视觉样本优先": "template_first",
+}
+VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE = {
+    "按角色合并（推荐）": "role",
+    "按具体符号区分": "literal",
 }
 def _label_for_value(mapping: dict[str, str], value: str, fallback: str) -> str:
     for label, mapped in mapping.items():
@@ -380,6 +399,38 @@ class ProjectProfileWizard(tk.Toplevel):
             if symbol_inventory_saved
             else int(symbol_defaults["lane_tolerance_percent"])
         ))
+        template_mode = str(
+            getattr(s, "profile_symbol_template_mode", "combined") or "combined"
+        )
+        self.symbol_template_mode_var = tk.StringVar(value=_label_for_value(
+            VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE,
+            template_mode,
+            "字符符号集 + 视觉样本",
+        ))
+        template_group_mode = str(
+            getattr(s, "profile_symbol_template_group_mode", "role") or "role"
+        )
+        self.symbol_template_group_var = tk.StringVar(value=_label_for_value(
+            VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE,
+            template_group_mode,
+            "按角色合并（推荐）",
+        ))
+        self.symbol_template_threshold_var = tk.DoubleVar(value=max(
+            0.35,
+            min(
+                0.95,
+                float(getattr(s, "profile_symbol_template_threshold", 0.68) or 0.68),
+            ),
+        ))
+        self.symbol_template_debug_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_symbol_template_debug_enabled", False))
+        )
+        self.visual_marker_samples = parse_visual_marker_samples(
+            getattr(s, "profile_symbol_templates_json", "")
+        )
+        self.effective_entry_markers_var = tk.StringVar(value="")
+        self.effective_bracket_markers_var = tk.StringVar(value="")
+        self.visual_marker_sample_count_var = tk.StringVar(value="")
         self.cjk_allow_single_var = tk.BooleanVar(value=(
             bool(getattr(s, "profile_cjk_allow_single_headword", True))
             if parser_controls_saved else structure_defaults["cjk_single_visual"]
@@ -437,10 +488,18 @@ class ProjectProfileWizard(tk.Toplevel):
             self.entry_marker_symbols_var,
             self.bracket_open_symbols_var,
             self.symbol_lane_tolerance_var,
+            self.symbol_template_mode_var,
+            self.symbol_template_group_var,
+            self.symbol_template_threshold_var,
         ):
             var.trace_add(
                 "write", lambda *_args: self.after_idle(self._headword_specificity_changed)
             )
+        for var in (self.entry_marker_symbols_var, self.bracket_open_symbols_var):
+            var.trace_add(
+                "write", lambda *_args: self.after_idle(self._refresh_symbol_template_summary)
+            )
+        self._refresh_symbol_template_summary()
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self, padding=10)
@@ -1570,7 +1629,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=1, column=1, sticky="ew", pady=3)
         ttk.Label(
             self.symbol_inventory_frame,
-            text="例如 ○ ● ◇ ◆ □ ■ △ ▲ ※；空格/逗号分隔",
+            text="例如 ○●◉◯；可连续输入，也可用空格/逗号分隔",
             foreground="#666666",
         ).grid(row=1, column=2, sticky="w", padx=(6, 0), pady=3)
         ttk.Label(
@@ -1610,6 +1669,97 @@ class ProjectProfileWizard(tk.Toplevel):
             text="% 行高（越小越严格；默认 50%）",
             foreground="#666666",
         ).grid(row=5, column=2, sticky="w", padx=(6, 0), pady=3)
+
+        effective = ttk.Frame(self.symbol_inventory_frame)
+        effective.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(4, 2))
+        ttk.Label(
+            effective, textvariable=self.effective_entry_markers_var,
+            foreground="#555555",
+        ).pack(anchor="w")
+        ttk.Label(
+            effective, textvariable=self.effective_bracket_markers_var,
+            foreground="#555555",
+        ).pack(anchor="w")
+
+        visual_templates = ttk.LabelFrame(
+            self.symbol_inventory_frame, text="本词典视觉标记样本", padding=7,
+        )
+        visual_templates.grid(
+            row=7, column=0, columnspan=3, sticky="ew", pady=(8, 0)
+        )
+        visual_templates.columnconfigure(1, weight=1)
+
+        ttk.Label(visual_templates, text="识别方式：").grid(
+            row=0, column=0, sticky="e", padx=(0, 6), pady=3
+        )
+        ttk.Combobox(
+            visual_templates,
+            textvariable=self.symbol_template_mode_var,
+            values=tuple(VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE),
+            state="readonly",
+            width=22,
+        ).grid(row=0, column=1, sticky="w", pady=3)
+
+        ttk.Label(visual_templates, text="样本组织：").grid(
+            row=1, column=0, sticky="e", padx=(0, 6), pady=3
+        )
+        ttk.Combobox(
+            visual_templates,
+            textvariable=self.symbol_template_group_var,
+            values=tuple(VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE),
+            state="readonly",
+            width=22,
+        ).grid(row=1, column=1, sticky="w", pady=3)
+
+        ttk.Label(visual_templates, text="最低匹配分数：").grid(
+            row=2, column=0, sticky="e", padx=(0, 6), pady=3
+        )
+        tk.Spinbox(
+            visual_templates,
+            from_=0.35, to=0.95, increment=0.02, width=7,
+            textvariable=self.symbol_template_threshold_var,
+            format="%.2f",
+        ).grid(row=2, column=1, sticky="w", pady=3)
+        ttk.Label(
+            visual_templates,
+            text="默认 0.68；真实扫描差异较大时可适度降低",
+            foreground="#666666",
+        ).grid(row=2, column=2, sticky="w", padx=(6, 0), pady=3)
+
+        ttk.Checkbutton(
+            visual_templates,
+            text="在 OCR 诊断中记录模板匹配分数与样本来源",
+            variable=self.symbol_template_debug_var,
+            command=self._headword_specificity_changed,
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
+
+        ttk.Label(
+            visual_templates,
+            textvariable=self.visual_marker_sample_count_var,
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(5, 3))
+
+        sample_buttons = ttk.Frame(visual_templates)
+        sample_buttons.grid(row=5, column=0, columnspan=3, sticky="w")
+        ttk.Button(
+            sample_buttons,
+            text="从页面采样…",
+            command=self._capture_visual_marker_sample,
+        ).pack(side="left")
+        ttk.Button(
+            sample_buttons,
+            text="查看/删除样本",
+            command=self._show_visual_marker_samples,
+        ).pack(side="left", padx=(6, 0))
+        ttk.Button(
+            sample_buttons,
+            text="清空样本",
+            command=self._clear_visual_marker_samples,
+        ).pack(side="left", padx=(6, 0))
+        ttk.Label(
+            visual_templates,
+            text="直接框选这本词典真实印刷的入口标记；每类建议采 2–5 个不同页面样本。",
+            foreground="#666666",
+        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
         specificity = ttk.LabelFrame(
             tab, text="词头专属性（当前结构的视觉证据）", padding=10,
@@ -1880,7 +2030,108 @@ class ProjectProfileWizard(tk.Toplevel):
         self._profile_revision += 1
         self._mark_validation_stale()
         self._refresh_headword_tuning_status()
+        self._refresh_symbol_template_summary()
         self._refresh_summary()
+
+    def _refresh_symbol_template_summary(self) -> None:
+        if not hasattr(self, "effective_entry_markers_var"):
+            return
+        entry = split_configured_symbols(self.entry_marker_symbols_var.get())
+        bracket = split_configured_symbols(self.bracket_open_symbols_var.get())
+        self.effective_entry_markers_var.set(
+            "有效入口标记：" + (" ".join(entry) if entry else "无")
+        )
+        self.effective_bracket_markers_var.set(
+            "有效括号起始：" + (" ".join(bracket) if bracket else "无")
+        )
+        samples = list(getattr(self, "visual_marker_samples", []) or [])
+        entry_count = sum(
+            1 for sample in samples
+            if str(sample.get("role") or "") == "entry_marker"
+        )
+        bracket_count = sum(
+            1 for sample in samples
+            if str(sample.get("role") or "") == "bracket_open"
+        )
+        self.visual_marker_sample_count_var.set(
+            f"入口标记样本：{entry_count} ｜ 括号起始样本：{bracket_count}"
+        )
+
+    def _capture_visual_marker_sample(self) -> None:
+        if not self.project.images:
+            messagebox.showinfo(
+                "无法采样", "项目中没有可用页面。", parent=self,
+            )
+            return
+        initial_index = 0
+        if self._validation_results:
+            try:
+                initial_index = int(
+                    self._validation_results[
+                        self.validation_preview_slot % len(self._validation_results)
+                    ][0]
+                )
+            except (TypeError, ValueError, IndexError):
+                initial_index = 0
+        elif self.sample_indices:
+            initial_index = int(self.sample_indices[0])
+        entry = split_configured_symbols(self.entry_marker_symbols_var.get())
+        VisualMarkerCaptureDialog(
+            self,
+            self.project.images,
+            initial_index=initial_index,
+            initial_role="entry_marker",
+            initial_literal=entry[0] if entry else "",
+            on_saved=self._visual_marker_sample_saved,
+        )
+
+    def _visual_marker_sample_saved(self, sample: dict) -> None:
+        samples = [
+            dict(item) for item in getattr(self, "visual_marker_samples", []) or []
+        ]
+        sample_id = str(sample.get("id") or "")
+        if sample_id:
+            samples = [
+                item for item in samples
+                if str(item.get("id") or "") != sample_id
+            ]
+        samples.append(dict(sample))
+        self._replace_visual_marker_samples(samples)
+
+    def _replace_visual_marker_samples(self, samples: list[dict]) -> None:
+        self.visual_marker_samples = [dict(sample) for sample in samples]
+        self.working.profile_symbol_template_version = 1
+        self.working.profile_symbol_templates_json = (
+            serialize_visual_marker_samples(self.visual_marker_samples)
+        )
+        self._refresh_symbol_template_summary()
+        self._headword_specificity_changed()
+
+    def _show_visual_marker_samples(self) -> None:
+        if not getattr(self, "visual_marker_samples", None):
+            messagebox.showinfo(
+                "本词典视觉标记样本",
+                "尚未保存视觉标记样本。请先点击【从页面采样…】。",
+                parent=self,
+            )
+            return
+        VisualMarkerSamplesDialog(
+            self,
+            [dict(sample) for sample in self.visual_marker_samples],
+            on_changed=self._replace_visual_marker_samples,
+        )
+
+    def _clear_visual_marker_samples(self) -> None:
+        if not getattr(self, "visual_marker_samples", None):
+            return
+        if not messagebox.askyesno(
+            "清空视觉标记样本",
+            "确定清空当前项目保存的全部视觉标记样本吗？\n"
+            "原始扫描页不会被修改。",
+            parent=self,
+        ):
+            return
+        self._replace_visual_marker_samples([])
 
     def _refresh_headword_structure_summary(self) -> None:
         if not hasattr(self, "headword_structure_summary_var"):
@@ -2117,8 +2368,12 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_symbol_inventory_enabled = bool(
             self.symbol_inventory_enabled_var.get()
         )
-        s.profile_entry_marker_symbols = self.entry_marker_symbols_var.get().strip()
-        s.profile_bracket_open_symbols = self.bracket_open_symbols_var.get().strip()
+        s.profile_entry_marker_symbols = " ".join(
+            split_configured_symbols(self.entry_marker_symbols_var.get())
+        )
+        s.profile_bracket_open_symbols = " ".join(
+            split_configured_symbols(self.bracket_open_symbols_var.get())
+        )
         s.profile_symbol_visual_rescue_enabled = bool(
             self.symbol_visual_rescue_var.get()
         )
@@ -2127,6 +2382,24 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         s.profile_symbol_lane_tolerance_percent = max(
             20, min(120, int(self.symbol_lane_tolerance_var.get()))
+        )
+        s.profile_symbol_template_version = 1
+        s.profile_symbol_template_mode = VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE.get(
+            self.symbol_template_mode_var.get(), "combined"
+        )
+        s.profile_symbol_template_group_mode = (
+            VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE.get(
+                self.symbol_template_group_var.get(), "role"
+            )
+        )
+        s.profile_symbol_template_threshold = max(
+            0.35, min(0.95, float(self.symbol_template_threshold_var.get()))
+        )
+        s.profile_symbol_templates_json = serialize_visual_marker_samples(
+            self.visual_marker_samples
+        )
+        s.profile_symbol_template_debug_enabled = bool(
+            self.symbol_template_debug_var.get()
         )
         s.profile_cjk_allow_single_headword = bool(self.cjk_allow_single_var.get())
         s.profile_cjk_allow_bracketed_headword = bool(self.cjk_allow_bracketed_var.get())
@@ -2643,6 +2916,8 @@ class ProjectProfileWizard(tk.Toplevel):
             raw_pct = 0
             lower_total = 0
             lower_accepted = 0
+            template_matches = 0
+            template_scores: list[float] = []
             reject_counts: dict[str, int] = {}
             if index < len(columns):
                 column = columns[index] or {}
@@ -2668,6 +2943,17 @@ class ProjectProfileWizard(tk.Toplevel):
                         center_y = (float(box[1]) + float(box[3])) / 2.0
                     except (TypeError, ValueError):
                         continue
+                    features = row.get("features") if isinstance(row, dict) else None
+                    if isinstance(features, dict):
+                        try:
+                            template_score = float(
+                                features.get("visual_marker_template_score") or 0.0
+                            )
+                        except (TypeError, ValueError):
+                            template_score = 0.0
+                        if template_score > 0:
+                            template_matches += 1
+                            template_scores.append(template_score)
                     if center_y < band_height * 0.50:
                         continue
                     lower_total += 1
@@ -2711,10 +2997,16 @@ class ProjectProfileWizard(tk.Toplevel):
             warning = ""
             if raw_pct >= 85 and selected_pct <= 65:
                 warning = " ⚠原始OCR完整但词头在中途停止"
+            template_text = ""
+            if bool(getattr(settings, "profile_symbol_template_debug_enabled", False)):
+                best_template = max(template_scores) if template_scores else 0.0
+                template_text = (
+                    f"｜模板命中{template_matches}（最高{best_template:.2f}）"
+                )
             parts.append(
                 f"{index + 1}栏：原始OCR至{raw_pct}%｜词头至{selected_pct}%｜"
                 f"下半页候选{lower_total}（通过{lower_accepted}；拒绝主因：{reason_text}）｜"
-                f"左缘最大漂移{drift}px{warning}"
+                f"左缘最大漂移{drift}px{template_text}{warning}"
             )
         return "\n".join(parts)
 

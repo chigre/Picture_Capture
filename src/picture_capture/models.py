@@ -325,6 +325,15 @@ class AppSettings:
     # text.  Tolerance is expressed as a percentage of local OCR line height.
     profile_symbol_lane_required: bool = True
     profile_symbol_lane_tolerance_percent: int = 50
+    # Project-level visual marker templates captured from real scanned pages.
+    # The payload stores normalized binary templates rather than absolute source
+    # paths, so copied projects remain self-contained.
+    profile_symbol_template_version: int = 0
+    profile_symbol_template_mode: str = "combined"  # off / combined / template_first
+    profile_symbol_template_group_mode: str = "role"  # role / literal
+    profile_symbol_template_threshold: float = 0.68
+    profile_symbol_templates_json: str = ""
+    profile_symbol_template_debug_enabled: bool = False
     profile_cjk_allow_single_headword: bool = True
     profile_cjk_allow_bracketed_headword: bool = True
     profile_cjk_require_left_edge: bool = True
