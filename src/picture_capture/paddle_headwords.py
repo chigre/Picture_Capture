@@ -449,6 +449,7 @@ def _parse_chinese_bracketed_headword(
     *,
     enforce_chinese_language: bool = True,
     allow_japanese_reading_prefix: bool = False,
+    allowed_openers: tuple[str, ...] | None = None,
 ) -> HeadwordParse | None:
     """Parse complete or line-wrapped Chinese bracket headwords.
 
@@ -467,14 +468,27 @@ def _parse_chinese_bracketed_headword(
         return None
     parse_text, repairs = _repair_headword_ocr(text)
 
-    # Chinese profiles require the bracket at the physical line start.  The
-    # Japanese shueisha-style profile may prepend a short kana reading such as
+    # Chinese profiles require a configured bracket at the physical line
+    # start. Japanese profiles may prepend a short kana reading such as
     # "あい【愛】"; that prefix is entry metadata, not part of the lemma.
+    openers = tuple(
+        sorted(
+            dict.fromkeys(
+                allowed_openers
+                or ("【", "〔", "［", "[", "「", "『", "〈", "《")
+            ),
+            key=len,
+            reverse=True,
+        )
+    )
+    if not openers:
+        return None
+    opener_pattern = "|".join(re.escape(value) for value in openers)
     reading_prefix = ""
     if allow_japanese_reading_prefix:
         opener = re.match(
-            r"^\s*(?:(?P<reading>[\u3040-\u30ff\u31f0-\u31ffー・･]{1,12})\s*)?"
-            r"(?P<opening>[【〔［\[])\s*(?P<remainder>.*)$",
+            rf"^\s*(?:(?P<reading>[\u3040-\u30ff\u31f0-\u31ffー・･]{{1,12}})\s*)?"
+            rf"(?P<opening>{opener_pattern})\s*(?P<remainder>.*)$",
             parse_text,
             flags=re.UNICODE,
         )
@@ -482,7 +496,7 @@ def _parse_chinese_bracketed_headword(
             reading_prefix = str(opener.group("reading") or "")
     else:
         opener = re.match(
-            r"^\s*(?P<opening>[【〔［\[])\s*(?P<remainder>.*)$",
+            rf"^\s*(?P<opening>{opener_pattern})\s*(?P<remainder>.*)$",
             parse_text,
             flags=re.UNICODE,
         )
@@ -491,7 +505,12 @@ def _parse_chinese_bracketed_headword(
 
     opening = opener.group("opening")
     remainder = opener.group("remainder").rstrip()
-    close_match = re.search(r"[】〕］\]]", remainder, flags=re.UNICODE)
+    configured_closer = _BRACKET_CLOSER_BY_OPENER.get(opening)
+    close_match = (
+        re.search(re.escape(configured_closer), remainder, flags=re.UNICODE)
+        if configured_closer
+        else re.search(r"[】〕］\]」』〉》]", remainder, flags=re.UNICODE)
+    )
     is_closed = close_match is not None
 
     if is_closed:
@@ -1805,8 +1824,14 @@ def parse_headword_text(
             numbered_prefix_matched = True
             text = text[prefix.end():]
             text = re.sub(r"^\s*[.．]\s*", "", text, count=1)
+            bracket_inventory = _configured_symbol_inventory(
+                settings, active_profile
+            )
             bracketed = _parse_chinese_bracketed_headword(
-                text, settings, enforce_chinese_language=False,
+                text,
+                settings,
+                enforce_chinese_language=False,
+                allowed_openers=tuple(bracket_inventory["bracket_openers"]),
             )
             if bracketed is not None:
                 return bracketed
@@ -1835,6 +1860,9 @@ def parse_headword_text(
         explicit_cjk_profile = bool(
             profile is not None and active_profile.family == "cjk_visual"
         )
+        bracket_inventory = _configured_symbol_inventory(
+            settings, active_profile
+        )
         chinese = _parse_chinese_bracketed_headword(
             text,
             settings,
@@ -1842,6 +1870,7 @@ def parse_headword_text(
             allow_japanese_reading_prefix=(
                 explicit_cjk_profile and _is_japanese_ocr(settings)
             ),
+            allowed_openers=tuple(bracket_inventory["bracket_openers"]),
         )
         if chinese is not None:
             return chinese
