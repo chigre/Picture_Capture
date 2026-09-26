@@ -2235,6 +2235,25 @@ def test_v281_ocr_single_han_can_use_sparse_right_context_without_projection_run
     # that the new OCR-candidate reverse-validation path itself stayed off.
 
 
+def test_v281_cjk_projection_works_on_binary_1bit_scan():
+    import numpy as np
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import _cjk_visual_projection_runs
+
+    gray = np.full((260, 180), 255, dtype=np.uint8)
+    # Ordinary body-height rows.
+    for y0 in (20, 55, 190, 225):
+        gray[y0:y0 + 20, 4:55] = 0
+    # One oversized single-character row.
+    gray[105:158, 4:58] = 0
+    settings = AppSettings(character_height=20)
+    zone_width, runs = _cjk_visual_projection_runs(
+        gray, 0, settings, 1.0,
+    )
+    assert zone_width > 0
+    assert any(start <= 105 and end >= 158 for start, end in runs)
+
+
 def test_v281_candidate_band_is_capped_to_current_column_width():
     from PIL import Image
     from picture_capture.models import AppSettings
