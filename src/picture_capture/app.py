@@ -4474,7 +4474,10 @@ class ReviewWindow(tk.Toplevel):
         self._review_auto_zoom_job = None
         if not self.review_zoom_auto:
             return
-        self._request_render_rows(focus_index=self.active_index)
+        if self._filter_rows_active:
+            self._request_filter_batch_render()
+        else:
+            self._request_render_rows(focus_index=self.active_index)
 
     def _stored_review_zoom_percent(self) -> int:
         return 0 if self.review_zoom_auto else round(self.review_zoom * 100)
@@ -5698,47 +5701,73 @@ class ReviewWindow(tk.Toplevel):
 
     def _update_title(self) -> None:
         page = self.parent.current_page.name if self.parent.current_page else ""
+        if self._filter_rows_active:
+            total = len(self.filtered_targets)
+            self.title(f"词条校对 — 筛选模式 — 共 {total} 条")
+            return
         total = len(self.editors)
         current = self.active_index + 1 if total else 0
         remaining = max(0, total - current)
         self.title(f"词条校对 — {page} — 当前: {current} 剩余: {remaining} 合计: {total}")
 
+    def _finish_close_review(self) -> None:
+        if self.parent.review_window is self:
+            self.parent.review_window = None
+        self._prefetch_closed = True
+        self.parent._invalidate_ui_worker(self._review_render_worker_key)
+        self.parent._invalidate_ui_worker(f"focused-filter-scan-{id(self)}")
+        self.parent._invalidate_ui_worker(f"focused-filter-render-{id(self)}")
+        if self._filter_save_job is not None:
+            try:
+                self.after_cancel(self._filter_save_job)
+            except tk.TclError:
+                pass
+            self._filter_save_job = None
+        if self._review_auto_zoom_job is not None:
+            try:
+                self.after_cancel(self._review_auto_zoom_job)
+            except tk.TclError:
+                pass
+            self._review_auto_zoom_job = None
+        self._network_lookup_serial += 1
+        if self._network_lookup_job is not None:
+            try:
+                self.after_cancel(self._network_lookup_job)
+            except tk.TclError:
+                pass
+            self._network_lookup_job = None
+        if self._network_poll_job is not None:
+            try:
+                self.after_cancel(self._network_poll_job)
+            except tk.TclError:
+                pass
+            self._network_poll_job = None
+        self._network_pending_serials.clear()
+        with self._prefetch_lock:
+            self._prefetched_pages.clear()
+        self.parent.clear_review_entry_highlight()
+        self.destroy()
+        self.parent.redraw()
+
     def _close_review(self) -> None:
+        if self._filter_rows_active:
+            self._flush_focused_changes_now()
+            if self._filter_save_running or self._filter_pending_changes:
+                self._filter_close_after_save = True
+                self.parent.status_var.set("正在保存筛选校对修改，完成后关闭校对窗口。")
+                return
+            self._finish_close_review()
+            return
         try:
             self.save()
         finally:
-            if self.parent.review_window is self:
-                self.parent.review_window = None
-            self._prefetch_closed = True
-            self.parent._invalidate_ui_worker(self._review_render_worker_key)
-            if self._review_auto_zoom_job is not None:
-                try:
-                    self.after_cancel(self._review_auto_zoom_job)
-                except tk.TclError:
-                    pass
-                self._review_auto_zoom_job = None
-            self._network_lookup_serial += 1
-            if self._network_lookup_job is not None:
-                try:
-                    self.after_cancel(self._network_lookup_job)
-                except tk.TclError:
-                    pass
-                self._network_lookup_job = None
-            if self._network_poll_job is not None:
-                try:
-                    self.after_cancel(self._network_poll_job)
-                except tk.TclError:
-                    pass
-                self._network_poll_job = None
-            self._network_pending_serials.clear()
-            with self._prefetch_lock:
-                self._prefetched_pages.clear()
-            self.parent.clear_review_entry_highlight()
-            self.destroy()
-            self.parent.redraw()
+            self._finish_close_review()
 
     def autosave_commit(self) -> bool:
         """Commit review edits for the shared main-window autosave timer."""
+        if self._filter_rows_active:
+            self._flush_focused_changes_now()
+            return True
         if not self.parent.project or not self.parent.current_page:
             return False
         state = self.parent._foreground_batch_state(self.parent.current_index)
@@ -7026,6 +7055,8 @@ class ReviewWindow(tk.Toplevel):
         self, *, focus_index: int | None = None, reset_scroll: bool = False,
     ) -> None:
         """Prepare proofreading crops off-thread; materialize Tk widgets only on Tk."""
+        if self._filter_rows_active:
+            return
         project = getattr(self.parent, "project", None)
         current_page = getattr(self.parent, "current_page", None)
         parent_image = getattr(self.parent, "image", None)
@@ -7139,6 +7170,8 @@ class ReviewWindow(tk.Toplevel):
         )
 
     def render_rows(self, preloaded_crops: list[Image.Image] | None = None) -> None:
+        if self._filter_rows_active:
+            return
         if preloaded_crops is None:
             self._request_render_rows(focus_index=self.active_index)
             return
@@ -7720,6 +7753,17 @@ class ReviewWindow(tk.Toplevel):
         self.parent.save_settings()
 
     def insert_char(self, char: str) -> None:
+        if self._filter_rows_active and getattr(self, "filter_editors", []):
+            index = max(
+                0, min(
+                    len(self.filter_editors) - 1,
+                    int(getattr(self, "filter_active_local_index", 0)),
+                )
+            )
+            editor = self.filter_editors[index]
+            editor.insert("insert", char)
+            self._on_filter_key(type("_Event", (), {"char": ""})(), index)
+            return
         if self.editors and self.parent._claim_page_for_manual_edit():
             self.editors[self.active_index].insert("insert", char)
             self.on_key(type("_Event", (), {"char": ""})(), self.active_index)
@@ -7780,6 +7824,9 @@ class ReviewWindow(tk.Toplevel):
         self.parent.check_headword_order(all_pages)
 
     def save(self, *, redraw_main: bool = True) -> None:
+        if self._filter_rows_active:
+            self._flush_focused_changes_now()
+            return
         state = self.parent._foreground_batch_state(self.parent.current_index)
         if state == "processing":
             self.parent.status_var.set("当前页正在后台处理，校对窗口保持只读，未写入 PDIC。")
@@ -8002,6 +8049,8 @@ class ReviewWindow(tk.Toplevel):
             ).start()
 
     def change_page(self, delta: int) -> None:
+        if self._filter_rows_active:
+            return
         target = self.parent.current_index + delta
         # Commit review edits without repainting the page we are about to leave.
         # The parent is told that the current PDIC has already been saved, which
