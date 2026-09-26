@@ -4071,6 +4071,47 @@ def _selected_tail_structure_evidence(
     return names, diagnostics
 
 
+def _ordinary_visual_rescue_thresholds(
+    settings: AppSettings,
+) -> dict[str, float | str]:
+    """Resolve thresholds used by ordinary left-edge visual rescue.
+
+    Saved Project Profile tail controls (version >= 1) are fully explicit:
+    rescue uses the same visible boldness threshold shown in the headword
+    specificity panel. Left-edge tolerance and candidate-score thresholds are
+    already applied by the ordinary candidate gate. No extra hidden height,
+    boldness, or confidence threshold is added for saved explicit Profiles.
+
+    Version 0 keeps the historical thresholds only for backward compatibility
+    with projects that have not yet saved the new Profile controls.
+    """
+    explicit = int(
+        getattr(settings, "profile_tail_structure_version", 0) or 0
+    ) >= 1
+    if explicit:
+        return {
+            "source": "visible_profile_specificity",
+            "boldness": float(settings.paddle_boldness_ratio),
+            "height": 0.0,
+            "confidence": float(settings.paddle_rec_score_threshold),
+        }
+    return {
+        "source": "legacy_hidden_thresholds",
+        "boldness": max(
+            float(getattr(settings, "paddle_strong_edge_visual_boldness_ratio", 1.22) or 1.22),
+            float(settings.paddle_boldness_ratio) * 1.03,
+        ),
+        "height": max(
+            0.75,
+            float(getattr(settings, "paddle_strong_edge_visual_height_ratio", 0.90) or 0.90),
+        ),
+        "confidence": max(
+            float(settings.paddle_rec_score_threshold),
+            float(getattr(settings, "paddle_strong_edge_visual_min_confidence", 0.55) or 0.55),
+        ),
+    }
+
+
 def _ordinary_strong_edge_visual_rescue(
     settings: AppSettings,
     parsed: HeadwordParse | None,
@@ -4083,16 +4124,12 @@ def _ordinary_strong_edge_visual_rescue(
     looks_like_continuation: bool,
     marker_noise: bool,
 ) -> bool:
-    """Conservatively recover bold left-edge Latin heads when POS OCR fails.
+    """Recover a left-edge head when selected post-lemma OCR evidence fails.
 
-    The regular Latin profile normally requires a structural cue (usually POS)
-    because ordinary definition prose can also begin near the column edge. Some
-    bilingual scans, however, preserve the bold lemma very clearly while OCR
-    repeatedly corrupts the small italic POS label (for example v.tr. -> vtr.,
-    s.m. -> sim., or v.tr. -> 0. tr.). This rescue keeps the structural rule as
-    the primary path and only substitutes typography when all of the following
-    remain true: strict left edge, clear bold contrast, normal line height,
-    adequate OCR confidence, and no continuation/noise signal.
+    For saved explicit Profiles this path obeys the user-visible specificity
+    controls instead of layering another hidden strong-edge threshold on top.
+    Semantic guards remain: parsed lemma, strict left edge, body region, and
+    no continuation/noise signal.
     """
     tail_controls_active = int(
         getattr(settings, "profile_tail_structure_version", 0) or 0
@@ -4114,22 +4151,12 @@ def _ordinary_strong_edge_visual_rescue(
         or marker_noise
     ):
         return False
-    minimum_boldness = max(
-        float(getattr(settings, "paddle_strong_edge_visual_boldness_ratio", 1.22) or 1.22),
-        float(settings.paddle_boldness_ratio) * 1.03,
-    )
-    minimum_height = max(
-        0.75,
-        float(getattr(settings, "paddle_strong_edge_visual_height_ratio", 0.90) or 0.90),
-    )
-    minimum_confidence = max(
-        float(settings.paddle_rec_score_threshold),
-        float(getattr(settings, "paddle_strong_edge_visual_min_confidence", 0.55) or 0.55),
-    )
+
+    thresholds = _ordinary_visual_rescue_thresholds(settings)
     return bool(
-        boldness_ratio >= minimum_boldness
-        and height_ratio >= minimum_height
-        and confidence >= minimum_confidence
+        boldness_ratio >= float(thresholds["boldness"])
+        and height_ratio >= float(thresholds["height"])
+        and confidence >= float(thresholds["confidence"])
     )
 
 
@@ -4530,11 +4557,7 @@ def filter_headword_records(
         )
         looks_like_continuation = bool(parsed and parsed.looks_like_continuation)
         marker_noise = _looks_like_marker_noise_lemma(parsed)
-        strong_visual = bool(
-            parsed and len(parsed.normalized.strip("-")) >= 3 and at_left and below_header
-            and boldness_ratio >= max(1.25, settings.paddle_boldness_ratio * 1.08)
-            and height_ratio >= 0.92
-        )
+        visual_rescue_thresholds = _ordinary_visual_rescue_thresholds(settings)
         ordinary_strong_edge_visual_rescue = _ordinary_strong_edge_visual_rescue(
             settings,
             parsed,
@@ -4545,6 +4568,20 @@ def filter_headword_records(
             confidence=line.confidence,
             looks_like_continuation=looks_like_continuation,
             marker_noise=marker_noise,
+        )
+        # For saved explicit Profiles the old diagnostic/fusion feature must
+        # describe the same visible rescue decision, not a second hidden gate.
+        strong_visual = (
+            ordinary_strong_edge_visual_rescue
+            if tail_controls_active
+            else bool(
+                parsed
+                and len(parsed.normalized.strip("-")) >= 3
+                and at_left
+                and below_header
+                and boldness_ratio >= max(1.25, settings.paddle_boldness_ratio * 1.08)
+                and height_ratio >= 0.92
+            )
         )
         # "普通左缘短词" always means left-edge. The optional
         # relaxation applies only to the explicitly CJK structural channels.
@@ -4893,6 +4930,22 @@ def filter_headword_records(
                 "cjk_require_left_edge": cjk_require_left_edge,
                 "strong_visual_fallback": strong_visual,
                 "ordinary_strong_edge_visual_rescue": ordinary_strong_edge_visual_rescue,
+                "visual_rescue_threshold_source": str(
+                    visual_rescue_thresholds["source"]
+                ),
+                "visual_rescue_boldness_threshold": round(
+                    float(visual_rescue_thresholds["boldness"]), 4
+                ),
+                "visual_rescue_height_threshold": round(
+                    float(visual_rescue_thresholds["height"]), 4
+                ),
+                "visual_rescue_confidence_threshold": round(
+                    float(visual_rescue_thresholds["confidence"]), 4
+                ),
+                "visual_rescue_left_tolerance": int(settings.paddle_left_tolerance),
+                "visual_rescue_candidate_score_threshold": round(
+                    float(settings.paddle_min_candidate_score), 4
+                ),
                 "image_boundary_supported": bool(image_boundary is not None),
                 "marker_noise": marker_noise,
                 "ordinary_accept": ordinary_accept,
