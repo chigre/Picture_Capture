@@ -1767,6 +1767,7 @@ class SettingsDialog(tk.Toplevel):
         ("内容语言", "dictionary_content_language", str),
         ("正文页码范围", "dictionary_body_page_range", str),
         ("自定义 Profile 名称", "dictionary_custom_profile_name", str),
+        ("图片后缀", "image_suffix", str),
         ("词典分栏", "columns", int), ("两栏中隔", "gutter", int),
         ("单栏宽距", "column_width", int), ("起始点 Y", "start_y", int),
         ("正文结束 Y", "bottom_y", int), ("首栏 X", "manual_x", int),
@@ -1983,6 +1984,7 @@ class SettingsDialog(tk.Toplevel):
         "batch_interval": "自动保存间隔",
         "wordslist_path": "参考词表文件",
         "dictionary_custom_profile_name": "自定义 Profile 显示名称",
+        "image_suffix": "项目图片后缀",
         "detection_method": "默认画线方式",
         "paddle_lens_mode": "Google Lens 运行模式",
         "ocr_engine": "普通文本 OCR 引擎",
@@ -2073,6 +2075,7 @@ class SettingsDialog(tk.Toplevel):
         "dictionary_index_language": "作用：词头/索引语言的 ISO 639-1 两位代码，用于后期词典元数据、索引/排序语义等项目层信息。首次可根据 OCR 语言自动建议，但之后用户选择应被保留。\n\n注意：它描述“索引词是什么语言”，不等同于释义内容语言，也不直接替代 OCR 引擎自己的语言代码。",
         "dictionary_content_language": "作用：释义/正文内容语言的 ISO 639-1 两位代码，用于后期词典元数据。双语词典中它通常和索引语言不同。\n\n注意：它不负责选择 OCR 模型，也不会改变词头排序；请按词典内容语义填写。",
         "dictionary_body_page_range": "作用：记录词典正文的页码范围，例如 1-1250。Project Profile 选择代表页、批量工作流或后续制作步骤可据此区分正文与前后附页。\n\n填写：使用逻辑正文页范围，而不是操作系统文件序号；范围错误可能让代表页/批量流程包含封面、索引或附录。",
+        "image_suffix": "作用：指定项目扫描图片的文件后缀，例如 .png、.tif、.jpg。新建项目时会用它筛选扫描页；已有项目加载后会跟随实际项目设置。\n\n填写时可写 png 或 .png，保存时会统一补上前导点。",
         "dictionary_custom_profile_name": "作用：仅给当前项目的“自定义结构”Profile 一个更易读的显示名称；底层 Profile key 仍保持 custom，解析器和持久化身份不会因此改变。\n\n适用：当你为某本特殊词典建立了自定义结构时，可用书名/版式名标记。它不是新建一个新的内置 Profile，也不会自动改变任何识别规则。",
         "layout_writing_mode": "作用：定义页面文字的书写方式，例如横排或竖排，并影响阅读顺序和内部图像分析方向。\n\n坐标规则：无论选择哪种书写方式，用户设置、PDIC/PPP 和对外坐标始终只保存原图 X/Y；内部临时旋转/镜像不会建立第二套持久化坐标。",
         "layout_text_direction": "作用：定义阅读方向，例如横排 LTR/RTL。它影响栏顺序、阅读顺序和某些界面/导出排序。\n\n坐标规则：阅读方向不会改变设置值的原图 X/Y 语义。",
@@ -2128,7 +2131,7 @@ class SettingsDialog(tk.Toplevel):
         "review_zoom_percent", "wordslist_path",
     )
     PROJECT_RUNTIME_FIELDS = (
-        "batch_interval", "tesseract_language",
+        "image_suffix", "batch_interval", "tesseract_language",
         "paddle_ocr_version", "paddle_max_input_side",
         "illustration_detect_padding", "illustration_detect_right_padding",
     )
@@ -2819,6 +2822,170 @@ class SettingsDialog(tk.Toplevel):
             min_wrap=160,
         )
 
+    @staticmethod
+    def _crop_nonnegative_int(value: str, label: str) -> int:
+        try:
+            number = int(str(value).strip() or "0")
+        except ValueError as exc:
+            raise ValueError(f"{label}必须是整数") from exc
+        if number < 0:
+            raise ValueError(f"{label}不能小于0")
+        return number
+
+    def _crop_payload(self) -> dict:
+        vars_ = self._crop_vars
+        top = self._crop_nonnegative_int(vars_["general_top_y"].get(), "一般页切图上边界Y")
+        bottom = self._crop_nonnegative_int(vars_["general_bottom_y"].get(), "一般页切图下边界Y")
+        left = self._crop_nonnegative_int(vars_["entry_left_padding_x"].get(), "词条左侧额外留白")
+        right = self._crop_nonnegative_int(vars_["entry_right_padding_x"].get(), "词条右侧额外留白")
+        margin = self._crop_nonnegative_int(vars_["polygon_margin"].get(), "PPP多边形外扩")
+        workers = self._crop_nonnegative_int(vars_["parallel_workers"].get(), "并行进程数")
+        if workers > 8:
+            raise ValueError("并行进程数必须为 0–8")
+        if bottom and bottom <= top:
+            raise ValueError("一般页切图下边界Y必须大于上边界Y，或填0表示页面底部")
+        return {
+            "version": CROP_SETTINGS_VERSION,
+            "coordinate_space": SOURCE_COORDINATE_SPACE,
+            "general_top_y": top,
+            "general_bottom_y": bottom,
+            "entry_left_padding_x": left,
+            "entry_right_padding_x": right,
+            "integrate_illustrations": bool(vars_["integrate_illustrations"].get()),
+            "polygon_margin": margin,
+            "parallel_workers": workers,
+            "special_pages": dict(getattr(self, "_crop_specials", {})),
+        }
+
+    def _save_integrated_crop_settings(self) -> None:
+        if not hasattr(self, "_crop_vars"):
+            return
+        payload = self._crop_payload()
+        self.parent.settings.crop_parallel_workers = int(payload["parallel_workers"])
+        if self.parent.project:
+            path = qt_root(self.parent.project.root) / CROP_SETTINGS_FILENAME
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        if getattr(self.parent, "crop_preview_var", None) is not None:
+            if self.parent.crop_preview_var.get():
+                self.parent.redraw()
+
+    def _build_crop_settings_tab(self, tab: ttk.Frame) -> None:
+        page = self._scrollable_settings_page(tab)
+        self._settings_intro(
+            page,
+            "切图设置：词条切图 / 插图切图共用",
+            "Section=0 页面使用这里的通用上下边界；Section>0 页面由主界面页面列表中的 Section 边界接管。"
+            "这些设置随设置中心一起自动保存，不再打开独立切图设置窗口。",
+        )
+        saved = self.parent._load_crop_settings()
+        default_bottom = (
+            self.parent.settings.bottom_y if self.parent.settings.crop_to_bottom_y else 0
+        )
+        self._crop_specials = (
+            dict(saved.get("special_pages", {}))
+            if isinstance(saved.get("special_pages", {}), dict)
+            else {}
+        )
+        self._crop_vars = {
+            "general_top_y": tk.StringVar(
+                value=str(saved.get("general_top_y", self.parent.settings.start_y))
+            ),
+            "general_bottom_y": tk.StringVar(
+                value=str(saved.get("general_bottom_y", default_bottom))
+            ),
+            "entry_left_padding_x": tk.StringVar(
+                value=str(saved.get("entry_left_padding_x", 0))
+            ),
+            "entry_right_padding_x": tk.StringVar(
+                value=str(saved.get("entry_right_padding_x", 0))
+            ),
+            "integrate_illustrations": tk.BooleanVar(
+                value=bool(saved.get("integrate_illustrations", True))
+            ),
+            "polygon_margin": tk.StringVar(
+                value=str(saved.get("polygon_margin", 0))
+            ),
+            "parallel_workers": tk.StringVar(
+                value=str(
+                    saved.get(
+                        "parallel_workers",
+                        self.parent.settings.crop_parallel_workers,
+                    )
+                )
+            ),
+        }
+
+        general = ttk.LabelFrame(page, text="通用切图规则", padding=(12, 10))
+        general.pack(fill="x", pady=(0, 10))
+        for col in (1, 3):
+            general.columnconfigure(col, weight=1)
+
+        ttk.Label(general, text="一般页切图上边界 Y（原图）：").grid(
+            row=0, column=0, sticky="e", pady=4
+        )
+        ttk.Entry(
+            general, textvariable=self._crop_vars["general_top_y"], width=12
+        ).grid(row=0, column=1, sticky="w", padx=(6, 16), pady=4)
+        ttk.Label(general, text="一般页切图下边界 Y（原图）：").grid(
+            row=0, column=2, sticky="e", pady=4
+        )
+        ttk.Entry(
+            general, textvariable=self._crop_vars["general_bottom_y"], width=12
+        ).grid(row=0, column=3, sticky="w", padx=(6, 0), pady=4)
+
+        ttk.Label(general, text="词条 X 左侧额外留白：").grid(
+            row=1, column=0, sticky="e", pady=4
+        )
+        ttk.Entry(
+            general, textvariable=self._crop_vars["entry_left_padding_x"], width=12
+        ).grid(row=1, column=1, sticky="w", padx=(6, 16), pady=4)
+        ttk.Label(general, text="词条 X 右侧额外留白：").grid(
+            row=1, column=2, sticky="e", pady=4
+        )
+        ttk.Entry(
+            general, textvariable=self._crop_vars["entry_right_padding_x"], width=12
+        ).grid(row=1, column=3, sticky="w", padx=(6, 0), pady=4)
+
+        ttk.Label(general, text="PPP 多边形外扩（原图px）：").grid(
+            row=2, column=0, sticky="e", pady=4
+        )
+        ttk.Entry(
+            general, textvariable=self._crop_vars["polygon_margin"], width=12
+        ).grid(row=2, column=1, sticky="w", padx=(6, 16), pady=4)
+        ttk.Label(general, text="并行进程（0=自动）：").grid(
+            row=2, column=2, sticky="e", pady=4
+        )
+        ttk.Entry(
+            general, textvariable=self._crop_vars["parallel_workers"], width=12
+        ).grid(row=2, column=3, sticky="w", padx=(6, 0), pady=4)
+
+        ttk.Checkbutton(
+            general,
+            text="综合插图计算词条切图信息",
+            variable=self._crop_vars["integrate_illustrations"],
+        ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(8, 2))
+
+        ttk.Label(
+            general,
+            text="下边界 0 = 页面底部。以上数值均为全分辨率原图 X/Y；Section>0 时页面 Section 边界优先。",
+            foreground="#666666",
+            justify="left",
+        ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(6, 0))
+
+        section_info = ttk.LabelFrame(page, text="特殊页面范围", padding=(12, 10))
+        section_info.pack(fill="x")
+        ttk.Label(
+            section_info,
+            text="特殊页面统一在主界面【六、页面列表】的 Section 列管理："
+                 "Section=1 可拖动单一上/下边界，Section≥2 可设置多个阅读区。"
+                 "这里不再维护第二套特殊页面覆盖。",
+            justify="left",
+        ).pack(anchor="w", fill="x")
+
     def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:
         super().__init__(parent)
         self.parent = parent
@@ -2870,6 +3037,7 @@ class SettingsDialog(tk.Toplevel):
         ocr_tab = ttk.Frame(notebook)
         display_tab = ttk.Frame(notebook)
         project_tab = ttk.Frame(notebook)
+        crop_tab = ttk.Frame(notebook)
         advanced_tab = ttk.Frame(notebook)
         sort_tab = ttk.Frame(notebook)
         rules_tab = ttk.Frame(notebook)
@@ -2879,6 +3047,7 @@ class SettingsDialog(tk.Toplevel):
             (normal_tab, "普通画线（备用）"),
             (display_tab, "显示 / 校对"),
             (project_tab, "项目 / 批量"),
+            (crop_tab, "切图设置"),
             (advanced_tab, "高级"),
             (sort_tab, "排序"),
             (rules_tab, "过滤规则"),
@@ -2891,6 +3060,7 @@ class SettingsDialog(tk.Toplevel):
             "ocr": ocr_tab,
             "display": display_tab,
             "project": project_tab,
+            "crop": crop_tab,
             "advanced": advanced_tab,
             "profile": advanced_tab,
             "params": common_tab,
@@ -3201,6 +3371,8 @@ class SettingsDialog(tk.Toplevel):
         )
         self._add_check_group(project_page, "普通 OCR 文本处理", project_checks)
 
+        self._build_crop_settings_tab(crop_tab)
+
         advanced = self._scrollable_settings_page(advanced_tab)
         self._settings_intro(
             advanced,
@@ -3346,6 +3518,11 @@ class SettingsDialog(tk.Toplevel):
         self._autosave_job: str | None = None
         self._autosave_ready = True
         for _name, _var in self.vars.items():
+            try:
+                _var.trace_add("write", lambda *_args: self._schedule_autosave())
+            except Exception:
+                pass
+        for _name, _var in getattr(self, "_crop_vars", {}).items():
             try:
                 _var.trace_add("write", lambda *_args: self._schedule_autosave())
             except Exception:
@@ -4061,6 +4238,9 @@ class SettingsDialog(tk.Toplevel):
             self.parent.settings.review_zoom_percent = (
                 0 if review_zoom_percent <= 0 else min(250, max(20, review_zoom_percent))
             )
+            suffix = str(getattr(self.parent.settings, "image_suffix", "") or "").strip()
+            if suffix:
+                self.parent.settings.image_suffix = suffix if suffix.startswith(".") else f".{suffix}"
             if not 0 <= int(self.parent.settings.crop_parallel_workers) <= 8:
                 raise ValueError("切图并行进程数必须为 0–8；0 表示自动，1 表示串行。")
             if not 1 <= int(self.parent.settings.paddle_band_width_ratio) <= 100:
@@ -4078,6 +4258,7 @@ class SettingsDialog(tk.Toplevel):
             if self.parent.settings.headword_sort_mode == "custom":
                 parse_custom_order(self.parent.settings.headword_custom_order)
             self.parent.settings.dictionary_profile_id = self._current_profile_key()
+            self._save_integrated_crop_settings()
             rules_text = self.rules_text.get("1.0", "end-1c")
             parse_headword_filter_rules(rules_text, "规则编辑框")
             if self.parent.project:
