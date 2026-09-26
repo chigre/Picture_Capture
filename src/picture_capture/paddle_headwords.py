@@ -2417,6 +2417,63 @@ def _cjk_right_context_features(metrics: dict[str, Any] | None) -> dict[str, Any
     }
 
 
+def _cjk_candidate_right_context_metrics(
+    gray: np.ndarray,
+    box: tuple[int, int, int, int],
+    median_height: float,
+    settings: AppSettings,
+    *,
+    header_cutoff: int = 0,
+) -> dict[str, Any]:
+    """Right-side layout evidence centered on an OCR single-Han candidate.
+
+    This is the second path for large-head detection: it does not require the
+    left-strip projection to have produced an oversized run first.  OCR can crop
+    a real display glyph to body height, so estimate a plausible display-height
+    window from the page-local median and inspect the area immediately to the
+    right of the candidate itself.
+    """
+    x0, y0, x1, y1 = (int(value) for value in box)
+    box_height = max(1, y1 - y0)
+    expected_height = max(box_height, round(max(1.0, median_height) * 1.45))
+    center_y = (y0 + y1) / 2.0
+    run_start = round(center_y - expected_height / 2.0)
+    run_end = run_start + expected_height
+    image_h, image_w = gray.shape[:2]
+    if run_start < header_cutoff:
+        run_end += header_cutoff - run_start
+        run_start = header_cutoff
+    if run_end > image_h:
+        run_start = max(header_cutoff, run_start - (run_end - image_h))
+        run_end = image_h
+
+    # Start at the candidate's own right edge.  For very narrow/clipped boxes,
+    # keep at least a modest glyph-width estimate so we do not sample through
+    # the right half of the Han character itself.
+    estimated_glyph_width = max(
+        box_height,
+        round(max(1.0, median_height) * 0.78),
+    )
+    context_x = max(x1, x0 + estimated_glyph_width)
+    context_x = min(max(0, context_x), image_w)
+    metrics = _cjk_right_context_metrics(
+        gray,
+        (run_start, run_end),
+        context_x,
+        settings,
+        header_cutoff=header_cutoff,
+    )
+    metrics["candidate_box_height"] = int(box_height)
+    metrics["candidate_expected_height"] = int(expected_height)
+    metrics["candidate_context_x"] = int(context_x)
+    metrics["candidate_run_start"] = int(run_start)
+    metrics["candidate_run_end"] = int(run_end)
+    metrics["candidate_baseline_supported"] = bool(
+        float(metrics.get("baseline_ink_density", 0.0) or 0.0) >= 0.01
+    )
+    return metrics
+
+
 def _cjk_word_for_visual_run(
     records: list[OCRRecord],
     run: tuple[int, int],
@@ -3283,9 +3340,37 @@ def filter_headword_records(
         preceding_gap = max(0, y0 - previous_bottom)
         separated = preceding_gap >= gap_threshold
         leading_record_height_ratio = height_ratio
+        leading_record: OCRRecord | None = None
         if line.records:
             leading_record = min(line.records, key=lambda record: (record.box[0], record.box[1]))
-            leading_record_height_ratio = (leading_record.box[3] - leading_record.box[1]) / median_height
+            leading_record_height_ratio = (
+                leading_record.box[3] - leading_record.box[1]
+            ) / median_height
+
+        cjk_candidate_right_context: dict[str, Any] | None = None
+        cjk_candidate_right_sparse = False
+        if (
+            cjk_single_visual
+            and cjk_allow_single
+            and cjk_at_left
+            and leading_record is not None
+            and bool(getattr(settings, "profile_cjk_right_context_enabled", True))
+        ):
+            cjk_candidate_right_context = _cjk_candidate_right_context_metrics(
+                gray,
+                leading_record.box,
+                median_height,
+                settings,
+                header_cutoff=header_cutoff,
+            )
+            # Candidate-centered sparsity is allowed to rescue a missed visual
+            # projection only when the same X-region contains ordinary body ink
+            # elsewhere on the page.  This prevents an all-white synthetic/empty
+            # region from becoming positive evidence by itself.
+            cjk_candidate_right_sparse = bool(
+                cjk_candidate_right_context.get("sparse")
+                and cjk_candidate_right_context.get("candidate_baseline_supported")
+            )
 
         # Structure carries most of the evidence. POS is deliberately stronger
         # than boldness because body text can also be bold (ANT., FAM., etc.).
@@ -3299,6 +3384,7 @@ def filter_headword_records(
             + (0.75 if large else 0.0)
             + (1.0 if bold else 0.0)
             + (0.5 if separated else 0.0)
+            + (0.75 if cjk_candidate_right_sparse else 0.0)
         )
         structural_cue = has_pos or has_inflection or has_descriptor or special
         visual_cue = large or bold or separated
@@ -3306,6 +3392,23 @@ def filter_headword_records(
         # Character dictionaries use oversized single glyphs as entry heads.
         # Their size contrast is much stronger than ordinary bold body text, so
         # use a dedicated gate rather than lowering the global candidate score.
+        cjk_single_sparse_context_rescue = bool(
+            cjk_single_visual
+            and cjk_candidate_right_sparse
+            and cjk_at_left
+            and leading_record_height_ratio >= 0.72
+            and (
+                separated
+                or bool(
+                    parsed
+                    and parsed.parser_stage in {
+                        "cjk_single_with_pinyin",
+                        "chinese_single_character_with_variant",
+                    }
+                )
+                or boldness_ratio >= 0.92
+            )
+        )
         cjk_single_prominent = bool(
             cjk_single_visual
             and (
@@ -3315,6 +3418,7 @@ def filter_headword_records(
                     and boldness_ratio >= max(1.08, settings.paddle_boldness_ratio * 0.95)
                     and separated
                 )
+                or cjk_single_sparse_context_rescue
             )
         )
         looks_like_continuation = bool(parsed and parsed.looks_like_continuation)
@@ -3364,6 +3468,7 @@ def filter_headword_records(
                     and boldness_ratio >= max(1.12, settings.paddle_boldness_ratio)
                     and separated
                 )
+                or cjk_single_sparse_context_rescue
             )
         )
         cjk_single_accept = bool(
@@ -3549,6 +3654,15 @@ def filter_headword_records(
                 "cjk_single_prominent": cjk_single_prominent,
                 "cjk_single_accept": cjk_single_accept,
                 "cjk_single_strong_visual": cjk_single_strong_visual,
+                "cjk_single_sparse_context_rescue": cjk_single_sparse_context_rescue,
+                **(
+                    _cjk_right_context_features(cjk_candidate_right_context)
+                    if cjk_candidate_right_context is not None else {}
+                ),
+                "cjk_candidate_right_baseline_supported": bool(
+                    cjk_candidate_right_context
+                    and cjk_candidate_right_context.get("candidate_baseline_supported")
+                ),
                 "cjk_bracketed": cjk_bracketed,
                 "cjk_bracket_visual_supported": cjk_bracket_visual_supported,
                 "cjk_bracket_extra_required": cjk_bracket_extra_required,
