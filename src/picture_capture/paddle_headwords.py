@@ -2318,19 +2318,20 @@ def _detect_visual_entry_markers(
         if (
             line_h * 0.84 <= box_w <= line_h * 1.25
             and line_h * 0.80 <= box_h <= line_h * 1.25
-            and 0.25 <= density <= 0.38
-            and central_ink <= 0.06
-            and outer_fraction <= 0.04
+            and 0.24 <= density <= 0.39
+            and central_ink <= 0.08
+            and outer_fraction <= 0.07
         ):
             marker_type = "open_circle"
-        # Filled sub-entry bullets are slightly smaller but remain compact and
-        # centrally solid.
+        # Filled sub-entry bullets are slightly smaller and can be mildly
+        # deformed/connected to a neighbouring stroke in scans.  Keep the
+        # compact lane/size constraints strict, but tolerate that edge tail.
         elif (
-            line_h * 0.55 <= box_w <= line_h * 1.10
+            line_h * 0.52 <= box_w <= line_h * 1.10
             and line_h * 0.66 <= box_h <= line_h * 1.15
-            and 0.70 <= density <= 0.90
-            and central_ink >= 0.80
-            and outer_fraction <= 0.04
+            and 0.68 <= density <= 0.92
+            and central_ink >= 0.70
+            and outer_fraction <= 0.09
         ):
             marker_type = "filled_circle"
         if not marker_type:
