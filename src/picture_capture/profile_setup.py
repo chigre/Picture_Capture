@@ -399,6 +399,38 @@ class ProjectProfileWizard(tk.Toplevel):
             if symbol_inventory_saved
             else int(symbol_defaults["lane_tolerance_percent"])
         ))
+        template_mode = str(
+            getattr(s, "profile_symbol_template_mode", "combined") or "combined"
+        )
+        self.symbol_template_mode_var = tk.StringVar(value=_label_for_value(
+            VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE,
+            template_mode,
+            "字符符号集 + 视觉样本",
+        ))
+        template_group_mode = str(
+            getattr(s, "profile_symbol_template_group_mode", "role") or "role"
+        )
+        self.symbol_template_group_var = tk.StringVar(value=_label_for_value(
+            VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE,
+            template_group_mode,
+            "按角色合并（推荐）",
+        ))
+        self.symbol_template_threshold_var = tk.DoubleVar(value=max(
+            0.35,
+            min(
+                0.95,
+                float(getattr(s, "profile_symbol_template_threshold", 0.68) or 0.68),
+            ),
+        ))
+        self.symbol_template_debug_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_symbol_template_debug_enabled", False))
+        )
+        self.visual_marker_samples = parse_visual_marker_samples(
+            getattr(s, "profile_symbol_templates_json", "")
+        )
+        self.effective_entry_markers_var = tk.StringVar(value="")
+        self.effective_bracket_markers_var = tk.StringVar(value="")
+        self.visual_marker_sample_count_var = tk.StringVar(value="")
         self.cjk_allow_single_var = tk.BooleanVar(value=(
             bool(getattr(s, "profile_cjk_allow_single_headword", True))
             if parser_controls_saved else structure_defaults["cjk_single_visual"]
@@ -456,10 +488,18 @@ class ProjectProfileWizard(tk.Toplevel):
             self.entry_marker_symbols_var,
             self.bracket_open_symbols_var,
             self.symbol_lane_tolerance_var,
+            self.symbol_template_mode_var,
+            self.symbol_template_group_var,
+            self.symbol_template_threshold_var,
         ):
             var.trace_add(
                 "write", lambda *_args: self.after_idle(self._headword_specificity_changed)
             )
+        for var in (self.entry_marker_symbols_var, self.bracket_open_symbols_var):
+            var.trace_add(
+                "write", lambda *_args: self.after_idle(self._refresh_symbol_template_summary)
+            )
+        self._refresh_symbol_template_summary()
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self, padding=10)
