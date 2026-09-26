@@ -5241,9 +5241,11 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
     with a wider ~0.55-normal-line allowance, because their two refinement paths
     can legitimately land farther apart while still describing one glyph.
 
-    The final separator keeps the *lower* safe Y of a confirmed duplicate pair,
-    matching the UI rule that refined lines should sit as close as possible to
-    the current headword rather than float upward into the previous entry.
+    For ordinary/bracketed duplicates the final separator keeps the *lower*
+    safe Y.  For oversized single-CJK duplicates we keep the *upper* boundary:
+    the lower visual/OCR duplicate can fall inside the same entry around
+    pronunciation/radical metadata (e.g. between 播 ba and Bộ:), while the upper
+    line is the true entry-start separator.
     """
     merged = 0
     by_column: dict[int, list[dict[str, Any]]] = {}
@@ -5272,11 +5274,17 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
         left: dict[str, Any], right: dict[str, Any], *, single_cjk_special: bool = False,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         keeper, loser = (left, right) if _review_candidate_priority(left) >= _review_candidate_priority(right) else (right, left)
-        # Keep the lower/safer reading-axis V, but copy the complete
-        # canonical+source point. Taking max(source_y) is wrong after rotation.
+        # Copy one complete canonical+source point; never mix individual
+        # coordinates after rotation. Ordinary duplicates keep the lower/closer
+        # marker, but oversized single-CJK duplicates keep the upper entry-start
+        # boundary so a lower visual confirmation cannot move the separator into
+        # pronunciation/radical metadata inside the same entry.
         left_v = int(left.get("canonical_v", left.get("source_y", 0)))
         right_v = int(right.get("canonical_v", right.get("source_y", 0)))
-        position_row = left if left_v >= right_v else right
+        if single_cjk_special:
+            position_row = left if left_v <= right_v else right
+        else:
+            position_row = left if left_v >= right_v else right
         for key in (
             "canonical_u", "canonical_v", "source_x", "source_y",
             "refined_source_y", "coarse_canonical_v", "coarse_source_x",
