@@ -4628,11 +4628,12 @@ def test_v2116_page_illustration_count_uses_ppp_without_opening_page_pixels(tmp_
     app.polygons = []
     assert PictureCaptureApp._page_illustration_count_text(app, 0) == "2"
 
-def test_v2110_main_crop_preview_replaces_old_width_only_checkbox():
+def test_main_crop_preview_is_selected_only_through_display_mode():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'text="显示切图预览"' in text
-    assert 'command=self._toggle_crop_preview' in text
+    assert 'text="显示切图预览"' not in text
+    assert 'values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览")' in text
+    assert '"切图预览": (False, False, True)' in text
     assert 'def _draw_crop_plan_preview' in text
 
 
@@ -4650,9 +4651,11 @@ def test_display_mode_and_dark_mode_live_at_bottom_of_auxiliary_options():
     aux_start = text.index('self._section_frame(parent, "三、辅助选项及框线色块"')
     aux_end = text.index('actions = self._section_frame(parent, "四、画线与校对"', aux_start)
     aux = text[aux_start:aux_end]
-    assert 'display_mode_combo = ttk.Combobox(\n            view_mode_row,' in aux
+    assert 'display_mode_combo = ttk.Combobox(\n            option_row,' in aux
     assert 'text="深色模式"' in aux
-    assert aux.index('save_row = ttk.Frame(aux)') < aux.index('view_mode_row = ttk.Frame(aux)')
+    assert 'text="显示切图预览"' not in aux
+    assert aux.index('text="隐藏线框(插图除外)"') < aux.index('text="显示模式："')
+    assert aux.index('text="显示模式："') < aux.index('text="深色模式"')
     assert 'text="◧"' not in text
     assert '"原图+标注": (False, False, False)' in text
     assert '"二值+标注": (True, False, False)' in text
@@ -5346,17 +5349,18 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in app_text
     assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
     assert 'self.settings.illustration_label_border_width, overlay_scale' in app_text
-    # Sequence number stays marker-filled; delete X sits below it with no marker fill.
+    # Sequence stays marker-filled; destructive [X] sits immediately to its left.
     assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in app_text
     assert 'marker_control_bg = str(self.settings.headword_marker_color)' in app_text
     assert 'bg=marker_control_bg' in app_text
     assert 'fg="#ffffff"' in app_text
     assert 'record["index_widget"] = index_label' in app_text
-    assert 'record["delete_item"] = delete_item' in app_text
-    assert 'text="X"' in app_text
-    assert 'fill=marker_control_bg' in app_text
-    assert 'self.canvas.create_text(' in app_text
-    assert 'delete_y = float(index_y + max(1, index_label.winfo_reqheight()) + 1)' in app_text
+    assert 'record["delete_widget"] = delete_button' in app_text
+    assert 'text="[X]"' in app_text
+    assert 'bg="#9d042f"' in app_text
+    assert 'activebackground="#9d042f"' in app_text
+    assert 'self._attach_tooltip(delete_button, "点击删除该画线!")' in app_text
+    assert 'delete_x = float(index_x - index_width - 1)' in app_text
 
 
 def test_platform_language_font_recommendations_and_auto_normalization():
@@ -8011,13 +8015,18 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert 'accent_button.bind(' in text and '"<Button-3>"' in text
     assert "def copy_char(self, char: str)" in text
     assert "def _candidate_word_for_ocr_source(" in text
+    assert 'self.focused_page_range_var = parent.page_range_spec_var' in text
+    assert 'indices = self.parent._parse_page_spec(' in text
     assert 'ocr_compare_key = self.OCR_COMPARE_LABEL_TO_KEY.get(' in text
     assert '"ocr_words": ocr_words' in text
-    assert 'reasons.append("OCR不匹配")' in text
+    assert 'reasons.append(f"OCR不匹配（OCR结果：{ocr_word}）")' in text
     assert 'f"序号 {int(target.get(\'sequence_number\', index + 1))} | 原因：{reason}"' in text
     assert 'text="填充OCR结果"' in text
     assert "def _fill_filter_ocr_result(self, index: int) -> None:" in text
+    assert '"""Fast filter pass using only PDIC and OCR JSON, never page pixels."""' in text
+    assert 'focused-filter-scan-rest-' in text
+    assert 'display_meta: list[tuple[int, int]] = []' in text
     assert "marker_control_bg = str(self.settings.headword_marker_color)" in text
-    assert 'text="X"' in text
-    assert 'fill=marker_control_bg' in text
-    assert 'record["delete_item"] = delete_item' in text
+    assert 'text="[X]"' in text
+    assert 'bg="#9d042f"' in text
+    assert 'record["delete_widget"] = delete_button' in text
