@@ -137,7 +137,9 @@ class AppSettings:
     # Percentage of the detected column width used by rightward entry boxes.
     right_ratio: float = 100.0
     right_ratio_percent_version: int = 1
-    horizontal_tolerance: int = 5
+    # 2016 VB ordinary drawing used a ~20 px micro-adjust lane at a ~25 px
+    # character height. Keep new projects near that proven starting point.
+    horizontal_tolerance: int = 20
     marker_height: int = 2
     guide_width: int = 2
     # Main overlay colours: headword markers stay red; other structural lines use blue.
