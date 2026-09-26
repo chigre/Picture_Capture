@@ -189,7 +189,18 @@ class AppSettings:
     tesseract_language: str = ""
     ocr_replace: bool = True
     lowercase_ocr: bool = False
+    # Legacy compatibility only.  v2.14+ ordinary drawing no longer has a
+    # separate "manual columns" execution mode; page-specific automatic layout
+    # is controlled by ordinary_auto_layout and the per-field switches below.
     manual_columns: bool = False
+    ordinary_auto_layout: bool = False
+    ordinary_auto_columns: bool = True
+    ordinary_auto_start_y: bool = True
+    ordinary_auto_manual_x: bool = True
+    ordinary_auto_column_width: bool = True
+    ordinary_auto_gutter: bool = True
+    ordinary_auto_character_height: bool = True
+    ordinary_auto_row_padding: bool = True
     crop_to_bottom_y: bool = False
     hide_overlays: bool = False
     polygon_mode: bool = False
