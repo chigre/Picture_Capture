@@ -2090,6 +2090,49 @@ def test_ordinary_drawing_restores_vb_left_edge_gate():
     assert abs(entries[1].y - 145) <= 3
 
 
+def test_manual_columns_restore_vb_manual_y_start():
+    image = Image.new("RGB", (220, 170), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((20, 55, 110, 66), fill="black")
+    draw.rectangle((20, 105, 110, 116), fill="black")
+
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        manual_y=90,
+        column_width=180,
+        gutter=0,
+        start_y=20,
+        body_indent=20,
+        horizontal_tolerance=5,
+        character_height=18,
+        row_padding=2,
+        darkness_threshold=300,
+        dark_area_percent=90,
+        manual_columns=True,
+        detection_method="left_edge",
+        follow_column_deformation=False,
+        paddle_refine_separator_y=False,
+    )
+    entries, _ = detect_entries(image, settings)
+    assert len(entries) == 1
+    assert 95 <= entries[0].y <= 105
+
+
+def test_restored_vb_controls_are_exposed_separately_from_modern_right_ratio():
+    app_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    assert '("向右比例 %", "right_ratio", float)' in app_source
+    assert '("VB 向右比例 1/x", "ordinary_right_divisor", float)' in app_source
+    for name in (
+        "white_threshold_high", "white_threshold_low", "whitespace_adjustment",
+        "upward_ratio", "analysis_left", "analysis_right",
+    ):
+        assert name in app_source
+
+
 def test_ordinary_micro_tolerance_is_not_clipped_by_body_indent():
     image = Image.new("RGB", (220, 150), "white")
     draw = ImageDraw.Draw(image)
