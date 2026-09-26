@@ -2030,7 +2030,108 @@ class ProjectProfileWizard(tk.Toplevel):
         self._profile_revision += 1
         self._mark_validation_stale()
         self._refresh_headword_tuning_status()
+        self._refresh_symbol_template_summary()
         self._refresh_summary()
+
+    def _refresh_symbol_template_summary(self) -> None:
+        if not hasattr(self, "effective_entry_markers_var"):
+            return
+        entry = split_configured_symbols(self.entry_marker_symbols_var.get())
+        bracket = split_configured_symbols(self.bracket_open_symbols_var.get())
+        self.effective_entry_markers_var.set(
+            "有效入口标记：" + (" ".join(entry) if entry else "无")
+        )
+        self.effective_bracket_markers_var.set(
+            "有效括号起始：" + (" ".join(bracket) if bracket else "无")
+        )
+        samples = list(getattr(self, "visual_marker_samples", []) or [])
+        entry_count = sum(
+            1 for sample in samples
+            if str(sample.get("role") or "") == "entry_marker"
+        )
+        bracket_count = sum(
+            1 for sample in samples
+            if str(sample.get("role") or "") == "bracket_open"
+        )
+        self.visual_marker_sample_count_var.set(
+            f"入口标记样本：{entry_count} ｜ 括号起始样本：{bracket_count}"
+        )
+
+    def _capture_visual_marker_sample(self) -> None:
+        if not self.project.images:
+            messagebox.showinfo(
+                "无法采样", "项目中没有可用页面。", parent=self,
+            )
+            return
+        initial_index = 0
+        if self._validation_results:
+            try:
+                initial_index = int(
+                    self._validation_results[
+                        self.validation_preview_slot % len(self._validation_results)
+                    ][0]
+                )
+            except (TypeError, ValueError, IndexError):
+                initial_index = 0
+        elif self.sample_indices:
+            initial_index = int(self.sample_indices[0])
+        entry = split_configured_symbols(self.entry_marker_symbols_var.get())
+        VisualMarkerCaptureDialog(
+            self,
+            self.project.images,
+            initial_index=initial_index,
+            initial_role="entry_marker",
+            initial_literal=entry[0] if entry else "",
+            on_saved=self._visual_marker_sample_saved,
+        )
+
+    def _visual_marker_sample_saved(self, sample: dict) -> None:
+        samples = [
+            dict(item) for item in getattr(self, "visual_marker_samples", []) or []
+        ]
+        sample_id = str(sample.get("id") or "")
+        if sample_id:
+            samples = [
+                item for item in samples
+                if str(item.get("id") or "") != sample_id
+            ]
+        samples.append(dict(sample))
+        self._replace_visual_marker_samples(samples)
+
+    def _replace_visual_marker_samples(self, samples: list[dict]) -> None:
+        self.visual_marker_samples = [dict(sample) for sample in samples]
+        self.working.profile_symbol_template_version = 1
+        self.working.profile_symbol_templates_json = (
+            serialize_visual_marker_samples(self.visual_marker_samples)
+        )
+        self._refresh_symbol_template_summary()
+        self._headword_specificity_changed()
+
+    def _show_visual_marker_samples(self) -> None:
+        if not getattr(self, "visual_marker_samples", None):
+            messagebox.showinfo(
+                "本词典视觉标记样本",
+                "尚未保存视觉标记样本。请先点击【从页面采样…】。",
+                parent=self,
+            )
+            return
+        VisualMarkerSamplesDialog(
+            self,
+            [dict(sample) for sample in self.visual_marker_samples],
+            on_changed=self._replace_visual_marker_samples,
+        )
+
+    def _clear_visual_marker_samples(self) -> None:
+        if not getattr(self, "visual_marker_samples", None):
+            return
+        if not messagebox.askyesno(
+            "清空视觉标记样本",
+            "确定清空当前项目保存的全部视觉标记样本吗？\n"
+            "原始扫描页不会被修改。",
+            parent=self,
+        ):
+            return
+        self._replace_visual_marker_samples([])
 
     def _refresh_headword_structure_summary(self) -> None:
         if not hasattr(self, "headword_structure_summary_var"):
@@ -2267,8 +2368,12 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_symbol_inventory_enabled = bool(
             self.symbol_inventory_enabled_var.get()
         )
-        s.profile_entry_marker_symbols = self.entry_marker_symbols_var.get().strip()
-        s.profile_bracket_open_symbols = self.bracket_open_symbols_var.get().strip()
+        s.profile_entry_marker_symbols = " ".join(
+            split_configured_symbols(self.entry_marker_symbols_var.get())
+        )
+        s.profile_bracket_open_symbols = " ".join(
+            split_configured_symbols(self.bracket_open_symbols_var.get())
+        )
         s.profile_symbol_visual_rescue_enabled = bool(
             self.symbol_visual_rescue_var.get()
         )
@@ -2277,6 +2382,24 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         s.profile_symbol_lane_tolerance_percent = max(
             20, min(120, int(self.symbol_lane_tolerance_var.get()))
+        )
+        s.profile_symbol_template_version = 1
+        s.profile_symbol_template_mode = VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE.get(
+            self.symbol_template_mode_var.get(), "combined"
+        )
+        s.profile_symbol_template_group_mode = (
+            VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE.get(
+                self.symbol_template_group_var.get(), "role"
+            )
+        )
+        s.profile_symbol_template_threshold = max(
+            0.35, min(0.95, float(self.symbol_template_threshold_var.get()))
+        )
+        s.profile_symbol_templates_json = serialize_visual_marker_samples(
+            self.visual_marker_samples
+        )
+        s.profile_symbol_template_debug_enabled = bool(
+            self.symbol_template_debug_var.get()
         )
         s.profile_cjk_allow_single_headword = bool(self.cjk_allow_single_var.get())
         s.profile_cjk_allow_bracketed_headword = bool(self.cjk_allow_bracketed_var.get())
