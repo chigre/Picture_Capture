@@ -4178,6 +4178,7 @@ class ReviewWindow(tk.Toplevel):
         )
         self.filtered_targets: list[dict] = []
         self.filtered_batch_index = 0
+        self._filter_rows_active = False
         self.filter_batch_var = tk.StringVar(value="")
         self._filter_scan_serial = 0
         self._filter_render_serial = 0
