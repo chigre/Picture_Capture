@@ -369,15 +369,14 @@ def apply_headword_tuning(
         settings.paddle_min_candidate_score = max(
             0.5, float(settings.paddle_min_candidate_score) + 0.50 * amount,
         )
-        # Keep the POS-less visual rescue aligned with the same user-facing
-        # precision/recall control. "偏多" requires stronger bold contrast;
-        # "偏少" lets slightly lighter printed heads pass.
-        rescue_enabled = (
-            bool(getattr(settings, "profile_tail_allow_visual_rescue", False))
-            if int(getattr(settings, "profile_tail_structure_version", 0) or 0) >= 1
-            else bool(getattr(settings, "paddle_allow_strong_edge_visual_rescue", False))
-        )
-        if rescue_enabled:
+        # Saved explicit Profiles already tune the *visible*
+        # paddle_boldness_ratio above, and visual rescue uses that exact value.
+        # Only legacy projects (tail structure version 0) still need the old
+        # hidden rescue threshold adjusted for backward compatibility.
+        if (
+            int(getattr(settings, "profile_tail_structure_version", 0) or 0) < 1
+            and bool(getattr(settings, "paddle_allow_strong_edge_visual_rescue", False))
+        ):
             settings.paddle_strong_edge_visual_boldness_ratio = max(
                 1.05,
                 float(settings.paddle_strong_edge_visual_boldness_ratio)
