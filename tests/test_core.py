@@ -2098,6 +2098,70 @@ def test_v281_sparse_right_context_safely_recovers_more_clipped_large_cjk():
     assert word == "" and record is None
 
 
+def test_v281_ocr_single_han_can_use_sparse_right_context_without_projection_run():
+    from PIL import Image, ImageDraw
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import OCRRecord, filter_headword_records
+
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_single_headword=True,
+        profile_cjk_allow_bracketed_headword=False,
+        profile_cjk_right_context_enabled=True,
+        profile_cjk_right_context_width_percent=80,
+        paddle_band_width=180, paddle_band_width_ratio=100,
+        paddle_band_left_margin=0, paddle_left_tolerance=16,
+        paddle_rec_score_threshold=0.1, paddle_auto_header_rule=False,
+        paddle_refine_separator_y=False, paddle_require_pos_or_symbol=False,
+        paddle_require_visual_cue=False, character_height=20, row_padding=4,
+    )
+    profile = load_dictionary_profile(preset="cjk_visual", language="chi_tra")
+
+    def make_band(*, dense_candidate_right: bool) -> Image.Image:
+        image = Image.new("RGB", (180, 220), "white")
+        draw = ImageDraw.Draw(image)
+        # Ordinary body rows make the same X strip meaningfully dense elsewhere.
+        for y0 in (15, 45, 165, 195):
+            draw.rectangle((24, y0, 48, y0 + 18), fill="black")
+        # The OCR box itself is only body-height, so left-strip projection has no
+        # oversized run to rescue. This simulates a vertically cropped large Han.
+        draw.rectangle((4, 105, 20, 123), fill="black")
+        if dense_candidate_right:
+            draw.rectangle((24, 98, 48, 130), fill="black")
+        return image
+
+    records = [
+        OCRRecord("正文", 0.99, (4, 15, 48, 34)),
+        OCRRecord("另一正文", 0.99, (4, 45, 48, 64)),
+        OCRRecord("巴", 0.99, (4, 105, 20, 124)),
+        OCRRecord("後文", 0.99, (4, 165, 48, 184)),
+        OCRRecord("末行", 0.99, (4, 195, 48, 214)),
+    ]
+
+    entries, diagnostics = filter_headword_records(
+        records, make_band(dense_candidate_right=False), 0, 0, settings,
+        profile=profile,
+    )
+    assert [entry.word for entry in entries] == ["巴"]
+    row = next(item for item in diagnostics if item.get("text") == "巴")
+    assert row["features"]["cjk_single_sparse_context_rescue"] is True
+    assert row["features"]["cjk_right_context_sparse"] is True
+    assert row["features"]["cjk_candidate_right_baseline_supported"] is True
+
+    entries, diagnostics = filter_headword_records(
+        records, make_band(dense_candidate_right=True), 0, 0, settings,
+        profile=profile,
+    )
+    assert entries == []
+    row = next(item for item in diagnostics if item.get("text") == "巴")
+    assert row["features"]["cjk_single_sparse_context_rescue"] is False
+    assert row["features"]["cjk_right_context_sparse"] is False
+    assert row["reject_reason"] == "cjk_single_not_visually_prominent"
+
+
 def test_v281_candidate_band_is_capped_to_current_column_width():
     from PIL import Image
     from picture_capture.models import AppSettings
