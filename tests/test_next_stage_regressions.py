@@ -1989,7 +1989,7 @@ def test_auto_refine_y_is_exposed_as_shared_ordinary_drawing_control():
     assert '("自动精修横线 Y", "paddle_refine_separator_y")' in normal_checks
 
     quick_start = source.index("    def _build_quick_settings(")
-    quick_end = source.index("    def _pointer_over_sidebar(", quick_start)
+    quick_end = source.index("\n    def ", quick_start + 10)
     quick = source[quick_start:quick_end]
     assert 'text="自动精修横线Y（普通/OCR共用）"' in quick
     assert 'self.quick_bool_vars["paddle_refine_separator_y"] = refine_y_var' in quick
