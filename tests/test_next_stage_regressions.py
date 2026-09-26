@@ -24,7 +24,7 @@ from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
     _legacy_find_separator_y, _legacy_is_point, _left_edge_ink_mask,
     apply_column_start_offsets, derive_geometry, derive_nominal_geometry,
-    detect_entries, refine_existing_entries,
+    detect_entries, ordinary_page_layout_settings, refine_existing_entries,
 )
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
@@ -988,18 +988,22 @@ def test_page_template_alternating_ab_side_widths_are_independent():
     assert entry_allowed_by_page_template(84, 30, image.size, settings, 1)
 
 
-def test_page_template_auto_footer_uses_learned_body_bottom():
+def test_page_template_auto_footer_uses_full_page_height_not_legacy_bottom_y():
     settings = AppSettings(
         bottom_y=1800,
         profile_footer_mode="auto",
     )
     effective = effective_page_settings(settings, (1000, 2000), 0)
-    assert effective.crop_to_bottom_y is True
-    assert effective.bottom_y == 1800
+    assert effective.crop_to_bottom_y is False
 
-    empty = replace(settings, bottom_y=0)
-    effective_empty = effective_page_settings(empty, (1000, 2000), 0)
-    assert effective_empty.crop_to_bottom_y is False
+    explicit = replace(
+        settings,
+        profile_footer_mode="present",
+        profile_footer_percent=10,
+    )
+    explicit_effective = effective_page_settings(explicit, (1000, 2000), 0)
+    assert explicit_effective.crop_to_bottom_y is True
+    assert explicit_effective.bottom_y == 1800
 
 
 def test_page_template_applies_header_footer_and_ab_side_exclusion():
@@ -2051,6 +2055,15 @@ def test_auto_refine_y_is_exposed_as_shared_ordinary_drawing_control():
     quick = source[quick_start:quick_end]
     assert 'text="自动精修横线Y（普通/OCR共用）"' in quick
     assert 'self.quick_bool_vars["paddle_refine_separator_y"] = refine_y_var' in quick
+    assert 'text="使用自动版面参数"' in quick
+    assert '"ordinary_auto_columns"' in quick
+    assert '"ordinary_auto_start_y"' in quick
+    assert '"ordinary_auto_manual_x"' in quick
+    assert '"ordinary_auto_column_width"' in quick
+    assert '"ordinary_auto_gutter"' in quick
+    assert '"ordinary_auto_character_height"' in quick
+    assert '"ordinary_auto_row_padding"' in quick
+    assert '"bottom_y"' not in quick
 
 
 def test_ordinary_drawing_restores_vb_left_edge_gate():
@@ -2090,7 +2103,7 @@ def test_ordinary_drawing_restores_vb_left_edge_gate():
     assert abs(entries[1].y - 145) <= 3
 
 
-def test_manual_columns_restore_vb_manual_y_start():
+def test_legacy_manual_columns_and_manual_y_no_longer_change_ordinary_start():
     image = Image.new("RGB", (220, 170), "white")
     draw = ImageDraw.Draw(image)
     draw.rectangle((20, 55, 110, 66), fill="black")
@@ -2115,8 +2128,55 @@ def test_manual_columns_restore_vb_manual_y_start():
         paddle_refine_separator_y=False,
     )
     entries, _ = detect_entries(image, settings)
-    assert len(entries) == 1
-    assert 95 <= entries[0].y <= 105
+    assert len(entries) == 2
+
+
+def test_ordinary_auto_layout_applies_only_checked_page_specific_fields(monkeypatch):
+    import picture_capture.layout_detection as layout_detection
+
+    estimate = SimpleNamespace(
+        columns=3,
+        start_y=77,
+        manual_x=41,
+        column_width=333,
+        gutter=27,
+        character_height=31,
+        row_padding=4,
+        bottom_y=999,
+    )
+    monkeypatch.setattr(
+        layout_detection, "detect_layout_parameters",
+        lambda _image, _settings: estimate,
+    )
+    settings = AppSettings(
+        columns=2,
+        start_y=20,
+        manual_x=10,
+        column_width=250,
+        gutter=15,
+        character_height=24,
+        row_padding=2,
+        ordinary_auto_layout=True,
+        ordinary_auto_columns=True,
+        ordinary_auto_start_y=True,
+        ordinary_auto_manual_x=False,
+        ordinary_auto_column_width=True,
+        ordinary_auto_gutter=False,
+        ordinary_auto_character_height=True,
+        ordinary_auto_row_padding=False,
+    )
+    effective, applied = ordinary_page_layout_settings(
+        Image.new("RGB", (900, 1200), "white"), settings
+    )
+    assert effective.columns == 3
+    assert effective.start_y == 77
+    assert effective.manual_x == 10
+    assert effective.column_width == 333
+    assert effective.gutter == 15
+    assert effective.character_height == 31
+    assert effective.row_padding == 2
+    assert "bottom_y" not in applied
+    assert settings.columns == 2  # project baseline is never mutated
 
 
 def test_restored_vb_controls_are_exposed_separately_from_modern_right_ratio():
