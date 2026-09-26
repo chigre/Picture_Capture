@@ -7299,6 +7299,748 @@ class ReviewWindow(tk.Toplevel):
                 self._reset_rows_scroll_top()
             self._update_title()
 
+
+class FocusedReviewWindow(tk.Toplevel):
+    """Cross-page proofreading for risky PDIC headwords.
+
+    Unlike ReviewWindow, rows in this window are intentionally heterogeneous:
+    every row owns its source page, crop and PDIC coordinate. Saving groups edits
+    by page, rereads each PDIC from disk, changes only exact coordinate-matched
+    words, writes atomically through write_pdic(), and verifies the result before
+    reporting success. This prevents one page's editor state from leaking into
+    another page's PDIC.
+    """
+
+    def __init__(
+        self, parent: "PictureCaptureApp", initial_indices: list[int],
+    ) -> None:
+        super().__init__(parent)
+        self.parent = parent
+        self.title("重点校对")
+        screen_w = max(1, self.winfo_screenwidth())
+        screen_h = max(1, self.winfo_screenheight())
+        width, height = _review_window_dimensions(screen_w, screen_h)
+        width = min(screen_w, max(width, 760))
+        height = min(screen_h, max(height, 560))
+        self.geometry(
+            f"{width}x{height}+{max(0, (screen_w - width) // 2)}+"
+            f"{max(0, (screen_h - height) // 2)}"
+        )
+        self.minsize(min(700, width), min(500, height))
+        self.transient(parent)
+
+        total = len(parent.project.images) if parent.project else 0
+        valid = sorted(
+            {int(index) for index in initial_indices if 0 <= int(index) < total}
+        )
+        if not valid and total:
+            valid = [max(0, int(parent.current_index))]
+        self.start_page_var = tk.StringVar(value=str((valid[0] + 1) if valid else 1))
+        self.end_page_var = tk.StringVar(value=str((valid[-1] + 1) if valid else total or 1))
+        self.include_mismatch_var = tk.BooleanVar(
+            value=bool(
+                getattr(parent.settings, "focused_review_include_ocr_mismatch", True)
+            )
+        )
+        self.include_characters_var = tk.BooleanVar(
+            value=bool(
+                getattr(parent.settings, "focused_review_include_characters", True)
+            )
+        )
+        self.characters_var = tk.StringVar(
+            value=str(
+                getattr(
+                    parent.settings,
+                    "focused_review_characters",
+                    "傅,裹,歴,ー,殼,鳥,縳,寶,内,刺,勝,𧰟,茶,顔,門,𧘲,㓕,椿",
+                )
+                or ""
+            )
+        )
+        self.status_var = tk.StringVar(value="准备扫描…")
+        self.targets: list[dict] = []
+        self.vars: list[tk.StringVar] = []
+        self.editors: list[tk.Entry] = []
+        self.thumbnails: list[ImageTk.PhotoImage] = []
+        self._scan_serial = 0
+        self._saving = False
+
+        self.review_section_title_font = font.nametofont("TkDefaultFont").copy()
+        self.review_section_title_font.configure(weight="bold")
+        ReviewWindow._configure_review_styles(self)
+        self._build()
+        self.protocol("WM_DELETE_WINDOW", self._close)
+        self.bind("<Control-s>", lambda _event: self.save())
+        self.after_idle(self.scan)
+
+    def _build(self) -> None:
+        outer = ttk.Frame(self, padding=(8, 7), style="PCR.Surface.TFrame")
+        outer.pack(fill="both", expand=True)
+
+        toolbar = ttk.Frame(outer, padding=(5, 4), style="PCR.Toolbar.TFrame")
+        toolbar.pack(fill="x")
+        ttk.Button(
+            toolbar, text="保存修改", command=self.save, style="PCR.Compact.TButton"
+        ).pack(side="left")
+        ttk.Button(
+            toolbar, text="重新扫描", command=self.scan, style="PCR.Compact.TButton"
+        ).pack(side="left", padx=(6, 0))
+        ttk.Label(
+            toolbar, textvariable=self.status_var, style="PCR.Toolbar.TLabel"
+        ).pack(side="left", fill="x", expand=True, padx=(12, 0))
+
+        filters = ttk.LabelFrame(outer, text="重点校对条件", padding=(8, 6))
+        filters.pack(fill="x", pady=(7, 6))
+        range_row = ttk.Frame(filters)
+        range_row.pack(fill="x")
+        ttk.Label(range_row, text="页面范围（项目序号）：").pack(side="left")
+        ttk.Entry(
+            range_row, textvariable=self.start_page_var, width=7, justify="center"
+        ).pack(side="left")
+        ttk.Label(range_row, text=" 至 ").pack(side="left")
+        ttk.Entry(
+            range_row, textvariable=self.end_page_var, width=7, justify="center"
+        ).pack(side="left")
+        ttk.Checkbutton(
+            range_row,
+            text="OCR不匹配词条",
+            variable=self.include_mismatch_var,
+        ).pack(side="left", padx=(14, 0))
+        ttk.Checkbutton(
+            range_row,
+            text="包含特定字符",
+            variable=self.include_characters_var,
+        ).pack(side="left", padx=(10, 0))
+
+        chars_row = ttk.Frame(filters)
+        chars_row.pack(fill="x", pady=(5, 0))
+        ttk.Label(chars_row, text="特定字符（用逗号分隔）：").pack(side="left")
+        ttk.Entry(
+            chars_row, textvariable=self.characters_var
+        ).pack(side="left", fill="x", expand=True, padx=(4, 0))
+        ttk.Label(
+            filters,
+            text=(
+                "匹配关系为“任一条件满足即进入重点校对”。OCR不匹配使用当前 PDIC 文本 "
+                "与 OCR 融合结果比较；没有 OCR 缓存的页面仍可按特定字符筛选。"
+            ),
+            foreground="#666666",
+            wraplength=980,
+        ).pack(fill="x", pady=(5, 0))
+
+        body = ttk.Frame(outer, style="PCR.Surface.TFrame")
+        body.pack(fill="both", expand=True)
+        self.canvas = tk.Canvas(
+            body, highlightthickness=0, borderwidth=0, bg="#f6f7f9"
+        )
+        ybar = ttk.Scrollbar(body, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=ybar.set)
+        ybar.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.rows = ttk.Frame(self.canvas, style="PCR.Surface.TFrame")
+        self.rows_window = self.canvas.create_window(
+            (0, 0), window=self.rows, anchor="nw"
+        )
+        self.rows.bind(
+            "<Configure>",
+            lambda _event: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
+        )
+        self.canvas.bind(
+            "<Configure>",
+            lambda event: self.canvas.itemconfigure(
+                self.rows_window, width=max(1, int(event.width))
+            ),
+        )
+        for widget in (self.canvas, self.rows):
+            widget.bind(
+                "<MouseWheel>",
+                lambda event: self.canvas.yview_scroll(
+                    -1 if int(getattr(event, "delta", 0)) > 0 else 1, "units"
+                ),
+            )
+            widget.bind(
+                "<Button-4>",
+                lambda _event: self.canvas.yview_scroll(-1, "units"),
+            )
+            widget.bind(
+                "<Button-5>",
+                lambda _event: self.canvas.yview_scroll(1, "units"),
+            )
+
+        footer = ttk.Frame(outer, style="PCR.Surface.TFrame")
+        footer.pack(fill="x", pady=(6, 0))
+        ttk.Label(
+            footer,
+            text="修改只写回对应页面、对应坐标的 PDIC 词条；不会按显示顺序跨页重排。",
+            foreground="#666666",
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(
+            footer, text="关闭", command=self._close, style="PCR.Compact.TButton"
+        ).pack(side="right")
+
+    def _indices(self) -> list[int]:
+        if not self.parent.project:
+            return []
+        total = len(self.parent.project.images)
+        try:
+            start = int(self.start_page_var.get().strip())
+            end = int(self.end_page_var.get().strip())
+        except ValueError as exc:
+            raise ValueError("页面范围必须输入整数项目序号。") from exc
+        if start < 1 or end < start or end > total:
+            raise ValueError(f"页面范围必须在 1–{total} 内，且起始页不能大于结束页。")
+        return list(range(start - 1, end))
+
+    def _persist_filter_settings(self) -> None:
+        self.parent.settings.focused_review_characters = self.characters_var.get().strip()
+        self.parent.settings.focused_review_include_ocr_mismatch = bool(
+            self.include_mismatch_var.get()
+        )
+        self.parent.settings.focused_review_include_characters = bool(
+            self.include_characters_var.get()
+        )
+        self.parent.save_settings()
+
+    def _dirty(self) -> bool:
+        return any(
+            index < len(self.targets)
+            and variable.get().strip() != str(self.targets[index].get("original_word") or "")
+            for index, variable in enumerate(self.vars)
+        )
+
+    def scan(self) -> None:
+        if self._saving:
+            return
+        if self._dirty():
+            answer = messagebox.askyesnocancel(
+                "重新扫描重点校对",
+                "当前有尚未保存的修改。是否先保存再重新扫描？",
+                parent=self,
+            )
+            if answer is None:
+                return
+            if answer:
+                self.save(rescan_after=True)
+                return
+        try:
+            indices = self._indices()
+        except Exception as exc:
+            messagebox.showerror("页面范围无效", str(exc), parent=self)
+            return
+        include_mismatch = bool(self.include_mismatch_var.get())
+        include_chars = bool(self.include_characters_var.get())
+        tokens = _focused_review_character_tokens(self.characters_var.get())
+        if not include_mismatch and not include_chars:
+            messagebox.showinfo(
+                "没有筛选条件",
+                "请至少勾选“ OCR不匹配词条 ”或“ 包含特定字符 ”之一。",
+                parent=self,
+            )
+            return
+        if include_chars and not tokens:
+            messagebox.showinfo(
+                "特定字符为空",
+                "已勾选“包含特定字符”，请在字符框中至少输入一个字符。",
+                parent=self,
+            )
+            return
+        self._persist_filter_settings()
+        project = self.parent.project
+        if project is None:
+            return
+        pages = list(project.images)
+        settings = replace(self.parent.settings)
+        available_width = max(420, int(self.winfo_width()) - 70)
+        self.status_var.set(f"正在扫描 {len(indices)} 页…")
+        self._scan_serial += 1
+        serial = self._scan_serial
+
+        def worker():
+            result: list[dict] = []
+            pages_without_ocr = 0
+            for page_index in indices:
+                page = pages[page_index]
+                entries = read_pdic(pdic_path(page))
+                if not entries:
+                    continue
+                with Image.open(page) as opened:
+                    image = normalize_page_rgb(opened)
+                review_settings, geometry = _review_crop_context(
+                    image, settings, available_width, page_index
+                )
+                sections = read_page_sections(page)
+                ordered = sort_entries_reading_order(entries, geometry, sections)
+                cache = ocr_cache_root(project.root) / f"{page.stem}.json"
+                candidates: list[dict] = []
+                if cache.exists():
+                    try:
+                        raw = json.loads(cache.read_text(encoding="utf-8"))
+                        if isinstance(raw, dict):
+                            candidates = [
+                                item for item in raw.get("review_candidates", [])
+                                if isinstance(item, dict)
+                            ]
+                    except Exception:
+                        candidates = []
+                elif include_mismatch:
+                    pages_without_ocr += 1
+
+                canonical_width = max(
+                    1, geometry.transform.canonical_size(image.size)[0]
+                )
+                line_height = max(
+                    6,
+                    stored_geometry_to_canonical(
+                        settings.character_height, canonical_width, settings
+                    ),
+                )
+                tolerance = max(6, round(line_height * 0.55))
+                for entry_index, entry in enumerate(ordered):
+                    candidate = _candidate_for_entry_from_list(
+                        entry, candidates, y_tolerance=tolerance
+                    )
+                    ocr_word = (
+                        str(candidate.get("word") or "").strip()
+                        if candidate is not None else ""
+                    )
+                    mismatch = bool(
+                        include_mismatch
+                        and ocr_word
+                        and _review_similarity_key(entry.word)
+                        != _review_similarity_key(ocr_word)
+                    )
+                    matched_tokens = tuple(
+                        token for token in tokens if token and token in entry.word
+                    ) if include_chars else ()
+                    if not mismatch and not matched_tokens:
+                        continue
+                    reasons: list[str] = []
+                    if mismatch:
+                        reasons.append(f"OCR不匹配：{ocr_word}")
+                    if matched_tokens:
+                        reasons.append("特定字符：" + "、".join(matched_tokens))
+                    next_entry = (
+                        ordered[entry_index + 1]
+                        if entry_index + 1 < len(ordered) else None
+                    )
+                    box = _review_line_box(
+                        entry, geometry, image, review_settings, next_entry
+                    )
+                    crop = image.crop(box).convert("RGB")
+                    stored_zoom = int(
+                        getattr(settings, "review_zoom_percent", 0) or 0
+                    )
+                    if stored_zoom > 0:
+                        zoom = max(0.20, min(2.50, stored_zoom / 100.0))
+                    else:
+                        zoom = review_auto_fit_zoom(
+                            crop.width, available_width, 0.96
+                        )
+                    if abs(zoom - 1.0) > 1e-6:
+                        crop = crop.resize(
+                            (
+                                max(1, round(crop.width * zoom)),
+                                max(1, round(crop.height * zoom)),
+                            ),
+                            Image.Resampling.LANCZOS,
+                        )
+                    result.append({
+                        "page_index": int(page_index),
+                        "page_name": page.name,
+                        "page_stem": page.stem,
+                        "x": int(entry.x),
+                        "y": int(entry.y),
+                        "original_word": str(entry.word),
+                        "ocr_word": ocr_word,
+                        "candidate_id": (
+                            str(candidate.get("candidate_id") or "")
+                            if candidate is not None else ""
+                        ),
+                        "reasons": tuple(reasons),
+                        "crop": crop,
+                    })
+            return result, pages_without_ocr
+
+        def done(payload) -> None:
+            if serial != self._scan_serial:
+                return
+            targets, pages_without_ocr = payload
+            self.targets = list(targets)
+            self._render_targets()
+            extra = (
+                f"；{pages_without_ocr} 页无 OCR 缓存，未参与 OCR不匹配筛选"
+                if pages_without_ocr else ""
+            )
+            self.status_var.set(
+                f"重点校对：{len(indices)} 页中筛出 {len(self.targets)} 条{extra}"
+            )
+
+        def failed(exc, detail) -> None:
+            if detail:
+                print(detail)
+            self.status_var.set(f"重点校对扫描失败：{exc}")
+            messagebox.showerror("重点校对扫描失败", str(exc), parent=self)
+
+        self.parent._start_ui_worker(
+            f"focused-review-scan-{id(self)}", worker, done, failed
+        )
+
+    def _render_targets(self) -> None:
+        for child in self.rows.winfo_children():
+            child.destroy()
+        self.vars.clear()
+        self.editors.clear()
+        self.thumbnails.clear()
+        if not self.targets:
+            ttk.Label(
+                self.rows,
+                text="当前范围内没有符合条件的词条。",
+                style="PCR.Body.TLabel",
+            ).grid(row=0, column=0, sticky="w", padx=12, pady=24)
+            return
+
+        family = resolve_content_font_family(
+            self,
+            self.parent.settings.review_entry_font_family,
+            self.parent.settings.ocr_language,
+        )
+        font_size = _review_editor_font_size(self.parent.settings)
+        font_spec = _entry_font_spec(
+            family,
+            font_size,
+            self.parent.settings.review_entry_font_bold,
+            self.parent.settings.review_entry_font_italic,
+        )
+        for index, target in enumerate(self.targets):
+            row = ttk.Frame(
+                self.rows, padding=(7, 5), style="PCR.Surface.TFrame"
+            )
+            row.grid(row=index, column=0, sticky="ew", padx=4, pady=(2, 5))
+            row.columnconfigure(0, weight=1)
+
+            header = ttk.Frame(row, style="PCR.Surface.TFrame")
+            header.grid(row=0, column=0, sticky="ew")
+            reason = " ｜ ".join(str(x) for x in target.get("reasons", ()))
+            ttk.Label(
+                header,
+                text=f"{target['page_name']}  ·  ({target['x']}, {target['y']})",
+                style="PCR.Header.TLabel",
+            ).pack(side="left")
+            ttk.Label(
+                header, text=reason, foreground="#a33a2b"
+            ).pack(side="left", padx=(10, 0))
+            ttk.Button(
+                header,
+                text="跳到页面",
+                command=lambda i=int(target["page_index"]): self._jump_to_page(i),
+                style="PCR.Compact.TButton",
+            ).pack(side="right")
+
+            photo = ImageTk.PhotoImage(
+                themed_display_image(target["crop"], self.parent.appearance_mode)
+            )
+            self.thumbnails.append(photo)
+            ttk.Label(
+                row, image=photo, style="PCR.Crop.TLabel"
+            ).grid(row=1, column=0, sticky="ew", pady=(4, 2))
+
+            edit_row = ttk.Frame(row, style="PCR.Surface.TFrame")
+            edit_row.grid(row=2, column=0, sticky="ew")
+            edit_row.columnconfigure(0, weight=1)
+            variable = tk.StringVar(value=str(target["original_word"]))
+            self.vars.append(variable)
+            editor = tk.Entry(
+                edit_row,
+                textvariable=variable,
+                font=font_spec,
+                bg="#fff7d6",
+                foreground="#111827",
+                insertbackground="#111827",
+                selectbackground="#c7d5e3",
+                selectforeground="#111827",
+                relief="flat",
+                bd=0,
+                highlightthickness=1,
+                highlightbackground="#e1c86b",
+                highlightcolor="#cc9a1a",
+            )
+            editor._pc_skip_classic_appearance = True
+            editor.grid(
+                row=0, column=0, sticky="ew",
+                ipady=max(
+                    0,
+                    int(self.parent.settings.review_entry_vertical_padding),
+                ),
+            )
+            self.editors.append(editor)
+            editor.bind(
+                "<Return>",
+                lambda _event, i=index: self._focus_next(i),
+            )
+            ocr_word = str(target.get("ocr_word") or "")
+            if ocr_word and _review_similarity_key(ocr_word) != _review_similarity_key(
+                target["original_word"]
+            ):
+                ttk.Button(
+                    edit_row,
+                    text=f"采用 OCR：{ocr_word}",
+                    command=lambda i=index, value=ocr_word: self._use_ocr(i, value),
+                    style="PCR.Compact.TButton",
+                ).grid(row=0, column=1, padx=(6, 0))
+        self.rows.columnconfigure(0, weight=1)
+        if self.editors:
+            self.editors[0].focus_set()
+
+    def _focus_next(self, index: int) -> str:
+        if self.editors:
+            target = min(len(self.editors) - 1, int(index) + 1)
+            self.editors[target].focus_set()
+            self.editors[target].selection_range(0, "end")
+        return "break"
+
+    def _use_ocr(self, index: int, value: str) -> None:
+        if 0 <= index < len(self.vars):
+            self.vars[index].set(str(value))
+            self.editors[index].focus_set()
+            self.editors[index].icursor("end")
+
+    def _jump_to_page(self, page_index: int) -> None:
+        # Saving first makes the main view and the focused editor agree even if
+        # the destination page is one of the modified pages.
+        if self._dirty():
+            self.save(jump_after=page_index)
+            return
+        self.parent.load_page(int(page_index))
+        self.parent.lift()
+
+    def save(
+        self, *, rescan_after: bool = False, jump_after: int | None = None
+    ) -> None:
+        if self._saving or not self.parent.project:
+            return
+        changed: list[dict] = []
+        for index, target in enumerate(self.targets):
+            if index >= len(self.vars):
+                continue
+            new_word = (
+                self.vars[index].get()
+                .replace("\r", " ")
+                .replace("\n", " ")
+                .replace("#", "＃")
+                .strip()
+            )
+            if new_word != self.vars[index].get():
+                self.vars[index].set(new_word)
+            if new_word != str(target.get("original_word") or ""):
+                changed.append({**target, "new_word": new_word})
+        if not changed:
+            self.status_var.set("没有需要保存的修改。")
+            if rescan_after:
+                self.scan()
+            elif jump_after is not None:
+                self.parent.load_page(int(jump_after))
+                self.parent.lift()
+            return
+
+        project = self.parent.project
+        pages = list(project.images)
+        grouped: dict[int, list[dict]] = {}
+        for item in changed:
+            grouped.setdefault(int(item["page_index"]), []).append(item)
+        self._saving = True
+        self.status_var.set(
+            f"正在安全保存 {len(changed)} 条修改（{len(grouped)} 页）…"
+        )
+
+        def worker():
+            saved_rows: list[tuple[int, int, int, str]] = []
+            saved_pages: list[str] = []
+            conflicts: list[str] = []
+            for page_index, changes in sorted(grouped.items()):
+                page = pages[page_index]
+                target_path = pdic_path(page)
+                original_entries = read_pdic(target_path)
+                working = [replace(entry) for entry in original_entries]
+                used: set[int] = set()
+                page_conflicts: list[str] = []
+                for change in changes:
+                    exact = [
+                        i for i, entry in enumerate(working)
+                        if i not in used
+                        and int(entry.x) == int(change["x"])
+                        and int(entry.y) == int(change["y"])
+                    ]
+                    if len(exact) > 1:
+                        preferred = [
+                            i for i in exact
+                            if working[i].word == str(change["original_word"])
+                        ]
+                        exact = preferred or exact
+                    if len(exact) != 1:
+                        page_conflicts.append(
+                            f"{page.name}: ({change['x']},{change['y']}) "
+                            f"{change['original_word']}"
+                        )
+                        continue
+                    entry_index = exact[0]
+                    used.add(entry_index)
+                    working[entry_index].word = str(change["new_word"])
+                    saved_rows.append(
+                        (
+                            int(page_index),
+                            int(change["x"]),
+                            int(change["y"]),
+                            str(change["new_word"]),
+                        )
+                    )
+                if page_conflicts:
+                    conflicts.extend(page_conflicts)
+                    # Never partially rewrite a page when one of its requested
+                    # coordinate matches is ambiguous/missing.
+                    saved_rows = [
+                        row for row in saved_rows if row[0] != int(page_index)
+                    ]
+                    continue
+                with Image.open(page) as opened:
+                    image_width = int(opened.width)
+                current = page.stem
+                previous = pages[page_index - 1].stem if page_index > 0 else "@"
+                following = (
+                    pages[page_index + 1].stem
+                    if page_index + 1 < len(pages) else "@"
+                )
+                pages_tuple = (current, previous, following)
+                try:
+                    write_pdic(
+                        target_path, working, image_width, pages_tuple
+                    )
+                    verified = read_pdic(target_path)
+                    if len(verified) != len(working):
+                        raise RuntimeError("保存后 PDIC 行数发生变化")
+                    expected = {
+                        (row[1], row[2]): row[3]
+                        for row in saved_rows if row[0] == page_index
+                    }
+                    actual = {
+                        (int(entry.x), int(entry.y)): entry.word
+                        for entry in verified
+                    }
+                    for key, value in expected.items():
+                        if actual.get(key) != value:
+                            raise RuntimeError(
+                                f"保存后坐标 {key} 的文本校验失败"
+                            )
+                except Exception:
+                    # Restore a semantically equivalent original PDIC through
+                    # the same atomic writer before propagating the error.
+                    write_pdic(
+                        target_path, original_entries, image_width, pages_tuple
+                    )
+                    raise
+                saved_pages.append(page.name)
+            return saved_rows, saved_pages, conflicts
+
+        def done(payload) -> None:
+            self._saving = False
+            saved_rows, saved_pages, conflicts = payload
+            saved_map = {
+                (page_index, x, y): word
+                for page_index, x, y, word in saved_rows
+            }
+            for index, target in enumerate(self.targets):
+                key = (
+                    int(target["page_index"]),
+                    int(target["x"]),
+                    int(target["y"]),
+                )
+                if key in saved_map:
+                    target["original_word"] = saved_map[key]
+                    if index < len(self.vars):
+                        self.vars[index].set(saved_map[key])
+
+            # Synchronize the live main-page model only for the page currently
+            # open; never call save_pdic() here, which could overwrite another
+            # page with stale widgets.
+            current_index = int(self.parent.current_index)
+            current_changes = {
+                (x, y): word
+                for page_index, x, y, word in saved_rows
+                if page_index == current_index
+            }
+            if current_changes:
+                for entry in self.parent.entries:
+                    value = current_changes.get((int(entry.x), int(entry.y)))
+                    if value is not None:
+                        entry.word = value
+                        entry.confidence = None
+                        entry.ocr_source = "manual"
+                        entry.final_engine = "manual"
+                        entry.manually_selected = True
+                self.parent.redraw()
+
+            conflict_text = (
+                f"；{len(conflicts)} 条因坐标冲突未写入"
+                if conflicts else ""
+            )
+            self.status_var.set(
+                f"已保存 {len(saved_rows)} 条修改 / {len(saved_pages)} 页"
+                f"{conflict_text}"
+            )
+            self.parent.status_var.set(self.status_var.get())
+            if conflicts:
+                messagebox.showwarning(
+                    "部分词条未保存",
+                    "以下词条的原 PDIC 坐标已变化或存在歧义，因此为避免写错页面未保存：\n\n"
+                    + "\n".join(conflicts[:20])
+                    + ("\n…" if len(conflicts) > 20 else ""),
+                    parent=self,
+                )
+            if rescan_after:
+                self.scan()
+            elif jump_after is not None:
+                self.parent.load_page(int(jump_after))
+                self.parent.lift()
+
+        def failed(exc, detail) -> None:
+            self._saving = False
+            if detail:
+                print(detail)
+            self.status_var.set(f"重点校对保存失败：{exc}")
+            messagebox.showerror(
+                "重点校对保存失败",
+                f"{exc}\n\n对应页面已尽可能恢复为写入前的 PDIC。",
+                parent=self,
+            )
+
+        self.parent._start_ui_worker(
+            f"focused-review-save-{id(self)}",
+            worker,
+            done,
+            failed,
+            wait_on_close=True,
+        )
+
+    def _close(self) -> None:
+        if self._saving:
+            messagebox.showinfo(
+                "正在保存", "请等待当前 PDIC 安全保存完成后再关闭。", parent=self
+            )
+            return
+        if self._dirty():
+            answer = messagebox.askyesnocancel(
+                "关闭重点校对",
+                "存在尚未保存的文本修改。是否保存后关闭？",
+                parent=self,
+            )
+            if answer is None:
+                return
+            if answer:
+                self.save()
+                return
+        self.parent.__dict__.pop("focused_review_window", None)
+        self.destroy()
+
+
 class OCRConflictReviewDialog(tk.Toplevel):
     """Review v2.1 multi-OCR decisions and jump directly to the page row."""
 
