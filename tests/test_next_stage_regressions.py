@@ -2076,6 +2076,40 @@ def test_auto_refine_y_is_exposed_as_shared_ordinary_drawing_control():
     assert 'padx=(8, 0)' not in hide_tail
 
 
+def test_ordinary_backup_checkbox_defaults_and_two_row_auto_layout_grid():
+    settings = AppSettings()
+    assert settings.paddle_refine_separator_y is True
+    assert settings.follow_column_deformation is True
+    assert settings.ordinary_auto_layout is True
+    assert settings.ordinary_auto_columns is False
+    assert settings.ordinary_auto_start_y is True
+    assert settings.ordinary_auto_manual_x is True
+    assert settings.ordinary_auto_column_width is False
+    assert settings.ordinary_auto_gutter is False
+    assert settings.ordinary_auto_character_height is False
+    assert settings.ordinary_auto_row_padding is False
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    start = source.index("    def _add_check_group(")
+    end = source.index("\n    def _add_collapsible_settings(", start)
+    check_group = source[start:end]
+    assert 'child_row = 0 if index < 3 else 1' in check_group
+    assert 'child_col = index if index < 3 else index - 3' in check_group
+    ordered = (
+        "\"ordinary_auto_columns\"",
+        "\"ordinary_auto_start_y\"",
+        "\"ordinary_auto_manual_x\"",
+        "\"ordinary_auto_column_width\"",
+        "\"ordinary_auto_gutter\"",
+        "\"ordinary_auto_character_height\"",
+        "\"ordinary_auto_row_padding\"",
+    )
+    positions = [check_group.index(name) for name in ordered]
+    assert positions == sorted(positions)
+
 def test_ordinary_drawing_restores_vb_left_edge_gate():
     image = Image.new("RGB", (260, 240), "white")
     draw = ImageDraw.Draw(image)
