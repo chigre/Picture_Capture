@@ -5335,6 +5335,7 @@ class ReviewWindow(tk.Toplevel):
 
         def worker():
             raw_crops: list[Image.Image] = []
+            display_meta: list[tuple[int, int]] = []
             page_cache: dict[int, tuple[Image.Image, object, list[WordEntry]]] = {}
             for target in targets:
                 page_index = int(target["page_index"])
@@ -5364,9 +5365,20 @@ class ReviewWindow(tk.Toplevel):
                     matches = preferred or matches
                 if len(matches) != 1:
                     raw_crops.append(Image.new("RGB", (max(40, available_width // 2), 36), "white"))
+                    display_meta.append((
+                        int(target.get("column_number", 1) or 1),
+                        int(target.get("sequence_number", 0) or 0),
+                    ))
                     continue
                 row = matches[0]
                 entry = ordered[row]
+                try:
+                    column_number = column_index(
+                        int(entry.x), geometry, int(entry.y)
+                    ) + 1
+                except Exception:
+                    column_number = 1
+                display_meta.append((int(column_number), int(row + 1)))
                 next_entry = ordered[row + 1] if row + 1 < len(ordered) else None
                 box = _review_line_box(
                     entry, geometry, image, review_settings, next_entry
@@ -5389,12 +5401,15 @@ class ReviewWindow(tk.Toplevel):
                 )
                 for crop in raw_crops
             ]
-            return crops, effective_zoom
+            return crops, effective_zoom, display_meta
 
         def done(payload) -> None:
             if serial != self._filter_render_serial or not getattr(self, "_filter_rows_active", False):
                 return
-            crops, effective_zoom = payload
+            crops, effective_zoom, display_meta = payload
+            for target, (column_number, sequence_number) in zip(targets, display_meta):
+                target["column_number"] = int(column_number)
+                target["sequence_number"] = int(sequence_number)
             if self.review_zoom_auto:
                 self.review_zoom = max(0.01, float(effective_zoom))
                 self.review_zoom_var.set(f"自动 {round(self.review_zoom * 100):d}%")
