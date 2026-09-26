@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture.formats import read_pdic, read_ppp, write_pdic, write_ppp, read_picdic_index_records
+from picture_capture.formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, read_picdic_index_records
 from picture_capture.app import (
     PictureCaptureApp, _candidate_choice_rows, _parse_words_of_pages_text, _fill_page_entries,
     _build_words_page_lookup, _resolve_words_page_token, _parse_merged_pdic_text, _write_pdic_atomic,
