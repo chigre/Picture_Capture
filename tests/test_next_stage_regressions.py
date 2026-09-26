@@ -1403,7 +1403,7 @@ def test_visual_marker_capture_uses_source_pixel_zoom_controls():
     )
     text = source.read_text(encoding="utf-8")
     assert "self.zoom_percent = 100" in text
-    assert 'text="图片缩放（默认 100% 原始像素）："'
+    assert 'text="图片缩放（默认 100% 原始像素）："'' in text
     assert 'text="100%", command=lambda: self._set_zoom(100)' in text
     assert 'text="适合窗口", command=self._fit_window' in text
     assert '"<Control-MouseWheel>"' in text
