@@ -2226,6 +2226,16 @@ def test_v214_single_only_profile_visual_rescue_keeps_large_head_not_body_line()
         records, band, 0, 0, settings, profile=profile,
     )
     assert [entry.word for entry in entries] == ["波"]
+    wave_row = next(
+        row for row in diagnostics
+        if row.get("accepted") and row.get("normalized_headword") == "波"
+    )
+    # The OCR/grammar separator (224 - row_padding 4 = 220) remains the actual
+    # entry boundary.  Visual projection confirms/de-duplicates the same glyph
+    # but may not move that boundary down toward the glyph/body metadata.
+    assert wave_row["source_y"] == 220
+    assert wave_row["visual_confirmation_source_y"] == 201
+    assert wave_row["features"]["cjk_visual_projection_confirmed"] is True
     false_rows = [row for row in diagnostics if row.get("text", "").startswith("Âm: 花")]
     assert false_rows and false_rows[0]["accepted"] is False
 
