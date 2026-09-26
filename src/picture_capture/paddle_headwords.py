@@ -3868,11 +3868,15 @@ def filter_headword_records(
         )
         has_pos = bool(parsed and parsed.has_pos and not rule_result["pos_excluded"])
         has_inflection = bool(parsed and parsed.has_inflection)
+        cjk_marker_prefixed = bool(
+            parsed and parsed.descriptor_text == "cjk_marker_pinyin"
+        )
         cjk_single_visual = bool(
             _is_chinese_ocr(settings)
             and parsed
             and _is_single_cjk_ideograph(parsed.normalized)
             and parsed.descriptor_text != "chinese_bracketed_headword"
+            and not cjk_marker_prefixed
         )
         parser_controls = int(
             getattr(settings, "profile_parser_controls_version", 0) or 0
@@ -4267,6 +4271,7 @@ def filter_headword_records(
                     float(visual_entry_marker.get("center_delta") or 0.0)
                     if visual_entry_marker else 0.0
                 ),
+                "cjk_marker_prefixed": cjk_marker_prefixed,
                 "cjk_bracketed": cjk_bracketed,
                 "cjk_bracket_visual_supported": cjk_bracket_visual_supported,
                 "cjk_bracket_extra_required": cjk_bracket_extra_required,
