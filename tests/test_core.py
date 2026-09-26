@@ -2025,6 +2025,79 @@ def test_v281_chinese_single_character_requires_visual_prominence():
     assert rows["同"]["reject_reason"] == "cjk_single_not_visually_prominent"
 
 
+def test_v281_cjk_right_context_detects_sparse_headword_layout():
+    import numpy as np
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import _cjk_right_context_metrics
+
+    settings = AppSettings(
+        profile_cjk_right_context_enabled=True,
+        profile_cjk_right_context_width_percent=80,
+    )
+    gray = np.full((260, 220), 255, dtype=np.uint8)
+    # Ordinary body text to the right establishes a much denser baseline.
+    for y0 in (20, 55, 90, 195, 225):
+        gray[y0:y0 + 20, 100:140] = 0
+    # Candidate large head at y=130..180: only a short pronunciation fragment
+    # occupies the upper right; the lower/right region remains blank.
+    gray[132:140, 104:126] = 0
+    metrics = _cjk_right_context_metrics(
+        gray, (130, 180), 100, settings, header_cutoff=0,
+    )
+    assert metrics["available"] is True
+    assert metrics["width_percent"] == 80
+    assert metrics["width_px"] == 40
+    assert metrics["blank_ratio"] > 0.85
+    assert metrics["lower_blank_ratio"] > 0.95
+    assert metrics["row_occupancy"] < 0.30
+    assert metrics["density_ratio"] < 0.60
+    assert metrics["sparse"] is True
+
+
+def test_v281_cjk_right_context_rejects_dense_body_like_layout():
+    import numpy as np
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import _cjk_right_context_metrics
+
+    settings = AppSettings(profile_cjk_right_context_width_percent=80)
+    gray = np.full((260, 220), 255, dtype=np.uint8)
+    for y0 in (20, 55, 90, 195, 225):
+        gray[y0:y0 + 20, 100:140] = 0
+    gray[130:180, 100:140] = 0
+    metrics = _cjk_right_context_metrics(gray, (130, 180), 100, settings)
+    assert metrics["available"] is True
+    assert metrics["sparse"] is False
+    assert metrics["lower_blank_ratio"] < 0.20
+    assert metrics["row_occupancy"] > 0.90
+
+
+def test_v281_sparse_right_context_safely_recovers_more_clipped_large_cjk():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import OCRRecord, _cjk_word_for_visual_run
+
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        profile_parser_controls_version=1,
+        profile_cjk_allow_single_headword=True,
+    )
+    profile = load_dictionary_profile(preset="cjk_visual", language="chi_tra")
+    clipped = [OCRRecord("巴", 0.99, (8, 119, 34, 131))]
+    run = (100, 150)
+    sparse = {"available": True, "sparse": True}
+    dense = {"available": True, "sparse": False}
+
+    word, _confidence, record = _cjk_word_for_visual_run(
+        clipped, run, 100, settings, profile, sparse,
+    )
+    assert word == "巴" and record is clipped[0]
+
+    word, _confidence, record = _cjk_word_for_visual_run(
+        clipped, run, 100, settings, profile, dense,
+    )
+    assert word == "" and record is None
+
+
 def test_v281_candidate_band_is_capped_to_current_column_width():
     from PIL import Image
     from picture_capture.models import AppSettings
