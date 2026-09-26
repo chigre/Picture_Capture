@@ -442,8 +442,7 @@
       "description": "以 ○、●、◆ 等明确符号作为强词条提示。",
       "family": "marker_prefixed",
       "validated_examples": [
-        "HanYi",
-        "CNIT"
+        "HanYi"
       ],
       "features": [
         "explicit_entry_marker"
