@@ -631,43 +631,6 @@ class AppSettings:
         known = cls.__dataclass_fields__
         return cls(**{key: value for key, value in raw.items() if key in known})
 
-    @classmethod
-    def from_legacy(cls, path: Path) -> "AppSettings":
-        """Read the positional _Mysettings.ini format emitted by Form1.vb."""
-        parts = path.read_text(encoding="utf-8-sig").split("@")
-        settings = cls()
-        converters = {
-            2: ("columns", int),
-            3: ("gutter", int),
-            4: ("column_width", int),
-            5: ("start_y", int),
-            6: ("manual_y", int),
-            7: ("manual_x", int),
-            8: ("body_indent", int),
-            9: ("character_height", int),
-            10: ("row_padding", int),
-            11: ("right_ratio", float),
-            12: ("horizontal_tolerance", int),
-            13: ("marker_height", int),
-            14: ("guide_width", int),
-            15: ("darkness_threshold", int),
-            16: ("dark_area_percent", int),
-            17: ("batch_interval", float),
-        }
-        for index, (name, cast) in converters.items():
-            if len(parts) > index and parts[index].strip():
-                try:
-                    setattr(settings, name, cast(parts[index]))
-                except ValueError:
-                    pass
-        if len(parts) > 18 and parts[18].strip().isdigit():
-            # Old ComboBox used the language string, not a stable numeric enum.
-            legacy_languages = ["eng", "spa", "ita", "fra", "por", "deu", "chi_sim", "chi_tra"]
-            idx = int(parts[18])
-            if 0 <= idx < len(legacy_languages):
-                settings.ocr_language = legacy_languages[idx]
-        settings.right_ratio = 100.0 / max(0.01, float(settings.right_ratio))
-        return settings
 
 
 @dataclass
