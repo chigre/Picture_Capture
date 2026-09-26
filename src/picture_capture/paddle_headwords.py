@@ -2664,6 +2664,58 @@ def _parse_cjk_visual_marker_line(
     return parsed
 
 
+def _parse_visual_configured_symbol_line(
+    text: str,
+    visual_symbol: dict[str, Any],
+    settings: AppSettings,
+    profile: DictionaryProfile,
+) -> HeadwordParse | None:
+    """Recover a configured fixed-symbol head when OCR lost the symbol itself."""
+    role = str(visual_symbol.get("role") or "")
+    symbol = str(visual_symbol.get("symbol") or "")
+    if not symbol:
+        return None
+    if role == "entry_marker":
+        return _parse_cjk_visual_marker_line(text, symbol, settings, profile)
+    if role != "bracket_open":
+        return None
+
+    parse_text, _repairs = _repair_headword_ocr(text)
+    closer = _BRACKET_CLOSER_BY_OPENER.get(symbol, "")
+    # When OCR dropped the opening bracket, require either a visible matching
+    # closer or a short headword-like physical row.  This keeps a visual bracket
+    # component from swallowing a long definition line.
+    has_closer = bool(closer and closer in parse_text[:72])
+    compact = parse_text.strip()
+    if not has_closer and len(compact) > 24:
+        return None
+
+    match = re.search(
+        r"[\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]",
+        parse_text[:16],
+    )
+    if match is None or match.start() > 6:
+        return None
+    synthetic = symbol + parse_text[match.start():]
+    parsed = _parse_chinese_bracketed_headword(
+        synthetic,
+        settings,
+        enforce_chinese_language=not (
+            _is_chinese_ocr(settings) or _is_japanese_ocr(settings)
+        ),
+        allow_japanese_reading_prefix=False,
+        allowed_openers=(symbol,),
+    )
+    if parsed is None:
+        return None
+    parsed.parser_stage = "cjk_visual_bracket_rescue"
+    parsed.parser_trace = (
+        f"visual_headword_symbol:{symbol}",
+        "cjk_visual_bracket_rescue",
+    )
+    return parsed
+
+
 def _leading_cjk_ideograph(text: str) -> str:
     """Return a CJK glyph only when it is the actual leading token.
 
@@ -3785,11 +3837,28 @@ def filter_headword_records(
         bool(getattr(settings, "profile_allow_marker_prefix", False))
         if parser_controls else active_profile.uses_parser("cjk_marker_pinyin")
     )
+    bracket_symbol_enabled = (
+        bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True))
+        if parser_controls else active_profile.uses_parser("cjk_bracketed")
+    )
+    symbol_inventory = _configured_symbol_inventory(settings, active_profile)
+    visual_symbol_enabled = bool(
+        symbol_inventory.get("enabled")
+        and symbol_inventory.get("visual_rescue")
+        and (
+            (marker_prefix_enabled and symbol_inventory.get("entry_markers"))
+            or (bracket_symbol_enabled and symbol_inventory.get("bracket_openers"))
+        )
+    )
     visual_entry_markers = (
         _detect_visual_entry_markers(
-            gray, median_height, left_limit, lower_bound=header_cutoff,
+            gray,
+            median_height,
+            left_limit,
+            lower_bound=header_cutoff,
+            inventory=symbol_inventory,
         )
-        if marker_prefix_enabled and _is_chinese_ocr(settings) else []
+        if visual_symbol_enabled else []
     )
     visual_marker_matches = _match_visual_entry_markers_to_lines(
         lines, visual_entry_markers, median_height,
@@ -3802,17 +3871,25 @@ def filter_headword_records(
     for line_index, line in enumerate(lines):
         parsed = parse_headword_text(line.text, settings, patterns, active_profile)
         visual_marker = visual_marker_matches.get(line_index)
-        if visual_marker is not None and (
-            parsed is None or parsed.parser_stage != "cjk_marker_pinyin"
-        ):
-            rescued = _parse_cjk_visual_marker_line(
-                line.text,
-                str(visual_marker.get("symbol") or "○"),
-                settings,
-                active_profile,
+        if visual_marker is not None:
+            expected_stages = (
+                {"cjk_marker_pinyin", "cjk_visual_marker_rescue"}
+                if visual_marker.get("role") == "entry_marker"
+                else {
+                    "chinese_bracketed_headword",
+                    "chinese_open_bracket_headword",
+                    "cjk_visual_bracket_rescue",
+                }
             )
-            if rescued is not None:
-                parsed = rescued
+            if parsed is None or parsed.parser_stage not in expected_stages:
+                rescued = _parse_visual_configured_symbol_line(
+                    line.text,
+                    visual_marker,
+                    settings,
+                    active_profile,
+                )
+                if rescued is not None:
+                    parsed = rescued
         parses.append(parsed)
         leading_boxes.append(
             _leading_box(line, parsed.match_end if parsed else min(12, len(line.text)))
@@ -4235,13 +4312,26 @@ def filter_headword_records(
                     and cjk_candidate_right_context.get("candidate_baseline_supported")
                 ),
                 "visual_entry_marker": bool(visual_entry_marker),
+                "visual_headword_symbol": bool(visual_entry_marker),
                 "visual_entry_marker_type": (
                     str(visual_entry_marker.get("type") or "")
+                    if visual_entry_marker else ""
+                ),
+                "visual_headword_symbol_family": (
+                    str(visual_entry_marker.get("family") or "")
+                    if visual_entry_marker else ""
+                ),
+                "visual_headword_symbol_role": (
+                    str(visual_entry_marker.get("role") or "")
                     if visual_entry_marker else ""
                 ),
                 "visual_entry_marker_symbol": (
                     str(visual_entry_marker.get("symbol") or "")
                     if visual_entry_marker else ""
+                ),
+                "visual_headword_symbol_lane_delta": (
+                    float(visual_entry_marker.get("lane_delta") or 0.0)
+                    if visual_entry_marker else 0.0
                 ),
                 "visual_entry_marker_density": (
                     float(visual_entry_marker.get("density") or 0.0)
