@@ -12889,11 +12889,12 @@ class PictureCaptureApp(tk.Tk):
             rtl=rtl,
             vertical_box=vertical_box,
         )
+        marker_control_bg = str(self.settings.headword_marker_color)
         index_label = tk.Label(
             self.canvas,
             text=str(index),
-            bg=str(editor.cget("bg")),
-            fg="#222222",
+            bg=marker_control_bg,
+            fg="#ffffff",
             bd=0,
             padx=2,
             pady=0,
@@ -12901,8 +12902,8 @@ class PictureCaptureApp(tk.Tk):
                 main_family, max(8, round(editor_font_size * 0.65)), False, False,
             ),
         )
-        # Preserve the editor-matching light status/background colour even
-        # when the rest of the application is using dark appearance.
+        # Sequence numbers and the visible delete control intentionally use the
+        # same colour as 【词头横线】 so the row controls read as one visual group.
         index_label._pc_skip_classic_appearance = True
         self.overlay_widgets.append(index_label)
         record["widgets"].append(index_label)
@@ -12911,6 +12912,39 @@ class PictureCaptureApp(tk.Tk):
             index_x, index_y, window=index_label, anchor=index_anchor,
         )
         record["canvas_items"].append(index_window)
+
+        if vertical and vertical_box is not None:
+            delete_x = float(vertical_box[0])
+            delete_y = float(vertical_box[3] + 1)
+        else:
+            delete_x = float(editor_x - editor_req_width if rtl else editor_x)
+            delete_y = float(editor_y + editor_req_height + 1)
+        delete_button = tk.Button(
+            self.canvas,
+            text="[X]",
+            width=3,
+            takefocus=False,
+            relief="flat",
+            bd=0,
+            padx=1,
+            pady=0,
+            cursor="hand2",
+            fg="#ffffff",
+            bg=marker_control_bg,
+            activeforeground="#ffffff",
+            activebackground=marker_control_bg,
+            command=lambda e=entry: self.delete_entry(e),
+        )
+        delete_button._pc_skip_classic_appearance = True
+        if processing_readonly:
+            delete_button.configure(state="disabled")
+        self.overlay_widgets.append(delete_button)
+        record["widgets"].append(delete_button)
+        record["delete_widget"] = delete_button
+        delete_window = self.canvas.create_window(
+            delete_x, delete_y, window=delete_button, anchor="nw",
+        )
+        record["canvas_items"].append(delete_window)
 
         if self.crop_preview_var.get():
             left, top, right, bottom = line_box(entry, geometry, self.image, self.settings)
