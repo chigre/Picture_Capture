@@ -20,7 +20,10 @@ from picture_capture.models import (
     AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
 )
 from picture_capture.layout_transform import LayoutTransform
-from picture_capture.layout_detection import _analysis_ink_mask
+from picture_capture.layout_detection import (
+    LayoutEstimate, _analysis_ink_mask, aggregate_layout_estimates,
+    ordinary_layout_priors_from_character_height,
+)
 from picture_capture.processing import (
     _left_edge_ink_mask, apply_column_start_offsets, derive_geometry,
     derive_nominal_geometry, detect_entries, refine_existing_entries,
@@ -1928,6 +1931,33 @@ def test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only():
     assert settings.paddle_compare_tesseract is False
     assert settings.paddle_enable_lens is False
     assert settings.paddle_lens_mode == "off"
+
+def test_layout_detection_restores_vb_ordinary_scale_priors():
+    assert ordinary_layout_priors_from_character_height(25) == (28, 20)
+    assert ordinary_layout_priors_from_character_height(35) == (39, 28)
+
+    estimate = LayoutEstimate(
+        columns=2,
+        start_y=89,
+        column_width=902,
+        gutter=54,
+        manual_x=28,
+        bottom_y=2739,
+        character_height=35,
+        row_padding=4,
+        source_boxes=120,
+    )
+    values, _summary = aggregate_layout_estimates([estimate])
+    assert values["character_height"] == 35
+    assert values["body_indent"] == 39
+    assert values["horizontal_tolerance"] == 28
+
+
+def test_new_projects_use_vb_scale_micro_tolerance():
+    settings = AppSettings()
+    assert settings.horizontal_tolerance == 20
+    assert settings.horizontal_tolerance < settings.body_indent
+
 
 def test_ordinary_drawing_auto_refine_y_is_shared_and_switchable(monkeypatch):
     import picture_capture.paddle_headwords as paddle_headwords
