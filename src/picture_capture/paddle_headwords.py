@@ -322,8 +322,13 @@ def _configured_symbol_inventory(
 ) -> dict[str, Any]:
     """Resolve dictionary-specific symbol roles with Project Profile overrides."""
     base = dict(profile.symbol_inventory or {})
+    has_role_aware_inventory = bool(profile.symbol_inventory is not None)
     entry = tuple(str(x) for x in base.get("entry_markers", []) if str(x))
-    if not entry:
+    # Legacy profiles stored every structural symbol in grammar.entry_markers.
+    # Once a role-aware inventory exists, an explicitly empty entry_markers list
+    # is meaningful (e.g. cjk_visual keeps 【 as a bracket opener, not an entry
+    # marker), so do not leak those bracket glyphs back into the entry role.
+    if not entry and not has_role_aware_inventory:
         entry = tuple(str(x) for x in profile.entry_leading_symbols if str(x))
     bracket = tuple(str(x) for x in base.get("bracket_openers", []) if str(x))
     saved = int(getattr(settings, "profile_symbol_inventory_version", 0) or 0) >= 1
