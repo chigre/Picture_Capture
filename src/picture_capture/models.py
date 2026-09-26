@@ -309,11 +309,32 @@ class AppSettings:
     profile_allow_ordinary_left_edge: bool = True
     profile_allow_numbered_prefix: bool = False
     profile_allow_marker_prefix: bool = False
+    # Dictionary-specific headword symbol inventory.  Version 0 preserves the
+    # historical profile-derived symbol sets; Project Profile saves version 1
+    # together with the explicit per-dictionary symbol lists below.
+    profile_symbol_inventory_version: int = 0
+    profile_symbol_inventory_enabled: bool = True
+    # Whitespace / comma / Chinese-comma separated literal symbols. Entry
+    # markers are standalone boundary glyphs (○ ● ◇ ◆ …); bracket openers are
+    # structural delimiters whose enclosed text is the lemma (【 〔 「 …).
+    profile_entry_marker_symbols: str = ""
+    profile_bracket_open_symbols: str = ""
+    # Visual symbol rescue is used when OCR drops/misreads the configured glyph.
+    profile_symbol_visual_rescue_enabled: bool = True
+    # Stable X-lane evidence suppresses incidental look-alike symbols in body
+    # text.  Tolerance is expressed as a percentage of local OCR line height.
+    profile_symbol_lane_required: bool = True
+    profile_symbol_lane_tolerance_percent: int = 50
     profile_cjk_allow_single_headword: bool = True
     profile_cjk_allow_bracketed_headword: bool = True
     profile_cjk_require_left_edge: bool = True
     profile_cjk_brackets_in_body: bool = False
     profile_cjk_require_visual_evidence: bool = False
+    # Optional layout evidence for oversized CJK heads. The detector samples a
+    # strip immediately to the right of the large-glyph zone; width is expressed
+    # as a percentage of the detected glyph/run height so it scales with DPI.
+    profile_cjk_right_context_enabled: bool = True
+    profile_cjk_right_context_width_percent: int = 80
     # Dictionary collation used by the headword-order checker. ``auto`` follows
     # the selected OCR language; custom mode accepts arbitrary alphabet units
     # (including multi-character letters such as ch / ll).

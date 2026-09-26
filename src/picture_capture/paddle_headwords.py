@@ -284,6 +284,137 @@ def _is_chinese_ocr(settings: AppSettings) -> bool:
     )
 
 
+def _is_japanese_ocr(settings: AppSettings) -> bool:
+    """Return True when the active OCR language is Japanese."""
+    lang = (settings.ocr_language or "").lower()
+    paddle_lang = (settings.paddle_language or "").lower()
+    parts = {part.strip() for part in lang.split("+") if part.strip()}
+    return bool(parts.intersection({"jpn", "jpn_vert", "japan"}) or paddle_lang == "japan")
+
+
+_SYMBOL_FAMILY_BY_LITERAL = {
+    "○": "circle_open", "◯": "circle_open", "◦": "circle_open",
+    "●": "circle_filled", "•": "circle_filled", "◉": "circle_filled",
+    "◇": "diamond_open", "◆": "diamond_filled",
+    "□": "square_open", "■": "square_filled",
+    "△": "triangle_open", "▽": "triangle_open", "▷": "triangle_open", "◁": "triangle_open",
+    "▲": "triangle_filled", "▼": "triangle_filled", "▶": "triangle_filled", "►": "triangle_filled", "◀": "triangle_filled",
+    "【": "bracket_open", "〔": "bracket_open", "［": "bracket_open", "[": "bracket_open",
+    "「": "bracket_open", "『": "bracket_open", "〈": "bracket_open", "《": "bracket_open",
+}
+
+_BRACKET_CLOSER_BY_OPENER = {
+    "【": "】", "〔": "〕", "［": "］", "[": "]",
+    "「": "」", "『": "』", "〈": "〉", "《": "》",
+}
+
+
+def _split_configured_symbols(value: str | None) -> tuple[str, ...]:
+    text = str(value or "").strip()
+    if not text:
+        return ()
+    parts = re.split(r"[\s,，、;；]+", text)
+    return tuple(dict.fromkeys(part for part in parts if part))
+
+
+def _configured_symbol_inventory(
+    settings: AppSettings, profile: DictionaryProfile,
+) -> dict[str, Any]:
+    """Resolve dictionary-specific symbol roles with Project Profile overrides."""
+    base = dict(profile.symbol_inventory or {})
+    has_role_aware_inventory = bool(profile.symbol_inventory is not None)
+    entry = tuple(str(x) for x in base.get("entry_markers", []) if str(x))
+    # Legacy profiles stored every structural symbol in grammar.entry_markers.
+    # Once a role-aware inventory exists, an explicitly empty entry_markers list
+    # is meaningful (e.g. cjk_visual keeps 【 as a bracket opener, not an entry
+    # marker), so do not leak those bracket glyphs back into the entry role.
+    if not entry and not has_role_aware_inventory:
+        entry = tuple(str(x) for x in profile.entry_leading_symbols if str(x))
+    bracket = tuple(str(x) for x in base.get("bracket_openers", []) if str(x))
+    saved = int(getattr(settings, "profile_symbol_inventory_version", 0) or 0) >= 1
+    if saved:
+        enabled = bool(getattr(settings, "profile_symbol_inventory_enabled", True))
+        entry = _split_configured_symbols(
+            getattr(settings, "profile_entry_marker_symbols", "")
+        ) if enabled else ()
+        bracket = _split_configured_symbols(
+            getattr(settings, "profile_bracket_open_symbols", "")
+        ) if enabled else ()
+        visual_rescue = bool(
+            getattr(settings, "profile_symbol_visual_rescue_enabled", True)
+        )
+        lane_required = bool(
+            getattr(settings, "profile_symbol_lane_required", True)
+        )
+        lane_tolerance = max(
+            20, min(
+                120,
+                int(getattr(settings, "profile_symbol_lane_tolerance_percent", 50) or 50),
+            )
+        )
+    else:
+        enabled = bool(base.get("enabled", True))
+        visual_rescue = bool(base.get("visual_rescue", True))
+        lane_required = bool(base.get("lane_expected", False))
+        lane_tolerance = max(
+            20, min(120, int(base.get("lane_tolerance_percent") or 50))
+        )
+        # Parser-controls v1 predates dictionary-specific inventories. Preserve
+        # its documented "固定符号" checkbox semantics until the Project Profile
+        # explicitly saves an inventory (version 1).
+        if (
+            not entry
+            and int(getattr(settings, "profile_parser_controls_version", 0) or 0) >= 1
+            and bool(getattr(settings, "profile_allow_marker_prefix", False))
+        ):
+            entry = ("○", "●", "◦", "•", "〓", "◆", "◇", "►", "▶")
+    families = {
+        _SYMBOL_FAMILY_BY_LITERAL[symbol]
+        for symbol in entry + bracket
+        if symbol in _SYMBOL_FAMILY_BY_LITERAL
+    }
+    families.update(
+        str(x) for x in base.get("visual_families", []) if str(x)
+    )
+    return {
+        "enabled": enabled,
+        "entry_markers": entry,
+        "bracket_openers": bracket,
+        "visual_rescue": visual_rescue,
+        "lane_required": lane_required,
+        "lane_tolerance_percent": lane_tolerance,
+        "visual_families": tuple(sorted(families)),
+    }
+
+
+def _starts_with_unconfigured_headword_symbol(
+    text: str,
+    settings: AppSettings,
+    profile: DictionaryProfile,
+) -> bool:
+    """Reject known symbol-led rows that are outside an explicitly saved set."""
+    if int(getattr(settings, "profile_symbol_inventory_version", 0) or 0) < 1:
+        return False
+    inventory = _configured_symbol_inventory(settings, profile)
+    if not inventory.get("enabled", True):
+        return False
+    stripped = unicodedata.normalize("NFKC", str(text or "")).lstrip()
+    if not stripped:
+        return False
+    configured = tuple(inventory["entry_markers"]) + tuple(inventory["bracket_openers"])
+    if any(stripped.startswith(symbol) for symbol in configured if symbol):
+        return False
+    known = tuple(
+        sorted(
+            set(_SYMBOL_FAMILY_BY_LITERAL)
+            | {"〓", "※", "*", "†", "‡", "§", "¶"},
+            key=len,
+            reverse=True,
+        )
+    )
+    return any(stripped.startswith(symbol) for symbol in known)
+
+
 def _parse_cjk_marker_pinyin_headword(
     text: str, settings: AppSettings, profile: DictionaryProfile,
 ) -> HeadwordParse | None:
@@ -296,22 +427,19 @@ def _parse_cjk_marker_pinyin_headword(
     if not _is_chinese_ocr(settings):
         return None
     parse_text, repairs = _repair_headword_ocr(text)
-    if int(getattr(settings, "profile_parser_controls_version", 0) or 0) >= 1:
-        generic_markers = ("○", "●", "◦", "•", "〓", "◆", "◇", "►", "▶")
-        profile_markers = (
-            tuple(m for m in profile.entry_leading_symbols if m)
-            if profile.uses_parser("cjk_marker_pinyin") else ()
+    inventory = _configured_symbol_inventory(settings, profile)
+    markers = tuple(
+        sorted(
+            dict.fromkeys(inventory["entry_markers"]),
+            key=len,
+            reverse=True,
         )
-        markers = tuple(
-            sorted(dict.fromkeys(generic_markers + profile_markers), key=len, reverse=True)
-        )
-    else:
-        markers = tuple(sorted((m for m in profile.entry_leading_symbols if m), key=len, reverse=True))
-        if not markers:
-            markers = ("○", "●", "◦", "•", "〓")
+    )
+    if not markers:
+        return None
     marker_pattern = "|".join(re.escape(m) for m in markers)
     match = re.match(
-        rf"^\s*(?P<marker>{marker_pattern})\s*(?P<lemma>[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]{{1,24}})",
+        rf"^\s*(?P<marker>{marker_pattern})\s*(?P<lemma>[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff][\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaffA-Za-z0-9·-]{{0,23}})",
         parse_text,
         flags=re.UNICODE,
     )
@@ -358,7 +486,12 @@ def _parse_cjk_single_with_pinyin(text: str, settings: AppSettings) -> HeadwordP
 
 
 def _parse_chinese_bracketed_headword(
-    text: str, settings: AppSettings, *, enforce_chinese_language: bool = True
+    text: str,
+    settings: AppSettings,
+    *,
+    enforce_chinese_language: bool = True,
+    allow_japanese_reading_prefix: bool = False,
+    allowed_openers: tuple[str, ...] | None = None,
 ) -> HeadwordParse | None:
     """Parse complete or line-wrapped Chinese bracket headwords.
 
@@ -377,15 +510,49 @@ def _parse_chinese_bracketed_headword(
         return None
     parse_text, repairs = _repair_headword_ocr(text)
 
-    # The opening marker must be at the physical OCR-line start.  OCR may map
-    # traditional corner brackets to visually similar square-bracket glyphs.
-    opener = re.match(r"^\s*([【〔［\[])\s*(.*)$", parse_text, flags=re.UNICODE)
+    # Chinese profiles require a configured bracket at the physical line
+    # start. Japanese profiles may prepend a short kana reading such as
+    # "あい【愛】"; that prefix is entry metadata, not part of the lemma.
+    openers = tuple(
+        sorted(
+            dict.fromkeys(
+                allowed_openers
+                or ("【", "〔", "［", "[", "「", "『", "〈", "《")
+            ),
+            key=len,
+            reverse=True,
+        )
+    )
+    if not openers:
+        return None
+    opener_pattern = "|".join(re.escape(value) for value in openers)
+    reading_prefix = ""
+    if allow_japanese_reading_prefix:
+        opener = re.match(
+            rf"^\s*(?:(?P<reading>[\u3040-\u30ff\u31f0-\u31ffー・･]{{1,12}})\s*)?"
+            rf"(?P<opening>{opener_pattern})\s*(?P<remainder>.*)$",
+            parse_text,
+            flags=re.UNICODE,
+        )
+        if opener:
+            reading_prefix = str(opener.group("reading") or "")
+    else:
+        opener = re.match(
+            rf"^\s*(?P<opening>{opener_pattern})\s*(?P<remainder>.*)$",
+            parse_text,
+            flags=re.UNICODE,
+        )
     if not opener:
         return None
 
-    opening = opener.group(1)
-    remainder = opener.group(2).rstrip()
-    close_match = re.search(r"[】〕］\]]", remainder, flags=re.UNICODE)
+    opening = opener.group("opening")
+    remainder = opener.group("remainder").rstrip()
+    configured_closer = _BRACKET_CLOSER_BY_OPENER.get(opening)
+    close_match = (
+        re.search(re.escape(configured_closer), remainder, flags=re.UNICODE)
+        if configured_closer
+        else re.search(r"[】〕］\]」』〉》]", remainder, flags=re.UNICODE)
+    )
     is_closed = close_match is not None
 
     if is_closed:
@@ -395,7 +562,7 @@ def _parse_chinese_bracketed_headword(
         # us a reliable boundary, so a wider limit is safe here.
         if not raw_inner or len(raw_inner) > 64:
             return None
-        match_end = opener.start(2) + close_match.end()
+        match_end = opener.start("remainder") + close_match.end()
         definition_text = remainder[close_match.end():].lstrip()
         descriptor = "chinese_bracketed_headword"
         parser_stage = "chinese_bracketed_headword"
@@ -443,7 +610,10 @@ def _parse_chinese_bracketed_headword(
         usage_text="",
         definition_text=definition_text,
         parser_stage=parser_stage,
-        parser_trace=(parser_stage,),
+        parser_trace=(
+            (f"japanese_reading_prefix:{reading_prefix}", parser_stage)
+            if reading_prefix else (parser_stage,)
+        ),
         bug_types=(),
     )
 
@@ -1696,8 +1866,14 @@ def parse_headword_text(
             numbered_prefix_matched = True
             text = text[prefix.end():]
             text = re.sub(r"^\s*[.．]\s*", "", text, count=1)
+            bracket_inventory = _configured_symbol_inventory(
+                settings, active_profile
+            )
             bracketed = _parse_chinese_bracketed_headword(
-                text, settings, enforce_chinese_language=False,
+                text,
+                settings,
+                enforce_chinese_language=False,
+                allowed_openers=tuple(bracket_inventory["bracket_openers"]),
             )
             if bracketed is not None:
                 return bracketed
@@ -1723,7 +1899,21 @@ def parse_headword_text(
         allow_bracketed
         and (parser_controls or "bracketed_compound" in features)
     ):
-        chinese = _parse_chinese_bracketed_headword(text, settings)
+        explicit_cjk_profile = bool(
+            profile is not None and active_profile.family == "cjk_visual"
+        )
+        bracket_inventory = _configured_symbol_inventory(
+            settings, active_profile
+        )
+        chinese = _parse_chinese_bracketed_headword(
+            text,
+            settings,
+            enforce_chinese_language=not explicit_cjk_profile,
+            allow_japanese_reading_prefix=(
+                explicit_cjk_profile and _is_japanese_ocr(settings)
+            ),
+            allowed_openers=tuple(bracket_inventory["bracket_openers"]),
+        )
         if chinese is not None:
             return chinese
     if legacy_language_driven_cjk or (
@@ -1733,6 +1923,12 @@ def parse_headword_text(
         chinese_single = _parse_chinese_single_character_headword(text, settings)
         if chinese_single is not None:
             return chinese_single
+
+    # A Project Profile with an explicit symbol inventory is exact: a row
+    # starting with a known-but-unconfigured headword symbol must not silently
+    # fall through to the generic lemma parser after that symbol is skipped.
+    if _starts_with_unconfigured_headword_symbol(text, settings, active_profile):
+        return None
 
     # The generic lemma parser is the "普通左缘短词" structure. A numbered
     # prefix is also allowed to continue through it because the prefix itself
@@ -2129,6 +2325,466 @@ def match_ocr_lines_to_image_boundaries(
     return matches
 
 
+def _binary_rle_components(
+    mask: np.ndarray,
+) -> list[tuple[int, int, int, int, int]]:
+    """Dependency-free 8-connected components for visual marker analysis."""
+    mask = np.asarray(mask, dtype=bool)
+    if mask.ndim != 2 or mask.size == 0:
+        return []
+    height, _width = mask.shape
+    parent: list[int] = []
+    rank: list[int] = []
+    boxes: list[list[int]] = []
+
+    def make(x0: int, x1: int, y: int) -> int:
+        index = len(parent)
+        parent.append(index)
+        rank.append(0)
+        boxes.append([x0, y, x1, y + 1, x1 - x0])
+        return index
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra == rb:
+            return
+        if rank[ra] < rank[rb]:
+            ra, rb = rb, ra
+        parent[rb] = ra
+        if rank[ra] == rank[rb]:
+            rank[ra] += 1
+
+    previous: list[tuple[int, int, int]] = []
+    for y in range(height):
+        padded = np.r_[False, mask[y], False].astype(np.int8)
+        changes = np.diff(padded)
+        starts = np.flatnonzero(changes == 1)
+        ends = np.flatnonzero(changes == -1)
+        current: list[tuple[int, int, int]] = []
+        cursor = 0
+        for x0, x1 in zip(starts.tolist(), ends.tolist()):
+            component = make(x0, x1, y)
+            while cursor < len(previous) and previous[cursor][1] < x0 - 1:
+                cursor += 1
+            k = cursor
+            while k < len(previous) and previous[k][0] <= x1 + 1:
+                px0, px1, prior = previous[k]
+                if px1 >= x0 - 1:
+                    union(component, prior)
+                k += 1
+            current.append((x0, x1, component))
+        previous = current
+
+    merged: dict[int, list[int]] = {}
+    for index, box in enumerate(boxes):
+        root = find(index)
+        target = merged.setdefault(root, [box[0], box[1], box[2], box[3], 0])
+        target[0] = min(target[0], box[0])
+        target[1] = min(target[1], box[1])
+        target[2] = max(target[2], box[2])
+        target[3] = max(target[3], box[3])
+        target[4] += box[4]
+    return [tuple(value) for value in merged.values()]
+
+
+def _visual_marker_shape_metrics(mask: np.ndarray) -> dict[str, float]:
+    """Geometry descriptors shared by configured visual symbol families."""
+    mask = np.asarray(mask, dtype=bool)
+    if mask.ndim != 2 or mask.size == 0 or not mask.any():
+        return {
+            "density": 0.0, "central_ink": 1.0, "outer_ink_fraction": 1.0,
+            "top_ink": 0.0, "bottom_ink": 0.0, "left_ink": 0.0, "right_ink": 0.0,
+            "corner_ink": 0.0, "midrow_width": 0.0, "toprow_width": 0.0,
+            "bottomrow_width": 0.0,
+        }
+    height, width = mask.shape
+    density = float(mask.mean())
+    y0, y1 = round(height * 0.30), round(height * 0.70)
+    x0, x1 = round(width * 0.30), round(width * 0.70)
+    central = mask[max(0, y0):max(y0 + 1, y1), max(0, x0):max(x0 + 1, x1)]
+    central_ink = float(central.mean()) if central.size else 1.0
+
+    yy, xx = np.indices(mask.shape, dtype=np.float64)
+    xn = (xx - (width - 1) / 2.0) / max(1.0, width / 2.0)
+    yn = (yy - (height - 1) / 2.0) / max(1.0, height / 2.0)
+    radius = np.sqrt(xn * xn + yn * yn)
+    dark_radius = radius[mask]
+    outer_ink_fraction = (
+        float(np.mean(dark_radius > 1.05)) if dark_radius.size else 1.0
+    )
+    edge_h = max(1, round(height * 0.22))
+    edge_w = max(1, round(width * 0.22))
+    top_ink = float(mask[:edge_h, :].mean())
+    bottom_ink = float(mask[-edge_h:, :].mean())
+    left_ink = float(mask[:, :edge_w].mean())
+    right_ink = float(mask[:, -edge_w:].mean())
+    corners = np.concatenate([
+        mask[:edge_h, :edge_w].ravel(),
+        mask[:edge_h, -edge_w:].ravel(),
+        mask[-edge_h:, :edge_w].ravel(),
+        mask[-edge_h:, -edge_w:].ravel(),
+    ])
+    corner_ink = float(corners.mean()) if corners.size else 0.0
+
+    def _row_width_ratio(y: int) -> float:
+        row = mask[max(0, min(height - 1, y))]
+        positions = np.flatnonzero(row)
+        if positions.size == 0:
+            return 0.0
+        return float((positions[-1] - positions[0] + 1) / max(1, width))
+
+    return {
+        "density": round(density, 4),
+        "central_ink": round(central_ink, 4),
+        "outer_ink_fraction": round(outer_ink_fraction, 4),
+        "top_ink": round(top_ink, 4),
+        "bottom_ink": round(bottom_ink, 4),
+        "left_ink": round(left_ink, 4),
+        "right_ink": round(right_ink, 4),
+        "corner_ink": round(corner_ink, 4),
+        "midrow_width": round(_row_width_ratio(height // 2), 4),
+        "toprow_width": round(_row_width_ratio(max(0, round(height * 0.18))), 4),
+        "bottomrow_width": round(_row_width_ratio(min(height - 1, round(height * 0.82))), 4),
+    }
+
+
+def _visual_family_symbol(
+    inventory: dict[str, Any], family: str,
+) -> tuple[str, str] | None:
+    """Return (literal, role) for one configured visual family."""
+    for role, key in (("entry_marker", "entry_markers"), ("bracket_open", "bracket_openers")):
+        for symbol in inventory.get(key, ()):
+            if _SYMBOL_FAMILY_BY_LITERAL.get(str(symbol)) == family:
+                return str(symbol), role
+    return None
+
+
+def _classify_visual_symbol_component(
+    mask: np.ndarray,
+    line_h: float,
+    inventory: dict[str, Any],
+) -> tuple[str, str, str, dict[str, float]] | None:
+    """Classify a connected component only into configured symbol families."""
+    height, width = mask.shape
+    if width <= 0 or height <= 0:
+        return None
+    aspect = width / max(1.0, float(height))
+    metrics = _visual_marker_shape_metrics(mask)
+    density = float(metrics["density"])
+    central = float(metrics["central_ink"])
+    outer = float(metrics["outer_ink_fraction"])
+    corner = float(metrics["corner_ink"])
+    top = float(metrics["top_ink"])
+    bottom = float(metrics["bottom_ink"])
+    left = float(metrics["left_ink"])
+    right = float(metrics["right_ink"])
+    mid_width = float(metrics["midrow_width"])
+    top_width = float(metrics["toprow_width"])
+    bottom_width = float(metrics["bottomrow_width"])
+    families = set(inventory.get("visual_families") or ())
+
+    checks: list[tuple[str, bool]] = [
+        ("circle_open",
+         0.72 <= aspect <= 1.30
+         and line_h * 0.78 <= width <= line_h * 1.30
+         and line_h * 0.76 <= height <= line_h * 1.30
+         and 0.22 <= density <= 0.42 and central <= 0.10 and outer <= 0.08),
+        ("circle_filled",
+         0.70 <= aspect <= 1.32
+         and line_h * 0.46 <= width <= line_h * 1.16
+         and line_h * 0.58 <= height <= line_h * 1.22
+         and 0.60 <= density <= 0.94 and central >= 0.58 and outer <= 0.11),
+        ("square_open",
+         0.72 <= aspect <= 1.30
+         and line_h * 0.55 <= height <= line_h * 1.30
+         and 0.18 <= density <= 0.55 and central <= 0.18
+         and min(top, bottom, left, right) >= 0.16 and corner >= 0.08),
+        ("square_filled",
+         0.72 <= aspect <= 1.30
+         and line_h * 0.45 <= height <= line_h * 1.25
+         and density >= 0.72 and central >= 0.70 and corner >= 0.45),
+        ("diamond_open",
+         0.70 <= aspect <= 1.35
+         and line_h * 0.55 <= height <= line_h * 1.35
+         and 0.14 <= density <= 0.50 and central <= 0.18
+         and corner <= 0.16
+         # A diamond widens much more sharply toward the mid-row than a ring.
+         # This prevents a configured ◇ profile from accepting an unconfigured ○.
+         and mid_width >= max(top_width, bottom_width) * 1.35),
+        ("diamond_filled",
+         0.70 <= aspect <= 1.35
+         and line_h * 0.50 <= height <= line_h * 1.30
+         and 0.45 <= density <= 0.82 and central >= 0.45
+         and corner <= 0.32
+         and mid_width >= max(top_width, bottom_width) * 1.35),
+        ("triangle_open",
+         0.65 <= aspect <= 1.50
+         and line_h * 0.52 <= height <= line_h * 1.35
+         and 0.12 <= density <= 0.48 and central <= 0.35
+         and bottom_width >= top_width * 1.35),
+        ("triangle_filled",
+         0.65 <= aspect <= 1.50
+         and line_h * 0.48 <= height <= line_h * 1.30
+         and density >= 0.38 and central >= 0.35
+         and bottom_width >= top_width * 1.25),
+        ("bracket_open",
+         0.18 <= aspect <= 0.95
+         and line_h * 0.55 <= height <= line_h * 1.55
+         and 0.12 <= density <= 0.68
+         and max(left, right) >= 0.20
+         and top >= 0.12 and bottom >= 0.12
+         and central <= 0.60),
+    ]
+    for family, passed in checks:
+        if family not in families or not passed:
+            continue
+        resolved = _visual_family_symbol(inventory, family)
+        if resolved is None:
+            continue
+        symbol, role = resolved
+        return family, symbol, role, metrics
+    return None
+
+
+def _detect_visual_entry_markers(
+    gray: np.ndarray,
+    median_height: float,
+    left_limit: int,
+    *,
+    lower_bound: int = 0,
+    inventory: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Detect configured entry/bracket symbols directly from page pixels.
+
+    The detector is dictionary-specific: only visual families implied by the
+    active symbol inventory are considered. Unknown/custom literals remain OCR-
+    only rather than being guessed from generic shapes.
+    """
+    if gray.size == 0 or gray.ndim != 2:
+        return []
+    if inventory is None:
+        # Low-level historical API/tests called this detector without a profile.
+        # Keep that behavior as the original ○/● detector.
+        inventory = {
+            "enabled": True,
+            "entry_markers": ("○", "●"),
+            "bracket_openers": (),
+            "visual_rescue": True,
+            "lane_required": False,
+            "lane_tolerance_percent": 50,
+            "visual_families": ("circle_open", "circle_filled"),
+        }
+    else:
+        inventory = dict(inventory)
+    if not inventory.get("enabled", True) or not inventory.get("visual_rescue", True):
+        return []
+    if not inventory.get("visual_families"):
+        return []
+
+    height, width = gray.shape
+    line_h = max(8.0, float(median_height))
+    zone_width = min(
+        width,
+        max(int(left_limit + round(line_h * 2.0)), round(line_h * 2.8), 56),
+    )
+    lower = max(0, min(height - 1, int(lower_bound)))
+    if zone_width < 12 or lower >= height - 2:
+        return []
+
+    roi = gray[lower:, :zone_width]
+    threshold = _otsu_threshold(roi)
+    dark = roi <= threshold
+    candidates: list[dict[str, Any]] = []
+    broad_left = max(int(left_limit), round(line_h * 1.80))
+
+    for x0, y0, x1, y1, _area in _binary_rle_components(dark):
+        box_w = x1 - x0
+        box_h = y1 - y0
+        if box_w <= 0 or box_h <= 0 or x0 > broad_left:
+            continue
+        classified = _classify_visual_symbol_component(
+            dark[y0:y1, x0:x1], line_h, inventory
+        )
+        if classified is None:
+            continue
+        family, symbol, role, metrics = classified
+        legacy_type = {
+            "circle_open": "open_circle",
+            "circle_filled": "filled_circle",
+        }.get(family, family)
+        item: dict[str, Any] = {
+            "type": legacy_type, "family": family, "symbol": symbol, "role": role,
+            "x0": int(x0), "x1": int(x1),
+            "y0": int(lower + y0), "y1": int(lower + y1),
+            "center_y": round(float(lower + (y0 + y1) / 2.0), 2),
+            "width": int(box_w), "height": int(box_h),
+            "threshold": int(threshold),
+        }
+        item.update(metrics)
+        candidates.append(item)
+
+    if not candidates:
+        return []
+
+    # Lane filtering is role-aware. A dictionary can therefore keep one marker
+    # lane for ○/● and a nearby bracket lane without forcing both onto one X.
+    if bool(inventory.get("lane_required", False)):
+        tolerance = max(
+            6.0,
+            line_h * max(20, min(120, int(inventory.get("lane_tolerance_percent") or 50))) / 100.0,
+        )
+        filtered: list[dict[str, Any]] = []
+        for role in ("entry_marker", "bracket_open"):
+            group = [item for item in candidates if item.get("role") == role]
+            if not group:
+                continue
+            if len(group) >= 3:
+                lane_x = float(np.median([item["x0"] for item in group]))
+                group = [
+                    item for item in group
+                    if abs(float(item["x0"]) - lane_x) <= tolerance
+                ]
+                for item in group:
+                    item["lane_x"] = round(lane_x, 2)
+                    item["lane_delta"] = round(abs(float(item["x0"]) - lane_x), 2)
+                    item["lane_required"] = True
+            filtered.extend(group)
+        candidates = filtered
+    return candidates
+
+
+def _match_visual_entry_markers_to_lines(
+    lines: list[OCRLine],
+    markers: list[dict[str, Any]],
+    median_height: float,
+) -> dict[int, dict[str, Any]]:
+    """Pair visual ○/● markers with OCR rows on the same physical line."""
+    if not lines or not markers:
+        return {}
+    line_h = max(8.0, float(median_height))
+    max_delta = max(8.0, line_h * 0.80)
+    proposals: list[tuple[float, int, int]] = []
+    for marker_index, marker in enumerate(markers):
+        marker_center = float(marker["center_y"])
+        marker_x1 = int(marker["x1"])
+        for line_index, line in enumerate(lines):
+            x0, y0, _x1, y1 = line.box
+            line_center = (y0 + y1) / 2.0
+            delta = abs(line_center - marker_center)
+            if delta > max_delta:
+                continue
+            if x0 > marker_x1 + line_h * 3.2:
+                continue
+            overlap = max(
+                0, min(int(marker["y1"]), y1) - max(int(marker["y0"]), y0)
+            )
+            if overlap <= 0 and delta > line_h * 0.55:
+                continue
+            proposals.append((delta, marker_index, line_index))
+
+    matches: dict[int, dict[str, Any]] = {}
+    used_markers: set[int] = set()
+    used_lines: set[int] = set()
+    for delta, marker_index, line_index in sorted(proposals):
+        if marker_index in used_markers or line_index in used_lines:
+            continue
+        item = dict(markers[marker_index])
+        item["match_method"] = "visual_marker_nearest_row"
+        item["ocr_line_index"] = int(line_index)
+        item["center_delta"] = round(float(delta), 2)
+        matches[line_index] = item
+        used_markers.add(marker_index)
+        used_lines.add(line_index)
+    return matches
+
+
+def _parse_cjk_visual_marker_line(
+    text: str,
+    marker_symbol: str,
+    settings: AppSettings,
+    profile: DictionaryProfile,
+) -> HeadwordParse | None:
+    """Recover a marker-led CJK head when OCR omitted/misread the visual marker."""
+    parse_text, _repairs = _repair_headword_ocr(text)
+    # At most a few OCR junk glyphs may precede the Han lemma where the circle
+    # was.  The visual marker itself supplies the strong boundary evidence.
+    match = re.search(
+        r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]",
+        parse_text[:10],
+    )
+    if match is None or match.start() > 4:
+        return None
+    synthetic = marker_symbol + parse_text[match.start():]
+    parsed = _parse_cjk_marker_pinyin_headword(synthetic, settings, profile)
+    if parsed is None:
+        return None
+    parsed.parser_stage = "cjk_visual_marker_rescue"
+    parsed.descriptor_text = "cjk_marker_pinyin"
+    parsed.parser_trace = (
+        f"visual_entry_marker:{marker_symbol}",
+        "cjk_visual_marker_rescue",
+    )
+    return parsed
+
+
+def _parse_visual_configured_symbol_line(
+    text: str,
+    visual_symbol: dict[str, Any],
+    settings: AppSettings,
+    profile: DictionaryProfile,
+) -> HeadwordParse | None:
+    """Recover a configured fixed-symbol head when OCR lost the symbol itself."""
+    role = str(visual_symbol.get("role") or "")
+    symbol = str(visual_symbol.get("symbol") or "")
+    if not symbol:
+        return None
+    if role == "entry_marker":
+        return _parse_cjk_visual_marker_line(text, symbol, settings, profile)
+    if role != "bracket_open":
+        return None
+
+    parse_text, _repairs = _repair_headword_ocr(text)
+    closer = _BRACKET_CLOSER_BY_OPENER.get(symbol, "")
+    # When OCR dropped the opening bracket, require either a visible matching
+    # closer or a short headword-like physical row.  This keeps a visual bracket
+    # component from swallowing a long definition line.
+    has_closer = bool(closer and closer in parse_text[:72])
+    compact = parse_text.strip()
+    if not has_closer and len(compact) > 24:
+        return None
+
+    match = re.search(
+        r"[\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]",
+        parse_text[:16],
+    )
+    if match is None or match.start() > 6:
+        return None
+    synthetic = symbol + parse_text[match.start():]
+    parsed = _parse_chinese_bracketed_headword(
+        synthetic,
+        settings,
+        enforce_chinese_language=not (
+            _is_chinese_ocr(settings) or _is_japanese_ocr(settings)
+        ),
+        allow_japanese_reading_prefix=False,
+        allowed_openers=(symbol,),
+    )
+    if parsed is None:
+        return None
+    parsed.parser_stage = "cjk_visual_bracket_rescue"
+    parsed.parser_trace = (
+        f"visual_headword_symbol:{symbol}",
+        "cjk_visual_bracket_rescue",
+    )
+    return parsed
+
+
 def _leading_cjk_ideograph(text: str) -> str:
     """Return a CJK glyph only when it is the actual leading token.
 
@@ -2180,7 +2836,7 @@ def _cjk_visual_projection_runs(
     if zone_width <= 0:
         return 0, []
     threshold = _otsu_threshold(gray[:, :zone_width])
-    dark_counts = (gray[:, :zone_width] < threshold).sum(axis=1)
+    dark_counts = (gray[:, :zone_width] <= threshold).sum(axis=1)
     active = dark_counts >= max(3, round(zone_width * 0.015))
 
     # Fill only tiny vertical holes inside a glyph.  Do not bridge the whitespace
@@ -2232,15 +2888,257 @@ def _cjk_visual_projection_runs(
     return zone_width, result
 
 
+def _cjk_right_context_metrics(
+    gray: np.ndarray,
+    run: tuple[int, int],
+    zone_width: int,
+    settings: AppSettings,
+    *,
+    header_cutoff: int = 0,
+) -> dict[str, Any]:
+    """Measure whitespace/sparsity immediately to the right of a large CJK run.
+
+    Many dictionary designs give an oversized head character a locally sparse
+    right side: pronunciation may occupy the upper part, while the lower/right
+    area remains much emptier than ordinary body text.  The sampled width scales
+    with the detected run height rather than fixed pixels so the cue survives DPI
+    changes.  This is supporting evidence, never a standalone headword decision.
+    """
+    enabled = bool(
+        getattr(settings, "profile_cjk_right_context_enabled", True)
+    )
+    width_percent = max(
+        30,
+        min(
+            200,
+            int(getattr(settings, "profile_cjk_right_context_width_percent", 80) or 80),
+        ),
+    )
+    metrics: dict[str, Any] = {
+        "enabled": enabled,
+        "available": False,
+        "sparse": False,
+        "width_percent": width_percent,
+        "width_px": 0,
+        "blank_ratio": 0.0,
+        "lower_blank_ratio": 0.0,
+        "row_occupancy": 1.0,
+        "ink_density": 1.0,
+        "baseline_ink_density": 0.0,
+        "density_ratio": 1.0,
+        "sparse_votes": 0,
+    }
+    if not enabled or gray.size == 0:
+        return metrics
+
+    image_h, image_w = gray.shape[:2]
+    start = max(0, min(image_h, int(run[0])))
+    end = max(start + 1, min(image_h, int(run[1])))
+    run_height = max(1, end - start)
+    x0 = max(0, min(image_w, int(zone_width)))
+    requested = max(8, round(run_height * width_percent / 100.0))
+    x1 = min(image_w, x0 + requested)
+    if x1 - x0 < 6:
+        return metrics
+
+    analysis_top = max(0, min(image_h, int(header_cutoff)))
+    threshold_source = gray[analysis_top:, x0:x1]
+    if threshold_source.size == 0:
+        threshold_source = gray[:, x0:x1]
+    threshold = _otsu_threshold(threshold_source)
+
+    roi = gray[start:end, x0:x1]
+    if roi.size == 0:
+        return metrics
+    dark = roi <= threshold
+    ink_density = float(np.mean(dark))
+    blank_ratio = 1.0 - ink_density
+
+    lower_offset = max(0, min(dark.shape[0] - 1, round(dark.shape[0] * 0.35)))
+    lower = dark[lower_offset:, :]
+    lower_blank_ratio = (
+        1.0 - float(np.mean(lower)) if lower.size else blank_ratio
+    )
+    row_dark_counts = dark.sum(axis=1)
+    row_ink_floor = max(1, round(dark.shape[1] * 0.035))
+    row_occupancy = float(np.mean(row_dark_counts >= row_ink_floor))
+
+    baseline_parts: list[np.ndarray] = []
+    if start > analysis_top:
+        baseline_parts.append(gray[analysis_top:start, x0:x1])
+    if end < image_h:
+        baseline_parts.append(gray[end:image_h, x0:x1])
+    baseline = (
+        np.concatenate(baseline_parts, axis=0)
+        if baseline_parts else np.empty((0, x1 - x0), dtype=gray.dtype)
+    )
+    if baseline.size:
+        baseline_ink_density = float(np.mean(baseline <= threshold))
+    else:
+        baseline_ink_density = 0.0
+    density_ratio = (
+        ink_density / max(0.01, baseline_ink_density)
+        if baseline_ink_density > 0
+        else 1.0
+    )
+
+    votes = 0
+    if blank_ratio >= 0.78:
+        votes += 1
+    if lower_blank_ratio >= 0.86:
+        votes += 1
+    if row_occupancy <= 0.50:
+        votes += 1
+    if baseline_ink_density >= 0.02 and density_ratio <= 0.60:
+        votes += 1
+    sparse = bool(lower_blank_ratio >= 0.80 and votes >= 2)
+
+    metrics.update({
+        "available": True,
+        "sparse": sparse,
+        "width_px": int(x1 - x0),
+        "blank_ratio": round(blank_ratio, 4),
+        "lower_blank_ratio": round(lower_blank_ratio, 4),
+        "row_occupancy": round(row_occupancy, 4),
+        "ink_density": round(ink_density, 4),
+        "baseline_ink_density": round(baseline_ink_density, 4),
+        "density_ratio": round(density_ratio, 4),
+        "sparse_votes": int(votes),
+    })
+    return metrics
+
+
+def _cjk_right_context_features(metrics: dict[str, Any] | None) -> dict[str, Any]:
+    """Flatten right-context diagnostics into JSON-safe candidate features."""
+    if not metrics:
+        return {}
+    return {
+        "cjk_right_context_enabled": bool(metrics.get("enabled", False)),
+        "cjk_right_context_available": bool(metrics.get("available", False)),
+        "cjk_right_context_sparse": bool(metrics.get("sparse", False)),
+        "cjk_right_context_width_percent": int(metrics.get("width_percent", 0) or 0),
+        "cjk_right_context_width_px": int(metrics.get("width_px", 0) or 0),
+        "cjk_right_blank_ratio": float(metrics.get("blank_ratio", 0.0) or 0.0),
+        "cjk_lower_right_blank_ratio": float(
+            metrics.get("lower_blank_ratio", 0.0) or 0.0
+        ),
+        "cjk_right_row_occupancy": float(
+            metrics.get("row_occupancy", 0.0) or 0.0
+        ),
+        "cjk_right_density_ratio": float(
+            metrics.get("density_ratio", 1.0) or 1.0
+        ),
+        "cjk_right_sparse_votes": int(metrics.get("sparse_votes", 0) or 0),
+    }
+
+
+def _cjk_candidate_right_context_metrics(
+    gray: np.ndarray,
+    box: tuple[int, int, int, int],
+    median_height: float,
+    settings: AppSettings,
+    *,
+    header_cutoff: int = 0,
+) -> dict[str, Any]:
+    """Right-side layout evidence centered on an OCR single-Han candidate.
+
+    This is the second path for large-head detection: it does not require the
+    left-strip projection to have produced an oversized run first.  OCR can crop
+    a real display glyph to body height, so estimate a plausible display-height
+    window from the page-local median and inspect the area immediately to the
+    right of the candidate itself.
+    """
+    x0, y0, x1, y1 = (int(value) for value in box)
+    box_height = max(1, y1 - y0)
+    expected_height = max(box_height, round(max(1.0, median_height) * 1.45))
+    center_y = (y0 + y1) / 2.0
+    run_start = round(center_y - expected_height / 2.0)
+    run_end = run_start + expected_height
+    image_h, image_w = gray.shape[:2]
+    if run_start < header_cutoff:
+        run_end += header_cutoff - run_start
+        run_start = header_cutoff
+    if run_end > image_h:
+        run_start = max(header_cutoff, run_start - (run_end - image_h))
+        run_end = image_h
+
+    # Start at the candidate's own right edge.  For very narrow/clipped boxes,
+    # keep at least a modest glyph-width estimate so we do not sample through
+    # the right half of the Han character itself.
+    estimated_glyph_width = max(
+        box_height,
+        round(max(1.0, median_height) * 0.78),
+    )
+    context_x = max(x1, x0 + estimated_glyph_width)
+    context_x = min(max(0, context_x), image_w)
+    metrics = _cjk_right_context_metrics(
+        gray,
+        (run_start, run_end),
+        context_x,
+        settings,
+        header_cutoff=header_cutoff,
+    )
+    metrics["candidate_box_height"] = int(box_height)
+    metrics["candidate_expected_height"] = int(expected_height)
+    metrics["candidate_context_x"] = int(context_x)
+    metrics["candidate_run_start"] = int(run_start)
+    metrics["candidate_run_end"] = int(run_end)
+    metrics["candidate_baseline_supported"] = bool(
+        float(metrics.get("baseline_ink_density", 0.0) or 0.0) >= 0.01
+    )
+    return metrics
+
+
+def _cjk_candidate_right_context_features(
+    metrics: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Candidate-local right-context diagnostics with a non-colliding prefix."""
+    if not metrics:
+        return {}
+    return {
+        "cjk_candidate_right_context_available": bool(
+            metrics.get("available", False)
+        ),
+        "cjk_candidate_right_context_sparse": bool(metrics.get("sparse", False)),
+        "cjk_candidate_right_blank_ratio": float(
+            metrics.get("blank_ratio", 0.0) or 0.0
+        ),
+        "cjk_candidate_lower_right_blank_ratio": float(
+            metrics.get("lower_blank_ratio", 0.0) or 0.0
+        ),
+        "cjk_candidate_right_row_occupancy": float(
+            metrics.get("row_occupancy", 0.0) or 0.0
+        ),
+        "cjk_candidate_right_density_ratio": float(
+            metrics.get("density_ratio", 1.0) or 1.0
+        ),
+        "cjk_candidate_right_sparse_votes": int(
+            metrics.get("sparse_votes", 0) or 0
+        ),
+        "cjk_candidate_right_context_x": int(
+            metrics.get("candidate_context_x", 0) or 0
+        ),
+        "cjk_candidate_expected_height": int(
+            metrics.get("candidate_expected_height", 0) or 0
+        ),
+    }
+
+
 def _cjk_word_for_visual_run(
-    records: list[OCRRecord], run: tuple[int, int], zone_width: int, settings: AppSettings,
+    records: list[OCRRecord],
+    run: tuple[int, int],
+    zone_width: int,
+    settings: AppSettings,
+    profile: DictionaryProfile | None = None,
+    right_context: dict[str, Any] | None = None,
 ) -> tuple[str, float, OCRRecord | None]:
     """Pick an OCR token that physically represents one oversized CJK glyph.
 
-    A visual run is only a location hypothesis. It must be backed by an OCR
-    record whose own box substantially overlaps the run. Fallback extraction is
-    allowed only when the OCR record itself begins with the Han glyph; arbitrary
-    Han characters inside ordinary definition text are never promoted.
+    The active Project Profile is passed through so a short ``漢字 + pinyin``
+    OCR record can use the same structural parser as the ordinary OCR channel.
+    This matters when OCR crops the large glyph vertically: strong profile
+    structure may safely relax the visual-box gate, while unparsed fallback
+    candidates remain deliberately strict.
     """
     start, end = run
     center = (start + end) / 2.0
@@ -2251,25 +3149,97 @@ def _cjk_word_for_visual_run(
         if x0 > zone_width * 1.12:
             continue
         record_height = max(1, y1 - y0)
+        record_width = max(1, x1 - x0)
         overlap = max(0, min(end, y1) - max(start, y0))
         record_center = (y0 + y1) / 2.0
         distance = abs(record_center - center)
 
-        parsed = parse_headword_text(record.text, settings)
+        parsed = parse_headword_text(record.text, settings, profile=profile)
+        profile_pinyin = None
+        parser_controls = int(
+            getattr(settings, "profile_parser_controls_version", 0) or 0
+        ) >= 1
+        single_enabled = (
+            bool(getattr(settings, "profile_cjk_allow_single_headword", True))
+            if parser_controls else True
+        )
+        if single_enabled:
+            # "大字单字" is the user-facing Project Profile contract.  Inside an
+            # already detected oversized visual run, a record that starts with
+            # one Han glyph plus romanization is strong structure even when the
+            # generic parser/profile metadata did not return a parsed object.
+            # The compact-width and overlap gates below still prevent ordinary
+            # definition lines from using this relaxed path.
+            profile_pinyin = _parse_cjk_single_with_pinyin(record.text, settings)
+        if profile_pinyin is not None:
+            parsed = profile_pinyin
         parsed_single = bool(
             parsed and _is_single_cjk_ideograph(parsed.normalized)
+        )
+        profile_pinyin_single = bool(
+            profile_pinyin is not None and parsed_single
+        )
+        profile_visual_single = bool(
+            parsed_single
+            and single_enabled
+            and profile is not None
+            and profile.family == "cjk_visual"
+            and parsed is not None
+            and parsed.parser_stage in {
+                "chinese_single_character",
+                "chinese_single_character_with_variant",
+            }
         )
         word = parsed.normalized if parsed_single else _leading_cjk_ideograph(record.text)
         if not word:
             continue
 
-        # A genuine large-glyph OCR box is vertically comparable with the visual
-        # run. Ordinary body lines near a merged/tall projection run are much
-        # shorter and therefore cannot rescue themselves into headwords.
-        minimum_height_ratio = 0.40 if parsed_single else 0.55
-        if record_height < height * minimum_height_ratio:
+        context_available = bool(
+            right_context and right_context.get("available")
+        )
+        context_sparse = bool(
+            right_context and right_context.get("sparse")
+        )
+        if profile_pinyin_single or profile_visual_single:
+            # Strong Project-Profile structure plus a sparse right-side layout is
+            # especially characteristic of a real display head.  It safely buys
+            # a little extra recall when OCR vertically clips the glyph.  If the
+            # right side is dense, keep a slightly stricter box gate rather than
+            # rejecting the otherwise strong OCR structure outright.
+            if context_sparse:
+                minimum_height_ratio = 0.24
+                overlap_ratio = 0.18
+                distance_ratio = 0.76
+            elif context_available:
+                minimum_height_ratio = 0.30
+                overlap_ratio = 0.24
+                distance_ratio = 0.70
+            else:
+                # Backward-compatible neutral behavior for callers/caches that
+                # do not yet carry right-context metrics.
+                minimum_height_ratio = 0.28
+                overlap_ratio = 0.22
+                distance_ratio = 0.72
+            if record_width > zone_width * 1.75:
+                continue
+            if distance > height * distance_ratio:
+                continue
+        elif parsed_single:
+            minimum_height_ratio = 0.40
+            overlap_ratio = 0.30
+        else:
+            # Weak fallback evidence should not be rescued from a dense block of
+            # ordinary body text when the right-context measurement is available.
+            if context_available and not context_sparse:
+                continue
+            minimum_height_ratio = 0.55
+            overlap_ratio = 0.45
+
+        # OCR boxes are integer-valued; allow half a pixel of quantization
+        # tolerance at an exact ratio boundary (e.g. 14 px / 50 px = 0.28).
+        if record_height + 0.5 < height * minimum_height_ratio:
             continue
-        overlap_floor = min(record_height, height) * (0.30 if parsed_single else 0.45)
+        overlap_floor = min(record_height, height) * overlap_ratio
         if overlap < overlap_floor:
             continue
 
@@ -2278,7 +3248,7 @@ def _cjk_word_for_visual_run(
         if not parsed_single and x0 > zone_width * 0.95:
             continue
 
-        quality_rank = 0 if parsed_single else 1
+        quality_rank = 0 if profile_pinyin_single else (1 if parsed_single else 2)
         ranked.append((distance, quality_rank, -float(record.confidence), word, record))
     if not ranked:
         return "", 0.0, None
@@ -2735,8 +3705,20 @@ def refine_first_content_y(
         refined = coarse_y
         reason = "no_sustained_ink_keep_coarse"
     else:
-        refined = int(top + onset)
-        reason = "first_sustained_ink_onset"
+        ink_onset = int(top + onset)
+        # A separator should mark the whitespace immediately *before* the first
+        # entry, not touch the top stroke/accent of the glyph.  Keep a small
+        # scale-aware clearance above the sustained-ink onset while respecting
+        # the header/lower bound.
+        clearance = max(
+            2,
+            round(
+                max(1.0, line_height * 0.12)
+                + max(0, settings.row_padding) * 0.35 * reference_to_canonical_scale
+            ),
+        )
+        refined = max(int(lower_bound), ink_onset - clearance)
+        reason = "whitespace_before_first_sustained_ink"
 
     return refined, {
         "enabled": True,
@@ -2810,7 +3792,20 @@ def _accepted_cjk_row_for_visual_run(
             overlap >= min(box_h, run_h) * 0.22
             or center_distance <= max(box_h, run_h) * 0.62
         )
-        if same_physical_row and (same_word or features.get("cjk_single_visual")):
+        # OCR sometimes places the accepted single-Han box on the pinyin/baseline
+        # rather than around the full display glyph.  If the normalized lemma is
+        # the same, allow a wider vertical association so the later visual rescue
+        # confirms the existing candidate instead of creating a second separator
+        # inside the same entry.  Nearby repeated homographs remain distinct
+        # because this relaxed window is still bounded to roughly one glyph.
+        same_word_shifted_box = bool(
+            same_word
+            and center_distance <= max(run_h * 1.45, box_h * 1.6)
+        )
+        if (
+            (same_physical_row and (same_word or features.get("cjk_single_visual")))
+            or same_word_shifted_box
+        ):
             return row
     return None
 
@@ -2904,14 +3899,70 @@ def filter_headword_records(
         lines, image_separator_candidates, max(2, round(median_height))
     )
 
+    parser_controls = int(
+        getattr(settings, "profile_parser_controls_version", 0) or 0
+    ) >= 1
+    marker_prefix_enabled = (
+        bool(getattr(settings, "profile_allow_marker_prefix", False))
+        if parser_controls else active_profile.uses_parser("cjk_marker_pinyin")
+    )
+    bracket_symbol_enabled = (
+        bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True))
+        if parser_controls else active_profile.uses_parser("cjk_bracketed")
+    )
+    symbol_inventory = _configured_symbol_inventory(settings, active_profile)
+    visual_symbol_enabled = bool(
+        symbol_inventory.get("enabled")
+        and symbol_inventory.get("visual_rescue")
+        and (
+            (marker_prefix_enabled and symbol_inventory.get("entry_markers"))
+            or (bracket_symbol_enabled and symbol_inventory.get("bracket_openers"))
+        )
+    )
+    visual_entry_markers = (
+        _detect_visual_entry_markers(
+            gray,
+            median_height,
+            left_limit,
+            lower_bound=header_cutoff,
+            inventory=symbol_inventory,
+        )
+        if visual_symbol_enabled else []
+    )
+    visual_marker_matches = _match_visual_entry_markers_to_lines(
+        lines, visual_entry_markers, median_height,
+    )
+
     # Estimate a page-local reference density from leading text portions, not
     # from the whole line (which often mixes bold lemma with normal definition).
     leading_boxes: list[tuple[int, int, int, int]] = []
     parses: list[HeadwordParse | None] = []
-    for line in lines:
+    for line_index, line in enumerate(lines):
         parsed = parse_headword_text(line.text, settings, patterns, active_profile)
+        visual_marker = visual_marker_matches.get(line_index)
+        if visual_marker is not None:
+            expected_stages = (
+                {"cjk_marker_pinyin", "cjk_visual_marker_rescue"}
+                if visual_marker.get("role") == "entry_marker"
+                else {
+                    "chinese_bracketed_headword",
+                    "chinese_open_bracket_headword",
+                    "cjk_visual_bracket_rescue",
+                }
+            )
+            if parsed is None or parsed.parser_stage not in expected_stages:
+                rescued = _parse_visual_configured_symbol_line(
+                    line.text,
+                    visual_marker,
+                    settings,
+                    active_profile,
+                )
+                if rescued is not None:
+                    parsed = rescued
         parses.append(parsed)
-        leading_boxes.append(_leading_box(line, parsed.match_end if parsed else min(12, len(line.text))))
+        leading_boxes.append(
+            _leading_box(line, parsed.match_end if parsed else min(12, len(line.text)))
+        )
     densities = np.asarray([_ink_ratio(gray, box) for box in leading_boxes], dtype=float)
     positive_densities = densities[densities > 0]
     median_density = max(1e-6, float(np.median(positive_densities)) if positive_densities.size else 1e-6)
@@ -2923,12 +3974,15 @@ def filter_headword_records(
     for index, line in enumerate(lines):
         parsed = parses[index]
         image_boundary = image_boundary_matches.get(index)
+        visual_entry_marker = visual_marker_matches.get(index)
         height_ratio = heights[index] / median_height
         boldness_ratio = densities[index] / median_density
         x0, y0, _, y1 = line.box
-        at_left = x0 <= left_limit
+        at_left = bool(x0 <= left_limit or visual_entry_marker is not None)
         below_header = y0 >= header_cutoff
-        special = bool(special_pattern.search(line.text))
+        special = bool(
+            special_pattern.search(line.text) or visual_entry_marker is not None
+        )
         internal_symbol = starts_with_internal_article_symbol(line.text, active_profile)
         relation_label = leading_relation_label(line.text, active_profile)
         rule_result = evaluate_headword_filter_rules(
@@ -2940,17 +3994,23 @@ def filter_headword_records(
         )
         has_pos = bool(parsed and parsed.has_pos and not rule_result["pos_excluded"])
         has_inflection = bool(parsed and parsed.has_inflection)
+        cjk_marker_prefixed = bool(
+            parsed and parsed.descriptor_text == "cjk_marker_pinyin"
+        )
         cjk_single_visual = bool(
             _is_chinese_ocr(settings)
             and parsed
             and _is_single_cjk_ideograph(parsed.normalized)
             and parsed.descriptor_text != "chinese_bracketed_headword"
+            and not cjk_marker_prefixed
         )
         parser_controls = int(
             getattr(settings, "profile_parser_controls_version", 0) or 0
         ) >= 1
         cjk_profile_active = bool(
-            getattr(active_profile, "key", "") == "cjk_visual" or parser_controls
+            getattr(active_profile, "family", "") == "cjk_visual"
+            or getattr(active_profile, "key", "") == "cjk_visual"
+            or parser_controls
         )
         cjk_bracketed = bool(
             cjk_profile_active
@@ -2993,9 +4053,37 @@ def filter_headword_records(
         preceding_gap = max(0, y0 - previous_bottom)
         separated = preceding_gap >= gap_threshold
         leading_record_height_ratio = height_ratio
+        leading_record: OCRRecord | None = None
         if line.records:
             leading_record = min(line.records, key=lambda record: (record.box[0], record.box[1]))
-            leading_record_height_ratio = (leading_record.box[3] - leading_record.box[1]) / median_height
+            leading_record_height_ratio = (
+                leading_record.box[3] - leading_record.box[1]
+            ) / median_height
+
+        cjk_candidate_right_context: dict[str, Any] | None = None
+        cjk_candidate_right_sparse = False
+        if (
+            cjk_single_visual
+            and cjk_allow_single
+            and cjk_at_left
+            and leading_record is not None
+            and bool(getattr(settings, "profile_cjk_right_context_enabled", True))
+        ):
+            cjk_candidate_right_context = _cjk_candidate_right_context_metrics(
+                gray,
+                leading_record.box,
+                median_height,
+                settings,
+                header_cutoff=header_cutoff,
+            )
+            # Candidate-centered sparsity is allowed to rescue a missed visual
+            # projection only when the same X-region contains ordinary body ink
+            # elsewhere on the page.  This prevents an all-white synthetic/empty
+            # region from becoming positive evidence by itself.
+            cjk_candidate_right_sparse = bool(
+                cjk_candidate_right_context.get("sparse")
+                and cjk_candidate_right_context.get("candidate_baseline_supported")
+            )
 
         # Structure carries most of the evidence. POS is deliberately stronger
         # than boldness because body text can also be bold (ANT., FAM., etc.).
@@ -3009,6 +4097,7 @@ def filter_headword_records(
             + (0.75 if large else 0.0)
             + (1.0 if bold else 0.0)
             + (0.5 if separated else 0.0)
+            + (0.75 if cjk_candidate_right_sparse else 0.0)
         )
         structural_cue = has_pos or has_inflection or has_descriptor or special
         visual_cue = large or bold or separated
@@ -3016,6 +4105,23 @@ def filter_headword_records(
         # Character dictionaries use oversized single glyphs as entry heads.
         # Their size contrast is much stronger than ordinary bold body text, so
         # use a dedicated gate rather than lowering the global candidate score.
+        cjk_single_sparse_context_rescue = bool(
+            cjk_single_visual
+            and cjk_candidate_right_sparse
+            and cjk_at_left
+            and leading_record_height_ratio >= 0.72
+            and (
+                separated
+                or bool(
+                    parsed
+                    and parsed.parser_stage in {
+                        "cjk_single_with_pinyin",
+                        "chinese_single_character_with_variant",
+                    }
+                )
+                or boldness_ratio >= 0.92
+            )
+        )
         cjk_single_prominent = bool(
             cjk_single_visual
             and (
@@ -3025,6 +4131,7 @@ def filter_headword_records(
                     and boldness_ratio >= max(1.08, settings.paddle_boldness_ratio * 0.95)
                     and separated
                 )
+                or cjk_single_sparse_context_rescue
             )
         )
         looks_like_continuation = bool(parsed and parsed.looks_like_continuation)
@@ -3074,6 +4181,7 @@ def filter_headword_records(
                     and boldness_ratio >= max(1.12, settings.paddle_boldness_ratio)
                     and separated
                 )
+                or cjk_single_sparse_context_rescue
             )
         )
         cjk_single_accept = bool(
@@ -3146,6 +4254,11 @@ def filter_headword_records(
         else:
             reject_reason = "candidate_rejected"
         coarse_band_y = max(0, y0 - row_padding)
+        if visual_entry_marker is not None:
+            marker_coarse_y = max(
+                0, int(visual_entry_marker["y0"]) - max(1, int(row_padding))
+            )
+            coarse_band_y = min(coarse_band_y, marker_coarse_y)
         # The first printed entry is a special geometry case: there is no
         # preceding line and therefore no inter-line whitespace valley. Locate
         # the first sustained ink row instead of applying the ordinary valley rule.
@@ -3259,6 +4372,45 @@ def filter_headword_records(
                 "cjk_single_prominent": cjk_single_prominent,
                 "cjk_single_accept": cjk_single_accept,
                 "cjk_single_strong_visual": cjk_single_strong_visual,
+                "cjk_single_sparse_context_rescue": cjk_single_sparse_context_rescue,
+                **_cjk_candidate_right_context_features(
+                    cjk_candidate_right_context
+                ),
+                "cjk_candidate_right_baseline_supported": bool(
+                    cjk_candidate_right_context
+                    and cjk_candidate_right_context.get("candidate_baseline_supported")
+                ),
+                "visual_entry_marker": bool(visual_entry_marker),
+                "visual_headword_symbol": bool(visual_entry_marker),
+                "visual_entry_marker_type": (
+                    str(visual_entry_marker.get("type") or "")
+                    if visual_entry_marker else ""
+                ),
+                "visual_headword_symbol_family": (
+                    str(visual_entry_marker.get("family") or "")
+                    if visual_entry_marker else ""
+                ),
+                "visual_headword_symbol_role": (
+                    str(visual_entry_marker.get("role") or "")
+                    if visual_entry_marker else ""
+                ),
+                "visual_entry_marker_symbol": (
+                    str(visual_entry_marker.get("symbol") or "")
+                    if visual_entry_marker else ""
+                ),
+                "visual_headword_symbol_lane_delta": (
+                    float(visual_entry_marker.get("lane_delta") or 0.0)
+                    if visual_entry_marker else 0.0
+                ),
+                "visual_entry_marker_density": (
+                    float(visual_entry_marker.get("density") or 0.0)
+                    if visual_entry_marker else 0.0
+                ),
+                "visual_entry_marker_center_delta": (
+                    float(visual_entry_marker.get("center_delta") or 0.0)
+                    if visual_entry_marker else 0.0
+                ),
+                "cjk_marker_prefixed": cjk_marker_prefixed,
                 "cjk_bracketed": cjk_bracketed,
                 "cjk_bracket_visual_supported": cjk_bracket_visual_supported,
                 "cjk_bracket_extra_required": cjk_bracket_extra_required,
@@ -3306,7 +4458,21 @@ def filter_headword_records(
             gray, header_cutoff, settings, reference_scale
         )
         for run_start, run_end in visual_runs:
-            word, confidence, matched_record = _cjk_word_for_visual_run(records, (run_start, run_end), zone_width, settings)
+            right_context = _cjk_right_context_metrics(
+                gray,
+                (run_start, run_end),
+                zone_width,
+                settings,
+                header_cutoff=header_cutoff,
+            )
+            word, confidence, matched_record = _cjk_word_for_visual_run(
+                records,
+                (run_start, run_end),
+                zone_width,
+                settings,
+                active_profile,
+                right_context,
+            )
             if not word or matched_record is None:
                 continue
             coarse_band_y = max(header_cutoff, run_start - row_padding)
@@ -3339,21 +4505,29 @@ def filter_headword_records(
                 diagnostics, run_start, run_end, word
             )
             if existing_cjk is not None:
-                # For oversized single-Han entries the visual projection is a
-                # stronger vertical anchor than OCR box.y.  Preserve the OCR
-                # coarse position for diagnostics, but make the visual run the
-                # authoritative marker/anchor so an OCR box that starts on the
-                # preceding line cannot drag the separator upward.
-                existing_cjk.setdefault("ocr_coarse_source_y", existing_cjk.get("coarse_source_y"))
-                existing_cjk["source_y"] = source_y
-                existing_cjk["anchor_source_y"] = visual_anchor_source_y
-                existing_cjk["separator_refinement"] = visual_separator_refinement
+                # The OCR/grammar path has already produced the entry boundary.
+                # The visual run is confirmation/de-duplication evidence only;
+                # it must NOT replace a valid separator with a lower line inside
+                # the same entry (for example between 播 ba and its Bộ:/radical
+                # metadata).  Keep the original marker and store the visual
+                # geometry separately for diagnostics.
+                existing_cjk.setdefault(
+                    "ocr_coarse_source_y", existing_cjk.get("coarse_source_y")
+                )
+                existing_cjk["visual_confirmation_source_y"] = source_y
+                existing_cjk["visual_confirmation_anchor_source_y"] = (
+                    visual_anchor_source_y
+                )
+                existing_cjk["visual_confirmation_separator_refinement"] = (
+                    visual_separator_refinement
+                )
                 features = existing_cjk.setdefault("features", {})
                 features["cjk_visual_projection_confirmed"] = True
                 features["cjk_visual_run_height"] = run_height
                 features["cjk_visual_zone_width"] = zone_width
                 features["cjk_visual_run_start"] = int(run_start)
                 features["cjk_visual_run_end"] = int(run_end)
+                features.update(_cjk_right_context_features(right_context))
                 trace = existing_cjk.setdefault("parser_trace", [])
                 if "chinese_visual_projection_confirmed" not in trace:
                     trace.append("chinese_visual_projection_confirmed")
@@ -3389,11 +4563,15 @@ def filter_headword_records(
                 nearest["coarse_source_y"] = source_top + coarse_band_y
                 nearest["anchor_source_y"] = visual_anchor_source_y
                 nearest["separator_refinement"] = visual_separator_refinement
-                nearest["score"] = max(float(nearest.get("score") or 0.0), 8.0)
+                context_bonus = 0.75 if right_context.get("sparse") else 0.0
+                nearest["score"] = max(
+                    float(nearest.get("score") or 0.0), 8.0 + context_bonus
+                )
                 features = nearest.setdefault("features", {})
                 features["cjk_visual_projection_rescue"] = True
                 features["cjk_visual_run_height"] = run_height
                 features["cjk_visual_zone_width"] = zone_width
+                features.update(_cjk_right_context_features(right_context))
                 nearest.setdefault("parser_trace", []).append("chinese_visual_projection_rescue")
                 nearest["parser_stage"] = "chinese_visual_projection_rescue"
             else:
@@ -3423,7 +4601,9 @@ def filter_headword_records(
                     "coarse_source_y": source_top + coarse_band_y,
                     "anchor_source_y": visual_anchor_source_y,
                     "separator_refinement": visual_separator_refinement,
-                    "score": 8.0,
+                    "score": 8.0 + (
+                        0.75 if right_context.get("sparse") else 0.0
+                    ),
                     "accepted": True,
                     "reject_reason": "",
                     "user_rule": {
@@ -3444,6 +4624,7 @@ def filter_headword_records(
                         "cjk_visual_projection_rescue": True,
                         "cjk_visual_run_height": run_height,
                         "cjk_visual_zone_width": zone_width,
+                        **_cjk_right_context_features(right_context),
                         "strong_visual_fallback": True,
                         "marker_noise": False,
                         "ordinary_accept": False,
@@ -5108,9 +6289,11 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
     with a wider ~0.55-normal-line allowance, because their two refinement paths
     can legitimately land farther apart while still describing one glyph.
 
-    The final separator keeps the *lower* safe Y of a confirmed duplicate pair,
-    matching the UI rule that refined lines should sit as close as possible to
-    the current headword rather than float upward into the previous entry.
+    For ordinary/bracketed duplicates the final separator keeps the *lower*
+    safe Y.  For oversized single-CJK duplicates we keep the *upper* boundary:
+    the lower visual/OCR duplicate can fall inside the same entry around
+    pronunciation/radical metadata (e.g. between 播 ba and Bộ:), while the upper
+    line is the true entry-start separator.
     """
     merged = 0
     by_column: dict[int, list[dict[str, Any]]] = {}
@@ -5139,11 +6322,17 @@ def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str
         left: dict[str, Any], right: dict[str, Any], *, single_cjk_special: bool = False,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         keeper, loser = (left, right) if _review_candidate_priority(left) >= _review_candidate_priority(right) else (right, left)
-        # Keep the lower/safer reading-axis V, but copy the complete
-        # canonical+source point. Taking max(source_y) is wrong after rotation.
+        # Copy one complete canonical+source point; never mix individual
+        # coordinates after rotation. Ordinary duplicates keep the lower/closer
+        # marker, but oversized single-CJK duplicates keep the upper entry-start
+        # boundary so a lower visual confirmation cannot move the separator into
+        # pronunciation/radical metadata inside the same entry.
         left_v = int(left.get("canonical_v", left.get("source_y", 0)))
         right_v = int(right.get("canonical_v", right.get("source_y", 0)))
-        position_row = left if left_v >= right_v else right
+        if single_cjk_special:
+            position_row = left if left_v <= right_v else right
+        else:
+            position_row = left if left_v >= right_v else right
         for key in (
             "canonical_u", "canonical_v", "source_x", "source_y",
             "refined_source_y", "coarse_canonical_v", "coarse_source_x",

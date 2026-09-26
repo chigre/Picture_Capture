@@ -374,7 +374,27 @@
         "bracketed_compound",
         "pinyin_after_headword",
         "visual_size_emphasis"
-      ]
+      ],
+      "symbol_inventory": {
+        "enabled": true,
+        "entry_markers": [],
+        "bracket_openers": [
+          "【",
+          "〔",
+          "［",
+          "[",
+          "「",
+          "『",
+          "〈",
+          "《"
+        ],
+        "visual_rescue": true,
+        "lane_expected": true,
+        "lane_tolerance_percent": 55,
+        "visual_families": [
+          "bracket_open"
+        ]
+      }
     },
     "marker_prefixed": {
       "parser_modes": [
@@ -426,7 +446,40 @@
       ],
       "features": [
         "explicit_entry_marker"
-      ]
+      ],
+      "symbol_inventory": {
+        "enabled": true,
+        "entry_markers": [
+          "○",
+          "●",
+          "◦",
+          "•",
+          "〓",
+          "◆",
+          "◇",
+          "►",
+          "▶",
+          "□",
+          "■",
+          "△",
+          "▲",
+          "※"
+        ],
+        "bracket_openers": [],
+        "visual_rescue": true,
+        "lane_expected": true,
+        "lane_tolerance_percent": 50,
+        "visual_families": [
+          "circle_open",
+          "circle_filled",
+          "diamond_open",
+          "diamond_filled",
+          "square_open",
+          "square_filled",
+          "triangle_open",
+          "triangle_filled"
+        ]
+      }
     },
     "custom": {
       "parser_modes": [
@@ -837,7 +890,14 @@
           "【本义】",
           "【演变】",
           "【组字】"
-        ]
+        ],
+        "symbol_inventory": {
+          "entry_markers": [],
+          "bracket_openers": [],
+          "visual_rescue": true,
+          "lane_expected": false,
+          "lane_tolerance_percent": 50
+        }
       }
     },
     "XDHYCD": {
@@ -854,6 +914,17 @@
         "columns_policy": "fixed",
         "column_separator": "present",
         "analysis_threshold_mode": "auto"
+      },
+      "headword_overrides": {
+        "symbol_inventory": {
+          "entry_markers": [],
+          "bracket_openers": [
+            "【"
+          ],
+          "visual_rescue": true,
+          "lane_expected": true,
+          "lane_tolerance_percent": 50
+        }
       }
     },
     "TimesCED": {
@@ -870,6 +941,15 @@
         "columns_policy": "fixed",
         "column_separator": "present",
         "analysis_threshold_mode": "auto"
+      },
+      "headword_overrides": {
+        "symbol_inventory": {
+          "entry_markers": [],
+          "bracket_openers": [],
+          "visual_rescue": true,
+          "lane_expected": false,
+          "lane_tolerance_percent": 50
+        }
       }
     },
     "RUIGO": {
@@ -911,6 +991,48 @@
         "columns_policy": "fixed",
         "column_separator": "absent",
         "analysis_threshold_mode": "auto"
+      },
+      "headword_overrides": {
+        "symbol_inventory": {
+          "entry_markers": [],
+          "bracket_openers": [
+            "【"
+          ],
+          "visual_rescue": true,
+          "lane_expected": true,
+          "lane_tolerance_percent": 50
+        }
+      }
+    },
+    "CNIT": {
+      "headword_profile": "marker_prefixed",
+      "headword_features": [
+        "explicit_entry_marker"
+      ],
+      "language": "chi_sim",
+      "layout": {
+        "writing_mode": "horizontal-tb",
+        "text_direction": "ltr",
+        "columns": 3,
+        "columns_policy": "fixed",
+        "column_separator": "absent",
+        "analysis_threshold_mode": "auto"
+      },
+      "headword_overrides": {
+        "symbol_inventory": {
+          "entry_markers": [
+            "○",
+            "●"
+          ],
+          "bracket_openers": [],
+          "visual_rescue": true,
+          "lane_expected": true,
+          "lane_tolerance_percent": 45,
+          "visual_families": [
+            "circle_open",
+            "circle_filled"
+          ]
+        }
       }
     }
   },

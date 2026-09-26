@@ -16,6 +16,7 @@ from .coordinate_space import stored_geometry_to_canonical
 from .dictionary_profile import (
     dictionary_profile_preset,
     language_effective_settings,
+    profile_symbol_inventory_defaults,
     write_project_profile,
 )
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
@@ -342,6 +343,43 @@ class ProjectProfileWizard(tk.Toplevel):
             bool(getattr(s, "profile_allow_marker_prefix", False))
             if parser_controls_saved else structure_defaults["marker_prefix"]
         ))
+        symbol_defaults = profile_symbol_inventory_defaults(s.dictionary_profile_id)
+        symbol_inventory_saved = int(
+            getattr(s, "profile_symbol_inventory_version", 0) or 0
+        ) >= 1
+        self.symbol_inventory_enabled_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_symbol_inventory_enabled", True))
+            if symbol_inventory_saved else bool(symbol_defaults["enabled"])
+        ))
+        self.entry_marker_symbols_var = tk.StringVar(value=(
+            str(getattr(s, "profile_entry_marker_symbols", "") or "")
+            if symbol_inventory_saved
+            else " ".join(symbol_defaults["entry_markers"])
+        ))
+        self.bracket_open_symbols_var = tk.StringVar(value=(
+            str(getattr(s, "profile_bracket_open_symbols", "") or "")
+            if symbol_inventory_saved
+            else " ".join(symbol_defaults["bracket_openers"])
+        ))
+        self.symbol_visual_rescue_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_symbol_visual_rescue_enabled", True))
+            if symbol_inventory_saved else bool(symbol_defaults["visual_rescue"])
+        ))
+        self.symbol_lane_required_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_symbol_lane_required", True))
+            if symbol_inventory_saved else bool(symbol_defaults["lane_required"])
+        ))
+        self.symbol_lane_tolerance_var = tk.IntVar(value=(
+            max(
+                20,
+                min(
+                    120,
+                    int(getattr(s, "profile_symbol_lane_tolerance_percent", 50) or 50),
+                ),
+            )
+            if symbol_inventory_saved
+            else int(symbol_defaults["lane_tolerance_percent"])
+        ))
         self.cjk_allow_single_var = tk.BooleanVar(value=(
             bool(getattr(s, "profile_cjk_allow_single_headword", True))
             if parser_controls_saved else structure_defaults["cjk_single_visual"]
@@ -358,6 +396,18 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         self.cjk_require_visual_var = tk.BooleanVar(
             value=bool(getattr(s, "profile_cjk_require_visual_evidence", False))
+        )
+        self.cjk_right_context_enabled_var = tk.BooleanVar(
+            value=bool(getattr(s, "profile_cjk_right_context_enabled", True))
+        )
+        self.cjk_right_context_width_var = tk.IntVar(
+            value=max(
+                30,
+                min(
+                    200,
+                    int(getattr(s, "profile_cjk_right_context_width_percent", 80) or 80),
+                ),
+            )
         )
 
         detection_vars = (
@@ -383,6 +433,10 @@ class ProjectProfileWizard(tk.Toplevel):
             self.headword_height_ratio_var,
             self.headword_boldness_ratio_var,
             self.headword_min_score_var,
+            self.cjk_right_context_width_var,
+            self.entry_marker_symbols_var,
+            self.bracket_open_symbols_var,
+            self.symbol_lane_tolerance_var,
         ):
             var.trace_add(
                 "write", lambda *_args: self.after_idle(self._headword_specificity_changed)
@@ -1496,6 +1550,67 @@ class ProjectProfileWizard(tk.Toplevel):
             foreground="#555555", wraplength=self._wizard_content_width,
         ).grid(row=6, column=0, sticky="w", pady=(4, 0))
 
+        self.symbol_inventory_frame = ttk.LabelFrame(
+            structures, text="本词典固定词头符号集", padding=8,
+        )
+        self.symbol_inventory_frame.grid(row=7, column=0, sticky="ew", pady=(8, 0))
+        self.symbol_inventory_frame.columnconfigure(1, weight=1)
+        ttk.Checkbutton(
+            self.symbol_inventory_frame,
+            text="启用本词典专用符号集",
+            variable=self.symbol_inventory_enabled_var,
+            command=self._headword_structure_changed,
+        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=2)
+        ttk.Label(
+            self.symbol_inventory_frame, text="入口标记：",
+        ).grid(row=1, column=0, sticky="e", padx=(0, 6), pady=3)
+        ttk.Entry(
+            self.symbol_inventory_frame,
+            textvariable=self.entry_marker_symbols_var,
+        ).grid(row=1, column=1, sticky="ew", pady=3)
+        ttk.Label(
+            self.symbol_inventory_frame,
+            text="例如 ○ ● ◇ ◆ □ ■ △ ▲ ※；空格/逗号分隔",
+            foreground="#666666",
+        ).grid(row=1, column=2, sticky="w", padx=(6, 0), pady=3)
+        ttk.Label(
+            self.symbol_inventory_frame, text="括号起始：",
+        ).grid(row=2, column=0, sticky="e", padx=(0, 6), pady=3)
+        ttk.Entry(
+            self.symbol_inventory_frame,
+            textvariable=self.bracket_open_symbols_var,
+        ).grid(row=2, column=1, sticky="ew", pady=3)
+        ttk.Label(
+            self.symbol_inventory_frame,
+            text="例如 【 〔 ［ [ 「 『 〈 《",
+            foreground="#666666",
+        ).grid(row=2, column=2, sticky="w", padx=(6, 0), pady=3)
+        ttk.Checkbutton(
+            self.symbol_inventory_frame,
+            text="OCR 漏掉/错认符号时允许视觉形状补救",
+            variable=self.symbol_visual_rescue_var,
+            command=self._headword_structure_changed,
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
+        ttk.Checkbutton(
+            self.symbol_inventory_frame,
+            text="使用同栏 marker lane 过滤正文中的相似符号",
+            variable=self.symbol_lane_required_var,
+            command=self._headword_structure_changed,
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=2)
+        ttk.Label(
+            self.symbol_inventory_frame, text="lane 容差：",
+        ).grid(row=5, column=0, sticky="e", padx=(0, 6), pady=3)
+        tk.Spinbox(
+            self.symbol_inventory_frame,
+            from_=20, to=120, increment=5, width=7,
+            textvariable=self.symbol_lane_tolerance_var,
+        ).grid(row=5, column=1, sticky="w", pady=3)
+        ttk.Label(
+            self.symbol_inventory_frame,
+            text="% 行高（越小越严格；默认 50%）",
+            foreground="#666666",
+        ).grid(row=5, column=2, sticky="w", padx=(6, 0), pady=3)
+
         specificity = ttk.LabelFrame(
             tab, text="词头专属性（当前结构的视觉证据）", padding=10,
         )
@@ -1547,11 +1662,25 @@ class ProjectProfileWizard(tk.Toplevel):
             ("必须靠近栏左缘", self.cjk_require_left_edge_var),
             ("释义正文中也经常出现【括号词】", self.cjk_brackets_in_body_var),
             ("只有视觉明显突出时才把单字/括号词当词头", self.cjk_require_visual_var),
+            ("分析大字右侧留白（仅辅助“大字单字”判断）", self.cjk_right_context_enabled_var),
         )):
             ttk.Checkbutton(
                 self.cjk_specificity_frame, text=label, variable=variable,
                 command=self._headword_specificity_changed,
-            ).grid(row=row, column=0, sticky="w", pady=2)
+            ).grid(row=row, column=0, columnspan=3, sticky="w", pady=2)
+
+        ttk.Label(
+            self.cjk_specificity_frame, text="大字右侧检测宽度：",
+        ).grid(row=4, column=0, sticky="e", pady=(3, 0))
+        tk.Spinbox(
+            self.cjk_specificity_frame, from_=30, to=200, increment=5, width=7,
+            textvariable=self.cjk_right_context_width_var,
+        ).grid(row=4, column=1, sticky="w", pady=(3, 0))
+        ttk.Label(
+            self.cjk_specificity_frame,
+            text="% 大字高度（默认 80%；同时分析整体、下部留白和相对正文密度）",
+            foreground="#666666",
+        ).grid(row=4, column=2, sticky="w", pady=(3, 0))
 
         self.headword_tuning_status_var = tk.StringVar(value="")
         ttk.Label(
@@ -1695,6 +1824,15 @@ class ProjectProfileWizard(tk.Toplevel):
         self.marker_prefix_var.set(defaults["marker_prefix"])
         self.numbered_prefix_var.set(defaults["numbered_prefix"])
 
+    def _set_symbol_defaults_for_profile(self, key: str) -> None:
+        defaults = profile_symbol_inventory_defaults(key)
+        self.symbol_inventory_enabled_var.set(bool(defaults["enabled"]))
+        self.entry_marker_symbols_var.set(" ".join(defaults["entry_markers"]))
+        self.bracket_open_symbols_var.set(" ".join(defaults["bracket_openers"]))
+        self.symbol_visual_rescue_var.set(bool(defaults["visual_rescue"]))
+        self.symbol_lane_required_var.set(bool(defaults["lane_required"]))
+        self.symbol_lane_tolerance_var.set(int(defaults["lane_tolerance_percent"]))
+
     def _specificity_defaults_for_profile(self, key: str) -> tuple[int, float, float, float]:
         temp = replace(self.working)
         temp.ocr_language = _ocr_language_code(self.ocr_language_var.get())
@@ -1724,6 +1862,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_tuning_level_var.set(0)
         key = self._current_profile_key()
         self._set_structure_defaults_for_profile(key)
+        self._set_symbol_defaults_for_profile(key)
         self._reset_specificity_for_profile(key)
         self._profile_revision += 1
         self._mark_validation_stale()
@@ -1754,7 +1893,10 @@ class ProjectProfileWizard(tk.Toplevel):
         if self.cjk_allow_single_var.get():
             active.append("大字单字")
         if self.marker_prefix_var.get():
-            active.append("固定符号")
+            markers = self.entry_marker_symbols_var.get().strip()
+            active.append(
+                "固定符号" + (f"（{markers}）" if markers else "")
+            )
         if self.numbered_prefix_var.get():
             active.append("编号前缀")
         self.headword_structure_summary_var.set(
@@ -1773,6 +1915,14 @@ class ProjectProfileWizard(tk.Toplevel):
                 self.cjk_specificity_frame.grid()
             else:
                 self.cjk_specificity_frame.grid_remove()
+        if hasattr(self, "symbol_inventory_frame"):
+            show_symbols = bool(
+                self.marker_prefix_var.get() or self.cjk_allow_bracketed_var.get()
+            )
+            if show_symbols:
+                self.symbol_inventory_frame.grid()
+            else:
+                self.symbol_inventory_frame.grid_remove()
 
     def _refresh_headword_tuning_status(self) -> None:
         if not hasattr(self, "headword_tuning_status_var"):
@@ -1830,7 +1980,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_headword_specificity_visibility()
         hints = {
             "latin_regular": "常规边缘：栏边位置是主证据；字号、粗体和词后结构辅助判断。",
-            "cjk_visual": "视觉型：大字/括号结构及视觉突出程度是主证据。",
+            "cjk_visual": "视觉型：大字/括号结构及视觉突出程度是主证据；大字单字还可结合右侧留白/稀疏度。",
             "numbered_prefix": "编号型：编号前缀是主证据；字号/粗体属于辅助证据。",
             "marker_prefixed": "符号型：○ / ● / ◆ 等固定符号是主证据；字号/粗体属于辅助证据。",
             "custom": "自定义：基础视觉门槛可配合上方 parser 勾选逐页测试。",
@@ -1963,11 +2113,32 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_allow_ordinary_left_edge = bool(self.ordinary_left_edge_var.get())
         s.profile_allow_numbered_prefix = bool(self.numbered_prefix_var.get())
         s.profile_allow_marker_prefix = bool(self.marker_prefix_var.get())
+        s.profile_symbol_inventory_version = 1
+        s.profile_symbol_inventory_enabled = bool(
+            self.symbol_inventory_enabled_var.get()
+        )
+        s.profile_entry_marker_symbols = self.entry_marker_symbols_var.get().strip()
+        s.profile_bracket_open_symbols = self.bracket_open_symbols_var.get().strip()
+        s.profile_symbol_visual_rescue_enabled = bool(
+            self.symbol_visual_rescue_var.get()
+        )
+        s.profile_symbol_lane_required = bool(
+            self.symbol_lane_required_var.get()
+        )
+        s.profile_symbol_lane_tolerance_percent = max(
+            20, min(120, int(self.symbol_lane_tolerance_var.get()))
+        )
         s.profile_cjk_allow_single_headword = bool(self.cjk_allow_single_var.get())
         s.profile_cjk_allow_bracketed_headword = bool(self.cjk_allow_bracketed_var.get())
         s.profile_cjk_require_left_edge = bool(self.cjk_require_left_edge_var.get())
         s.profile_cjk_brackets_in_body = bool(self.cjk_brackets_in_body_var.get())
         s.profile_cjk_require_visual_evidence = bool(self.cjk_require_visual_var.get())
+        s.profile_cjk_right_context_enabled = bool(
+            self.cjk_right_context_enabled_var.get()
+        )
+        s.profile_cjk_right_context_width_percent = max(
+            30, min(200, int(self.cjk_right_context_width_var.get()))
+        )
         profile_key = self._current_profile_key()
         apply_headword_profile(s, profile_key)
         for name, value in language_effective_settings(s.ocr_language, s.layout_writing_mode).items():

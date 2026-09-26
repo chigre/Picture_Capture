@@ -824,7 +824,7 @@ class ProcessingTests(unittest.TestCase):
         self.assertTrue(sa_diag["looks_like_continuation"])
         self.assertTrue(blacion_diag["looks_like_continuation"])
 
-    def test_first_content_headword_uses_first_sustained_ink_y(self) -> None:
+    def test_first_content_headword_uses_whitespace_before_first_ink(self) -> None:
         settings = AppSettings(
             ocr_language="spa", parameter_display_width=300, paddle_band_width=300,
             row_padding=3, paddle_auto_header_rule=False, paddle_refine_separator_y=True,
@@ -833,15 +833,18 @@ class ProcessingTests(unittest.TestCase):
         band = Image.new("RGB", (300, 150), "white")
         draw = ImageDraw.Draw(band)
         # OCR top is slightly early (36) while actual printed ink starts at 40.
-        # The first-entry rule should move down to the first sustained ink row,
-        # not into the blank top margin.
+        # The marker must sit in the blank gap immediately above the glyph rather
+        # than touch/cross the first stroke.
         draw.rectangle((15, 40, 280, 58), fill="black")
         records = [OCRRecord("a·ga·rrón (pl. agarrones) s.m.", 0.99, (10, 36, 270, 61))]
         entries, diagnostics = filter_headword_records(records, band, 0, 20, settings, separator_band=band)
         self.assertEqual(len(entries), 1)
-        self.assertEqual(entries[0].y, 40)
+        self.assertEqual(entries[0].y, 36)
         candidate = next(item for item in diagnostics[1:] if item.get("accepted"))
-        self.assertEqual(candidate["separator_refinement"]["reason"], "first_sustained_ink_onset")
+        self.assertEqual(
+            candidate["separator_refinement"]["reason"],
+            "whitespace_before_first_sustained_ink",
+        )
         self.assertGreater(candidate["separator_refinement"]["shift"], 0)
 
     def test_page53_gender_variants_and_bound_morphemes_pass_structure_rules(self) -> None:
@@ -1393,7 +1396,8 @@ class DictionaryProfileV2Tests(unittest.TestCase):
         from picture_capture.dictionary_profile import profile_library_path
         raw = json.loads(profile_library_path().read_text(encoding="utf-8"))
         self.assertEqual(set(raw["validated_examples"]), {
-            "NewApproach", "LDER", "HZYLDZD", "XDHYCD", "TimesCED", "RUIGO", "XAHDCD", "shueisha",
+            "NewApproach", "LDER", "HZYLDZD", "XDHYCD", "TimesCED", "RUIGO",
+            "XAHDCD", "shueisha", "CNIT",
         })
 
     def test_v210_profile_defaults_keep_supported_language_variant(self) -> None:
@@ -1436,6 +1440,107 @@ class DictionaryProfileV2Tests(unittest.TestCase):
         assert parsed is not None
         self.assertEqual(parsed.normalized, "阿爸")
         self.assertEqual(parsed.descriptor_text, "cjk_marker_pinyin")
+
+    def test_v210_marker_parser_keeps_mixed_cjk_ascii_headword_token(self) -> None:
+        profile = load_dictionary_profile(preset="cjk_marker_pinyin", language="chi_sim")
+        parsed = parse_headword_text(
+            "●阿Q精神 A Kiu jingshen",
+            AppSettings(
+                ocr_language="chi_sim",
+                profile_parser_controls_version=1,
+                profile_allow_marker_prefix=True,
+                profile_allow_ordinary_left_edge=False,
+            ),
+            profile=profile,
+        )
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed.normalized, "阿Q精神")
+
+    def test_v210_marker_single_han_is_structural_not_large_glyph_gated(self) -> None:
+        profile = load_dictionary_profile(preset="cjk_marker_pinyin", language="chi_sim")
+        settings = AppSettings(
+            ocr_language="chi_sim",
+            profile_parser_controls_version=1,
+            profile_allow_ordinary_left_edge=False,
+            profile_allow_marker_prefix=True,
+            profile_cjk_allow_single_headword=False,
+            profile_cjk_allow_bracketed_headword=False,
+            paddle_band_width=180,
+            paddle_band_width_ratio=100,
+            paddle_band_left_margin=0,
+            paddle_left_tolerance=24,
+            paddle_rec_score_threshold=0.1,
+            paddle_auto_header_rule=False,
+            paddle_refine_separator_y=False,
+            paddle_require_pos_or_symbol=False,
+            paddle_require_visual_cue=False,
+            character_height=26,
+            row_padding=4,
+        )
+        band = Image.new("RGB", (180, 100), "white")
+        records = [OCRRecord("○呵 hē interj.", 0.99, (4, 30, 120, 58))]
+        entries, diagnostics = filter_headword_records(
+            records, band, 0, 0, settings, profile=profile,
+        )
+        self.assertEqual([entry.word for entry in entries], ["呵"])
+        row = next(item for item in diagnostics if item.get("accepted"))
+        self.assertTrue(row["features"]["cjk_marker_prefixed"])
+        self.assertFalse(row["features"]["cjk_single_visual"])
+
+    def test_v210_visual_circle_marker_detector_distinguishes_open_and_filled(self) -> None:
+        from picture_capture.paddle_headwords import _detect_visual_entry_markers
+
+        image = Image.new("L", (180, 150), "white")
+        draw = ImageDraw.Draw(image)
+        draw.ellipse((8, 28, 44, 64), outline="black", width=4)
+        draw.ellipse((10, 88, 42, 120), fill="black")
+        gray = np.asarray(image, dtype=np.uint8)
+        markers = _detect_visual_entry_markers(
+            gray, median_height=40.0, left_limit=40, lower_bound=0,
+        )
+        self.assertEqual([item["type"] for item in markers], [
+            "open_circle", "filled_circle",
+        ])
+        self.assertEqual([item["symbol"] for item in markers], ["○", "●"])
+
+    def test_v210_visual_marker_rescues_entry_when_ocr_drops_circle(self) -> None:
+        profile = load_dictionary_profile(preset="cjk_marker_pinyin", language="chi_sim")
+        settings = AppSettings(
+            ocr_language="chi_sim",
+            profile_parser_controls_version=1,
+            profile_allow_ordinary_left_edge=False,
+            profile_allow_marker_prefix=True,
+            profile_cjk_allow_single_headword=False,
+            profile_cjk_allow_bracketed_headword=False,
+            paddle_band_width=180,
+            paddle_band_width_ratio=100,
+            paddle_band_left_margin=0,
+            paddle_left_tolerance=20,
+            paddle_rec_score_threshold=0.1,
+            paddle_auto_header_rule=False,
+            paddle_refine_separator_y=False,
+            paddle_require_pos_or_symbol=False,
+            paddle_require_visual_cue=False,
+            character_height=26,
+            row_padding=4,
+        )
+        band = Image.new("RGB", (180, 130), "white")
+        draw = ImageDraw.Draw(band)
+        # The printed open circle is present, but OCR starts at the lemma and has
+        # completely dropped the marker.
+        draw.ellipse((8, 40, 42, 74), outline="black", width=4)
+        records = [
+            OCRRecord("阿Q精神 A Kiu jingshen", 0.99, (50, 40, 172, 74)),
+        ]
+        entries, diagnostics = filter_headword_records(
+            records, band, 0, 0, settings, profile=profile,
+        )
+        self.assertEqual([entry.word for entry in entries], ["阿Q精神"])
+        row = next(item for item in diagnostics if item.get("accepted"))
+        self.assertTrue(row["features"]["visual_entry_marker"])
+        self.assertEqual(row["features"]["visual_entry_marker_type"], "open_circle")
+        self.assertEqual(row["parser_stage"], "cjk_visual_marker_rescue")
 
     def test_v210_latin_profile_does_not_enable_cjk_parser_from_definition_language(self) -> None:
         profile = load_dictionary_profile(preset="latin_pos_classic", language="por+chi_sim")
@@ -1831,6 +1936,207 @@ def test_wizard_parser_controls_gate_cjk_bracket_and_marker_structures():
     assert marker.normalized == "同義"
 
 
+def test_v214_configured_visual_symbol_families_are_role_aware():
+    import numpy as np
+    from picture_capture.paddle_headwords import _classify_visual_symbol_component
+
+    line_h = 20.0
+    yy, xx = np.indices((20, 20))
+    radius = np.sqrt((xx - 9.5) ** 2 + (yy - 9.5) ** 2)
+    ring = (radius >= 6.5) & (radius <= 8.5)
+    disk = radius <= 9.0
+
+    square = np.zeros((20, 20), dtype=bool)
+    square[2:18, 2:4] = True
+    square[2:18, 16:18] = True
+    square[2:4, 2:18] = True
+    square[16:18, 2:18] = True
+
+    manhattan = np.abs(xx - 9.5) + np.abs(yy - 9.5)
+    diamond = (manhattan >= 7.0) & (manhattan <= 8.5)
+
+    triangle = np.zeros((20, 20), dtype=bool)
+    for y in range(2, 18):
+        half = round(((y - 2) / 15.0) * 8)
+        left, right = 10 - half, 10 + half
+        triangle[y, max(0, left):min(20, left + 2)] = True
+        triangle[y, max(0, right - 1):min(20, right + 1)] = True
+    triangle[16:18, 2:19] = True
+
+    bracket = np.zeros((20, 10), dtype=bool)
+    bracket[2:18, 1:3] = True
+    bracket[2:4, 1:8] = True
+    bracket[16:18, 1:8] = True
+
+    cases = [
+        (ring, "circle_open", {"entry_markers": ("○",), "bracket_openers": ()}, "○", "entry_marker"),
+        (disk, "circle_filled", {"entry_markers": ("●",), "bracket_openers": ()}, "●", "entry_marker"),
+        (square, "square_open", {"entry_markers": ("□",), "bracket_openers": ()}, "□", "entry_marker"),
+        (diamond, "diamond_open", {"entry_markers": ("◇",), "bracket_openers": ()}, "◇", "entry_marker"),
+        (triangle, "triangle_open", {"entry_markers": ("△",), "bracket_openers": ()}, "△", "entry_marker"),
+        (bracket, "bracket_open", {"entry_markers": (), "bracket_openers": ("【",)}, "【", "bracket_open"),
+    ]
+    for mask, family, base, symbol, role in cases:
+        inventory = {**base, "visual_families": (family,)}
+        result = _classify_visual_symbol_component(mask, line_h, inventory)
+        assert result is not None, family
+        detected_family, detected_symbol, detected_role, _metrics = result
+        assert (detected_family, detected_symbol, detected_role) == (family, symbol, role)
+
+    # Shape recognition is dictionary-specific: a perfectly circular component
+    # must not become a headword marker when this dictionary only configured ◇.
+    wrong_inventory = {
+        "entry_markers": ("◇",), "bracket_openers": (),
+        "visual_families": ("diamond_open",),
+    }
+    assert _classify_visual_symbol_component(ring, line_h, wrong_inventory) is None
+
+
+def test_v214_dictionary_symbol_inventory_is_exact_per_project():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import parse_headword_text
+
+    profile = load_dictionary_profile(preset="marker_prefixed", language="chi_sim")
+    settings = AppSettings(
+        ocr_language="chi_sim",
+        profile_parser_controls_version=1,
+        profile_allow_marker_prefix=True,
+        profile_symbol_inventory_version=1,
+        profile_symbol_inventory_enabled=True,
+        profile_entry_marker_symbols="○ ●",
+        profile_bracket_open_symbols="【",
+    )
+    parsed = parse_headword_text("●阿Q精神 mentality", settings, profile=profile)
+    assert parsed is not None
+    assert parsed.normalized == "阿Q精神"
+    assert parsed.parser_trace[0] == "entry_marker:●"
+    # ◆ exists in the generic marker profile, but this dictionary explicitly
+    # configured only ○/●, so it must not leak back in through a global set.
+    assert parse_headword_text("◆阿Q精神 mentality", settings, profile=profile) is None
+
+
+def test_v214_dictionary_bracket_inventory_limits_openers():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import parse_headword_text
+
+    profile = load_dictionary_profile(preset="cjk_visual", language="chi_sim")
+    settings = AppSettings(
+        ocr_language="chi_sim",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_bracketed_headword=True,
+        profile_symbol_inventory_version=1,
+        profile_symbol_inventory_enabled=True,
+        profile_entry_marker_symbols="",
+        profile_bracket_open_symbols="【",
+    )
+    assert parse_headword_text("【爱】释义", settings, profile=profile).normalized == "爱"
+    assert parse_headword_text("〔爱〕释义", settings, profile=profile) is None
+
+
+def test_v214_cnit_validated_profile_has_narrow_symbol_inventory():
+    from picture_capture.dictionary_profile import (
+        dictionary_profile_preset, profile_symbol_inventory_defaults,
+    )
+
+    preset = dictionary_profile_preset("CNIT")
+    assert preset.family == "marker_prefixed"
+    assert preset.layout["columns"] == 3
+    symbols = profile_symbol_inventory_defaults("CNIT")
+    assert symbols["entry_markers"] == ["○", "●"]
+    assert symbols["bracket_openers"] == []
+    assert symbols["lane_required"] is True
+    assert set(symbols["visual_families"]) == {"circle_open", "circle_filled"}
+
+
+def test_v214_validated_examples_resolve_as_executable_profiles():
+    from picture_capture.dictionary_profile import dictionary_profile_preset
+
+    shueisha = dictionary_profile_preset("shueisha")
+    assert shueisha.family == "cjk_visual"
+    assert shueisha.default_language == "jpn"
+    assert shueisha.layout["writing_mode"] == "vertical-rl"
+    assert shueisha.layout["canonical_transform"] == "rotate_ccw90"
+    assert shueisha.headword["features"] == ["bracketed_compound"]
+
+    times = dictionary_profile_preset("TimesCED")
+    assert times.family == "cjk_visual"
+    assert times.headword["features"] == [
+        "large_single_character", "pinyin_after_headword",
+    ]
+
+
+def test_v214_shueisha_japanese_bracketed_headwords_accept_kana_reading_prefix():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import parse_headword_text
+
+    profile = load_dictionary_profile(preset="shueisha", language="jpn")
+    settings = AppSettings(
+        ocr_language="jpn", paddle_language="japan",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_single_headword=False,
+        profile_cjk_allow_bracketed_headword=True,
+    )
+
+    for text, expected, reading in [
+        ("【愛】", "愛", ""),
+        ("あい【愛】", "愛", "あい"),
+        ("あい【藍】説明", "藍", "あい"),
+        ("アイ【哀】", "哀", "アイ"),
+    ]:
+        parsed = parse_headword_text(text, settings, profile=profile)
+        assert parsed is not None
+        assert parsed.normalized == expected
+        assert parsed.descriptor_text == "chinese_bracketed_headword"
+        if reading:
+            assert f"japanese_reading_prefix:{reading}" in parsed.parser_trace
+
+    # The kana-prefix relaxation belongs to the explicit Japanese CJK profile;
+    # a non-CJK language does not gain a generic bracket parser.
+    spanish = AppSettings(
+        ocr_language="spa",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_bracketed_headword=True,
+    )
+    assert parse_headword_text("ai【愛】", spanish) is None
+
+
+def test_v214_shueisha_bracketed_headword_is_accepted_by_filter():
+    from PIL import Image
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import OCRRecord, filter_headword_records
+
+    profile = load_dictionary_profile(preset="shueisha", language="jpn")
+    settings = AppSettings(
+        ocr_language="jpn", paddle_language="japan",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_single_headword=False,
+        profile_cjk_allow_bracketed_headword=True,
+        profile_cjk_require_left_edge=True,
+        paddle_band_width=180, paddle_band_width_ratio=100,
+        paddle_band_left_margin=0, paddle_left_tolerance=18,
+        paddle_rec_score_threshold=0.1, paddle_auto_header_rule=False,
+        paddle_refine_separator_y=False, paddle_require_pos_or_symbol=False,
+        paddle_require_visual_cue=False, character_height=18, row_padding=4,
+    )
+    band = Image.new("RGB", (180, 120), "white")
+    records = [OCRRecord("あい【愛】", 0.99, (4, 30, 86, 52))]
+    entries, diagnostics = filter_headword_records(
+        records, band, 0, 0, settings, profile=profile,
+    )
+    assert [entry.word for entry in entries] == ["愛"]
+    row = next(item for item in diagnostics if item.get("text") == "あい【愛】")
+    assert row["accepted"] is True
+    assert row["features"]["cjk_bracketed"] is True
+
+
 def test_v280_cjk_bracket_body_option_requires_extra_visual_evidence():
     from PIL import Image
     from picture_capture.dictionary_profile import load_dictionary_profile
@@ -1936,6 +2242,165 @@ def test_v281_chinese_single_character_requires_visual_prominence():
     assert rows["同"]["reject_reason"] == "cjk_single_not_visually_prominent"
 
 
+def test_v281_cjk_right_context_detects_sparse_headword_layout():
+    import numpy as np
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import _cjk_right_context_metrics
+
+    settings = AppSettings(
+        profile_cjk_right_context_enabled=True,
+        profile_cjk_right_context_width_percent=80,
+    )
+    gray = np.full((260, 220), 255, dtype=np.uint8)
+    # Ordinary body text to the right establishes a much denser baseline.
+    for y0 in (20, 55, 90, 195, 225):
+        gray[y0:y0 + 20, 100:140] = 0
+    # Candidate large head at y=130..180: only a short pronunciation fragment
+    # occupies the upper right; the lower/right region remains blank.
+    gray[132:140, 104:126] = 0
+    metrics = _cjk_right_context_metrics(
+        gray, (130, 180), 100, settings, header_cutoff=0,
+    )
+    assert metrics["available"] is True
+    assert metrics["width_percent"] == 80
+    assert metrics["width_px"] == 40
+    assert metrics["blank_ratio"] > 0.85
+    assert metrics["lower_blank_ratio"] > 0.95
+    assert metrics["row_occupancy"] < 0.30
+    assert metrics["density_ratio"] < 0.60
+    assert metrics["sparse"] is True
+
+
+def test_v281_cjk_right_context_rejects_dense_body_like_layout():
+    import numpy as np
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import _cjk_right_context_metrics
+
+    settings = AppSettings(profile_cjk_right_context_width_percent=80)
+    gray = np.full((260, 220), 255, dtype=np.uint8)
+    for y0 in (20, 55, 90, 195, 225):
+        gray[y0:y0 + 20, 100:140] = 0
+    gray[130:180, 100:140] = 0
+    metrics = _cjk_right_context_metrics(gray, (130, 180), 100, settings)
+    assert metrics["available"] is True
+    assert metrics["sparse"] is False
+    assert metrics["lower_blank_ratio"] < 0.20
+    assert metrics["row_occupancy"] > 0.90
+
+
+def test_v281_sparse_right_context_safely_recovers_more_clipped_large_cjk():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import OCRRecord, _cjk_word_for_visual_run
+
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        profile_parser_controls_version=1,
+        profile_cjk_allow_single_headword=True,
+    )
+    profile = load_dictionary_profile(preset="cjk_visual", language="chi_tra")
+    clipped = [OCRRecord("巴", 0.99, (8, 119, 34, 131))]
+    run = (100, 150)
+    sparse = {"available": True, "sparse": True}
+    dense = {"available": True, "sparse": False}
+
+    word, _confidence, record = _cjk_word_for_visual_run(
+        clipped, run, 100, settings, profile, sparse,
+    )
+    assert word == "巴" and record is clipped[0]
+
+    word, _confidence, record = _cjk_word_for_visual_run(
+        clipped, run, 100, settings, profile, dense,
+    )
+    assert word == "" and record is None
+
+
+def test_v281_ocr_single_han_can_use_sparse_right_context_without_projection_run():
+    from PIL import Image, ImageDraw
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import OCRRecord, filter_headword_records
+
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_single_headword=True,
+        profile_cjk_allow_bracketed_headword=False,
+        profile_cjk_right_context_enabled=True,
+        profile_cjk_right_context_width_percent=80,
+        paddle_band_width=180, paddle_band_width_ratio=100,
+        paddle_band_left_margin=0, paddle_left_tolerance=16,
+        paddle_rec_score_threshold=0.1, paddle_auto_header_rule=False,
+        paddle_refine_separator_y=False, paddle_require_pos_or_symbol=False,
+        paddle_require_visual_cue=False, character_height=20, row_padding=4,
+    )
+    profile = load_dictionary_profile(preset="cjk_visual", language="chi_tra")
+
+    def make_band(*, dense_candidate_right: bool) -> Image.Image:
+        image = Image.new("RGB", (180, 220), "white")
+        draw = ImageDraw.Draw(image)
+        # Ordinary body rows make the same X strip meaningfully dense elsewhere.
+        for y0 in (15, 45, 165, 195):
+            draw.rectangle((24, y0, 48, y0 + 18), fill="black")
+        # The OCR box itself is only body-height, so left-strip projection has no
+        # oversized run to rescue. This simulates a vertically cropped large Han.
+        draw.rectangle((4, 105, 20, 123), fill="black")
+        if dense_candidate_right:
+            draw.rectangle((24, 98, 48, 130), fill="black")
+        return image
+
+    records = [
+        OCRRecord("body text", 0.99, (4, 15, 48, 34)),
+        OCRRecord("more text", 0.99, (4, 45, 48, 64)),
+        OCRRecord("巴", 0.99, (4, 105, 20, 124)),
+        OCRRecord("definition", 0.99, (4, 165, 48, 184)),
+        OCRRecord("last line", 0.99, (4, 195, 48, 214)),
+    ]
+
+    entries, diagnostics = filter_headword_records(
+        records, make_band(dense_candidate_right=False), 0, 0, settings,
+        profile=profile,
+    )
+    assert [entry.word for entry in entries] == ["巴"]
+    row = next(item for item in diagnostics if item.get("text") == "巴")
+    assert row["features"]["cjk_single_sparse_context_rescue"] is True
+    assert row["features"]["cjk_candidate_right_context_sparse"] is True
+    assert row["features"]["cjk_candidate_right_baseline_supported"] is True
+
+    entries, diagnostics = filter_headword_records(
+        records, make_band(dense_candidate_right=True), 0, 0, settings,
+        profile=profile,
+    )
+    row = next(item for item in diagnostics if item.get("text") == "巴")
+    # Dense right context must not activate the *new OCR-candidate reverse
+    # validation path*. The candidate may still be accepted by an independent
+    # pre-existing visual-projection path in this synthetic dense image.
+    assert row["features"]["cjk_single_sparse_context_rescue"] is False
+    # A later independent visual-projection confirmation may attach its own
+    # right-context metrics to the same diagnostic row; the invariant here is
+    # that the new OCR-candidate reverse-validation path itself stayed off.
+
+
+def test_v281_cjk_projection_works_on_binary_1bit_scan():
+    import numpy as np
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import _cjk_visual_projection_runs
+
+    gray = np.full((260, 180), 255, dtype=np.uint8)
+    # Ordinary body-height rows.
+    for y0 in (20, 55, 190, 225):
+        gray[y0:y0 + 20, 4:55] = 0
+    # One oversized single-character row.
+    gray[105:158, 4:58] = 0
+    settings = AppSettings(character_height=20)
+    zone_width, runs = _cjk_visual_projection_runs(
+        gray, 0, settings, 1.0,
+    )
+    assert zone_width > 0
+    assert any(start <= 105 and end >= 158 for start, end in runs)
+
+
 def test_v281_candidate_band_is_capped_to_current_column_width():
     from PIL import Image
     from picture_capture.models import AppSettings
@@ -1984,7 +2449,7 @@ def test_v281_cjk_visual_projection_recovers_oversized_single_character_row():
     assert any(start <= 130 and end >= 178 for start, end in runs)
 
 
-def test_v214_visual_single_cjk_rescue_rejects_definition_text_near_tall_run():
+def test_v214_visual_single_cjk_rescue_uses_profile_for_clipped_pinyin_head():
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import OCRRecord, _cjk_word_for_visual_run
 
@@ -1995,27 +2460,100 @@ def test_v214_visual_single_cjk_rescue_rejects_definition_text_near_tall_run():
         profile_cjk_allow_single_headword=True,
         profile_cjk_allow_bracketed_headword=False,
     )
+    profile = load_dictionary_profile(preset="TimesCED", language="chi_tra")
     run = (80, 145)
-    # This is the failure pattern from a definition line: the Han character is
-    # inside ordinary prose and its OCR box is far shorter than the tall visual
-    # projection run. It must not be mined as a single-character headword.
+
+    # Definition text still cannot donate an arbitrary Han character to the
+    # visual rescue path.
     body = [OCRRecord("Âm: 波 ba (ba). 普通正文", 0.99, (5, 101, 190, 123))]
-    word, _confidence, record = _cjk_word_for_visual_run(body, run, 100, settings)
+    word, _confidence, record = _cjk_word_for_visual_run(
+        body, run, 100, settings, profile,
+    )
     assert word == "" and record is None
 
-    # A real oversized head record may contain pinyin after the display glyph;
-    # its OCR box itself spans the visual run and remains recoverable.
-    head = [OCRRecord("波 ba", 0.99, (8, 82, 88, 143))]
-    word, confidence, record = _cjk_word_for_visual_run(head, run, 100, settings)
+    # Real scans may crop a visually large glyph to a body-height OCR box. The
+    # active TimesCED profile recognizes "波 ba" structurally, so the visual
+    # run may use a narrower box gate without relaxing the generic fallback.
+    clipped_head = [OCRRecord("波 ba", 0.99, (8, 101, 82, 123))]
+    word, confidence, record = _cjk_word_for_visual_run(
+        clipped_head, run, 100, settings, profile,
+    )
     assert word == "波"
     assert confidence == 0.99
-    assert record is head[0]
+    assert record is clipped_head[0]
 
-    # Chinese prose that merely starts with a Han character is also not a
-    # fallback headword when the record is an ordinary body-height line.
-    prose = [OCRRecord("波羅蜜正文說明", 0.99, (5, 101, 180, 123))]
-    word, _confidence, record = _cjk_word_for_visual_run(prose, run, 100, settings)
+    # Turning off the user-facing "大字单字" control disables the
+    # relaxed structural rescue even though the same OCR text is present.
+    settings.profile_cjk_allow_single_headword = False
+    word, _confidence, record = _cjk_word_for_visual_run(
+        clipped_head, run, 100, settings, profile,
+    )
     assert word == "" and record is None
+    settings.profile_cjk_allow_single_headword = True
+
+    # Even a profile-parsed candidate is rejected if it is a wide definition
+    # line rather than the compact headword + pinyin record.
+    wide = [OCRRecord("波 ba ordinary definition text", 0.99, (5, 101, 195, 123))]
+    word, _confidence, record = _cjk_word_for_visual_run(
+        wide, run, 100, settings, profile,
+    )
+    assert word == "" and record is None
+
+
+def test_v214_visual_rescue_accepts_clipped_single_han_box_when_large_single_enabled():
+    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.models import AppSettings
+    from picture_capture.paddle_headwords import OCRRecord, _cjk_word_for_visual_run
+
+    profile = load_dictionary_profile(preset="cjk_visual", language="chi_tra")
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=False,
+        profile_cjk_allow_single_headword=True,
+        profile_cjk_allow_bracketed_headword=False,
+    )
+    run = (100, 150)
+    # OCR may segment the pinyin separately and leave only a vertically clipped
+    # single-Han box. The visual run + explicit large-single structure is enough
+    # to recover the separator.
+    clipped = [OCRRecord("巴", 0.99, (8, 117, 36, 131))]
+    word, confidence, record = _cjk_word_for_visual_run(
+        clipped, run, 100, settings, profile,
+    )
+    assert word == "巴"
+    assert confidence == 0.99
+    assert record is clipped[0]
+
+    settings.profile_cjk_allow_single_headword = False
+    word, _confidence, record = _cjk_word_for_visual_run(
+        clipped, run, 100, settings, profile,
+    )
+    assert word == "" and record is None
+
+
+def test_v214_visual_projection_dedupes_shifted_same_han_candidate():
+    from picture_capture.paddle_headwords import _accepted_cjk_row_for_visual_run
+
+    diagnostics = [{
+        "accepted": True,
+        "normalized_headword": "播",
+        # Simulate OCR anchoring the accepted box on a nearby baseline/pinyin
+        # fragment instead of the full oversized Han glyph.
+        "box": [6, 45, 54, 65],
+        "features": {"cjk_single_visual": True},
+    }]
+    matched = _accepted_cjk_row_for_visual_run(
+        diagnostics, 100, 150, "播",
+    )
+    assert matched is diagnostics[0]
+
+    # A repeated homograph a full entry away must stay distinct.
+    far = [{
+        "accepted": True, "normalized_headword": "播",
+        "box": [6, 5, 54, 25], "features": {"cjk_single_visual": True},
+    }]
+    assert _accepted_cjk_row_for_visual_run(far, 100, 150, "播") is None
 
 
 def test_v214_single_only_profile_visual_rescue_keeps_large_head_not_body_line():
@@ -2055,11 +2593,14 @@ def test_v214_single_only_profile_visual_rescue_keeps_large_head_not_body_line()
         OCRRecord("普通正文", 0.99, (4, 20, 92, 40)),
         OCRRecord("另一正文", 0.99, (4, 60, 92, 80)),
         OCRRecord("Âm: 花 ba (ba). 普通釋義", 0.99, (5, 118, 190, 140)),
-        OCRRecord("波 ba", 0.99, (8, 207, 88, 263)),
+        OCRRecord("波 ba", 0.99, (8, 224, 82, 246)),
         OCRRecord("後續正文", 0.99, (4, 300, 92, 320)),
         OCRRecord("末行正文", 0.99, (4, 340, 92, 360)),
     ]
-    entries, diagnostics = filter_headword_records(records, band, 0, 0, settings)
+    profile = load_dictionary_profile(preset="TimesCED", language="chi_tra")
+    entries, diagnostics = filter_headword_records(
+        records, band, 0, 0, settings, profile=profile,
+    )
     assert [entry.word for entry in entries] == ["波"]
     false_rows = [row for row in diagnostics if row.get("text", "").startswith("Âm: 花")]
     assert false_rows and false_rows[0]["accepted"] is False
@@ -2102,8 +2643,40 @@ def test_v282_selected_single_cjk_duplicates_are_merged():
     selected = [row for row in rows if row.get("selected")]
     assert merged == 1
     assert [row["word"] for row in selected] == ["囚", "丞"]
-    assert selected[0]["source_y"] == 105
+    assert selected[0]["source_y"] == 100
     assert "NEAR_Y_DUPLICATE_MERGED" in selected[0]["issue_types"]
+
+
+def test_v282_large_cjk_duplicate_keeps_entry_start_not_internal_metadata_line():
+    from picture_capture.paddle_headwords import _deduplicate_selected_cjk_review_candidates
+
+    rows = [
+        {
+            "candidate_id": "upper", "column": 1, "source_y": 100,
+            "canonical_v": 100, "box": [8, 112, 70, 166],
+            "selected": True, "word": "播", "score": 6.8, "confidence": 0.94,
+            "line_height_reference": 70.0, "line_dedup_tolerance": 8,
+            "issue_types": [], "decision_reason": "ocr_headword",
+            "paddle": {"y": 100, "accepted": True}, "tesseract": {}, "lens": {},
+        },
+        {
+            "candidate_id": "lower", "column": 1, "source_y": 134,
+            "canonical_v": 134, "box": [8, 118, 72, 168],
+            "selected": True, "word": "播", "score": 8.0, "confidence": 0.98,
+            "line_height_reference": 70.0, "line_dedup_tolerance": 8,
+            "issue_types": [], "decision_reason": "visual_projection",
+            "paddle": {}, "tesseract": {"y": 134, "accepted": True}, "lens": {},
+        },
+    ]
+    merged = _deduplicate_selected_cjk_review_candidates(rows)
+    selected = [row for row in rows if row.get("selected")]
+    assert merged == 1
+    assert len(selected) == 1
+    assert selected[0]["word"] == "播"
+    # Even though the lower visual candidate has the higher score, it is an
+    # internal duplicate. Preserve the earlier separator above the headword.
+    assert selected[0]["source_y"] == 100
+    assert selected[0]["canonical_v"] == 100
 
 
 def test_v288_selected_bracketed_cjk_duplicates_are_merged():
@@ -2233,7 +2806,7 @@ def test_v2814_large_single_cjk_uses_wider_type_specific_dedup_tolerance():
     selected = [row for row in rows if row.get("selected")]
     assert merged == 1
     assert len(selected) == 1
-    assert selected[0]["source_y"] == 512
+    assert selected[0]["source_y"] == 500
     assert "SINGLE_CJK_DUPLICATE_MERGED" in selected[0]["issue_types"]
 
 
