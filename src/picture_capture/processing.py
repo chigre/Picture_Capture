@@ -674,8 +674,13 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
     anchor_dark = gray < anchor_threshold
 
     top = max(0, round(geometry.top * scale))
-    bottom = min(gray.shape[0], round(geometry.bottom * scale))
-    y_step = max(1, round(2 * scale))
+    ordinary_bottom = int(geometry.bottom)
+    configured_bottom = _source_px(getattr(settings, "bottom_y", 0))
+    if configured_bottom > int(geometry.top):
+        ordinary_bottom = min(ordinary_bottom, configured_bottom)
+    bottom = min(gray.shape[0], round(ordinary_bottom * scale))
+    # VB Draw_Auto sampled every second row of its analysis bitmap.
+    y_step = 2
     lane_analysis = max(0, round(search_lane * scale))
     support_width_analysis = max(1, round(support_width * scale))
     support_half_analysis = max(1, round(support_half_height * scale))
