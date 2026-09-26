@@ -776,6 +776,283 @@ def detect_entries(
     return sort_entries_reading_order(entries, geometry, page_sections), geometry
 
 
+def _combined_candidate_word(candidate: dict) -> str:
+    word = str(candidate.get("word") or "").strip()
+    if word:
+        return word
+    for engine in ("paddle", "tesseract", "lens"):
+        side = candidate.get(engine, {}) or {}
+        if isinstance(side, dict):
+            word = str(side.get("lemma") or "").strip()
+            if word:
+                return word
+    return ""
+
+
+def _combined_candidate_quality(candidate: dict) -> tuple[float | None, float | None]:
+    confidence = candidate.get("confidence")
+    score = candidate.get("score")
+    try:
+        confidence_value = float(confidence) if confidence is not None else None
+    except (TypeError, ValueError):
+        confidence_value = None
+    try:
+        score_value = float(score) if score is not None else None
+    except (TypeError, ValueError):
+        score_value = None
+    if confidence_value is None:
+        values: list[float] = []
+        for engine in ("paddle", "tesseract", "lens"):
+            side = candidate.get(engine, {}) or {}
+            try:
+                value = side.get("confidence") if isinstance(side, dict) else None
+                if value is not None:
+                    values.append(float(value))
+            except (TypeError, ValueError):
+                continue
+        confidence_value = max(values) if values else None
+    if score_value is None:
+        values = []
+        for engine in ("paddle", "tesseract", "lens"):
+            side = candidate.get(engine, {}) or {}
+            try:
+                value = side.get("score") if isinstance(side, dict) else None
+                if value is not None:
+                    values.append(float(value))
+            except (TypeError, ValueError):
+                continue
+        score_value = max(values) if values else None
+    return confidence_value, score_value
+
+
+def _combined_candidate_is_hard_reject(candidate: dict) -> bool:
+    """Return whether a rejected OCR row must never be rescued by geometry."""
+    if bool(candidate.get("manual_override")) and not bool(candidate.get("selected")):
+        return True
+    if str(candidate.get("position_variant") or "refined") == "original":
+        return True
+    fragments: list[str] = [
+        str(candidate.get("decision_reason") or ""),
+        " ".join(str(item) for item in candidate.get("issue_types", []) or []),
+    ]
+    for engine in ("paddle", "tesseract", "lens"):
+        side = candidate.get(engine, {}) or {}
+        if isinstance(side, dict):
+            fragments.append(str(side.get("reason") or ""))
+    text = " ".join(fragments).casefold()
+    hard_tokens = (
+        "incompatible_headword_script",
+        "internal_article_symbol",
+        "internal_relation_label",
+        "internal_locution",
+        "continuation_fragment",
+        "marker_glyph_ocr_noise",
+        "user_reject_rule",
+        "above_header_cutoff",
+        "cjk_single_headword_disabled",
+        "cjk_bracketed_headword_disabled",
+        "manual",
+    )
+    return any(token in text for token in hard_tokens)
+
+
+def merge_combined_detection_entries(
+    normal_entries: list[Entry],
+    ocr_entries: list[Entry],
+    geometry: Geometry,
+    settings: AppSettings,
+    *,
+    review_candidates: list[dict] | None = None,
+    page_sections: list[PageSection] | None = None,
+) -> tuple[list[Entry], dict[str, int]]:
+    """Precision-first merge for combined ordinary + OCR line detection.
+
+    OCR-selected entries are the primary result. Ordinary left-edge detection is
+    used as an independent geometric vote:
+
+    1. A normal marker near an OCR marker in the same section/column is support
+       for that OCR row and is not duplicated.
+    2. A normal marker near a *rejected* OCR review candidate may rescue it only
+       when OCR still produced a plausible lemma and the rejection is soft
+       (e.g. missing tail structure / score threshold). Hard semantic rejects,
+       explicit manual deselections, continuation rows, incompatible scripts,
+       header rows and internal labels are never rescued.
+    3. A normal-only marker with no OCR candidate at all is not automatically
+       unioned. This is intentionally conservative: ordinary mode can see body
+       lines, and blindly unioning them is the main path to duplicate/false
+       markers. Users can still run ordinary mode alone when they explicitly
+       want that behavior.
+    4. A final same-column near-Y dedup pass keeps the stronger OCR-backed row.
+
+    The function never mutates its inputs and returns merge statistics for the
+    UI/status bar.
+    """
+    review_candidates = [
+        item for item in (review_candidates or []) if isinstance(item, dict)
+    ]
+    canonical_width = max(1, geometry.transform.canonical_size(geometry.source_size)[0])
+    line_height = max(
+        4,
+        stored_geometry_to_canonical(
+            settings.character_height, canonical_width, settings,
+        ),
+    )
+    match_tolerance = max(3, round(line_height * 0.42))
+    dedup_tolerance = max(2, round(line_height * 0.28))
+
+    def position(entry: Entry) -> tuple[int, int, int]:
+        _u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
+        col = column_index_for_click(int(entry.x), geometry, int(entry.y))
+        section = section_index_for_v(
+            int(v), page_sections, geometry.top, geometry.bottom,
+        )
+        return int(section), int(col), int(v)
+
+    ocr_rows = [replace(entry) for entry in ocr_entries]
+    normal_rows = [replace(entry) for entry in normal_entries]
+    ocr_positions = [position(entry) for entry in ocr_rows]
+    final: list[Entry] = list(ocr_rows)
+    co_supported = 0
+    rescued = 0
+    normal_only_rejected = 0
+    hard_rejected = 0
+
+    candidate_positions: list[tuple[int, int, int, dict]] = []
+    for candidate in review_candidates:
+        try:
+            sx = int(candidate.get("source_x", 0))
+            sy = int(candidate.get("source_y", 0))
+        except (TypeError, ValueError):
+            continue
+        if sy <= 0:
+            continue
+        _u, v = geometry.source_to_canonical(sx, sy)
+        col = int(candidate.get("column", column_index_for_click(sx, geometry, sy)))
+        section = section_index_for_v(
+            int(v), page_sections, geometry.top, geometry.bottom,
+        )
+        candidate_positions.append((int(section), int(col), int(v), candidate))
+
+    for normal in normal_rows:
+        n_section, n_col, n_v = position(normal)
+        distances = [
+            (abs(n_v - o_v), index)
+            for index, (o_section, o_col, o_v) in enumerate(ocr_positions)
+            if o_section == n_section and o_col == n_col
+        ]
+        if distances:
+            distance, _index = min(distances)
+            if distance <= match_tolerance:
+                co_supported += 1
+                continue
+
+        nearby_candidates = [
+            (abs(n_v - c_v), candidate)
+            for c_section, c_col, c_v, candidate in candidate_positions
+            if c_section == n_section and c_col == n_col
+        ]
+        if not nearby_candidates:
+            normal_only_rejected += 1
+            continue
+        distance, candidate = min(nearby_candidates, key=lambda item: item[0])
+        if distance > match_tolerance:
+            normal_only_rejected += 1
+            continue
+        if bool(candidate.get("selected")):
+            # A selected candidate should normally already be represented by
+            # ocr_entries; treating this as support is safer than duplicating it.
+            co_supported += 1
+            continue
+        if _combined_candidate_is_hard_reject(candidate):
+            hard_rejected += 1
+            continue
+        word = _combined_candidate_word(candidate)
+        if not word:
+            normal_only_rejected += 1
+            continue
+        confidence, score = _combined_candidate_quality(candidate)
+        confidence_floor = max(0.35, float(settings.paddle_rec_score_threshold))
+        score_floor = max(0.25, float(settings.paddle_min_candidate_score) * 0.50)
+        if confidence is not None and confidence < confidence_floor:
+            normal_only_rejected += 1
+            continue
+        if score is not None and score < score_floor:
+            normal_only_rejected += 1
+            continue
+        rescued_entry = replace(
+            normal,
+            word=word,
+            confidence=confidence,
+            ocr_source="combined_normal_rescue",
+            candidate_id=str(candidate.get("candidate_id") or ""),
+            final_engine=str(candidate.get("final_engine") or "combined"),
+            issue_type="COMBINED_NORMAL_RESCUE",
+            parser_score=score,
+        )
+        final.append(rescued_entry)
+        rescued += 1
+
+    def quality(entry: Entry) -> float:
+        value = 0.0
+        if entry.word:
+            value += 4.0
+        if entry.candidate_id:
+            value += 2.0
+        if entry.ocr_source and entry.ocr_source != "combined_normal_rescue":
+            value += 1.5
+        if entry.ocr_source == "combined_normal_rescue":
+            value += 0.75
+        if entry.confidence is not None:
+            value += max(0.0, min(1.0, float(entry.confidence)))
+        if entry.parser_score is not None:
+            value += min(1.5, max(0.0, float(entry.parser_score)) * 0.15)
+        if entry.manually_selected:
+            value += 3.0
+        return value
+
+    # Final geometric dedup. Adjacent true headwords are normally separated by
+    # about one full line height, so 0.28× is deliberately below that spacing.
+    final = sort_entries_reading_order(final, geometry, page_sections)
+    deduped: list[Entry] = []
+    duplicates_removed = 0
+    for entry in final:
+        e_section, e_col, e_v = position(entry)
+        duplicate_index: int | None = None
+        duplicate_distance: int | None = None
+        for index in range(len(deduped) - 1, -1, -1):
+            other = deduped[index]
+            o_section, o_col, o_v = position(other)
+            if o_section != e_section or o_col != e_col:
+                continue
+            distance = abs(e_v - o_v)
+            if distance <= dedup_tolerance:
+                duplicate_index = index
+                duplicate_distance = distance
+                break
+            if o_v < e_v - dedup_tolerance:
+                break
+        if duplicate_index is None:
+            deduped.append(entry)
+            continue
+        duplicates_removed += 1
+        keeper = deduped[duplicate_index]
+        if quality(entry) > quality(keeper):
+            deduped[duplicate_index] = entry
+
+    return sort_entries_reading_order(deduped, geometry, page_sections), {
+        "normal": len(normal_entries),
+        "ocr": len(ocr_entries),
+        "merged": len(deduped),
+        "co_supported": co_supported,
+        "normal_rescued": rescued,
+        "normal_only_rejected": normal_only_rejected,
+        "hard_rejected": hard_rejected,
+        "duplicates_removed": duplicates_removed,
+        "match_tolerance": match_tolerance,
+        "dedup_tolerance": dedup_tolerance,
+    }
+
+
 def refine_existing_entries(
     image: Image.Image,
     entries: list[Entry],
