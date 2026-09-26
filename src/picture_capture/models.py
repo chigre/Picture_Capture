@@ -258,7 +258,7 @@ class AppSettings:
     focused_review_exclude_single_character: bool = False
     focused_review_exclude_reference_words: bool = False
     focused_review_characters: str = "椿,彝,壯,鳥,傅,顔,彝,榖,歴,内,脱,書,鳴"
-    focused_review_batch_size: int = 40
+    focused_review_batch_size: int = 20
     # Auxiliary headword reference list used by the review window and main-view membership styling.
     # Relative paths are resolved from the project root; absolute paths are also supported.
     wordslist_path: str = "wordslist.txt"
