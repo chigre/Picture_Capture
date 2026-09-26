@@ -690,7 +690,7 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
         if bottom <= top:
             continue
         y_analysis = top
-        last_refined_y = -10**9
+        last_candidate_y = -10**9
 
         while y_analysis < bottom:
             canonical_y = round(y_analysis / max(scale, 1e-9))
@@ -747,7 +747,10 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
                 int(geometry.bottom), max(int(geometry.top), int(refined_y))
             )
             min_gap = max(2, round(row_height * 0.55))
-            if refined_y - last_refined_y >= min_gap:
+            # Candidate discovery must be independent from the optional Y
+            # refinement. Refined Y changes only the rendered/saved separator;
+            # it must not change which later rows are searched or de-duplicated.
+            if coarse_y - last_candidate_y >= min_gap:
                 marker_x = round(geometry.x_at(col, refined_y))
                 source_x, source_y = geometry.canonical_to_source(
                     marker_x, refined_y
@@ -755,13 +758,14 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
                 entries.append(
                     Entry(word="", x=int(source_x), y=int(source_y))
                 )
-                last_refined_y = refined_y
+                last_candidate_y = coarse_y
 
-            # Match the VB Draw_Auto behaviour: after a confirmed headword,
-            # jump roughly one line forward before looking for another anchor.
+            # Preserve the VB-style skip after a confirmed candidate, but base
+            # it on the coarse layout position so Y refinement remains a pure
+            # post-localization adjustment.
             next_canonical_y = max(
                 coarse_y + 2,
-                refined_y + round(row_height * row_step_multiplier),
+                coarse_y + round(row_height * row_step_multiplier),
             )
             y_analysis = max(
                 y_analysis + y_step,
