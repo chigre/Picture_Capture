@@ -279,16 +279,20 @@ def evaluate_headword_filter_rules(
 
 
 def _ocr_language_parts(settings: AppSettings) -> set[str]:
-    values: set[str] = set()
-    for raw in (
-        str(getattr(settings, "ocr_language", "") or ""),
-        str(getattr(settings, "paddle_language", "") or ""),
-    ):
-        for part in raw.lower().replace(",", "+").split("+"):
-            part = part.strip()
-            if part:
-                values.add(part)
-    return values
+    """Return the user-selected semantic OCR language components.
+
+    ocr_language is authoritative. paddle_language is only a fallback for older
+    callers with no semantic language, because a stale backend model name must
+    not silently disable the script guard.
+    """
+    raw = str(getattr(settings, "ocr_language", "") or "").strip()
+    if not raw:
+        raw = str(getattr(settings, "paddle_language", "") or "").strip()
+    return {
+        part.strip()
+        for part in raw.lower().replace(",", "+").split("+")
+        if part.strip()
+    }
 
 
 def _leading_script_family(text: str) -> str:
