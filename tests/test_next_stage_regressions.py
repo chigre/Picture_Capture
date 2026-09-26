@@ -20,13 +20,11 @@ from picture_capture.models import (
     AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
 )
 from picture_capture.layout_transform import LayoutTransform
-from picture_capture.layout_detection import (
-    LayoutEstimate, _analysis_ink_mask, aggregate_layout_estimates,
-    ordinary_layout_priors_from_character_height,
-)
+from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
-    _left_edge_ink_mask, apply_column_start_offsets, derive_geometry,
-    derive_nominal_geometry, detect_entries, refine_existing_entries,
+    _legacy_find_separator_y, _legacy_is_point, _left_edge_ink_mask,
+    apply_column_start_offsets, derive_geometry, derive_nominal_geometry,
+    detect_entries, refine_existing_entries,
 )
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
@@ -1932,31 +1930,61 @@ def test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only():
     assert settings.paddle_enable_lens is False
     assert settings.paddle_lens_mode == "off"
 
-def test_layout_detection_restores_vb_ordinary_scale_priors():
-    assert ordinary_layout_priors_from_character_height(25) == (28, 20)
-    assert ordinary_layout_priors_from_character_height(35) == (39, 28)
-
-    estimate = LayoutEstimate(
-        columns=2,
-        start_y=89,
-        column_width=902,
-        gutter=54,
-        manual_x=28,
-        bottom_y=2739,
-        character_height=35,
-        row_padding=4,
-        source_boxes=120,
-    )
-    values, _summary = aggregate_layout_estimates([estimate])
-    assert values["character_height"] == 35
-    assert values["body_indent"] == 39
-    assert values["horizontal_tolerance"] == 28
-
-
-def test_new_projects_use_vb_scale_micro_tolerance():
+def test_vb_ordinary_defaults_are_not_replaced_by_scale_heuristics():
     settings = AppSettings()
-    assert settings.horizontal_tolerance == 20
-    assert settings.horizontal_tolerance < settings.body_indent
+    assert settings.horizontal_tolerance == 5
+    assert settings.ordinary_right_divisor == 1.0
+    assert settings.white_threshold_high == 999
+    assert settings.white_threshold_low == 700
+    assert settings.whitespace_adjustment == 2
+    assert settings.upward_ratio == 1.5
+    assert settings.row_step_multiplier == 1.2
+
+
+def test_vb_ispoint_uses_original_two_dimensional_brightness_gate():
+    rgb_sum = np.full((80, 120), 765, dtype=np.uint16)
+    rgb_sum[35:46, 31:51] = 0
+    assert _legacy_is_point(
+        rgb_sum, 30, 40, 20, 20, 90, direction=1
+    )
+    assert not _legacy_is_point(
+        np.full((80, 120), 765, dtype=np.uint16),
+        30, 40, 20, 20, 90, direction=1,
+    )
+
+
+def test_vb_separator_prefers_full_white_row_then_centres_short_white_band():
+    rgb_sum = np.full((100, 160), 765, dtype=np.uint16)
+    separator, meta = _legacy_find_separator_y(
+        rgb_sum, 20, 60,
+        column_width=100, direction=1, row_height=20,
+        upward_ratio=1.5, ordinary_right_divisor=1.0,
+        darkness_threshold=300, white_threshold_high=999,
+        white_threshold_low=700, whitespace_adjustment=2,
+        top=10, x_min=0, x_max=159,
+    )
+    assert separator == 58
+    assert meta["reason"] == "vb_full_white"
+    assert meta["span"] == 98
+
+
+def test_vb_separator_falls_back_from_999_toward_700_when_no_clean_row_exists():
+    rgb_sum = np.full((100, 160), 765, dtype=np.uint16)
+    # One black pixel in every candidate row defeats method 1 but leaves the
+    # 98-pixel row roughly 990/1000 white, so method 2 should recover it.
+    for y in range(47, 60):
+        rgb_sum[y, 21] = 0
+    separator, meta = _legacy_find_separator_y(
+        rgb_sum, 20, 60,
+        column_width=100, direction=1, row_height=20,
+        upward_ratio=1.5, ordinary_right_divisor=1.0,
+        darkness_threshold=300, white_threshold_high=999,
+        white_threshold_low=700, whitespace_adjustment=2,
+        top=10, x_min=0, x_max=159,
+    )
+    assert separator == 59
+    assert meta["reason"] == "vb_brightness_fallback"
+    assert 700 <= int(meta["threshold"]) < 999
 
 
 def test_ordinary_drawing_auto_refine_y_is_shared_and_switchable(monkeypatch):
@@ -2062,6 +2090,35 @@ def test_ordinary_drawing_restores_vb_left_edge_gate():
     assert abs(entries[1].y - 145) <= 3
 
 
+def test_ordinary_micro_tolerance_is_not_clipped_by_body_indent():
+    image = Image.new("RGB", (220, 150), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((30, 55, 110, 66), fill="black")
+
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=180,
+        gutter=0,
+        start_y=20,
+        body_indent=5,
+        horizontal_tolerance=12,
+        character_height=18,
+        row_padding=2,
+        darkness_threshold=300,
+        dark_area_percent=90,
+        detection_method="left_edge",
+        follow_column_deformation=False,
+        paddle_refine_separator_y=False,
+    )
+    accepted, _ = detect_entries(image, settings)
+    assert len(accepted) == 1
+
+    settings.horizontal_tolerance = 8
+    rejected, _ = detect_entries(image, settings)
+    assert rejected == []
+
+
 def test_ordinary_micro_tolerance_controls_headword_anchor_lane():
     image = Image.new("RGB", (220, 150), "white")
     draw = ImageDraw.Draw(image)
@@ -2123,8 +2180,8 @@ def test_ordinary_y_refinement_receives_full_resolution_coordinates(monkeypatch)
     )
     entries, _ = detect_entries(image, settings)
     assert entries and seen
-    # The detector may downsample its candidate scan, but the shared Y refiner
-    # must see canonical full-resolution rows and source-scale Y.
+    # Ordinary candidate and VB separator placement are already full-resolution;
+    # the optional modern refiner receives the same source-resolution Y axis.
     assert seen[0][0][0] == 1800
     assert seen[0][1] > 1000
 
@@ -2155,9 +2212,14 @@ def test_ordinary_layout_threshold_policy_remains_available_for_layout_analysis(
     start = processing_source.index("def _detect_entries_left_edge(")
     end = processing_source.index("\ndef detect_entries(", start)
     ordinary = processing_source[start:end]
-    assert "_legacy_text_support(" in ordinary
-    assert "horizontal_tolerance" in ordinary
-    assert "anchor_threshold" in ordinary
+    assert "_legacy_is_point(" in ordinary
+    assert "_legacy_find_separator_y(" in ordinary
+    assert "ordinary_right_divisor" in ordinary
+    assert "white_threshold_high" in ordinary
+    assert "white_threshold_low" in ordinary
+    assert "whitespace_adjustment" in ordinary
+    assert "upward_ratio" in ordinary
+    assert "_analysis_image(" not in ordinary
     assert "density_floor" not in ordinary
 
 
