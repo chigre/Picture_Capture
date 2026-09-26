@@ -4154,11 +4154,43 @@ class ReviewWindow(tk.Toplevel):
         self.thumbnails: list[ImageTk.PhotoImage] = []
         self.replace_digits = tk.BooleanVar(value=False)
         self.order_scope_var = tk.StringVar(value="current")
+        self.review_mode_var = tk.StringVar(value="single")
+        self.focused_page_range_var = tk.StringVar(
+            value=str(getattr(parent.settings, "focused_review_page_range", "") or "")
+        )
+        self.focused_include_mismatch_var = tk.BooleanVar(
+            value=bool(getattr(parent.settings, "focused_review_include_ocr_mismatch", True))
+        )
+        self.focused_include_characters_var = tk.BooleanVar(
+            value=bool(getattr(parent.settings, "focused_review_include_characters", False))
+        )
+        self.focused_exclude_single_var = tk.BooleanVar(
+            value=bool(getattr(parent.settings, "focused_review_exclude_single_character", False))
+        )
+        self.focused_exclude_reference_var = tk.BooleanVar(
+            value=bool(getattr(parent.settings, "focused_review_exclude_reference_words", False))
+        )
+        self.focused_characters_var = tk.StringVar(
+            value=str(getattr(parent.settings, "focused_review_characters", "") or "")
+        )
+        self.focused_batch_size_var = tk.StringVar(
+            value=str(max(1, int(getattr(parent.settings, "focused_review_batch_size", 40) or 40)))
+        )
+        self.filtered_targets: list[dict] = []
+        self.filtered_batch_index = 0
+        self.filter_batch_var = tk.StringVar(value="")
+        self._filter_scan_serial = 0
+        self._filter_render_serial = 0
+        self._filter_current_batch_targets: list[dict] = []
+        self._filter_pending_changes: dict[int, dict[tuple[int, int], dict]] = {}
+        self._filter_save_job: str | None = None
+        self._filter_save_running = False
+        self._filter_close_after_save = False
         self.digit_map_expanded = tk.BooleanVar(value=False)
         self.accent_panel_expanded = tk.BooleanVar(value=False)
         self.review_right_section_expanded = {
             key: tk.BooleanVar(value=True)
-            for key in ("display", "ocr", "network", "reference")
+            for key in ("display", "digit", "accent", "ocr", "network", "reference")
         }
         self._review_right_sections: dict[str, dict[str, object]] = {}
         self.autosave_label_var = tk.StringVar(value="")
