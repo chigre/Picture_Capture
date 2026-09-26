@@ -594,116 +594,176 @@ def _left_edge_ink_mask(gray: np.ndarray, settings: AppSettings) -> np.ndarray:
     return gray < _left_edge_otsu_threshold(gray)
 
 
-def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tuple[list[Entry], Geometry]:
-    """Detect dictionary headword rows near each column's left edge.
+def _legacy_text_support(
+    gray: np.ndarray,
+    x: int,
+    y: int,
+    width: int,
+    half_height: int,
+    max_brightness_percent: float,
+) -> bool:
+    """VB-compatible 2D text support check for one left-edge anchor.
 
-    This preserves the old program's core assumption: a headword starts with
-    dark ink inside a narrow strip at the left of a dictionary column. Runs are
-    consolidated and filtered using the configured character height.
+    The 2016 IsPoint routine did not decide from a single scan row. After
+    finding a dark anchor close to the column left edge it averaged a sizeable
+    rectangle to the right of that point and required enough real text ink to
+    be present. This rejects isolated dust while keeping the body-indent
+    boundary semantically separate from the headword lane.
+    """
+    height, image_width = gray.shape[:2]
+    width = max(1, int(width))
+    half_height = max(1, int(half_height))
+    x0 = int(x) + 1
+    x1 = min(image_width, x0 + width)
+    y0 = int(y) - half_height
+    y1 = int(y) + half_height + 1
+    if x1 <= x0 or y0 < 0 or y1 > height:
+        return False
+    region = gray[y0:y1, x0:x1]
+    if region.size == 0:
+        return False
+    brightness_percent = float(region.mean()) * 100.0 / 255.0
+    return brightness_percent <= float(max_brightness_percent)
+
+
+def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tuple[list[Entry], Geometry]:
+    """Detect ordinary-mode headwords with the original VB layout prior.
+
+    The 2016 implementation made two different spatial statements instead of
+    collapsing them into one projection strip: a candidate anchor had to occur
+    very close to the tracked column-left edge (微调判距 /
+    horizontal_tolerance), and a larger rectangle extending into the column
+    then had to contain enough text (the old IsPoint check using body_indent
+    and dark_area_percent).
+
+    Definition text beginning at the configured body indent therefore cannot
+    become a candidate merely because it contributes ink inside a wide strip.
+    Modern geometry tracking and optional Y refinement stay on top of this
+    stronger legacy candidate gate.
     """
     source = normalize_page_rgb(image)
     geometry = derive_geometry(source, settings)
     canonical = geometry.transform.canonical_image_for_analysis(source)
     analysis, scale = _analysis_image(canonical)
-    canonical_width = canonical.width
-    body_indent = _source_px(settings.body_indent)
-    character_height = _source_px(settings.character_height)
-    row_padding = _source_px(settings.row_padding)
-    row_height = max(1, character_height + row_padding)
     gray = np.asarray(ImageOps.grayscale(analysis), dtype=np.uint8)
-    dark = _left_edge_ink_mask(gray, settings)
-    top = round(geometry.top * scale)
+    canonical_gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
+
+    body_indent = max(1, _source_px(settings.body_indent))
+    character_height = max(1, _source_px(settings.character_height))
+    row_padding = max(0, _source_px(settings.row_padding))
+    row_height = max(1, character_height + row_padding)
+    horizontal_tolerance = max(0, _source_px(settings.horizontal_tolerance))
+    # The VB workflow normally kept 微调判距 smaller than 正文缩进. Enforce
+    # that relationship so the search lane cannot silently expand into body
+    # text when a project carries an over-large tolerance.
+    search_lane = min(horizontal_tolerance, max(0, body_indent - 1))
+    support_width = max(2, body_indent)
+    support_half_height = max(2, body_indent)
+    support_brightness = max(
+        1.0, min(100.0, float(getattr(settings, "dark_area_percent", 90)))
+    )
+    row_step_multiplier = max(
+        0.5, min(3.0, float(getattr(settings, "row_step_multiplier", 1.2)))
+    )
+
+    # Preserve the historical dark-anchor threshold exactly. Surrounding
+    # layout/column analysis may still use auto/Otsu/adaptive thresholding,
+    # but a word-start anchor is intentionally a stable project parameter.
+    anchor_threshold = int(round(float(settings.darkness_threshold) / 3.0))
+    anchor_threshold = min(255, max(0, anchor_threshold))
+    anchor_dark = gray < anchor_threshold
+
+    top = max(0, round(geometry.top * scale))
     bottom = min(gray.shape[0], round(geometry.bottom * scale))
-    strip_width = max(3, round(body_indent * scale))
-    min_gap = max(3, round(row_height * scale * 0.55))
+    y_step = max(1, round(2 * scale))
+    lane_analysis = max(0, round(search_lane * scale))
+    support_width_analysis = max(1, round(support_width * scale))
+    support_half_analysis = max(1, round(support_half_height * scale))
     entries: list[Entry] = []
 
-    for col, source_x in enumerate(geometry.column_starts):
+    for col in range(len(geometry.column_starts)):
         if bottom <= top:
             continue
-        counts = np.zeros(bottom - top, dtype=np.int32)
-        actual_widths = np.zeros(bottom - top, dtype=np.int32)
-        for offset, y_analysis in enumerate(range(top, bottom)):
-            y_source = round(y_analysis / scale)
-            tracked_x = geometry.x_at(col, y_source)
-            x0 = min(gray.shape[1] - 1, max(0, round(tracked_x * scale)))
-            x1 = min(gray.shape[1], x0 + strip_width)
-            if x1 > x0:
-                counts[offset] = int(dark[y_analysis, x0:x1].sum())
-                actual_widths[offset] = x1 - x0
-        # A single speck must not become a marker.  Derive the row-density
-        # floor from this column instead of hard-coding 10% for every scan/font.
-        # Thin type stays detectable, while dark/noisy scans still require a
-        # meaningful amount of left-edge ink.
-        density = np.divide(
-            counts.astype(np.float64),
-            np.maximum(1, actual_widths),
-            out=np.zeros_like(counts, dtype=np.float64),
-            where=actual_widths > 0,
-        )
-        positive = density[density > 0]
-        if positive.size:
-            q35 = float(np.percentile(positive, 35))
-            density_floor = min(0.12, max(0.035, q35 * 0.55))
-        else:
-            density_floor = 0.10
-        active = counts >= np.maximum(
-            2, np.rint(actual_widths * density_floor).astype(np.int32)
-        )
-        # Close tiny vertical gaps inside letters/diacritics.
-        if active.size >= 3:
-            active = np.convolve(active.astype(np.uint8), np.ones(3, dtype=np.uint8), mode="same") > 0
-        runs: list[tuple[int, int]] = []
-        start: int | None = None
-        for offset, value in enumerate(active):
-            if value and start is None:
-                start = offset
-            elif not value and start is not None:
-                runs.append((start, offset - 1))
-                start = None
-        if start is not None:
-            runs.append((start, len(active) - 1))
+        y_analysis = top
+        last_refined_y = -10**9
 
-        last_y = -10**9
-        for run_start, run_end in runs:
-            run_height = run_end - run_start + 1
-            if run_height < 2:
-                continue
-            y_analysis = max(
-                top,
-                top + run_start - max(1, round(row_padding * scale)),
+        while y_analysis < bottom:
+            canonical_y = round(y_analysis / max(scale, 1e-9))
+            tracked_x = geometry.x_at(col, canonical_y)
+            x0 = min(
+                gray.shape[1] - 1,
+                max(0, round(tracked_x * scale)),
             )
-            y_source = round(y_analysis / scale)
+            x1 = min(gray.shape[1], x0 + lane_analysis + 1)
+            accepted_x: int | None = None
+
+            if x1 > x0:
+                dark_offsets = np.flatnonzero(anchor_dark[y_analysis, x0:x1])
+                for offset in dark_offsets:
+                    candidate_x = x0 + int(offset)
+                    if _legacy_text_support(
+                        gray,
+                        candidate_x,
+                        y_analysis,
+                        support_width_analysis,
+                        support_half_analysis,
+                        support_brightness,
+                    ):
+                        accepted_x = candidate_x
+                        break
+
+            if accepted_x is None:
+                y_analysis += y_step
+                continue
+
+            coarse_y = canonical_y
+            refined_y = coarse_y
             if settings.paddle_refine_separator_y:
-                # Shared automatic Y refinement: ordinary drawing first gets a
-                # coarse separator Y from left-edge projection, then runs the
-                # same local ink-valley refiner used by OCR drawing. Restrict
-                # analysis to this column so neighbouring columns cannot
-                # influence the final marker Y.
+                # Y refinement runs in full-resolution canonical coordinates.
+                # The previous ordinary path mixed canonical X/Y with the
+                # downsampled analysis array for wide pages.
                 from .paddle_headwords import refine_separator_y
-                source_pixel_scale = 1.0
-                column_x = max(0, round(geometry.x_at(col, y_source)))
+                column_x = max(0, round(geometry.x_at(col, coarse_y)))
                 column_right = min(
-                    gray.shape[1],
-                    column_x + max(10, geometry.column_widths[col]),
+                    canonical_gray.shape[1],
+                    column_x + max(10, int(geometry.column_widths[col])),
                 )
                 if column_right > column_x:
-                    y_source, _refinement = refine_separator_y(
-                        gray[:, column_x:column_right],
-                        y_source,
+                    refined_y, _refinement = refine_separator_y(
+                        canonical_gray[:, column_x:column_right],
+                        int(coarse_y),
                         max(2, character_height),
                         settings,
-                        pixel_scale=source_pixel_scale,
-                        lower_bound=max(0, geometry.top),
+                        pixel_scale=1.0,
+                        lower_bound=max(0, int(geometry.top)),
                     )
-            if y_source - last_y < round(min_gap / scale):
-                continue
-            source_point = geometry.canonical_to_source(source_x, y_source)
-            entries.append(Entry(word="", x=source_point[0], y=source_point[1]))
-            last_y = y_source
+
+            refined_y = min(
+                int(geometry.bottom), max(int(geometry.top), int(refined_y))
+            )
+            min_gap = max(2, round(row_height * 0.55))
+            if refined_y - last_refined_y >= min_gap:
+                marker_x = round(geometry.x_at(col, refined_y))
+                source_x, source_y = geometry.canonical_to_source(
+                    marker_x, refined_y
+                )
+                entries.append(
+                    Entry(word="", x=int(source_x), y=int(source_y))
+                )
+                last_refined_y = refined_y
+
+            # Match the VB Draw_Auto behaviour: after a confirmed headword,
+            # jump roughly one line forward before looking for another anchor.
+            next_canonical_y = max(
+                coarse_y + 2,
+                refined_y + round(row_height * row_step_multiplier),
+            )
+            y_analysis = max(
+                y_analysis + y_step,
+                round(next_canonical_y * scale),
+            )
 
     return sort_entries_reading_order(entries, geometry), geometry
-
 
 
 def detect_entries(
