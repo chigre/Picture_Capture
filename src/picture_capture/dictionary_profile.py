@@ -89,7 +89,11 @@ def _label_to_regex(value: str) -> str:
         if char.isspace():
             pieces.append(r"\s*")
         elif char == ".":
-            pieces.append(r"\.?" )
+            # OCR often inserts/removes spaces around dots in compact POS
+            # abbreviations (v.tr. -> v. tr. / vtr. and s.m. -> s. m.).
+            # Keep the literal optional as before, but also tolerate OCR
+            # whitespace after it. _find_pos_cue still enforces token bounds.
+            pieces.append(r"\.?\s*")
         elif char == "/":
             pieces.append(r"\s*/\s*")
         else:
