@@ -1233,7 +1233,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "recommended_current" not in text
     assert 'root / "extended"' not in text
     assert "fill=(255, 0, 0, 255), width=1" in text
-    assert "允许的词头结构（决定哪些 parser 通道开放）" in text
+    assert "完整词头结构（词头前 + 词头本体 + 词头后）" in text
     assert "普通左缘短词可以作为词头" in text
     assert "【括号词】可以作为词头" in text
     assert "大字单字可以作为词头" in text
