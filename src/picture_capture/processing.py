@@ -428,9 +428,8 @@ def derive_nominal_geometry(image_width: int, image_height: int, settings: AppSe
 def _derive_geometry_canonical(image: Image.Image, settings: AppSettings) -> Geometry:
     """Build geometry in full-resolution canonical pixels.
 
-    Version-2 settings are already stored in this space. Legacy display-scaled
-    values are converted only at this boundary, so downstream code never needs
-    to know about GUI zoom or parameter_display_width.
+    User settings are literal original-image pixels. Temporary transformed
+    analysis coordinates stay inside this processing boundary.
     """
     analysis, analysis_scale = _analysis_image(image)
     analysis_width, analysis_height = analysis.size
