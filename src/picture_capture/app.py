@@ -4190,7 +4190,7 @@ class ReviewWindow(tk.Toplevel):
             )
         )
         self.focused_batch_size_var = tk.StringVar(
-            value=str(max(1, int(getattr(parent.settings, "focused_review_batch_size", 40) or 40)))
+            value=str(max(1, int(getattr(parent.settings, "focused_review_batch_size", 20) or 20)))
         )
         self.filtered_targets: list[dict] = []
         self.filtered_batch_index = 0
