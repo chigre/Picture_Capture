@@ -2148,7 +2148,7 @@ def test_v281_ocr_single_han_can_use_sparse_right_context_without_projection_run
     assert [entry.word for entry in entries] == ["巴"]
     row = next(item for item in diagnostics if item.get("text") == "巴")
     assert row["features"]["cjk_single_sparse_context_rescue"] is True
-    assert row["features"]["cjk_right_context_sparse"] is True
+    assert row["features"]["cjk_candidate_right_context_sparse"] is True
     assert row["features"]["cjk_candidate_right_baseline_supported"] is True
 
     entries, diagnostics = filter_headword_records(
