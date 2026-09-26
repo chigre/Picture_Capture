@@ -4474,7 +4474,7 @@ class ReviewWindow(tk.Toplevel):
         self._review_auto_zoom_job = None
         if not self.review_zoom_auto:
             return
-        if self._filter_rows_active:
+        if getattr(self, "_filter_rows_active", False):
             self._request_filter_batch_render()
         else:
             self._request_render_rows(focus_index=self.active_index)
@@ -5061,7 +5061,7 @@ class ReviewWindow(tk.Toplevel):
 
         # Commit the normal page before replacing its widgets. Merely selecting
         # the 筛选 radio never reaches this path; only the explicit button does.
-        if not self._filter_rows_active:
+        if not getattr(self, "_filter_rows_active", False):
             self.save(redraw_main=False)
         self.review_mode_var.set("filter")
         self._filter_rows_active = True
@@ -5152,7 +5152,7 @@ class ReviewWindow(tk.Toplevel):
             return targets, pages_without_ocr, len(indices)
 
         def done(payload) -> None:
-            if serial != self._filter_scan_serial or not self._filter_rows_active:
+            if serial != self._filter_scan_serial or not getattr(self, "_filter_rows_active", False):
                 return
             targets, pages_without_ocr, page_count = payload
             self.filtered_targets = list(targets)
@@ -5198,7 +5198,7 @@ class ReviewWindow(tk.Toplevel):
         self._request_filter_batch_render()
 
     def _request_filter_batch_render(self) -> None:
-        if not self._filter_rows_active:
+        if not getattr(self, "_filter_rows_active", False):
             return
         total = len(self.filtered_targets)
         if total <= 0:
@@ -5289,7 +5289,7 @@ class ReviewWindow(tk.Toplevel):
             return crops, effective_zoom
 
         def done(payload) -> None:
-            if serial != self._filter_render_serial or not self._filter_rows_active:
+            if serial != self._filter_render_serial or not getattr(self, "_filter_rows_active", False):
                 return
             crops, effective_zoom = payload
             if self.review_zoom_auto:
@@ -5701,7 +5701,7 @@ class ReviewWindow(tk.Toplevel):
 
     def _update_title(self) -> None:
         page = self.parent.current_page.name if self.parent.current_page else ""
-        if self._filter_rows_active:
+        if getattr(self, "_filter_rows_active", False):
             total = len(self.filtered_targets)
             self.title(f"词条校对 — 筛选模式 — 共 {total} 条")
             return
@@ -5750,7 +5750,7 @@ class ReviewWindow(tk.Toplevel):
         self.parent.redraw()
 
     def _close_review(self) -> None:
-        if self._filter_rows_active:
+        if getattr(self, "_filter_rows_active", False):
             self._flush_focused_changes_now()
             if self._filter_save_running or self._filter_pending_changes:
                 self._filter_close_after_save = True
@@ -5765,7 +5765,7 @@ class ReviewWindow(tk.Toplevel):
 
     def autosave_commit(self) -> bool:
         """Commit review edits for the shared main-window autosave timer."""
-        if self._filter_rows_active:
+        if getattr(self, "_filter_rows_active", False):
             self._flush_focused_changes_now()
             return True
         if not self.parent.project or not self.parent.current_page:
@@ -7055,7 +7055,7 @@ class ReviewWindow(tk.Toplevel):
         self, *, focus_index: int | None = None, reset_scroll: bool = False,
     ) -> None:
         """Prepare proofreading crops off-thread; materialize Tk widgets only on Tk."""
-        if self._filter_rows_active:
+        if getattr(self, "_filter_rows_active", False):
             return
         project = getattr(self.parent, "project", None)
         current_page = getattr(self.parent, "current_page", None)
@@ -7170,7 +7170,7 @@ class ReviewWindow(tk.Toplevel):
         )
 
     def render_rows(self, preloaded_crops: list[Image.Image] | None = None) -> None:
-        if self._filter_rows_active:
+        if getattr(self, "_filter_rows_active", False):
             return
         if preloaded_crops is None:
             self._request_render_rows(focus_index=self.active_index)
@@ -7824,7 +7824,7 @@ class ReviewWindow(tk.Toplevel):
         self.parent.check_headword_order(all_pages)
 
     def save(self, *, redraw_main: bool = True) -> None:
-        if self._filter_rows_active:
+        if getattr(self, "_filter_rows_active", False):
             self._flush_focused_changes_now()
             return
         state = self.parent._foreground_batch_state(self.parent.current_index)
@@ -8049,7 +8049,7 @@ class ReviewWindow(tk.Toplevel):
             ).start()
 
     def change_page(self, delta: int) -> None:
-        if self._filter_rows_active:
+        if getattr(self, "_filter_rows_active", False):
             return
         target = self.parent.current_index + delta
         # Commit review edits without repainting the page we are about to leave.
@@ -15005,16 +15005,20 @@ class PictureCaptureApp(tk.Tk):
         else:
             options["disabledbackground"] = bg
         widget.configure(**options)
-        # The sequence label is visually part of the editor: whenever OCR
-        # background or the configured default background changes, keep both
-        # surfaces identical.
+        # Sequence/delete controls belong to the headword marker visual group,
+        # not to transient editor membership/OCR backgrounds.
         record = self.__dict__.get("_entry_visuals", {}).get(id(entry))
-        index_widget = record.get("index_widget") if record else None
-        if index_widget is not None:
-            try:
-                index_widget.configure(bg=bg)
-            except tk.TclError:
-                pass
+        marker_bg = str(self.settings.headword_marker_color)
+        for control_name in ("index_widget", "delete_widget"):
+            control = record.get(control_name) if record else None
+            if control is not None:
+                try:
+                    control.configure(
+                        bg=marker_bg, fg="#ffffff",
+                        activebackground=marker_bg, activeforeground="#ffffff",
+                    )
+                except tk.TclError:
+                    pass
 
     def _entry_overlay_style(
         self, entry: WordEntry, displayed_word: str | None = None,
