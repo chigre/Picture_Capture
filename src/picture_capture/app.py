@@ -2165,7 +2165,7 @@ class SettingsDialog(tk.Toplevel):
     NORMAL_CHECKS = (
         ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
         ("手动分栏", "manual_columns"),
-        ("自动精修横线 Y（默认勾选）", "paddle_refine_separator_y"),
+        ("自动精修横线Y（默认勾选）", "paddle_refine_separator_y"),
     )
     OCR_COMMON_CHECKS = (
         ("PaddleOCR 主识别", "paddle_use_paddleocr"),
@@ -15998,6 +15998,155 @@ class PictureCaptureApp(tk.Tk):
         self.settings.detection_method = "left_edge"; self.save_settings()
         self._detect_pages(indices, method="left_edge", force_refresh=False)
 
+    def run_combined_draw_action(self) -> None:
+        """Run ordinary + OCR detection, then precision-merge their evidence."""
+        if not self.guard() or not self.apply_quick_settings(show_status=False):
+            return
+        try:
+            indices = self.selected_page_indices()
+        except Exception as exc:
+            self.show_error("页面范围无效", exc)
+            return
+        self._detect_pages_combined(
+            indices, force_refresh=self.ocr_refresh_var.get() == "force"
+        )
+
+    def _detect_pages_combined(
+        self, indices: list[int], *, force_refresh: bool
+    ) -> None:
+        if not self.project or not indices:
+            self.status_var.set("没有需要处理的页面")
+            return
+        if not self._guard_transformed_geometry("联合模式画线"):
+            return
+        if len(indices) > 1 and not messagebox.askyesno(
+            "联合模式画线",
+            f"将对 {len(indices)} 页分别执行普通画线和 OCR 画线，再统一融合并重写这些页面的 PDIC。\n\n"
+            "融合采用 OCR 结果优先、普通画线辅助验证/补救、同栏近 Y 去重；"
+            "不会把两套结果简单并集。继续？",
+            parent=self,
+        ):
+            return
+
+        self.save_pdic(silent=True)
+        base_settings = replace(self.settings)
+        project = self.project
+        pages = list(project.images)
+        pages_info = {i: self.pages_tuple(i) for i in indices}
+        filter_path = headword_filter_rules_path(
+            project.root, HEADWORD_FILTER_RULES_FILENAME
+        )
+
+        def worker(index: int, _position: int, _total: int):
+            page = pages[index]
+            with Image.open(page) as opened:
+                image = normalize_page_rgb(opened)
+            sections = read_page_sections(page)
+
+            normal_settings = replace(base_settings)
+            normal_settings.detection_method = "left_edge"
+            normal_entries, normal_geometry = detect_entries(
+                image,
+                normal_settings,
+                profile_page_index=index,
+                page_sections=sections,
+            )
+
+            ocr_settings = replace(base_settings)
+            ocr_settings.detection_method = "paddleocr"
+            cache_path = ocr_cache_root(project.root) / f"{page.stem}.json"
+            ocr_entries, ocr_geometry = detect_entries(
+                image,
+                ocr_settings,
+                paddle_cache_path=cache_path,
+                force_paddle_refresh=force_refresh,
+                paddle_filter_rules_path=filter_path,
+                profile_page_index=index,
+                page_sections=sections,
+            )
+            review_candidates: list[dict] = []
+            if cache_path.exists():
+                try:
+                    payload = json.loads(cache_path.read_text(encoding="utf-8"))
+                    if isinstance(payload, dict):
+                        review_candidates = [
+                            item for item in payload.get("review_candidates", [])
+                            if isinstance(item, dict)
+                        ]
+                except Exception:
+                    review_candidates = []
+
+            # Both passes use the same page/Profile geometry contract. Prefer
+            # the OCR-derived instance because its review candidates use that
+            # canonical coordinate system.
+            geometry = ocr_geometry or normal_geometry
+            merged, stats = merge_combined_detection_entries(
+                normal_entries,
+                ocr_entries,
+                geometry,
+                base_settings,
+                review_candidates=review_candidates,
+                page_sections=sections,
+            )
+            write_pdic(
+                pdic_path(page), merged, image.width, pages_info[index]
+            )
+            return {
+                "index": int(index),
+                "count": len(merged),
+                **{key: int(value) for key, value in stats.items()
+                   if isinstance(value, (int, float))},
+            }
+
+        def done(completed, total, stopped, results, error) -> None:
+            if error is not None:
+                return
+            self.load_page(self.current_index)
+            self._refresh_page_quality_colors()
+            rows = [row for row in results if isinstance(row, dict)]
+            totals = {
+                key: sum(int(row.get(key, 0) or 0) for row in rows)
+                for key in (
+                    "normal", "ocr", "merged", "co_supported",
+                    "normal_rescued", "normal_only_rejected",
+                    "hard_rejected", "duplicates_removed",
+                )
+            }
+            skipped = int(getattr(self, "_batch_skipped_count", 0))
+            prefix = (
+                f"联合模式画线{'已停止' if stopped else '完成'}："
+                f"{completed}/{total}"
+            )
+            details = (
+                f"｜普通候选 {totals['normal']}，OCR结果 {totals['ocr']}，"
+                f"最终 {totals['merged']}；双模式互证 {totals['co_supported']}，"
+                f"普通补救 {totals['normal_rescued']}，近重复去除 {totals['duplicates_removed']}"
+            )
+            if totals["normal_only_rejected"]:
+                details += (
+                    f"；无 OCR 支持的普通候选保守过滤 "
+                    f"{totals['normal_only_rejected']}"
+                )
+            if totals["hard_rejected"]:
+                details += f"；OCR硬拒绝未救回 {totals['hard_rejected']}"
+            if skipped:
+                details += f"；人工锁定跳过 {skipped} 页"
+            self.status_var.set(prefix + details)
+
+        started = self._start_batch_task(
+            "联合模式画线",
+            indices,
+            worker,
+            done,
+            item_label=lambda index: pages[index].name,
+            foreground_page_edit=True,
+            page_indexer=lambda index: int(index),
+        )
+        if started:
+            self.status_var.set(
+                f"联合模式画线：正在处理 {len(indices)} 页；每页依次执行普通 + OCR 检测并融合。"
+            )
+
     def run_ocr_draw(self, scope: str, force_refresh: bool) -> None:
         if not self.guard() or not self.apply_quick_settings(show_status=False): return
         self.settings.detection_method = "paddleocr"
@@ -17974,9 +18123,65 @@ class PictureCaptureApp(tk.Tk):
                 f"正在比较 {len(indices)} 页：当前 PDIC（新） ↔ {source.name}（旧）；可暂停或停止。"
             )
 
+    def open_focused_review(self) -> None:
+        if not self.guard() or not self.project:
+            return
+        if self._batch_active:
+            self.status_var.set("批量任务运行中，请结束或停止后再打开重点校对。")
+            return
+
+        existing = self.focused_review_window
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.deiconify()
+                    existing.lift()
+                    existing.focus_force()
+                    return
+            except tk.TclError:
+                pass
+            self.focused_review_window = None
+
+        # A normal proofreading window owns live page Entry objects. Close it
+        # through its established save path before starting cross-page review,
+        # otherwise two editors could race on the same PDIC.
+        review = self.review_window
+        if review is not None:
+            try:
+                if review.winfo_exists():
+                    review._close_review()
+            except tk.TclError:
+                self.review_window = None
+
+        # Commit any main-canvas edit before scanning PDICs from disk.
+        self._sync_entry_editor_texts()
+        self.save_pdic(silent=True)
+        try:
+            indices = self.selected_page_indices()
+        except Exception as exc:
+            self.show_error("页面范围无效", exc)
+            return
+        window = FocusedReviewWindow(self, indices)
+        self.focused_review_window = window
+
     def open_review(self) -> None:
         if not (self.guard() and self.entries):
             return
+        focused = self.focused_review_window
+        if focused is not None:
+            try:
+                if focused.winfo_exists():
+                    focused.deiconify()
+                    focused.lift()
+                    focused.focus_force()
+                    messagebox.showinfo(
+                        "重点校对正在打开",
+                        "为避免同一 PDIC 被两个校对窗口同时修改，请先完成或关闭【重点校对】。",
+                        parent=self,
+                    )
+                    return
+            except tk.TclError:
+                self.focused_review_window = None
         if self.review_window is not None:
             try:
                 if self.review_window.winfo_exists():
