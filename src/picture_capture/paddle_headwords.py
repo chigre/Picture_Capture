@@ -2463,7 +2463,7 @@ def _cjk_visual_projection_runs(
     if zone_width <= 0:
         return 0, []
     threshold = _otsu_threshold(gray[:, :zone_width])
-    dark_counts = (gray[:, :zone_width] < threshold).sum(axis=1)
+    dark_counts = (gray[:, :zone_width] <= threshold).sum(axis=1)
     active = dark_counts >= max(3, round(zone_width * 0.015))
 
     # Fill only tiny vertical holes inside a glyph.  Do not bridge the whitespace
@@ -2577,7 +2577,7 @@ def _cjk_right_context_metrics(
     roi = gray[start:end, x0:x1]
     if roi.size == 0:
         return metrics
-    dark = roi < threshold
+    dark = roi <= threshold
     ink_density = float(np.mean(dark))
     blank_ratio = 1.0 - ink_density
 
@@ -2600,7 +2600,7 @@ def _cjk_right_context_metrics(
         if baseline_parts else np.empty((0, x1 - x0), dtype=gray.dtype)
     )
     if baseline.size:
-        baseline_ink_density = float(np.mean(baseline < threshold))
+        baseline_ink_density = float(np.mean(baseline <= threshold))
     else:
         baseline_ink_density = 0.0
     density_ratio = (
