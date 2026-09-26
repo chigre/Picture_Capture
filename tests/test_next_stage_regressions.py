@@ -503,7 +503,7 @@ def test_usage_guide_is_modern_task_oriented_and_centered():
     guide = text[guide_start:guide_end]
 
     assert '"快速开始"' in guide
-    assert 'self.title("Picture Capture · 使用指南")' in guide
+    assert 'self.title("Picture Capture · 帮助中心")' in guide
     assert "work_x, work_y, work_w, work_h = _screen_work_area(self)" in guide
     assert "x = work_x + max(0, (work_w - width) // 2)" in guide
     assert "y = work_y + max(0, (work_h - height) // 2)" in guide
@@ -515,7 +515,7 @@ def test_usage_guide_is_modern_task_oriented_and_centered():
     assert '"导航与排错"' in guide
     assert 'self.search_var = tk.StringVar()' in guide
     assert '"推荐原则"' in guide
-    assert '"项目Profile"' in guide
+    assert '"初始Profile"' in guide
     assert '"检测版面参数"' in guide
     assert '"环境中心"' in guide
     assert '"设置中心"' in guide
