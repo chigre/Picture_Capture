@@ -510,6 +510,7 @@ class ProcessingTests(unittest.TestCase):
             settings = AppSettings(
                 columns=2, manual_x=30, column_width=550, gutter=50,
                 start_y=40, detection_method="left_edge",
+                ordinary_auto_layout=False,
             )
             entries, geometry = detect_entries(image, settings)
             self.assertEqual(len(geometry.column_starts), 2)
@@ -528,6 +529,7 @@ class ProcessingTests(unittest.TestCase):
             columns=2, manual_x=30, column_width=350, gutter=50,
             start_y=50, body_indent=24, character_height=20,
             detection_method="left_edge", follow_column_deformation=True,
+            ordinary_auto_layout=False,
             # Same synthetic geometry as the historical 90 px radius /
             # 100 px block / 20 px step, expressed directly in the new units.
             column_track_radius=90 / 350 * 100,
@@ -7428,6 +7430,7 @@ def test_rtl_ordinary_drawing_detects_source_physical_right_edge():
         character_height=18,
         layout_transform="mirror_x",
         detection_method="left_edge",
+        ordinary_auto_layout=False,
         paddle_refine_separator_y=False,
     )
 
