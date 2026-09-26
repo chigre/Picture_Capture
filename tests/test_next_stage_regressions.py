@@ -20,7 +20,6 @@ from picture_capture.models import (
     AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
 )
 from picture_capture.layout_transform import LayoutTransform
-from picture_capture.coordinate_space import migrate_legacy_geometry_settings, setting_pixels
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
     _left_edge_ink_mask, apply_column_start_offsets, derive_geometry,
@@ -211,7 +210,6 @@ def test_refine_existing_entries_never_changes_count_or_exceeds_safe_delta(monke
         gutter=0,
         start_y=0,
         bottom_y=160,
-        parameter_display_width=120,
         character_height=10,
         paddle_separator_search_ratio=0.30,
         paddle_refine_separator_y=True,
@@ -991,7 +989,6 @@ def test_page_template_alternating_ab_side_widths_are_independent():
 
 def test_page_template_auto_footer_uses_learned_body_bottom():
     settings = AppSettings(
-        parameter_display_width=1000,
         bottom_y=1800,
         profile_footer_mode="auto",
     )
@@ -1006,7 +1003,6 @@ def test_page_template_auto_footer_uses_learned_body_bottom():
 
 def test_page_template_applies_header_footer_and_ab_side_exclusion():
     settings = AppSettings(
-        parameter_display_width=1000,
         profile_header_mode="present",
         profile_header_percent=10,
         profile_footer_mode="present",
@@ -1808,8 +1804,6 @@ def test_project_profile_column_left_nudges_persist_and_drive_geometry(tmp_path)
         manual_x=40,
         column_width=300,
         gutter=40,
-        geometry_coordinate_version=3,
-        geometry_coordinate_space="source_image_pixels",
         column_start_offsets=[0, 12],
         follow_column_deformation=False,
     )
@@ -1824,12 +1818,8 @@ def test_project_profile_column_left_nudges_persist_and_drive_geometry(tmp_path)
     path = tmp_path / "settings.json"
     settings.to_json(path)
     saved = path.read_text(encoding="utf-8")
-    assert '"geometry_reference_width"' not in saved
-    assert '"parameter_display_width"' not in saved
     reopened = AppSettings.from_json(path)
     assert reopened.column_start_offsets == [0, 12]
-    assert reopened.geometry_coordinate_version == 3
-
     # Corrupt/extreme nudges are clipped before columns can cross.
     guarded = apply_column_start_offsets(
         [40, 380], [250, -250], gutter=40, max_x=799,
@@ -1840,37 +1830,15 @@ def test_project_profile_column_left_nudges_persist_and_drive_geometry(tmp_path)
 
 def test_source_pixel_settings_never_scale_against_page_width():
     settings = AppSettings(
-        geometry_coordinate_version=3,
-        geometry_coordinate_space="source_image_pixels",
         paddle_left_tolerance=34,
         paddle_separator_safety_px=2,
     )
-    assert setting_pixels(settings.paddle_left_tolerance, 1400, settings) == 34
-    assert setting_pixels(settings.paddle_left_tolerance, 2800, settings) == 34
-    assert setting_pixels(settings.paddle_left_tolerance, 4200, settings) == 34
-    assert setting_pixels(settings.paddle_separator_safety_px, 4200, settings) == 2
-
-
-def test_v2_reference_page_geometry_migrates_once_to_source_pixels():
-    settings = AppSettings(
-        geometry_coordinate_version=2,
-        geometry_coordinate_space="canonical_reference_page_pixels",
-        geometry_reference_width=800,
-        manual_x=40,
-        column_width=300,
-        gutter=40,
-        column_start_offsets=[0, 12],
-    )
-    assert migrate_legacy_geometry_settings(settings, (1600, 2000))
-    assert settings.geometry_coordinate_version == 3
-    assert settings.geometry_coordinate_space == "source_image_pixels"
-    assert settings.geometry_reference_width == 0
-    assert settings.parameter_display_width == 0
-    assert settings.manual_x == 80
-    assert settings.column_width == 600
-    assert settings.gutter == 80
-    assert settings.column_start_offsets == [0, 24]
-
+    assert settings.paddle_left_tolerance == 34
+    assert settings.paddle_separator_safety_px == 2
+    geometry_1400 = derive_nominal_geometry(1400, 1800, settings)
+    geometry_4200 = derive_nominal_geometry(4200, 5400, settings)
+    assert geometry_1400.column_starts[0] == geometry_4200.column_starts[0]
+    assert geometry_1400.top == geometry_4200.top
 
 def test_project_profile_exposes_clickable_column_left_line_nudging():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
