@@ -11009,9 +11009,14 @@ class PictureCaptureApp(tk.Tk):
             command=self._quick_parameter_changed,
         ).pack(side="left")
 
-        auto_fields_row = ttk.Frame(normal)
-        auto_fields_row.grid(row=4, column=0, columnspan=8, sticky="w", padx=(18, 0), pady=(1, 0))
-        for text, name in (
+        auto_fields_rows = (ttk.Frame(normal), ttk.Frame(normal))
+        auto_fields_rows[0].grid(
+            row=4, column=0, columnspan=8, sticky="w", padx=(18, 0), pady=(1, 0)
+        )
+        auto_fields_rows[1].grid(
+            row=5, column=0, columnspan=8, sticky="w", padx=(18, 0), pady=(0, 0)
+        )
+        auto_field_specs = (
             ("分栏数", "ordinary_auto_columns"),
             ("正文起始Y", "ordinary_auto_start_y"),
             ("首栏X", "ordinary_auto_manual_x"),
@@ -11019,15 +11024,17 @@ class PictureCaptureApp(tk.Tk):
             ("栏间空", "ordinary_auto_gutter"),
             ("单行高", "ordinary_auto_character_height"),
             ("行间空", "ordinary_auto_row_padding"),
-        ):
+        )
+        for index, (text, name) in enumerate(auto_field_specs):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name)))
             self.quick_bool_vars[name] = var
             ttk.Checkbutton(
-                auto_fields_row, text=text, variable=var,
+                auto_fields_rows[0 if index < 4 else 1],
+                text=text, variable=var,
                 command=self._quick_parameter_changed,
             ).pack(side="left", padx=(0, 6))
 
-        row = ttk.Frame(normal); row.grid(row=5, column=0, columnspan=8, sticky="ew", pady=(4, 0))
+        row = ttk.Frame(normal); row.grid(row=6, column=0, columnspan=8, sticky="ew", pady=(4, 0))
         ttk.Button(
             row, text="检测版面参数", command=self.detect_layout_current,
             style="PC.Compact.TButton",
