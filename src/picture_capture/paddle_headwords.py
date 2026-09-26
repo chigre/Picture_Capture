@@ -2502,12 +2502,20 @@ def _cjk_word_for_visual_run(
             if context_sparse:
                 minimum_height_ratio = 0.24
                 overlap_ratio = 0.18
-            else:
+                distance_ratio = 0.76
+            elif context_available:
                 minimum_height_ratio = 0.30
                 overlap_ratio = 0.24
+                distance_ratio = 0.70
+            else:
+                # Backward-compatible neutral behavior for callers/caches that
+                # do not yet carry right-context metrics.
+                minimum_height_ratio = 0.28
+                overlap_ratio = 0.22
+                distance_ratio = 0.72
             if record_width > zone_width * 1.75:
                 continue
-            if distance > height * (0.76 if context_sparse else 0.70):
+            if distance > height * distance_ratio:
                 continue
         elif parsed_single:
             minimum_height_ratio = 0.40
