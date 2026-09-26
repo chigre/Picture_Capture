@@ -893,11 +893,19 @@ def column_index_for_click(x: int, geometry: Geometry, y: int = 0) -> int:
     nearest column start. If the click is genuinely in a gutter or outside all
     columns, choose the interval boundary nearest to the click.
     """
-    x, _canonical_y = geometry.source_to_canonical(int(x), int(y))
+    x, canonical_y = geometry.source_to_canonical(int(x), int(y))
     if not geometry.column_starts:
         return 0
     intervals: list[tuple[int, int]] = []
-    for i, start in enumerate(geometry.column_starts):
+    for i, nominal_start in enumerate(geometry.column_starts):
+        # Use the same Y-dependent path that drawing, OCR and cropping use.
+        # The previous nominal-only classifier could assign a marker to the
+        # adjacent column after the visible left edge had curved away.
+        start = (
+            geometry.x_at(i, int(canonical_y))
+            if i < len(geometry.column_paths)
+            else int(nominal_start)
+        )
         width = geometry.column_widths[i] if i < len(geometry.column_widths) else 1
         right = int(start) + max(1, int(width))
         intervals.append((int(start), right))
