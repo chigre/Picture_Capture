@@ -314,6 +314,11 @@ class AppSettings:
     profile_cjk_require_left_edge: bool = True
     profile_cjk_brackets_in_body: bool = False
     profile_cjk_require_visual_evidence: bool = False
+    # Optional layout evidence for oversized CJK heads. The detector samples a
+    # strip immediately to the right of the large-glyph zone; width is expressed
+    # as a percentage of the detected glyph/run height so it scales with DPI.
+    profile_cjk_right_context_enabled: bool = True
+    profile_cjk_right_context_width_percent: int = 80
     # Dictionary collation used by the headword-order checker. ``auto`` follows
     # the selected OCR language; custom mode accepts arbitrary alphabet units
     # (including multi-character letters such as ch / ll).
