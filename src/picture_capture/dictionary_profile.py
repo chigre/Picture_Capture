@@ -613,6 +613,10 @@ def apply_project_profile_components(path: Path | None, settings: Any) -> None:
     layout = raw.get("layout") or {}
     ocr = raw.get("ocr") or {}
     visual_templates = raw.get("visual_marker_templates") or {}
+    structure = raw.get("headword_structure") or {}
+    starts = structure.get("starts") or {}
+    tail = structure.get("tail") or {}
+    symbols = structure.get("symbol_inventory") or {}
     mapping = {
         "layout_writing_mode": layout.get("writing_mode"),
         "layout_text_direction": layout.get("text_direction"),
@@ -624,6 +628,27 @@ def apply_project_profile_components(path: Path | None, settings: Any) -> None:
         "paddle_language": ocr.get("paddle_language"),
         "tesseract_language": ocr.get("tesseract_language"),
         "paddle_use_textline_orientation": ocr.get("use_textline_orientation"),
+        "profile_parser_controls_version": structure.get("version"),
+        "profile_allow_ordinary_left_edge": starts.get("ordinary_left_edge"),
+        "profile_allow_numbered_prefix": starts.get("numbered_prefix"),
+        "profile_allow_marker_prefix": starts.get("marker_prefix"),
+        "profile_cjk_allow_single_headword": starts.get("cjk_single_visual"),
+        "profile_cjk_allow_bracketed_headword": starts.get("cjk_bracketed"),
+        "profile_tail_structure_version": structure.get("version"),
+        "profile_tail_allow_pos": tail.get("allow_pos"),
+        "profile_tail_allow_inflection": tail.get("allow_inflection"),
+        "profile_tail_allow_variant": tail.get("allow_variant"),
+        "profile_tail_allow_pronunciation": tail.get("allow_pronunciation"),
+        "profile_tail_allow_descriptor": tail.get("allow_descriptor"),
+        "profile_tail_require_selected": tail.get("require_selected"),
+        "profile_tail_allow_visual_rescue": tail.get("allow_visual_rescue"),
+        "profile_symbol_inventory_version": structure.get("version"),
+        "profile_symbol_inventory_enabled": symbols.get("enabled"),
+        "profile_entry_marker_symbols": symbols.get("entry_markers"),
+        "profile_bracket_open_symbols": symbols.get("bracket_openers"),
+        "profile_symbol_visual_rescue_enabled": symbols.get("visual_rescue"),
+        "profile_symbol_lane_required": symbols.get("lane_required"),
+        "profile_symbol_lane_tolerance_percent": symbols.get("lane_tolerance_percent"),
         "profile_symbol_template_version": visual_templates.get("version"),
         "profile_symbol_template_mode": visual_templates.get("mode"),
         "profile_symbol_template_group_mode": visual_templates.get("group_mode"),
@@ -704,6 +729,70 @@ def write_project_profile(
             "use_textline_orientation": bool(getattr(settings, "paddle_use_textline_orientation", False)),
         },
         "headword": selected_profile.headword,
+        "headword_structure": {
+            "version": 1,
+            "starts": {
+                "ordinary_left_edge": bool(
+                    getattr(settings, "profile_allow_ordinary_left_edge", True)
+                ),
+                "numbered_prefix": bool(
+                    getattr(settings, "profile_allow_numbered_prefix", False)
+                ),
+                "marker_prefix": bool(
+                    getattr(settings, "profile_allow_marker_prefix", False)
+                ),
+                "cjk_single_visual": bool(
+                    getattr(settings, "profile_cjk_allow_single_headword", True)
+                ),
+                "cjk_bracketed": bool(
+                    getattr(settings, "profile_cjk_allow_bracketed_headword", True)
+                ),
+            },
+            "tail": {
+                "allow_pos": bool(
+                    getattr(settings, "profile_tail_allow_pos", True)
+                ),
+                "allow_inflection": bool(
+                    getattr(settings, "profile_tail_allow_inflection", True)
+                ),
+                "allow_variant": bool(
+                    getattr(settings, "profile_tail_allow_variant", True)
+                ),
+                "allow_pronunciation": bool(
+                    getattr(settings, "profile_tail_allow_pronunciation", False)
+                ),
+                "allow_descriptor": bool(
+                    getattr(settings, "profile_tail_allow_descriptor", True)
+                ),
+                "require_selected": bool(
+                    getattr(settings, "profile_tail_require_selected", False)
+                ),
+                "allow_visual_rescue": bool(
+                    getattr(settings, "profile_tail_allow_visual_rescue", False)
+                ),
+            },
+            "symbol_inventory": {
+                "enabled": bool(
+                    getattr(settings, "profile_symbol_inventory_enabled", True)
+                ),
+                "entry_markers": str(
+                    getattr(settings, "profile_entry_marker_symbols", "") or ""
+                ),
+                "bracket_openers": str(
+                    getattr(settings, "profile_bracket_open_symbols", "") or ""
+                ),
+                "visual_rescue": bool(
+                    getattr(settings, "profile_symbol_visual_rescue_enabled", True)
+                ),
+                "lane_required": bool(
+                    getattr(settings, "profile_symbol_lane_required", True)
+                ),
+                "lane_tolerance_percent": int(
+                    getattr(settings, "profile_symbol_lane_tolerance_percent", 50)
+                    or 50
+                ),
+            },
+        },
         "visual_marker_templates": {
             "version": int(
                 getattr(settings, "profile_symbol_template_version", 0) or 0
