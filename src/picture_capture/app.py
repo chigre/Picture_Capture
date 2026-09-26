@@ -1770,6 +1770,7 @@ class SettingsDialog(tk.Toplevel):
         ("词典分栏", "columns", int), ("两栏中隔", "gutter", int),
         ("单栏宽距", "column_width", int), ("起始点 Y", "start_y", int),
         ("正文结束 Y", "bottom_y", int), ("首栏 X", "manual_x", int),
+        ("手动 Y", "manual_y", int),
         ("正文缩进", "body_indent", int), ("单行字高", "character_height", int),
         ("行间空白", "row_padding", int), ("向右比例 %", "right_ratio", float),
         ("VB 向右比例 1/x", "ordinary_right_divisor", float),
@@ -1931,6 +1932,7 @@ class SettingsDialog(tk.Toplevel):
         "start_y": "正文起始 Y",
         "bottom_y": "正文结束 Y",
         "manual_x": "第一栏左缘 X",
+        "manual_y": "手动模式起始 Y",
         "column_width": "单栏正文宽度",
         "gutter": "栏间空白",
         "character_height": "典型行高",
@@ -1988,6 +1990,7 @@ class SettingsDialog(tk.Toplevel):
         "start_y": "作用：正文起始 Y，单位为原图像素，原点在扫描图左上角，Y 向下。运行时直接使用该像素值，不按页面宽度或显示缩放换算。\n\n若 Project Profile 明确设置页眉模式/页眉比例，页面模板可以为当前页计算实际正文上界；最终保存/显示的坐标仍使用原图 X/Y。",
         "bottom_y": "作用：正文结束 Y，单位为原图像素，用来限制版面分析和词头识别的有效正文区。运行时直接使用该像素值，不按页面宽度或显示缩放换算。\n\n调整：过小会漏掉页尾词条，过大可能把页码/脚注吸入正文。",
         "manual_x": "作用：第一栏左缘 X，单位为原图像素，原点在扫描图左上角，X 向右。其余栏位置结合栏宽、栏间距推导；该值不会因窗口缩放或页面宽度而改变。\n\n镜像、RTL、竖排等阅读方向只影响内部读取顺序/临时变换，不改变这里保存的原图 X/Y 坐标语义。",
+        "manual_y": "作用：对应 VB.NET 手动模式的【手动 Y】。只有勾选【手动分栏】时，普通画线才用它替代正文起始 Y 作为扫描起点；自动模式继续使用【正文起始 Y】。单位始终为全分辨率原图 Y。",
         "body_indent": "作用：普通画线把它恢复为 VB.NET 原版的【正文缩进】先验。词头候选必须先在栏左【微调判距】内找到黑色锚点，然后才向右用正文缩进宽度做二维墨迹确认；正文从该缩进位置开始时，不会仅因为正文有墨迹就被当成新词头。它也参与栏左跟踪的局部搜索范围。\n\n调整：应接近释义正文相对词头栏左缘的真实缩进。过小会让二维确认范围不足；过大则会引入更多上下邻行墨迹，但候选锚点仍受【微调判距 < 正文缩进】约束。",
         "character_height": "作用：项目的典型单行字高，单位为原图像素。普通画线用它估计行尺度；OCR画线的行距/空白判断、横线 Y 精修和部分 CJK 视觉逻辑也会以它作为尺度基准。\n\n调整：应接近正文常规印刷行高，而不是某个特别大的词头字高。",
         "row_padding": "作用：典型行周围的额外留白尺度。它参与普通画线行盒、词条单行框高度以及 OCR 词头前空白/分隔位置等计算。\n\n调整：增大可给文字上下更多安全空间，但过大会让相邻行更容易重叠/合并；过小则可能让横线或单行切图贴字过紧。应和【典型行高】一起校准。",
@@ -2084,6 +2087,7 @@ class SettingsDialog(tk.Toplevel):
     )
     NORMAL_COMMON_FIELDS = (
         "body_indent", "horizontal_tolerance", "character_height", "row_padding",
+        "manual_y",
     )
     NORMAL_ADVANCED_FIELDS = (
         "analysis_threshold_mode", "darkness_threshold", "dark_area_percent",
@@ -2132,7 +2136,7 @@ class SettingsDialog(tk.Toplevel):
 
     SETTING_UNITS = {
         "columns": "栏",
-        "start_y": "原图px", "bottom_y": "原图px", "manual_x": "原图px",
+        "start_y": "原图px", "bottom_y": "原图px", "manual_x": "原图px", "manual_y": "原图px",
         "column_width": "原图px", "gutter": "原图px", "body_indent": "原图px",
         "character_height": "原图px", "row_padding": "原图px", "horizontal_tolerance": "原图px",
         "darkness_threshold": "RGB 和", "dark_area_percent": "%",
@@ -2154,7 +2158,8 @@ class SettingsDialog(tk.Toplevel):
     SETTING_SPIN = {
         "columns": (1, 12, 1),
         "start_y": (0, 50000, 1), "bottom_y": (0, 50000, 1),
-        "manual_x": (0, 50000, 1), "column_width": (1, 50000, 1),
+        "manual_x": (0, 50000, 1), "manual_y": (0, 50000, 1),
+        "column_width": (1, 50000, 1),
         "gutter": (0, 10000, 1), "body_indent": (0, 10000, 1),
         "character_height": (1, 2000, 1), "row_padding": (0, 1000, 1),
         "horizontal_tolerance": (0, 5000, 1), "darkness_threshold": (0, 765, 1),
