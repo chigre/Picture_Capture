@@ -2273,12 +2273,157 @@ def _cjk_visual_projection_runs(
     return zone_width, result
 
 
+def _cjk_right_context_metrics(
+    gray: np.ndarray,
+    run: tuple[int, int],
+    zone_width: int,
+    settings: AppSettings,
+    *,
+    header_cutoff: int = 0,
+) -> dict[str, Any]:
+    """Measure whitespace/sparsity immediately to the right of a large CJK run.
+
+    Many dictionary designs give an oversized head character a locally sparse
+    right side: pronunciation may occupy the upper part, while the lower/right
+    area remains much emptier than ordinary body text.  The sampled width scales
+    with the detected run height rather than fixed pixels so the cue survives DPI
+    changes.  This is supporting evidence, never a standalone headword decision.
+    """
+    enabled = bool(
+        getattr(settings, "profile_cjk_right_context_enabled", True)
+    )
+    width_percent = max(
+        30,
+        min(
+            200,
+            int(getattr(settings, "profile_cjk_right_context_width_percent", 80) or 80),
+        ),
+    )
+    metrics: dict[str, Any] = {
+        "enabled": enabled,
+        "available": False,
+        "sparse": False,
+        "width_percent": width_percent,
+        "width_px": 0,
+        "blank_ratio": 0.0,
+        "lower_blank_ratio": 0.0,
+        "row_occupancy": 1.0,
+        "ink_density": 1.0,
+        "baseline_ink_density": 0.0,
+        "density_ratio": 1.0,
+        "sparse_votes": 0,
+    }
+    if not enabled or gray.size == 0:
+        return metrics
+
+    image_h, image_w = gray.shape[:2]
+    start = max(0, min(image_h, int(run[0])))
+    end = max(start + 1, min(image_h, int(run[1])))
+    run_height = max(1, end - start)
+    x0 = max(0, min(image_w, int(zone_width)))
+    requested = max(8, round(run_height * width_percent / 100.0))
+    x1 = min(image_w, x0 + requested)
+    if x1 - x0 < 6:
+        return metrics
+
+    analysis_top = max(0, min(image_h, int(header_cutoff)))
+    threshold_source = gray[analysis_top:, x0:x1]
+    if threshold_source.size == 0:
+        threshold_source = gray[:, x0:x1]
+    threshold = _otsu_threshold(threshold_source)
+
+    roi = gray[start:end, x0:x1]
+    if roi.size == 0:
+        return metrics
+    dark = roi < threshold
+    ink_density = float(np.mean(dark))
+    blank_ratio = 1.0 - ink_density
+
+    lower_offset = max(0, min(dark.shape[0] - 1, round(dark.shape[0] * 0.35)))
+    lower = dark[lower_offset:, :]
+    lower_blank_ratio = (
+        1.0 - float(np.mean(lower)) if lower.size else blank_ratio
+    )
+    row_dark_counts = dark.sum(axis=1)
+    row_ink_floor = max(1, round(dark.shape[1] * 0.035))
+    row_occupancy = float(np.mean(row_dark_counts >= row_ink_floor))
+
+    baseline_parts: list[np.ndarray] = []
+    if start > analysis_top:
+        baseline_parts.append(gray[analysis_top:start, x0:x1])
+    if end < image_h:
+        baseline_parts.append(gray[end:image_h, x0:x1])
+    baseline = (
+        np.concatenate(baseline_parts, axis=0)
+        if baseline_parts else np.empty((0, x1 - x0), dtype=gray.dtype)
+    )
+    if baseline.size:
+        baseline_ink_density = float(np.mean(baseline < threshold))
+    else:
+        baseline_ink_density = 0.0
+    density_ratio = (
+        ink_density / max(0.01, baseline_ink_density)
+        if baseline_ink_density > 0
+        else 1.0
+    )
+
+    votes = 0
+    if blank_ratio >= 0.78:
+        votes += 1
+    if lower_blank_ratio >= 0.86:
+        votes += 1
+    if row_occupancy <= 0.50:
+        votes += 1
+    if baseline_ink_density >= 0.02 and density_ratio <= 0.60:
+        votes += 1
+    sparse = bool(lower_blank_ratio >= 0.80 and votes >= 2)
+
+    metrics.update({
+        "available": True,
+        "sparse": sparse,
+        "width_px": int(x1 - x0),
+        "blank_ratio": round(blank_ratio, 4),
+        "lower_blank_ratio": round(lower_blank_ratio, 4),
+        "row_occupancy": round(row_occupancy, 4),
+        "ink_density": round(ink_density, 4),
+        "baseline_ink_density": round(baseline_ink_density, 4),
+        "density_ratio": round(density_ratio, 4),
+        "sparse_votes": int(votes),
+    })
+    return metrics
+
+
+def _cjk_right_context_features(metrics: dict[str, Any] | None) -> dict[str, Any]:
+    """Flatten right-context diagnostics into JSON-safe candidate features."""
+    if not metrics:
+        return {}
+    return {
+        "cjk_right_context_enabled": bool(metrics.get("enabled", False)),
+        "cjk_right_context_available": bool(metrics.get("available", False)),
+        "cjk_right_context_sparse": bool(metrics.get("sparse", False)),
+        "cjk_right_context_width_percent": int(metrics.get("width_percent", 0) or 0),
+        "cjk_right_context_width_px": int(metrics.get("width_px", 0) or 0),
+        "cjk_right_blank_ratio": float(metrics.get("blank_ratio", 0.0) or 0.0),
+        "cjk_lower_right_blank_ratio": float(
+            metrics.get("lower_blank_ratio", 0.0) or 0.0
+        ),
+        "cjk_right_row_occupancy": float(
+            metrics.get("row_occupancy", 0.0) or 0.0
+        ),
+        "cjk_right_density_ratio": float(
+            metrics.get("density_ratio", 1.0) or 1.0
+        ),
+        "cjk_right_sparse_votes": int(metrics.get("sparse_votes", 0) or 0),
+    }
+
+
 def _cjk_word_for_visual_run(
     records: list[OCRRecord],
     run: tuple[int, int],
     zone_width: int,
     settings: AppSettings,
     profile: DictionaryProfile | None = None,
+    right_context: dict[str, Any] | None = None,
 ) -> tuple[str, float, OCRRecord | None]:
     """Pick an OCR token that physically represents one oversized CJK glyph.
 
@@ -2342,23 +2487,36 @@ def _cjk_word_for_visual_run(
         if not word:
             continue
 
+        context_available = bool(
+            right_context and right_context.get("available")
+        )
+        context_sparse = bool(
+            right_context and right_context.get("sparse")
+        )
         if profile_pinyin_single or profile_visual_single:
-            # A large TimesCED-style glyph may be recognized either as a short
-            # ``漢 ba`` record or as a clipped single-Han box with the nearby
-            # pinyin segmented separately.  In both cases the explicit
-            # 【大字单字】 profile plus the oversized visual run supplies strong
-            # structure, so recover the clipped OCR box without weakening the
-            # generic fallback used for definition text.
-            minimum_height_ratio = 0.28
-            overlap_ratio = 0.22
+            # Strong Project-Profile structure plus a sparse right-side layout is
+            # especially characteristic of a real display head.  It safely buys
+            # a little extra recall when OCR vertically clips the glyph.  If the
+            # right side is dense, keep a slightly stricter box gate rather than
+            # rejecting the otherwise strong OCR structure outright.
+            if context_sparse:
+                minimum_height_ratio = 0.24
+                overlap_ratio = 0.18
+            else:
+                minimum_height_ratio = 0.30
+                overlap_ratio = 0.24
             if record_width > zone_width * 1.75:
                 continue
-            if distance > height * 0.72:
+            if distance > height * (0.76 if context_sparse else 0.70):
                 continue
         elif parsed_single:
             minimum_height_ratio = 0.40
             overlap_ratio = 0.30
         else:
+            # Weak fallback evidence should not be rescued from a dense block of
+            # ordinary body text when the right-context measurement is available.
+            if context_available and not context_sparse:
+                continue
             minimum_height_ratio = 0.55
             overlap_ratio = 0.45
 
@@ -3430,8 +3588,20 @@ def filter_headword_records(
             gray, header_cutoff, settings, reference_scale
         )
         for run_start, run_end in visual_runs:
+            right_context = _cjk_right_context_metrics(
+                gray,
+                (run_start, run_end),
+                zone_width,
+                settings,
+                header_cutoff=header_cutoff,
+            )
             word, confidence, matched_record = _cjk_word_for_visual_run(
-                records, (run_start, run_end), zone_width, settings, active_profile,
+                records,
+                (run_start, run_end),
+                zone_width,
+                settings,
+                active_profile,
+                right_context,
             )
             if not word or matched_record is None:
                 continue
@@ -3487,6 +3657,7 @@ def filter_headword_records(
                 features["cjk_visual_zone_width"] = zone_width
                 features["cjk_visual_run_start"] = int(run_start)
                 features["cjk_visual_run_end"] = int(run_end)
+                features.update(_cjk_right_context_features(right_context))
                 trace = existing_cjk.setdefault("parser_trace", [])
                 if "chinese_visual_projection_confirmed" not in trace:
                     trace.append("chinese_visual_projection_confirmed")
@@ -3522,11 +3693,15 @@ def filter_headword_records(
                 nearest["coarse_source_y"] = source_top + coarse_band_y
                 nearest["anchor_source_y"] = visual_anchor_source_y
                 nearest["separator_refinement"] = visual_separator_refinement
-                nearest["score"] = max(float(nearest.get("score") or 0.0), 8.0)
+                context_bonus = 0.75 if right_context.get("sparse") else 0.0
+                nearest["score"] = max(
+                    float(nearest.get("score") or 0.0), 8.0 + context_bonus
+                )
                 features = nearest.setdefault("features", {})
                 features["cjk_visual_projection_rescue"] = True
                 features["cjk_visual_run_height"] = run_height
                 features["cjk_visual_zone_width"] = zone_width
+                features.update(_cjk_right_context_features(right_context))
                 nearest.setdefault("parser_trace", []).append("chinese_visual_projection_rescue")
                 nearest["parser_stage"] = "chinese_visual_projection_rescue"
             else:
@@ -3556,7 +3731,9 @@ def filter_headword_records(
                     "coarse_source_y": source_top + coarse_band_y,
                     "anchor_source_y": visual_anchor_source_y,
                     "separator_refinement": visual_separator_refinement,
-                    "score": 8.0,
+                    "score": 8.0 + (
+                        0.75 if right_context.get("sparse") else 0.0
+                    ),
                     "accepted": True,
                     "reject_reason": "",
                     "user_rule": {
@@ -3577,6 +3754,7 @@ def filter_headword_records(
                         "cjk_visual_projection_rescue": True,
                         "cjk_visual_run_height": run_height,
                         "cjk_visual_zone_width": zone_width,
+                        **_cjk_right_context_features(right_context),
                         "strong_visual_fallback": True,
                         "marker_noise": False,
                         "ordinary_accept": False,
