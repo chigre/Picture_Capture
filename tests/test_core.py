@@ -2134,11 +2134,11 @@ def test_v281_ocr_single_han_can_use_sparse_right_context_without_projection_run
         return image
 
     records = [
-        OCRRecord("正文", 0.99, (4, 15, 48, 34)),
-        OCRRecord("另一正文", 0.99, (4, 45, 48, 64)),
+        OCRRecord("body text", 0.99, (4, 15, 48, 34)),
+        OCRRecord("more text", 0.99, (4, 45, 48, 64)),
         OCRRecord("巴", 0.99, (4, 105, 20, 124)),
-        OCRRecord("後文", 0.99, (4, 165, 48, 184)),
-        OCRRecord("末行", 0.99, (4, 195, 48, 214)),
+        OCRRecord("definition", 0.99, (4, 165, 48, 184)),
+        OCRRecord("last line", 0.99, (4, 195, 48, 214)),
     ]
 
     entries, diagnostics = filter_headword_records(
