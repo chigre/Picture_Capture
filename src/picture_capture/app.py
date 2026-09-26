@@ -9888,9 +9888,9 @@ class PictureCaptureApp(tk.Tk):
         )
         normal.pack(fill="x")
         add_field(normal, 0, 0, "分栏数：", "columns", int)
-        add_field(normal, 0, 2, "页眉Y(原图)：", "start_y", int)
-        add_field(normal, 0, 4, "页尾Y(原图)：", "bottom_y", int)
-        add_field(normal, 0, 6, "首栏U：", "manual_x", int)
+        add_field(normal, 0, 2, "页眉Y：", "start_y", int)
+        add_field(normal, 0, 4, "页尾Y：", "bottom_y", int)
+        add_field(normal, 0, 6, "首栏X：", "manual_x", int)
         add_field(normal, 1, 0, "单栏宽：", "column_width", int)
         add_field(normal, 1, 2, "栏间空：", "gutter", int)
         add_field(normal, 1, 4, "单行高：", "character_height", int)
@@ -9947,7 +9947,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Entry(
             lens_row, textvariable=safety_var, width=4, justify="left"
         ).pack(side="left", padx=(2, 2))
-        ttk.Label(lens_row, text="原图px").pack(side="left")
+        ttk.Label(lens_row, text="px").pack(side="left")
         ocr_tools = ttk.Frame(ocr)
         ocr_tools.grid(row=4, column=0, columnspan=6, sticky="ew", pady=(4, 0))
         ttk.Button(
@@ -10294,9 +10294,9 @@ class PictureCaptureApp(tk.Tk):
         if not hasattr(self, "quick_field_labels"):
             return
         labels = {
-            "start_y": "正文起始Y(原图)：",
-            "bottom_y": "正文结束Y(原图)：",
-            "manual_x": "首栏X(原图)：",
+            "start_y": "正文起始Y：",
+            "bottom_y": "正文结束Y：",
+            "manual_x": "首栏X：",
         }
         for name, label in labels.items():
             widget = self.quick_field_labels.get(name)
