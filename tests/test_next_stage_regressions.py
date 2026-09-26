@@ -1995,7 +1995,111 @@ def test_auto_refine_y_is_exposed_as_shared_ordinary_drawing_control():
     assert 'self.quick_bool_vars["paddle_refine_separator_y"] = refine_y_var' in quick
 
 
-def test_ordinary_drawing_uses_shared_threshold_policy():
+def test_ordinary_drawing_restores_vb_left_edge_gate():
+    image = Image.new("RGB", (260, 240), "white")
+    draw = ImageDraw.Draw(image)
+
+    # True headwords start inside the 6 px left-edge gate.
+    for y in (45, 145):
+        draw.rectangle((22, y, 100, y + 12), fill="black")
+
+    # Definition-only lines start at the body indent. The former wide-strip
+    # projection treated these as candidates; the VB gate must reject them.
+    for y in (95, 195):
+        draw.rectangle((52, y, 150, y + 12), fill="black")
+
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=210,
+        gutter=0,
+        start_y=20,
+        body_indent=32,
+        horizontal_tolerance=6,
+        character_height=18,
+        row_padding=2,
+        darkness_threshold=300,
+        dark_area_percent=90,
+        row_step_multiplier=1.2,
+        detection_method="left_edge",
+        follow_column_deformation=False,
+        paddle_refine_separator_y=False,
+    )
+    entries, _ = detect_entries(image, settings)
+
+    assert len(entries) == 2
+    assert abs(entries[0].y - 45) <= 3
+    assert abs(entries[1].y - 145) <= 3
+
+
+def test_ordinary_micro_tolerance_controls_headword_anchor_lane():
+    image = Image.new("RGB", (220, 150), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((27, 55, 110, 68), fill="black")
+
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=180,
+        gutter=0,
+        start_y=20,
+        body_indent=30,
+        horizontal_tolerance=8,
+        character_height=18,
+        row_padding=2,
+        darkness_threshold=300,
+        dark_area_percent=90,
+        detection_method="left_edge",
+        follow_column_deformation=False,
+        paddle_refine_separator_y=False,
+    )
+    accepted, _ = detect_entries(image, settings)
+    assert len(accepted) == 1
+
+    settings.horizontal_tolerance = 4
+    rejected, _ = detect_entries(image, settings)
+    assert rejected == []
+
+
+def test_ordinary_y_refinement_receives_full_resolution_coordinates(monkeypatch):
+    import picture_capture.paddle_headwords as paddle_headwords
+
+    seen: list[tuple[tuple[int, int], int]] = []
+
+    def fake_refiner(gray, coarse_y, _line_height, _settings, **_kwargs):
+        seen.append((tuple(gray.shape), int(coarse_y)))
+        return int(coarse_y), {"reason": "test"}
+
+    monkeypatch.setattr(paddle_headwords, "refine_separator_y", fake_refiner)
+
+    image = Image.new("RGB", (2400, 1800), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((120, 1200, 500, 1240), fill="black")
+    settings = AppSettings(
+        columns=1,
+        manual_x=120,
+        column_width=1800,
+        gutter=0,
+        start_y=100,
+        body_indent=90,
+        horizontal_tolerance=20,
+        character_height=45,
+        row_padding=5,
+        darkness_threshold=300,
+        dark_area_percent=95,
+        detection_method="left_edge",
+        follow_column_deformation=False,
+        paddle_refine_separator_y=True,
+    )
+    entries, _ = detect_entries(image, settings)
+    assert entries and seen
+    # The detector may downsample its candidate scan, but the shared Y refiner
+    # must see canonical full-resolution rows and source-scale Y.
+    assert seen[0][0][0] == 1800
+    assert seen[0][1] > 1000
+
+
+def test_ordinary_layout_threshold_policy_remains_available_for_layout_analysis():
     import numpy as np
 
     gray = np.array([
@@ -2014,13 +2118,17 @@ def test_ordinary_drawing_uses_shared_threshold_policy():
     auto = _left_edge_ink_mask(gray, AppSettings(analysis_threshold_mode="auto"))
     adaptive = _left_edge_ink_mask(gray, AppSettings(analysis_threshold_mode="adaptive"))
     assert auto.dtype == bool and adaptive.dtype == bool
+
     processing_source = (
         Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "processing.py"
     ).read_text(encoding="utf-8")
     start = processing_source.index("def _detect_entries_left_edge(")
     end = processing_source.index("\ndef detect_entries(", start)
-    assert "dark = _left_edge_ink_mask(gray, settings)" in processing_source[start:end]
-    assert "density_floor" in processing_source[start:end]
+    ordinary = processing_source[start:end]
+    assert "_legacy_text_support(" in ordinary
+    assert "horizontal_tolerance" in ordinary
+    assert "anchor_threshold" in ordinary
+    assert "density_floor" not in ordinary
 
 
 def test_analysis_threshold_modes_are_effective():
