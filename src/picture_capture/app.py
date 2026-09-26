@@ -2084,7 +2084,6 @@ class SettingsDialog(tk.Toplevel):
     )
     NORMAL_COMMON_FIELDS = (
         "body_indent", "horizontal_tolerance", "character_height", "row_padding",
-        "manual_y",
     )
     NORMAL_ADVANCED_FIELDS = (
         "analysis_threshold_mode", "darkness_threshold", "dark_area_percent",
@@ -2133,7 +2132,7 @@ class SettingsDialog(tk.Toplevel):
 
     SETTING_UNITS = {
         "columns": "栏",
-        "start_y": "原图px", "bottom_y": "原图px", "manual_x": "原图px", "manual_y": "原图px",
+        "start_y": "原图px", "bottom_y": "原图px", "manual_x": "原图px",
         "column_width": "原图px", "gutter": "原图px", "body_indent": "原图px",
         "character_height": "原图px", "row_padding": "原图px", "horizontal_tolerance": "原图px",
         "darkness_threshold": "RGB 和", "dark_area_percent": "%",
@@ -2155,8 +2154,7 @@ class SettingsDialog(tk.Toplevel):
     SETTING_SPIN = {
         "columns": (1, 12, 1),
         "start_y": (0, 50000, 1), "bottom_y": (0, 50000, 1),
-        "manual_x": (0, 50000, 1), "manual_y": (0, 50000, 1),
-        "column_width": (1, 50000, 1),
+        "manual_x": (0, 50000, 1), "column_width": (1, 50000, 1),
         "gutter": (0, 10000, 1), "body_indent": (0, 10000, 1),
         "character_height": (1, 2000, 1), "row_padding": (0, 1000, 1),
         "horizontal_tolerance": (0, 5000, 1), "darkness_threshold": (0, 765, 1),
