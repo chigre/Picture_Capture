@@ -10118,66 +10118,31 @@ class PictureCaptureApp(tk.Tk):
         }
         self._apply_page_list_display_columns(save=False)
 
-        project_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
-        project_row.pack(fill="x")
-        for col in range(4):
-            project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
-        for col, (label, command, role) in enumerate((
-            ("新建项目", self.open_project, "project"),
-            ("已有项目", self.open_recent_project, "project"),
-            ("导出训练标记包", self.export_training_package, None),
-        )):
-            button = (
-                self._footer_action_button(project_row, label, command, role=role)
-                if role is not None
-                else ttk.Button(
-                    project_row, text=label, command=command, style="PC.Footer.TButton"
-                )
-            )
-            button.grid(
-                row=0, column=col, sticky="ew",
-                padx=(0 if col == 0 else 4, 0),
-            )
-
-        suffix_cell = ttk.Frame(project_row, style="PC.Footer.TFrame")
-        suffix_cell.grid(row=0, column=3, sticky="ew", padx=(4, 0))
-        suffix_cell.columnconfigure(1, weight=1)
-        ttk.Label(suffix_cell, text="图片后缀：", style="PC.Footer.TLabel").grid(
-            row=0, column=0, sticky="e", padx=(0, 2)
-        )
+        # The footer is intentionally one compact row of high-level centers.
+        # Keep image_suffix_var as the non-visual mirror used by session/new-project
+        # loading; the editable control now lives in Settings Center.
         self.image_suffix_var = tk.StringVar(value=self.settings.image_suffix)
-        ttk.Entry(
-            suffix_cell,
-            textvariable=self.image_suffix_var,
-            width=7,
-            justify="left",
-            style="PC.Footer.TEntry",
-        ).grid(row=0, column=1, sticky="ew")
-        self.image_suffix_var.trace_add("write", lambda *_args: self._quick_parameter_changed())
-
-        parameter_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
-        parameter_row.pack(fill="x", pady=(4, 0))
+        center_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
+        center_row.pack(fill="x")
         for col in range(4):
-            parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
+            center_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
         for col, (label, command, role) in enumerate((
-            ("项目Profile", self.open_project_profile, "config"),
+            ("项目中心", self.open_recent_project, "project"),
+            ("初始Profile", self.open_project_profile, "config"),
             ("设置中心", self.open_settings, "config"),
-            ("保存参数", self.save_main_parameters, None),
-            ("使用指南", self.show_help_dialog, None),
+            ("帮助中心", self.show_help_dialog, "config"),
         )):
-            button = (
-                self._footer_action_button(parameter_row, label, command, role=role)
-                if role is not None
-                else ttk.Button(
-                    parameter_row, text=label, command=command, style="PC.Footer.TButton"
-                )
+            button = self._footer_action_button(
+                center_row, label, command, role=role
             )
             button.grid(
                 row=0, column=col, sticky="ew",
                 padx=(0 if col == 0 else 4, 0),
             )
-            if label == "使用指南":
-                self._attach_tooltip(button, "打开使用指南：推荐流程、各功能用途、快捷操作与常见排错。")
+            if label == "帮助中心":
+                self._attach_tooltip(
+                    button, "打开帮助中心：推荐流程、各功能用途、快捷操作与常见排错。"
+                )
         self.canvas = tk.Canvas(
             viewer, bg=self._main_ui_colors["canvas"], highlightthickness=0
         )
@@ -11362,8 +11327,9 @@ class PictureCaptureApp(tk.Tk):
         )
         postproduction.pack(fill="x", pady=(4, 0))
         production_rows = [
-            (("切图设置", self.open_crop_settings), ("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope)),
+            (("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope)),
             (("项目详情", self.open_project_details), ("导出PicDic索引", self.export_picdic_index), ("PicDic制作", self.build_picdic)),
+            (("导出训练标记包", self.export_training_package),),
         ]
         for ri, specs in enumerate(production_rows):
             row = ttk.Frame(postproduction)
@@ -12856,7 +12822,7 @@ class PictureCaptureApp(tk.Tk):
     def open_recent_project(self) -> None:
         """Show recent projects as a modern, information-focused card list."""
         dialog = tk.Toplevel(self)
-        dialog.title("已有项目")
+        dialog.title("项目中心")
         dialog.transient(self)
         self._recent_projects_dialog = dialog
 
@@ -12886,7 +12852,7 @@ class PictureCaptureApp(tk.Tk):
         header = ttk.Frame(host)
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
-        ttk.Label(header, text="最近项目", font=title_font).grid(
+        ttk.Label(header, text="项目中心", font=title_font).grid(
             row=0, column=0, sticky="w"
         )
         ttk.Label(
@@ -12986,6 +12952,15 @@ class PictureCaptureApp(tk.Tk):
             tools, text="清理失效项", command=remove_missing, state="disabled"
         )
         cleanup_button.grid(row=0, column=3, sticky="e", padx=(10, 0))
+
+        def create_project_from_center() -> None:
+            dialog.destroy()
+            self.open_project()
+
+        new_project_button = self._footer_action_button(
+            tools, "新建项目", create_project_from_center, role="project"
+        )
+        new_project_button.grid(row=0, column=4, sticky="e", padx=(10, 0))
 
         def bind_open(widget, root: Path, row: dict[str, object]) -> None:
             try:
