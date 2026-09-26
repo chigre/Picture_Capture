@@ -248,3 +248,8 @@ Profile v2 文件，结构核心为：
 - manifest。
 
 用于后续训练、误差分析或跨机器复现实验。
+
+
+### PageSections 坐标
+
+新写入的 PageSections sidecar 只保存原图 X/Y 边界线段（`source_image_pixels`）。旧版 `top_v/bottom_v` canonical 文件仅作为兼容读取输入；再次保存会升级为 source XY。
