@@ -315,6 +315,12 @@ class VisualMarkerSamplesDialog(tk.Toplevel):
         self.listbox.configure(yscrollcommand=scroll.set)
         self.listbox.grid(row=0, column=0, sticky="nsew")
         scroll.grid(row=0, column=1, sticky="ns")
+        preview = ttk.LabelFrame(frame, text="归一化模板", padding=8)
+        preview.grid(row=0, column=2, sticky="ns", padx=(10, 0))
+        self.preview_label = ttk.Label(preview, text="选择一个样本")
+        self.preview_label.pack(anchor="center", padx=8, pady=8)
+        self.preview_photo: ImageTk.PhotoImage | None = None
+        self.listbox.bind("<<ListboxSelect>>", self._show_selected_preview)
         self._refresh()
 
         footer = ttk.Frame(outer)
@@ -337,6 +343,28 @@ class VisualMarkerSamplesDialog(tk.Toplevel):
                 "end", f"{index:>2}. {role} · {literal} · {page} · {box}"
             )
 
+    def _show_selected_preview(self, _event=None) -> None:
+        selection = self.listbox.curselection()
+        if not selection:
+            self.preview_photo = None
+            self.preview_label.configure(image="", text="选择一个样本")
+            return
+        sample = self.samples[int(selection[0])]
+        try:
+            size = int(sample.get("size") or 0)
+            bitmap = str(sample.get("bitmap") or "")
+            if size <= 0 or len(bitmap) != size * size:
+                raise ValueError("invalid bitmap")
+            pixels = [0 if value == "1" else 255 for value in bitmap]
+            image = Image.new("L", (size, size), 255)
+            image.putdata(pixels)
+            image = image.resize((160, 160), Image.Resampling.NEAREST)
+            self.preview_photo = ImageTk.PhotoImage(image.convert("RGB"))
+            self.preview_label.configure(image=self.preview_photo, text="")
+        except Exception:
+            self.preview_photo = None
+            self.preview_label.configure(image="", text="模板预览不可用")
+
     def _delete_selected(self) -> None:
         selection = self.listbox.curselection()
         if not selection:
@@ -344,3 +372,4 @@ class VisualMarkerSamplesDialog(tk.Toplevel):
         del self.samples[int(selection[0])]
         self.on_changed([dict(sample) for sample in self.samples])
         self._refresh()
+        self._show_selected_preview()
