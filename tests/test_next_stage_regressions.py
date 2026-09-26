@@ -2,7 +2,8 @@ from pathlib import Path
 from dataclasses import replace
 from types import SimpleNamespace
 
-from PIL import Image
+import numpy as np
+from PIL import Image, ImageDraw
 
 from picture_capture.app import (
     PictureCaptureApp, SettingsDialog, binary_preview_image, effective_main_overlay_font_size,
@@ -32,8 +33,13 @@ from picture_capture.profile_semantics import (
 )
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
-    _repair_multiline_headword_state_machine, parse_headword_text,
-    prepare_ocr_band, run_paddle_band,
+    _detect_visual_entry_markers, _repair_multiline_headword_state_machine,
+    parse_headword_text, prepare_ocr_band, run_paddle_band,
+)
+from picture_capture.visual_marker_templates import (
+    build_visual_marker_sample, match_visual_marker_template,
+    parse_visual_marker_samples, serialize_visual_marker_samples,
+    split_configured_symbols,
 )
 from picture_capture.project_storage import profile_path, qt_root, settings_path
 from picture_capture.picdic import PicDicBuildCancelled, build_picdic_package
@@ -1236,6 +1242,16 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "括号起始：" in text
     assert "OCR 漏掉/错认符号时允许视觉形状补救" in text
     assert "使用同栏 marker lane 过滤正文中的相似符号" in text
+    assert "本词典视觉标记样本" in text
+    assert "字符符号集 + 视觉样本" in text
+    assert "视觉样本优先" in text
+    assert "按角色合并（推荐）" in text
+    assert "最低匹配分数：" in text
+    assert "从页面采样…" in text
+    assert "查看/删除样本" in text
+    assert "有效入口标记：" in text
+    assert "profile_symbol_template_version" in text
+    assert "profile_symbol_templates_json" in text
     assert "profile_symbol_inventory_version" in text
     assert "profile_entry_marker_symbols" in text
     assert "profile_bracket_open_symbols" in text
@@ -1284,6 +1300,100 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "下半页候选" in text
     assert "左缘最大漂移" in text
     assert "原始OCR完整但词头在中途停止" in text
+
+
+def test_visual_marker_symbol_inventory_accepts_contiguous_input():
+    expected = ("●", "○", "◉", "◯")
+    assert split_configured_symbols("●○◉◯") == expected
+    assert split_configured_symbols("● ○ ◉ ◯") == expected
+    assert split_configured_symbols("●,○,◉,◯") == expected
+    assert split_configured_symbols("●，○，◉，◯") == expected
+    assert split_configured_symbols("ABC") == ("ABC",)
+
+
+def test_visual_marker_templates_round_trip_with_project_settings(tmp_path):
+    image = Image.new("L", (36, 36), 255)
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((7, 7, 28, 28), outline=0, width=4)
+    sample = build_visual_marker_sample(
+        image,
+        role="entry_marker",
+        literal="○",
+        sample_id="entry:test",
+        source_page="0023.png",
+        source_box=(10, 20, 46, 56),
+    )
+    settings = AppSettings(
+        profile_symbol_template_version=1,
+        profile_symbol_template_mode="combined",
+        profile_symbol_template_group_mode="role",
+        profile_symbol_template_threshold=0.68,
+        profile_symbol_templates_json=serialize_visual_marker_samples([sample]),
+    )
+    path = tmp_path / "settings.json"
+    settings.to_json(path)
+    reopened = AppSettings.from_json(path)
+    samples = parse_visual_marker_samples(reopened.profile_symbol_templates_json)
+    assert reopened.profile_symbol_template_version == 1
+    assert reopened.profile_symbol_template_mode == "combined"
+    assert len(samples) == 1
+    assert samples[0]["literal"] == "○"
+    assert samples[0]["source_page"] == "0023.png"
+    assert samples[0]["source_box"] == [10, 20, 46, 56]
+
+
+def test_dictionary_visual_template_matches_scan_variation():
+    reference = Image.new("L", (40, 40), 255)
+    draw = ImageDraw.Draw(reference)
+    draw.ellipse((8, 8, 31, 31), outline=0, width=4)
+    sample = build_visual_marker_sample(
+        reference, role="entry_marker", literal="○", sample_id="ring"
+    )
+
+    candidate = Image.new("L", (42, 42), 255)
+    draw = ImageDraw.Draw(candidate)
+    draw.ellipse((8, 9, 33, 34), outline=0, width=5)
+    candidate_mask = np.asarray(candidate, dtype=np.uint8) < 128
+    match = match_visual_marker_template(candidate_mask, [sample])
+    assert match is not None
+    assert float(match["score"]) >= 0.55
+    assert match["sample"]["id"] == "ring"
+
+
+def test_visual_marker_detector_can_use_dictionary_template_without_generic_family():
+    reference = Image.new("L", (24, 24), 255)
+    draw = ImageDraw.Draw(reference)
+    draw.ellipse((4, 4, 19, 19), outline=0, width=3)
+    sample = build_visual_marker_sample(
+        reference, role="entry_marker", literal="○", sample_id="ring"
+    )
+
+    page = Image.new("L", (90, 120), 255)
+    draw = ImageDraw.Draw(page)
+    draw.ellipse((6, 46, 21, 61), outline=0, width=3)
+    markers = _detect_visual_entry_markers(
+        np.asarray(page, dtype=np.uint8),
+        18.0,
+        24,
+        lower_bound=0,
+        inventory={
+            "enabled": True,
+            "entry_markers": ("○",),
+            "bracket_openers": (),
+            "visual_rescue": True,
+            "lane_required": False,
+            "lane_tolerance_percent": 50,
+            "visual_families": (),
+            "visual_templates": [sample],
+            "visual_template_mode": "template_first",
+            "visual_template_threshold": 0.50,
+        },
+    )
+    assert markers
+    assert markers[0]["family"] == "dictionary_template"
+    assert markers[0]["role"] == "entry_marker"
+    assert markers[0]["symbol"] == "○"
+    assert float(markers[0]["template_score"]) >= 0.50
 
 
 def test_project_profile_column_left_nudges_persist_and_drive_geometry(tmp_path):
