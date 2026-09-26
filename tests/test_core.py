@@ -6252,15 +6252,18 @@ def test_v21122_hotfix3_page_word_text_and_diff_classify_add_delete_modify():
     ]
 
 
-def test_v21122_hotfix3_main_actions_put_compare_before_review():
+def test_v21122_hotfix3_main_actions_keep_compare_and_review_positions():
     from pathlib import Path
     import inspect
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review))'
-    assert row in text
+    focused_row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("重点校对", self.open_focused_review), ("词条校对", self.open_review))'
+    save_row = '(("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("新旧比较", self.compare_old_new_selected_scope), ("保存当前页", self.save_current_page))'
+    assert focused_row in text
+    assert save_row in text
     assert "class OldNewComparisonWindow" in text
+    assert "class FocusedReviewWindow" in text
     assert 'notebook.add(diff_tab, text="差异")' in text
     assert 'self._add_text_tab(notebook, "当前 PDIC 合集"' in text
     assert 'self._add_text_tab(notebook, "旧 wordslist 片段"' in text
