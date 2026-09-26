@@ -1936,6 +1936,62 @@ def test_wizard_parser_controls_gate_cjk_bracket_and_marker_structures():
     assert marker.normalized == "同義"
 
 
+def test_v214_configured_visual_symbol_families_are_role_aware():
+    import numpy as np
+    from picture_capture.paddle_headwords import _classify_visual_symbol_component
+
+    line_h = 20.0
+    yy, xx = np.indices((20, 20))
+    radius = np.sqrt((xx - 9.5) ** 2 + (yy - 9.5) ** 2)
+    ring = (radius >= 6.5) & (radius <= 8.5)
+    disk = radius <= 9.0
+
+    square = np.zeros((20, 20), dtype=bool)
+    square[2:18, 2:4] = True
+    square[2:18, 16:18] = True
+    square[2:4, 2:18] = True
+    square[16:18, 2:18] = True
+
+    manhattan = np.abs(xx - 9.5) + np.abs(yy - 9.5)
+    diamond = (manhattan >= 7.0) & (manhattan <= 8.5)
+
+    triangle = np.zeros((20, 20), dtype=bool)
+    for y in range(2, 18):
+        half = round(((y - 2) / 15.0) * 8)
+        left, right = 10 - half, 10 + half
+        triangle[y, max(0, left):min(20, left + 2)] = True
+        triangle[y, max(0, right - 1):min(20, right + 1)] = True
+    triangle[16:18, 2:19] = True
+
+    bracket = np.zeros((20, 10), dtype=bool)
+    bracket[2:18, 1:3] = True
+    bracket[2:4, 1:8] = True
+    bracket[16:18, 1:8] = True
+
+    cases = [
+        (ring, "circle_open", {"entry_markers": ("○",), "bracket_openers": ()}, "○", "entry_marker"),
+        (disk, "circle_filled", {"entry_markers": ("●",), "bracket_openers": ()}, "●", "entry_marker"),
+        (square, "square_open", {"entry_markers": ("□",), "bracket_openers": ()}, "□", "entry_marker"),
+        (diamond, "diamond_open", {"entry_markers": ("◇",), "bracket_openers": ()}, "◇", "entry_marker"),
+        (triangle, "triangle_open", {"entry_markers": ("△",), "bracket_openers": ()}, "△", "entry_marker"),
+        (bracket, "bracket_open", {"entry_markers": (), "bracket_openers": ("【",)}, "【", "bracket_open"),
+    ]
+    for mask, family, base, symbol, role in cases:
+        inventory = {**base, "visual_families": (family,)}
+        result = _classify_visual_symbol_component(mask, line_h, inventory)
+        assert result is not None, family
+        detected_family, detected_symbol, detected_role, _metrics = result
+        assert (detected_family, detected_symbol, detected_role) == (family, symbol, role)
+
+    # Shape recognition is dictionary-specific: a perfectly circular component
+    # must not become a headword marker when this dictionary only configured ◇.
+    wrong_inventory = {
+        "entry_markers": ("◇",), "bracket_openers": (),
+        "visual_families": ("diamond_open",),
+    }
+    assert _classify_visual_symbol_component(ring, line_h, wrong_inventory) is None
+
+
 def test_v214_dictionary_symbol_inventory_is_exact_per_project():
     from picture_capture.dictionary_profile import load_dictionary_profile
     from picture_capture.models import AppSettings
