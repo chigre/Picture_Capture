@@ -1396,6 +1396,25 @@ def test_visual_marker_detector_can_use_dictionary_template_without_generic_fami
     assert float(markers[0]["template_score"]) >= 0.50
 
 
+def test_visual_marker_capture_uses_source_pixel_zoom_controls():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "visual_marker_ui.py"
+    )
+    text = source.read_text(encoding="utf-8")
+    assert "self.zoom_percent = 100" in text
+    assert 'text="图片缩放（默认 100% 原始像素）："'
+    assert 'text="100%", command=lambda: self._set_zoom(100)' in text
+    assert 'text="适合窗口", command=self._fit_window' in text
+    assert '"<Control-MouseWheel>"' in text
+    assert "self.canvas.canvasx(event.x)" in text
+    assert "self.canvas.canvasy(event.y)" in text
+    assert 'orient="horizontal", command=self.canvas.xview' in text
+    assert 'orient="vertical", command=self.canvas.yview' in text
+    assert "self.selection_source = source_box" in text
+    assert "当前缩放 {self.zoom_percent}%" in text
+
+
 def test_project_profile_column_left_nudges_persist_and_drive_geometry(tmp_path):
     settings = AppSettings(
         columns=2,
