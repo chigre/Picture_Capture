@@ -309,6 +309,12 @@ class AppSettings:
     profile_allow_ordinary_left_edge: bool = True
     profile_allow_numbered_prefix: bool = False
     profile_allow_marker_prefix: bool = False
+    # Script compatibility is version-gated so existing projects retain their
+    # historical candidate set until Project Profile is explicitly saved.
+    # Version 1 rejects headwords whose leading script is incompatible with the
+    # selected OCR language (e.g. Han/Kana in an Italian/English dictionary).
+    profile_headword_script_guard_version: int = 0
+    profile_headword_script_guard_enabled: bool = True
     # User-visible evidence after the lemma. Version 0 preserves the historical
     # all-in-one POS/inflection/descriptor gate. Project Profile saves version 1
     # so every evidence family becomes an explicit part of the dictionary
