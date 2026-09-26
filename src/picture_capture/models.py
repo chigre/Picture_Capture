@@ -380,7 +380,7 @@ class AppSettings:
     headword_sort_mode: str = "auto"
     headword_custom_order: str = "a b c d e f g h i j k l m n o p q r s t u v w x y z"
     headword_custom_fold_accents: bool = True
-    follow_column_deformation: bool = True
+    follow_column_deformation: bool = False
     # v2.12.12 resets the two layout-behavior checkboxes to safer opt-in defaults.
     layout_behavior_defaults_version: int = 1
     # v2.14 refreshes visible/default workflow choices once for existing projects.
