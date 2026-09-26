@@ -474,7 +474,10 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
         current.bottom_y = int(source_bottom)
         current.crop_to_bottom_y = True
     elif footer_mode == "auto":
-        current.crop_to_bottom_y = int(getattr(current, "bottom_y", 0) or 0) > 0
+        # No manual/learned bottom-Y fallback. A normal page runs to the source
+        # image height; explicit footer percentages and Page SECTION sidecars
+        # are the only page-bottom authorities.
+        current.crop_to_bottom_y = False
     elif footer_mode == "none":
         current.crop_to_bottom_y = False
 
