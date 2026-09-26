@@ -704,6 +704,132 @@ def _review_text_similarity(left: object, right: object) -> float | None:
     return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio()
 
 
+def _focused_review_character_tokens(value: object) -> tuple[str, ...]:
+    """Parse comma-separated focused-review character tokens deterministically."""
+    parts = [
+        token.strip()
+        for token in re.split(r"[,，]+", str(value or ""))
+        if token.strip()
+    ]
+    return tuple(dict.fromkeys(parts))
+
+
+def _focused_review_page_indices(value: object, total: int) -> list[int]:
+    """Parse 1-based ranges such as 1-20,25,30-35; blank means all pages."""
+    total = max(0, int(total))
+    text = str(value or "").strip()
+    if not text:
+        return list(range(total))
+    result: set[int] = set()
+    for token in re.split(r"[,，;；\s]+", text):
+        token = token.strip()
+        if not token:
+            continue
+        match = re.fullmatch(r"(\d+)\s*[-–—~～]\s*(\d+)", token)
+        if match:
+            start, end = int(match.group(1)), int(match.group(2))
+            if end < start:
+                start, end = end, start
+            if start < 1 or end > total:
+                raise ValueError(f"页面范围必须在 1–{total} 内。")
+            result.update(range(start - 1, end))
+            continue
+        if not token.isdigit():
+            raise ValueError("页面范围格式示例：1-20,25,30-35；留空表示全部页面。")
+        page = int(token)
+        if page < 1 or page > total:
+            raise ValueError(f"页面范围必须在 1–{total} 内。")
+        result.add(page - 1)
+    return sorted(result)
+
+
+def _focused_review_is_single_character(value: object) -> bool:
+    text = unicodedata.normalize("NFKC", str(value or "")).strip()
+    return len([char for char in text if not char.isspace()]) == 1
+
+
+def _apply_focused_review_page_updates(
+    page: Path, pages: list[Path], page_index: int, changes: list[dict],
+) -> tuple[list[tuple[int, int, int, str]], list[str]]:
+    """Apply filtered-review edits using exact original-image X/Y only."""
+    target_path = pdic_path(page)
+    original_entries = read_pdic(target_path)
+    working = [replace(entry) for entry in original_entries]
+    used: set[int] = set()
+    planned: list[tuple[int, int, int, str]] = []
+    conflicts: list[str] = []
+    for change in changes:
+        x, y = int(change["x"]), int(change["y"])
+        original_word = str(change.get("original_word") or "")
+        new_word = (
+            str(change.get("new_word") or "")
+            .replace("\r", " ").replace("\n", " ").replace("#", "＃").strip()
+        )
+        exact = [
+            i for i, entry in enumerate(working)
+            if i not in used and int(entry.x) == x and int(entry.y) == y
+        ]
+        if len(exact) > 1:
+            preferred = [i for i in exact if working[i].word == original_word]
+            exact = preferred or exact
+        if len(exact) != 1:
+            conflicts.append(f"{page.name}: ({x},{y}) {original_word}")
+            continue
+        entry_index = exact[0]
+        used.add(entry_index)
+        working[entry_index].word = new_word
+        planned.append((int(page_index), x, y, new_word))
+    if conflicts:
+        return [], conflicts
+    with Image.open(page) as opened:
+        image_width = int(opened.width)
+    page_links = (
+        page.stem,
+        pages[page_index - 1].stem if page_index > 0 else "@",
+        pages[page_index + 1].stem if page_index + 1 < len(pages) else "@",
+    )
+    try:
+        write_pdic(target_path, working, image_width, page_links)
+        verified = read_pdic(target_path)
+        if len(verified) != len(working):
+            raise RuntimeError("保存后 PDIC 行数发生变化")
+        expected = {(row[1], row[2]): row[3] for row in planned}
+        actual: dict[tuple[int, int], list[str]] = {}
+        for entry in verified:
+            actual.setdefault((int(entry.x), int(entry.y)), []).append(entry.word)
+        for key, value in expected.items():
+            if actual.get(key, []).count(value) != 1:
+                raise RuntimeError(f"保存后坐标 {key} 的文本校验失败")
+    except Exception:
+        write_pdic(target_path, original_entries, image_width, page_links)
+        raise
+    return planned, []
+
+
+def _candidate_for_entry_from_list(
+    entry: WordEntry, candidates: list[dict], *, y_tolerance: int,
+) -> dict | None:
+    """Match one PDIC row to OCR metadata using original-image X/Y."""
+    if entry.candidate_id:
+        for candidate in candidates:
+            if str(candidate.get("candidate_id", "")) == entry.candidate_id:
+                return candidate
+    nearby: list[tuple[float, dict]] = []
+    tolerance = max(4, int(y_tolerance))
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        if str(candidate.get("position_variant") or "refined") == "original":
+            continue
+        try:
+            dx = abs(int(candidate.get("source_x", entry.x)) - int(entry.x))
+            dy = abs(int(candidate.get("source_y", entry.y)) - int(entry.y))
+        except (TypeError, ValueError):
+            continue
+        if dx <= 20 and dy <= tolerance:
+            nearby.append((dy + dx * 0.1, candidate))
+    return min(nearby, key=lambda item: item[0])[1] if nearby else None
+
 def _review_similarity_color(score: float | None) -> str:
     """Semantic background colour for one OCR option in the review panel."""
     if score is None:
