@@ -10952,9 +10952,11 @@ class PictureCaptureApp(tk.Tk):
         add_field(normal, 1, 2, "栏间空：", "gutter", int)
         add_field(normal, 1, 4, "单行高：", "character_height", int)
         add_field(normal, 1, 6, "行间空：", "row_padding", int)
+        add_field(normal, 2, 0, "正文缩进：", "body_indent", int)
+        add_field(normal, 2, 2, "微调判距：", "horizontal_tolerance", int)
         shared_draw_row = ttk.Frame(normal)
         shared_draw_row.grid(
-            row=2, column=0, columnspan=8, sticky="ew", pady=(4, 0)
+            row=2, column=4, columnspan=4, sticky="w", pady=(4, 0)
         )
         refine_y_var = tk.BooleanVar(
             value=bool(self.settings.paddle_refine_separator_y)
