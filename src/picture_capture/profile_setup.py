@@ -363,6 +363,13 @@ class ProjectProfileWizard(tk.Toplevel):
             bool(getattr(s, "profile_allow_marker_prefix", False))
             if parser_controls_saved else structure_defaults["marker_prefix"]
         ))
+        script_guard_saved = int(
+            getattr(s, "profile_headword_script_guard_version", 0) or 0
+        ) >= 1
+        self.headword_script_guard_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_headword_script_guard_enabled", True))
+            if script_guard_saved else True
+        ))
         tail_defaults = profile_tail_structure_defaults(s.dictionary_profile_id)
         tail_controls_saved = int(
             getattr(s, "profile_tail_structure_version", 0) or 0
@@ -1637,21 +1644,32 @@ class ProjectProfileWizard(tk.Toplevel):
                 structures, text=label, variable=variable,
                 command=self._headword_structure_changed,
             ).grid(row=row + 1, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(
+            structures,
+            text="按 OCR 语言排除不兼容的词头首字符（推荐）",
+            variable=self.headword_script_guard_var,
+            command=self._headword_structure_changed,
+        ).grid(row=6, column=0, sticky="w", pady=(5, 2))
+        ttk.Label(
+            structures,
+            text="例如英语/意大利语等会排除汉字、假名、韩文开头；日语允许汉字/假名，中文允许汉字。",
+            foreground="#666666", wraplength=self._wizard_content_width,
+        ).grid(row=7, column=0, sticky="w", pady=(0, 4))
         ttk.Label(
             structures,
             text="这里决定“谁有资格成为候选”。取消某一项后，该结构不会再靠后续阈值被误救回来。",
             foreground="#666666", wraplength=self._wizard_content_width,
-        ).grid(row=6, column=0, sticky="w", pady=(6, 0))
+        ).grid(row=8, column=0, sticky="w", pady=(6, 0))
         self.headword_structure_summary_var = tk.StringVar(value="")
         ttk.Label(
             structures, textvariable=self.headword_structure_summary_var,
             foreground="#555555", wraplength=self._wizard_content_width,
-        ).grid(row=7, column=0, sticky="w", pady=(4, 0))
+        ).grid(row=9, column=0, sticky="w", pady=(4, 0))
 
         self.tail_structure_frame = ttk.LabelFrame(
             structures, text="词头后结构（哪些内容可以作为新词条证据）", padding=8,
         )
-        self.tail_structure_frame.grid(row=8, column=0, sticky="ew", pady=(8, 0))
+        self.tail_structure_frame.grid(row=10, column=0, sticky="ew", pady=(8, 0))
         self.tail_structure_frame.columnconfigure(0, weight=1)
         for tail_row, (label, variable) in enumerate((
             ("词性 POS（s.m. / v.tr. / agg. / adj. …）", self.tail_allow_pos_var),
@@ -1695,7 +1713,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self.symbol_inventory_frame = ttk.LabelFrame(
             structures, text="本词典固定词头符号集", padding=8,
         )
-        self.symbol_inventory_frame.grid(row=9, column=0, sticky="ew", pady=(8, 0))
+        self.symbol_inventory_frame.grid(row=11, column=0, sticky="ew", pady=(8, 0))
         self.symbol_inventory_frame.columnconfigure(1, weight=1)
         ttk.Checkbutton(
             self.symbol_inventory_frame,
@@ -2244,8 +2262,15 @@ class ProjectProfileWizard(tk.Toplevel):
             )
         if self.numbered_prefix_var.get():
             active.append("编号前缀")
+        script_guard_text = (
+            "；按OCR语言过滤首字符"
+            if self.headword_script_guard_var.get()
+            else "；不限制首字符脚本"
+        )
         self.headword_structure_summary_var.set(
-            "当前词头前/本体：" + ("、".join(active) if active else "无（不会自动生成词头）")
+            "当前词头前/本体："
+            + ("、".join(active) if active else "无（不会自动生成词头）")
+            + script_guard_text
         )
         tail_active: list[str] = []
         if self.tail_allow_pos_var.get():
@@ -2484,6 +2509,10 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_allow_ordinary_left_edge = bool(self.ordinary_left_edge_var.get())
         s.profile_allow_numbered_prefix = bool(self.numbered_prefix_var.get())
         s.profile_allow_marker_prefix = bool(self.marker_prefix_var.get())
+        s.profile_headword_script_guard_version = 1
+        s.profile_headword_script_guard_enabled = bool(
+            self.headword_script_guard_var.get()
+        )
         s.profile_tail_structure_version = 1
         s.profile_tail_allow_pos = bool(self.tail_allow_pos_var.get())
         s.profile_tail_allow_inflection = bool(self.tail_allow_inflection_var.get())
