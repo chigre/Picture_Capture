@@ -17,6 +17,7 @@ from .dictionary_profile import (
     dictionary_profile_preset,
     language_effective_settings,
     profile_symbol_inventory_defaults,
+    profile_tail_structure_defaults,
     write_project_profile,
 )
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
