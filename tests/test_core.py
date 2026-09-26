@@ -5322,6 +5322,9 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert settings.review_simplified_font_family == AUTO_FONT_FAMILY
     assert settings.review_simplified_font_size == 16
 
+    assert settings.review_show_simplified is False
+    assert settings.focused_review_characters == "椿,彝,壯,鳥,傅,顔,彝,榖,歴,内,脱,書,鳴"
+
     assert settings.show_illustration_labels is False
     assert settings.batch_interval == 3.0
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
@@ -5343,14 +5346,17 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in app_text
     assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
     assert 'self.settings.illustration_label_border_width, overlay_scale' in app_text
-    # Sequence number and delete control use the configured headword-marker colour.
+    # Sequence number stays marker-filled; delete X sits below it with no marker fill.
     assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in app_text
     assert 'marker_control_bg = str(self.settings.headword_marker_color)' in app_text
     assert 'bg=marker_control_bg' in app_text
     assert 'fg="#ffffff"' in app_text
     assert 'record["index_widget"] = index_label' in app_text
     assert 'record["delete_widget"] = delete_button' in app_text
-    assert 'for control_name in ("index_widget", "delete_widget")' in app_text
+    assert 'text="X"' in app_text
+    assert 'fg=marker_control_bg' in app_text
+    assert 'delete_bg = str(self.canvas.cget("bg"))' in app_text
+    assert 'delete_y = float(index_y + max(1, index_label.winfo_reqheight()) + 1)' in app_text
 
 
 def test_platform_language_font_recommendations_and_auto_normalization():
@@ -5665,7 +5671,7 @@ def test_review_toolbar_controls_are_grouped_by_function():
     assert 'style="PCR.Body.TCheckbutton"' in ocr
 
 
-def test_review_right_sections_are_collapsible_and_default_expanded():
+def test_review_right_sections_use_requested_default_expansion_states():
     from pathlib import Path
     import inspect
     import picture_capture.app as app_module
@@ -5675,7 +5681,8 @@ def test_review_right_sections_are_collapsible_and_default_expanded():
     end = text.index("class OCRConflictReviewDialog", start)
     review = text[start:end]
     assert 'for key in ("display", "digit", "accent", "ocr", "network", "reference")' in review
-    assert 'key: tk.BooleanVar(value=True)' in review
+    assert 'key: tk.BooleanVar(value=(key not in {"digit", "accent"}))' in review
+    assert 'expanded = True if state is None else bool(state.get())' in review
     for key, title in (
         ("display", "显示设置"),
         ("digit", "数字替换映射"),
@@ -7986,18 +7993,30 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert 'text="px"' in text[safety:safety + 900]
 
     assert 'text="校对模式："' in text
-    assert 'text="重点筛选校对"' in text
+    assert 'self.focused_panel_title = tk.StringVar(value="▸ 重点筛选校对")' in text
+    assert 'self.focused_panel_expanded = tk.BooleanVar(value=False)' in text
     assert 'text="OCR不匹配"' in text
     assert 'text="含特定字符"' in text
     assert 'text="排除单字符"' in text
     assert 'text="排除参考词表"' in text
     assert 'text="单批显示数量："' in text
-    assert 'text="上一批"' in text and 'text="下一批"' in text
+    assert "filter_batch_top" not in text and "filter_batch_bottom" not in text
+    assert 'text=("上\\n一\\n批" if active else "上\\n一\\n页")' in text
+    assert 'text=("下\\n一\\n批" if active else "下\\n一\\n页")' in text
+    assert "self.change_filter_batch(delta)" in text
     assert 'right, "digit", "数字替换映射"' in text
     assert 'text="启用", variable=self.replace_digits' in text
     assert 'right, "accent", "变音字符"' in text
+    assert 'key: tk.BooleanVar(value=(key not in {"digit", "accent"}))' in text
     assert 'accent_button.bind(' in text and '"<Button-3>"' in text
     assert "def copy_char(self, char: str)" in text
+    assert "def _candidate_word_for_ocr_source(" in text
+    assert 'ocr_compare_key = self.OCR_COMPARE_LABEL_TO_KEY.get(' in text
+    assert '"ocr_words": ocr_words' in text
+    assert 'reasons.append("OCR不匹配")' in text
+    assert 'f"序号 {int(target.get(\'sequence_number\', index + 1))} | 原因：{reason}"' in text
+    assert 'text="填充OCR结果"' in text
+    assert "def _fill_filter_ocr_result(self, index: int) -> None:" in text
     assert "marker_control_bg = str(self.settings.headword_marker_color)" in text
-    assert 'text="[X]"' in text
-    assert 'fg="#ffffff"' in text
+    assert 'text="X"' in text
+    assert 'fg=marker_control_bg' in text
