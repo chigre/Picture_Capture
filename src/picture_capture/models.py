@@ -193,14 +193,14 @@ class AppSettings:
     # separate "manual columns" execution mode; page-specific automatic layout
     # is controlled by ordinary_auto_layout and the per-field switches below.
     manual_columns: bool = False
-    ordinary_auto_layout: bool = False
-    ordinary_auto_columns: bool = True
+    ordinary_auto_layout: bool = True
+    ordinary_auto_columns: bool = False
     ordinary_auto_start_y: bool = True
     ordinary_auto_manual_x: bool = True
-    ordinary_auto_column_width: bool = True
-    ordinary_auto_gutter: bool = True
-    ordinary_auto_character_height: bool = True
-    ordinary_auto_row_padding: bool = True
+    ordinary_auto_column_width: bool = False
+    ordinary_auto_gutter: bool = False
+    ordinary_auto_character_height: bool = False
+    ordinary_auto_row_padding: bool = False
     crop_to_bottom_y: bool = False
     hide_overlays: bool = False
     polygon_mode: bool = False
@@ -380,7 +380,7 @@ class AppSettings:
     headword_sort_mode: str = "auto"
     headword_custom_order: str = "a b c d e f g h i j k l m n o p q r s t u v w x y z"
     headword_custom_fold_accents: bool = True
-    follow_column_deformation: bool = False
+    follow_column_deformation: bool = True
     # v2.12.12 resets the two layout-behavior checkboxes to safer opt-in defaults.
     layout_behavior_defaults_version: int = 1
     # v2.14 refreshes visible/default workflow choices once for existing projects.
