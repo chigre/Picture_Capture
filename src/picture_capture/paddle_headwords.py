@@ -3920,6 +3920,60 @@ def _accepted_cjk_row_for_visual_run(
     return None
 
 
+def _ordinary_strong_edge_visual_rescue(
+    settings: AppSettings,
+    parsed: HeadwordParse | None,
+    *,
+    at_left: bool,
+    below_header: bool,
+    boldness_ratio: float,
+    height_ratio: float,
+    confidence: float,
+    looks_like_continuation: bool,
+    marker_noise: bool,
+) -> bool:
+    """Conservatively recover bold left-edge Latin heads when POS OCR fails.
+
+    The regular Latin profile normally requires a structural cue (usually POS)
+    because ordinary definition prose can also begin near the column edge. Some
+    bilingual scans, however, preserve the bold lemma very clearly while OCR
+    repeatedly corrupts the small italic POS label (for example v.tr. -> vtr.,
+    s.m. -> sim., or v.tr. -> 0. tr.). This rescue keeps the structural rule as
+    the primary path and only substitutes typography when all of the following
+    remain true: strict left edge, clear bold contrast, normal line height,
+    adequate OCR confidence, and no continuation/noise signal.
+    """
+    if not bool(getattr(settings, "paddle_allow_strong_edge_visual_rescue", False)):
+        return False
+    if (
+        parsed is None
+        or not parsed.normalized
+        or len(parsed.normalized.strip("-")) < 3
+        or not at_left
+        or not below_header
+        or looks_like_continuation
+        or marker_noise
+    ):
+        return False
+    minimum_boldness = max(
+        float(getattr(settings, "paddle_strong_edge_visual_boldness_ratio", 1.22) or 1.22),
+        float(settings.paddle_boldness_ratio) * 1.03,
+    )
+    minimum_height = max(
+        0.75,
+        float(getattr(settings, "paddle_strong_edge_visual_height_ratio", 0.90) or 0.90),
+    )
+    minimum_confidence = max(
+        float(settings.paddle_rec_score_threshold),
+        float(getattr(settings, "paddle_strong_edge_visual_min_confidence", 0.55) or 0.55),
+    )
+    return bool(
+        boldness_ratio >= minimum_boldness
+        and height_ratio >= minimum_height
+        and confidence >= minimum_confidence
+    )
+
+
 def filter_headword_records(
     records: list[OCRRecord],
     band: Image.Image,
@@ -4268,6 +4322,17 @@ def filter_headword_records(
             and boldness_ratio >= max(1.25, settings.paddle_boldness_ratio * 1.08)
             and height_ratio >= 0.92
         )
+        ordinary_strong_edge_visual_rescue = _ordinary_strong_edge_visual_rescue(
+            settings,
+            parsed,
+            at_left=at_left,
+            below_header=below_header,
+            boldness_ratio=boldness_ratio,
+            height_ratio=height_ratio,
+            confidence=line.confidence,
+            looks_like_continuation=looks_like_continuation,
+            marker_noise=marker_noise,
+        )
         # "普通左缘短词" always means left-edge. The optional
         # relaxation applies only to the explicitly CJK structural channels.
         if cjk_single_visual or cjk_bracketed:
@@ -4296,7 +4361,11 @@ def filter_headword_records(
             and not looks_like_continuation
             and not marker_noise
             and score >= settings.paddle_min_candidate_score
-            and (structural_cue or not settings.paddle_require_pos_or_symbol)
+            and (
+                structural_cue
+                or not settings.paddle_require_pos_or_symbol
+                or ordinary_strong_edge_visual_rescue
+            )
             and (fallback_cue or not settings.paddle_require_visual_cue)
         )
         cjk_single_strong_visual = bool(
@@ -4557,6 +4626,7 @@ def filter_headword_records(
                 "cjk_allow_bracketed": cjk_allow_bracketed,
                 "cjk_require_left_edge": cjk_require_left_edge,
                 "strong_visual_fallback": strong_visual,
+                "ordinary_strong_edge_visual_rescue": ordinary_strong_edge_visual_rescue,
                 "image_boundary_supported": bool(image_boundary is not None),
                 "marker_noise": marker_noise,
                 "ordinary_accept": ordinary_accept,
