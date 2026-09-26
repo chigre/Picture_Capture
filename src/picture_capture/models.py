@@ -386,6 +386,15 @@ class AppSettings:
     # For ordinary dictionary pages, a nearby POS label (or an explicit entry
     # symbol) is the safest way to reject indented definition lines.
     paddle_require_pos_or_symbol: bool = True
+    # Some bold edge-headword dictionaries print a very reliable typographic
+    # entry cue while OCR frequently corrupts the small italic POS label.  The
+    # latin_regular profile can opt into a conservative rescue: strict left
+    # edge + clearly bold lemma + normal line height, with continuation rows
+    # still rejected.
+    paddle_allow_strong_edge_visual_rescue: bool = False
+    paddle_strong_edge_visual_boldness_ratio: float = 1.22
+    paddle_strong_edge_visual_height_ratio: float = 0.90
+    paddle_strong_edge_visual_min_confidence: float = 0.55
     paddle_remove_syllable_separators: bool = True
     paddle_auto_header_rule: bool = True
     paddle_header_search_height: int = 100
