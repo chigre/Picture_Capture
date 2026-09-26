@@ -52,39 +52,22 @@ def _candidate_ground_truth_link(
     geometry,
     line_height: int,
 ) -> dict[str, Any]:
-    """Link one OCR candidate to the nearest saved line on canonical reading V.
+    """Link one OCR candidate to the nearest saved line.
 
-    Ground-truth points remain original-image pixels. Reading-order distance is
-    measured in full-resolution canonical V so rotated/vertical dictionaries do
-    not accidentally compare physical source Y.
+    Reading-order comparison may use a temporary transformed axis internally,
+    but training annotations expose only original-image X/Y coordinates.
     """
     try:
         column = int(candidate.get("column", -1))
+        source_x = int(candidate.get("source_x"))
+        source_y = int(candidate.get("source_y", candidate.get("refined_source_y")))
+        _axis_u, candidate_axis_v = geometry.source_to_canonical(source_x, source_y)
     except Exception:
         return {
             "ground_truth_selected": False,
             "nearest_ground_truth_source": None,
-            "ground_truth_canonical_v_delta": None,
+            "ground_truth_source_y_delta": None,
         }
-
-    candidate_v = candidate.get("canonical_v")
-    if candidate_v is None:
-        try:
-            source_x = int(candidate.get("source_x"))
-            source_y = int(
-                candidate.get(
-                    "source_y",
-                    candidate.get("refined_source_y"),
-                )
-            )
-            _u, candidate_v = geometry.source_to_canonical(source_x, source_y)
-        except Exception:
-            return {
-                "ground_truth_selected": False,
-                "nearest_ground_truth_source": None,
-                "ground_truth_canonical_v_delta": None,
-            }
-    candidate_v = int(candidate_v)
 
     same_col = [
         row for row in ground_truth
@@ -94,32 +77,23 @@ def _candidate_ground_truth_link(
         return {
             "ground_truth_selected": False,
             "nearest_ground_truth_source": None,
-            "ground_truth_canonical_v_delta": None,
+            "ground_truth_source_y_delta": None,
         }
 
-    def row_v(row: dict[str, Any]) -> int:
-        _u, v = geometry.source_to_canonical(
-            int(row["x"]), int(row["y"])
-        )
+    def axis_v(row: dict[str, Any]) -> int:
+        _u, v = geometry.source_to_canonical(int(row["x"]), int(row["y"]))
         return int(v)
 
-    nearest = min(same_col, key=lambda row: abs(row_v(row) - candidate_v))
-    nearest_v = row_v(nearest)
-    delta = abs(nearest_v - candidate_v)
+    nearest = min(same_col, key=lambda row: abs(axis_v(row) - int(candidate_axis_v)))
+    axis_delta = abs(axis_v(nearest) - int(candidate_axis_v))
     tolerance = max(4, round(max(1, line_height) * 0.60))
     return {
-        "ground_truth_selected": bool(delta <= tolerance),
-        "nearest_ground_truth_source": [
-            int(nearest["x"]), int(nearest["y"])
-        ],
-        "nearest_ground_truth_canonical_v": int(nearest_v),
-        "ground_truth_canonical_v_delta": int(delta),
-        # Compatibility fields remain source-space facts where possible.
-        "nearest_ground_truth_y": int(nearest["y"]),
-        "ground_truth_y_delta": (
-            abs(int(nearest["y"]) - int(candidate.get("source_y", nearest["y"])))
-            if candidate.get("source_y") is not None else None
-        ),
+        "ground_truth_selected": bool(axis_delta <= tolerance),
+        "nearest_ground_truth_source": [int(nearest["x"]), int(nearest["y"])],
+        "nearest_ground_truth_source_x": int(nearest["x"]),
+        "nearest_ground_truth_source_y": int(nearest["y"]),
+        "ground_truth_source_x_delta": abs(int(nearest["x"]) - source_x),
+        "ground_truth_source_y_delta": abs(int(nearest["y"]) - source_y),
     }
 
 def export_training_page(
