@@ -253,16 +253,17 @@ def _natural_text_key(value: object) -> tuple:
 def effective_main_overlay_font_size(
     image_width: int, view_scale: float, settings: AppSettings,
 ) -> int:
-    """Return the main overlay font size using view zoom only.
+    """Return the main overlay font size.
 
-    The base size is defined at 100% original-image view; it is not normalized
-    against any fixed page width.
+    1400 px displayed page width corresponds to the configured base font size.
     """
 
     base_size = max(5, int(settings.main_entry_font_size))
 
     if settings.main_entry_follow_zoom:
-        font_size = round(base_size * max(0.05, float(view_scale)))
+        displayed_page_width = max(1.0, image_width * view_scale)
+        scale = displayed_page_width / 1400.0
+        font_size = round(base_size * scale)
     else:
         font_size = base_size
 
@@ -1779,34 +1780,34 @@ class SettingsDialog(tk.Toplevel):
     # unchanged; this layer only reorganizes the settings experience.
     SETTING_LABELS = {
         "columns": "正文栏数",
-        "start_y": "作用：正文起始 Y，单位为原图像素，原点在扫描图左上角，Y 向下。运行时直接使用该像素值，不按页面宽度或显示缩放换算。\n\n若 Project Profile 明确设置页眉模式/页眉比例，页面模板可以为当前页计算实际正文上界；最终保存/显示的坐标仍使用原图 X/Y。",
-        "bottom_y": "作用：正文结束 Y，单位为原图像素，用来限制版面分析和词头识别的有效正文区。运行时直接使用该像素值，不按页面宽度或显示缩放换算。\n\n调整：过小会漏掉页尾词条，过大可能把页码/脚注吸入正文。",
-        "manual_x": "作用：第一栏左缘 X，单位为原图像素，原点在扫描图左上角，X 向右。其余栏位置结合栏宽、栏间距推导；该值不会因窗口缩放或页面宽度而改变。\n\n镜像、RTL、竖排等阅读方向只影响内部读取顺序/临时变换，不改变这里保存的原图 X/Y 坐标语义。",
-        "column_width": "作用：单栏正文的典型宽度，单位为原图像素。它决定栏几何的水平范围，并间接影响 OCR 候选带、词条矩形和相邻栏边界。该数值在运行时原样使用，不按页面宽度换算。\n\n调整：过小可能截掉长词头/释义并让切图偏窄；过大可能侵入栏间空白甚至邻栏。",
-        "gutter": "作用：相邻正文栏之间的典型空白宽度，单位为原图像素。它参与栏位置推导、栏间区域判断和部分切图边界计算；不会按页面宽度、窗口宽度或任何参考宽度自动缩放。\n\n调整：过小会让相邻栏靠得过近，过大则可能把正文有效区域压窄。通常应由版面检测或 Profile 代表页确定。",
-        "character_height": "作用：项目的典型单行字高，单位为原图像素。普通画线用它估计行尺度；OCR画线的行距/空白判断、横线 Y 精修和部分 CJK 视觉逻辑也会以它作为尺度基准。\n\n调整：应接近正文常规印刷行高，而不是某个特别大的词头字高。",
+        "start_y": "正文起始 Y",
+        "bottom_y": "正文结束 Y",
+        "manual_x": "第一栏左缘 X",
+        "column_width": "单栏正文宽度",
+        "gutter": "栏间空白",
+        "character_height": "典型行高",
         "row_padding": "典型行间空白",
         "ocr_language": "词头 OCR 语言",
         "analysis_threshold_mode": "墨迹判断方式",
         "body_indent": "左缘检测宽度",
-        "character_height": "作用：项目的典型单行字高，单位为原图像素。普通画线用它估计行尺度；OCR画线的行距/空白判断、横线 Y 精修和部分 CJK 视觉逻辑也会以它作为尺度基准。\n\n调整：应接近正文常规印刷行高，而不是某个特别大的词头字高。",
+        "character_height": "典型单行字高",
         "row_padding": "典型行间空白",
         "darkness_threshold": "固定黑度阈值",
         "horizontal_tolerance": "横向微调容差",
         "paddle_band_width_ratio": "OCR 识别带宽",
-        "paddle_left_tolerance": "作用：词头候选允许偏离估计栏左缘的最大距离，单位为原图像素。这是“候选位置是否仍算栏左”的关键阈值；设置 34 就是原图 34 px，不会在宽图上自动变成 68/102 px。\n\n调整：增大可容纳缩进词头，但也更容易把正文缩进行吸进候选；减小更严格。",
+        "paddle_left_tolerance": "词头左缘容差",
         "paddle_rec_score_threshold": "OCR 片段最低置信度",
         "paddle_min_candidate_score": "词头候选最低分",
-        "paddle_separator_safety_px": "作用：横线精修后与当前词头墨迹之间保留的额外安全距离，单位为原图像素。设置 2 就始终是原图 2 px，不随页面宽度变化。\n\n调整：文字被线贴住/穿过时增大；横线与词头间距明显过大时减小。",
+        "paddle_separator_safety_px": "横线与文字安全距离",
         "paddle_line_merge_y_ratio": "同行碎片合并容差",
         "paddle_height_ratio": "字高提示阈值",
         "paddle_boldness_ratio": "粗体提示阈值",
         "paddle_gap_ratio": "行前空白提示阈值",
         "paddle_pos_search_chars": "词性提示搜索范围",
         "paddle_separator_search_ratio": "横线 Y 精修搜索范围",
-        "paddle_separator_band_radius": "作用：横线 Y 精修时，对局部墨迹/空白曲线做平滑的半径，单位为原图像素。该值不再使用 1400px 参考宽度。\n\n调整：增大更平滑但可能抹掉窄空白带；减小更敏感但更受噪声影响。",
+        "paddle_separator_band_radius": "横线空白带平滑半径",
         "paddle_separator_roi_width_ratio": "横线精修横向范围",
-        "paddle_separator_column_margin": "作用：横线精修分析时，从栏最左边缘跳过一小段区域，避免栏边线、装订阴影、竖直装饰线被误当作文字墨迹。单位为原图像素，不按页面宽度缩放。\n\n调整：存在明显栏线/黑边时可增大；过大会跳过真正贴边的词头。",
+        "paddle_separator_column_margin": "横线精修栏边余量",
         "paddle_max_input_side": "OCR 最大输入边长",
         "paddle_preprocessing": "OCR 图像预处理",
         "paddle_device": "PaddleOCR 运行设备",
@@ -1962,20 +1963,20 @@ class SettingsDialog(tk.Toplevel):
 
     SETTING_UNITS = {
         "columns": "栏",
-        "start_y": "作用：正文起始 Y，单位为原图像素，原点在扫描图左上角，Y 向下。运行时直接使用该像素值，不按页面宽度或显示缩放换算。\n\n若 Project Profile 明确设置页眉模式/页眉比例，页面模板可以为当前页计算实际正文上界；最终保存/显示的坐标仍使用原图 X/Y。",
-        "column_width": "作用：单栏正文的典型宽度，单位为原图像素。它决定栏几何的水平范围，并间接影响 OCR 候选带、词条矩形和相邻栏边界。该数值在运行时原样使用，不按页面宽度换算。\n\n调整：过小可能截掉长词头/释义并让切图偏窄；过大可能侵入栏间空白甚至邻栏。",
-        "character_height": "作用：项目的典型单行字高，单位为原图像素。普通画线用它估计行尺度；OCR画线的行距/空白判断、横线 Y 精修和部分 CJK 视觉逻辑也会以它作为尺度基准。\n\n调整：应接近正文常规印刷行高，而不是某个特别大的词头字高。",
+        "start_y": "原图px", "bottom_y": "原图px", "manual_x": "原图px",
+        "column_width": "原图px", "gutter": "原图px", "body_indent": "原图px",
+        "character_height": "原图px", "row_padding": "原图px", "horizontal_tolerance": "原图px",
         "darkness_threshold": "RGB 和", "column_track_radius": "原图px",
         "column_track_block_height": "原图px", "column_track_max_step": "原图px",
         "paddle_band_width_ratio": "%", "paddle_band_left_margin": "原图px",
-        "paddle_left_tolerance": "作用：词头候选允许偏离估计栏左缘的最大距离，单位为原图像素。这是“候选位置是否仍算栏左”的关键阈值；设置 34 就是原图 34 px，不会在宽图上自动变成 68/102 px。\n\n调整：增大可容纳缩进词头，但也更容易把正文缩进行吸进候选；减小更严格。",
-        "paddle_separator_safety_px": "作用：横线精修后与当前词头墨迹之间保留的额外安全距离，单位为原图像素。设置 2 就始终是原图 2 px，不随页面宽度变化。\n\n调整：文字被线贴住/穿过时增大；横线与词头间距明显过大时减小。",
+        "paddle_left_tolerance": "原图px", "paddle_max_input_side": "px",
+        "paddle_separator_safety_px": "原图px", "paddle_separator_band_radius": "原图px",
         "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "原图px",
-        "paddle_header_search_height": "作用：自动页眉横线检测只在页面顶部这段高度内搜索，单位为原图像素。超出范围的横线不会被当作页眉规则线；该值不再按 1400px 基准缩放。\n\n调整：页眉线较低时可增大；太大可能把正文中的表格线/装饰线误当页眉。",
+        "paddle_header_search_height": "原图px", "paddle_header_rule_margin": "原图px",
         "batch_interval": "秒", "illustration_detect_padding": "原图px",
-        "illustration_detect_right_padding": "作用：在通用插图外扩之外，右侧再额外扩展的原图像素。用于某些词典插图常向栏间或右侧空白延伸的版式。\n\n调整：只在右侧经常被截时增加；过大会把邻近文字纳入插图。",
+        "illustration_detect_right_padding": "原图px", "main_entry_font_size": "pt",
         "review_entry_font_size": "pt", "review_entry_vertical_padding": "px",
-        "review_single_cjk_line_height": "作用：校对窗口针对中文单字词条使用的特殊裁图行高。0 表示自动按项目典型行高约 2.5 倍计算；非 0 时单位为原图像素。\n\n调整：单字大字头被上下裁掉时增大；留白过多时减小。只影响校对裁图展示，不改变词头检测位置。",
+        "review_single_cjk_line_height": "原图px", "review_zoom_percent": "%",
     }
     SETTING_SPIN = {
         "columns": (1, 12, 1),
@@ -2003,12 +2004,12 @@ class SettingsDialog(tk.Toplevel):
 
     SETTING_HELP_IMAGES = {
         "columns": "layout_col_number.png",
-        "start_y": "作用：正文起始 Y，单位为原图像素，原点在扫描图左上角，Y 向下。运行时直接使用该像素值，不按页面宽度或显示缩放换算。\n\n若 Project Profile 明确设置页眉模式/页眉比例，页面模板可以为当前页计算实际正文上界；最终保存/显示的坐标仍使用原图 X/Y。",
-        "bottom_y": "作用：正文结束 Y，单位为原图像素，用来限制版面分析和词头识别的有效正文区。运行时直接使用该像素值，不按页面宽度或显示缩放换算。\n\n调整：过小会漏掉页尾词条，过大可能把页码/脚注吸入正文。",
-        "manual_x": "作用：第一栏左缘 X，单位为原图像素，原点在扫描图左上角，X 向右。其余栏位置结合栏宽、栏间距推导；该值不会因窗口缩放或页面宽度而改变。\n\n镜像、RTL、竖排等阅读方向只影响内部读取顺序/临时变换，不改变这里保存的原图 X/Y 坐标语义。",
-        "column_width": "作用：单栏正文的典型宽度，单位为原图像素。它决定栏几何的水平范围，并间接影响 OCR 候选带、词条矩形和相邻栏边界。该数值在运行时原样使用，不按页面宽度换算。\n\n调整：过小可能截掉长词头/释义并让切图偏窄；过大可能侵入栏间空白甚至邻栏。",
-        "gutter": "作用：相邻正文栏之间的典型空白宽度，单位为原图像素。它参与栏位置推导、栏间区域判断和部分切图边界计算；不会按页面宽度、窗口宽度或任何参考宽度自动缩放。\n\n调整：过小会让相邻栏靠得过近，过大则可能把正文有效区域压窄。通常应由版面检测或 Profile 代表页确定。",
-        "character_height": "作用：项目的典型单行字高，单位为原图像素。普通画线用它估计行尺度；OCR画线的行距/空白判断、横线 Y 精修和部分 CJK 视觉逻辑也会以它作为尺度基准。\n\n调整：应接近正文常规印刷行高，而不是某个特别大的词头字高。",
+        "start_y": "layout_settings.png",
+        "bottom_y": "layout_settings.png",
+        "manual_x": "layout_settings.png",
+        "column_width": "layout_settings.png",
+        "gutter": "layout_settings.png",
+        "character_height": "layout_settings.png",
         "row_padding": "layout_settings.png",
     }
 

@@ -371,42 +371,29 @@ def apply_column_start_offsets(
 def _derive_nominal_geometry_canonical(
     image_width: int, image_height: int, settings: AppSettings,
 ) -> Geometry:
-    """Return nominal geometry in full-resolution canonical pixels."""
+    """Return nominal geometry with settings used as literal full-resolution pixels."""
     width = max(1, int(image_width))
     height = max(1, int(image_height))
-    analysis_scale = min(1.0, float(_ANALYSIS_MAX_WIDTH) / width)
-    analysis_width = max(1, round(width * analysis_scale))
+    count = max(1, int(settings.columns))
 
-    def canonical_value(name: str) -> int:
-        return _source_px(getattr(settings, name))
-
-    count = max(1, settings.columns)
-    left = max(0, round(canonical_value("manual_x") * analysis_scale))
-    gutter = max(0, round(canonical_value("gutter") * analysis_scale))
-    column_width = max(10, round(canonical_value("column_width") * analysis_scale))
-    configured_right = left + count * column_width + (count - 1) * gutter
-    base_starts_analysis = [
-        left + i * (column_width + gutter) for i in range(count)
-    ]
-    offsets_canonical = _column_start_offsets_canonical(settings, count, width)
-    offsets_analysis = [round(value * analysis_scale) for value in offsets_canonical]
-    starts_analysis = apply_column_start_offsets(
-        base_starts_analysis, offsets_analysis, gutter=gutter, max_x=analysis_width - 1,
+    left = max(0, _source_px(settings.manual_x))
+    gutter = max(0, _source_px(settings.gutter))
+    column_width = max(10, _source_px(settings.column_width))
+    base_starts = [left + i * (column_width + gutter) for i in range(count)]
+    offsets = _column_start_offsets_canonical(settings, count, width)
+    starts = apply_column_start_offsets(
+        base_starts, offsets, gutter=gutter, max_x=width - 1,
     )
-    starts = [
-        min(width - 1, max(0, round(x / analysis_scale)))
-        for x in starts_analysis
-    ]
-    gutter_canonical = round(gutter / analysis_scale)
+
     widths: list[int] = []
     for i, start_x in enumerate(starts):
         if i + 1 < len(starts):
-            widths.append(max(1, starts[i + 1] - start_x - gutter_canonical))
+            widths.append(max(1, starts[i + 1] - start_x - gutter))
         else:
             widths.append(max(1, width - start_x))
 
-    top = min(height - 1, max(0, canonical_value("start_y")))
-    bottom_setting = canonical_value("bottom_y")
+    top = min(height - 1, max(0, _source_px(settings.start_y)))
+    bottom_setting = _source_px(settings.bottom_y)
     if settings.crop_to_bottom_y and bottom_setting > top:
         bottom = min(height, max(top + 1, bottom_setting))
     else:
@@ -426,84 +413,66 @@ def derive_nominal_geometry(image_width: int, image_height: int, settings: AppSe
 
 
 def _derive_geometry_canonical(image: Image.Image, settings: AppSettings) -> Geometry:
-    """Build geometry in full-resolution canonical pixels.
+    """Build geometry from literal full-resolution pixel settings.
 
-    User settings are literal original-image pixels. Temporary transformed
-    analysis coordinates stay inside this processing boundary.
+    Image analysis may use a downscaled copy, but configured X/Y values are
+    never round-tripped through that analysis scale.
     """
     analysis, analysis_scale = _analysis_image(image)
     analysis_width, analysis_height = analysis.size
-    canonical_width, canonical_height = image.size
+    source_width, source_height = image.size
+    count = max(1, int(settings.columns))
 
-    def canonical_value(name: str) -> int:
-        return _source_px(getattr(settings, name))
-
-    count = max(1, settings.columns)
-    left = max(0, round(canonical_value("manual_x") * analysis_scale))
-    gutter = max(0, round(canonical_value("gutter") * analysis_scale))
-    column_width = max(10, round(canonical_value("column_width") * analysis_scale))
-    configured_right = left + count * column_width + (count - 1) * gutter
-    base_starts_analysis = [
-        left + i * (column_width + gutter) for i in range(count)
-    ]
-    offsets_canonical = _column_start_offsets_canonical(
-        settings, count, canonical_width,
+    left = max(0, _source_px(settings.manual_x))
+    gutter = max(0, _source_px(settings.gutter))
+    column_width = max(10, _source_px(settings.column_width))
+    base_starts = [left + i * (column_width + gutter) for i in range(count)]
+    offsets = _column_start_offsets_canonical(settings, count, source_width)
+    starts = apply_column_start_offsets(
+        base_starts, offsets, gutter=gutter, max_x=source_width - 1,
     )
-    offsets_analysis = [round(value * analysis_scale) for value in offsets_canonical]
-    starts_analysis = apply_column_start_offsets(
-        base_starts_analysis, offsets_analysis,
-        gutter=gutter, max_x=analysis_width - 1,
-    )
-    widths_analysis: list[int] = []
-    for i, start_x in enumerate(starts_analysis):
-        if i + 1 < len(starts_analysis):
-            widths_analysis.append(
-                max(1, starts_analysis[i + 1] - start_x - gutter)
-            )
-        else:
-            widths_analysis.append(max(1, analysis_width - start_x))
 
-    starts = [
-        min(canonical_width - 1, max(0, round(x / analysis_scale)))
-        for x in starts_analysis
-    ]
-    gutter_canonical = round(gutter / analysis_scale)
     widths: list[int] = []
     for i, start_x in enumerate(starts):
         if i + 1 < len(starts):
-            widths.append(
-                max(1, starts[i + 1] - start_x - gutter_canonical)
-            )
+            widths.append(max(1, starts[i + 1] - start_x - gutter))
         else:
-            widths.append(max(1, canonical_width - start_x))
+            widths.append(max(1, source_width - start_x))
 
-    top = min(
-        canonical_height - 1,
-        max(0, canonical_value("start_y")),
-    )
-    bottom_setting = canonical_value("bottom_y")
+    top = min(source_height - 1, max(0, _source_px(settings.start_y)))
+    bottom_setting = _source_px(settings.bottom_y)
     if settings.crop_to_bottom_y and bottom_setting > top:
-        bottom = min(canonical_height, max(top + 1, bottom_setting))
+        bottom = min(source_height, max(top + 1, bottom_setting))
     else:
-        bottom = canonical_height
+        bottom = source_height
 
+    starts_analysis = [
+        min(analysis_width - 1, max(0, round(x * analysis_scale)))
+        for x in starts
+    ]
+    widths_analysis = [
+        max(1, round(width * analysis_scale)) for width in widths
+    ]
     top_analysis = min(
         analysis_height - 1, max(0, round(top * analysis_scale))
     )
     bottom_analysis = min(
-        analysis_height,
-        max(top_analysis + 1, round(bottom * analysis_scale)),
+        analysis_height, max(top_analysis + 1, round(bottom * analysis_scale))
     )
-    paths = _estimate_column_paths(
-        analysis,
-        analysis_scale,
-        starts_analysis,
-        widths_analysis,
-        top_analysis,
-        bottom_analysis,
-        settings,
-        analysis_scale,
-    )
+
+    if settings.follow_column_deformation:
+        paths = _estimate_column_paths(
+            analysis,
+            analysis_scale,
+            starts_analysis,
+            widths_analysis,
+            top_analysis,
+            bottom_analysis,
+            settings,
+            analysis_scale,
+        )
+    else:
+        paths = [ColumnPath([(top, x), (bottom, x)]) for x in starts]
     return Geometry(starts, widths, top, bottom, paths)
 
 def derive_geometry(image: Image.Image, settings: AppSettings) -> Geometry:

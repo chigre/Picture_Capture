@@ -6038,8 +6038,16 @@ def _arbitrate_pair(
         "lemma_similarity": sim,
         "paddle": {
             "source_x": pair.get("paddle_source_x"),
-            "source_y": pair.get("paddle_source_y"),
-            "y": pair.get("paddle_source_y"),
+            "source_y": (
+                pair.get("paddle_source_y")
+                if pair.get("paddle_source_y") is not None
+                else pair.get("paddle_y")
+            ),
+            "y": (
+                pair.get("paddle_source_y")
+                if pair.get("paddle_source_y") is not None
+                else pair.get("paddle_y")
+            ),
             "box": pair.get("paddle_box"), "confidence": pair.get("paddle_conf"),
             "accepted": pair.get("paddle_accepted"), "score": pair.get("paddle_score"), "lemma": pair.get("paddle_lemma"),
             "raw": pair.get("paddle_raw"), "corrected": pair.get("paddle_corrected"), "POS": pair.get("paddle_pos"),
@@ -6048,8 +6056,16 @@ def _arbitrate_pair(
         },
         "tesseract": {
             "source_x": pair.get("tesseract_source_x"),
-            "source_y": pair.get("tesseract_source_y"),
-            "y": pair.get("tesseract_source_y"),
+            "source_y": (
+                pair.get("tesseract_source_y")
+                if pair.get("tesseract_source_y") is not None
+                else pair.get("tesseract_y")
+            ),
+            "y": (
+                pair.get("tesseract_source_y")
+                if pair.get("tesseract_source_y") is not None
+                else pair.get("tesseract_y")
+            ),
             "box": pair.get("tesseract_box"), "confidence": pair.get("tesseract_conf"),
             "accepted": pair.get("tesseract_accepted"), "score": pair.get("tesseract_score"), "lemma": pair.get("tesseract_lemma"),
             "raw": pair.get("tesseract_raw"), "corrected": pair.get("tesseract_corrected"), "POS": pair.get("tesseract_pos"),
@@ -6058,8 +6074,16 @@ def _arbitrate_pair(
         },
         "lens": {
             "source_x": pair.get("lens_source_x"),
-            "source_y": pair.get("lens_source_y"),
-            "y": pair.get("lens_source_y"),
+            "source_y": (
+                pair.get("lens_source_y")
+                if pair.get("lens_source_y") is not None
+                else pair.get("lens_y")
+            ),
+            "y": (
+                pair.get("lens_source_y")
+                if pair.get("lens_source_y") is not None
+                else pair.get("lens_y")
+            ),
             "box": pair.get("lens_box"), "confidence": pair.get("lens_conf"),
             "accepted": pair.get("lens_accepted"), "score": pair.get("lens_score"), "lemma": pair.get("lens_lemma"),
             "raw": pair.get("lens_raw"), "corrected": pair.get("lens_corrected"), "POS": pair.get("lens_pos"),
@@ -7376,7 +7400,8 @@ def detect_paddle_headwords(
             "final_entries": [asdict(entry) for entry in all_entries],
             "columns": report_columns,
         }
-        _atomic_write_json(cache_path, _source_only_persistence(payload))
+        payload = _source_only_persistence(payload)
+        _atomic_write_json(cache_path, payload)
         _atomic_write_text(
             cache_path.with_name(f"{cache_path.stem}_ocr_diagnostics.txt"),
             _diagnostic_text(report_columns), encoding="utf-8",
