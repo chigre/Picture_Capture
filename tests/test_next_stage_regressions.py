@@ -33,8 +33,9 @@ from picture_capture.profile_semantics import (
 )
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
-    _detect_visual_entry_markers, _repair_multiline_headword_state_machine,
-    parse_headword_text, prepare_ocr_band, run_paddle_band,
+    _detect_visual_entry_markers, _ordinary_strong_edge_visual_rescue,
+    _repair_multiline_headword_state_machine, parse_headword_text,
+    prepare_ocr_band, run_paddle_band,
 )
 from picture_capture.visual_marker_templates import (
     build_visual_marker_sample, match_visual_marker_template,
@@ -1300,6 +1301,102 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "下半页候选" in text
     assert "左缘最大漂移" in text
     assert "原始OCR完整但词头在中途停止" in text
+
+
+def test_latin_regular_italian_pos_labels_tolerate_ocr_dot_spacing():
+    settings = AppSettings(
+        ocr_language="ita",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=True,
+    )
+    profile = load_dictionary_profile(preset="latin_regular", language="ita")
+    patterns = _compile_patterns(settings, profile)
+    examples = (
+        "abbassare v. tr. abbassare qualcosa",
+        "abbarbagliare vtr. la mente",
+        "abbandono s. m. stato di abbandono",
+        "abbattere v. intr. forma rara",
+    )
+    for text in examples:
+        parsed = parse_headword_text(text, settings, patterns, profile)
+        assert parsed is not None, text
+        assert parsed.has_pos, text
+
+
+def test_latin_regular_profile_enables_conservative_strong_edge_visual_rescue():
+    settings = AppSettings(ocr_language="ita")
+    apply_headword_profile(settings, "latin_regular")
+    assert settings.paddle_require_pos_or_symbol is True
+    assert settings.paddle_allow_strong_edge_visual_rescue is True
+    assert settings.paddle_strong_edge_visual_boldness_ratio == 1.22
+    assert settings.paddle_strong_edge_visual_height_ratio == 0.90
+
+
+def test_strong_edge_visual_rescue_recovers_pos_ocr_failure_but_not_body_text():
+    settings = AppSettings(
+        ocr_language="ita",
+        paddle_allow_strong_edge_visual_rescue=True,
+        paddle_strong_edge_visual_boldness_ratio=1.22,
+        paddle_strong_edge_visual_height_ratio=0.90,
+        paddle_strong_edge_visual_min_confidence=0.55,
+        paddle_boldness_ratio=1.12,
+        paddle_rec_score_threshold=0.20,
+    )
+    profile = load_dictionary_profile(preset="latin_regular", language="ita")
+    patterns = _compile_patterns(settings, profile)
+    parsed = parse_headword_text(
+        "abbarbagliamento sim. 眩眼，迷乱",
+        settings,
+        patterns,
+        profile,
+    )
+    assert parsed is not None
+    assert not parsed.has_pos
+
+    assert _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.34,
+        height_ratio=0.96,
+        confidence=0.91,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
+    assert not _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.08,
+        height_ratio=0.96,
+        confidence=0.91,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
+    assert not _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=True,
+        below_header=True,
+        boldness_ratio=1.34,
+        height_ratio=0.96,
+        confidence=0.91,
+        looks_like_continuation=True,
+        marker_noise=False,
+    )
+    assert not _ordinary_strong_edge_visual_rescue(
+        settings,
+        parsed,
+        at_left=False,
+        below_header=True,
+        boldness_ratio=1.34,
+        height_ratio=0.96,
+        confidence=0.91,
+        looks_like_continuation=False,
+        marker_noise=False,
+    )
 
 
 def test_visual_marker_symbol_inventory_accepts_contiguous_input():
