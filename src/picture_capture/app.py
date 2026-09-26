@@ -4499,7 +4499,15 @@ class ReviewWindow(tk.Toplevel):
             row1, textvariable=self.autosave_label_var, variable=self.parent.autosave_var,
             command=self._toggle_shared_autosave,
         ).pack(side="left", padx=(6, 0))
-        ttk.Checkbutton(row1, text="数字替换映射", variable=self.replace_digits).pack(side="left", padx=(8, 0))
+        ttk.Label(row1, text="校对模式：", style="PCR.Toolbar.TLabel").pack(side="left", padx=(8, 0))
+        ttk.Radiobutton(
+            row1, text="单页", variable=self.review_mode_var, value="single",
+            command=self._change_review_mode,
+        ).pack(side="left", padx=(2, 0))
+        ttk.Radiobutton(
+            row1, text="筛选", variable=self.review_mode_var, value="filter",
+            command=self._change_review_mode,
+        ).pack(side="left", padx=(2, 0))
         ttk.Button(
             row1, text="排序规则", command=self.open_sort_rules, style="PCR.Compact.TButton"
         ).pack(side="left", padx=(10, 0))
@@ -4515,63 +4523,46 @@ class ReviewWindow(tk.Toplevel):
         ).pack(side="left", padx=(5, 0))
         ttk.Separator(controls, orient="horizontal").pack(fill="x", pady=(5, 0))
 
-        # Default-collapsed numeric map.
-        self.digit_panel = ttk.Frame(
-            left, padding=(7, 1, 7, 2), style="PCR.Surface.TFrame"
+        focused = ttk.LabelFrame(
+            left, text="重点筛选校对", padding=(7, 5), style="PCR.Surface.TFrame"
         )
-        self.digit_panel.pack(fill="x")
-        self.digit_panel_title = tk.StringVar(value="▸ 数字替换映射")
-        self.digit_panel_toggle = ttk.Label(
-            self.digit_panel,
-            textvariable=self.digit_panel_title,
-            style="PCR.SectionTitle.TLabel",
-            cursor="hand2",
-        )
-        self.digit_panel_toggle.pack(fill="x")
-        self.digit_panel_toggle.bind(
-            "<Button-1>", lambda _event: self._toggle_review_panel("digit")
-        )
-        self.digit_panel_body = ttk.Frame(
-            self.digit_panel, padding=(5, 3), style="PCR.Surface.TFrame"
-        )
-        for index, digit in enumerate(self.DIGIT_KEYS):
-            row = index // 5
-            col = (index % 5) * 2
-            ttk.Label(self.digit_panel_body, text=f"{digit}→").grid(row=row, column=col, padx=(2, 0), pady=1, sticky="e")
-            ttk.Entry(
-                self.digit_panel_body, textvariable=self.digit_map_vars[index], width=3, justify="center"
-            ).grid(row=row, column=col + 1, padx=(0, 6), pady=1, sticky="w")
+        focused.pack(fill="x", padx=(7, 7), pady=(0, 5))
+        filter_row1 = ttk.Frame(focused, style="PCR.Surface.TFrame")
+        filter_row1.pack(fill="x")
+        ttk.Button(
+            filter_row1, text="筛选", command=self.run_focused_filter,
+            style="PCR.Compact.TButton",
+        ).pack(side="left")
+        ttk.Label(filter_row1, text="页面范围").pack(side="left", padx=(7, 2))
+        ttk.Entry(
+            filter_row1, textvariable=self.focused_page_range_var, width=12,
+            style="PCR.Compact.TEntry",
+        ).pack(side="left")
+        ttk.Checkbutton(
+            filter_row1, text="OCR不匹配", variable=self.focused_include_mismatch_var,
+        ).pack(side="left", padx=(8, 0))
+        ttk.Checkbutton(
+            filter_row1, text="含特定字符", variable=self.focused_include_characters_var,
+        ).pack(side="left", padx=(7, 0))
+        ttk.Checkbutton(
+            filter_row1, text="排除单字符", variable=self.focused_exclude_single_var,
+        ).pack(side="left", padx=(7, 0))
+        ttk.Checkbutton(
+            filter_row1, text="排除参考词表", variable=self.focused_exclude_reference_var,
+        ).pack(side="left", padx=(7, 0))
 
-        # Default-collapsed grouped character palette.
-        self.accent_panel = ttk.Frame(
-            left, padding=(7, 0, 7, 4), style="PCR.Surface.TFrame"
-        )
-        self.accent_panel.pack(fill="x")
-        self.accent_panel_title = tk.StringVar(value="▸ 变音字符")
-        self.accent_panel_toggle = ttk.Label(
-            self.accent_panel,
-            textvariable=self.accent_panel_title,
-            style="PCR.SectionTitle.TLabel",
-            cursor="hand2",
-        )
-        self.accent_panel_toggle.pack(fill="x")
-        self.accent_panel_toggle.bind(
-            "<Button-1>", lambda _event: self._toggle_review_panel("accent")
-        )
-        self.accent_panel_body = ttk.Frame(
-            self.accent_panel, padding=(5, 3), style="PCR.Surface.TFrame"
-        )
-        for group_index, (label, chars) in enumerate(self.ACCENT_GROUPS):
-            row = group_index // 2
-            base_col = (group_index % 2) * 7
-            ttk.Label(self.accent_panel_body, text=label, width=4, anchor="e").grid(
-                row=row, column=base_col, padx=((0 if base_col == 0 else 12), 4), pady=1
-            )
-            for offset, char in enumerate(chars, start=1):
-                ttk.Button(
-                    self.accent_panel_body, text=char, width=3, command=lambda c=char: self.insert_char(c)
-                ).grid(row=row, column=base_col + offset, padx=1, pady=1, sticky="w")
-
+        filter_row2 = ttk.Frame(focused, style="PCR.Surface.TFrame")
+        filter_row2.pack(fill="x", pady=(4, 0))
+        ttk.Label(filter_row2, text="特定字符（用','分隔）：").pack(side="left")
+        ttk.Entry(
+            filter_row2, textvariable=self.focused_characters_var,
+            style="PCR.Compact.TEntry",
+        ).pack(side="left", fill="x", expand=True, padx=(3, 8))
+        ttk.Label(filter_row2, text="单批显示数量：").pack(side="left")
+        ttk.Spinbox(
+            filter_row2, from_=1, to=500, increment=1, width=6,
+            textvariable=self.focused_batch_size_var, style="PCR.Compact.TSpinbox",
+        ).pack(side="left")
         # Main review strip: vertical previous/next buttons flank the scrollable rows.
         strip = ttk.Frame(left, style="PCR.Surface.TFrame")
         strip.pack(fill="both", expand=True, padx=(4, 4), pady=(0, 4))
@@ -4588,6 +4579,20 @@ class ReviewWindow(tk.Toplevel):
         self.prev_page_button.pack(side="left", fill="y", padx=(0, 4))
         editor_area = ttk.Frame(strip, style="PCR.Surface.TFrame")
         editor_area.pack(side="left", fill="both", expand=True)
+        self.filter_batch_top = ttk.Frame(editor_area, style="PCR.Toolbar.TFrame")
+        self.filter_batch_bottom = ttk.Frame(editor_area, style="PCR.Toolbar.TFrame")
+        for batch_bar in (self.filter_batch_top, self.filter_batch_bottom):
+            ttk.Button(
+                batch_bar, text="上一批", command=lambda d=-1: self.change_filter_batch(d),
+                style="PCR.Compact.TButton",
+            ).pack(side="left")
+            ttk.Label(
+                batch_bar, textvariable=self.filter_batch_var, style="PCR.Toolbar.TLabel",
+            ).pack(side="left", fill="x", expand=True, padx=8)
+            ttk.Button(
+                batch_bar, text="下一批", command=lambda d=1: self.change_filter_batch(d),
+                style="PCR.Compact.TButton",
+            ).pack(side="right")
         self.next_page_button = tk.Button(
             strip, text="下\n一\n页", width=3, command=lambda: self.change_page(1),
             bg=review_nav_bg, activebackground=review_nav_active_bg,
