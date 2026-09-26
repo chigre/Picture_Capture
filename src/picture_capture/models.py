@@ -112,15 +112,7 @@ class AppSettings:
     dictionary_index_language: str = ""
     dictionary_content_language: str = ""
     dictionary_body_page_range: str = ""
-    # Coordinate contract: every user-facing/persisted geometry value is an
-    # original/full-resolution image pixel value. No setting is normalized to
-    # viewer width, page width, or a fixed reference width.
-    geometry_coordinate_version: int = 3
-    geometry_coordinate_space: str = "source_image_pixels"
-    # Migration-only fields for pre-v3 project JSON. They are cleared on open
-    # and omitted from newly saved settings.
-    geometry_reference_width: int = 0
-    parameter_display_width: int = 0
+    # All geometry values below are literal original-image X/Y pixel values.
     columns: int = 2
     # Profile v3 layout semantics. Saved geometry remains in original-image
     # pixel units; temporary layout transforms never change settings semantics.
@@ -493,21 +485,11 @@ class AppSettings:
 
     def to_json(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = asdict(self)
-        if int(payload.get("geometry_coordinate_version", 0) or 0) >= 3:
-            payload.pop("geometry_reference_width", None)
-            payload.pop("parameter_display_width", None)
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.write_text(json.dumps(asdict(self), ensure_ascii=False, indent=2), encoding="utf-8")
 
     @classmethod
     def from_json(cls, path: Path) -> "AppSettings":
         raw = json.loads(path.read_text(encoding="utf-8"))
-        # Settings written before the coordinate-contract migration stored page
-        # geometry in GUI display pixels. Mark them explicitly so ProjectState
-        # can upgrade them once the first source-image size is known.
-        if "geometry_coordinate_version" not in raw:
-            raw["geometry_coordinate_version"] = 1
-            raw["geometry_coordinate_space"] = "legacy_display_pixels"
         if int(raw.get("right_ratio_percent_version", 0) or 0) < 1:
             old_divisor = max(0.01, float(raw.get("right_ratio", 1.0) or 1.0))
             raw["right_ratio"] = 100.0 / old_divisor
@@ -654,8 +636,6 @@ class AppSettings:
         """Read the positional _Mysettings.ini format emitted by Form1.vb."""
         parts = path.read_text(encoding="utf-8-sig").split("@")
         settings = cls()
-        settings.geometry_coordinate_version = 1
-        settings.geometry_coordinate_space = "legacy_display_pixels"
         converters = {
             2: ("columns", int),
             3: ("gutter", int),
@@ -711,7 +691,7 @@ class ProjectState:
         # Do not create anything in an empty/non-project folder selected by mistake.
         from .project_storage import (
             ensure_project_storage, has_legacy_project_data, is_managed_project,
-            legacy_ini_path, profile_path as active_profile_path,
+            profile_path as active_profile_path,
             qt_root, settings_path as active_settings_path,
         )
         if images and (is_managed_project(root) or not has_legacy_project_data(root)):
@@ -721,11 +701,8 @@ class ProjectState:
                 __version__ = "unknown"
             ensure_project_storage(root, __version__)
         json_settings = active_settings_path(root)
-        legacy_settings = legacy_ini_path(root)
         if json_settings.exists():
             settings = AppSettings.from_json(json_settings)
-        elif legacy_settings.exists():
-            settings = AppSettings.from_legacy(legacy_settings)
         else:
             settings = AppSettings()
             # A v3 profile sidecar can bootstrap a project that predates
@@ -757,21 +734,6 @@ class ProjectState:
                 )
             except Exception:
                 pass
-        # Resolve any pre-v3 display/reference-page geometry once to direct
-        # original/full-resolution pixels. Version-3 projects are never scaled.
-        if images:
-            try:
-                from .coordinate_space import migrate_legacy_geometry_settings
-                with Image.open(images[0]) as first_page:
-                    source_size = first_page.size
-                migrated = migrate_legacy_geometry_settings(settings, source_size)
-                if migrated and json_settings.exists():
-                    settings.to_json(json_settings)
-            except Exception:
-                # Migration must never make an otherwise readable project
-                # impossible to open; retry remains possible on a later open.
-                pass
-
         words_path = resolve_wordslist_path(root, settings.wordslist_path)
         words = read_noncomment_lines(words_path) if words_path.exists() else []
         active_qt = qt_root(root)
