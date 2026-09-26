@@ -4744,6 +4744,47 @@ class ReviewWindow(tk.Toplevel):
             simplified_font_row, text="斜体", variable=self.review_simplified_font_italic_var
         ).pack(side="left", padx=(5, 0))
 
+        digit_box = self._review_collapsible_section(
+            right, "digit", "数字替换映射", padding=6, fill="x", pady=(0, 6)
+        )
+        digit_rows = [
+            ttk.Frame(digit_box, style="PCR.Surface.TFrame"),
+            ttk.Frame(digit_box, style="PCR.Surface.TFrame"),
+        ]
+        digit_rows[0].pack(fill="x")
+        digit_rows[1].pack(fill="x", pady=(3, 0))
+        ttk.Checkbutton(
+            digit_rows[0], text="启用", variable=self.replace_digits,
+            style="PCR.Body.TCheckbutton",
+        ).pack(side="left", padx=(0, 8))
+        for index, digit in enumerate(self.DIGIT_KEYS):
+            host = digit_rows[0 if index < 5 else 1]
+            ttk.Label(host, text=f"{digit}→").pack(side="left", padx=(2, 0))
+            ttk.Entry(
+                host, textvariable=self.digit_map_vars[index], width=3, justify="center",
+                style="PCR.Compact.TEntry",
+            ).pack(side="left", padx=(0, 5))
+
+        accent_box = self._review_collapsible_section(
+            right, "accent", "变音字符", padding=6, fill="x", pady=(0, 6)
+        )
+        ttk.Label(
+            accent_box, text="左键输入；右键复制", style="PCR.Muted.TLabel",
+        ).pack(anchor="w", pady=(0, 3))
+        for label, chars in self.ACCENT_GROUPS:
+            accent_row = ttk.Frame(accent_box, style="PCR.Surface.TFrame")
+            accent_row.pack(fill="x", pady=1)
+            ttk.Label(accent_row, text=label, width=4, anchor="e").pack(side="left", padx=(0, 4))
+            for char in chars:
+                accent_button = ttk.Button(
+                    accent_row, text=char, width=3,
+                    command=lambda c=char: self.insert_char(c),
+                    style="PCR.Tool.TButton",
+                )
+                accent_button.pack(side="left", padx=1)
+                accent_button.bind(
+                    "<Button-3>", lambda _event, c=char: self.copy_char(c), add="+"
+                )
         # Keep the four OCR sources on a single compact line. Each available
         # result remains clickable, preserving the previous quick-fill workflow.
         ocr_box = self._review_collapsible_section(
