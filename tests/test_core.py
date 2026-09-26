@@ -1456,6 +1456,37 @@ class DictionaryProfileV2Tests(unittest.TestCase):
         assert parsed is not None
         self.assertEqual(parsed.normalized, "阿Q精神")
 
+    def test_v210_marker_single_han_is_structural_not_large_glyph_gated(self) -> None:
+        profile = load_dictionary_profile(preset="cjk_marker_pinyin", language="chi_sim")
+        settings = AppSettings(
+            ocr_language="chi_sim",
+            profile_parser_controls_version=1,
+            profile_allow_ordinary_left_edge=False,
+            profile_allow_marker_prefix=True,
+            profile_cjk_allow_single_headword=False,
+            profile_cjk_allow_bracketed_headword=False,
+            paddle_band_width=180,
+            paddle_band_width_ratio=100,
+            paddle_band_left_margin=0,
+            paddle_left_tolerance=24,
+            paddle_rec_score_threshold=0.1,
+            paddle_auto_header_rule=False,
+            paddle_refine_separator_y=False,
+            paddle_require_pos_or_symbol=False,
+            paddle_require_visual_cue=False,
+            character_height=26,
+            row_padding=4,
+        )
+        band = Image.new("RGB", (180, 100), "white")
+        records = [OCRRecord("○呵 hē interj.", 0.99, (4, 30, 120, 58))]
+        entries, diagnostics = filter_headword_records(
+            records, band, 0, 0, settings, profile=profile,
+        )
+        self.assertEqual([entry.word for entry in entries], ["呵"])
+        row = next(item for item in diagnostics if item.get("accepted"))
+        self.assertTrue(row["features"]["cjk_marker_prefixed"])
+        self.assertFalse(row["features"]["cjk_single_visual"])
+
     def test_v210_visual_circle_marker_detector_distinguishes_open_and_filled(self) -> None:
         from picture_capture.paddle_headwords import _detect_visual_entry_markers
 
