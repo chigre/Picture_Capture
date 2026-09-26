@@ -2513,12 +2513,16 @@ def _classify_visual_symbol_component(
          0.70 <= aspect <= 1.35
          and line_h * 0.55 <= height <= line_h * 1.35
          and 0.14 <= density <= 0.50 and central <= 0.18
-         and corner <= 0.16 and mid_width >= max(top_width, bottom_width) * 1.15),
+         and corner <= 0.16
+         # A diamond widens much more sharply toward the mid-row than a ring.
+         # This prevents a configured ◇ profile from accepting an unconfigured ○.
+         and mid_width >= max(top_width, bottom_width) * 1.35),
         ("diamond_filled",
          0.70 <= aspect <= 1.35
          and line_h * 0.50 <= height <= line_h * 1.30
          and 0.45 <= density <= 0.82 and central >= 0.45
-         and corner <= 0.32 and mid_width >= max(top_width, bottom_width) * 1.10),
+         and corner <= 0.32
+         and mid_width >= max(top_width, bottom_width) * 1.35),
         ("triangle_open",
          0.65 <= aspect <= 1.50
          and line_h * 0.52 <= height <= line_h * 1.35
