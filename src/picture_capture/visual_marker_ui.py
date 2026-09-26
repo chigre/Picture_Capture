@@ -211,7 +211,7 @@ class VisualMarkerCaptureDialog(tk.Toplevel):
     def _set_zoom(self, percent: int | float) -> None:
         if self.source_image is None:
             return
-        target = max(25, min(800, int(round(float(percent)))))
+        target = max(10, min(300, int(round(float(percent)))))
         if target == self.zoom_percent:
             return
         # Keep the same relative viewport position while changing scale.
@@ -254,7 +254,7 @@ class VisualMarkerCaptureDialog(tk.Toplevel):
         if self.source_image is None or not self.winfo_exists():
             return
         self.update_idletasks()
-        scale = max(0.25, min(8.0, float(self.zoom_percent) / 100.0))
+        scale = max(0.10, min(3.0, float(self.zoom_percent) / 100.0))
         target = (
             max(1, round(self.source_image.width * scale)),
             max(1, round(self.source_image.height * scale)),
