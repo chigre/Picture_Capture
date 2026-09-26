@@ -1695,20 +1695,25 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=6, column=0, sticky="w", pady=2)
         ttk.Checkbutton(
             self.tail_structure_frame,
-            text="词后结构 OCR 失败时，允许“严格左缘 + 明显粗体”视觉补救",
+            text="词后结构 OCR 失败时，允许“严格左缘 + 粗体”视觉补救",
             variable=self.tail_allow_visual_rescue_var,
             command=self._headword_structure_changed,
         ).grid(row=7, column=0, sticky="w", pady=2)
         ttk.Label(
             self.tail_structure_frame,
+            text="视觉补救使用下方可见的【栏左缘容差】【粗体倍率】【候选强度】；不再另设隐藏的粗体/行高门槛。",
+            foreground="#666666", wraplength=self._wizard_content_width,
+        ).grid(row=8, column=0, sticky="w", pady=(2, 2))
+        ttk.Label(
+            self.tail_structure_frame,
             text="固定符号、编号等已勾选的强前缀仍可独立作为边界证据；此处主要控制普通左缘词的词后证据。",
             foreground="#666666", wraplength=self._wizard_content_width,
-        ).grid(row=8, column=0, sticky="w", pady=(5, 2))
+        ).grid(row=9, column=0, sticky="w", pady=(5, 2))
         ttk.Label(
             self.tail_structure_frame,
             textvariable=self.tail_structure_summary_var,
             foreground="#555555", wraplength=self._wizard_content_width,
-        ).grid(row=9, column=0, sticky="w", pady=(3, 0))
+        ).grid(row=10, column=0, sticky="w", pady=(3, 0))
 
         self.symbol_inventory_frame = ttk.LabelFrame(
             structures, text="本词典固定词头符号集", padding=8,
@@ -2375,7 +2380,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_headword_structure_summary()
         self._refresh_headword_specificity_visibility()
         hints = {
-            "latin_regular": "常规边缘：严格栏左缘定位词头；下方勾选的 POS/词形/变体等词后结构是显式证据，必要时可启用粗体视觉补救。",
+            "latin_regular": "常规边缘：严格栏左缘定位词头；POS/词形/变体等词后结构是显式证据。视觉补救直接使用本页可见的栏左缘容差、粗体倍率和候选强度，不再叠加隐藏阈值。",
             "cjk_visual": "视觉型：大字/括号结构及视觉突出程度是主证据；大字单字还可结合右侧留白/稀疏度。",
             "numbered_prefix": "编号型：编号前缀是主证据；字号/粗体属于辅助证据。",
             "marker_prefixed": "符号型：○ / ● / ◆ 等固定符号是主证据；字号/粗体属于辅助证据。",
