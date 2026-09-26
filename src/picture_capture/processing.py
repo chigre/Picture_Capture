@@ -572,13 +572,11 @@ def _left_edge_otsu_threshold(gray: np.ndarray) -> int:
 
 
 def _left_edge_ink_mask(gray: np.ndarray, settings: AppSettings) -> np.ndarray:
-    """Build the ordinary-drawing foreground mask from the shared threshold policy.
+    """Compatibility foreground mask for layout-analysis regressions.
 
-    Ordinary drawing historically always used the legacy fixed RGB-sum threshold.
-    That made otherwise identical layouts behave differently when paper tone,
-    scan exposure, or yellowing changed.  The ordinary mode now follows the same
-    user-facing threshold policy as layout analysis: automatic/Otsu by default,
-    adaptive for uneven backgrounds, and fixed only for compatibility/tuning.
+    Restored VB ordinary drawing no longer uses this Otsu/adaptive path for its
+    headword anchor or separator decision. Draw_Auto uses the fixed RGB-sum
+    threshold directly on full-resolution source pixels, matching the VB code.
     """
     mode = str(getattr(settings, "analysis_threshold_mode", "auto") or "auto").strip().lower()
     if mode == "fixed":
@@ -680,7 +678,7 @@ def _legacy_find_separator_y(
     row_height = max(1, int(row_height))
     upward_ratio = max(0.1, float(upward_ratio))
     upward = max(1, int(round(row_height / upward_ratio)))
-    divisor = max(0.1, float(ordinary_right_divisor))
+    divisor = max(1.0, float(ordinary_right_divisor))
     requested_span = max(1, int(round(float(column_width) / divisor * 0.98)))
     if direction > 0:
         room = min(width - 1, int(x_max)) - int(candidate_x)
@@ -818,7 +816,7 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
         0.1, float(getattr(settings, "upward_ratio", 1.5) or 1.5)
     )
     ordinary_right_divisor = max(
-        0.1, float(getattr(settings, "ordinary_right_divisor", 1.0) or 1.0)
+        1.0, float(getattr(settings, "ordinary_right_divisor", 1.0) or 1.0)
     )
     white_high = int(getattr(settings, "white_threshold_high", 999))
     white_low = int(getattr(settings, "white_threshold_low", 700))
@@ -826,7 +824,12 @@ def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tupl
         0, int(getattr(settings, "whitespace_adjustment", 2))
     )
 
-    top = max(0, min(image_height - 1, int(geometry.top)))
+    top_source = (
+        _source_px(getattr(settings, "manual_y", geometry.top))
+        if bool(getattr(settings, "manual_columns", False))
+        else int(geometry.top)
+    )
+    top = max(0, min(image_height - 1, int(top_source)))
     ordinary_bottom = min(image_height, int(geometry.bottom))
     configured_bottom = _source_px(getattr(settings, "bottom_y", 0))
     if configured_bottom > top:
