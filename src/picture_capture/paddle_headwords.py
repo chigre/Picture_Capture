@@ -278,6 +278,94 @@ def evaluate_headword_filter_rules(
 
 
 
+def _ocr_language_parts(settings: AppSettings) -> set[str]:
+    values: set[str] = set()
+    for raw in (
+        str(getattr(settings, "ocr_language", "") or ""),
+        str(getattr(settings, "paddle_language", "") or ""),
+    ):
+        for part in raw.lower().replace(",", "+").split("+"):
+            part = part.strip()
+            if part:
+                values.add(part)
+    return values
+
+
+def _leading_script_family(text: str) -> str:
+    """Classify the first meaningful headword character into a script family."""
+    normalized = unicodedata.normalize("NFKC", str(text or "")).lstrip()
+    if not normalized:
+        return ""
+    for char in normalized:
+        if char.isspace() or char in "-'’·•∙‧":
+            continue
+        code = ord(char)
+        if (
+            0x3400 <= code <= 0x4DBF
+            or 0x4E00 <= code <= 0x9FFF
+            or 0xF900 <= code <= 0xFAFF
+            or 0x20000 <= code <= 0x2FA1F
+        ):
+            return "han"
+        if (
+            0x3040 <= code <= 0x309F
+            or 0x30A0 <= code <= 0x30FF
+            or 0x31F0 <= code <= 0x31FF
+        ):
+            return "kana"
+        if (
+            0x1100 <= code <= 0x11FF
+            or 0x3130 <= code <= 0x318F
+            or 0xAC00 <= code <= 0xD7AF
+        ):
+            return "hangul"
+        return "other"
+    return ""
+
+
+def _headword_script_compatibility(
+    settings: AppSettings, parsed: HeadwordParse | None,
+) -> tuple[bool, str]:
+    """Reject CJK-script headwords when the selected OCR language cannot use them.
+
+    This is deliberately language/script compatibility rather than the naive
+    rule "non-Chinese => reject Han": Japanese headwords legitimately begin
+    with Kanji, and Korean dictionaries may contain Hanja. The guard therefore
+    allows Han for Chinese/Japanese/Korean OCR, Kana only for Japanese OCR, and
+    Hangul only for Korean OCR. Other scripts are left unchanged here.
+    """
+    active = int(
+        getattr(settings, "profile_headword_script_guard_version", 0) or 0
+    ) >= 1 and bool(
+        getattr(settings, "profile_headword_script_guard_enabled", True)
+    )
+    if not active or parsed is None or not parsed.normalized:
+        return True, ""
+
+    family = _leading_script_family(parsed.normalized)
+    if family not in {"han", "kana", "hangul"}:
+        return True, family
+
+    parts = _ocr_language_parts(settings)
+    chinese = bool(
+        parts.intersection({"chi_sim", "chi_tra", "ch", "chinese_cht", "zh", "zho"})
+    )
+    japanese = bool(
+        parts.intersection({"jpn", "jpn_vert", "japan", "ja", "japanese"})
+    )
+    korean = bool(
+        parts.intersection({"kor", "korean", "ko"})
+    )
+
+    if family == "han":
+        return bool(chinese or japanese or korean), family
+    if family == "kana":
+        return bool(japanese), family
+    if family == "hangul":
+        return bool(korean), family
+    return True, family
+
+
 def _is_chinese_ocr(settings: AppSettings) -> bool:
     """Return True when the active OCR language is Simplified/Traditional Chinese."""
     lang = (settings.ocr_language or "").lower()
@@ -4240,6 +4328,9 @@ def filter_headword_records(
             line_text=line.text,
             pos_text=parsed.pos_text if parsed else "",
         )
+        script_compatible, leading_script = _headword_script_compatibility(
+            settings, parsed
+        )
         has_pos = bool(parsed and parsed.has_pos and not rule_result["pos_excluded"])
         has_inflection = bool(parsed and parsed.has_inflection)
         tail_evidence, tail_evidence_features = _selected_tail_structure_evidence(
@@ -4461,7 +4552,11 @@ def filter_headword_records(
         else:
             position_ok = at_left
         base_eligible = bool(
-            parsed and parsed.normalized and below_header and position_ok
+            parsed
+            and parsed.normalized
+            and below_header
+            and position_ok
+            and script_compatible
         )
         cjk_bracket_visual_supported = bool(large or bold)
         cjk_bracket_extra_required = bool(
@@ -4556,6 +4651,8 @@ def filter_headword_records(
             reject_reason = "user_reject_rule"
         elif not parsed:
             reject_reason = "lemma_parse_failed"
+        elif not script_compatible:
+            reject_reason = "incompatible_headword_script"
         elif cjk_profile_active and cjk_single_visual and not cjk_allow_single:
             reject_reason = "cjk_single_headword_disabled"
         elif cjk_bracketed and not cjk_allow_bracketed:
@@ -4708,6 +4805,23 @@ def filter_headword_records(
                 "tail_structure_required": tail_required,
                 "tail_structure_satisfied": tail_requirement_ok,
                 "front_structure_cue": front_structure_cue,
+                "headword_script_guard_enabled": bool(
+                    int(
+                        getattr(
+                            settings,
+                            "profile_headword_script_guard_version",
+                            0,
+                        )
+                        or 0
+                    ) >= 1
+                    and getattr(
+                        settings,
+                        "profile_headword_script_guard_enabled",
+                        True,
+                    )
+                ),
+                "headword_leading_script": leading_script,
+                "headword_script_compatible": script_compatible,
                 "numbered_prefix_evidence": numbered_prefix_evidence,
                 "configured_marker_evidence": configured_marker_evidence,
                 **tail_evidence_features,
