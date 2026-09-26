@@ -36,9 +36,9 @@ from picture_capture.profile_semantics import (
 )
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
-    _detect_visual_entry_markers, _ordinary_strong_edge_visual_rescue,
-    _repair_multiline_headword_state_machine, _selected_tail_structure_evidence,
-    parse_headword_text,
+    _detect_visual_entry_markers, _headword_script_compatibility,
+    _ordinary_strong_edge_visual_rescue, _repair_multiline_headword_state_machine,
+    _selected_tail_structure_evidence, HeadwordParse, parse_headword_text,
     prepare_ocr_band, run_paddle_band,
 )
 from picture_capture.visual_marker_templates import (
@@ -1307,6 +1307,61 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "原始OCR完整但词头在中途停止" in text
 
 
+def _parsed_headword_for_script_test(value: str) -> HeadwordParse:
+    return HeadwordParse(
+        raw=value,
+        normalized=value,
+        has_pos=False,
+        pos_text="",
+        has_inflection=False,
+        inflection_text="",
+        has_descriptor=False,
+        descriptor_text="",
+        match_end=max(1, len(value)),
+    )
+
+
+def test_headword_script_guard_rejects_cjk_for_non_cjk_ocr_but_keeps_japanese_kanji():
+    han = _parsed_headword_for_script_test("波")
+    kana = _parsed_headword_for_script_test("あい")
+    latin = _parsed_headword_for_script_test("abbassare")
+
+    ita = AppSettings(
+        ocr_language="ita",
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=True,
+    )
+    assert _headword_script_compatibility(ita, han) == (False, "han")
+    assert _headword_script_compatibility(ita, kana) == (False, "kana")
+    assert _headword_script_compatibility(ita, latin) == (True, "other")
+
+    jpn = AppSettings(
+        ocr_language="jpn",
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=True,
+    )
+    assert _headword_script_compatibility(jpn, han) == (True, "han")
+    assert _headword_script_compatibility(jpn, kana) == (True, "kana")
+
+    chi = AppSettings(
+        ocr_language="chi_sim",
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=True,
+    )
+    assert _headword_script_compatibility(chi, han) == (True, "han")
+    assert _headword_script_compatibility(chi, kana) == (False, "kana")
+
+
+def test_headword_script_guard_can_be_disabled_for_special_bilingual_projects():
+    han = _parsed_headword_for_script_test("波")
+    settings = AppSettings(
+        ocr_language="ita",
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=False,
+    )
+    assert _headword_script_compatibility(settings, han) == (True, "")
+
+
 def test_headword_profiles_seed_explicit_tail_structure_defaults():
     latin = profile_tail_structure_defaults("latin_regular")
     assert latin == {
@@ -1364,6 +1419,8 @@ def test_complete_headword_structure_round_trips_in_v3_sidecar(tmp_path):
         dictionary_profile_id="latin_regular",
         ocr_language="ita",
         profile_parser_controls_version=1,
+        profile_headword_script_guard_version=1,
+        profile_headword_script_guard_enabled=True,
         profile_allow_ordinary_left_edge=True,
         profile_allow_numbered_prefix=False,
         profile_allow_marker_prefix=True,
@@ -1388,11 +1445,14 @@ def test_complete_headword_structure_round_trips_in_v3_sidecar(tmp_path):
     write_project_profile(path, settings, "latin_regular", force=True)
     payload = __import__("json").loads(path.read_text(encoding="utf-8"))
     assert payload["headword_structure"]["tail"]["allow_pronunciation"] is True
+    assert payload["headword_structure"]["script_guard_enabled"] is True
     assert payload["headword_structure"]["starts"]["marker_prefix"] is True
     assert payload["headword_structure"]["symbol_inventory"]["entry_markers"] == "◆ ◇"
 
     restored = AppSettings()
     apply_project_profile_components(path, restored)
+    assert restored.profile_headword_script_guard_version == 1
+    assert restored.profile_headword_script_guard_enabled is True
     assert restored.profile_tail_structure_version == 1
     assert restored.profile_tail_allow_pos is True
     assert restored.profile_tail_allow_inflection is False
@@ -1412,6 +1472,9 @@ def test_profile_setup_exposes_complete_headword_structure_controls():
     )
     text = source.read_text(encoding="utf-8")
     assert "完整词头结构（词头前 + 词头本体 + 词头后）" in text
+    assert "按 OCR 语言排除不兼容的词头首字符（推荐）" in text
+    assert "日语允许汉字/假名，中文允许汉字" in text
+    assert "profile_headword_script_guard_version = 1" in text
     assert "词头后结构（哪些内容可以作为新词条证据）" in text
     assert "词性 POS（s.m. / v.tr. / agg. / adj. …）" in text
     assert "词形 / 屈折变化" in text
