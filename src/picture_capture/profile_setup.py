@@ -363,6 +363,39 @@ class ProjectProfileWizard(tk.Toplevel):
             bool(getattr(s, "profile_allow_marker_prefix", False))
             if parser_controls_saved else structure_defaults["marker_prefix"]
         ))
+        tail_defaults = profile_tail_structure_defaults(s.dictionary_profile_id)
+        tail_controls_saved = int(
+            getattr(s, "profile_tail_structure_version", 0) or 0
+        ) >= 1
+        self.tail_allow_pos_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_pos", True))
+            if tail_controls_saved else tail_defaults["allow_pos"]
+        ))
+        self.tail_allow_inflection_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_inflection", True))
+            if tail_controls_saved else tail_defaults["allow_inflection"]
+        ))
+        self.tail_allow_variant_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_variant", True))
+            if tail_controls_saved else tail_defaults["allow_variant"]
+        ))
+        self.tail_allow_pronunciation_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_pronunciation", False))
+            if tail_controls_saved else tail_defaults["allow_pronunciation"]
+        ))
+        self.tail_allow_descriptor_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_descriptor", True))
+            if tail_controls_saved else tail_defaults["allow_descriptor"]
+        ))
+        self.tail_require_selected_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_require_selected", True))
+            if tail_controls_saved else tail_defaults["require_selected"]
+        ))
+        self.tail_allow_visual_rescue_var = tk.BooleanVar(value=(
+            bool(getattr(s, "profile_tail_allow_visual_rescue", False))
+            if tail_controls_saved else tail_defaults["allow_visual_rescue"]
+        ))
+        self.tail_structure_summary_var = tk.StringVar(value="")
         symbol_defaults = profile_symbol_inventory_defaults(s.dictionary_profile_id)
         symbol_inventory_saved = int(
             getattr(s, "profile_symbol_inventory_version", 0) or 0
