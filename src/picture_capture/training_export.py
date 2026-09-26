@@ -13,11 +13,7 @@ from PIL import Image, ImageOps
 from .formats import pdic_path, read_pdic, read_ppp
 from .image_utils import normalize_page_rgb
 from .models import AppSettings
-from .coordinate_space import (
-    SOURCE_COORDINATE_SPACE,
-    coordinate_contract,
-    setting_pixels,
-)
+from .coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
 from .processing import column_index, derive_geometry
 from .profile_semantics import (
     effective_page_settings,
@@ -219,9 +215,7 @@ def export_training_page(
     canonical_width, canonical_height = geometry.transform.canonical_size(
         image.size
     )
-    canonical_line_height = setting_pixels(
-        effective.character_height, canonical_width, effective,
-    )
+    canonical_line_height = int(effective.character_height)
     candidates: list[dict[str, Any]] = []
     for raw in list(cache.get("review_candidates") or []):
         if not isinstance(raw, dict):
@@ -310,11 +304,7 @@ def export_training_page(
             "columns": int(len(geometry.column_starts)),
             "source_column_paths_xy": source_column_paths,
             "line_height_px": int(canonical_line_height),
-            "row_padding_px": int(
-                setting_pixels(
-                    effective.row_padding, canonical_width, effective,
-                )
-            ),
+            "row_padding_px": int(effective.row_padding),
         },
         "artifacts": {
             "pdic": pdic_rel,
@@ -375,9 +365,6 @@ def write_training_manifest(
     software_version: str,
 ) -> Path:
     exported_settings = asdict(settings)
-    if int(exported_settings.get("geometry_coordinate_version", 0) or 0) >= 3:
-        exported_settings.pop("geometry_reference_width", None)
-        exported_settings.pop("parameter_display_width", None)
     manifest = {
         "format": TRAINING_EXPORT_FORMAT,
         "software_version": software_version,

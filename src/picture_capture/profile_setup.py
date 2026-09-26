@@ -12,7 +12,6 @@ from PIL import Image, ImageDraw, ImageTk
 
 from .ui_compat import screen_work_area
 from .appearance import themed_display_image
-from .coordinate_space import setting_pixels
 from .dictionary_profile import (
     dictionary_profile_preset,
     language_effective_settings,

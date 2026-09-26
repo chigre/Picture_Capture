@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from .coordinate_space import pixels_to_setting
 import re
 from typing import Iterable
 
@@ -442,11 +441,8 @@ def excluded_source_side_percent(settings: AppSettings, page_index: int) -> floa
 def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], page_index: int = 0) -> AppSettings:
     """Return a per-page copy with the confirmed page template applied.
 
-    Explicit physical header/footer percentages are converted at one boundary
-    only. Version-3 settings store the resulting full-resolution image pixel
-    value directly; older projects use compatibility conversion only while
-    being migrated. Vertical dictionaries keep physical top/bottom masks
-    separate from the internal reading-axis transform.
+    Explicit physical header/footer percentages are resolved once to original-
+    image Y pixels. No reference-width/display-width conversion is performed.
     """
     current = replace(settings)
     source_width = max(1, int(image_size[0]))
@@ -462,9 +458,7 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
             0.0, min(35.0, float(getattr(current, "profile_header_percent", 6.0)))
         )
         source_top = round(source_height * pct / 100.0)
-        current.start_y = pixels_to_setting(
-            source_top, source_width, current,
-        )
+        current.start_y = int(source_top)
         current.paddle_auto_header_rule = False
     elif header_mode == "auto" and horizontal:
         current.paddle_auto_header_rule = True
@@ -477,9 +471,7 @@ def effective_page_settings(settings: AppSettings, image_size: tuple[int, int], 
             0.0, min(35.0, float(getattr(current, "profile_footer_percent", 5.0)))
         )
         source_bottom = round(source_height * (1.0 - pct / 100.0))
-        current.bottom_y = pixels_to_setting(
-            source_bottom, source_width, current,
-        )
+        current.bottom_y = int(source_bottom)
         current.crop_to_bottom_y = True
     elif footer_mode == "auto":
         current.crop_to_bottom_y = int(getattr(current, "bottom_y", 0) or 0) > 0
