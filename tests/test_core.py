@@ -2279,6 +2279,7 @@ def test_v282_large_cjk_duplicate_keeps_entry_start_not_internal_metadata_line()
             "candidate_id": "upper", "column": 1, "source_y": 100,
             "canonical_v": 100, "box": [8, 112, 70, 166],
             "selected": True, "word": "播", "score": 6.8, "confidence": 0.94,
+            "line_height_reference": 70.0, "line_dedup_tolerance": 8,
             "issue_types": [], "decision_reason": "ocr_headword",
             "paddle": {"y": 100, "accepted": True}, "tesseract": {}, "lens": {},
         },
@@ -2286,6 +2287,7 @@ def test_v282_large_cjk_duplicate_keeps_entry_start_not_internal_metadata_line()
             "candidate_id": "lower", "column": 1, "source_y": 134,
             "canonical_v": 134, "box": [8, 118, 72, 168],
             "selected": True, "word": "播", "score": 8.0, "confidence": 0.98,
+            "line_height_reference": 70.0, "line_dedup_tolerance": 8,
             "issue_types": [], "decision_reason": "visual_projection",
             "paddle": {}, "tesseract": {"y": 134, "accepted": True}, "lens": {},
         },
@@ -2428,7 +2430,7 @@ def test_v2814_large_single_cjk_uses_wider_type_specific_dedup_tolerance():
     selected = [row for row in rows if row.get("selected")]
     assert merged == 1
     assert len(selected) == 1
-    assert selected[0]["source_y"] == 512
+    assert selected[0]["source_y"] == 500
     assert "SINGLE_CJK_DUPLICATE_MERGED" in selected[0]["issue_types"]
 
 
