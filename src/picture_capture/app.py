@@ -784,6 +784,85 @@ def _focused_review_character_tokens(value: object) -> tuple[str, ...]:
     return tuple(dict.fromkeys(parts))
 
 
+def _apply_focused_review_page_updates(
+    page: Path,
+    pages: list[Path],
+    page_index: int,
+    changes: list[dict],
+) -> tuple[list[tuple[int, int, int, str]], list[str]]:
+    """Safely apply focused-review text edits to exactly one page PDIC.
+
+    Coordinates, row count and page links are preserved. Ambiguous/missing
+    coordinate matches abort the *whole page* update. Publication is atomic via
+    write_pdic(), then reread/verified. A failed verification restores the
+    original page before the exception escapes.
+    """
+    target_path = pdic_path(page)
+    original_entries = read_pdic(target_path)
+    working = [replace(entry) for entry in original_entries]
+    used: set[int] = set()
+    planned: list[tuple[int, int, int, str]] = []
+    conflicts: list[str] = []
+
+    for change in changes:
+        x = int(change["x"])
+        y = int(change["y"])
+        original_word = str(change.get("original_word") or "")
+        new_word = (
+            str(change.get("new_word") or "")
+            .replace("\r", " ")
+            .replace("\n", " ")
+            .replace("#", "＃")
+            .strip()
+        )
+        exact = [
+            i for i, entry in enumerate(working)
+            if i not in used and int(entry.x) == x and int(entry.y) == y
+        ]
+        if len(exact) > 1:
+            preferred = [
+                i for i in exact if working[i].word == original_word
+            ]
+            exact = preferred or exact
+        if len(exact) != 1:
+            conflicts.append(f"{page.name}: ({x},{y}) {original_word}")
+            continue
+        entry_index = exact[0]
+        used.add(entry_index)
+        working[entry_index].word = new_word
+        planned.append((int(page_index), x, y, new_word))
+
+    if conflicts:
+        return [], conflicts
+
+    with Image.open(page) as opened:
+        image_width = int(opened.width)
+    current = page.stem
+    previous = pages[page_index - 1].stem if page_index > 0 else "@"
+    following = (
+        pages[page_index + 1].stem
+        if page_index + 1 < len(pages) else "@"
+    )
+    page_links = (current, previous, following)
+    try:
+        write_pdic(target_path, working, image_width, page_links)
+        verified = read_pdic(target_path)
+        if len(verified) != len(working):
+            raise RuntimeError("保存后 PDIC 行数发生变化")
+        expected = {(row[1], row[2]): row[3] for row in planned}
+        actual: dict[tuple[int, int], list[str]] = {}
+        for entry in verified:
+            actual.setdefault((int(entry.x), int(entry.y)), []).append(entry.word)
+        for key, value in expected.items():
+            values = actual.get(key, [])
+            if values.count(value) != 1:
+                raise RuntimeError(f"保存后坐标 {key} 的文本校验失败")
+    except Exception:
+        write_pdic(target_path, original_entries, image_width, page_links)
+        raise
+    return planned, []
+
+
 def _candidate_for_entry_from_list(
     entry: WordEntry,
     candidates: list[dict],
@@ -7860,85 +7939,13 @@ class FocusedReviewWindow(tk.Toplevel):
             conflicts: list[str] = []
             for page_index, changes in sorted(grouped.items()):
                 page = pages[page_index]
-                target_path = pdic_path(page)
-                original_entries = read_pdic(target_path)
-                working = [replace(entry) for entry in original_entries]
-                used: set[int] = set()
-                page_conflicts: list[str] = []
-                for change in changes:
-                    exact = [
-                        i for i, entry in enumerate(working)
-                        if i not in used
-                        and int(entry.x) == int(change["x"])
-                        and int(entry.y) == int(change["y"])
-                    ]
-                    if len(exact) > 1:
-                        preferred = [
-                            i for i in exact
-                            if working[i].word == str(change["original_word"])
-                        ]
-                        exact = preferred or exact
-                    if len(exact) != 1:
-                        page_conflicts.append(
-                            f"{page.name}: ({change['x']},{change['y']}) "
-                            f"{change['original_word']}"
-                        )
-                        continue
-                    entry_index = exact[0]
-                    used.add(entry_index)
-                    working[entry_index].word = str(change["new_word"])
-                    saved_rows.append(
-                        (
-                            int(page_index),
-                            int(change["x"]),
-                            int(change["y"]),
-                            str(change["new_word"]),
-                        )
-                    )
+                page_saved, page_conflicts = _apply_focused_review_page_updates(
+                    page, pages, page_index, changes
+                )
                 if page_conflicts:
                     conflicts.extend(page_conflicts)
-                    # Never partially rewrite a page when one of its requested
-                    # coordinate matches is ambiguous/missing.
-                    saved_rows = [
-                        row for row in saved_rows if row[0] != int(page_index)
-                    ]
                     continue
-                with Image.open(page) as opened:
-                    image_width = int(opened.width)
-                current = page.stem
-                previous = pages[page_index - 1].stem if page_index > 0 else "@"
-                following = (
-                    pages[page_index + 1].stem
-                    if page_index + 1 < len(pages) else "@"
-                )
-                pages_tuple = (current, previous, following)
-                try:
-                    write_pdic(
-                        target_path, working, image_width, pages_tuple
-                    )
-                    verified = read_pdic(target_path)
-                    if len(verified) != len(working):
-                        raise RuntimeError("保存后 PDIC 行数发生变化")
-                    expected = {
-                        (row[1], row[2]): row[3]
-                        for row in saved_rows if row[0] == page_index
-                    }
-                    actual = {
-                        (int(entry.x), int(entry.y)): entry.word
-                        for entry in verified
-                    }
-                    for key, value in expected.items():
-                        if actual.get(key) != value:
-                            raise RuntimeError(
-                                f"保存后坐标 {key} 的文本校验失败"
-                            )
-                except Exception:
-                    # Restore a semantically equivalent original PDIC through
-                    # the same atomic writer before propagating the error.
-                    write_pdic(
-                        target_path, original_entries, image_width, pages_tuple
-                    )
-                    raise
+                saved_rows.extend(page_saved)
                 saved_pages.append(page.name)
             return saved_rows, saved_pages, conflicts
 
