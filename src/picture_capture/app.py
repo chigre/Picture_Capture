@@ -11898,7 +11898,8 @@ class PictureCaptureApp(tk.Tk):
             "选择检测页面范围",
             f"将按页面列表上方当前选择的范围检测 {len(indices)} 页。\n"
             f"范围：{names[0]}" + (f" ～ {names[-1]}" if len(names) > 1 else "") +
-            "\n\n多页结果将取均值并自动填充全部普通版面参数。是否继续？",
+            "\n\n多页结果将取稳健汇总并填充分栏/起始Y/首栏X/栏宽/栏间空/行高等版面参数；"
+            "页底不再作为手工参数写入。是否继续？",
             parent=self,
         ):
             return
@@ -11919,6 +11920,8 @@ class PictureCaptureApp(tk.Tk):
                 fixed_columns=self.settings.columns,
             )
             for name, value in values.items():
+                if name == "bottom_y":
+                    continue
                 setattr(self.settings, name, value)
             self.sync_quick_settings(); self.save_settings(); self.redraw()
             suffix = "（任务提前停止，按已完成页面计算）" if stopped else ""
