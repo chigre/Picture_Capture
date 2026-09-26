@@ -1226,6 +1226,9 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "普通左缘短词可以作为词头" in text
     assert "【括号词】可以作为词头" in text
     assert "大字单字可以作为词头" in text
+    assert "分析大字右侧留白（仅辅助“大字单字”判断）" in text
+    assert "大字右侧检测宽度：" in text
+    assert "profile_cjk_right_context_width_percent" in text
     assert "固定符号开头（○ / ● / ◆ …）可以作为词头" in text
     assert "编号开头（1. / 2. / …）可以作为词头" in text
     assert "词头专属性（当前结构的视觉证据）" in text
