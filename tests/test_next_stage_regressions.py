@@ -12,7 +12,10 @@ from picture_capture.app import (
     transformed_entry_anchor, vertical_marker_contact_gap, vertical_ocr_menu_layout,
     vertical_overlay_layout,
 )
-from picture_capture.dictionary_profile import effective_project_profile_id, load_dictionary_profile
+from picture_capture.dictionary_profile import (
+    apply_project_profile_components, effective_project_profile_id,
+    load_dictionary_profile, profile_tail_structure_defaults, write_project_profile,
+)
 from picture_capture.models import (
     AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
 )
@@ -34,7 +37,8 @@ from picture_capture.profile_semantics import (
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
     _detect_visual_entry_markers, _ordinary_strong_edge_visual_rescue,
-    _repair_multiline_headword_state_machine, parse_headword_text,
+    _repair_multiline_headword_state_machine, _selected_tail_structure_evidence,
+    parse_headword_text,
     prepare_ocr_band, run_paddle_band,
 )
 from picture_capture.visual_marker_templates import (
@@ -1301,6 +1305,122 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "下半页候选" in text
     assert "左缘最大漂移" in text
     assert "原始OCR完整但词头在中途停止" in text
+
+
+def test_headword_profiles_seed_explicit_tail_structure_defaults():
+    latin = profile_tail_structure_defaults("latin_regular")
+    assert latin == {
+        "allow_pos": True,
+        "allow_inflection": True,
+        "allow_variant": True,
+        "allow_pronunciation": False,
+        "allow_descriptor": True,
+        "require_selected": True,
+        "allow_visual_rescue": True,
+    }
+    numbered = profile_tail_structure_defaults("numbered_prefix")
+    assert numbered["require_selected"] is False
+    assert numbered["allow_visual_rescue"] is False
+    cjk = profile_tail_structure_defaults("cjk_visual")
+    assert not any(
+        cjk[name]
+        for name in (
+            "allow_pos", "allow_inflection", "allow_variant",
+            "allow_pronunciation", "allow_descriptor",
+            "require_selected", "allow_visual_rescue",
+        )
+    )
+
+
+def test_selected_tail_structure_evidence_obeys_project_checkboxes():
+    settings = AppSettings(
+        ocr_language="ita",
+        profile_tail_structure_version=1,
+        profile_tail_allow_pos=False,
+        profile_tail_allow_inflection=False,
+        profile_tail_allow_variant=True,
+        profile_tail_allow_pronunciation=False,
+        profile_tail_allow_descriptor=False,
+    )
+    profile = load_dictionary_profile(preset="latin_regular", language="ita")
+    patterns = _compile_patterns(settings, profile)
+    parsed = parse_headword_text(
+        "abbandonata, da agg. forma femminile",
+        settings, patterns, profile,
+    )
+    assert parsed is not None
+    assert parsed.has_pos
+    assert parsed.variants
+    evidence, features = _selected_tail_structure_evidence(settings, parsed)
+    assert evidence == ("variant",)
+    assert features["available_pos"] is True
+    assert features["selected_pos"] is False
+    assert features["selected_variant"] is True
+
+
+def test_complete_headword_structure_round_trips_in_v3_sidecar(tmp_path):
+    path = tmp_path / "dictionary_profile.json"
+    settings = AppSettings(
+        dictionary_profile_id="latin_regular",
+        ocr_language="ita",
+        profile_parser_controls_version=1,
+        profile_allow_ordinary_left_edge=True,
+        profile_allow_numbered_prefix=False,
+        profile_allow_marker_prefix=True,
+        profile_cjk_allow_single_headword=False,
+        profile_cjk_allow_bracketed_headword=False,
+        profile_tail_structure_version=1,
+        profile_tail_allow_pos=True,
+        profile_tail_allow_inflection=False,
+        profile_tail_allow_variant=True,
+        profile_tail_allow_pronunciation=True,
+        profile_tail_allow_descriptor=False,
+        profile_tail_require_selected=True,
+        profile_tail_allow_visual_rescue=True,
+        profile_symbol_inventory_version=1,
+        profile_symbol_inventory_enabled=True,
+        profile_entry_marker_symbols="◆ ◇",
+        profile_bracket_open_symbols="",
+        profile_symbol_visual_rescue_enabled=True,
+        profile_symbol_lane_required=True,
+        profile_symbol_lane_tolerance_percent=45,
+    )
+    write_project_profile(path, settings, "latin_regular", force=True)
+    payload = __import__("json").loads(path.read_text(encoding="utf-8"))
+    assert payload["headword_structure"]["tail"]["allow_pronunciation"] is True
+    assert payload["headword_structure"]["starts"]["marker_prefix"] is True
+    assert payload["headword_structure"]["symbol_inventory"]["entry_markers"] == "◆ ◇"
+
+    restored = AppSettings()
+    apply_project_profile_components(path, restored)
+    assert restored.profile_tail_structure_version == 1
+    assert restored.profile_tail_allow_pos is True
+    assert restored.profile_tail_allow_inflection is False
+    assert restored.profile_tail_allow_variant is True
+    assert restored.profile_tail_allow_pronunciation is True
+    assert restored.profile_tail_allow_descriptor is False
+    assert restored.profile_tail_require_selected is True
+    assert restored.profile_tail_allow_visual_rescue is True
+    assert restored.profile_allow_marker_prefix is True
+    assert restored.profile_entry_marker_symbols == "◆ ◇"
+
+
+def test_profile_setup_exposes_complete_headword_structure_controls():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "profile_setup.py"
+    )
+    text = source.read_text(encoding="utf-8")
+    assert "完整词头结构（词头前 + 词头本体 + 词头后）" in text
+    assert "词头后结构（哪些内容可以作为新词条证据）" in text
+    assert "词性 POS（s.m. / v.tr. / agg. / adj. …）" in text
+    assert "词形 / 屈折变化" in text
+    assert "变体 / 性数变化" in text
+    assert "发音 / 音标" in text
+    assert "描述型结构" in text
+    assert "普通左缘词至少需要命中一种上面勾选的词后结构" in text
+    assert "允许“严格左缘 + 明显粗体”视觉补救" in text
+    assert "profile_tail_structure_version = 1" in text
 
 
 def test_latin_regular_italian_pos_labels_tolerate_ocr_dot_spacing():
