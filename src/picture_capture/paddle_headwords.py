@@ -292,6 +292,87 @@ def _is_japanese_ocr(settings: AppSettings) -> bool:
     return bool(parts.intersection({"jpn", "jpn_vert", "japan"}) or paddle_lang == "japan")
 
 
+_SYMBOL_FAMILY_BY_LITERAL = {
+    "○": "circle_open", "◯": "circle_open", "◦": "circle_open",
+    "●": "circle_filled", "•": "circle_filled", "◉": "circle_filled",
+    "◇": "diamond_open", "◆": "diamond_filled",
+    "□": "square_open", "■": "square_filled",
+    "△": "triangle_open", "▽": "triangle_open", "▷": "triangle_open", "◁": "triangle_open",
+    "▲": "triangle_filled", "▼": "triangle_filled", "▶": "triangle_filled", "►": "triangle_filled", "◀": "triangle_filled",
+    "【": "bracket_open", "〔": "bracket_open", "［": "bracket_open", "[": "bracket_open",
+    "「": "bracket_open", "『": "bracket_open", "〈": "bracket_open", "《": "bracket_open",
+}
+
+_BRACKET_CLOSER_BY_OPENER = {
+    "【": "】", "〔": "〕", "［": "］", "[": "]",
+    "「": "」", "『": "』", "〈": "〉", "《": "》",
+}
+
+
+def _split_configured_symbols(value: str | None) -> tuple[str, ...]:
+    text = str(value or "").strip()
+    if not text:
+        return ()
+    parts = re.split(r"[\s,，、;；]+", text)
+    return tuple(dict.fromkeys(part for part in parts if part))
+
+
+def _configured_symbol_inventory(
+    settings: AppSettings, profile: DictionaryProfile,
+) -> dict[str, Any]:
+    """Resolve dictionary-specific symbol roles with Project Profile overrides."""
+    base = dict(profile.symbol_inventory or {})
+    entry = tuple(str(x) for x in base.get("entry_markers", []) if str(x))
+    if not entry:
+        entry = tuple(str(x) for x in profile.entry_leading_symbols if str(x))
+    bracket = tuple(str(x) for x in base.get("bracket_openers", []) if str(x))
+    saved = int(getattr(settings, "profile_symbol_inventory_version", 0) or 0) >= 1
+    if saved:
+        enabled = bool(getattr(settings, "profile_symbol_inventory_enabled", True))
+        entry = _split_configured_symbols(
+            getattr(settings, "profile_entry_marker_symbols", "")
+        ) if enabled else ()
+        bracket = _split_configured_symbols(
+            getattr(settings, "profile_bracket_open_symbols", "")
+        ) if enabled else ()
+        visual_rescue = bool(
+            getattr(settings, "profile_symbol_visual_rescue_enabled", True)
+        )
+        lane_required = bool(
+            getattr(settings, "profile_symbol_lane_required", True)
+        )
+        lane_tolerance = max(
+            20, min(
+                120,
+                int(getattr(settings, "profile_symbol_lane_tolerance_percent", 50) or 50),
+            )
+        )
+    else:
+        enabled = bool(base.get("enabled", True))
+        visual_rescue = bool(base.get("visual_rescue", True))
+        lane_required = bool(base.get("lane_expected", False))
+        lane_tolerance = max(
+            20, min(120, int(base.get("lane_tolerance_percent") or 50))
+        )
+    families = {
+        _SYMBOL_FAMILY_BY_LITERAL[symbol]
+        for symbol in entry + bracket
+        if symbol in _SYMBOL_FAMILY_BY_LITERAL
+    }
+    families.update(
+        str(x) for x in base.get("visual_families", []) if str(x)
+    )
+    return {
+        "enabled": enabled,
+        "entry_markers": entry,
+        "bracket_openers": bracket,
+        "visual_rescue": visual_rescue,
+        "lane_required": lane_required,
+        "lane_tolerance_percent": lane_tolerance,
+        "visual_families": tuple(sorted(families)),
+    }
+
+
 def _parse_cjk_marker_pinyin_headword(
     text: str, settings: AppSettings, profile: DictionaryProfile,
 ) -> HeadwordParse | None:
@@ -304,19 +385,16 @@ def _parse_cjk_marker_pinyin_headword(
     if not _is_chinese_ocr(settings):
         return None
     parse_text, repairs = _repair_headword_ocr(text)
-    if int(getattr(settings, "profile_parser_controls_version", 0) or 0) >= 1:
-        generic_markers = ("○", "●", "◦", "•", "〓", "◆", "◇", "►", "▶")
-        profile_markers = (
-            tuple(m for m in profile.entry_leading_symbols if m)
-            if profile.uses_parser("cjk_marker_pinyin") else ()
+    inventory = _configured_symbol_inventory(settings, profile)
+    markers = tuple(
+        sorted(
+            dict.fromkeys(inventory["entry_markers"]),
+            key=len,
+            reverse=True,
         )
-        markers = tuple(
-            sorted(dict.fromkeys(generic_markers + profile_markers), key=len, reverse=True)
-        )
-    else:
-        markers = tuple(sorted((m for m in profile.entry_leading_symbols if m), key=len, reverse=True))
-        if not markers:
-            markers = ("○", "●", "◦", "•", "〓")
+    )
+    if not markers:
+        return None
     marker_pattern = "|".join(re.escape(m) for m in markers)
     match = re.match(
         rf"^\s*(?P<marker>{marker_pattern})\s*(?P<lemma>[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff][\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaffA-Za-z0-9·-]{{0,23}})",
