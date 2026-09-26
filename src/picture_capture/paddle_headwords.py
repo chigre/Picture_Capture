@@ -4002,7 +4002,15 @@ def _ordinary_strong_edge_visual_rescue(
     remain true: strict left edge, clear bold contrast, normal line height,
     adequate OCR confidence, and no continuation/noise signal.
     """
-    if not bool(getattr(settings, "paddle_allow_strong_edge_visual_rescue", False)):
+    tail_controls_active = int(
+        getattr(settings, "profile_tail_structure_version", 0) or 0
+    ) >= 1
+    rescue_enabled = (
+        bool(getattr(settings, "profile_tail_allow_visual_rescue", False))
+        if tail_controls_active
+        else bool(getattr(settings, "paddle_allow_strong_edge_visual_rescue", False))
+    )
+    if not rescue_enabled:
         return False
     if (
         parsed is None
