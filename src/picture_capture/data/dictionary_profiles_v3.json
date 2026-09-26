@@ -306,6 +306,15 @@
             "¶"
           ]
         }
+      },
+      "tail_structure": {
+        "allow_pos": true,
+        "allow_inflection": true,
+        "allow_variant": true,
+        "allow_pronunciation": false,
+        "allow_descriptor": true,
+        "require_selected": true,
+        "allow_visual_rescue": true
       }
     },
     "numbered_prefix": {
@@ -320,7 +329,16 @@
       "family": "numbered_prefix",
       "validated_examples": [
         "RUIGO"
-      ]
+      ],
+      "tail_structure": {
+        "allow_pos": true,
+        "allow_inflection": true,
+        "allow_variant": true,
+        "allow_pronunciation": false,
+        "allow_descriptor": true,
+        "require_selected": false,
+        "allow_visual_rescue": false
+      }
     },
     "cjk_visual": {
       "parser_modes": [
@@ -398,6 +416,15 @@
         "visual_families": [
           "bracket_open"
         ]
+      },
+      "tail_structure": {
+        "allow_pos": false,
+        "allow_inflection": false,
+        "allow_variant": false,
+        "allow_pronunciation": false,
+        "allow_descriptor": false,
+        "require_selected": false,
+        "allow_visual_rescue": false
       }
     },
     "marker_prefixed": {
@@ -483,6 +510,15 @@
           "triangle_open",
           "triangle_filled"
         ]
+      },
+      "tail_structure": {
+        "allow_pos": true,
+        "allow_inflection": true,
+        "allow_variant": true,
+        "allow_pronunciation": false,
+        "allow_descriptor": true,
+        "require_selected": false,
+        "allow_visual_rescue": false
       }
     },
     "custom": {
@@ -520,7 +556,16 @@
       "display_name": "自定义结构",
       "description": "保留高级参数和自定义规则，不绑定具体语言、方向或栏数。",
       "family": "custom",
-      "validated_examples": []
+      "validated_examples": [],
+      "tail_structure": {
+        "allow_pos": true,
+        "allow_inflection": true,
+        "allow_variant": true,
+        "allow_pronunciation": false,
+        "allow_descriptor": true,
+        "require_selected": true,
+        "allow_visual_rescue": false
+      }
     },
     "legacy_spanish_structured": {
       "parser_modes": [
@@ -657,7 +702,16 @@
       "description": "保留高级参数和自定义规则，不绑定具体语言、方向或栏数。",
       "family": "legacy_spanish_structured",
       "validated_examples": [],
-      "user_visible": false
+      "user_visible": false,
+      "tail_structure": {
+        "allow_pos": true,
+        "allow_inflection": true,
+        "allow_variant": true,
+        "allow_pronunciation": false,
+        "allow_descriptor": true,
+        "require_selected": true,
+        "allow_visual_rescue": false
+      }
     }
   },
   "languages": {
