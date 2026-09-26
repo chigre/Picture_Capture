@@ -4184,7 +4184,10 @@ class ReviewWindow(tk.Toplevel):
             value=bool(getattr(parent.settings, "focused_review_exclude_reference_words", False))
         )
         self.focused_characters_var = tk.StringVar(
-            value=str(getattr(parent.settings, "focused_review_characters", "") or "")
+            value=str(
+                getattr(parent.settings, "focused_review_characters", "")
+                or "椿,彝,壯,鳥,傅,顔,彝,榖,歴,内,脱,書,鳴"
+            )
         )
         self.focused_batch_size_var = tk.StringVar(
             value=str(max(1, int(getattr(parent.settings, "focused_review_batch_size", 40) or 40)))
@@ -13882,34 +13885,22 @@ class PictureCaptureApp(tk.Tk):
             delete_x = float(index_x)
             delete_y = float(index_y + max(1, index_label.winfo_reqheight()) + 1)
             delete_anchor = index_anchor
-        delete_bg = str(self.canvas.cget("bg"))
-        delete_button = tk.Button(
-            self.canvas,
+        delete_item = self.canvas.create_text(
+            delete_x,
+            delete_y,
             text="X",
-            width=2,
-            takefocus=False,
-            relief="flat",
-            bd=0,
-            highlightthickness=0,
-            padx=0,
-            pady=0,
-            cursor="hand2",
-            fg=marker_control_bg,
-            bg=delete_bg,
-            activeforeground=marker_control_bg,
-            activebackground=delete_bg,
-            command=lambda e=entry: self.delete_entry(e),
+            fill=marker_control_bg,
+            anchor=delete_anchor,
+            font=_entry_font_spec(
+                main_family, max(8, round(editor_font_size * 0.65)), False, False,
+            ),
         )
-        delete_button._pc_skip_classic_appearance = True
-        if processing_readonly:
-            delete_button.configure(state="disabled")
-        self.overlay_widgets.append(delete_button)
-        record["widgets"].append(delete_button)
-        record["delete_widget"] = delete_button
-        delete_window = self.canvas.create_window(
-            delete_x, delete_y, window=delete_button, anchor=delete_anchor,
-        )
-        record["canvas_items"].append(delete_window)
+        if not processing_readonly:
+            self.canvas.tag_bind(
+                delete_item, "<Button-1>", lambda _event, e=entry: self.delete_entry(e)
+            )
+        record["delete_item"] = delete_item
+        record["canvas_items"].append(delete_item)
 
         if self.crop_preview_var.get():
             left, top, right, bottom = line_box(entry, geometry, self.image, self.settings)
@@ -15075,8 +15066,8 @@ class PictureCaptureApp(tk.Tk):
         else:
             options["disabledbackground"] = bg
         widget.configure(**options)
-        # Sequence remains marker-filled; the delete X is intentionally
-        # background-free and uses the headword-marker colour as its text.
+        # Sequence remains marker-filled; the delete X is a true canvas-text
+        # overlay with no background and uses the headword-marker colour.
         record = self.__dict__.get("_entry_visuals", {}).get(id(entry))
         marker_bg = str(self.settings.headword_marker_color)
         index_control = record.get("index_widget") if record else None
@@ -15085,14 +15076,10 @@ class PictureCaptureApp(tk.Tk):
                 index_control.configure(bg=marker_bg, fg="#ffffff")
             except tk.TclError:
                 pass
-        delete_control = record.get("delete_widget") if record else None
-        if delete_control is not None:
+        delete_item = record.get("delete_item") if record else None
+        if delete_item is not None:
             try:
-                delete_bg = str(self.canvas.cget("bg"))
-                delete_control.configure(
-                    bg=delete_bg, fg=marker_bg,
-                    activebackground=delete_bg, activeforeground=marker_bg,
-                )
+                self.canvas.itemconfigure(delete_item, fill=marker_bg)
             except tk.TclError:
                 pass
 
