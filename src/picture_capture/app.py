@@ -1770,7 +1770,6 @@ class SettingsDialog(tk.Toplevel):
         ("词典分栏", "columns", int), ("两栏中隔", "gutter", int),
         ("单栏宽距", "column_width", int), ("起始点 Y", "start_y", int),
         ("正文结束 Y", "bottom_y", int), ("首栏 X", "manual_x", int),
-        ("手动 Y", "manual_y", int),
         ("正文缩进", "body_indent", int), ("单行字高", "character_height", int),
         ("行间空白", "row_padding", int), ("向右比例 %", "right_ratio", float),
         ("VB 向右比例 1/x", "ordinary_right_divisor", float),
@@ -1904,7 +1903,7 @@ class SettingsDialog(tk.Toplevel):
 
     CHECK_GROUPS = [
         ("版面行为", [
-            ("手动分栏", "manual_columns"),
+            ("使用自动版面参数", "ordinary_auto_layout"),
             ("跟随词头列倾斜和局部变形", "follow_column_deformation"),
         ]),
         ("OCR 处理", [
@@ -1932,7 +1931,6 @@ class SettingsDialog(tk.Toplevel):
         "start_y": "正文起始 Y",
         "bottom_y": "正文结束 Y",
         "manual_x": "第一栏左缘 X",
-        "manual_y": "手动模式起始 Y",
         "column_width": "单栏正文宽度",
         "gutter": "栏间空白",
         "character_height": "典型行高",
@@ -1990,7 +1988,6 @@ class SettingsDialog(tk.Toplevel):
         "start_y": "作用：正文起始 Y，单位为原图像素，原点在扫描图左上角，Y 向下。运行时直接使用该像素值，不按页面宽度或显示缩放换算。\n\n若 Project Profile 明确设置页眉模式/页眉比例，页面模板可以为当前页计算实际正文上界；最终保存/显示的坐标仍使用原图 X/Y。",
         "bottom_y": "作用：正文结束 Y，单位为原图像素，用来限制版面分析和词头识别的有效正文区。运行时直接使用该像素值，不按页面宽度或显示缩放换算。\n\n调整：过小会漏掉页尾词条，过大可能把页码/脚注吸入正文。",
         "manual_x": "作用：第一栏左缘 X，单位为原图像素，原点在扫描图左上角，X 向右。其余栏位置结合栏宽、栏间距推导；该值不会因窗口缩放或页面宽度而改变。\n\n镜像、RTL、竖排等阅读方向只影响内部读取顺序/临时变换，不改变这里保存的原图 X/Y 坐标语义。",
-        "manual_y": "作用：对应 VB.NET 手动模式的【手动 Y】。只有勾选【手动分栏】时，普通画线才用它替代正文起始 Y 作为扫描起点；自动模式继续使用【正文起始 Y】。单位始终为全分辨率原图 Y。",
         "body_indent": "作用：普通画线把它恢复为 VB.NET 原版的【正文缩进】先验。词头候选必须先在栏左【微调判距】内找到黑色锚点，然后才向右用正文缩进宽度做二维墨迹确认；正文从该缩进位置开始时，不会仅因为正文有墨迹就被当成新词头。它也参与栏左跟踪的局部搜索范围。\n\n调整：应接近释义正文相对词头栏左缘的真实缩进。过小会让二维确认范围不足；过大则会引入更多上下邻行墨迹，但候选锚点仍受【微调判距 < 正文缩进】约束。",
         "character_height": "作用：项目的典型单行字高，单位为原图像素。普通画线用它估计行尺度；OCR画线的行距/空白判断、横线 Y 精修和部分 CJK 视觉逻辑也会以它作为尺度基准。\n\n调整：应接近正文常规印刷行高，而不是某个特别大的词头字高。",
         "row_padding": "作用：典型行周围的额外留白尺度。它参与普通画线行盒、词条单行框高度以及 OCR 词头前空白/分隔位置等计算。\n\n调整：增大可给文字上下更多安全空间，但过大会让相邻行更容易重叠/合并；过小则可能让横线或单行切图贴字过紧。应和【典型行高】一起校准。",
@@ -2212,7 +2209,7 @@ class SettingsDialog(tk.Toplevel):
     }
 
     CHECK_HELP = {
-        "manual_columns": "开启：普通画线/版面几何优先使用项目中保存的手工栏位置，而不是让每页自动估计。适合自动分栏被插图、装饰线或异常空白稳定干扰的项目。\n\n关闭（推荐默认）：按实际页面估计栏几何，对轻微扫描偏移更鲁棒。若开启后栏线整体错位，应先检查 manual_x、column_width、gutter，而不是继续调 OCR。",
+        "ordinary_auto_layout": "开启：每一页执行【普通画线】前先自动检测该页版面，再只用主界面勾选的版面字段覆盖项目基准值，形成这一页专属的临时参数后再运行 VB 普通画线。页面之间互不污染，检测结果不会把上一页参数永久写到下一页。\n\n关闭：普通画线直接使用项目当前版面参数。页底始终由页面高度、Project Profile 页底规则或 SECTION 决定，不使用主界面的正文结束 Y。",
         "follow_column_deformation": "开启：沿页面分块重新跟踪栏左缘，让栏路径可随书脊弯曲、斜拍或局部形变变化；会使用搜索半径、分块高度和最大步移三个高级参数。\n\n关闭：栏左缘按较直的几何路径处理，平直扫描更稳定也更简单。没有明显弯曲时不建议开启。",
         "paddle_use_paddleocr": "开启：PaddleOCR 作为 OCR画线的主文字识别来源。默认推荐，因为后续 grammar/parser、候选评分和多 OCR 融合都围绕结构化文字结果工作。\n\n关闭：仅用于专门测试其他引擎或故障排查；若同时没有可用 Tesseract/Lens，OCR画线将缺少主要文字来源。",
         "paddle_use_textline_orientation": "开启：让 PaddleOCR 额外处理文字行方向/旋转信息，适合文字行方向不稳定、局部旋转或特殊扫描。\n\n代价：通常增加计算并可能改变模型路径。普通已经规范化的横排/竖排页面不需要为了“更准”而默认开启，优先让 Project Profile 的页面变换处理整体方向。",
@@ -2240,7 +2237,7 @@ class SettingsDialog(tk.Toplevel):
     NORMAL_CHECKS = (
         ("自动精修横线 Y", "paddle_refine_separator_y"),
         ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
-        ("手动分栏", "manual_columns"),
+        ("使用自动版面参数", "ordinary_auto_layout"),
     )
     OCR_COMMON_CHECKS = (
         ("PaddleOCR 主识别", "paddle_use_paddleocr"),
@@ -10980,18 +10977,17 @@ class PictureCaptureApp(tk.Tk):
         )
         normal.pack(fill="x")
         add_field(normal, 0, 0, "分栏数：", "columns", int)
-        add_field(normal, 0, 2, "页眉Y：", "start_y", int)
-        add_field(normal, 0, 4, "页尾Y：", "bottom_y", int)
-        add_field(normal, 0, 6, "首栏X：", "manual_x", int)
-        add_field(normal, 1, 0, "单栏宽：", "column_width", int)
-        add_field(normal, 1, 2, "栏间空：", "gutter", int)
-        add_field(normal, 1, 4, "单行高：", "character_height", int)
-        add_field(normal, 1, 6, "行间空：", "row_padding", int)
-        add_field(normal, 2, 0, "正文缩进：", "body_indent", int)
-        add_field(normal, 2, 2, "微调判距：", "horizontal_tolerance", int)
+        add_field(normal, 0, 2, "正文起始Y：", "start_y", int)
+        add_field(normal, 0, 4, "首栏X：", "manual_x", int)
+        add_field(normal, 0, 6, "单栏宽：", "column_width", int)
+        add_field(normal, 1, 0, "栏间空：", "gutter", int)
+        add_field(normal, 1, 2, "单行高：", "character_height", int)
+        add_field(normal, 1, 4, "行间空：", "row_padding", int)
+        add_field(normal, 1, 6, "正文缩进：", "body_indent", int)
+        add_field(normal, 2, 0, "微调判距：", "horizontal_tolerance", int)
         shared_draw_row = ttk.Frame(normal)
         shared_draw_row.grid(
-            row=2, column=4, columnspan=4, sticky="w", pady=(4, 0)
+            row=2, column=2, columnspan=6, sticky="w", pady=(4, 0)
         )
         refine_y_var = tk.BooleanVar(
             value=bool(self.settings.paddle_refine_separator_y)
@@ -11004,7 +11000,36 @@ class PictureCaptureApp(tk.Tk):
             command=self._quick_parameter_changed,
         ).pack(side="left")
 
-        row = ttk.Frame(normal); row.grid(row=3, column=0, columnspan=8, sticky="ew", pady=(4, 0))
+        auto_layout_row = ttk.Frame(normal)
+        auto_layout_row.grid(row=3, column=0, columnspan=8, sticky="ew", pady=(4, 0))
+        auto_layout_var = tk.BooleanVar(value=bool(self.settings.ordinary_auto_layout))
+        self.quick_bool_vars["ordinary_auto_layout"] = auto_layout_var
+        ttk.Checkbutton(
+            auto_layout_row,
+            text="使用自动版面参数",
+            variable=auto_layout_var,
+            command=self._quick_parameter_changed,
+        ).pack(side="left")
+
+        auto_fields_row = ttk.Frame(normal)
+        auto_fields_row.grid(row=4, column=0, columnspan=8, sticky="w", padx=(18, 0), pady=(1, 0))
+        for text, name in (
+            ("分栏数", "ordinary_auto_columns"),
+            ("正文起始Y", "ordinary_auto_start_y"),
+            ("首栏X", "ordinary_auto_manual_x"),
+            ("单栏宽", "ordinary_auto_column_width"),
+            ("栏间空", "ordinary_auto_gutter"),
+            ("单行高", "ordinary_auto_character_height"),
+            ("行间空", "ordinary_auto_row_padding"),
+        ):
+            var = tk.BooleanVar(value=bool(getattr(self.settings, name)))
+            self.quick_bool_vars[name] = var
+            ttk.Checkbutton(
+                auto_fields_row, text=text, variable=var,
+                command=self._quick_parameter_changed,
+            ).pack(side="left", padx=(0, 6))
+
+        row = ttk.Frame(normal); row.grid(row=5, column=0, columnspan=8, sticky="ew", pady=(4, 0))
         ttk.Button(
             row, text="检测版面参数", command=self.detect_layout_current,
             style="PC.Compact.TButton",
@@ -11399,7 +11424,6 @@ class PictureCaptureApp(tk.Tk):
             return
         labels = {
             "start_y": "正文起始Y：",
-            "bottom_y": "正文结束Y：",
             "manual_x": "首栏X：",
         }
         for name, label in labels.items():
@@ -11417,7 +11441,7 @@ class PictureCaptureApp(tk.Tk):
                 if hasattr(self.settings, name):
                     value = getattr(self.settings, name)
                     if name in {
-                        "start_y", "bottom_y", "manual_x", "column_width",
+                        "start_y", "manual_x", "column_width",
                         "gutter", "character_height", "row_padding",
                     }:
                         value = self._quick_geometry_value(name)
@@ -11461,7 +11485,7 @@ class PictureCaptureApp(tk.Tk):
             original_geometry = {
                 name: self._quick_geometry_value(name)
                 for name in (
-                    "start_y", "bottom_y", "manual_x", "column_width",
+                    "start_y", "manual_x", "column_width",
                     "gutter", "character_height", "row_padding",
                 )
                 if name in self.quick_vars
