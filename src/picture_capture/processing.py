@@ -319,22 +319,31 @@ def _estimate_column_paths(
             for x in starts_analysis
         ]
 
-    canonical_width = max(1, round(analysis.width / max(scale, 1e-9)))
     body_indent = _source_px(settings.body_indent)
-    block_height_value = _source_px(settings.column_track_block_height)
-    radius_value = _source_px(settings.column_track_radius)
-    max_step_value = _source_px(settings.column_track_max_step)
+    radius_percent = max(
+        0.1, min(50.0, float(getattr(settings, "column_track_radius", 5.0) or 5.0))
+    )
+    block_height_percent = max(
+        0.1, min(25.0, float(getattr(settings, "column_track_block_height", 3.0) or 3.0))
+    )
+    max_slope_percent = max(
+        0.1, min(50.0, float(getattr(settings, "column_track_max_step", 8.0) or 8.0))
+    )
     dark = _adaptive_dark_mask(
         ImageOps.grayscale(analysis),
         max(3, round(_COLUMN_TRACK_ADAPTIVE_BLOCK * geometry_to_analysis)),
         _COLUMN_TRACK_ADAPTIVE_C,
     )
     height, width = dark.shape
-    block_height = max(30, round(block_height_value * geometry_to_analysis))
-    radius = max(8, round(radius_value * geometry_to_analysis))
+    body_height = max(1, int(bottom_analysis) - int(top_analysis))
+    block_height = max(30, round(body_height * block_height_percent / 100.0))
     paths: list[ColumnPath] = []
 
     for nominal_x, column_width in zip(starts_analysis, widths_analysis):
+        # Search range follows the actual current-page column width instead of
+        # an absolute source-pixel constant, so the same setting survives DPI
+        # changes and page-specific layout detection.
+        radius = max(8, round(column_width * radius_percent / 100.0))
         search_left = max(0, nominal_x - radius)
         search_right = min(
             width,
@@ -393,15 +402,10 @@ def _estimate_column_paths(
                     key=lambda j: abs(j - index),
                 )
                 filled.append(int(raw_x[nearest]))  # type: ignore[arg-type]
-        configured_step = max(
-            1, round(max_step_value * geometry_to_analysis)
-        )
-        # A genuine page tilt/curve changes gradually. Independently of an
-        # overly permissive saved max-step value, one vertical block must not
-        # drag the path by more than about 15% of that block's height. This
-        # rejects the common false signal from indented definition paragraphs.
-        geometric_step = max(2, round(block_height * 0.15))
-        stable_step = min(configured_step, geometric_step)
+        # Max local movement is a slope-like percentage of the current block
+        # height.  This keeps the accepted geometric tilt invariant when the
+        # user changes block height or scans at another resolution.
+        stable_step = max(1, round(block_height * max_slope_percent / 100.0))
         filled = _smooth_track(
             filled, stable_step, nominal_x=int(nominal_x),
         )
