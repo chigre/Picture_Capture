@@ -7828,10 +7828,14 @@ def test_page_crop_plan_declares_source_coordinate_space():
 
 
 def test_page_sections_sidecar_roundtrip_uses_managed_storage(tmp_path):
+    import json
+    from picture_capture.coordinate_space import SOURCE_COORDINATE_SPACE
+
     root = tmp_path / "dictionary"
     root.mkdir()
     ensure_project_storage(root, "test")
     page = root / "0001.png"
+    Image.new("RGB", (1200, 1600), "white").save(page)
     sections = [PageSection(100, 700), PageSection(820, 1400)]
     path = write_page_sections(
         page, sections, canonical_width=1200, canonical_height=1600,
@@ -7839,6 +7843,11 @@ def test_page_sections_sidecar_roundtrip_uses_managed_storage(tmp_path):
     )
     assert path == page_sections_path_for_image(page)
     assert path == root / "_PictureCapture" / "data" / "PageSections" / "0001.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["coordinate_space"] == SOURCE_COORDINATE_SPACE
+    assert "top_v" not in path.read_text(encoding="utf-8")
+    assert payload["sections"][0]["top_source_segment_xyxy"] == [[0, 100], [1199, 100]]
+    assert payload["sections"][0]["bottom_source_segment_xyxy"] == [[0, 700], [1199, 700]]
     assert read_page_sections(page) == sections
     lanes = build_reading_lanes(2, 0, 1600, sections)
     assert [(lane.section_index, lane.column_index) for lane in lanes] == [
@@ -7865,7 +7874,7 @@ def test_page_sections_single_explicit_region_is_preserved(tmp_path):
     assert read_page_sections(page) == []
 
 
-def test_page_sections_reads_migrated_legacy_qt_fallback(tmp_path):
+def test_page_sections_reads_legacy_canonical_qt_fallback(tmp_path):
     import json
     from picture_capture.project_storage import qt_root
 
@@ -7915,9 +7924,8 @@ def test_page_sections_sort_section_before_column():
 def test_page_sections_whole_entry_crop_follows_lanes_and_skips_gap():
     image = Image.new("RGB", (1000, 1000), "white")
     settings = AppSettings(
-        geometry_coordinate_version=2,
-        geometry_coordinate_space="canonical_reference_page_pixels",
-        geometry_reference_width=1000,
+        geometry_coordinate_version=3,
+        geometry_coordinate_space="source_image_pixels",
         columns=2,
         manual_x=20,
         column_width=420,
