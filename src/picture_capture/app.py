@@ -1794,9 +1794,9 @@ class SettingsDialog(tk.Toplevel):
         ("栏数策略", "layout_columns_policy", str),
         ("中央分隔线", "layout_column_separator_mode", str),
         ("分析阈值", "analysis_threshold_mode", str),
-        ("列跟踪搜索半径", "column_track_radius", int),
-        ("列跟踪分块高度", "column_track_block_height", int),
-        ("列跟踪最大步移", "column_track_max_step", int),
+        ("栏左跟随搜索范围（%栏宽）", "column_track_radius", float),
+        ("栏左跟随分块高度（%正文高）", "column_track_block_height", float),
+        ("栏左最大局部斜率（%块高）", "column_track_max_step", float),
         ("PaddleOCR 语言", "paddle_language", str),
         ("PaddleOCR 模型版本", "paddle_ocr_version", str),
         ("OCR图像预处理", "paddle_preprocessing", str),
@@ -1904,6 +1904,13 @@ class SettingsDialog(tk.Toplevel):
     CHECK_GROUPS = [
         ("版面行为", [
             ("使用自动版面参数", "ordinary_auto_layout"),
+            ("分栏数", "ordinary_auto_columns"),
+            ("正文起始Y", "ordinary_auto_start_y"),
+            ("首栏X", "ordinary_auto_manual_x"),
+            ("单栏宽", "ordinary_auto_column_width"),
+            ("栏间空", "ordinary_auto_gutter"),
+            ("单行高", "ordinary_auto_character_height"),
+            ("行间空", "ordinary_auto_row_padding"),
             ("跟随词头列倾斜和局部变形", "follow_column_deformation"),
         ]),
         ("OCR 处理", [
@@ -1951,6 +1958,9 @@ class SettingsDialog(tk.Toplevel):
         "analysis_right": "普通分析右边界",
         "row_step_multiplier": "检测后跳步",
         "horizontal_tolerance": "微调判距",
+        "column_track_radius": "栏左跟随搜索范围",
+        "column_track_block_height": "栏左跟随分块高度",
+        "column_track_max_step": "栏左最大局部斜率",
         "paddle_band_width_ratio": "OCR 识别带宽",
         "paddle_left_tolerance": "词头左缘容差",
         "paddle_rec_score_threshold": "OCR 片段最低置信度",
@@ -2004,9 +2014,9 @@ class SettingsDialog(tk.Toplevel):
         "analysis_left": "作用：普通画线原图 X 分析左边界。与右边界同时有效且右>左时，栏左锚点和横向白带分析都限制在该原图范围内；0/0 表示不额外限制。它不引入任何缩放坐标。",
         "analysis_right": "作用：普通画线原图 X 分析右边界。与左边界配合使用；默认 0 表示整页。所有数值均为全分辨率原图 X。",
         "row_step_multiplier": "作用：对应 VB.NET 找到候选并确定分隔 Y 后的跳步。下一次扫描从【当前分隔 Y + (单行字高+行间空白) × 本值】附近继续；默认 1.2。这样同一个词头的多个笔画和紧邻正文不会再次触发。",
-        "column_track_radius": "作用：开启【跟随栏左缘倾斜/弯曲】后，每个纵向分块允许在名义栏左缘附近向左右搜索真实墨迹边缘的半径，单位为原图像素。\n\n调整：过小跟不上明显弯曲/斜拍；过大可能把搜索吸到正文内部或邻栏。",
-        "column_track_block_height": "作用：开启列跟踪后，沿阅读轴把页面切成多高的块来重新估计栏左缘。块越小，路径能更细地跟随局部弯曲；块越大，路径更平滑稳定。\n\n调整：太小容易受单个粗字、插图、污点影响；太大则跟不上快速变化的书脊弯曲。应与搜索半径、最大步移一起理解。",
-        "column_track_max_step": "作用：限制相邻列跟踪锚点之间允许的最大水平跳变，避免某个分块突然追到正文或邻栏。\n\n调整：过小会把真实的快速弯曲强行拉直；过大则失去防跳栏作用。仅在已开启列跟踪且诊断显示路径被过度限制/突然跳变时调整。",
+        "column_track_radius": "作用：开启【跟随栏左缘倾斜/弯曲】后，搜索范围按当前页当前栏的实际栏宽计算：搜索半径 = 单栏宽 × 本百分比。默认 5%。因此不同 DPI、不同裁边或逐页自动版面参数下仍保持同一几何含义。\n\n调整：过小会跟不上明显倾斜/弯曲；过大则可能把正文缩进或邻栏墨迹吸进搜索走廊。",
+        "column_track_block_height": "作用：沿正文有效高度分块跟踪栏左缘：分块高度 = 当前页正文有效高度 × 本百分比。默认 3%，即通常把正文纵向分成约 30 多段。\n\n调整：太小容易受单个粗字、插图和污点影响；太大则会把真实局部弯曲过度拉平。",
+        "column_track_max_step": "作用：相邻跟踪锚点允许的最大横向变化改为局部斜率：最大步移 = 当前分块高度 × 本百分比。默认 8%。这样即使改变扫描分辨率或分块高度，允许的几何斜率仍保持一致。\n\n调整：过小会把真实倾斜强行拉直；过大则更容易被缩进正文或异常墨迹带偏。",
         "ocr_language": "作用：项目的主要词头/OCR语言，是多个组件的上层语义入口：用于选择/映射 PaddleOCR 与 Tesseract 语言、Dictionary Profile 默认结构、排序预设以及部分 CJK/拉丁解析路径。\n\n调整：应填写词头语言而不是释义语言。改变后可能导致 OCR 模型、Profile 和排序语义变化，已有 OCR 缓存/结果不应默认视为仍可比较，稳定项目中不要频繁切换。",
         "paddle_device": "兼容字段：旧项目中的 CPU/GPU 值继续读取，但运行时设备现在由本机环境自动决定，不再作为可迁移的项目参数。高级用户可用 PICTURE_CAPTURE_PADDLE_DEVICE=cpu/gpu 临时强制本机设备。",
         "paddle_preprocessing": "作用：决定送入 PaddleOCR 前的图像预处理。original 保留原图；grayscale 转灰度；auto_contrast 拉伸对比度；binary 强制二值化。\n\n选择：默认优先 original，因为 OCR 模型通常能利用原始灰度/颜色信息。只有扫描发灰、底色不均或模型确有改善证据时再改；过度二值化可能损失细笔画和重音符号。",
@@ -2139,8 +2149,8 @@ class SettingsDialog(tk.Toplevel):
         "ordinary_right_divisor": "1/x", "white_threshold_high": "0–1000",
         "white_threshold_low": "0–1000", "whitespace_adjustment": "原图px",
         "upward_ratio": "1/x", "analysis_left": "原图px", "analysis_right": "原图px",
-        "row_step_multiplier": "×行高", "column_track_radius": "原图px",
-        "column_track_block_height": "原图px", "column_track_max_step": "原图px",
+        "row_step_multiplier": "×行高", "column_track_radius": "% 单栏宽",
+        "column_track_block_height": "% 正文高度", "column_track_max_step": "% 分块高度",
         "paddle_band_width_ratio": "%", "paddle_band_left_margin": "原图px",
         "paddle_left_tolerance": "原图px", "paddle_max_input_side": "px",
         "paddle_separator_safety_px": "原图px", "paddle_separator_band_radius": "原图px",
@@ -2163,8 +2173,9 @@ class SettingsDialog(tk.Toplevel):
         "whitespace_adjustment": (0, 30, 1), "upward_ratio": (0.1, 10.0, 0.1),
         "row_step_multiplier": (0.5, 3.0, 0.1),
         "analysis_left": (0, 50000, 1), "analysis_right": (0, 50000, 1),
-        "column_track_radius": (0, 5000, 1), "column_track_block_height": (1, 10000, 1),
-        "column_track_max_step": (0, 5000, 1),
+        "column_track_radius": (0.5, 25.0, 0.5),
+        "column_track_block_height": (0.5, 20.0, 0.5),
+        "column_track_max_step": (0.5, 30.0, 0.5),
         "paddle_band_width_ratio": (1, 100, 1), "paddle_band_left_margin": (0, 5000, 1),
         "paddle_left_tolerance": (0, 5000, 1), "paddle_max_input_side": (256, 20000, 64),
         "paddle_separator_safety_px": (0, 1000, 1),
@@ -2207,8 +2218,15 @@ class SettingsDialog(tk.Toplevel):
     }
 
     CHECK_HELP = {
-        "ordinary_auto_layout": "开启：每一页执行【普通画线】前先自动检测该页版面，再只用主界面勾选的版面字段覆盖项目基准值，形成这一页专属的临时参数后再运行 VB 普通画线。页面之间互不污染，检测结果不会把上一页参数永久写到下一页。\n\n关闭：普通画线直接使用项目当前版面参数。页底始终由页面高度、Project Profile 页底规则或 SECTION 决定，不使用主界面的正文结束 Y。",
-        "follow_column_deformation": "开启：沿页面分块重新跟踪栏左缘，让栏路径可随书脊弯曲、斜拍或局部形变变化；会使用搜索半径、分块高度和最大步移三个高级参数。\n\n关闭：栏左缘按较直的几何路径处理，平直扫描更稳定也更简单。没有明显弯曲时不建议开启。",
+        "ordinary_auto_layout": "开启：每一页执行【普通画线】前先自动检测该页版面，再只用下方勾选的版面字段覆盖项目基准值，形成这一页专属的临时参数后再运行 VB 普通画线。页面之间互不污染。\n\n关闭：普通画线直接使用项目当前版面参数。",
+        "ordinary_auto_columns": "自动版面检测后，用当前页检测出的【分栏数】临时替换项目基准值；只影响本页普通画线，不写回下一页。",
+        "ordinary_auto_start_y": "自动版面检测后，用当前页检测出的【正文起始Y】临时替换项目基准值；适合页眉位置存在逐页漂移的扫描。",
+        "ordinary_auto_manual_x": "自动版面检测后，用当前页检测出的【首栏X】临时替换项目基准值；适合整页左右轻微漂移。",
+        "ordinary_auto_column_width": "自动版面检测后，用当前页检测出的【单栏宽】临时替换项目基准值；栏左跟随搜索范围也会按该页实际栏宽百分比计算。",
+        "ordinary_auto_gutter": "自动版面检测后，用当前页检测出的【栏间空】临时替换项目基准值；只影响当前页几何。",
+        "ordinary_auto_character_height": "自动版面检测后，用当前页检测出的【单行高】临时替换项目基准值；会影响普通画线的行尺度和跳步。",
+        "ordinary_auto_row_padding": "自动版面检测后，用当前页检测出的【行间空】临时替换项目基准值；与单行高共同决定普通画线行尺度。",
+        "follow_column_deformation": "开启：沿页面分块重新跟踪栏左缘，让栏路径可随书脊弯曲、斜拍或局部形变变化。三个相关参数现在都是相对量：搜索范围按单栏宽百分比、分块高度按正文高度百分比、最大局部斜率按分块高度百分比计算。\n\n关闭：栏左缘按较直的几何路径处理，平直扫描更稳定也更简单。",
         "paddle_use_paddleocr": "开启：PaddleOCR 作为 OCR画线的主文字识别来源。默认推荐，因为后续 grammar/parser、候选评分和多 OCR 融合都围绕结构化文字结果工作。\n\n关闭：仅用于专门测试其他引擎或故障排查；若同时没有可用 Tesseract/Lens，OCR画线将缺少主要文字来源。",
         "paddle_use_textline_orientation": "开启：让 PaddleOCR 额外处理文字行方向/旋转信息，适合文字行方向不稳定、局部旋转或特殊扫描。\n\n代价：通常增加计算并可能改变模型路径。普通已经规范化的横排/竖排页面不需要为了“更准”而默认开启，优先让 Project Profile 的页面变换处理整体方向。",
         "paddle_remove_syllable_separators": "开启：最终 lemma 归一化时去掉音节分隔点（如 ·、•、∙、‧），并对部分 OCR 分隔符误识别做保守清理；真正的单个词内连字符原则上保留。\n\n关闭：保留词头中的这些分隔符，适合词典索引本身就要求保留音节标记的项目。它改变输出 lemma 文本，不改变词头 Y。",
@@ -2236,6 +2254,13 @@ class SettingsDialog(tk.Toplevel):
         ("自动精修横线 Y", "paddle_refine_separator_y"),
         ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
         ("使用自动版面参数", "ordinary_auto_layout"),
+        ("分栏数", "ordinary_auto_columns"),
+        ("正文起始Y", "ordinary_auto_start_y"),
+        ("首栏X", "ordinary_auto_manual_x"),
+        ("单栏宽", "ordinary_auto_column_width"),
+        ("栏间空", "ordinary_auto_gutter"),
+        ("单行高", "ordinary_auto_character_height"),
+        ("行间空", "ordinary_auto_row_padding"),
     )
     OCR_COMMON_CHECKS = (
         ("PaddleOCR 主识别", "paddle_use_paddleocr"),
@@ -2956,7 +2981,7 @@ class SettingsDialog(tk.Toplevel):
             normal,
             "版面行为",
             self.NORMAL_CHECKS,
-            intro="自动精修横线 Y 直接参与普通画线流程；其余两项只在扫描页确实弯曲/倾斜或自动分栏失败时调整。",
+            intro="【使用自动版面参数】下面的七项决定每页检测后临时更新哪些版面字段；【跟随栏左缘倾斜/弯曲】及其三个百分比参数用于页面局部几何跟踪。",
         )
         self._add_collapsible_settings(
             normal,
@@ -10993,48 +11018,21 @@ class PictureCaptureApp(tk.Tk):
         self.quick_bool_vars["paddle_refine_separator_y"] = refine_y_var
         ttk.Checkbutton(
             shared_draw_row,
-            text="自动精修横线Y（普通/OCR共用）",
+            text="自动精修横线Y（通用）",
             variable=refine_y_var,
             command=self._quick_parameter_changed,
         ).pack(side="left")
 
-        auto_layout_row = ttk.Frame(normal)
-        auto_layout_row.grid(row=3, column=0, columnspan=8, sticky="ew", pady=(4, 0))
         auto_layout_var = tk.BooleanVar(value=bool(self.settings.ordinary_auto_layout))
         self.quick_bool_vars["ordinary_auto_layout"] = auto_layout_var
         ttk.Checkbutton(
-            auto_layout_row,
+            shared_draw_row,
             text="使用自动版面参数",
             variable=auto_layout_var,
             command=self._quick_parameter_changed,
-        ).pack(side="left")
+        ).pack(side="left", padx=(12, 0))
 
-        auto_fields_rows = (ttk.Frame(normal), ttk.Frame(normal))
-        auto_fields_rows[0].grid(
-            row=4, column=0, columnspan=8, sticky="w", padx=(18, 0), pady=(1, 0)
-        )
-        auto_fields_rows[1].grid(
-            row=5, column=0, columnspan=8, sticky="w", padx=(18, 0), pady=(0, 0)
-        )
-        auto_field_specs = (
-            ("分栏数", "ordinary_auto_columns"),
-            ("正文起始Y", "ordinary_auto_start_y"),
-            ("首栏X", "ordinary_auto_manual_x"),
-            ("单栏宽", "ordinary_auto_column_width"),
-            ("栏间空", "ordinary_auto_gutter"),
-            ("单行高", "ordinary_auto_character_height"),
-            ("行间空", "ordinary_auto_row_padding"),
-        )
-        for index, (text, name) in enumerate(auto_field_specs):
-            var = tk.BooleanVar(value=bool(getattr(self.settings, name)))
-            self.quick_bool_vars[name] = var
-            ttk.Checkbutton(
-                auto_fields_rows[0 if index < 4 else 1],
-                text=text, variable=var,
-                command=self._quick_parameter_changed,
-            ).pack(side="left", padx=(0, 6))
-
-        row = ttk.Frame(normal); row.grid(row=6, column=0, columnspan=8, sticky="ew", pady=(4, 0))
+        row = ttk.Frame(normal); row.grid(row=3, column=0, columnspan=8, sticky="ew", pady=(4, 0))
         ttk.Button(
             row, text="检测版面参数", command=self.detect_layout_current,
             style="PC.Compact.TButton",
@@ -11241,7 +11239,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Checkbutton(
             option_row, text="隐藏线框(插图除外)", variable=self.hide_var,
             command=self._toggle_hide_overlays,
-        ).pack(side="left", padx=(8, 0))
+        ).pack(side="left")
         ttk.Label(option_row, text="显示模式：").pack(side="left", padx=(10, 2))
         display_mode_combo = ttk.Combobox(
             option_row,
