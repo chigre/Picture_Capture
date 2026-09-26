@@ -135,11 +135,12 @@ class AppSettings:
     character_height: int = 26
     row_padding: int = 1
     # Percentage of the detected column width used by rightward entry boxes.
+    # This is intentionally separate from the VB ordinary-drawing divisor below.
     right_ratio: float = 100.0
     right_ratio_percent_version: int = 1
-    # 2016 VB ordinary drawing used a ~20 px micro-adjust lane at a ~25 px
-    # character height. Keep new projects near that proven starting point.
-    horizontal_tolerance: int = 20
+    # VB.NET NumericUpDown10: separator analysis width = column_width / value * 0.98.
+    ordinary_right_divisor: float = 1.0
+    horizontal_tolerance: int = 5
     marker_height: int = 2
     guide_width: int = 2
     # Main overlay colours: headword markers stay red; other structural lines use blue.
@@ -503,6 +504,9 @@ class AppSettings:
         raw = json.loads(path.read_text(encoding="utf-8"))
         if int(raw.get("right_ratio_percent_version", 0) or 0) < 1:
             old_divisor = max(0.01, float(raw.get("right_ratio", 1.0) or 1.0))
+            # Preserve the original VB "向右比例 1/x" before migrating the
+            # repurposed right_ratio field to the modern entry-box percentage.
+            raw.setdefault("ordinary_right_divisor", old_divisor)
             raw["right_ratio"] = 100.0 / old_divisor
             raw["right_ratio_percent_version"] = 1
         # Transparently upgrade the untouched v1.4 default regex. Without this

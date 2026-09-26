@@ -572,13 +572,11 @@ def _left_edge_otsu_threshold(gray: np.ndarray) -> int:
 
 
 def _left_edge_ink_mask(gray: np.ndarray, settings: AppSettings) -> np.ndarray:
-    """Build the ordinary-drawing foreground mask from the shared threshold policy.
+    """Compatibility foreground mask for layout-analysis regressions.
 
-    Ordinary drawing historically always used the legacy fixed RGB-sum threshold.
-    That made otherwise identical layouts behave differently when paper tone,
-    scan exposure, or yellowing changed.  The ordinary mode now follows the same
-    user-facing threshold policy as layout analysis: automatic/Otsu by default,
-    adaptive for uneven backgrounds, and fixed only for compatibility/tuning.
+    Restored VB ordinary drawing no longer uses this Otsu/adaptive path for its
+    headword anchor or separator decision. Draw_Auto uses the fixed RGB-sum
+    threshold directly on full-resolution source pixels, matching the VB code.
     """
     mode = str(getattr(settings, "analysis_threshold_mode", "auto") or "auto").strip().lower()
     if mode == "fixed":
@@ -594,183 +592,357 @@ def _left_edge_ink_mask(gray: np.ndarray, settings: AppSettings) -> np.ndarray:
     return gray < _left_edge_otsu_threshold(gray)
 
 
-def _legacy_text_support(
-    gray: np.ndarray,
+def _legacy_is_point(
+    rgb_sum: np.ndarray,
     x: int,
     y: int,
-    width: int,
-    half_height: int,
+    area_x: int,
+    area_y: int,
     max_brightness_percent: float,
+    *,
+    direction: int = 1,
 ) -> bool:
-    """VB-compatible 2D text support check for one left-edge anchor.
+    """Faithful full-resolution port of VB.NET IsPoint().
 
-    The 2016 IsPoint routine did not decide from a single scan row. After
-    finding a dark anchor close to the column left edge it averaged a sizeable
-    rectangle to the right of that point and required enough real text ink to
-    be present. This rejects isolated dust while keeping the body-indent
-    boundary semantically separate from the headword lane.
+    VB sampled area_x pixels to the reading-right of the anchor and rows from
+    -area_y/2 through +area_y/2. Its denominator intentionally remained
+    area_x * area_y even though the inclusive row loop can contain one extra
+    row. Keeping that detail preserves the old 90% gate.
     """
-    height, image_width = gray.shape[:2]
-    width = max(1, int(width))
-    half_height = max(1, int(half_height))
-    x0 = int(x) + 1
-    x1 = min(image_width, x0 + width)
-    y0 = int(y) - half_height
-    y1 = int(y) + half_height + 1
-    if x1 <= x0 or y0 < 0 or y1 > height:
+    height, width = rgb_sum.shape[:2]
+    area_x = max(1, int(area_x))
+    area_y = max(1, int(area_y))
+    direction = 1 if int(direction) >= 0 else -1
+    half = max(0, round(area_y * 0.5))
+    y0 = int(y) - half
+    y1 = int(y) + half
+    if y0 < 0 or y1 >= height:
         return False
-    region = gray[y0:y1, x0:x1]
+
+    xs = int(x) + direction * np.arange(1, area_x + 1, dtype=np.int64)
+    if xs.size == 0 or int(xs.min()) < 0 or int(xs.max()) >= width:
+        return False
+    region = rgb_sum[y0:y1 + 1, xs]
     if region.size == 0:
         return False
-    brightness_percent = float(region.mean()) * 100.0 / 255.0
+    denominator = float(area_x * area_y * 255 * 3)
+    brightness_percent = round(float(region.astype(np.float64).sum()) / denominator * 100.0)
     return brightness_percent <= float(max_brightness_percent)
 
 
+def _legacy_row_brightness_1000(
+    rgb_sum: np.ndarray,
+    y: int,
+    x: int,
+    width: int,
+    *,
+    direction: int = 1,
+) -> int | None:
+    """Return the VB row-brightness score on its original 0..1000 scale."""
+    height, image_width = rgb_sum.shape[:2]
+    if not (0 <= int(y) < height):
+        return None
+    width = max(1, int(width))
+    direction = 1 if int(direction) >= 0 else -1
+    xs = int(x) + direction * np.arange(1, width + 1, dtype=np.int64)
+    if xs.size == 0 or int(xs.min()) < 0 or int(xs.max()) >= image_width:
+        return None
+    total = float(rgb_sum[int(y), xs].astype(np.float64).sum())
+    return int(round(total / float(765 * width) * 1000.0))
+
+
+def _legacy_find_separator_y(
+    rgb_sum: np.ndarray,
+    candidate_x: int,
+    candidate_y: int,
+    *,
+    column_width: int,
+    direction: int,
+    row_height: int,
+    upward_ratio: float,
+    ordinary_right_divisor: float,
+    darkness_threshold: int,
+    white_threshold_high: int,
+    white_threshold_low: int,
+    whitespace_adjustment: int,
+    top: int,
+    x_min: int,
+    x_max: int,
+) -> tuple[int | None, dict[str, int | str]]:
+    """Port the two-stage Y search from VB.NET Draw_Auto() at source resolution."""
+    height, width = rgb_sum.shape[:2]
+    if height <= 0 or width <= 0:
+        return None, {"reason": "empty_image"}
+
+    direction = 1 if int(direction) >= 0 else -1
+    row_height = max(1, int(row_height))
+    upward_ratio = max(0.1, float(upward_ratio))
+    upward = max(1, int(round(row_height / upward_ratio)))
+    divisor = max(1.0, float(ordinary_right_divisor))
+    requested_span = max(1, int(round(float(column_width) / divisor * 0.98)))
+    if direction > 0:
+        room = min(width - 1, int(x_max)) - int(candidate_x)
+    else:
+        room = int(candidate_x) - max(0, int(x_min))
+    span = max(0, min(requested_span, int(room)))
+    if span <= 0:
+        return None, {"reason": "empty_horizontal_span"}
+
+    high = max(0, min(1000, int(white_threshold_high)))
+    low = max(0, min(1000, int(white_threshold_low)))
+    if low > high:
+        low, high = high, low
+    adjust = max(0, int(whitespace_adjustment))
+    dark_limit = max(0, min(765, int(darkness_threshold)))
+    xs = int(candidate_x) + direction * np.arange(1, span + 1, dtype=np.int64)
+
+    # VB method 1: nearest upward row with no pixel darker than the fixed
+    # threshold, followed by a short run-of-white centering correction.
+    for ysu in range(1, upward + 1):
+        line_y = int(candidate_y) - ysu
+        if line_y < int(top):
+            break
+        row_values = rgb_sum[line_y, xs]
+        if bool(np.any(row_values < dark_limit)):
+            continue
+
+        extra_white = 0
+        if int(candidate_y) - ysu - int(top) > row_height and adjust > 0:
+            for offset in range(1, adjust + 1):
+                score = _legacy_row_brightness_1000(
+                    rgb_sum, line_y - offset, candidate_x, span, direction=direction
+                )
+                if score is not None and score >= high:
+                    extra_white += 1
+                else:
+                    break
+        separator = int(round(int(candidate_y) - (ysu + extra_white * 0.5)))
+        separator = min(int(candidate_y), max(int(top), separator))
+        return separator, {
+            "reason": "vb_full_white",
+            "upward_offset": int(ysu),
+            "span": int(span),
+            "extra_white_rows": int(extra_white),
+        }
+
+    # VB method 2: relax the row-white requirement 999 -> 700 (defaults), in
+    # steps of two for narrow gaps, skewed rows, and protruding glyphs.
+    for threshold in range(high, low - 1, -2):
+        for ysu in range(1, upward + 1):
+            line_y = int(candidate_y) - ysu
+            if line_y < int(top):
+                break
+            score = _legacy_row_brightness_1000(
+                rgb_sum, line_y, candidate_x, span, direction=direction
+            )
+            if score is None or score <= threshold:
+                continue
+
+            separator = line_y
+            if adjust > 0 and ysu < adjust:
+                for ygiu in range(ysu, upward + 1):
+                    probe_y = int(candidate_y) - ygiu
+                    if probe_y < int(top):
+                        break
+                    probe = _legacy_row_brightness_1000(
+                        rgb_sum, probe_y, candidate_x, span, direction=direction
+                    )
+                    if probe is None:
+                        break
+                    if probe < low or probe + 50 < threshold:
+                        separator = int(candidate_y) - ygiu + adjust
+                        break
+            separator = min(int(candidate_y), max(int(top), int(separator)))
+            return separator, {
+                "reason": "vb_brightness_fallback",
+                "upward_offset": int(ysu),
+                "span": int(span),
+                "threshold": int(threshold),
+            }
+
+    return None, {"reason": "no_vb_separator", "span": int(span)}
+
+
+def _ordinary_source_column_edge(
+    geometry: Geometry, column: int, y: int
+) -> tuple[int, int]:
+    """Return dynamic source-X edge and source reading-right direction."""
+    if geometry.transform.kind not in {"identity", "mirror_x"}:
+        raise RuntimeError(
+            "普通画线仅支持保持原图 Y 轴的横排版面；旋转/竖排页面请使用 OCR 画线。"
+        )
+    canonical_x = int(round(geometry.x_at(column, int(y))))
+    source_x, source_y = geometry.canonical_to_source(canonical_x, int(y))
+    next_x, next_y = geometry.canonical_to_source(canonical_x + 1, int(y))
+    if int(source_y) != int(y) or int(next_y) != int(y):
+        raise RuntimeError("普通画线检测到非水平坐标变换，已停止以避免混用坐标系。")
+    direction = 1 if int(next_x) >= int(source_x) else -1
+    return int(source_x), direction
+
+
 def _detect_entries_left_edge(image: Image.Image, settings: AppSettings) -> tuple[list[Entry], Geometry]:
-    """Detect ordinary-mode headwords with the original VB layout prior.
+    """Restore the 2016 VB.NET Draw_Auto ordinary-drawing algorithm.
 
-    The 2016 implementation made two different spatial statements instead of
-    collapsing them into one projection strip: a candidate anchor had to occur
-    very close to the tracked column-left edge (微调判距 /
-    horizontal_tolerance), and a larger rectangle extending into the column
-    then had to contain enough text (the old IsPoint check using body_indent
-    and dark_area_percent).
+    The complete candidate/separator chain runs directly on original
+    full-resolution source pixels:
 
-    Definition text beginning at the configured body indent therefore cannot
-    become a candidate merely because it contributes ink inside a wide strip.
-    Modern geometry tracking and optional Y refinement stay on top of this
-    stronger legacy candidate gate.
+      dynamic LX(y) -> 微调判距 dark anchor -> IsPoint 2D support ->
+      upward separator search -> full-white first -> 999..700 fallback ->
+      whitespace correction -> VB separator Y -> optional small modern refine.
+
+    No downsampled analysis image and no scaled coordinate system participates
+    in ordinary candidate or separator placement.
     """
     source = normalize_page_rgb(image)
     geometry = derive_geometry(source, settings)
-    canonical = geometry.transform.canonical_image_for_analysis(source)
-    analysis, scale = _analysis_image(canonical)
-    gray = np.asarray(ImageOps.grayscale(analysis), dtype=np.uint8)
-    canonical_gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
+    rgb = np.asarray(source, dtype=np.uint8)
+    rgb_sum = rgb.astype(np.uint16).sum(axis=2)
+    gray = np.asarray(ImageOps.grayscale(source), dtype=np.uint8)
+    image_height, image_width = rgb_sum.shape[:2]
 
     body_indent = max(1, _source_px(settings.body_indent))
     character_height = max(1, _source_px(settings.character_height))
-    row_padding = max(0, _source_px(settings.row_padding))
+    row_padding = int(_source_px(settings.row_padding))
     row_height = max(1, character_height + row_padding)
     horizontal_tolerance = max(0, _source_px(settings.horizontal_tolerance))
-    # The VB workflow normally kept 微调判距 smaller than 正文缩进. Enforce
-    # that relationship so the search lane cannot silently expand into body
-    # text when a project carries an over-large tolerance.
-    search_lane = min(horizontal_tolerance, max(0, body_indent - 1))
-    support_width = max(2, body_indent)
-    support_half_height = max(2, body_indent)
+    darkness_threshold = max(0, min(765, int(settings.darkness_threshold)))
     support_brightness = max(
         1.0, min(100.0, float(getattr(settings, "dark_area_percent", 90)))
     )
     row_step_multiplier = max(
         0.5, min(3.0, float(getattr(settings, "row_step_multiplier", 1.2)))
     )
+    upward_ratio = max(
+        0.1, float(getattr(settings, "upward_ratio", 1.5) or 1.5)
+    )
+    ordinary_right_divisor = max(
+        1.0, float(getattr(settings, "ordinary_right_divisor", 1.0) or 1.0)
+    )
+    white_high = int(getattr(settings, "white_threshold_high", 999))
+    white_low = int(getattr(settings, "white_threshold_low", 700))
+    whitespace_adjustment = max(
+        0, int(getattr(settings, "whitespace_adjustment", 2))
+    )
 
-    # Preserve the historical dark-anchor threshold exactly. Surrounding
-    # layout/column analysis may still use auto/Otsu/adaptive thresholding,
-    # but a word-start anchor is intentionally a stable project parameter.
-    anchor_threshold = int(round(float(settings.darkness_threshold) / 3.0))
-    anchor_threshold = min(255, max(0, anchor_threshold))
-    anchor_dark = gray < anchor_threshold
-
-    top = max(0, round(geometry.top * scale))
-    ordinary_bottom = int(geometry.bottom)
+    top_source = (
+        _source_px(getattr(settings, "manual_y", geometry.top))
+        if bool(getattr(settings, "manual_columns", False))
+        else int(geometry.top)
+    )
+    top = max(0, min(image_height - 1, int(top_source)))
+    ordinary_bottom = min(image_height, int(geometry.bottom))
     configured_bottom = _source_px(getattr(settings, "bottom_y", 0))
-    if configured_bottom > int(geometry.top):
+    if configured_bottom > top:
         ordinary_bottom = min(ordinary_bottom, configured_bottom)
-    bottom = min(gray.shape[0], round(ordinary_bottom * scale))
-    # VB Draw_Auto sampled every second row of its analysis bitmap.
-    y_step = 2
-    lane_analysis = max(0, round(search_lane * scale))
-    support_width_analysis = max(1, round(support_width * scale))
-    support_half_analysis = max(1, round(support_half_height * scale))
+    bottom = max(top + 1, ordinary_bottom)
+
+    analysis_left = int(getattr(settings, "analysis_left", 0) or 0)
+    analysis_right = int(getattr(settings, "analysis_right", 0) or 0)
+    if analysis_right > analysis_left >= 0:
+        x_min = max(0, min(image_width - 1, analysis_left))
+        x_max = max(x_min, min(image_width - 1, analysis_right))
+    else:
+        x_min, x_max = 0, image_width - 1
+
     entries: list[Entry] = []
-
     for col in range(len(geometry.column_starts)):
-        if bottom <= top:
-            continue
-        y_analysis = top
-        last_candidate_y = -10**9
-
-        while y_analysis < bottom:
-            canonical_y = round(y_analysis / max(scale, 1e-9))
-            tracked_x = geometry.x_at(col, canonical_y)
-            x0 = min(
-                gray.shape[1] - 1,
-                max(0, round(tracked_x * scale)),
-            )
-            x1 = min(gray.shape[1], x0 + lane_analysis + 1)
+        y = top
+        while y < bottom:
+            edge_x, direction = _ordinary_source_column_edge(geometry, col, y)
             accepted_x: int | None = None
 
-            if x1 > x0:
-                dark_offsets = np.flatnonzero(anchor_dark[y_analysis, x0:x1])
-                for offset in dark_offsets:
-                    candidate_x = x0 + int(offset)
-                    if _legacy_text_support(
-                        gray,
-                        candidate_x,
-                        y_analysis,
-                        support_width_analysis,
-                        support_half_analysis,
-                        support_brightness,
-                    ):
-                        accepted_x = candidate_x
-                        break
+            # Dynamic LX(y) already supplies the modern slope/deformation term;
+            # the remaining full-resolution source-pixel lane is 微调判距.
+            for offset in range(horizontal_tolerance + 1):
+                candidate_x = edge_x + direction * offset
+                if candidate_x < x_min or candidate_x > x_max:
+                    continue
+                if candidate_x < 0 or candidate_x >= image_width:
+                    continue
+                if int(rgb_sum[y, candidate_x]) >= darkness_threshold:
+                    continue
+                if _legacy_is_point(
+                    rgb_sum,
+                    candidate_x,
+                    y,
+                    body_indent,
+                    2 * body_indent,
+                    support_brightness,
+                    direction=direction,
+                ):
+                    accepted_x = int(candidate_x)
+                    break
 
             if accepted_x is None:
-                y_analysis += y_step
+                y += 2
                 continue
 
-            coarse_y = canonical_y
-            refined_y = coarse_y
-            if settings.paddle_refine_separator_y:
-                # Y refinement runs in full-resolution canonical coordinates.
-                # The previous ordinary path mixed canonical X/Y with the
-                # downsampled analysis array for wide pages.
-                from .paddle_headwords import refine_separator_y
-                column_x = max(0, round(geometry.x_at(col, coarse_y)))
-                column_right = min(
-                    canonical_gray.shape[1],
-                    column_x + max(10, int(geometry.column_widths[col])),
-                )
-                if column_right > column_x:
-                    refined_y, _refinement = refine_separator_y(
-                        canonical_gray[:, column_x:column_right],
-                        int(coarse_y),
-                        max(2, character_height),
-                        settings,
-                        pixel_scale=1.0,
-                        lower_bound=max(0, int(geometry.top)),
+            vb_separator_y, _vb_meta = _legacy_find_separator_y(
+                rgb_sum,
+                accepted_x,
+                y,
+                column_width=max(1, int(geometry.column_widths[col])),
+                direction=direction,
+                row_height=row_height,
+                upward_ratio=upward_ratio,
+                ordinary_right_divisor=ordinary_right_divisor,
+                darkness_threshold=darkness_threshold,
+                white_threshold_high=white_high,
+                white_threshold_low=white_low,
+                whitespace_adjustment=whitespace_adjustment,
+                top=top,
+                x_min=x_min,
+                x_max=x_max,
+            )
+
+            if vb_separator_y is not None:
+                final_y = int(vb_separator_y)
+
+                # Modern enhancement is deliberately post-VB and tightly
+                # bounded: it may only nudge an already valid VB separator.
+                if settings.paddle_refine_separator_y:
+                    from .paddle_headwords import refine_separator_y
+                    refine_edge_x, refine_direction = _ordinary_source_column_edge(
+                        geometry, col, final_y
                     )
+                    col_width = max(10, int(geometry.column_widths[col]))
+                    other_x = refine_edge_x + refine_direction * col_width
+                    crop_x0 = max(0, min(refine_edge_x, other_x))
+                    crop_x1 = min(image_width, max(refine_edge_x, other_x) + 1)
+                    if crop_x1 - crop_x0 > 8:
+                        refined_y, _refinement = refine_separator_y(
+                            gray[:, crop_x0:crop_x1],
+                            final_y,
+                            max(2, character_height),
+                            settings,
+                            pixel_scale=1.0,
+                            lower_bound=top,
+                        )
+                        max_delta = max(2, round(row_height * 0.20))
+                        final_y += max(
+                            -max_delta,
+                            min(max_delta, int(refined_y) - final_y),
+                        )
 
-            refined_y = min(
-                int(geometry.bottom), max(int(geometry.top), int(refined_y))
-            )
-            min_gap = max(2, round(row_height * 0.55))
-            # Candidate discovery must be independent from the optional Y
-            # refinement. Refined Y changes only the rendered/saved separator;
-            # it must not change which later rows are searched or de-duplicated.
-            if coarse_y - last_candidate_y >= min_gap:
-                marker_x = round(geometry.x_at(col, refined_y))
-                source_x, source_y = geometry.canonical_to_source(
-                    marker_x, refined_y
+                final_y = min(bottom - 1, max(top, int(final_y)))
+                marker_x, _direction = _ordinary_source_column_edge(
+                    geometry, col, final_y
                 )
-                entries.append(
-                    Entry(word="", x=int(source_x), y=int(source_y))
-                )
-                last_candidate_y = coarse_y
+                entries.append(Entry(word="", x=int(marker_x), y=int(final_y)))
 
-            # Preserve the VB-style skip after a confirmed candidate, but base
-            # it on the coarse layout position so Y refinement remains a pure
-            # post-localization adjustment.
-            next_canonical_y = max(
-                coarse_y + 2,
-                coarse_y + round(row_height * row_step_multiplier),
-            )
-            y_analysis = max(
-                y_analysis + y_step,
-                round(next_canonical_y * scale),
-            )
+                # VB: y = separatorY + rowHeight * 1.2 (default).
+                y = max(
+                    y + 2,
+                    int(final_y + round(row_height * row_step_multiplier)),
+                )
+            else:
+                # VB still advanced after a confirmed anchor even when neither
+                # separator method succeeded; emulate that anti-retrigger step.
+                upward = max(1, int(round(row_height / upward_ratio)))
+                y = max(
+                    y + 2,
+                    int(y - upward + round(row_height * row_step_multiplier)),
+                )
 
     return sort_entries_reading_order(entries, geometry), geometry
 

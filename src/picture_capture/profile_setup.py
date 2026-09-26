@@ -3032,7 +3032,7 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_column_adjust_status()
         for name in (
             "start_y", "bottom_y", "manual_x", "column_width", "gutter",
-            "character_height", "row_padding", "body_indent", "horizontal_tolerance",
+            "character_height", "row_padding",
         ):
             if name in self._analysis_suggestion:
                 setattr(self.working, name, int(self._analysis_suggestion[name]))
