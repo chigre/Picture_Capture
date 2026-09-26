@@ -1550,6 +1550,67 @@ class ProjectProfileWizard(tk.Toplevel):
             foreground="#555555", wraplength=self._wizard_content_width,
         ).grid(row=6, column=0, sticky="w", pady=(4, 0))
 
+        self.symbol_inventory_frame = ttk.LabelFrame(
+            structures, text="本词典固定词头符号集", padding=8,
+        )
+        self.symbol_inventory_frame.grid(row=7, column=0, sticky="ew", pady=(8, 0))
+        self.symbol_inventory_frame.columnconfigure(1, weight=1)
+        ttk.Checkbutton(
+            self.symbol_inventory_frame,
+            text="启用本词典专用符号集",
+            variable=self.symbol_inventory_enabled_var,
+            command=self._headword_structure_changed,
+        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=2)
+        ttk.Label(
+            self.symbol_inventory_frame, text="入口标记：",
+        ).grid(row=1, column=0, sticky="e", padx=(0, 6), pady=3)
+        ttk.Entry(
+            self.symbol_inventory_frame,
+            textvariable=self.entry_marker_symbols_var,
+        ).grid(row=1, column=1, sticky="ew", pady=3)
+        ttk.Label(
+            self.symbol_inventory_frame,
+            text="例如 ○ ● ◇ ◆ □ ■ △ ▲ ※；空格/逗号分隔",
+            foreground="#666666",
+        ).grid(row=1, column=2, sticky="w", padx=(6, 0), pady=3)
+        ttk.Label(
+            self.symbol_inventory_frame, text="括号起始：",
+        ).grid(row=2, column=0, sticky="e", padx=(0, 6), pady=3)
+        ttk.Entry(
+            self.symbol_inventory_frame,
+            textvariable=self.bracket_open_symbols_var,
+        ).grid(row=2, column=1, sticky="ew", pady=3)
+        ttk.Label(
+            self.symbol_inventory_frame,
+            text="例如 【 〔 ［ [ 「 『 〈 《",
+            foreground="#666666",
+        ).grid(row=2, column=2, sticky="w", padx=(6, 0), pady=3)
+        ttk.Checkbutton(
+            self.symbol_inventory_frame,
+            text="OCR 漏掉/错认符号时允许视觉形状补救",
+            variable=self.symbol_visual_rescue_var,
+            command=self._headword_structure_changed,
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
+        ttk.Checkbutton(
+            self.symbol_inventory_frame,
+            text="使用同栏 marker lane 过滤正文中的相似符号",
+            variable=self.symbol_lane_required_var,
+            command=self._headword_structure_changed,
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=2)
+        ttk.Label(
+            self.symbol_inventory_frame, text="lane 容差：",
+        ).grid(row=5, column=0, sticky="e", padx=(0, 6), pady=3)
+        tk.Spinbox(
+            self.symbol_inventory_frame,
+            from_=20, to=120, increment=5, width=7,
+            textvariable=self.symbol_lane_tolerance_var,
+        ).grid(row=5, column=1, sticky="w", pady=3)
+        ttk.Label(
+            self.symbol_inventory_frame,
+            text="% 行高（越小越严格；默认 50%）",
+            foreground="#666666",
+        ).grid(row=5, column=2, sticky="w", padx=(6, 0), pady=3)
+
         specificity = ttk.LabelFrame(
             tab, text="词头专属性（当前结构的视觉证据）", padding=10,
         )
