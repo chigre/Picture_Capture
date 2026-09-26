@@ -15,6 +15,10 @@
         "paddle_gap_ratio": 0.7,
         "paddle_min_candidate_score": 1,
         "paddle_require_pos_or_symbol": true,
+        "paddle_allow_strong_edge_visual_rescue": true,
+        "paddle_strong_edge_visual_boldness_ratio": 1.22,
+        "paddle_strong_edge_visual_height_ratio": 0.9,
+        "paddle_strong_edge_visual_min_confidence": 0.55,
         "paddle_remove_syllable_separators": true,
         "paddle_auto_header_rule": true,
         "paddle_refine_separator_y": true,
@@ -81,7 +85,7 @@
         ]
       },
       "display_name": "常规边缘词头",
-      "description": "词头位于正文栏起始边，以边缘位置及字号、粗体、词后结构等线索综合判断。",
+      "description": "词头位于正文栏起始边；优先使用词性/词后结构，OCR 漏掉小号词性标记时可由严格左缘 + 明显粗体补救。",
       "family": "latin_regular",
       "validated_examples": [
         "NewApproach",
