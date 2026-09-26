@@ -3465,15 +3465,22 @@ def filter_headword_records(
                 diagnostics, run_start, run_end, word
             )
             if existing_cjk is not None:
-                # For oversized single-Han entries the visual projection is a
-                # stronger vertical anchor than OCR box.y.  Preserve the OCR
-                # coarse position for diagnostics, but make the visual run the
-                # authoritative marker/anchor so an OCR box that starts on the
-                # preceding line cannot drag the separator upward.
-                existing_cjk.setdefault("ocr_coarse_source_y", existing_cjk.get("coarse_source_y"))
-                existing_cjk["source_y"] = source_y
-                existing_cjk["anchor_source_y"] = visual_anchor_source_y
-                existing_cjk["separator_refinement"] = visual_separator_refinement
+                # The OCR/grammar path has already produced the entry boundary.
+                # The visual run is confirmation/de-duplication evidence only;
+                # it must NOT replace a valid separator with a lower line inside
+                # the same entry (for example between 播 ba and its Bộ:/radical
+                # metadata).  Keep the original marker and store the visual
+                # geometry separately for diagnostics.
+                existing_cjk.setdefault(
+                    "ocr_coarse_source_y", existing_cjk.get("coarse_source_y")
+                )
+                existing_cjk["visual_confirmation_source_y"] = source_y
+                existing_cjk["visual_confirmation_anchor_source_y"] = (
+                    visual_anchor_source_y
+                )
+                existing_cjk["visual_confirmation_separator_refinement"] = (
+                    visual_separator_refinement
+                )
                 features = existing_cjk.setdefault("features", {})
                 features["cjk_visual_projection_confirmed"] = True
                 features["cjk_visual_run_height"] = run_height
