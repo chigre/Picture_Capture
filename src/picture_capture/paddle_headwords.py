@@ -2362,7 +2362,9 @@ def _cjk_word_for_visual_run(
             minimum_height_ratio = 0.55
             overlap_ratio = 0.45
 
-        if record_height < height * minimum_height_ratio:
+        # OCR boxes are integer-valued; allow half a pixel of quantization
+        # tolerance at an exact ratio boundary (e.g. 14 px / 50 px = 0.28).
+        if record_height + 0.5 < height * minimum_height_ratio:
             continue
         overlap_floor = min(record_height, height) * overlap_ratio
         if overlap < overlap_floor:
