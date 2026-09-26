@@ -2138,6 +2138,7 @@ def test_ordinary_drawing_restores_vb_left_edge_gate():
         row_step_multiplier=1.2,
         detection_method="left_edge",
         follow_column_deformation=False,
+        ordinary_auto_layout=False,
         paddle_refine_separator_y=False,
     )
     entries, _ = detect_entries(image, settings)
@@ -2273,6 +2274,7 @@ def test_ordinary_micro_tolerance_is_not_clipped_by_body_indent():
         dark_area_percent=90,
         detection_method="left_edge",
         follow_column_deformation=False,
+        ordinary_auto_layout=False,
         paddle_refine_separator_y=False,
     )
     accepted, _ = detect_entries(image, settings)
@@ -2302,6 +2304,7 @@ def test_ordinary_micro_tolerance_controls_headword_anchor_lane():
         dark_area_percent=90,
         detection_method="left_edge",
         follow_column_deformation=False,
+        ordinary_auto_layout=False,
         paddle_refine_separator_y=False,
     )
     accepted, _ = detect_entries(image, settings)
