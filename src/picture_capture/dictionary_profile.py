@@ -629,6 +629,8 @@ def apply_project_profile_components(path: Path | None, settings: Any) -> None:
         "tesseract_language": ocr.get("tesseract_language"),
         "paddle_use_textline_orientation": ocr.get("use_textline_orientation"),
         "profile_parser_controls_version": structure.get("version"),
+        "profile_headword_script_guard_version": structure.get("version"),
+        "profile_headword_script_guard_enabled": structure.get("script_guard_enabled"),
         "profile_allow_ordinary_left_edge": starts.get("ordinary_left_edge"),
         "profile_allow_numbered_prefix": starts.get("numbered_prefix"),
         "profile_allow_marker_prefix": starts.get("marker_prefix"),
@@ -731,6 +733,9 @@ def write_project_profile(
         "headword": selected_profile.headword,
         "headword_structure": {
             "version": 1,
+            "script_guard_enabled": bool(
+                getattr(settings, "profile_headword_script_guard_enabled", True)
+            ),
             "starts": {
                 "ordinary_left_edge": bool(
                     getattr(settings, "profile_allow_ordinary_left_edge", True)
