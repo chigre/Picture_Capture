@@ -3377,6 +3377,6 @@ def test_v214_application_icon_is_packaged_and_propagated_to_toplevels():
 
     smoke = (root / "scripts" / "gui_smoke.py").read_text(encoding="utf-8")
     assert 'if app._app_icon_photo is None:' in smoke
-    assert 'raise RuntimeError("Packaged application icon failed to load")' in smoke
+    assert '"Packaged application icon failed to load: "' in smoke
     assert 'raise RuntimeError("Application icon could not be registered")' in smoke
 
