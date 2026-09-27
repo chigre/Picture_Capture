@@ -3354,3 +3354,26 @@ def test_headword_order_finalizer_blocks_new_batches_until_snapshot_report_finis
     expected = 'self._ui_worker_key_active("headword-order-finalize")'
     assert expected in sequential
     assert expected in parallel
+
+def test_v214_application_icon_is_packaged_and_propagated_to_toplevels():
+    root = Path(__file__).resolve().parents[1]
+    icon = root / "src" / "picture_capture" / "data" / "app_icon.png"
+    assert icon.is_file()
+    assert icon.stat().st_size > 0
+
+    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
+    assert '"data/*.png"' in pyproject
+
+    app_source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    assert "self.iconphoto(True, self._app_icon_photo)" in app_source
+    assert 'self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")' in app_source
+    handler_start = app_source.index("    def _app_icon_toplevel_mapped(")
+    handler_end = app_source.index("\n    def ", handler_start + 10)
+    handler = app_source[handler_start:handler_end]
+    assert "isinstance(widget, tk.Toplevel)" in handler
+    assert "widget.iconphoto(False, self._app_icon_photo)" in handler
+
+    smoke = (root / "scripts" / "gui_smoke.py").read_text(encoding="utf-8")
+    assert 'if app._app_icon_photo is None:' in smoke
+    assert 'raise RuntimeError("Packaged application icon failed to load")' in smoke
+
