@@ -9870,6 +9870,12 @@ class PictureCaptureApp(tk.Tk):
         widget = getattr(event, "widget", None)
         if not isinstance(widget, tk.Toplevel) or self._app_icon_photo is None:
             return
+        if getattr(widget, "_pc_app_icon_applied", False):
+            return
+        # Mark before iconphoto(): on Windows, changing the window icon while a
+        # Toplevel is mapping may itself produce another Map notification.
+        # The guard keeps icon propagation idempotent and prevents a remap loop.
+        widget._pc_app_icon_applied = True
         try:
             widget.iconphoto(False, self._app_icon_photo)
         except tk.TclError:
