@@ -1,67 +1,131 @@
 # Picture Capture
 
-Picture Capture 是一个面向**多栏词典扫描页**的桌面制作与校对工具。它可以自动/半自动为词头画线，调用多引擎 OCR 识别词条，进行繁简校对、参考词表定位与词典核验，并输出 PDIC / PicDic / 训练数据。
+Picture Capture 是一个面向**扫描版词典数字化制作、OCR 词头定位、人工校对与 PicDic/PDIC 后期制作**的桌面工具。它继承 2016 年 VB.NET 版本的核心工作流，并在 Python 版本中持续扩展多 OCR、Project Profile、结构化词头识别、跨平台运行与项目数据管理。
 
 当前版本：**v2.14.0**  
 界面：Tkinter  
-环境管理：**uv + 项目专属 `.venv`**
+环境管理：**uv + 项目专属 `.venv`**  
+主要平台：**Windows / Linux / macOS**
+
+> **v2.14.0 是相对于上一个正式 Release v2.13.2 的大幅更新版本。**  
+> 原计划中的 v2.13.3 没有单独发布，其修复和后续大量功能均已并入 v2.14.0。
+
+---
+
+## v2.14.0 主要变化
+
+### 1. Project Profile 与词头识别体系升级
+
+- 【项目 Profile】成为词典级版式与词头结构配置中心，可定义页面方向、分栏、页眉页尾、词头前缀/本体/词后结构、固定入口符号和 OCR 语言规则。
+- 支持 POS、词形/屈折、变体/性数、发音/音标、描述型结构等词后证据，不再依赖单一隐藏规则。
+- 支持从真实扫描页采集**视觉词头标记模板**，用于圆点、方形、菱形、三角形、括号等固定符号的识别补救。
+- 新增 CJK/非 CJK 语言兼容约束、大字单字视觉证据、栏左线人工微调以及 Profile 多页诊断。
+
+### 2. OCR 画线确立为推荐默认流程
+
+- **OCR画线是默认推荐路径**：PaddleOCR 主识别 → 可选 Tesseract 对照 → 多 OCR 融合 → 结构/视觉证据校验。
+- 普通画线保留为备用路径，并重新按 2016 VB.NET `Draw_Auto` 核心流程实现。
+- 自动版面参数、横线精修、动态栏左路径、词头结构和页面几何统一接入同一套运行逻辑。
+
+### 3. 坐标、版面与 SECTION 重新统一
+
+- 主要运行和持久化几何统一到**原图像素 X/Y**，避免窗口缩放、不同 DPI 或旧参考宽度造成坐标漂移。
+- 页面级新增 **SECTION**：同一页可设置多个独立阅读区域，并统一用于 OCR、排序、校对、TXT 填充、PDIC 修复/恢复和整词条切图。
+- 主界面几何参数支持 **% + px 双输入**：px 作为底层真值，百分比用于直观填写和跨尺寸理解。
+- 新增四边标尺、页面特异栏几何和更明确的页眉/页尾/正文边界语义。
+
+### 4. 校对与后期制作工作流增强
+
+- 【词条校对】重组为显示设置、OCR 结果、词条联网核验结果、参考词表等可折叠区域。
+- 重点筛选校对支持 OCR 不匹配、批次浏览、轻量首扫和直接填充 OCR 结果。
+- OpenCC 简体化支持独立保存、重新简体化以及与 CC-CEDICT 的结果比较。
+- 继续支持 PDIC/PPP、词条切图、插图切图、PicDic 制作、训练标记包导出和备份/恢复。
+
+### 5. 全局深色模式与界面收口
+
+- 新增应用级深色模式，主界面、设置中心、词条校对、Project Profile、新旧比较和主要二级窗口统一跟随。
+- 扫描图夜间显示只改变预览，不修改原图、OCR 输入、PDIC/PPP、切图或导出结果。
+- 设置中心、帮助中心和主界面重新整理信息架构，并改进中文/英文混排换行、高 DPI 显示与窗口工作区适配。
+- v2.14.0 使用新版 Picture Capture 应用图标，并作为主窗口及 Toplevel 的统一窗口图标。
+
+### 6. 环境中心与跨平台运行
+
+- 新增【环境中心】，集中检查 PaddleOCR/PaddlePaddle、Google Lens、Tesseract、OpenCC、CC-CEDICT 与网络词典状态。
+- OCR 安装逻辑统一到 `scripts/ocr_setup.py`，Windows、Linux、macOS 共用同一套 profile 与验证逻辑。
+- Windows/Linux x86_64 可自动检测 NVIDIA GPU、Compute Capability 与驱动 CUDA 上限，并选择兼容的 `cu118 / cu126 / cu129` profile。
+- CPU/GPU、Tesseract 路径、用户级 runtime 配置与项目数据解耦，项目跨机器或跨系统复制时更稳健。
+
+### 7. 安装、CI 与 Release 安全收敛
+
+- Windows 日常启动器不再承担安装、下载或依赖切换，只使用已准备好的项目 `.venv`。
+- Release ZIP 明确包含 `scripts/`、三平台安装/启动入口、`uv.lock` 和文档。
+- GitHub Actions 在 Windows、Ubuntu、macOS 上执行 pytest、GUI construction smoke、兼容性测试、compileall、Ruff 与 wheel build。
+- OCR CPU profile 另有三平台真实安装与 runtime verification。
+- Release 自动生成 wheel、source ZIP、用户 Release ZIP 和 `SHA256SUMS.txt`。
+
+完整变更见 [CHANGELOG.md](CHANGELOG.md)。
+
+---
 
 ## 主要能力
 
-- **OCR画线为推荐默认流程**：PaddleOCR 结合词头文字、位置与结构证据自动画线；`left_edge` 普通画线保留为规则版式或 OCR 暂不可用时的备用方案。
-- PaddleOCR / Tesseract / Google Lens 多引擎 OCR、融合结果与人工复核。
-- 校对窗口：参考词表定位、OpenCC 繁→简、简体独立编辑与保存。
-- 夜间校对：全局深色模式同时调整界面与扫描图显示；仅改变预览，不改原图、OCR、PDIC/PPP 或导出结果。
-- CC-CEDICT / 萌典 / Wiktionary 词条核验，并可比较 CC-CEDICT 与 OpenCC 的简体结果。
-- 原词条与简体词条逐行对齐，删除与保存同步。
-- 词条切图、插图多边形（PPP）、PicDic 制作、训练标注导出、PDIC 备份/恢复。
-- Project Storage v2：程序数据集中保存到项目 `_PictureCapture/`，尽量保持项目根目录整洁。
-
-## v2.13.x 的环境方式
-
-从 v2.13.0 起，项目统一使用 [uv](https://docs.astral.sh/uv/) 管理 Python 和依赖：
-
-- `.python-version` 固定为 **Python 3.13**；
-- `uv.lock` 固定依赖版本；
-- 依赖安装到项目自己的 `.venv`；
-- **不会使用全局 `pip` 污染系统 Python**；
-- 主程序和 OCR 附加组件使用同一个项目解释器，不再出现“程序运行在一个 Python、OCR 却装进另一个 Python”的情况。
-
-> 项目要求 Python `>=3.10,<3.14`。正常使用不需要自己先安装 Python 3.13，uv 会按项目配置准备环境。
+- 多栏扫描词典的项目化管理与页面浏览。
+- PaddleOCR / Tesseract / Google Lens 多引擎 OCR。
+- OCR 词头定位、结构证据、视觉符号模板与人工复核。
+- 普通规则画线作为 OCR 不适用时的备用方案。
+- Project Profile、自动版面检测、栏左微调与页面 SECTION。
+- 原词条 / 简体词条双轨校对与 OpenCC。
+- CC-CEDICT / 萌典 / Wiktionary / 网络搜索辅助核验。
+- 外部 `wordslist.txt` 定位、填充、排序检查与新旧比较。
+- PDIC / PPP、词条切图、插图切图、PicDic 与训练标记导出。
+- 深色模式、夜间扫描图预览和跨平台运行。
 
 ---
 
 # 获取正式版本
 
-普通用户请从 GitHub 的 [Releases 页面](https://github.com/chigre/Picture_Capture/releases/latest) 下载最新正式版本的 **Release ZIP**，完整解压后再安装和运行。不要使用 GitHub 自动生成的 “Source code” 压缩包代替正式发布包；仓库源码和 source archive 主要供开发者使用。
+普通用户请从 GitHub 的 [Releases 页面](https://github.com/chigre/Picture_Capture/releases/latest) 下载最新正式版本的 **Release ZIP**，完整解压后再安装和运行。
 
-> **不要继续使用 2026-09-21 发布的 v2.13.2 Release ZIP。** 该旧包生成于 Windows 启动/安装脚本安全收敛之前，仍包含更复杂的批处理安装逻辑，可能触发杀毒软件启发式检测。v2.13.3 起请使用重新构建的 Release ZIP，并可用同一 Release 中的 `SHA256SUMS.txt` 校验文件完整性。
+**不要使用 GitHub 自动生成的 “Source code” ZIP 代替正式 Release ZIP。** 自动生成的源码包主要供开发使用；正式 Release ZIP 才包含项目规定的发布目录结构和平台入口。
+
+> **不要继续使用 2026-09-21 发布的 v2.13.2 Release ZIP。**  
+> v2.13.2 生成于 Windows 启动/安装脚本安全收敛之前，而且没有包含此后完成的大量 v2.14.0 功能。请从 **v2.14.0** 起使用重新构建的正式 Release ZIP，并可使用同一 Release 中的 `SHA256SUMS.txt` 校验文件完整性。
+
+---
+
+# 安装前准备
+
+Picture Capture 使用 [uv](https://docs.astral.sh/uv/) 管理 Python 与依赖。
+
+- 项目要求 Python `>=3.10,<3.14`。
+- 仓库的 `.python-version` 当前指定 **Python 3.13**。
+- 正常使用时无需手工为本项目单独配置 Python 3.13；uv 会按项目配置准备环境。
+- **需要先让系统能够找到 `uv` 命令。** 如果尚未安装，请按 uv 官方安装说明完成一次系统级安装。
+- 所有 Python 依赖安装到项目自己的 `.venv`，不会使用全局 `pip` 污染系统 Python。
 
 ---
 
 # 跨平台安装
 
-Picture Capture 现在使用同一套 Python OCR 安装核心 `scripts/ocr_setup.py`，Windows、Linux 和 macOS 的平台入口只负责准备项目 `.venv` 并调用它。安装器会先识别操作系统与 CPU 架构，再决定 PaddleOCR CPU/GPU 是否属于当前平台的受支持路径。
+Picture Capture 的平台入口只负责准备项目环境并调用统一 OCR 安装核心 `scripts/ocr_setup.py`。
 
-| 平台 | 核心 GUI | PaddleOCR CPU | NVIDIA GPU | 推荐入口 |
+| 平台 | 核心 GUI | PaddleOCR CPU | NVIDIA GPU | 推荐首次入口 |
 | --- | --- | --- | --- | --- |
-| Windows x86_64 | 支持 | 支持 | 支持；自动检测 Compute Capability 与驱动 CUDA 上限 | `install_ocr_windows.bat` |
-| Linux x86_64 | 支持 | 支持 | 支持；与 Windows 使用同一自动推荐逻辑 | `./install_ocr_linux.sh` |
+| Windows x86_64 | 支持 | 支持 | 支持；自动检测 GPU/驱动兼容性 | `install_ocr_windows.bat` |
+| Linux x86_64 | 支持 | 支持 | 支持；使用同一 GPU 推荐逻辑 | `./install_ocr_linux.sh` |
 | Linux arm64 | 支持 | 支持 | 不自动提供项目 GPU profile | `./install_ocr_linux.sh` |
-| macOS Apple Silicon (arm64) | 支持 | 支持 | PaddlePaddle 当前仅 CPU | `install_ocr_macos.command` |
-| macOS Intel (x86_64) | 核心支持 | PaddlePaddle 3.3.x 官方 wheel 不支持 | 不支持 | Core/Lens/Tesseract 路径 |
-
-项目要求 Python `>=3.10,<3.14`，默认由 uv 按 `.python-version` 使用 Python 3.13。所有依赖都安装在项目自己的 `.venv` 中，不污染系统 Python。
+| macOS Apple Silicon | 支持 | 支持 | PaddlePaddle 当前仅 CPU | `install_ocr_macos.command` |
+| macOS Intel | 核心支持 | PaddlePaddle 3.3.x 当前无官方 x86_64 wheel | 不支持 | Core/Lens/Tesseract 路径 |
 
 ## Windows
 
-首次安装直接运行：
+首次安装：
 
 ```text
 install_ocr_windows.bat
 ```
 
-有受支持 NVIDIA GPU 时，安装器会读取 GPU 0 的 Compute Capability、驱动版本和驱动报告的 CUDA 兼容上限。只有 **Compute Capability > 7.5** 且驱动覆盖至少一个已声明 CUDA profile 时才自动推荐 GPU，并在 `cu118 / cu126 / cu129` 中选择最高兼容版本。安装后仍会执行真实 Paddle GPU `conv2d` smoke test。
+安装器会根据当前机器推荐 CPU 或 GPU OCR。对于受支持的 NVIDIA GPU，会结合 GPU 0 的 Compute Capability、驱动版本与驱动报告的 CUDA 兼容上限，从 `cu118 / cu126 / cu129` 中选择合适 profile；GPU 安装后仍会执行真实 Paddle `conv2d` 验证。
 
 日常启动：
 
@@ -78,30 +142,36 @@ chmod +x install_ocr_linux.sh run_linux.sh
 ./install_ocr_linux.sh
 ```
 
-Linux x86_64 会自动检测 NVIDIA GPU 并使用与 Windows 相同的 GPU 推荐逻辑；Linux arm64 自动限定为 Paddle CPU。日常启动：
+日常启动：
 
 ```bash
 ./run_linux.sh
 ```
 
+Linux x86_64 可自动推荐 NVIDIA GPU OCR；Linux arm64 自动限定为 Paddle CPU。
+
 ## macOS
 
-Apple Silicon（M 系列）首次运行：
+Apple Silicon 首次安装：
 
 ```bash
 chmod +x install_ocr_macos.command run_macos.command
 ./install_ocr_macos.command
 ```
 
-也可在 Finder 中运行 `install_ocr_macos.command`。PaddlePaddle 在 macOS 当前只走 CPU，因此安装器不会显示 CUDA/GPU profile。日常启动：
+也可在 Finder 中运行 `install_ocr_macos.command`。
+
+日常启动：
 
 ```bash
 ./run_macos.command
 ```
 
-Intel Mac 不会自动尝试安装当前没有官方 macOS x86_64 wheel 的 PaddlePaddle 3.3.x；安装器会保守推荐 Core only，同时仍可使用系统 Tesseract 或选择 Google Lens。
+Apple Silicon 使用 Paddle CPU。Intel Mac 不会自动尝试安装当前没有官方 x86_64 wheel 的 PaddlePaddle 3.3.x，可使用 Core、Google Lens 或系统 Tesseract 路径。
 
-## OCR profile
+---
+
+# OCR profiles
 
 | profile | Windows x64 | Linux x64 | Linux arm64 | macOS arm64 |
 | --- | --- | --- | --- | --- |
@@ -112,25 +182,43 @@ Intel Mac 不会自动尝试安装当前没有官方 macOS x86_64 wheel 的 Padd
 | `lens` | 可选 | 可选 | 可选 | 可选 |
 | Core only | 支持 | 支持 | 支持 | 支持 |
 
-GPU profile 将 `paddlepaddle-gpu==3.3.0` 与对应 Paddle 官方 CUDA 索引声明在 `pyproject.toml` 中。Windows CUDA 12.6/12.9 profile 额外锁定项目内 cuDNN wheel并注册 DLL 搜索目录；Linux 使用 Paddle wheel 的平台依赖。CPU/GPU profile 互斥，切换时直接重新运行当前平台安装器即可。
+GPU profile 将 `paddlepaddle-gpu==3.3.0` 与对应 Paddle 官方 CUDA 索引声明在 `pyproject.toml`。Windows CUDA 12.6/12.9 profile 额外锁定项目内 cuDNN wheel并注册 DLL 搜索目录；CPU/GPU profile 互斥。
 
-安装成功后会记录 `.picture_capture_ocr_extra`。日常启动器只运行已经准备好的环境，不执行依赖同步、下载或 profile 切换。
+安装成功后会记录 `.picture_capture_ocr_extra`。日常启动器只运行已经准备好的环境，不会自动下载、同步或切换 OCR profile。
 
-详细平台边界见 [docs/platform-support.md](docs/platform-support.md)，OCR 安装与验证见 [docs/ocr-install.md](docs/ocr-install.md)。
+详细说明：
 
-> **跨机器迁移**：项目文件不再决定本机 CPU/GPU 或 Tesseract 程序路径。Paddle 设备按当前机器自动解析，Tesseract 由【环境中心】保存为用户级 runtime 设置；项目从 Windows/Linux/macOS 之间复制时无需手动清理旧设备路径。旧 Windows 项目中的大小写文件名和 foreign absolute wordslist 路径也有兼容回退。
+- [docs/platform-support.md](docs/platform-support.md)
+- [docs/ocr-install.md](docs/ocr-install.md)
+
+---
+
+# 推荐使用流程
+
+1. 从正式 Release ZIP 解压 Picture Capture，并完成当前平台首次安装。
+2. 启动程序，在【项目中心】新建或打开词典项目。
+3. 先进入【项目Profile】，用代表页确认页面方向、正文范围、分栏、词头结构和 OCR 语言。
+4. 在少量代表页上运行【检测版面参数】和【运行OCR画线（推荐）】。
+5. 检查词头、横线和 SECTION；必要时调整栏左线、固定符号模板或 OCR 结构规则。
+6. 代表页稳定后，再扩展到批量 OCR / 批量画线。
+7. 在【词条校对】完成原词条、简体、OCR 与参考词表核验。
+8. 最后进入【后期词典制作】完成切图、PicDic、训练标记或其他导出。
+
+【普通画线】建议只用于规则版式、历史项目或 OCR 暂不可用的场景。
 
 ---
 
 # Tesseract
 
-Tesseract 是系统级程序，不由 uv 管理。Windows 可使用：
+Tesseract 是系统级程序，不由 uv 管理。
+
+Windows 可使用系统包管理器安装，例如：
 
 ```bat
 winget install tesseract-ocr.tesseract
 ```
 
-Linux/macOS 请使用系统包管理器安装 Tesseract 及所需语言数据。Picture Capture 会在运行时检查可用的 Tesseract 与语言包。
+Linux/macOS 请使用对应系统包管理器安装 Tesseract 及所需语言数据。Picture Capture 的【环境中心】会检查当前 Tesseract 可执行程序和语言包，并给出下一步提示。
 
 ---
 
@@ -142,44 +230,22 @@ Picture Capture 可使用它：
 
 - 检查繁体或简体词条是否收录；
 - 读取 CC-CEDICT 的繁体→简体对应；
-- 与 OpenCC 自动简化结果进行比较；
+- 与 OpenCC 自动简化结果比较；
 - 对不一致结果提示人工复核。
 
-安装说明见：
-
-[docs/cc-cedict-install.md](docs/cc-cedict-install.md)
-
----
-
-# 快速上手
-
-1. 启动 Picture Capture。
-2. 在左侧页面列表点击【打开项目目录】，选择词典项目文件夹。
-3. 点击【环境中心】统一检查 PaddleOCR、Google Lens、Tesseract、OpenCC、CC-CEDICT，并按提示处理缺失组件。
-4. 在单页先校准版面参数和词头画线。
-5. 确认结果后再执行批量 OCR / 批量画线。
-6. 在【词条校对】中完成原词条、简体、OCR 与词典核验。
-
-校对窗口支持：
-
-- OpenCC 自动简化；
-- 已保存简体内容保护，不会在重新打开页面时被 OpenCC 静默覆盖；
-- CC-CEDICT 与 OpenCC 简体结果比较；
-- 萌典 / Wiktionary / 网络搜索；
-- 外部 wordslist 拼音/字母定位；
-- 原词条和简体词条独立字体设置。
+安装说明见 [docs/cc-cedict-install.md](docs/cc-cedict-install.md)。
 
 ---
 
 # 项目数据
 
-新项目的软件数据统一写入：
+新项目的软件数据统一保存在：
 
 ```text
-<项目目录>\_PictureCapture\
+<项目目录>/_PictureCapture/
 ```
 
-主要包括：
+主要结构：
 
 ```text
 _PictureCapture/
@@ -194,6 +260,8 @@ _PictureCapture/
 ```
 
 原始扫描图和用户自己的 `wordslist.txt` 不会被程序自动移动。
+
+v2.14.0 进一步把 CPU/GPU 选择、Tesseract 程序路径和用户级 runtime 配置与项目数据分离，因此词典项目在 Windows/Linux/macOS 或不同机器之间迁移时，不应再依赖旧机器的设备路径。
 
 详见 [docs/usage.md](docs/usage.md)。
 
@@ -230,25 +298,32 @@ uv run pytest
 uv run ruff check .
 ```
 
+CI 当前覆盖 Windows、Ubuntu、macOS，并包含真实 Tk GUI construction smoke。OCR Platform Smoke 另外验证三平台 CPU OCR profile 的安装与 runtime。
+
 ---
 
 # 文档索引
 
 | 文件 | 内容 |
 | --- | --- |
-| [README.md](README.md) | 安装、启动与快速使用 |
+| [README.md](README.md) | 当前版本、安装、推荐工作流与主要能力 |
+| [CHANGELOG.md](CHANGELOG.md) | 完整版本历史与 v2.14.0 详细变更 |
 | [docs/usage.md](docs/usage.md) | 项目目录、画线、OCR、规则、CLI 与详细使用 |
-| [docs/ocr-install.md](docs/ocr-install.md) | Windows CPU/GPU OCR 一键安装、CUDA profile、切换与验证 |
+| [docs/SETTINGS_REFERENCE.md](docs/SETTINGS_REFERENCE.md) | 设置中心参数说明 |
+| [docs/FILE_FORMATS_AND_OUTPUTS.md](docs/FILE_FORMATS_AND_OUTPUTS.md) | 文件格式、sidecar 与输出说明 |
+| [docs/ocr-install.md](docs/ocr-install.md) | OCR 安装、CPU/GPU profile、切换与验证 |
+| [docs/platform-support.md](docs/platform-support.md) | Windows/Linux/macOS 平台支持边界 |
 | [docs/cc-cedict-install.md](docs/cc-cedict-install.md) | CC-CEDICT 本地词典安装 |
 | [docs/architecture.md](docs/architecture.md) | OCR / 词头管线与存储架构 |
-| [docs/coordinate-system.md](docs/coordinate-system.md) | 原图 X/Y 单一持久化坐标契约与旧项目迁移 |
+| [docs/coordinate-system.md](docs/coordinate-system.md) | 原图像素坐标、canonical 变换与旧项目迁移 |
 | [docs/legacy-function-map.md](docs/legacy-function-map.md) | 旧 VB.NET 功能到 Python 的映射 |
-| [CHANGELOG.md](CHANGELOG.md) | 完整版本历史 |
 
 ---
 
 # 版本渊源
 
-Picture Capture 是根据 2016 年 VB.NET 项目 `picture_capture_V2016`（`Form1.vb`、`Form2.vb`、Designer 与 RESX 文件）重建的 **Python 复原版**。程序保留了原工作流与主要数据格式（`.pdic`、`.ppp`、`wordslist.txt`、`_Mysettings.ini` 等），并持续增加 OCR、项目存储、繁简校对和批处理能力。
+Picture Capture 根据 2016 年 VB.NET 项目 `picture_capture_V2016`（`Form1.vb`、`Form2.vb`、Designer 与 RESX 文件）重建为 Python 版本。
+
+当前版本继续兼容主要历史工作流和数据格式（包括 `.pdic`、`.ppp`、`wordslist.txt`、`_Mysettings.ini` 等），同时以 Project Profile、OCR、结构化校对、统一坐标和 Project Storage 为新架构逐步承接旧功能。
 
 完整版本演进见 [CHANGELOG.md](CHANGELOG.md)。
