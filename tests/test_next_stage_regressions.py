@@ -169,10 +169,12 @@ def test_recent_projects_dialog_uses_modern_card_information_hierarchy():
     end = source.index("\n    @staticmethod", start)
     text = source[start:end]
 
-    assert 'dialog.title("已有项目")' in text
+    assert 'dialog.title("项目中心")' in text
     assert 'text="最近项目"' in text
     assert 'text="搜索项目"' in text
     assert 'text="清理失效项"' in text
+    assert 'text="新建项目", command=create_new_project' in text
+    assert 'column=4' in text
     assert 'text="打开"' in text
     assert 'text="⋯"' in text
     assert '"可用" if exists else "路径失效"' in text
@@ -329,6 +331,17 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert 'padding=(13, 7)' in settings
     assert "self.transient(parent); self.grab_set()" not in settings
     assert "def select_tab(self, key: str | None)" in settings
+    assert '(crop_tab, "切图设置")' in settings
+    assert '"crop": crop_tab' in settings
+    assert "def _build_crop_settings_tab(" in settings
+    assert '"general_top_y"' in settings
+    assert '"general_bottom_y"' in settings
+    assert '"entry_left_padding_x"' in settings
+    assert '"entry_right_padding_x"' in settings
+    assert '"integrate_illustrations"' in settings
+    assert '"polygon_margin"' in settings
+    assert '"parallel_workers"' in settings
+    assert "self._save_integrated_crop_settings()" in settings
 
     assert 'text="OCR画线（推荐）"' in settings
     assert 'text="普通画线（备用）"' in settings
@@ -419,21 +432,35 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
     project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
     project_bar = text[project_bar_start:project_bar_end]
-    assert project_bar.index('("已有项目", self.open_recent_project, "project")') < project_bar.index('("导出训练标记包", self.export_training_package, None)')
-    assert project_bar.index('("项目Profile", self.open_project_profile, "config")') < project_bar.index('("设置中心", self.open_settings, "config")')
-    assert project_bar.index('("设置中心", self.open_settings, "config")') < project_bar.index('("保存参数", self.save_main_parameters, None)')
-    assert project_bar.index('("保存参数", self.save_main_parameters, None)') < project_bar.index('("使用指南", self.show_help_dialog, None)')
-    assert '("项目Profile", self.open_project_profile, "config")' in project_bar
+    expected = (
+        '("项目中心", self.open_recent_project)',
+        '("初始Profile", self.open_project_profile)',
+        '("设置中心", self.open_settings)',
+        '("帮助中心", self.show_help_dialog)',
+    )
+    positions = [project_bar.index(item) for item in expected]
+    assert positions == sorted(positions)
+    assert '("新建项目", self.open_project' not in project_bar
+    assert "导出训练标记包" not in project_bar
+    assert "保存参数" not in project_bar
+    assert "使用指南" not in project_bar
     assert 'uniform="project-footer-columns"' in project_bar
     assert 'project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
-    assert 'parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
-    assert 'self._footer_action_button(' in project_bar
+    assert 'role="project"' in project_bar
 
     actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
     actions = text[actions_start:actions_end]
     assert '("设置中心", self.open_settings)' not in actions
     assert '("导出训练标记包", self.export_training_package)' not in actions
+
+    post_start = text.index('        postproduction = self._section_frame(')
+    post_end = text.index("        postproduction.columnconfigure(0, weight=1)", post_start)
+    post = text[post_start:post_end]
+    assert '("切图设置", self.open_crop_settings)' not in post
+    assert '("词条切图", self.split_entries_selected_scope)' in post
+    assert '("插图切图", self.split_illustrations_selected_scope)' in post
+    assert post.rindex('("导出训练标记包", self.export_training_package)') > post.index('("PicDic制作", self.build_picdic)')
 
     profile_start = text.index("    def _build_profile_tab(")
     profile_end = text.index("    def _build_profile_choice_labels(", profile_start)
@@ -463,13 +490,26 @@ def test_bottom_important_actions_follow_scheme_a_groups():
     project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
     project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
     project_bar = text[project_bar_start:project_bar_end]
-    assert '("新建项目", self.open_project, "project")' in project_bar
-    assert '("已有项目", self.open_recent_project, "project")' in project_bar
-    assert '("导出训练标记包", self.export_training_package, None)' in project_bar
-    assert '("项目Profile", self.open_project_profile, "config")' in project_bar
-    assert '("设置中心", self.open_settings, "config")' in project_bar
-    assert '("保存参数", self.save_main_parameters, None)' in project_bar
-    assert '("使用指南", self.show_help_dialog, None)' in project_bar
+    for label, command in (
+        ("项目中心", "self.open_recent_project"),
+        ("初始Profile", "self.open_project_profile"),
+        ("设置中心", "self.open_settings"),
+        ("帮助中心", "self.show_help_dialog"),
+    ):
+        assert f'("{label}", {command})' in project_bar
+    assert project_bar.count('role="project"') == 1
+    assert "导出训练标记包" not in project_bar
+    assert "保存参数" not in project_bar
+
+
+def test_crop_settings_entry_redirects_to_settings_center_tab():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    def open_crop_settings(self) -> None:")
+    end = text.index("\n    def ", start + 10)
+    method = text[start:end]
+    assert 'self.open_settings(initial_tab="crop")' in method
+    assert "CropSettingsDialog(self, indices)" not in method
 
 
 def test_usage_guide_is_modern_task_oriented_and_centered():
@@ -511,7 +551,7 @@ def test_usage_guide_is_modern_task_oriented_and_centered():
     assert "messagebox.showinfo" not in show
     assert "show_help_popup" not in text
     assert "OCR_USAGE_HELP" not in text
-    assert "打开使用指南：推荐流程、各功能用途、快捷操作与常见排错。" in text
+    assert "打开帮助中心：推荐流程、各功能用途、快捷操作与常见排错。" in text
 
 
 def test_main_workspace_modern_styles_are_scoped_and_dense():
