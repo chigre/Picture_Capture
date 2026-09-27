@@ -12784,6 +12784,25 @@ class PictureCaptureApp(tk.Tk):
             except tk.TclError:
                 pass
 
+    def _preprocess_blocking_window_name(self) -> str | None:
+        candidates = (
+            ("review_window", "词条校对"),
+            ("ocr_review_window", "OCR词头冲突复核"),
+            ("old_new_compare_window", "新旧比较"),
+            ("_settings_dialog", "设置中心"),
+            ("_project_profile_wizard", "项目Profile"),
+        )
+        for attr, label in candidates:
+            window = self.__dict__.get(attr)
+            if window is None:
+                continue
+            try:
+                if window.winfo_exists():
+                    return label
+            except tk.TclError:
+                continue
+        return None
+
     def toggle_preprocess_mode(self) -> None:
         self._set_preprocess_mode(not self._preprocess_mode_active())
 
@@ -12795,6 +12814,17 @@ class PictureCaptureApp(tk.Tk):
                 "图片预处理", "请先打开包含扫描图片的项目目录。", parent=self,
             )
             return
+        if active:
+            blocker = self._preprocess_blocking_window_name()
+            if blocker is not None:
+                self.preprocess_mode_var.set(False)
+                messagebox.showinfo(
+                    "图片预处理",
+                    f"请先关闭【{blocker}】，再进入预处理模式。\n\n"
+                    "预处理模式不会与其他可修改项目数据的窗口并行运行。",
+                    parent=self,
+                )
+                return
         if active and self._batch_active:
             self.preprocess_mode_var.set(False)
             self.status_var.set("当前批量任务运行中；结束后再进入预处理模式。")
