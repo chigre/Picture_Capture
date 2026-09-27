@@ -1,0 +1,19 @@
+name: One-time v2.14.0 release dispatcher
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    if: contains(github.event.head_commit.message, '[dispatch-v2.14.0]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch v2.14.0 release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --repo "${GITHUB_REPOSITORY}" -f release_tag=v2.14.0
