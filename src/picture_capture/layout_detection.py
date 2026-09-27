@@ -167,6 +167,48 @@ def _get_text_detector(settings: AppSettings) -> Any:
     raise RuntimeError(f"PaddleOCR 文本检测模型初始化失败：{last_exc}") from last_exc
 
 
+def detect_text_polygons(
+    image: Image.Image, settings: AppSettings, *, limit_side_len: int = 2400,
+) -> list[np.ndarray]:
+    """Detect source-image text polygons without recognizing text.
+
+    This exposes the same PaddleOCR TextDetection primitive used by automatic
+    layout detection, but preserves each polygon instead of immediately
+    collapsing it to an axis-aligned box.  The preprocessing module uses those
+    original edges to estimate small page skew.
+    """
+    source = normalize_page_rgb(image)
+    detector = _get_text_detector(settings)
+    os.environ["FLAGS_enable_pir_api"] = "0"
+    try:
+        results = list(
+            detector.predict(
+                np.asarray(source), batch_size=1,
+                limit_side_len=max(256, int(limit_side_len)),
+            )
+        )
+    except TypeError:
+        results = list(detector.predict(np.asarray(source)))
+    if not results:
+        return []
+    payload = _result_payload(results[0])
+    raw_polys = payload.get("dt_polys")
+    if raw_polys is None:
+        raw_polys = payload.get("polys")
+    polygons: list[np.ndarray] = []
+    if raw_polys is None:
+        return polygons
+    for raw in list(raw_polys):
+        arr = np.asarray(raw, dtype=float)
+        if arr.ndim != 2 or arr.shape[0] < 3 or arr.shape[1] < 2:
+            continue
+        arr = arr[:, :2].copy()
+        arr[:, 0] = np.clip(arr[:, 0], 0, max(0, source.width - 1))
+        arr[:, 1] = np.clip(arr[:, 1], 0, max(0, source.height - 1))
+        polygons.append(arr)
+    return polygons
+
+
 def _boxes_from_detection(result: Any, width: int, height: int) -> list[tuple[int, int, int, int]]:
     payload = _result_payload(result)
     raw_polys = payload.get("dt_polys")
@@ -540,6 +582,11 @@ def _analysis_ink_mask(gray: np.ndarray, settings: AppSettings) -> np.ndarray:
         return gray.astype(np.int16) < (local - 10)
     # "auto" and explicit "otsu" intentionally share the conservative Otsu path.
     return gray < _otsu_threshold(gray)
+
+
+def analysis_ink_mask(gray: np.ndarray, settings: AppSettings) -> np.ndarray:
+    """Public wrapper for the deterministic layout-analysis foreground mask."""
+    return _analysis_ink_mask(gray, settings)
 
 
 def _projection_layout_estimate(source: Image.Image, settings: AppSettings) -> LayoutEstimate:
