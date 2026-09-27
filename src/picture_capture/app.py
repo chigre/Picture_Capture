@@ -10118,66 +10118,44 @@ class PictureCaptureApp(tk.Tk):
         }
         self._apply_page_list_display_columns(save=False)
 
+        suffix_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
+        suffix_row.pack(fill="x", pady=(0, 4))
+        suffix_row.columnconfigure(1, weight=1)
+        ttk.Label(suffix_row, text="图片后缀：", style="PC.Footer.TLabel").grid(
+            row=0, column=0, sticky="w", padx=(0, 4)
+        )
+        self.image_suffix_var = tk.StringVar(value=self.settings.image_suffix)
+        ttk.Entry(
+            suffix_row,
+            textvariable=self.image_suffix_var,
+            width=9,
+            justify="left",
+            style="PC.Footer.TEntry",
+        ).grid(row=0, column=1, sticky="w")
+        self.image_suffix_var.trace_add("write", lambda *_args: self._quick_parameter_changed())
+
         project_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
         project_row.pack(fill="x")
         for col in range(4):
             project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
-        for col, (label, command, role) in enumerate((
-            ("新建项目", self.open_project, "project"),
-            ("已有项目", self.open_recent_project, "project"),
-            ("导出训练标记包", self.export_training_package, None),
+        for col, (label, command) in enumerate((
+            ("项目中心", self.open_recent_project),
+            ("初始Profile", self.open_project_profile),
+            ("设置中心", self.open_settings),
+            ("帮助中心", self.show_help_dialog),
         )):
-            button = (
-                self._footer_action_button(project_row, label, command, role=role)
-                if role is not None
-                else ttk.Button(
-                    project_row, text=label, command=command, style="PC.Footer.TButton"
-                )
+            button = self._footer_action_button(
+                project_row, label, command, role="project"
             )
             button.grid(
                 row=0, column=col, sticky="ew",
                 padx=(0 if col == 0 else 4, 0),
             )
-
-        suffix_cell = ttk.Frame(project_row, style="PC.Footer.TFrame")
-        suffix_cell.grid(row=0, column=3, sticky="ew", padx=(4, 0))
-        suffix_cell.columnconfigure(1, weight=1)
-        ttk.Label(suffix_cell, text="图片后缀：", style="PC.Footer.TLabel").grid(
-            row=0, column=0, sticky="e", padx=(0, 2)
-        )
-        self.image_suffix_var = tk.StringVar(value=self.settings.image_suffix)
-        ttk.Entry(
-            suffix_cell,
-            textvariable=self.image_suffix_var,
-            width=7,
-            justify="left",
-            style="PC.Footer.TEntry",
-        ).grid(row=0, column=1, sticky="ew")
-        self.image_suffix_var.trace_add("write", lambda *_args: self._quick_parameter_changed())
-
-        parameter_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
-        parameter_row.pack(fill="x", pady=(4, 0))
-        for col in range(4):
-            parameter_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
-        for col, (label, command, role) in enumerate((
-            ("项目Profile", self.open_project_profile, "config"),
-            ("设置中心", self.open_settings, "config"),
-            ("保存参数", self.save_main_parameters, None),
-            ("使用指南", self.show_help_dialog, None),
-        )):
-            button = (
-                self._footer_action_button(parameter_row, label, command, role=role)
-                if role is not None
-                else ttk.Button(
-                    parameter_row, text=label, command=command, style="PC.Footer.TButton"
+            if label == "帮助中心":
+                self._attach_tooltip(
+                    button,
+                    "打开帮助中心：推荐流程、各功能用途、快捷操作与常见排错。",
                 )
-            )
-            button.grid(
-                row=0, column=col, sticky="ew",
-                padx=(0 if col == 0 else 4, 0),
-            )
-            if label == "使用指南":
-                self._attach_tooltip(button, "打开使用指南：推荐流程、各功能用途、快捷操作与常见排错。")
         self.canvas = tk.Canvas(
             viewer, bg=self._main_ui_colors["canvas"], highlightthickness=0
         )
@@ -11362,8 +11340,9 @@ class PictureCaptureApp(tk.Tk):
         )
         postproduction.pack(fill="x", pady=(4, 0))
         production_rows = [
-            (("切图设置", self.open_crop_settings), ("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope)),
+            (("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope)),
             (("项目详情", self.open_project_details), ("导出PicDic索引", self.export_picdic_index), ("PicDic制作", self.build_picdic)),
+            (("导出训练标记包", self.export_training_package),),
         ]
         for ri, specs in enumerate(production_rows):
             row = ttk.Frame(postproduction)
@@ -12856,7 +12835,7 @@ class PictureCaptureApp(tk.Tk):
     def open_recent_project(self) -> None:
         """Show recent projects as a modern, information-focused card list."""
         dialog = tk.Toplevel(self)
-        dialog.title("已有项目")
+        dialog.title("项目中心")
         dialog.transient(self)
         self._recent_projects_dialog = dialog
 
@@ -12907,6 +12886,12 @@ class PictureCaptureApp(tk.Tk):
         ttk.Label(tools, textvariable=count_var, foreground="#666666").grid(
             row=0, column=2, sticky="e"
         )
+
+        def create_new_project() -> None:
+            try:
+                dialog.destroy()
+            finally:
+                self.open_project()
 
         ttk.Separator(host, orient="horizontal").grid(
             row=2, column=0, sticky="ew", pady=(0, 10)
@@ -12986,6 +12971,9 @@ class PictureCaptureApp(tk.Tk):
             tools, text="清理失效项", command=remove_missing, state="disabled"
         )
         cleanup_button.grid(row=0, column=3, sticky="e", padx=(10, 0))
+        ttk.Button(
+            tools, text="新建项目", command=create_new_project
+        ).grid(row=0, column=4, sticky="e", padx=(8, 0))
 
         def bind_open(widget, root: Path, row: dict[str, object]) -> None:
             try:
@@ -16739,21 +16727,8 @@ class PictureCaptureApp(tk.Tk):
 
 
     def open_crop_settings(self) -> None:
-        if not self.project or not self.current_page or self.image is None:
-            messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=self)
-            return
-        if self._batch_active:
-            self.status_var.set("已有批量任务正在运行，请结束后再修改切图设置。")
-            return
-        try:
-            indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc); return
-        if not indices:
-            indices = [self.current_index]
-        self._sync_polygon_label_texts()
-        write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
-        CropSettingsDialog(self, indices)
+        """Open the integrated Settings Center crop-settings tab."""
+        self.open_settings(initial_tab="crop")
 
     def split_entries_selected_scope(self) -> None:
         if not self.guard(): return
