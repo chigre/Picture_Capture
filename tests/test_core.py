@@ -4744,7 +4744,7 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
         assert f'self._attach_tooltip(' in page_toolbar
         assert f'"{tooltip}"' in page_toolbar
     assert 'text="页面大小："' not in text
-    assert '("已有项目", self.open_recent_project, "project")' in text
+    assert '("项目中心", self.open_recent_project)' in text
     assert "self.after_idle(self._maximize_main_window)" in text
     assert "self.after_idle(self._ensure_sidebar_navigation_width)" in text
     assert '"lined": "画线"' in text
@@ -5338,10 +5338,13 @@ def test_sidebar_has_collapsed_postproduction_section_and_project_details():
     assert 'parent, "五、后期词典制作", padding=5, section_key="postproduction"' in app_text
     assert 'self._section_frame(parent, "四、画线与校对"' in app_text
     assert 'self._section_frame(sidebar, "六、页面列表"' in app_text
-    first_row = '(("切图设置", self.open_crop_settings), ("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope))'
+    first_row = '(("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope))'
     second_row = '(("项目详情", self.open_project_details), ("导出PicDic索引", self.export_picdic_index), ("PicDic制作", self.build_picdic))'
+    final_row = '(("导出训练标记包", self.export_training_package),)'
     assert first_row in app_text
     assert second_row in app_text
+    assert final_row in app_text
+    assert '("切图设置", self.open_crop_settings)' not in app_text
     assert '(project_tab, "项目 / 批量")' in app_text
     assert '"项目资料"' in app_text
     assert 'self.open_settings(initial_tab="project")' in app_text
