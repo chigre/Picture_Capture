@@ -3366,6 +3366,8 @@ def test_v214_application_icon_is_packaged_and_propagated_to_toplevels():
 
     app_source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     assert "self.iconphoto(True, self._app_icon_photo)" in app_source
+    assert "self.iconphoto(False, self._app_icon_photo)" in app_source
+    assert "self._app_icon_registered = True" in app_source
     assert 'self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")' in app_source
     handler_start = app_source.index("    def _app_icon_toplevel_mapped(")
     handler_end = app_source.index("\n    def ", handler_start + 10)
@@ -3376,4 +3378,5 @@ def test_v214_application_icon_is_packaged_and_propagated_to_toplevels():
     smoke = (root / "scripts" / "gui_smoke.py").read_text(encoding="utf-8")
     assert 'if app._app_icon_photo is None:' in smoke
     assert 'raise RuntimeError("Packaged application icon failed to load")' in smoke
+    assert 'raise RuntimeError("Application icon could not be registered")' in smoke
 
