@@ -11298,6 +11298,7 @@ class PictureCaptureApp(tk.Tk):
         project_row.pack(fill="x")
         for col in range(4):
             project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
+        self.project_footer_buttons: list[ttk.Button] = []
         for col, (label, command) in enumerate((
             ("项目中心", self.open_recent_project),
             ("项目Profile", self.open_project_profile),
@@ -11311,6 +11312,7 @@ class PictureCaptureApp(tk.Tk):
                 row=0, column=col, sticky="ew",
                 padx=(0 if col == 0 else 4, 0),
             )
+            self.project_footer_buttons.append(button)
             footer_tooltips = {
                 "项目中心": "打开最近项目与项目管理；可从这里新建或切换词典项目。",
                 "项目Profile": "配置词典信息、阅读方向、页面模板和词头结构，并用代表页测试。",
@@ -11714,6 +11716,9 @@ class PictureCaptureApp(tk.Tk):
 
     def _page_list_section_double_click(self, event: tk.Event) -> str | None:
         """Edit the page-level Section count directly from the page list."""
+        if self._preprocess_mode_active():
+            self.status_var.set("预处理模式中：SECTION 编辑已锁定。")
+            return "break"
         if self.page_list.identify_region(event.x, event.y) != "cell":
             return None
         if self._page_list_column_at(event.x) != "section":
@@ -11752,6 +11757,9 @@ class PictureCaptureApp(tk.Tk):
 
     def _page_list_bookmark_click(self, event: tk.Event) -> str | None:
         """Toggle the bookmark cell without changing the active page."""
+        if self._preprocess_mode_active():
+            self.status_var.set("预处理模式中：仅保留页面浏览，不修改书签或其他项目数据。")
+            return "break"
         if self.page_list.identify_region(event.x, event.y) != "cell":
             return None
         if self.page_list.identify_column(event.x) != "#1":
@@ -12756,6 +12764,13 @@ class PictureCaptureApp(tk.Tk):
                                 self._preprocess_locked_widgets.append((widget, old_state))
                         except tk.TclError:
                             pass
+            for widget in getattr(self, "project_footer_buttons", ()):
+                try:
+                    was_disabled = "disabled" in widget.state()
+                    widget.state(["disabled"])
+                    self._preprocess_locked_widgets.append((widget, was_disabled))
+                except tk.TclError:
+                    pass
             return
 
         remembered = self._preprocess_locked_widgets
