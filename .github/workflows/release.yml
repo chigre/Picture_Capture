@@ -23,6 +23,36 @@ jobs:
           python-version: "3.13"
           enable-cache: true
 
+      - name: Verify release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          tag = os.environ["RELEASE_TAG"]
+          project_version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+          init_text = Path("src/picture_capture/__init__.py").read_text(encoding="utf-8")
+          match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', init_text)
+          if match is None:
+              raise SystemExit("Could not read __version__ from src/picture_capture/__init__.py")
+          package_version = match.group(1)
+
+          expected_tag = f"v{project_version}"
+          if package_version != project_version:
+              raise SystemExit(
+                  f"Version mismatch: pyproject={project_version}, package={package_version}"
+              )
+          if tag != expected_tag:
+              raise SystemExit(
+                  f"Tag mismatch: tag={tag}, expected={expected_tag}"
+              )
+          print(f"Release version verified: {tag}")
+          PY
+
       - name: Install locked dependencies
         run: uv sync --locked --group dev
 
