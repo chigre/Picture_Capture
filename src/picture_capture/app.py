@@ -9663,6 +9663,11 @@ class PictureCaptureApp(tk.Tk):
                 self.iconphoto(True, self._app_icon_photo)
         except (tk.TclError, OSError):
             self._app_icon_photo = None
+        # iconphoto(default=True) establishes the Tk default; the class binding
+        # below also reapplies the same packaged icon to every mapped Toplevel.
+        # This covers platform/window-manager cases where inheriting the default
+        # icon alone is inconsistent.
+        self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")
         self.title(f"Picture Capture v{__version__} — OCR 词头定位")
         fit_window_to_work_area(self, 1440, 900, min_width=1080, min_height=680)
         self.project: ProjectState | None = None
@@ -9844,6 +9849,15 @@ class PictureCaptureApp(tk.Tk):
         self.after_idle(self._maximize_main_window)
         self.after_idle(self._ensure_sidebar_navigation_width)
         self.after_idle(self.restore_last_session)
+
+    def _app_icon_toplevel_mapped(self, event: tk.Event) -> None:
+        widget = getattr(event, "widget", None)
+        if not isinstance(widget, tk.Toplevel) or self._app_icon_photo is None:
+            return
+        try:
+            widget.iconphoto(False, self._app_icon_photo)
+        except tk.TclError:
+            pass
 
     def _maximize_main_window(self) -> None:
         """Start the main window maximized, with cross-platform fallbacks."""
