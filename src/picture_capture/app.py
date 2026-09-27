@@ -12873,21 +12873,26 @@ class PictureCaptureApp(tk.Tk):
             self.redraw()
             return
 
+        if self._ui_worker_key_active("preprocess-current"):
+            self.preprocess_status_var.set(
+                f"{page.name} 尚未分析｜正在完成上一页分析，完成后将继续当前页。"
+            )
+            return
+
         self.preprocess_status_var.set(f"正在分析 {page.name}…")
         self.status_var.set(f"图片预处理：正在后台分析 {page.name}…")
 
         def worker():
-            analysis = analyze_preprocess_path(
+            return analyze_preprocess_path(
                 page, settings,
                 safety_margin_percent=safety,
                 auto_deskew=auto_deskew,
             )
-            save_preprocess_analysis(project.root, page, analysis)
-            return analysis
 
         def done(analysis: PreprocessAnalysis) -> None:
             if self.project is not project:
                 return
+            save_preprocess_analysis(project.root, page, analysis)
             self._preprocess_results[page.name] = analysis
             if self.current_index == page_index and self.current_page == page:
                 self._preprocess_photo = None
@@ -12897,6 +12902,8 @@ class PictureCaptureApp(tk.Tk):
                 self.status_var.set(
                     f"图片预处理分析完成：{page.name}｜{preprocess_result_summary(analysis)}"
                 )
+            elif self._preprocess_mode_active() and self.current_page is not None:
+                self.after_idle(lambda: self.analyze_preprocess_current(silent=True))
 
         def failed(exc, detail) -> None:
             if detail:
@@ -12905,6 +12912,8 @@ class PictureCaptureApp(tk.Tk):
                 self.preprocess_status_var.set(f"分析失败：{exc}")
                 if not silent:
                     self.show_error("图片预处理分析失败", exc)
+            elif self.project is project and self._preprocess_mode_active():
+                self.after_idle(lambda: self.analyze_preprocess_current(silent=True))
 
         self._start_ui_worker("preprocess-current", worker, done, failed)
 
@@ -12916,6 +12925,9 @@ class PictureCaptureApp(tk.Tk):
             self._set_preprocess_mode(True, analyze=False)
             if not self._preprocess_mode_active():
                 return
+        if self._ui_worker_key_active("preprocess-current"):
+            self.status_var.set("当前页预处理分析仍在进行；完成后再启动范围分析。")
+            return
         try:
             indices = self.selected_page_indices()
         except ValueError as exc:
@@ -13005,6 +13017,9 @@ class PictureCaptureApp(tk.Tk):
         if not self.project:
             messagebox.showinfo("图片预处理", "请先打开项目。", parent=self)
             return
+        if self._ui_worker_key_active("preprocess-current"):
+            self.status_var.set("当前页预处理分析仍在进行；完成后再导出检查小图。")
+            return
         try:
             indices = self.selected_page_indices()
         except ValueError as exc:
@@ -13041,6 +13056,9 @@ class PictureCaptureApp(tk.Tk):
     def export_preprocess_images(self) -> None:
         if not self.project:
             messagebox.showinfo("图片预处理", "请先打开项目。", parent=self)
+            return
+        if self._ui_worker_key_active("preprocess-current"):
+            self.status_var.set("当前页预处理分析仍在进行；完成后再导出预处理图片。")
             return
         try:
             indices = self.selected_page_indices()
@@ -16666,7 +16684,10 @@ class PictureCaptureApp(tk.Tk):
 
     def _set_idle_cursor_status(self) -> None:
         zoom = round(self.view_scale * 100)
-        self.cursor_status_var.set(f"坐标：—｜缩放 {zoom}%｜词条 {len(self.entries)}")
+        if self._preprocess_mode_active():
+            self.cursor_status_var.set(f"坐标：—｜预处理预览｜缩放 {zoom}%")
+        else:
+            self.cursor_status_var.set(f"坐标：—｜缩放 {zoom}%｜词条 {len(self.entries)}")
 
     @staticmethod
     def _polygon_display_name(region: PolygonRegion, index: int) -> str:
@@ -17293,6 +17314,7 @@ class PictureCaptureApp(tk.Tk):
                 source_y = round(canvas_y / self.view_scale)
                 if (
                     not self._section_editing
+                    and not self._preprocess_mode_active()
                     and self._ruler_hit_id(source_x, source_y) is not None
                 ):
                     self._show_ruler_hint(event)
