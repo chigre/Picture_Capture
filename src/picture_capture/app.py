@@ -9656,17 +9656,28 @@ class PictureCaptureApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self._app_icon_photo: tk.PhotoImage | None = None
+        self._app_icon_registered = False
         try:
             icon_path = Path(__file__).resolve().parent / "data" / "app_icon.png"
             if icon_path.exists():
                 self._app_icon_photo = tk.PhotoImage(file=str(icon_path))
-                self.iconphoto(True, self._app_icon_photo)
         except (tk.TclError, OSError):
             self._app_icon_photo = None
-        # iconphoto(default=True) establishes the Tk default; the class binding
-        # below also reapplies the same packaged icon to every mapped Toplevel.
-        # This covers platform/window-manager cases where inheriting the default
-        # icon alone is inconsistent.
+        if self._app_icon_photo is not None:
+            # Prefer Tk's default icon so future Toplevels inherit it. Some
+            # window-manager/headless combinations reject the default flag, so
+            # fall back to explicitly setting the root icon instead.
+            try:
+                self.iconphoto(True, self._app_icon_photo)
+                self._app_icon_registered = True
+            except tk.TclError:
+                try:
+                    self.iconphoto(False, self._app_icon_photo)
+                    self._app_icon_registered = True
+                except tk.TclError:
+                    pass
+        # Reapply the same packaged icon to every mapped Toplevel. This makes
+        # secondary-window behavior independent of default-icon inheritance.
         self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")
         self.title(f"Picture Capture v{__version__} — OCR 词头定位")
         fit_window_to_work_area(self, 1440, 900, min_width=1080, min_height=680)
