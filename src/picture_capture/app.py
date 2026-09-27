@@ -10596,6 +10596,8 @@ class PictureCaptureApp(tk.Tk):
 
         self.photo = None
         self._display_photo_cache_key = None
+        self._preprocess_photo = None
+        self._preprocess_photo_cache_key = None
         self._schedule_page_cell_overlay_refresh()
         if self.image is not None:
             self.redraw()
@@ -14555,6 +14557,9 @@ class PictureCaptureApp(tk.Tk):
             self.status_var.set("停止请求已发出：当前页处理完成后安全停止；已完成页面结果会保留。")
 
     def guard(self) -> bool:
+        if self._preprocess_mode_active():
+            self.status_var.set("预处理模式中：普通编辑已锁定，请先退出预处理模式。")
+            return False
         if getattr(self, "_batch_active", False):
             if not self._claim_page_for_manual_edit():
                 return False
@@ -15140,6 +15145,8 @@ class PictureCaptureApp(tk.Tk):
         if self._ui_worker_key_active("profile-validation"):
             self.status_var.set("Project Profile 测试仍在安全结束；完成后再切换项目。")
             return
+        if self._preprocess_mode_active():
+            self._set_preprocess_mode(False, analyze=False)
         root = root.expanduser().resolve()
         if self.project is not None and root == Path(self.project.root).expanduser().resolve():
             self.status_var.set("当前项目已经打开；保留当前编辑状态，不执行后台重载。")
@@ -15289,6 +15296,16 @@ class PictureCaptureApp(tk.Tk):
             self.project = project
             self._project_words = set(project.words)
             self.settings = project.settings
+            self._preprocess_results.clear()
+            self._preprocess_photo = None
+            self._preprocess_photo_cache_key = None
+            self.preprocess_auto_deskew_var.set(
+                bool(self.settings.preprocess_auto_deskew)
+            )
+            self.preprocess_safety_var.set(
+                f"{float(self.settings.preprocess_safety_margin_percent):g}"
+            )
+            self.preprocess_status_var.set("未分析")
             if recent_warning:
                 self._recent_projects_warning = recent_warning
             if hasattr(self, "_page_column_vars"):
@@ -15471,7 +15488,10 @@ class PictureCaptureApp(tk.Tk):
         self._pending_page_index = None
         self._invalidate_ui_worker("page-load")
         self._flush_deferred_page_save()
-        if self.current_page and self.image and index != self.current_index and not skip_current_save:
+        if (
+            self.current_page and self.image and index != self.current_index
+            and not skip_current_save and not self._preprocess_mode_active()
+        ):
             if self._can_save_current_during_batch_navigation():
                 self._save_current_page_by_mode()
         self.current_index = index; self.current_page = self.project.images[index]
@@ -15500,6 +15520,8 @@ class PictureCaptureApp(tk.Tk):
             self._load_ocr_review_candidates()
             self.polygons = read_ppp(self._ppp_read_path(self.current_page))
         self.new_polygon = []
+        self._preprocess_photo = None
+        self._preprocess_photo_cache_key = None
         self._section_editing = False
         self._drag_section_boundary = None
         self.update_idletasks()
@@ -15538,6 +15560,11 @@ class PictureCaptureApp(tk.Tk):
         quality = self._current_page_quality_text()
         suffix = f"｜{quality}" if quality else ""
         self.status_var.set(f"{self.current_page.name}｜{self.image.width}×{self.image.height}｜{len(self.entries)} 个词条{suffix}")
+        if self._preprocess_mode_active():
+            existing_preprocess = self._preprocess_result_for_page(index)
+            self._set_current_preprocess_status(existing_preprocess)
+            if existing_preprocess is None:
+                self.after_idle(lambda: self.analyze_preprocess_current(silent=True))
         if self._pending_section_editor_index == index:
             self._pending_section_editor_index = None
             if self.page_sections:
@@ -16344,6 +16371,9 @@ class PictureCaptureApp(tk.Tk):
         if self.image is None:
             return
         size = (max(1, round(self.image.width * self.view_scale)), max(1, round(self.image.height * self.view_scale)))
+        if self._preprocess_mode_active():
+            self._redraw_preprocess_preview(size)
+            return
         photo = self._get_cached_display_photo(size)
         self.canvas.create_image(0, 0, image=photo, anchor="nw", tags="page")
         if self.crop_preview_var.get():
@@ -17095,6 +17125,8 @@ class PictureCaptureApp(tk.Tk):
 
     def canvas_left_double_click(self, event: tk.Event) -> str | None:
         """Finish SECTION editing by double-clicking anywhere on the page image."""
+        if self._preprocess_mode_active():
+            return "break"
         if not self._section_editing or self.image is None:
             return None
         x, y = self.original_xy(event)
@@ -17161,6 +17193,8 @@ class PictureCaptureApp(tk.Tk):
         self.redraw()
 
     def canvas_left_drag(self, event: tk.Event) -> str | None:
+        if self._preprocess_mode_active():
+            return "break"
         if self.image is None:
             return None
         x, y = self.original_xy(event)
@@ -17192,6 +17226,8 @@ class PictureCaptureApp(tk.Tk):
         return None
 
     def canvas_left_release(self, _event: tk.Event) -> str | None:
+        if self._preprocess_mode_active():
+            return "break"
         if self._drag_section_boundary is not None:
             self._drag_section_boundary = None
             try:
@@ -17247,7 +17283,7 @@ class PictureCaptureApp(tk.Tk):
             display_width = self.image.width * self.view_scale
             display_height = self.image.height * self.view_scale
             if 0 <= canvas_x < display_width and 0 <= canvas_y < display_height:
-                if self._section_editing:
+                if self._section_editing or self._preprocess_mode_active():
                     self.cursor_canvas_xy = None
                     self.canvas.delete("cursor-guide")
                 else:
@@ -17262,10 +17298,16 @@ class PictureCaptureApp(tk.Tk):
                     self._show_ruler_hint(event)
                 else:
                     self._hide_ruler_hint()
-                self.cursor_status_var.set(
-                    f"原图 X,Y {source_x}, {source_y}｜"
-                    f"缩放 {round(self.view_scale * 100)}%｜词条 {len(self.entries)}"
-                )
+                if self._preprocess_mode_active():
+                    self.cursor_status_var.set(
+                        f"预处理预览 X,Y {source_x}, {source_y}｜"
+                        f"缩放 {round(self.view_scale * 100)}%"
+                    )
+                else:
+                    self.cursor_status_var.set(
+                        f"原图 X,Y {source_x}, {source_y}｜"
+                        f"缩放 {round(self.view_scale * 100)}%｜词条 {len(self.entries)}"
+                    )
             else:
                 self.cursor_canvas_xy = None
                 self.canvas.delete("cursor-guide")
