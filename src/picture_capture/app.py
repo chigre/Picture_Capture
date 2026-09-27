@@ -12271,7 +12271,7 @@ class PictureCaptureApp(tk.Tk):
         ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
         ttk.Label(
             preprocess, textvariable=self.preprocess_status_var,
-            style="PC.FieldLabel.TLabel", anchor="w", justify="left",
+            style="PC.FieldLabel.TLabel", anchor="w",
             wraplength=430,
         ).grid(row=3, column=0, sticky="ew", pady=(4, 0))
 
