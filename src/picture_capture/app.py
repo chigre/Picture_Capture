@@ -9657,13 +9657,17 @@ class PictureCaptureApp(tk.Tk):
         super().__init__()
         self._app_icon_photo: ImageTk.PhotoImage | None = None
         self._app_icon_registered = False
+        self._app_icon_error: str | None = None
+        icon_path = Path(__file__).resolve().parent / "data" / "app_icon.png"
         try:
-            icon_path = Path(__file__).resolve().parent / "data" / "app_icon.png"
-            if icon_path.exists():
+            if not icon_path.exists():
+                self._app_icon_error = f"icon asset not found: {icon_path}"
+            else:
                 with Image.open(icon_path) as icon_image:
                     self._app_icon_photo = ImageTk.PhotoImage(icon_image.convert("RGBA"))
-        except (tk.TclError, OSError):
+        except (tk.TclError, OSError) as exc:
             self._app_icon_photo = None
+            self._app_icon_error = f"{type(exc).__name__}: {exc} (path={icon_path})"
         if self._app_icon_photo is not None:
             # Prefer Tk's default icon so future Toplevels inherit it. Some
             # window-manager/headless combinations reject the default flag, so
