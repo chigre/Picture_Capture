@@ -9655,12 +9655,13 @@ class OldNewComparisonWindow(tk.Toplevel):
 class PictureCaptureApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self._app_icon_photo: tk.PhotoImage | None = None
+        self._app_icon_photo: ImageTk.PhotoImage | None = None
         self._app_icon_registered = False
         try:
             icon_path = Path(__file__).resolve().parent / "data" / "app_icon.png"
             if icon_path.exists():
-                self._app_icon_photo = tk.PhotoImage(file=str(icon_path))
+                with Image.open(icon_path) as icon_image:
+                    self._app_icon_photo = ImageTk.PhotoImage(icon_image.convert("RGBA"))
         except (tk.TclError, OSError):
             self._app_icon_photo = None
         if self._app_icon_photo is not None:
