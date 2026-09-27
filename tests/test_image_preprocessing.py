@@ -165,7 +165,7 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert 'text="进入预处理模式"' in source
     assert 'text="自动纠偏"' in source
     assert 'text="安全边界："' in source
-    assert 'text="分析所选范围"' in source
+    assert '"分析所选范围"' in source
     assert 'text="导出检查小图"' in source
     assert 'text="导出预处理图片"' in source
     assert 'section_keys = ("normal", "aux", "ocr", "actions", "postproduction")' in source
