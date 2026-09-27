@@ -110,6 +110,20 @@ def training_exports_root(project_root: Path) -> Path:
     return path
 
 
+def image_preprocess_data_root(project_root: Path) -> Path:
+    """Project-local cache/results for the non-destructive image preprocessor."""
+    path = data_root(project_root) / "ImagePreprocess"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def image_preprocess_output_root(project_root: Path) -> Path:
+    """Generated review previews and processed page images."""
+    path = output_root(project_root) / "ImagePreprocess"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def pdic_path_for_image(image_path: Path) -> Path:
     image_path = Path(image_path)
     root = image_path.parent
