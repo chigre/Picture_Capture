@@ -9,6 +9,8 @@ def main() -> int:
 
     app = PictureCaptureApp()
     try:
+        if app._app_icon_photo is None:
+            raise RuntimeError("Packaged application icon failed to load")
         app.withdraw()
         app.update_idletasks()
 
