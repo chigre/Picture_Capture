@@ -169,6 +169,11 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert 'text="导出检查小图"' in source
     assert 'text="导出预处理图片"' in source
     assert 'section_keys = ("normal", "aux", "ocr", "actions", "postproduction")' in source
+    assert '("review_window", "词条校对")' in source
+    assert '("_settings_dialog", "设置中心")' in source
+    assert '("_project_profile_wizard", "项目Profile")' in source
+    assert "self.project_footer_buttons.append(button)" in source
+    assert 'if self._preprocess_mode_active():\n            self.status_var.set("预处理模式中：SECTION 编辑已锁定。")' in source
     assert "if self._preprocess_mode_active():" in source
     assert "self._redraw_preprocess_preview(size)" in source
     assert "普通编辑已锁定" in source
