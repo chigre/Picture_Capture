@@ -3373,6 +3373,8 @@ def test_v214_application_icon_is_packaged_and_propagated_to_toplevels():
     handler_end = app_source.index("\n    def ", handler_start + 10)
     handler = app_source[handler_start:handler_end]
     assert "isinstance(widget, tk.Toplevel)" in handler
+    assert 'getattr(widget, "_pc_app_icon_applied", False)' in handler
+    assert "widget._pc_app_icon_applied = True" in handler
     assert "widget.iconphoto(False, self._app_icon_photo)" in handler
 
     smoke = (root / "scripts" / "gui_smoke.py").read_text(encoding="utf-8")
