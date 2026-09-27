@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 import json
 import math
 from pathlib import Path
@@ -42,6 +42,7 @@ class PreprocessAnalysis:
     method: str
     warnings: tuple[str, ...] = ()
     safety_margin_percent: float = DEFAULT_SAFETY_MARGIN_PERCENT
+    auto_deskew: bool = True
     source_size_bytes: int = 0
     source_mtime_ns: int = 0
 
@@ -84,6 +85,7 @@ class PreprocessAnalysis:
             safety_margin_percent=max(
                 0.0, float(payload.get("safety_margin_percent", DEFAULT_SAFETY_MARGIN_PERCENT))
             ),
+            auto_deskew=bool(payload.get("auto_deskew", True)),
             source_size_bytes=max(0, int(payload.get("source_size_bytes", 0))),
             source_mtime_ns=max(0, int(payload.get("source_mtime_ns", 0))),
         )
@@ -494,6 +496,7 @@ def analyze_preprocess_page(
         method=method,
         warnings=tuple(warnings),
         safety_margin_percent=float(safety_margin_percent),
+        auto_deskew=bool(auto_deskew),
     )
 
 
@@ -556,9 +559,12 @@ def analysis_is_current(
     page: Path,
     *,
     safety_margin_percent: float,
+    auto_deskew: bool,
 ) -> bool:
     page = Path(page)
     if abs(float(analysis.safety_margin_percent) - float(safety_margin_percent)) > 1e-6:
+        return False
+    if bool(analysis.auto_deskew) != bool(auto_deskew):
         return False
     try:
         stat = page.stat()
