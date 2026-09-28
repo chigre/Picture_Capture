@@ -3238,7 +3238,12 @@ def analyze_preprocess_page(
                 estimate.separator_shift_knots_px
             )
             orthogonal_after_quality_score = float(actual_score)
-            orthogonal_alignment_verdict = str(actual_verdict)
+            if pixel_driven and pixel_row_available:
+                orthogonal_alignment_verdict = str(
+                    orthogonal_pixel_row_verdict
+                )
+            else:
+                orthogonal_alignment_verdict = str(actual_verdict)
             geometry_strength = max(
                 geometry_strength,
                 estimate.max_vertical_shift_px,
@@ -3715,6 +3720,24 @@ def analyze_preprocess_page(
         ),
         orthogonal_pixel_angle_confidence=round(
             float(orthogonal_pixel_angle_confidence), 6
+        ),
+        orthogonal_pixel_row_sample_count=int(
+            orthogonal_pixel_row_sample_count
+        ),
+        orthogonal_before_pixel_row_p90_px=round(
+            float(orthogonal_before_pixel_row_p90_px), 3
+        ),
+        orthogonal_after_pixel_row_p90_px=round(
+            float(orthogonal_after_pixel_row_p90_px), 3
+        ),
+        orthogonal_before_pixel_row_worst_px=round(
+            float(orthogonal_before_pixel_row_worst_px), 3
+        ),
+        orthogonal_after_pixel_row_worst_px=round(
+            float(orthogonal_after_pixel_row_worst_px), 3
+        ),
+        orthogonal_pixel_row_verdict=str(
+            orthogonal_pixel_row_verdict
         ),
         orthogonal_confidence=round(float(orthogonal_confidence), 6),
         orthogonal_column_spread_deg=round(
@@ -4662,6 +4685,24 @@ def export_summary_csv(
             ),
             "orthogonal_pixel_angle_confidence": (
                 analysis.orthogonal_pixel_angle_confidence
+            ),
+            "orthogonal_pixel_row_sample_count": (
+                analysis.orthogonal_pixel_row_sample_count
+            ),
+            "orthogonal_before_pixel_row_p90_px": (
+                analysis.orthogonal_before_pixel_row_p90_px
+            ),
+            "orthogonal_after_pixel_row_p90_px": (
+                analysis.orthogonal_after_pixel_row_p90_px
+            ),
+            "orthogonal_before_pixel_row_worst_px": (
+                analysis.orthogonal_before_pixel_row_worst_px
+            ),
+            "orthogonal_after_pixel_row_worst_px": (
+                analysis.orthogonal_after_pixel_row_worst_px
+            ),
+            "orthogonal_pixel_row_verdict": (
+                analysis.orthogonal_pixel_row_verdict
             ),
             "orthogonal_confidence": analysis.orthogonal_confidence,
             "orthogonal_column_spread_deg": (
