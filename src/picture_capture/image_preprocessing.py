@@ -1312,18 +1312,21 @@ def analyze_preprocess_page(
                 f"Paddle UVDoc 展平不可用，已保留前一步几何结果：{exc}"
             )
 
-    # Advanced geometry is deliberately estimated after the global small-angle
-    # correction. Two independent projective families are considered:
-    # (1) structural column-boundary rectification and
-    # (2) horizontal vanishing-point rectification derived from many text rows.
-    # A combined candidate can apply both. Every candidate must improve row
-    # horizontality and pass the Jacobian + paired-text scale budgets before
-    # automatic execution. Nonlinear unwarping remains explicit-only.
+    # Advanced projective geometry is staged after the global small-angle
+    # correction:
+    #   A) structural keystone correction is decided on its own evidence and
+    #      distortion safety; it is NOT required to improve row horizontality.
+    #   B) any residual top-to-bottom row-angle trend is then corrected by a
+    #      horizontal-VP homography whose strength is optimized in [0, 1].
+    # This avoids the v12 failure mode where a useful 0004-style structural
+    # correction was rejected by the horizontal gate, while a full-strength VP
+    # correction over-shot the near-zero row trend on 0002/0004/0011.
     if (
         manual_quad is None
         and working_polygons
         and requested_geometry_mode in {"auto", "perspective"}
     ):
+        original_projective_polygons = list(working_polygons)
         perspective_threshold = max(5.0, width * 0.002)
         line_supports_perspective = bool(
             line_geometry.recommendation == "perspective"
@@ -1331,23 +1334,28 @@ def analyze_preprocess_page(
             and not line_geometry.separator_curve_reliable
         )
 
-        def audit_projective_candidate(candidate) -> dict:
+        def distortion_audit(candidate, *, row_before_polygons=None) -> dict:
             mapped_polygons = transform_polygons_homography(
-                working_polygons, candidate.matrix,
+                original_projective_polygons, candidate.matrix,
             )
             jacobian = audit_homography_distortion(
                 candidate.matrix,
                 working.size,
-                polygons=working_polygons,
+                polygons=original_projective_polygons,
             )
             text_scale = audit_text_scale_stability(
-                working_polygons,
+                original_projective_polygons,
                 mapped_polygons,
                 working.size,
                 writing_mode=settings.layout_writing_mode,
             )
+            row_source = (
+                original_projective_polygons
+                if row_before_polygons is None
+                else row_before_polygons
+            )
             row_alignment = audit_horizontal_alignment(
-                working_polygons,
+                row_source,
                 mapped_polygons,
             )
             jacobian_safe = bool(
@@ -1370,37 +1378,6 @@ def analyze_preprocess_page(
                 )
             )
             text_scale_safe = text_scale.verdict in {"stable", "insufficient"}
-            row_safe = row_alignment.verdict == "improved"
-            source = str(getattr(candidate, "candidate_source", "structural"))
-            if source == "structural":
-                evidence_safe = bool(
-                    candidate.strength_px >= perspective_threshold
-                    and line_supports_perspective
-                    and str(getattr(candidate, "classification", "unknown")) == "keystone"
-                )
-            elif source == "horizontal_vp":
-                evidence_safe = bool(
-                    candidate.horizontal_row_count >= HORIZONTAL_VP_MIN_ROWS
-                    and line_geometry.confidence >= 0.35
-                    and not line_geometry.separator_curve_reliable
-                    and abs(row_alignment.before_trend_deg)
-                    >= HORIZONTAL_VP_MIN_TREND_DEG
-                )
-            elif source == "structural+horizontal_vp":
-                evidence_safe = bool(
-                    line_supports_perspective
-                    and candidate.horizontal_row_count >= HORIZONTAL_VP_MIN_ROWS
-                    and not line_geometry.separator_curve_reliable
-                )
-            else:
-                evidence_safe = False
-
-            auto_safe = bool(
-                evidence_safe
-                and row_safe
-                and jacobian_safe
-                and text_scale_safe
-            )
             distortion_cost = (
                 jacobian.anisotropy_p95_ratio
                 + 0.35 * jacobian.horizontal_scale_span_ratio
@@ -1413,125 +1390,195 @@ def analyze_preprocess_page(
                 "jacobian": jacobian,
                 "text_scale": text_scale,
                 "row": row_alignment,
-                "evidence_safe": evidence_safe,
-                "auto_safe": auto_safe,
+                "jacobian_safe": jacobian_safe,
+                "text_scale_safe": text_scale_safe,
+                "distortion_safe": bool(jacobian_safe and text_scale_safe),
                 "distortion_cost": float(distortion_cost),
             }
 
-        candidate_entries: list[dict] = []
         structural_candidate = None
-        structural_polygons = None
-
+        structural_entry = None
         try:
             structural_candidate = estimate_perspective_from_polygons(
-                working_polygons, working.size, settings,
+                original_projective_polygons, working.size, settings,
             )
-            structural_entry = audit_projective_candidate(structural_candidate)
-            candidate_entries.append(structural_entry)
-            structural_polygons = structural_entry["polygons"]
+            structural_entry = distortion_audit(structural_candidate)
         except Exception:
             structural_candidate = None
-            structural_polygons = None
+            structural_entry = None
 
-        try:
-            horizontal_candidate = estimate_horizontal_perspective_from_polygons(
-                working_polygons, working.size,
-            )
-            candidate_entries.append(
-                audit_projective_candidate(horizontal_candidate)
-            )
-        except Exception:
-            horizontal_candidate = None
-
-        if (
+        structural_evidence_safe = bool(
             structural_candidate is not None
-            and structural_polygons is not None
-            and str(getattr(structural_candidate, "classification", "unknown"))
+            and float(getattr(structural_candidate, "strength_px", 0.0))
+            >= perspective_threshold
+            and line_supports_perspective
+            and str(
+                getattr(structural_candidate, "classification", "unknown")
+            )
             == "keystone"
-        ):
-            try:
-                horizontal_after_structural = (
-                    estimate_horizontal_perspective_from_polygons(
-                        structural_polygons, working.size,
-                    )
-                )
-                combined_candidate = compose_perspective_estimates(
-                    structural_candidate,
-                    horizontal_after_structural,
+        )
+        structural_auto_safe = bool(
+            structural_entry is not None
+            and structural_evidence_safe
+            and structural_entry["distortion_safe"]
+        )
+        perspective_structural_safe = structural_auto_safe
+
+        # Stage A: in auto mode only a structurally justified + distortion-safe
+        # keystone becomes the base. Explicit perspective mode remains an
+        # intentional user override and can keep the structural candidate even
+        # when the automatic safety gate rejects it.
+        base_candidate = None
+        base_polygons = original_projective_polygons
+        if requested_geometry_mode == "auto":
+            if structural_auto_safe:
+                base_candidate = structural_candidate
+                base_polygons = structural_entry["polygons"]
+                perspective_structural_applied = True
+        elif structural_candidate is not None:
+            if float(getattr(structural_candidate, "strength_px", 0.0)) >= 0.75:
+                base_candidate = structural_candidate
+                base_polygons = structural_entry["polygons"]
+                perspective_structural_applied = True
+
+        # Stage B: estimate the residual horizontal projective direction on the
+        # current base, then optimize only its strength. The optimizer transforms
+        # polygons only, so evaluating ~10-20 strengths is inexpensive.
+        horizontal_full = None
+        horizontal_partial = None
+        horizontal_row_audit = None
+        horizontal_strength = 0.0
+        horizontal_total_candidate = None
+        horizontal_total_entry = None
+        horizontal_evidence_safe = False
+        try:
+            horizontal_full = estimate_horizontal_perspective_from_polygons(
+                base_polygons, working.size,
+            )
+            (
+                horizontal_partial,
+                horizontal_row_audit,
+                horizontal_strength,
+            ) = optimize_horizontal_perspective_strength(
+                base_polygons,
+                working.size,
+                horizontal_full,
+            )
+            if base_candidate is not None:
+                horizontal_total_candidate = compose_perspective_estimates(
+                    base_candidate,
+                    horizontal_partial,
                     working.size,
                 )
-                candidate_entries.append(
-                    audit_projective_candidate(combined_candidate)
-                )
-            except Exception:
-                pass
-
-        if candidate_entries:
-            safe_entries = [
-                entry for entry in candidate_entries if entry["auto_safe"]
-            ]
-
-            def candidate_sort_key(entry: dict) -> tuple:
-                row = entry["row"]
-                candidate = entry["candidate"]
-                source = str(getattr(candidate, "candidate_source", "structural"))
-                # First minimize the residual horizontal error. Distortion is
-                # only a tie-breaker after all candidates have passed budgets.
-                source_tiebreak = {
-                    "structural+horizontal_vp": 0,
-                    "structural": 1,
-                    "horizontal_vp": 2,
-                }.get(source, 3)
-                return (
-                    float(row.after_metric_deg),
-                    float(entry["distortion_cost"]),
-                    source_tiebreak,
-                )
-
-            if requested_geometry_mode == "auto" and safe_entries:
-                # Do not trade away a real structural-keystone correction just
-                # because a horizontal-only candidate has slightly lower scale
-                # cost.  A safe combined candidate corrects both projective
-                # families; otherwise prefer safe structural rectification, then
-                # fall back to horizontal-VP when structure does not justify a
-                # keystone transform.
-                source_priority = (
-                    "structural+horizontal_vp",
-                    "structural",
-                    "horizontal_vp",
-                )
-                selected_entry = None
-                for preferred_source in source_priority:
-                    same_source = [
-                        entry
-                        for entry in safe_entries
-                        if str(
-                            getattr(
-                                entry["candidate"],
-                                "candidate_source",
-                                "structural",
-                            )
-                        )
-                        == preferred_source
-                    ]
-                    if same_source:
-                        selected_entry = min(
-                            same_source, key=candidate_sort_key,
-                        )
-                        break
-                if selected_entry is None:
-                    selected_entry = min(
-                        safe_entries, key=candidate_sort_key,
-                    )
             else:
-                selected_entry = min(candidate_entries, key=candidate_sort_key)
+                horizontal_total_candidate = horizontal_partial
 
-            perspective = selected_entry["candidate"]
-            candidate_polygons = selected_entry["polygons"]
-            jacobian_audit = selected_entry["jacobian"]
-            text_scale_audit = selected_entry["text_scale"]
-            row_audit = selected_entry["row"]
-            perspective_auto_safe = bool(selected_entry["auto_safe"])
+            horizontal_total_entry = distortion_audit(
+                horizontal_total_candidate,
+                row_before_polygons=base_polygons,
+            )
+            # Use the optimizer's row audit here because it measures exactly the
+            # residual horizontal stage (base→partial VP), not source→combined.
+            horizontal_total_entry["row"] = horizontal_row_audit
+            horizontal_evidence_safe = bool(
+                int(getattr(horizontal_full, "horizontal_row_count", 0))
+                >= HORIZONTAL_VP_MIN_ROWS
+                and line_geometry.confidence >= 0.35
+                and not line_geometry.separator_curve_reliable
+                and abs(float(horizontal_row_audit.before_trend_deg))
+                >= HORIZONTAL_VP_MIN_TREND_DEG
+                and horizontal_row_audit.verdict == "improved"
+            )
+        except Exception:
+            horizontal_full = None
+            horizontal_partial = None
+            horizontal_row_audit = None
+            horizontal_strength = 0.0
+            horizontal_total_candidate = None
+            horizontal_total_entry = None
+            horizontal_evidence_safe = False
+
+        horizontal_auto_safe = bool(
+            horizontal_total_entry is not None
+            and horizontal_evidence_safe
+            and horizontal_total_entry["distortion_safe"]
+        )
+
+        selected_entry = None
+        selected_candidate = None
+        selected_horizontal_strength = 0.0
+
+        if requested_geometry_mode == "auto":
+            if horizontal_auto_safe:
+                selected_entry = horizontal_total_entry
+                selected_candidate = horizontal_total_candidate
+                selected_horizontal_strength = horizontal_strength
+            elif structural_auto_safe:
+                selected_entry = structural_entry
+                selected_candidate = structural_candidate
+        else:
+            # Explicit perspective is still an override, but prefer the optimized
+            # residual-horizontal version when it actually improves row geometry.
+            if (
+                horizontal_total_entry is not None
+                and horizontal_row_audit is not None
+                and horizontal_row_audit.after_metric_deg
+                < horizontal_row_audit.before_metric_deg
+            ):
+                selected_entry = horizontal_total_entry
+                selected_candidate = horizontal_total_candidate
+                selected_horizontal_strength = horizontal_strength
+            elif structural_entry is not None:
+                selected_entry = structural_entry
+                selected_candidate = structural_candidate
+            elif horizontal_total_entry is not None:
+                selected_entry = horizontal_total_entry
+                selected_candidate = horizontal_total_candidate
+                selected_horizontal_strength = horizontal_strength
+
+        # If auto mode applied no candidate, retain the most informative rejected
+        # candidate in diagnostics without applying it.
+        diagnostic_entry = selected_entry
+        diagnostic_candidate = selected_candidate
+        diagnostic_horizontal_strength = selected_horizontal_strength
+        if diagnostic_entry is None:
+            rejected_options: list[tuple[float, dict, object, float]] = []
+            if structural_entry is not None and structural_candidate is not None:
+                rejected_options.append(
+                    (
+                        float(structural_entry["distortion_cost"]),
+                        structural_entry,
+                        structural_candidate,
+                        0.0,
+                    )
+                )
+            if (
+                horizontal_total_entry is not None
+                and horizontal_total_candidate is not None
+            ):
+                row_metric = (
+                    float(horizontal_row_audit.after_metric_deg)
+                    if horizontal_row_audit is not None
+                    else 999.0
+                )
+                rejected_options.append(
+                    (
+                        row_metric + float(horizontal_total_entry["distortion_cost"]),
+                        horizontal_total_entry,
+                        horizontal_total_candidate,
+                        horizontal_strength,
+                    )
+                )
+            if rejected_options:
+                _score, diagnostic_entry, diagnostic_candidate, diagnostic_horizontal_strength = min(
+                    rejected_options, key=lambda item: item[0]
+                )
+
+        if diagnostic_entry is not None and diagnostic_candidate is not None:
+            perspective = diagnostic_candidate
+            jacobian_audit = diagnostic_entry["jacobian"]
+            text_scale_audit = diagnostic_entry["text_scale"]
+            row_audit = diagnostic_entry["row"]
 
             source_quad_value = getattr(perspective, "source_quad", None)
             target_quad_value = getattr(perspective, "target_quad", None)
@@ -1558,7 +1605,12 @@ def analyze_preprocess_page(
             perspective_horizontal_row_count = int(
                 getattr(perspective, "horizontal_row_count", 0)
             )
-            perspective_candidate_strength_px = float(perspective.strength_px)
+            perspective_horizontal_strength = float(
+                diagnostic_horizontal_strength
+            )
+            perspective_candidate_strength_px = float(
+                getattr(perspective, "strength_px", 0.0)
+            )
             perspective_left_drift_px = float(
                 getattr(perspective, "left_drift_px", 0.0)
             )
@@ -1653,137 +1705,87 @@ def analyze_preprocess_page(
             perspective_text_scale_after_score = text_scale_audit.after_score
             perspective_text_scale_verdict = text_scale_audit.verdict
 
-            apply_perspective = bool(
-                perspective.strength_px >= 0.75
-                and (
-                    requested_geometry_mode == "perspective"
-                    or (
-                        requested_geometry_mode == "auto"
-                        and perspective_auto_safe
-                    )
-                )
+        perspective_auto_safe = bool(
+            requested_geometry_mode == "auto"
+            and selected_entry is not None
+            and (
+                selected_candidate is structural_candidate
+                and structural_auto_safe
+                or selected_candidate is horizontal_total_candidate
+                and horizontal_auto_safe
             )
+        )
 
-            if requested_geometry_mode == "auto" and not safe_entries:
-                review_reasons: list[str] = []
-                if row_audit.verdict != "improved":
-                    review_reasons.append(
-                        "候选未充分改善横向行几何 "
-                        f"(Δ角 {row_audit.before_trend_deg:+.2f}°→"
-                        f"{row_audit.after_trend_deg:+.2f}°)"
-                    )
-                if not jacobian_audit.valid:
-                    review_reasons.append("候选变换 Jacobian 非法或发生局部翻转")
-                if (
-                    jacobian_audit.horizontal_scale_span_ratio
-                    > AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX
-                ):
-                    review_reasons.append(
-                        "横向局部尺度漂移 "
-                        f"{jacobian_audit.horizontal_scale_span_ratio * 100:.2f}% 超限"
-                    )
-                if (
-                    jacobian_audit.vertical_scale_span_ratio
-                    > AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX
-                ):
-                    review_reasons.append(
-                        "纵向局部尺度漂移 "
-                        f"{jacobian_audit.vertical_scale_span_ratio * 100:.2f}% 超限"
-                    )
-                if (
-                    jacobian_audit.area_scale_span_ratio
-                    > AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX
-                ):
-                    review_reasons.append(
-                        "局部面积尺度漂移 "
-                        f"{jacobian_audit.area_scale_span_ratio * 100:.2f}% 超限"
-                    )
-                if (
-                    jacobian_audit.anisotropy_p95_ratio
-                    > AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
-                ):
-                    review_reasons.append(
-                        "局部横纵不等比例拉伸 "
-                        f"{jacobian_audit.anisotropy_p95_ratio * 100:.2f}% 超限"
-                    )
-                if text_scale_audit.verdict == "worse":
-                    review_reasons.append(
-                        "配对文本框尺度场超限："
-                        f"行向 {text_scale_audit.inline_ratio_span_ratio * 100:.2f}% / "
-                        f"跨行 {text_scale_audit.cross_ratio_span_ratio * 100:.2f}%"
-                    )
-                if not selected_entry["evidence_safe"]:
-                    selected_source = str(
-                        getattr(
-                            selected_entry["candidate"],
-                            "candidate_source",
-                            "structural",
-                        )
-                    )
-                    selected_classification = str(
-                        getattr(
-                            selected_entry["candidate"],
-                            "classification",
-                            "unknown",
-                        )
-                    )
-                    if selected_source == "structural" and not line_supports_perspective:
-                        review_reasons.append("文本行几何证据不足或不一致")
-                    elif (
-                        selected_source == "structural"
-                        and selected_classification == "parallel_drift"
-                    ):
-                        review_reasons.append(
-                            "首末结构边界主要呈同向平行漂移，更像旋转/剪切而非梯形透视"
-                        )
-                    else:
-                        review_reasons.append(
-                            "候选缺少与其类型匹配的结构/文本行证据"
-                        )
-                if review_reasons:
-                    warnings.append(
-                        "自动投影候选已拦截："
-                        + "；".join(review_reasons)
-                        + "。可人工选择“自动透视”复核。"
-                    )
-                    method_parts.append("perspective_review")
-
-            if (
-                requested_geometry_mode == "perspective"
-                and perspective.strength_px >= 0.75
-                and not perspective_auto_safe
-            ):
-                text_scale_label = {
-                    "stable": "稳定",
-                    "worse": "超限",
-                    "insufficient": "证据不足",
-                }.get(text_scale_audit.verdict, text_scale_audit.verdict)
-                warnings.append(
-                    "已按用户显式选择执行投影矫正；该候选未通过自动安全门，"
-                    f"来源={perspective_candidate_source}，"
-                    f"行趋势 {row_audit.before_trend_deg:+.2f}°→"
-                    f"{row_audit.after_trend_deg:+.2f}°，"
-                    f"Jacobian X/Y 漂移 "
-                    f"{jacobian_audit.horizontal_scale_span_ratio * 100:.2f}%/"
-                    f"{jacobian_audit.vertical_scale_span_ratio * 100:.2f}%，"
-                    f"配对文本框尺度={text_scale_label}。"
-                )
-
+        if selected_entry is not None and selected_candidate is not None:
+            apply_perspective = bool(
+                float(getattr(selected_candidate, "strength_px", 0.0)) >= 0.75
+            )
             if apply_perspective:
-                perspective_matrix = perspective.matrix
+                perspective_matrix = selected_candidate.matrix
                 geometry_strength = max(
-                    geometry_strength, float(perspective.strength_px)
+                    geometry_strength,
+                    float(getattr(selected_candidate, "strength_px", 0.0)),
                 )
                 working = apply_homography_image(
                     working, perspective_matrix,
                 )
-                working_polygons = candidate_polygons
+                working_polygons = selected_entry["polygons"]
                 actual_geometry_mode = "perspective"
                 method_parts.append("perspective")
-                if perspective_candidate_source == "horizontal_vp":
+                if perspective_structural_applied:
+                    method_parts.append("structural")
+                if selected_horizontal_strength > 0.0:
                     method_parts.append("horizontal_vp")
-                elif perspective_candidate_source == "structural+horizontal_vp":
-                    method_parts.append("horizontal_vp_combined")
+                    method_parts.append("horizontal_vp_optimized")
+        elif requested_geometry_mode == "auto":
+            review_reasons: list[str] = []
+            if structural_candidate is not None and not structural_auto_safe:
+                classification = str(
+                    getattr(structural_candidate, "classification", "unknown")
+                )
+                if classification == "parallel_drift":
+                    review_reasons.append(
+                        "栏结构主要呈同向平行漂移，不作为 keystone 自动执行"
+                    )
+                elif not line_supports_perspective:
+                    review_reasons.append("栏结构透视缺少一致的文本行/结构证据")
+                if (
+                    structural_entry is not None
+                    and not structural_entry["distortion_safe"]
+                ):
+                    review_reasons.append("栏结构候选超过字符尺度形变安全预算")
+            if horizontal_full is not None and not horizontal_auto_safe:
+                if horizontal_row_audit is not None:
+                    review_reasons.append(
+                        "残余水平投影优化未同时满足行水平改善与尺度安全："
+                        f"强度 {horizontal_strength:.3f}，"
+                        f"Δ角 {horizontal_row_audit.before_trend_deg:+.2f}°→"
+                        f"{horizontal_row_audit.after_trend_deg:+.2f}°"
+                    )
+                else:
+                    review_reasons.append("残余水平投影证据不足")
+            if review_reasons:
+                warnings.append(
+                    "自动投影候选已拦截：" + "；".join(review_reasons)
+                    + "。可人工选择“自动透视”复核。"
+                )
+                method_parts.append("perspective_review")
+
+        if (
+            requested_geometry_mode == "perspective"
+            and selected_entry is not None
+            and not (
+                structural_auto_safe
+                or horizontal_auto_safe
+            )
+        ):
+            warnings.append(
+                "已按用户显式选择执行投影矫正；该候选未通过自动安全门。"
+                f"来源={perspective_candidate_source}，"
+                f"水平强度={perspective_horizontal_strength:.3f}，"
+                f"行趋势 {perspective_row_before_trend_deg:+.2f}°→"
+                f"{perspective_row_after_trend_deg:+.2f}°。"
+            )
 
     # Advanced transforms change the page geometry. Re-run TextDetection on the
     # corrected image before final structural cropping. If that second pass
