@@ -224,6 +224,12 @@ class AppSettings:
     preprocess_export_canvas_mode: str = "batch_max"
     preprocess_export_canvas_width: int = 0
     preprocess_export_canvas_height: int = 0
+    # Fixed page margins define the page body (版心). Content alignment is
+    # resolved inside this body, not against the outer page edge.
+    preprocess_export_margin_top: int = 0
+    preprocess_export_margin_bottom: int = 0
+    preprocess_export_margin_left: int = 0
+    preprocess_export_margin_right: int = 0
     preprocess_export_align_x: str = "center"
     preprocess_export_align_y: str = "top"
     # Overlay editor presentation at 100% page scale. The page zoom multiplies
