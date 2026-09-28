@@ -1506,6 +1506,12 @@ def geometry_corrected_image(
         estimate = OrthogonalWarpEstimate(
             y_knots=tuple(analysis.orthogonal_y_knots),
             angle_knots_deg=tuple(analysis.orthogonal_angle_knots_deg),
+            x_knots=tuple(analysis.orthogonal_x_knots),
+            row_grid_rows=int(analysis.orthogonal_row_grid_rows),
+            row_grid_cols=int(analysis.orthogonal_row_grid_cols),
+            row_displacement_grid_px=tuple(
+                analysis.orthogonal_row_displacement_grid_px
+            ),
             separator_y_knots=tuple(analysis.orthogonal_separator_y_knots),
             separator_shift_knots_px=tuple(
                 analysis.orthogonal_separator_shift_knots_px
@@ -1517,6 +1523,18 @@ def geometry_corrected_image(
             ),
             separator_point_count=int(
                 analysis.orthogonal_separator_point_count
+            ),
+            horizontal_rule_point_count=int(
+                analysis.orthogonal_horizontal_rule_point_count
+            ),
+            horizontal_rule_y=float(
+                analysis.orthogonal_horizontal_rule_y
+            ),
+            horizontal_rule_angle_deg=float(
+                analysis.orthogonal_before_horizontal_rule_angle_deg
+            ),
+            horizontal_rule_residual_span_px=float(
+                analysis.orthogonal_before_horizontal_rule_residual_px
             ),
             max_row_angle_deg=float(
                 analysis.orthogonal_max_row_angle_deg
