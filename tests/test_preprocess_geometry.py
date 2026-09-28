@@ -197,6 +197,33 @@ def test_horizontal_geometry_separates_staggered_rows_across_three_columns() -> 
     assert max(abs(value) for value in verified.after_column_trends_deg) <= 0.12
 
 
+def test_horizontal_geometry_auto_detects_three_columns_without_cross_row_pairing() -> None:
+    settings = AppSettings(layout_columns_policy="detect")
+    polygons: list[np.ndarray] = []
+    centers = (170.0, 520.0, 870.0)
+    offsets = (0.0, 13.0, 25.0)
+    for cx, offset in zip(centers, offsets):
+        for row in range(19):
+            t = row / 18.0
+            y = 135 + row * 43 + offset
+            angle = 0.34 - 0.68 * t
+            polygons.append(_rotated_box(cx, y, 210, 21, angle))
+
+    estimate = estimate_horizontal_perspective_from_polygons(
+        polygons, (1050, 1050), settings,
+    )
+    transformed = transform_polygons_homography(polygons, estimate.matrix)
+    audit = audit_horizontal_alignment(
+        polygons, transformed, size=(1050, 1050), settings=settings,
+    )
+
+    assert estimate.horizontal_column_count == 3
+    assert audit.column_count == 3
+    assert audit.valid_column_count == 3
+    assert audit.verdict == "improved"
+    assert audit.after_worst_region_deg <= 0.18
+
+
 def test_horizontal_geometry_supports_two_three_and_n_columns() -> None:
     for columns in (2, 3, 4, 5):
         width = 300 * columns
