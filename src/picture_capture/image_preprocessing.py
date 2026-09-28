@@ -283,6 +283,49 @@ class PreprocessAnalysis:
             perspective_classification=str(
                 payload.get("perspective_classification", "none") or "none"
             ),
+            perspective_candidate_source=str(
+                payload.get("perspective_candidate_source", "none") or "none"
+            ),
+            perspective_horizontal_vanishing_x=float(
+                payload.get("perspective_horizontal_vanishing_x", 0.0)
+            ),
+            perspective_horizontal_vanishing_y=float(
+                payload.get("perspective_horizontal_vanishing_y", 0.0)
+            ),
+            perspective_horizontal_row_count=max(
+                0, int(payload.get("perspective_horizontal_row_count", 0))
+            ),
+            perspective_row_before_top_angle_deg=float(
+                payload.get("perspective_row_before_top_angle_deg", 0.0)
+            ),
+            perspective_row_after_top_angle_deg=float(
+                payload.get("perspective_row_after_top_angle_deg", 0.0)
+            ),
+            perspective_row_before_bottom_angle_deg=float(
+                payload.get("perspective_row_before_bottom_angle_deg", 0.0)
+            ),
+            perspective_row_after_bottom_angle_deg=float(
+                payload.get("perspective_row_after_bottom_angle_deg", 0.0)
+            ),
+            perspective_row_before_trend_deg=float(
+                payload.get("perspective_row_before_trend_deg", 0.0)
+            ),
+            perspective_row_after_trend_deg=float(
+                payload.get("perspective_row_after_trend_deg", 0.0)
+            ),
+            perspective_row_before_metric_deg=max(
+                0.0, float(payload.get("perspective_row_before_metric_deg", 0.0))
+            ),
+            perspective_row_after_metric_deg=max(
+                0.0, float(payload.get("perspective_row_after_metric_deg", 0.0))
+            ),
+            perspective_row_improvement_ratio=float(
+                payload.get("perspective_row_improvement_ratio", 0.0)
+            ),
+            perspective_row_alignment_verdict=str(
+                payload.get("perspective_row_alignment_verdict", "insufficient")
+                or "insufficient"
+            ),
             perspective_candidate_strength_px=max(
                 0.0, float(payload.get("perspective_candidate_strength_px", 0.0))
             ),
@@ -1045,6 +1088,20 @@ def analyze_preprocess_page(
     perspective_source_quad: tuple[float, ...] | None = None
     perspective_target_quad: tuple[float, ...] | None = None
     perspective_classification = "none"
+    perspective_candidate_source = "none"
+    perspective_horizontal_vanishing_x = 0.0
+    perspective_horizontal_vanishing_y = 0.0
+    perspective_horizontal_row_count = 0
+    perspective_row_before_top_angle_deg = 0.0
+    perspective_row_after_top_angle_deg = 0.0
+    perspective_row_before_bottom_angle_deg = 0.0
+    perspective_row_after_bottom_angle_deg = 0.0
+    perspective_row_before_trend_deg = 0.0
+    perspective_row_after_trend_deg = 0.0
+    perspective_row_before_metric_deg = 0.0
+    perspective_row_after_metric_deg = 0.0
+    perspective_row_improvement_ratio = 0.0
+    perspective_row_alignment_verdict = "insufficient"
     perspective_candidate_strength_px = 0.0
     perspective_left_drift_px = 0.0
     perspective_right_drift_px = 0.0
@@ -1582,6 +1639,44 @@ def analyze_preprocess_page(
         perspective_source_quad=perspective_source_quad,
         perspective_target_quad=perspective_target_quad,
         perspective_classification=perspective_classification,
+        perspective_candidate_source=perspective_candidate_source,
+        perspective_horizontal_vanishing_x=round(
+            float(perspective_horizontal_vanishing_x), 3
+        ),
+        perspective_horizontal_vanishing_y=round(
+            float(perspective_horizontal_vanishing_y), 3
+        ),
+        perspective_horizontal_row_count=int(perspective_horizontal_row_count),
+        perspective_row_before_top_angle_deg=round(
+            float(perspective_row_before_top_angle_deg), 4
+        ),
+        perspective_row_after_top_angle_deg=round(
+            float(perspective_row_after_top_angle_deg), 4
+        ),
+        perspective_row_before_bottom_angle_deg=round(
+            float(perspective_row_before_bottom_angle_deg), 4
+        ),
+        perspective_row_after_bottom_angle_deg=round(
+            float(perspective_row_after_bottom_angle_deg), 4
+        ),
+        perspective_row_before_trend_deg=round(
+            float(perspective_row_before_trend_deg), 4
+        ),
+        perspective_row_after_trend_deg=round(
+            float(perspective_row_after_trend_deg), 4
+        ),
+        perspective_row_before_metric_deg=round(
+            float(perspective_row_before_metric_deg), 4
+        ),
+        perspective_row_after_metric_deg=round(
+            float(perspective_row_after_metric_deg), 4
+        ),
+        perspective_row_improvement_ratio=round(
+            float(perspective_row_improvement_ratio), 6
+        ),
+        perspective_row_alignment_verdict=str(
+            perspective_row_alignment_verdict
+        ),
         perspective_candidate_strength_px=round(float(perspective_candidate_strength_px), 3),
         perspective_left_drift_px=round(float(perspective_left_drift_px), 3),
         perspective_right_drift_px=round(float(perspective_right_drift_px), 3),
