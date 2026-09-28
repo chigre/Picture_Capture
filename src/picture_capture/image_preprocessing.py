@@ -20,6 +20,13 @@ from .layout_detection import (
     infer_layout_from_boxes,
 )
 from .models import AppSettings
+from .orthogonal_dewarp import (
+    ORTHOGONAL_WARP_MAX_SCALE_DEVIATION,
+    OrthogonalWarpEstimate,
+    apply_orthogonal_warp_image,
+    estimate_orthogonal_warp,
+    transform_polygons_orthogonal,
+)
 from .preprocess_geometry import (
     HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG,
     HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG,
@@ -61,7 +68,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 16
+PREPROCESS_FORMAT_VERSION = 17
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -74,6 +81,9 @@ AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX = 0.055
 AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX = 0.035
 AUTO_UVDOC_MIN_CONFIDENCE = 0.65
 AUTO_UVDOC_MIN_HORIZONTAL_IMPROVEMENT = 0.15
+ORTHOGONAL_AUTO_MIN_CONFIDENCE = 0.45
+ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT = 0.25
+ORTHOGONAL_AUTO_GAINS = (0.55, 0.70, 0.85, 1.0, 1.10)
 PREVIEW_YELLOW = (255, 225, 110, 94)
 PREVIEW_OUTLINE = (218, 164, 24, 255)
 
@@ -200,6 +210,22 @@ class PreprocessAnalysis:
     perspective_text_scale_verdict: str = "insufficient"
     perspective_auto_safe: bool = False
     manual_perspective_quad: tuple[float, ...] | None = None
+    orthogonal_applied: bool = False
+    orthogonal_passes: int = 0
+    orthogonal_row_count: int = 0
+    orthogonal_valid_column_count: int = 0
+    orthogonal_separator_point_count: int = 0
+    orthogonal_row_gain: float = 0.0
+    orthogonal_confidence: float = 0.0
+    orthogonal_column_spread_deg: float = 0.0
+    orthogonal_max_row_angle_deg: float = 0.0
+    orthogonal_row_angle_span_deg: float = 0.0
+    orthogonal_max_horizontal_shift_px: float = 0.0
+    orthogonal_max_vertical_shift_px: float = 0.0
+    orthogonal_max_scale_deviation: float = 0.0
+    orthogonal_before_quality_score: float = 0.0
+    orthogonal_after_quality_score: float = 0.0
+    orthogonal_alignment_verdict: str = "insufficient"
     final_alignment_row_count: int = 0
     final_alignment_valid_column_count: int = 0
     final_alignment_edge_pair_count: int = 0
@@ -630,6 +656,49 @@ class PreprocessAnalysis:
                 if isinstance(payload.get("manual_perspective_quad"), (list, tuple))
                 and len(payload.get("manual_perspective_quad", ())) == 8
                 else None
+            ),
+            orthogonal_applied=bool(payload.get("orthogonal_applied", False)),
+            orthogonal_passes=max(0, int(payload.get("orthogonal_passes", 0))),
+            orthogonal_row_count=max(0, int(payload.get("orthogonal_row_count", 0))),
+            orthogonal_valid_column_count=max(
+                0, int(payload.get("orthogonal_valid_column_count", 0))
+            ),
+            orthogonal_separator_point_count=max(
+                0, int(payload.get("orthogonal_separator_point_count", 0))
+            ),
+            orthogonal_row_gain=max(
+                0.0, float(payload.get("orthogonal_row_gain", 0.0))
+            ),
+            orthogonal_confidence=max(
+                0.0, min(1.0, float(payload.get("orthogonal_confidence", 0.0)))
+            ),
+            orthogonal_column_spread_deg=max(
+                0.0, float(payload.get("orthogonal_column_spread_deg", 0.0))
+            ),
+            orthogonal_max_row_angle_deg=max(
+                0.0, float(payload.get("orthogonal_max_row_angle_deg", 0.0))
+            ),
+            orthogonal_row_angle_span_deg=max(
+                0.0, float(payload.get("orthogonal_row_angle_span_deg", 0.0))
+            ),
+            orthogonal_max_horizontal_shift_px=max(
+                0.0, float(payload.get("orthogonal_max_horizontal_shift_px", 0.0))
+            ),
+            orthogonal_max_vertical_shift_px=max(
+                0.0, float(payload.get("orthogonal_max_vertical_shift_px", 0.0))
+            ),
+            orthogonal_max_scale_deviation=max(
+                0.0, float(payload.get("orthogonal_max_scale_deviation", 0.0))
+            ),
+            orthogonal_before_quality_score=max(
+                0.0, float(payload.get("orthogonal_before_quality_score", 0.0))
+            ),
+            orthogonal_after_quality_score=max(
+                0.0, float(payload.get("orthogonal_after_quality_score", 0.0))
+            ),
+            orthogonal_alignment_verdict=str(
+                payload.get("orthogonal_alignment_verdict", "insufficient")
+                or "insufficient"
             ),
             final_alignment_row_count=max(
                 0, int(payload.get("final_alignment_row_count", 0))
