@@ -148,7 +148,7 @@ def test_deskewed_layout_keeps_fixed_margin_after_correction(monkeypatch) -> Non
     assert crop_y1 - raw_y1 == 20
 
 
-def test_auto_geometry_never_applies_structural_mesh(monkeypatch) -> None:
+def test_auto_geometry_uses_line_geometry_only_for_review(monkeypatch) -> None:
     image = Image.new("RGB", (1000, 1400), "white")
     polygons = [_tilted_box(350, 80, 120, 24, 0.0)]
     for row in range(20):
@@ -160,9 +160,6 @@ def test_auto_geometry_never_applies_structural_mesh(monkeypatch) -> None:
             )
         )
 
-    class Candidate:
-        strength_px = 24.0
-
     monkeypatch.setattr(
         image_preprocessing,
         "detect_text_polygons",
@@ -170,17 +167,15 @@ def test_auto_geometry_never_applies_structural_mesh(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         image_preprocessing,
-        "estimate_layout_dewarp_from_polygons",
-        lambda *_args, **_kwargs: Candidate(),
-    )
-
-    def forbidden_mesh(*_args, **_kwargs):
-        raise AssertionError("automatic mode must never apply structural mesh")
-
-    monkeypatch.setattr(
-        image_preprocessing,
-        "apply_layout_dewarp_image",
-        forbidden_mesh,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=20,
+            separator_found=True,
+            separator_residual_px=9.0,
+            separator_span_ratio=0.9,
+            recommendation="uvdoc_review",
+            confidence=0.9,
+        ),
     )
 
     analysis = analyze_preprocess_page(
@@ -191,8 +186,9 @@ def test_auto_geometry_never_applies_structural_mesh(monkeypatch) -> None:
         geometry_mode="auto",
     )
 
-    assert analysis.geometry_mode != "dewarp"
-    assert "nonlinear_review" in analysis.method
+    assert analysis.geometry_mode != "uvdoc"
+    assert analysis.line_geometry_recommendation == "uvdoc_review"
+    assert analysis.line_geometry_separator_residual_px == 9.0
     assert any("UVDoc" in warning for warning in analysis.warnings)
 
 
