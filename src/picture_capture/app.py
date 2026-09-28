@@ -12929,12 +12929,14 @@ class PictureCaptureApp(tk.Tk):
             return None
         page = self.project.images[index]
         safety, auto_deskew, geometry_mode = self._preprocess_config()
+        manual_quad = load_manual_perspective_quad(self.project.root, page)
         cached = self._preprocess_results.get(page.name)
         if cached is not None and preprocess_analysis_is_current(
             cached, page,
             safety_margin_px=safety,
             auto_deskew=auto_deskew,
             geometry_mode=geometry_mode,
+            manual_perspective_quad=manual_quad,
         ):
             return cached
         loaded = load_preprocess_analysis(self.project.root, page)
@@ -12943,6 +12945,7 @@ class PictureCaptureApp(tk.Tk):
             safety_margin_px=safety,
             auto_deskew=auto_deskew,
             geometry_mode=geometry_mode,
+            manual_perspective_quad=manual_quad,
         ):
             self._preprocess_results[page.name] = loaded
             return loaded
@@ -12978,6 +12981,7 @@ class PictureCaptureApp(tk.Tk):
         project = self.project
         settings = replace(self.settings)
         safety, auto_deskew, geometry_mode = self._preprocess_config()
+        manual_quad = load_manual_perspective_quad(project.root, page)
         current = self._preprocess_result_for_page(page_index)
         if current is not None:
             self._set_current_preprocess_status(current)
@@ -12999,6 +13003,7 @@ class PictureCaptureApp(tk.Tk):
                 safety_margin_px=safety,
                 auto_deskew=auto_deskew,
                 geometry_mode=geometry_mode,
+                manual_perspective_quad=manual_quad,
             )
 
         def done(analysis: PreprocessAnalysis) -> None:
@@ -13051,11 +13056,13 @@ class PictureCaptureApp(tk.Tk):
 
         def worker(index, _position, _total):
             page = project.images[int(index)]
+            manual_quad = load_manual_perspective_quad(project.root, page)
             analysis = analyze_preprocess_path(
                 page, settings,
                 safety_margin_px=safety,
                 auto_deskew=auto_deskew,
                 geometry_mode=geometry_mode,
+                manual_perspective_quad=manual_quad,
             )
             save_preprocess_analysis(project.root, page, analysis)
             return int(index), analysis
@@ -13112,18 +13119,21 @@ class PictureCaptureApp(tk.Tk):
         self, project: ProjectState, page: Path, settings: AppSettings,
         safety: float, auto_deskew: bool, geometry_mode: str,
     ) -> PreprocessAnalysis:
+        manual_quad = load_manual_perspective_quad(project.root, page)
         analysis = load_preprocess_analysis(project.root, page)
         if analysis is None or not preprocess_analysis_is_current(
             analysis, page,
             safety_margin_px=safety,
             auto_deskew=auto_deskew,
             geometry_mode=geometry_mode,
+            manual_perspective_quad=manual_quad,
         ):
             analysis = analyze_preprocess_path(
                 page, settings,
                 safety_margin_px=safety,
                 auto_deskew=auto_deskew,
                 geometry_mode=geometry_mode,
+                manual_perspective_quad=manual_quad,
             )
             save_preprocess_analysis(project.root, page, analysis)
         return analysis
