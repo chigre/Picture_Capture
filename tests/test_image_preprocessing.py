@@ -640,6 +640,9 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
     text = summary.read_text(encoding="utf-8-sig")
     assert "line_geometry_recommendation" in text
     assert "separator_residual_px" in text
+    assert "separator_drift_px" in text
+    assert "perspective_scale_delta_ratio" in text
+    assert "perspective_auto_safe" in text
     assert "canvas_content_x0" in text
     assert "perspective" in text
 
@@ -736,6 +739,9 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert '"顶端对齐", "居中", "底部对齐"' in source
     assert "export_diagnostic_json(" in source
     assert "export_summary_csv(" in source
+    assert "allow_page_navigation: bool = False" in source
+    assert source.count("allow_page_navigation=True") >= 4
+    assert 'and not getattr(self, "_batch_allow_page_navigation", False)' in source
     assert 'text="手动四角"' in source
     assert 'text="重置四角"' in source
     assert 'text="px"' in source
