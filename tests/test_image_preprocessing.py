@@ -909,6 +909,7 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
     assert payload["algorithm_constants"]["text_scale_inline_span_max"] == 0.045
     assert payload["algorithm_constants"]["text_scale_cross_span_max"] == 0.075
     assert payload["algorithm_constants"]["text_scale_anisotropy_p95_max"] == 0.04
+    assert payload["algorithm_constants"]["horizontal_vp_column_spread_max_deg"] == 0.35
     assert payload["algorithm_constants"]["horizontal_strength_min"] == 0.15
     assert payload["algorithm_constants"]["horizontal_strength_coarse_step"] == 0.10
     assert payload["algorithm_constants"]["horizontal_strength_fine_step"] == 0.025
