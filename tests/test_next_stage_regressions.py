@@ -3850,8 +3850,9 @@ def test_verified_cjk_recovery_suppresses_its_raw_source_before_line_grouping():
     assert details[0]["raw_text"] == "摆1"
     assert details[0]["recovered_word"] == "摆"
     assert details[0]["reason"] == "same_recovery_source_text"
-    assert group_ocr_records := paddle_headwords.group_ocr_records(effective)
-    assert group_ocr_records[0].text == "摆"
+    grouped = paddle_headwords.group_ocr_records(effective)
+    assert grouped
+    assert grouped[0].text == "摆"
 
 
 def test_verified_cjk_recovery_suppresses_giant_raw_box_spanning_recovered_heads():
