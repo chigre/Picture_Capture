@@ -24,6 +24,8 @@ HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT = 0.50
 HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG = 0.12
 HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG = 0.18
 HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG = 0.15
+HORIZONTAL_ALIGNMENT_TAIL_FRACTION = 0.18
+HORIZONTAL_ALIGNMENT_MAX_TAIL_DEG = 0.18
 HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG = 0.35
 HORIZONTAL_STRENGTH_MIN = 0.15
 HORIZONTAL_STRENGTH_COARSE_STEP = 0.10
@@ -131,6 +133,12 @@ class HorizontalAlignmentAudit:
     after_column_trends_deg: tuple[float, ...] = ()
     before_column_metrics_deg: tuple[float, ...] = ()
     after_column_metrics_deg: tuple[float, ...] = ()
+    before_column_top_tail_p90_abs_deg: tuple[float, ...] = ()
+    after_column_top_tail_p90_abs_deg: tuple[float, ...] = ()
+    before_column_bottom_tail_p90_abs_deg: tuple[float, ...] = ()
+    after_column_bottom_tail_p90_abs_deg: tuple[float, ...] = ()
+    before_worst_tail_p90_abs_deg: float = 0.0
+    after_worst_tail_p90_abs_deg: float = 0.0
     improvement_ratio: float = 0.0
     verdict: str = "insufficient"
 
@@ -1085,6 +1093,45 @@ def _horizontal_region_angles(
     return float(values[0]), float(values[1]), float(values[2])
 
 
+def _horizontal_tail_p90_abs(
+    rows: list[tuple[float, float, float, float]],
+    *,
+    fraction: float = HORIZONTAL_ALIGNMENT_TAIL_FRACTION,
+) -> tuple[float, float]:
+    """Return robust top/bottom tail P90 absolute row angles.
+
+    Third-based region medians can hide a defect confined to the final few
+    lines. Tail windows deliberately isolate the outer ~18% of each populated
+    column so a lower-right residual cannot disappear into the bottom-third
+    median.
+    """
+    if len(rows) < 5:
+        return 0.0, 0.0
+    ys = np.asarray([row[1] for row in rows], dtype=float)
+    y_min = float(ys.min())
+    y_max = float(ys.max())
+    span = max(1.0, y_max - y_min)
+    top_limit = y_min + span * max(0.05, min(0.35, float(fraction)))
+    bottom_limit = y_max - span * max(0.05, min(0.35, float(fraction)))
+
+    def p90(mask: np.ndarray) -> float:
+        indices = np.flatnonzero(mask)
+        if indices.size < 3:
+            return 0.0
+        return _weighted_percentile_pairs(
+            [
+                (
+                    abs(float(rows[int(index)][2])),
+                    max(1.0, float(rows[int(index)][3])),
+                )
+                for index in indices
+            ],
+            90.0,
+        )
+
+    return float(p90(ys <= top_limit)), float(p90(ys >= bottom_limit))
+
+
 def _horizontal_metric(
     middle: float,
     top: float,
@@ -1190,6 +1237,10 @@ def audit_horizontal_alignment(
     after_trends: list[float] = []
     before_metrics: list[float] = []
     after_metrics: list[float] = []
+    before_top_tails: list[float] = []
+    after_top_tails: list[float] = []
+    before_bottom_tails: list[float] = []
+    after_bottom_tails: list[float] = []
     valid_indices: list[int] = []
 
     for before_stats, after_stats, index in valid_pairs:
@@ -1213,6 +1264,16 @@ def audit_horizontal_alignment(
         after_bottoms.append(abottom_region)
         before_trends.append(btrend)
         after_trends.append(atrend)
+        btop_tail, bbottom_tail = _horizontal_tail_p90_abs(
+            before_rows_for_column
+        )
+        atop_tail, abottom_tail = _horizontal_tail_p90_abs(
+            after_rows_for_column
+        )
+        before_top_tails.append(btop_tail)
+        after_top_tails.append(atop_tail)
+        before_bottom_tails.append(bbottom_tail)
+        after_bottom_tails.append(abottom_tail)
         before_metrics.append(
             _horizontal_metric(
                 bmiddle_region,
@@ -1242,6 +1303,14 @@ def audit_horizontal_alignment(
         abs(value)
         for values in (after_tops, after_middles, after_bottoms)
         for value in values
+    )
+    before_worst_tail = max(
+        before_top_tails + before_bottom_tails,
+        default=0.0,
+    )
+    after_worst_tail = max(
+        after_top_tails + after_bottom_tails,
+        default=0.0,
     )
     (
         before_edge_count,
@@ -1318,6 +1387,7 @@ def audit_horizontal_alignment(
         and improvement >= HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT
         and after_worst_trend <= HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG
         and after_worst_region <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
+        and after_worst_tail <= HORIZONTAL_ALIGNMENT_MAX_TAIL_DEG
         and dual_edge_safe
         and after_mad <= max(0.16, before_mad + 0.03)
     ):
@@ -1371,6 +1441,12 @@ def audit_horizontal_alignment(
         after_column_trends_deg=tuple(after_trends),
         before_column_metrics_deg=tuple(before_metrics),
         after_column_metrics_deg=tuple(after_metrics),
+        before_column_top_tail_p90_abs_deg=tuple(before_top_tails),
+        after_column_top_tail_p90_abs_deg=tuple(after_top_tails),
+        before_column_bottom_tail_p90_abs_deg=tuple(before_bottom_tails),
+        after_column_bottom_tail_p90_abs_deg=tuple(after_bottom_tails),
+        before_worst_tail_p90_abs_deg=float(before_worst_tail),
+        after_worst_tail_p90_abs_deg=float(after_worst_tail),
         improvement_ratio=max(-10.0, min(1.0, improvement)),
         verdict=verdict,
     )
