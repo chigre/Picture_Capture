@@ -198,7 +198,14 @@ def test_2d_row_field_handles_column_disagreement_and_header_rule(
     assert estimate.row_grid_cols >= 4
     assert estimate.horizontal_rule_point_count >= 20
 
-    transformed = transform_polygons_orthogonal(polygons, estimate)
+    # Production optimizes a small gain set against absolute final
+    # horizontality. This synthetic field deliberately has different left/right
+    # trajectories, so verify that the permitted mild over-gain closes the
+    # remaining detector/interpolation residual instead of requiring one shared
+    # page angle.
+    transformed = transform_polygons_orthogonal(
+        polygons, estimate, row_gain=1.10
+    )
     audit = audit_horizontal_alignment(
         polygons,
         transformed,
@@ -206,10 +213,12 @@ def test_2d_row_field_handles_column_disagreement_and_header_rule(
         settings=settings,
     )
     assert audit.after_worst_region_deg <= 0.18
-    assert max(abs(value) for value in audit.after_column_trends_deg) <= 0.15
+    assert max(abs(value) for value in audit.after_column_trends_deg) <= 0.12
 
     header_array = np.asarray(header, dtype=float)
-    mapped_header = transform_points_orthogonal(header_array, estimate)
+    mapped_header = transform_points_orthogonal(
+        header_array, estimate, row_gain=1.10
+    )
     slope, _intercept = np.polyfit(
         mapped_header[:, 0],
         mapped_header[:, 1],
