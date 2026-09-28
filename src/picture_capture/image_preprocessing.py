@@ -2410,6 +2410,199 @@ def analyze_preprocess_page(
                 f"{perspective_row_after_trend_deg:+.2f}°。"
             )
 
+    # Final deterministic orthogonal normalizer.
+    #
+    # Rotation/homography solve global geometry; UVDoc is a generic neural
+    # fallback. Neither guarantees that every dictionary row is horizontal and
+    # every physical column separator is vertical. Use the current post-transform
+    # OCR geometry itself to build a small row-wise mesh, validate it by a fresh
+    # detection pass, and (at most once) refine the residual. This makes the
+    # acceptance criterion part of the correction loop instead of a warning only.
+    orthogonal_applied = False
+    orthogonal_passes = 0
+    orthogonal_row_count = 0
+    orthogonal_valid_column_count = 0
+    orthogonal_separator_point_count = 0
+    orthogonal_row_gain = 0.0
+    orthogonal_confidence = 0.0
+    orthogonal_column_spread_deg = 0.0
+    orthogonal_max_row_angle_deg = 0.0
+    orthogonal_row_angle_span_deg = 0.0
+    orthogonal_max_horizontal_shift_px = 0.0
+    orthogonal_max_vertical_shift_px = 0.0
+    orthogonal_max_scale_deviation = 0.0
+    orthogonal_before_quality_score = 0.0
+    orthogonal_after_quality_score = 0.0
+    orthogonal_alignment_verdict = "insufficient"
+
+    if (
+        requested_geometry_mode == "auto"
+        and working_polygons
+        and not str(settings.layout_writing_mode or "horizontal-tb").startswith(
+            "vertical"
+        )
+    ):
+        for pass_index in range(2):
+            try:
+                estimate = estimate_orthogonal_warp(
+                    working,
+                    working_polygons,
+                    settings,
+                )
+            except Exception as exc:
+                warnings.append(f"正交网格几何估计不可用：{exc}")
+                break
+
+            orthogonal_row_count = int(estimate.row_count)
+            orthogonal_valid_column_count = int(
+                estimate.valid_column_count
+            )
+            orthogonal_separator_point_count = int(
+                estimate.separator_point_count
+            )
+            orthogonal_confidence = float(estimate.confidence)
+            orthogonal_column_spread_deg = float(
+                estimate.column_spread_deg
+            )
+            orthogonal_max_row_angle_deg = float(
+                estimate.max_row_angle_deg
+            )
+            orthogonal_row_angle_span_deg = float(
+                estimate.row_angle_span_deg
+            )
+            orthogonal_max_horizontal_shift_px = float(
+                estimate.max_horizontal_shift_px
+            )
+            orthogonal_max_vertical_shift_px = float(
+                estimate.max_vertical_shift_px
+            )
+            orthogonal_max_scale_deviation = float(
+                estimate.max_scale_deviation
+            )
+
+            if (
+                not estimate.active
+                or estimate.confidence < ORTHOGONAL_AUTO_MIN_CONFIDENCE
+                or estimate.max_scale_deviation
+                > ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
+            ):
+                break
+
+            (
+                row_gain,
+                predicted_polygons,
+                predicted_verdict,
+                before_score,
+                predicted_score,
+            ) = _choose_orthogonal_candidate(
+                working_polygons,
+                estimate,
+                working.size,
+                settings,
+            )
+            orthogonal_before_quality_score = float(before_score)
+
+            predicted_improved = bool(
+                predicted_verdict == "passed"
+                or (
+                    predicted_verdict != "insufficient"
+                    and before_score > 1e-6
+                    and predicted_score
+                    <= before_score
+                    * (1.0 - ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT)
+                )
+            )
+            if not predicted_improved or row_gain <= 0.0:
+                if pass_index == 0:
+                    warnings.append(
+                        "检测到残余行/列几何，但正交网格候选未达到"
+                        "自动改善阈值，已保留前一步结果。"
+                    )
+                break
+
+            try:
+                candidate_image = apply_orthogonal_warp_image(
+                    working,
+                    estimate,
+                    row_gain=row_gain,
+                    separator_gain=1.0,
+                )
+                candidate_polygons = detect_text_polygons(
+                    candidate_image,
+                    settings,
+                )
+            except Exception as exc:
+                warnings.append(
+                    f"正交网格展平后复检失败，已保留前一步结果：{exc}"
+                )
+                break
+            if len(candidate_polygons) < 8:
+                warnings.append(
+                    "正交网格展平后有效文本框不足，已保留前一步结果。"
+                )
+                break
+
+            baseline_audit = audit_horizontal_alignment(
+                working_polygons,
+                working_polygons,
+                size=working.size,
+                settings=settings,
+            )
+            candidate_audit = audit_horizontal_alignment(
+                candidate_polygons,
+                candidate_polygons,
+                size=candidate_image.size,
+                settings=settings,
+            )
+            baseline_verdict, baseline_score = _absolute_horizontal_quality(
+                baseline_audit
+            )
+            actual_verdict, actual_score = _absolute_horizontal_quality(
+                candidate_audit
+            )
+            actual_improved = bool(
+                actual_verdict == "passed"
+                or (
+                    actual_verdict != "insufficient"
+                    and baseline_verdict != "insufficient"
+                    and baseline_score > 1e-6
+                    and actual_score
+                    <= baseline_score
+                    * (1.0 - ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT)
+                )
+            )
+            if not actual_improved:
+                warnings.append(
+                    "正交网格候选未通过重新检测后的闭环水平验收，"
+                    f"质量分 {baseline_score:.2f}→{actual_score:.2f}，"
+                    "已回退。"
+                )
+                break
+
+            working = candidate_image
+            working_polygons = [
+                np.asarray(poly, dtype=float)
+                for poly in candidate_polygons
+            ]
+            orthogonal_applied = True
+            orthogonal_passes += 1
+            orthogonal_row_gain = float(row_gain)
+            orthogonal_after_quality_score = float(actual_score)
+            orthogonal_alignment_verdict = str(actual_verdict)
+            geometry_strength = max(
+                geometry_strength,
+                estimate.max_vertical_shift_px,
+                estimate.max_horizontal_shift_px,
+            )
+            actual_geometry_mode = "orthogonal"
+            advanced_redetected = True
+            method_parts.append(
+                "orthogonal_dewarp"
+                if pass_index == 0 else "orthogonal_refine"
+            )
+            if actual_verdict == "passed":
+                break
+
     # Advanced transforms change the page geometry. Re-run TextDetection on the
     # corrected image before final structural cropping. If that second pass
     # fails, the mathematically transformed original polygons remain a safe
