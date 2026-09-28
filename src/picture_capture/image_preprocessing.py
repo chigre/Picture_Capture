@@ -1333,7 +1333,7 @@ def analyze_preprocess_page(
             # few boxes survive for a stable comparison, the analytic Jacobian
             # remains the primary safety gate rather than inventing evidence.
             text_scale_safe = text_scale_audit.verdict in {
-                "improved", "stable", "insufficient",
+                "stable", "insufficient",
             }
             perspective_auto_safe = bool(
                 strong_candidate
@@ -1398,9 +1398,10 @@ def analyze_preprocess_page(
                     )
                 if text_scale_audit.verdict == "worse":
                     review_reasons.append(
-                        "同一批文本框的空间尺度稳定性将变差 "
-                        f"({text_scale_audit.before_score * 100:.2f}%→"
-                        f"{text_scale_audit.after_score * 100:.2f}%)"
+                        "配对文本框尺度场超出安全范围："
+                        f"行向90%跨度 {text_scale_audit.inline_ratio_span_ratio * 100:.2f}%，"
+                        f"跨行90%跨度 {text_scale_audit.cross_ratio_span_ratio * 100:.2f}%，"
+                        f"各向异性P95 {text_scale_audit.anisotropy_p95_ratio * 100:.2f}%"
                     )
                 if review_reasons:
                     warnings.append(
@@ -1414,18 +1415,20 @@ def analyze_preprocess_page(
                 and not perspective_auto_safe
             ):
                 text_scale_label = {
-                    "improved": "改善",
                     "stable": "稳定",
-                    "worse": "变差",
+                    "worse": "超限",
                     "insufficient": "证据不足",
                 }.get(text_scale_audit.verdict, text_scale_audit.verdict)
                 warnings.append(
                     "已按用户显式选择执行透视；该候选未通过“自动几何”的"
-                    "Jacobian/文字尺度安全审计，"
-                    f"分类={perspective_classification}，横向尺度漂移 "
-                    f"{jacobian_audit.horizontal_scale_span_ratio * 100:.2f}%，"
-                    f"纵向 {jacobian_audit.vertical_scale_span_ratio * 100:.2f}%，"
-                    f"文字尺度={text_scale_label}。"
+                    "Jacobian/配对文本框尺度安全审计，"
+                    f"分类={perspective_classification}，Jacobian X/Y 漂移 "
+                    f"{jacobian_audit.horizontal_scale_span_ratio * 100:.2f}%/"
+                    f"{jacobian_audit.vertical_scale_span_ratio * 100:.2f}%，"
+                    f"文本框行向/跨行跨度 "
+                    f"{text_scale_audit.inline_ratio_span_ratio * 100:.2f}%/"
+                    f"{text_scale_audit.cross_ratio_span_ratio * 100:.2f}%，"
+                    f"状态={text_scale_label}。"
                 )
             if apply_perspective and perspective.strength_px >= 0.75:
                 perspective_matrix = perspective.matrix
