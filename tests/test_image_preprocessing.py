@@ -923,6 +923,10 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
     assert "separator_drift_px" in text
     assert "perspective_scale_delta_ratio" in text
     assert "perspective_horizontal_strength" in text
+    assert "perspective_row_valid_column_indices" in text
+    assert "line_geometry_columns" in text
+    assert "line_geometry_valid_column_indices" in text
+    assert "line_geometry_worst_region_angle_deg" in text
     assert "perspective_structural_safe" in text
     assert "perspective_structural_applied" in text
     assert "perspective_jacobian_horizontal_scale_span_ratio" in text
@@ -964,6 +968,20 @@ def test_preprocess_analysis_roundtrip_and_source_signature(tmp_path: Path) -> N
         method="paddle_layout_roi",
         safety_margin_px=20,
         auto_deskew=True,
+        perspective_horizontal_column_count=3,
+        perspective_row_valid_column_count=2,
+        perspective_row_valid_column_indices=(0, 2),
+        perspective_row_column_row_counts=(18, 2, 17),
+        perspective_row_after_worst_region_deg=0.14,
+        perspective_row_after_worst_column_index=2,
+        line_geometry_columns=3,
+        line_geometry_valid_columns=2,
+        line_geometry_valid_column_indices=(0, 2),
+        line_geometry_column_row_counts=(18, 2, 17),
+        line_geometry_column_trends_deg=(-0.08, -0.11),
+        line_geometry_worst_column_index=2,
+        line_geometry_worst_column_trend_deg=-0.11,
+        line_geometry_worst_region_angle_deg=0.16,
         source_size_bytes=stat.st_size,
         source_mtime_ns=stat.st_mtime_ns,
     )
@@ -974,6 +992,12 @@ def test_preprocess_analysis_roundtrip_and_source_signature(tmp_path: Path) -> N
     assert loaded is not None
     assert loaded.crop_box == analysis.crop_box
     assert loaded.auto_deskew is True
+    assert loaded.perspective_row_valid_column_indices == (0, 2)
+    assert loaded.perspective_row_column_row_counts == (18, 2, 17)
+    assert loaded.line_geometry_columns == 3
+    assert loaded.line_geometry_valid_column_indices == (0, 2)
+    assert loaded.line_geometry_column_trends_deg == (-0.08, -0.11)
+    assert loaded.line_geometry_worst_column_index == 2
     assert analysis_is_current(
         loaded, page, safety_margin_px=20, auto_deskew=True
     )
