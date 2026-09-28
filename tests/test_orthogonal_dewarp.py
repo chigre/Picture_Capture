@@ -198,26 +198,38 @@ def test_2d_row_field_handles_column_disagreement_and_header_rule(
     assert estimate.row_grid_cols >= 4
     assert estimate.horizontal_rule_point_count >= 20
 
-    # Production optimizes a small gain set against absolute final
-    # horizontality. This synthetic field deliberately has different left/right
-    # trajectories, so verify that the permitted mild over-gain closes the
-    # remaining detector/interpolation residual instead of requiring one shared
-    # page angle.
-    transformed = transform_polygons_orthogonal(
-        polygons, estimate, row_gain=1.15
-    )
-    audit = audit_horizontal_alignment(
-        polygons,
-        transformed,
-        size=image.size,
-        settings=settings,
-    )
+    # Production optimizes the same small gain family against absolute final
+    # horizontality. Select the best synthetic candidate using the strict trend
+    # gate, then verify the header rule with that same gain.
+    candidates = []
+    for gain in (0.85, 1.0, 1.10, 1.15):
+        transformed = transform_polygons_orthogonal(
+            polygons, estimate, row_gain=gain
+        )
+        audit = audit_horizontal_alignment(
+            polygons,
+            transformed,
+            size=image.size,
+            settings=settings,
+        )
+        worst_trend = max(
+            abs(value) for value in audit.after_column_trends_deg
+        )
+        objective = max(
+            audit.after_worst_region_deg / 0.18,
+            worst_trend / 0.12,
+            audit.after_top_edge_p90_abs_deg / 0.18,
+            audit.after_bottom_edge_p90_abs_deg / 0.18,
+        )
+        candidates.append((objective, gain, audit))
+    _objective, best_gain, audit = min(candidates, key=lambda item: item[0])
+
     assert audit.after_worst_region_deg <= 0.18
     assert max(abs(value) for value in audit.after_column_trends_deg) <= 0.12
 
     header_array = np.asarray(header, dtype=float)
     mapped_header = transform_points_orthogonal(
-        header_array, estimate, row_gain=1.15
+        header_array, estimate, row_gain=best_gain
     )
     slope, _intercept = np.polyfit(
         mapped_header[:, 0],
