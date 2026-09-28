@@ -53,6 +53,7 @@ class OrthogonalWarpEstimate:
     x_knots: tuple[float, ...] = ()
     row_grid_rows: int = 0
     row_grid_cols: int = 0
+    row_angle_grid_deg: tuple[float, ...] = ()
     row_displacement_grid_px: tuple[float, ...] = ()
     separator_y_knots: tuple[float, ...] = ()
     separator_shift_knots_px: tuple[float, ...] = ()
@@ -341,7 +342,10 @@ def _integrated_row_displacement(
     return displacement - reference
 
 
-def _row_grid_matrix(estimate: OrthogonalWarpEstimate) -> np.ndarray | None:
+def _row_grid_matrix(
+    estimate: OrthogonalWarpEstimate,
+    values: tuple[float, ...],
+) -> np.ndarray | None:
     rows = int(estimate.row_grid_rows)
     cols = int(estimate.row_grid_cols)
     if (
@@ -349,13 +353,43 @@ def _row_grid_matrix(estimate: OrthogonalWarpEstimate) -> np.ndarray | None:
         or cols < 2
         or len(estimate.y_knots) != rows
         or len(estimate.x_knots) != cols
-        or len(estimate.row_displacement_grid_px) != rows * cols
+        or len(values) != rows * cols
     ):
         return None
-    return np.asarray(
-        estimate.row_displacement_grid_px,
-        dtype=float,
-    ).reshape(rows, cols)
+    return np.asarray(values, dtype=float).reshape(rows, cols)
+
+
+def _integral_at_x(
+    x: float,
+    xs: np.ndarray,
+    slopes: np.ndarray,
+) -> float:
+    """Integral of a piecewise-linear slope field from xs[0] to x."""
+    px = float(x)
+    if px <= float(xs[0]):
+        return (px - float(xs[0])) * float(slopes[0])
+
+    cumulative = 0.0
+    for index in range(len(xs) - 1):
+        x0 = float(xs[index])
+        x1 = float(xs[index + 1])
+        s0 = float(slopes[index])
+        s1 = float(slopes[index + 1])
+        dx = x1 - x0
+        if dx <= 1e-9:
+            continue
+        if px >= x1:
+            cumulative += 0.5 * (s0 + s1) * dx
+            continue
+        u = max(0.0, min(1.0, (px - x0) / dx))
+        cumulative += dx * (
+            s0 * u + 0.5 * (s1 - s0) * u * u
+        )
+        return cumulative
+
+    return cumulative + (
+        px - float(xs[-1])
+    ) * float(slopes[-1])
 
 
 def _row_displacement(
@@ -363,16 +397,61 @@ def _row_displacement(
     y: float | np.ndarray,
     estimate: OrthogonalWarpEstimate,
 ) -> float | np.ndarray:
-    grid = _row_grid_matrix(estimate)
-    if grid is None:
-        # Backward-compatible shared-angle field.
-        angles = np.asarray(
-            _interp(y, estimate.y_knots, estimate.angle_knots_deg),
-            dtype=float,
+    angle_grid = _row_grid_matrix(
+        estimate,
+        estimate.row_angle_grid_deg,
+    )
+    if angle_grid is None:
+        displacement_grid = _row_grid_matrix(
+            estimate,
+            estimate.row_displacement_grid_px,
         )
-        return np.tan(np.radians(angles)) * (
-            np.asarray(x, dtype=float) - float(estimate.reference_x)
+        if displacement_grid is None:
+            # Backward-compatible shared-angle field.
+            angles = np.asarray(
+                _interp(y, estimate.y_knots, estimate.angle_knots_deg),
+                dtype=float,
+            )
+            return np.tan(np.radians(angles)) * (
+                np.asarray(x, dtype=float) - float(estimate.reference_x)
+            )
+
+        # Legacy 2-D saved results used linear interpolation of the displacement
+        # grid. Retain replay compatibility for those results.
+        xs = np.asarray(estimate.x_knots, dtype=float)
+        ys = np.asarray(estimate.y_knots, dtype=float)
+        x_array, y_array = np.broadcast_arrays(
+            np.asarray(x, dtype=float),
+            np.asarray(y, dtype=float),
         )
+        flat_x = x_array.ravel()
+        flat_y = y_array.ravel()
+        result = np.empty_like(flat_x, dtype=float)
+        y_indices = np.searchsorted(ys, flat_y, side="right") - 1
+        y_indices = np.clip(y_indices, 0, len(ys) - 2)
+        for index, (px, py, iy) in enumerate(zip(flat_x, flat_y, y_indices)):
+            iy = int(iy)
+            y0 = float(ys[iy])
+            y1 = float(ys[iy + 1])
+            v0 = float(np.interp(px, xs, displacement_grid[iy]))
+            v1 = float(np.interp(px, xs, displacement_grid[iy + 1]))
+            if py <= ys[0]:
+                result[index] = float(
+                    np.interp(px, xs, displacement_grid[0])
+                )
+            elif py >= ys[-1]:
+                result[index] = float(
+                    np.interp(px, xs, displacement_grid[-1])
+                )
+            elif y1 - y0 <= 1e-9:
+                result[index] = v0
+            else:
+                t = (float(py) - y0) / (y1 - y0)
+                result[index] = v0 * (1.0 - t) + v1 * t
+        shaped = result.reshape(x_array.shape)
+        if np.isscalar(x) and np.isscalar(y):
+            return float(shaped)
+        return shaped
 
     xs = np.asarray(estimate.x_knots, dtype=float)
     ys = np.asarray(estimate.y_knots, dtype=float)
@@ -384,26 +463,28 @@ def _row_displacement(
     flat_y = y_array.ravel()
     result = np.empty_like(flat_x, dtype=float)
 
-    # Interpolate across X on the two neighbouring Y knot rows, then interpolate
-    # those two values in Y. The grid is intentionally small (normally <=5x14),
-    # so this explicit loop is cheap and keeps dependencies minimal.
-    y_indices = np.searchsorted(ys, flat_y, side="right") - 1
-    y_indices = np.clip(y_indices, 0, len(ys) - 2)
-    for index, (px, py, iy) in enumerate(zip(flat_x, flat_y, y_indices)):
-        iy = int(iy)
-        y0 = float(ys[iy])
-        y1 = float(ys[iy + 1])
-        v0 = float(np.interp(px, xs, grid[iy]))
-        v1 = float(np.interp(px, xs, grid[iy + 1]))
+    # Interpolate the *angle/slope field* in Y, then integrate it analytically
+    # across X. This preserves the requested local derivative at each measured
+    # column centre. Interpolating an already-integrated displacement across a
+    # wide X interval would instead replace the local slope by the interval
+    # average, leaving exactly the right-upper-corner residual seen on 0014.
+    for index, (px, py) in enumerate(zip(flat_x, flat_y)):
         if py <= ys[0]:
-            result[index] = float(np.interp(px, xs, grid[0]))
+            angles = angle_grid[0]
         elif py >= ys[-1]:
-            result[index] = float(np.interp(px, xs, grid[-1]))
-        elif y1 - y0 <= 1e-9:
-            result[index] = v0
+            angles = angle_grid[-1]
         else:
-            t = (float(py) - y0) / (y1 - y0)
-            result[index] = v0 * (1.0 - t) + v1 * t
+            iy = int(np.searchsorted(ys, py, side="right") - 1)
+            iy = max(0, min(len(ys) - 2, iy))
+            y0 = float(ys[iy])
+            y1 = float(ys[iy + 1])
+            t = 0.0 if y1 - y0 <= 1e-9 else (float(py) - y0) / (y1 - y0)
+            angles = angle_grid[iy] * (1.0 - t) + angle_grid[iy + 1] * t
+        slopes = np.tan(np.radians(angles))
+        result[index] = (
+            _integral_at_x(float(px), xs, slopes)
+            - _integral_at_x(float(estimate.reference_x), xs, slopes)
+        )
 
     shaped = result.reshape(x_array.shape)
     if np.isscalar(x) and np.isscalar(y):
@@ -666,6 +747,9 @@ def estimate_orthogonal_warp(
         x_knots=tuple(float(v) for v in x_knots),
         row_grid_rows=int(displacement_grid.shape[0]),
         row_grid_cols=int(displacement_grid.shape[1]),
+        row_angle_grid_deg=tuple(
+            float(v) for v in angle_grid.ravel()
+        ),
         row_displacement_grid_px=tuple(
             float(v) for v in displacement_grid.ravel()
         ),
