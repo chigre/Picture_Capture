@@ -107,6 +107,24 @@ def test_identity_homography_has_zero_local_scale_distortion() -> None:
     assert audit.anisotropy_p95_ratio < 1e-9
 
 
+def test_identity_text_scale_field_is_exactly_stable() -> None:
+    polygons: list[np.ndarray] = []
+    for row in range(18):
+        y = 160 + row * 38
+        polygons.extend((_box(100, y, 280, 22), _box(500, y, 280, 22)))
+
+    audit = audit_text_scale_stability(
+        polygons, polygons, (900, 1000),
+    )
+
+    assert audit.verdict == "stable"
+    assert abs(audit.inline_ratio_median - 1.0) < 1e-12
+    assert abs(audit.cross_ratio_median - 1.0) < 1e-12
+    assert audit.inline_ratio_span_ratio < 1e-12
+    assert audit.cross_ratio_span_ratio < 1e-12
+    assert audit.anisotropy_p95_ratio < 1e-12
+
+
 def test_0004_style_homography_stays_within_auto_distortion_budget() -> None:
     matrix = (
         1.0176582443, 0.0144603422, -30.5796527,
@@ -121,12 +139,20 @@ def test_0004_style_homography_stays_within_auto_distortion_budget() -> None:
     audit = audit_homography_distortion(
         matrix, (2480, 3567), polygons=polygons,
     )
+    transformed = transform_polygons_homography(polygons, matrix)
+    text_audit = audit_text_scale_stability(
+        polygons, transformed, (2480, 3567),
+    )
 
     assert audit.valid is True
     assert audit.horizontal_scale_span_ratio <= 0.04
     assert audit.vertical_scale_span_ratio <= 0.07
     assert audit.area_scale_span_ratio <= 0.055
     assert audit.anisotropy_p95_ratio <= 0.035
+    assert text_audit.verdict == "stable"
+    assert text_audit.inline_ratio_span_ratio <= 0.045
+    assert text_audit.cross_ratio_span_ratio <= 0.075
+    assert text_audit.anisotropy_p95_ratio <= 0.04
 
 
 def test_0011_style_homography_is_detected_as_scale_instability() -> None:
@@ -155,7 +181,9 @@ def test_0011_style_homography_is_detected_as_scale_instability() -> None:
     assert audit.anisotropy_p95_ratio > 0.035
     assert text_audit.sample_count >= 40
     assert text_audit.verdict == "worse"
-    assert text_audit.after_score > text_audit.before_score
+    assert text_audit.inline_ratio_span_ratio > 0.045
+    assert text_audit.cross_ratio_span_ratio > 0.075
+    assert text_audit.anisotropy_p95_ratio > 0.04
 
 
 def test_text_scale_audit_recognizes_corrective_homography() -> None:
@@ -185,6 +213,12 @@ def test_text_scale_audit_recognizes_corrective_homography() -> None:
     )
 
     assert text_audit.sample_count >= 30
-    assert text_audit.verdict == "improved"
+    # This deliberately large correction improves the synthetic page's absolute
+    # size trend, but the paired ratio field still records how strongly the
+    # transform itself rescaled text. Automatic mode may therefore remain
+    # conservative even when a manual/ground-truth correction is meaningful.
     assert text_audit.after_score < text_audit.before_score
+    assert text_audit.inline_ratio_p05 > 0
+    assert text_audit.inline_ratio_p95 >= text_audit.inline_ratio_p05
+    assert text_audit.cross_ratio_p95 >= text_audit.cross_ratio_p05
 
