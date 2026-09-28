@@ -23,6 +23,7 @@ HORIZONTAL_VP_MIN_ROWS = 8
 HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT = 0.50
 HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG = 0.12
 HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG = 0.18
+HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG = 0.15
 HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG = 0.35
 HORIZONTAL_STRENGTH_MIN = 0.15
 HORIZONTAL_STRENGTH_COARSE_STEP = 0.10
@@ -106,6 +107,15 @@ class HorizontalAlignmentAudit:
     after_metric_deg: float = 0.0
     before_worst_region_deg: float = 0.0
     after_worst_region_deg: float = 0.0
+    before_worst_edge_deg: float = 0.0
+    after_worst_edge_deg: float = 0.0
+    before_top_edge_p90_abs_deg: float = 0.0
+    after_top_edge_p90_abs_deg: float = 0.0
+    before_bottom_edge_p90_abs_deg: float = 0.0
+    after_bottom_edge_p90_abs_deg: float = 0.0
+    before_edge_pair_delta_p90_deg: float = 0.0
+    after_edge_pair_delta_p90_deg: float = 0.0
+    edge_pair_count: int = 0
     before_worst_region_span_deg: float = 0.0
     after_worst_region_span_deg: float = 0.0
     before_worst_column_metric_deg: float = 0.0
@@ -635,6 +645,54 @@ def _weighted_median_pairs(values: list[tuple[float, float]]) -> float:
     return ordered[-1][0]
 
 
+def _horizontal_polygon_edge_angles(
+    raw: np.ndarray,
+) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    """Return independent top/bottom edge angles for one OCR text polygon.
+
+    True row horizontality requires *both* long horizontal edges to be level.
+    Collapsing a quadrilateral to one representative angle can hide a trapezoid
+    or projective shear where the top edge and bottom edge tilt in opposite
+    directions.
+    """
+    poly = np.asarray(raw, dtype=float)
+    if poly.ndim != 2 or poly.shape[0] < 4 or poly.shape[1] < 2:
+        return None
+    points = poly[:, :2]
+    if not np.isfinite(points).all():
+        return None
+    width = float(points[:, 0].max() - points[:, 0].min())
+    height = float(points[:, 1].max() - points[:, 1].min())
+    if width < max(12.0, height * 1.35) or height < 3.0:
+        return None
+
+    edges: list[tuple[float, float, float]] = []
+    for index in range(len(points)):
+        p0 = points[index]
+        p1 = points[(index + 1) % len(points)]
+        dx = float(p1[0] - p0[0])
+        dy = float(p1[1] - p0[1])
+        length = math.hypot(dx, dy)
+        if length < max(8.0, height * 1.2):
+            continue
+        angle = _normalize_text_angle(math.degrees(math.atan2(dy, dx)))
+        if abs(angle) <= 20.0 and abs(dx) >= abs(dy):
+            midpoint_y = float((p0[1] + p1[1]) / 2.0)
+            edges.append((midpoint_y, angle, length))
+    if len(edges) < 2:
+        return None
+
+    ordered = sorted(edges, key=lambda item: item[0])
+    top = ordered[0]
+    bottom = ordered[-1]
+    if top is bottom:
+        return None
+    return (
+        (float(top[1]), float(top[2])),
+        (float(bottom[1]), float(bottom[2])),
+    )
+
+
 def _horizontal_polygon_sample(
     raw: np.ndarray,
 ) -> tuple[float, float, float, float, float] | None:
@@ -653,22 +711,16 @@ def _horizontal_polygon_sample(
     if width < max(12.0, height * 1.35) or height < 3.0:
         return None
 
-    edges: list[tuple[float, float]] = []
-    for index in range(len(points)):
-        p0 = points[index]
-        p1 = points[(index + 1) % len(points)]
-        dx = float(p1[0] - p0[0])
-        dy = float(p1[1] - p0[1])
-        length = math.hypot(dx, dy)
-        if length < max(8.0, height * 1.2):
-            continue
-        angle = _normalize_text_angle(math.degrees(math.atan2(dy, dx)))
-        if abs(angle) <= 20.0 and abs(dx) >= abs(dy):
-            edges.append((angle, length))
-    if not edges:
+    edge_pair = _horizontal_polygon_edge_angles(poly)
+    if edge_pair is None:
         return None
-    selected = sorted(edges, key=lambda item: item[1], reverse=True)[:2]
-    angle = _weighted_median_pairs(selected)
+    (top_angle, top_length), (bottom_angle, bottom_length) = edge_pair
+    total_length = max(1e-9, top_length + bottom_length)
+    # Angles are constrained to ±20°, so a length-weighted mean is stable and
+    # uses both boundaries instead of silently selecting only one of them.
+    angle = (
+        top_angle * top_length + bottom_angle * bottom_length
+    ) / total_length
     center = points.mean(axis=0)
     return (
         float(center[0]),
@@ -676,6 +728,55 @@ def _horizontal_polygon_sample(
         float(angle),
         max(1.0, width),
         max(1.0, height),
+    )
+
+
+def _horizontal_polygon_edge_metrics(
+    polygons: list[np.ndarray],
+    groups: list[list[int]],
+) -> tuple[int, float, float, float, float]:
+    """Robust dual-edge audit, equalized by column.
+
+    Returns (sample_count, top_abs_p90, bottom_abs_p90, pair_delta_p90,
+    worst_edge). Each populated column is summarized first, then the worst
+    column is retained so one bad column cannot disappear in a page average.
+    """
+    column_top: list[float] = []
+    column_bottom: list[float] = []
+    column_delta: list[float] = []
+    sample_count = 0
+    for indices in groups:
+        top_values: list[float] = []
+        bottom_values: list[float] = []
+        delta_values: list[float] = []
+        for index in indices:
+            if not (0 <= index < len(polygons)):
+                continue
+            edge_pair = _horizontal_polygon_edge_angles(polygons[index])
+            if edge_pair is None:
+                continue
+            (top_angle, _top_length), (bottom_angle, _bottom_length) = edge_pair
+            top_values.append(abs(float(top_angle)))
+            bottom_values.append(abs(float(bottom_angle)))
+            delta_values.append(
+                abs(_normalize_text_angle(float(top_angle) - float(bottom_angle)))
+            )
+        if len(top_values) < 5:
+            continue
+        sample_count += len(top_values)
+        column_top.append(float(np.percentile(top_values, 90)))
+        column_bottom.append(float(np.percentile(bottom_values, 90)))
+        column_delta.append(float(np.percentile(delta_values, 90)))
+
+    top_p90 = max(column_top, default=0.0)
+    bottom_p90 = max(column_bottom, default=0.0)
+    pair_p90 = max(column_delta, default=0.0)
+    return (
+        int(sample_count),
+        float(top_p90),
+        float(bottom_p90),
+        float(pair_p90),
+        float(max(top_p90, bottom_p90)),
     )
 
 
@@ -1112,6 +1213,21 @@ def audit_horizontal_alignment(
         for values in (after_tops, after_middles, after_bottoms)
         for value in values
     )
+    (
+        before_edge_count,
+        before_top_edge_p90,
+        before_bottom_edge_p90,
+        before_edge_pair_delta_p90,
+        before_worst_edge,
+    ) = _horizontal_polygon_edge_metrics(before_list, groups)
+    (
+        after_edge_count,
+        after_top_edge_p90,
+        after_bottom_edge_p90,
+        after_edge_pair_delta_p90,
+        after_worst_edge,
+    ) = _horizontal_polygon_edge_metrics(after_list, groups)
+    edge_pair_count = min(before_edge_count, after_edge_count)
     before_region_spans = [
         max(top, middle, bottom) - min(top, middle, bottom)
         for top, middle, bottom in zip(
@@ -1154,6 +1270,17 @@ def audit_horizontal_alignment(
         [abs(after_trend)] + [abs(value) for value in after_trends]
     )
 
+    dual_edge_safe = bool(
+        edge_pair_count < HORIZONTAL_VP_MIN_ROWS
+        or (
+            after_worst_edge <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
+            and (
+                after_edge_pair_delta_p90
+                <= HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG
+            )
+        )
+    )
+
     if len(after_rows) < HORIZONTAL_VP_MIN_ROWS:
         verdict = "insufficient"
     elif (
@@ -1161,6 +1288,7 @@ def audit_horizontal_alignment(
         and improvement >= HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT
         and after_worst_trend <= HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG
         and after_worst_region <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
+        and dual_edge_safe
         and after_mad <= max(0.16, before_mad + 0.03)
     ):
         verdict = "improved"
@@ -1189,6 +1317,15 @@ def audit_horizontal_alignment(
         after_metric_deg=after_metric,
         before_worst_region_deg=before_worst_region,
         after_worst_region_deg=after_worst_region,
+        before_worst_edge_deg=before_worst_edge,
+        after_worst_edge_deg=after_worst_edge,
+        before_top_edge_p90_abs_deg=before_top_edge_p90,
+        after_top_edge_p90_abs_deg=after_top_edge_p90,
+        before_bottom_edge_p90_abs_deg=before_bottom_edge_p90,
+        after_bottom_edge_p90_abs_deg=after_bottom_edge_p90,
+        before_edge_pair_delta_p90_deg=before_edge_pair_delta_p90,
+        after_edge_pair_delta_p90_deg=after_edge_pair_delta_p90,
+        edge_pair_count=edge_pair_count,
         before_worst_region_span_deg=before_worst_region_span,
         after_worst_region_span_deg=after_worst_region_span,
         before_worst_column_metric_deg=before_worst_column_metric,
@@ -1614,10 +1751,17 @@ def optimize_horizontal_perspective_strength(
         audit = audit_horizontal_alignment(
             polygon_list, mapped, size=size, settings=settings,
         )
+        edge_penalty = (
+            float(audit.after_worst_edge_deg)
+            + 0.75 * float(audit.after_edge_pair_delta_p90_deg)
+            if audit.edge_pair_count >= HORIZONTAL_VP_MIN_ROWS
+            else 0.0
+        )
         objective = (
-            0.55 * float(audit.after_metric_deg)
-            + 0.35 * float(audit.after_worst_region_deg)
+            0.45 * float(audit.after_metric_deg)
+            + 0.25 * float(audit.after_worst_region_deg)
             + 0.10 * float(audit.after_worst_column_metric_deg)
+            + 0.20 * edge_penalty
             + 0.02 * float(lam)
         )
         evaluated.append((objective, float(lam), candidate, audit))
@@ -1647,10 +1791,17 @@ def optimize_horizontal_perspective_strength(
         audit = audit_horizontal_alignment(
             polygon_list, mapped, size=size, settings=settings,
         )
+        edge_penalty = (
+            float(audit.after_worst_edge_deg)
+            + 0.75 * float(audit.after_edge_pair_delta_p90_deg)
+            if audit.edge_pair_count >= HORIZONTAL_VP_MIN_ROWS
+            else 0.0
+        )
         objective = (
-            0.55 * float(audit.after_metric_deg)
-            + 0.35 * float(audit.after_worst_region_deg)
+            0.45 * float(audit.after_metric_deg)
+            + 0.25 * float(audit.after_worst_region_deg)
             + 0.10 * float(audit.after_worst_column_metric_deg)
+            + 0.20 * edge_penalty
             + 0.02 * float(lam)
         )
         evaluated.append((objective, float(lam), candidate, audit))
