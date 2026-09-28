@@ -28,6 +28,8 @@ class TextLineGeometryAnalysis:
     separator_found: bool = False
     separator_residual_px: float = 0.0
     separator_span_ratio: float = 0.0
+    separator_slope_px_per_1000y: float = 0.0
+    separator_drift_px: float = 0.0
     recommendation: str = "insufficient"
     confidence: float = 0.0
 
@@ -194,12 +196,32 @@ def _fit_separator_track(
     x1: int,
     y0: int,
     y1: int,
-) -> tuple[float, float, float] | None:
+) -> tuple[float, float, float, float, float] | None:
     if x1 - x0 < 4 or y1 - y0 < 80:
         return None
 
+    band = gray[y0:y1, x0:x1]
+    if band.size == 0:
+        return None
+
+    # First find a physically persistent dark X position over the full body.
+    # A real column separator survives across many Y rows; dictionary text
+    # strokes do not. This global anchor makes straight/slanted separators much
+    # harder to miss than independent per-bin argmax selection.
+    global_dark_fraction = (band < 175).mean(axis=0)
+    global_mean_dark = np.clip(
+        215.0 - band.astype(float), 0.0, 215.0
+    ).mean(axis=0) / 215.0
+    global_score = global_dark_fraction * 0.82 + global_mean_dark * 0.18
+    global_pos = int(np.argmax(global_score))
+    global_strength = float(global_score[global_pos])
+    if global_strength < 0.075:
+        return None
+    anchor_x = x0 + global_pos
+
     bins = max(12, min(30, int(round((y1 - y0) / 48.0))))
     edges = np.linspace(y0, y1, bins + 1, dtype=int)
+    radius = max(6, min(max(12, round((x1 - x0) * 0.42)), (x1 - x0) // 2))
     xs: list[float] = []
     ys: list[float] = []
     strengths: list[float] = []
@@ -208,71 +230,76 @@ def _fit_separator_track(
         yb = int(edges[index + 1])
         if yb - ya < 3:
             continue
-        local = gray[ya:yb, x0:x1]
+        xa = max(x0, anchor_x - radius)
+        xb = min(x1, anchor_x + radius + 1)
+        local = gray[ya:yb, xa:xb]
         if local.size == 0:
             continue
         dark_fraction = (local < 175).mean(axis=0)
         mean_dark = np.clip(
             215.0 - local.astype(float), 0.0, 215.0
         ).mean(axis=0) / 215.0
-        score = dark_fraction * 0.72 + mean_dark * 0.28
+        score = dark_fraction * 0.78 + mean_dark * 0.22
         pos = int(np.argmax(score))
         strength = float(score[pos])
-        if strength < 0.10:
+        if strength < max(0.07, global_strength * 0.18):
             continue
-        xs.append(float(x0 + pos))
+        xs.append(float(xa + pos))
         ys.append(float((ya + yb - 1) / 2.0))
         strengths.append(strength)
 
-    if len(xs) < max(8, bins // 2):
+    if len(xs) < max(7, bins // 2):
         return None
 
     x_values = np.asarray(xs, dtype=float)
     y_values = np.asarray(ys, dtype=float)
     strength_values = np.asarray(strengths, dtype=float)
 
-    # Remove isolated text/noise hits without forcing the remaining track to be
-    # linear. A genuine curved separator should survive this local-continuity
-    # filter so its curvature can be measured rather than rejected.
+    # Reject isolated text hits by local continuity, while preserving a slowly
+    # slanted or genuinely curved physical separator.
     if len(x_values) >= 3:
         smooth = x_values.copy()
         smooth[1:-1] = np.median(
-            np.vstack(
-                [x_values[:-2], x_values[1:-1], x_values[2:]]
-            ),
+            np.vstack([x_values[:-2], x_values[1:-1], x_values[2:]]),
             axis=0,
         )
-        continuity = max(3.0, (x1 - x0) * 0.25)
+        continuity = max(3.0, min(18.0, (x1 - x0) * 0.22))
         keep = np.abs(x_values - smooth) <= continuity
     else:
         keep = np.ones(len(x_values), dtype=bool)
-    if int(keep.sum()) < max(8, bins // 2):
+    if int(keep.sum()) < max(7, bins // 2):
         return None
 
     x_values = x_values[keep]
     y_values = y_values[keep]
     strength_values = strength_values[keep]
     weights = np.sqrt(np.maximum(0.05, strength_values))
-    slope, intercept = np.polyfit(
-        y_values, x_values, 1, w=weights,
-    )
+    slope, intercept = np.polyfit(y_values, x_values, 1, w=weights)
     residual = x_values - (slope * y_values + intercept)
     residual_span = float(
         np.percentile(residual, 90) - np.percentile(residual, 10)
     )
     span_ratio = float(len(x_values)) / float(bins)
     quality = float(np.median(strength_values)) * span_ratio
-    return max(0.0, residual_span), span_ratio, quality
+    drift_px = float(slope * (y1 - y0))
+    slope_per_1000y = float(slope * 1000.0)
+    return (
+        max(0.0, residual_span),
+        span_ratio,
+        quality,
+        slope_per_1000y,
+        drift_px,
+    )
 
 def _separator_geometry(
     image: Image.Image,
     polygons: list[np.ndarray],
     settings: AppSettings,
-) -> tuple[bool, float, float]:
+) -> tuple[bool, float, float, float, float]:
     width, height = image.size
     boxes = polygon_boxes(polygons, width, height)
     if len(boxes) < 8:
-        return False, 0.0, 0.0
+        return False, 0.0, 0.0, 0.0, 0.0
     try:
         layout = infer_layout_from_boxes(
             boxes,
@@ -284,18 +311,18 @@ def _separator_geometry(
             column_separator_mode=settings.layout_column_separator_mode,
         )
     except Exception:
-        return False, 0.0, 0.0
+        return False, 0.0, 0.0, 0.0, 0.0
     starts = tuple(int(v) for v in layout.column_starts)
     if len(starts) < 2:
-        return False, 0.0, 0.0
+        return False, 0.0, 0.0, 0.0, 0.0
     rights = tuple(int(v) for v in layout.column_rights)
     gray = np.asarray(normalize_page_rgb(image).convert("L"), dtype=np.uint8)
     body_top = max(0, int(layout.start_y))
     body_bottom = min(height, int(layout.bottom_y))
     if body_bottom - body_top < 80:
-        return False, 0.0, 0.0
+        return False, 0.0, 0.0, 0.0, 0.0
 
-    candidates: list[tuple[float, float, float]] = []
+    candidates: list[tuple[float, float, float, float, float]] = []
     for index in range(len(starts) - 1):
         left = (
             rights[index]
@@ -304,25 +331,53 @@ def _separator_geometry(
         )
         right = starts[index + 1]
         gap = right - left
-        if gap < 6:
-            continue
-        inset = max(1, round(gap * 0.08))
-        result = _fit_separator_track(
-            gray,
-            max(0, left + inset),
-            min(width, right - inset),
-            body_top,
-            body_bottom,
-        )
-        if result is not None:
-            candidates.append(result)
+
+        search_bands: list[tuple[int, int]] = []
+        if gap >= 6:
+            inset = max(1, round(gap * 0.05))
+            search_bands.append((
+                max(0, left + inset),
+                min(width, right - inset),
+            ))
+
+        # OCR right edges can intrude into the gutter and collapse the nominal
+        # gap. Add a wider structural band centered between adjacent columns as
+        # an independent fallback; this is what rescues pages such as 0011.
+        pitch = max(1, starts[index + 1] - starts[index])
+        if gap >= 6:
+            center = (left + right) / 2.0
+        else:
+            center = (starts[index] + starts[index + 1]) / 2.0
+        half = max(14, min(90, round(pitch * 0.18)))
+        search_bands.append((
+            max(0, round(center - half)),
+            min(width, round(center + half)),
+        ))
+
+        seen: set[tuple[int, int]] = set()
+        for xa, xb in search_bands:
+            band_key = (int(xa), int(xb))
+            if band_key in seen or xb - xa < 4:
+                continue
+            seen.add(band_key)
+            result = _fit_separator_track(
+                gray, int(xa), int(xb), body_top, body_bottom,
+            )
+            if result is not None:
+                candidates.append(result)
 
     if not candidates:
-        return False, 0.0, 0.0
-    residual, span_ratio, _quality = max(
+        return False, 0.0, 0.0, 0.0, 0.0
+    residual, span_ratio, _quality, slope_per_1000y, drift_px = max(
         candidates, key=lambda item: item[2]
     )
-    return True, float(residual), float(span_ratio)
+    return (
+        True,
+        float(residual),
+        float(span_ratio),
+        float(slope_per_1000y),
+        float(drift_px),
+    )
 
 
 def analyze_text_line_geometry(
@@ -355,9 +410,13 @@ def analyze_text_line_geometry(
         residual_mad,
         residual_span,
     ) = _robust_angle_trend(rows)
-    separator_found, separator_residual, separator_span_ratio = (
-        _separator_geometry(image, polygon_list, settings)
-    )
+    (
+        separator_found,
+        separator_residual,
+        separator_span_ratio,
+        separator_slope_per_1000y,
+        separator_drift_px,
+    ) = _separator_geometry(image, polygon_list, settings)
 
     row_factor = min(1.0, len(rows) / 18.0)
     residual_factor = max(0.25, 1.0 - min(1.0, residual_mad / 0.45))
@@ -400,6 +459,8 @@ def analyze_text_line_geometry(
         separator_found=bool(separator_found),
         separator_residual_px=round(float(separator_residual), 3),
         separator_span_ratio=round(float(separator_span_ratio), 4),
+        separator_slope_px_per_1000y=round(float(separator_slope_per_1000y), 3),
+        separator_drift_px=round(float(separator_drift_px), 3),
         recommendation=recommendation,
         confidence=round(float(confidence), 4),
     )
