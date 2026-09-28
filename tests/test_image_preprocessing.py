@@ -341,6 +341,121 @@ def test_auto_perspective_applies_with_coherent_line_support(monkeypatch) -> Non
     assert "perspective" in analysis.method
 
 
+def test_safe_structural_keystone_does_not_require_row_improvement(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = [_tilted_box(350, 80, 120, 24, 0.0)]
+    for row in range(20):
+        y = 180 + row * 48
+        polygons.extend(
+            (
+                _tilted_box(100, y, 300, 24, 0.0),
+                _tilted_box(460, y, 300, 24, 0.0),
+            )
+        )
+
+    class Perspective:
+        strength_px = 20.0
+        matrix = (
+            0.995, 0.0, 2.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0,
+        )
+        source_quad = (
+            100.0, 100.0,
+            800.0, 100.0,
+            795.0, 1200.0,
+            105.0, 1200.0,
+        )
+        target_quad = (
+            105.0, 100.0,
+            795.0, 100.0,
+            795.0, 1200.0,
+            105.0, 1200.0,
+        )
+        classification = "keystone"
+        candidate_source = "structural"
+        left_drift_px = 5.0
+        right_drift_px = -5.0
+        common_drift_px = 0.0
+        width_delta_px = -10.0
+        width_change_ratio = 0.014
+        scale_top = 0.986
+        scale_bottom = 1.0
+        scale_delta_ratio = 0.014
+        horizontal_vanishing_x = 0.0
+        horizontal_vanishing_y = 0.0
+        horizontal_row_count = 0
+
+    class StableRows:
+        row_count = 20
+        before_global_angle_deg = 0.0
+        after_global_angle_deg = 0.0
+        before_top_angle_deg = 0.10
+        after_top_angle_deg = 0.10
+        before_bottom_angle_deg = -0.10
+        after_bottom_angle_deg = -0.10
+        before_trend_deg = -0.20
+        after_trend_deg = -0.20
+        before_residual_mad_deg = 0.03
+        after_residual_mad_deg = 0.03
+        before_metric_deg = 0.20
+        after_metric_deg = 0.20
+        improvement_ratio = 0.0
+        verdict = "stable"
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_perspective_from_polygons",
+        lambda *_args, **_kwargs: Perspective(),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_horizontal_perspective_from_polygons",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("no residual horizontal candidate")
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "audit_horizontal_alignment",
+        lambda *_args, **_kwargs: StableRows(),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=20,
+            angle_trend_deg=-0.20,
+            recommendation="perspective",
+            confidence=0.9,
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_homography_image",
+        lambda source, _matrix: source.copy(),
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(),
+        geometry_mode="auto",
+    )
+
+    assert analysis.geometry_mode == "perspective"
+    assert analysis.perspective_candidate_source == "structural"
+    assert analysis.perspective_structural_safe is True
+    assert analysis.perspective_structural_applied is True
+    assert analysis.perspective_auto_safe is True
+
+
 def test_auto_geometry_can_use_horizontal_vanishing_point_without_ruling_line(
     monkeypatch,
 ) -> None:
