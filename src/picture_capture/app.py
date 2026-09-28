@@ -13689,7 +13689,7 @@ class PictureCaptureApp(tk.Tk):
                     destination,
                     canvas,
                     _metadata_destination,
-                ) in export_results:
+                ) in sorted(export_results, key=lambda item: int(item[0])):
                     page = project.images[int(index)]
                     self._preprocess_results[page.name] = analysis
                     summary_records.append(
