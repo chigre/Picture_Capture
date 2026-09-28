@@ -204,7 +204,7 @@ def test_2d_row_field_handles_column_disagreement_and_header_rule(
     # remaining detector/interpolation residual instead of requiring one shared
     # page angle.
     transformed = transform_polygons_orthogonal(
-        polygons, estimate, row_gain=1.10
+        polygons, estimate, row_gain=1.15
     )
     audit = audit_horizontal_alignment(
         polygons,
@@ -217,7 +217,7 @@ def test_2d_row_field_handles_column_disagreement_and_header_rule(
 
     header_array = np.asarray(header, dtype=float)
     mapped_header = transform_points_orthogonal(
-        header_array, estimate, row_gain=1.10
+        header_array, estimate, row_gain=1.15
     )
     slope, _intercept = np.polyfit(
         mapped_header[:, 0],
