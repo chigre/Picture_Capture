@@ -844,6 +844,19 @@ def _horizontal_column_rows(
     return result, groups
 
 
+def horizontal_column_rows(
+    polygons: Iterable[np.ndarray],
+    size: tuple[int, int],
+    settings: AppSettings | None = None,
+) -> list[list[tuple[float, float, float, float]]]:
+    """Public read-only N-column row reconstruction for geometry diagnostics."""
+    polygon_list = [np.asarray(poly, dtype=float) for poly in polygons]
+    rows, _groups = _horizontal_column_rows(
+        polygon_list, size, settings,
+    )
+    return rows
+
+
 def _horizontal_row_stats(
     rows: list[tuple[float, float, float, float]],
 ) -> tuple[float, float, float, float, float, float]:
