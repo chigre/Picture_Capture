@@ -21,10 +21,14 @@ from .layout_detection import (
 )
 from .models import AppSettings
 from .orthogonal_dewarp import (
+    HORIZONTAL_RULE_MAX_ANGLE_DEG,
+    HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX,
+    HORIZONTAL_RULE_MAX_RESIDUAL_WIDTH_RATIO,
     ORTHOGONAL_WARP_MAX_SCALE_DEVIATION,
     OrthogonalWarpEstimate,
     apply_orthogonal_warp_image,
     estimate_orthogonal_warp,
+    horizontal_rule_metrics,
     transform_polygons_orthogonal,
 )
 from .preprocess_geometry import (
@@ -69,7 +73,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 17
+PREPROCESS_FORMAT_VERSION = 18
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -220,8 +224,19 @@ class PreprocessAnalysis:
     orthogonal_reference_x: float = 0.0
     orthogonal_y_knots: tuple[float, ...] = ()
     orthogonal_angle_knots_deg: tuple[float, ...] = ()
+    orthogonal_x_knots: tuple[float, ...] = ()
+    orthogonal_row_grid_rows: int = 0
+    orthogonal_row_grid_cols: int = 0
+    orthogonal_row_displacement_grid_px: tuple[float, ...] = ()
     orthogonal_separator_y_knots: tuple[float, ...] = ()
     orthogonal_separator_shift_knots_px: tuple[float, ...] = ()
+    orthogonal_horizontal_rule_point_count: int = 0
+    orthogonal_horizontal_rule_y: float = 0.0
+    orthogonal_before_horizontal_rule_angle_deg: float = 0.0
+    orthogonal_after_horizontal_rule_angle_deg: float = 0.0
+    orthogonal_before_horizontal_rule_residual_px: float = 0.0
+    orthogonal_after_horizontal_rule_residual_px: float = 0.0
+    orthogonal_horizontal_rule_verdict: str = "insufficient"
     orthogonal_confidence: float = 0.0
     orthogonal_column_spread_deg: float = 0.0
     orthogonal_max_row_angle_deg: float = 0.0
@@ -687,6 +702,21 @@ class PreprocessAnalysis:
             orthogonal_angle_knots_deg=tuple(
                 float(v) for v in payload.get("orthogonal_angle_knots_deg", ())
             ),
+            orthogonal_x_knots=tuple(
+                float(v) for v in payload.get("orthogonal_x_knots", ())
+            ),
+            orthogonal_row_grid_rows=max(
+                0, int(payload.get("orthogonal_row_grid_rows", 0))
+            ),
+            orthogonal_row_grid_cols=max(
+                0, int(payload.get("orthogonal_row_grid_cols", 0))
+            ),
+            orthogonal_row_displacement_grid_px=tuple(
+                float(v)
+                for v in payload.get(
+                    "orthogonal_row_displacement_grid_px", ()
+                )
+            ),
             orthogonal_separator_y_knots=tuple(
                 float(v)
                 for v in payload.get("orthogonal_separator_y_knots", ())
@@ -696,6 +726,45 @@ class PreprocessAnalysis:
                 for v in payload.get(
                     "orthogonal_separator_shift_knots_px", ()
                 )
+            ),
+            orthogonal_horizontal_rule_point_count=max(
+                0,
+                int(payload.get("orthogonal_horizontal_rule_point_count", 0)),
+            ),
+            orthogonal_horizontal_rule_y=float(
+                payload.get("orthogonal_horizontal_rule_y", 0.0)
+            ),
+            orthogonal_before_horizontal_rule_angle_deg=float(
+                payload.get(
+                    "orthogonal_before_horizontal_rule_angle_deg", 0.0
+                )
+            ),
+            orthogonal_after_horizontal_rule_angle_deg=float(
+                payload.get(
+                    "orthogonal_after_horizontal_rule_angle_deg", 0.0
+                )
+            ),
+            orthogonal_before_horizontal_rule_residual_px=max(
+                0.0,
+                float(
+                    payload.get(
+                        "orthogonal_before_horizontal_rule_residual_px", 0.0
+                    )
+                ),
+            ),
+            orthogonal_after_horizontal_rule_residual_px=max(
+                0.0,
+                float(
+                    payload.get(
+                        "orthogonal_after_horizontal_rule_residual_px", 0.0
+                    )
+                ),
+            ),
+            orthogonal_horizontal_rule_verdict=str(
+                payload.get(
+                    "orthogonal_horizontal_rule_verdict", "insufficient"
+                )
+                or "insufficient"
             ),
             orthogonal_confidence=max(
                 0.0, min(1.0, float(payload.get("orthogonal_confidence", 0.0)))
