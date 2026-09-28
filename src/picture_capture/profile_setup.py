@@ -1685,7 +1685,7 @@ class ProjectProfileWizard(tk.Toplevel):
             ("普通左缘短词可以作为词头", self.ordinary_left_edge_var),
             ("【括号词】可以作为词头", self.cjk_allow_bracketed_var),
             ("大字单字可以作为词头", self.cjk_allow_single_var),
-            ("固定符号开头（○ / ● / ◆ …）可以作为词头", self.marker_prefix_var),
+            ("固定符号开头（○ / ● / ◆ …；不包括【括号】）可以作为词头", self.marker_prefix_var),
             ("编号开头（1. / 2. / …）可以作为词头", self.numbered_prefix_var),
         )):
             ttk.Checkbutton(
@@ -1775,7 +1775,7 @@ class ProjectProfileWizard(tk.Toplevel):
             command=self._headword_structure_changed,
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=2)
         ttk.Label(
-            self.symbol_inventory_frame, text="入口标记：",
+            self.symbol_inventory_frame, text="独立入口标记：",
         ).grid(row=1, column=0, sticky="e", padx=(0, 6), pady=3)
         ttk.Entry(
             self.symbol_inventory_frame,
@@ -1783,11 +1783,11 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=1, column=1, sticky="ew", pady=3)
         ttk.Label(
             self.symbol_inventory_frame,
-            text="例如 ○●◉◯；可连续输入，也可用空格/逗号分隔",
+            text="仅指 ○●◆ 等独立前缀；【不要填这里】。可连续输入，也可用空格/逗号分隔",
             foreground="#666666",
         ).grid(row=1, column=2, sticky="w", padx=(6, 0), pady=3)
         ttk.Label(
-            self.symbol_inventory_frame, text="括号起始：",
+            self.symbol_inventory_frame, text="括号词头起始：",
         ).grid(row=2, column=0, sticky="e", padx=(0, 6), pady=3)
         ttk.Entry(
             self.symbol_inventory_frame,
@@ -1795,12 +1795,12 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=2, column=1, sticky="ew", pady=3)
         ttk.Label(
             self.symbol_inventory_frame,
-            text="例如 【 〔 ［ [ 「 『 〈 《",
+            text="默认【；括号内文字才是词头。若词典使用〔［「等，再按实际版式添加。",
             foreground="#666666",
         ).grid(row=2, column=2, sticky="w", padx=(6, 0), pady=3)
         ttk.Checkbutton(
             self.symbol_inventory_frame,
-            text="OCR 漏掉/错认符号时允许视觉形状补救",
+            text="OCR 漏掉/错认符号时允许视觉形状补救（括号仍按 bracket_open 处理）",
             variable=self.symbol_visual_rescue_var,
             command=self._headword_structure_changed,
         ).grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
@@ -1911,7 +1911,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ).pack(side="left", padx=(6, 0))
         ttk.Label(
             visual_templates,
-            text="直接框选这本词典真实印刷的入口标记；每类建议采 2–5 个不同页面样本。",
+            text="直接框选真实印刷符号。采【时按“括号起始”保存，不会当成独立入口标记；每类建议采 2–5 个不同页面样本。",
             foreground="#666666",
         ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
@@ -2240,13 +2240,18 @@ class ProjectProfileWizard(tk.Toplevel):
                 initial_index = 0
         elif self.sample_indices:
             initial_index = int(self.sample_indices[0])
-        entry = split_configured_symbols(self.entry_marker_symbols_var.get())
+        initial_role, initial_literal = _visual_marker_capture_defaults(
+            marker_prefix_enabled=bool(self.marker_prefix_var.get()),
+            bracket_enabled=bool(self.cjk_allow_bracketed_var.get()),
+            entry_text=self.entry_marker_symbols_var.get(),
+            bracket_text=self.bracket_open_symbols_var.get(),
+        )
         VisualMarkerCaptureDialog(
             self,
             self.project.images,
             initial_index=initial_index,
-            initial_role="entry_marker",
-            initial_literal=entry[0] if entry else "",
+            initial_role=initial_role,
+            initial_literal=initial_literal,
             on_saved=self._visual_marker_sample_saved,
         )
 
