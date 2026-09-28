@@ -1504,3 +1504,98 @@ def test_global_deskew_prefers_reliable_physical_header_rule(
     assert abs(analysis.ocr_correction_angle_deg + 0.80) <= 0.05
     assert abs(analysis.applied_angle_deg + 0.26) < 1e-6
     assert "header_rule_deskew" in analysis.method
+
+
+
+def test_pixel_row_geometry_can_accept_safe_candidate_when_ocr_tail_is_biased(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    warped = _two_column_angle_field(lambda t: 0.45 - 0.90 * t)
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: warped,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=40,
+            recommendation="uvdoc_review",
+            confidence=0.9,
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_orthogonal_warp",
+        lambda *_args, **_kwargs: image_preprocessing.OrthogonalWarpEstimate(
+            y_knots=(180.0, 1092.0),
+            angle_knots_deg=(0.45, -0.45),
+            reference_x=500.0,
+            row_count=40,
+            valid_column_count=2,
+            pixel_angle_sample_count=18,
+            pixel_angle_used_count=18,
+            pixel_angle_confidence=0.30,
+            max_row_angle_deg=0.45,
+            row_angle_span_deg=0.90,
+            max_vertical_shift_px=4.0,
+            max_scale_deviation=0.01,
+            confidence=0.95,
+            active=True,
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_orthogonal_warp_image",
+        lambda source, *_args, **_kwargs: source.copy(),
+    )
+
+    pixel_calls = 0
+
+    def fake_pixel_rows(*_args, **_kwargs):
+        nonlocal pixel_calls
+        pixel_calls += 1
+        if pixel_calls == 1:
+            return type(
+                "PixelAudit",
+                (),
+                {
+                    "sample_count": 24,
+                    "valid_column_count": 2,
+                    "p90_shift_px": 5.0,
+                    "worst_shift_px": 6.0,
+                    "passed": False,
+                },
+            )()
+        return type(
+            "PixelAudit",
+            (),
+            {
+                "sample_count": 24,
+                "valid_column_count": 2,
+                "p90_shift_px": 1.0,
+                "worst_shift_px": 1.5,
+                "passed": True,
+            },
+        )()
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "audit_pixel_row_profiles",
+        fake_pixel_rows,
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(layout_columns_policy="fixed", columns=2),
+        geometry_mode="auto",
+    )
+
+    assert analysis.orthogonal_applied is True
+    assert analysis.geometry_mode == "orthogonal"
+    assert analysis.orthogonal_pixel_row_verdict == "passed"
+    assert analysis.orthogonal_before_pixel_row_p90_px == 5.0
+    assert analysis.orthogonal_after_pixel_row_p90_px == 1.0
