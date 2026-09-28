@@ -1721,6 +1721,18 @@ def analyze_preprocess_page(
 
         if (
             requested_geometry_mode == "auto"
+            and selected_candidate is horizontal_total_candidate
+            and structural_candidate is not None
+            and not structural_auto_safe
+        ):
+            warnings.append(
+                "栏结构候选未通过自动 keystone/尺度安全门；"
+                f"已改用安全的优化水平投影（λ={selected_horizontal_strength:.3f}），"
+                "不叠加危险的 structural 变换。"
+            )
+
+        if (
+            requested_geometry_mode == "auto"
             and structural_auto_safe
             and selected_candidate is structural_candidate
             and horizontal_full is not None
