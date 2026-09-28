@@ -22,6 +22,7 @@ from picture_capture.image_preprocessing import (
     promote_processed_pages,
     export_diagnostic_json,
     export_summary_csv,
+    geometry_corrected_image,
     save_analysis,
     save_manual_perspective_quad,
 )
@@ -951,6 +952,53 @@ def _sample_export_analysis() -> PreprocessAnalysis:
         line_geometry_recommendation="perspective",
         line_geometry_confidence=0.86,
     )
+
+
+def test_geometry_export_replays_saved_orthogonal_field(monkeypatch) -> None:
+    analysis = _sample_export_analysis()
+    analysis.geometry_mode = "orthogonal"
+    analysis.orthogonal_applied = True
+    analysis.orthogonal_row_count = 30
+    analysis.orthogonal_valid_column_count = 2
+    analysis.orthogonal_separator_point_count = 12
+    analysis.orthogonal_row_gain = 0.85
+    analysis.orthogonal_reference_x = 60.0
+    analysis.orthogonal_y_knots = (20.0, 90.0, 160.0)
+    analysis.orthogonal_angle_knots_deg = (0.4, 0.0, -0.4)
+    analysis.orthogonal_separator_y_knots = (20.0, 160.0)
+    analysis.orthogonal_separator_shift_knots_px = (2.0, -2.0)
+    analysis.orthogonal_confidence = 0.9
+    analysis.orthogonal_max_row_angle_deg = 0.4
+    analysis.orthogonal_row_angle_span_deg = 0.8
+    analysis.orthogonal_max_horizontal_shift_px = 2.0
+    analysis.orthogonal_max_vertical_shift_px = 0.5
+    analysis.orthogonal_max_scale_deviation = 0.01
+
+    captured = {}
+
+    def fake_apply(source, estimate, *, row_gain, separator_gain):
+        captured["estimate"] = estimate
+        captured["row_gain"] = row_gain
+        captured["separator_gain"] = separator_gain
+        return source.copy()
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_orthogonal_warp_image",
+        fake_apply,
+    )
+
+    source = Image.new("RGB", (120, 180), "white")
+    output = geometry_corrected_image(source, analysis)
+
+    assert output.size == source.size
+    assert captured["row_gain"] == 0.85
+    assert captured["separator_gain"] == 1.0
+    estimate = captured["estimate"]
+    assert estimate.reference_x == 60.0
+    assert estimate.y_knots == (20.0, 90.0, 160.0)
+    assert estimate.angle_knots_deg == (0.4, 0.0, -0.4)
+    assert estimate.separator_shift_knots_px == (2.0, -2.0)
 
 
 def test_output_canvas_alignment_preserves_crop_without_rescaling() -> None:
