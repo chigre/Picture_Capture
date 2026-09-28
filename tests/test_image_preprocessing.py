@@ -192,6 +192,117 @@ def test_auto_geometry_uses_line_geometry_only_for_review(monkeypatch) -> None:
     assert any("UVDoc" in warning for warning in analysis.warnings)
 
 
+def test_auto_perspective_requires_line_geometry_support(monkeypatch) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = [_tilted_box(350, 80, 120, 24, 0.0)]
+    for row in range(20):
+        y = 180 + row * 48
+        polygons.extend(
+            (
+                _tilted_box(100, y, 300, 24, 0.0),
+                _tilted_box(460, y, 300, 24, 0.0),
+            )
+        )
+
+    class Perspective:
+        strength_px = 20.0
+        matrix = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_perspective_from_polygons",
+        lambda *_args, **_kwargs: Perspective(),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=20,
+            recommendation="none",
+            confidence=0.9,
+        ),
+    )
+
+    def forbidden_homography(*_args, **_kwargs):
+        raise AssertionError("auto mode must not apply unsupported perspective")
+
+    monkeypatch.setattr(
+        image_preprocessing, "apply_homography_image", forbidden_homography,
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(),
+        geometry_mode="auto",
+    )
+
+    assert analysis.geometry_mode == "deskew"
+    assert "perspective_review" in analysis.method
+    assert any("文本行几何证据不足" in warning for warning in analysis.warnings)
+
+
+def test_auto_perspective_applies_with_coherent_line_support(monkeypatch) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = [_tilted_box(350, 80, 120, 24, 0.0)]
+    for row in range(20):
+        y = 180 + row * 48
+        polygons.extend(
+            (
+                _tilted_box(100, y, 300, 24, 0.0),
+                _tilted_box(460, y, 300, 24, 0.0),
+            )
+        )
+
+    class Perspective:
+        strength_px = 20.0
+        matrix = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_perspective_from_polygons",
+        lambda *_args, **_kwargs: Perspective(),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=20,
+            angle_trend_deg=0.35,
+            recommendation="perspective",
+            confidence=0.9,
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_homography_image",
+        lambda source, _matrix: source.copy(),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "transform_polygons_homography",
+        lambda values, _matrix: list(values),
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(),
+        geometry_mode="auto",
+    )
+
+    assert analysis.geometry_mode == "perspective"
+    assert "perspective" in analysis.method
+
+
 def test_uvdoc_mode_redetects_layout_after_unwarping(monkeypatch) -> None:
     image = Image.new("RGB", (1000, 1400), "white")
     polygons = [_tilted_box(350, 80, 120, 24, 0.0)]
