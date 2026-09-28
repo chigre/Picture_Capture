@@ -2145,11 +2145,64 @@ def analyze_preprocess_page(
             float(perspective_horizontal_vanishing_y), 3
         ),
         perspective_horizontal_row_count=int(perspective_horizontal_row_count),
+        perspective_horizontal_column_count=int(
+            perspective_horizontal_column_count
+        ),
+        perspective_horizontal_vp_column_spread_deg=round(
+            float(perspective_horizontal_vp_column_spread_deg), 4
+        ),
         perspective_horizontal_strength=round(
             float(perspective_horizontal_strength), 6
         ),
         perspective_structural_applied=bool(perspective_structural_applied),
         perspective_structural_safe=bool(perspective_structural_safe),
+        perspective_row_valid_column_count=int(
+            perspective_row_valid_column_count
+        ),
+        perspective_row_column_row_counts=tuple(
+            int(v) for v in perspective_row_column_row_counts
+        ),
+        perspective_row_after_worst_region_deg=round(
+            float(perspective_row_after_worst_region_deg), 4
+        ),
+        perspective_row_after_worst_column_metric_deg=round(
+            float(perspective_row_after_worst_column_metric_deg), 4
+        ),
+        perspective_row_after_worst_column_index=int(
+            perspective_row_after_worst_column_index
+        ),
+        perspective_row_before_column_top_angles_deg=tuple(
+            round(float(v), 4)
+            for v in perspective_row_before_column_top_angles_deg
+        ),
+        perspective_row_after_column_top_angles_deg=tuple(
+            round(float(v), 4)
+            for v in perspective_row_after_column_top_angles_deg
+        ),
+        perspective_row_before_column_middle_angles_deg=tuple(
+            round(float(v), 4)
+            for v in perspective_row_before_column_middle_angles_deg
+        ),
+        perspective_row_after_column_middle_angles_deg=tuple(
+            round(float(v), 4)
+            for v in perspective_row_after_column_middle_angles_deg
+        ),
+        perspective_row_before_column_bottom_angles_deg=tuple(
+            round(float(v), 4)
+            for v in perspective_row_before_column_bottom_angles_deg
+        ),
+        perspective_row_after_column_bottom_angles_deg=tuple(
+            round(float(v), 4)
+            for v in perspective_row_after_column_bottom_angles_deg
+        ),
+        perspective_row_before_column_trends_deg=tuple(
+            round(float(v), 4)
+            for v in perspective_row_before_column_trends_deg
+        ),
+        perspective_row_after_column_trends_deg=tuple(
+            round(float(v), 4)
+            for v in perspective_row_after_column_trends_deg
+        ),
         perspective_row_before_top_angle_deg=round(
             float(perspective_row_before_top_angle_deg), 4
         ),
@@ -2744,6 +2797,9 @@ def export_diagnostic_json(
         "horizontal_alignment_max_after_edge_deg": (
             HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
         ),
+        "horizontal_vp_column_spread_max_deg": (
+            HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG
+        ),
         "horizontal_strength_min": HORIZONTAL_STRENGTH_MIN,
         "horizontal_strength_coarse_step": HORIZONTAL_STRENGTH_COARSE_STEP,
         "horizontal_strength_fine_step": HORIZONTAL_STRENGTH_FINE_STEP,
@@ -2810,6 +2866,12 @@ def export_summary_csv(
             "perspective_horizontal_row_count": (
                 analysis.perspective_horizontal_row_count
             ),
+            "perspective_horizontal_column_count": (
+                analysis.perspective_horizontal_column_count
+            ),
+            "perspective_horizontal_vp_column_spread_deg": (
+                analysis.perspective_horizontal_vp_column_spread_deg
+            ),
             "perspective_horizontal_strength": (
                 analysis.perspective_horizontal_strength
             ),
@@ -2818,6 +2880,54 @@ def export_summary_csv(
             ),
             "perspective_structural_safe": (
                 analysis.perspective_structural_safe
+            ),
+            "perspective_row_valid_column_count": (
+                analysis.perspective_row_valid_column_count
+            ),
+            "perspective_row_column_row_counts": json.dumps(
+                analysis.perspective_row_column_row_counts,
+                ensure_ascii=False,
+            ),
+            "perspective_row_after_worst_region_deg": (
+                analysis.perspective_row_after_worst_region_deg
+            ),
+            "perspective_row_after_worst_column_metric_deg": (
+                analysis.perspective_row_after_worst_column_metric_deg
+            ),
+            "perspective_row_after_worst_column_index": (
+                analysis.perspective_row_after_worst_column_index
+            ),
+            "perspective_row_before_column_top_angles_deg": json.dumps(
+                analysis.perspective_row_before_column_top_angles_deg,
+                ensure_ascii=False,
+            ),
+            "perspective_row_after_column_top_angles_deg": json.dumps(
+                analysis.perspective_row_after_column_top_angles_deg,
+                ensure_ascii=False,
+            ),
+            "perspective_row_before_column_middle_angles_deg": json.dumps(
+                analysis.perspective_row_before_column_middle_angles_deg,
+                ensure_ascii=False,
+            ),
+            "perspective_row_after_column_middle_angles_deg": json.dumps(
+                analysis.perspective_row_after_column_middle_angles_deg,
+                ensure_ascii=False,
+            ),
+            "perspective_row_before_column_bottom_angles_deg": json.dumps(
+                analysis.perspective_row_before_column_bottom_angles_deg,
+                ensure_ascii=False,
+            ),
+            "perspective_row_after_column_bottom_angles_deg": json.dumps(
+                analysis.perspective_row_after_column_bottom_angles_deg,
+                ensure_ascii=False,
+            ),
+            "perspective_row_before_column_trends_deg": json.dumps(
+                analysis.perspective_row_before_column_trends_deg,
+                ensure_ascii=False,
+            ),
+            "perspective_row_after_column_trends_deg": json.dumps(
+                analysis.perspective_row_after_column_trends_deg,
+                ensure_ascii=False,
             ),
             "perspective_row_before_top_angle_deg": (
                 analysis.perspective_row_before_top_angle_deg
