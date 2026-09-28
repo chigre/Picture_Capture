@@ -5,9 +5,11 @@ from picture_capture.models import AppSettings
 from picture_capture.preprocess_geometry import (
     audit_horizontal_alignment,
     audit_homography_distortion,
+    PerspectiveEstimate,
     audit_text_scale_stability,
     estimate_horizontal_perspective_from_polygons,
     estimate_perspective_from_polygons,
+    optimize_horizontal_perspective_strength,
     perspective_from_quad,
     transform_points_homography,
     transform_polygons_homography,
@@ -111,6 +113,52 @@ def test_horizontal_vanishing_candidate_does_not_flip_for_left_side_vp() -> None
     assert before_center[0] < 450
     assert after_center[0] < 450
     assert abs(audit.after_trend_deg) <= 0.12
+
+
+def test_horizontal_strength_optimizer_avoids_full_strength_overshoot() -> None:
+    polygons: list[np.ndarray] = []
+    for row in range(24):
+        t = row / 23.0
+        y = 130 + row * 32
+        angle = 0.40 - 0.80 * t
+        polygons.extend(
+            (
+                _rotated_box(250, y, 280, 22, angle),
+                _rotated_box(650, y, 280, 22, angle),
+            )
+        )
+
+    correct = estimate_horizontal_perspective_from_polygons(
+        polygons, (900, 1000),
+    )
+    correct_matrix = np.asarray(correct.matrix, dtype=float).reshape(3, 3)
+    exaggerated = np.eye(3, dtype=float) + 1.65 * (
+        correct_matrix - np.eye(3, dtype=float)
+    )
+    exaggerated /= exaggerated[2, 2]
+    full = PerspectiveEstimate(
+        matrix=tuple(float(v) for v in exaggerated.reshape(-1)),
+        classification="horizontal_vp",
+        candidate_source="horizontal_vp",
+        horizontal_vanishing_x=correct.horizontal_vanishing_x,
+        horizontal_vanishing_y=correct.horizontal_vanishing_y,
+        horizontal_row_count=correct.horizontal_row_count,
+    )
+
+    optimized, audit, strength = optimize_horizontal_perspective_strength(
+        polygons, (900, 1000), full,
+    )
+    transformed = transform_polygons_homography(polygons, optimized.matrix)
+    verified = audit_horizontal_alignment(polygons, transformed)
+
+    assert 0.45 <= strength <= 0.80
+    assert audit.verdict == "improved"
+    assert verified.verdict == "improved"
+    assert abs(verified.after_trend_deg) <= 0.12
+    assert max(
+        abs(verified.after_top_angle_deg),
+        abs(verified.after_bottom_angle_deg),
+    ) <= 0.18
 
 
 def test_horizontal_vanishing_candidate_keeps_character_scale_safe() -> None:
