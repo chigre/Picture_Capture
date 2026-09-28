@@ -12886,6 +12886,61 @@ class PictureCaptureApp(tk.Tk):
         }.get(geometry_label, "auto")
         return safety, bool(self.preprocess_auto_deskew_var.get()), geometry_mode
 
+    def _preprocess_export_config(
+        self,
+    ) -> tuple[bool, str, int, int, str, str]:
+        enabled = bool(self.preprocess_export_canvas_var.get())
+        mode_label = str(self.preprocess_export_canvas_mode_var.get() or "").strip()
+        mode = {
+            "本批最大裁剪尺寸": "batch_max",
+            "自定义尺寸": "custom",
+        }.get(mode_label, "batch_max")
+        try:
+            width = int(round(float(str(self.preprocess_export_canvas_width_var.get()).strip())))
+        except (TypeError, ValueError):
+            width = int(getattr(self.settings, "preprocess_export_canvas_width", 0) or 0)
+        try:
+            height = int(round(float(str(self.preprocess_export_canvas_height_var.get()).strip())))
+        except (TypeError, ValueError):
+            height = int(getattr(self.settings, "preprocess_export_canvas_height", 0) or 0)
+        width = max(0, min(100000, width))
+        height = max(0, min(100000, height))
+        align_x = {
+            "左对齐": "left",
+            "居中": "center",
+            "右对齐": "right",
+        }.get(str(self.preprocess_export_align_x_var.get() or "").strip(), "center")
+        align_y = {
+            "顶端对齐": "top",
+            "居中": "center",
+            "底部对齐": "bottom",
+        }.get(str(self.preprocess_export_align_y_var.get() or "").strip(), "top")
+        return enabled, mode, width, height, align_x, align_y
+
+    def _preprocess_export_settings_changed(self, _event=None) -> None:
+        enabled, mode, width, height, align_x, align_y = (
+            self._preprocess_export_config()
+        )
+        self.preprocess_export_canvas_width_var.set(str(width))
+        self.preprocess_export_canvas_height_var.set(str(height))
+        self.settings.preprocess_export_canvas_enabled = enabled
+        self.settings.preprocess_export_canvas_mode = mode
+        self.settings.preprocess_export_canvas_width = width
+        self.settings.preprocess_export_canvas_height = height
+        self.settings.preprocess_export_align_x = align_x
+        self.settings.preprocess_export_align_y = align_y
+        if self.project is not None:
+            self.project.settings.preprocess_export_canvas_enabled = enabled
+            self.project.settings.preprocess_export_canvas_mode = mode
+            self.project.settings.preprocess_export_canvas_width = width
+            self.project.settings.preprocess_export_canvas_height = height
+            self.project.settings.preprocess_export_align_x = align_x
+            self.project.settings.preprocess_export_align_y = align_y
+            try:
+                self.settings.to_json(settings_path(self.project.root))
+            except OSError:
+                pass
+
     def _preprocess_settings_changed(self, _event=None) -> None:
         safety, auto_deskew, geometry_mode = self._preprocess_config()
         self.preprocess_safety_var.set(str(safety))
