@@ -1921,12 +1921,22 @@ def analyze_preprocess_page(
             and not horizontal_auto_safe
         ):
             if horizontal_row_audit is not None:
+                worst_index = (
+                    horizontal_row_audit.after_worst_column_index + 1
+                    if horizontal_row_audit.after_worst_column_index >= 0
+                    else 0
+                )
                 warnings.append(
                     "已执行安全的栏结构透视，但残余水平投影未通过自动门："
                     f"最优强度 {horizontal_strength:.3f}，"
-                    f"行趋势 {horizontal_row_audit.before_trend_deg:+.2f}°→"
-                    f"{horizontal_row_audit.after_trend_deg:+.2f}°。"
-                    "已保留 structural 结果，未强行继续拉伸文字。"
+                    f"全页行趋势 {horizontal_row_audit.before_trend_deg:+.2f}°→"
+                    f"{horizontal_row_audit.after_trend_deg:+.2f}°，"
+                    f"最差区域残余 {horizontal_row_audit.after_worst_region_deg:.2f}°"
+                    + (
+                        f"（第 {worst_index} 栏）"
+                        if worst_index else ""
+                    )
+                    + "。已保留 structural 结果，未强行继续拉伸文字。"
                 )
             else:
                 warnings.append(
@@ -2010,11 +2020,32 @@ def analyze_preprocess_page(
                         )
             if horizontal_full is not None and not horizontal_auto_safe:
                 if horizontal_row_audit is not None:
+                    worst_index = (
+                        horizontal_row_audit.after_worst_column_index + 1
+                        if horizontal_row_audit.after_worst_column_index >= 0
+                        else 0
+                    )
+                    spread = float(
+                        getattr(
+                            horizontal_full,
+                            "horizontal_vp_column_spread_deg",
+                            0.0,
+                        )
+                    )
                     review_reasons.append(
-                        "残余水平投影优化未同时满足行水平改善与尺度安全："
+                        "残余水平投影优化未同时满足分栏水平改善与尺度安全："
                         f"强度 {horizontal_strength:.3f}，"
-                        f"Δ角 {horizontal_row_audit.before_trend_deg:+.2f}°→"
-                        f"{horizontal_row_audit.after_trend_deg:+.2f}°"
+                        f"全页Δ角 {horizontal_row_audit.before_trend_deg:+.2f}°→"
+                        f"{horizontal_row_audit.after_trend_deg:+.2f}°，"
+                        f"最差区域 {horizontal_row_audit.after_worst_region_deg:.2f}°"
+                        + (
+                            f"（第 {worst_index} 栏）"
+                            if worst_index else ""
+                        )
+                        + (
+                            f"，栏间VP分歧 {spread:.2f}°"
+                            if spread > 0.0 else ""
+                        )
                     )
                 else:
                     review_reasons.append("残余水平投影证据不足")
