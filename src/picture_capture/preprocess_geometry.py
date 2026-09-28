@@ -1387,7 +1387,6 @@ def audit_horizontal_alignment(
         and improvement >= HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT
         and after_worst_trend <= HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG
         and after_worst_region <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
-        and after_worst_tail <= HORIZONTAL_ALIGNMENT_MAX_TAIL_DEG
         and dual_edge_safe
         and after_mad <= max(0.16, before_mad + 0.03)
     ):
