@@ -910,6 +910,47 @@ def _horizontal_row_stats(
     )
 
 
+def _horizontal_region_angles(
+    rows: list[tuple[float, float, float, float]],
+    *,
+    fallback: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """Direct robust top/middle/bottom row angles for one populated column.
+
+    Trend fitting remains useful for the VP direction, but a small local defect
+    (for example only the lower-right part of a page) can be diluted by one
+    global linear fit. Region medians therefore provide an independent
+    worst-region gate.
+    """
+    if not rows:
+        return fallback
+    ys = np.asarray([row[1] for row in rows], dtype=float)
+    y_min = float(ys.min())
+    y_max = float(ys.max())
+    span = max(1.0, y_max - y_min)
+    norm = (ys - y_min) / span
+    bands = (
+        norm < (1.0 / 3.0),
+        (norm >= (1.0 / 3.0)) & (norm < (2.0 / 3.0)),
+        norm >= (2.0 / 3.0),
+    )
+    values: list[float] = []
+    for band_index, mask in enumerate(bands):
+        indices = np.flatnonzero(mask)
+        if indices.size < 2:
+            values.append(float(fallback[band_index]))
+            continue
+        values.append(
+            _weighted_median_pairs(
+                [
+                    (rows[int(index)][2], rows[int(index)][3])
+                    for index in indices
+                ]
+            )
+        )
+    return float(values[0]), float(values[1]), float(values[2])
+
+
 def _horizontal_metric(
     middle: float,
     top: float,
@@ -1019,19 +1060,41 @@ def audit_horizontal_alignment(
     for before_stats, after_stats, index in valid_pairs:
         bm, bt, bb, btrend, bmad, _bspan = before_stats
         am, at, ab, atrend, amad, _aspan = after_stats
-        before_tops.append(bt)
-        after_tops.append(at)
-        before_middles.append(bm)
-        after_middles.append(am)
-        before_bottoms.append(bb)
-        after_bottoms.append(ab)
+        before_rows_for_column = before_columns[index]
+        after_rows_for_column = after_columns[index]
+        btop_region, bmiddle_region, bbottom_region = _horizontal_region_angles(
+            before_rows_for_column,
+            fallback=(bt, bm, bb),
+        )
+        atop_region, amiddle_region, abottom_region = _horizontal_region_angles(
+            after_rows_for_column,
+            fallback=(at, am, ab),
+        )
+        before_tops.append(btop_region)
+        after_tops.append(atop_region)
+        before_middles.append(bmiddle_region)
+        after_middles.append(amiddle_region)
+        before_bottoms.append(bbottom_region)
+        after_bottoms.append(abottom_region)
         before_trends.append(btrend)
         after_trends.append(atrend)
         before_metrics.append(
-            _horizontal_metric(bm, bt, bb, btrend, bmad)
+            _horizontal_metric(
+                bmiddle_region,
+                btop_region,
+                bbottom_region,
+                btrend,
+                bmad,
+            )
         )
         after_metrics.append(
-            _horizontal_metric(am, at, ab, atrend, amad)
+            _horizontal_metric(
+                amiddle_region,
+                atop_region,
+                abottom_region,
+                atrend,
+                amad,
+            )
         )
         valid_indices.append(index)
 
