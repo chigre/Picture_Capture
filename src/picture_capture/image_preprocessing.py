@@ -216,6 +216,11 @@ class PreprocessAnalysis:
     orthogonal_valid_column_count: int = 0
     orthogonal_separator_point_count: int = 0
     orthogonal_row_gain: float = 0.0
+    orthogonal_reference_x: float = 0.0
+    orthogonal_y_knots: tuple[float, ...] = ()
+    orthogonal_angle_knots_deg: tuple[float, ...] = ()
+    orthogonal_separator_y_knots: tuple[float, ...] = ()
+    orthogonal_separator_shift_knots_px: tuple[float, ...] = ()
     orthogonal_confidence: float = 0.0
     orthogonal_column_spread_deg: float = 0.0
     orthogonal_max_row_angle_deg: float = 0.0
@@ -668,6 +673,25 @@ class PreprocessAnalysis:
             ),
             orthogonal_row_gain=max(
                 0.0, float(payload.get("orthogonal_row_gain", 0.0))
+            ),
+            orthogonal_reference_x=float(
+                payload.get("orthogonal_reference_x", 0.0)
+            ),
+            orthogonal_y_knots=tuple(
+                float(v) for v in payload.get("orthogonal_y_knots", ())
+            ),
+            orthogonal_angle_knots_deg=tuple(
+                float(v) for v in payload.get("orthogonal_angle_knots_deg", ())
+            ),
+            orthogonal_separator_y_knots=tuple(
+                float(v)
+                for v in payload.get("orthogonal_separator_y_knots", ())
+            ),
+            orthogonal_separator_shift_knots_px=tuple(
+                float(v)
+                for v in payload.get(
+                    "orthogonal_separator_shift_knots_px", ()
+                )
             ),
             orthogonal_confidence=max(
                 0.0, min(1.0, float(payload.get("orthogonal_confidence", 0.0)))
@@ -1373,6 +1397,50 @@ def geometry_corrected_image(
         )
     if analysis.geometry_mode == "uvdoc":
         corrected = unwarp_document_image(corrected)
+    if (
+        analysis.orthogonal_applied
+        and analysis.orthogonal_y_knots
+        and analysis.orthogonal_angle_knots_deg
+    ):
+        estimate = OrthogonalWarpEstimate(
+            y_knots=tuple(analysis.orthogonal_y_knots),
+            angle_knots_deg=tuple(analysis.orthogonal_angle_knots_deg),
+            separator_y_knots=tuple(analysis.orthogonal_separator_y_knots),
+            separator_shift_knots_px=tuple(
+                analysis.orthogonal_separator_shift_knots_px
+            ),
+            reference_x=float(analysis.orthogonal_reference_x),
+            row_count=int(analysis.orthogonal_row_count),
+            valid_column_count=int(
+                analysis.orthogonal_valid_column_count
+            ),
+            separator_point_count=int(
+                analysis.orthogonal_separator_point_count
+            ),
+            max_row_angle_deg=float(
+                analysis.orthogonal_max_row_angle_deg
+            ),
+            row_angle_span_deg=float(
+                analysis.orthogonal_row_angle_span_deg
+            ),
+            max_horizontal_shift_px=float(
+                analysis.orthogonal_max_horizontal_shift_px
+            ),
+            max_vertical_shift_px=float(
+                analysis.orthogonal_max_vertical_shift_px
+            ),
+            max_scale_deviation=float(
+                analysis.orthogonal_max_scale_deviation
+            ),
+            confidence=float(analysis.orthogonal_confidence),
+            active=True,
+        )
+        corrected = apply_orthogonal_warp_image(
+            corrected,
+            estimate,
+            row_gain=float(analysis.orthogonal_row_gain),
+            separator_gain=1.0,
+        )
     return corrected
 
 
@@ -2432,6 +2500,11 @@ def analyze_preprocess_page(
     orthogonal_valid_column_count = 0
     orthogonal_separator_point_count = 0
     orthogonal_row_gain = 0.0
+    orthogonal_reference_x = 0.0
+    orthogonal_y_knots: tuple[float, ...] = ()
+    orthogonal_angle_knots_deg: tuple[float, ...] = ()
+    orthogonal_separator_y_knots: tuple[float, ...] = ()
+    orthogonal_separator_shift_knots_px: tuple[float, ...] = ()
     orthogonal_confidence = 0.0
     orthogonal_column_spread_deg = 0.0
     orthogonal_max_row_angle_deg = 0.0
@@ -2450,7 +2523,7 @@ def analyze_preprocess_page(
             "vertical"
         )
     ):
-        for pass_index in range(2):
+        for pass_index in range(1):
             try:
                 estimate = estimate_orthogonal_warp(
                     working,
@@ -2595,6 +2668,15 @@ def analyze_preprocess_page(
             orthogonal_applied = True
             orthogonal_passes += 1
             orthogonal_row_gain = float(row_gain)
+            orthogonal_reference_x = float(estimate.reference_x)
+            orthogonal_y_knots = tuple(estimate.y_knots)
+            orthogonal_angle_knots_deg = tuple(estimate.angle_knots_deg)
+            orthogonal_separator_y_knots = tuple(
+                estimate.separator_y_knots
+            )
+            orthogonal_separator_shift_knots_px = tuple(
+                estimate.separator_shift_knots_px
+            )
             orthogonal_after_quality_score = float(actual_score)
             orthogonal_alignment_verdict = str(actual_verdict)
             geometry_strength = max(
@@ -2987,6 +3069,20 @@ def analyze_preprocess_page(
             orthogonal_separator_point_count
         ),
         orthogonal_row_gain=round(float(orthogonal_row_gain), 6),
+        orthogonal_reference_x=round(float(orthogonal_reference_x), 4),
+        orthogonal_y_knots=tuple(
+            round(float(v), 4) for v in orthogonal_y_knots
+        ),
+        orthogonal_angle_knots_deg=tuple(
+            round(float(v), 6) for v in orthogonal_angle_knots_deg
+        ),
+        orthogonal_separator_y_knots=tuple(
+            round(float(v), 4) for v in orthogonal_separator_y_knots
+        ),
+        orthogonal_separator_shift_knots_px=tuple(
+            round(float(v), 6)
+            for v in orthogonal_separator_shift_knots_px
+        ),
         orthogonal_confidence=round(float(orthogonal_confidence), 6),
         orthogonal_column_spread_deg=round(
             float(orthogonal_column_spread_deg), 4
