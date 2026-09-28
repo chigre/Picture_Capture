@@ -316,6 +316,8 @@ texto ◆ referencia  → 不命中（符号不在行首）
 
 每次【导出预处理图片】还会默认写出 `ImagePreprocess/meta/<page>.preprocess.json` 与 `ImagePreprocess/preprocess_summary.csv`。逐页 JSON 包含完整 PreprocessAnalysis、所有 text-line/straight-separator 诊断及最终 canvas/content-box 信息；CSV 汇总主要异常筛查字段和画布位置，便于复盘“为什么某页被旋转/透视/标记 UVDoc review、最终裁到哪里、在统一白底中被放到哪里”。
 
+
+自动透视安全判定额外输出 `perspective_classification`、`perspective_candidate_strength_px`、`perspective_left/right/common_drift_px`、`perspective_width_delta_px`、`perspective_width_change_ratio`、`perspective_scale_top/bottom`、`perspective_scale_delta_ratio` 和 `perspective_auto_safe`。其中 `parallel_drift` 表示两侧结构边界主要同向移动，默认视为 rotation/shear-like 信号而不是 keystone；`keystone` 才表示上下有效宽度存在可解释的收敛/发散。自动模式在 separator 缺失时采用 1.5% scale-delta 上限，separator 存在时采用 3% 上限。分隔线诊断另输出 `separator_slope_px_per_1000y` 和 `separator_drift_px`。
 主界面按【一、版面参数 → 二、显示设置 → 三、OCR画线参数（默认）】排列高频项。候选置信度、最低候选分、同行合并等底层阈值移到【设置中心 → OCR画线 → 高级设置】，避免首次使用时误调。默认展开【一、版面参数】和【六、页面列表】，默认折叠【二、显示设置】【三、OCR画线参数（默认）】【四、画线与校对】【五、后期词典制作】；展开/折叠状态在首次采用新默认后继续按用户操作保存。
 
 【检测版面参数】按页面列表上方的当前范围运行。单页时直接采用该页检测值；选择 2 页及以上时，数值参数使用稳健中位数，分栏数使用多数页面的栏数（固定栏数策略开启时使用固定值）。当前直接检测/写回字段为：正文栏数、正文起始Y、第一栏左缘X、单栏宽度、栏间空白、典型单行字高、典型行间空白；不会检测正文结束Y、正文缩进或微调判距。若正文缩进与微调判距仍分别等于检测前单行高的 1× / 0.5×，单行高更新后会继续按同一默认关系同步；一旦用户改成其他值就保持独立。主界面只显示其中前五项，行高和行间空仍写入普通画线相关设置。按钮悬浮提示为“若所选页面数量≥2，参数为稳健中位数”。
