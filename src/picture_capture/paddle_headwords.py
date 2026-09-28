@@ -7,6 +7,7 @@ import difflib
 import gc
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -3653,12 +3654,14 @@ def _recover_oversized_cjk_ocr_records(
                 band.width,
                 max(zone_width, round(run_height * 1.10)),
             )
+            recovered_confidence = (
+                float(confidence)
+                if local_records
+                else float(parent.confidence)
+            )
             recovered.append(OCRRecord(
                 text=word,
-                confidence=max(
-                    float(confidence),
-                    min(0.99, float(parent.confidence)),
-                ),
+                confidence=max(0.0, min(1.0, recovered_confidence)),
                 box=(
                     max(0, min(x0, round(zone_width * 0.15))),
                     int(run_start),
@@ -3675,7 +3678,7 @@ def _recover_oversized_cjk_ocr_records(
                 "word": word,
                 "local_text": source_text,
                 "confidence": round(
-                    max(float(confidence), float(parent.confidence)), 6
+                    max(0.0, min(1.0, recovered_confidence)), 6
                 ),
             })
 
