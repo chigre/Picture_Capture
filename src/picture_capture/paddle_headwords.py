@@ -5169,8 +5169,13 @@ def filter_headword_records(
         )
         cjk_bracket_extra_required = bool(
             cjk_bracketed
-            and not cjk_bracket_explicit_ocr
-            and (cjk_brackets_in_body or cjk_require_visual_evidence)
+            and (
+                cjk_brackets_in_body
+                or (
+                    not cjk_bracket_explicit_ocr
+                    and cjk_require_visual_evidence
+                )
+            )
         )
         tail_required = bool(
             tail_controls_active
