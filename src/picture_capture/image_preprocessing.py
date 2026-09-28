@@ -1745,6 +1745,16 @@ def analyze_preprocess_page(
             perspective_horizontal_row_count = int(
                 getattr(perspective, "horizontal_row_count", 0)
             )
+            perspective_horizontal_column_count = int(
+                getattr(perspective, "horizontal_column_count", 0)
+            )
+            perspective_horizontal_vp_column_spread_deg = float(
+                getattr(
+                    perspective,
+                    "horizontal_vp_column_spread_deg",
+                    0.0,
+                )
+            )
             perspective_horizontal_strength = float(
                 diagnostic_horizontal_strength
             )
@@ -1776,6 +1786,41 @@ def analyze_preprocess_page(
                 0.0, float(getattr(perspective, "scale_delta_ratio", 0.0))
             )
 
+            perspective_row_valid_column_count = row_audit.valid_column_count
+            perspective_row_column_row_counts = tuple(row_audit.column_row_counts)
+            perspective_row_after_worst_region_deg = (
+                row_audit.after_worst_region_deg
+            )
+            perspective_row_after_worst_column_metric_deg = (
+                row_audit.after_worst_column_metric_deg
+            )
+            perspective_row_after_worst_column_index = (
+                row_audit.after_worst_column_index
+            )
+            perspective_row_before_column_top_angles_deg = tuple(
+                row_audit.before_column_top_angles_deg
+            )
+            perspective_row_after_column_top_angles_deg = tuple(
+                row_audit.after_column_top_angles_deg
+            )
+            perspective_row_before_column_middle_angles_deg = tuple(
+                row_audit.before_column_middle_angles_deg
+            )
+            perspective_row_after_column_middle_angles_deg = tuple(
+                row_audit.after_column_middle_angles_deg
+            )
+            perspective_row_before_column_bottom_angles_deg = tuple(
+                row_audit.before_column_bottom_angles_deg
+            )
+            perspective_row_after_column_bottom_angles_deg = tuple(
+                row_audit.after_column_bottom_angles_deg
+            )
+            perspective_row_before_column_trends_deg = tuple(
+                row_audit.before_column_trends_deg
+            )
+            perspective_row_after_column_trends_deg = tuple(
+                row_audit.after_column_trends_deg
+            )
             perspective_row_before_top_angle_deg = row_audit.before_top_angle_deg
             perspective_row_after_top_angle_deg = row_audit.after_top_angle_deg
             perspective_row_before_bottom_angle_deg = row_audit.before_bottom_angle_deg
