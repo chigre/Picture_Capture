@@ -12924,6 +12924,219 @@ class PictureCaptureApp(tk.Tk):
                 self.redraw()
             self.status_var.set("已退出预处理模式，恢复普通编辑功能。")
 
+    @staticmethod
+    def _default_preprocess_corner_quad(image: Image.Image) -> tuple[float, ...]:
+        width, height = image.size
+        inset = max(4, round(min(width, height) * 0.012))
+        return (
+            float(inset), float(inset),
+            float(max(inset + 1, width - 1 - inset)), float(inset),
+            float(max(inset + 1, width - 1 - inset)),
+            float(max(inset + 1, height - 1 - inset)),
+            float(inset), float(max(inset + 1, height - 1 - inset)),
+        )
+
+    def edit_preprocess_corners(self) -> None:
+        if not self.project or self.current_page is None or self.image is None:
+            messagebox.showinfo("手动四角", "请先打开包含扫描图片的项目。", parent=self)
+            return
+        if self._ui_worker_key_active("preprocess-current") or self._batch_active:
+            self.status_var.set("预处理任务正在运行；完成后再编辑手动四角。")
+            return
+        if not self._preprocess_mode_active():
+            self._set_preprocess_mode(True, analyze=False)
+            if not self._preprocess_mode_active():
+                return
+
+        project = self.project
+        page = self.current_page
+        source = normalize_page_rgb(self.image)
+        existing = load_manual_perspective_quad(project.root, page)
+        initial = existing or self._default_preprocess_corner_quad(source)
+        points = [
+            [float(initial[index]), float(initial[index + 1])]
+            for index in range(0, 8, 2)
+        ]
+
+        window = tk.Toplevel(self)
+        window.title(f"手动四角透视｜{page.name}")
+        window.transient(self)
+        work_x, work_y, work_w, work_h = _screen_work_area(self)
+        max_w = max(640, min(1280, work_w - 120))
+        max_h = max(520, min(920, work_h - 180))
+        scale = min(
+            1.0,
+            max_w / max(1, source.width),
+            (max_h - 90) / max(1, source.height),
+        )
+        display_size = (
+            max(1, round(source.width * scale)),
+            max(1, round(source.height * scale)),
+        )
+
+        body = ttk.Frame(window, padding=8)
+        body.pack(fill="both", expand=True)
+        canvas = tk.Canvas(
+            body,
+            width=display_size[0],
+            height=display_size[1],
+            highlightthickness=1,
+            highlightbackground="#888888",
+            cursor="crosshair",
+        )
+        canvas.pack(fill="both", expand=True)
+        photo = ImageTk.PhotoImage(
+            source.resize(display_size, Image.Resampling.LANCZOS)
+        )
+        canvas.create_image(0, 0, image=photo, anchor="nw", tags=("page",))
+        window._manual_corner_photo = photo  # type: ignore[attr-defined]
+
+        labels = ("左上", "右上", "右下", "左下")
+        drag_state: dict[str, int | None] = {"index": None}
+
+        def redraw_handles() -> None:
+            canvas.delete("manual-corners")
+            coords = [
+                coordinate * scale
+                for point in points
+                for coordinate in point
+            ]
+            canvas.create_polygon(
+                *coords,
+                fill="",
+                outline="#ff7a00",
+                width=3,
+                tags=("manual-corners",),
+            )
+            radius = 7
+            for index, (x, y) in enumerate(points):
+                cx = x * scale
+                cy = y * scale
+                canvas.create_oval(
+                    cx - radius, cy - radius,
+                    cx + radius, cy + radius,
+                    fill="#ff7a00",
+                    outline="white",
+                    width=2,
+                    tags=("manual-corners",),
+                )
+                canvas.create_text(
+                    cx + 11, cy - 11,
+                    text=labels[index],
+                    fill="#d35400",
+                    anchor="sw",
+                    font=(AUTO_FONT_FAMILY, 10, "bold"),
+                    tags=("manual-corners",),
+                )
+
+        def nearest_handle(event: tk.Event) -> int | None:
+            best: tuple[float, int] | None = None
+            for index, (x, y) in enumerate(points):
+                dx = float(event.x) - x * scale
+                dy = float(event.y) - y * scale
+                distance = dx * dx + dy * dy
+                if best is None or distance < best[0]:
+                    best = (distance, index)
+            if best is not None and best[0] <= 22.0 * 22.0:
+                return best[1]
+            return None
+
+        def press(event: tk.Event) -> str:
+            drag_state["index"] = nearest_handle(event)
+            return "break"
+
+        def drag(event: tk.Event) -> str:
+            index = drag_state.get("index")
+            if index is None:
+                return "break"
+            x = max(0.0, min(float(source.width - 1), float(event.x) / max(scale, 1e-9)))
+            y = max(0.0, min(float(source.height - 1), float(event.y) / max(scale, 1e-9)))
+            points[int(index)] = [x, y]
+            redraw_handles()
+            return "break"
+
+        def release(_event: tk.Event) -> str:
+            drag_state["index"] = None
+            return "break"
+
+        canvas.bind("<ButtonPress-1>", press)
+        canvas.bind("<B1-Motion>", drag)
+        canvas.bind("<ButtonRelease-1>", release)
+        redraw_handles()
+
+        ttk.Label(
+            body,
+            text=(
+                "拖动四个橙色控制点到页面/正文平面的四角。坐标保存在原扫描图上；"
+                "小角度纠偏后会同步变换四点，再做透视纠正，最后重新检测版面并裁边。"
+            ),
+            wraplength=max(560, display_size[0]),
+            justify="left",
+        ).pack(fill="x", pady=(7, 4))
+
+        controls = ttk.Frame(body)
+        controls.pack(fill="x")
+
+        def reset_handles() -> None:
+            defaults = self._default_preprocess_corner_quad(source)
+            for index in range(4):
+                points[index] = [
+                    float(defaults[index * 2]),
+                    float(defaults[index * 2 + 1]),
+                ]
+            redraw_handles()
+
+        def apply_handles() -> None:
+            quad = tuple(coordinate for point in points for coordinate in point)
+            try:
+                perspective_from_quad(quad, source.size)
+            except Exception as exc:
+                messagebox.showerror(
+                    "手动四角无效", str(exc), parent=window,
+                )
+                return
+            save_manual_perspective_quad(project.root, page, quad)
+            self._preprocess_results.pop(page.name, None)
+            self._preprocess_photo = None
+            self._preprocess_photo_cache_key = None
+            window.destroy()
+            self.status_var.set(f"已保存 {page.name} 手动四角；正在重新分析。")
+            self.analyze_preprocess_current(silent=True)
+
+        ttk.Button(
+            controls, text="恢复整页四角", command=reset_handles,
+            style="PC.Compact.TButton",
+        ).pack(side="left")
+        ttk.Button(
+            controls, text="取消", command=window.destroy,
+            style="PC.Compact.TButton",
+        ).pack(side="right")
+        ttk.Button(
+            controls, text="应用四角", command=apply_handles,
+            style="PC.Primary.TButton",
+        ).pack(side="right", padx=(0, 6))
+
+        window.update_idletasks()
+        target_w = min(work_w, max(660, window.winfo_reqwidth()))
+        target_h = min(work_h, max(560, window.winfo_reqheight()))
+        x = work_x + max(0, (work_w - target_w) // 2)
+        y = work_y + max(0, (work_h - target_h) // 2)
+        window.geometry(f"{target_w}x{target_h}+{x}+{y}")
+        window.grab_set()
+        window.focus_force()
+
+    def reset_preprocess_corners(self) -> None:
+        if not self.project or self.current_page is None:
+            return
+        page = self.current_page
+        clear_manual_perspective_quad(self.project.root, page)
+        self._preprocess_results.pop(page.name, None)
+        self._preprocess_photo = None
+        self._preprocess_photo_cache_key = None
+        self.status_var.set(f"已重置 {page.name} 手动四角；恢复自动几何纠正。")
+        if self._preprocess_mode_active():
+            self.analyze_preprocess_current(silent=True)
+
     def _preprocess_result_for_page(self, index: int) -> PreprocessAnalysis | None:
         if not self.project or not (0 <= index < len(self.project.images)):
             return None
