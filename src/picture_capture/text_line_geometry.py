@@ -595,7 +595,7 @@ def analyze_text_line_geometry(
         and separator_span_ratio >= 0.72
         and separator_track_quality >= 0.12
         and separator_track_jump_p95_px <= separator_jump_limit
-        and separator_curvature_score >= 0.55
+        and separator_curvature_score >= 0.35
         and separator_residual >= separator_curve_threshold
     )
     if separator_curve_reliable:
