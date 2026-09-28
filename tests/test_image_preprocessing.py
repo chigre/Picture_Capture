@@ -908,6 +908,9 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
     assert payload["algorithm_constants"]["text_scale_inline_span_max"] == 0.045
     assert payload["algorithm_constants"]["text_scale_cross_span_max"] == 0.075
     assert payload["algorithm_constants"]["text_scale_anisotropy_p95_max"] == 0.04
+    assert payload["algorithm_constants"]["horizontal_strength_min"] == 0.15
+    assert payload["algorithm_constants"]["horizontal_strength_coarse_step"] == 0.10
+    assert payload["algorithm_constants"]["horizontal_strength_fine_step"] == 0.025
     assert payload["algorithm_constants"]["separator_curve_span_min"] == 0.72
     assert payload["algorithm_constants"]["separator_curvature_score_min"] == 0.35
 
@@ -918,6 +921,9 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
     assert "separator_residual_px" in text
     assert "separator_drift_px" in text
     assert "perspective_scale_delta_ratio" in text
+    assert "perspective_horizontal_strength" in text
+    assert "perspective_structural_safe" in text
+    assert "perspective_structural_applied" in text
     assert "perspective_jacobian_horizontal_scale_span_ratio" in text
     assert "perspective_jacobian_vertical_scale_span_ratio" in text
     assert "perspective_text_scale_inline_ratio_p05" in text
