@@ -3145,10 +3145,15 @@ def _cjk_visual_projection_runs(
         # a tightly cropped local OCR result that resolves to one Han headword.
         # A lower-distribution reference prevents consecutive display heads from
         # inflating the page median and hiding one another.
-        body_reference = (
+        raw_body_reference = (
             float(np.percentile(np.asarray(body_heights, dtype=float), 35))
             if body_heights else body_median
         )
+        # The left strip of a character dictionary may contain almost nothing
+        # except display heads. Cap the discovery reference at the configured
+        # ordinary line height so a page full of consecutive large glyphs does
+        # not redefine "normal" upward and hide the smaller display heads.
+        body_reference = min(raw_body_reference, expected_body)
         minimum_large = max(body_reference * 1.28, expected_body * 1.25)
         maximum_large = max(
             minimum_large + 1.0,
