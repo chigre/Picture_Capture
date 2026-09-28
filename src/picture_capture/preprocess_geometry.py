@@ -1282,33 +1282,37 @@ def _horizontal_vp_column_spread_deg(
     column_rows: list[list[tuple[float, float, float, float]]],
     common_vp: tuple[float, float],
 ) -> float:
-    """Diagnostic angular disagreement between per-column and common VPs."""
-    differences: list[float] = []
+    """Return P90 column disagreement with one common horizontal VP.
+
+    Fitting a separate VP for each column is numerically unstable when the true
+    VP is very far away. Instead, compare every observed row direction directly
+    with the direction from that row center to the common VP, summarize each
+    populated column robustly, then take P90 across columns.
+    """
     common_x, common_y = common_vp
+    column_residuals: list[float] = []
     for rows in column_rows:
-        if len(rows) < HORIZONTAL_VP_MIN_ROWS:
+        if len(rows) < 5:
             continue
-        angles = np.asarray([row[2] for row in rows], dtype=float)
-        if float(np.percentile(angles, 90) - np.percentile(angles, 10)) < 0.14:
-            continue
-        try:
-            own_x, own_y = _fit_horizontal_vanishing_point([rows])
-        except RuntimeError:
-            continue
-        center_x = float(np.median([row[0] for row in rows]))
-        center_y = float(np.median([row[1] for row in rows]))
-        common_angle = _normalize_text_angle(
-            math.degrees(math.atan2(common_y - center_y, common_x - center_x))
-        )
-        own_angle = _normalize_text_angle(
-            math.degrees(math.atan2(own_y - center_y, own_x - center_x))
-        )
-        differences.append(
-            abs(_normalize_text_angle(common_angle - own_angle))
-        )
+        residual_pairs: list[tuple[float, float]] = []
+        for x, y, angle_deg, weight in rows:
+            predicted = _normalize_text_angle(
+                math.degrees(
+                    math.atan2(common_y - float(y), common_x - float(x))
+                )
+            )
+            residual = abs(
+                _normalize_text_angle(float(angle_deg) - predicted)
+            )
+            residual_pairs.append((residual, max(1.0, float(weight))))
+        if residual_pairs:
+            column_residuals.append(
+                _weighted_median_pairs(residual_pairs)
+            )
     return (
-        float(np.percentile(differences, 90))
-        if len(differences) >= 2 else 0.0
+        float(np.percentile(column_residuals, 90))
+        if len(column_residuals) >= 2
+        else (column_residuals[0] if column_residuals else 0.0)
     )
 
 
