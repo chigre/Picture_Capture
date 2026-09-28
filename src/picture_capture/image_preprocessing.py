@@ -1661,6 +1661,15 @@ def analyze_preprocess_page(
             horizontal_driver_trend = max(
                 abs(float(horizontal_row_audit.before_trend_deg)),
                 before_column_trend,
+                abs(
+                    float(
+                        getattr(
+                            horizontal_row_audit,
+                            "before_worst_region_span_deg",
+                            0.0,
+                        )
+                    )
+                ),
             )
             vp_column_spread = float(
                 getattr(
