@@ -2746,6 +2746,9 @@ def analyze_preprocess_page(
     orthogonal_before_horizontal_rule_residual_px = 0.0
     orthogonal_after_horizontal_rule_residual_px = 0.0
     orthogonal_horizontal_rule_verdict = "insufficient"
+    orthogonal_pixel_angle_sample_count = 0
+    orthogonal_pixel_angle_used_count = 0
+    orthogonal_pixel_angle_confidence = 0.0
     orthogonal_confidence = 0.0
     orthogonal_column_spread_deg = 0.0
     orthogonal_max_row_angle_deg = 0.0
@@ -2797,6 +2800,15 @@ def analyze_preprocess_page(
             orthogonal_before_horizontal_rule_residual_px = float(
                 estimate.horizontal_rule_residual_span_px
             )
+            orthogonal_pixel_angle_sample_count = int(
+                estimate.pixel_angle_sample_count
+            )
+            orthogonal_pixel_angle_used_count = int(
+                estimate.pixel_angle_used_count
+            )
+            orthogonal_pixel_angle_confidence = float(
+                estimate.pixel_angle_confidence
+            )
             orthogonal_confidence = float(estimate.confidence)
             orthogonal_column_spread_deg = float(
                 estimate.column_spread_deg
@@ -2825,30 +2837,73 @@ def analyze_preprocess_page(
             ):
                 break
 
-            (
-                row_gain,
-                predicted_polygons,
-                predicted_verdict,
-                before_score,
-                predicted_score,
-            ) = _choose_orthogonal_candidate(
-                working_polygons,
-                estimate,
-                working.size,
-                settings,
+            pixel_driven = bool(
+                estimate.pixel_angle_used_count
+                >= max(4, estimate.valid_column_count * 3)
+                and estimate.pixel_angle_confidence >= 0.06
             )
+            if pixel_driven:
+                # Pixel projection estimates a physical correction angle, so
+                # unit gain has a direct meaning. OCR polygons remain a safety
+                # audit, not the optimizer for this branch.
+                row_gain = 1.0
+                predicted_polygons = transform_polygons_orthogonal(
+                    working_polygons,
+                    estimate,
+                    row_gain=row_gain,
+                    separator_gain=1.0,
+                )
+                predicted_scale = audit_text_scale_stability(
+                    working_polygons,
+                    predicted_polygons,
+                    working.size,
+                    writing_mode=settings.layout_writing_mode,
+                )
+                predicted_audit = audit_horizontal_alignment(
+                    working_polygons,
+                    predicted_polygons,
+                    size=working.size,
+                    settings=settings,
+                )
+                baseline_predicted_audit = audit_horizontal_alignment(
+                    working_polygons,
+                    working_polygons,
+                    size=working.size,
+                    settings=settings,
+                )
+                _before_predicted_verdict, before_score = (
+                    _absolute_horizontal_quality(baseline_predicted_audit)
+                )
+                predicted_verdict, predicted_score = (
+                    _absolute_horizontal_quality(predicted_audit)
+                )
+                predicted_improved = predicted_scale.verdict != "worse"
+                method_parts.append("pixel_angle_field")
+            else:
+                (
+                    row_gain,
+                    predicted_polygons,
+                    predicted_verdict,
+                    before_score,
+                    predicted_score,
+                ) = _choose_orthogonal_candidate(
+                    working_polygons,
+                    estimate,
+                    working.size,
+                    settings,
+                )
+                predicted_improved = bool(
+                    predicted_verdict == "passed"
+                    or (
+                        predicted_verdict != "insufficient"
+                        and before_score > 1e-6
+                        and predicted_score
+                        <= before_score
+                        * (1.0 - ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT)
+                    )
+                )
             orthogonal_before_quality_score = float(before_score)
 
-            predicted_improved = bool(
-                predicted_verdict == "passed"
-                or (
-                    predicted_verdict != "insufficient"
-                    and before_score > 1e-6
-                    and predicted_score
-                    <= before_score
-                    * (1.0 - ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT)
-                )
-            )
             if not predicted_improved or row_gain <= 0.0:
                 if pass_index == 0:
                     warnings.append(
