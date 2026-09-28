@@ -12,6 +12,13 @@ from .layout_detection import LayoutEstimate, infer_layout_from_boxes
 from .models import AppSettings
 
 
+TEXT_SCALE_INLINE_SPAN_MAX = 0.045
+TEXT_SCALE_CROSS_SPAN_MAX = 0.075
+TEXT_SCALE_INLINE_GRADIENT_MAX = 0.045
+TEXT_SCALE_CROSS_GRADIENT_MAX = 0.075
+TEXT_SCALE_ANISOTROPY_P95_MAX = 0.040
+
+
 @dataclass(frozen=True, slots=True)
 class HomographyDistortionAudit:
     """Local scale distortion introduced by one projective transform.
@@ -513,11 +520,11 @@ def audit_text_scale_stability(
     # Slightly looser than the analytic Jacobian budget because polygon edge
     # lengths also carry detector quantization/orientation noise.
     safe = bool(
-        inline_span <= 0.045
-        and cross_span <= 0.075
-        and inline_gradient <= 0.045
-        and cross_gradient <= 0.075
-        and anisotropy_p95 <= 0.040
+        inline_span <= TEXT_SCALE_INLINE_SPAN_MAX
+        and cross_span <= TEXT_SCALE_CROSS_SPAN_MAX
+        and inline_gradient <= TEXT_SCALE_INLINE_GRADIENT_MAX
+        and cross_gradient <= TEXT_SCALE_CROSS_GRADIENT_MAX
+        and anisotropy_p95 <= TEXT_SCALE_ANISOTROPY_P95_MAX
     )
     verdict = "stable" if safe else "worse"
     return TextScaleStabilityAudit(
