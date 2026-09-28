@@ -1210,9 +1210,24 @@ def analyze_preprocess_page(
     perspective_horizontal_vanishing_x = 0.0
     perspective_horizontal_vanishing_y = 0.0
     perspective_horizontal_row_count = 0
+    perspective_horizontal_column_count = 0
+    perspective_horizontal_vp_column_spread_deg = 0.0
     perspective_horizontal_strength = 0.0
     perspective_structural_applied = False
     perspective_structural_safe = False
+    perspective_row_valid_column_count = 0
+    perspective_row_column_row_counts: tuple[int, ...] = ()
+    perspective_row_after_worst_region_deg = 0.0
+    perspective_row_after_worst_column_metric_deg = 0.0
+    perspective_row_after_worst_column_index = -1
+    perspective_row_before_column_top_angles_deg: tuple[float, ...] = ()
+    perspective_row_after_column_top_angles_deg: tuple[float, ...] = ()
+    perspective_row_before_column_middle_angles_deg: tuple[float, ...] = ()
+    perspective_row_after_column_middle_angles_deg: tuple[float, ...] = ()
+    perspective_row_before_column_bottom_angles_deg: tuple[float, ...] = ()
+    perspective_row_after_column_bottom_angles_deg: tuple[float, ...] = ()
+    perspective_row_before_column_trends_deg: tuple[float, ...] = ()
+    perspective_row_after_column_trends_deg: tuple[float, ...] = ()
     perspective_row_before_top_angle_deg = 0.0
     perspective_row_after_top_angle_deg = 0.0
     perspective_row_before_bottom_angle_deg = 0.0
@@ -1458,6 +1473,8 @@ def analyze_preprocess_page(
             row_alignment = audit_horizontal_alignment(
                 row_source,
                 mapped_polygons,
+                size=working.size,
+                settings=settings,
             )
             jacobian_safe = bool(
                 jacobian.valid
@@ -1554,7 +1571,7 @@ def analyze_preprocess_page(
         horizontal_evidence_safe = False
         try:
             horizontal_full = estimate_horizontal_perspective_from_polygons(
-                base_polygons, working.size,
+                base_polygons, working.size, settings,
             )
             (
                 horizontal_partial,
@@ -1564,6 +1581,7 @@ def analyze_preprocess_page(
                 base_polygons,
                 working.size,
                 horizontal_full,
+                settings,
             )
             if base_candidate is not None:
                 horizontal_total_candidate = compose_perspective_estimates(
@@ -1581,13 +1599,34 @@ def analyze_preprocess_page(
             # Use the optimizer's row audit here because it measures exactly the
             # residual horizontal stage (base→partial VP), not source→combined.
             horizontal_total_entry["row"] = horizontal_row_audit
+            before_column_trend = max(
+                (
+                    abs(float(value))
+                    for value in horizontal_row_audit.before_column_trends_deg
+                ),
+                default=0.0,
+            )
+            horizontal_driver_trend = max(
+                abs(float(horizontal_row_audit.before_trend_deg)),
+                before_column_trend,
+            )
+            vp_column_spread = float(
+                getattr(
+                    horizontal_full,
+                    "horizontal_vp_column_spread_deg",
+                    0.0,
+                )
+            )
             horizontal_evidence_safe = bool(
                 int(getattr(horizontal_full, "horizontal_row_count", 0))
                 >= HORIZONTAL_VP_MIN_ROWS
                 and line_geometry.confidence >= 0.35
                 and not line_geometry.separator_curve_reliable
-                and abs(float(horizontal_row_audit.before_trend_deg))
-                >= HORIZONTAL_VP_MIN_TREND_DEG
+                and horizontal_driver_trend >= HORIZONTAL_VP_MIN_TREND_DEG
+                and (
+                    vp_column_spread <= HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG
+                    or vp_column_spread <= 0.0
+                )
                 and horizontal_row_audit.verdict == "improved"
             )
         except Exception:
