@@ -990,23 +990,25 @@ def unwrap_column_band(
     ) / 100.0
     left_margin = max(0, int(settings.paddle_band_left_margin))
     if source_width is not None:
+        # Explicit callers (notably separator refinement) request an exact
+        # source width and intentionally bypass the user-facing percentage.
         band_width = max(24, int(source_width))
     else:
-        configured_band_width = max(
-            24,
-            round(max(0, int(settings.paddle_band_width)) * band_ratio),
-        )
-        # Never let the OCR candidate strip spill into the next dictionary
-        # column. This mattered little on wide two-column Latin pages but is
-        # destructive on dense three-column CJK pages: OCR would merge a large
-        # one-character head from this column with a bracketed entry in the
-        # next column and neither parser could recover the boundary.
+        # paddle_band_width_ratio is a percentage of the actual detected
+        # column width, not of the historical fixed paddle_band_width.
+        # Keep the left safety margin separate from that percentage: 100%
+        # means the complete column content plus the configured pixels to its left.
+        #
+        # The old 600px reference made 60% become 360px on every scan, which
+        # silently clipped long CJK headwords and changed meaning with DPI.
+        fallback_width = max(24, int(getattr(settings, "column_width", 0) or 0))
         column_width = (
             int(geometry.column_widths[column])
             if 0 <= column < len(geometry.column_widths)
-            else configured_band_width
+            else fallback_width
         )
-        band_width = max(24, min(configured_band_width, max(24, column_width + left_margin)))
+        content_width = max(1, round(max(1, column_width) * band_ratio))
+        band_width = max(24, min(column_width, content_width) + left_margin)
     top = max(0, geometry.top)
     canonical_size = geometry.transform.canonical_size(image.size)
     bottom = min(canonical_size[1], geometry.bottom)
