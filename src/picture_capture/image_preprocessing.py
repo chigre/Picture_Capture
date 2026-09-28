@@ -1442,6 +1442,14 @@ def _choose_orthogonal_candidate(
             row_gain=float(gain),
             separator_gain=1.0,
         )
+        scale_audit = audit_text_scale_stability(
+            source_polygons,
+            mapped,
+            size,
+            writing_mode=settings.layout_writing_mode,
+        )
+        if scale_audit.verdict == "worse":
+            continue
         audit = audit_horizontal_alignment(
             source_polygons,
             mapped,
