@@ -63,6 +63,7 @@ from .text_line_geometry import (
     SEPARATOR_TRACK_QUALITY_MIN,
     TextLineGeometryAnalysis,
     analyze_text_line_geometry,
+    separator_track_points,
 )
 from .project_storage import image_preprocess_data_root, image_preprocess_output_root
 
@@ -82,6 +83,8 @@ AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX = 0.035
 ORTHOGONAL_AUTO_MIN_CONFIDENCE = 0.45
 ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT = 0.25
 ORTHOGONAL_AUTO_GAINS = (0.55, 0.70, 0.85, 1.0, 1.10)
+ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX = 3.5
+ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO = 0.0015
 PREVIEW_YELLOW = (255, 225, 110, 94)
 PREVIEW_OUTLINE = (218, 164, 24, 255)
 
@@ -228,6 +231,9 @@ class PreprocessAnalysis:
     orthogonal_max_scale_deviation: float = 0.0
     orthogonal_before_quality_score: float = 0.0
     orthogonal_after_quality_score: float = 0.0
+    orthogonal_before_separator_span_px: float = 0.0
+    orthogonal_after_separator_span_px: float = 0.0
+    orthogonal_vertical_verdict: str = "insufficient"
     orthogonal_alignment_verdict: str = "insufficient"
     final_alignment_row_count: int = 0
     final_alignment_valid_column_count: int = 0
@@ -717,6 +723,18 @@ class PreprocessAnalysis:
             ),
             orthogonal_after_quality_score=max(
                 0.0, float(payload.get("orthogonal_after_quality_score", 0.0))
+            ),
+            orthogonal_before_separator_span_px=max(
+                0.0,
+                float(payload.get("orthogonal_before_separator_span_px", 0.0)),
+            ),
+            orthogonal_after_separator_span_px=max(
+                0.0,
+                float(payload.get("orthogonal_after_separator_span_px", 0.0)),
+            ),
+            orthogonal_vertical_verdict=str(
+                payload.get("orthogonal_vertical_verdict", "insufficient")
+                or "insufficient"
             ),
             orthogonal_alignment_verdict=str(
                 payload.get("orthogonal_alignment_verdict", "insufficient")
@@ -1298,6 +1316,22 @@ def _absolute_horizontal_quality(audit) -> tuple[str, float]:
         <= HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG
     )
     return ("passed" if passed else "failed"), float(score)
+
+
+def _separator_vertical_span(
+    points: Iterable[tuple[float, float]],
+) -> tuple[int, float]:
+    """Return robust X spread of a physical vertical separator track."""
+    values = np.asarray(
+        [float(x) for _y, x in points],
+        dtype=float,
+    )
+    if values.size < 7:
+        return int(values.size), 0.0
+    return (
+        int(values.size),
+        float(np.percentile(values, 90) - np.percentile(values, 10)),
+    )
 
 
 def _choose_orthogonal_candidate(
@@ -2512,6 +2546,9 @@ def analyze_preprocess_page(
     orthogonal_max_scale_deviation = 0.0
     orthogonal_before_quality_score = 0.0
     orthogonal_after_quality_score = 0.0
+    orthogonal_before_separator_span_px = 0.0
+    orthogonal_after_separator_span_px = 0.0
+    orthogonal_vertical_verdict = "insufficient"
     orthogonal_alignment_verdict = "insufficient"
 
     if (
@@ -2639,7 +2676,7 @@ def analyze_preprocess_page(
             actual_verdict, actual_score = _absolute_horizontal_quality(
                 candidate_audit
             )
-            actual_improved = bool(
+            horizontal_improved = bool(
                 actual_verdict == "passed"
                 or (
                     actual_verdict != "insufficient"
@@ -2650,11 +2687,67 @@ def analyze_preprocess_page(
                     * (1.0 - ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT)
                 )
             )
+
+            vertical_required = bool(estimate.separator_point_count >= 7)
+            vertical_safe = True
+            if vertical_required:
+                before_separator = separator_track_points(
+                    working,
+                    working_polygons,
+                    settings,
+                )
+                after_separator = separator_track_points(
+                    candidate_image,
+                    candidate_polygons,
+                    settings,
+                )
+                (
+                    before_separator_count,
+                    before_separator_span,
+                ) = _separator_vertical_span(before_separator)
+                (
+                    after_separator_count,
+                    after_separator_span,
+                ) = _separator_vertical_span(after_separator)
+                orthogonal_before_separator_span_px = float(
+                    before_separator_span
+                )
+                orthogonal_after_separator_span_px = float(
+                    after_separator_span
+                )
+                vertical_limit = max(
+                    ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX,
+                    working.width
+                    * ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO,
+                )
+                vertical_safe = bool(
+                    before_separator_count >= 7
+                    and after_separator_count >= 7
+                    and after_separator_span <= vertical_limit
+                )
+                orthogonal_vertical_verdict = (
+                    "passed" if vertical_safe else "failed"
+                )
+            else:
+                orthogonal_vertical_verdict = "not_required"
+
+            actual_improved = bool(horizontal_improved and vertical_safe)
             if not actual_improved:
+                reason = (
+                    "水平验收未通过"
+                    if not horizontal_improved
+                    else "实体竖线验收未通过"
+                )
                 warnings.append(
-                    "正交网格候选未通过重新检测后的闭环水平验收，"
-                    f"质量分 {baseline_score:.2f}→{actual_score:.2f}，"
-                    "已回退。"
+                    f"正交网格候选{reason}，"
+                    f"水平质量分 {baseline_score:.2f}→{actual_score:.2f}"
+                    + (
+                        "，竖线X跨度 "
+                        f"{orthogonal_before_separator_span_px:.1f}px→"
+                        f"{orthogonal_after_separator_span_px:.1f}px"
+                        if vertical_required else ""
+                    )
+                    + "，已回退。"
                 )
                 break
 
@@ -3106,6 +3199,13 @@ def analyze_preprocess_page(
         orthogonal_after_quality_score=round(
             float(orthogonal_after_quality_score), 4
         ),
+        orthogonal_before_separator_span_px=round(
+            float(orthogonal_before_separator_span_px), 3
+        ),
+        orthogonal_after_separator_span_px=round(
+            float(orthogonal_after_separator_span_px), 3
+        ),
+        orthogonal_vertical_verdict=str(orthogonal_vertical_verdict),
         orthogonal_alignment_verdict=str(
             orthogonal_alignment_verdict
         ),
@@ -3636,6 +3736,12 @@ def export_diagnostic_json(
         "orthogonal_warp_max_scale_deviation": (
             ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
         ),
+        "orthogonal_vertical_max_span_min_px": (
+            ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX
+        ),
+        "orthogonal_vertical_max_span_width_ratio": (
+            ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO
+        ),
         "horizontal_alignment_max_edge_pair_delta_deg": (
             HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG
         ),
@@ -3991,6 +4097,15 @@ def export_summary_csv(
             ),
             "orthogonal_after_quality_score": (
                 analysis.orthogonal_after_quality_score
+            ),
+            "orthogonal_before_separator_span_px": (
+                analysis.orthogonal_before_separator_span_px
+            ),
+            "orthogonal_after_separator_span_px": (
+                analysis.orthogonal_after_separator_span_px
+            ),
+            "orthogonal_vertical_verdict": (
+                analysis.orthogonal_vertical_verdict
             ),
             "orthogonal_alignment_verdict": (
                 analysis.orthogonal_alignment_verdict
@@ -4404,6 +4519,13 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
             f" 横移≤{analysis.orthogonal_max_horizontal_shift_px:.1f}px"
             f" 质量 {analysis.orthogonal_before_quality_score:.2f}"
             f"→{analysis.orthogonal_after_quality_score:.2f}"
+            + (
+                f" 竖线{analysis.orthogonal_vertical_verdict}"
+                f" {analysis.orthogonal_before_separator_span_px:.1f}"
+                f"→{analysis.orthogonal_after_separator_span_px:.1f}px"
+                if analysis.orthogonal_vertical_verdict != "insufficient"
+                else ""
+            )
         )
     final_alignment_part = ""
     if analysis.final_alignment_verdict != "insufficient":
