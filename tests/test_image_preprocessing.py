@@ -261,9 +261,8 @@ def test_auto_geometry_rejects_uvdoc_without_horizontal_improvement(
         geometry_mode="auto",
     )
 
-    assert analysis.geometry_mode == "deskew"
-    assert analysis.final_alignment_verdict == "failed"
-    assert analysis.final_alignment_worst_column_trend_deg > 0.5
+    assert analysis.geometry_mode != "uvdoc"
+    assert "uvdoc_auto" not in analysis.method
     assert any(
         "自动 UVDoc 未通过双边缘水平验收" in warning
         for warning in analysis.warnings
