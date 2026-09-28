@@ -20,6 +20,11 @@ from .layout_detection import (
 )
 from .models import AppSettings
 from .preprocess_geometry import (
+    TEXT_SCALE_ANISOTROPY_P95_MAX,
+    TEXT_SCALE_CROSS_GRADIENT_MAX,
+    TEXT_SCALE_CROSS_SPAN_MAX,
+    TEXT_SCALE_INLINE_GRADIENT_MAX,
+    TEXT_SCALE_INLINE_SPAN_MAX,
     apply_homography_image,
     audit_homography_distortion,
     audit_text_scale_stability,
@@ -35,7 +40,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 10
+PREPROCESS_FORMAT_VERSION = 11
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -119,6 +124,17 @@ class PreprocessAnalysis:
     perspective_jacobian_anisotropy_p95_ratio: float = 0.0
     perspective_jacobian_min_determinant: float = 1.0
     perspective_text_scale_samples: int = 0
+    perspective_text_scale_inline_ratio_p05: float = 1.0
+    perspective_text_scale_inline_ratio_median: float = 1.0
+    perspective_text_scale_inline_ratio_p95: float = 1.0
+    perspective_text_scale_cross_ratio_p05: float = 1.0
+    perspective_text_scale_cross_ratio_median: float = 1.0
+    perspective_text_scale_cross_ratio_p95: float = 1.0
+    perspective_text_scale_inline_ratio_span_ratio: float = 0.0
+    perspective_text_scale_cross_ratio_span_ratio: float = 0.0
+    perspective_text_scale_inline_ratio_gradient_ratio: float = 0.0
+    perspective_text_scale_cross_ratio_gradient_ratio: float = 0.0
+    perspective_text_scale_anisotropy_p95_ratio: float = 0.0
     perspective_text_scale_before_inline_gradient_ratio: float = 0.0
     perspective_text_scale_after_inline_gradient_ratio: float = 0.0
     perspective_text_scale_before_cross_gradient_ratio: float = 0.0
@@ -141,6 +157,10 @@ class PreprocessAnalysis:
     line_geometry_separator_span_ratio: float = 0.0
     line_geometry_separator_slope_px_per_1000y: float = 0.0
     line_geometry_separator_drift_px: float = 0.0
+    line_geometry_separator_track_quality: float = 0.0
+    line_geometry_separator_track_jump_p95_px: float = 0.0
+    line_geometry_separator_curvature_score: float = 0.0
+    line_geometry_separator_curve_reliable: bool = False
     line_geometry_recommendation: str = "insufficient"
     line_geometry_confidence: float = 0.0
     source_size_bytes: int = 0
