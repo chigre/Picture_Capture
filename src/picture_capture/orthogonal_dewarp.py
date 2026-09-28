@@ -40,7 +40,7 @@ PIXEL_ROW_PROFILE_MIN_CORRELATION = 0.72
 PIXEL_ROW_PROFILE_P90_MAX_PX = 1.5
 PIXEL_ROW_PROFILE_WORST_MAX_PX = 2.5
 PIXEL_ROW_BOTTOM_TAIL_ANCHOR_PERCENTILES = (94.0, 97.0, 99.0)
-PIXEL_ROW_BOTTOM_TAIL_HALF_WINDOW_PX = 72
+PIXEL_ROW_BOTTOM_TAIL_HALF_WINDOW_PX = 52
 PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX = 1.5
 PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX = 2.5
 
@@ -645,7 +645,7 @@ def audit_pixel_row_profiles(
             half_window = PIXEL_ROW_BOTTOM_TAIL_HALF_WINDOW_PX
             start = max(0, int(round(anchor)) - half_window)
             end = min(source.height, int(round(anchor)) + half_window)
-            if end - start < 90:
+            if end - start < 70:
                 continue
             reference = profiles[1][start:end]
             reference_std = float(reference.std())
