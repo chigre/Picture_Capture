@@ -16378,7 +16378,11 @@ class PictureCaptureApp(tk.Tk):
         self, delta: int, *, preloaded: dict | None = None,
         current_already_saved: bool = False, async_allowed: bool = True,
     ) -> bool:
-        if getattr(self, "_batch_active", False) and not self._batch_foreground_pages:
+        if (
+            getattr(self, "_batch_active", False)
+            and not self._batch_foreground_pages
+            and not getattr(self, "_batch_allow_page_navigation", False)
+        ):
             self.status_var.set("当前批量任务运行中，暂不允许切换页面；可先暂停/停止。")
             return False
         if not self.project:
