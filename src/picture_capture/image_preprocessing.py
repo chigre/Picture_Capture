@@ -907,8 +907,16 @@ def analyze_preprocess_page(
                 and line_geometry.confidence >= 0.35
             )
 
-            perspective_source_quad = tuple(perspective.source_quad)
-            perspective_target_quad = tuple(perspective.target_quad)
+            source_quad_value = getattr(perspective, "source_quad", None)
+            target_quad_value = getattr(perspective, "target_quad", None)
+            perspective_source_quad = (
+                tuple(float(v) for v in source_quad_value)
+                if source_quad_value is not None else None
+            )
+            perspective_target_quad = (
+                tuple(float(v) for v in target_quad_value)
+                if target_quad_value is not None else None
+            )
             perspective_candidate_strength_px = float(perspective.strength_px)
             perspective_classification = str(
                 getattr(perspective, "classification", "unknown")
