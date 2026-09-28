@@ -204,6 +204,13 @@ class PreprocessAnalysis:
     line_geometry_trend_deg: float = 0.0
     line_geometry_residual_mad_deg: float = 0.0
     line_geometry_residual_span_deg: float = 0.0
+    line_geometry_columns: int = 0
+    line_geometry_valid_columns: int = 0
+    line_geometry_column_row_counts: tuple[int, ...] = ()
+    line_geometry_column_trends_deg: tuple[float, ...] = ()
+    line_geometry_worst_column_index: int = -1
+    line_geometry_worst_column_trend_deg: float = 0.0
+    line_geometry_worst_region_angle_deg: float = 0.0
     line_geometry_separator_found: bool = False
     line_geometry_separator_residual_px: float = 0.0
     line_geometry_separator_span_ratio: float = 0.0
