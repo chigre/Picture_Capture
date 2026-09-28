@@ -1020,6 +1020,17 @@ def analyze_preprocess_page(
     perspective_jacobian_anisotropy_p95_ratio = 0.0
     perspective_jacobian_min_determinant = 1.0
     perspective_text_scale_samples = 0
+    perspective_text_scale_inline_ratio_p05 = 1.0
+    perspective_text_scale_inline_ratio_median = 1.0
+    perspective_text_scale_inline_ratio_p95 = 1.0
+    perspective_text_scale_cross_ratio_p05 = 1.0
+    perspective_text_scale_cross_ratio_median = 1.0
+    perspective_text_scale_cross_ratio_p95 = 1.0
+    perspective_text_scale_inline_ratio_span_ratio = 0.0
+    perspective_text_scale_cross_ratio_span_ratio = 0.0
+    perspective_text_scale_inline_ratio_gradient_ratio = 0.0
+    perspective_text_scale_cross_ratio_gradient_ratio = 0.0
+    perspective_text_scale_anisotropy_p95_ratio = 0.0
     perspective_text_scale_before_inline_gradient_ratio = 0.0
     perspective_text_scale_after_inline_gradient_ratio = 0.0
     perspective_text_scale_before_cross_gradient_ratio = 0.0
@@ -1092,6 +1103,39 @@ def analyze_preprocess_page(
                     jacobian_audit.min_determinant
                 )
                 perspective_text_scale_samples = text_scale_audit.sample_count
+                perspective_text_scale_inline_ratio_p05 = (
+                    text_scale_audit.inline_ratio_p05
+                )
+                perspective_text_scale_inline_ratio_median = (
+                    text_scale_audit.inline_ratio_median
+                )
+                perspective_text_scale_inline_ratio_p95 = (
+                    text_scale_audit.inline_ratio_p95
+                )
+                perspective_text_scale_cross_ratio_p05 = (
+                    text_scale_audit.cross_ratio_p05
+                )
+                perspective_text_scale_cross_ratio_median = (
+                    text_scale_audit.cross_ratio_median
+                )
+                perspective_text_scale_cross_ratio_p95 = (
+                    text_scale_audit.cross_ratio_p95
+                )
+                perspective_text_scale_inline_ratio_span_ratio = (
+                    text_scale_audit.inline_ratio_span_ratio
+                )
+                perspective_text_scale_cross_ratio_span_ratio = (
+                    text_scale_audit.cross_ratio_span_ratio
+                )
+                perspective_text_scale_inline_ratio_gradient_ratio = (
+                    text_scale_audit.inline_ratio_gradient_ratio
+                )
+                perspective_text_scale_cross_ratio_gradient_ratio = (
+                    text_scale_audit.cross_ratio_gradient_ratio
+                )
+                perspective_text_scale_anisotropy_p95_ratio = (
+                    text_scale_audit.anisotropy_p95_ratio
+                )
                 perspective_text_scale_before_inline_gradient_ratio = (
                     text_scale_audit.before_inline_gradient_ratio
                 )
@@ -1223,6 +1267,31 @@ def analyze_preprocess_page(
             )
             perspective_jacobian_min_determinant = jacobian_audit.min_determinant
             perspective_text_scale_samples = text_scale_audit.sample_count
+            perspective_text_scale_inline_ratio_p05 = text_scale_audit.inline_ratio_p05
+            perspective_text_scale_inline_ratio_median = (
+                text_scale_audit.inline_ratio_median
+            )
+            perspective_text_scale_inline_ratio_p95 = text_scale_audit.inline_ratio_p95
+            perspective_text_scale_cross_ratio_p05 = text_scale_audit.cross_ratio_p05
+            perspective_text_scale_cross_ratio_median = (
+                text_scale_audit.cross_ratio_median
+            )
+            perspective_text_scale_cross_ratio_p95 = text_scale_audit.cross_ratio_p95
+            perspective_text_scale_inline_ratio_span_ratio = (
+                text_scale_audit.inline_ratio_span_ratio
+            )
+            perspective_text_scale_cross_ratio_span_ratio = (
+                text_scale_audit.cross_ratio_span_ratio
+            )
+            perspective_text_scale_inline_ratio_gradient_ratio = (
+                text_scale_audit.inline_ratio_gradient_ratio
+            )
+            perspective_text_scale_cross_ratio_gradient_ratio = (
+                text_scale_audit.cross_ratio_gradient_ratio
+            )
+            perspective_text_scale_anisotropy_p95_ratio = (
+                text_scale_audit.anisotropy_p95_ratio
+            )
             perspective_text_scale_before_inline_gradient_ratio = (
                 text_scale_audit.before_inline_gradient_ratio
             )
