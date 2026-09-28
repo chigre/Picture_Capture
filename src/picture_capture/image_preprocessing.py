@@ -1748,12 +1748,48 @@ def analyze_preprocess_page(
                         "栏结构主要呈同向平行漂移，不作为 keystone 自动执行"
                     )
                 elif not line_supports_perspective:
-                    review_reasons.append("栏结构透视缺少一致的文本行/结构证据")
-                if (
-                    structural_entry is not None
-                    and not structural_entry["distortion_safe"]
-                ):
-                    review_reasons.append("栏结构候选超过字符尺度形变安全预算")
+                    review_reasons.append("文本行几何证据不足或与栏结构透视不一致")
+                if structural_entry is not None:
+                    structural_j = structural_entry["jacobian"]
+                    structural_t = structural_entry["text_scale"]
+                    if (
+                        structural_j.horizontal_scale_span_ratio
+                        > AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX
+                    ):
+                        review_reasons.append(
+                            "栏结构候选横向局部尺度漂移 "
+                            f"{structural_j.horizontal_scale_span_ratio * 100:.2f}% 超限"
+                        )
+                    if (
+                        structural_j.vertical_scale_span_ratio
+                        > AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX
+                    ):
+                        review_reasons.append(
+                            "栏结构候选纵向局部尺度漂移 "
+                            f"{structural_j.vertical_scale_span_ratio * 100:.2f}% 超限"
+                        )
+                    if (
+                        structural_j.area_scale_span_ratio
+                        > AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX
+                    ):
+                        review_reasons.append(
+                            "栏结构候选局部面积尺度漂移 "
+                            f"{structural_j.area_scale_span_ratio * 100:.2f}% 超限"
+                        )
+                    if (
+                        structural_j.anisotropy_p95_ratio
+                        > AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
+                    ):
+                        review_reasons.append(
+                            "栏结构候选局部横纵不等比例拉伸 "
+                            f"{structural_j.anisotropy_p95_ratio * 100:.2f}% 超限"
+                        )
+                    if structural_t.verdict == "worse":
+                        review_reasons.append(
+                            "栏结构候选配对文本框尺度场超限："
+                            f"行向 {structural_t.inline_ratio_span_ratio * 100:.2f}% / "
+                            f"跨行 {structural_t.cross_ratio_span_ratio * 100:.2f}%"
+                        )
             if horizontal_full is not None and not horizontal_auto_safe:
                 if horizontal_row_audit is not None:
                     review_reasons.append(
