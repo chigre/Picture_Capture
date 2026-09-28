@@ -154,31 +154,51 @@ def test_deskewed_layout_keeps_fixed_margin_after_correction(monkeypatch) -> Non
     assert crop_y1 - raw_y1 == 20
 
 
-def test_auto_geometry_uses_line_geometry_only_for_review(monkeypatch) -> None:
-    image = Image.new("RGB", (1000, 1400), "white")
+def _two_column_angle_field(angle_at) -> list[np.ndarray]:
     polygons = [_tilted_box(350, 80, 120, 24, 0.0)]
     for row in range(20):
         y = 180 + row * 48
+        t = row / 19.0
+        angle = float(angle_at(t))
         polygons.extend(
             (
-                _tilted_box(100, y, 300, 24, 0.0),
-                _tilted_box(460, y, 300, 24, 0.0),
+                _tilted_box(100, y, 300, 24, angle),
+                _tilted_box(460, y, 300, 24, angle),
             )
         )
+    return polygons
 
+
+def test_auto_geometry_applies_uvdoc_when_nonlinear_evidence_flattens(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    warped = _two_column_angle_field(lambda t: 0.50 - 1.00 * t)
+    flattened = _two_column_angle_field(lambda _t: 0.0)
+    detect_calls = 0
+
+    def fake_detect(_image, _settings):
+        nonlocal detect_calls
+        detect_calls += 1
+        return warped if detect_calls == 1 else flattened
+
+    monkeypatch.setattr(image_preprocessing, "detect_text_polygons", fake_detect)
     monkeypatch.setattr(
         image_preprocessing,
-        "detect_text_polygons",
-        lambda _image, _settings: polygons,
+        "unwarp_document_image",
+        lambda source: source.copy(),
     )
     monkeypatch.setattr(
         image_preprocessing,
         "analyze_text_line_geometry",
         lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
-            row_count=20,
+            row_count=40,
             separator_found=True,
             separator_residual_px=9.0,
             separator_span_ratio=0.9,
+            separator_track_quality=0.95,
+            separator_curvature_score=0.8,
+            separator_curve_reliable=True,
             recommendation="uvdoc_review",
             confidence=0.9,
         ),
@@ -186,16 +206,68 @@ def test_auto_geometry_uses_line_geometry_only_for_review(monkeypatch) -> None:
 
     analysis = analyze_preprocess_page(
         image,
-        AppSettings(),
+        AppSettings(layout_columns_policy="fixed", columns=2),
         safety_margin_px=20,
         auto_deskew=True,
         geometry_mode="auto",
     )
 
-    assert analysis.geometry_mode != "uvdoc"
+    assert analysis.geometry_mode == "uvdoc"
+    assert "uvdoc_auto" in analysis.method
     assert analysis.line_geometry_recommendation == "uvdoc_review"
-    assert analysis.line_geometry_separator_residual_px == 9.0
-    assert any("UVDoc" in warning for warning in analysis.warnings)
+    assert analysis.final_alignment_verdict == "passed"
+    assert analysis.final_alignment_edge_pair_count >= 30
+    assert analysis.final_alignment_top_edge_p90_abs_deg <= 0.18
+    assert analysis.final_alignment_bottom_edge_p90_abs_deg <= 0.18
+    assert analysis.final_alignment_edge_pair_delta_p90_deg <= 0.15
+    assert not any("建议使用“UVDoc" in warning for warning in analysis.warnings)
+
+
+def test_auto_geometry_rejects_uvdoc_without_horizontal_improvement(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    warped = _two_column_angle_field(lambda t: 0.50 - 1.00 * t)
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: warped,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "unwarp_document_image",
+        lambda source: source.copy(),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=40,
+            separator_found=True,
+            separator_residual_px=9.0,
+            separator_span_ratio=0.9,
+            separator_track_quality=0.95,
+            separator_curvature_score=0.8,
+            separator_curve_reliable=True,
+            recommendation="uvdoc_review",
+            confidence=0.9,
+        ),
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(layout_columns_policy="fixed", columns=2),
+        geometry_mode="auto",
+    )
+
+    assert analysis.geometry_mode == "deskew"
+    assert analysis.final_alignment_verdict == "failed"
+    assert analysis.final_alignment_worst_column_trend_deg > 0.5
+    assert any(
+        "自动 UVDoc 未通过双边缘水平验收" in warning
+        for warning in analysis.warnings
+    )
 
 
 def test_auto_perspective_requires_line_geometry_support(monkeypatch) -> None:
