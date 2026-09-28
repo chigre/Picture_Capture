@@ -10,7 +10,7 @@ from PIL import Image
 from .image_utils import normalize_page_rgb
 from .layout_detection import infer_layout_from_boxes
 from .models import AppSettings
-from .preprocess_geometry import polygon_boxes
+from .preprocess_geometry import horizontal_column_rows, polygon_boxes
 
 
 SEPARATOR_CURVE_SPAN_MIN = 0.72
@@ -44,6 +44,13 @@ class TextLineGeometryAnalysis:
     angle_trend_deg: float = 0.0
     residual_mad_deg: float = 0.0
     residual_span_deg: float = 0.0
+    column_count: int = 0
+    valid_column_count: int = 0
+    column_row_counts: tuple[int, ...] = ()
+    column_trends_deg: tuple[float, ...] = ()
+    worst_column_index: int = -1
+    worst_column_trend_deg: float = 0.0
+    worst_region_angle_deg: float = 0.0
     separator_found: bool = False
     separator_residual_px: float = 0.0
     separator_span_ratio: float = 0.0
@@ -555,10 +562,21 @@ def analyze_text_line_geometry(
         return TextLineGeometryAnalysis(recommendation="insufficient")
 
     polygon_list = [np.asarray(poly, dtype=float) for poly in polygons]
-    rows = _cluster_rows(polygon_list)
+    column_rows_xy = horizontal_column_rows(
+        polygon_list, image.size, settings,
+    )
+    column_rows = [
+        [(row[1], row[2], row[3]) for row in rows]
+        for rows in column_rows_xy
+    ]
+    valid_columns = [rows for rows in column_rows if len(rows) >= 5]
+    rows = [row for column in valid_columns for row in column]
     if len(rows) < 5:
         return TextLineGeometryAnalysis(
             row_count=len(rows),
+            column_count=len(column_rows),
+            valid_column_count=len(valid_columns),
+            column_row_counts=tuple(len(column) for column in column_rows),
             recommendation="insufficient",
             confidence=min(0.35, len(rows) / 12.0),
         )
@@ -572,6 +590,48 @@ def analyze_text_line_geometry(
         residual_mad,
         residual_span,
     ) = _robust_angle_trend(rows)
+
+    column_trends: list[float] = []
+    column_region_angles: list[float] = []
+    valid_column_indices: list[int] = []
+    for index, column in enumerate(column_rows):
+        if len(column) < 5:
+            continue
+        try:
+            (
+                _column_global,
+                column_top,
+                column_middle,
+                column_bottom,
+                column_trend,
+                _column_mad,
+                _column_span,
+            ) = _robust_angle_trend(column)
+        except RuntimeError:
+            continue
+        column_trends.append(float(column_trend))
+        column_region_angles.append(
+            max(
+                abs(float(column_top)),
+                abs(float(column_middle)),
+                abs(float(column_bottom)),
+            )
+        )
+        valid_column_indices.append(index)
+
+    if column_trends:
+        worst_position = int(np.argmax(np.abs(column_trends)))
+        worst_column_index = valid_column_indices[worst_position]
+        worst_column_trend = float(column_trends[worst_position])
+        worst_region_angle = max(column_region_angles)
+    else:
+        worst_column_index = -1
+        worst_column_trend = 0.0
+        worst_region_angle = max(
+            abs(float(top_angle)),
+            abs(float(middle_angle)),
+            abs(float(bottom_angle)),
+        )
     (
         separator_found,
         separator_residual,
@@ -613,7 +673,11 @@ def analyze_text_line_geometry(
     )
     if separator_curve_reliable:
         recommendation = "uvdoc_review"
-    elif abs(angle_trend) >= 0.18 and residual_mad <= 0.22 and len(rows) >= 8:
+    elif (
+        max(abs(angle_trend), abs(worst_column_trend)) >= 0.18
+        and residual_mad <= 0.22
+        and len(rows) >= 8
+    ):
         recommendation = "perspective"
     elif abs(global_angle) >= 0.12 and len(rows) >= 6:
         recommendation = "deskew"
@@ -633,6 +697,13 @@ def analyze_text_line_geometry(
         angle_trend_deg=round(float(angle_trend), 4),
         residual_mad_deg=round(float(residual_mad), 4),
         residual_span_deg=round(float(residual_span), 4),
+        column_count=len(column_rows),
+        valid_column_count=len(valid_columns),
+        column_row_counts=tuple(len(column) for column in column_rows),
+        column_trends_deg=tuple(round(float(v), 4) for v in column_trends),
+        worst_column_index=int(worst_column_index),
+        worst_column_trend_deg=round(float(worst_column_trend), 4),
+        worst_region_angle_deg=round(float(worst_region_angle), 4),
         separator_found=bool(separator_found),
         separator_residual_px=round(float(separator_residual), 3),
         separator_span_ratio=round(float(separator_span_ratio), 4),
