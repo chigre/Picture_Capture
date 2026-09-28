@@ -117,18 +117,69 @@ def _local_column_angle(
     y: float,
     radius: float,
 ) -> float | None:
-    samples: list[tuple[float, float]] = []
+    """Estimate the row angle *at* y with a robust local linear fit.
+
+    A local median is biased toward the page centre when the row direction
+    changes steadily from top to bottom: the endpoint windows are asymmetric
+    and therefore under-correct the very rows that need the largest adjustment.
+    Fitting angle against centred Y preserves an exact linear trend while still
+    following smooth nonlinear changes locally.
+    """
+    samples: list[tuple[float, float, float]] = []
     for _x, row_y, angle, weight in rows:
         distance = abs(float(row_y) - float(y))
         if distance > radius:
             continue
         locality = max(0.05, 1.0 - distance / max(1e-6, radius))
         samples.append(
-            (float(angle), math.sqrt(max(1.0, float(weight))) * locality)
+            (
+                float(row_y) - float(y),
+                float(angle),
+                math.sqrt(max(1.0, float(weight))) * locality,
+            )
         )
     if len(samples) < 2:
         return None
-    return _weighted_median(samples)
+    if len(samples) == 2:
+        dy0, angle0, _weight0 = samples[0]
+        dy1, angle1, _weight1 = samples[1]
+        denominator = dy1 - dy0
+        if abs(denominator) < 1e-9:
+            return float((angle0 + angle1) / 2.0)
+        slope = (angle1 - angle0) / denominator
+        return float(angle0 - slope * dy0)
+
+    dy = np.asarray([item[0] for item in samples], dtype=float)
+    angles = np.asarray([item[1] for item in samples], dtype=float)
+    weights = np.asarray([item[2] for item in samples], dtype=float)
+    keep = np.ones(len(samples), dtype=bool)
+    intercept = float(np.median(angles))
+    for _ in range(3):
+        if int(keep.sum()) < 3:
+            break
+        slope, intercept = np.polyfit(
+            dy[keep],
+            angles[keep],
+            1,
+            w=weights[keep],
+        )
+        residual = angles - (slope * dy + intercept)
+        centre = float(np.median(residual[keep]))
+        mad = float(np.median(np.abs(residual[keep] - centre)))
+        threshold = max(0.08, mad * 3.5)
+        new_keep = np.abs(residual - centre) <= threshold
+        if int(new_keep.sum()) == int(keep.sum()):
+            keep = new_keep
+            break
+        keep = new_keep
+    if int(keep.sum()) >= 3:
+        _slope, intercept = np.polyfit(
+            dy[keep],
+            angles[keep],
+            1,
+            w=weights[keep],
+        )
+    return float(intercept)
 
 
 def estimate_orthogonal_warp(
