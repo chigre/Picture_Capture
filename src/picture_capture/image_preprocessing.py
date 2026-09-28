@@ -33,7 +33,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 8
+PREPROCESS_FORMAT_VERSION = 9
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -85,6 +85,18 @@ class PreprocessAnalysis:
     geometry_mode: str = "deskew"
     geometry_strength_px: float = 0.0
     perspective_matrix: tuple[float, ...] | None = None
+    perspective_source_quad: tuple[float, ...] | None = None
+    perspective_target_quad: tuple[float, ...] | None = None
+    perspective_classification: str = "none"
+    perspective_left_drift_px: float = 0.0
+    perspective_right_drift_px: float = 0.0
+    perspective_common_drift_px: float = 0.0
+    perspective_width_delta_px: float = 0.0
+    perspective_width_change_ratio: float = 0.0
+    perspective_scale_top: float = 1.0
+    perspective_scale_bottom: float = 1.0
+    perspective_scale_delta_ratio: float = 0.0
+    perspective_auto_safe: bool = False
     manual_perspective_quad: tuple[float, ...] | None = None
     line_geometry_rows: int = 0
     line_geometry_global_angle_deg: float = 0.0
@@ -97,6 +109,8 @@ class PreprocessAnalysis:
     line_geometry_separator_found: bool = False
     line_geometry_separator_residual_px: float = 0.0
     line_geometry_separator_span_ratio: float = 0.0
+    line_geometry_separator_slope_px_per_1000y: float = 0.0
+    line_geometry_separator_drift_px: float = 0.0
     line_geometry_recommendation: str = "insufficient"
     line_geometry_confidence: float = 0.0
     source_size_bytes: int = 0
@@ -113,6 +127,14 @@ class PreprocessAnalysis:
         payload["perspective_matrix"] = (
             list(self.perspective_matrix)
             if self.perspective_matrix is not None else None
+        )
+        payload["perspective_source_quad"] = (
+            list(self.perspective_source_quad)
+            if self.perspective_source_quad is not None else None
+        )
+        payload["perspective_target_quad"] = (
+            list(self.perspective_target_quad)
+            if self.perspective_target_quad is not None else None
         )
         payload["manual_perspective_quad"] = (
             list(self.manual_perspective_quad)
@@ -168,6 +190,48 @@ class PreprocessAnalysis:
                 and len(payload.get("perspective_matrix", ())) == 9
                 else None
             ),
+            perspective_source_quad=(
+                tuple(float(v) for v in payload.get("perspective_source_quad", ()))
+                if isinstance(payload.get("perspective_source_quad"), (list, tuple))
+                and len(payload.get("perspective_source_quad", ())) == 8
+                else None
+            ),
+            perspective_target_quad=(
+                tuple(float(v) for v in payload.get("perspective_target_quad", ()))
+                if isinstance(payload.get("perspective_target_quad"), (list, tuple))
+                and len(payload.get("perspective_target_quad", ())) == 8
+                else None
+            ),
+            perspective_classification=str(
+                payload.get("perspective_classification", "none") or "none"
+            ),
+            perspective_left_drift_px=float(
+                payload.get("perspective_left_drift_px", 0.0)
+            ),
+            perspective_right_drift_px=float(
+                payload.get("perspective_right_drift_px", 0.0)
+            ),
+            perspective_common_drift_px=float(
+                payload.get("perspective_common_drift_px", 0.0)
+            ),
+            perspective_width_delta_px=float(
+                payload.get("perspective_width_delta_px", 0.0)
+            ),
+            perspective_width_change_ratio=max(
+                0.0, float(payload.get("perspective_width_change_ratio", 0.0))
+            ),
+            perspective_scale_top=max(
+                0.0, float(payload.get("perspective_scale_top", 1.0))
+            ),
+            perspective_scale_bottom=max(
+                0.0, float(payload.get("perspective_scale_bottom", 1.0))
+            ),
+            perspective_scale_delta_ratio=max(
+                0.0, float(payload.get("perspective_scale_delta_ratio", 0.0))
+            ),
+            perspective_auto_safe=bool(
+                payload.get("perspective_auto_safe", False)
+            ),
             manual_perspective_quad=(
                 tuple(float(v) for v in payload.get("manual_perspective_quad", ()))
                 if isinstance(payload.get("manual_perspective_quad"), (list, tuple))
@@ -210,6 +274,12 @@ class PreprocessAnalysis:
                     1.0,
                     float(payload.get("line_geometry_separator_span_ratio", 0.0)),
                 ),
+            ),
+            line_geometry_separator_slope_px_per_1000y=float(
+                payload.get("line_geometry_separator_slope_px_per_1000y", 0.0)
+            ),
+            line_geometry_separator_drift_px=float(
+                payload.get("line_geometry_separator_drift_px", 0.0)
             ),
             line_geometry_recommendation=str(
                 payload.get("line_geometry_recommendation", "insufficient")
@@ -740,6 +810,18 @@ def analyze_preprocess_page(
     actual_geometry_mode = "deskew"
     geometry_strength = 0.0
     perspective_matrix: tuple[float, ...] | None = None
+    perspective_source_quad: tuple[float, ...] | None = None
+    perspective_target_quad: tuple[float, ...] | None = None
+    perspective_classification = "none"
+    perspective_left_drift_px = 0.0
+    perspective_right_drift_px = 0.0
+    perspective_common_drift_px = 0.0
+    perspective_width_delta_px = 0.0
+    perspective_width_change_ratio = 0.0
+    perspective_scale_top = 1.0
+    perspective_scale_bottom = 1.0
+    perspective_scale_delta_ratio = 0.0
+    perspective_auto_safe = False
 
     # A saved manual quadrilateral is expressed in original-source pixels.
     # Rotate those four handles through the same small-angle correction first,
@@ -807,24 +889,84 @@ def analyze_preprocess_page(
                 line_geometry.recommendation == "perspective"
                 and line_geometry.confidence >= 0.35
             )
+
+            perspective_source_quad = tuple(perspective.source_quad)
+            perspective_target_quad = tuple(perspective.target_quad)
+            perspective_classification = str(
+                getattr(perspective, "classification", "unknown")
+            )
+            perspective_left_drift_px = float(
+                getattr(perspective, "left_drift_px", 0.0)
+            )
+            perspective_right_drift_px = float(
+                getattr(perspective, "right_drift_px", 0.0)
+            )
+            perspective_common_drift_px = float(
+                getattr(perspective, "common_drift_px", 0.0)
+            )
+            perspective_width_delta_px = float(
+                getattr(perspective, "width_delta_px", 0.0)
+            )
+            perspective_width_change_ratio = max(
+                0.0, float(getattr(perspective, "width_change_ratio", 0.0))
+            )
+            perspective_scale_top = max(
+                0.0, float(getattr(perspective, "scale_top", 1.0))
+            )
+            perspective_scale_bottom = max(
+                0.0, float(getattr(perspective, "scale_bottom", 1.0))
+            )
+            perspective_scale_delta_ratio = max(
+                0.0, float(getattr(perspective, "scale_delta_ratio", 0.0))
+            )
+
+            is_keystone = perspective_classification == "keystone"
+            is_parallel_drift = perspective_classification == "parallel_drift"
+            # Missing a physical separator makes the OCR-only geometry less
+            # trustworthy, so the automatic scale-gradient ceiling is tighter.
+            max_auto_scale_delta = (
+                0.030 if line_geometry.separator_found else 0.015
+            )
+            scale_safe = (
+                perspective_scale_delta_ratio <= max_auto_scale_delta
+            )
+            perspective_auto_safe = bool(
+                strong_candidate
+                and line_supports_perspective
+                and is_keystone
+                and not is_parallel_drift
+                and scale_safe
+            )
+
             apply_perspective = (
                 requested_geometry_mode == "perspective"
                 or (
                     requested_geometry_mode == "auto"
-                    and strong_candidate
-                    and line_supports_perspective
+                    and perspective_auto_safe
                 )
             )
-            if (
-                requested_geometry_mode == "auto"
-                and strong_candidate
-                and not line_supports_perspective
-            ):
-                warnings.append(
-                    "栏结构提示可能存在透视，但文本行几何证据不足或不一致；"
-                    "自动模式未执行透视，可人工选择“自动透视”复核。"
-                )
-                method_parts.append("perspective_review")
+
+            if requested_geometry_mode == "auto" and strong_candidate:
+                review_reasons: list[str] = []
+                if not line_supports_perspective:
+                    review_reasons.append("文本行几何证据不足或不一致")
+                if is_parallel_drift:
+                    review_reasons.append(
+                        "首末结构边界主要呈同向平行漂移，更像旋转/剪切而非梯形透视"
+                    )
+                elif not is_keystone:
+                    review_reasons.append("上下有效宽度变化不足以支持梯形透视")
+                if not scale_safe:
+                    review_reasons.append(
+                        f"预计上下横向尺度差 {perspective_scale_delta_ratio * 100:.2f}% "
+                        f"超过自动安全上限 {max_auto_scale_delta * 100:.1f}%"
+                    )
+                if review_reasons:
+                    warnings.append(
+                        "自动透视候选已拦截：" + "；".join(review_reasons)
+                        + "。可人工选择“自动透视”复核。"
+                    )
+                    method_parts.append("perspective_review")
             if apply_perspective and perspective.strength_px >= 0.75:
                 perspective_matrix = perspective.matrix
                 geometry_strength = max(
@@ -935,6 +1077,18 @@ def analyze_preprocess_page(
         geometry_mode=actual_geometry_mode,
         geometry_strength_px=round(float(geometry_strength), 3),
         perspective_matrix=perspective_matrix,
+        perspective_source_quad=perspective_source_quad,
+        perspective_target_quad=perspective_target_quad,
+        perspective_classification=perspective_classification,
+        perspective_left_drift_px=round(float(perspective_left_drift_px), 3),
+        perspective_right_drift_px=round(float(perspective_right_drift_px), 3),
+        perspective_common_drift_px=round(float(perspective_common_drift_px), 3),
+        perspective_width_delta_px=round(float(perspective_width_delta_px), 3),
+        perspective_width_change_ratio=round(float(perspective_width_change_ratio), 6),
+        perspective_scale_top=round(float(perspective_scale_top), 6),
+        perspective_scale_bottom=round(float(perspective_scale_bottom), 6),
+        perspective_scale_delta_ratio=round(float(perspective_scale_delta_ratio), 6),
+        perspective_auto_safe=bool(perspective_auto_safe),
         manual_perspective_quad=manual_quad,
         line_geometry_rows=int(line_geometry.row_count),
         line_geometry_global_angle_deg=float(line_geometry.global_angle_deg),
@@ -950,6 +1104,12 @@ def analyze_preprocess_page(
         ),
         line_geometry_separator_span_ratio=float(
             line_geometry.separator_span_ratio
+        ),
+        line_geometry_separator_slope_px_per_1000y=float(
+            line_geometry.separator_slope_px_per_1000y
+        ),
+        line_geometry_separator_drift_px=float(
+            line_geometry.separator_drift_px
         ),
         line_geometry_recommendation=str(line_geometry.recommendation),
         line_geometry_confidence=float(line_geometry.confidence),
