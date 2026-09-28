@@ -39,6 +39,10 @@ PIXEL_ROW_PROFILE_MAX_SHIFT_PX = 8
 PIXEL_ROW_PROFILE_MIN_CORRELATION = 0.72
 PIXEL_ROW_PROFILE_P90_MAX_PX = 1.5
 PIXEL_ROW_PROFILE_WORST_MAX_PX = 2.5
+PIXEL_ROW_BOTTOM_TAIL_ANCHOR_PERCENTILES = (94.0, 97.0, 99.0)
+PIXEL_ROW_BOTTOM_TAIL_HALF_WINDOW_PX = 72
+PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX = 1.5
+PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX = 2.5
 
 HORIZONTAL_RULE_MAX_ANGLE_DEG = 0.10
 HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX = 2.5
@@ -510,6 +514,12 @@ class PixelRowProfileAudit:
     worst_shift_px: float = 0.0
     median_correlation: float = 0.0
     valid_column_count: int = 0
+    bottom_tail_sample_count: int = 0
+    bottom_tail_p90_shift_px: float = 0.0
+    bottom_tail_worst_shift_px: float = 0.0
+    bottom_tail_median_correlation: float = 0.0
+    bottom_tail_valid_column_count: int = 0
+    bottom_tail_passed: bool = False
     passed: bool = False
 
 
@@ -557,7 +567,10 @@ def audit_pixel_row_profiles(
     valid_columns = [rows for rows in columns if len(rows) >= 5]
     shifts: list[float] = []
     correlations: list[float] = []
+    tail_shifts: list[float] = []
+    tail_correlations: list[float] = []
     valid_count = 0
+    tail_valid_count = 0
     for rows in valid_columns:
         x0, x1 = _pixel_column_bounds(rows, source.width)
         span = float(x1 - x0)
@@ -626,17 +639,84 @@ def audit_pixel_row_profiles(
         if column_samples >= 6:
             valid_count += 1
 
+        tail_column_samples = 0
+        for percentile in PIXEL_ROW_BOTTOM_TAIL_ANCHOR_PERCENTILES:
+            anchor = float(np.percentile(ys, percentile))
+            half_window = PIXEL_ROW_BOTTOM_TAIL_HALF_WINDOW_PX
+            start = max(0, int(round(anchor)) - half_window)
+            end = min(source.height, int(round(anchor)) + half_window)
+            if end - start < 90:
+                continue
+            reference = profiles[1][start:end]
+            reference_std = float(reference.std())
+            if reference_std <= 1e-6:
+                continue
+            reference = (reference - reference.mean()) / reference_std
+            for profile_index in (0, 2):
+                best_correlation = -1.0
+                best_shift = 0
+                profile = profiles[profile_index]
+                for shift in range(
+                    -PIXEL_ROW_PROFILE_MAX_SHIFT_PX,
+                    PIXEL_ROW_PROFILE_MAX_SHIFT_PX + 1,
+                ):
+                    shifted_start = start + shift
+                    shifted_end = end + shift
+                    if shifted_start < 0 or shifted_end > source.height:
+                        continue
+                    candidate = profile[shifted_start:shifted_end]
+                    candidate_std = float(candidate.std())
+                    if candidate_std <= 1e-6:
+                        continue
+                    candidate = (
+                        candidate - candidate.mean()
+                    ) / candidate_std
+                    correlation = float(np.mean(reference * candidate))
+                    if correlation > best_correlation:
+                        best_correlation = correlation
+                        best_shift = shift
+                if best_correlation >= PIXEL_ROW_PROFILE_MIN_CORRELATION:
+                    tail_shifts.append(abs(float(best_shift)))
+                    tail_correlations.append(float(best_correlation))
+                    tail_column_samples += 1
+        if tail_column_samples >= 2:
+            tail_valid_count += 1
+
     if not shifts:
-        return PixelRowProfileAudit(valid_column_count=valid_count)
+        return PixelRowProfileAudit(
+            valid_column_count=valid_count,
+            bottom_tail_valid_column_count=tail_valid_count,
+        )
     p90 = float(np.percentile(np.asarray(shifts, dtype=float), 90))
     worst = float(max(shifts))
     median_corr = float(np.median(np.asarray(correlations, dtype=float)))
+    tail_p90 = (
+        float(np.percentile(np.asarray(tail_shifts, dtype=float), 90))
+        if tail_shifts else 0.0
+    )
+    tail_worst = float(max(tail_shifts)) if tail_shifts else 0.0
+    tail_median_corr = (
+        float(np.median(np.asarray(tail_correlations, dtype=float)))
+        if tail_correlations else 0.0
+    )
+    tail_passed = bool(
+        tail_valid_count >= 1
+        and len(tail_shifts) >= 2
+        and tail_p90 <= PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX
+        and tail_worst <= PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX
+    )
     return PixelRowProfileAudit(
         sample_count=len(shifts),
         p90_shift_px=p90,
         worst_shift_px=worst,
         median_correlation=median_corr,
         valid_column_count=valid_count,
+        bottom_tail_sample_count=len(tail_shifts),
+        bottom_tail_p90_shift_px=tail_p90,
+        bottom_tail_worst_shift_px=tail_worst,
+        bottom_tail_median_correlation=tail_median_corr,
+        bottom_tail_valid_column_count=tail_valid_count,
+        bottom_tail_passed=tail_passed,
         passed=bool(
             valid_count >= 1
             and len(shifts) >= 8
@@ -1173,10 +1253,14 @@ def estimate_orthogonal_warp(
         * (0.75 + 0.25 * column_factor)
         * (0.92 + 0.08 * rule_factor)
     )
+    # active describes whether there is enough reliable geometry to attempt a
+    # correction. The actual deformation safety budget is enforced later by
+    # gain limiting plus before/after text-scale audits. This lets pages whose
+    # unit-gain field is only slightly too strong (e.g. 0004) be corrected
+    # progressively instead of being rejected before a safer gain is tried.
     active = bool(
         len(all_rows) >= ORTHOGONAL_WARP_MIN_ROWS
         and len(valid_columns) >= 1
-        and max_scale_deviation <= ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
         and (
             max_angle >= ORTHOGONAL_WARP_MIN_DRIVER_DEG
             or angle_span >= ORTHOGONAL_WARP_MIN_DRIVER_DEG * 1.5
