@@ -21,6 +21,8 @@ from .layout_detection import (
 from .models import AppSettings
 from .preprocess_geometry import (
     apply_homography_image,
+    audit_homography_distortion,
+    audit_text_scale_stability,
     estimate_perspective_from_polygons,
     perspective_from_quad,
     transform_polygons_homography,
@@ -33,12 +35,17 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 9
+PREPROCESS_FORMAT_VERSION = 10
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
-AUTO_PERSPECTIVE_SCALE_DELTA_WITH_SEPARATOR = 0.030
-AUTO_PERSPECTIVE_SCALE_DELTA_WITHOUT_SEPARATOR = 0.015
+# Automatic perspective is now guarded by the transform's analytic Jacobian
+# and before/after text-scale stability. Physical separators remain optional
+# structural evidence and no longer change the distortion budget.
+AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX = 0.040
+AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX = 0.070
+AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX = 0.055
+AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX = 0.035
 PREVIEW_YELLOW = (255, 225, 110, 94)
 PREVIEW_OUTLINE = (218, 164, 24, 255)
 
@@ -105,6 +112,20 @@ class PreprocessAnalysis:
     perspective_scale_top: float = 1.0
     perspective_scale_bottom: float = 1.0
     perspective_scale_delta_ratio: float = 0.0
+    perspective_jacobian_samples: int = 0
+    perspective_jacobian_horizontal_scale_span_ratio: float = 0.0
+    perspective_jacobian_vertical_scale_span_ratio: float = 0.0
+    perspective_jacobian_area_scale_span_ratio: float = 0.0
+    perspective_jacobian_anisotropy_p95_ratio: float = 0.0
+    perspective_jacobian_min_determinant: float = 1.0
+    perspective_text_scale_samples: int = 0
+    perspective_text_scale_before_inline_gradient_ratio: float = 0.0
+    perspective_text_scale_after_inline_gradient_ratio: float = 0.0
+    perspective_text_scale_before_cross_gradient_ratio: float = 0.0
+    perspective_text_scale_after_cross_gradient_ratio: float = 0.0
+    perspective_text_scale_before_score: float = 0.0
+    perspective_text_scale_after_score: float = 0.0
+    perspective_text_scale_verdict: str = "insufficient"
     perspective_auto_safe: bool = False
     manual_perspective_quad: tuple[float, ...] | None = None
     line_geometry_rows: int = 0
@@ -240,6 +261,89 @@ class PreprocessAnalysis:
             ),
             perspective_scale_delta_ratio=max(
                 0.0, float(payload.get("perspective_scale_delta_ratio", 0.0))
+            ),
+            perspective_jacobian_samples=max(
+                0, int(payload.get("perspective_jacobian_samples", 0))
+            ),
+            perspective_jacobian_horizontal_scale_span_ratio=max(
+                0.0,
+                float(
+                    payload.get(
+                        "perspective_jacobian_horizontal_scale_span_ratio", 0.0
+                    )
+                ),
+            ),
+            perspective_jacobian_vertical_scale_span_ratio=max(
+                0.0,
+                float(
+                    payload.get(
+                        "perspective_jacobian_vertical_scale_span_ratio", 0.0
+                    )
+                ),
+            ),
+            perspective_jacobian_area_scale_span_ratio=max(
+                0.0,
+                float(
+                    payload.get(
+                        "perspective_jacobian_area_scale_span_ratio", 0.0
+                    )
+                ),
+            ),
+            perspective_jacobian_anisotropy_p95_ratio=max(
+                0.0,
+                float(
+                    payload.get(
+                        "perspective_jacobian_anisotropy_p95_ratio", 0.0
+                    )
+                ),
+            ),
+            perspective_jacobian_min_determinant=float(
+                payload.get("perspective_jacobian_min_determinant", 1.0)
+            ),
+            perspective_text_scale_samples=max(
+                0, int(payload.get("perspective_text_scale_samples", 0))
+            ),
+            perspective_text_scale_before_inline_gradient_ratio=max(
+                0.0,
+                float(
+                    payload.get(
+                        "perspective_text_scale_before_inline_gradient_ratio", 0.0
+                    )
+                ),
+            ),
+            perspective_text_scale_after_inline_gradient_ratio=max(
+                0.0,
+                float(
+                    payload.get(
+                        "perspective_text_scale_after_inline_gradient_ratio", 0.0
+                    )
+                ),
+            ),
+            perspective_text_scale_before_cross_gradient_ratio=max(
+                0.0,
+                float(
+                    payload.get(
+                        "perspective_text_scale_before_cross_gradient_ratio", 0.0
+                    )
+                ),
+            ),
+            perspective_text_scale_after_cross_gradient_ratio=max(
+                0.0,
+                float(
+                    payload.get(
+                        "perspective_text_scale_after_cross_gradient_ratio", 0.0
+                    )
+                ),
+            ),
+            perspective_text_scale_before_score=max(
+                0.0, float(payload.get("perspective_text_scale_before_score", 0.0))
+            ),
+            perspective_text_scale_after_score=max(
+                0.0, float(payload.get("perspective_text_scale_after_score", 0.0))
+            ),
+            perspective_text_scale_verdict=str(
+                payload.get("perspective_text_scale_verdict", "insufficient")
+                or "insufficient"
             ),
             perspective_auto_safe=bool(
                 payload.get("perspective_auto_safe", False)
@@ -834,6 +938,20 @@ def analyze_preprocess_page(
     perspective_scale_top = 1.0
     perspective_scale_bottom = 1.0
     perspective_scale_delta_ratio = 0.0
+    perspective_jacobian_samples = 0
+    perspective_jacobian_horizontal_scale_span_ratio = 0.0
+    perspective_jacobian_vertical_scale_span_ratio = 0.0
+    perspective_jacobian_area_scale_span_ratio = 0.0
+    perspective_jacobian_anisotropy_p95_ratio = 0.0
+    perspective_jacobian_min_determinant = 1.0
+    perspective_text_scale_samples = 0
+    perspective_text_scale_before_inline_gradient_ratio = 0.0
+    perspective_text_scale_after_inline_gradient_ratio = 0.0
+    perspective_text_scale_before_cross_gradient_ratio = 0.0
+    perspective_text_scale_after_cross_gradient_ratio = 0.0
+    perspective_text_scale_before_score = 0.0
+    perspective_text_scale_after_score = 0.0
+    perspective_text_scale_verdict = "insufficient"
     perspective_auto_safe = False
 
     # A saved manual quadrilateral is expressed in original-source pixels.
