@@ -368,6 +368,9 @@ class AppSettings:
     # historical profile-derived symbol sets; Project Profile saves version 1
     # together with the explicit per-dictionary symbol lists below.
     profile_symbol_inventory_version: int = 0
+    # v1 separates standalone entry markers (○●◆) from bracket openers (【).
+    # Older cjk_visual projects could accidentally persist 【 in both roles.
+    profile_symbol_role_semantics_version: int = 1
     profile_symbol_inventory_enabled: bool = True
     # Whitespace / comma / Chinese-comma separated literal symbols. Entry
     # markers are standalone boundary glyphs (○ ● ◇ ◆ …); bracket openers are
@@ -663,6 +666,75 @@ class AppSettings:
             raw["manual_columns"] = False
             raw["follow_column_deformation"] = False
             raw["layout_behavior_defaults_version"] = 1
+
+        # CJK Profile role migration: early Project Profile builds could seed
+        # bracket glyphs (especially 【) into the standalone entry-marker role,
+        # and visual samples captured from those projects inherited
+        # role=entry_marker. Migrate once; later user edits are preserved.
+        if int(raw.get("profile_symbol_role_semantics_version", 0) or 0) < 1:
+            if str(raw.get("dictionary_profile_id") or "") == "cjk_visual":
+                try:
+                    from .visual_marker_templates import (
+                        parse_visual_marker_samples,
+                        serialize_visual_marker_samples,
+                        split_configured_symbols,
+                    )
+
+                    bracket_role_symbols = set("【〔［[「『〈《")
+                    entry = list(split_configured_symbols(
+                        raw.get("profile_entry_marker_symbols", "")
+                    ))
+                    bracket = list(split_configured_symbols(
+                        raw.get("profile_bracket_open_symbols", "")
+                    ))
+                    bracket_set = set(bracket)
+                    moved = [
+                        symbol for symbol in entry
+                        if symbol in bracket_role_symbols
+                        or symbol in bracket_set
+                    ]
+                    entry = [
+                        symbol for symbol in entry
+                        if symbol not in moved
+                    ]
+                    bracket = list(dict.fromkeys([*bracket, *moved]))
+                    if (
+                        bool(raw.get(
+                            "profile_cjk_allow_bracketed_headword", True
+                        ))
+                        and not bracket
+                    ):
+                        bracket = ["【"]
+                    raw["profile_entry_marker_symbols"] = " ".join(entry)
+                    raw["profile_bracket_open_symbols"] = " ".join(bracket)
+                    if not entry:
+                        raw["profile_allow_marker_prefix"] = False
+                    # Stable lane evidence is the safe default for bracket
+                    # visual rescue and prevents body look-alikes.
+                    raw["profile_symbol_lane_required"] = True
+
+                    samples = parse_visual_marker_samples(
+                        raw.get("profile_symbol_templates_json", "")
+                    )
+                    bracket_set = set(bracket)
+                    migrated_samples = []
+                    for sample in samples:
+                        item = dict(sample)
+                        literal = str(item.get("literal") or "")
+                        if (
+                            str(item.get("role") or "") == "entry_marker"
+                            and literal in bracket_set
+                        ):
+                            item["role"] = "bracket_open"
+                        migrated_samples.append(item)
+                    raw["profile_symbol_templates_json"] = (
+                        serialize_visual_marker_samples(migrated_samples)
+                    )
+                except Exception:
+                    # Settings loading must remain robust even if a malformed
+                    # old visual-template payload cannot be migrated.
+                    pass
+            raw["profile_symbol_role_semantics_version"] = 1
 
         # v2.14: make the recommended OCR path single-engine by default and
         # declutter the page list. Apply once to existing projects so persisted
