@@ -12359,8 +12359,77 @@ class PictureCaptureApp(tk.Tk):
                 style="PC.Compact.TButton",
             ).grid(row=0, column=col, sticky="ew", padx=(0 if col == 0 else 4, 0))
 
+        preprocess_canvas_row = ttk.Frame(preprocess)
+        preprocess_canvas_row.grid(row=3, column=0, sticky="ew", pady=(4, 0))
+        ttk.Checkbutton(
+            preprocess_canvas_row,
+            text="统一白底画布",
+            variable=self.preprocess_export_canvas_var,
+            command=self._preprocess_export_settings_changed,
+        ).pack(side="left")
+        canvas_mode_combo = ttk.Combobox(
+            preprocess_canvas_row,
+            textvariable=self.preprocess_export_canvas_mode_var,
+            values=("本批最大裁剪尺寸", "自定义尺寸"),
+            state="readonly",
+            width=15,
+        )
+        canvas_mode_combo.pack(side="left", padx=(6, 0))
+        canvas_mode_combo.bind(
+            "<<ComboboxSelected>>", self._preprocess_export_settings_changed
+        )
+        ttk.Label(preprocess_canvas_row, text="宽×高：").pack(side="left", padx=(8, 2))
+        canvas_width_spin = ttk.Spinbox(
+            preprocess_canvas_row,
+            from_=0, to=100000, increment=10, width=7,
+            textvariable=self.preprocess_export_canvas_width_var,
+        )
+        canvas_width_spin.pack(side="left")
+        ttk.Label(preprocess_canvas_row, text="×").pack(side="left", padx=2)
+        canvas_height_spin = ttk.Spinbox(
+            preprocess_canvas_row,
+            from_=0, to=100000, increment=10, width=7,
+            textvariable=self.preprocess_export_canvas_height_var,
+        )
+        canvas_height_spin.pack(side="left")
+        for widget in (canvas_width_spin, canvas_height_spin):
+            widget.bind("<Return>", self._preprocess_export_settings_changed)
+            widget.bind("<FocusOut>", self._preprocess_export_settings_changed)
+
+        preprocess_align_row = ttk.Frame(preprocess)
+        preprocess_align_row.grid(row=4, column=0, sticky="ew", pady=(4, 0))
+        ttk.Label(preprocess_align_row, text="X：").pack(side="left")
+        align_x_combo = ttk.Combobox(
+            preprocess_align_row,
+            textvariable=self.preprocess_export_align_x_var,
+            values=("左对齐", "居中", "右对齐"),
+            state="readonly",
+            width=8,
+        )
+        align_x_combo.pack(side="left")
+        align_x_combo.bind(
+            "<<ComboboxSelected>>", self._preprocess_export_settings_changed
+        )
+        ttk.Label(preprocess_align_row, text="Y：").pack(side="left", padx=(8, 2))
+        align_y_combo = ttk.Combobox(
+            preprocess_align_row,
+            textvariable=self.preprocess_export_align_y_var,
+            values=("顶端对齐", "居中", "底部对齐"),
+            state="readonly",
+            width=8,
+        )
+        align_y_combo.pack(side="left")
+        align_y_combo.bind(
+            "<<ComboboxSelected>>", self._preprocess_export_settings_changed
+        )
+        ttk.Label(
+            preprocess_align_row,
+            text="导出图片同时生成逐页 JSON + summary CSV",
+            style="PC.FieldLabel.TLabel",
+        ).pack(side="left", padx=(10, 0))
+
         preprocess_export_row = ttk.Frame(preprocess)
-        preprocess_export_row.grid(row=3, column=0, sticky="ew", pady=(4, 0))
+        preprocess_export_row.grid(row=5, column=0, sticky="ew", pady=(4, 0))
         preprocess_export_row.columnconfigure(0, weight=1, uniform="preprocess-export")
         preprocess_export_row.columnconfigure(1, weight=1, uniform="preprocess-export")
         ttk.Button(
@@ -12377,7 +12446,7 @@ class PictureCaptureApp(tk.Tk):
             preprocess, textvariable=self.preprocess_status_var,
             style="PC.FieldLabel.TLabel", anchor="w",
             wraplength=430,
-        ).grid(row=4, column=0, sticky="ew", pady=(4, 0))
+        ).grid(row=6, column=0, sticky="ew", pady=(4, 0))
 
         self._attach_tooltip(
             self.preprocess_mode_button,
