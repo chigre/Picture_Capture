@@ -76,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.command == "autodraw":
                 cache_path = (
                     ocr_cache_root(project.root) / f"{page.stem}.json"
-                    if project.settings.detection_method == "paddleocr" else None
+                    if project.settings.detection_method in {"paddleocr", "combined"} else None
                 )
                 entries, _ = detect_entries(
                     image, project.settings, paddle_cache_path=cache_path,
