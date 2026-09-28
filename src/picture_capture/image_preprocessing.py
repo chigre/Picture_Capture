@@ -74,7 +74,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 19
+PREPROCESS_FORMAT_VERSION = 20
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -137,6 +137,11 @@ class PreprocessAnalysis:
     confidence: float
     status: str
     method: str
+    ocr_correction_angle_deg: float = 0.0
+    deskew_anchor_source: str = "ocr"
+    source_header_rule_point_count: int = 0
+    source_header_rule_angle_deg: float = 0.0
+    source_header_rule_residual_px: float = 0.0
     warnings: tuple[str, ...] = ()
     safety_margin_px: int = DEFAULT_SAFETY_MARGIN_PX
     auto_deskew: bool = True
@@ -239,6 +244,9 @@ class PreprocessAnalysis:
     orthogonal_before_horizontal_rule_residual_px: float = 0.0
     orthogonal_after_horizontal_rule_residual_px: float = 0.0
     orthogonal_horizontal_rule_verdict: str = "insufficient"
+    orthogonal_pixel_angle_sample_count: int = 0
+    orthogonal_pixel_angle_used_count: int = 0
+    orthogonal_pixel_angle_confidence: float = 0.0
     orthogonal_confidence: float = 0.0
     orthogonal_column_spread_deg: float = 0.0
     orthogonal_max_row_angle_deg: float = 0.0
@@ -353,6 +361,21 @@ class PreprocessAnalysis:
             confidence=max(0.0, min(1.0, float(payload.get("confidence", 0.0)))),
             status=str(payload.get("status", "review") or "review"),
             method=str(payload.get("method", "unknown") or "unknown"),
+            ocr_correction_angle_deg=float(
+                payload.get("ocr_correction_angle_deg", 0.0)
+            ),
+            deskew_anchor_source=str(
+                payload.get("deskew_anchor_source", "ocr") or "ocr"
+            ),
+            source_header_rule_point_count=max(
+                0, int(payload.get("source_header_rule_point_count", 0))
+            ),
+            source_header_rule_angle_deg=float(
+                payload.get("source_header_rule_angle_deg", 0.0)
+            ),
+            source_header_rule_residual_px=max(
+                0.0, float(payload.get("source_header_rule_residual_px", 0.0))
+            ),
             warnings=tuple(str(item) for item in payload.get("warnings", ()) if str(item).strip()),
             safety_margin_px=max(
                 0, int(payload.get("safety_margin_px", DEFAULT_SAFETY_MARGIN_PX))
@@ -774,6 +797,16 @@ class PreprocessAnalysis:
                     "orthogonal_horizontal_rule_verdict", "insufficient"
                 )
                 or "insufficient"
+            ),
+            orthogonal_pixel_angle_sample_count=max(
+                0, int(payload.get("orthogonal_pixel_angle_sample_count", 0))
+            ),
+            orthogonal_pixel_angle_used_count=max(
+                0, int(payload.get("orthogonal_pixel_angle_used_count", 0))
+            ),
+            orthogonal_pixel_angle_confidence=max(
+                0.0,
+                float(payload.get("orthogonal_pixel_angle_confidence", 0.0)),
             ),
             orthogonal_confidence=max(
                 0.0, min(1.0, float(payload.get("orthogonal_confidence", 0.0)))
