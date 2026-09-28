@@ -23,6 +23,7 @@ from .models import AppSettings
 from .preprocess_geometry import (
     HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG,
     HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG,
+    HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG,
     HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT,
     HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG,
     HORIZONTAL_STRENGTH_COARSE_STEP,
@@ -60,7 +61,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 15
+PREPROCESS_FORMAT_VERSION = 16
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -71,6 +72,8 @@ AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX = 0.040
 AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX = 0.070
 AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX = 0.055
 AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX = 0.035
+AUTO_UVDOC_MIN_CONFIDENCE = 0.65
+AUTO_UVDOC_MIN_HORIZONTAL_IMPROVEMENT = 0.15
 PREVIEW_YELLOW = (255, 225, 110, 94)
 PREVIEW_OUTLINE = (218, 164, 24, 255)
 
@@ -197,6 +200,18 @@ class PreprocessAnalysis:
     perspective_text_scale_verdict: str = "insufficient"
     perspective_auto_safe: bool = False
     manual_perspective_quad: tuple[float, ...] | None = None
+    final_alignment_row_count: int = 0
+    final_alignment_valid_column_count: int = 0
+    final_alignment_edge_pair_count: int = 0
+    final_alignment_top_edge_p90_abs_deg: float = 0.0
+    final_alignment_bottom_edge_p90_abs_deg: float = 0.0
+    final_alignment_edge_pair_delta_p90_deg: float = 0.0
+    final_alignment_worst_edge_deg: float = 0.0
+    final_alignment_worst_region_deg: float = 0.0
+    final_alignment_trend_deg: float = 0.0
+    final_alignment_worst_column_trend_deg: float = 0.0
+    final_alignment_quality_score: float = 0.0
+    final_alignment_verdict: str = "insufficient"
     line_geometry_rows: int = 0
     line_geometry_global_angle_deg: float = 0.0
     line_geometry_top_angle_deg: float = 0.0
@@ -615,6 +630,44 @@ class PreprocessAnalysis:
                 if isinstance(payload.get("manual_perspective_quad"), (list, tuple))
                 and len(payload.get("manual_perspective_quad", ())) == 8
                 else None
+            ),
+            final_alignment_row_count=max(
+                0, int(payload.get("final_alignment_row_count", 0))
+            ),
+            final_alignment_valid_column_count=max(
+                0, int(payload.get("final_alignment_valid_column_count", 0))
+            ),
+            final_alignment_edge_pair_count=max(
+                0, int(payload.get("final_alignment_edge_pair_count", 0))
+            ),
+            final_alignment_top_edge_p90_abs_deg=max(
+                0.0, float(payload.get("final_alignment_top_edge_p90_abs_deg", 0.0))
+            ),
+            final_alignment_bottom_edge_p90_abs_deg=max(
+                0.0, float(payload.get("final_alignment_bottom_edge_p90_abs_deg", 0.0))
+            ),
+            final_alignment_edge_pair_delta_p90_deg=max(
+                0.0, float(payload.get("final_alignment_edge_pair_delta_p90_deg", 0.0))
+            ),
+            final_alignment_worst_edge_deg=max(
+                0.0, float(payload.get("final_alignment_worst_edge_deg", 0.0))
+            ),
+            final_alignment_worst_region_deg=max(
+                0.0, float(payload.get("final_alignment_worst_region_deg", 0.0))
+            ),
+            final_alignment_trend_deg=float(
+                payload.get("final_alignment_trend_deg", 0.0)
+            ),
+            final_alignment_worst_column_trend_deg=max(
+                0.0,
+                float(payload.get("final_alignment_worst_column_trend_deg", 0.0)),
+            ),
+            final_alignment_quality_score=max(
+                0.0, float(payload.get("final_alignment_quality_score", 0.0))
+            ),
+            final_alignment_verdict=str(
+                payload.get("final_alignment_verdict", "insufficient")
+                or "insufficient"
             ),
             line_geometry_rows=max(
                 0, int(payload.get("line_geometry_rows", 0))
@@ -1106,6 +1159,56 @@ def _projection_skew_fallback(
     return float(fine[int(np.argmax(fine_scores))])
 
 
+def _absolute_horizontal_quality(audit) -> tuple[str, float]:
+    """Return an absolute final-output horizontality verdict and score.
+
+    A line is accepted only when both polygon boundaries are level and mutually
+    parallel, while page and per-column row directions are also level. This
+    deliberately does not use the before/after improvement verdict because a
+    final self-audit has no transform delta.
+    """
+    worst_column_trend = max(
+        [abs(float(getattr(audit, "after_trend_deg", 0.0)))]
+        + [
+            abs(float(value))
+            for value in getattr(audit, "after_column_trends_deg", ())
+        ]
+    )
+    score = max(
+        abs(float(getattr(audit, "after_trend_deg", 0.0)))
+        / max(1e-6, HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG),
+        worst_column_trend
+        / max(1e-6, HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG),
+        float(getattr(audit, "after_worst_region_deg", 0.0))
+        / max(1e-6, HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG),
+        float(getattr(audit, "after_worst_edge_deg", 0.0))
+        / max(1e-6, HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG),
+        float(getattr(audit, "after_edge_pair_delta_p90_deg", 0.0))
+        / max(1e-6, HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG),
+    )
+    if (
+        int(getattr(audit, "row_count", 0)) < HORIZONTAL_VP_MIN_ROWS
+        or int(getattr(audit, "valid_column_count", 0)) < 1
+        or int(getattr(audit, "edge_pair_count", 0)) < HORIZONTAL_VP_MIN_ROWS
+    ):
+        return "insufficient", float(score)
+
+    passed = bool(
+        abs(float(getattr(audit, "after_trend_deg", 0.0)))
+        <= HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG
+        and worst_column_trend <= HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG
+        and float(getattr(audit, "after_worst_region_deg", 0.0))
+        <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
+        and float(getattr(audit, "after_top_edge_p90_abs_deg", 0.0))
+        <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
+        and float(getattr(audit, "after_bottom_edge_p90_abs_deg", 0.0))
+        <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
+        and float(getattr(audit, "after_edge_pair_delta_p90_deg", 0.0))
+        <= HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG
+    )
+    return ("passed" if passed else "failed"), float(score)
+
+
 def _normalize_geometry_mode(value: str | None) -> str:
     mode = str(value or "auto").strip().lower()
     aliases = {
@@ -1172,13 +1275,24 @@ def analyze_preprocess_page(
         warnings.append(f"版面结构检测不可用，裁边已使用投影回退：{exc}")
 
     line_geometry = TextLineGeometryAnalysis()
+    auto_uvdoc_evidence = False
     if polygons:
         try:
             line_geometry = analyze_text_line_geometry(
                 source, polygons, settings,
             )
             method_parts.append("line_geometry")
-            if line_geometry.recommendation == "uvdoc_review":
+            auto_uvdoc_evidence = bool(
+                requested_geometry_mode == "auto"
+                and line_geometry.recommendation == "uvdoc_review"
+                and line_geometry.separator_curve_reliable
+                and line_geometry.confidence >= AUTO_UVDOC_MIN_CONFIDENCE
+            )
+            if (
+                line_geometry.recommendation == "uvdoc_review"
+                and requested_geometry_mode != "uvdoc"
+                and not auto_uvdoc_evidence
+            ):
                 warnings.append(
                     "可靠实体长线轨迹显示平滑非线性弯曲；"
                     "建议使用“UVDoc展平（Paddle高级）”复核。"
@@ -1460,21 +1574,88 @@ def analyze_preprocess_page(
         except Exception as exc:
             warnings.append(f"手动四角透视纠正不可用：{exc}")
 
-    # PaddleOCR/PaddleX 3.7 ships the official document-preprocessor
-    # pipeline with UVDoc as its image-unwarping module.  Keep this explicit
-    # rather than silently downloading/running a neural model in automatic mode.
-    if requested_geometry_mode == "uvdoc":
+    # PaddleOCR/PaddleX 3.7 ships the official UVDoc-backed document
+    # preprocessor. In auto mode we invoke it only for strong nonlinear
+    # evidence, then re-detect text and require a measurable dual-edge/page
+    # horizontality improvement before accepting the neural warp.
+    advanced_redetected = False
+    run_auto_uvdoc = bool(auto_uvdoc_evidence)
+    if requested_geometry_mode == "uvdoc" or run_auto_uvdoc:
+        before_uvdoc = working
+        before_uvdoc_polygons = list(working_polygons)
         try:
-            working = unwarp_document_image(working)
-            # UVDoc is non-projective, so the prior polygon coordinates are no
-            # longer valid. Final crop must come from a fresh detection pass.
-            working_polygons = []
-            actual_geometry_mode = "uvdoc"
-            method_parts.append("uvdoc")
+            uvdoc_candidate = unwarp_document_image(working)
         except Exception as exc:
             warnings.append(
                 f"Paddle UVDoc 展平不可用，已保留前一步几何结果：{exc}"
             )
+        else:
+            if run_auto_uvdoc:
+                candidate_polygons: list[np.ndarray] = []
+                try:
+                    redetected = detect_text_polygons(uvdoc_candidate, settings)
+                    if len(redetected) >= 4:
+                        candidate_polygons = redetected
+                except Exception as exc:
+                    warnings.append(
+                        "自动 UVDoc 后文本复检失败，已回退到前一步几何结果："
+                        f"{exc}"
+                    )
+
+                if candidate_polygons:
+                    before_audit = audit_horizontal_alignment(
+                        before_uvdoc_polygons,
+                        before_uvdoc_polygons,
+                        size=before_uvdoc.size,
+                        settings=settings,
+                    )
+                    after_audit = audit_horizontal_alignment(
+                        candidate_polygons,
+                        candidate_polygons,
+                        size=uvdoc_candidate.size,
+                        settings=settings,
+                    )
+                    before_verdict, before_score = _absolute_horizontal_quality(
+                        before_audit
+                    )
+                    after_verdict, after_score = _absolute_horizontal_quality(
+                        after_audit
+                    )
+                    improved_enough = bool(
+                        after_verdict == "passed"
+                        or (
+                            after_verdict == "failed"
+                            and before_verdict != "insufficient"
+                            and after_score
+                            <= before_score
+                            * (1.0 - AUTO_UVDOC_MIN_HORIZONTAL_IMPROVEMENT)
+                        )
+                    )
+                    if improved_enough:
+                        working = uvdoc_candidate
+                        working_polygons = candidate_polygons
+                        actual_geometry_mode = "uvdoc"
+                        method_parts.extend(("uvdoc", "uvdoc_auto", "redetect"))
+                        advanced_redetected = True
+                    else:
+                        warnings.append(
+                            "自动 UVDoc 未通过双边缘水平验收，已回退："
+                            f"质量分 {before_score:.2f}→{after_score:.2f}，"
+                            f"验收={after_verdict}。"
+                        )
+                else:
+                    warnings.append(
+                        "自动 UVDoc 后有效文本框不足，无法完成双边缘验收；"
+                        "已回退到前一步几何结果。"
+                    )
+            else:
+                working = uvdoc_candidate
+                # Explicit UVDoc is a user override. Its final output is still
+                # audited below, but insufficient post-warp OCR does not cancel
+                # the requested transform.
+                working_polygons = []
+                actual_geometry_mode = "uvdoc"
+                method_parts.append("uvdoc")
 
     # Advanced projective geometry is staged after the global small-angle
     # correction:
@@ -2175,7 +2356,11 @@ def analyze_preprocess_page(
     # fails, the mathematically transformed original polygons remain a safe
     # fallback and preserve non-destructive export.
     final_polygons = working_polygons
-    if polygons and actual_geometry_mode in {"manual_perspective", "perspective", "uvdoc"}:
+    if (
+        polygons
+        and actual_geometry_mode in {"manual_perspective", "perspective", "uvdoc"}
+        and not advanced_redetected
+    ):
         try:
             redetected = detect_text_polygons(working, settings)
             if len(redetected) >= 4:
@@ -2185,6 +2370,85 @@ def analyze_preprocess_page(
                 warnings.append("高级纠正后文本框过少，最终裁边沿用变换后的原检测框。")
         except Exception as exc:
             warnings.append(f"高级纠正后版面复检失败，沿用变换后的原检测框：{exc}")
+
+    final_alignment_row_count = 0
+    final_alignment_valid_column_count = 0
+    final_alignment_edge_pair_count = 0
+    final_alignment_top_edge_p90_abs_deg = 0.0
+    final_alignment_bottom_edge_p90_abs_deg = 0.0
+    final_alignment_edge_pair_delta_p90_deg = 0.0
+    final_alignment_worst_edge_deg = 0.0
+    final_alignment_worst_region_deg = 0.0
+    final_alignment_trend_deg = 0.0
+    final_alignment_worst_column_trend_deg = 0.0
+    final_alignment_quality_score = 0.0
+    final_alignment_verdict = "insufficient"
+    if (
+        final_polygons
+        and not str(settings.layout_writing_mode or "horizontal-tb").startswith(
+            "vertical"
+        )
+    ):
+        try:
+            final_audit = audit_horizontal_alignment(
+                final_polygons,
+                final_polygons,
+                size=working.size,
+                settings=settings,
+            )
+            final_alignment_row_count = int(final_audit.row_count)
+            final_alignment_valid_column_count = int(
+                final_audit.valid_column_count
+            )
+            final_alignment_edge_pair_count = int(final_audit.edge_pair_count)
+            final_alignment_top_edge_p90_abs_deg = float(
+                final_audit.after_top_edge_p90_abs_deg
+            )
+            final_alignment_bottom_edge_p90_abs_deg = float(
+                final_audit.after_bottom_edge_p90_abs_deg
+            )
+            final_alignment_edge_pair_delta_p90_deg = float(
+                final_audit.after_edge_pair_delta_p90_deg
+            )
+            final_alignment_worst_edge_deg = float(
+                final_audit.after_worst_edge_deg
+            )
+            final_alignment_worst_region_deg = float(
+                final_audit.after_worst_region_deg
+            )
+            final_alignment_trend_deg = float(final_audit.after_trend_deg)
+            final_alignment_worst_column_trend_deg = max(
+                [abs(float(final_audit.after_trend_deg))]
+                + [
+                    abs(float(value))
+                    for value in final_audit.after_column_trends_deg
+                ]
+            )
+            (
+                final_alignment_verdict,
+                final_alignment_quality_score,
+            ) = _absolute_horizontal_quality(final_audit)
+            if final_alignment_verdict == "failed":
+                warnings.append(
+                    "成品双边缘水平验收未通过："
+                    f"上缘P90 {final_alignment_top_edge_p90_abs_deg:.2f}°，"
+                    f"下缘P90 {final_alignment_bottom_edge_p90_abs_deg:.2f}°，"
+                    "上下缘差P90 "
+                    f"{final_alignment_edge_pair_delta_p90_deg:.2f}°，"
+                    f"最差区域 {final_alignment_worst_region_deg:.2f}°，"
+                    "最差栏趋势 "
+                    f"{final_alignment_worst_column_trend_deg:.2f}°。"
+                )
+            elif (
+                final_alignment_verdict == "insufficient"
+                and actual_geometry_mode == "uvdoc"
+            ):
+                warnings.append(
+                    "UVDoc 展平后有效双边缘文本行不足，无法完成最终水平验收。"
+                )
+        except Exception as exc:
+            if actual_geometry_mode == "uvdoc":
+                warnings.append(f"UVDoc 展平后水平验收不可用：{exc}")
 
     layout_box: tuple[int, int, int, int] | None = None
     if final_polygons:
@@ -2445,6 +2709,34 @@ def analyze_preprocess_page(
         perspective_text_scale_verdict=str(perspective_text_scale_verdict),
         perspective_auto_safe=bool(perspective_auto_safe),
         manual_perspective_quad=manual_quad,
+        final_alignment_row_count=int(final_alignment_row_count),
+        final_alignment_valid_column_count=int(
+            final_alignment_valid_column_count
+        ),
+        final_alignment_edge_pair_count=int(final_alignment_edge_pair_count),
+        final_alignment_top_edge_p90_abs_deg=round(
+            float(final_alignment_top_edge_p90_abs_deg), 4
+        ),
+        final_alignment_bottom_edge_p90_abs_deg=round(
+            float(final_alignment_bottom_edge_p90_abs_deg), 4
+        ),
+        final_alignment_edge_pair_delta_p90_deg=round(
+            float(final_alignment_edge_pair_delta_p90_deg), 4
+        ),
+        final_alignment_worst_edge_deg=round(
+            float(final_alignment_worst_edge_deg), 4
+        ),
+        final_alignment_worst_region_deg=round(
+            float(final_alignment_worst_region_deg), 4
+        ),
+        final_alignment_trend_deg=round(float(final_alignment_trend_deg), 4),
+        final_alignment_worst_column_trend_deg=round(
+            float(final_alignment_worst_column_trend_deg), 4
+        ),
+        final_alignment_quality_score=round(
+            float(final_alignment_quality_score), 4
+        ),
+        final_alignment_verdict=str(final_alignment_verdict),
         line_geometry_rows=int(line_geometry.row_count),
         line_geometry_global_angle_deg=float(line_geometry.global_angle_deg),
         line_geometry_top_angle_deg=float(line_geometry.top_angle_deg),
@@ -2936,6 +3228,13 @@ def export_diagnostic_json(
         "auto_homography_anisotropy_p95_max": (
             AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
         ),
+        "auto_uvdoc_min_confidence": AUTO_UVDOC_MIN_CONFIDENCE,
+        "auto_uvdoc_min_horizontal_improvement": (
+            AUTO_UVDOC_MIN_HORIZONTAL_IMPROVEMENT
+        ),
+        "horizontal_alignment_max_edge_pair_delta_deg": (
+            HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG
+        ),
         "text_scale_inline_span_max": TEXT_SCALE_INLINE_SPAN_MAX,
         "text_scale_cross_span_max": TEXT_SCALE_CROSS_SPAN_MAX,
         "text_scale_inline_gradient_max": TEXT_SCALE_INLINE_GRADIENT_MAX,
@@ -3254,6 +3553,36 @@ def export_summary_csv(
             ),
             "line_geometry_recommendation": analysis.line_geometry_recommendation,
             "line_geometry_confidence": analysis.line_geometry_confidence,
+            "final_alignment_row_count": analysis.final_alignment_row_count,
+            "final_alignment_valid_column_count": (
+                analysis.final_alignment_valid_column_count
+            ),
+            "final_alignment_edge_pair_count": (
+                analysis.final_alignment_edge_pair_count
+            ),
+            "final_alignment_top_edge_p90_abs_deg": (
+                analysis.final_alignment_top_edge_p90_abs_deg
+            ),
+            "final_alignment_bottom_edge_p90_abs_deg": (
+                analysis.final_alignment_bottom_edge_p90_abs_deg
+            ),
+            "final_alignment_edge_pair_delta_p90_deg": (
+                analysis.final_alignment_edge_pair_delta_p90_deg
+            ),
+            "final_alignment_worst_edge_deg": (
+                analysis.final_alignment_worst_edge_deg
+            ),
+            "final_alignment_worst_region_deg": (
+                analysis.final_alignment_worst_region_deg
+            ),
+            "final_alignment_trend_deg": analysis.final_alignment_trend_deg,
+            "final_alignment_worst_column_trend_deg": (
+                analysis.final_alignment_worst_column_trend_deg
+            ),
+            "final_alignment_quality_score": (
+                analysis.final_alignment_quality_score
+            ),
+            "final_alignment_verdict": analysis.final_alignment_verdict,
             "canvas_enabled": canvas.enabled,
             "canvas_mode": canvas.mode,
             "canvas_requested_width": canvas.requested_width,
@@ -3619,11 +3948,23 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
             f"{separator}"
             f" → {line_labels.get(analysis.line_geometry_recommendation, analysis.line_geometry_recommendation)}"
         )
+    final_alignment_part = ""
+    if analysis.final_alignment_verdict != "insufficient":
+        final_label = (
+            "通过" if analysis.final_alignment_verdict == "passed" else "未通过"
+        )
+        final_alignment_part = (
+            f"｜成品水平{final_label}"
+            f" 上缘P90 {analysis.final_alignment_top_edge_p90_abs_deg:.2f}°"
+            f" 下缘P90 {analysis.final_alignment_bottom_edge_p90_abs_deg:.2f}°"
+            f" 上下缘差P90 {analysis.final_alignment_edge_pair_delta_p90_deg:.2f}°"
+            f" 最差栏趋势 {analysis.final_alignment_worst_column_trend_deg:.2f}°"
+        )
     return (
         f"{label}｜{geometry}{strength}｜"
         f"旋转 {analysis.applied_angle_deg:+.2f}°"
         f"（检测 {analysis.correction_angle_deg:+.2f}°）"
-        f"{perspective_part}{line_part}｜"
+        f"{perspective_part}{line_part}{final_alignment_part}｜"
         f"保留 {analysis.retained_ratio * 100:.1f}%｜"
         f"裁剪 L{x0} T{y0} R{x1} B{y1}"
     )
