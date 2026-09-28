@@ -1397,6 +1397,42 @@ def analyze_preprocess_page(
         perspective_scale_top=round(float(perspective_scale_top), 6),
         perspective_scale_bottom=round(float(perspective_scale_bottom), 6),
         perspective_scale_delta_ratio=round(float(perspective_scale_delta_ratio), 6),
+        perspective_jacobian_samples=int(perspective_jacobian_samples),
+        perspective_jacobian_horizontal_scale_span_ratio=round(
+            float(perspective_jacobian_horizontal_scale_span_ratio), 6
+        ),
+        perspective_jacobian_vertical_scale_span_ratio=round(
+            float(perspective_jacobian_vertical_scale_span_ratio), 6
+        ),
+        perspective_jacobian_area_scale_span_ratio=round(
+            float(perspective_jacobian_area_scale_span_ratio), 6
+        ),
+        perspective_jacobian_anisotropy_p95_ratio=round(
+            float(perspective_jacobian_anisotropy_p95_ratio), 6
+        ),
+        perspective_jacobian_min_determinant=round(
+            float(perspective_jacobian_min_determinant), 8
+        ),
+        perspective_text_scale_samples=int(perspective_text_scale_samples),
+        perspective_text_scale_before_inline_gradient_ratio=round(
+            float(perspective_text_scale_before_inline_gradient_ratio), 6
+        ),
+        perspective_text_scale_after_inline_gradient_ratio=round(
+            float(perspective_text_scale_after_inline_gradient_ratio), 6
+        ),
+        perspective_text_scale_before_cross_gradient_ratio=round(
+            float(perspective_text_scale_before_cross_gradient_ratio), 6
+        ),
+        perspective_text_scale_after_cross_gradient_ratio=round(
+            float(perspective_text_scale_after_cross_gradient_ratio), 6
+        ),
+        perspective_text_scale_before_score=round(
+            float(perspective_text_scale_before_score), 6
+        ),
+        perspective_text_scale_after_score=round(
+            float(perspective_text_scale_after_score), 6
+        ),
+        perspective_text_scale_verdict=str(perspective_text_scale_verdict),
         perspective_auto_safe=bool(perspective_auto_safe),
         manual_perspective_quad=manual_quad,
         line_geometry_rows=int(line_geometry.row_count),
@@ -1843,11 +1879,17 @@ def export_diagnostic_json(
     payload["algorithm_constants"] = {
         "max_auto_deskew_deg": DEFAULT_MAX_AUTO_DESKEW_DEG,
         "deskew_dead_zone_deg": DEFAULT_DESKEW_DEAD_ZONE_DEG,
-        "auto_perspective_scale_delta_with_separator": (
-            AUTO_PERSPECTIVE_SCALE_DELTA_WITH_SEPARATOR
+        "auto_homography_horizontal_scale_span_max": (
+            AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX
         ),
-        "auto_perspective_scale_delta_without_separator": (
-            AUTO_PERSPECTIVE_SCALE_DELTA_WITHOUT_SEPARATOR
+        "auto_homography_vertical_scale_span_max": (
+            AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX
+        ),
+        "auto_homography_area_scale_span_max": (
+            AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX
+        ),
+        "auto_homography_anisotropy_p95_max": (
+            AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
         ),
     }
     payload["export"] = {
@@ -1902,6 +1944,44 @@ def export_summary_csv(
             "perspective_scale_top": analysis.perspective_scale_top,
             "perspective_scale_bottom": analysis.perspective_scale_bottom,
             "perspective_scale_delta_ratio": analysis.perspective_scale_delta_ratio,
+            "perspective_jacobian_samples": analysis.perspective_jacobian_samples,
+            "perspective_jacobian_horizontal_scale_span_ratio": (
+                analysis.perspective_jacobian_horizontal_scale_span_ratio
+            ),
+            "perspective_jacobian_vertical_scale_span_ratio": (
+                analysis.perspective_jacobian_vertical_scale_span_ratio
+            ),
+            "perspective_jacobian_area_scale_span_ratio": (
+                analysis.perspective_jacobian_area_scale_span_ratio
+            ),
+            "perspective_jacobian_anisotropy_p95_ratio": (
+                analysis.perspective_jacobian_anisotropy_p95_ratio
+            ),
+            "perspective_jacobian_min_determinant": (
+                analysis.perspective_jacobian_min_determinant
+            ),
+            "perspective_text_scale_samples": analysis.perspective_text_scale_samples,
+            "perspective_text_scale_before_inline_gradient_ratio": (
+                analysis.perspective_text_scale_before_inline_gradient_ratio
+            ),
+            "perspective_text_scale_after_inline_gradient_ratio": (
+                analysis.perspective_text_scale_after_inline_gradient_ratio
+            ),
+            "perspective_text_scale_before_cross_gradient_ratio": (
+                analysis.perspective_text_scale_before_cross_gradient_ratio
+            ),
+            "perspective_text_scale_after_cross_gradient_ratio": (
+                analysis.perspective_text_scale_after_cross_gradient_ratio
+            ),
+            "perspective_text_scale_before_score": (
+                analysis.perspective_text_scale_before_score
+            ),
+            "perspective_text_scale_after_score": (
+                analysis.perspective_text_scale_after_score
+            ),
+            "perspective_text_scale_verdict": (
+                analysis.perspective_text_scale_verdict
+            ),
             "perspective_auto_safe": analysis.perspective_auto_safe,
             "crop_x0": analysis.crop_box[0],
             "crop_y0": analysis.crop_box[1],
@@ -2048,9 +2128,22 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
     }
     perspective_part = ""
     if analysis.perspective_candidate_strength_px > 0:
+        audit_part = ""
+        if analysis.perspective_jacobian_samples:
+            audit_part = (
+                " / J尺度漂移 "
+                f"X{analysis.perspective_jacobian_horizontal_scale_span_ratio * 100:.1f}%"
+                f" Y{analysis.perspective_jacobian_vertical_scale_span_ratio * 100:.1f}%"
+            )
+        text_scale_part = ""
+        if analysis.perspective_text_scale_samples:
+            text_scale_part = (
+                f" / 字符尺度 {analysis.perspective_text_scale_verdict}"
+            )
         perspective_part = (
             f"｜透视候选 {analysis.perspective_candidate_strength_px:.1f}px"
-            f" / 尺度差 {analysis.perspective_scale_delta_ratio * 100:.2f}%"
+            f" / 旧尺度差 {analysis.perspective_scale_delta_ratio * 100:.2f}%"
+            f"{audit_part}{text_scale_part}"
             f" / {analysis.perspective_classification}"
         )
     line_part = ""
