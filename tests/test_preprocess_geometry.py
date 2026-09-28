@@ -41,6 +41,34 @@ def test_perspective_estimate_straightens_diverging_column_starts() -> None:
     assert np.max(np.abs(mapped - dst)) < 1e-5
     assert abs(mapped[0, 0] - mapped[3, 0]) < 1e-5
     assert abs(mapped[1, 0] - mapped[2, 0]) < 1e-5
+    assert estimate.classification == "keystone"
+    assert estimate.width_change_ratio > 0.01
+    assert estimate.scale_delta_ratio > 0.01
+
+
+def test_parallel_column_drift_is_not_classified_as_keystone() -> None:
+    polygons: list[np.ndarray] = [_box(420, 45, 100, 18)]
+    for row in range(22):
+        y = 120 + row * 34
+        t = row / 21.0
+        drift = 28.0 * t
+        polygons.extend(
+            (
+                _box(90 + drift, y),
+                _box(480 + drift, y),
+            )
+        )
+
+    estimate = estimate_perspective_from_polygons(
+        polygons, (900, 1000), AppSettings(),
+    )
+
+    assert estimate.strength_px > 10
+    assert estimate.classification == "parallel_drift"
+    assert abs(estimate.common_drift_px) > 15
+    assert abs(estimate.width_delta_px) < 2
+    assert estimate.width_change_ratio < 0.005
+    assert estimate.scale_delta_ratio < 0.005
 
 
 def test_manual_four_corner_perspective_maps_to_axis_aligned_rectangle() -> None:
