@@ -3416,10 +3416,35 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
                 if analysis.perspective_horizontal_strength > 0
                 else ""
             )
+            column_part = ""
+            if analysis.perspective_row_valid_column_count:
+                total_columns = max(
+                    analysis.perspective_horizontal_column_count,
+                    analysis.perspective_row_valid_column_count,
+                )
+                worst_column = (
+                    analysis.perspective_row_after_worst_column_index + 1
+                    if analysis.perspective_row_after_worst_column_index >= 0
+                    else 0
+                )
+                column_part = (
+                    f" / 分栏 {analysis.perspective_row_valid_column_count}"
+                    f"/{total_columns}"
+                    f" 最差区域 {analysis.perspective_row_after_worst_region_deg:.2f}°"
+                    + (
+                        f"(第{worst_column}栏)"
+                        if worst_column else ""
+                    )
+                )
+                if analysis.perspective_horizontal_vp_column_spread_deg > 0:
+                    column_part += (
+                        " VP分歧 "
+                        f"{analysis.perspective_horizontal_vp_column_spread_deg:.2f}°"
+                    )
             row_part = (
                 f" / 行趋势 {analysis.perspective_row_before_trend_deg:+.2f}°"
                 f"→{analysis.perspective_row_after_trend_deg:+.2f}°"
-                f"{strength_part}"
+                f"{strength_part}{column_part}"
             )
         perspective_part = (
             f"｜投影候选 {analysis.perspective_candidate_strength_px:.1f}px"
@@ -3442,9 +3467,25 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
                 f" 跳变P95 {analysis.line_geometry_separator_track_jump_p95_px:.1f}px"
                 f"{curve_flag}"
             )
+        column_geometry = ""
+        if analysis.line_geometry_valid_columns:
+            worst_column = (
+                analysis.line_geometry_worst_column_index + 1
+                if analysis.line_geometry_worst_column_index >= 0
+                else 0
+            )
+            column_geometry = (
+                f" {analysis.line_geometry_valid_columns}/"
+                f"{max(analysis.line_geometry_columns, analysis.line_geometry_valid_columns)}栏"
+                + (
+                    f" 最差第{worst_column}栏"
+                    f" Δ{analysis.line_geometry_worst_column_trend_deg:+.2f}°"
+                    if worst_column else ""
+                )
+            )
         line_part = (
-            f"｜行几何 {analysis.line_geometry_rows}行"
-            f" Δ角 {analysis.line_geometry_trend_deg:+.2f}°"
+            f"｜行几何 {analysis.line_geometry_rows}行{column_geometry}"
+            f" 全页Δ角 {analysis.line_geometry_trend_deg:+.2f}°"
             f"{separator}"
             f" → {line_labels.get(analysis.line_geometry_recommendation, analysis.line_geometry_recommendation)}"
         )
