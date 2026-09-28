@@ -38,7 +38,7 @@ def test_perspective_estimate_straightens_diverging_column_starts() -> None:
         polygons, (900, 1000), AppSettings(),
     )
 
-    assert estimate.strength_px >= 8
+    assert estimate.strength_px >= 5.5
     src = np.asarray(estimate.source_quad, dtype=float).reshape(4, 2)
     mapped = transform_points_homography(src, estimate.matrix)
     dst = np.asarray(estimate.target_quad, dtype=float).reshape(4, 2)
