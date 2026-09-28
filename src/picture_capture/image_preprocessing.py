@@ -1538,11 +1538,31 @@ def _separator_vertical_span(
     )
 
 
+def _orthogonal_safe_gain_cap(
+    estimate: OrthogonalWarpEstimate,
+) -> float:
+    """Return the largest row gain allowed by the local scale safety budget."""
+    deviation = max(0.0, float(estimate.max_scale_deviation))
+    if deviation <= 1e-9:
+        return float(max(ORTHOGONAL_AUTO_GAINS))
+    return max(
+        0.0,
+        min(
+            float(max(ORTHOGONAL_AUTO_GAINS)),
+            ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
+            * ORTHOGONAL_SCALE_SAFETY_FRACTION
+            / deviation,
+        ),
+    )
+
+
 def _choose_orthogonal_candidate(
     polygons: Iterable[np.ndarray],
     estimate: OrthogonalWarpEstimate,
     size: tuple[int, int],
     settings: AppSettings,
+    *,
+    max_gain: float | None = None,
 ) -> tuple[
     float,
     list[np.ndarray],
@@ -1565,7 +1585,23 @@ def _choose_orthogonal_candidate(
     best_verdict = "insufficient"
     best_score = float("inf")
     best_objective = float("inf")
-    for gain in ORTHOGONAL_AUTO_GAINS:
+    gain_cap = (
+        float(max_gain)
+        if max_gain is not None
+        else float(max(ORTHOGONAL_AUTO_GAINS))
+    )
+    gain_values = [
+        float(gain)
+        for gain in ORTHOGONAL_AUTO_GAINS
+        if float(gain) <= gain_cap + 1e-9
+    ]
+    if (
+        gain_cap >= ORTHOGONAL_MIN_SAFE_GAIN
+        and all(abs(gain - gain_cap) > 1e-6 for gain in gain_values)
+    ):
+        gain_values.append(float(gain_cap))
+    gain_values = sorted(set(gain_values))
+    for gain in gain_values:
         mapped = transform_polygons_orthogonal(
             source_polygons,
             estimate,
