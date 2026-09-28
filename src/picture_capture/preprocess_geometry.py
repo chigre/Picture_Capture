@@ -645,6 +645,28 @@ def _weighted_median_pairs(values: list[tuple[float, float]]) -> float:
     return ordered[-1][0]
 
 
+def _weighted_percentile_pairs(
+    values: list[tuple[float, float]],
+    percentile: float,
+) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(
+        (float(value), max(0.0, float(weight)))
+        for value, weight in values
+    )
+    total = sum(weight for _value, weight in ordered)
+    if total <= 0.0:
+        return float(np.percentile([value for value, _weight in ordered], percentile))
+    target = total * max(0.0, min(100.0, float(percentile))) / 100.0
+    running = 0.0
+    for value, weight in ordered:
+        running += weight
+        if running >= target:
+            return value
+    return ordered[-1][0]
+
+
 def _horizontal_polygon_edge_angles(
     raw: np.ndarray,
 ) -> tuple[tuple[float, float], tuple[float, float]] | None:
@@ -746,27 +768,35 @@ def _horizontal_polygon_edge_metrics(
     column_delta: list[float] = []
     sample_count = 0
     for indices in groups:
-        top_values: list[float] = []
-        bottom_values: list[float] = []
-        delta_values: list[float] = []
+        top_values: list[tuple[float, float]] = []
+        bottom_values: list[tuple[float, float]] = []
+        delta_values: list[tuple[float, float]] = []
         for index in indices:
             if not (0 <= index < len(polygons)):
                 continue
             edge_pair = _horizontal_polygon_edge_angles(polygons[index])
             if edge_pair is None:
                 continue
-            (top_angle, _top_length), (bottom_angle, _bottom_length) = edge_pair
-            top_values.append(abs(float(top_angle)))
-            bottom_values.append(abs(float(bottom_angle)))
+            (top_angle, top_length), (bottom_angle, bottom_length) = edge_pair
+            weight = max(1.0, min(float(top_length), float(bottom_length)))
+            top_values.append((abs(float(top_angle)), weight))
+            bottom_values.append((abs(float(bottom_angle)), weight))
             delta_values.append(
-                abs(_normalize_text_angle(float(top_angle) - float(bottom_angle)))
+                (
+                    abs(
+                        _normalize_text_angle(
+                            float(top_angle) - float(bottom_angle)
+                        )
+                    ),
+                    weight,
+                )
             )
         if len(top_values) < 5:
             continue
         sample_count += len(top_values)
-        column_top.append(float(np.percentile(top_values, 90)))
-        column_bottom.append(float(np.percentile(bottom_values, 90)))
-        column_delta.append(float(np.percentile(delta_values, 90)))
+        column_top.append(_weighted_percentile_pairs(top_values, 90.0))
+        column_bottom.append(_weighted_percentile_pairs(bottom_values, 90.0))
+        column_delta.append(_weighted_percentile_pairs(delta_values, 90.0))
 
     top_p90 = max(column_top, default=0.0)
     bottom_p90 = max(column_bottom, default=0.0)
