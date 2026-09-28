@@ -2332,16 +2332,6 @@ def analyze_preprocess_page(
             )
         if (
             requested_geometry_mode == "auto"
-            and selected_candidate is horizontal_total_candidate
-            and line_geometry.separator_curve_reliable
-        ):
-            warnings.append(
-                "已先执行通过尺度与双边缘水平审计的全局水平投影；"
-                "实体分隔线仍提示非线性弯曲，因此继续保留 UVDoc 复核建议。"
-            )
-
-        if (
-            requested_geometry_mode == "auto"
             and structural_auto_safe
             and selected_candidate is structural_candidate
             and horizontal_full is not None
@@ -2523,8 +2513,8 @@ def analyze_preprocess_page(
     # Rotation/homography solve global geometry; UVDoc is a generic neural
     # fallback. Neither guarantees that every dictionary row is horizontal and
     # every physical column separator is vertical. Use the current post-transform
-    # OCR geometry itself to build a small row-wise mesh, validate it by a fresh
-    # detection pass, and (at most once) refine the residual. This makes the
+    # OCR geometry itself to build a small row-wise mesh, then validate the
+    # actually transformed pixels by a fresh detection pass. This makes the
     # acceptance criterion part of the correction loop instead of a warning only.
     orthogonal_applied = False
     orthogonal_passes = 0
@@ -2777,10 +2767,7 @@ def analyze_preprocess_page(
             )
             actual_geometry_mode = "orthogonal"
             advanced_redetected = True
-            method_parts.append(
-                "orthogonal_dewarp"
-                if pass_index == 0 else "orthogonal_refine"
-            )
+            method_parts.append("orthogonal_dewarp")
             if actual_verdict == "passed":
                 break
 
