@@ -10024,6 +10024,7 @@ class PictureCaptureApp(tk.Tk):
                 "deskew": "轻量：旋转+裁边",
                 "perspective": "自动透视",
                 "dewarp": "版面去弯曲",
+                "uvdoc": "UVDoc展平（Paddle高级）",
                 "auto": "自动几何（推荐）",
             }.get(
                 str(getattr(self.settings, "preprocess_geometry_mode", "auto") or "auto"),
@@ -12276,9 +12277,10 @@ class PictureCaptureApp(tk.Tk):
                 "轻量：旋转+裁边",
                 "自动透视",
                 "版面去弯曲",
+                "UVDoc展平（Paddle高级）",
             ),
             state="readonly",
-            width=18,
+            width=22,
         )
         geometry_combo.pack(side="left", fill="x", expand=True)
         geometry_combo.bind("<<ComboboxSelected>>", self._preprocess_settings_changed)
@@ -12298,7 +12300,7 @@ class PictureCaptureApp(tk.Tk):
         reset_corner_button.pack(side="left", padx=(4, 0))
         self._attach_tooltip(
             manual_corner_button,
-            "在原始整页图上拖动左上、右上、右下、左下四个控制点；手动四角优先于自动透视。",
+            "在原始整页图上拖动左上、右上、右下、左下四个控制点；手动四角优先于自动透视，也可在 UVDoc 前先做人工透视校正。",
         )
         self._attach_tooltip(
             reset_corner_button,
@@ -12775,6 +12777,7 @@ class PictureCaptureApp(tk.Tk):
             "轻量：旋转+裁边": "deskew",
             "自动透视": "perspective",
             "版面去弯曲": "dewarp",
+            "UVDoc展平（Paddle高级）": "uvdoc",
         }.get(geometry_label, "auto")
         return safety, bool(self.preprocess_auto_deskew_var.get()), geometry_mode
 
