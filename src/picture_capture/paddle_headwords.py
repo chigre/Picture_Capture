@@ -5162,8 +5162,7 @@ def filter_headword_records(
             and str(visual_entry_marker.get("role") or "") == "bracket_open"
         )
         cjk_bracket_visual_supported = bool(
-            cjk_bracket_explicit_ocr
-            or cjk_bracket_visual_marker
+            cjk_bracket_visual_marker
             or large
             or bold
         )
