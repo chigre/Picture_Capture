@@ -85,6 +85,7 @@ from .image_preprocessing import (
     preprocess_metadata_output_root,
     preview_output_root as preprocess_preview_output_root,
     processed_output_root as preprocess_processed_output_root,
+    promote_processed_pages,
     result_summary as preprocess_result_summary,
     save_analysis as save_preprocess_analysis,
     save_manual_perspective_quad,
@@ -12364,10 +12365,10 @@ class PictureCaptureApp(tk.Tk):
         for col in range(4):
             preprocess_action_row.columnconfigure(col, weight=1, uniform="preprocess-actions")
         for col, (text_value, command) in enumerate((
-            ("分析当前页", self.analyze_preprocess_current),
             ("分析所选范围", self.analyze_preprocess_selected),
             ("上一需检查", lambda: self.jump_preprocess_review(-1)),
             ("下一需检查", lambda: self.jump_preprocess_review(1)),
+            ("诊断信息", self.show_preprocess_diagnostics),
         )):
             ttk.Button(
                 preprocess_action_row, text=text_value, command=command,
@@ -12469,8 +12470,10 @@ class PictureCaptureApp(tk.Tk):
 
         preprocess_export_row = ttk.Frame(preprocess)
         preprocess_export_row.grid(row=6, column=0, sticky="ew", pady=(4, 0))
-        preprocess_export_row.columnconfigure(0, weight=1, uniform="preprocess-export")
-        preprocess_export_row.columnconfigure(1, weight=1, uniform="preprocess-export")
+        for col in range(3):
+            preprocess_export_row.columnconfigure(
+                col, weight=1, uniform="preprocess-export"
+            )
         ttk.Button(
             preprocess_export_row, text="导出检查小图",
             command=self.export_preprocess_previews,
@@ -12481,11 +12484,18 @@ class PictureCaptureApp(tk.Tk):
             command=self.export_preprocess_images,
             style="PC.Compact.TButton",
         ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
-        ttk.Label(
-            preprocess, textvariable=self.preprocess_status_var,
-            style="PC.FieldLabel.TLabel", anchor="w",
-            wraplength=430,
-        ).grid(row=7, column=0, sticky="ew", pady=(4, 0))
+        promote_button = ttk.Button(
+            preprocess_export_row, text="设为工作图片",
+            command=self.promote_preprocessed_working_images,
+            style="PC.Compact.TButton",
+        )
+        promote_button.grid(row=0, column=2, sticky="ew", padx=(4, 0))
+        self._attach_tooltip(
+            promote_button,
+            "要求整套工作页已导出。原扫描图一次性移动到 __before__，"
+            "处理后图片以原文件名成为项目根目录中的后续工作图片；"
+            "__before__ 已存在时绝不覆盖。",
+        )
 
         self._attach_tooltip(
             self.preprocess_mode_button,
