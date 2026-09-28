@@ -60,7 +60,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 14
+PREPROCESS_FORMAT_VERSION = 15
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -136,6 +136,7 @@ class PreprocessAnalysis:
     perspective_horizontal_vp_column_spread_deg: float = 0.0
     perspective_horizontal_strength: float = 0.0
     perspective_row_valid_column_count: int = 0
+    perspective_row_valid_column_indices: tuple[int, ...] = ()
     perspective_row_column_row_counts: tuple[int, ...] = ()
     perspective_row_after_worst_region_deg: float = 0.0
     perspective_row_after_worst_column_metric_deg: float = 0.0
@@ -206,6 +207,7 @@ class PreprocessAnalysis:
     line_geometry_residual_span_deg: float = 0.0
     line_geometry_columns: int = 0
     line_geometry_valid_columns: int = 0
+    line_geometry_valid_column_indices: tuple[int, ...] = ()
     line_geometry_column_row_counts: tuple[int, ...] = ()
     line_geometry_column_trends_deg: tuple[float, ...] = ()
     line_geometry_worst_column_index: int = -1
@@ -352,6 +354,12 @@ class PreprocessAnalysis:
             ),
             perspective_row_valid_column_count=max(
                 0, int(payload.get("perspective_row_valid_column_count", 0))
+            ),
+            perspective_row_valid_column_indices=tuple(
+                int(v)
+                for v in payload.get(
+                    "perspective_row_valid_column_indices", ()
+                )
             ),
             perspective_row_column_row_counts=tuple(
                 int(v)
@@ -631,6 +639,36 @@ class PreprocessAnalysis:
             ),
             line_geometry_residual_span_deg=max(
                 0.0, float(payload.get("line_geometry_residual_span_deg", 0.0))
+            ),
+            line_geometry_columns=max(
+                0, int(payload.get("line_geometry_columns", 0))
+            ),
+            line_geometry_valid_columns=max(
+                0, int(payload.get("line_geometry_valid_columns", 0))
+            ),
+            line_geometry_valid_column_indices=tuple(
+                int(v)
+                for v in payload.get(
+                    "line_geometry_valid_column_indices", ()
+                )
+            ),
+            line_geometry_column_row_counts=tuple(
+                int(v)
+                for v in payload.get("line_geometry_column_row_counts", ())
+            ),
+            line_geometry_column_trends_deg=tuple(
+                float(v)
+                for v in payload.get("line_geometry_column_trends_deg", ())
+            ),
+            line_geometry_worst_column_index=int(
+                payload.get("line_geometry_worst_column_index", -1)
+            ),
+            line_geometry_worst_column_trend_deg=float(
+                payload.get("line_geometry_worst_column_trend_deg", 0.0)
+            ),
+            line_geometry_worst_region_angle_deg=max(
+                0.0,
+                float(payload.get("line_geometry_worst_region_angle_deg", 0.0)),
             ),
             line_geometry_separator_found=bool(
                 payload.get("line_geometry_separator_found", False)
@@ -1223,6 +1261,7 @@ def analyze_preprocess_page(
     perspective_structural_applied = False
     perspective_structural_safe = False
     perspective_row_valid_column_count = 0
+    perspective_row_valid_column_indices: tuple[int, ...] = ()
     perspective_row_column_row_counts: tuple[int, ...] = ()
     perspective_row_after_worst_region_deg = 0.0
     perspective_row_after_worst_column_metric_deg = 0.0
@@ -1802,6 +1841,10 @@ def analyze_preprocess_page(
             perspective_row_valid_column_count = int(
                 getattr(row_audit, "valid_column_count", 0)
             )
+            perspective_row_valid_column_indices = tuple(
+                int(value)
+                for value in getattr(row_audit, "valid_column_indices", ())
+            )
             perspective_row_column_row_counts = tuple(
                 getattr(row_audit, "column_row_counts", ())
             )
@@ -2211,6 +2254,9 @@ def analyze_preprocess_page(
         perspective_row_valid_column_count=int(
             perspective_row_valid_column_count
         ),
+        perspective_row_valid_column_indices=tuple(
+            int(v) for v in perspective_row_valid_column_indices
+        ),
         perspective_row_column_row_counts=tuple(
             int(v) for v in perspective_row_column_row_counts
         ),
@@ -2373,6 +2419,29 @@ def analyze_preprocess_page(
         line_geometry_trend_deg=float(line_geometry.angle_trend_deg),
         line_geometry_residual_mad_deg=float(line_geometry.residual_mad_deg),
         line_geometry_residual_span_deg=float(line_geometry.residual_span_deg),
+        line_geometry_columns=int(getattr(line_geometry, "column_count", 0)),
+        line_geometry_valid_columns=int(
+            getattr(line_geometry, "valid_column_count", 0)
+        ),
+        line_geometry_valid_column_indices=tuple(
+            int(v)
+            for v in getattr(line_geometry, "valid_column_indices", ())
+        ),
+        line_geometry_column_row_counts=tuple(
+            int(v) for v in getattr(line_geometry, "column_row_counts", ())
+        ),
+        line_geometry_column_trends_deg=tuple(
+            float(v) for v in getattr(line_geometry, "column_trends_deg", ())
+        ),
+        line_geometry_worst_column_index=int(
+            getattr(line_geometry, "worst_column_index", -1)
+        ),
+        line_geometry_worst_column_trend_deg=float(
+            getattr(line_geometry, "worst_column_trend_deg", 0.0)
+        ),
+        line_geometry_worst_region_angle_deg=float(
+            getattr(line_geometry, "worst_region_angle_deg", 0.0)
+        ),
         line_geometry_separator_found=bool(line_geometry.separator_found),
         line_geometry_separator_residual_px=float(
             line_geometry.separator_residual_px
@@ -2936,6 +3005,10 @@ def export_summary_csv(
             "perspective_row_valid_column_count": (
                 analysis.perspective_row_valid_column_count
             ),
+            "perspective_row_valid_column_indices": json.dumps(
+                analysis.perspective_row_valid_column_indices,
+                ensure_ascii=False,
+            ),
             "perspective_row_column_row_counts": json.dumps(
                 analysis.perspective_row_column_row_counts,
                 ensure_ascii=False,
@@ -3107,6 +3180,29 @@ def export_summary_csv(
             "line_geometry_trend_deg": analysis.line_geometry_trend_deg,
             "line_geometry_residual_mad_deg": analysis.line_geometry_residual_mad_deg,
             "line_geometry_residual_span_deg": analysis.line_geometry_residual_span_deg,
+            "line_geometry_columns": analysis.line_geometry_columns,
+            "line_geometry_valid_columns": analysis.line_geometry_valid_columns,
+            "line_geometry_valid_column_indices": json.dumps(
+                analysis.line_geometry_valid_column_indices,
+                ensure_ascii=False,
+            ),
+            "line_geometry_column_row_counts": json.dumps(
+                analysis.line_geometry_column_row_counts,
+                ensure_ascii=False,
+            ),
+            "line_geometry_column_trends_deg": json.dumps(
+                analysis.line_geometry_column_trends_deg,
+                ensure_ascii=False,
+            ),
+            "line_geometry_worst_column_index": (
+                analysis.line_geometry_worst_column_index
+            ),
+            "line_geometry_worst_column_trend_deg": (
+                analysis.line_geometry_worst_column_trend_deg
+            ),
+            "line_geometry_worst_region_angle_deg": (
+                analysis.line_geometry_worst_region_angle_deg
+            ),
             "separator_found": analysis.line_geometry_separator_found,
             "separator_residual_px": analysis.line_geometry_separator_residual_px,
             "separator_span_ratio": analysis.line_geometry_separator_span_ratio,
