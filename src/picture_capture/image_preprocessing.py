@@ -930,6 +930,70 @@ def load_analysis(project_root: Path, page: Path) -> PreprocessAnalysis | None:
         return None
 
 
+MANUAL_GEOMETRY_FORMAT = "picture-capture-manual-perspective"
+MANUAL_GEOMETRY_VERSION = 1
+
+
+def manual_geometry_path(project_root: Path, page: Path) -> Path:
+    root = image_preprocess_data_root(project_root)
+    root.mkdir(parents=True, exist_ok=True)
+    return root / f"{Path(page).stem}.geometry.json"
+
+
+def load_manual_perspective_quad(
+    project_root: Path, page: Path,
+) -> tuple[float, ...] | None:
+    path = manual_geometry_path(project_root, page)
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if (
+            payload.get("format") != MANUAL_GEOMETRY_FORMAT
+            or int(payload.get("version", 0) or 0) != MANUAL_GEOMETRY_VERSION
+        ):
+            return None
+        values = payload.get("quad")
+        if not isinstance(values, (list, tuple)) or len(values) != 8:
+            return None
+        quad = tuple(float(v) for v in values)
+        return quad if all(math.isfinite(v) for v in quad) else None
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def save_manual_perspective_quad(
+    project_root: Path,
+    page: Path,
+    quad: Iterable[float],
+) -> Path:
+    values = tuple(float(v) for v in quad)
+    if len(values) != 8 or not all(math.isfinite(v) for v in values):
+        raise ValueError("手动四角坐标无效")
+    path = manual_geometry_path(project_root, page)
+    payload = {
+        "format": MANUAL_GEOMETRY_FORMAT,
+        "version": MANUAL_GEOMETRY_VERSION,
+        "page": Path(page).name,
+        "quad": list(values),
+    }
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+    return path
+
+
+def clear_manual_perspective_quad(project_root: Path, page: Path) -> None:
+    path = manual_geometry_path(project_root, page)
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
 def analysis_is_current(
     analysis: PreprocessAnalysis,
     page: Path,
@@ -937,6 +1001,7 @@ def analysis_is_current(
     safety_margin_px: int,
     auto_deskew: bool,
     geometry_mode: str = "auto",
+    manual_perspective_quad: tuple[float, ...] | None = None,
 ) -> bool:
     page = Path(page)
     if int(analysis.safety_margin_px) != int(safety_margin_px):
@@ -944,6 +1009,16 @@ def analysis_is_current(
     if bool(analysis.auto_deskew) != bool(auto_deskew):
         return False
     if _normalize_geometry_mode(analysis.requested_geometry_mode) != _normalize_geometry_mode(geometry_mode):
+        return False
+    expected_quad = (
+        tuple(round(float(v), 4) for v in manual_perspective_quad)
+        if manual_perspective_quad is not None else None
+    )
+    actual_quad = (
+        tuple(round(float(v), 4) for v in analysis.manual_perspective_quad)
+        if analysis.manual_perspective_quad is not None else None
+    )
+    if actual_quad != expected_quad:
         return False
     try:
         stat = page.stat()
