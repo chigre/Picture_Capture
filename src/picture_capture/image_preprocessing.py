@@ -824,6 +824,7 @@ def analyze_preprocess_path(
     *,
     safety_margin_px: int = DEFAULT_SAFETY_MARGIN_PX,
     auto_deskew: bool = True,
+    geometry_mode: str = "auto",
 ) -> PreprocessAnalysis:
     path = Path(path)
     with Image.open(path) as opened:
@@ -832,6 +833,7 @@ def analyze_preprocess_path(
             settings,
             safety_margin_px=safety_margin_px,
             auto_deskew=auto_deskew,
+            geometry_mode=geometry_mode,
         )
     try:
         stat = path.stat()
@@ -878,11 +880,14 @@ def analysis_is_current(
     *,
     safety_margin_px: int,
     auto_deskew: bool,
+    geometry_mode: str = "auto",
 ) -> bool:
     page = Path(page)
     if int(analysis.safety_margin_px) != int(safety_margin_px):
         return False
     if bool(analysis.auto_deskew) != bool(auto_deskew):
+        return False
+    if _normalize_geometry_mode(analysis.requested_geometry_mode) != _normalize_geometry_mode(geometry_mode):
         return False
     try:
         stat = page.stat()
@@ -925,12 +930,12 @@ def overlay_excluded_regions(
 
 
 def review_image(image: Image.Image, analysis: PreprocessAnalysis) -> Image.Image:
-    corrected = deskew_image(image, analysis.applied_angle_deg)
+    corrected = geometry_corrected_image(image, analysis)
     return overlay_excluded_regions(corrected, analysis.crop_box)
 
 
 def processed_image(image: Image.Image, analysis: PreprocessAnalysis) -> Image.Image:
-    corrected = deskew_image(image, analysis.applied_angle_deg)
+    corrected = geometry_corrected_image(image, analysis)
     return corrected.crop(analysis.crop_box)
 
 
@@ -985,8 +990,21 @@ def save_processed_page(page: Path, analysis: PreprocessAnalysis, destination: P
 def result_summary(analysis: PreprocessAnalysis) -> str:
     x0, y0, x1, y1 = analysis.crop_box
     label = "需检查" if analysis.status == "review" else "正常"
+    geometry_labels = {
+        "deskew": "轻量纠偏",
+        "perspective": "透视纠正",
+        "dewarp": "版面去弯曲",
+    }
+    geometry = geometry_labels.get(analysis.geometry_mode, analysis.geometry_mode)
+    strength = (
+        f" {analysis.geometry_strength_px:.1f}px"
+        if analysis.geometry_mode in {"perspective", "dewarp"}
+        and analysis.geometry_strength_px > 0
+        else ""
+    )
     return (
-        f"{label}｜纠偏 {analysis.applied_angle_deg:+.2f}°"
+        f"{label}｜{geometry}{strength}｜"
+        f"旋转 {analysis.applied_angle_deg:+.2f}°"
         f"（检测 {analysis.correction_angle_deg:+.2f}°）｜"
         f"保留 {analysis.retained_ratio * 100:.1f}%｜"
         f"裁剪 L{x0} T{y0} R{x1} B{y1}"
