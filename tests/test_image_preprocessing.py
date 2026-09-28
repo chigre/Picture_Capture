@@ -715,6 +715,8 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
     assert payload["algorithm_constants"]["text_scale_inline_span_max"] == 0.045
     assert payload["algorithm_constants"]["text_scale_cross_span_max"] == 0.075
     assert payload["algorithm_constants"]["text_scale_anisotropy_p95_max"] == 0.04
+    assert payload["algorithm_constants"]["separator_curve_span_min"] == 0.72
+    assert payload["algorithm_constants"]["separator_curvature_score_min"] == 0.35
 
     summary = tmp_path / "preprocess_summary.csv"
     export_summary_csv([(page, analysis, output, canvas)], summary)
