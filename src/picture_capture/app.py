@@ -81,6 +81,8 @@ from .image_preprocessing import (
     load_analysis as load_preprocess_analysis,
     load_manual_perspective_quad,
     overlay_excluded_regions,
+    output_canvas_info,
+    preprocess_metadata_output_root,
     preview_output_root as preprocess_preview_output_root,
     processed_output_root as preprocess_processed_output_root,
     result_summary as preprocess_result_summary,
@@ -88,6 +90,8 @@ from .image_preprocessing import (
     save_manual_perspective_quad,
     save_processed_page,
     save_review_preview,
+    export_diagnostic_json,
+    export_summary_csv,
 )
 from .preprocess_geometry import perspective_from_quad
 from .page_sections import (
@@ -10029,6 +10033,40 @@ class PictureCaptureApp(tk.Tk):
             }.get(
                 str(getattr(self.settings, "preprocess_geometry_mode", "auto") or "auto"),
                 "自动几何（推荐）",
+            )
+        )
+        self.preprocess_export_canvas_var = tk.BooleanVar(
+            value=bool(getattr(self.settings, "preprocess_export_canvas_enabled", False))
+        )
+        self.preprocess_export_canvas_mode_var = tk.StringVar(
+            value={
+                "batch_max": "本批最大裁剪尺寸",
+                "custom": "自定义尺寸",
+            }.get(
+                str(getattr(self.settings, "preprocess_export_canvas_mode", "batch_max") or "batch_max"),
+                "本批最大裁剪尺寸",
+            )
+        )
+        self.preprocess_export_canvas_width_var = tk.StringVar(
+            value=str(int(getattr(self.settings, "preprocess_export_canvas_width", 0) or 0))
+        )
+        self.preprocess_export_canvas_height_var = tk.StringVar(
+            value=str(int(getattr(self.settings, "preprocess_export_canvas_height", 0) or 0))
+        )
+        self.preprocess_export_align_x_var = tk.StringVar(
+            value={
+                "left": "左对齐", "center": "居中", "right": "右对齐",
+            }.get(
+                str(getattr(self.settings, "preprocess_export_align_x", "center") or "center"),
+                "居中",
+            )
+        )
+        self.preprocess_export_align_y_var = tk.StringVar(
+            value={
+                "top": "顶端对齐", "center": "居中", "bottom": "底部对齐",
+            }.get(
+                str(getattr(self.settings, "preprocess_export_align_y", "top") or "top"),
+                "顶端对齐",
             )
         )
         self.preprocess_status_var = tk.StringVar(value="未分析")
