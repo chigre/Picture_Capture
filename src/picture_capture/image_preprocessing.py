@@ -1263,10 +1263,38 @@ def export_diagnostic_json(
     *,
     output_path: Path | None = None,
     canvas: OutputCanvasInfo | None = None,
+    settings: AppSettings | None = None,
 ) -> Path:
     payload = analysis.to_dict()
     payload["page"] = Path(page).name
     payload["source_path_name"] = Path(page).name
+    payload["effective_settings"] = (
+        {
+            "layout_writing_mode": str(settings.layout_writing_mode),
+            "layout_text_direction": str(settings.layout_text_direction),
+            "layout_transform": str(settings.layout_transform),
+            "layout_columns_policy": str(settings.layout_columns_policy),
+            "fixed_columns": int(settings.columns),
+            "layout_column_separator_mode": str(
+                settings.layout_column_separator_mode
+            ),
+            "analysis_threshold_mode": str(settings.analysis_threshold_mode),
+            "preprocess_auto_deskew": bool(
+                settings.preprocess_auto_deskew
+            ),
+            "preprocess_safety_margin_px": int(
+                settings.preprocess_safety_margin_px
+            ),
+            "preprocess_geometry_mode": str(
+                settings.preprocess_geometry_mode
+            ),
+        }
+        if settings is not None else None
+    )
+    payload["algorithm_constants"] = {
+        "max_auto_deskew_deg": DEFAULT_MAX_AUTO_DESKEW_DEG,
+        "deskew_dead_zone_deg": DEFAULT_DESKEW_DEAD_ZONE_DEG,
+    }
     payload["export"] = {
         "output_filename": Path(output_path).name if output_path is not None else None,
         "content_width": max(1, analysis.crop_box[2] - analysis.crop_box[0]),
