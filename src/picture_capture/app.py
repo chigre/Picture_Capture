@@ -10053,6 +10053,18 @@ class PictureCaptureApp(tk.Tk):
         self.preprocess_export_canvas_height_var = tk.StringVar(
             value=str(int(getattr(self.settings, "preprocess_export_canvas_height", 0) or 0))
         )
+        self.preprocess_export_margin_top_var = tk.StringVar(
+            value=str(int(getattr(self.settings, "preprocess_export_margin_top", 0) or 0))
+        )
+        self.preprocess_export_margin_bottom_var = tk.StringVar(
+            value=str(int(getattr(self.settings, "preprocess_export_margin_bottom", 0) or 0))
+        )
+        self.preprocess_export_margin_left_var = tk.StringVar(
+            value=str(int(getattr(self.settings, "preprocess_export_margin_left", 0) or 0))
+        )
+        self.preprocess_export_margin_right_var = tk.StringVar(
+            value=str(int(getattr(self.settings, "preprocess_export_margin_right", 0) or 0))
+        )
         self.preprocess_export_align_x_var = tk.StringVar(
             value={
                 "left": "左对齐", "center": "居中", "right": "右对齐",
@@ -12366,7 +12378,7 @@ class PictureCaptureApp(tk.Tk):
         preprocess_canvas_row.grid(row=3, column=0, sticky="ew", pady=(4, 0))
         ttk.Checkbutton(
             preprocess_canvas_row,
-            text="统一白底画布",
+            text="统一最终页面",
             variable=self.preprocess_export_canvas_var,
             command=self._preprocess_export_settings_changed,
         ).pack(side="left")
@@ -12381,7 +12393,7 @@ class PictureCaptureApp(tk.Tk):
         canvas_mode_combo.bind(
             "<<ComboboxSelected>>", self._preprocess_export_settings_changed
         )
-        ttk.Label(preprocess_canvas_row, text="宽×高：").pack(side="left", padx=(8, 2))
+        ttk.Label(preprocess_canvas_row, text="页面宽×高：").pack(side="left", padx=(8, 2))
         canvas_width_spin = ttk.Spinbox(
             preprocess_canvas_row,
             from_=0, to=100000, increment=10, width=7,
@@ -12399,9 +12411,33 @@ class PictureCaptureApp(tk.Tk):
             widget.bind("<Return>", self._preprocess_export_settings_changed)
             widget.bind("<FocusOut>", self._preprocess_export_settings_changed)
 
+        preprocess_margin_row = ttk.Frame(preprocess)
+        preprocess_margin_row.grid(row=4, column=0, sticky="ew", pady=(4, 0))
+        ttk.Label(preprocess_margin_row, text="页边空(px)：").pack(side="left")
+        margin_widgets = []
+        for label, variable in (
+            ("上", self.preprocess_export_margin_top_var),
+            ("左", self.preprocess_export_margin_left_var),
+            ("下", self.preprocess_export_margin_bottom_var),
+            ("右", self.preprocess_export_margin_right_var),
+        ):
+            ttk.Label(preprocess_margin_row, text=f"{label}：").pack(
+                side="left", padx=(5, 1)
+            )
+            spin = ttk.Spinbox(
+                preprocess_margin_row,
+                from_=0, to=100000, increment=5, width=5,
+                textvariable=variable,
+            )
+            spin.pack(side="left")
+            margin_widgets.append(spin)
+        for widget in margin_widgets:
+            widget.bind("<Return>", self._preprocess_export_settings_changed)
+            widget.bind("<FocusOut>", self._preprocess_export_settings_changed)
+
         preprocess_align_row = ttk.Frame(preprocess)
-        preprocess_align_row.grid(row=4, column=0, sticky="ew", pady=(4, 0))
-        ttk.Label(preprocess_align_row, text="X：").pack(side="left")
+        preprocess_align_row.grid(row=5, column=0, sticky="ew", pady=(4, 0))
+        ttk.Label(preprocess_align_row, text="内容框排版 X：").pack(side="left")
         align_x_combo = ttk.Combobox(
             preprocess_align_row,
             textvariable=self.preprocess_export_align_x_var,
@@ -12427,12 +12463,12 @@ class PictureCaptureApp(tk.Tk):
         )
         ttk.Label(
             preprocess_align_row,
-            text="导出图片同时生成逐页 JSON + summary CSV",
+            text="内容框在版心内排版；不足部分填白",
             style="PC.FieldLabel.TLabel",
         ).pack(side="left", padx=(10, 0))
 
         preprocess_export_row = ttk.Frame(preprocess)
-        preprocess_export_row.grid(row=5, column=0, sticky="ew", pady=(4, 0))
+        preprocess_export_row.grid(row=6, column=0, sticky="ew", pady=(4, 0))
         preprocess_export_row.columnconfigure(0, weight=1, uniform="preprocess-export")
         preprocess_export_row.columnconfigure(1, weight=1, uniform="preprocess-export")
         ttk.Button(
@@ -12449,7 +12485,7 @@ class PictureCaptureApp(tk.Tk):
             preprocess, textvariable=self.preprocess_status_var,
             style="PC.FieldLabel.TLabel", anchor="w",
             wraplength=430,
-        ).grid(row=6, column=0, sticky="ew", pady=(4, 0))
+        ).grid(row=7, column=0, sticky="ew", pady=(4, 0))
 
         self._attach_tooltip(
             self.preprocess_mode_button,
@@ -12891,23 +12927,45 @@ class PictureCaptureApp(tk.Tk):
 
     def _preprocess_export_config(
         self,
-    ) -> tuple[bool, str, int, int, str, str]:
+    ) -> tuple[bool, str, int, int, int, int, int, int, str, str]:
         enabled = bool(self.preprocess_export_canvas_var.get())
         mode_label = str(self.preprocess_export_canvas_mode_var.get() or "").strip()
         mode = {
             "本批最大裁剪尺寸": "batch_max",
             "自定义尺寸": "custom",
         }.get(mode_label, "batch_max")
-        try:
-            width = int(round(float(str(self.preprocess_export_canvas_width_var.get()).strip())))
-        except (TypeError, ValueError):
-            width = int(getattr(self.settings, "preprocess_export_canvas_width", 0) or 0)
-        try:
-            height = int(round(float(str(self.preprocess_export_canvas_height_var.get()).strip())))
-        except (TypeError, ValueError):
-            height = int(getattr(self.settings, "preprocess_export_canvas_height", 0) or 0)
-        width = max(0, min(100000, width))
-        height = max(0, min(100000, height))
+
+        def bounded_int(variable, setting_name: str) -> int:
+            try:
+                value = int(round(float(str(variable.get()).strip())))
+            except (TypeError, ValueError):
+                value = int(getattr(self.settings, setting_name, 0) or 0)
+            return max(0, min(100000, value))
+
+        width = bounded_int(
+            self.preprocess_export_canvas_width_var,
+            "preprocess_export_canvas_width",
+        )
+        height = bounded_int(
+            self.preprocess_export_canvas_height_var,
+            "preprocess_export_canvas_height",
+        )
+        margin_top = bounded_int(
+            self.preprocess_export_margin_top_var,
+            "preprocess_export_margin_top",
+        )
+        margin_bottom = bounded_int(
+            self.preprocess_export_margin_bottom_var,
+            "preprocess_export_margin_bottom",
+        )
+        margin_left = bounded_int(
+            self.preprocess_export_margin_left_var,
+            "preprocess_export_margin_left",
+        )
+        margin_right = bounded_int(
+            self.preprocess_export_margin_right_var,
+            "preprocess_export_margin_right",
+        )
         align_x = {
             "左对齐": "left",
             "居中": "center",
@@ -12918,18 +12976,32 @@ class PictureCaptureApp(tk.Tk):
             "居中": "center",
             "底部对齐": "bottom",
         }.get(str(self.preprocess_export_align_y_var.get() or "").strip(), "top")
-        return enabled, mode, width, height, align_x, align_y
+        return (
+            enabled, mode, width, height,
+            margin_top, margin_bottom, margin_left, margin_right,
+            align_x, align_y,
+        )
 
     def _preprocess_export_settings_changed(self, _event=None) -> None:
-        enabled, mode, width, height, align_x, align_y = (
-            self._preprocess_export_config()
-        )
+        (
+            enabled, mode, width, height,
+            margin_top, margin_bottom, margin_left, margin_right,
+            align_x, align_y,
+        ) = self._preprocess_export_config()
         self.preprocess_export_canvas_width_var.set(str(width))
         self.preprocess_export_canvas_height_var.set(str(height))
+        self.preprocess_export_margin_top_var.set(str(margin_top))
+        self.preprocess_export_margin_bottom_var.set(str(margin_bottom))
+        self.preprocess_export_margin_left_var.set(str(margin_left))
+        self.preprocess_export_margin_right_var.set(str(margin_right))
         self.settings.preprocess_export_canvas_enabled = enabled
         self.settings.preprocess_export_canvas_mode = mode
         self.settings.preprocess_export_canvas_width = width
         self.settings.preprocess_export_canvas_height = height
+        self.settings.preprocess_export_margin_top = margin_top
+        self.settings.preprocess_export_margin_bottom = margin_bottom
+        self.settings.preprocess_export_margin_left = margin_left
+        self.settings.preprocess_export_margin_right = margin_right
         self.settings.preprocess_export_align_x = align_x
         self.settings.preprocess_export_align_y = align_y
         if self.project is not None:
@@ -12937,12 +13009,20 @@ class PictureCaptureApp(tk.Tk):
             self.project.settings.preprocess_export_canvas_mode = mode
             self.project.settings.preprocess_export_canvas_width = width
             self.project.settings.preprocess_export_canvas_height = height
+            self.project.settings.preprocess_export_margin_top = margin_top
+            self.project.settings.preprocess_export_margin_bottom = margin_bottom
+            self.project.settings.preprocess_export_margin_left = margin_left
+            self.project.settings.preprocess_export_margin_right = margin_right
             self.project.settings.preprocess_export_align_x = align_x
             self.project.settings.preprocess_export_align_y = align_y
             try:
                 self.settings.to_json(settings_path(self.project.root))
             except OSError:
                 pass
+        if self._preprocess_mode_active():
+            self._set_current_preprocess_status(
+                self._preprocess_result_for_page(self.current_index)
+            )
 
     def _preprocess_settings_changed(self, _event=None) -> None:
         safety, auto_deskew, geometry_mode = self._preprocess_config()
@@ -13342,7 +13422,36 @@ class PictureCaptureApp(tk.Tk):
             warning = "｜" + "；".join(analysis.warnings[:2])
             if len(analysis.warnings) > 2:
                 warning += f"；另 {len(analysis.warnings) - 2} 项"
-        self.preprocess_status_var.set(preprocess_result_summary(analysis) + warning)
+        x0, y0, x1, y1 = analysis.crop_box
+        content_width = max(1, int(x1) - int(x0))
+        content_height = max(1, int(y1) - int(y0))
+        layout_note = f"｜内容框 {content_width}×{content_height}px"
+        try:
+            (
+                canvas_enabled, canvas_mode, page_width, page_height,
+                margin_top, margin_bottom, margin_left, margin_right,
+                _align_x, _align_y,
+            ) = self._preprocess_export_config()
+        except (AttributeError, tk.TclError):
+            canvas_enabled = False
+        if canvas_enabled:
+            if canvas_mode == "custom" and page_width > 0 and page_height > 0:
+                effective_width = max(
+                    page_width, content_width + margin_left + margin_right
+                )
+                effective_height = max(
+                    page_height, content_height + margin_top + margin_bottom
+                )
+                layout_note += (
+                    f"｜页面 {effective_width}×{effective_height}px"
+                    f"｜版心 {effective_width - margin_left - margin_right}"
+                    f"×{effective_height - margin_top - margin_bottom}px"
+                )
+            else:
+                layout_note += "｜页面=按本批最大内容框+页边空"
+        self.preprocess_status_var.set(
+            preprocess_result_summary(analysis) + layout_note + warning
+        )
 
     def analyze_preprocess_current(self, *, silent: bool = False) -> None:
         if not self.project or self.current_page is None:
@@ -13582,14 +13691,18 @@ class PictureCaptureApp(tk.Tk):
             canvas_mode,
             canvas_width,
             canvas_height,
+            margin_top,
+            margin_bottom,
+            margin_left,
+            margin_right,
             align_x,
             align_y,
         ) = self._preprocess_export_config()
         if canvas_enabled and canvas_mode == "custom":
             if canvas_width <= 0 or canvas_height <= 0:
                 messagebox.showerror(
-                    "统一白底画布",
-                    "自定义尺寸时，宽度和高度都必须大于 0 px。",
+                    "统一最终页面",
+                    "指定页面尺寸时，宽度和高度都必须大于 0 px。",
                     parent=self,
                 )
                 return
@@ -13631,15 +13744,21 @@ class PictureCaptureApp(tk.Tk):
             max_content_width = max(content_widths)
             max_content_height = max(content_heights)
 
+            minimum_page_width = (
+                max_content_width + margin_left + margin_right
+            )
+            minimum_page_height = (
+                max_content_height + margin_top + margin_bottom
+            )
             if canvas_enabled:
                 if canvas_mode == "batch_max":
-                    requested_width = max_content_width
-                    requested_height = max_content_height
+                    requested_width = minimum_page_width
+                    requested_height = minimum_page_height
                 else:
                     requested_width = canvas_width
                     requested_height = canvas_height
-                effective_width = max(requested_width, max_content_width)
-                effective_height = max(requested_height, max_content_height)
+                effective_width = max(requested_width, minimum_page_width)
+                effective_height = max(requested_height, minimum_page_height)
             else:
                 requested_width = 0
                 requested_height = 0
@@ -13661,6 +13780,10 @@ class PictureCaptureApp(tk.Tk):
                     requested_height=requested_height,
                     canvas_width=effective_width if canvas_enabled else None,
                     canvas_height=effective_height if canvas_enabled else None,
+                    margin_top=margin_top,
+                    margin_bottom=margin_bottom,
+                    margin_left=margin_left,
+                    margin_right=margin_right,
                     align_x=align_x,
                     align_y=align_y,
                 )
@@ -13705,9 +13828,18 @@ class PictureCaptureApp(tk.Tk):
 
                 canvas_note = ""
                 if canvas_enabled:
+                    body_width = (
+                        effective_width - margin_left - margin_right
+                    )
+                    body_height = (
+                        effective_height - margin_top - margin_bottom
+                    )
                     canvas_note = (
-                        f"｜统一画布 {effective_width}×{effective_height}px"
-                        f"（X {self.preprocess_export_align_x_var.get()} / "
+                        f"｜最终页面 {effective_width}×{effective_height}px"
+                        f"｜版心 {body_width}×{body_height}px"
+                        f"（页边 上{margin_top}/左{margin_left}/"
+                        f"下{margin_bottom}/右{margin_right}px；"
+                        f"X {self.preprocess_export_align_x_var.get()} / "
                         f"Y {self.preprocess_export_align_y_var.get()}）"
                     )
                     if (
@@ -16059,6 +16191,18 @@ class PictureCaptureApp(tk.Tk):
                         ) or 0
                     )
                 )
+            )
+            self.preprocess_export_margin_top_var.set(
+                str(int(getattr(self.settings, "preprocess_export_margin_top", 0) or 0))
+            )
+            self.preprocess_export_margin_bottom_var.set(
+                str(int(getattr(self.settings, "preprocess_export_margin_bottom", 0) or 0))
+            )
+            self.preprocess_export_margin_left_var.set(
+                str(int(getattr(self.settings, "preprocess_export_margin_left", 0) or 0))
+            )
+            self.preprocess_export_margin_right_var.set(
+                str(int(getattr(self.settings, "preprocess_export_margin_right", 0) or 0))
             )
             self.preprocess_export_align_x_var.set(
                 {
