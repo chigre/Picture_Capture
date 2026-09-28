@@ -1719,6 +1719,27 @@ def analyze_preprocess_page(
             )
         )
 
+        if (
+            requested_geometry_mode == "auto"
+            and structural_auto_safe
+            and selected_candidate is structural_candidate
+            and horizontal_full is not None
+            and not horizontal_auto_safe
+        ):
+            if horizontal_row_audit is not None:
+                warnings.append(
+                    "已执行安全的栏结构透视，但残余水平投影未通过自动门："
+                    f"最优强度 {horizontal_strength:.3f}，"
+                    f"行趋势 {horizontal_row_audit.before_trend_deg:+.2f}°→"
+                    f"{horizontal_row_audit.after_trend_deg:+.2f}°。"
+                    "已保留 structural 结果，未强行继续拉伸文字。"
+                )
+            else:
+                warnings.append(
+                    "已执行安全的栏结构透视，但残余水平投影证据不足；"
+                    "已保留 structural 结果。"
+                )
+
         if selected_entry is not None and selected_candidate is not None:
             apply_perspective = bool(
                 float(getattr(selected_candidate, "strength_px", 0.0)) >= 0.75
