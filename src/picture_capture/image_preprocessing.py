@@ -1124,12 +1124,13 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
     geometry_labels = {
         "deskew": "轻量纠偏",
         "perspective": "透视纠正",
+        "manual_perspective": "手动四角",
         "dewarp": "版面去弯曲",
     }
     geometry = geometry_labels.get(analysis.geometry_mode, analysis.geometry_mode)
     strength = (
         f" {analysis.geometry_strength_px:.1f}px"
-        if analysis.geometry_mode in {"perspective", "dewarp"}
+        if analysis.geometry_mode in {"manual_perspective", "perspective", "dewarp"}
         and analysis.geometry_strength_px > 0
         else ""
     )
