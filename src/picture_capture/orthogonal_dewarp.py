@@ -5,9 +5,10 @@ import math
 from typing import Iterable
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .image_utils import normalize_page_rgb
+from .layout_detection import analysis_ink_mask
 from .models import AppSettings
 from .preprocess_geometry import horizontal_column_rows
 from .text_line_geometry import (
@@ -26,6 +27,12 @@ ORTHOGONAL_WARP_MAX_ANGLE_DEG = 2.0
 ORTHOGONAL_WARP_MAX_SCALE_DEVIATION = 0.065
 ORTHOGONAL_WARP_MAX_SEPARATOR_SHIFT_RATIO = 0.02
 ORTHOGONAL_WARP_MESH_STEP_PX = 40
+PIXEL_ANGLE_SEARCH_RADIUS_DEG = 0.45
+PIXEL_ANGLE_COARSE_STEP_DEG = 0.08
+PIXEL_ANGLE_FINE_STEP_DEG = 0.02
+PIXEL_ANGLE_MAX_PATCH_DIM = 720
+PIXEL_ANGLE_MIN_CONFIDENCE = 0.08
+PIXEL_ANGLE_MIN_INK_PIXELS = 800
 
 HORIZONTAL_RULE_MAX_ANGLE_DEG = 0.10
 HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX = 2.5
@@ -69,6 +76,9 @@ class OrthogonalWarpEstimate:
     horizontal_rule_y: float = 0.0
     horizontal_rule_angle_deg: float = 0.0
     horizontal_rule_residual_span_px: float = 0.0
+    pixel_angle_sample_count: int = 0
+    pixel_angle_used_count: int = 0
+    pixel_angle_confidence: float = 0.0
     max_row_angle_deg: float = 0.0
     row_angle_span_deg: float = 0.0
     max_horizontal_shift_px: float = 0.0
@@ -326,6 +336,156 @@ def _local_track_angle(
             break
         keep = new_keep
     return float(math.degrees(math.atan(float(slope))))
+
+
+def _pixel_column_bounds(
+    rows: list[tuple[float, float, float, float]],
+    width: int,
+) -> tuple[int, int]:
+    """Return a robust full text-bearing X span for one reconstructed column."""
+    left = np.asarray(
+        [float(row[0]) - float(row[3]) / 2.0 for row in rows],
+        dtype=float,
+    )
+    right = np.asarray(
+        [float(row[0]) + float(row[3]) / 2.0 for row in rows],
+        dtype=float,
+    )
+    x0 = float(np.percentile(left, 8.0))
+    x1 = float(np.percentile(right, 92.0))
+    if x1 - x0 < max(120.0, width * 0.12):
+        centre = _weighted_median(
+            [(float(row[0]), max(1.0, float(row[3]))) for row in rows]
+        )
+        half = max(100.0, float(np.median([row[3] for row in rows])) * 0.8)
+        x0 = centre - half
+        x1 = centre + half
+    pad = max(8.0, (x1 - x0) * 0.03)
+    return (
+        max(0, int(math.floor(x0 - pad))),
+        min(width, int(math.ceil(x1 + pad))),
+    )
+
+
+def _pixel_projection_score(mask: Image.Image, angle_deg: float) -> float:
+    rotated = mask.rotate(
+        float(angle_deg),
+        resample=Image.Resampling.NEAREST,
+        expand=False,
+        fillcolor=0,
+    )
+    array = np.asarray(rotated, dtype=np.float32) / 255.0
+    h, w = array.shape
+    my = max(2, round(h * 0.04))
+    mx = max(2, round(w * 0.04))
+    if h > my * 2 + 2 and w > mx * 2 + 2:
+        array = array[my:h - my, mx:w - mx]
+    ink_per_row = float(array.sum()) / max(1, array.shape[0])
+    if ink_per_row <= 1e-6:
+        return 0.0
+    projection = array.sum(axis=1)
+    return float(np.square(np.diff(projection)).sum() / ink_per_row)
+
+
+def _pixel_projection_angle(
+    image: Image.Image,
+    rows: list[tuple[float, float, float, float]],
+    y: float,
+    radius: float,
+    settings: AppSettings,
+    fallback: float,
+) -> tuple[float, float]:
+    """Measure local text-row correction directly from page pixels.
+
+    OCR polygons are useful for column membership and a safe search centre, but
+    the actual local angle is selected by maximizing horizontal projection
+    sharpness of the ink pixels. Keeping the search close to the OCR angle
+    avoids sparse-page aliases while still correcting systematic OCR-box bias.
+    """
+    source = normalize_page_rgb(image)
+    x0, x1 = _pixel_column_bounds(rows, source.width)
+    half_height = max(180.0, min(300.0, float(radius) * 0.70))
+    y0 = max(0, int(math.floor(float(y) - half_height)))
+    y1 = min(source.height, int(math.ceil(float(y) + half_height)))
+    if x1 - x0 < 120 or y1 - y0 < 160:
+        return float(fallback), 0.0
+
+    patch = ImageOps.grayscale(source.crop((x0, y0, x1, y1)))
+    scale = min(
+        1.0,
+        PIXEL_ANGLE_MAX_PATCH_DIM
+        / max(1.0, float(max(patch.size))),
+    )
+    if scale < 1.0:
+        patch = patch.resize(
+            (
+                max(1, round(patch.width * scale)),
+                max(1, round(patch.height * scale)),
+            ),
+            Image.Resampling.BILINEAR,
+        )
+    gray = np.asarray(patch, dtype=np.uint8)
+    ink = analysis_ink_mask(gray, settings)
+    if int(ink.sum()) < PIXEL_ANGLE_MIN_INK_PIXELS:
+        return float(fallback), 0.0
+    mask = Image.fromarray(ink.astype(np.uint8) * 255, mode="L")
+
+    centre = float(np.clip(
+        fallback,
+        -ORTHOGONAL_WARP_MAX_ANGLE_DEG,
+        ORTHOGONAL_WARP_MAX_ANGLE_DEG,
+    ))
+    coarse = np.arange(
+        centre - PIXEL_ANGLE_SEARCH_RADIUS_DEG,
+        centre + PIXEL_ANGLE_SEARCH_RADIUS_DEG + 1e-9,
+        PIXEL_ANGLE_COARSE_STEP_DEG,
+        dtype=float,
+    )
+    coarse = np.clip(
+        coarse,
+        -ORTHOGONAL_WARP_MAX_ANGLE_DEG,
+        ORTHOGONAL_WARP_MAX_ANGLE_DEG,
+    )
+    coarse = np.unique(np.round(coarse, 6))
+    scores = np.asarray(
+        [_pixel_projection_score(mask, float(angle)) for angle in coarse],
+        dtype=float,
+    )
+    if not scores.size or float(scores.max()) <= 0.0:
+        return float(fallback), 0.0
+    best_coarse = float(coarse[int(np.argmax(scores))])
+    fine = np.arange(
+        best_coarse - PIXEL_ANGLE_COARSE_STEP_DEG,
+        best_coarse + PIXEL_ANGLE_COARSE_STEP_DEG + 1e-9,
+        PIXEL_ANGLE_FINE_STEP_DEG,
+        dtype=float,
+    )
+    fine = np.clip(
+        fine,
+        centre - PIXEL_ANGLE_SEARCH_RADIUS_DEG,
+        centre + PIXEL_ANGLE_SEARCH_RADIUS_DEG,
+    )
+    fine = np.clip(
+        fine,
+        -ORTHOGONAL_WARP_MAX_ANGLE_DEG,
+        ORTHOGONAL_WARP_MAX_ANGLE_DEG,
+    )
+    fine = np.unique(np.round(fine, 6))
+    fine_scores = np.asarray(
+        [_pixel_projection_score(mask, float(angle)) for angle in fine],
+        dtype=float,
+    )
+    best_index = int(np.argmax(fine_scores))
+    best = float(fine[best_index])
+    baseline = max(
+        1e-6,
+        float(np.median(scores)),
+    )
+    confidence = max(
+        0.0,
+        (float(fine_scores[best_index]) - baseline) / baseline,
+    )
+    return best, float(confidence)
 
 
 def _column_center(
