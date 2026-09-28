@@ -51,6 +51,11 @@ class OutputCanvasInfo:
     requested_height: int
     width: int
     height: int
+    margin_top: int
+    margin_bottom: int
+    margin_left: int
+    margin_right: int
+    body_box: tuple[int, int, int, int]
     align_x: str
     align_y: str
     content_box: tuple[int, int, int, int]
@@ -59,6 +64,7 @@ class OutputCanvasInfo:
 
     def to_dict(self) -> dict:
         payload = asdict(self)
+        payload["body_box"] = list(self.body_box)
         payload["content_box"] = list(self.content_box)
         payload["background"] = "white"
         return payload
@@ -1370,6 +1376,10 @@ def output_canvas_info(
     requested_height: int = 0,
     canvas_width: int | None = None,
     canvas_height: int | None = None,
+    margin_top: int = 0,
+    margin_bottom: int = 0,
+    margin_left: int = 0,
+    margin_right: int = 0,
     align_x: str = "center",
     align_y: str = "top",
 ) -> OutputCanvasInfo:
@@ -1382,26 +1392,49 @@ def output_canvas_info(
     if mode not in {"batch_max", "custom"}:
         mode = "batch_max"
 
+    margin_top = max(0, int(margin_top))
+    margin_bottom = max(0, int(margin_bottom))
+    margin_left = max(0, int(margin_left))
+    margin_right = max(0, int(margin_right))
+
     if not enabled:
         width = content_width
         height = content_height
+        margin_top = margin_bottom = margin_left = margin_right = 0
+        body_box = (0, 0, width, height)
         paste_x = 0
         paste_y = 0
     else:
-        width = max(content_width, int(canvas_width or requested_width or content_width))
-        height = max(content_height, int(canvas_height or requested_height or content_height))
+        minimum_width = content_width + margin_left + margin_right
+        minimum_height = content_height + margin_top + margin_bottom
+        width = max(
+            minimum_width,
+            int(canvas_width or requested_width or minimum_width),
+        )
+        height = max(
+            minimum_height,
+            int(canvas_height or requested_height or minimum_height),
+        )
+        body_x0 = margin_left
+        body_y0 = margin_top
+        body_x1 = max(body_x0, width - margin_right)
+        body_y1 = max(body_y0, height - margin_bottom)
+        body_box = (body_x0, body_y0, body_x1, body_y1)
+        body_width = max(1, body_x1 - body_x0)
+        body_height = max(1, body_y1 - body_y0)
+
         if align_x == "left":
-            paste_x = 0
+            paste_x = body_x0
         elif align_x == "right":
-            paste_x = width - content_width
+            paste_x = body_x1 - content_width
         else:
-            paste_x = (width - content_width) // 2
+            paste_x = body_x0 + (body_width - content_width) // 2
         if align_y == "top":
-            paste_y = 0
+            paste_y = body_y0
         elif align_y == "bottom":
-            paste_y = height - content_height
+            paste_y = body_y1 - content_height
         else:
-            paste_y = (height - content_height) // 2
+            paste_y = body_y0 + (body_height - content_height) // 2
 
     return OutputCanvasInfo(
         enabled=bool(enabled),
@@ -1410,14 +1443,27 @@ def output_canvas_info(
         requested_height=max(0, int(requested_height)),
         width=width,
         height=height,
+        margin_top=margin_top,
+        margin_bottom=margin_bottom,
+        margin_left=margin_left,
+        margin_right=margin_right,
+        body_box=tuple(int(value) for value in body_box),
         align_x=align_x,
         align_y=align_y,
         content_box=(
             int(paste_x), int(paste_y),
             int(paste_x + content_width), int(paste_y + content_height),
         ),
-        expanded_width=bool(enabled and width > max(0, int(requested_width)) and mode == "custom"),
-        expanded_height=bool(enabled and height > max(0, int(requested_height)) and mode == "custom"),
+        expanded_width=bool(
+            enabled
+            and width > max(0, int(requested_width))
+            and mode == "custom"
+        ),
+        expanded_height=bool(
+            enabled
+            and height > max(0, int(requested_height))
+            and mode == "custom"
+        ),
     )
 
 
@@ -1432,8 +1478,14 @@ def processed_image_with_canvas(
     # Never rescale the retained scan just to make it fit. The batch export
     # resolves a canvas at least as large as every content crop; this local
     # guard keeps direct callers safe as well.
-    width = max(int(canvas.width), content.width)
-    height = max(int(canvas.height), content.height)
+    width = max(
+        int(canvas.width),
+        content.width + canvas.margin_left + canvas.margin_right,
+    )
+    height = max(
+        int(canvas.height),
+        content.height + canvas.margin_top + canvas.margin_bottom,
+    )
     if width != canvas.width or height != canvas.height:
         canvas = output_canvas_info(
             analysis,
@@ -1443,6 +1495,10 @@ def processed_image_with_canvas(
             requested_height=canvas.requested_height,
             canvas_width=width,
             canvas_height=height,
+            margin_top=canvas.margin_top,
+            margin_bottom=canvas.margin_bottom,
+            margin_left=canvas.margin_left,
+            margin_right=canvas.margin_right,
             align_x=canvas.align_x,
             align_y=canvas.align_y,
         )
@@ -1488,6 +1544,36 @@ def export_diagnostic_json(
             ),
             "preprocess_geometry_mode": str(
                 settings.preprocess_geometry_mode
+            ),
+            "preprocess_export_canvas_enabled": bool(
+                settings.preprocess_export_canvas_enabled
+            ),
+            "preprocess_export_canvas_mode": str(
+                settings.preprocess_export_canvas_mode
+            ),
+            "preprocess_export_canvas_width": int(
+                settings.preprocess_export_canvas_width
+            ),
+            "preprocess_export_canvas_height": int(
+                settings.preprocess_export_canvas_height
+            ),
+            "preprocess_export_margin_top": int(
+                settings.preprocess_export_margin_top
+            ),
+            "preprocess_export_margin_bottom": int(
+                settings.preprocess_export_margin_bottom
+            ),
+            "preprocess_export_margin_left": int(
+                settings.preprocess_export_margin_left
+            ),
+            "preprocess_export_margin_right": int(
+                settings.preprocess_export_margin_right
+            ),
+            "preprocess_export_align_x": str(
+                settings.preprocess_export_align_x
+            ),
+            "preprocess_export_align_y": str(
+                settings.preprocess_export_align_y
             ),
         }
         if settings is not None else None
@@ -1584,6 +1670,14 @@ def export_summary_csv(
             "canvas_requested_height": canvas.requested_height,
             "canvas_width": canvas.width,
             "canvas_height": canvas.height,
+            "canvas_margin_top": canvas.margin_top,
+            "canvas_margin_bottom": canvas.margin_bottom,
+            "canvas_margin_left": canvas.margin_left,
+            "canvas_margin_right": canvas.margin_right,
+            "canvas_body_x0": canvas.body_box[0],
+            "canvas_body_y0": canvas.body_box[1],
+            "canvas_body_x1": canvas.body_box[2],
+            "canvas_body_y1": canvas.body_box[3],
             "canvas_align_x": canvas.align_x,
             "canvas_align_y": canvas.align_y,
             "canvas_content_x0": canvas.content_box[0],
