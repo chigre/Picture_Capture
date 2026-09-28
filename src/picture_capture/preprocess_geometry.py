@@ -14,12 +14,27 @@ from .models import AppSettings
 
 @dataclass(frozen=True, slots=True)
 class PerspectiveEstimate:
-    """Projective correction inferred from structural column-left trajectories."""
+    """Projective correction inferred from structural column trajectories.
+
+    The diagnostics separate common lateral drift (rotation/shear-like) from
+    differential edge drift (true width convergence/divergence). Automatic
+    preprocessing can therefore reject a large homography even when OCR-derived
+    signals agree that "something" changes over Y.
+    """
 
     matrix: tuple[float, ...]
     source_quad: tuple[float, ...]
     target_quad: tuple[float, ...]
     strength_px: float
+    left_drift_px: float = 0.0
+    right_drift_px: float = 0.0
+    common_drift_px: float = 0.0
+    width_delta_px: float = 0.0
+    width_change_ratio: float = 0.0
+    scale_top: float = 1.0
+    scale_bottom: float = 1.0
+    scale_delta_ratio: float = 0.0
+    classification: str = "unknown"
 
 
 def polygon_boxes(
@@ -200,11 +215,45 @@ def estimate_perspective_from_polygons(
     )
     matrix = _homography(src, dst)
     strength = float(np.max(np.linalg.norm(src - dst, axis=1)))
+    top_width = float(right_top - left_top)
+    bottom_width = float(right_bottom - left_bottom)
+    mean_width = max(1.0, (top_width + bottom_width) / 2.0)
+    left_drift = float(left_bottom - left_top)
+    right_drift = float(right_bottom - right_top)
+    common_drift = float((left_drift + right_drift) / 2.0)
+    width_delta = float(bottom_width - top_width)
+    width_change_ratio = abs(width_delta) / mean_width
+    target_width = max(1.0, float(target_right - target_left))
+    scale_top = target_width / max(1.0, top_width)
+    scale_bottom = target_width / max(1.0, bottom_width)
+    scale_mean = max(1e-9, (abs(scale_top) + abs(scale_bottom)) / 2.0)
+    scale_delta_ratio = abs(scale_bottom - scale_top) / scale_mean
+    same_direction = left_drift * right_drift > 0.0
+    parallel_dominant = (
+        same_direction
+        and abs(common_drift) >= max(4.0, abs(width_delta) * 1.5)
+    )
+    if parallel_dominant:
+        classification = "parallel_drift"
+    elif width_change_ratio >= 0.003:
+        classification = "keystone"
+    else:
+        classification = "weak"
+
     return PerspectiveEstimate(
         matrix=tuple(float(v) for v in matrix.reshape(-1)),
         source_quad=tuple(float(v) for v in src.reshape(-1)),
         target_quad=tuple(float(v) for v in dst.reshape(-1)),
         strength_px=strength,
+        left_drift_px=left_drift,
+        right_drift_px=right_drift,
+        common_drift_px=common_drift,
+        width_delta_px=width_delta,
+        width_change_ratio=width_change_ratio,
+        scale_top=scale_top,
+        scale_bottom=scale_bottom,
+        scale_delta_ratio=scale_delta_ratio,
+        classification=classification,
     )
 
 
@@ -261,11 +310,26 @@ def perspective_from_quad(
     )
     matrix = _homography(src, dst)
     strength = float(np.max(np.linalg.norm(src - dst, axis=1)))
+    top_width = max(1.0, float(np.linalg.norm(tr - tl)))
+    bottom_width = max(1.0, float(np.linalg.norm(br - bl)))
+    target_width = max(1.0, float(right - left))
+    scale_top = target_width / top_width
+    scale_bottom = target_width / bottom_width
+    scale_mean = max(1e-9, (abs(scale_top) + abs(scale_bottom)) / 2.0)
     return PerspectiveEstimate(
         matrix=tuple(float(v) for v in matrix.reshape(-1)),
         source_quad=tuple(float(v) for v in src.reshape(-1)),
         target_quad=tuple(float(v) for v in dst.reshape(-1)),
         strength_px=strength,
+        left_drift_px=float(bl[0] - tl[0]),
+        right_drift_px=float(br[0] - tr[0]),
+        common_drift_px=float(((bl[0] - tl[0]) + (br[0] - tr[0])) / 2.0),
+        width_delta_px=float(bottom_width - top_width),
+        width_change_ratio=abs(bottom_width - top_width) / max(1.0, (top_width + bottom_width) / 2.0),
+        scale_top=scale_top,
+        scale_bottom=scale_bottom,
+        scale_delta_ratio=abs(scale_bottom - scale_top) / scale_mean,
+        classification="manual",
     )
 
 
