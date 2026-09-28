@@ -1490,6 +1490,17 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "括号词头起始：" in text
     assert "OCR 漏掉/错认符号时允许视觉形状补救" in text
     assert "使用同栏 marker lane 过滤正文中的相似符号" in text
+    assert "self.symbol_inventory_frame.columnconfigure(1, weight=1, minsize=180)" in text
+    assert "symbol_hint_wrap = max(220, self._wizard_content_width - 140)" in text
+    assert "symbol_full_wrap = max(280, self._wizard_content_width - 40)" in text
+    assert "textvariable=self.entry_marker_symbols_var" in text
+    assert "textvariable=self.bracket_open_symbols_var" in text
+    assert "width=24" in text
+    assert 'grid(row=1, column=1, columnspan=2, sticky="ew", pady=3)' in text
+    assert 'grid(row=3, column=1, columnspan=2, sticky="ew", pady=3)' in text
+    assert "wraplength=symbol_hint_wrap" in text
+    assert "wraplength=symbol_full_wrap" in text
+    assert "OCR 漏掉/错认符号时允许视觉形状补救（默认关；" not in text
     assert "本词典视觉标记样本" in text
     assert "字符符号集 + 视觉样本" in text
     assert "视觉样本优先" in text
