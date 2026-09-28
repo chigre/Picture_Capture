@@ -148,6 +148,54 @@ def test_deskewed_layout_keeps_fixed_margin_after_correction(monkeypatch) -> Non
     assert crop_y1 - raw_y1 == 20
 
 
+def test_auto_geometry_never_applies_structural_mesh(monkeypatch) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = [_tilted_box(350, 80, 120, 24, 0.0)]
+    for row in range(20):
+        y = 180 + row * 48
+        polygons.extend(
+            (
+                _tilted_box(100, y, 300, 24, 0.0),
+                _tilted_box(460, y, 300, 24, 0.0),
+            )
+        )
+
+    class Candidate:
+        strength_px = 24.0
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_layout_dewarp_from_polygons",
+        lambda *_args, **_kwargs: Candidate(),
+    )
+
+    def forbidden_mesh(*_args, **_kwargs):
+        raise AssertionError("automatic mode must never apply structural mesh")
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_layout_dewarp_image",
+        forbidden_mesh,
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(),
+        safety_margin_px=20,
+        auto_deskew=True,
+        geometry_mode="auto",
+    )
+
+    assert analysis.geometry_mode != "dewarp"
+    assert "nonlinear_review" in analysis.method
+    assert any("UVDoc" in warning for warning in analysis.warnings)
+
+
 def test_uvdoc_mode_redetects_layout_after_unwarping(monkeypatch) -> None:
     image = Image.new("RGB", (1000, 1400), "white")
     polygons = [_tilted_box(350, 80, 120, 24, 0.0)]
