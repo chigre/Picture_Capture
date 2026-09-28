@@ -2961,6 +2961,42 @@ def analyze_preprocess_page(
         perspective_text_scale_verdict=str(perspective_text_scale_verdict),
         perspective_auto_safe=bool(perspective_auto_safe),
         manual_perspective_quad=manual_quad,
+        orthogonal_applied=bool(orthogonal_applied),
+        orthogonal_passes=int(orthogonal_passes),
+        orthogonal_row_count=int(orthogonal_row_count),
+        orthogonal_valid_column_count=int(orthogonal_valid_column_count),
+        orthogonal_separator_point_count=int(
+            orthogonal_separator_point_count
+        ),
+        orthogonal_row_gain=round(float(orthogonal_row_gain), 6),
+        orthogonal_confidence=round(float(orthogonal_confidence), 6),
+        orthogonal_column_spread_deg=round(
+            float(orthogonal_column_spread_deg), 4
+        ),
+        orthogonal_max_row_angle_deg=round(
+            float(orthogonal_max_row_angle_deg), 4
+        ),
+        orthogonal_row_angle_span_deg=round(
+            float(orthogonal_row_angle_span_deg), 4
+        ),
+        orthogonal_max_horizontal_shift_px=round(
+            float(orthogonal_max_horizontal_shift_px), 3
+        ),
+        orthogonal_max_vertical_shift_px=round(
+            float(orthogonal_max_vertical_shift_px), 3
+        ),
+        orthogonal_max_scale_deviation=round(
+            float(orthogonal_max_scale_deviation), 6
+        ),
+        orthogonal_before_quality_score=round(
+            float(orthogonal_before_quality_score), 4
+        ),
+        orthogonal_after_quality_score=round(
+            float(orthogonal_after_quality_score), 4
+        ),
+        orthogonal_alignment_verdict=str(
+            orthogonal_alignment_verdict
+        ),
         final_alignment_row_count=int(final_alignment_row_count),
         final_alignment_valid_column_count=int(
             final_alignment_valid_column_count
