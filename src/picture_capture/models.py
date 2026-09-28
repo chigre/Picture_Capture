@@ -709,8 +709,14 @@ class AppSettings:
                     raw["profile_bracket_open_symbols"] = " ".join(bracket)
                     if not entry:
                         raw["profile_allow_marker_prefix"] = False
-                    # Stable lane evidence is the safe default for bracket
-                    # visual rescue and prevents body look-alikes.
+                    # If we actually had to move a bracket out of the old
+                    # entry-marker role, that project was created under the
+                    # buggy semantics. Reset visual rescue to the new safe
+                    # opt-in default; direct OCR bracket parsing remains on.
+                    if moved:
+                        raw["profile_symbol_visual_rescue_enabled"] = False
+                    # Stable lane evidence remains the required safety net if
+                    # the user later turns bracket visual rescue back on.
                     raw["profile_symbol_lane_required"] = True
 
                     samples = parse_visual_marker_samples(
