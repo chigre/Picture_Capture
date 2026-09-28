@@ -46,6 +46,7 @@ class TextLineGeometryAnalysis:
     residual_span_deg: float = 0.0
     column_count: int = 0
     valid_column_count: int = 0
+    valid_column_indices: tuple[int, ...] = ()
     column_row_counts: tuple[int, ...] = ()
     column_trends_deg: tuple[float, ...] = ()
     worst_column_index: int = -1
@@ -576,6 +577,11 @@ def analyze_text_line_geometry(
             row_count=len(rows),
             column_count=len(column_rows),
             valid_column_count=len(valid_columns),
+            valid_column_indices=tuple(
+                index
+                for index, column in enumerate(column_rows)
+                if len(column) >= 5
+            ),
             column_row_counts=tuple(len(column) for column in column_rows),
             recommendation="insufficient",
             confidence=min(0.35, len(rows) / 12.0),
@@ -699,6 +705,7 @@ def analyze_text_line_geometry(
         residual_span_deg=round(float(residual_span), 4),
         column_count=len(column_rows),
         valid_column_count=len(valid_columns),
+        valid_column_indices=tuple(valid_column_indices),
         column_row_counts=tuple(len(column) for column in column_rows),
         column_trends_deg=tuple(round(float(v), 4) for v in column_trends),
         worst_column_index=int(worst_column_index),
