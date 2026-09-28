@@ -13670,9 +13670,90 @@ class PictureCaptureApp(tk.Tk):
             f"状态：{'需检查' if analysis.status == 'review' else '正常'}",
             f"方法：{analysis.method}",
             f"几何模式：{analysis.geometry_mode}",
-            "",
-            "警告：" if warnings else "警告：无",
         ]
+
+        valid_indices = tuple(
+            int(value)
+            for value in analysis.perspective_row_valid_column_indices
+        )
+        if valid_indices:
+            header_lines.extend(
+                [
+                    "",
+                    "分栏水平诊断（before → after）：",
+                ]
+            )
+            top_before = analysis.perspective_row_before_column_top_angles_deg
+            top_after = analysis.perspective_row_after_column_top_angles_deg
+            mid_before = analysis.perspective_row_before_column_middle_angles_deg
+            mid_after = analysis.perspective_row_after_column_middle_angles_deg
+            bottom_before = analysis.perspective_row_before_column_bottom_angles_deg
+            bottom_after = analysis.perspective_row_after_column_bottom_angles_deg
+            trend_before = analysis.perspective_row_before_column_trends_deg
+            trend_after = analysis.perspective_row_after_column_trends_deg
+            row_counts = analysis.perspective_row_column_row_counts
+            for pos, column_index in enumerate(valid_indices):
+                def value(seq, default=0.0):
+                    return float(seq[pos]) if pos < len(seq) else float(default)
+
+                rows = (
+                    int(row_counts[column_index])
+                    if 0 <= column_index < len(row_counts)
+                    else 0
+                )
+                header_lines.append(
+                    f"- 第 {column_index + 1} 栏"
+                    f"（{rows} 行）："
+                    f"上 {value(top_before):+.3f}°→{value(top_after):+.3f}°；"
+                    f"中 {value(mid_before):+.3f}°→{value(mid_after):+.3f}°；"
+                    f"下 {value(bottom_before):+.3f}°→{value(bottom_after):+.3f}°；"
+                    f"趋势 {value(trend_before):+.3f}°→{value(trend_after):+.3f}°"
+                )
+            header_lines.append(
+                "最差残余区域："
+                f"{analysis.perspective_row_after_worst_region_deg:.3f}°"
+                + (
+                    f"（第 {analysis.perspective_row_after_worst_column_index + 1} 栏）"
+                    if analysis.perspective_row_after_worst_column_index >= 0
+                    else ""
+                )
+            )
+            if analysis.perspective_horizontal_vp_column_spread_deg > 0:
+                header_lines.append(
+                    "各栏 VP 方向分歧 P90："
+                    f"{analysis.perspective_horizontal_vp_column_spread_deg:.3f}°"
+                )
+        elif analysis.line_geometry_valid_columns:
+            indices = tuple(
+                int(value)
+                for value in analysis.line_geometry_valid_column_indices
+            )
+            header_lines.extend(["", "原始分栏行几何："])
+            for pos, column_index in enumerate(indices):
+                rows = (
+                    int(analysis.line_geometry_column_row_counts[column_index])
+                    if 0 <= column_index < len(analysis.line_geometry_column_row_counts)
+                    else 0
+                )
+                trend = (
+                    float(analysis.line_geometry_column_trends_deg[pos])
+                    if pos < len(analysis.line_geometry_column_trends_deg)
+                    else 0.0
+                )
+                header_lines.append(
+                    f"- 第 {column_index + 1} 栏：{rows} 行，趋势 {trend:+.3f}°"
+                )
+            header_lines.append(
+                "最差局部角："
+                f"{analysis.line_geometry_worst_region_angle_deg:.3f}°"
+            )
+
+        header_lines.extend(
+            [
+                "",
+                "警告：" if warnings else "警告：无",
+            ]
+        )
         if warnings:
             header_lines.extend(f"- {item}" for item in warnings)
         header_lines.extend(
