@@ -1510,12 +1510,12 @@ class UsageGuideWindow(tk.Toplevel):
         (
             "drawing",
             "画线与 OCR",
-            "OCR画线是默认推荐模式；普通画线降为备用，只在左缘极稳定的简单版式或 OCR 暂不可用时优先考虑。",
+            "融合画线是默认推荐模式：普通几何提供稳定定位，OCR 提供语义确认和独立救漏；两个单独模式用于诊断各自误差。",
             (
                 (
-                    "A", "OCR画线：默认推荐",
-                    "优先运行【OCR画线】。它同时利用词头文字、左缘位置、粗体/字高、词性和特殊符号等证据，"
-                    "比单纯依赖栏左墨迹更适合真实词典中的复杂版式；默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启。"
+                    "A", "融合画线：默认推荐",
+                    "优先运行【融合画线】。普通模式与 OCR 模式各自完成检测和精修后，程序按同栏 Y 位置一对一融合，"
+                    "匹配项继承 OCR 文字且只保留一条横线，双方未匹配项继续承担救漏；默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启。"
                 ),
                 (
                     "B", "有效缓存：OCR 不必每次重跑",
@@ -12565,14 +12565,14 @@ class PictureCaptureApp(tk.Tk):
             "快速扫描所选至少 2 页的页眉边界和正文左缘，生成一致性报告；不修改版面参数。",
         )
         ordinary_settings_button = ttk.Button(
-            row, text="普通画线设置（备用）…",
+            row, text="普通画线设置…",
             command=lambda: self.open_settings(initial_tab="normal"),
             style="PC.Compact.TButton",
         )
         ordinary_settings_button.pack(side="left", fill="x", expand=True, padx=(5, 0))
         self._attach_tooltip(
             ordinary_settings_button,
-            "打开普通画线的专属参数；OCR画线正常时通常无需调整。",
+            "打开普通画线的专属参数；融合模式会直接复用这些几何参数。",
         )
         for col in (1, 3, 5, 7): normal.columnconfigure(col, weight=1)
 
@@ -12774,7 +12774,7 @@ class PictureCaptureApp(tk.Tk):
 
         aux.columnconfigure(1, weight=1); aux.columnconfigure(3, weight=1)
 
-        ocr = self._section_frame(parent, "三、OCR画线参数（默认）", padding=5, section_key="ocr")
+        ocr = self._section_frame(parent, "三、融合 / OCR画线参数", padding=5, section_key="ocr")
         ocr.pack(fill="x", pady=(4, 0))
         self.ocr_refresh_var = tk.StringVar(value="reuse")
         ttk.Label(ocr, text="识别策略：").grid(row=0, column=0, sticky="w")
