@@ -378,9 +378,11 @@ def test_0011_style_large_ocr_homography_is_blocked_without_separator(monkeypatc
             global_angle_deg=-0.4581,
             angle_trend_deg=-0.7777,
             residual_mad_deg=0.0791,
-            separator_found=False,
+            separator_found=True,
+            separator_residual_px=1.8,
+            separator_span_ratio=0.9,
             recommendation="perspective",
-            confidence=0.6429,
+            confidence=0.9,
         ),
     )
 
@@ -402,7 +404,10 @@ def test_0011_style_large_ocr_homography_is_blocked_without_separator(monkeypatc
     assert analysis.perspective_scale_delta_ratio == 0.056
     assert analysis.perspective_auto_safe is False
     assert "perspective_review" in analysis.method
-    assert any("横向尺度差" in warning for warning in analysis.warnings)
+    assert analysis.perspective_jacobian_horizontal_scale_span_ratio > 0.04
+    assert analysis.perspective_jacobian_vertical_scale_span_ratio > 0.07
+    assert analysis.perspective_text_scale_verdict == "worse"
+    assert any("局部尺度漂移" in warning for warning in analysis.warnings)
 
 
 def test_auto_parallel_drift_candidate_is_blocked_even_with_line_support(monkeypatch) -> None:
@@ -695,6 +700,14 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
     assert payload["effective_settings"]["fixed_columns"] == 3
     assert payload["effective_settings"]["layout_columns_policy"] == "fixed"
     assert payload["algorithm_constants"]["max_auto_deskew_deg"] == 5.0
+    assert (
+        payload["algorithm_constants"]["auto_homography_horizontal_scale_span_max"]
+        == 0.04
+    )
+    assert (
+        payload["algorithm_constants"]["auto_homography_anisotropy_p95_max"]
+        == 0.035
+    )
 
     summary = tmp_path / "preprocess_summary.csv"
     export_summary_csv([(page, analysis, output, canvas)], summary)
@@ -703,6 +716,9 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
     assert "separator_residual_px" in text
     assert "separator_drift_px" in text
     assert "perspective_scale_delta_ratio" in text
+    assert "perspective_jacobian_horizontal_scale_span_ratio" in text
+    assert "perspective_jacobian_vertical_scale_span_ratio" in text
+    assert "perspective_text_scale_verdict" in text
     assert "perspective_auto_safe" in text
     assert "canvas_body_x0" in text
     assert "canvas_margin_top" in text
