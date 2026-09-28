@@ -1667,11 +1667,23 @@ def geometry_corrected_image(
         )
     if analysis.geometry_mode == "uvdoc":
         corrected = unwarp_document_image(corrected)
-    if (
+    if analysis.orthogonal_applied and analysis.orthogonal_steps:
+        for step_payload in analysis.orthogonal_steps:
+            estimate, row_gain = _orthogonal_estimate_from_step(
+                dict(step_payload)
+            )
+            corrected = apply_orthogonal_warp_image(
+                corrected,
+                estimate,
+                row_gain=row_gain,
+                separator_gain=1.0,
+            )
+    elif (
         analysis.orthogonal_applied
         and analysis.orthogonal_y_knots
         and analysis.orthogonal_angle_knots_deg
     ):
+        # Compatibility fallback for pre-v22 in-memory objects.
         estimate = OrthogonalWarpEstimate(
             y_knots=tuple(analysis.orthogonal_y_knots),
             angle_knots_deg=tuple(analysis.orthogonal_angle_knots_deg),
@@ -1689,41 +1701,6 @@ def geometry_corrected_image(
                 analysis.orthogonal_separator_shift_knots_px
             ),
             reference_x=float(analysis.orthogonal_reference_x),
-            row_count=int(analysis.orthogonal_row_count),
-            valid_column_count=int(
-                analysis.orthogonal_valid_column_count
-            ),
-            separator_point_count=int(
-                analysis.orthogonal_separator_point_count
-            ),
-            horizontal_rule_point_count=int(
-                analysis.orthogonal_horizontal_rule_point_count
-            ),
-            horizontal_rule_y=float(
-                analysis.orthogonal_horizontal_rule_y
-            ),
-            horizontal_rule_angle_deg=float(
-                analysis.orthogonal_before_horizontal_rule_angle_deg
-            ),
-            horizontal_rule_residual_span_px=float(
-                analysis.orthogonal_before_horizontal_rule_residual_px
-            ),
-            max_row_angle_deg=float(
-                analysis.orthogonal_max_row_angle_deg
-            ),
-            row_angle_span_deg=float(
-                analysis.orthogonal_row_angle_span_deg
-            ),
-            max_horizontal_shift_px=float(
-                analysis.orthogonal_max_horizontal_shift_px
-            ),
-            max_vertical_shift_px=float(
-                analysis.orthogonal_max_vertical_shift_px
-            ),
-            max_scale_deviation=float(
-                analysis.orthogonal_max_scale_deviation
-            ),
-            confidence=float(analysis.orthogonal_confidence),
             active=True,
         )
         corrected = apply_orthogonal_warp_image(
