@@ -79,7 +79,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 23
+PREPROCESS_FORMAT_VERSION = 24
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -95,6 +95,8 @@ ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT = 0.25
 ORTHOGONAL_AUTO_GAINS = (0.55, 0.70, 0.85, 1.0, 1.10, 1.15)
 ORTHOGONAL_MIN_SAFE_GAIN = 0.45
 ORTHOGONAL_SCALE_SAFETY_FRACTION = 0.95
+ORTHOGONAL_TAIL_PROGRESS_RATIO = 0.90
+ORTHOGONAL_TAIL_MAX_REGRESSION_PX = 0.50
 ORTHOGONAL_MAX_AUTO_PASSES = 3
 POST_PERSPECTIVE_REDETECT_MIN_BOXES = 8
 ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX = 3.5
@@ -3289,16 +3291,40 @@ def analyze_preprocess_page(
                 and candidate_pixel_rows.bottom_tail_worst_shift_px
                 <= PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX
             )
+            baseline_tail_available = bool(
+                baseline_pixel_rows.bottom_tail_sample_count >= 2
+                and baseline_pixel_rows.bottom_tail_valid_column_count >= 1
+            )
             pixel_tail_improved = bool(
                 pixel_tail_available
-                and baseline_pixel_rows.bottom_tail_sample_count >= 2
+                and baseline_tail_available
                 and baseline_pixel_rows.bottom_tail_p90_shift_px > 1e-6
                 and candidate_pixel_rows.bottom_tail_p90_shift_px
-                <= baseline_pixel_rows.bottom_tail_p90_shift_px * 0.70
+                <= baseline_pixel_rows.bottom_tail_p90_shift_px
+                * ORTHOGONAL_TAIL_PROGRESS_RATIO
                 and candidate_pixel_rows.bottom_tail_worst_shift_px
-                <= max(
-                    PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX,
-                    baseline_pixel_rows.bottom_tail_worst_shift_px * 0.80,
+                <= baseline_pixel_rows.bottom_tail_worst_shift_px
+                + ORTHOGONAL_TAIL_MAX_REGRESSION_PX
+            )
+            # Candidate retention and loop convergence are intentionally
+            # different decisions. A pass that dramatically fixes the body
+            # must not be discarded merely because a tiny page-tail residual
+            # needs another pass. Keep it when the physical tail has not
+            # meaningfully regressed; only the stop gate below requires tail
+            # PASS. This prevents the v23 0014 regression (body 5→1 px,
+            # tail 6→4.3 px) from rolling the whole page back to deskew.
+            pixel_tail_retainable = bool(
+                not pixel_tail_available
+                or pixel_tail_safe
+                or pixel_tail_improved
+                or (
+                    baseline_tail_available
+                    and candidate_pixel_rows.bottom_tail_p90_shift_px
+                    <= baseline_pixel_rows.bottom_tail_p90_shift_px
+                    + ORTHOGONAL_TAIL_MAX_REGRESSION_PX
+                    and candidate_pixel_rows.bottom_tail_worst_shift_px
+                    <= baseline_pixel_rows.bottom_tail_worst_shift_px
+                    + ORTHOGONAL_TAIL_MAX_REGRESSION_PX
                 )
             )
             if pixel_tail_safe:
@@ -3397,11 +3423,7 @@ def analyze_preprocess_page(
                     pixel_driven
                     and pixel_row_available
                     and (pixel_row_safe or pixel_row_improved)
-                    and (
-                        not pixel_tail_available
-                        or pixel_tail_safe
-                        or pixel_tail_improved
-                    )
+                    and pixel_tail_retainable
                 )
                 or (
                     (not pixel_driven or not pixel_row_available)
@@ -3418,7 +3440,7 @@ def analyze_preprocess_page(
                 if (
                     pixel_driven
                     and pixel_tail_available
-                    and not (pixel_tail_safe or pixel_tail_improved)
+                    and not pixel_tail_retainable
                 ):
                     reason = (
                         "正文页尾像素行验收未通过"
@@ -3646,12 +3668,11 @@ def analyze_preprocess_page(
                     and orthogonal_initial_bottom_tail_available
                     and orthogonal_initial_bottom_tail_p90_px > 1e-6
                     and retained_pixel_rows.bottom_tail_p90_shift_px
-                    <= orthogonal_initial_bottom_tail_p90_px * 0.70
+                    <= orthogonal_initial_bottom_tail_p90_px
+                    * ORTHOGONAL_TAIL_PROGRESS_RATIO
                     and retained_pixel_rows.bottom_tail_worst_shift_px
-                    <= max(
-                        PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX,
-                        orthogonal_initial_bottom_tail_worst_px * 0.80,
-                    )
+                    <= orthogonal_initial_bottom_tail_worst_px
+                    + ORTHOGONAL_TAIL_MAX_REGRESSION_PX
                 )
                 if retained_tail_safe:
                     orthogonal_bottom_tail_verdict = "passed"
@@ -4765,6 +4786,10 @@ def export_diagnostic_json(
         "orthogonal_auto_gains": list(ORTHOGONAL_AUTO_GAINS),
         "orthogonal_min_safe_gain": ORTHOGONAL_MIN_SAFE_GAIN,
         "orthogonal_scale_safety_fraction": ORTHOGONAL_SCALE_SAFETY_FRACTION,
+        "orthogonal_tail_progress_ratio": ORTHOGONAL_TAIL_PROGRESS_RATIO,
+        "orthogonal_tail_max_regression_px": (
+            ORTHOGONAL_TAIL_MAX_REGRESSION_PX
+        ),
         "pixel_row_bottom_tail_p90_max_px": (
             PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX
         ),

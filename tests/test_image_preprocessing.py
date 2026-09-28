@@ -1992,16 +1992,18 @@ def test_bottom_tail_review_triggers_second_residual_pass(
 
     metrics = iter(
         [
-            # pass 1 baseline: body already good, bottom tail clearly bad
-            (1.0, 1.5, 6.0, 7.0),
-            # pass 1 candidate: tail clearly improves but is not yet passed
-            (1.0, 1.5, 3.0, 4.0),
-            # pass 2 baseline
-            (1.0, 1.5, 3.0, 4.0),
-            # pass 2 candidate: tail passes
-            (1.0, 1.5, 1.0, 1.5),
-            # retained final pixels
-            (1.0, 1.5, 1.0, 1.5),
+            # Real 0014 v23 failure: body is strongly warped and tail is bad.
+            (5.0, 6.0, 6.0, 6.0),
+            # First candidate fixes the body almost completely, while the
+            # bottom tail improves only modestly (6.0 -> 4.3 px). v23 wrongly
+            # rejected the whole page because 4.3/6.0 narrowly missed 0.70.
+            (1.0, 1.0, 4.3, 5.0),
+            # Pass 2 baseline must be that retained improved candidate.
+            (1.0, 1.0, 4.3, 5.0),
+            # Pass 2 candidate: tail passes.
+            (1.0, 1.0, 1.0, 1.5),
+            # Retained final pixels.
+            (1.0, 1.0, 1.0, 1.5),
         ]
     )
 
@@ -2042,6 +2044,8 @@ def test_bottom_tail_review_triggers_second_residual_pass(
     assert analysis.orthogonal_passes == 2
     assert analysis.orthogonal_pixel_row_verdict == "passed"
     assert analysis.orthogonal_bottom_tail_verdict == "passed"
+    assert analysis.orthogonal_before_pixel_row_p90_px == 5.0
+    assert analysis.orthogonal_after_pixel_row_p90_px == 1.0
     assert analysis.orthogonal_before_bottom_tail_p90_px == 6.0
     assert analysis.orthogonal_after_bottom_tail_p90_px == 1.0
     assert "orthogonal_residual_pass" in analysis.method
