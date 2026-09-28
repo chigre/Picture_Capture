@@ -78,7 +78,10 @@ def test_preprocess_crop_uses_layout_columns_not_edge_ink(monkeypatch) -> None:
     draw = ImageDraw.Draw(image)
     # Strong scanner/binding noise must not influence normal structural cropping.
     draw.rectangle((3, 60, 12, 1340), fill="black")
-    polygons = [_tilted_box(350, 80, 120, 24, 0.0)]  # running header
+    polygons = [
+        _tilted_box(350, 80, 120, 24, 0.0),  # running header
+        _tilted_box(4, 300, 8, 120, 0.0),  # 0008-like left-edge false detection
+    ]
     for row in range(20):
         y = 180 + row * 48
         left = _tilted_box(100, y, 300, 24, 0.0)
@@ -107,6 +110,39 @@ def test_preprocess_crop_uses_layout_columns_not_edge_ink(monkeypatch) -> None:
     assert analysis.method.startswith("paddle_layout_roi")
     assert analysis.source_boxes >= 40
     assert not any("投影回退" in warning for warning in analysis.warnings)
+
+
+def test_deskewed_layout_keeps_fixed_margin_after_correction(monkeypatch) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = [_tilted_box(350, 80, 120, 24, 1.25)]  # running header
+    for row in range(20):
+        y = 180 + row * 48
+        polygons.extend(
+            (
+                _tilted_box(100, y, 300, 24, 1.25),
+                _tilted_box(460, y, 300, 24, 1.25),
+            )
+        )
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(),
+        safety_margin_px=20,
+        auto_deskew=True,
+    )
+
+    assert abs(analysis.applied_angle_deg) > 0.5
+    raw_x0, raw_y0, raw_x1, raw_y1 = analysis.raw_content_box
+    crop_x0, crop_y0, crop_x1, crop_y1 = analysis.crop_box
+    assert raw_x0 - crop_x0 == 20
+    assert raw_y0 - crop_y0 == 20
+    assert crop_x1 - raw_x1 == 20
+    assert crop_y1 - raw_y1 == 20
 
 
 def test_preview_overlay_marks_only_nonretained_area() -> None:
