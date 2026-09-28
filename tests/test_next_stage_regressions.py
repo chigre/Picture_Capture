@@ -3418,3 +3418,223 @@ def test_v214_application_icon_is_packaged_and_propagated_to_toplevels():
     assert '"Packaged application icon failed to load: "' in smoke
     assert 'raise RuntimeError("Application icon could not be registered")' in smoke
 
+
+
+
+def test_oversized_cjk_box_recovers_each_physical_display_head(monkeypatch):
+    """0007 regression: one giant 厂广安 box must not collapse four visual heads."""
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        character_height=100,
+        profile_parser_controls_version=1,
+        profile_cjk_allow_single_headword=True,
+    )
+    profile = load_dictionary_profile(
+        preset="cjk_visual", language="chi_tra",
+    )
+    band = Image.new("RGB", (360, 1000), "white")
+    giant = OCRRecord("厂广安", 0.9949, (0, 80, 317, 850))
+    records = [
+        OCRRecord("正文", 0.99, (130, 0, 350, 105)),
+        OCRRecord("正文", 0.99, (130, 860, 350, 965)),
+        giant,
+    ]
+    runs = [(100, 190), (285, 380), (480, 575), (675, 775)]
+    monkeypatch.setattr(
+        paddle_headwords,
+        "_cjk_visual_projection_runs",
+        lambda *_args, **_kwargs: (90, list(runs)),
+    )
+    monkeypatch.setattr(
+        paddle_headwords,
+        "_header_cutoff",
+        lambda *_args, **_kwargs: 0,
+    )
+
+    words = iter(("暖", "厂", "广", "安"))
+
+    class Result:
+        def __init__(self, word):
+            self.json = {
+                "res": {
+                    "rec_texts": [word],
+                    "rec_scores": [0.96],
+                    "rec_boxes": [[2, 3, 70, 78]],
+                }
+            }
+
+    class Engine:
+        def predict(self, _image, **_kwargs):
+            return [Result(next(words))]
+
+    recovered, details = _recover_oversized_cjk_ocr_records(
+        records,
+        band,
+        settings,
+        profile,
+        engine=Engine(),
+    )
+
+    children = [
+        record for record in recovered
+        if record.recovery == "oversized_multi_entry_local_ocr"
+    ]
+    assert [record.text for record in children] == ["暖", "厂", "广", "安"]
+    assert [record.box[1:4:2] for record in children] == [
+        (100, 190), (285, 380), (480, 575), (675, 775),
+    ]
+    assert all(record.parent_box == giant.box for record in children)
+    assert all(abs(record.confidence - 0.96) < 1e-6 for record in children)
+    assert giant not in recovered
+    assert len(details) == 1
+    assert details[0]["parent_text"] == "厂广安"
+    assert details[0]["visual_run_count"] == 4
+    assert details[0]["recovered_count"] == 4
+
+
+def test_oversized_cjk_box_never_guesses_missing_children_from_parent_text(
+    monkeypatch,
+):
+    """If parent text has 3 chars for 4 physical heads, do not distribute it."""
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        character_height=100,
+        profile_parser_controls_version=1,
+        profile_cjk_allow_single_headword=True,
+    )
+    profile = load_dictionary_profile(
+        preset="cjk_visual", language="chi_tra",
+    )
+    band = Image.new("RGB", (360, 1000), "white")
+    giant = OCRRecord("厂广安", 0.99, (0, 80, 317, 850))
+    records = [
+        OCRRecord("正文", 0.99, (130, 0, 350, 105)),
+        OCRRecord("正文", 0.99, (130, 860, 350, 965)),
+        giant,
+    ]
+    monkeypatch.setattr(
+        paddle_headwords,
+        "_cjk_visual_projection_runs",
+        lambda *_args, **_kwargs: (
+            90,
+            [(100, 190), (285, 380), (480, 575), (675, 775)],
+        ),
+    )
+    monkeypatch.setattr(
+        paddle_headwords,
+        "_header_cutoff",
+        lambda *_args, **_kwargs: 0,
+    )
+
+    class FailingEngine:
+        def predict(self, _image, **_kwargs):
+            raise RuntimeError("local OCR unavailable")
+
+    recovered, details = _recover_oversized_cjk_ocr_records(
+        records,
+        band,
+        settings,
+        profile,
+        engine=FailingEngine(),
+    )
+
+    assert recovered == records
+    assert details == []
+    assert not any(record.recovery for record in recovered)
+
+
+def test_cjk_visual_profile_defaults_separate_brackets_from_entry_markers():
+    defaults = profile_symbol_inventory_defaults("cjk_visual")
+    assert defaults["entry_markers"] == []
+    assert defaults["bracket_openers"] == ["【"]
+    assert defaults["visual_rescue"] is True
+    assert defaults["lane_required"] is True
+    assert defaults["lane_tolerance_percent"] == 45
+
+
+def test_cjk_visual_symbol_role_normalization_moves_legacy_bracket_sample():
+    sample = {
+        "id": "legacy-bracket",
+        "role": "entry_marker",
+        "literal": "【",
+        "source_page": "0002.png",
+        "source_box": [1, 2, 10, 20],
+        "size": 16,
+        "bitmap": "0" * 256,
+        "aspect_ratio": 0.5,
+        "density": 0.1,
+        "central_ink": 0.1,
+        "hole_count": 0,
+    }
+    entry, bracket, samples = _normalize_cjk_visual_symbol_roles(
+        "【 ○", "【", [sample],
+    )
+    assert split_configured_symbols(entry) == ("○",)
+    assert split_configured_symbols(bracket) == ("【",)
+    assert samples[0]["role"] == "bracket_open"
+
+    role, literal = _visual_marker_capture_defaults(
+        marker_prefix_enabled=False,
+        bracket_enabled=True,
+        entry_text="",
+        bracket_text="【",
+    )
+    assert (role, literal) == ("bracket_open", "【")
+
+
+def test_old_cjk_visual_settings_migrate_bracket_role_once(tmp_path):
+    marker = Image.new("L", (20, 24), 255)
+    draw = ImageDraw.Draw(marker)
+    draw.rectangle((4, 2, 7, 21), fill=0)
+    draw.rectangle((4, 2, 14, 5), fill=0)
+    sample = build_visual_marker_sample(
+        marker.convert("RGB"),
+        role="entry_marker",
+        literal="【",
+        sample_id="legacy",
+    )
+    settings_path_value = tmp_path / "settings.json"
+    settings_path_value.write_text(
+        __import__("json").dumps(
+            {
+                "dictionary_profile_id": "cjk_visual",
+                "profile_symbol_role_semantics_version": 0,
+                "profile_parser_controls_version": 1,
+                "profile_allow_marker_prefix": True,
+                "profile_cjk_allow_bracketed_headword": True,
+                "profile_symbol_inventory_version": 1,
+                "profile_entry_marker_symbols": "【",
+                "profile_bracket_open_symbols": "【",
+                "profile_symbol_lane_required": False,
+                "profile_symbol_template_version": 1,
+                "profile_symbol_templates_json": serialize_visual_marker_samples(
+                    [sample]
+                ),
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    migrated = AppSettings.from_json(settings_path_value)
+    assert migrated.profile_symbol_role_semantics_version == 1
+    assert migrated.profile_allow_marker_prefix is False
+    assert migrated.profile_entry_marker_symbols == ""
+    assert migrated.profile_bracket_open_symbols == "【"
+    assert migrated.profile_symbol_lane_required is True
+    samples = parse_visual_marker_samples(
+        migrated.profile_symbol_templates_json
+    )
+    assert len(samples) == 1
+    assert samples[0]["literal"] == "【"
+    assert samples[0]["role"] == "bracket_open"
+
+
+def test_cjk_profile_ui_explains_bracket_role_at_the_controls():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "profile_setup.py"
+    ).read_text(encoding="utf-8")
+    assert "不包括【括号】" in source
+    assert "【不要填这里】" in source
+    assert "采【时按“括号起始”保存" in source
