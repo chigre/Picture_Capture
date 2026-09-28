@@ -238,3 +238,63 @@ def test_2d_row_field_handles_column_disagreement_and_header_rule(
     )
     mapped_angle = math.degrees(math.atan(float(slope)))
     assert abs(mapped_angle) <= 0.10
+
+
+
+def test_orthogonal_bottom_boundary_does_not_extrapolate_past_last_right_rows(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1050, 1150), "white")
+    polygons: list[np.ndarray] = []
+
+    # Left column extends farther down the page. The right column ends earlier
+    # while retaining a clear negative residual at its last measured rows.
+    for row in range(24):
+        t = row / 23.0
+        polygons.append(
+            _rotated_box(
+                270.0,
+                140.0 + row * 39.0,
+                330.0,
+                22.0,
+                0.40 - 0.72 * t,
+            )
+        )
+    for row in range(20):
+        t = row / 19.0
+        polygons.append(
+            _rotated_box(
+                760.0,
+                150.0 + row * 39.0,
+                330.0,
+                22.0,
+                0.48 - 0.88 * t,
+            )
+        )
+
+    monkeypatch.setattr(
+        orthogonal_dewarp,
+        "separator_track_points",
+        lambda *_args, **_kwargs: (),
+    )
+    monkeypatch.setattr(
+        orthogonal_dewarp,
+        "horizontal_rule_track_points",
+        lambda *_args, **_kwargs: (),
+    )
+    estimate = estimate_orthogonal_warp(
+        image,
+        polygons,
+        AppSettings(layout_columns_policy="fixed", columns=2),
+    )
+
+    grid = np.asarray(estimate.row_angle_grid_deg, dtype=float).reshape(
+        estimate.row_grid_rows,
+        estimate.row_grid_cols,
+    )
+    x_knots = np.asarray(estimate.x_knots, dtype=float)
+    right_index = int(np.argmin(np.abs(x_knots - 760.0)))
+    # The final grid value must stay negative like the last real right-column
+    # rows; a one-sided local regression must not flip or invent a new trend.
+    assert grid[-1, right_index] <= -0.18
+    assert np.min(grid[-3:, right_index]) >= -0.60

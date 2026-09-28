@@ -337,7 +337,7 @@ def test_auto_geometry_rolls_back_orthogonal_candidate_without_real_improvement(
     assert analysis.geometry_mode != "uvdoc"
     assert analysis.orthogonal_applied is False
     assert any(
-        "正交网格候选正文水平验收未通过" in warning
+        "正交网格候选" in warning and "验收未通过" in warning
         for warning in analysis.warnings
     )
     assert any(

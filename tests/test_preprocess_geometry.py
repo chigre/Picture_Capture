@@ -640,3 +640,34 @@ def test_text_scale_audit_recognizes_corrective_homography() -> None:
     assert text_audit.inline_ratio_p95 >= text_audit.inline_ratio_p05
     assert text_audit.cross_ratio_p95 >= text_audit.cross_ratio_p05
 
+
+
+
+def test_bottom_tail_gate_catches_last_rows_hidden_by_bottom_third() -> None:
+    settings = AppSettings(layout_columns_policy="fixed", columns=2)
+    before: list[np.ndarray] = []
+    after: list[np.ndarray] = []
+    for column, cx in enumerate((260.0, 760.0)):
+        for row in range(24):
+            y = 145 + row * 38 + column * 6
+            before_angle = 0.28 - 0.56 * (row / 23.0)
+            # Only the final three rows of the right column remain visibly
+            # tilted. They are too sparse to move the whole bottom-third median
+            # reliably, but they are exactly the page-tail defect users see.
+            after_angle = (
+                -0.32
+                if column == 1 and row >= 21
+                else 0.0
+            )
+            before.append(_rotated_box(cx, y, 300, 22, before_angle))
+            after.append(_rotated_box(cx, y, 300, 22, after_angle))
+
+    audit = audit_horizontal_alignment(
+        before, after, size=(1050, 1150), settings=settings,
+    )
+
+    assert audit.valid_column_count == 2
+    assert audit.after_worst_region_deg < 0.18
+    assert audit.after_column_bottom_tail_p90_abs_deg[1] >= 0.30
+    assert audit.after_worst_tail_p90_abs_deg >= 0.30
+    assert audit.verdict != "improved"

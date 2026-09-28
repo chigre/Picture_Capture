@@ -142,7 +142,17 @@ def _local_column_angle(
     y: float,
     radius: float,
 ) -> float | None:
-    """Estimate row angle at Y using a robust local linear fit."""
+    """Estimate row angle at Y without extrapolating past real row support.
+
+    Interior knots may use a local robust linear fit because rows exist on both
+    sides of the target Y. Near the first/last text rows that assumption breaks:
+    a one-sided fit extrapolates the trend and can even reverse sign at the page
+    edge. That exact failure left the lower-right tail of real page 0014 tilted.
+
+    Boundary knots therefore use a robust weighted angle from the nearest real
+    rows. This keeps the correction anchored to measured text rather than to an
+    unconstrained regression beyond the data.
+    """
     samples: list[tuple[float, float, float]] = []
     for _x, row_y, angle, weight in rows:
         distance = abs(float(row_y) - float(y))
@@ -158,6 +168,17 @@ def _local_column_angle(
         )
     if len(samples) < 2:
         return None
+
+    has_above = any(item[0] < -1e-6 for item in samples)
+    has_below = any(item[0] > 1e-6 for item in samples)
+    if not (has_above and has_below):
+        nearest = sorted(samples, key=lambda item: abs(item[0]))[
+            : min(5, len(samples))
+        ]
+        return _weighted_median(
+            [(angle, weight) for _dy, angle, weight in nearest]
+        )
+
     if len(samples) == 2:
         dy0, angle0, _weight0 = samples[0]
         dy1, angle1, _weight1 = samples[1]
@@ -573,6 +594,18 @@ def estimate_orthogonal_warp(
     ) = _robust_track_fit(rule_points)
 
     y_values: list[float] = list(float(v) for v in body_y_knots)
+    # Add a per-column lower support knot only when that column genuinely ends
+    # far from every regular body knot. Near-duplicate knots create an
+    # artificially steep d(displacement)/dy and can trip the scale-safety gate.
+    # Normal edge cases are handled by _local_column_angle's no-extrapolation
+    # rule without inserting extra knots.
+    boundary_gap_min = max(18.0, radius * 0.45)
+    for rows in valid_columns:
+        column_ys = np.asarray([row[1] for row in rows], dtype=float)
+        if column_ys.size >= 5:
+            lower_support = float(np.percentile(column_ys, 95.0))
+            if float(np.min(np.abs(body_y_knots - lower_support))) >= boundary_gap_min:
+                y_values.append(lower_support)
     if rule_count >= 7 and rule_y < y_hi:
         y_values.append(float(rule_y))
     knot_ys = _unique_sorted(y_values, tolerance=3.0)
