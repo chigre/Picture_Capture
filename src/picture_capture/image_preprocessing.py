@@ -347,13 +347,22 @@ def _layout_content_box_from_polygons(
         fixed_columns=settings.columns,
         column_separator_mode=settings.layout_column_separator_mode,
     )
-    left = max(0, min(width - 1, int(estimate.manual_x)))
-    right = (
-        left
-        + max(1, int(estimate.columns)) * max(1, int(estimate.column_width))
-        + max(0, int(estimate.columns) - 1) * max(0, int(estimate.gutter))
+    starts = tuple(int(value) for value in estimate.column_starts)
+    left = (
+        max(0, min(width - 1, starts[0]))
+        if starts else max(0, min(width - 1, int(estimate.manual_x)))
     )
-    right = max(left + 1, min(width, right))
+    last_start = (
+        starts[-1]
+        if starts
+        else left
+        + max(0, int(estimate.columns) - 1)
+        * (max(1, int(estimate.column_width)) + max(0, int(estimate.gutter)))
+    )
+    right = max(
+        left + 1,
+        min(width, int(last_start) + max(1, int(estimate.column_width))),
+    )
 
     # Reuse the detector population but estimate the header top independently
     # from body start_y. Only text spatially associated with the detected page
