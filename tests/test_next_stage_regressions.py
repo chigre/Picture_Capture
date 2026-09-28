@@ -5,6 +5,8 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image, ImageDraw
 
+import picture_capture.paddle_headwords as paddle_headwords
+
 from picture_capture.app import (
     PictureCaptureApp, SettingsDialog, binary_preview_image, effective_main_overlay_font_size,
     _layout_pixels_to_percent, _layout_percent_to_pixels,
@@ -15,7 +17,8 @@ from picture_capture.app import (
 )
 from picture_capture.dictionary_profile import (
     apply_project_profile_components, effective_project_profile_id,
-    load_dictionary_profile, profile_tail_structure_defaults, write_project_profile,
+    load_dictionary_profile, profile_symbol_inventory_defaults,
+    profile_tail_structure_defaults, write_project_profile,
 )
 from picture_capture.models import (
     AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
@@ -44,7 +47,11 @@ from picture_capture.paddle_headwords import (
     _repair_multiline_headword_state_machine,
     _selected_tail_structure_evidence, filter_headword_records, HeadwordParse,
     parse_headword_filter_rules, parse_headword_text, prepare_ocr_band,
-    run_paddle_band,
+    run_paddle_band, _recover_oversized_cjk_ocr_records,
+)
+from picture_capture.profile_setup import (
+    _normalize_cjk_visual_symbol_roles,
+    _visual_marker_capture_defaults,
 )
 from picture_capture.visual_marker_templates import (
     build_visual_marker_sample, match_visual_marker_template,
