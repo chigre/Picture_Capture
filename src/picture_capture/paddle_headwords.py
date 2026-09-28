@@ -4130,6 +4130,98 @@ def _recover_image_first_oversized_cjk_records(
     return output, details
 
 
+def _suppress_raw_records_shadowed_by_verified_cjk_recovery(
+    records: list[OCRRecord],
+) -> tuple[list[OCRRecord], list[dict[str, Any]]]:
+    """Drop raw OCR boxes that duplicate verified CJK recovery rows.
+
+    Image-first recovery adds a synthetic single-Han record while preserving the
+    immutable raw Paddle cache. Without derived-record dedup, that synthetic row
+    can be merged back with its own source box, for example 摆 plus 摆1, or with
+    a giant raw box spanning several recovered heads. Suppression affects only
+    the effective derived record list; the raw cache remains untouched.
+    """
+    verified = [
+        record for record in records
+        if str(record.recovery or "") in _VERIFIED_OVERSIZED_CJK_RECOVERIES
+    ]
+    if not verified:
+        return list(records), []
+
+    def _norm(text: str) -> str:
+        return re.sub(
+            r"\s+",
+            "",
+            unicodedata.normalize("NFKC", str(text or "")),
+        )
+
+    output: list[OCRRecord] = []
+    details: list[dict[str, Any]] = []
+    for record in records:
+        if str(record.recovery or ""):
+            output.append(record)
+            continue
+
+        raw_text = _norm(record.text)
+        rx0, ry0, rx1, ry1 = (int(value) for value in record.box)
+        raw_height = max(1, ry1 - ry0)
+        suppressor: OCRRecord | None = None
+        reason = ""
+
+        for recovered in verified:
+            sx0, sy0, sx1, sy1 = (int(value) for value in recovered.box)
+            recovered_height = max(1, sy1 - sy0)
+            vertical_overlap = max(0, min(ry1, sy1) - max(ry0, sy0))
+            horizontal_overlap = max(0, min(rx1, sx1) - max(rx0, sx0))
+            if (
+                vertical_overlap < recovered_height * 0.45
+                or horizontal_overlap <= 0
+            ):
+                continue
+
+            source_text = _norm(recovered.recovery_source_text)
+            recovered_text = _norm(recovered.text)
+            if source_text and raw_text == source_text:
+                suppressor = recovered
+                reason = "same_recovery_source_text"
+                break
+
+            # Conservative fallback for engines that normalize away a sense
+            # suffix locally. Require the same leading Han plus a clearly taller
+            # raw box so ordinary neighboring OCR fragments are not removed.
+            raw_leading = _leading_cjk_ideograph(record.text)
+            if (
+                raw_leading
+                and recovered_text == raw_leading
+                and raw_height >= recovered_height * 1.20
+            ):
+                suppressor = recovered
+                reason = "same_leading_han_taller_raw_box"
+                break
+
+        if suppressor is None:
+            output.append(record)
+            continue
+
+        details.append({
+            "mode": "verified_cjk_recovery_duplicate_suppression",
+            "applied": True,
+            "status": "suppressed_raw_record",
+            "reason": reason,
+            "raw_text": str(record.text or ""),
+            "raw_box": [int(v) for v in record.box],
+            "recovered_word": str(suppressor.text or ""),
+            "recovery_source_text": str(
+                suppressor.recovery_source_text or ""
+            ),
+            "recovered_box": [int(v) for v in suppressor.box],
+            "recovery": str(suppressor.recovery or ""),
+        })
+
+    output.sort(key=lambda item: (item.box[1], item.box[0]))
+    return output, details
+
+
 def refine_separator_y(
     gray: np.ndarray,
     coarse_y: int,
@@ -7884,6 +7976,12 @@ def detect_paddle_headwords(
                 pixel_scale=pixel_scale,
             )
             oversized_recovery.extend(image_first_recovery)
+            records, recovery_duplicate_suppression = (
+                _suppress_raw_records_shadowed_by_verified_cjk_recovery(
+                    records
+                )
+            )
+            oversized_recovery.extend(recovery_duplicate_suppression)
 
         paddle_lines = _records_as_merged_lines(records, settings)
         paddle_full_text = "\n".join(line.text for line in paddle_lines)
