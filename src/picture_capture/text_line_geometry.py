@@ -13,6 +13,14 @@ from .models import AppSettings
 from .preprocess_geometry import polygon_boxes
 
 
+SEPARATOR_CURVE_SPAN_MIN = 0.72
+SEPARATOR_TRACK_QUALITY_MIN = 0.12
+SEPARATOR_CURVATURE_SCORE_MIN = 0.35
+SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD = 0.0015
+SEPARATOR_JUMP_MIN_PX = 4.0
+SEPARATOR_JUMP_WIDTH_RATIO_MAX = 0.003
+
+
 @dataclass(frozen=True, slots=True)
 class _SeparatorTrack:
     residual_span_px: float
@@ -588,14 +596,19 @@ def analyze_text_line_geometry(
     # A real long separator is a much stronger nonlinear-geometry witness than
     # OCR text starts. Perspective/rotation may tilt a straight line but cannot
     # bend it; a large post-linear-fit residual therefore supports UVDoc review.
-    separator_curve_threshold = max(3.0, image.width * 0.0015)
-    separator_jump_limit = max(4.0, image.width * 0.003)
+    separator_curve_threshold = max(
+        3.0, image.width * SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD
+    )
+    separator_jump_limit = max(
+        SEPARATOR_JUMP_MIN_PX,
+        image.width * SEPARATOR_JUMP_WIDTH_RATIO_MAX,
+    )
     separator_curve_reliable = bool(
         separator_found
-        and separator_span_ratio >= 0.72
-        and separator_track_quality >= 0.12
+        and separator_span_ratio >= SEPARATOR_CURVE_SPAN_MIN
+        and separator_track_quality >= SEPARATOR_TRACK_QUALITY_MIN
         and separator_track_jump_p95_px <= separator_jump_limit
-        and separator_curvature_score >= 0.35
+        and separator_curvature_score >= SEPARATOR_CURVATURE_SCORE_MIN
         and separator_residual >= separator_curve_threshold
     )
     if separator_curve_reliable:
