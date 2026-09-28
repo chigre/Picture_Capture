@@ -138,6 +138,9 @@ def test_horizontal_strength_optimizer_avoids_full_strength_overshoot() -> None:
     exaggerated /= exaggerated[2, 2]
     full = PerspectiveEstimate(
         matrix=tuple(float(v) for v in exaggerated.reshape(-1)),
+        source_quad=correct.source_quad,
+        target_quad=correct.target_quad,
+        strength_px=correct.strength_px * 1.65,
         classification="horizontal_vp",
         candidate_source="horizontal_vp",
         horizontal_vanishing_x=correct.horizontal_vanishing_x,
