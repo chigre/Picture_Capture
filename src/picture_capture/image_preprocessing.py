@@ -1716,20 +1716,63 @@ def analyze_preprocess_page(
         except Exception as exc:
             warnings.append(f"文本行几何分析不可用：{exc}")
 
-    correction, angle_samples, angle_mad = estimate_skew_from_polygons(
+    ocr_correction, angle_samples, angle_mad = estimate_skew_from_polygons(
         polygons, writing_mode=settings.layout_writing_mode,
     )
     if angle_samples < 4:
         if method_parts[0] != "projection_fallback":
             method_parts.append("projection_angle")
         try:
-            correction = _projection_skew_fallback(
+            ocr_correction = _projection_skew_fallback(
                 source, settings, writing_mode=settings.layout_writing_mode,
             )
             warnings.append("文本框角度样本较少，倾斜角由投影法补充估计。")
         except Exception as exc:
-            correction = 0.0
+            ocr_correction = 0.0
             warnings.append(f"倾斜角回退估计失败：{exc}")
+
+    correction = float(ocr_correction)
+    deskew_anchor_source = "ocr"
+    source_header_rule_point_count = 0
+    source_header_rule_angle_deg = 0.0
+    source_header_rule_residual_px = 0.0
+    if (
+        polygons
+        and not str(settings.layout_writing_mode or "horizontal-tb").startswith(
+            "vertical"
+        )
+    ):
+        try:
+            (
+                source_header_rule_point_count,
+                source_header_rule_angle_deg,
+                source_header_rule_residual_px,
+                _source_header_rule_y,
+            ) = horizontal_rule_metrics(source, polygons, settings)
+            header_residual_limit = max(
+                HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX,
+                width * HORIZONTAL_RULE_MAX_RESIDUAL_WIDTH_RATIO,
+            )
+            header_anchor_reliable = bool(
+                source_header_rule_point_count >= 7
+                and abs(float(source_header_rule_angle_deg))
+                <= DEFAULT_MAX_AUTO_DESKEW_DEG
+                and float(source_header_rule_residual_px)
+                <= header_residual_limit
+            )
+            if header_anchor_reliable:
+                correction = float(source_header_rule_angle_deg)
+                deskew_anchor_source = "header_rule"
+                method_parts.append("header_rule_deskew")
+                if abs(float(ocr_correction) - correction) >= 0.12:
+                    warnings.append(
+                        "正文OCR平均倾角与页眉实体横线不一致："
+                        f"OCR {float(ocr_correction):+.2f}°，"
+                        f"页眉 {correction:+.2f}°；"
+                        "全局旋转采用实体横线，正文残差交由局部像素场矫正。"
+                    )
+        except Exception as exc:
+            warnings.append(f"页眉实体横线全局锚定不可用：{exc}")
 
     if abs(correction) < DEFAULT_DESKEW_DEAD_ZONE_DEG:
         applied = 0.0
