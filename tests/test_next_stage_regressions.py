@@ -3740,6 +3740,153 @@ def test_oversized_cjk_box_never_guesses_missing_children_from_parent_text(
 
 
 
+
+def test_trusted_bracket_lane_comes_from_explicit_ocr_not_visual_candidates():
+    inventory = {
+        "lane_required": True,
+        "lane_tolerance_percent": 50,
+        "bracket_openers": ("【",),
+    }
+    lines = [
+        OCRLine("【甲】", 0.99, (2, 20, 120, 120), []),
+        OCRLine("正文", 0.99, (125, 140, 260, 240), []),
+        OCRLine("【乙】", 0.99, (4, 260, 120, 360), []),
+    ]
+
+    lanes = paddle_headwords._trusted_visual_marker_lanes(
+        lines, inventory, 100.0,
+    )
+
+    lane = lanes["bracket_open"]
+    assert lane["x"] == 3.0
+    assert lane["count"] == 2
+    assert lane["source"] == "explicit_ocr_bracket_rows"
+    assert lane["tolerance"] == 40.0
+
+    candidates = [
+        {
+            "role": "bracket_open",
+            "family": "bracket_open",
+            "x0": 18,
+            "template_score": 0.0,
+        },
+        {
+            "role": "bracket_open",
+            "family": "bracket_open",
+            "x0": 78,
+            "template_score": 0.0,
+        },
+        {
+            "role": "entry_marker",
+            "family": "circle_open",
+            "x0": 88,
+        },
+    ]
+    filtered = paddle_headwords._apply_trusted_visual_marker_lanes(
+        candidates, lanes, template_threshold=0.65,
+    )
+
+    assert len(filtered) == 2
+    bracket = next(item for item in filtered if item["role"] == "bracket_open")
+    assert bracket["x0"] == 18
+    assert bracket["lane_source"] == "explicit_ocr_bracket_rows"
+    assert bracket["lane_anchor_count"] == 2
+    assert bracket["lane_delta"] == 15.0
+    assert any(item["role"] == "entry_marker" for item in filtered)
+
+
+def test_unanchored_bracket_rescue_rejects_generic_shape_and_weak_template():
+    candidates = [
+        {
+            "role": "bracket_open",
+            "family": "bracket_open",
+            "x0": 12,
+            "template_score": 0.0,
+        },
+        {
+            "role": "bracket_open",
+            "family": "dictionary_template",
+            "x0": 12,
+            "template_score": 0.665,
+        },
+        {
+            "role": "bracket_open",
+            "family": "dictionary_template",
+            "x0": 12,
+            "template_score": 0.74,
+        },
+    ]
+
+    filtered = paddle_headwords._apply_trusted_visual_marker_lanes(
+        candidates, {}, template_threshold=0.65,
+    )
+
+    assert len(filtered) == 1
+    assert filtered[0]["template_score"] == 0.74
+    assert filtered[0]["lane_source"] == "template_only_no_ocr_anchor"
+
+
+def test_verified_cjk_recovery_suppresses_its_raw_source_before_line_grouping():
+    records = [
+        OCRRecord("摆1", 0.987, (0, 157, 359, 480)),
+        OCRRecord(
+            "摆",
+            0.927,
+            (0, 203, 253, 433),
+            recovery="image_first_oversized_local_ocr",
+            recovery_source_text="摆1",
+        ),
+        OCRRecord("正文", 0.99, (130, 500, 300, 610)),
+    ]
+
+    effective, details = (
+        paddle_headwords._suppress_raw_records_shadowed_by_verified_cjk_recovery(
+            records
+        )
+    )
+
+    assert [record.text for record in effective] == ["摆", "正文"]
+    assert len(details) == 1
+    assert details[0]["raw_text"] == "摆1"
+    assert details[0]["recovered_word"] == "摆"
+    assert details[0]["reason"] == "same_recovery_source_text"
+    assert group_ocr_records := paddle_headwords.group_ocr_records(effective)
+    assert group_ocr_records[0].text == "摆"
+
+
+def test_verified_cjk_recovery_suppresses_giant_raw_box_spanning_recovered_heads():
+    records = [
+        OCRRecord("霸", 0.998, (0, 5854, 359, 6464)),
+        OCRRecord(
+            "耦",
+            0.769,
+            (0, 5890, 255, 6122),
+            recovery="image_first_oversized_local_ocr",
+            recovery_source_text="耦",
+        ),
+        OCRRecord(
+            "霸",
+            0.999,
+            (0, 6162, 182, 6327),
+            recovery="image_first_oversized_local_ocr",
+            recovery_source_text="霸",
+        ),
+    ]
+
+    effective, details = (
+        paddle_headwords._suppress_raw_records_shadowed_by_verified_cjk_recovery(
+            records
+        )
+    )
+
+    assert [record.text for record in effective] == ["耦", "霸"]
+    assert len(details) == 1
+    assert details[0]["raw_text"] == "霸"
+    assert details[0]["recovered_word"] == "霸"
+    lines = paddle_headwords.group_ocr_records(effective)
+    assert [line.text for line in lines] == ["耦", "霸"]
+
+
 def test_explicit_ocr_bracket_headword_does_not_need_large_or_bold_visual_evidence():
     settings = AppSettings(
         ocr_language="chi_tra",
