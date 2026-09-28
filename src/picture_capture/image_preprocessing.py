@@ -77,7 +77,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 21
+PREPROCESS_FORMAT_VERSION = 22
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -91,6 +91,8 @@ AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX = 0.035
 ORTHOGONAL_AUTO_MIN_CONFIDENCE = 0.45
 ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT = 0.25
 ORTHOGONAL_AUTO_GAINS = (0.55, 0.70, 0.85, 1.0, 1.10, 1.15)
+ORTHOGONAL_MAX_AUTO_PASSES = 3
+POST_PERSPECTIVE_REDETECT_MIN_BOXES = 8
 ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX = 3.5
 ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO = 0.0015
 PREVIEW_YELLOW = (255, 225, 110, 94)
@@ -226,6 +228,7 @@ class PreprocessAnalysis:
     manual_perspective_quad: tuple[float, ...] | None = None
     orthogonal_applied: bool = False
     orthogonal_passes: int = 0
+    orthogonal_steps: tuple[dict[str, object], ...] = ()
     orthogonal_row_count: int = 0
     orthogonal_valid_column_count: int = 0
     orthogonal_separator_point_count: int = 0
@@ -720,6 +723,11 @@ class PreprocessAnalysis:
             ),
             orthogonal_applied=bool(payload.get("orthogonal_applied", False)),
             orthogonal_passes=max(0, int(payload.get("orthogonal_passes", 0))),
+            orthogonal_steps=tuple(
+                dict(item)
+                for item in payload.get("orthogonal_steps", ())
+                if isinstance(item, dict)
+            ),
             orthogonal_row_count=max(0, int(payload.get("orthogonal_row_count", 0))),
             orthogonal_valid_column_count=max(
                 0, int(payload.get("orthogonal_valid_column_count", 0))
@@ -1569,6 +1577,65 @@ def _choose_orthogonal_candidate(
     )
 
 
+def _orthogonal_step_payload(
+    estimate: OrthogonalWarpEstimate,
+    row_gain: float,
+) -> dict[str, object]:
+    """Serialize only the geometry needed to replay one accepted warp pass."""
+    return {
+        "row_gain": float(row_gain),
+        "reference_x": float(estimate.reference_x),
+        "y_knots": [float(v) for v in estimate.y_knots],
+        "angle_knots_deg": [float(v) for v in estimate.angle_knots_deg],
+        "x_knots": [float(v) for v in estimate.x_knots],
+        "row_grid_rows": int(estimate.row_grid_rows),
+        "row_grid_cols": int(estimate.row_grid_cols),
+        "row_angle_grid_deg": [
+            float(v) for v in estimate.row_angle_grid_deg
+        ],
+        "row_displacement_grid_px": [
+            float(v) for v in estimate.row_displacement_grid_px
+        ],
+        "separator_y_knots": [
+            float(v) for v in estimate.separator_y_knots
+        ],
+        "separator_shift_knots_px": [
+            float(v) for v in estimate.separator_shift_knots_px
+        ],
+    }
+
+
+def _orthogonal_estimate_from_step(
+    payload: dict[str, object],
+) -> tuple[OrthogonalWarpEstimate, float]:
+    estimate = OrthogonalWarpEstimate(
+        y_knots=tuple(float(v) for v in payload.get("y_knots", ())),
+        angle_knots_deg=tuple(
+            float(v) for v in payload.get("angle_knots_deg", ())
+        ),
+        x_knots=tuple(float(v) for v in payload.get("x_knots", ())),
+        row_grid_rows=max(0, int(payload.get("row_grid_rows", 0) or 0)),
+        row_grid_cols=max(0, int(payload.get("row_grid_cols", 0) or 0)),
+        row_angle_grid_deg=tuple(
+            float(v) for v in payload.get("row_angle_grid_deg", ())
+        ),
+        row_displacement_grid_px=tuple(
+            float(v)
+            for v in payload.get("row_displacement_grid_px", ())
+        ),
+        separator_y_knots=tuple(
+            float(v) for v in payload.get("separator_y_knots", ())
+        ),
+        separator_shift_knots_px=tuple(
+            float(v)
+            for v in payload.get("separator_shift_knots_px", ())
+        ),
+        reference_x=float(payload.get("reference_x", 0.0) or 0.0),
+        active=True,
+    )
+    return estimate, max(0.0, float(payload.get("row_gain", 1.0) or 1.0))
+
+
 def _normalize_geometry_mode(value: str | None) -> str:
     mode = str(value or "auto").strip().lower()
     aliases = {
@@ -1600,11 +1667,23 @@ def geometry_corrected_image(
         )
     if analysis.geometry_mode == "uvdoc":
         corrected = unwarp_document_image(corrected)
-    if (
+    if analysis.orthogonal_applied and analysis.orthogonal_steps:
+        for step_payload in analysis.orthogonal_steps:
+            estimate, row_gain = _orthogonal_estimate_from_step(
+                dict(step_payload)
+            )
+            corrected = apply_orthogonal_warp_image(
+                corrected,
+                estimate,
+                row_gain=row_gain,
+                separator_gain=1.0,
+            )
+    elif (
         analysis.orthogonal_applied
         and analysis.orthogonal_y_knots
         and analysis.orthogonal_angle_knots_deg
     ):
+        # Compatibility fallback for pre-v22 in-memory objects.
         estimate = OrthogonalWarpEstimate(
             y_knots=tuple(analysis.orthogonal_y_knots),
             angle_knots_deg=tuple(analysis.orthogonal_angle_knots_deg),
@@ -1622,41 +1701,6 @@ def geometry_corrected_image(
                 analysis.orthogonal_separator_shift_knots_px
             ),
             reference_x=float(analysis.orthogonal_reference_x),
-            row_count=int(analysis.orthogonal_row_count),
-            valid_column_count=int(
-                analysis.orthogonal_valid_column_count
-            ),
-            separator_point_count=int(
-                analysis.orthogonal_separator_point_count
-            ),
-            horizontal_rule_point_count=int(
-                analysis.orthogonal_horizontal_rule_point_count
-            ),
-            horizontal_rule_y=float(
-                analysis.orthogonal_horizontal_rule_y
-            ),
-            horizontal_rule_angle_deg=float(
-                analysis.orthogonal_before_horizontal_rule_angle_deg
-            ),
-            horizontal_rule_residual_span_px=float(
-                analysis.orthogonal_before_horizontal_rule_residual_px
-            ),
-            max_row_angle_deg=float(
-                analysis.orthogonal_max_row_angle_deg
-            ),
-            row_angle_span_deg=float(
-                analysis.orthogonal_row_angle_span_deg
-            ),
-            max_horizontal_shift_px=float(
-                analysis.orthogonal_max_horizontal_shift_px
-            ),
-            max_vertical_shift_px=float(
-                analysis.orthogonal_max_vertical_shift_px
-            ),
-            max_scale_deviation=float(
-                analysis.orthogonal_max_scale_deviation
-            ),
-            confidence=float(analysis.orthogonal_confidence),
             active=True,
         )
         corrected = apply_orthogonal_warp_image(
@@ -2743,6 +2787,40 @@ def analyze_preprocess_page(
                 f"{perspective_row_after_trend_deg:+.2f}°。"
             )
 
+    # A safe perspective can fix the page frame while leaving body-row
+    # geometry unresolved (0004-type pages). Re-detect on the actual
+    # perspective-corrected pixels before the nonlinear stage so orthogonal
+    # refinement does not inherit only mathematically transformed pre-warp
+    # boxes.
+    if (
+        requested_geometry_mode == "auto"
+        and actual_geometry_mode == "perspective"
+        and working_polygons
+    ):
+        try:
+            post_perspective_polygons = detect_text_polygons(
+                working,
+                settings,
+            )
+            if (
+                len(post_perspective_polygons)
+                >= POST_PERSPECTIVE_REDETECT_MIN_BOXES
+            ):
+                working_polygons = [
+                    np.asarray(poly, dtype=float)
+                    for poly in post_perspective_polygons
+                ]
+                advanced_redetected = True
+                method_parts.append("post_perspective_redetect")
+            else:
+                warnings.append(
+                    "透视后正文复检文本框不足，正交细化沿用变换后的原检测框。"
+                )
+        except Exception as exc:
+            warnings.append(
+                f"透视后正文复检不可用，正交细化沿用变换后的原检测框：{exc}"
+            )
+
     # Final deterministic orthogonal normalizer.
     #
     # Rotation/homography solve global geometry; UVDoc is a generic neural
@@ -2753,6 +2831,7 @@ def analyze_preprocess_page(
     # acceptance criterion part of the correction loop instead of a warning only.
     orthogonal_applied = False
     orthogonal_passes = 0
+    orthogonal_steps: list[dict[str, object]] = []
     orthogonal_row_count = 0
     orthogonal_valid_column_count = 0
     orthogonal_separator_point_count = 0
@@ -2783,6 +2862,9 @@ def analyze_preprocess_page(
     orthogonal_before_pixel_row_worst_px = 0.0
     orthogonal_after_pixel_row_worst_px = 0.0
     orthogonal_pixel_row_verdict = "insufficient"
+    orthogonal_initial_pixel_row_p90_px = 0.0
+    orthogonal_initial_pixel_row_worst_px = 0.0
+    orthogonal_initial_pixel_row_available = False
     orthogonal_confidence = 0.0
     orthogonal_column_spread_deg = 0.0
     orthogonal_max_row_angle_deg = 0.0
@@ -2804,7 +2886,7 @@ def analyze_preprocess_page(
             "vertical"
         )
     ):
-        for pass_index in range(1):
+        for pass_index in range(ORTHOGONAL_MAX_AUTO_PASSES):
             try:
                 estimate = estimate_orthogonal_warp(
                     working,
@@ -2985,6 +3067,18 @@ def analyze_preprocess_page(
                 working_polygons,
                 settings,
             )
+            if (
+                not orthogonal_initial_pixel_row_available
+                and baseline_pixel_rows.sample_count >= 8
+                and baseline_pixel_rows.valid_column_count >= 1
+            ):
+                orthogonal_initial_pixel_row_p90_px = float(
+                    baseline_pixel_rows.p90_shift_px
+                )
+                orthogonal_initial_pixel_row_worst_px = float(
+                    baseline_pixel_rows.worst_shift_px
+                )
+                orthogonal_initial_pixel_row_available = True
             candidate_pixel_rows = audit_pixel_row_profiles(
                 candidate_image,
                 candidate_polygons,
@@ -3218,6 +3312,9 @@ def analyze_preprocess_page(
             ]
             orthogonal_applied = True
             orthogonal_passes += 1
+            orthogonal_steps.append(
+                _orthogonal_step_payload(estimate, float(row_gain))
+            )
             orthogonal_row_gain = float(row_gain)
             orthogonal_reference_x = float(estimate.reference_x)
             orthogonal_y_knots = tuple(estimate.y_knots)
@@ -3252,8 +3349,83 @@ def analyze_preprocess_page(
             actual_geometry_mode = "orthogonal"
             advanced_redetected = True
             method_parts.append("orthogonal_dewarp")
-            if actual_verdict == "passed":
+            if orthogonal_passes > 1:
+                method_parts.append("orthogonal_residual_pass")
+
+            # Stop as soon as the physical row geometry is truly straight.
+            # Otherwise an accepted improved_review result becomes the input
+            # to another fresh measurement pass (0012-type pages). Because
+            # working/working_polygons were already updated above, a later
+            # rejected pass leaves the previous accepted result intact.
+            if (
+                pixel_driven
+                and pixel_row_available
+                and orthogonal_pixel_row_verdict == "passed"
+            ):
                 break
+            if (
+                not pixel_driven
+                and actual_verdict == "passed"
+            ):
+                break
+
+    # Re-audit the actual retained pixels after all accepted/rejected
+    # attempts. A later rejected residual pass must not overwrite diagnostics
+    # for the earlier accepted page.
+    if orthogonal_applied and working_polygons:
+        try:
+            retained_pixel_rows = audit_pixel_row_profiles(
+                working,
+                working_polygons,
+                settings,
+            )
+            if retained_pixel_rows.sample_count >= 8:
+                orthogonal_pixel_row_sample_count = int(
+                    retained_pixel_rows.sample_count
+                )
+                if orthogonal_initial_pixel_row_available:
+                    orthogonal_before_pixel_row_p90_px = float(
+                        orthogonal_initial_pixel_row_p90_px
+                    )
+                    orthogonal_before_pixel_row_worst_px = float(
+                        orthogonal_initial_pixel_row_worst_px
+                    )
+                orthogonal_after_pixel_row_p90_px = float(
+                    retained_pixel_rows.p90_shift_px
+                )
+                orthogonal_after_pixel_row_worst_px = float(
+                    retained_pixel_rows.worst_shift_px
+                )
+                retained_safe = bool(
+                    retained_pixel_rows.p90_shift_px
+                    <= PIXEL_ROW_PROFILE_P90_MAX_PX
+                    and retained_pixel_rows.worst_shift_px
+                    <= PIXEL_ROW_PROFILE_WORST_MAX_PX
+                )
+                retained_improved = bool(
+                    orthogonal_initial_pixel_row_available
+                    and orthogonal_initial_pixel_row_p90_px > 1e-6
+                    and retained_pixel_rows.p90_shift_px
+                    <= orthogonal_initial_pixel_row_p90_px * 0.70
+                    and retained_pixel_rows.worst_shift_px
+                    <= max(
+                        PIXEL_ROW_PROFILE_WORST_MAX_PX,
+                        orthogonal_initial_pixel_row_worst_px * 0.80,
+                    )
+                )
+                if retained_safe:
+                    orthogonal_pixel_row_verdict = "passed"
+                elif retained_improved:
+                    orthogonal_pixel_row_verdict = "improved_review"
+                else:
+                    orthogonal_pixel_row_verdict = "failed"
+                orthogonal_alignment_verdict = str(
+                    orthogonal_pixel_row_verdict
+                )
+        except Exception as exc:
+            warnings.append(
+                f"最终正交像素行复检不可用：{exc}"
+            )
 
     if (
         requested_geometry_mode == "auto"
@@ -3658,6 +3830,7 @@ def analyze_preprocess_page(
         manual_perspective_quad=manual_quad,
         orthogonal_applied=bool(orthogonal_applied),
         orthogonal_passes=int(orthogonal_passes),
+        orthogonal_steps=tuple(dict(step) for step in orthogonal_steps),
         orthogonal_row_count=int(orthogonal_row_count),
         orthogonal_valid_column_count=int(orthogonal_valid_column_count),
         orthogonal_separator_point_count=int(
@@ -4309,6 +4482,10 @@ def export_diagnostic_json(
             ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT
         ),
         "orthogonal_auto_gains": list(ORTHOGONAL_AUTO_GAINS),
+        "orthogonal_max_auto_passes": ORTHOGONAL_MAX_AUTO_PASSES,
+        "post_perspective_redetect_min_boxes": (
+            POST_PERSPECTIVE_REDETECT_MIN_BOXES
+        ),
         "orthogonal_warp_max_scale_deviation": (
             ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
         ),
@@ -4646,6 +4823,7 @@ def export_summary_csv(
             "line_geometry_confidence": analysis.line_geometry_confidence,
             "orthogonal_applied": analysis.orthogonal_applied,
             "orthogonal_passes": analysis.orthogonal_passes,
+            "orthogonal_step_count": len(analysis.orthogonal_steps),
             "orthogonal_row_count": analysis.orthogonal_row_count,
             "orthogonal_valid_column_count": (
                 analysis.orthogonal_valid_column_count
