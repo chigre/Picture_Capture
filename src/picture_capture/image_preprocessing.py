@@ -405,7 +405,7 @@ def _layout_content_box_from_polygons(
         and left - horizontal_pad <= (box[0] + box[2]) / 2.0 <= right + horizontal_pad
     ]
     header_top = (
-        int(round(float(np.percentile(header_tops, 5))))
+        int(min(header_tops))
         if header_tops else max(0, int(estimate.start_y))
     )
     body_bottom = max(header_top + 1, min(height, int(estimate.bottom_y)))
