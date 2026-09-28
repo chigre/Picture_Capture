@@ -1393,6 +1393,10 @@ def interpolate_perspective_estimate(
         horizontal_vanishing_x=float(estimate.horizontal_vanishing_x),
         horizontal_vanishing_y=float(estimate.horizontal_vanishing_y),
         horizontal_row_count=int(estimate.horizontal_row_count),
+        horizontal_column_count=int(estimate.horizontal_column_count),
+        horizontal_vp_column_spread_deg=float(
+            estimate.horizontal_vp_column_spread_deg
+        ),
     )
 
 
@@ -1400,6 +1404,7 @@ def optimize_horizontal_perspective_strength(
     polygons: Iterable[np.ndarray],
     size: tuple[int, int],
     full_estimate: PerspectiveEstimate,
+    settings: AppSettings | None = None,
 ) -> tuple[PerspectiveEstimate, HorizontalAlignmentAudit, float]:
     """Find the partial horizontal-VP strength with minimum row error.
 
@@ -1414,9 +1419,39 @@ def optimize_horizontal_perspective_strength(
     full_polygons = transform_polygons_homography(
         polygon_list, full_estimate.matrix,
     )
-    full_audit = audit_horizontal_alignment(polygon_list, full_polygons)
-    before_trend = float(full_audit.before_trend_deg)
-    after_trend = float(full_audit.after_trend_deg)
+    full_audit = audit_horizontal_alignment(
+        polygon_list, full_polygons, size=size, settings=settings,
+    )
+    before_candidates = [abs(float(full_audit.before_trend_deg))]
+    before_candidates.extend(
+        abs(float(value)) for value in full_audit.before_column_trends_deg
+    )
+    after_candidates = [abs(float(full_audit.after_trend_deg))]
+    after_candidates.extend(
+        abs(float(value)) for value in full_audit.after_column_trends_deg
+    )
+    before_trend = (
+        float(full_audit.before_trend_deg)
+        if abs(float(full_audit.before_trend_deg))
+        >= max(before_candidates, default=0.0) - 1e-9
+        else (
+            float(full_audit.before_column_trends_deg[
+                int(np.argmax(np.abs(full_audit.before_column_trends_deg)))
+            ])
+            if full_audit.before_column_trends_deg else 0.0
+        )
+    )
+    after_trend = (
+        float(full_audit.after_trend_deg)
+        if abs(float(full_audit.after_trend_deg))
+        >= max(after_candidates, default=0.0) - 1e-9
+        else (
+            float(full_audit.after_column_trends_deg[
+                int(np.argmax(np.abs(full_audit.after_column_trends_deg)))
+            ])
+            if full_audit.after_column_trends_deg else 0.0
+        )
+    )
 
     guesses: set[float] = set()
     coarse_count = int(
@@ -1463,10 +1498,13 @@ def optimize_horizontal_perspective_strength(
         mapped = transform_polygons_homography(
             polygon_list, candidate.matrix,
         )
-        audit = audit_horizontal_alignment(polygon_list, mapped)
+        audit = audit_horizontal_alignment(
+            polygon_list, mapped, size=size, settings=settings,
+        )
         objective = (
-            float(audit.after_metric_deg)
-            + 0.08 * abs(float(audit.after_trend_deg))
+            0.55 * float(audit.after_metric_deg)
+            + 0.35 * float(audit.after_worst_region_deg)
+            + 0.10 * float(audit.after_worst_column_metric_deg)
             + 0.02 * float(lam)
         )
         evaluated.append((objective, float(lam), candidate, audit))
@@ -1493,10 +1531,13 @@ def optimize_horizontal_perspective_strength(
         mapped = transform_polygons_homography(
             polygon_list, candidate.matrix,
         )
-        audit = audit_horizontal_alignment(polygon_list, mapped)
+        audit = audit_horizontal_alignment(
+            polygon_list, mapped, size=size, settings=settings,
+        )
         objective = (
-            float(audit.after_metric_deg)
-            + 0.08 * abs(float(audit.after_trend_deg))
+            0.55 * float(audit.after_metric_deg)
+            + 0.35 * float(audit.after_worst_region_deg)
+            + 0.10 * float(audit.after_worst_column_metric_deg)
             + 0.02 * float(lam)
         )
         evaluated.append((objective, float(lam), candidate, audit))
@@ -1551,6 +1592,8 @@ def compose_perspective_estimates(
         horizontal_vanishing_x=second.horizontal_vanishing_x,
         horizontal_vanishing_y=second.horizontal_vanishing_y,
         horizontal_row_count=second.horizontal_row_count,
+        horizontal_column_count=second.horizontal_column_count,
+        horizontal_vp_column_spread_deg=second.horizontal_vp_column_spread_deg,
     )
 
 
