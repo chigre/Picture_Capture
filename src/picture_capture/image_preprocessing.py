@@ -1344,27 +1344,19 @@ def analyze_preprocess_page(
         warnings.append(f"版面结构检测不可用，裁边已使用投影回退：{exc}")
 
     line_geometry = TextLineGeometryAnalysis()
-    auto_uvdoc_evidence = False
     if polygons:
         try:
             line_geometry = analyze_text_line_geometry(
                 source, polygons, settings,
             )
             method_parts.append("line_geometry")
-            auto_uvdoc_evidence = bool(
-                requested_geometry_mode == "auto"
-                and line_geometry.recommendation == "uvdoc_review"
-                and line_geometry.separator_curve_reliable
-                and line_geometry.confidence >= AUTO_UVDOC_MIN_CONFIDENCE
-            )
             if (
                 line_geometry.recommendation == "uvdoc_review"
                 and requested_geometry_mode != "uvdoc"
-                and not auto_uvdoc_evidence
             ):
                 warnings.append(
-                    "可靠实体长线轨迹显示平滑非线性弯曲；"
-                    "建议使用“UVDoc展平（Paddle高级）”复核。"
+                    "检测到可靠的平滑非线性弯曲；自动模式将优先使用"
+                    "确定性的正交网格展平，UVDoc保留为手动高级备选。"
                 )
             elif line_geometry.recommendation == "manual_review":
                 if (
@@ -1643,88 +1635,21 @@ def analyze_preprocess_page(
         except Exception as exc:
             warnings.append(f"手动四角透视纠正不可用：{exc}")
 
-    # PaddleOCR/PaddleX 3.7 ships the official UVDoc-backed document
-    # preprocessor. In auto mode we invoke it only for strong nonlinear
-    # evidence, then re-detect text and require a measurable dual-edge/page
-    # horizontality improvement before accepting the neural warp.
+    # UVDoc remains an explicit user-selected fallback for severe document
+    # curvature. Automatic mode no longer runs a neural warp before the
+    # deterministic final straightener: UVDoc is not designed to guarantee
+    # sub-degree row/column orthogonality and can add an unnecessary resample.
     advanced_redetected = False
-    run_auto_uvdoc = bool(auto_uvdoc_evidence)
-    if requested_geometry_mode == "uvdoc" or run_auto_uvdoc:
-        before_uvdoc = working
-        before_uvdoc_polygons = list(working_polygons)
+    if requested_geometry_mode == "uvdoc":
         try:
-            uvdoc_candidate = unwarp_document_image(working)
+            working = unwarp_document_image(working)
+            working_polygons = []
+            actual_geometry_mode = "uvdoc"
+            method_parts.append("uvdoc")
         except Exception as exc:
             warnings.append(
                 f"Paddle UVDoc 展平不可用，已保留前一步几何结果：{exc}"
             )
-        else:
-            if run_auto_uvdoc:
-                candidate_polygons: list[np.ndarray] = []
-                try:
-                    redetected = detect_text_polygons(uvdoc_candidate, settings)
-                    if len(redetected) >= 4:
-                        candidate_polygons = redetected
-                except Exception as exc:
-                    warnings.append(
-                        "自动 UVDoc 后文本复检失败，已回退到前一步几何结果："
-                        f"{exc}"
-                    )
-
-                if candidate_polygons:
-                    before_audit = audit_horizontal_alignment(
-                        before_uvdoc_polygons,
-                        before_uvdoc_polygons,
-                        size=before_uvdoc.size,
-                        settings=settings,
-                    )
-                    after_audit = audit_horizontal_alignment(
-                        candidate_polygons,
-                        candidate_polygons,
-                        size=uvdoc_candidate.size,
-                        settings=settings,
-                    )
-                    before_verdict, before_score = _absolute_horizontal_quality(
-                        before_audit
-                    )
-                    after_verdict, after_score = _absolute_horizontal_quality(
-                        after_audit
-                    )
-                    improved_enough = bool(
-                        after_verdict == "passed"
-                        or (
-                            after_verdict == "failed"
-                            and before_verdict != "insufficient"
-                            and after_score
-                            <= before_score
-                            * (1.0 - AUTO_UVDOC_MIN_HORIZONTAL_IMPROVEMENT)
-                        )
-                    )
-                    if improved_enough:
-                        working = uvdoc_candidate
-                        working_polygons = candidate_polygons
-                        actual_geometry_mode = "uvdoc"
-                        method_parts.extend(("uvdoc", "uvdoc_auto", "redetect"))
-                        advanced_redetected = True
-                    else:
-                        warnings.append(
-                            "自动 UVDoc 未通过双边缘水平验收，已回退："
-                            f"质量分 {before_score:.2f}→{after_score:.2f}，"
-                            f"验收={after_verdict}。"
-                        )
-                else:
-                    warnings.append(
-                        "自动 UVDoc 后有效文本框不足，无法完成双边缘验收；"
-                        "已回退到前一步几何结果。"
-                    )
-            else:
-                working = uvdoc_candidate
-                # Explicit UVDoc is a user override. Its final output is still
-                # audited below, but insufficient post-warp OCR does not cancel
-                # the requested transform.
-                working_polygons = []
-                actual_geometry_mode = "uvdoc"
-                method_parts.append("uvdoc")
 
     # Advanced projective geometry is staged after the global small-angle
     # correction:
@@ -1938,6 +1863,7 @@ def analyze_preprocess_page(
                 int(getattr(horizontal_full, "horizontal_row_count", 0))
                 >= HORIZONTAL_VP_MIN_ROWS
                 and line_geometry.confidence >= 0.35
+                and not line_geometry.separator_curve_reliable
                 and horizontal_driver_trend >= HORIZONTAL_VP_MIN_TREND_DEG
                 and (
                     vp_column_spread <= HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG
