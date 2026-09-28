@@ -20,6 +20,13 @@ from .layout_detection import (
     infer_layout_from_boxes,
 )
 from .models import AppSettings
+from .orthogonal_dewarp import (
+    ORTHOGONAL_WARP_MAX_SCALE_DEVIATION,
+    OrthogonalWarpEstimate,
+    apply_orthogonal_warp_image,
+    estimate_orthogonal_warp,
+    transform_polygons_orthogonal,
+)
 from .preprocess_geometry import (
     HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG,
     HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG,
@@ -56,12 +63,13 @@ from .text_line_geometry import (
     SEPARATOR_TRACK_QUALITY_MIN,
     TextLineGeometryAnalysis,
     analyze_text_line_geometry,
+    separator_track_points,
 )
 from .project_storage import image_preprocess_data_root, image_preprocess_output_root
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 16
+PREPROCESS_FORMAT_VERSION = 17
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -72,8 +80,11 @@ AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX = 0.040
 AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX = 0.070
 AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX = 0.055
 AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX = 0.035
-AUTO_UVDOC_MIN_CONFIDENCE = 0.65
-AUTO_UVDOC_MIN_HORIZONTAL_IMPROVEMENT = 0.15
+ORTHOGONAL_AUTO_MIN_CONFIDENCE = 0.45
+ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT = 0.25
+ORTHOGONAL_AUTO_GAINS = (0.55, 0.70, 0.85, 1.0, 1.10)
+ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX = 3.5
+ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO = 0.0015
 PREVIEW_YELLOW = (255, 225, 110, 94)
 PREVIEW_OUTLINE = (218, 164, 24, 255)
 
@@ -200,6 +211,30 @@ class PreprocessAnalysis:
     perspective_text_scale_verdict: str = "insufficient"
     perspective_auto_safe: bool = False
     manual_perspective_quad: tuple[float, ...] | None = None
+    orthogonal_applied: bool = False
+    orthogonal_passes: int = 0
+    orthogonal_row_count: int = 0
+    orthogonal_valid_column_count: int = 0
+    orthogonal_separator_point_count: int = 0
+    orthogonal_row_gain: float = 0.0
+    orthogonal_reference_x: float = 0.0
+    orthogonal_y_knots: tuple[float, ...] = ()
+    orthogonal_angle_knots_deg: tuple[float, ...] = ()
+    orthogonal_separator_y_knots: tuple[float, ...] = ()
+    orthogonal_separator_shift_knots_px: tuple[float, ...] = ()
+    orthogonal_confidence: float = 0.0
+    orthogonal_column_spread_deg: float = 0.0
+    orthogonal_max_row_angle_deg: float = 0.0
+    orthogonal_row_angle_span_deg: float = 0.0
+    orthogonal_max_horizontal_shift_px: float = 0.0
+    orthogonal_max_vertical_shift_px: float = 0.0
+    orthogonal_max_scale_deviation: float = 0.0
+    orthogonal_before_quality_score: float = 0.0
+    orthogonal_after_quality_score: float = 0.0
+    orthogonal_before_separator_span_px: float = 0.0
+    orthogonal_after_separator_span_px: float = 0.0
+    orthogonal_vertical_verdict: str = "insufficient"
+    orthogonal_alignment_verdict: str = "insufficient"
     final_alignment_row_count: int = 0
     final_alignment_valid_column_count: int = 0
     final_alignment_edge_pair_count: int = 0
@@ -630,6 +665,80 @@ class PreprocessAnalysis:
                 if isinstance(payload.get("manual_perspective_quad"), (list, tuple))
                 and len(payload.get("manual_perspective_quad", ())) == 8
                 else None
+            ),
+            orthogonal_applied=bool(payload.get("orthogonal_applied", False)),
+            orthogonal_passes=max(0, int(payload.get("orthogonal_passes", 0))),
+            orthogonal_row_count=max(0, int(payload.get("orthogonal_row_count", 0))),
+            orthogonal_valid_column_count=max(
+                0, int(payload.get("orthogonal_valid_column_count", 0))
+            ),
+            orthogonal_separator_point_count=max(
+                0, int(payload.get("orthogonal_separator_point_count", 0))
+            ),
+            orthogonal_row_gain=max(
+                0.0, float(payload.get("orthogonal_row_gain", 0.0))
+            ),
+            orthogonal_reference_x=float(
+                payload.get("orthogonal_reference_x", 0.0)
+            ),
+            orthogonal_y_knots=tuple(
+                float(v) for v in payload.get("orthogonal_y_knots", ())
+            ),
+            orthogonal_angle_knots_deg=tuple(
+                float(v) for v in payload.get("orthogonal_angle_knots_deg", ())
+            ),
+            orthogonal_separator_y_knots=tuple(
+                float(v)
+                for v in payload.get("orthogonal_separator_y_knots", ())
+            ),
+            orthogonal_separator_shift_knots_px=tuple(
+                float(v)
+                for v in payload.get(
+                    "orthogonal_separator_shift_knots_px", ()
+                )
+            ),
+            orthogonal_confidence=max(
+                0.0, min(1.0, float(payload.get("orthogonal_confidence", 0.0)))
+            ),
+            orthogonal_column_spread_deg=max(
+                0.0, float(payload.get("orthogonal_column_spread_deg", 0.0))
+            ),
+            orthogonal_max_row_angle_deg=max(
+                0.0, float(payload.get("orthogonal_max_row_angle_deg", 0.0))
+            ),
+            orthogonal_row_angle_span_deg=max(
+                0.0, float(payload.get("orthogonal_row_angle_span_deg", 0.0))
+            ),
+            orthogonal_max_horizontal_shift_px=max(
+                0.0, float(payload.get("orthogonal_max_horizontal_shift_px", 0.0))
+            ),
+            orthogonal_max_vertical_shift_px=max(
+                0.0, float(payload.get("orthogonal_max_vertical_shift_px", 0.0))
+            ),
+            orthogonal_max_scale_deviation=max(
+                0.0, float(payload.get("orthogonal_max_scale_deviation", 0.0))
+            ),
+            orthogonal_before_quality_score=max(
+                0.0, float(payload.get("orthogonal_before_quality_score", 0.0))
+            ),
+            orthogonal_after_quality_score=max(
+                0.0, float(payload.get("orthogonal_after_quality_score", 0.0))
+            ),
+            orthogonal_before_separator_span_px=max(
+                0.0,
+                float(payload.get("orthogonal_before_separator_span_px", 0.0)),
+            ),
+            orthogonal_after_separator_span_px=max(
+                0.0,
+                float(payload.get("orthogonal_after_separator_span_px", 0.0)),
+            ),
+            orthogonal_vertical_verdict=str(
+                payload.get("orthogonal_vertical_verdict", "insufficient")
+                or "insufficient"
+            ),
+            orthogonal_alignment_verdict=str(
+                payload.get("orthogonal_alignment_verdict", "insufficient")
+                or "insufficient"
             ),
             final_alignment_row_count=max(
                 0, int(payload.get("final_alignment_row_count", 0))
@@ -1209,6 +1318,86 @@ def _absolute_horizontal_quality(audit) -> tuple[str, float]:
     return ("passed" if passed else "failed"), float(score)
 
 
+def _separator_vertical_span(
+    points: Iterable[tuple[float, float]],
+) -> tuple[int, float]:
+    """Return robust X spread of a physical vertical separator track."""
+    values = np.asarray(
+        [float(x) for _y, x in points],
+        dtype=float,
+    )
+    if values.size < 7:
+        return int(values.size), 0.0
+    return (
+        int(values.size),
+        float(np.percentile(values, 90) - np.percentile(values, 10)),
+    )
+
+
+def _choose_orthogonal_candidate(
+    polygons: Iterable[np.ndarray],
+    estimate: OrthogonalWarpEstimate,
+    size: tuple[int, int],
+    settings: AppSettings,
+) -> tuple[
+    float,
+    list[np.ndarray],
+    str,
+    float,
+    float,
+]:
+    """Select the mildest row-warp gain that best straightens current rows."""
+    source_polygons = [np.asarray(poly, dtype=float) for poly in polygons]
+    before_audit = audit_horizontal_alignment(
+        source_polygons,
+        source_polygons,
+        size=size,
+        settings=settings,
+    )
+    _before_verdict, before_score = _absolute_horizontal_quality(before_audit)
+
+    best_gain = 0.0
+    best_polygons = source_polygons
+    best_verdict = "insufficient"
+    best_score = float("inf")
+    best_objective = float("inf")
+    for gain in ORTHOGONAL_AUTO_GAINS:
+        mapped = transform_polygons_orthogonal(
+            source_polygons,
+            estimate,
+            row_gain=float(gain),
+            separator_gain=1.0,
+        )
+        audit = audit_horizontal_alignment(
+            source_polygons,
+            mapped,
+            size=size,
+            settings=settings,
+        )
+        verdict, score = _absolute_horizontal_quality(audit)
+        # Prefer a true pass. Otherwise minimize the normalized absolute
+        # residual, with a tiny regularizer that avoids over-correction.
+        objective = float(score) + 0.025 * abs(float(gain) - 1.0)
+        if verdict == "passed":
+            objective -= 0.20
+        if objective < best_objective:
+            best_objective = objective
+            best_gain = float(gain)
+            best_polygons = mapped
+            best_verdict = str(verdict)
+            best_score = float(score)
+
+    if not math.isfinite(best_score):
+        return 0.0, source_polygons, "insufficient", before_score, before_score
+    return (
+        best_gain,
+        best_polygons,
+        best_verdict,
+        float(before_score),
+        float(best_score),
+    )
+
+
 def _normalize_geometry_mode(value: str | None) -> str:
     mode = str(value or "auto").strip().lower()
     aliases = {
@@ -1240,6 +1429,50 @@ def geometry_corrected_image(
         )
     if analysis.geometry_mode == "uvdoc":
         corrected = unwarp_document_image(corrected)
+    if (
+        analysis.orthogonal_applied
+        and analysis.orthogonal_y_knots
+        and analysis.orthogonal_angle_knots_deg
+    ):
+        estimate = OrthogonalWarpEstimate(
+            y_knots=tuple(analysis.orthogonal_y_knots),
+            angle_knots_deg=tuple(analysis.orthogonal_angle_knots_deg),
+            separator_y_knots=tuple(analysis.orthogonal_separator_y_knots),
+            separator_shift_knots_px=tuple(
+                analysis.orthogonal_separator_shift_knots_px
+            ),
+            reference_x=float(analysis.orthogonal_reference_x),
+            row_count=int(analysis.orthogonal_row_count),
+            valid_column_count=int(
+                analysis.orthogonal_valid_column_count
+            ),
+            separator_point_count=int(
+                analysis.orthogonal_separator_point_count
+            ),
+            max_row_angle_deg=float(
+                analysis.orthogonal_max_row_angle_deg
+            ),
+            row_angle_span_deg=float(
+                analysis.orthogonal_row_angle_span_deg
+            ),
+            max_horizontal_shift_px=float(
+                analysis.orthogonal_max_horizontal_shift_px
+            ),
+            max_vertical_shift_px=float(
+                analysis.orthogonal_max_vertical_shift_px
+            ),
+            max_scale_deviation=float(
+                analysis.orthogonal_max_scale_deviation
+            ),
+            confidence=float(analysis.orthogonal_confidence),
+            active=True,
+        )
+        corrected = apply_orthogonal_warp_image(
+            corrected,
+            estimate,
+            row_gain=float(analysis.orthogonal_row_gain),
+            separator_gain=1.0,
+        )
     return corrected
 
 
@@ -1275,27 +1508,19 @@ def analyze_preprocess_page(
         warnings.append(f"版面结构检测不可用，裁边已使用投影回退：{exc}")
 
     line_geometry = TextLineGeometryAnalysis()
-    auto_uvdoc_evidence = False
     if polygons:
         try:
             line_geometry = analyze_text_line_geometry(
                 source, polygons, settings,
             )
             method_parts.append("line_geometry")
-            auto_uvdoc_evidence = bool(
-                requested_geometry_mode == "auto"
-                and line_geometry.recommendation == "uvdoc_review"
-                and line_geometry.separator_curve_reliable
-                and line_geometry.confidence >= AUTO_UVDOC_MIN_CONFIDENCE
-            )
             if (
                 line_geometry.recommendation == "uvdoc_review"
-                and requested_geometry_mode != "uvdoc"
-                and not auto_uvdoc_evidence
+                and requested_geometry_mode not in {"auto", "uvdoc"}
             ):
                 warnings.append(
-                    "可靠实体长线轨迹显示平滑非线性弯曲；"
-                    "建议使用“UVDoc展平（Paddle高级）”复核。"
+                    "检测到可靠的平滑非线性弯曲；当前模式不会自动执行"
+                    "正交网格展平，可改用自动模式或手动UVDoc复核。"
                 )
             elif line_geometry.recommendation == "manual_review":
                 if (
@@ -1574,88 +1799,21 @@ def analyze_preprocess_page(
         except Exception as exc:
             warnings.append(f"手动四角透视纠正不可用：{exc}")
 
-    # PaddleOCR/PaddleX 3.7 ships the official UVDoc-backed document
-    # preprocessor. In auto mode we invoke it only for strong nonlinear
-    # evidence, then re-detect text and require a measurable dual-edge/page
-    # horizontality improvement before accepting the neural warp.
+    # UVDoc remains an explicit user-selected fallback for severe document
+    # curvature. Automatic mode no longer runs a neural warp before the
+    # deterministic final straightener: UVDoc is not designed to guarantee
+    # sub-degree row/column orthogonality and can add an unnecessary resample.
     advanced_redetected = False
-    run_auto_uvdoc = bool(auto_uvdoc_evidence)
-    if requested_geometry_mode == "uvdoc" or run_auto_uvdoc:
-        before_uvdoc = working
-        before_uvdoc_polygons = list(working_polygons)
+    if requested_geometry_mode == "uvdoc":
         try:
-            uvdoc_candidate = unwarp_document_image(working)
+            working = unwarp_document_image(working)
+            working_polygons = []
+            actual_geometry_mode = "uvdoc"
+            method_parts.append("uvdoc")
         except Exception as exc:
             warnings.append(
                 f"Paddle UVDoc 展平不可用，已保留前一步几何结果：{exc}"
             )
-        else:
-            if run_auto_uvdoc:
-                candidate_polygons: list[np.ndarray] = []
-                try:
-                    redetected = detect_text_polygons(uvdoc_candidate, settings)
-                    if len(redetected) >= 4:
-                        candidate_polygons = redetected
-                except Exception as exc:
-                    warnings.append(
-                        "自动 UVDoc 后文本复检失败，已回退到前一步几何结果："
-                        f"{exc}"
-                    )
-
-                if candidate_polygons:
-                    before_audit = audit_horizontal_alignment(
-                        before_uvdoc_polygons,
-                        before_uvdoc_polygons,
-                        size=before_uvdoc.size,
-                        settings=settings,
-                    )
-                    after_audit = audit_horizontal_alignment(
-                        candidate_polygons,
-                        candidate_polygons,
-                        size=uvdoc_candidate.size,
-                        settings=settings,
-                    )
-                    before_verdict, before_score = _absolute_horizontal_quality(
-                        before_audit
-                    )
-                    after_verdict, after_score = _absolute_horizontal_quality(
-                        after_audit
-                    )
-                    improved_enough = bool(
-                        after_verdict == "passed"
-                        or (
-                            after_verdict == "failed"
-                            and before_verdict != "insufficient"
-                            and after_score
-                            <= before_score
-                            * (1.0 - AUTO_UVDOC_MIN_HORIZONTAL_IMPROVEMENT)
-                        )
-                    )
-                    if improved_enough:
-                        working = uvdoc_candidate
-                        working_polygons = candidate_polygons
-                        actual_geometry_mode = "uvdoc"
-                        method_parts.extend(("uvdoc", "uvdoc_auto", "redetect"))
-                        advanced_redetected = True
-                    else:
-                        warnings.append(
-                            "自动 UVDoc 未通过双边缘水平验收，已回退："
-                            f"质量分 {before_score:.2f}→{after_score:.2f}，"
-                            f"验收={after_verdict}。"
-                        )
-                else:
-                    warnings.append(
-                        "自动 UVDoc 后有效文本框不足，无法完成双边缘验收；"
-                        "已回退到前一步几何结果。"
-                    )
-            else:
-                working = uvdoc_candidate
-                # Explicit UVDoc is a user override. Its final output is still
-                # audited below, but insufficient post-warp OCR does not cancel
-                # the requested transform.
-                working_polygons = []
-                actual_geometry_mode = "uvdoc"
-                method_parts.append("uvdoc")
 
     # Advanced projective geometry is staged after the global small-angle
     # correction:
@@ -1869,6 +2027,7 @@ def analyze_preprocess_page(
                 int(getattr(horizontal_full, "horizontal_row_count", 0))
                 >= HORIZONTAL_VP_MIN_ROWS
                 and line_geometry.confidence >= 0.35
+                and not line_geometry.separator_curve_reliable
                 and horizontal_driver_trend >= HORIZONTAL_VP_MIN_TREND_DEG
                 and (
                     vp_column_spread <= HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG
@@ -2173,16 +2332,6 @@ def analyze_preprocess_page(
             )
         if (
             requested_geometry_mode == "auto"
-            and selected_candidate is horizontal_total_candidate
-            and line_geometry.separator_curve_reliable
-        ):
-            warnings.append(
-                "已先执行通过尺度与双边缘水平审计的全局水平投影；"
-                "实体分隔线仍提示非线性弯曲，因此继续保留 UVDoc 复核建议。"
-            )
-
-        if (
-            requested_geometry_mode == "auto"
             and structural_auto_safe
             and selected_candidate is structural_candidate
             and horizontal_full is not None
@@ -2235,7 +2384,11 @@ def analyze_preprocess_page(
                     method_parts.append("horizontal_vp_optimized")
         elif requested_geometry_mode == "auto":
             review_reasons: list[str] = []
-            if structural_candidate is not None and not structural_auto_safe:
+            if (
+                structural_candidate is not None
+                and not structural_auto_safe
+                and not line_geometry.separator_curve_reliable
+            ):
                 classification = str(
                     getattr(structural_candidate, "classification", "unknown")
                 )
@@ -2286,7 +2439,11 @@ def analyze_preprocess_page(
                             f"行向 {structural_t.inline_ratio_span_ratio * 100:.2f}% / "
                             f"跨行 {structural_t.cross_ratio_span_ratio * 100:.2f}%"
                         )
-            if horizontal_full is not None and not horizontal_auto_safe:
+            if (
+                horizontal_full is not None
+                and not horizontal_auto_safe
+                and not line_geometry.separator_curve_reliable
+            ):
                 if horizontal_row_audit is not None:
                     worst_index = (
                         horizontal_row_audit.after_worst_column_index + 1
@@ -2350,6 +2507,279 @@ def analyze_preprocess_page(
                 f"行趋势 {perspective_row_before_trend_deg:+.2f}°→"
                 f"{perspective_row_after_trend_deg:+.2f}°。"
             )
+
+    # Final deterministic orthogonal normalizer.
+    #
+    # Rotation/homography solve global geometry; UVDoc is a generic neural
+    # fallback. Neither guarantees that every dictionary row is horizontal and
+    # every physical column separator is vertical. Use the current post-transform
+    # OCR geometry itself to build a small row-wise mesh, then validate the
+    # actually transformed pixels by a fresh detection pass. This makes the
+    # acceptance criterion part of the correction loop instead of a warning only.
+    orthogonal_applied = False
+    orthogonal_passes = 0
+    orthogonal_row_count = 0
+    orthogonal_valid_column_count = 0
+    orthogonal_separator_point_count = 0
+    orthogonal_row_gain = 0.0
+    orthogonal_reference_x = 0.0
+    orthogonal_y_knots: tuple[float, ...] = ()
+    orthogonal_angle_knots_deg: tuple[float, ...] = ()
+    orthogonal_separator_y_knots: tuple[float, ...] = ()
+    orthogonal_separator_shift_knots_px: tuple[float, ...] = ()
+    orthogonal_confidence = 0.0
+    orthogonal_column_spread_deg = 0.0
+    orthogonal_max_row_angle_deg = 0.0
+    orthogonal_row_angle_span_deg = 0.0
+    orthogonal_max_horizontal_shift_px = 0.0
+    orthogonal_max_vertical_shift_px = 0.0
+    orthogonal_max_scale_deviation = 0.0
+    orthogonal_before_quality_score = 0.0
+    orthogonal_after_quality_score = 0.0
+    orthogonal_before_separator_span_px = 0.0
+    orthogonal_after_separator_span_px = 0.0
+    orthogonal_vertical_verdict = "insufficient"
+    orthogonal_alignment_verdict = "insufficient"
+
+    if (
+        requested_geometry_mode == "auto"
+        and working_polygons
+        and not str(settings.layout_writing_mode or "horizontal-tb").startswith(
+            "vertical"
+        )
+    ):
+        for pass_index in range(1):
+            try:
+                estimate = estimate_orthogonal_warp(
+                    working,
+                    working_polygons,
+                    settings,
+                )
+            except Exception as exc:
+                warnings.append(f"正交网格几何估计不可用：{exc}")
+                break
+
+            orthogonal_row_count = int(estimate.row_count)
+            orthogonal_valid_column_count = int(
+                estimate.valid_column_count
+            )
+            orthogonal_separator_point_count = int(
+                estimate.separator_point_count
+            )
+            orthogonal_confidence = float(estimate.confidence)
+            orthogonal_column_spread_deg = float(
+                estimate.column_spread_deg
+            )
+            orthogonal_max_row_angle_deg = float(
+                estimate.max_row_angle_deg
+            )
+            orthogonal_row_angle_span_deg = float(
+                estimate.row_angle_span_deg
+            )
+            orthogonal_max_horizontal_shift_px = float(
+                estimate.max_horizontal_shift_px
+            )
+            orthogonal_max_vertical_shift_px = float(
+                estimate.max_vertical_shift_px
+            )
+            orthogonal_max_scale_deviation = float(
+                estimate.max_scale_deviation
+            )
+
+            if (
+                not estimate.active
+                or estimate.confidence < ORTHOGONAL_AUTO_MIN_CONFIDENCE
+                or estimate.max_scale_deviation
+                > ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
+            ):
+                break
+
+            (
+                row_gain,
+                predicted_polygons,
+                predicted_verdict,
+                before_score,
+                predicted_score,
+            ) = _choose_orthogonal_candidate(
+                working_polygons,
+                estimate,
+                working.size,
+                settings,
+            )
+            orthogonal_before_quality_score = float(before_score)
+
+            predicted_improved = bool(
+                predicted_verdict == "passed"
+                or (
+                    predicted_verdict != "insufficient"
+                    and before_score > 1e-6
+                    and predicted_score
+                    <= before_score
+                    * (1.0 - ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT)
+                )
+            )
+            if not predicted_improved or row_gain <= 0.0:
+                if pass_index == 0:
+                    warnings.append(
+                        "检测到残余行/列几何，但正交网格候选未达到"
+                        "自动改善阈值，已保留前一步结果。"
+                    )
+                break
+
+            try:
+                candidate_image = apply_orthogonal_warp_image(
+                    working,
+                    estimate,
+                    row_gain=row_gain,
+                    separator_gain=1.0,
+                )
+                candidate_polygons = detect_text_polygons(
+                    candidate_image,
+                    settings,
+                )
+            except Exception as exc:
+                warnings.append(
+                    f"正交网格展平后复检失败，已保留前一步结果：{exc}"
+                )
+                break
+            if len(candidate_polygons) < 8:
+                warnings.append(
+                    "正交网格展平后有效文本框不足，已保留前一步结果。"
+                )
+                break
+
+            baseline_audit = audit_horizontal_alignment(
+                working_polygons,
+                working_polygons,
+                size=working.size,
+                settings=settings,
+            )
+            candidate_audit = audit_horizontal_alignment(
+                candidate_polygons,
+                candidate_polygons,
+                size=candidate_image.size,
+                settings=settings,
+            )
+            baseline_verdict, baseline_score = _absolute_horizontal_quality(
+                baseline_audit
+            )
+            actual_verdict, actual_score = _absolute_horizontal_quality(
+                candidate_audit
+            )
+            horizontal_improved = bool(
+                actual_verdict == "passed"
+                or (
+                    actual_verdict != "insufficient"
+                    and baseline_verdict != "insufficient"
+                    and baseline_score > 1e-6
+                    and actual_score
+                    <= baseline_score
+                    * (1.0 - ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT)
+                )
+            )
+
+            vertical_required = bool(estimate.separator_point_count >= 7)
+            vertical_safe = True
+            if vertical_required:
+                before_separator = separator_track_points(
+                    working,
+                    working_polygons,
+                    settings,
+                )
+                after_separator = separator_track_points(
+                    candidate_image,
+                    candidate_polygons,
+                    settings,
+                )
+                (
+                    before_separator_count,
+                    before_separator_span,
+                ) = _separator_vertical_span(before_separator)
+                (
+                    after_separator_count,
+                    after_separator_span,
+                ) = _separator_vertical_span(after_separator)
+                orthogonal_before_separator_span_px = float(
+                    before_separator_span
+                )
+                orthogonal_after_separator_span_px = float(
+                    after_separator_span
+                )
+                vertical_limit = max(
+                    ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX,
+                    working.width
+                    * ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO,
+                )
+                vertical_safe = bool(
+                    before_separator_count >= 7
+                    and after_separator_count >= 7
+                    and after_separator_span <= vertical_limit
+                )
+                orthogonal_vertical_verdict = (
+                    "passed" if vertical_safe else "failed"
+                )
+            else:
+                orthogonal_vertical_verdict = "not_required"
+
+            actual_improved = bool(horizontal_improved and vertical_safe)
+            if not actual_improved:
+                reason = (
+                    "水平验收未通过"
+                    if not horizontal_improved
+                    else "实体竖线验收未通过"
+                )
+                warnings.append(
+                    f"正交网格候选{reason}，"
+                    f"水平质量分 {baseline_score:.2f}→{actual_score:.2f}"
+                    + (
+                        "，竖线X跨度 "
+                        f"{orthogonal_before_separator_span_px:.1f}px→"
+                        f"{orthogonal_after_separator_span_px:.1f}px"
+                        if vertical_required else ""
+                    )
+                    + "，已回退。"
+                )
+                break
+
+            working = candidate_image
+            working_polygons = [
+                np.asarray(poly, dtype=float)
+                for poly in candidate_polygons
+            ]
+            orthogonal_applied = True
+            orthogonal_passes += 1
+            orthogonal_row_gain = float(row_gain)
+            orthogonal_reference_x = float(estimate.reference_x)
+            orthogonal_y_knots = tuple(estimate.y_knots)
+            orthogonal_angle_knots_deg = tuple(estimate.angle_knots_deg)
+            orthogonal_separator_y_knots = tuple(
+                estimate.separator_y_knots
+            )
+            orthogonal_separator_shift_knots_px = tuple(
+                estimate.separator_shift_knots_px
+            )
+            orthogonal_after_quality_score = float(actual_score)
+            orthogonal_alignment_verdict = str(actual_verdict)
+            geometry_strength = max(
+                geometry_strength,
+                estimate.max_vertical_shift_px,
+                estimate.max_horizontal_shift_px,
+            )
+            actual_geometry_mode = "orthogonal"
+            advanced_redetected = True
+            method_parts.append("orthogonal_dewarp")
+            if actual_verdict == "passed":
+                break
+
+    if (
+        requested_geometry_mode == "auto"
+        and line_geometry.separator_curve_reliable
+        and not orthogonal_applied
+    ):
+        warnings.append(
+            "检测到可靠非线性弯曲，但正交网格未能通过闭环验收；"
+            "已保留前一步结果，可手动选择UVDoc复核。"
+        )
 
     # Advanced transforms change the page geometry. Re-run TextDetection on the
     # corrected image before final structural cropping. If that second pass
@@ -2709,6 +3139,63 @@ def analyze_preprocess_page(
         perspective_text_scale_verdict=str(perspective_text_scale_verdict),
         perspective_auto_safe=bool(perspective_auto_safe),
         manual_perspective_quad=manual_quad,
+        orthogonal_applied=bool(orthogonal_applied),
+        orthogonal_passes=int(orthogonal_passes),
+        orthogonal_row_count=int(orthogonal_row_count),
+        orthogonal_valid_column_count=int(orthogonal_valid_column_count),
+        orthogonal_separator_point_count=int(
+            orthogonal_separator_point_count
+        ),
+        orthogonal_row_gain=round(float(orthogonal_row_gain), 6),
+        orthogonal_reference_x=round(float(orthogonal_reference_x), 4),
+        orthogonal_y_knots=tuple(
+            round(float(v), 4) for v in orthogonal_y_knots
+        ),
+        orthogonal_angle_knots_deg=tuple(
+            round(float(v), 6) for v in orthogonal_angle_knots_deg
+        ),
+        orthogonal_separator_y_knots=tuple(
+            round(float(v), 4) for v in orthogonal_separator_y_knots
+        ),
+        orthogonal_separator_shift_knots_px=tuple(
+            round(float(v), 6)
+            for v in orthogonal_separator_shift_knots_px
+        ),
+        orthogonal_confidence=round(float(orthogonal_confidence), 6),
+        orthogonal_column_spread_deg=round(
+            float(orthogonal_column_spread_deg), 4
+        ),
+        orthogonal_max_row_angle_deg=round(
+            float(orthogonal_max_row_angle_deg), 4
+        ),
+        orthogonal_row_angle_span_deg=round(
+            float(orthogonal_row_angle_span_deg), 4
+        ),
+        orthogonal_max_horizontal_shift_px=round(
+            float(orthogonal_max_horizontal_shift_px), 3
+        ),
+        orthogonal_max_vertical_shift_px=round(
+            float(orthogonal_max_vertical_shift_px), 3
+        ),
+        orthogonal_max_scale_deviation=round(
+            float(orthogonal_max_scale_deviation), 6
+        ),
+        orthogonal_before_quality_score=round(
+            float(orthogonal_before_quality_score), 4
+        ),
+        orthogonal_after_quality_score=round(
+            float(orthogonal_after_quality_score), 4
+        ),
+        orthogonal_before_separator_span_px=round(
+            float(orthogonal_before_separator_span_px), 3
+        ),
+        orthogonal_after_separator_span_px=round(
+            float(orthogonal_after_separator_span_px), 3
+        ),
+        orthogonal_vertical_verdict=str(orthogonal_vertical_verdict),
+        orthogonal_alignment_verdict=str(
+            orthogonal_alignment_verdict
+        ),
         final_alignment_row_count=int(final_alignment_row_count),
         final_alignment_valid_column_count=int(
             final_alignment_valid_column_count
@@ -3228,9 +3715,19 @@ def export_diagnostic_json(
         "auto_homography_anisotropy_p95_max": (
             AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
         ),
-        "auto_uvdoc_min_confidence": AUTO_UVDOC_MIN_CONFIDENCE,
-        "auto_uvdoc_min_horizontal_improvement": (
-            AUTO_UVDOC_MIN_HORIZONTAL_IMPROVEMENT
+        "orthogonal_auto_min_confidence": ORTHOGONAL_AUTO_MIN_CONFIDENCE,
+        "orthogonal_auto_min_score_improvement": (
+            ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT
+        ),
+        "orthogonal_auto_gains": list(ORTHOGONAL_AUTO_GAINS),
+        "orthogonal_warp_max_scale_deviation": (
+            ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
+        ),
+        "orthogonal_vertical_max_span_min_px": (
+            ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX
+        ),
+        "orthogonal_vertical_max_span_width_ratio": (
+            ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO
         ),
         "horizontal_alignment_max_edge_pair_delta_deg": (
             HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG
@@ -3553,6 +4050,53 @@ def export_summary_csv(
             ),
             "line_geometry_recommendation": analysis.line_geometry_recommendation,
             "line_geometry_confidence": analysis.line_geometry_confidence,
+            "orthogonal_applied": analysis.orthogonal_applied,
+            "orthogonal_passes": analysis.orthogonal_passes,
+            "orthogonal_row_count": analysis.orthogonal_row_count,
+            "orthogonal_valid_column_count": (
+                analysis.orthogonal_valid_column_count
+            ),
+            "orthogonal_separator_point_count": (
+                analysis.orthogonal_separator_point_count
+            ),
+            "orthogonal_row_gain": analysis.orthogonal_row_gain,
+            "orthogonal_confidence": analysis.orthogonal_confidence,
+            "orthogonal_column_spread_deg": (
+                analysis.orthogonal_column_spread_deg
+            ),
+            "orthogonal_max_row_angle_deg": (
+                analysis.orthogonal_max_row_angle_deg
+            ),
+            "orthogonal_row_angle_span_deg": (
+                analysis.orthogonal_row_angle_span_deg
+            ),
+            "orthogonal_max_horizontal_shift_px": (
+                analysis.orthogonal_max_horizontal_shift_px
+            ),
+            "orthogonal_max_vertical_shift_px": (
+                analysis.orthogonal_max_vertical_shift_px
+            ),
+            "orthogonal_max_scale_deviation": (
+                analysis.orthogonal_max_scale_deviation
+            ),
+            "orthogonal_before_quality_score": (
+                analysis.orthogonal_before_quality_score
+            ),
+            "orthogonal_after_quality_score": (
+                analysis.orthogonal_after_quality_score
+            ),
+            "orthogonal_before_separator_span_px": (
+                analysis.orthogonal_before_separator_span_px
+            ),
+            "orthogonal_after_separator_span_px": (
+                analysis.orthogonal_after_separator_span_px
+            ),
+            "orthogonal_vertical_verdict": (
+                analysis.orthogonal_vertical_verdict
+            ),
+            "orthogonal_alignment_verdict": (
+                analysis.orthogonal_alignment_verdict
+            ),
             "final_alignment_row_count": analysis.final_alignment_row_count,
             "final_alignment_valid_column_count": (
                 analysis.final_alignment_valid_column_count
@@ -3824,6 +4368,7 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         "perspective": "透视纠正",
         "manual_perspective": "手动四角",
         "uvdoc": "UVDoc 展平",
+        "orthogonal": "正交网格展平",
     }
     geometry = geometry_labels.get(analysis.geometry_mode, analysis.geometry_mode)
     if (
@@ -3833,14 +4378,17 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         geometry = "手动四角+UVDoc"
     strength = (
         f" {analysis.geometry_strength_px:.1f}px"
-        if analysis.geometry_mode in {"manual_perspective", "perspective"}        and analysis.geometry_strength_px > 0
+        if analysis.geometry_mode in {
+            "manual_perspective", "perspective", "orthogonal"
+        }
+        and analysis.geometry_strength_px > 0
         else ""
     )
     line_labels = {
         "none": "无需额外",
         "deskew": "旋转",
         "perspective": "透视",
-        "uvdoc_review": "建议UVDoc",
+        "uvdoc_review": "非线性弯曲",
         "manual_review": "人工复核",
         "insufficient": "证据不足",
     }
@@ -3948,6 +4496,24 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
             f"{separator}"
             f" → {line_labels.get(analysis.line_geometry_recommendation, analysis.line_geometry_recommendation)}"
         )
+    orthogonal_part = ""
+    if analysis.orthogonal_applied:
+        orthogonal_part = (
+            f"｜正交闭环 {analysis.orthogonal_alignment_verdict}"
+            f" gain={analysis.orthogonal_row_gain:.2f}"
+            f" 角场±{analysis.orthogonal_max_row_angle_deg:.2f}°"
+            f" 纵移≤{analysis.orthogonal_max_vertical_shift_px:.1f}px"
+            f" 横移≤{analysis.orthogonal_max_horizontal_shift_px:.1f}px"
+            f" 质量 {analysis.orthogonal_before_quality_score:.2f}"
+            f"→{analysis.orthogonal_after_quality_score:.2f}"
+            + (
+                f" 竖线{analysis.orthogonal_vertical_verdict}"
+                f" {analysis.orthogonal_before_separator_span_px:.1f}"
+                f"→{analysis.orthogonal_after_separator_span_px:.1f}px"
+                if analysis.orthogonal_vertical_verdict != "insufficient"
+                else ""
+            )
+        )
     final_alignment_part = ""
     if analysis.final_alignment_verdict != "insufficient":
         final_label = (
@@ -3964,7 +4530,7 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         f"{label}｜{geometry}{strength}｜"
         f"旋转 {analysis.applied_angle_deg:+.2f}°"
         f"（检测 {analysis.correction_angle_deg:+.2f}°）"
-        f"{perspective_part}{line_part}{final_alignment_part}｜"
+        f"{perspective_part}{line_part}{orthogonal_part}{final_alignment_part}｜"
         f"保留 {analysis.retained_ratio * 100:.1f}%｜"
         f"裁剪 L{x0} T{y0} R{x1} B{y1}"
     )

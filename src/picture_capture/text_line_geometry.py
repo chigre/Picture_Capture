@@ -30,6 +30,8 @@ class _SeparatorTrack:
     drift_px: float
     jump_p95_px: float
     curvature_score: float
+    xs: tuple[float, ...] = ()
+    ys: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -447,17 +449,20 @@ def _fit_separator_track(
         drift_px=drift_px,
         jump_p95_px=max(0.0, jump_p95),
         curvature_score=curvature_score,
+        xs=tuple(float(v) for v in x_values),
+        ys=tuple(float(v) for v in y_values),
     )
 
-def _separator_geometry(
+def _selected_separator_track(
     image: Image.Image,
     polygons: list[np.ndarray],
     settings: AppSettings,
-) -> tuple[bool, float, float, float, float, float, float, float]:
+) -> _SeparatorTrack | None:
+    """Return the best persistent physical separator track, including points."""
     width, height = image.size
     boxes = polygon_boxes(polygons, width, height)
     if len(boxes) < 8:
-        return False, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        return None
     try:
         layout = infer_layout_from_boxes(
             boxes,
@@ -469,16 +474,16 @@ def _separator_geometry(
             column_separator_mode=settings.layout_column_separator_mode,
         )
     except Exception:
-        return False, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        return None
     starts = tuple(int(v) for v in layout.column_starts)
     if len(starts) < 2:
-        return False, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        return None
     rights = tuple(int(v) for v in layout.column_rights)
     gray = np.asarray(normalize_page_rgb(image).convert("L"), dtype=np.uint8)
     body_top = max(0, int(layout.start_y))
     body_bottom = min(height, int(layout.bottom_y))
     if body_bottom - body_top < 80:
-        return False, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        return None
 
     candidates: list[_SeparatorTrack] = []
     for index in range(len(starts) - 1):
@@ -498,9 +503,6 @@ def _separator_geometry(
                 min(width, right - inset),
             ))
 
-        # OCR right edges can intrude into the gutter and collapse the nominal
-        # gap. Add a wider structural band centered between adjacent columns as
-        # an independent fallback; this is what rescues pages such as 0011.
         pitch = max(1, starts[index + 1] - starts[index])
         if gap >= 6:
             center = (left + right) / 2.0
@@ -525,19 +527,41 @@ def _separator_geometry(
                 candidates.append(result)
 
     if not candidates:
-        return False, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-    # Favor a persistent, smooth physical track rather than a high-contrast
-    # sequence that hops between text strokes. Curvature is not penalized here;
-    # it is evaluated separately when deciding whether UVDoc review is justified.
-    selected = max(
+        return None
+    return max(
         candidates,
         key=lambda item: (
-            item.quality
-            / (1.0 + 0.08 * item.jump_p95_px),
+            item.quality / (1.0 + 0.08 * item.jump_p95_px),
             item.span_ratio,
             -item.jump_p95_px,
         ),
     )
+
+
+def separator_track_points(
+    image: Image.Image,
+    polygons: Iterable[np.ndarray],
+    settings: AppSettings,
+) -> tuple[tuple[float, float], ...]:
+    """Return robust (y, x) samples of the strongest physical column separator."""
+    polygon_list = [np.asarray(poly, dtype=float) for poly in polygons]
+    selected = _selected_separator_track(image, polygon_list, settings)
+    if selected is None:
+        return ()
+    return tuple(
+        (float(y), float(x))
+        for y, x in zip(selected.ys, selected.xs)
+    )
+
+
+def _separator_geometry(
+    image: Image.Image,
+    polygons: list[np.ndarray],
+    settings: AppSettings,
+) -> tuple[bool, float, float, float, float, float, float, float]:
+    selected = _selected_separator_track(image, polygons, settings)
+    if selected is None:
+        return False, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     return (
         True,
         float(selected.residual_span_px),
@@ -548,7 +572,6 @@ def _separator_geometry(
         float(selected.jump_p95_px),
         float(selected.curvature_score),
     )
-
 
 def analyze_text_line_geometry(
     image: Image.Image,

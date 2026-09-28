@@ -22,6 +22,7 @@ from picture_capture.image_preprocessing import (
     promote_processed_pages,
     export_diagnostic_json,
     export_summary_csv,
+    geometry_corrected_image,
     save_analysis,
     save_manual_perspective_quad,
 )
@@ -169,7 +170,7 @@ def _two_column_angle_field(angle_at) -> list[np.ndarray]:
     return polygons
 
 
-def test_auto_geometry_applies_uvdoc_when_nonlinear_evidence_flattens(
+def test_auto_geometry_uses_orthogonal_dewarp_not_uvdoc_for_nonlinear_rows(
     monkeypatch,
 ) -> None:
     image = Image.new("RGB", (1000, 1400), "white")
@@ -186,7 +187,9 @@ def test_auto_geometry_applies_uvdoc_when_nonlinear_evidence_flattens(
     monkeypatch.setattr(
         image_preprocessing,
         "unwarp_document_image",
-        lambda source: source.copy(),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("auto nonlinear correction must not invoke UVDoc")
+        ),
     )
     monkeypatch.setattr(
         image_preprocessing,
@@ -203,6 +206,49 @@ def test_auto_geometry_applies_uvdoc_when_nonlinear_evidence_flattens(
             confidence=0.9,
         ),
     )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_orthogonal_warp",
+        lambda *_args, **_kwargs: image_preprocessing.OrthogonalWarpEstimate(
+            y_knots=(180.0, 1092.0),
+            angle_knots_deg=(0.50, -0.50),
+            reference_x=500.0,
+            row_count=40,
+            valid_column_count=2,
+            separator_point_count=8,
+            max_row_angle_deg=0.50,
+            row_angle_span_deg=1.0,
+            max_vertical_shift_px=4.4,
+            max_scale_deviation=0.01,
+            confidence=0.95,
+            active=True,
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_orthogonal_warp_image",
+        lambda source, *_args, **_kwargs: source.copy(),
+    )
+    separator_calls = 0
+
+    def fake_separator_track(_image, _polygons, _settings):
+        nonlocal separator_calls
+        separator_calls += 1
+        if separator_calls == 1:
+            return tuple(
+                (100.0 + i * 100.0, 500.0 + i * 1.5)
+                for i in range(8)
+            )
+        return tuple(
+            (100.0 + i * 100.0, 505.0 + i * 0.1)
+            for i in range(8)
+        )
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "separator_track_points",
+        fake_separator_track,
+    )
 
     analysis = analyze_preprocess_page(
         image,
@@ -212,18 +258,20 @@ def test_auto_geometry_applies_uvdoc_when_nonlinear_evidence_flattens(
         geometry_mode="auto",
     )
 
-    assert analysis.geometry_mode == "uvdoc"
-    assert "uvdoc_auto" in analysis.method
+    assert analysis.geometry_mode == "orthogonal"
+    assert analysis.orthogonal_applied is True
+    assert analysis.orthogonal_row_gain > 0
+    assert "orthogonal_dewarp" in analysis.method
     assert analysis.line_geometry_recommendation == "uvdoc_review"
     assert analysis.final_alignment_verdict == "passed"
-    assert analysis.final_alignment_edge_pair_count >= 30
     assert analysis.final_alignment_top_edge_p90_abs_deg <= 0.18
     assert analysis.final_alignment_bottom_edge_p90_abs_deg <= 0.18
     assert analysis.final_alignment_edge_pair_delta_p90_deg <= 0.15
-    assert not any("建议使用“UVDoc" in warning for warning in analysis.warnings)
+    assert analysis.orthogonal_vertical_verdict == "passed"
+    assert analysis.orthogonal_after_separator_span_px <= 3.5
 
 
-def test_auto_geometry_rejects_uvdoc_without_horizontal_improvement(
+def test_auto_geometry_rolls_back_orthogonal_candidate_without_real_improvement(
     monkeypatch,
 ) -> None:
     image = Image.new("RGB", (1000, 1400), "white")
@@ -237,7 +285,9 @@ def test_auto_geometry_rejects_uvdoc_without_horizontal_improvement(
     monkeypatch.setattr(
         image_preprocessing,
         "unwarp_document_image",
-        lambda source: source.copy(),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("auto nonlinear correction must not invoke UVDoc")
+        ),
     )
     monkeypatch.setattr(
         image_preprocessing,
@@ -254,6 +304,28 @@ def test_auto_geometry_rejects_uvdoc_without_horizontal_improvement(
             confidence=0.9,
         ),
     )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_orthogonal_warp",
+        lambda *_args, **_kwargs: image_preprocessing.OrthogonalWarpEstimate(
+            y_knots=(180.0, 1092.0),
+            angle_knots_deg=(0.50, -0.50),
+            reference_x=500.0,
+            row_count=40,
+            valid_column_count=2,
+            max_row_angle_deg=0.50,
+            row_angle_span_deg=1.0,
+            max_vertical_shift_px=4.4,
+            max_scale_deviation=0.01,
+            confidence=0.95,
+            active=True,
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_orthogonal_warp_image",
+        lambda source, *_args, **_kwargs: source.copy(),
+    )
 
     analysis = analyze_preprocess_page(
         image,
@@ -261,10 +333,15 @@ def test_auto_geometry_rejects_uvdoc_without_horizontal_improvement(
         geometry_mode="auto",
     )
 
+    assert analysis.geometry_mode != "orthogonal"
     assert analysis.geometry_mode != "uvdoc"
-    assert "uvdoc_auto" not in analysis.method
+    assert analysis.orthogonal_applied is False
     assert any(
-        "自动 UVDoc 未通过双边缘水平验收" in warning
+        "正交网格候选水平验收未通过" in warning
+        for warning in analysis.warnings
+    )
+    assert any(
+        "可手动选择UVDoc复核" in warning
         for warning in analysis.warnings
     )
 
@@ -584,7 +661,7 @@ def test_auto_geometry_can_use_horizontal_vanishing_point_without_ruling_line(
     assert "horizontal_vp" in analysis.method
 
 
-def test_rejected_auto_uvdoc_can_fall_back_to_safe_horizontal_vp(
+def test_reliable_nonlinear_curve_blocks_horizontal_vp_in_auto_mode(
     monkeypatch,
 ) -> None:
     image = Image.new("RGB", (1000, 1400), "white")
@@ -630,8 +707,20 @@ def test_rejected_auto_uvdoc_can_fall_back_to_safe_horizontal_vp(
     )
     monkeypatch.setattr(
         image_preprocessing,
+        "estimate_orthogonal_warp",
+        lambda *_args, **_kwargs: image_preprocessing.OrthogonalWarpEstimate(
+            row_count=44,
+            valid_column_count=2,
+            confidence=0.95,
+            active=False,
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
         "unwarp_document_image",
-        lambda source: source.copy(),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("auto mode must not invoke UVDoc")
+        ),
     )
 
     analysis = analyze_preprocess_page(
@@ -640,16 +729,14 @@ def test_rejected_auto_uvdoc_can_fall_back_to_safe_horizontal_vp(
         geometry_mode="auto",
     )
 
-    assert analysis.geometry_mode == "perspective"
-    assert analysis.perspective_candidate_source == "horizontal_vp"
-    assert analysis.perspective_row_alignment_verdict == "improved"
-    assert analysis.perspective_auto_safe is True
-    assert "horizontal_vp" in analysis.method
+    assert analysis.geometry_mode == "deskew"
+    assert analysis.perspective_auto_safe is False
+    assert "horizontal_vp" not in analysis.method
+    assert analysis.orthogonal_applied is False
     assert any(
-        "自动 UVDoc 未通过双边缘水平验收" in warning
+        "正交网格未能通过闭环验收" in warning
         for warning in analysis.warnings
     )
-    assert any("双边缘水平审计" in warning for warning in analysis.warnings)
 
 
 def test_0011_style_large_ocr_homography_is_blocked_even_with_separator(monkeypatch) -> None:
@@ -888,6 +975,53 @@ def _sample_export_analysis() -> PreprocessAnalysis:
         line_geometry_recommendation="perspective",
         line_geometry_confidence=0.86,
     )
+
+
+def test_geometry_export_replays_saved_orthogonal_field(monkeypatch) -> None:
+    analysis = _sample_export_analysis()
+    analysis.geometry_mode = "orthogonal"
+    analysis.orthogonal_applied = True
+    analysis.orthogonal_row_count = 30
+    analysis.orthogonal_valid_column_count = 2
+    analysis.orthogonal_separator_point_count = 12
+    analysis.orthogonal_row_gain = 0.85
+    analysis.orthogonal_reference_x = 60.0
+    analysis.orthogonal_y_knots = (20.0, 90.0, 160.0)
+    analysis.orthogonal_angle_knots_deg = (0.4, 0.0, -0.4)
+    analysis.orthogonal_separator_y_knots = (20.0, 160.0)
+    analysis.orthogonal_separator_shift_knots_px = (2.0, -2.0)
+    analysis.orthogonal_confidence = 0.9
+    analysis.orthogonal_max_row_angle_deg = 0.4
+    analysis.orthogonal_row_angle_span_deg = 0.8
+    analysis.orthogonal_max_horizontal_shift_px = 2.0
+    analysis.orthogonal_max_vertical_shift_px = 0.5
+    analysis.orthogonal_max_scale_deviation = 0.01
+
+    captured = {}
+
+    def fake_apply(source, estimate, *, row_gain, separator_gain):
+        captured["estimate"] = estimate
+        captured["row_gain"] = row_gain
+        captured["separator_gain"] = separator_gain
+        return source.copy()
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_orthogonal_warp_image",
+        fake_apply,
+    )
+
+    source = Image.new("RGB", (120, 180), "white")
+    output = geometry_corrected_image(source, analysis)
+
+    assert output.size == source.size
+    assert captured["row_gain"] == 0.85
+    assert captured["separator_gain"] == 1.0
+    estimate = captured["estimate"]
+    assert estimate.reference_x == 60.0
+    assert estimate.y_knots == (20.0, 90.0, 160.0)
+    assert estimate.angle_knots_deg == (0.4, 0.0, -0.4)
+    assert estimate.separator_shift_knots_px == (2.0, -2.0)
 
 
 def test_output_canvas_alignment_preserves_crop_without_rescaling() -> None:
