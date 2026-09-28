@@ -6173,7 +6173,7 @@ def _cache_signature(image: Image.Image, geometry: "Geometry", settings: AppSett
         "paths": [path.points for path in geometry.column_paths],
         "geometry_top": int(geometry.top),
         "geometry_bottom": int(geometry.bottom),
-        "column_widths": [int(value) for value in geometry.column_widths],
+        "column_widths": [int(value) for value in getattr(geometry, "column_widths", [])],
         "band_width_semantics": "detected_column_ratio_v1",
         "band_width_ratio": max(1, min(100, int(getattr(settings, "paddle_band_width_ratio", 100)))),
         "band_left_margin": settings.paddle_band_left_margin,
