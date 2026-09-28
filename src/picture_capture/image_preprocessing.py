@@ -10,14 +10,19 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
 from .image_utils import normalize_page_rgb
-from .layout_detection import analysis_ink_mask, detect_text_polygons
+from .layout_detection import (
+    LayoutEstimate,
+    analysis_ink_mask,
+    detect_text_polygons,
+    infer_layout_from_boxes,
+)
 from .models import AppSettings
 from .project_storage import image_preprocess_data_root, image_preprocess_output_root
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 1
-DEFAULT_SAFETY_MARGIN_PERCENT = 1.5
+PREPROCESS_FORMAT_VERSION = 2
+DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
 PREVIEW_YELLOW = (255, 225, 110, 94)
@@ -41,7 +46,7 @@ class PreprocessAnalysis:
     status: str
     method: str
     warnings: tuple[str, ...] = ()
-    safety_margin_percent: float = DEFAULT_SAFETY_MARGIN_PERCENT
+    safety_margin_px: int = DEFAULT_SAFETY_MARGIN_PX
     auto_deskew: bool = True
     source_size_bytes: int = 0
     source_mtime_ns: int = 0
@@ -60,6 +65,11 @@ class PreprocessAnalysis:
     def from_dict(cls, payload: dict) -> "PreprocessAnalysis":
         if not isinstance(payload, dict):
             raise ValueError("图片预处理结果格式无效")
+        if (
+            payload.get("format") != PREPROCESS_FORMAT
+            or int(payload.get("format_version", 0) or 0) != PREPROCESS_FORMAT_VERSION
+        ):
+            raise ValueError("图片预处理结果版本已过期，需要重新分析")
         crop = tuple(int(v) for v in payload.get("crop_box", ()))
         raw = tuple(int(v) for v in payload.get("raw_content_box", ()))
         text = payload.get("text_box")
@@ -82,8 +92,8 @@ class PreprocessAnalysis:
             status=str(payload.get("status", "review") or "review"),
             method=str(payload.get("method", "unknown") or "unknown"),
             warnings=tuple(str(item) for item in payload.get("warnings", ()) if str(item).strip()),
-            safety_margin_percent=max(
-                0.0, float(payload.get("safety_margin_percent", DEFAULT_SAFETY_MARGIN_PERCENT))
+            safety_margin_px=max(
+                0, int(payload.get("safety_margin_px", DEFAULT_SAFETY_MARGIN_PX))
             ),
             auto_deskew=bool(payload.get("auto_deskew", True)),
             source_size_bytes=max(0, int(payload.get("source_size_bytes", 0))),
@@ -292,75 +302,121 @@ def _rotated_text_box(
     )
 
 
-def _merge_projection_and_text(
-    projection: tuple[int, int, int, int],
-    text_box: tuple[int, int, int, int] | None,
-    width: int,
-    height: int,
-) -> tuple[tuple[int, int, int, int], bool]:
-    if text_box is None:
-        return projection, False
-    px0, py0, px1, py1 = projection
-    tx0, ty0, tx1, ty1 = text_box
-    x0 = min(px0, tx0)
-    y0 = min(py0, ty0)
-    x1 = max(px1, tx1)
-    y1 = max(py1, ty1)
-    disagreement = False
-
-    # If only the ink projection reaches the extreme physical edge while Paddle
-    # sees text safely inside the page, treat it as scanner/binding noise and
-    # retain a small context strip instead of the entire artifact.
-    context_x = max(8, round(width * 0.018))
-    context_y = max(8, round(height * 0.012))
-    if px0 < width * 0.02 and tx0 > width * 0.04:
-        x0 = max(px0, tx0 - context_x)
-        disagreement = True
-    if px1 > width * 0.98 and tx1 < width * 0.96:
-        x1 = min(px1, tx1 + context_x)
-        disagreement = True
-    if py0 < height * 0.012 and ty0 > height * 0.035:
-        y0 = max(py0, ty0 - context_y)
-        disagreement = True
-    if py1 > height * 0.988 and ty1 < height * 0.965:
-        y1 = min(py1, ty1 + context_y)
-        disagreement = True
-
-    return (
-        max(0, int(x0)), max(0, int(y0)),
-        min(width, int(x1)), min(height, int(y1)),
-    ), disagreement
-
-
-def _median_polygon_height(polygons: Iterable[np.ndarray]) -> float:
-    values: list[float] = []
+def _polygon_boxes(
+    polygons: Iterable[np.ndarray], width: int, height: int,
+) -> list[tuple[int, int, int, int]]:
+    boxes: list[tuple[int, int, int, int]] = []
     for raw in polygons:
         poly = np.asarray(raw, dtype=float)
         if poly.ndim != 2 or poly.shape[0] < 3 or poly.shape[1] < 2:
             continue
-        height = float(poly[:, 1].max() - poly[:, 1].min())
-        if 3.0 <= height:
-            values.append(height)
-    return float(np.median(values)) if values else 0.0
+        x0 = max(0, min(width - 1, math.floor(float(poly[:, 0].min()))))
+        y0 = max(0, min(height - 1, math.floor(float(poly[:, 1].min()))))
+        x1 = max(1, min(width, math.ceil(float(poly[:, 0].max())) + 1))
+        y1 = max(1, min(height, math.ceil(float(poly[:, 1].max())) + 1))
+        if x1 - x0 >= 3 and y1 - y0 >= 3:
+            boxes.append((x0, y0, x1, y1))
+    return boxes
 
 
-def _expand_box(
+def _layout_content_box_from_polygons(
+    polygons: Iterable[np.ndarray],
+    width: int,
+    height: int,
+    settings: AppSettings,
+) -> tuple[tuple[int, int, int, int], LayoutEstimate]:
+    """Derive the retained content frame from dictionary layout, not page ink.
+
+    Horizontal bounds deliberately follow the same parameters exposed by
+    automatic layout detection:
+      first column left -> final column right.
+    Vertical bounds retain the running header / page text above the body and end
+    at the detected body bottom. Scanner specks outside the column span therefore
+    cannot enlarge the normal crop.
+    """
+    boxes = _polygon_boxes(polygons, width, height)
+    if len(boxes) < 4:
+        raise RuntimeError("Paddle文本框过少，无法建立版面保留范围")
+
+    estimate = infer_layout_from_boxes(
+        boxes,
+        (width, height),
+        display_scale=1.0,
+        ink_mask=None,
+        columns_policy=settings.layout_columns_policy,
+        fixed_columns=settings.columns,
+        column_separator_mode=settings.layout_column_separator_mode,
+    )
+    left = max(0, min(width - 1, int(estimate.manual_x)))
+    right = (
+        left
+        + max(1, int(estimate.columns)) * max(1, int(estimate.column_width))
+        + max(0, int(estimate.columns) - 1) * max(0, int(estimate.gutter))
+    )
+    right = max(left + 1, min(width, right))
+
+    # Reuse the detector population but estimate the header top independently
+    # from body start_y. Only text spatially associated with the detected page
+    # layout is eligible, so edge/binding artifacts do not define Y either.
+    heights = [box[3] - box[1] for box in boxes]
+    median_h = max(4.0, float(np.median(heights)))
+    filtered = [
+        box for box in boxes
+        if box[3] - box[1] >= max(3.0, median_h * 0.40)
+        and box[2] - box[0] <= width * 0.92
+    ] or boxes
+    horizontal_pad = max(8, round(max(estimate.character_height, estimate.column_width * 0.08)))
+    upper_limit = int(estimate.start_y) + max(8, round(estimate.character_height * 1.5))
+    header_tops = [
+        box[1]
+        for box in filtered
+        if box[1] <= upper_limit
+        and left - horizontal_pad <= (box[0] + box[2]) / 2.0 <= right + horizontal_pad
+    ]
+    header_top = (
+        int(round(float(np.percentile(header_tops, 5))))
+        if header_tops else max(0, int(estimate.start_y))
+    )
+    body_bottom = max(header_top + 1, min(height, int(estimate.bottom_y)))
+    return (left, max(0, header_top), right, body_bottom), estimate
+
+
+def _expand_box_px(
     box: tuple[int, int, int, int],
     width: int,
     height: int,
-    *,
-    safety_margin_percent: float,
-    text_height: float,
+    safety_margin_px: int,
 ) -> tuple[int, int, int, int]:
-    percent = max(0.0, min(12.0, float(safety_margin_percent)))
-    margin_x = max(round(width * percent / 100.0), round(text_height * 1.6))
-    margin_y = max(round(height * percent / 100.0), round(text_height * 2.0))
+    margin = max(0, min(1000, int(safety_margin_px)))
     x0, y0, x1, y1 = box
     return (
-        max(0, x0 - margin_x),
-        max(0, y0 - margin_y),
-        min(width, x1 + margin_x),
-        min(height, y1 + margin_y),
+        max(0, x0 - margin),
+        max(0, y0 - margin),
+        min(width, x1 + margin),
+        min(height, y1 + margin),
+    )
+
+
+def _rotate_box_same_canvas(
+    box: tuple[int, int, int, int],
+    width: int,
+    height: int,
+    angle_deg: float,
+) -> tuple[int, int, int, int]:
+    x0, y0, x1, y1 = box
+    points = [
+        _rotate_point_same_canvas(x0, y0, width, height, angle_deg),
+        _rotate_point_same_canvas(x1, y0, width, height, angle_deg),
+        _rotate_point_same_canvas(x1, y1, width, height, angle_deg),
+        _rotate_point_same_canvas(x0, y1, width, height, angle_deg),
+    ]
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    return (
+        max(0, min(width - 1, math.floor(min(xs)))),
+        max(0, min(height - 1, math.floor(min(ys)))),
+        max(1, min(width, math.ceil(max(xs)))),
+        max(1, min(height, math.ceil(max(ys)))),
     )
 
 
@@ -399,26 +455,33 @@ def analyze_preprocess_page(
     image: Image.Image,
     settings: AppSettings,
     *,
-    safety_margin_percent: float = DEFAULT_SAFETY_MARGIN_PERCENT,
+    safety_margin_px: int = DEFAULT_SAFETY_MARGIN_PX,
     auto_deskew: bool = True,
 ) -> PreprocessAnalysis:
     source = normalize_page_rgb(image)
     width, height = source.size
     warnings: list[str] = []
     polygons: list[np.ndarray] = []
-    method = "paddle_text_polygons"
+    method = "paddle_layout_roi"
+    layout_box_source: tuple[int, int, int, int] | None = None
+    layout_source_boxes = 0
 
     try:
         polygons = detect_text_polygons(source, settings)
+        layout_box_source, layout_estimate = _layout_content_box_from_polygons(
+            polygons, width, height, settings,
+        )
+        layout_source_boxes = int(layout_estimate.source_boxes)
     except Exception as exc:
         method = "projection_fallback"
-        warnings.append(f"Paddle文本检测不可用，已使用投影回退：{exc}")
+        warnings.append(f"版面结构检测不可用，裁边已使用投影回退：{exc}")
 
     correction, angle_samples, angle_mad = estimate_skew_from_polygons(
         polygons, writing_mode=settings.layout_writing_mode,
     )
     if angle_samples < 4:
-        method = "projection_fallback" if not polygons else "paddle+projection_angle"
+        if method != "projection_fallback":
+            method = "paddle_layout_roi+projection_angle"
         try:
             correction = _projection_skew_fallback(
                 source, settings, writing_mode=settings.layout_writing_mode,
@@ -440,23 +503,36 @@ def analyze_preprocess_page(
                 f"{DEFAULT_MAX_AUTO_DESKEW_DEG:.1f}°，未自动旋转。"
             )
 
-    corrected = deskew_image(source, applied)
-    projection_box = _projection_content_box(corrected, settings)
     text_box = _rotated_text_box(polygons, width, height, applied)
-    raw_content_box, boundary_disagreement = _merge_projection_and_text(
-        projection_box, text_box, width, height,
-    )
-    if boundary_disagreement:
-        warnings.append("页边墨迹与文本检测范围差异较大，已优先抑制极边缘扫描/装订痕迹。")
+    if layout_box_source is not None:
+        # The user-facing rule is defined before correction:
+        #   X = first-column-left .. last-column-right
+        #   Y = header-top .. body-bottom
+        # plus a fixed pixel safety margin. Rotate that exact ROI together with
+        # the page and only then take its axis-aligned box on the corrected canvas.
+        safe_source_box = _expand_box_px(
+            layout_box_source, width, height, safety_margin_px,
+        )
+        raw_content_box = _rotate_box_same_canvas(
+            layout_box_source, width, height, applied,
+        )
+        crop_box = _rotate_box_same_canvas(
+            safe_source_box, width, height, applied,
+        )
+    else:
+        # Projection is now strictly a compatibility fallback. It no longer
+        # participates in ordinary Paddle/layout-driven crop decisions.
+        corrected = deskew_image(source, applied)
+        raw_content_box = _projection_content_box(corrected, settings)
+        crop_box = _expand_box_px(
+            raw_content_box, width, height, safety_margin_px,
+        )
 
-    text_height = _median_polygon_height(polygons)
-    crop_box = _expand_box(
-        raw_content_box, width, height,
-        safety_margin_percent=safety_margin_percent,
-        text_height=text_height,
-    )
     x0, y0, x1, y1 = crop_box
-    retained_ratio = max(0.0, min(1.0, ((x1 - x0) * (y1 - y0)) / float(width * height)))
+    retained_ratio = max(
+        0.0,
+        min(1.0, ((x1 - x0) * (y1 - y0)) / float(width * height)),
+    )
 
     if angle_samples and angle_mad > 0.65:
         warnings.append(f"文本框倾斜角离散较大（MAD {angle_mad:.2f}°）。")
@@ -464,18 +540,19 @@ def analyze_preprocess_page(
         warnings.append(f"页面倾斜较大（{correction:+.2f}°），建议人工确认。")
     if len(polygons) < 8:
         warnings.append(f"有效文本框仅 {len(polygons)} 个，建议人工确认裁边。")
-    if retained_ratio < 0.55:
+    if retained_ratio < 0.45:
         warnings.append(f"仅保留页面 {retained_ratio * 100:.1f}% 面积，裁剪幅度较大。")
     if retained_ratio > 0.975:
         warnings.append(f"保留页面 {retained_ratio * 100:.1f}% 面积，几乎未裁边。")
 
-    confidence = min(1.0, len(polygons) / 45.0)
+    evidence_boxes = layout_source_boxes or len(polygons)
+    confidence = min(1.0, evidence_boxes / 40.0)
     if angle_samples:
         confidence *= max(0.25, 1.0 - min(1.0, angle_mad / 1.5))
     else:
         confidence *= 0.45
-    if boundary_disagreement:
-        confidence *= 0.85
+    if method == "projection_fallback":
+        confidence *= 0.55
     confidence = max(0.0, min(1.0, confidence))
     status = "review" if warnings or confidence < 0.45 else "normal"
 
@@ -487,7 +564,7 @@ def analyze_preprocess_page(
         crop_box=crop_box,
         raw_content_box=raw_content_box,
         text_box=text_box,
-        source_boxes=len(polygons),
+        source_boxes=evidence_boxes,
         angle_samples=angle_samples,
         angle_mad_deg=round(float(angle_mad), 4),
         retained_ratio=retained_ratio,
@@ -495,16 +572,15 @@ def analyze_preprocess_page(
         status=status,
         method=method,
         warnings=tuple(warnings),
-        safety_margin_percent=float(safety_margin_percent),
+        safety_margin_px=max(0, int(safety_margin_px)),
         auto_deskew=bool(auto_deskew),
     )
-
 
 def analyze_preprocess_path(
     path: Path,
     settings: AppSettings,
     *,
-    safety_margin_percent: float = DEFAULT_SAFETY_MARGIN_PERCENT,
+    safety_margin_px: int = DEFAULT_SAFETY_MARGIN_PX,
     auto_deskew: bool = True,
 ) -> PreprocessAnalysis:
     path = Path(path)
@@ -512,7 +588,7 @@ def analyze_preprocess_path(
         analysis = analyze_preprocess_page(
             opened,
             settings,
-            safety_margin_percent=safety_margin_percent,
+            safety_margin_px=safety_margin_px,
             auto_deskew=auto_deskew,
         )
     try:
@@ -558,11 +634,11 @@ def analysis_is_current(
     analysis: PreprocessAnalysis,
     page: Path,
     *,
-    safety_margin_percent: float,
+    safety_margin_px: int,
     auto_deskew: bool,
 ) -> bool:
     page = Path(page)
-    if abs(float(analysis.safety_margin_percent) - float(safety_margin_percent)) > 1e-6:
+    if int(analysis.safety_margin_px) != int(safety_margin_px):
         return False
     if bool(analysis.auto_deskew) != bool(auto_deskew):
         return False
