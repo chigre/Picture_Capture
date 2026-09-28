@@ -32,6 +32,10 @@ class LayoutEstimate:
     confidence: float = 0.0
     # Full-resolution canonical page width represented by this estimate.
     canonical_width: int = 0
+    # Actual detected/synthesized left edge of each column in canonical pixels.
+    # Keeping these lets downstream preprocessing use the real final-column
+    # position instead of reconstructing it from a median pitch.
+    column_starts: tuple[int, ...] = ()
 
 
 @dataclass(slots=True)
@@ -523,6 +527,7 @@ def infer_layout_from_boxes(
         method="paddle",
         separator_x=(round(float(np.median(separators)) * scale) if separators else None),
         canonical_width=int(width),
+        column_starts=tuple(max(0, round(start * scale)) for start in starts),
     )
 
 
@@ -773,6 +778,7 @@ def _projection_layout_estimate(source: Image.Image, settings: AppSettings) -> L
         method="projection_fallback",
         separator_x=(round(float(np.median(separator_centers)) * factor) if separator_centers else None),
         canonical_width=int(original_w),
+        column_starts=tuple(max(0, round(start * factor)) for start in starts),
     )
 
 
