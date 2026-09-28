@@ -74,7 +74,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 19
+PREPROCESS_FORMAT_VERSION = 20
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -137,6 +137,11 @@ class PreprocessAnalysis:
     confidence: float
     status: str
     method: str
+    ocr_correction_angle_deg: float = 0.0
+    deskew_anchor_source: str = "ocr"
+    source_header_rule_point_count: int = 0
+    source_header_rule_angle_deg: float = 0.0
+    source_header_rule_residual_px: float = 0.0
     warnings: tuple[str, ...] = ()
     safety_margin_px: int = DEFAULT_SAFETY_MARGIN_PX
     auto_deskew: bool = True
@@ -239,6 +244,9 @@ class PreprocessAnalysis:
     orthogonal_before_horizontal_rule_residual_px: float = 0.0
     orthogonal_after_horizontal_rule_residual_px: float = 0.0
     orthogonal_horizontal_rule_verdict: str = "insufficient"
+    orthogonal_pixel_angle_sample_count: int = 0
+    orthogonal_pixel_angle_used_count: int = 0
+    orthogonal_pixel_angle_confidence: float = 0.0
     orthogonal_confidence: float = 0.0
     orthogonal_column_spread_deg: float = 0.0
     orthogonal_max_row_angle_deg: float = 0.0
@@ -353,6 +361,21 @@ class PreprocessAnalysis:
             confidence=max(0.0, min(1.0, float(payload.get("confidence", 0.0)))),
             status=str(payload.get("status", "review") or "review"),
             method=str(payload.get("method", "unknown") or "unknown"),
+            ocr_correction_angle_deg=float(
+                payload.get("ocr_correction_angle_deg", 0.0)
+            ),
+            deskew_anchor_source=str(
+                payload.get("deskew_anchor_source", "ocr") or "ocr"
+            ),
+            source_header_rule_point_count=max(
+                0, int(payload.get("source_header_rule_point_count", 0))
+            ),
+            source_header_rule_angle_deg=float(
+                payload.get("source_header_rule_angle_deg", 0.0)
+            ),
+            source_header_rule_residual_px=max(
+                0.0, float(payload.get("source_header_rule_residual_px", 0.0))
+            ),
             warnings=tuple(str(item) for item in payload.get("warnings", ()) if str(item).strip()),
             safety_margin_px=max(
                 0, int(payload.get("safety_margin_px", DEFAULT_SAFETY_MARGIN_PX))
@@ -774,6 +797,16 @@ class PreprocessAnalysis:
                     "orthogonal_horizontal_rule_verdict", "insufficient"
                 )
                 or "insufficient"
+            ),
+            orthogonal_pixel_angle_sample_count=max(
+                0, int(payload.get("orthogonal_pixel_angle_sample_count", 0))
+            ),
+            orthogonal_pixel_angle_used_count=max(
+                0, int(payload.get("orthogonal_pixel_angle_used_count", 0))
+            ),
+            orthogonal_pixel_angle_confidence=max(
+                0.0,
+                float(payload.get("orthogonal_pixel_angle_confidence", 0.0)),
             ),
             orthogonal_confidence=max(
                 0.0, min(1.0, float(payload.get("orthogonal_confidence", 0.0)))
@@ -1683,20 +1716,63 @@ def analyze_preprocess_page(
         except Exception as exc:
             warnings.append(f"文本行几何分析不可用：{exc}")
 
-    correction, angle_samples, angle_mad = estimate_skew_from_polygons(
+    ocr_correction, angle_samples, angle_mad = estimate_skew_from_polygons(
         polygons, writing_mode=settings.layout_writing_mode,
     )
     if angle_samples < 4:
         if method_parts[0] != "projection_fallback":
             method_parts.append("projection_angle")
         try:
-            correction = _projection_skew_fallback(
+            ocr_correction = _projection_skew_fallback(
                 source, settings, writing_mode=settings.layout_writing_mode,
             )
             warnings.append("文本框角度样本较少，倾斜角由投影法补充估计。")
         except Exception as exc:
-            correction = 0.0
+            ocr_correction = 0.0
             warnings.append(f"倾斜角回退估计失败：{exc}")
+
+    correction = float(ocr_correction)
+    deskew_anchor_source = "ocr"
+    source_header_rule_point_count = 0
+    source_header_rule_angle_deg = 0.0
+    source_header_rule_residual_px = 0.0
+    if (
+        polygons
+        and not str(settings.layout_writing_mode or "horizontal-tb").startswith(
+            "vertical"
+        )
+    ):
+        try:
+            (
+                source_header_rule_point_count,
+                source_header_rule_angle_deg,
+                source_header_rule_residual_px,
+                _source_header_rule_y,
+            ) = horizontal_rule_metrics(source, polygons, settings)
+            header_residual_limit = max(
+                HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX,
+                width * HORIZONTAL_RULE_MAX_RESIDUAL_WIDTH_RATIO,
+            )
+            header_anchor_reliable = bool(
+                source_header_rule_point_count >= 7
+                and abs(float(source_header_rule_angle_deg))
+                <= DEFAULT_MAX_AUTO_DESKEW_DEG
+                and float(source_header_rule_residual_px)
+                <= header_residual_limit
+            )
+            if header_anchor_reliable:
+                correction = float(source_header_rule_angle_deg)
+                deskew_anchor_source = "header_rule"
+                method_parts.append("header_rule_deskew")
+                if abs(float(ocr_correction) - correction) >= 0.12:
+                    warnings.append(
+                        "正文OCR平均倾角与页眉实体横线不一致："
+                        f"OCR {float(ocr_correction):+.2f}°，"
+                        f"页眉 {correction:+.2f}°；"
+                        "全局旋转采用实体横线，正文残差交由局部像素场矫正。"
+                    )
+        except Exception as exc:
+            warnings.append(f"页眉实体横线全局锚定不可用：{exc}")
 
     if abs(correction) < DEFAULT_DESKEW_DEAD_ZONE_DEG:
         applied = 0.0
@@ -2670,6 +2746,9 @@ def analyze_preprocess_page(
     orthogonal_before_horizontal_rule_residual_px = 0.0
     orthogonal_after_horizontal_rule_residual_px = 0.0
     orthogonal_horizontal_rule_verdict = "insufficient"
+    orthogonal_pixel_angle_sample_count = 0
+    orthogonal_pixel_angle_used_count = 0
+    orthogonal_pixel_angle_confidence = 0.0
     orthogonal_confidence = 0.0
     orthogonal_column_spread_deg = 0.0
     orthogonal_max_row_angle_deg = 0.0
@@ -2721,6 +2800,15 @@ def analyze_preprocess_page(
             orthogonal_before_horizontal_rule_residual_px = float(
                 estimate.horizontal_rule_residual_span_px
             )
+            orthogonal_pixel_angle_sample_count = int(
+                estimate.pixel_angle_sample_count
+            )
+            orthogonal_pixel_angle_used_count = int(
+                estimate.pixel_angle_used_count
+            )
+            orthogonal_pixel_angle_confidence = float(
+                estimate.pixel_angle_confidence
+            )
             orthogonal_confidence = float(estimate.confidence)
             orthogonal_column_spread_deg = float(
                 estimate.column_spread_deg
@@ -2749,30 +2837,73 @@ def analyze_preprocess_page(
             ):
                 break
 
-            (
-                row_gain,
-                predicted_polygons,
-                predicted_verdict,
-                before_score,
-                predicted_score,
-            ) = _choose_orthogonal_candidate(
-                working_polygons,
-                estimate,
-                working.size,
-                settings,
+            pixel_driven = bool(
+                estimate.pixel_angle_used_count
+                >= max(4, estimate.valid_column_count * 3)
+                and estimate.pixel_angle_confidence >= 0.06
             )
+            if pixel_driven:
+                # Pixel projection estimates a physical correction angle, so
+                # unit gain has a direct meaning. OCR polygons remain a safety
+                # audit, not the optimizer for this branch.
+                row_gain = 1.0
+                predicted_polygons = transform_polygons_orthogonal(
+                    working_polygons,
+                    estimate,
+                    row_gain=row_gain,
+                    separator_gain=1.0,
+                )
+                predicted_scale = audit_text_scale_stability(
+                    working_polygons,
+                    predicted_polygons,
+                    working.size,
+                    writing_mode=settings.layout_writing_mode,
+                )
+                predicted_audit = audit_horizontal_alignment(
+                    working_polygons,
+                    predicted_polygons,
+                    size=working.size,
+                    settings=settings,
+                )
+                baseline_predicted_audit = audit_horizontal_alignment(
+                    working_polygons,
+                    working_polygons,
+                    size=working.size,
+                    settings=settings,
+                )
+                _before_predicted_verdict, before_score = (
+                    _absolute_horizontal_quality(baseline_predicted_audit)
+                )
+                predicted_verdict, predicted_score = (
+                    _absolute_horizontal_quality(predicted_audit)
+                )
+                predicted_improved = predicted_scale.verdict != "worse"
+                method_parts.append("pixel_angle_field")
+            else:
+                (
+                    row_gain,
+                    predicted_polygons,
+                    predicted_verdict,
+                    before_score,
+                    predicted_score,
+                ) = _choose_orthogonal_candidate(
+                    working_polygons,
+                    estimate,
+                    working.size,
+                    settings,
+                )
+                predicted_improved = bool(
+                    predicted_verdict == "passed"
+                    or (
+                        predicted_verdict != "insufficient"
+                        and before_score > 1e-6
+                        and predicted_score
+                        <= before_score
+                        * (1.0 - ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT)
+                    )
+                )
             orthogonal_before_quality_score = float(before_score)
 
-            predicted_improved = bool(
-                predicted_verdict == "passed"
-                or (
-                    predicted_verdict != "insufficient"
-                    and before_score > 1e-6
-                    and predicted_score
-                    <= before_score
-                    * (1.0 - ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT)
-                )
-            )
             if not predicted_improved or row_gain <= 0.0:
                 if pass_index == 0:
                     warnings.append(
@@ -3195,6 +3326,15 @@ def analyze_preprocess_page(
         source_height=height,
         correction_angle_deg=round(float(correction), 4),
         applied_angle_deg=round(float(applied), 4),
+        ocr_correction_angle_deg=round(float(ocr_correction), 4),
+        deskew_anchor_source=str(deskew_anchor_source),
+        source_header_rule_point_count=int(source_header_rule_point_count),
+        source_header_rule_angle_deg=round(
+            float(source_header_rule_angle_deg), 4
+        ),
+        source_header_rule_residual_px=round(
+            float(source_header_rule_residual_px), 3
+        ),
         crop_box=crop_box,
         raw_content_box=raw_content_box,
         text_box=text_box,
@@ -3449,6 +3589,15 @@ def analyze_preprocess_page(
         ),
         orthogonal_horizontal_rule_verdict=str(
             orthogonal_horizontal_rule_verdict
+        ),
+        orthogonal_pixel_angle_sample_count=int(
+            orthogonal_pixel_angle_sample_count
+        ),
+        orthogonal_pixel_angle_used_count=int(
+            orthogonal_pixel_angle_used_count
+        ),
+        orthogonal_pixel_angle_confidence=round(
+            float(orthogonal_pixel_angle_confidence), 6
         ),
         orthogonal_confidence=round(float(orthogonal_confidence), 6),
         orthogonal_column_spread_deg=round(
@@ -4100,6 +4249,11 @@ def export_summary_csv(
             "source_height": analysis.source_height,
             "applied_angle_deg": analysis.applied_angle_deg,
             "correction_angle_deg": analysis.correction_angle_deg,
+            "ocr_correction_angle_deg": analysis.ocr_correction_angle_deg,
+            "deskew_anchor_source": analysis.deskew_anchor_source,
+            "source_header_rule_point_count": analysis.source_header_rule_point_count,
+            "source_header_rule_angle_deg": analysis.source_header_rule_angle_deg,
+            "source_header_rule_residual_px": analysis.source_header_rule_residual_px,
             "angle_samples": analysis.angle_samples,
             "angle_mad_deg": analysis.angle_mad_deg,
             "requested_geometry_mode": analysis.requested_geometry_mode,
@@ -4382,6 +4536,15 @@ def export_summary_csv(
             ),
             "orthogonal_horizontal_rule_verdict": (
                 analysis.orthogonal_horizontal_rule_verdict
+            ),
+            "orthogonal_pixel_angle_sample_count": (
+                analysis.orthogonal_pixel_angle_sample_count
+            ),
+            "orthogonal_pixel_angle_used_count": (
+                analysis.orthogonal_pixel_angle_used_count
+            ),
+            "orthogonal_pixel_angle_confidence": (
+                analysis.orthogonal_pixel_angle_confidence
             ),
             "orthogonal_confidence": analysis.orthogonal_confidence,
             "orthogonal_column_spread_deg": (

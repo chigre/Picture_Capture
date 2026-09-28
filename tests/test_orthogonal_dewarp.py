@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from picture_capture import orthogonal_dewarp
 from picture_capture.models import AppSettings
@@ -298,3 +298,78 @@ def test_orthogonal_bottom_boundary_does_not_extrapolate_past_last_right_rows(
     # rows; a one-sided local regression must not flip or invent a new trend.
     assert grid[-1, right_index] <= -0.18
     assert np.min(grid[-3:, right_index]) >= -0.60
+
+
+
+def test_pixel_projection_recovers_local_angle_when_ocr_hint_is_biased() -> None:
+    image = Image.new("RGB", (1000, 900), "white")
+    draw = ImageDraw.Draw(image)
+    target_angle = -0.62
+    slope = math.tan(math.radians(target_angle))
+    rows: list[tuple[float, float, float, float]] = []
+    for index in range(15):
+        cy = 220.0 + index * 30.0
+        x0 = 120.0
+        x1 = 880.0
+        y0 = cy - slope * (x1 - x0) / 2.0
+        y1 = cy + slope * (x1 - x0) / 2.0
+        # Broken segments mimic text rather than one continuous ruling line.
+        for start in range(120, 860, 74):
+            end = min(880, start + 48)
+            t0 = (start - x0) / (x1 - x0)
+            t1 = (end - x0) / (x1 - x0)
+            sy = y0 * (1.0 - t0) + y1 * t0
+            ey = y0 * (1.0 - t1) + y1 * t1
+            draw.line((start, sy, end, ey), fill="black", width=3)
+        # Deliberately biased OCR angle hint; the physical pixels must win.
+        rows.append((500.0, cy, -0.20, 760.0))
+
+    angle, confidence = orthogonal_dewarp._pixel_projection_angle(
+        image,
+        rows,
+        440.0,
+        250.0,
+        AppSettings(),
+        -0.20,
+    )
+
+    assert confidence >= orthogonal_dewarp.PIXEL_ANGLE_MIN_CONFIDENCE
+    assert abs(angle - target_angle) <= 0.10
+
+
+def test_pixel_projection_field_overrides_systematic_polygon_angle_bias(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1000, 1000), "white")
+    polygons: list[np.ndarray] = []
+    for cx in (260.0, 740.0):
+        for row in range(20):
+            y = 150.0 + row * 38.0
+            polygons.append(_rotated_box(cx, y, 300.0, 22.0, -0.20))
+
+    monkeypatch.setattr(
+        orthogonal_dewarp,
+        "separator_track_points",
+        lambda *_args, **_kwargs: (),
+    )
+    monkeypatch.setattr(
+        orthogonal_dewarp,
+        "horizontal_rule_track_points",
+        lambda *_args, **_kwargs: (),
+    )
+    monkeypatch.setattr(
+        orthogonal_dewarp,
+        "_pixel_projection_angle",
+        lambda *_args, **_kwargs: (-0.58, 0.40),
+    )
+
+    estimate = estimate_orthogonal_warp(
+        image,
+        polygons,
+        AppSettings(layout_columns_policy="fixed", columns=2),
+    )
+    grid = np.asarray(estimate.row_angle_grid_deg, dtype=float)
+
+    assert estimate.pixel_angle_used_count >= 10
+    assert estimate.pixel_angle_confidence >= 0.30
+    assert np.median(grid) <= -0.50
