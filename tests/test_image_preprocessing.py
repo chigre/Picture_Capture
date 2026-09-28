@@ -1754,6 +1754,7 @@ def test_auto_orthogonal_runs_second_residual_pass_after_improved_review(
             (2.0, 3.0),  # pass 1 accepted but improved_review
             (2.0, 3.0),  # pass 2 baseline
             (1.0, 1.5),  # pass 2 passed -> stop
+            (1.0, 1.5),  # retained final pixels
         ]
     )
 
