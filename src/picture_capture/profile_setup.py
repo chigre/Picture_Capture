@@ -170,6 +170,60 @@ VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE = {
     "按角色合并（推荐）": "role",
     "按具体符号区分": "literal",
 }
+BRACKET_ROLE_SYMBOLS = frozenset("【〔［[「『〈《")
+
+
+def _normalize_cjk_visual_symbol_roles(
+    entry_text: str,
+    bracket_text: str,
+    samples: list[dict] | None = None,
+) -> tuple[str, str, list[dict]]:
+    """Keep bracket openers out of the standalone entry-marker role."""
+    entry = list(split_configured_symbols(entry_text))
+    bracket = list(split_configured_symbols(bracket_text))
+    bracket_set = set(bracket)
+    moved = [
+        symbol for symbol in entry
+        if symbol in BRACKET_ROLE_SYMBOLS or symbol in bracket_set
+    ]
+    entry = [symbol for symbol in entry if symbol not in moved]
+    bracket = list(dict.fromkeys([*bracket, *moved]))
+    bracket_set = set(bracket)
+    normalized_samples: list[dict] = []
+    for sample in samples or []:
+        item = dict(sample)
+        literal = str(item.get("literal") or "")
+        if (
+            str(item.get("role") or "") == "entry_marker"
+            and literal
+            and literal in bracket_set
+        ):
+            item["role"] = "bracket_open"
+        normalized_samples.append(item)
+    return " ".join(entry), " ".join(bracket), normalized_samples
+
+
+def _visual_marker_capture_defaults(
+    *,
+    marker_prefix_enabled: bool,
+    bracket_enabled: bool,
+    entry_text: str,
+    bracket_text: str,
+) -> tuple[str, str]:
+    """Choose the semantically correct initial sample role in the capture UI."""
+    entry = split_configured_symbols(entry_text)
+    bracket = split_configured_symbols(bracket_text)
+    if marker_prefix_enabled and entry:
+        return "entry_marker", entry[0]
+    if bracket_enabled and bracket:
+        return "bracket_open", bracket[0]
+    if entry:
+        return "entry_marker", entry[0]
+    if bracket:
+        return "bracket_open", bracket[0]
+    return ("bracket_open", "") if bracket_enabled else ("entry_marker", "")
+
+
 def _label_for_value(mapping: dict[str, str], value: str, fallback: str) -> str:
     for label, mapped in mapping.items():
         if mapped == value:
