@@ -214,9 +214,9 @@ class AppSettings:
     # only ImagePreprocess analysis/export and never rewrite source page files.
     preprocess_auto_deskew: bool = True
     preprocess_safety_margin_px: int = 20
-    # Geometry stage before final crop. "auto" escalates from deskew to
-    # perspective / structural mesh dewarp only when measured deformation
-    # exceeds conservative pixel thresholds.
+    # Geometry stage before final crop. "auto" may apply global deskew and
+    # projective correction, but never nonlinear OCR-derived mesh warping.
+    # Strong nonlinear deformation is reviewed and handled explicitly by UVDoc.
     preprocess_geometry_mode: str = "auto"
     # Overlay editor presentation at 100% page scale. The page zoom multiplies
     # the base font, so text boxes zoom together with the scanned page.
