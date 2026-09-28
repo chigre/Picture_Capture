@@ -9,6 +9,7 @@ from typing import Iterable
 import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
+from .document_unwarping import unwarp_document_image
 from .image_utils import normalize_page_rgb
 from .layout_detection import (
     LayoutEstimate,
@@ -32,7 +33,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 5
+PREPROCESS_FORMAT_VERSION = 6
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -559,6 +560,8 @@ def _normalize_geometry_mode(value: str | None) -> str:
         "perspective": "perspective",
         "dewarp": "dewarp",
         "mesh": "dewarp",
+        "uvdoc": "uvdoc",
+        "paddle_unwarp": "uvdoc",
     }
     return aliases.get(mode, "auto")
 
@@ -590,6 +593,8 @@ def geometry_corrected_image(
         corrected = apply_homography_image(
             corrected, analysis.perspective_matrix,
         )
+    if analysis.geometry_mode == "uvdoc":
+        corrected = unwarp_document_image(corrected)
     if _dewarp_payload_valid(
         analysis.dewarp_y_samples,
         analysis.dewarp_target_starts,
@@ -706,6 +711,22 @@ def analyze_preprocess_page(
         except Exception as exc:
             warnings.append(f"手动四角透视纠正不可用：{exc}")
 
+    # PaddleOCR/PaddleX 3.7 ships the official document-preprocessor
+    # pipeline with UVDoc as its image-unwarping module.  Keep this explicit
+    # rather than silently downloading/running a neural model in automatic mode.
+    if requested_geometry_mode == "uvdoc":
+        try:
+            working = unwarp_document_image(working)
+            # UVDoc is non-projective, so the prior polygon coordinates are no
+            # longer valid. Final crop must come from a fresh detection pass.
+            working_polygons = []
+            actual_geometry_mode = "uvdoc"
+            method_parts.append("uvdoc")
+        except Exception as exc:
+            warnings.append(
+                f"Paddle UVDoc 展平不可用，已保留前一步几何结果：{exc}"
+            )
+
     # Advanced geometry is deliberately estimated after the global small-angle
     # correction. Perspective handles the remaining trapezoid/shear component;
     # the mesh stage then removes slow local column curvature.
@@ -776,7 +797,7 @@ def analyze_preprocess_page(
     # fails, the mathematically transformed original polygons remain a safe
     # fallback and preserve non-destructive export.
     final_polygons = working_polygons
-    if polygons and actual_geometry_mode in {"manual_perspective", "perspective", "dewarp"}:
+    if polygons and actual_geometry_mode in {"manual_perspective", "perspective", "dewarp", "uvdoc"}:
         try:
             redetected = detect_text_polygons(working, settings)
             if len(redetected) >= 4:
@@ -1130,6 +1151,7 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         "perspective": "透视纠正",
         "manual_perspective": "手动四角",
         "dewarp": "版面去弯曲",
+        "uvdoc": "UVDoc 展平",
     }
     geometry = geometry_labels.get(analysis.geometry_mode, analysis.geometry_mode)
     if (
@@ -1137,6 +1159,11 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         and analysis.geometry_mode == "dewarp"
     ):
         geometry = "手动四角+去弯曲"
+    elif (
+        analysis.manual_perspective_quad is not None
+        and analysis.geometry_mode == "uvdoc"
+    ):
+        geometry = "手动四角+UVDoc"
     strength = (
         f" {analysis.geometry_strength_px:.1f}px"
         if analysis.geometry_mode in {"manual_perspective", "perspective", "dewarp"}
