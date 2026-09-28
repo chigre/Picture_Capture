@@ -12,9 +12,12 @@ from picture_capture.image_preprocessing import (
     analysis_is_current,
     analyze_preprocess_page,
     estimate_skew_from_polygons,
+    clear_manual_perspective_quad,
     load_analysis,
+    load_manual_perspective_quad,
     overlay_excluded_regions,
     save_analysis,
+    save_manual_perspective_quad,
 )
 from picture_capture.layout_detection import detect_text_polygons
 from picture_capture.models import AppSettings
@@ -196,6 +199,18 @@ def test_preprocess_analysis_roundtrip_and_source_signature(tmp_path: Path) -> N
     )
 
 
+def test_manual_perspective_quad_roundtrip(tmp_path: Path) -> None:
+    page = tmp_path / "0004.tif"
+    Image.new("RGB", (400, 600), "white").save(page)
+    quad = (10.0, 20.0, 390.0, 25.0, 380.0, 580.0, 15.0, 575.0)
+
+    save_manual_perspective_quad(tmp_path, page, quad)
+    assert load_manual_perspective_quad(tmp_path, page) == quad
+
+    clear_manual_perspective_quad(tmp_path, page)
+    assert load_manual_perspective_quad(tmp_path, page) is None
+
+
 def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     root = Path(__file__).resolve().parents[1]
     source = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
@@ -204,6 +219,9 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert 'text="进入预处理模式"' in source
     assert 'text="自动纠偏"' in source
     assert 'text="安全边界："' in source
+    assert '"自动几何（推荐）"' in source
+    assert 'text="手动四角"' in source
+    assert 'text="重置四角"' in source
     assert 'text="px"' in source
     assert '"分析所选范围"' in source
     assert 'text="导出检查小图"' in source
