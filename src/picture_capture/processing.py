@@ -1022,6 +1022,165 @@ def _detect_entries_left_edge(
     return sort_entries_reading_order(entries, geometry), geometry
 
 
+
+def _is_single_cjk_headword(word: str) -> bool:
+    """Return True only for one normalized Han ideograph."""
+    text = str(word or "").strip()
+    if len(text) != 1:
+        return False
+    code = ord(text)
+    return (
+        0x3400 <= code <= 0x4DBF
+        or 0x4E00 <= code <= 0x9FFF
+        or 0xF900 <= code <= 0xFAFF
+        or 0x20000 <= code <= 0x323AF
+    )
+
+
+def _entry_with_fused_metadata(
+    position: Entry,
+    semantic: Entry,
+    *,
+    use_semantic_position: bool = False,
+) -> Entry:
+    """Keep one canonical marker while inheriting OCR semantics/review metadata."""
+    source = str(semantic.ocr_source or semantic.final_engine or "ocr")
+    anchor = semantic if use_semantic_position else position
+    return Entry(
+        word=str(semantic.word or position.word or ""),
+        x=int(anchor.x),
+        y=int(anchor.y),
+        current_page=str(semantic.current_page or position.current_page or ""),
+        previous_page=str(semantic.previous_page or position.previous_page or "@"),
+        next_page=str(semantic.next_page or position.next_page or "@"),
+        confidence=semantic.confidence,
+        ocr_source=f"combined:{source}",
+        alphabetical_warning=str(semantic.alphabetical_warning or ""),
+        candidate_id=str(semantic.candidate_id or ""),
+        final_engine=str(semantic.final_engine or ""),
+        issue_type=str(semantic.issue_type or ""),
+        parser_score=semantic.parser_score,
+        manually_selected=bool(semantic.manually_selected),
+    )
+
+
+def _fuse_detection_entries(
+    ordinary_entries: list[Entry],
+    ocr_entries: list[Entry],
+    geometry: Geometry,
+    settings: AppSettings,
+    page_sections: list[PageSection] | None = None,
+) -> list[Entry]:
+    """Fuse the two independent detectors at the entry-event level.
+
+    Ordinary drawing is treated as a strong geometric observation, while OCR is
+    the semantic observation and an independent rescue path.  We deliberately do
+    not union line rectangles and we do not let OCR failure veto a valid ordinary
+    marker.  Nearby observations in the same visual column are paired one-to-one;
+    unmatched observations from either detector survive.  A final strict Y
+    collapse guarantees exactly one marker for one physical entry boundary.
+
+    For ordinary/bracketed entries, the restored VB separator is retained when
+    both detectors agree.  A one-Han OCR entry keeps its OCR position because the
+    OCR path has a dedicated oversized-CJK adaptive separator refiner that is more
+    specific than the ordinary normal-line geometry.
+    """
+    if not ordinary_entries:
+        return sort_entries_reading_order(list(ocr_entries), geometry, page_sections)
+    if not ocr_entries:
+        return sort_entries_reading_order(list(ordinary_entries), geometry, page_sections)
+
+    line_height = max(2, int(round(float(getattr(settings, "character_height", 26) or 26))))
+    try:
+        alignment_ratio = float(getattr(settings, "paddle_alignment_y_tolerance_ratio", 0.45) or 0.45)
+    except (TypeError, ValueError):
+        alignment_ratio = 0.45
+    alignment_ratio = max(0.25, min(0.55, alignment_ratio))
+    base_tolerance = max(4, round(line_height * alignment_ratio))
+    strict_dedup = max(2, round(line_height * 0.22))
+
+    def axis(entry: Entry) -> tuple[int, int, int]:
+        u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
+        col = column_index_for_click(int(entry.x), geometry, int(entry.y))
+        return int(col), int(u), int(v)
+
+    ordinary_rows = [(entry, *axis(entry)) for entry in ordinary_entries]
+    ocr_rows = [(entry, *axis(entry)) for entry in ocr_entries]
+    ordinary_rows.sort(key=lambda row: (row[1], row[3], row[2]))
+    ocr_rows.sort(key=lambda row: (row[1], row[3], row[2]))
+
+    used_ocr: set[int] = set()
+    fused: list[Entry] = []
+    for ordinary, ordinary_col, _ordinary_u, ordinary_v in ordinary_rows:
+        best_index: int | None = None
+        best_delta: int | None = None
+        for index, (ocr, ocr_col, _ocr_u, ocr_v) in enumerate(ocr_rows):
+            if index in used_ocr or ocr_col != ordinary_col:
+                continue
+            tolerance = base_tolerance
+            if _is_single_cjk_headword(ocr.word):
+                tolerance = max(tolerance, round(line_height * 0.55))
+            delta = abs(int(ocr_v) - int(ordinary_v))
+            if delta > tolerance:
+                continue
+            if best_delta is None or delta < best_delta:
+                best_index = index
+                best_delta = delta
+        if best_index is None:
+            fused.append(ordinary)
+            continue
+
+        used_ocr.add(best_index)
+        ocr = ocr_rows[best_index][0]
+        fused.append(_entry_with_fused_metadata(
+            ordinary,
+            ocr,
+            use_semantic_position=_is_single_cjk_headword(ocr.word),
+        ))
+
+    for index, (ocr, _col, _u, _v) in enumerate(ocr_rows):
+        if index not in used_ocr:
+            fused.append(ocr)
+
+    # Second-stage de-duplication is intentionally tighter than cross-detector
+    # pairing.  It catches residual same-boundary duplicates without collapsing
+    # genuinely adjacent dictionary entries.
+    ranked: list[tuple[Entry, int, int, int]] = []
+    for entry in fused:
+        col, u, v = axis(entry)
+        source = str(entry.ocr_source or "")
+        if source.startswith("combined:"):
+            priority = 3
+        elif entry.word or entry.candidate_id or entry.final_engine:
+            priority = 2
+        else:
+            priority = 1
+        ranked.append((entry, col, u, v))
+    ranked.sort(key=lambda row: (row[1], row[3], row[2]))
+
+    output: list[tuple[Entry, int, int, int]] = []
+    for row in ranked:
+        if output and row[1] == output[-1][1] and abs(row[3] - output[-1][3]) <= strict_dedup:
+            current = output[-1][0]
+            incoming = row[0]
+
+            def priority(item: Entry) -> tuple[int, int, float]:
+                source = str(item.ocr_source or "")
+                return (
+                    3 if source.startswith("combined:") else (2 if item.word or item.candidate_id or item.final_engine else 1),
+                    1 if item.manually_selected else 0,
+                    float(item.confidence if item.confidence is not None else -1.0),
+                )
+
+            if priority(incoming) > priority(current):
+                output[-1] = row
+            continue
+        output.append(row)
+
+    return sort_entries_reading_order(
+        [row[0] for row in output], geometry, page_sections
+    )
+
 def detect_entries(
     image: Image.Image,
     settings: AppSettings,
@@ -1036,16 +1195,32 @@ def detect_entries(
     effective = effective_page_settings(settings, source.size, profile_page_index)
     analysis_source = page_template_analysis_image(source, effective, profile_page_index)
     method = effective.detection_method.strip().lower()
-    if method == "paddleocr":
+    if method in {"paddleocr", "combined"}:
         geometry = derive_geometry(analysis_source, effective)
         from .paddle_headwords import detect_paddle_headwords
-        entries = detect_paddle_headwords(
+        ocr_entries = detect_paddle_headwords(
             analysis_source, geometry, effective,
             cache_path=paddle_cache_path,
             force_refresh=force_paddle_refresh,
             filter_rules_path=paddle_filter_rules_path,
             page_sections=page_sections,
         )
+        if method == "combined":
+            # Run the restored ordinary detector unchanged, including its
+            # page-specific auto-layout and VB separator chain.  The OCR path
+            # likewise keeps its own existing geometry/parser/refinement logic;
+            # only their final entry observations are fused.
+            ordinary_effective, _applied_layout = ordinary_page_layout_settings(
+                analysis_source, effective
+            )
+            ordinary_entries, _ordinary_geometry = _detect_entries_left_edge(
+                analysis_source, ordinary_effective, page_sections=page_sections
+            )
+            entries = _fuse_detection_entries(
+                ordinary_entries, ocr_entries, geometry, effective, page_sections
+            )
+        else:
+            entries = ocr_entries
     else:
         ordinary_effective, _applied_layout = ordinary_page_layout_settings(
             analysis_source, effective
