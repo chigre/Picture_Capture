@@ -3490,6 +3490,7 @@ def test_oversized_cjk_box_recovers_each_physical_display_head(monkeypatch):
     assert details[0]["parent_text"] == "厂广安"
     assert details[0]["visual_run_count"] == 4
     assert details[0]["recovered_count"] == 4
+    assert details[0]["applied"] is True
 
 
 def test_oversized_cjk_box_never_guesses_missing_children_from_parent_text(
@@ -3541,7 +3542,10 @@ def test_oversized_cjk_box_never_guesses_missing_children_from_parent_text(
     assert sorted(recovered, key=lambda row: (row.box[1], row.box[0])) == sorted(
         records, key=lambda row: (row.box[1], row.box[0])
     )
-    assert details == []
+    assert len(details) == 1
+    assert details[0]["applied"] is False
+    assert details[0]["visual_run_count"] == 4
+    assert details[0]["recovered_count"] == 0
     assert not any(record.recovery for record in recovered)
 
 
