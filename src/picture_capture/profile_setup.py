@@ -1767,79 +1767,118 @@ class ProjectProfileWizard(tk.Toplevel):
             structures, text="本词典固定词头符号集", padding=8,
         )
         self.symbol_inventory_frame.grid(row=11, column=0, sticky="ew", pady=(8, 0))
-        self.symbol_inventory_frame.columnconfigure(1, weight=1)
+        # Keep the user-editable symbol fields visibly wide. Long help text must
+        # wrap below them instead of consuming the grid width and collapsing Entry.
+        self.symbol_inventory_frame.columnconfigure(1, weight=1, minsize=180)
+        self.symbol_inventory_frame.columnconfigure(2, weight=0)
+        symbol_hint_wrap = max(220, self._wizard_content_width - 140)
+        symbol_full_wrap = max(280, self._wizard_content_width - 40)
+
         ttk.Checkbutton(
             self.symbol_inventory_frame,
             text="启用本词典专用符号集",
             variable=self.symbol_inventory_enabled_var,
             command=self._headword_structure_changed,
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=2)
+
         ttk.Label(
             self.symbol_inventory_frame, text="独立入口标记：",
         ).grid(row=1, column=0, sticky="e", padx=(0, 6), pady=3)
         ttk.Entry(
             self.symbol_inventory_frame,
             textvariable=self.entry_marker_symbols_var,
-        ).grid(row=1, column=1, sticky="ew", pady=3)
+            width=24,
+        ).grid(row=1, column=1, columnspan=2, sticky="ew", pady=3)
         ttk.Label(
             self.symbol_inventory_frame,
-            text="仅指 ○●◆ 等独立前缀；【不要填这里】。可连续输入，也可用空格/逗号分隔",
+            text="仅指 ○●◆ 等独立前缀；【不要填这里】。可连续输入，也可用空格/逗号分隔。",
             foreground="#666666",
-        ).grid(row=1, column=2, sticky="w", padx=(6, 0), pady=3)
+            wraplength=symbol_hint_wrap,
+            justify="left",
+        ).grid(row=2, column=1, columnspan=2, sticky="w", pady=(0, 5))
+
         ttk.Label(
             self.symbol_inventory_frame, text="括号词头起始：",
-        ).grid(row=2, column=0, sticky="e", padx=(0, 6), pady=3)
+        ).grid(row=3, column=0, sticky="e", padx=(0, 6), pady=3)
         ttk.Entry(
             self.symbol_inventory_frame,
             textvariable=self.bracket_open_symbols_var,
-        ).grid(row=2, column=1, sticky="ew", pady=3)
+            width=24,
+        ).grid(row=3, column=1, columnspan=2, sticky="ew", pady=3)
         ttk.Label(
             self.symbol_inventory_frame,
             text="默认【；括号内文字才是词头。若词典使用〔［「等，再按实际版式添加。",
             foreground="#666666",
-        ).grid(row=2, column=2, sticky="w", padx=(6, 0), pady=3)
+            wraplength=symbol_hint_wrap,
+            justify="left",
+        ).grid(row=4, column=1, columnspan=2, sticky="w", pady=(0, 5))
+
         ttk.Checkbutton(
             self.symbol_inventory_frame,
-            text="OCR 漏掉/错认符号时允许视觉形状补救（默认关；确认经常漏括号再开；括号仍按 bracket_open 处理）",
+            text="OCR 漏掉/错认符号时允许视觉形状补救",
             variable=self.symbol_visual_rescue_var,
             command=self._headword_structure_changed,
-        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
+        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=(2, 0))
+        ttk.Label(
+            self.symbol_inventory_frame,
+            text="默认关闭；只有确认 OCR 经常漏掉括号/入口符号时再开启。括号仍按 bracket_open 角色处理，不会变成独立入口标记。",
+            foreground="#666666",
+            wraplength=symbol_full_wrap,
+            justify="left",
+        ).grid(row=6, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(0, 4))
+
         ttk.Checkbutton(
             self.symbol_inventory_frame,
             text="使用同栏 marker lane 过滤正文中的相似符号",
             variable=self.symbol_lane_required_var,
             command=self._headword_structure_changed,
-        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=2)
+        ).grid(row=7, column=0, columnspan=3, sticky="w", pady=(2, 0))
+        ttk.Label(
+            self.symbol_inventory_frame,
+            text="开启后，只接受落在本栏稳定标记带附近的视觉符号，可减少正文里相似圆点、方块或括号造成的误检。",
+            foreground="#666666",
+            wraplength=symbol_full_wrap,
+            justify="left",
+        ).grid(row=8, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(0, 4))
+
         ttk.Label(
             self.symbol_inventory_frame, text="lane 容差：",
-        ).grid(row=5, column=0, sticky="e", padx=(0, 6), pady=3)
+        ).grid(row=9, column=0, sticky="e", padx=(0, 6), pady=3)
         tk.Spinbox(
             self.symbol_inventory_frame,
             from_=20, to=120, increment=5, width=7,
             textvariable=self.symbol_lane_tolerance_var,
-        ).grid(row=5, column=1, sticky="w", pady=3)
+        ).grid(row=9, column=1, sticky="w", pady=3)
         ttk.Label(
             self.symbol_inventory_frame,
             text="% 行高（越小越严格；默认 50%）",
             foreground="#666666",
-        ).grid(row=5, column=2, sticky="w", padx=(6, 0), pady=3)
+            wraplength=symbol_hint_wrap,
+            justify="left",
+        ).grid(row=10, column=1, columnspan=2, sticky="w", pady=(0, 4))
 
         effective = ttk.Frame(self.symbol_inventory_frame)
-        effective.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(4, 2))
+        effective.grid(row=11, column=0, columnspan=3, sticky="ew", pady=(4, 2))
         ttk.Label(
-            effective, textvariable=self.effective_entry_markers_var,
+            effective,
+            textvariable=self.effective_entry_markers_var,
             foreground="#555555",
+            wraplength=symbol_full_wrap,
+            justify="left",
         ).pack(anchor="w")
         ttk.Label(
-            effective, textvariable=self.effective_bracket_markers_var,
+            effective,
+            textvariable=self.effective_bracket_markers_var,
             foreground="#555555",
+            wraplength=symbol_full_wrap,
+            justify="left",
         ).pack(anchor="w")
 
         visual_templates = ttk.LabelFrame(
             self.symbol_inventory_frame, text="本词典视觉标记样本", padding=7,
         )
         visual_templates.grid(
-            row=7, column=0, columnspan=3, sticky="ew", pady=(8, 0)
+            row=12, column=0, columnspan=3, sticky="ew", pady=(8, 0)
         )
         visual_templates.columnconfigure(1, weight=1)
 
@@ -1878,6 +1917,8 @@ class ProjectProfileWizard(tk.Toplevel):
             visual_templates,
             text="默认 0.68；真实扫描差异较大时可适度降低",
             foreground="#666666",
+            wraplength=symbol_hint_wrap,
+            justify="left",
         ).grid(row=2, column=2, sticky="w", padx=(6, 0), pady=3)
 
         ttk.Checkbutton(
@@ -1890,6 +1931,8 @@ class ProjectProfileWizard(tk.Toplevel):
         ttk.Label(
             visual_templates,
             textvariable=self.visual_marker_sample_count_var,
+            wraplength=symbol_full_wrap,
+            justify="left",
         ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(5, 3))
 
         sample_buttons = ttk.Frame(visual_templates)
@@ -1913,6 +1956,8 @@ class ProjectProfileWizard(tk.Toplevel):
             visual_templates,
             text="直接框选真实印刷符号。采【时按“括号起始”保存，不会当成独立入口标记；每类建议采 2–5 个不同页面样本。",
             foreground="#666666",
+            wraplength=symbol_full_wrap,
+            justify="left",
         ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
         specificity = ttk.LabelFrame(
