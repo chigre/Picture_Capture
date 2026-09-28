@@ -84,9 +84,12 @@ class TextScaleStabilityAudit:
 
 @dataclass(frozen=True, slots=True)
 class HorizontalAlignmentAudit:
-    """Before/after horizontal-line geometry for one projective candidate."""
+    """Before/after horizontal geometry with N-column-aware worst-region checks."""
 
     row_count: int = 0
+    column_count: int = 0
+    valid_column_count: int = 0
+    column_row_counts: tuple[int, ...] = ()
     before_global_angle_deg: float = 0.0
     after_global_angle_deg: float = 0.0
     before_top_angle_deg: float = 0.0
@@ -99,6 +102,21 @@ class HorizontalAlignmentAudit:
     after_residual_mad_deg: float = 0.0
     before_metric_deg: float = 0.0
     after_metric_deg: float = 0.0
+    before_worst_region_deg: float = 0.0
+    after_worst_region_deg: float = 0.0
+    before_worst_column_metric_deg: float = 0.0
+    after_worst_column_metric_deg: float = 0.0
+    after_worst_column_index: int = -1
+    before_column_top_angles_deg: tuple[float, ...] = ()
+    after_column_top_angles_deg: tuple[float, ...] = ()
+    before_column_middle_angles_deg: tuple[float, ...] = ()
+    after_column_middle_angles_deg: tuple[float, ...] = ()
+    before_column_bottom_angles_deg: tuple[float, ...] = ()
+    after_column_bottom_angles_deg: tuple[float, ...] = ()
+    before_column_trends_deg: tuple[float, ...] = ()
+    after_column_trends_deg: tuple[float, ...] = ()
+    before_column_metrics_deg: tuple[float, ...] = ()
+    after_column_metrics_deg: tuple[float, ...] = ()
     improvement_ratio: float = 0.0
     verdict: str = "insufficient"
 
@@ -130,6 +148,8 @@ class PerspectiveEstimate:
     horizontal_vanishing_x: float = 0.0
     horizontal_vanishing_y: float = 0.0
     horizontal_row_count: int = 0
+    horizontal_column_count: int = 0
+    horizontal_vp_column_spread_deg: float = 0.0
 
 
 def polygon_boxes(
