@@ -449,7 +449,17 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
 
     metadata = tmp_path / "meta" / "0004.preprocess.json"
     export_diagnostic_json(
-        page, analysis, metadata, output_path=output, canvas=canvas,
+        page,
+        analysis,
+        metadata,
+        output_path=output,
+        canvas=canvas,
+        settings=AppSettings(
+            columns=3,
+            layout_columns_policy="fixed",
+            preprocess_safety_margin_px=20,
+            preprocess_geometry_mode="auto",
+        ),
     )
     payload = json.loads(metadata.read_text(encoding="utf-8"))
     assert payload["crop_box"] == [10, 20, 110, 170]
@@ -457,6 +467,9 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
     assert payload["line_geometry_separator_residual_px"] == 1.4
     assert payload["export"]["canvas"]["width"] == 200
     assert payload["export"]["canvas"]["content_box"] == [50, 0, 150, 150]
+    assert payload["effective_settings"]["fixed_columns"] == 3
+    assert payload["effective_settings"]["layout_columns_policy"] == "fixed"
+    assert payload["algorithm_constants"]["max_auto_deskew_deg"] == 5.0
 
     summary = tmp_path / "preprocess_summary.csv"
     export_summary_csv([(page, analysis, output, canvas)], summary)
