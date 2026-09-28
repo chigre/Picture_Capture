@@ -2787,6 +2787,40 @@ def analyze_preprocess_page(
                 f"{perspective_row_after_trend_deg:+.2f}°。"
             )
 
+    # A safe perspective can fix the page frame while leaving body-row
+    # geometry unresolved (0004-type pages). Re-detect on the actual
+    # perspective-corrected pixels before the nonlinear stage so orthogonal
+    # refinement does not inherit only mathematically transformed pre-warp
+    # boxes.
+    if (
+        requested_geometry_mode == "auto"
+        and actual_geometry_mode == "perspective"
+        and working_polygons
+    ):
+        try:
+            post_perspective_polygons = detect_text_polygons(
+                working,
+                settings,
+            )
+            if (
+                len(post_perspective_polygons)
+                >= POST_PERSPECTIVE_REDETECT_MIN_BOXES
+            ):
+                working_polygons = [
+                    np.asarray(poly, dtype=float)
+                    for poly in post_perspective_polygons
+                ]
+                advanced_redetected = True
+                method_parts.append("post_perspective_redetect")
+            else:
+                warnings.append(
+                    "透视后正文复检文本框不足，正交细化沿用变换后的原检测框。"
+                )
+        except Exception as exc:
+            warnings.append(
+                f"透视后正文复检不可用，正交细化沿用变换后的原检测框：{exc}"
+            )
+
     # Final deterministic orthogonal normalizer.
     #
     # Rotation/homography solve global geometry; UVDoc is a generic neural
@@ -2797,6 +2831,7 @@ def analyze_preprocess_page(
     # acceptance criterion part of the correction loop instead of a warning only.
     orthogonal_applied = False
     orthogonal_passes = 0
+    orthogonal_steps: list[dict[str, object]] = []
     orthogonal_row_count = 0
     orthogonal_valid_column_count = 0
     orthogonal_separator_point_count = 0
@@ -2848,7 +2883,7 @@ def analyze_preprocess_page(
             "vertical"
         )
     ):
-        for pass_index in range(1):
+        for pass_index in range(ORTHOGONAL_MAX_AUTO_PASSES):
             try:
                 estimate = estimate_orthogonal_warp(
                     working,
@@ -3262,6 +3297,9 @@ def analyze_preprocess_page(
             ]
             orthogonal_applied = True
             orthogonal_passes += 1
+            orthogonal_steps.append(
+                _orthogonal_step_payload(estimate, float(row_gain))
+            )
             orthogonal_row_gain = float(row_gain)
             orthogonal_reference_x = float(estimate.reference_x)
             orthogonal_y_knots = tuple(estimate.y_knots)
@@ -3296,7 +3334,24 @@ def analyze_preprocess_page(
             actual_geometry_mode = "orthogonal"
             advanced_redetected = True
             method_parts.append("orthogonal_dewarp")
-            if actual_verdict == "passed":
+            if orthogonal_passes > 1:
+                method_parts.append("orthogonal_residual_pass")
+
+            # Stop as soon as the physical row geometry is truly straight.
+            # Otherwise an accepted improved_review result becomes the input
+            # to another fresh measurement pass (0012-type pages). Because
+            # working/working_polygons were already updated above, a later
+            # rejected pass leaves the previous accepted result intact.
+            if (
+                pixel_driven
+                and pixel_row_available
+                and orthogonal_pixel_row_verdict == "passed"
+            ):
+                break
+            if (
+                not pixel_driven
+                and actual_verdict == "passed"
+            ):
                 break
 
     if (
