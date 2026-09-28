@@ -4683,6 +4683,21 @@ def filter_headword_records(
                 leading_record.box[3] - leading_record.box[1]
             ) / median_height
 
+        # A child produced by _recover_oversized_cjk_ocr_records() has already
+        # passed a stricter image-level proof than the generic single-CJK gate:
+        # one pathological giant OCR box contained multiple physically separate
+        # oversized glyph runs, and this exact run was locally re-OCRed as one
+        # Han headword.  Do not ask that child to prove "large" a second time
+        # against the OCR-line median.  On pages with several consecutive large
+        # heads that median can be inflated by the recovered children themselves,
+        # which previously made real heads appear ordinary-sized and unchecked.
+        cjk_oversized_recovery = bool(
+            cjk_single_visual
+            and leading_record is not None
+            and str(getattr(leading_record, "recovery", "") or "")
+            == "oversized_multi_entry_local_ocr"
+        )
+
         cjk_candidate_right_context: dict[str, Any] | None = None
         cjk_candidate_right_sparse = False
         if (
@@ -4784,7 +4799,8 @@ def filter_headword_records(
         cjk_single_prominent = bool(
             cjk_single_visual
             and (
-                leading_record_height_ratio >= 1.45
+                cjk_oversized_recovery
+                or leading_record_height_ratio >= 1.45
                 or (
                     leading_record_height_ratio >= 1.28
                     and boldness_ratio >= max(1.08, settings.paddle_boldness_ratio * 0.95)
@@ -4884,7 +4900,8 @@ def filter_headword_records(
         cjk_single_strong_visual = bool(
             cjk_single_prominent
             and (
-                leading_record_height_ratio >= 1.55
+                cjk_oversized_recovery
+                or leading_record_height_ratio >= 1.55
                 or (
                     leading_record_height_ratio >= 1.35
                     and boldness_ratio >= max(1.12, settings.paddle_boldness_ratio)
@@ -4976,7 +4993,12 @@ def filter_headword_records(
         # preceding line and therefore no inter-line whitespace valley. Locate
         # the first sustained ink row instead of applying the ordinary valley rule.
         has_prior_content_line = previous_bottom > header_cutoff
-        if is_headword and not has_prior_content_line:
+        # Keep refined geometry for a physically verified recovered large head
+        # even when another explicit policy (for example a user reject rule)
+        # leaves it unchecked.  A later manual checkbox selection must promote
+        # the refined separator, not the raw visual-run/OCR top.
+        refine_candidate_geometry = bool(is_headword or cjk_oversized_recovery)
+        if refine_candidate_geometry and not has_prior_content_line:
             refined_band_y, separator_refinement = refine_first_content_y(
                 separator_gray,
                 coarse_band_y,
@@ -4985,7 +5007,7 @@ def filter_headword_records(
                 pixel_scale=pixel_scale,
                 lower_bound=header_cutoff,
             )
-        elif is_headword and _is_chinese_ocr(settings):
+        elif refine_candidate_geometry and _is_chinese_ocr(settings):
             refined_band_y, separator_refinement = refine_separator_y_adaptive(
                 separator_gray,
                 coarse_band_y,
@@ -4996,7 +5018,7 @@ def filter_headword_records(
                 content_top=(int(image_boundary.get("ink_onset_y", y0)) if image_boundary else y0),
                 preceding_gap_hint=preceding_gap,
             )
-        elif is_headword:
+        elif refine_candidate_geometry:
             refined_band_y, separator_refinement = refine_separator_y(
                 separator_gray,
                 coarse_band_y,
@@ -5009,7 +5031,7 @@ def filter_headword_records(
             refined_band_y = coarse_band_y
             separator_refinement = {"enabled": False, "reason": "candidate_rejected"}
 
-        if is_headword and image_boundary is not None and has_prior_content_line:
+        if refine_candidate_geometry and image_boundary is not None and has_prior_content_line:
             boundary_y = int(image_boundary.get("y", refined_band_y))
             previous_refined_y = int(refined_band_y)
             # The mutually matched image boundary is an independent geometry
@@ -5105,6 +5127,11 @@ def filter_headword_records(
                 "configured_marker_evidence": configured_marker_evidence,
                 **tail_evidence_features,
                 "cjk_single_visual": cjk_single_visual,
+                "cjk_oversized_recovery": cjk_oversized_recovery,
+                "cjk_oversized_recovery_kind": (
+                    str(getattr(leading_record, "recovery", "") or "")
+                    if cjk_oversized_recovery and leading_record is not None else ""
+                ),
                 "cjk_at_left": cjk_at_left,
                 "cjk_single_prominent": cjk_single_prominent,
                 "cjk_single_accept": cjk_single_accept,
