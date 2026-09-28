@@ -334,10 +334,15 @@ def _fit_separator_track(
 
     bins, band_width = scores.shape
     predicted = start + total_drift * np.linspace(0.0, 1.0, bins)
-    local_radius = max(3, min(8, int(round(band_width * 0.035))))
+    # Allow enough local freedom to follow real smooth curvature, but penalize
+    # sudden departures from the predicted/previous path so short text strokes
+    # cannot pull independent bins to unrelated X positions.
+    local_radius = max(5, min(12, int(round(band_width * 0.06))))
+    expected_step = total_drift / max(1.0, float(bins - 1))
     xs: list[float] = []
     ys: list[float] = []
     strengths: list[float] = []
+    previous_local_x: float | None = None
 
     for index in range(bins):
         center = int(round(predicted[index]))
@@ -346,11 +351,21 @@ def _fit_separator_track(
         if xb <= xa:
             continue
         local_scores = scores[index, xa:xb]
-        pos = int(np.argmax(local_scores))
+        positions = np.arange(xa, xb, dtype=float)
+        if previous_local_x is None:
+            reference = float(predicted[index])
+        else:
+            continued = previous_local_x + expected_step
+            reference = 0.72 * continued + 0.28 * float(predicted[index])
+        distance_penalty = 0.018 * np.abs(positions - reference)
+        adjusted = local_scores - distance_penalty
+        pos = int(np.argmax(adjusted))
         strength = float(local_scores[pos])
         if strength < max(0.06, q20_strength * 0.65):
             continue
-        xs.append(float(x0 + xa + pos))
+        chosen_local_x = float(xa + pos)
+        previous_local_x = chosen_local_x
+        xs.append(float(x0) + chosen_local_x)
         ys.append(float((int(edges[index]) + int(edges[index + 1]) - 1) / 2.0))
         strengths.append(strength)
 
