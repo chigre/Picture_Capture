@@ -1485,9 +1485,10 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "profile_cjk_right_context_width_percent" in text
     assert "固定符号开头（○ / ● / ◆ …；不包括【括号】）可以作为词头" in text
     assert "本词典固定词头符号集" in text
-    assert "启用本词典专用符号集" in text
+    assert "启用独立入口标记符号集（○ / ● / ◆ …）" in text
     assert "独立入口标记：" in text
     assert "括号词头起始：" in text
+    assert "括号内文字才是词头。该栏由“【括号词】”结构独立控制" in text
     assert "OCR 漏掉/错认符号时允许视觉形状补救" in text
     assert "使用同栏 marker lane 过滤正文中的相似符号" in text
     assert "self.symbol_inventory_frame.columnconfigure(1, weight=1, minsize=180)" in text
