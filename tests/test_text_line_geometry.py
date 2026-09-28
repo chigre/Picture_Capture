@@ -6,7 +6,10 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from picture_capture.models import AppSettings
-from picture_capture.text_line_geometry import analyze_text_line_geometry
+from picture_capture.text_line_geometry import (
+    analyze_text_line_geometry,
+    horizontal_rule_track_points,
+)
 
 
 def _tilted_box(
@@ -201,3 +204,25 @@ def test_straight_separator_blocks_false_nonlinear_interpretation() -> None:
     assert analysis.separator_residual_px <= 2.5
     assert analysis.separator_curve_reliable is False
     assert analysis.recommendation != "uvdoc_review"
+
+
+def test_header_horizontal_rule_track_finds_long_slanted_rule() -> None:
+    image = Image.new("RGB", (900, 1000), "white")
+    draw = ImageDraw.Draw(image)
+    # Body starts around y=150 from the synthetic OCR boxes. Put a persistent
+    # running-header rule just above it, with a visible small slope.
+    draw.line((70, 118, 830, 126), fill="black", width=2)
+    polygons = _two_column_polygons(angle_at=lambda _t: 0.0)
+
+    points = horizontal_rule_track_points(
+        image,
+        polygons,
+        AppSettings(layout_columns_policy="fixed", columns=2),
+    )
+
+    assert len(points) >= 10
+    xs = np.asarray([item[0] for item in points], dtype=float)
+    ys = np.asarray([item[1] for item in points], dtype=float)
+    slope, _intercept = np.polyfit(xs, ys, 1)
+    angle = math.degrees(math.atan(float(slope)))
+    assert 0.35 <= angle <= 0.9
