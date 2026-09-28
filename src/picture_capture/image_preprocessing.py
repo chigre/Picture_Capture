@@ -985,13 +985,60 @@ def analyze_preprocess_page(
             geometry_strength = max(
                 geometry_strength, float(manual_estimate.strength_px)
             )
+            if working_polygons:
+                manual_candidate_polygons = transform_polygons_homography(
+                    working_polygons, perspective_matrix,
+                )
+                jacobian_audit = audit_homography_distortion(
+                    perspective_matrix,
+                    working.size,
+                    polygons=working_polygons,
+                )
+                text_scale_audit = audit_text_scale_stability(
+                    working_polygons,
+                    manual_candidate_polygons,
+                    working.size,
+                    writing_mode=settings.layout_writing_mode,
+                )
+                perspective_jacobian_samples = jacobian_audit.sample_count
+                perspective_jacobian_horizontal_scale_span_ratio = (
+                    jacobian_audit.horizontal_scale_span_ratio
+                )
+                perspective_jacobian_vertical_scale_span_ratio = (
+                    jacobian_audit.vertical_scale_span_ratio
+                )
+                perspective_jacobian_area_scale_span_ratio = (
+                    jacobian_audit.area_scale_span_ratio
+                )
+                perspective_jacobian_anisotropy_p95_ratio = (
+                    jacobian_audit.anisotropy_p95_ratio
+                )
+                perspective_jacobian_min_determinant = (
+                    jacobian_audit.min_determinant
+                )
+                perspective_text_scale_samples = text_scale_audit.sample_count
+                perspective_text_scale_before_inline_gradient_ratio = (
+                    text_scale_audit.before_inline_gradient_ratio
+                )
+                perspective_text_scale_after_inline_gradient_ratio = (
+                    text_scale_audit.after_inline_gradient_ratio
+                )
+                perspective_text_scale_before_cross_gradient_ratio = (
+                    text_scale_audit.before_cross_gradient_ratio
+                )
+                perspective_text_scale_after_cross_gradient_ratio = (
+                    text_scale_audit.after_cross_gradient_ratio
+                )
+                perspective_text_scale_before_score = text_scale_audit.before_score
+                perspective_text_scale_after_score = text_scale_audit.after_score
+                perspective_text_scale_verdict = text_scale_audit.verdict
+            else:
+                manual_candidate_polygons = []
             working = apply_homography_image(
                 working, perspective_matrix,
             )
-            if working_polygons:
-                working_polygons = transform_polygons_homography(
-                    working_polygons, perspective_matrix,
-                )
+            if manual_candidate_polygons:
+                working_polygons = manual_candidate_polygons
             actual_geometry_mode = "manual_perspective"
             method_parts.append("manual_perspective")
         except Exception as exc:
@@ -1072,24 +1119,85 @@ def analyze_preprocess_page(
                 0.0, float(getattr(perspective, "scale_delta_ratio", 0.0))
             )
 
+            candidate_polygons = transform_polygons_homography(
+                working_polygons, perspective.matrix,
+            )
+            jacobian_audit = audit_homography_distortion(
+                perspective.matrix,
+                working.size,
+                polygons=working_polygons,
+            )
+            text_scale_audit = audit_text_scale_stability(
+                working_polygons,
+                candidate_polygons,
+                working.size,
+                writing_mode=settings.layout_writing_mode,
+            )
+            perspective_jacobian_samples = jacobian_audit.sample_count
+            perspective_jacobian_horizontal_scale_span_ratio = (
+                jacobian_audit.horizontal_scale_span_ratio
+            )
+            perspective_jacobian_vertical_scale_span_ratio = (
+                jacobian_audit.vertical_scale_span_ratio
+            )
+            perspective_jacobian_area_scale_span_ratio = (
+                jacobian_audit.area_scale_span_ratio
+            )
+            perspective_jacobian_anisotropy_p95_ratio = (
+                jacobian_audit.anisotropy_p95_ratio
+            )
+            perspective_jacobian_min_determinant = jacobian_audit.min_determinant
+            perspective_text_scale_samples = text_scale_audit.sample_count
+            perspective_text_scale_before_inline_gradient_ratio = (
+                text_scale_audit.before_inline_gradient_ratio
+            )
+            perspective_text_scale_after_inline_gradient_ratio = (
+                text_scale_audit.after_inline_gradient_ratio
+            )
+            perspective_text_scale_before_cross_gradient_ratio = (
+                text_scale_audit.before_cross_gradient_ratio
+            )
+            perspective_text_scale_after_cross_gradient_ratio = (
+                text_scale_audit.after_cross_gradient_ratio
+            )
+            perspective_text_scale_before_score = text_scale_audit.before_score
+            perspective_text_scale_after_score = text_scale_audit.after_score
+            perspective_text_scale_verdict = text_scale_audit.verdict
+
             is_keystone = perspective_classification == "keystone"
             is_parallel_drift = perspective_classification == "parallel_drift"
-            # Missing a physical separator makes the OCR-only geometry less
-            # trustworthy, so the automatic scale-gradient ceiling is tighter.
-            max_auto_scale_delta = (
-                AUTO_PERSPECTIVE_SCALE_DELTA_WITH_SEPARATOR
-                if line_geometry.separator_found
-                else AUTO_PERSPECTIVE_SCALE_DELTA_WITHOUT_SEPARATOR
+            jacobian_safe = bool(
+                jacobian_audit.valid
+                and (
+                    jacobian_audit.horizontal_scale_span_ratio
+                    <= AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX
+                )
+                and (
+                    jacobian_audit.vertical_scale_span_ratio
+                    <= AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX
+                )
+                and (
+                    jacobian_audit.area_scale_span_ratio
+                    <= AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX
+                )
+                and (
+                    jacobian_audit.anisotropy_p95_ratio
+                    <= AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
+                )
             )
-            scale_safe = (
-                perspective_scale_delta_ratio <= max_auto_scale_delta
-            )
+            # Text-scale evidence is deliberately separator-independent. If too
+            # few boxes survive for a stable comparison, the analytic Jacobian
+            # remains the primary safety gate rather than inventing evidence.
+            text_scale_safe = text_scale_audit.verdict in {
+                "improved", "stable", "insufficient",
+            }
             perspective_auto_safe = bool(
                 strong_candidate
                 and line_supports_perspective
                 and is_keystone
                 and not is_parallel_drift
-                and scale_safe
+                and jacobian_safe
+                and text_scale_safe
             )
 
             apply_perspective = (
@@ -1110,15 +1218,50 @@ def analyze_preprocess_page(
                     )
                 elif not is_keystone:
                     review_reasons.append("上下有效宽度变化不足以支持梯形透视")
-                if not scale_safe:
+                if not jacobian_audit.valid:
+                    review_reasons.append("候选变换 Jacobian 非法或发生局部翻转")
+                if (
+                    jacobian_audit.horizontal_scale_span_ratio
+                    > AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX
+                ):
                     review_reasons.append(
-                        f"预计上下横向尺度差 {perspective_scale_delta_ratio * 100:.2f}% "
-                        f"超过自动安全上限 {max_auto_scale_delta * 100:.1f}%"
+                        "候选变换将在正文范围造成横向局部尺度漂移 "
+                        f"{jacobian_audit.horizontal_scale_span_ratio * 100:.2f}%"
+                    )
+                if (
+                    jacobian_audit.vertical_scale_span_ratio
+                    > AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX
+                ):
+                    review_reasons.append(
+                        "候选变换将在正文范围造成纵向局部尺度漂移 "
+                        f"{jacobian_audit.vertical_scale_span_ratio * 100:.2f}%"
+                    )
+                if (
+                    jacobian_audit.area_scale_span_ratio
+                    > AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX
+                ):
+                    review_reasons.append(
+                        "候选变换的局部面积尺度漂移 "
+                        f"{jacobian_audit.area_scale_span_ratio * 100:.2f}% 过大"
+                    )
+                if (
+                    jacobian_audit.anisotropy_p95_ratio
+                    > AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
+                ):
+                    review_reasons.append(
+                        "候选变换的局部横纵不等比例拉伸达到 "
+                        f"{jacobian_audit.anisotropy_p95_ratio * 100:.2f}%"
+                    )
+                if text_scale_audit.verdict == "worse":
+                    review_reasons.append(
+                        "同一批文本框的空间尺度稳定性将变差 "
+                        f"({text_scale_audit.before_score * 100:.2f}%→"
+                        f"{text_scale_audit.after_score * 100:.2f}%)"
                     )
                 if review_reasons:
                     warnings.append(
                         "自动透视候选已拦截：" + "；".join(review_reasons)
-                        + "。可人工选择“自动透视”复核。"
+                        + "。分隔线仅作为附加证据；可人工选择“自动透视”复核。"
                     )
                     method_parts.append("perspective_review")
             if (
@@ -1127,9 +1270,12 @@ def analyze_preprocess_page(
                 and not perspective_auto_safe
             ):
                 warnings.append(
-                    "已按用户显式选择执行透视；该候选未通过“自动几何”的保守安全门，"
-                    f"分类={perspective_classification}，预计上下横向尺度差 "
-                    f"{perspective_scale_delta_ratio * 100:.2f}%。"
+                    "已按用户显式选择执行透视；该候选未通过“自动几何”的"
+                    "Jacobian/文字尺度安全审计，"
+                    f"分类={perspective_classification}，横向尺度漂移 "
+                    f"{jacobian_audit.horizontal_scale_span_ratio * 100:.2f}%，"
+                    f"纵向 {jacobian_audit.vertical_scale_span_ratio * 100:.2f}%，"
+                    f"文字尺度={text_scale_audit.verdict}。"
                 )
             if apply_perspective and perspective.strength_px >= 0.75:
                 perspective_matrix = perspective.matrix
@@ -1139,9 +1285,7 @@ def analyze_preprocess_page(
                 working = apply_homography_image(
                     working, perspective_matrix,
                 )
-                working_polygons = transform_polygons_homography(
-                    working_polygons, perspective_matrix,
-                )
+                working_polygons = candidate_polygons
                 actual_geometry_mode = "perspective"
                 method_parts.append("perspective")
         except Exception as exc:
