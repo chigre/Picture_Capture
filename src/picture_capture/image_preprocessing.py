@@ -3320,12 +3320,42 @@ def analyze_preprocess_page(
         orthogonal_angle_knots_deg=tuple(
             round(float(v), 6) for v in orthogonal_angle_knots_deg
         ),
+        orthogonal_x_knots=tuple(
+            round(float(v), 4) for v in orthogonal_x_knots
+        ),
+        orthogonal_row_grid_rows=int(orthogonal_row_grid_rows),
+        orthogonal_row_grid_cols=int(orthogonal_row_grid_cols),
+        orthogonal_row_displacement_grid_px=tuple(
+            round(float(v), 6)
+            for v in orthogonal_row_displacement_grid_px
+        ),
         orthogonal_separator_y_knots=tuple(
             round(float(v), 4) for v in orthogonal_separator_y_knots
         ),
         orthogonal_separator_shift_knots_px=tuple(
             round(float(v), 6)
             for v in orthogonal_separator_shift_knots_px
+        ),
+        orthogonal_horizontal_rule_point_count=int(
+            orthogonal_horizontal_rule_point_count
+        ),
+        orthogonal_horizontal_rule_y=round(
+            float(orthogonal_horizontal_rule_y), 3
+        ),
+        orthogonal_before_horizontal_rule_angle_deg=round(
+            float(orthogonal_before_horizontal_rule_angle_deg), 4
+        ),
+        orthogonal_after_horizontal_rule_angle_deg=round(
+            float(orthogonal_after_horizontal_rule_angle_deg), 4
+        ),
+        orthogonal_before_horizontal_rule_residual_px=round(
+            float(orthogonal_before_horizontal_rule_residual_px), 3
+        ),
+        orthogonal_after_horizontal_rule_residual_px=round(
+            float(orthogonal_after_horizontal_rule_residual_px), 3
+        ),
+        orthogonal_horizontal_rule_verdict=str(
+            orthogonal_horizontal_rule_verdict
         ),
         orthogonal_confidence=round(float(orthogonal_confidence), 6),
         orthogonal_column_spread_deg=round(
