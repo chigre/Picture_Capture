@@ -938,11 +938,27 @@ def estimate_orthogonal_warp(
     # that integral turns one large interval into its average slope and leaves
     # a visible residual at the column centres. Add a modest uniform support
     # grid, then insert the measured centres/reference exactly.
+    column_pixel_samples: list[
+        tuple[list[tuple[float, float, float, float]], tuple[float, ...], float]
+    ] = []
     x_values: list[float] = [
         float(v) for v in np.linspace(0.0, float(width - 1), 11)
     ]
     x_values.append(float(reference_x))
     x_values.extend(float(v) for v in column_centres)
+    for rows in valid_columns:
+        column_x0, column_x1 = _pixel_column_bounds(rows, width)
+        column_span = max(1.0, float(column_x1 - column_x0))
+        sample_xs = tuple(
+            float(column_x0) + column_span * float(fraction)
+            for fraction in PIXEL_COLUMN_SAMPLE_FRACTIONS
+        )
+        sample_window = max(
+            180.0,
+            column_span * PIXEL_LOCAL_WINDOW_FRACTION,
+        )
+        column_pixel_samples.append((rows, sample_xs, sample_window))
+        x_values.extend(sample_xs)
     x_knots = _unique_sorted(x_values, tolerance=2.0)
     if x_knots.size < 2:
         return OrthogonalWarpEstimate(
@@ -979,7 +995,10 @@ def estimate_orthogonal_warp(
             spread = float(row_angles.max() - row_angles.min())
         else:
             local_samples: list[tuple[float, float]] = []
-            for centre, rows in zip(column_centres, valid_columns):
+            for centre, (rows, sample_xs, sample_window) in zip(
+                column_centres,
+                column_pixel_samples,
+            ):
                 local = _local_column_angle(
                     rows,
                     float(knot_y),
@@ -987,30 +1006,46 @@ def estimate_orthogonal_warp(
                 )
                 if local is None:
                     continue
-                pixel_angle_sample_count += 1
-                pixel_local, pixel_confidence = _pixel_projection_angle(
-                    source,
-                    rows,
-                    float(knot_y),
-                    radius,
-                    settings,
-                    float(local),
-                )
-                if pixel_confidence >= PIXEL_ANGLE_MIN_CONFIDENCE:
-                    # The pixels are the physical evidence; OCR supplies the
-                    # column assignment and a narrow anti-alias search centre.
-                    # Use the measured value directly when its projection peak
-                    # is unambiguous. This is what corrects pages such as 0014,
-                    # where OCR-box angles systematically under/over-estimate
-                    # the local baseline near the page edges.
-                    local = float(pixel_local)
-                    pixel_angle_used_count += 1
-                    pixel_confidences.append(float(pixel_confidence))
-                elif pixel_confidence >= PIXEL_ANGLE_MIN_CONFIDENCE * 0.5:
-                    local = 0.65 * float(pixel_local) + 0.35 * float(local)
-                    pixel_angle_used_count += 1
-                    pixel_confidences.append(float(pixel_confidence))
-                local_samples.append((float(centre), float(local)))
+                column_samples: list[tuple[float, float]] = []
+                for sample_x in sample_xs:
+                    pixel_angle_sample_count += 1
+                    pixel_local, pixel_confidence = _pixel_projection_angle(
+                        source,
+                        rows,
+                        float(knot_y),
+                        radius,
+                        settings,
+                        float(local),
+                        x_center=float(sample_x),
+                        x_window=float(sample_window),
+                    )
+                    measured = float(local)
+                    if pixel_confidence >= PIXEL_ANGLE_MIN_CONFIDENCE:
+                        measured = float(pixel_local)
+                        pixel_angle_used_count += 1
+                        pixel_confidences.append(float(pixel_confidence))
+                    elif (
+                        pixel_confidence
+                        >= PIXEL_ANGLE_MIN_CONFIDENCE * 0.5
+                    ):
+                        measured = (
+                            0.65 * float(pixel_local)
+                            + 0.35 * float(local)
+                        )
+                        pixel_angle_used_count += 1
+                        pixel_confidences.append(float(pixel_confidence))
+                    column_samples.append(
+                        (float(sample_x), float(measured))
+                    )
+
+                # Keep the OCR-derived centre as a weak continuity anchor only
+                # when the three local pixel windows are all uninformative.
+                if not column_samples:
+                    local_samples.append(
+                        (float(centre), float(local))
+                    )
+                else:
+                    local_samples.extend(column_samples)
             if not local_samples:
                 row_angles = np.zeros(len(x_knots), dtype=float)
                 spread = 0.0
