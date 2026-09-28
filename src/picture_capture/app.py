@@ -10171,6 +10171,9 @@ class PictureCaptureApp(tk.Tk):
         # manual review. Page states are protected so background PDIC writes
         # never race a user's edits on the same page.
         self._batch_foreground_pages = False
+        # Read-only preprocessing batches may keep the page list navigable;
+        # mutating batches leave this False.
+        self._batch_allow_page_navigation = False
         self._batch_page_states: dict[int, str] = {}
         self._batch_state_lock = threading.Lock()
         self._batch_skipped_count = 0
