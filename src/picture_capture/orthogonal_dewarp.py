@@ -33,6 +33,12 @@ PIXEL_ANGLE_FINE_STEP_DEG = 0.02
 PIXEL_ANGLE_MAX_PATCH_DIM = 720
 PIXEL_ANGLE_MIN_CONFIDENCE = 0.08
 PIXEL_ANGLE_MIN_INK_PIXELS = 800
+PIXEL_COLUMN_SAMPLE_FRACTIONS = (0.22, 0.50, 0.78)
+PIXEL_LOCAL_WINDOW_FRACTION = 0.38
+PIXEL_ROW_PROFILE_MAX_SHIFT_PX = 8
+PIXEL_ROW_PROFILE_MIN_CORRELATION = 0.72
+PIXEL_ROW_PROFILE_P90_MAX_PX = 1.5
+PIXEL_ROW_PROFILE_WORST_MAX_PX = 2.5
 
 HORIZONTAL_RULE_MAX_ANGLE_DEG = 0.10
 HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX = 2.5
@@ -394,6 +400,9 @@ def _pixel_projection_angle(
     radius: float,
     settings: AppSettings,
     fallback: float,
+    *,
+    x_center: float | None = None,
+    x_window: float | None = None,
 ) -> tuple[float, float]:
     """Measure local text-row correction directly from page pixels.
 
@@ -403,7 +412,13 @@ def _pixel_projection_angle(
     avoids sparse-page aliases while still correcting systematic OCR-box bias.
     """
     source = normalize_page_rgb(image)
-    x0, x1 = _pixel_column_bounds(rows, source.width)
+    column_x0, column_x1 = _pixel_column_bounds(rows, source.width)
+    if x_center is None or x_window is None:
+        x0, x1 = column_x0, column_x1
+    else:
+        half_window = max(70.0, float(x_window) / 2.0)
+        x0 = max(column_x0, int(math.floor(float(x_center) - half_window)))
+        x1 = min(column_x1, int(math.ceil(float(x_center) + half_window)))
     half_height = max(180.0, min(300.0, float(radius) * 0.70))
     y0 = max(0, int(math.floor(float(y) - half_height)))
     y1 = min(source.height, int(math.ceil(float(y) + half_height)))
@@ -486,6 +501,149 @@ def _pixel_projection_angle(
         (float(fine_scores[best_index]) - baseline) / baseline,
     )
     return best, float(confidence)
+
+
+@dataclass(frozen=True, slots=True)
+class PixelRowProfileAudit:
+    sample_count: int = 0
+    p90_shift_px: float = 0.0
+    worst_shift_px: float = 0.0
+    median_correlation: float = 0.0
+    valid_column_count: int = 0
+    passed: bool = False
+
+
+def _smooth_profile(values: np.ndarray, width: int) -> np.ndarray:
+    width = max(1, int(width))
+    if width <= 1:
+        return values.astype(float, copy=False)
+    if width % 2 == 0:
+        width += 1
+    kernel = np.ones(width, dtype=float) / float(width)
+    return np.convolve(values.astype(float, copy=False), kernel, mode="same")
+
+
+def _pixel_row_profile(
+    source: Image.Image,
+    x0: int,
+    x1: int,
+    settings: AppSettings,
+) -> np.ndarray:
+    gray = np.asarray(
+        ImageOps.grayscale(source.crop((x0, 0, x1, source.height))),
+        dtype=np.uint8,
+    )
+    ink = analysis_ink_mask(gray, settings).astype(float)
+    profile = ink.mean(axis=1)
+    profile = _smooth_profile(profile, 5)
+    return profile - _smooth_profile(profile, 35)
+
+
+def audit_pixel_row_profiles(
+    image: Image.Image,
+    polygons: Iterable[np.ndarray],
+    settings: AppSettings,
+) -> PixelRowProfileAudit:
+    """Audit actual row straightness from physical ink, not OCR box edges.
+
+    Each text column is split into left/middle/right strips. In several Y
+    windows the outer strip row profiles are cross-correlated with the middle
+    strip. A tilted or bowed text row appears as a non-zero vertical lag. This
+    catches exactly the lower-page curvature that can be hidden by one average
+    OCR angle or by glyph-dependent polygon edges.
+    """
+    source = normalize_page_rgb(image)
+    columns = horizontal_column_rows(polygons, source.size, settings)
+    valid_columns = [rows for rows in columns if len(rows) >= 5]
+    shifts: list[float] = []
+    correlations: list[float] = []
+    valid_count = 0
+    for rows in valid_columns:
+        x0, x1 = _pixel_column_bounds(rows, source.width)
+        span = float(x1 - x0)
+        if span < 240.0:
+            continue
+        strip_ranges: list[tuple[int, int]] = []
+        for centre_fraction in PIXEL_COLUMN_SAMPLE_FRACTIONS:
+            centre = x0 + span * float(centre_fraction)
+            half = span * 0.14
+            sx0 = max(x0, int(round(centre - half)))
+            sx1 = min(x1, int(round(centre + half)))
+            if sx1 - sx0 < 60:
+                break
+            strip_ranges.append((sx0, sx1))
+        if len(strip_ranges) != 3:
+            continue
+        profiles = [
+            _pixel_row_profile(source, sx0, sx1, settings)
+            for sx0, sx1 in strip_ranges
+        ]
+        ys = np.asarray([row[1] for row in rows], dtype=float)
+        y_lo = float(np.percentile(ys, 8.0))
+        y_hi = float(np.percentile(ys, 92.0))
+        if y_hi - y_lo < 180.0:
+            continue
+        anchors = np.linspace(y_lo, y_hi, 7)
+        column_samples = 0
+        for anchor in anchors:
+            half_window = 130
+            start = max(0, int(round(anchor)) - half_window)
+            end = min(source.height, int(round(anchor)) + half_window)
+            if end - start < 140:
+                continue
+            reference = profiles[1][start:end]
+            reference_std = float(reference.std())
+            if reference_std <= 1e-6:
+                continue
+            reference = (reference - reference.mean()) / reference_std
+            for profile_index in (0, 2):
+                best_correlation = -1.0
+                best_shift = 0
+                profile = profiles[profile_index]
+                for shift in range(
+                    -PIXEL_ROW_PROFILE_MAX_SHIFT_PX,
+                    PIXEL_ROW_PROFILE_MAX_SHIFT_PX + 1,
+                ):
+                    shifted_start = start + shift
+                    shifted_end = end + shift
+                    if shifted_start < 0 or shifted_end > source.height:
+                        continue
+                    candidate = profile[shifted_start:shifted_end]
+                    candidate_std = float(candidate.std())
+                    if candidate_std <= 1e-6:
+                        continue
+                    candidate = (
+                        candidate - candidate.mean()
+                    ) / candidate_std
+                    correlation = float(np.mean(reference * candidate))
+                    if correlation > best_correlation:
+                        best_correlation = correlation
+                        best_shift = shift
+                if best_correlation >= PIXEL_ROW_PROFILE_MIN_CORRELATION:
+                    shifts.append(abs(float(best_shift)))
+                    correlations.append(float(best_correlation))
+                    column_samples += 1
+        if column_samples >= 6:
+            valid_count += 1
+
+    if not shifts:
+        return PixelRowProfileAudit(valid_column_count=valid_count)
+    p90 = float(np.percentile(np.asarray(shifts, dtype=float), 90))
+    worst = float(max(shifts))
+    median_corr = float(np.median(np.asarray(correlations, dtype=float)))
+    return PixelRowProfileAudit(
+        sample_count=len(shifts),
+        p90_shift_px=p90,
+        worst_shift_px=worst,
+        median_correlation=median_corr,
+        valid_column_count=valid_count,
+        passed=bool(
+            valid_count >= 1
+            and len(shifts) >= 8
+            and p90 <= PIXEL_ROW_PROFILE_P90_MAX_PX
+            and worst <= PIXEL_ROW_PROFILE_WORST_MAX_PX
+        ),
+    )
 
 
 def _column_center(
