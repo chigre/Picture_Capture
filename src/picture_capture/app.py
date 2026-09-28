@@ -76,16 +76,20 @@ from .image_preprocessing import (
     PreprocessAnalysis,
     analysis_is_current as preprocess_analysis_is_current,
     analyze_preprocess_path,
+    clear_manual_perspective_quad,
     geometry_corrected_image,
     load_analysis as load_preprocess_analysis,
+    load_manual_perspective_quad,
     overlay_excluded_regions,
     preview_output_root as preprocess_preview_output_root,
     processed_output_root as preprocess_processed_output_root,
     result_summary as preprocess_result_summary,
     save_analysis as save_preprocess_analysis,
+    save_manual_perspective_quad,
     save_processed_page,
     save_review_preview,
 )
+from .preprocess_geometry import perspective_from_quad
 from .page_sections import (
     PageSection, read_page_sections, write_page_sections, v_is_inside_sections,
 )
@@ -12276,11 +12280,28 @@ class PictureCaptureApp(tk.Tk):
         )
         geometry_combo.pack(side="left", fill="x", expand=True)
         geometry_combo.bind("<<ComboboxSelected>>", self._preprocess_settings_changed)
-        ttk.Label(
+        manual_corner_button = ttk.Button(
             preprocess_geometry_row,
-            text="高级纠正后会重新检测版面再裁边",
-            style="PC.FieldLabel.TLabel",
-        ).pack(side="left", padx=(8, 0))
+            text="手动四角",
+            command=self.edit_preprocess_corners,
+            style="PC.Compact.TButton",
+        )
+        manual_corner_button.pack(side="left", padx=(6, 0))
+        reset_corner_button = ttk.Button(
+            preprocess_geometry_row,
+            text="重置四角",
+            command=self.reset_preprocess_corners,
+            style="PC.Compact.TButton",
+        )
+        reset_corner_button.pack(side="left", padx=(4, 0))
+        self._attach_tooltip(
+            manual_corner_button,
+            "在原始整页图上拖动左上、右上、右下、左下四个控制点；手动四角优先于自动透视。",
+        )
+        self._attach_tooltip(
+            reset_corner_button,
+            "删除当前页的手动四角覆盖，恢复自动几何纠正。",
+        )
 
         preprocess_action_row = ttk.Frame(preprocess)
         preprocess_action_row.grid(row=2, column=0, sticky="ew", pady=(4, 0))
