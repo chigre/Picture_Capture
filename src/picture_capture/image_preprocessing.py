@@ -33,7 +33,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 6
+PREPROCESS_FORMAT_VERSION = 7
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -728,8 +728,9 @@ def analyze_preprocess_page(
             )
 
     # Advanced geometry is deliberately estimated after the global small-angle
-    # correction. Perspective handles the remaining trapezoid/shear component;
-    # the mesh stage then removes slow local column curvature.
+    # correction. Perspective handles the remaining trapezoid/shear component.
+    # Nonlinear unwarping is intentionally NOT automatic: real-page validation
+    # showed that OCR-derived mesh deformation can create visible S-curves.
     if (
         manual_quad is None
         and working_polygons
@@ -766,31 +767,37 @@ def analyze_preprocess_page(
             candidate = estimate_layout_dewarp_from_polygons(
                 working_polygons, working.size, settings,
             )
-            # Automatic mode should react to visible page bow, not normal
-            # TextDetection left-edge jitter.  On a ~2400 px scan this requires
-            # roughly 6 px of coherent structural drift; users can still force
-            # the dewarp mode explicitly for subtler cases.
+            # Real-page validation (notably page 0004) showed that OCR-derived
+            # column-left trajectories can contain lexical/indentation jitter.
+            # Turning that signal directly into a nonlinear mesh can bend a
+            # genuinely straight separator into an S-curve.  Therefore mesh
+            # dewarp is NEVER applied by automatic mode.  Automatic mode only
+            # flags strong nonlinear evidence and leaves the image unchanged;
+            # UVDoc is the supported advanced unwarping path.
             dewarp_threshold = max(6.0, width * 0.0025)
-            apply_dewarp = (
-                requested_geometry_mode == "dewarp"
-                or candidate.strength_px >= dewarp_threshold
-            )
-            if apply_dewarp and candidate.strength_px >= 0.75:
-                dewarp_estimate = candidate
-                geometry_strength = max(
-                    geometry_strength, float(candidate.strength_px)
+            if requested_geometry_mode == "dewarp":
+                if candidate.strength_px >= 0.75:
+                    dewarp_estimate = candidate
+                    geometry_strength = max(
+                        geometry_strength, float(candidate.strength_px)
+                    )
+                    working = apply_layout_dewarp_image(
+                        working, dewarp_estimate,
+                    )
+                    working_polygons = transform_polygons_layout_dewarp(
+                        working_polygons, dewarp_estimate, width,
+                    )
+                    actual_geometry_mode = "dewarp"
+                    method_parts.append("dewarp_legacy")
+            elif candidate.strength_px >= dewarp_threshold:
+                warnings.append(
+                    "检测到疑似非线性页面形变；自动模式不会应用实验性 mesh，"
+                    "建议使用“UVDoc展平（Paddle高级）”复核。"
                 )
-                working = apply_layout_dewarp_image(
-                    working, dewarp_estimate,
-                )
-                working_polygons = transform_polygons_layout_dewarp(
-                    working_polygons, dewarp_estimate, width,
-                )
-                actual_geometry_mode = "dewarp"
-                method_parts.append("dewarp")
+                method_parts.append("nonlinear_review")
         except Exception as exc:
             if requested_geometry_mode == "dewarp":
-                warnings.append(f"版面去弯曲不可用：{exc}")
+                warnings.append(f"实验性 mesh 去弯曲不可用：{exc}")
 
     # Advanced transforms change the page geometry. Re-run TextDetection on the
     # corrected image before final structural cropping. If that second pass
