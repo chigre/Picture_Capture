@@ -398,7 +398,7 @@
         "bracket_openers": [
           "【"
         ],
-        "visual_rescue": true,
+        "visual_rescue": false,
         "lane_expected": true,
         "lane_tolerance_percent": 45,
         "visual_families": [
