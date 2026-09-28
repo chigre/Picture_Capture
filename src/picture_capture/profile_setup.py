@@ -1800,7 +1800,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=2, column=2, sticky="w", padx=(6, 0), pady=3)
         ttk.Checkbutton(
             self.symbol_inventory_frame,
-            text="OCR 漏掉/错认符号时允许视觉形状补救（括号仍按 bracket_open 处理）",
+            text="OCR 漏掉/错认符号时允许视觉形状补救（默认关；确认经常漏括号再开；括号仍按 bracket_open 处理）",
             variable=self.symbol_visual_rescue_var,
             command=self._headword_structure_changed,
         ).grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
