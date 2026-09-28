@@ -364,9 +364,13 @@ def profile_symbol_inventory_defaults(key: str | None) -> dict[str, Any]:
     headword = dict(profile.headword or {})
     inventory = dict(headword.get("symbol_inventory") or {})
     grammar = dict(headword.get("grammar") or {})
-    entry_markers = list(
-        inventory.get("entry_markers") or grammar.get("entry_markers") or []
-    )
+    # Role-aware inventories use an explicit empty entry_markers list to
+    # mean "there is no standalone entry-marker role". Do not fall back to the
+    # legacy grammar list in that case; cjk_visual keeps 【 as bracket_open only.
+    if "entry_markers" in inventory:
+        entry_markers = list(inventory.get("entry_markers") or [])
+    else:
+        entry_markers = list(grammar.get("entry_markers") or [])
     bracket_openers = list(inventory.get("bracket_openers") or [])
     if (
         not bracket_openers
