@@ -12485,16 +12485,16 @@ class PictureCaptureApp(tk.Tk):
             style="PC.Compact.TButton",
         ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
         promote_button = ttk.Button(
-            preprocess_export_row, text="设为工作图片",
+            preprocess_export_row, text="所选设为工作图片",
             command=self.promote_preprocessed_working_images,
             style="PC.Compact.TButton",
         )
         promote_button.grid(row=0, column=2, sticky="ew", padx=(4, 0))
         self._attach_tooltip(
             promote_button,
-            "要求整套工作页已导出。原扫描图一次性移动到 __before__，"
-            "处理后图片以原文件名成为项目根目录中的后续工作图片；"
-            "__before__ 已存在时绝不覆盖。",
+            "仅处理当前页面范围：所选页需已有 processed 导出。原扫描图"
+            "逐批移动到 __before__，处理后图片以原文件名成为后续工作图片；"
+            "未选页面保持不变，__before__ 中同名原图绝不覆盖。",
         )
 
         self._attach_tooltip(
@@ -13725,7 +13725,12 @@ class PictureCaptureApp(tk.Tk):
             return
 
         project = self.project
-        pages = list(project.images)
+        try:
+            indices = self.selected_page_indices()
+        except ValueError as exc:
+            self.show_error("页面范围无效", exc)
+            return
+        pages = [project.images[int(index)] for index in indices]
         if not pages:
             return
 
@@ -13753,12 +13758,14 @@ class PictureCaptureApp(tk.Tk):
         )
         confirmed = messagebox.askyesno(
             "设为工作图片",
-            "将把已导出的整套预处理图片设为后续工作图片。\n\n"
-            f"当前工作页：{len(pages)} 页\n"
-            "原扫描图：移动到项目根目录下的 __before__\n"
-            "处理后图片：以相同文件名写回项目根目录\n"
+            "将只把当前所选范围的预处理图片设为后续工作图片。\n\n"
+            f"所选页面：{len(pages)} 页\n"
+            "所选原扫描图：移动到项目根目录下的 __before__\n"
+            "所选处理后图片：以相同文件名写回项目根目录\n"
+            "未选页面：保持原样，可之后采用其他预处理方式\n"
             "预处理导出和诊断文件：继续保留，不会删除\n\n"
-            "__before__ 只建立一次；如果已经存在，软件会拒绝覆盖原始备份。"
+            "__before__ 可逐批累积不同页面的首代原图；"
+            "其中已经存在的同名页面绝不覆盖。"
             f"{warning}\n\n"
             "确认继续吗？",
             parent=self,
@@ -13780,9 +13787,10 @@ class PictureCaptureApp(tk.Tk):
 
         messagebox.showinfo(
             "设为工作图片",
-            f"已切换 {len(promoted)} 页。\n\n"
-            f"原扫描图已保存在：{backup}\n"
-            "处理后图片现在位于项目根目录，并将作为后续 OCR、画线和切图的工作图片。\n\n"
+            f"已切换所选 {len(promoted)} 页。\n\n"
+            f"这些页面的原扫描图已保存在：{backup}\n"
+            "处理后图片现在位于项目根目录，并将作为这些页面后续 OCR、画线和切图的工作图片；"
+            "其他未选页面保持原样。\n\n"
             "建议接下来重新检测版面参数；旧坐标型结果如来自原图，应重新生成。",
             parent=self,
         )
