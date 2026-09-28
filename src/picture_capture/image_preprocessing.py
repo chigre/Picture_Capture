@@ -35,6 +35,7 @@ from .preprocess_geometry import (
     HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG,
     HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG,
     HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG,
+    HORIZONTAL_ALIGNMENT_MAX_TAIL_DEG,
     HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT,
     HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG,
     HORIZONTAL_STRENGTH_COARSE_STEP,
@@ -73,7 +74,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 18
+PREPROCESS_FORMAT_VERSION = 19
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -259,6 +260,9 @@ class PreprocessAnalysis:
     final_alignment_edge_pair_delta_p90_deg: float = 0.0
     final_alignment_worst_edge_deg: float = 0.0
     final_alignment_worst_region_deg: float = 0.0
+    final_alignment_worst_tail_p90_abs_deg: float = 0.0
+    final_alignment_column_top_tail_p90_abs_deg: tuple[float, ...] = ()
+    final_alignment_column_bottom_tail_p90_abs_deg: tuple[float, ...] = ()
     final_alignment_trend_deg: float = 0.0
     final_alignment_worst_column_trend_deg: float = 0.0
     final_alignment_quality_score: float = 0.0
@@ -838,6 +842,26 @@ class PreprocessAnalysis:
             final_alignment_worst_region_deg=max(
                 0.0, float(payload.get("final_alignment_worst_region_deg", 0.0))
             ),
+            final_alignment_worst_tail_p90_abs_deg=max(
+                0.0,
+                float(
+                    payload.get(
+                        "final_alignment_worst_tail_p90_abs_deg", 0.0
+                    )
+                ),
+            ),
+            final_alignment_column_top_tail_p90_abs_deg=tuple(
+                float(v)
+                for v in payload.get(
+                    "final_alignment_column_top_tail_p90_abs_deg", ()
+                )
+            ),
+            final_alignment_column_bottom_tail_p90_abs_deg=tuple(
+                float(v)
+                for v in payload.get(
+                    "final_alignment_column_bottom_tail_p90_abs_deg", ()
+                )
+            ),
             final_alignment_trend_deg=float(
                 payload.get("final_alignment_trend_deg", 0.0)
             ),
@@ -1366,6 +1390,8 @@ def _absolute_horizontal_quality(audit) -> tuple[str, float]:
         / max(1e-6, HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG),
         float(getattr(audit, "after_worst_edge_deg", 0.0))
         / max(1e-6, HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG),
+        float(getattr(audit, "after_worst_tail_p90_abs_deg", 0.0))
+        / max(1e-6, HORIZONTAL_ALIGNMENT_MAX_TAIL_DEG),
         float(getattr(audit, "after_edge_pair_delta_p90_deg", 0.0))
         / max(1e-6, HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG),
     )
@@ -1386,6 +1412,8 @@ def _absolute_horizontal_quality(audit) -> tuple[str, float]:
         <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
         and float(getattr(audit, "after_bottom_edge_p90_abs_deg", 0.0))
         <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
+        and float(getattr(audit, "after_worst_tail_p90_abs_deg", 0.0))
+        <= HORIZONTAL_ALIGNMENT_MAX_TAIL_DEG
         and float(getattr(audit, "after_edge_pair_delta_p90_deg", 0.0))
         <= HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG
     )
@@ -2804,6 +2832,16 @@ def analyze_preprocess_page(
                     * (1.0 - ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT)
                 )
             )
+            tail_safe = bool(
+                float(
+                    getattr(
+                        candidate_audit,
+                        "after_worst_tail_p90_abs_deg",
+                        0.0,
+                    )
+                )
+                <= HORIZONTAL_ALIGNMENT_MAX_TAIL_DEG
+            )
 
             vertical_required = bool(estimate.separator_point_count >= 7)
             vertical_safe = True
@@ -2889,11 +2927,18 @@ def analyze_preprocess_page(
 
             actual_improved = bool(
                 horizontal_improved
+                and tail_safe
                 and vertical_safe
                 and header_rule_safe
             )
             if not actual_improved:
-                if not horizontal_improved:
+                if not tail_safe:
+                    reason = (
+                        "正文页首/页尾局部验收未通过"
+                        f"（最差尾部P90 "
+                        f"{float(getattr(candidate_audit, 'after_worst_tail_p90_abs_deg', 0.0)):.2f}°）"
+                    )
+                elif not horizontal_improved:
                     reason = "正文水平验收未通过"
                 elif not header_rule_safe:
                     reason = "页眉横线验收未通过"
@@ -2995,6 +3040,9 @@ def analyze_preprocess_page(
     final_alignment_edge_pair_delta_p90_deg = 0.0
     final_alignment_worst_edge_deg = 0.0
     final_alignment_worst_region_deg = 0.0
+    final_alignment_worst_tail_p90_abs_deg = 0.0
+    final_alignment_column_top_tail_p90_abs_deg: tuple[float, ...] = ()
+    final_alignment_column_bottom_tail_p90_abs_deg: tuple[float, ...] = ()
     final_alignment_trend_deg = 0.0
     final_alignment_worst_column_trend_deg = 0.0
     final_alignment_quality_score = 0.0
@@ -3032,6 +3080,25 @@ def analyze_preprocess_page(
             final_alignment_worst_region_deg = float(
                 final_audit.after_worst_region_deg
             )
+            final_alignment_worst_tail_p90_abs_deg = float(
+                getattr(final_audit, "after_worst_tail_p90_abs_deg", 0.0)
+            )
+            final_alignment_column_top_tail_p90_abs_deg = tuple(
+                float(v)
+                for v in getattr(
+                    final_audit,
+                    "after_column_top_tail_p90_abs_deg",
+                    (),
+                )
+            )
+            final_alignment_column_bottom_tail_p90_abs_deg = tuple(
+                float(v)
+                for v in getattr(
+                    final_audit,
+                    "after_column_bottom_tail_p90_abs_deg",
+                    (),
+                )
+            )
             final_alignment_trend_deg = float(final_audit.after_trend_deg)
             final_alignment_worst_column_trend_deg = max(
                 [abs(float(final_audit.after_trend_deg))]
@@ -3052,6 +3119,8 @@ def analyze_preprocess_page(
                     "上下缘差P90 "
                     f"{final_alignment_edge_pair_delta_p90_deg:.2f}°，"
                     f"最差区域 {final_alignment_worst_region_deg:.2f}°，"
+                    "页首/页尾最差P90 "
+                    f"{final_alignment_worst_tail_p90_abs_deg:.2f}°，"
                     "最差栏趋势 "
                     f"{final_alignment_worst_column_trend_deg:.2f}°。"
                 )
@@ -3435,6 +3504,17 @@ def analyze_preprocess_page(
         ),
         final_alignment_worst_region_deg=round(
             float(final_alignment_worst_region_deg), 4
+        ),
+        final_alignment_worst_tail_p90_abs_deg=round(
+            float(final_alignment_worst_tail_p90_abs_deg), 4
+        ),
+        final_alignment_column_top_tail_p90_abs_deg=tuple(
+            round(float(v), 4)
+            for v in final_alignment_column_top_tail_p90_abs_deg
+        ),
+        final_alignment_column_bottom_tail_p90_abs_deg=tuple(
+            round(float(v), 4)
+            for v in final_alignment_column_bottom_tail_p90_abs_deg
         ),
         final_alignment_trend_deg=round(float(final_alignment_trend_deg), 4),
         final_alignment_worst_column_trend_deg=round(
