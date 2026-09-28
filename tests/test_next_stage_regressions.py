@@ -27,9 +27,9 @@ from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
     _column_tracking_dimensions, _legacy_find_separator_y, _legacy_is_point,
-    _left_edge_ink_mask, apply_column_start_offsets, derive_geometry,
-    derive_nominal_geometry, detect_entries, ordinary_page_layout_settings,
-    refine_existing_entries,
+    _fuse_detection_entries, _left_edge_ink_mask, apply_column_start_offsets,
+    derive_geometry, derive_nominal_geometry, detect_entries,
+    ordinary_page_layout_settings, refine_existing_entries,
 )
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
@@ -86,6 +86,104 @@ def test_projects_restore_independent_settings_and_natural_order(tmp_path):
         assert [page.name for page in state.images] == ["page1.jpg", "page2.jpg", "page10.jpg"]
         assert (state.settings.columns, state.settings.main_entry_font_size,
                 state.settings.ocr_language, state.settings.paddle_band_width_ratio) == expected
+
+
+
+def test_ocr_candidate_band_ratio_is_relative_to_actual_column_width():
+    image = Image.new("RGB", (1000, 500), "white")
+    settings = AppSettings(
+        columns=1,
+        manual_x=100,
+        column_width=700,
+        gutter=0,
+        start_y=0,
+        paddle_band_width=600,  # legacy value must no longer define 100%
+        paddle_band_width_ratio=60,
+        paddle_band_left_margin=12,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    actual_column_width = int(geometry.column_widths[0])
+
+    band60, _top, margin = paddle_headwords.unwrap_column_band(
+        image, geometry, 0, settings
+    )
+    assert margin == 12
+    assert band60.width == max(
+        24, min(actual_column_width, round(actual_column_width * 0.60)) + margin
+    )
+    assert band60.width != round(settings.paddle_band_width * 0.60)
+
+    settings.paddle_band_width_ratio = 100
+    band100, _top, margin = paddle_headwords.unwrap_column_band(
+        image, geometry, 0, settings
+    )
+    assert band100.width == actual_column_width + margin
+
+
+def test_combined_fusion_pairs_once_preserves_ordinary_geometry_and_ocr_semantics():
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=360,
+        gutter=0,
+        start_y=0,
+        character_height=20,
+        paddle_alignment_y_tolerance_ratio=0.50,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 500, settings)
+    x = int(geometry.column_starts[0])
+
+    ordinary = [
+        Entry(word="", x=x, y=100),
+        Entry(word="", x=x, y=200),
+        Entry(word="", x=x, y=300),
+    ]
+    ocr = [
+        Entry(word="碍口", x=x, y=103, confidence=0.98, ocr_source="paddle",
+              candidate_id="c1", final_engine="paddle"),
+        Entry(word="OCR救漏", x=x, y=250, confidence=0.95, ocr_source="paddle",
+              candidate_id="c2", final_engine="paddle"),
+        Entry(word="碍手", x=x, y=304, confidence=0.99, ocr_source="paddle",
+              candidate_id="c3", final_engine="paddle"),
+    ]
+
+    fused = _fuse_detection_entries(ordinary, ocr, geometry, settings)
+    assert [(item.word, item.y) for item in fused] == [
+        ("碍口", 100),
+        ("", 200),
+        ("OCR救漏", 250),
+        ("碍手", 300),
+    ]
+    assert fused[0].ocr_source == "combined:paddle"
+    assert fused[-1].candidate_id == "c3"
+
+
+def test_combined_fusion_keeps_oversized_single_cjk_ocr_separator():
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=360,
+        gutter=0,
+        start_y=0,
+        character_height=30,
+        paddle_alignment_y_tolerance_ratio=0.50,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 300, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [Entry(word="", x=x, y=104)]
+    ocr = [
+        Entry(word="嗳", x=x, y=96, confidence=0.90, ocr_source="paddle",
+              candidate_id="single", final_engine="paddle")
+    ]
+
+    fused = _fuse_detection_entries(ordinary, ocr, geometry, settings)
+    assert len(fused) == 1
+    assert fused[0].word == "嗳"
+    assert fused[0].y == 96
+    assert fused[0].ocr_source == "combined:paddle"
 
 
 def test_settings_json_beats_profile_sidecar(tmp_path):
@@ -364,8 +462,10 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert '"parallel_workers"' in settings
     assert "self._save_integrated_crop_settings()" in settings
 
-    assert 'text="OCR画线（推荐）"' in settings
-    assert 'text="普通画线（备用）"' in settings
+    assert 'text="融合画线（推荐）"' in settings
+    assert 'text="OCR画线（单独诊断）"' in settings
+    assert 'text="普通画线（单独诊断）"' in settings
+    assert 'value=DETECTION_LABELS["combined"]' in settings
     assert 'value=DETECTION_LABELS["left_edge"]' in settings
     assert 'value=DETECTION_LABELS["paddleocr"]' in settings
 
@@ -605,9 +705,9 @@ def test_usage_guide_is_modern_task_oriented_and_centered():
     assert '"检测版面参数"' in guide
     assert '"环境中心"' in guide
     assert '"设置中心"' in guide
-    assert "OCR画线是默认推荐模式" in guide
-    assert "普通画线降为备用" in guide
-    assert "默认先用 OCR画线验证代表页" in guide
+    assert "融合画线是默认推荐模式" in guide
+    assert "普通几何提供稳定定位" in guide
+    assert "默认先用融合画线验证代表页" in guide
     assert "sidebar_hint_text =" in guide
     assert "_wrap_mixed_ui_text(" in guide
     assert "wraplength=158" not in guide
@@ -661,9 +761,9 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert 'add_field(normal, 0, 0, "正文栏数：", "columns", int)' in text
     assert 'add_field(normal, 0, 0, "分栏数：", "columns", int)' not in text
     assert '"二、显示设置"' in text
-    assert '"三、OCR画线参数（默认）"' in text
-    assert text.index('"二、显示设置"') < text.index('"三、OCR画线参数（默认）"')
-    assert 'text="普通画线设置（备用）…"' in text
+    assert '"三、融合 / OCR画线参数"' in text
+    assert text.index('"二、显示设置"') < text.index('"三、融合 / OCR画线参数"')
+    assert 'text="普通画线设置…"' in text
     assert 'text="显示标尺"' in text
     assert '"ruler_color": tk.StringVar(value=self.settings.ruler_color)' in text
     assert 'command=lambda: self._apply_overlay_visibility_toggle("show_rulers", ruler_var)' in text
@@ -675,10 +775,11 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
     actions = text[actions_start:actions_end]
     assert 'self._sidebar_action_button(row, text, command, role=role)' in actions
-    assert '"primary" if text == "运行OCR画线（推荐）"' in actions
-    assert '("运行OCR画线（推荐）", self.run_ocr_draw_action)' in actions
-    assert '("运行普通画线（备用）", self.run_normal_draw_action)' in actions
-    assert actions.index('("运行普通画线（备用）", self.run_normal_draw_action)') < actions.index('("运行OCR画线（推荐）", self.run_ocr_draw_action)')
+    assert '"primary" if text == "运行融合画线（推荐）"' in actions
+    assert '("运行融合画线（推荐）", self.run_combined_draw_action)' in actions
+    assert '("运行OCR画线（单独）", self.run_ocr_draw_action)' in actions
+    assert '("运行普通画线（单独）", self.run_normal_draw_action)' in actions
+    assert actions.index('("运行融合画线（推荐）", self.run_combined_draw_action)') < actions.index('("运行OCR画线（单独）", self.run_ocr_draw_action)')
     assert '("填充词条", self.fill_existing_headwords)' in actions
     assert '("修复排序", self.repair_pdic_order_selected_scope)' in actions
     for tooltip_key in (
