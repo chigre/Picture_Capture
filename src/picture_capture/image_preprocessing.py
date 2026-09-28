@@ -1269,13 +1269,19 @@ def analyze_preprocess_page(
                 and perspective.strength_px >= 0.75
                 and not perspective_auto_safe
             ):
+                text_scale_label = {
+                    "improved": "改善",
+                    "stable": "稳定",
+                    "worse": "变差",
+                    "insufficient": "证据不足",
+                }.get(text_scale_audit.verdict, text_scale_audit.verdict)
                 warnings.append(
                     "已按用户显式选择执行透视；该候选未通过“自动几何”的"
                     "Jacobian/文字尺度安全审计，"
                     f"分类={perspective_classification}，横向尺度漂移 "
                     f"{jacobian_audit.horizontal_scale_span_ratio * 100:.2f}%，"
                     f"纵向 {jacobian_audit.vertical_scale_span_ratio * 100:.2f}%，"
-                    f"文字尺度={text_scale_audit.verdict}。"
+                    f"文字尺度={text_scale_label}。"
                 )
             if apply_perspective and perspective.strength_px >= 0.75:
                 perspective_matrix = perspective.matrix
@@ -2137,9 +2143,16 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
             )
         text_scale_part = ""
         if analysis.perspective_text_scale_samples:
-            text_scale_part = (
-                f" / 字符尺度 {analysis.perspective_text_scale_verdict}"
+            text_scale_label = {
+                "improved": "改善",
+                "stable": "稳定",
+                "worse": "变差",
+                "insufficient": "证据不足",
+            }.get(
+                analysis.perspective_text_scale_verdict,
+                analysis.perspective_text_scale_verdict,
             )
+            text_scale_part = f" / 字符尺度 {text_scale_label}"
         perspective_part = (
             f"｜透视候选 {analysis.perspective_candidate_strength_px:.1f}px"
             f" / 旧尺度差 {analysis.perspective_scale_delta_ratio * 100:.2f}%"
