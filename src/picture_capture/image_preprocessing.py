@@ -323,6 +323,44 @@ class PreprocessAnalysis:
             perspective_text_scale_samples=max(
                 0, int(payload.get("perspective_text_scale_samples", 0))
             ),
+            perspective_text_scale_inline_ratio_p05=max(
+                0.0, float(payload.get("perspective_text_scale_inline_ratio_p05", 1.0))
+            ),
+            perspective_text_scale_inline_ratio_median=max(
+                0.0, float(payload.get("perspective_text_scale_inline_ratio_median", 1.0))
+            ),
+            perspective_text_scale_inline_ratio_p95=max(
+                0.0, float(payload.get("perspective_text_scale_inline_ratio_p95", 1.0))
+            ),
+            perspective_text_scale_cross_ratio_p05=max(
+                0.0, float(payload.get("perspective_text_scale_cross_ratio_p05", 1.0))
+            ),
+            perspective_text_scale_cross_ratio_median=max(
+                0.0, float(payload.get("perspective_text_scale_cross_ratio_median", 1.0))
+            ),
+            perspective_text_scale_cross_ratio_p95=max(
+                0.0, float(payload.get("perspective_text_scale_cross_ratio_p95", 1.0))
+            ),
+            perspective_text_scale_inline_ratio_span_ratio=max(
+                0.0,
+                float(payload.get("perspective_text_scale_inline_ratio_span_ratio", 0.0)),
+            ),
+            perspective_text_scale_cross_ratio_span_ratio=max(
+                0.0,
+                float(payload.get("perspective_text_scale_cross_ratio_span_ratio", 0.0)),
+            ),
+            perspective_text_scale_inline_ratio_gradient_ratio=max(
+                0.0,
+                float(payload.get("perspective_text_scale_inline_ratio_gradient_ratio", 0.0)),
+            ),
+            perspective_text_scale_cross_ratio_gradient_ratio=max(
+                0.0,
+                float(payload.get("perspective_text_scale_cross_ratio_gradient_ratio", 0.0)),
+            ),
+            perspective_text_scale_anisotropy_p95_ratio=max(
+                0.0,
+                float(payload.get("perspective_text_scale_anisotropy_p95_ratio", 0.0)),
+            ),
             perspective_text_scale_before_inline_gradient_ratio=max(
                 0.0,
                 float(
@@ -416,6 +454,23 @@ class PreprocessAnalysis:
             ),
             line_geometry_separator_drift_px=float(
                 payload.get("line_geometry_separator_drift_px", 0.0)
+            ),
+            line_geometry_separator_track_quality=max(
+                0.0, float(payload.get("line_geometry_separator_track_quality", 0.0))
+            ),
+            line_geometry_separator_track_jump_p95_px=max(
+                0.0,
+                float(payload.get("line_geometry_separator_track_jump_p95_px", 0.0)),
+            ),
+            line_geometry_separator_curvature_score=max(
+                0.0,
+                min(
+                    1.0,
+                    float(payload.get("line_geometry_separator_curvature_score", 0.0)),
+                ),
+            ),
+            line_geometry_separator_curve_reliable=bool(
+                payload.get("line_geometry_separator_curve_reliable", False)
             ),
             line_geometry_recommendation=str(
                 payload.get("line_geometry_recommendation", "insufficient")
