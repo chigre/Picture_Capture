@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-from PIL import Image
-
 from picture_capture.models import AppSettings
 from picture_capture.preprocess_geometry import (
     estimate_perspective_from_polygons,
