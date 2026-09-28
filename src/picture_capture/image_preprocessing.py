@@ -1324,6 +1324,8 @@ def analyze_preprocess_page(
                 row_audit = audit_horizontal_alignment(
                     working_polygons,
                     manual_candidate_polygons,
+                    size=working.size,
+                    settings=settings,
                 )
                 perspective_row_before_top_angle_deg = row_audit.before_top_angle_deg
                 perspective_row_after_top_angle_deg = row_audit.after_top_angle_deg
