@@ -148,6 +148,47 @@ def test_deskewed_layout_keeps_fixed_margin_after_correction(monkeypatch) -> Non
     assert crop_y1 - raw_y1 == 20
 
 
+def test_uvdoc_mode_redetects_layout_after_unwarping(monkeypatch) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = [_tilted_box(350, 80, 120, 24, 0.0)]
+    for row in range(20):
+        y = 180 + row * 48
+        polygons.extend(
+            (
+                _tilted_box(100, y, 300, 24, 0.0),
+                _tilted_box(460, y, 300, 24, 0.0),
+            )
+        )
+
+    calls = {"detect": 0, "uvdoc": 0}
+
+    def fake_detect(_image, _settings):
+        calls["detect"] += 1
+        return polygons
+
+    def fake_uvdoc(source):
+        calls["uvdoc"] += 1
+        return source.copy()
+
+    monkeypatch.setattr(image_preprocessing, "detect_text_polygons", fake_detect)
+    monkeypatch.setattr(image_preprocessing, "unwarp_document_image", fake_uvdoc)
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(),
+        safety_margin_px=20,
+        auto_deskew=True,
+        geometry_mode="uvdoc",
+    )
+
+    assert analysis.requested_geometry_mode == "uvdoc"
+    assert analysis.geometry_mode == "uvdoc"
+    assert "uvdoc" in analysis.method
+    assert "redetect" in analysis.method
+    assert calls["uvdoc"] == 1
+    assert calls["detect"] >= 2
+
+
 def test_preview_overlay_marks_only_nonretained_area() -> None:
     source = Image.new("RGB", (100, 100), "white")
     preview = overlay_excluded_regions(source, (20, 20, 80, 80))
@@ -220,6 +261,7 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert 'text="自动纠偏"' in source
     assert 'text="安全边界："' in source
     assert '"自动几何（推荐）"' in source
+    assert '"UVDoc展平（Paddle高级）"' in source
     assert 'text="手动四角"' in source
     assert 'text="重置四角"' in source
     assert 'text="px"' in source
