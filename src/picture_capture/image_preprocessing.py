@@ -2862,6 +2862,9 @@ def analyze_preprocess_page(
     orthogonal_before_pixel_row_worst_px = 0.0
     orthogonal_after_pixel_row_worst_px = 0.0
     orthogonal_pixel_row_verdict = "insufficient"
+    orthogonal_initial_pixel_row_p90_px = 0.0
+    orthogonal_initial_pixel_row_worst_px = 0.0
+    orthogonal_initial_pixel_row_available = False
     orthogonal_confidence = 0.0
     orthogonal_column_spread_deg = 0.0
     orthogonal_max_row_angle_deg = 0.0
@@ -3064,6 +3067,18 @@ def analyze_preprocess_page(
                 working_polygons,
                 settings,
             )
+            if (
+                not orthogonal_initial_pixel_row_available
+                and baseline_pixel_rows.sample_count >= 8
+                and baseline_pixel_rows.valid_column_count >= 1
+            ):
+                orthogonal_initial_pixel_row_p90_px = float(
+                    baseline_pixel_rows.p90_shift_px
+                )
+                orthogonal_initial_pixel_row_worst_px = float(
+                    baseline_pixel_rows.worst_shift_px
+                )
+                orthogonal_initial_pixel_row_available = True
             candidate_pixel_rows = audit_pixel_row_profiles(
                 candidate_image,
                 candidate_polygons,
@@ -3353,6 +3368,64 @@ def analyze_preprocess_page(
                 and actual_verdict == "passed"
             ):
                 break
+
+    # Re-audit the actual retained pixels after all accepted/rejected
+    # attempts. A later rejected residual pass must not overwrite diagnostics
+    # for the earlier accepted page.
+    if orthogonal_applied and working_polygons:
+        try:
+            retained_pixel_rows = audit_pixel_row_profiles(
+                working,
+                working_polygons,
+                settings,
+            )
+            if retained_pixel_rows.sample_count >= 8:
+                orthogonal_pixel_row_sample_count = int(
+                    retained_pixel_rows.sample_count
+                )
+                if orthogonal_initial_pixel_row_available:
+                    orthogonal_before_pixel_row_p90_px = float(
+                        orthogonal_initial_pixel_row_p90_px
+                    )
+                    orthogonal_before_pixel_row_worst_px = float(
+                        orthogonal_initial_pixel_row_worst_px
+                    )
+                orthogonal_after_pixel_row_p90_px = float(
+                    retained_pixel_rows.p90_shift_px
+                )
+                orthogonal_after_pixel_row_worst_px = float(
+                    retained_pixel_rows.worst_shift_px
+                )
+                retained_safe = bool(
+                    retained_pixel_rows.p90_shift_px
+                    <= PIXEL_ROW_PROFILE_P90_MAX_PX
+                    and retained_pixel_rows.worst_shift_px
+                    <= PIXEL_ROW_PROFILE_WORST_MAX_PX
+                )
+                retained_improved = bool(
+                    orthogonal_initial_pixel_row_available
+                    and orthogonal_initial_pixel_row_p90_px > 1e-6
+                    and retained_pixel_rows.p90_shift_px
+                    <= orthogonal_initial_pixel_row_p90_px * 0.70
+                    and retained_pixel_rows.worst_shift_px
+                    <= max(
+                        PIXEL_ROW_PROFILE_WORST_MAX_PX,
+                        orthogonal_initial_pixel_row_worst_px * 0.80,
+                    )
+                )
+                if retained_safe:
+                    orthogonal_pixel_row_verdict = "passed"
+                elif retained_improved:
+                    orthogonal_pixel_row_verdict = "improved_review"
+                else:
+                    orthogonal_pixel_row_verdict = "failed"
+                orthogonal_alignment_verdict = str(
+                    orthogonal_pixel_row_verdict
+                )
+        except Exception as exc:
+            warnings.append(
+                f"最终正交像素行复检不可用：{exc}"
+            )
 
     if (
         requested_geometry_mode == "auto"
