@@ -373,3 +373,108 @@ def test_pixel_projection_field_overrides_systematic_polygon_angle_bias(
     assert estimate.pixel_angle_used_count >= 10
     assert estimate.pixel_angle_confidence >= 0.30
     assert np.median(grid) <= -0.50
+
+
+
+def test_pixel_row_profile_audit_detects_cross_column_row_bend() -> None:
+    settings = AppSettings(layout_columns_policy="fixed", columns=1)
+    polygons: list[np.ndarray] = []
+    bent = Image.new("RGB", (900, 950), "white")
+    straight = Image.new("RGB", (900, 950), "white")
+    bent_draw = ImageDraw.Draw(bent)
+    straight_draw = ImageDraw.Draw(straight)
+
+    for row in range(18):
+        y = 120.0 + row * 42.0
+        polygons.append(_rotated_box(450.0, y, 720.0, 22.0, 0.0))
+        for start, end, offset in (
+            (110, 320, 4),
+            (345, 555, 0),
+            (580, 790, -4),
+        ):
+            for x in range(start, end, 55):
+                bent_draw.line(
+                    (x, y + offset, min(end, x + 38), y + offset),
+                    fill="black",
+                    width=3,
+                )
+                straight_draw.line(
+                    (x, y, min(end, x + 38), y),
+                    fill="black",
+                    width=3,
+                )
+
+    bent_audit = orthogonal_dewarp.audit_pixel_row_profiles(
+        bent, polygons, settings,
+    )
+    straight_audit = orthogonal_dewarp.audit_pixel_row_profiles(
+        straight, polygons, settings,
+    )
+
+    assert bent_audit.sample_count >= 8
+    assert bent_audit.p90_shift_px >= 3.0
+    assert bent_audit.passed is False
+    assert straight_audit.sample_count >= 8
+    assert straight_audit.p90_shift_px <= 1.0
+    assert straight_audit.passed is True
+
+
+def test_pixel_angle_field_samples_multiple_x_positions_inside_column(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (900, 950), "white")
+    polygons = [
+        _rotated_box(450.0, 120.0 + row * 42.0, 720.0, 22.0, -0.20)
+        for row in range(18)
+    ]
+
+    monkeypatch.setattr(
+        orthogonal_dewarp,
+        "separator_track_points",
+        lambda *_args, **_kwargs: (),
+    )
+    monkeypatch.setattr(
+        orthogonal_dewarp,
+        "horizontal_rule_track_points",
+        lambda *_args, **_kwargs: (),
+    )
+
+    def fake_pixel_angle(
+        _image,
+        _rows,
+        _y,
+        _radius,
+        _settings,
+        fallback,
+        *,
+        x_center=None,
+        x_window=None,
+    ):
+        assert x_window is not None
+        if x_center is None:
+            return float(fallback), 0.0
+        if x_center < 360.0:
+            return -0.55, 0.35
+        if x_center > 540.0:
+            return 0.20, 0.35
+        return -0.15, 0.35
+
+    monkeypatch.setattr(
+        orthogonal_dewarp,
+        "_pixel_projection_angle",
+        fake_pixel_angle,
+    )
+
+    estimate = estimate_orthogonal_warp(
+        image,
+        polygons,
+        AppSettings(layout_columns_policy="fixed", columns=1),
+    )
+    grid = np.asarray(
+        estimate.row_angle_grid_deg,
+        dtype=float,
+    ).reshape(estimate.row_grid_rows, estimate.row_grid_cols)
+
+    assert estimate.pixel_angle_used_count >= 12
+    assert estimate.row_grid_cols >= 6
+    assert float(np.max(grid) - np.min(grid)) >= 0.55
