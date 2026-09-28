@@ -1416,11 +1416,11 @@ def analyze_preprocess_page(
             method_parts.append("line_geometry")
             if (
                 line_geometry.recommendation == "uvdoc_review"
-                and requested_geometry_mode != "uvdoc"
+                and requested_geometry_mode not in {"auto", "uvdoc"}
             ):
                 warnings.append(
-                    "检测到可靠的平滑非线性弯曲；自动模式将优先使用"
-                    "确定性的正交网格展平，UVDoc保留为手动高级备选。"
+                    "检测到可靠的平滑非线性弯曲；当前模式不会自动执行"
+                    "正交网格展平，可改用自动模式或手动UVDoc复核。"
                 )
             elif line_geometry.recommendation == "manual_review":
                 if (
@@ -2294,7 +2294,11 @@ def analyze_preprocess_page(
                     method_parts.append("horizontal_vp_optimized")
         elif requested_geometry_mode == "auto":
             review_reasons: list[str] = []
-            if structural_candidate is not None and not structural_auto_safe:
+            if (
+                structural_candidate is not None
+                and not structural_auto_safe
+                and not line_geometry.separator_curve_reliable
+            ):
                 classification = str(
                     getattr(structural_candidate, "classification", "unknown")
                 )
@@ -2345,7 +2349,11 @@ def analyze_preprocess_page(
                             f"行向 {structural_t.inline_ratio_span_ratio * 100:.2f}% / "
                             f"跨行 {structural_t.cross_ratio_span_ratio * 100:.2f}%"
                         )
-            if horizontal_full is not None and not horizontal_auto_safe:
+            if (
+                horizontal_full is not None
+                and not horizontal_auto_safe
+                and not line_geometry.separator_curve_reliable
+            ):
                 if horizontal_row_audit is not None:
                     worst_index = (
                         horizontal_row_audit.after_worst_column_index + 1
@@ -2602,6 +2610,16 @@ def analyze_preprocess_page(
             )
             if actual_verdict == "passed":
                 break
+
+    if (
+        requested_geometry_mode == "auto"
+        and line_geometry.separator_curve_reliable
+        and not orthogonal_applied
+    ):
+        warnings.append(
+            "检测到可靠非线性弯曲，但正交网格未能通过闭环验收；"
+            "已保留前一步结果，可手动选择UVDoc复核。"
+        )
 
     # Advanced transforms change the page geometry. Re-run TextDetection on the
     # corrected image before final structural cropping. If that second pass
