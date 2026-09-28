@@ -107,6 +107,28 @@ def test_identity_homography_has_zero_local_scale_distortion() -> None:
     assert audit.anisotropy_p95_ratio < 1e-9
 
 
+def test_0004_style_homography_stays_within_auto_distortion_budget() -> None:
+    matrix = (
+        1.0176582443, 0.0144603422, -30.5796527,
+        0.0, 1.0279464072, -8.1571133,
+        0.0, 7.89669602e-6, 1.0,
+    )
+    polygons: list[np.ndarray] = []
+    for row in range(24):
+        y = 240 + row * 120
+        polygons.extend((_box(180, y, 720, 24), _box(1260, y, 720, 24)))
+
+    audit = audit_homography_distortion(
+        matrix, (2480, 3567), polygons=polygons,
+    )
+
+    assert audit.valid is True
+    assert audit.horizontal_scale_span_ratio <= 0.04
+    assert audit.vertical_scale_span_ratio <= 0.07
+    assert audit.area_scale_span_ratio <= 0.055
+    assert audit.anisotropy_p95_ratio <= 0.035
+
+
 def test_0011_style_homography_is_detected_as_scale_instability() -> None:
     matrix = (
         0.983649529, -0.0250342872, 24.2672841,
