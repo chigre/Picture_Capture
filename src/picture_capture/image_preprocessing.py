@@ -946,8 +946,8 @@ def analyze_preprocess_page(
             method_parts.append("line_geometry")
             if line_geometry.recommendation == "uvdoc_review":
                 warnings.append(
-                    "文本行与真实长直线共同提示非线性页面形变，建议使用"
-                    "“UVDoc展平（Paddle高级）”复核。"
+                    "可靠实体长线轨迹显示平滑非线性弯曲，且与文本行几何异常一致；"
+                    "建议使用“UVDoc展平（Paddle高级）”复核。"
                 )
             elif line_geometry.recommendation == "manual_review":
                 if (
@@ -963,6 +963,17 @@ def analyze_preprocess_page(
                     warnings.append(
                         "文本行方向存在不一致，当前证据不足以支持非线性矫正。"
                     )
+            separator_curve_threshold = max(3.0, width * 0.0015)
+            if (
+                line_geometry.separator_found
+                and line_geometry.separator_residual_px
+                >= separator_curve_threshold * 1.5
+                and not line_geometry.separator_curve_reliable
+            ):
+                warnings.append(
+                    "实体长线候选残差较大，但轨迹连续性或曲率一致性不足；"
+                    "该候选不作为 UVDoc 非线性形变证据。"
+                )
         except Exception as exc:
             warnings.append(f"文本行几何分析不可用：{exc}")
 
@@ -1567,6 +1578,39 @@ def analyze_preprocess_page(
             float(perspective_jacobian_min_determinant), 8
         ),
         perspective_text_scale_samples=int(perspective_text_scale_samples),
+        perspective_text_scale_inline_ratio_p05=round(
+            float(perspective_text_scale_inline_ratio_p05), 6
+        ),
+        perspective_text_scale_inline_ratio_median=round(
+            float(perspective_text_scale_inline_ratio_median), 6
+        ),
+        perspective_text_scale_inline_ratio_p95=round(
+            float(perspective_text_scale_inline_ratio_p95), 6
+        ),
+        perspective_text_scale_cross_ratio_p05=round(
+            float(perspective_text_scale_cross_ratio_p05), 6
+        ),
+        perspective_text_scale_cross_ratio_median=round(
+            float(perspective_text_scale_cross_ratio_median), 6
+        ),
+        perspective_text_scale_cross_ratio_p95=round(
+            float(perspective_text_scale_cross_ratio_p95), 6
+        ),
+        perspective_text_scale_inline_ratio_span_ratio=round(
+            float(perspective_text_scale_inline_ratio_span_ratio), 6
+        ),
+        perspective_text_scale_cross_ratio_span_ratio=round(
+            float(perspective_text_scale_cross_ratio_span_ratio), 6
+        ),
+        perspective_text_scale_inline_ratio_gradient_ratio=round(
+            float(perspective_text_scale_inline_ratio_gradient_ratio), 6
+        ),
+        perspective_text_scale_cross_ratio_gradient_ratio=round(
+            float(perspective_text_scale_cross_ratio_gradient_ratio), 6
+        ),
+        perspective_text_scale_anisotropy_p95_ratio=round(
+            float(perspective_text_scale_anisotropy_p95_ratio), 6
+        ),
         perspective_text_scale_before_inline_gradient_ratio=round(
             float(perspective_text_scale_before_inline_gradient_ratio), 6
         ),
@@ -1608,6 +1652,18 @@ def analyze_preprocess_page(
         ),
         line_geometry_separator_drift_px=float(
             line_geometry.separator_drift_px
+        ),
+        line_geometry_separator_track_quality=float(
+            line_geometry.separator_track_quality
+        ),
+        line_geometry_separator_track_jump_p95_px=float(
+            line_geometry.separator_track_jump_p95_px
+        ),
+        line_geometry_separator_curvature_score=float(
+            line_geometry.separator_curvature_score
+        ),
+        line_geometry_separator_curve_reliable=bool(
+            line_geometry.separator_curve_reliable
         ),
         line_geometry_recommendation=str(line_geometry.recommendation),
         line_geometry_confidence=float(line_geometry.confidence),
