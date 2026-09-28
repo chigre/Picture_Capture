@@ -2178,6 +2178,20 @@ class ProjectProfileWizard(tk.Toplevel):
         self._set_structure_defaults_for_profile(key)
         self._set_tail_defaults_for_profile(key)
         self._set_symbol_defaults_for_profile(key)
+        if key == "cjk_visual":
+            (
+                normalized_entry,
+                normalized_bracket,
+                normalized_samples,
+            ) = _normalize_cjk_visual_symbol_roles(
+                self.entry_marker_symbols_var.get(),
+                self.bracket_open_symbols_var.get(),
+                list(getattr(self, "visual_marker_samples", []) or []),
+            )
+            self.entry_marker_symbols_var.set(normalized_entry)
+            self.bracket_open_symbols_var.set(normalized_bracket)
+            self.visual_marker_samples = normalized_samples
+            self._refresh_symbol_template_summary()
         self._reset_specificity_for_profile(key)
         self._profile_revision += 1
         self._mark_validation_stale()
@@ -2583,16 +2597,35 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_tail_allow_visual_rescue = bool(
             self.tail_allow_visual_rescue_var.get()
         )
+        profile_key = self._current_profile_key()
         s.profile_symbol_inventory_version = 1
         s.profile_symbol_inventory_enabled = bool(
             self.symbol_inventory_enabled_var.get()
         )
-        s.profile_entry_marker_symbols = " ".join(
+        entry_symbols = " ".join(
             split_configured_symbols(self.entry_marker_symbols_var.get())
         )
-        s.profile_bracket_open_symbols = " ".join(
+        bracket_symbols = " ".join(
             split_configured_symbols(self.bracket_open_symbols_var.get())
         )
+        visual_samples = [
+            dict(item)
+            for item in getattr(self, "visual_marker_samples", []) or []
+        ]
+        if profile_key == "cjk_visual":
+            entry_symbols, bracket_symbols, visual_samples = (
+                _normalize_cjk_visual_symbol_roles(
+                    entry_symbols,
+                    bracket_symbols,
+                    visual_samples,
+                )
+            )
+            # A CJK bracket opener never becomes an independent prefix merely
+            # because the old buggy Profile once stored it in both roles.
+            if not entry_symbols:
+                s.profile_allow_marker_prefix = False
+        s.profile_entry_marker_symbols = entry_symbols
+        s.profile_bracket_open_symbols = bracket_symbols
         s.profile_symbol_visual_rescue_enabled = bool(
             self.symbol_visual_rescue_var.get()
         )
@@ -2615,7 +2648,7 @@ class ProjectProfileWizard(tk.Toplevel):
             0.35, min(0.95, float(self.symbol_template_threshold_var.get()))
         )
         s.profile_symbol_templates_json = serialize_visual_marker_samples(
-            self.visual_marker_samples
+            visual_samples
         )
         s.profile_symbol_template_debug_enabled = bool(
             self.symbol_template_debug_var.get()
@@ -2631,7 +2664,6 @@ class ProjectProfileWizard(tk.Toplevel):
         s.profile_cjk_right_context_width_percent = max(
             30, min(200, int(self.cjk_right_context_width_var.get()))
         )
-        profile_key = self._current_profile_key()
         apply_headword_profile(s, profile_key)
         for name, value in language_effective_settings(s.ocr_language, s.layout_writing_mode).items():
             if hasattr(s, name):
