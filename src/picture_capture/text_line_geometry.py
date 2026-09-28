@@ -132,7 +132,7 @@ def _cluster_rows(
 
 def _robust_angle_trend(
     rows: list[tuple[float, float, float]],
-) -> tuple[float, float, float, float, float, float]:
+) -> tuple[float, float, float, float, float, float, float]:
     if len(rows) < 5:
         raise RuntimeError("有效文本行不足")
     ys = np.asarray([row[0] for row in rows], dtype=float)
