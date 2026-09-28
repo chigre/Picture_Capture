@@ -312,8 +312,8 @@ class AppSettings:
     # thread, with an explicit browser search button as a manual fallback.
     review_network_lookup_enabled: bool = True
     ocr_engine: str = "tesseract"
-    # Headword markers are detected with the restored left-edge rule or PaddleOCR.
-    detection_method: str = "paddleocr"
+    # Headword markers may use combined ordinary geometry + OCR evidence, or either path alone.
+    detection_method: str = "combined"
     # v2.10 dictionary detection profile. Stable IDs describe layout families,
     # while project-specific numeric edits are persisted as overrides.
     dictionary_profile_id: str = "latin_structured_symbols"
@@ -426,11 +426,11 @@ class AppSettings:
     paddle_device: str = "auto"
     paddle_ocr_version: str = "PP-OCRv6"
     paddle_use_textline_orientation: bool = False
-    # Wider than v1.4 so long syllabified lemmas usually include the nearby
-    # plural/POS label, which is a much stronger entry cue than boldness alone.
+    # Legacy absolute OCR band width retained only for settings compatibility.
+    # v2.14+ runtime width is derived from the detected column width instead.
     paddle_band_width: int = 600
-    # Main-window simplification: percentage of the historical candidate band.
-    # 100 means the original configured ``paddle_band_width``; values are capped at 100.
+    # Percentage of the current detected column width analyzed by headword OCR.
+    # 100 means the full column; the separate left margin is added independently.
     paddle_band_width_ratio: int = 100
     # OCR-only guard/preprocessing; source pixels and canvas rendering are never replaced.
     paddle_max_input_side: int = 2800
