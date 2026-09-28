@@ -4939,6 +4939,14 @@ def filter_headword_records(
             )
         )
     )
+    trusted_visual_lanes = (
+        _trusted_visual_marker_lanes(
+            lines,
+            symbol_inventory,
+            median_height,
+        )
+        if visual_symbol_enabled else {}
+    )
     visual_entry_markers = (
         _detect_visual_entry_markers(
             gray,
@@ -4946,6 +4954,7 @@ def filter_headword_records(
             left_limit,
             lower_bound=header_cutoff,
             inventory=symbol_inventory,
+            trusted_lanes=trusted_visual_lanes,
         )
         if visual_symbol_enabled else []
     )
@@ -5916,6 +5925,8 @@ def filter_headword_records(
             "separator_roi_width_ratio": int(getattr(settings, "paddle_separator_roi_width_ratio", 60)),
             "image_separator_candidates": image_separator_candidates,
             "image_separator_match_count": len(image_boundary_matches),
+            "trusted_visual_marker_lanes": trusted_visual_lanes,
+            "visual_marker_candidate_count": len(visual_entry_markers),
             "user_filter_rule_count": len(user_rules or []),
         }
     })
