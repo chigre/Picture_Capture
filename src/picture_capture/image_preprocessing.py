@@ -4249,6 +4249,11 @@ def export_summary_csv(
             "source_height": analysis.source_height,
             "applied_angle_deg": analysis.applied_angle_deg,
             "correction_angle_deg": analysis.correction_angle_deg,
+            "ocr_correction_angle_deg": analysis.ocr_correction_angle_deg,
+            "deskew_anchor_source": analysis.deskew_anchor_source,
+            "source_header_rule_point_count": analysis.source_header_rule_point_count,
+            "source_header_rule_angle_deg": analysis.source_header_rule_angle_deg,
+            "source_header_rule_residual_px": analysis.source_header_rule_residual_px,
             "angle_samples": analysis.angle_samples,
             "angle_mad_deg": analysis.angle_mad_deg,
             "requested_geometry_mode": analysis.requested_geometry_mode,
@@ -4531,6 +4536,15 @@ def export_summary_csv(
             ),
             "orthogonal_horizontal_rule_verdict": (
                 analysis.orthogonal_horizontal_rule_verdict
+            ),
+            "orthogonal_pixel_angle_sample_count": (
+                analysis.orthogonal_pixel_angle_sample_count
+            ),
+            "orthogonal_pixel_angle_used_count": (
+                analysis.orthogonal_pixel_angle_used_count
+            ),
+            "orthogonal_pixel_angle_confidence": (
+                analysis.orthogonal_pixel_angle_confidence
             ),
             "orthogonal_confidence": analysis.orthogonal_confidence,
             "orthogonal_column_spread_deg": (
