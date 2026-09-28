@@ -197,84 +197,72 @@ def _fit_separator_track(
 ) -> tuple[float, float, float] | None:
     if x1 - x0 < 4 or y1 - y0 < 80:
         return None
-    band = gray[y0:y1, x0:x1]
-    dark = np.clip(215.0 - band.astype(float), 0.0, 215.0)
-    dark_fraction = (band < 175).mean(axis=0)
-    mean_dark = dark.mean(axis=0) / 215.0
-    score = dark_fraction * 0.72 + mean_dark * 0.28
-    best_local = int(np.argmax(score))
-    best_score = float(score[best_local])
-    if best_score < 0.16:
-        return None
-    peak_x = x0 + best_local
 
-    bins = max(12, min(28, int(round((y1 - y0) / 55.0))))
+    bins = max(12, min(30, int(round((y1 - y0) / 48.0))))
     edges = np.linspace(y0, y1, bins + 1, dtype=int)
-    radius = max(3, min(18, round((x1 - x0) * 0.18)))
     xs: list[float] = []
     ys: list[float] = []
-    weights: list[float] = []
+    strengths: list[float] = []
     for index in range(bins):
         ya = int(edges[index])
         yb = int(edges[index + 1])
         if yb - ya < 3:
             continue
-        xa = max(x0, peak_x - radius)
-        xb = min(x1, peak_x + radius + 1)
-        local = gray[ya:yb, xa:xb]
+        local = gray[ya:yb, x0:x1]
         if local.size == 0:
             continue
-        local_dark_fraction = (local < 175).mean(axis=0)
-        local_mean_dark = np.clip(
+        dark_fraction = (local < 175).mean(axis=0)
+        mean_dark = np.clip(
             215.0 - local.astype(float), 0.0, 215.0
         ).mean(axis=0) / 215.0
-        local_score = local_dark_fraction * 0.72 + local_mean_dark * 0.28
-        pos = int(np.argmax(local_score))
-        strength = float(local_score[pos])
-        if strength < max(0.08, best_score * 0.25):
+        score = dark_fraction * 0.72 + mean_dark * 0.28
+        pos = int(np.argmax(score))
+        strength = float(score[pos])
+        if strength < 0.10:
             continue
-        xs.append(float(xa + pos))
+        xs.append(float(x0 + pos))
         ys.append(float((ya + yb - 1) / 2.0))
-        weights.append(max(0.05, strength))
+        strengths.append(strength)
 
     if len(xs) < max(8, bins // 2):
         return None
 
     x_values = np.asarray(xs, dtype=float)
     y_values = np.asarray(ys, dtype=float)
-    w_values = np.sqrt(np.asarray(weights, dtype=float))
-    keep = np.ones(len(xs), dtype=bool)
-    for _ in range(4):
-        if int(keep.sum()) < 6:
-            break
-        slope, intercept = np.polyfit(
-            y_values[keep], x_values[keep], 1, w=w_values[keep],
+    strength_values = np.asarray(strengths, dtype=float)
+
+    # Remove isolated text/noise hits without forcing the remaining track to be
+    # linear. A genuine curved separator should survive this local-continuity
+    # filter so its curvature can be measured rather than rejected.
+    if len(x_values) >= 3:
+        smooth = x_values.copy()
+        smooth[1:-1] = np.median(
+            np.vstack(
+                [x_values[:-2], x_values[1:-1], x_values[2:]]
+            ),
+            axis=0,
         )
-        residual = x_values - (slope * y_values + intercept)
-        center = float(np.median(residual[keep]))
-        mad = float(np.median(np.abs(residual[keep] - center)))
-        threshold = max(1.25, mad * 3.5)
-        new_keep = np.abs(residual - center) <= threshold
-        if int(new_keep.sum()) == int(keep.sum()):
-            keep = new_keep
-            break
-        keep = new_keep
-
-    if int(keep.sum()) < 6:
+        continuity = max(3.0, (x1 - x0) * 0.25)
+        keep = np.abs(x_values - smooth) <= continuity
+    else:
+        keep = np.ones(len(x_values), dtype=bool)
+    if int(keep.sum()) < max(8, bins // 2):
         return None
-    slope, intercept = np.polyfit(
-        y_values[keep], x_values[keep], 1, w=w_values[keep],
-    )
-    residual = x_values[keep] - (
-        slope * y_values[keep] + intercept
-    )
-    residual_span = float(
-        np.percentile(residual, 95) - np.percentile(residual, 5)
-    )
-    span_ratio = float(keep.sum()) / float(bins)
-    quality = best_score * span_ratio
-    return max(0.0, residual_span), span_ratio, quality
 
+    x_values = x_values[keep]
+    y_values = y_values[keep]
+    strength_values = strength_values[keep]
+    weights = np.sqrt(np.maximum(0.05, strength_values))
+    slope, intercept = np.polyfit(
+        y_values, x_values, 1, w=weights,
+    )
+    residual = x_values - (slope * y_values + intercept)
+    residual_span = float(
+        np.percentile(residual, 90) - np.percentile(residual, 10)
+    )
+    span_ratio = float(len(x_values)) / float(bins)
+    quality = float(np.median(strength_values)) * span_ratio
+    return max(0.0, residual_span), span_ratio, quality
 
 def _separator_geometry(
     image: Image.Image,
