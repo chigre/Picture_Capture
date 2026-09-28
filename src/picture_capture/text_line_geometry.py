@@ -286,8 +286,12 @@ def _best_linear_separator_seed(
         min(max_drift, coarse_drift + 3) + 1,
     ))
     assert best is not None
-    _objective, drift, start, median_strength, q20_strength, _mean = best
-    if median_strength < 0.08 or q20_strength < 0.035:
+    _objective, drift, start, median_strength, q20_strength, mean_strength = best
+    # A genuinely curved line can leave any single straight seed for several
+    # bins, so Q20 may legitimately be near zero. Require a strong median/mean
+    # seed, then let the local continuity tracker and final coverage/curvature
+    # checks decide whether this is a physical line.
+    if median_strength < 0.08 or mean_strength < 0.10:
         return None
     return start, drift, median_strength, q20_strength
 
@@ -361,7 +365,7 @@ def _fit_separator_track(
         adjusted = local_scores - distance_penalty
         pos = int(np.argmax(adjusted))
         strength = float(local_scores[pos])
-        if strength < max(0.06, q20_strength * 0.65):
+        if strength < max(0.06, min(median_strength * 0.35, q20_strength * 0.65)):
             continue
         chosen_local_x = float(xa + pos)
         previous_local_x = chosen_local_x
