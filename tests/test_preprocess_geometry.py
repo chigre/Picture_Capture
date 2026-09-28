@@ -3,8 +3,10 @@ from __future__ import annotations
 import numpy as np
 from picture_capture.models import AppSettings
 from picture_capture.preprocess_geometry import (
+    audit_horizontal_alignment,
     audit_homography_distortion,
     audit_text_scale_stability,
+    estimate_horizontal_perspective_from_polygons,
     estimate_perspective_from_polygons,
     perspective_from_quad,
     transform_points_homography,
@@ -22,6 +24,93 @@ def _box(x0: float, y0: float, width: float = 220, height: float = 18) -> np.nda
         ],
         dtype=float,
     )
+
+
+def _rotated_box(
+    cx: float,
+    cy: float,
+    width: float,
+    height: float,
+    angle_deg: float,
+) -> np.ndarray:
+    half = np.asarray(
+        [
+            [-width / 2.0, -height / 2.0],
+            [width / 2.0, -height / 2.0],
+            [width / 2.0, height / 2.0],
+            [-width / 2.0, height / 2.0],
+        ],
+        dtype=float,
+    )
+    radians = np.deg2rad(angle_deg)
+    rotation = np.asarray(
+        [
+            [np.cos(radians), -np.sin(radians)],
+            [np.sin(radians), np.cos(radians)],
+        ],
+        dtype=float,
+    )
+    return half @ rotation.T + np.asarray([cx, cy], dtype=float)
+
+
+def test_horizontal_vanishing_candidate_flattens_y_dependent_row_angles() -> None:
+    polygons: list[np.ndarray] = []
+    for row in range(22):
+        t = row / 21.0
+        y = 140 + row * 34
+        angle = 0.42 - 0.84 * t
+        polygons.extend(
+            (
+                _rotated_box(260, y, 280, 22, angle),
+                _rotated_box(650, y, 280, 22, angle),
+            )
+        )
+
+    estimate = estimate_horizontal_perspective_from_polygons(
+        polygons, (900, 1000),
+    )
+    transformed = transform_polygons_homography(polygons, estimate.matrix)
+    audit = audit_horizontal_alignment(polygons, transformed)
+
+    assert estimate.classification == "horizontal_vp"
+    assert estimate.candidate_source == "horizontal_vp"
+    assert estimate.horizontal_row_count >= 18
+    assert abs(estimate.horizontal_vanishing_x) > 3000
+    assert audit.verdict == "improved"
+    assert abs(audit.before_trend_deg) > 0.6
+    assert abs(audit.after_trend_deg) <= 0.12
+    assert max(abs(audit.after_top_angle_deg), abs(audit.after_bottom_angle_deg)) <= 0.18
+    assert audit.improvement_ratio >= 0.5
+
+
+def test_horizontal_vanishing_candidate_keeps_character_scale_safe() -> None:
+    polygons: list[np.ndarray] = []
+    for row in range(22):
+        t = row / 21.0
+        y = 140 + row * 34
+        angle = 0.36 - 0.72 * t
+        polygons.extend(
+            (
+                _rotated_box(260, y, 280, 22, angle),
+                _rotated_box(650, y, 280, 22, angle),
+            )
+        )
+
+    estimate = estimate_horizontal_perspective_from_polygons(
+        polygons, (900, 1000),
+    )
+    transformed = transform_polygons_homography(polygons, estimate.matrix)
+    jacobian = audit_homography_distortion(
+        estimate.matrix, (900, 1000), polygons=polygons,
+    )
+    scale = audit_text_scale_stability(
+        polygons, transformed, (900, 1000),
+    )
+
+    assert jacobian.valid is True
+    assert jacobian.horizontal_scale_span_ratio <= 0.04
+    assert jacobian.vertical_scale_span_ratio <= 0.07
+    assert scale.verdict == "stable"
 
 
 def test_perspective_estimate_straightens_diverging_column_starts() -> None:
