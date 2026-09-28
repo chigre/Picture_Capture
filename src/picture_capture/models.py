@@ -214,6 +214,10 @@ class AppSettings:
     # only ImagePreprocess analysis/export and never rewrite source page files.
     preprocess_auto_deskew: bool = True
     preprocess_safety_margin_px: int = 20
+    # Geometry stage before final crop. "auto" escalates from deskew to
+    # perspective / structural mesh dewarp only when measured deformation
+    # exceeds conservative pixel thresholds.
+    preprocess_geometry_mode: str = "auto"
     # Overlay editor presentation at 100% page scale. The page zoom multiplies
     # the base font, so text boxes zoom together with the scanned page.
     main_entry_font_family: str = "自动（系统推荐）"
