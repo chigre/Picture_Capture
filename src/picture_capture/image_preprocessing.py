@@ -88,6 +88,7 @@ class PreprocessAnalysis:
     perspective_source_quad: tuple[float, ...] | None = None
     perspective_target_quad: tuple[float, ...] | None = None
     perspective_classification: str = "none"
+    perspective_candidate_strength_px: float = 0.0
     perspective_left_drift_px: float = 0.0
     perspective_right_drift_px: float = 0.0
     perspective_common_drift_px: float = 0.0
@@ -204,6 +205,9 @@ class PreprocessAnalysis:
             ),
             perspective_classification=str(
                 payload.get("perspective_classification", "none") or "none"
+            ),
+            perspective_candidate_strength_px=max(
+                0.0, float(payload.get("perspective_candidate_strength_px", 0.0))
             ),
             perspective_left_drift_px=float(
                 payload.get("perspective_left_drift_px", 0.0)
@@ -813,6 +817,7 @@ def analyze_preprocess_page(
     perspective_source_quad: tuple[float, ...] | None = None
     perspective_target_quad: tuple[float, ...] | None = None
     perspective_classification = "none"
+    perspective_candidate_strength_px = 0.0
     perspective_left_drift_px = 0.0
     perspective_right_drift_px = 0.0
     perspective_common_drift_px = 0.0
@@ -839,6 +844,18 @@ def analyze_preprocess_page(
                 rotated_quad, working.size,
             )
             perspective_matrix = manual_estimate.matrix
+            perspective_source_quad = tuple(manual_estimate.source_quad)
+            perspective_target_quad = tuple(manual_estimate.target_quad)
+            perspective_classification = str(manual_estimate.classification)
+            perspective_candidate_strength_px = float(manual_estimate.strength_px)
+            perspective_left_drift_px = float(manual_estimate.left_drift_px)
+            perspective_right_drift_px = float(manual_estimate.right_drift_px)
+            perspective_common_drift_px = float(manual_estimate.common_drift_px)
+            perspective_width_delta_px = float(manual_estimate.width_delta_px)
+            perspective_width_change_ratio = float(manual_estimate.width_change_ratio)
+            perspective_scale_top = float(manual_estimate.scale_top)
+            perspective_scale_bottom = float(manual_estimate.scale_bottom)
+            perspective_scale_delta_ratio = float(manual_estimate.scale_delta_ratio)
             geometry_strength = max(
                 geometry_strength, float(manual_estimate.strength_px)
             )
@@ -892,6 +909,7 @@ def analyze_preprocess_page(
 
             perspective_source_quad = tuple(perspective.source_quad)
             perspective_target_quad = tuple(perspective.target_quad)
+            perspective_candidate_strength_px = float(perspective.strength_px)
             perspective_classification = str(
                 getattr(perspective, "classification", "unknown")
             )
@@ -1080,6 +1098,7 @@ def analyze_preprocess_page(
         perspective_source_quad=perspective_source_quad,
         perspective_target_quad=perspective_target_quad,
         perspective_classification=perspective_classification,
+        perspective_candidate_strength_px=round(float(perspective_candidate_strength_px), 3),
         perspective_left_drift_px=round(float(perspective_left_drift_px), 3),
         perspective_right_drift_px=round(float(perspective_right_drift_px), 3),
         perspective_common_drift_px=round(float(perspective_common_drift_px), 3),
