@@ -33,6 +33,12 @@ from .preprocess_geometry import (
     transform_polygons_homography,
 )
 from .text_line_geometry import (
+    SEPARATOR_CURVATURE_SCORE_MIN,
+    SEPARATOR_CURVE_SPAN_MIN,
+    SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD,
+    SEPARATOR_JUMP_MIN_PX,
+    SEPARATOR_JUMP_WIDTH_RATIO_MAX,
+    SEPARATOR_TRACK_QUALITY_MIN,
     TextLineGeometryAnalysis,
     analyze_text_line_geometry,
 )
@@ -963,7 +969,9 @@ def analyze_preprocess_page(
                     warnings.append(
                         "文本行方向存在不一致，当前证据不足以支持非线性矫正。"
                     )
-            separator_curve_threshold = max(3.0, width * 0.0015)
+            separator_curve_threshold = max(
+                3.0, width * SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD
+            )
             if (
                 line_geometry.separator_found
                 and line_geometry.separator_residual_px
@@ -2105,6 +2113,14 @@ def export_diagnostic_json(
         "text_scale_inline_gradient_max": TEXT_SCALE_INLINE_GRADIENT_MAX,
         "text_scale_cross_gradient_max": TEXT_SCALE_CROSS_GRADIENT_MAX,
         "text_scale_anisotropy_p95_max": TEXT_SCALE_ANISOTROPY_P95_MAX,
+        "separator_curve_span_min": SEPARATOR_CURVE_SPAN_MIN,
+        "separator_track_quality_min": SEPARATOR_TRACK_QUALITY_MIN,
+        "separator_curvature_score_min": SEPARATOR_CURVATURE_SCORE_MIN,
+        "separator_curve_width_ratio_threshold": (
+            SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD
+        ),
+        "separator_jump_min_px": SEPARATOR_JUMP_MIN_PX,
+        "separator_jump_width_ratio_max": SEPARATOR_JUMP_WIDTH_RATIO_MAX,
     }
     payload["export"] = {
         "output_filename": Path(output_path).name if output_path is not None else None,
