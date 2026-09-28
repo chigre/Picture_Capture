@@ -75,22 +75,30 @@ def _weighted_median(values: list[tuple[float, float]]) -> float:
 
 
 def _smooth_knots(values: np.ndarray) -> np.ndarray:
-    if values.size < 3:
-        return values.astype(float, copy=True)
-    median = values.astype(float, copy=True)
-    for index in range(values.size):
-        lo = max(0, index - 1)
-        hi = min(values.size, index + 2)
-        median[index] = float(np.median(values[lo:hi]))
-    if values.size < 4:
+    """Suppress local noise without biasing the top/bottom boundary knots.
+
+    The page-end knots carry the largest correction on the common
+    top-positive/bottom-negative residual pattern. Averaging an endpoint with
+    its only neighbour pulls it toward zero and leaves a visible end-of-page
+    tilt. Preserve endpoints; smooth only true interior knots.
+    """
+    raw = values.astype(float, copy=True)
+    if raw.size < 3:
+        return raw
+    median = raw.copy()
+    for index in range(1, raw.size - 1):
+        median[index] = float(np.median(raw[index - 1:index + 2]))
+    if raw.size < 4:
         return median
     smooth = median.copy()
-    for index in range(1, values.size - 1):
+    for index in range(1, raw.size - 1):
         smooth[index] = (
             0.25 * median[index - 1]
             + 0.50 * median[index]
             + 0.25 * median[index + 1]
         )
+    smooth[0] = raw[0]
+    smooth[-1] = raw[-1]
     return smooth
 
 
