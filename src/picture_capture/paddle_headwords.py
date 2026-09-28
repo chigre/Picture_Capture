@@ -7328,14 +7328,36 @@ def detect_paddle_headwords(
 
         if cached_columns is not None and col < len(cached_columns):
             records = [OCRRecord(
-                text=str(item["text"]), confidence=float(item["confidence"]),
+                text=str(item["text"]),
+                confidence=float(item["confidence"]),
                 box=tuple(int(value) for value in item["box"]),  # type: ignore[arg-type]
+                recovery=str(item.get("recovery", "") or ""),
+                recovery_source_text=str(
+                    item.get("recovery_source_text", "") or ""
+                ),
+                parent_box=(
+                    tuple(int(value) for value in item["parent_box"])
+                    if item.get("parent_box") else None
+                ),
             ) for item in cached_columns[col].get("ocr_records", [])]
         elif use_paddle:
             source_records = run_paddle_band(band, settings, engine=engine)
-            records = _records_to_canonical_band(source_records, band.size, transform_kind)
+            records = _records_to_canonical_band(
+                source_records, band.size, transform_kind
+            )
         else:
             records = []
+
+        oversized_recovery: list[dict[str, Any]] = []
+        if use_paddle and records:
+            records, oversized_recovery = _recover_oversized_cjk_ocr_records(
+                records,
+                analysis_band,
+                settings,
+                profile,
+                engine=engine,
+                pixel_scale=pixel_scale,
+            )
 
         paddle_lines = _records_as_merged_lines(records, settings)
         paddle_full_text = "\n".join(line.text for line in paddle_lines)
@@ -7344,6 +7366,10 @@ def detect_paddle_headwords(
             separator_band=analysis_separator_band, user_rules=user_rules, engine_name="paddle", profile=profile,
             pixel_scale=pixel_scale,
         )
+        if oversized_recovery and diagnostics:
+            meta = diagnostics[0].get("meta")
+            if isinstance(meta, dict):
+                meta["oversized_multi_entry_recovery"] = oversized_recovery
         _attach_source_candidate_coordinates(diagnostics, geometry, col)
         for entry in paddle_entries:
             entry.x, entry.y = geometry.canonical_to_source(entry.x, entry.y)
