@@ -106,6 +106,8 @@ class HorizontalAlignmentAudit:
     after_metric_deg: float = 0.0
     before_worst_region_deg: float = 0.0
     after_worst_region_deg: float = 0.0
+    before_worst_region_span_deg: float = 0.0
+    after_worst_region_span_deg: float = 0.0
     before_worst_column_metric_deg: float = 0.0
     after_worst_column_metric_deg: float = 0.0
     after_worst_column_index: int = -1
@@ -1110,6 +1112,20 @@ def audit_horizontal_alignment(
         for values in (after_tops, after_middles, after_bottoms)
         for value in values
     )
+    before_region_spans = [
+        max(top, middle, bottom) - min(top, middle, bottom)
+        for top, middle, bottom in zip(
+            before_tops, before_middles, before_bottoms
+        )
+    ]
+    after_region_spans = [
+        max(top, middle, bottom) - min(top, middle, bottom)
+        for top, middle, bottom in zip(
+            after_tops, after_middles, after_bottoms
+        )
+    ]
+    before_worst_region_span = max(before_region_spans, default=0.0)
+    after_worst_region_span = max(after_region_spans, default=0.0)
     before_worst_column_metric = max(before_metrics)
     after_worst_column_metric = max(after_metrics)
     worst_position = int(np.argmax(after_metrics))
@@ -1131,7 +1147,8 @@ def audit_horizontal_alignment(
         if before_metric > 1e-6 else 0.0
     )
     before_driver_trend = max(
-        [abs(before_trend)] + [abs(value) for value in before_trends]
+        [abs(before_trend), before_worst_region_span]
+        + [abs(value) for value in before_trends]
     )
     after_worst_trend = max(
         [abs(after_trend)] + [abs(value) for value in after_trends]
@@ -1172,6 +1189,8 @@ def audit_horizontal_alignment(
         after_metric_deg=after_metric,
         before_worst_region_deg=before_worst_region,
         after_worst_region_deg=after_worst_region,
+        before_worst_region_span_deg=before_worst_region_span,
+        after_worst_region_span_deg=after_worst_region_span,
         before_worst_column_metric_deg=before_worst_column_metric,
         after_worst_column_metric_deg=after_worst_column_metric,
         after_worst_column_index=worst_column_index,
@@ -1315,16 +1334,26 @@ def estimate_horizontal_perspective_from_polygons(
     if len(rows) < HORIZONTAL_VP_MIN_ROWS:
         raise RuntimeError("有效文本行不足，无法估计水平消失点")
 
-    driver_trends: list[float] = []
+    driver_changes: list[float] = []
     for column in usable_columns:
         try:
-            _mid, _top, _bottom, trend, _mad, _span = (
+            middle, top, bottom, trend, _mad, _span = (
                 _horizontal_row_stats(column)
             )
-            driver_trends.append(abs(float(trend)))
+            region_top, region_middle, region_bottom = _horizontal_region_angles(
+                column,
+                fallback=(top, middle, bottom),
+            )
+            region_span = (
+                max(region_top, region_middle, region_bottom)
+                - min(region_top, region_middle, region_bottom)
+            )
+            driver_changes.append(
+                max(abs(float(trend)), abs(float(region_span)))
+            )
         except RuntimeError:
             continue
-    if not driver_trends or max(driver_trends) < HORIZONTAL_VP_MIN_TREND_DEG:
+    if not driver_changes or max(driver_changes) < HORIZONTAL_VP_MIN_TREND_DEG:
         raise RuntimeError("各栏文本行上下角度变化不足，无需水平消失点校正")
 
     vx, vy = _fit_horizontal_vanishing_point(usable_columns)
