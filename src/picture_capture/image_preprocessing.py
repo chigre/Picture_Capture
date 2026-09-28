@@ -359,14 +359,12 @@ def _layout_content_box_from_polygons(
         + max(0, int(estimate.columns) - 1)
         * (max(1, int(estimate.column_width)) + max(0, int(estimate.gutter)))
     )
-    right = max(
-        left + 1,
-        min(width, int(last_start) + max(1, int(estimate.column_width))),
-    )
 
-    # Reuse the detector population but estimate the header top independently
-    # from body start_y. Only text spatially associated with the detected page
-    # layout is eligible, so edge/binding artifacts do not define Y either.
+    # The estimated column width is intentionally conservative for drawing and
+    # layout inference, so using last_start + column_width can retain too much
+    # white margin. For preprocessing, derive the actual final-column right edge
+    # from the detected body text in that lane. A high percentile is robust to
+    # short definitions while ignoring isolated extreme boxes.
     heights = [box[3] - box[1] for box in boxes]
     median_h = max(4.0, float(np.median(heights)))
     filtered = [
@@ -374,6 +372,30 @@ def _layout_content_box_from_polygons(
         if box[3] - box[1] >= max(3.0, median_h * 0.40)
         and box[2] - box[0] <= width * 0.92
     ] or boxes
+    if len(starts) >= 2:
+        lane_left = (starts[-2] + starts[-1]) / 2.0
+    else:
+        lane_left = max(0.0, left - estimate.column_width * 0.15)
+    lane_right = min(width, last_start + max(estimate.column_width * 1.35, 24))
+    body_top_limit = max(0, int(estimate.start_y) - max(4, int(estimate.character_height)))
+    body_bottom_limit = min(
+        height, int(estimate.bottom_y) + max(4, int(estimate.character_height))
+    )
+    last_column_rights = [
+        box[2]
+        for box in filtered
+        if body_top_limit <= box[1] <= body_bottom_limit
+        and lane_left <= (box[0] + box[2]) / 2.0 <= lane_right
+    ]
+    if last_column_rights:
+        right = int(round(float(np.percentile(last_column_rights, 98))))
+    else:
+        right = int(last_start) + max(1, int(estimate.column_width))
+    right = max(int(last_start) + 1, min(width, right))
+
+    # Reuse the detector population but estimate the header top independently
+    # from body start_y. Only text spatially associated with the detected page
+    # layout is eligible, so edge/binding artifacts do not define Y either.
     horizontal_pad = max(8, round(max(estimate.character_height, estimate.column_width * 0.08)))
     upper_limit = int(estimate.start_y) + max(8, round(estimate.character_height * 1.5))
     header_tops = [
