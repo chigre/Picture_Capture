@@ -3793,6 +3793,208 @@ def _recover_oversized_cjk_ocr_records(
     return output, details
 
 
+_VERIFIED_OVERSIZED_CJK_RECOVERIES = {
+    "oversized_multi_entry_local_ocr",
+    "image_first_oversized_local_ocr",
+}
+
+
+def _record_already_represents_oversized_run(
+    record: OCRRecord,
+    run: tuple[int, int],
+    zone_width: int,
+    settings: AppSettings,
+    profile: DictionaryProfile,
+) -> bool:
+    """Return True when an existing OCR row already represents this visual run.
+
+    Giant or multi-line boxes are deliberately excluded because they are the
+    failure mode the image-first channel is intended to bypass.
+    """
+    x0, y0, _x1, y1 = (int(value) for value in record.box)
+    run_start, run_end = (int(run[0]), int(run[1]))
+    run_height = max(1, run_end - run_start)
+    record_height = max(1, y1 - y0)
+    if x0 > zone_width * 1.25 or record_height > run_height * 1.85:
+        return False
+    overlap = max(0, min(y1, run_end) - max(y0, run_start))
+    center_delta = abs(
+        ((y0 + y1) / 2.0) - ((run_start + run_end) / 2.0)
+    )
+    if overlap < run_height * 0.30 and center_delta > run_height * 0.45:
+        return False
+    if str(record.recovery or "") in _VERIFIED_OVERSIZED_CJK_RECOVERIES:
+        return True
+    parsed = parse_headword_text(record.text, settings, profile=profile)
+    return bool(parsed and _is_single_cjk_ideograph(parsed.normalized))
+
+
+def _recover_image_first_oversized_cjk_records(
+    records: list[OCRRecord],
+    band: Image.Image,
+    settings: AppSettings,
+    profile: DictionaryProfile,
+    *,
+    engine: Any | None = None,
+    pixel_scale: float = 1.0,
+) -> tuple[list[OCRRecord], list[dict[str, Any]]]:
+    """Recover large CJK heads from page pixels even when OCR has no good box.
+
+    Image geometry only discovers possible oversized runs. Each unmatched run
+    receives a tight local Paddle pass and is promoted only when that crop
+    resolves to one leading Han headword. Decorative Latin initials therefore
+    remain rejected while clipped, omitted, or out-of-parent-box CJK heads can
+    become ordinary downstream candidates.
+    """
+    if (
+        not _is_chinese_ocr(settings)
+        or str(
+            getattr(settings, "layout_writing_mode", "horizontal-tb")
+        ).startswith("vertical")
+        or not (
+            getattr(profile, "family", "") == "cjk_visual"
+            or getattr(profile, "key", "") == "cjk_visual"
+        )
+    ):
+        return list(records), []
+
+    parser_controls = int(
+        getattr(settings, "profile_parser_controls_version", 0) or 0
+    ) >= 1
+    if parser_controls and not bool(
+        getattr(settings, "profile_cjk_allow_single_headword", True)
+    ):
+        return list(records), []
+
+    gray = np.asarray(ImageOps.grayscale(band), dtype=np.uint8)
+    scale = max(0.01, float(pixel_scale))
+    header_cutoff = _header_cutoff(gray, settings, scale)
+    zone_width, visual_runs = _cjk_visual_projection_runs(
+        gray,
+        header_cutoff,
+        settings,
+        scale,
+        relaxed=True,
+    )
+    if not visual_runs or zone_width <= 0:
+        return list(records), []
+
+    local_engine = engine
+    if local_engine is None:
+        try:
+            local_engine = get_paddle_engine(settings)
+        except Exception:
+            local_engine = None
+    if local_engine is None:
+        return list(records), [{
+            "mode": "image_first_oversized_run_rescue",
+            "applied": False,
+            "reason": "local_ocr_unavailable",
+            "visual_run_count": len(visual_runs),
+        }]
+
+    rgb_band = normalize_page_rgb(band)
+    output = list(records)
+    details: list[dict[str, Any]] = []
+    for run_start, run_end in visual_runs[:32]:
+        run = (int(run_start), int(run_end))
+        if any(
+            _record_already_represents_oversized_run(
+                record,
+                run,
+                zone_width,
+                settings,
+                profile,
+            )
+            for record in output
+        ):
+            details.append({
+                "mode": "image_first_oversized_run_rescue",
+                "run": [int(run_start), int(run_end)],
+                "status": "already_represented",
+                "applied": False,
+            })
+            continue
+
+        run_height = max(1, int(run_end) - int(run_start))
+        pad_y = max(6, round(run_height * 0.14))
+        crop_top = max(0, int(run_start) - pad_y)
+        crop_bottom = min(band.height, int(run_end) + pad_y)
+        crop_right = min(
+            band.width,
+            max(
+                zone_width * 2,
+                round(run_height * 2.25),
+                zone_width + round(run_height * 1.35),
+            ),
+        )
+        local_records: list[OCRRecord] = []
+        word = ""
+        confidence = 0.0
+        source_text = ""
+        try:
+            if crop_bottom > crop_top and crop_right >= 24:
+                local_crop = rgb_band.crop(
+                    (0, crop_top, crop_right, crop_bottom)
+                )
+                local_records = run_paddle_band(
+                    local_crop,
+                    settings,
+                    engine=local_engine,
+                )
+                word, confidence, source_text = _single_cjk_from_local_records(
+                    local_records,
+                    settings,
+                    profile,
+                    max_left_x=max(12, round(zone_width * 1.20)),
+                )
+        except Exception:
+            local_records = []
+
+        if not word:
+            details.append({
+                "mode": "image_first_oversized_run_rescue",
+                "run": [int(run_start), int(run_end)],
+                "status": "local_ocr_no_single_cjk",
+                "applied": False,
+                "local_texts": [
+                    str(record.text) for record in local_records
+                ],
+            })
+            continue
+
+        synthetic_right = min(
+            band.width,
+            max(zone_width, round(run_height * 1.10)),
+        )
+        candidate = OCRRecord(
+            text=word,
+            confidence=max(0.0, min(1.0, float(confidence))),
+            box=(
+                0,
+                int(run_start),
+                max(1, int(synthetic_right)),
+                int(run_end),
+            ),
+            recovery="image_first_oversized_local_ocr",
+            recovery_source_text=source_text,
+            parent_box=None,
+        )
+        output.append(candidate)
+        details.append({
+            "mode": "image_first_oversized_run_rescue",
+            "run": [int(run_start), int(run_end)],
+            "status": "recovered",
+            "applied": True,
+            "word": word,
+            "local_text": source_text,
+            "confidence": round(float(candidate.confidence), 6),
+        })
+
+    output.sort(key=lambda item: (item.box[1], item.box[0]))
+    return output, details
+
+
 def refine_separator_y(
     gray: np.ndarray,
     coarse_y: int,
