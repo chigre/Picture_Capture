@@ -952,7 +952,7 @@ def analyze_preprocess_page(
             method_parts.append("line_geometry")
             if line_geometry.recommendation == "uvdoc_review":
                 warnings.append(
-                    "可靠实体长线轨迹显示平滑非线性弯曲，且与文本行几何异常一致；"
+                    "可靠实体长线轨迹显示平滑非线性弯曲；"
                     "建议使用“UVDoc展平（Paddle高级）”复核。"
                 )
             elif line_geometry.recommendation == "manual_review":
