@@ -13672,6 +13672,7 @@ class PictureCaptureApp(tk.Tk):
                     metadata_destination,
                     output_path=destination,
                     canvas=canvas,
+                    settings=settings,
                 )
                 return (
                     int(index), analysis, destination, canvas,
