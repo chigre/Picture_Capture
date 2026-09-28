@@ -3326,6 +3326,15 @@ def analyze_preprocess_page(
         source_height=height,
         correction_angle_deg=round(float(correction), 4),
         applied_angle_deg=round(float(applied), 4),
+        ocr_correction_angle_deg=round(float(ocr_correction), 4),
+        deskew_anchor_source=str(deskew_anchor_source),
+        source_header_rule_point_count=int(source_header_rule_point_count),
+        source_header_rule_angle_deg=round(
+            float(source_header_rule_angle_deg), 4
+        ),
+        source_header_rule_residual_px=round(
+            float(source_header_rule_residual_px), 3
+        ),
         crop_box=crop_box,
         raw_content_box=raw_content_box,
         text_box=text_box,
@@ -3580,6 +3589,15 @@ def analyze_preprocess_page(
         ),
         orthogonal_horizontal_rule_verdict=str(
             orthogonal_horizontal_rule_verdict
+        ),
+        orthogonal_pixel_angle_sample_count=int(
+            orthogonal_pixel_angle_sample_count
+        ),
+        orthogonal_pixel_angle_used_count=int(
+            orthogonal_pixel_angle_used_count
+        ),
+        orthogonal_pixel_angle_confidence=round(
+            float(orthogonal_pixel_angle_confidence), 6
         ),
         orthogonal_confidence=round(float(orthogonal_confidence), 6),
         orthogonal_column_spread_deg=round(
