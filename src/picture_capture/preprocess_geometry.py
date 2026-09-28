@@ -218,6 +218,65 @@ def estimate_perspective_from_polygons(
     )
 
 
+def perspective_from_quad(
+    quad: Iterable[float],
+    size: tuple[int, int],
+) -> PerspectiveEstimate:
+    """Build a manual four-corner rectification on the existing page canvas.
+
+    quad is ordered TL, TR, BR, BL in source-image pixels. The selected
+    quadrilateral is mapped to its axis-aligned bounding rectangle, preserving
+    the surrounding canvas so downstream layout detection can run normally.
+    """
+    values = tuple(float(v) for v in quad)
+    if len(values) != 8:
+        raise ValueError("手动四角必须包含 4 个二维坐标")
+    width, height = size
+    src = np.asarray(values, dtype=float).reshape(4, 2)
+    if not np.isfinite(src).all():
+        raise ValueError("手动四角包含无效坐标")
+    src[:, 0] = np.clip(src[:, 0], 0.0, max(0.0, float(width - 1)))
+    src[:, 1] = np.clip(src[:, 1], 0.0, max(0.0, float(height - 1)))
+
+    tl, tr, br, bl = src
+    top_width = float(np.linalg.norm(tr - tl))
+    bottom_width = float(np.linalg.norm(br - bl))
+    left_height = float(np.linalg.norm(bl - tl))
+    right_height = float(np.linalg.norm(br - tr))
+    if min(top_width, bottom_width) < max(20.0, width * 0.08):
+        raise ValueError("手动四角的页面宽度过小")
+    if min(left_height, right_height) < max(20.0, height * 0.08):
+        raise ValueError("手动四角的页面高度过小")
+
+    crosses = []
+    for index in range(4):
+        p0 = src[index]
+        p1 = src[(index + 1) % 4]
+        p2 = src[(index + 2) % 4]
+        crosses.append(float(np.cross(p1 - p0, p2 - p1)))
+    if not (all(v > 0 for v in crosses) or all(v < 0 for v in crosses)):
+        raise ValueError("四角顺序发生交叉，请保持左上→右上→右下→左下")
+
+    left = float(min(tl[0], bl[0]))
+    right = float(max(tr[0], br[0]))
+    top = float(min(tl[1], tr[1]))
+    bottom = float(max(bl[1], br[1]))
+    if right - left < 20 or bottom - top < 20:
+        raise ValueError("手动四角形成的目标矩形过小")
+    dst = np.asarray(
+        [[left, top], [right, top], [right, bottom], [left, bottom]],
+        dtype=float,
+    )
+    matrix = _homography(src, dst)
+    strength = float(np.max(np.linalg.norm(src - dst, axis=1)))
+    return PerspectiveEstimate(
+        matrix=tuple(float(v) for v in matrix.reshape(-1)),
+        source_quad=tuple(float(v) for v in src.reshape(-1)),
+        target_quad=tuple(float(v) for v in dst.reshape(-1)),
+        strength_px=strength,
+    )
+
+
 def transform_points_homography(points: np.ndarray, matrix: Iterable[float]) -> np.ndarray:
     mat = np.asarray(tuple(matrix), dtype=float).reshape(3, 3)
     raw = np.asarray(points, dtype=float)
