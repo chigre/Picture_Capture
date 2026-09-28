@@ -478,3 +478,42 @@ def test_pixel_angle_field_samples_multiple_x_positions_inside_column(
     assert estimate.pixel_angle_used_count >= 12
     assert estimate.row_grid_cols >= 6
     assert float(np.max(grid) - np.min(grid)) >= 0.55
+
+
+
+def test_pixel_row_profile_has_dedicated_bottom_tail_measurement() -> None:
+    image = Image.new("RGB", (900, 1050), "white")
+    draw = ImageDraw.Draw(image)
+    polygons: list[np.ndarray] = []
+    for row in range(21):
+        y = 120.0 + row * 40.0
+        polygons.append(_rotated_box(450.0, y, 720.0, 22.0, 0.0))
+        right_offset = -6.0 if row >= 19 else 0.0
+        for start, end, offset in (
+            (110, 320, 0.0),
+            (345, 555, 0.0),
+            (580, 790, right_offset),
+        ):
+            for x in range(start, end, 55):
+                draw.line(
+                    (
+                        x,
+                        y + offset,
+                        min(end, x + 38),
+                        y + offset,
+                    ),
+                    fill="black",
+                    width=3,
+                )
+
+    audit = orthogonal_dewarp.audit_pixel_row_profiles(
+        image,
+        polygons,
+        AppSettings(layout_columns_policy="fixed", columns=1),
+    )
+
+    assert audit.bottom_tail_sample_count >= 2
+    assert audit.bottom_tail_valid_column_count >= 1
+    assert audit.bottom_tail_p90_shift_px >= 4.0
+    assert audit.bottom_tail_worst_shift_px >= 4.0
+    assert audit.bottom_tail_passed is False
