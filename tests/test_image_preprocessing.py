@@ -488,6 +488,7 @@ def test_auto_perspective_applies_with_coherent_line_support(monkeypatch) -> Non
 
     assert analysis.geometry_mode == "perspective"
     assert "perspective" in analysis.method
+    assert "post_perspective_redetect" in analysis.method
 
 
 def test_safe_structural_keystone_does_not_require_row_improvement(
