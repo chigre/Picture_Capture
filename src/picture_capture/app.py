@@ -10034,6 +10034,8 @@ class PictureCaptureApp(tk.Tk):
         self._preprocess_results: dict[str, PreprocessAnalysis] = {}
         self._preprocess_photo: ImageTk.PhotoImage | None = None
         self._preprocess_photo_cache_key: tuple | None = None
+        self._preprocess_corrected_image: Image.Image | None = None
+        self._preprocess_corrected_image_key: tuple[int, int] | None = None
         self._preprocess_locked_widgets: list[tuple[tk.Misc, object]] = []
         self.preprocess_mode_button: ttk.Button | None = None
         self.polygon_draw_button: ttk.Button | None = None
@@ -13452,10 +13454,21 @@ class PictureCaptureApp(tk.Tk):
             return self._preprocess_photo
 
         if analysis is not None:
-            display = geometry_corrected_image(self.image, analysis).resize(
+            corrected_key = (id(self.image), id(analysis))
+            if (
+                self._preprocess_corrected_image is None
+                or self._preprocess_corrected_image_key != corrected_key
+            ):
+                self._preprocess_corrected_image = geometry_corrected_image(
+                    self.image, analysis,
+                )
+                self._preprocess_corrected_image_key = corrected_key
+            display = self._preprocess_corrected_image.resize(
                 size, Image.Resampling.LANCZOS
             )
         else:
+            self._preprocess_corrected_image = None
+            self._preprocess_corrected_image_key = None
             display = self.image.resize(size, Image.Resampling.LANCZOS)
         display = themed_display_image(display, self.appearance_mode)
         if analysis is not None:
