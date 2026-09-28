@@ -513,6 +513,66 @@ def test_auto_geometry_can_use_horizontal_vanishing_point_without_ruling_line(
     assert "horizontal_vp" in analysis.method
 
 
+def test_safe_horizontal_vp_is_not_blocked_by_uvdoc_curve_review(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = [_tilted_box(350, 80, 120, 24, 0.0)]
+    for row in range(22):
+        y = 180 + row * 44
+        t = row / 21.0
+        angle = 0.38 - 0.76 * t
+        polygons.extend(
+            (
+                _tilted_box(100, y, 300, 24, angle),
+                _tilted_box(500, y, 300, 24, angle),
+            )
+        )
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_perspective_from_polygons",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("no structural candidate")
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=22,
+            angle_trend_deg=-0.76,
+            recommendation="uvdoc_review",
+            confidence=0.95,
+            separator_found=True,
+            separator_curve_reliable=True,
+            separator_residual_px=6.0,
+            separator_span_ratio=1.0,
+            separator_track_quality=0.98,
+            separator_curvature_score=0.9,
+        ),
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(),
+        geometry_mode="auto",
+    )
+
+    assert analysis.geometry_mode == "perspective"
+    assert analysis.perspective_candidate_source == "horizontal_vp"
+    assert analysis.perspective_row_alignment_verdict == "improved"
+    assert analysis.perspective_auto_safe is True
+    assert "horizontal_vp" in analysis.method
+    assert any("UVDoc" in warning for warning in analysis.warnings)
+    assert any("双边缘水平审计" in warning for warning in analysis.warnings)
+
+
 def test_0011_style_large_ocr_homography_is_blocked_even_with_separator(monkeypatch) -> None:
     image = Image.new("RGB", (2480, 3567), "white")
     polygons = [_tilted_box(900, 80, 160, 24, -0.46)]
