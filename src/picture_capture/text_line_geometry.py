@@ -632,6 +632,19 @@ def horizontal_rule_track_points(
         return ()
     if selected.span_ratio < 0.65 or selected.quality < 0.10:
         return ()
+
+    # A pair of long first-body text lines can look like one persistent
+    # horizontal track after transposition. A true running-header rule must sit
+    # visibly above the inferred body start, not on or inside the first text row.
+    # This also prevents a false global deskew anchor on pages without a rule.
+    rule_y = float(np.median(np.asarray(selected.xs, dtype=float)))
+    body_gap = max(
+        6.0,
+        float(getattr(layout, "character_height", 0) or 0) * 0.25,
+    )
+    if rule_y >= float(body_top) - body_gap:
+        return ()
+
     # In the transposed image:
     # selected.ys = original X, selected.xs = original Y.
     return tuple(
