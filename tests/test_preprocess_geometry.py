@@ -254,6 +254,37 @@ def test_worst_column_residual_cannot_hide_in_page_average() -> None:
     assert audit.verdict != "improved"
 
 
+def test_localized_lower_right_tilt_is_caught_by_region_gate() -> None:
+    settings = AppSettings(layout_columns_policy="fixed", columns=2)
+    before: list[np.ndarray] = []
+    after: list[np.ndarray] = []
+    for column, cx in enumerate((260.0, 760.0)):
+        for row in range(21):
+            t = row / 20.0
+            y = 145 + row * 40 + column * 8
+            before_angle = 0.30 - 0.60 * t
+            # Only the final five rows of the right column remain visibly
+            # tilted. A whole-column linear trend can dilute this local defect,
+            # but the direct bottom-region median must keep it visible.
+            after_angle = (
+                -0.24
+                if column == 1 and row >= 16
+                else 0.0
+            )
+            before.append(_rotated_box(cx, y, 300, 22, before_angle))
+            after.append(_rotated_box(cx, y, 300, 22, after_angle))
+
+    audit = audit_horizontal_alignment(
+        before, after, size=(1050, 1100), settings=settings,
+    )
+
+    assert audit.valid_column_count == 2
+    assert audit.after_worst_column_index == 1
+    assert audit.after_column_bottom_angles_deg[1] <= -0.18
+    assert audit.after_worst_region_deg >= 0.18
+    assert audit.verdict != "improved"
+
+
 def test_horizontal_vanishing_candidate_keeps_character_scale_safe() -> None:
     polygons: list[np.ndarray] = []
     for row in range(22):
