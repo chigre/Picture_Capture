@@ -10013,7 +10013,7 @@ class PictureCaptureApp(tk.Tk):
             value=bool(self.settings.preprocess_auto_deskew)
         )
         self.preprocess_safety_var = tk.StringVar(
-            value=f"{float(self.settings.preprocess_safety_margin_percent):g}"
+            value=str(int(self.settings.preprocess_safety_margin_px))
         )
         self.preprocess_status_var = tk.StringVar(value="未分析")
         self._preprocess_results: dict[str, PreprocessAnalysis] = {}
@@ -12240,11 +12240,11 @@ class PictureCaptureApp(tk.Tk):
         ttk.Label(preprocess_mode_row, text="安全边界：").pack(side="left", padx=(8, 2))
         safety_spin = ttk.Spinbox(
             preprocess_mode_row,
-            from_=0.0, to=12.0, increment=0.25, width=6,
+            from_=0, to=500, increment=5, width=6,
             textvariable=self.preprocess_safety_var,
         )
         safety_spin.pack(side="left")
-        ttk.Label(preprocess_mode_row, text="%").pack(side="left", padx=(2, 0))
+        ttk.Label(preprocess_mode_row, text="px").pack(side="left", padx=(2, 0))
         safety_spin.bind("<Return>", self._preprocess_settings_changed)
         safety_spin.bind("<FocusOut>", self._preprocess_settings_changed)
 
@@ -12706,21 +12706,21 @@ class PictureCaptureApp(tk.Tk):
             hasattr(self, "preprocess_mode_var") and self.preprocess_mode_var.get()
         )
 
-    def _preprocess_config(self) -> tuple[float, bool]:
+    def _preprocess_config(self) -> tuple[int, bool]:
         try:
-            safety = float(str(self.preprocess_safety_var.get()).strip().rstrip("%"))
+            safety = int(round(float(str(self.preprocess_safety_var.get()).strip())))
         except (TypeError, ValueError):
-            safety = float(getattr(self.settings, "preprocess_safety_margin_percent", 1.5))
-        safety = max(0.0, min(12.0, safety))
+            safety = int(getattr(self.settings, "preprocess_safety_margin_px", 20))
+        safety = max(0, min(500, safety))
         return safety, bool(self.preprocess_auto_deskew_var.get())
 
     def _preprocess_settings_changed(self, _event=None) -> None:
         safety, auto_deskew = self._preprocess_config()
-        self.preprocess_safety_var.set(f"{safety:g}")
-        self.settings.preprocess_safety_margin_percent = safety
+        self.preprocess_safety_var.set(str(safety))
+        self.settings.preprocess_safety_margin_px = safety
         self.settings.preprocess_auto_deskew = auto_deskew
         if self.project is not None:
-            self.project.settings.preprocess_safety_margin_percent = safety
+            self.project.settings.preprocess_safety_margin_px = safety
             self.project.settings.preprocess_auto_deskew = auto_deskew
             try:
                 self.settings.to_json(settings_path(self.project.root))
@@ -12868,14 +12868,14 @@ class PictureCaptureApp(tk.Tk):
         cached = self._preprocess_results.get(page.name)
         if cached is not None and preprocess_analysis_is_current(
             cached, page,
-            safety_margin_percent=safety,
+            safety_margin_px=safety,
             auto_deskew=auto_deskew,
         ):
             return cached
         loaded = load_preprocess_analysis(self.project.root, page)
         if loaded is not None and preprocess_analysis_is_current(
             loaded, page,
-            safety_margin_percent=safety,
+            safety_margin_px=safety,
             auto_deskew=auto_deskew,
         ):
             self._preprocess_results[page.name] = loaded
@@ -12930,7 +12930,7 @@ class PictureCaptureApp(tk.Tk):
         def worker():
             return analyze_preprocess_path(
                 page, settings,
-                safety_margin_percent=safety,
+                safety_margin_px=safety,
                 auto_deskew=auto_deskew,
             )
 
@@ -12986,7 +12986,7 @@ class PictureCaptureApp(tk.Tk):
             page = project.images[int(index)]
             analysis = analyze_preprocess_path(
                 page, settings,
-                safety_margin_percent=safety,
+                safety_margin_px=safety,
                 auto_deskew=auto_deskew,
             )
             save_preprocess_analysis(project.root, page, analysis)
@@ -13047,12 +13047,12 @@ class PictureCaptureApp(tk.Tk):
         analysis = load_preprocess_analysis(project.root, page)
         if analysis is None or not preprocess_analysis_is_current(
             analysis, page,
-            safety_margin_percent=safety,
+            safety_margin_px=safety,
             auto_deskew=auto_deskew,
         ):
             analysis = analyze_preprocess_path(
                 page, settings,
-                safety_margin_percent=safety,
+                safety_margin_px=safety,
                 auto_deskew=auto_deskew,
             )
             save_preprocess_analysis(project.root, page, analysis)
@@ -15366,7 +15366,7 @@ class PictureCaptureApp(tk.Tk):
                 bool(self.settings.preprocess_auto_deskew)
             )
             self.preprocess_safety_var.set(
-                f"{float(self.settings.preprocess_safety_margin_percent):g}"
+                str(int(self.settings.preprocess_safety_margin_px))
             )
             self.preprocess_status_var.set("未分析")
             if recent_warning:
