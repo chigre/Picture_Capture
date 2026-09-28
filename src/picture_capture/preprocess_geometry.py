@@ -917,9 +917,17 @@ def estimate_horizontal_perspective_from_polygons(
         [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [-1.0 / vx_rel, 0.0, 1.0]],
         dtype=float,
     )
-    norm = math.hypot(vx_rel, vy_rel)
-    ux = vx_rel / max(1e-12, norm)
-    uy = vy_rel / max(1e-12, norm)
+    # A vanishing point at infinity is homogeneous: d and -d describe the
+    # same direction.  Force the representative to point toward +X so a VP on
+    # the left side of the page does not accidentally introduce a 180° flip.
+    direction_x = vx_rel
+    direction_y = vy_rel
+    if direction_x < 0.0:
+        direction_x = -direction_x
+        direction_y = -direction_y
+    norm = math.hypot(direction_x, direction_y)
+    ux = direction_x / max(1e-12, norm)
+    uy = direction_y / max(1e-12, norm)
     align = np.asarray(
         [[ux, uy, 0.0], [-uy, ux, 0.0], [0.0, 0.0, 1.0]],
         dtype=float,
