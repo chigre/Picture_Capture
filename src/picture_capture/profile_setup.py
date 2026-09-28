@@ -1776,7 +1776,7 @@ class ProjectProfileWizard(tk.Toplevel):
 
         ttk.Checkbutton(
             self.symbol_inventory_frame,
-            text="启用本词典专用符号集",
+            text="启用独立入口标记符号集（○ / ● / ◆ …）",
             variable=self.symbol_inventory_enabled_var,
             command=self._headword_structure_changed,
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=2)
@@ -1807,7 +1807,7 @@ class ProjectProfileWizard(tk.Toplevel):
         ).grid(row=3, column=1, columnspan=2, sticky="ew", pady=3)
         ttk.Label(
             self.symbol_inventory_frame,
-            text="默认【；括号内文字才是词头。若词典使用〔［「等，再按实际版式添加。",
+            text="默认【；括号内文字才是词头。该栏由“【括号词】”结构独立控制，不受上方独立入口标记开关影响；若词典使用〔［「等，再按实际版式添加。",
             foreground="#666666",
             wraplength=symbol_hint_wrap,
             justify="left",
