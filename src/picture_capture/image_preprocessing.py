@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import csv
 import json
 import math
 from pathlib import Path
@@ -38,6 +39,27 @@ DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
 PREVIEW_YELLOW = (255, 225, 110, 94)
 PREVIEW_OUTLINE = (218, 164, 24, 255)
+
+
+@dataclass(frozen=True, slots=True)
+class OutputCanvasInfo:
+    enabled: bool
+    mode: str
+    requested_width: int
+    requested_height: int
+    width: int
+    height: int
+    align_x: str
+    align_y: str
+    content_box: tuple[int, int, int, int]
+    expanded_width: bool = False
+    expanded_height: bool = False
+
+    def to_dict(self) -> dict:
+        payload = asdict(self)
+        payload["content_box"] = list(self.content_box)
+        payload["background"] = "white"
+        return payload
 
 
 @dataclass(slots=True)
@@ -1131,6 +1153,213 @@ def processed_image(image: Image.Image, analysis: PreprocessAnalysis) -> Image.I
     return corrected.crop(analysis.crop_box)
 
 
+def _normalize_canvas_alignment(value: str, *, axis: str) -> str:
+    value = str(value or "").strip().lower()
+    if axis == "x":
+        return value if value in {"left", "center", "right"} else "center"
+    return value if value in {"top", "center", "bottom"} else "top"
+
+
+def output_canvas_info(
+    analysis: PreprocessAnalysis,
+    *,
+    enabled: bool = False,
+    mode: str = "batch_max",
+    requested_width: int = 0,
+    requested_height: int = 0,
+    canvas_width: int | None = None,
+    canvas_height: int | None = None,
+    align_x: str = "center",
+    align_y: str = "top",
+) -> OutputCanvasInfo:
+    x0, y0, x1, y1 = analysis.crop_box
+    content_width = max(1, int(x1) - int(x0))
+    content_height = max(1, int(y1) - int(y0))
+    align_x = _normalize_canvas_alignment(align_x, axis="x")
+    align_y = _normalize_canvas_alignment(align_y, axis="y")
+    mode = str(mode or "batch_max").strip().lower()
+    if mode not in {"batch_max", "custom"}:
+        mode = "batch_max"
+
+    if not enabled:
+        width = content_width
+        height = content_height
+        paste_x = 0
+        paste_y = 0
+    else:
+        width = max(content_width, int(canvas_width or requested_width or content_width))
+        height = max(content_height, int(canvas_height or requested_height or content_height))
+        if align_x == "left":
+            paste_x = 0
+        elif align_x == "right":
+            paste_x = width - content_width
+        else:
+            paste_x = (width - content_width) // 2
+        if align_y == "top":
+            paste_y = 0
+        elif align_y == "bottom":
+            paste_y = height - content_height
+        else:
+            paste_y = (height - content_height) // 2
+
+    return OutputCanvasInfo(
+        enabled=bool(enabled),
+        mode=mode,
+        requested_width=max(0, int(requested_width)),
+        requested_height=max(0, int(requested_height)),
+        width=width,
+        height=height,
+        align_x=align_x,
+        align_y=align_y,
+        content_box=(
+            int(paste_x), int(paste_y),
+            int(paste_x + content_width), int(paste_y + content_height),
+        ),
+        expanded_width=bool(enabled and width > max(0, int(requested_width)) and mode == "custom"),
+        expanded_height=bool(enabled and height > max(0, int(requested_height)) and mode == "custom"),
+    )
+
+
+def processed_image_with_canvas(
+    image: Image.Image,
+    analysis: PreprocessAnalysis,
+    canvas: OutputCanvasInfo | None = None,
+) -> Image.Image:
+    content = processed_image(image, analysis)
+    if canvas is None or not canvas.enabled:
+        return content
+    # Never rescale the retained scan just to make it fit. The batch export
+    # resolves a canvas at least as large as every content crop; this local
+    # guard keeps direct callers safe as well.
+    width = max(int(canvas.width), content.width)
+    height = max(int(canvas.height), content.height)
+    if width != canvas.width or height != canvas.height:
+        canvas = output_canvas_info(
+            analysis,
+            enabled=True,
+            mode=canvas.mode,
+            requested_width=canvas.requested_width,
+            requested_height=canvas.requested_height,
+            canvas_width=width,
+            canvas_height=height,
+            align_x=canvas.align_x,
+            align_y=canvas.align_y,
+        )
+    output = Image.new("RGB", (width, height), "white")
+    output.paste(content, (canvas.content_box[0], canvas.content_box[1]))
+    return output
+
+
+def preprocess_metadata_output_root(project_root: Path) -> Path:
+    path = image_preprocess_output_root(project_root) / "meta"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def export_diagnostic_json(
+    page: Path,
+    analysis: PreprocessAnalysis,
+    destination: Path,
+    *,
+    output_path: Path | None = None,
+    canvas: OutputCanvasInfo | None = None,
+) -> Path:
+    payload = analysis.to_dict()
+    payload["page"] = Path(page).name
+    payload["source_path_name"] = Path(page).name
+    payload["export"] = {
+        "output_filename": Path(output_path).name if output_path is not None else None,
+        "content_width": max(1, analysis.crop_box[2] - analysis.crop_box[0]),
+        "content_height": max(1, analysis.crop_box[3] - analysis.crop_box[1]),
+        "canvas": (
+            canvas.to_dict()
+            if canvas is not None
+            else output_canvas_info(analysis, enabled=False).to_dict()
+        ),
+    }
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(destination)
+    return destination
+
+
+def export_summary_csv(
+    records: Iterable[tuple[Path, PreprocessAnalysis, Path, OutputCanvasInfo]],
+    destination: Path,
+) -> Path:
+    rows = []
+    for page, analysis, output_path, canvas in records:
+        rows.append({
+            "page": Path(page).name,
+            "status": analysis.status,
+            "confidence": round(float(analysis.confidence), 4),
+            "method": analysis.method,
+            "warnings": " | ".join(analysis.warnings),
+            "source_width": analysis.source_width,
+            "source_height": analysis.source_height,
+            "applied_angle_deg": analysis.applied_angle_deg,
+            "correction_angle_deg": analysis.correction_angle_deg,
+            "angle_samples": analysis.angle_samples,
+            "angle_mad_deg": analysis.angle_mad_deg,
+            "requested_geometry_mode": analysis.requested_geometry_mode,
+            "geometry_mode": analysis.geometry_mode,
+            "geometry_strength_px": analysis.geometry_strength_px,
+            "crop_x0": analysis.crop_box[0],
+            "crop_y0": analysis.crop_box[1],
+            "crop_x1": analysis.crop_box[2],
+            "crop_y1": analysis.crop_box[3],
+            "content_width": analysis.crop_box[2] - analysis.crop_box[0],
+            "content_height": analysis.crop_box[3] - analysis.crop_box[1],
+            "retained_ratio": round(float(analysis.retained_ratio), 6),
+            "safety_margin_px": analysis.safety_margin_px,
+            "line_geometry_rows": analysis.line_geometry_rows,
+            "line_geometry_global_angle_deg": analysis.line_geometry_global_angle_deg,
+            "line_geometry_top_angle_deg": analysis.line_geometry_top_angle_deg,
+            "line_geometry_middle_angle_deg": analysis.line_geometry_middle_angle_deg,
+            "line_geometry_bottom_angle_deg": analysis.line_geometry_bottom_angle_deg,
+            "line_geometry_trend_deg": analysis.line_geometry_trend_deg,
+            "line_geometry_residual_mad_deg": analysis.line_geometry_residual_mad_deg,
+            "line_geometry_residual_span_deg": analysis.line_geometry_residual_span_deg,
+            "separator_found": analysis.line_geometry_separator_found,
+            "separator_residual_px": analysis.line_geometry_separator_residual_px,
+            "separator_span_ratio": analysis.line_geometry_separator_span_ratio,
+            "line_geometry_recommendation": analysis.line_geometry_recommendation,
+            "line_geometry_confidence": analysis.line_geometry_confidence,
+            "canvas_enabled": canvas.enabled,
+            "canvas_mode": canvas.mode,
+            "canvas_requested_width": canvas.requested_width,
+            "canvas_requested_height": canvas.requested_height,
+            "canvas_width": canvas.width,
+            "canvas_height": canvas.height,
+            "canvas_align_x": canvas.align_x,
+            "canvas_align_y": canvas.align_y,
+            "canvas_content_x0": canvas.content_box[0],
+            "canvas_content_y0": canvas.content_box[1],
+            "canvas_content_x1": canvas.content_box[2],
+            "canvas_content_y1": canvas.content_box[3],
+            "canvas_expanded_width": canvas.expanded_width,
+            "canvas_expanded_height": canvas.expanded_height,
+            "output_filename": Path(output_path).name,
+        })
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = list(rows[0].keys()) if rows else [
+        "page", "status", "confidence", "warnings", "output_filename"
+    ]
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    temporary.replace(destination)
+    return destination
+
+
 def preview_output_root(project_root: Path) -> Path:
     path = image_preprocess_output_root(project_root) / "previews"
     path.mkdir(parents=True, exist_ok=True)
@@ -1164,9 +1393,15 @@ def save_review_preview(
     return destination
 
 
-def save_processed_page(page: Path, analysis: PreprocessAnalysis, destination: Path) -> Path:
+def save_processed_page(
+    page: Path,
+    analysis: PreprocessAnalysis,
+    destination: Path,
+    *,
+    canvas: OutputCanvasInfo | None = None,
+) -> Path:
     with Image.open(page) as opened:
-        result = processed_image(opened, analysis)
+        result = processed_image_with_canvas(opened, analysis, canvas)
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     suffix = destination.suffix.casefold()
