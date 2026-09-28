@@ -224,6 +224,26 @@ def test_horizontal_geometry_auto_detects_three_columns_without_cross_row_pairin
     assert audit.after_worst_region_deg <= 0.18
 
 
+def test_common_vp_consistency_detects_one_incompatible_column() -> None:
+    settings = AppSettings(layout_columns_policy="fixed", columns=3)
+    polygons: list[np.ndarray] = []
+    for column, cx in enumerate((180.0, 540.0, 900.0)):
+        for row in range(20):
+            t = row / 19.0
+            y = 140 + row * 42 + column * 6
+            angle = 0.34 - 0.68 * t
+            if column == 2:
+                angle += 0.90
+            polygons.append(_rotated_box(cx, y, 220, 21, angle))
+
+    estimate = estimate_horizontal_perspective_from_polygons(
+        polygons, (1080, 1050), settings,
+    )
+
+    assert estimate.horizontal_column_count == 3
+    assert estimate.horizontal_vp_column_spread_deg > 0.35
+
+
 def test_horizontal_geometry_supports_two_three_and_n_columns() -> None:
     for columns in (2, 3, 4, 5):
         width = 300 * columns
