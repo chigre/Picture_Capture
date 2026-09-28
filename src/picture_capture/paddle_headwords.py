@@ -3067,7 +3067,7 @@ def _leading_cjk_ideograph(text: str) -> str:
         return ""
     if first_tail.isalpha():
         return normalized[0]
-    sense = re.match(r"^\d{1,2}(?=$|\s|[([（［/·,，:：.\\-])", tail)
+    sense = re.match(r"^\d{1,2}(?=$|\s|\(|\[|（|［|/|·|,|，|:|：|\.|-)", tail)
     if sense is not None:
         remainder = tail[sense.end():].lstrip(" \t([（［/·,，:：.-")
         if not remainder or not _is_single_cjk_ideograph(remainder[0]):
