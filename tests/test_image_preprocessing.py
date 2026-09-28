@@ -509,6 +509,27 @@ def test_preprocess_analysis_roundtrip_and_source_signature(tmp_path: Path) -> N
     )
 
 
+def test_preprocess_export_canvas_settings_roundtrip(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    settings = AppSettings(
+        preprocess_export_canvas_enabled=True,
+        preprocess_export_canvas_mode="custom",
+        preprocess_export_canvas_width=1800,
+        preprocess_export_canvas_height=2400,
+        preprocess_export_align_x="right",
+        preprocess_export_align_y="bottom",
+    )
+    settings.to_json(path)
+    reopened = AppSettings.from_json(path)
+
+    assert reopened.preprocess_export_canvas_enabled is True
+    assert reopened.preprocess_export_canvas_mode == "custom"
+    assert reopened.preprocess_export_canvas_width == 1800
+    assert reopened.preprocess_export_canvas_height == 2400
+    assert reopened.preprocess_export_align_x == "right"
+    assert reopened.preprocess_export_align_y == "bottom"
+
+
 def test_manual_perspective_quad_roundtrip(tmp_path: Path) -> None:
     page = tmp_path / "0004.tif"
     Image.new("RGB", (400, 600), "white").save(page)
