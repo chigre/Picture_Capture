@@ -6166,14 +6166,15 @@ def _cache_signature(image: Image.Image, geometry: "Geometry", settings: AppSett
     # intentionally omitted so users can tune regex/weights and reuse cached
     # raw OCR without re-running the model.
     data = {
-        "version": 3,
+        "version": 4,
         "image_size": list(image.size),
         "image_fingerprint": _image_cache_fingerprint(image),
         "layout_transform": geometry.transform.kind,
         "paths": [path.points for path in geometry.column_paths],
         "geometry_top": int(geometry.top),
         "geometry_bottom": int(geometry.bottom),
-        "band_width": settings.paddle_band_width,
+        "column_widths": [int(value) for value in geometry.column_widths],
+        "band_width_semantics": "detected_column_ratio_v1",
         "band_width_ratio": max(1, min(100, int(getattr(settings, "paddle_band_width_ratio", 100)))),
         "band_left_margin": settings.paddle_band_left_margin,
         "language": _paddle_language(settings),
