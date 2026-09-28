@@ -10023,7 +10023,7 @@ class PictureCaptureApp(tk.Tk):
             value={
                 "deskew": "轻量：旋转+裁边",
                 "perspective": "自动透视",
-                "dewarp": "版面去弯曲",
+                "dewarp": "UVDoc展平（Paddle高级）",
                 "uvdoc": "UVDoc展平（Paddle高级）",
                 "auto": "自动几何（推荐）",
             }.get(
@@ -12276,7 +12276,6 @@ class PictureCaptureApp(tk.Tk):
                 "自动几何（推荐）",
                 "轻量：旋转+裁边",
                 "自动透视",
-                "版面去弯曲",
                 "UVDoc展平（Paddle高级）",
             ),
             state="readonly",
@@ -12776,7 +12775,6 @@ class PictureCaptureApp(tk.Tk):
             "自动几何（推荐）": "auto",
             "轻量：旋转+裁边": "deskew",
             "自动透视": "perspective",
-            "版面去弯曲": "dewarp",
             "UVDoc展平（Paddle高级）": "uvdoc",
         }.get(geometry_label, "auto")
         return safety, bool(self.preprocess_auto_deskew_var.get()), geometry_mode
