@@ -4172,6 +4172,27 @@ def analyze_preprocess_page(
         orthogonal_pixel_row_verdict=str(
             orthogonal_pixel_row_verdict
         ),
+        orthogonal_bottom_tail_sample_count=int(
+            orthogonal_bottom_tail_sample_count
+        ),
+        orthogonal_before_bottom_tail_p90_px=round(
+            float(orthogonal_before_bottom_tail_p90_px), 3
+        ),
+        orthogonal_after_bottom_tail_p90_px=round(
+            float(orthogonal_after_bottom_tail_p90_px), 3
+        ),
+        orthogonal_before_bottom_tail_worst_px=round(
+            float(orthogonal_before_bottom_tail_worst_px), 3
+        ),
+        orthogonal_after_bottom_tail_worst_px=round(
+            float(orthogonal_after_bottom_tail_worst_px), 3
+        ),
+        orthogonal_bottom_tail_verdict=str(
+            orthogonal_bottom_tail_verdict
+        ),
+        orthogonal_safe_gain_cap=round(
+            float(orthogonal_safe_gain_cap), 6
+        ),
         orthogonal_confidence=round(float(orthogonal_confidence), 6),
         orthogonal_column_spread_deg=round(
             float(orthogonal_column_spread_deg), 4
@@ -4742,6 +4763,14 @@ def export_diagnostic_json(
             ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT
         ),
         "orthogonal_auto_gains": list(ORTHOGONAL_AUTO_GAINS),
+        "orthogonal_min_safe_gain": ORTHOGONAL_MIN_SAFE_GAIN,
+        "orthogonal_scale_safety_fraction": ORTHOGONAL_SCALE_SAFETY_FRACTION,
+        "pixel_row_bottom_tail_p90_max_px": (
+            PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX
+        ),
+        "pixel_row_bottom_tail_worst_max_px": (
+            PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX
+        ),
         "orthogonal_max_auto_passes": ORTHOGONAL_MAX_AUTO_PASSES,
         "post_perspective_redetect_min_boxes": (
             POST_PERSPECTIVE_REDETECT_MIN_BOXES
@@ -5142,6 +5171,25 @@ def export_summary_csv(
             "orthogonal_pixel_row_verdict": (
                 analysis.orthogonal_pixel_row_verdict
             ),
+            "orthogonal_bottom_tail_sample_count": (
+                analysis.orthogonal_bottom_tail_sample_count
+            ),
+            "orthogonal_before_bottom_tail_p90_px": (
+                analysis.orthogonal_before_bottom_tail_p90_px
+            ),
+            "orthogonal_after_bottom_tail_p90_px": (
+                analysis.orthogonal_after_bottom_tail_p90_px
+            ),
+            "orthogonal_before_bottom_tail_worst_px": (
+                analysis.orthogonal_before_bottom_tail_worst_px
+            ),
+            "orthogonal_after_bottom_tail_worst_px": (
+                analysis.orthogonal_after_bottom_tail_worst_px
+            ),
+            "orthogonal_bottom_tail_verdict": (
+                analysis.orthogonal_bottom_tail_verdict
+            ),
+            "orthogonal_safe_gain_cap": analysis.orthogonal_safe_gain_cap,
             "orthogonal_confidence": analysis.orthogonal_confidence,
             "orthogonal_column_spread_deg": (
                 analysis.orthogonal_column_spread_deg
