@@ -319,6 +319,17 @@ class PreprocessAnalysis:
             perspective_horizontal_row_count=max(
                 0, int(payload.get("perspective_horizontal_row_count", 0))
             ),
+            perspective_horizontal_column_count=max(
+                0, int(payload.get("perspective_horizontal_column_count", 0))
+            ),
+            perspective_horizontal_vp_column_spread_deg=max(
+                0.0,
+                float(
+                    payload.get(
+                        "perspective_horizontal_vp_column_spread_deg", 0.0
+                    )
+                ),
+            ),
             perspective_horizontal_strength=max(
                 0.0,
                 min(
@@ -331,6 +342,76 @@ class PreprocessAnalysis:
             ),
             perspective_structural_safe=bool(
                 payload.get("perspective_structural_safe", False)
+            ),
+            perspective_row_valid_column_count=max(
+                0, int(payload.get("perspective_row_valid_column_count", 0))
+            ),
+            perspective_row_column_row_counts=tuple(
+                int(v)
+                for v in payload.get("perspective_row_column_row_counts", ())
+            ),
+            perspective_row_after_worst_region_deg=max(
+                0.0,
+                float(payload.get("perspective_row_after_worst_region_deg", 0.0)),
+            ),
+            perspective_row_after_worst_column_metric_deg=max(
+                0.0,
+                float(
+                    payload.get(
+                        "perspective_row_after_worst_column_metric_deg", 0.0
+                    )
+                ),
+            ),
+            perspective_row_after_worst_column_index=int(
+                payload.get("perspective_row_after_worst_column_index", -1)
+            ),
+            perspective_row_before_column_top_angles_deg=tuple(
+                float(v)
+                for v in payload.get(
+                    "perspective_row_before_column_top_angles_deg", ()
+                )
+            ),
+            perspective_row_after_column_top_angles_deg=tuple(
+                float(v)
+                for v in payload.get(
+                    "perspective_row_after_column_top_angles_deg", ()
+                )
+            ),
+            perspective_row_before_column_middle_angles_deg=tuple(
+                float(v)
+                for v in payload.get(
+                    "perspective_row_before_column_middle_angles_deg", ()
+                )
+            ),
+            perspective_row_after_column_middle_angles_deg=tuple(
+                float(v)
+                for v in payload.get(
+                    "perspective_row_after_column_middle_angles_deg", ()
+                )
+            ),
+            perspective_row_before_column_bottom_angles_deg=tuple(
+                float(v)
+                for v in payload.get(
+                    "perspective_row_before_column_bottom_angles_deg", ()
+                )
+            ),
+            perspective_row_after_column_bottom_angles_deg=tuple(
+                float(v)
+                for v in payload.get(
+                    "perspective_row_after_column_bottom_angles_deg", ()
+                )
+            ),
+            perspective_row_before_column_trends_deg=tuple(
+                float(v)
+                for v in payload.get(
+                    "perspective_row_before_column_trends_deg", ()
+                )
+            ),
+            perspective_row_after_column_trends_deg=tuple(
+                float(v)
+                for v in payload.get(
+                    "perspective_row_after_column_trends_deg", ()
+                )
             ),
             perspective_row_before_top_angle_deg=float(
                 payload.get("perspective_row_before_top_angle_deg", 0.0)
