@@ -795,6 +795,9 @@ def estimate_orthogonal_warp(
     angle_grid = np.zeros((len(knot_ys), len(x_knots)), dtype=float)
     spreads: list[float] = []
     median_angles: list[float] = []
+    pixel_confidences: list[float] = []
+    pixel_angle_sample_count = 0
+    pixel_angle_used_count = 0
     rule_radius = max(160.0, width * 0.18)
 
     for yi, knot_y in enumerate(knot_ys):
@@ -824,8 +827,32 @@ def estimate_orthogonal_warp(
                     float(knot_y),
                     radius,
                 )
-                if local is not None:
-                    local_samples.append((float(centre), float(local)))
+                if local is None:
+                    continue
+                pixel_angle_sample_count += 1
+                pixel_local, pixel_confidence = _pixel_projection_angle(
+                    source,
+                    rows,
+                    float(knot_y),
+                    radius,
+                    settings,
+                    float(local),
+                )
+                if pixel_confidence >= PIXEL_ANGLE_MIN_CONFIDENCE:
+                    # The pixels are the physical evidence; OCR supplies the
+                    # column assignment and a narrow anti-alias search centre.
+                    # Use the measured value directly when its projection peak
+                    # is unambiguous. This is what corrects pages such as 0014,
+                    # where OCR-box angles systematically under/over-estimate
+                    # the local baseline near the page edges.
+                    local = float(pixel_local)
+                    pixel_angle_used_count += 1
+                    pixel_confidences.append(float(pixel_confidence))
+                elif pixel_confidence >= PIXEL_ANGLE_MIN_CONFIDENCE * 0.5:
+                    local = 0.65 * float(pixel_local) + 0.35 * float(local)
+                    pixel_angle_used_count += 1
+                    pixel_confidences.append(float(pixel_confidence))
+                local_samples.append((float(centre), float(local)))
             if not local_samples:
                 row_angles = np.zeros(len(x_knots), dtype=float)
                 spread = 0.0
@@ -894,6 +921,11 @@ def estimate_orthogonal_warp(
             angle_grid[rule_index, xi] = raw_column[rule_index]
         else:
             angle_grid[:, xi] = _smooth_knots(raw_column)
+
+    median_angles = [
+        float(np.median(angle_grid[yi]))
+        for yi in range(angle_grid.shape[0])
+    ]
 
     displacement_grid = np.vstack(
         [
@@ -983,6 +1015,12 @@ def estimate_orthogonal_warp(
         horizontal_rule_y=float(rule_y),
         horizontal_rule_angle_deg=float(rule_angle),
         horizontal_rule_residual_span_px=float(rule_residual),
+        pixel_angle_sample_count=int(pixel_angle_sample_count),
+        pixel_angle_used_count=int(pixel_angle_used_count),
+        pixel_angle_confidence=(
+            float(np.median(pixel_confidences))
+            if pixel_confidences else 0.0
+        ),
         max_row_angle_deg=float(max_angle),
         row_angle_span_deg=float(angle_span),
         max_horizontal_shift_px=float(max_horizontal_shift),
