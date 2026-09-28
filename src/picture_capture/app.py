@@ -155,8 +155,9 @@ from .processing import (
 
 
 DETECTION_LABELS = {
-    "paddleocr": "PaddleOCR（推荐｜词头＋坐标）",
-    "left_edge": "左缘规则（备用）",
+    "combined": "融合画线（推荐｜普通几何＋OCR语义）",
+    "paddleocr": "PaddleOCR（单独｜词头＋坐标）",
+    "left_edge": "左缘规则（单独｜几何）",
 }
 DETECTION_VALUES = {label: value for value, label in DETECTION_LABELS.items()}
 OCR_ENGINE_LABELS = {"tesseract": "Tesseract", "paddleocr": "PaddleOCR"}
@@ -1431,9 +1432,9 @@ class UsageGuideWindow(tk.Toplevel):
                     "四边百分比标尺默认开启，可直接辅助人工核对和填写。"
                 ),
                 (
-                    "03", "默认先用 OCR画线验证代表页",
-                    "先在 1–3 张典型页面运行【运行OCR画线（推荐）】。OCR画线是主流程；"
-                    "普通画线仅作为左缘极稳定版式或 OCR 暂不可用时的备用方案。模型和原图没有变化时保留“使用有效缓存（推荐）”。"
+                    "03", "默认先用融合画线验证代表页",
+                    "先在 1–3 张典型页面运行【运行融合画线（推荐）】。融合模式同时利用普通几何定位与 OCR 语义/救漏；"
+                    "OCR画线和普通画线保留为单独诊断工具。模型和原图没有变化时保留“使用有效缓存（推荐）”。"
                 ),
                 (
                     "04", "先校对误差模式，再决定是否调参",
@@ -2371,7 +2372,7 @@ class SettingsDialog(tk.Toplevel):
         "paddle_device": "兼容字段：旧项目中的 CPU/GPU 值继续读取，但运行时设备现在由本机环境自动决定，不再作为可迁移的项目参数。高级用户可用 PICTURE_CAPTURE_PADDLE_DEVICE=cpu/gpu 临时强制本机设备。",
         "paddle_preprocessing": "作用：决定送入 PaddleOCR 前的图像预处理。original 保留原图；grayscale 转灰度；auto_contrast 拉伸对比度；binary 强制二值化。\n\n选择：默认优先 original，因为 OCR 模型通常能利用原始灰度/颜色信息。只有扫描发灰、底色不均或模型确有改善证据时再改；过度二值化可能损失细笔画和重音符号。",
         "paddle_max_input_side": "作用：限制送入 PaddleOCR 的图像最大长边，超出时按比例缩小。它主要平衡小字细节、推理速度、内存/显存和模型稳定性。\n\n调整：增大可保留更多细节，但会更慢、更占显存；减小更省资源但可能让小字号/附加符号变糊。改变此项会改变 OCR 输入图像，应视为可能需要重新 OCR，而不仅是重新评分候选。",
-        "paddle_band_width_ratio": "作用：每栏左侧有多少百分比宽度进入 OCR 候选带。程序不是把整栏全文都送去做词头判断，而是优先截取栏左区域以减少正文干扰。\n\n调整：太小会截断长词头、性别变体或紧随其后的 POS；太大则会引入更多释义正文、增加耗时和误候选。先以“能完整覆盖词头 + 近邻语法标签”为目标。",
+        "paddle_band_width_ratio": "作用：当前实际检测单栏宽度中，有多少百分比从栏左侧进入 OCR 候选带。100% 就是当前栏完整宽度；【候选带左侧余量】是在这个百分比之外另加的安全边距，不再以历史固定 600px 作为 100%。\n\n调整：太小会截断长词头、性别变体或紧随其后的 POS；太大则会引入更多释义正文、增加耗时和误候选。该比例随实际栏宽/DPI 自适应。",
         "paddle_band_left_margin": "作用：在 OCR 候选带左侧额外向外扩出的距离，单位为原图像素，用于保留略越出估计栏左缘、装饰符号或列跟踪误差附近的文字。运行时不做 1400px 或页面宽度归一化。\n\n调整：增加可救回被左边界裁切的词头；过大则会纳入页边线、污点或上一栏区域。",
         "paddle_left_tolerance": "作用：词头候选允许偏离估计栏左缘的最大距离，单位为原图像素。这是“候选位置是否仍算栏左”的关键阈值；设置 34 就是原图 34 px，不会在宽图上自动变成 68/102 px。\n\n调整：增大可容纳缩进词头，但也更容易把正文缩进行吸进候选；减小更严格。",
         "paddle_rec_score_threshold": "作用：在 OCR 碎片完成必要的同行/结构修复后，按识别置信度过滤低质量 OCR 行。低于阈值的行不会继续进入词头候选评分。\n\n调整：降低可提高召回、救回难字/粗体/重音符号，但会带入更多噪声；提高则更干净但更容易漏词。它和【词头候选最低分】不同：前者是 OCR 文字质量门槛，后者是综合结构评分门槛。",
@@ -2430,7 +2431,7 @@ class SettingsDialog(tk.Toplevel):
         "layout_columns_policy": "作用：决定栏数是由版面检测自动估计（detect）还是固定使用项目设置值（fixed）。\n\n选择：不同页面栏数稳定且检测容易受插图/空白干扰时可固定；版式可能变化或希望按实际页面估计时用 detect。fixed 下【正文栏数】尤为关键。",
         "layout_column_separator_mode": "作用：告诉版面检测中央/栏间是否存在明显分隔线：auto 自动判断，present 明确存在，absent 明确没有。该信息会改变栏边搜索区域和分隔线检测策略。\n\n选择：有稳定印刷竖线时 present 可减少歧义；明确无竖线时 absent 避免程序为不存在的线留搜索空间；不确定保持 auto。",
         "paddle_language": "作用：PaddleOCR 后端使用的语言/模型代码。通常由上层【OCR 语言】映射得到，属于后端专家覆盖项。\n\n修改：只有默认映射不适合当前模型或在调试 PaddleOCR 后端时才手动指定。与项目主语言不一致可能显著降低识别率，并可能改变 OCR 缓存签名。",
-        "detection_method": "作用：设置主界面默认使用哪条“画线”路径。OCR画线（推荐）综合文字、栏左位置、词性/变形/符号和视觉证据；普通画线（备用）只依赖几何与墨迹。\n\n选择：大多数词典优先 OCR画线；只有左缘极稳定、无需文字结构或 OCR 环境不可用时再用普通画线。它决定默认操作路径，不会删除另一种模式。",
+        "detection_method": "作用：设置主界面默认使用哪条“画线”路径。融合画线（推荐）让普通几何检测与 OCR 语义检测独立产生候选，再按同栏 Y 位置一对一配对、继承 OCR 文字并严格去重；OCR 或普通模式仍可单独运行用于诊断。\n\n选择：日常优先融合画线；需要判断问题究竟来自几何规则还是 OCR/parser 时，再分别运行单独模式。",
         "paddle_lens_mode": "作用：控制 Lens 在启用后的调用范围和是否参与融合。off 不调用；diagnostic 可全量获取但 Lens 不投票；conflict 只在 Paddle/Tesseract 冲突或缺失时调用；full 可对更多候选调用并影响非冲突决策。\n\n选择：推荐 conflict，能把网络调用集中在真正有价值的疑难项。full 最耗网络且会让 Lens 对更多最终结果产生影响。",
         "ocr_engine": "作用：这是“已有词条线后再识别整行文本”的普通 OCR 引擎设置，与 OCR画线的多引擎词头检测不是同一件事。\n\n选择：Tesseract/PaddleOCR 只影响普通文本填充路径；不要因为这里选了 Tesseract 就以为 OCR画线也只使用 Tesseract，后者由 OCR画线页的独立开关控制。",
         "headword_sort_mode": "作用：决定校对/索引检查采用的词头排序规则。可随 OCR 语言提供语言专用预设，也可使用通用 Unicode 或自定义字母表。\n\n注意：排序只改变比较/显示顺序和索引语义，不会改变扫描页面物理顺序、PDIC 坐标或 OCR 文字。",
@@ -3374,61 +3375,85 @@ class SettingsDialog(tk.Toplevel):
         mode_group.columnconfigure(1, weight=1)
         method_var = tk.StringVar(
             value=DETECTION_LABELS.get(
-                parent.settings.detection_method, DETECTION_LABELS["paddleocr"]
+                parent.settings.detection_method, DETECTION_LABELS["combined"]
             )
         )
         self.vars["detection_method"] = method_var
 
-        ocr_mode = ttk.Radiobutton(
+        combined_mode = ttk.Radiobutton(
             mode_group,
-            text="OCR画线（推荐）",
+            text="融合画线（推荐）",
             variable=method_var,
-            value=DETECTION_LABELS["paddleocr"],
+            value=DETECTION_LABELS["combined"],
         )
-        ocr_mode.grid(row=0, column=0, sticky="w", pady=3)
-        ocr_mode_help = ttk.Label(
+        combined_mode.grid(row=0, column=0, sticky="w", pady=3)
+        combined_mode_help = ttk.Label(
             mode_group,
-            text="默认推荐；结合文字、位置和结构证据，适合绝大多数词典项目。",
+            text="普通几何负责稳定定位，OCR负责语义确认与独立救漏；最终统一配对去重。",
             foreground="#666666",
             justify="left",
         )
-        ocr_mode_help.grid(row=0, column=1, sticky="ew", padx=(12, 0), pady=3)
+        combined_mode_help.grid(row=0, column=1, sticky="ew", padx=(12, 0), pady=3)
+        self._bind_responsive_labels(
+            combined_mode_help, combined_mode_help, horizontal_padding=4, min_wrap=100
+        )
+
+        ocr_mode = ttk.Radiobutton(
+            mode_group,
+            text="OCR画线（单独诊断）",
+            variable=method_var,
+            value=DETECTION_LABELS["paddleocr"],
+        )
+        ocr_mode.grid(row=1, column=0, sticky="w", pady=3)
+        ocr_mode_help = ttk.Label(
+            mode_group,
+            text="只运行 OCR / parser / 视觉候选链，便于定位 OCR 侧问题。",
+            foreground="#666666",
+            justify="left",
+        )
+        ocr_mode_help.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=3)
         self._bind_responsive_labels(
             ocr_mode_help, ocr_mode_help, horizontal_padding=4, min_wrap=100
         )
 
         normal_mode = ttk.Radiobutton(
             mode_group,
-            text="普通画线（备用）",
+            text="普通画线（单独诊断）",
             variable=method_var,
             value=DETECTION_LABELS["left_edge"],
         )
-        normal_mode.grid(row=1, column=0, sticky="w", pady=3)
+        normal_mode.grid(row=2, column=0, sticky="w", pady=3)
         normal_mode_help = ttk.Label(
             mode_group,
-            text="不识别文字；仅在左缘极稳定的简单版式或 OCR 暂不可用时优先考虑。",
+            text="只运行 VB 左缘几何/墨迹链；速度最快，适合检查缩进型版式的几何基线。",
             foreground="#666666",
             justify="left",
         )
-        normal_mode_help.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=3)
+        normal_mode_help.grid(row=2, column=1, sticky="ew", padx=(12, 0), pady=3)
         self._bind_responsive_labels(
             normal_mode_help, normal_mode_help, horizontal_padding=4, min_wrap=100
         )
 
         for widget, title, body in (
             (
+                combined_mode,
+                "融合画线（推荐）",
+                "两条成熟路径各自完整运行后再融合：普通模式提供高速、稳定的几何词条边界；"
+                "OCR 模式提供词头文字、结构证据和普通模式之外的独立救漏。程序只在同栏、Y位置足够接近时一对一配对；"
+                "匹配项输出唯一横线并继承 OCR 文字，未匹配项保留各自救漏能力，最后再用更严格阈值去重。"
+                "普通/括号词优先保留 VB 分隔线位置；单个大汉字保留 OCR 的专用自适应精修位置。",
+            ),
+            (
                 ocr_mode,
-                "OCR画线（推荐）",
-                "默认推荐路径：先在每栏左侧窄候选带运行 OCR，再把 lemma 结构、栏左位置、"
-                "POS/变形/特殊符号、字高/粗体/行前空白等证据组合判断。首次推理更耗时，"
-                "但未改变图像/模型/候选带时可复用 OCR 缓存；大多数词典应先调这条路径，而不是退回纯几何画线。",
+                "OCR画线（单独诊断）",
+                "单独运行现有 OCR 候选链，用于排查 OCR、词头 parser、符号/字高/粗体等结构证据。"
+                "原始 OCR 缓存仍可复用。",
             ),
             (
                 normal_mode,
-                "普通画线（备用）",
-                "只看版面几何和栏左墨迹，不依赖文字识别。适合词头稳定贴近栏左、正文有一致缩进的简单版式，"
-                "也可作为 OCR 环境不可用时的备用路径。正文同样贴边、缩进不稳定或需要 POS/符号语义时，"
-                "它缺少文字结构证据，因此更容易误检或漏检。",
+                "普通画线（单独诊断）",
+                "单独运行恢复的 VB.NET 左缘规则链，只看版面几何、墨迹和正文缩进。"
+                "适合验证普通模式本身的定位效果和速度。",
             ),
         ):
             self._bind_help_widget(
@@ -12812,8 +12837,9 @@ class PictureCaptureApp(tk.Tk):
         actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
         actions.pack(fill="x", pady=(4, 0))
         action_tooltips = {
-            "运行普通画线（备用）": "备用模式：依赖栏左几何、墨迹和行高；适合左缘高度稳定版式或 OCR 暂不可用时。",
-            "运行OCR画线（推荐）": "推荐默认：结合 OCR 文字、位置和结构证据识别词头，并可复用有效缓存。",
+            "运行融合画线（推荐）": "推荐默认：普通几何与 OCR 语义独立检测后按位置融合、救漏并严格去重。",
+            "运行OCR画线（单独）": "只运行 OCR 候选链，用于诊断 OCR/parser 侧漏检或误检。",
+            "运行普通画线（单独）": "只运行高速左缘几何链，用于诊断缩进/栏左规则。",
             "清除画线": "清除当前页全部词条画线；不会删除扫描图片。",
             "清除文本": "清空当前页画线中的词条文字，但保留画线位置。",
             "精修画线": "仅在所选范围微调已有画线的 Y 位置，不新增或删除词条。",
@@ -12829,7 +12855,7 @@ class PictureCaptureApp(tk.Tk):
             "保存当前页": "立即保存当前页的画线/词条或插图编辑结果。",
         }
         rows = [
-            (("运行普通画线（备用）", self.run_normal_draw_action), ("运行OCR画线（推荐）", self.run_ocr_draw_action)),
+            (("运行融合画线（推荐）", self.run_combined_draw_action), ("运行OCR画线（单独）", self.run_ocr_draw_action), ("运行普通画线（单独）", self.run_normal_draw_action)),
             (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充词条", self.fill_existing_headwords), ("修复排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("恢复PDIC", self.restore_from_pdic_backup)),
             (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
@@ -12841,7 +12867,7 @@ class PictureCaptureApp(tk.Tk):
                 row.columnconfigure(bi, weight=1, uniform=f"actions-row-{ri}")
             for bi, (text, command) in enumerate(specs):
                 role = (
-                    "primary" if text == "运行OCR画线（推荐）"
+                    "primary" if text == "运行融合画线（推荐）"
                     else "success" if text == "保存当前页"
                     else "primary" if text == "词条校对"
                     else "neutral"
@@ -19563,6 +19589,18 @@ class PictureCaptureApp(tk.Tk):
             item_label=lambda i: pages[i].name,
         )
 
+    def run_combined_draw_action(self) -> None:
+        if not self.guard() or not self.apply_quick_settings(show_status=False): return
+        try: indices = self.selected_page_indices()
+        except Exception as exc:
+            self.show_error("页面范围无效", exc); return
+        self.settings.detection_method = "combined"; self.save_settings()
+        self._detect_pages(
+            indices,
+            method="combined",
+            force_refresh=self.ocr_refresh_var.get() == "force",
+        )
+
     def run_ocr_draw_action(self) -> None:
         if not self.guard() or not self.apply_quick_settings(show_status=False): return
         try: indices = self.selected_page_indices()
@@ -19590,7 +19628,11 @@ class PictureCaptureApp(tk.Tk):
             self.status_var.set("没有需要处理的页面"); return
         if not self._guard_transformed_geometry("批量画线"):
             return
-        label = "OCR画线" if method == "paddleocr" else "普通画线"
+        label = {
+            "combined": "融合画线",
+            "paddleocr": "OCR画线",
+            "left_edge": "普通画线",
+        }.get(method, "画线")
         if len(indices) > 1 and not messagebox.askyesno(
             label,
             f"将对 {len(indices)} 页执行{label}并重写这些页面的 PDIC 画线。\n\n"
@@ -19618,7 +19660,7 @@ class PictureCaptureApp(tk.Tk):
                 return {"index": int(index), "count": int(count)}
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
-            cache_path = ocr_cache_root(project.root) / f"{page.stem}.json" if method == "paddleocr" else None
+            cache_path = ocr_cache_root(project.root) / f"{page.stem}.json" if method in {"paddleocr", "combined"} else None
             entries, _geometry = detect_entries(
                 image, settings, paddle_cache_path=cache_path,
                 force_paddle_refresh=force_refresh,
@@ -19636,7 +19678,7 @@ class PictureCaptureApp(tk.Tk):
                 return
             self.load_page(self.current_index)
             quality_text = ""
-            if method == "paddleocr":
+            if method in {"paddleocr", "combined"}:
                 self._refresh_page_quality_colors()
                 quality_text = "；页面列表已按 OCR 一致性/质量状态更新"
             else:
@@ -19669,7 +19711,7 @@ class PictureCaptureApp(tk.Tk):
                         f"；{len(suspect_rows)} 页画线数异常，建议优先复核"
                         + (f"（{', '.join(names)}{more}）" if names else "")
                     )
-            suffix = "（强制重新识别）" if method == "paddleocr" and force_refresh else ""
+            suffix = "（强制重新识别）" if method in {"paddleocr", "combined"} and force_refresh else ""
             skipped = int(getattr(self, "_batch_skipped_count", 0))
             skip_text = f"，人工锁定跳过 {skipped} 页" if skipped else ""
             if stopped:
