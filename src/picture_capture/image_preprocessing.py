@@ -2931,9 +2931,19 @@ def analyze_preprocess_page(
     orthogonal_before_pixel_row_worst_px = 0.0
     orthogonal_after_pixel_row_worst_px = 0.0
     orthogonal_pixel_row_verdict = "insufficient"
+    orthogonal_bottom_tail_sample_count = 0
+    orthogonal_before_bottom_tail_p90_px = 0.0
+    orthogonal_after_bottom_tail_p90_px = 0.0
+    orthogonal_before_bottom_tail_worst_px = 0.0
+    orthogonal_after_bottom_tail_worst_px = 0.0
+    orthogonal_bottom_tail_verdict = "insufficient"
+    orthogonal_safe_gain_cap = 0.0
     orthogonal_initial_pixel_row_p90_px = 0.0
     orthogonal_initial_pixel_row_worst_px = 0.0
     orthogonal_initial_pixel_row_available = False
+    orthogonal_initial_bottom_tail_p90_px = 0.0
+    orthogonal_initial_bottom_tail_worst_px = 0.0
+    orthogonal_initial_bottom_tail_available = False
     orthogonal_confidence = 0.0
     orthogonal_column_spread_deg = 0.0
     orthogonal_max_row_angle_deg = 0.0
@@ -3014,13 +3024,26 @@ def analyze_preprocess_page(
                 estimate.max_scale_deviation
             )
 
+            safe_gain_cap = _orthogonal_safe_gain_cap(estimate)
+            orthogonal_safe_gain_cap = float(safe_gain_cap)
             if (
                 not estimate.active
                 or estimate.confidence < ORTHOGONAL_AUTO_MIN_CONFIDENCE
-                or estimate.max_scale_deviation
-                > ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
+                or safe_gain_cap < ORTHOGONAL_MIN_SAFE_GAIN
             ):
+                if (
+                    pass_index == 0
+                    and estimate.active
+                    and estimate.confidence >= ORTHOGONAL_AUTO_MIN_CONFIDENCE
+                    and safe_gain_cap < ORTHOGONAL_MIN_SAFE_GAIN
+                ):
+                    warnings.append(
+                        "残余几何需要的网格强度超过安全尺度预算，"
+                        "即使降强度也不足以安全执行，已保留前一步结果。"
+                    )
                 break
+            if safe_gain_cap < 0.999:
+                method_parts.append("orthogonal_gain_limited")
 
             pixel_driven = bool(
                 estimate.pixel_angle_used_count
@@ -3031,7 +3054,7 @@ def analyze_preprocess_page(
                 # Pixel projection estimates a physical correction angle, so
                 # unit gain has a direct meaning. OCR polygons remain a safety
                 # audit, not the optimizer for this branch.
-                row_gain = 1.0
+                row_gain = min(1.0, float(safe_gain_cap))
                 predicted_polygons = transform_polygons_orthogonal(
                     working_polygons,
                     estimate,
@@ -3076,6 +3099,7 @@ def analyze_preprocess_page(
                     estimate,
                     working.size,
                     settings,
+                    max_gain=float(safe_gain_cap),
                 )
                 predicted_improved = bool(
                     predicted_verdict == "passed"
@@ -3148,6 +3172,18 @@ def analyze_preprocess_page(
                     baseline_pixel_rows.worst_shift_px
                 )
                 orthogonal_initial_pixel_row_available = True
+            if (
+                not orthogonal_initial_bottom_tail_available
+                and baseline_pixel_rows.bottom_tail_sample_count >= 2
+                and baseline_pixel_rows.bottom_tail_valid_column_count >= 1
+            ):
+                orthogonal_initial_bottom_tail_p90_px = float(
+                    baseline_pixel_rows.bottom_tail_p90_shift_px
+                )
+                orthogonal_initial_bottom_tail_worst_px = float(
+                    baseline_pixel_rows.bottom_tail_worst_shift_px
+                )
+                orthogonal_initial_bottom_tail_available = True
             candidate_pixel_rows = audit_pixel_row_profiles(
                 candidate_image,
                 candidate_polygons,
@@ -3167,6 +3203,21 @@ def analyze_preprocess_page(
             )
             orthogonal_after_pixel_row_worst_px = float(
                 candidate_pixel_rows.worst_shift_px
+            )
+            orthogonal_bottom_tail_sample_count = int(
+                candidate_pixel_rows.bottom_tail_sample_count
+            )
+            orthogonal_before_bottom_tail_p90_px = float(
+                baseline_pixel_rows.bottom_tail_p90_shift_px
+            )
+            orthogonal_after_bottom_tail_p90_px = float(
+                candidate_pixel_rows.bottom_tail_p90_shift_px
+            )
+            orthogonal_before_bottom_tail_worst_px = float(
+                baseline_pixel_rows.bottom_tail_worst_shift_px
+            )
+            orthogonal_after_bottom_tail_worst_px = float(
+                candidate_pixel_rows.bottom_tail_worst_shift_px
             )
             baseline_verdict, baseline_score = _absolute_horizontal_quality(
                 baseline_audit
@@ -3226,6 +3277,38 @@ def analyze_preprocess_page(
                 orthogonal_pixel_row_verdict = "failed"
             else:
                 orthogonal_pixel_row_verdict = "insufficient"
+
+            pixel_tail_available = bool(
+                candidate_pixel_rows.bottom_tail_sample_count >= 2
+                and candidate_pixel_rows.bottom_tail_valid_column_count >= 1
+            )
+            pixel_tail_safe = bool(
+                pixel_tail_available
+                and candidate_pixel_rows.bottom_tail_p90_shift_px
+                <= PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX
+                and candidate_pixel_rows.bottom_tail_worst_shift_px
+                <= PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX
+            )
+            pixel_tail_improved = bool(
+                pixel_tail_available
+                and baseline_pixel_rows.bottom_tail_sample_count >= 2
+                and baseline_pixel_rows.bottom_tail_p90_shift_px > 1e-6
+                and candidate_pixel_rows.bottom_tail_p90_shift_px
+                <= baseline_pixel_rows.bottom_tail_p90_shift_px * 0.70
+                and candidate_pixel_rows.bottom_tail_worst_shift_px
+                <= max(
+                    PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX,
+                    baseline_pixel_rows.bottom_tail_worst_shift_px * 0.80,
+                )
+            )
+            if pixel_tail_safe:
+                orthogonal_bottom_tail_verdict = "passed"
+            elif pixel_tail_improved:
+                orthogonal_bottom_tail_verdict = "improved_review"
+            elif pixel_tail_available:
+                orthogonal_bottom_tail_verdict = "failed"
+            else:
+                orthogonal_bottom_tail_verdict = "insufficient"
 
             vertical_required = bool(estimate.separator_point_count >= 7)
             vertical_safe = True
@@ -3314,6 +3397,11 @@ def analyze_preprocess_page(
                     pixel_driven
                     and pixel_row_available
                     and (pixel_row_safe or pixel_row_improved)
+                    and (
+                        not pixel_tail_available
+                        or pixel_tail_safe
+                        or pixel_tail_improved
+                    )
                 )
                 or (
                     (not pixel_driven or not pixel_row_available)
@@ -3328,6 +3416,16 @@ def analyze_preprocess_page(
             )
             if not actual_improved:
                 if (
+                    pixel_driven
+                    and pixel_tail_available
+                    and not (pixel_tail_safe or pixel_tail_improved)
+                ):
+                    reason = (
+                        "正文页尾像素行验收未通过"
+                        f"（P90 {candidate_pixel_rows.bottom_tail_p90_shift_px:.1f}px，"
+                        f"最差 {candidate_pixel_rows.bottom_tail_worst_shift_px:.1f}px）"
+                    )
+                elif (
                     pixel_driven
                     and pixel_row_available
                     and not (pixel_row_safe or pixel_row_improved)
@@ -3357,6 +3455,12 @@ def analyze_preprocess_page(
                         f"{baseline_pixel_rows.p90_shift_px:.1f}px→"
                         f"{candidate_pixel_rows.p90_shift_px:.1f}px"
                         if pixel_row_available else ""
+                    )
+                    + (
+                        "，页尾像素行P90 "
+                        f"{baseline_pixel_rows.bottom_tail_p90_shift_px:.1f}px→"
+                        f"{candidate_pixel_rows.bottom_tail_p90_shift_px:.1f}px"
+                        if pixel_tail_available else ""
                     )
                     + (
                         "，页眉横线 "
@@ -3430,6 +3534,10 @@ def analyze_preprocess_page(
                 pixel_driven
                 and pixel_row_available
                 and orthogonal_pixel_row_verdict == "passed"
+                and (
+                    not pixel_tail_available
+                    or orthogonal_bottom_tail_verdict == "passed"
+                )
             ):
                 break
             if (
