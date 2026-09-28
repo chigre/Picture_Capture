@@ -4256,6 +4256,29 @@ def export_summary_csv(
                 analysis.orthogonal_separator_point_count
             ),
             "orthogonal_row_gain": analysis.orthogonal_row_gain,
+            "orthogonal_row_grid_rows": analysis.orthogonal_row_grid_rows,
+            "orthogonal_row_grid_cols": analysis.orthogonal_row_grid_cols,
+            "orthogonal_horizontal_rule_point_count": (
+                analysis.orthogonal_horizontal_rule_point_count
+            ),
+            "orthogonal_horizontal_rule_y": (
+                analysis.orthogonal_horizontal_rule_y
+            ),
+            "orthogonal_before_horizontal_rule_angle_deg": (
+                analysis.orthogonal_before_horizontal_rule_angle_deg
+            ),
+            "orthogonal_after_horizontal_rule_angle_deg": (
+                analysis.orthogonal_after_horizontal_rule_angle_deg
+            ),
+            "orthogonal_before_horizontal_rule_residual_px": (
+                analysis.orthogonal_before_horizontal_rule_residual_px
+            ),
+            "orthogonal_after_horizontal_rule_residual_px": (
+                analysis.orthogonal_after_horizontal_rule_residual_px
+            ),
+            "orthogonal_horizontal_rule_verdict": (
+                analysis.orthogonal_horizontal_rule_verdict
+            ),
             "orthogonal_confidence": analysis.orthogonal_confidence,
             "orthogonal_column_spread_deg": (
                 analysis.orthogonal_column_spread_deg
