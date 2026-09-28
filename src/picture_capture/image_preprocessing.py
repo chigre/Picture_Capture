@@ -24,6 +24,7 @@ from .preprocess_geometry import (
     HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG,
     HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG,
     HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT,
+    HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG,
     HORIZONTAL_STRENGTH_COARSE_STEP,
     HORIZONTAL_STRENGTH_FINE_STEP,
     HORIZONTAL_STRENGTH_MIN,
@@ -59,7 +60,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 13
+PREPROCESS_FORMAT_VERSION = 14
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -131,7 +132,22 @@ class PreprocessAnalysis:
     perspective_horizontal_vanishing_x: float = 0.0
     perspective_horizontal_vanishing_y: float = 0.0
     perspective_horizontal_row_count: int = 0
+    perspective_horizontal_column_count: int = 0
+    perspective_horizontal_vp_column_spread_deg: float = 0.0
     perspective_horizontal_strength: float = 0.0
+    perspective_row_valid_column_count: int = 0
+    perspective_row_column_row_counts: tuple[int, ...] = ()
+    perspective_row_after_worst_region_deg: float = 0.0
+    perspective_row_after_worst_column_metric_deg: float = 0.0
+    perspective_row_after_worst_column_index: int = -1
+    perspective_row_before_column_top_angles_deg: tuple[float, ...] = ()
+    perspective_row_after_column_top_angles_deg: tuple[float, ...] = ()
+    perspective_row_before_column_middle_angles_deg: tuple[float, ...] = ()
+    perspective_row_after_column_middle_angles_deg: tuple[float, ...] = ()
+    perspective_row_before_column_bottom_angles_deg: tuple[float, ...] = ()
+    perspective_row_after_column_bottom_angles_deg: tuple[float, ...] = ()
+    perspective_row_before_column_trends_deg: tuple[float, ...] = ()
+    perspective_row_after_column_trends_deg: tuple[float, ...] = ()
     perspective_structural_applied: bool = False
     perspective_structural_safe: bool = False
     perspective_row_before_top_angle_deg: float = 0.0
