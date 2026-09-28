@@ -79,8 +79,6 @@ AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX = 0.040
 AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX = 0.070
 AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX = 0.055
 AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX = 0.035
-AUTO_UVDOC_MIN_CONFIDENCE = 0.65
-AUTO_UVDOC_MIN_HORIZONTAL_IMPROVEMENT = 0.15
 ORTHOGONAL_AUTO_MIN_CONFIDENCE = 0.45
 ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT = 0.25
 ORTHOGONAL_AUTO_GAINS = (0.55, 0.70, 0.85, 1.0, 1.10)
@@ -3630,9 +3628,13 @@ def export_diagnostic_json(
         "auto_homography_anisotropy_p95_max": (
             AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
         ),
-        "auto_uvdoc_min_confidence": AUTO_UVDOC_MIN_CONFIDENCE,
-        "auto_uvdoc_min_horizontal_improvement": (
-            AUTO_UVDOC_MIN_HORIZONTAL_IMPROVEMENT
+        "orthogonal_auto_min_confidence": ORTHOGONAL_AUTO_MIN_CONFIDENCE,
+        "orthogonal_auto_min_score_improvement": (
+            ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT
+        ),
+        "orthogonal_auto_gains": list(ORTHOGONAL_AUTO_GAINS),
+        "orthogonal_warp_max_scale_deviation": (
+            ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
         ),
         "horizontal_alignment_max_edge_pair_delta_deg": (
             HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG
@@ -3955,6 +3957,44 @@ def export_summary_csv(
             ),
             "line_geometry_recommendation": analysis.line_geometry_recommendation,
             "line_geometry_confidence": analysis.line_geometry_confidence,
+            "orthogonal_applied": analysis.orthogonal_applied,
+            "orthogonal_passes": analysis.orthogonal_passes,
+            "orthogonal_row_count": analysis.orthogonal_row_count,
+            "orthogonal_valid_column_count": (
+                analysis.orthogonal_valid_column_count
+            ),
+            "orthogonal_separator_point_count": (
+                analysis.orthogonal_separator_point_count
+            ),
+            "orthogonal_row_gain": analysis.orthogonal_row_gain,
+            "orthogonal_confidence": analysis.orthogonal_confidence,
+            "orthogonal_column_spread_deg": (
+                analysis.orthogonal_column_spread_deg
+            ),
+            "orthogonal_max_row_angle_deg": (
+                analysis.orthogonal_max_row_angle_deg
+            ),
+            "orthogonal_row_angle_span_deg": (
+                analysis.orthogonal_row_angle_span_deg
+            ),
+            "orthogonal_max_horizontal_shift_px": (
+                analysis.orthogonal_max_horizontal_shift_px
+            ),
+            "orthogonal_max_vertical_shift_px": (
+                analysis.orthogonal_max_vertical_shift_px
+            ),
+            "orthogonal_max_scale_deviation": (
+                analysis.orthogonal_max_scale_deviation
+            ),
+            "orthogonal_before_quality_score": (
+                analysis.orthogonal_before_quality_score
+            ),
+            "orthogonal_after_quality_score": (
+                analysis.orthogonal_after_quality_score
+            ),
+            "orthogonal_alignment_verdict": (
+                analysis.orthogonal_alignment_verdict
+            ),
             "final_alignment_row_count": analysis.final_alignment_row_count,
             "final_alignment_valid_column_count": (
                 analysis.final_alignment_valid_column_count
@@ -4226,6 +4266,7 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         "perspective": "透视纠正",
         "manual_perspective": "手动四角",
         "uvdoc": "UVDoc 展平",
+        "orthogonal": "正交网格展平",
     }
     geometry = geometry_labels.get(analysis.geometry_mode, analysis.geometry_mode)
     if (
@@ -4235,14 +4276,17 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         geometry = "手动四角+UVDoc"
     strength = (
         f" {analysis.geometry_strength_px:.1f}px"
-        if analysis.geometry_mode in {"manual_perspective", "perspective"}        and analysis.geometry_strength_px > 0
+        if analysis.geometry_mode in {
+            "manual_perspective", "perspective", "orthogonal"
+        }
+        and analysis.geometry_strength_px > 0
         else ""
     )
     line_labels = {
         "none": "无需额外",
         "deskew": "旋转",
         "perspective": "透视",
-        "uvdoc_review": "建议UVDoc",
+        "uvdoc_review": "非线性弯曲",
         "manual_review": "人工复核",
         "insufficient": "证据不足",
     }
@@ -4350,6 +4394,17 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
             f"{separator}"
             f" → {line_labels.get(analysis.line_geometry_recommendation, analysis.line_geometry_recommendation)}"
         )
+    orthogonal_part = ""
+    if analysis.orthogonal_applied:
+        orthogonal_part = (
+            f"｜正交闭环 {analysis.orthogonal_alignment_verdict}"
+            f" gain={analysis.orthogonal_row_gain:.2f}"
+            f" 角场±{analysis.orthogonal_max_row_angle_deg:.2f}°"
+            f" 纵移≤{analysis.orthogonal_max_vertical_shift_px:.1f}px"
+            f" 横移≤{analysis.orthogonal_max_horizontal_shift_px:.1f}px"
+            f" 质量 {analysis.orthogonal_before_quality_score:.2f}"
+            f"→{analysis.orthogonal_after_quality_score:.2f}"
+        )
     final_alignment_part = ""
     if analysis.final_alignment_verdict != "insufficient":
         final_label = (
@@ -4366,7 +4421,7 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         f"{label}｜{geometry}{strength}｜"
         f"旋转 {analysis.applied_angle_deg:+.2f}°"
         f"（检测 {analysis.correction_angle_deg:+.2f}°）"
-        f"{perspective_part}{line_part}{final_alignment_part}｜"
+        f"{perspective_part}{line_part}{orthogonal_part}{final_alignment_part}｜"
         f"保留 {analysis.retained_ratio * 100:.1f}%｜"
         f"裁剪 L{x0} T{y0} R{x1} B{y1}"
     )
