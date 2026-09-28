@@ -227,6 +227,7 @@ class PreprocessAnalysis:
     orthogonal_x_knots: tuple[float, ...] = ()
     orthogonal_row_grid_rows: int = 0
     orthogonal_row_grid_cols: int = 0
+    orthogonal_row_angle_grid_deg: tuple[float, ...] = ()
     orthogonal_row_displacement_grid_px: tuple[float, ...] = ()
     orthogonal_separator_y_knots: tuple[float, ...] = ()
     orthogonal_separator_shift_knots_px: tuple[float, ...] = ()
@@ -710,6 +711,10 @@ class PreprocessAnalysis:
             ),
             orthogonal_row_grid_cols=max(
                 0, int(payload.get("orthogonal_row_grid_cols", 0))
+            ),
+            orthogonal_row_angle_grid_deg=tuple(
+                float(v)
+                for v in payload.get("orthogonal_row_angle_grid_deg", ())
             ),
             orthogonal_row_displacement_grid_px=tuple(
                 float(v)
@@ -1509,6 +1514,9 @@ def geometry_corrected_image(
             x_knots=tuple(analysis.orthogonal_x_knots),
             row_grid_rows=int(analysis.orthogonal_row_grid_rows),
             row_grid_cols=int(analysis.orthogonal_row_grid_cols),
+            row_angle_grid_deg=tuple(
+                analysis.orthogonal_row_angle_grid_deg
+            ),
             row_displacement_grid_px=tuple(
                 analysis.orthogonal_row_displacement_grid_px
             ),
@@ -2615,6 +2623,7 @@ def analyze_preprocess_page(
     orthogonal_x_knots: tuple[float, ...] = ()
     orthogonal_row_grid_rows = 0
     orthogonal_row_grid_cols = 0
+    orthogonal_row_angle_grid_deg: tuple[float, ...] = ()
     orthogonal_row_displacement_grid_px: tuple[float, ...] = ()
     orthogonal_separator_y_knots: tuple[float, ...] = ()
     orthogonal_separator_shift_knots_px: tuple[float, ...] = ()
@@ -2915,6 +2924,9 @@ def analyze_preprocess_page(
             orthogonal_x_knots = tuple(estimate.x_knots)
             orthogonal_row_grid_rows = int(estimate.row_grid_rows)
             orthogonal_row_grid_cols = int(estimate.row_grid_cols)
+            orthogonal_row_angle_grid_deg = tuple(
+                estimate.row_angle_grid_deg
+            )
             orthogonal_row_displacement_grid_px = tuple(
                 estimate.row_displacement_grid_px
             )
@@ -3325,6 +3337,10 @@ def analyze_preprocess_page(
         ),
         orthogonal_row_grid_rows=int(orthogonal_row_grid_rows),
         orthogonal_row_grid_cols=int(orthogonal_row_grid_cols),
+        orthogonal_row_angle_grid_deg=tuple(
+            round(float(v), 6)
+            for v in orthogonal_row_angle_grid_deg
+        ),
         orthogonal_row_displacement_grid_px=tuple(
             round(float(v), 6)
             for v in orthogonal_row_displacement_grid_px
