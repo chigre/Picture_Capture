@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
@@ -15,7 +16,11 @@ from picture_capture.image_preprocessing import (
     clear_manual_perspective_quad,
     load_analysis,
     load_manual_perspective_quad,
+    output_canvas_info,
     overlay_excluded_regions,
+    processed_image_with_canvas,
+    export_diagnostic_json,
+    export_summary_csv,
     save_analysis,
     save_manual_perspective_quad,
 )
@@ -353,6 +358,115 @@ def test_preview_overlay_marks_only_nonretained_area() -> None:
     assert preview.getpixel((20, 20)) != (255, 255, 255)
 
 
+def _sample_export_analysis() -> PreprocessAnalysis:
+    return PreprocessAnalysis(
+        source_width=120,
+        source_height=180,
+        correction_angle_deg=0.0,
+        applied_angle_deg=0.0,
+        crop_box=(10, 20, 110, 170),
+        raw_content_box=(12, 22, 108, 168),
+        text_box=(12, 22, 108, 168),
+        source_boxes=20,
+        angle_samples=30,
+        angle_mad_deg=0.1,
+        retained_ratio=0.69,
+        confidence=0.9,
+        status="normal",
+        method="paddle_layout_roi+line_geometry",
+        line_geometry_rows=24,
+        line_geometry_trend_deg=0.22,
+        line_geometry_separator_found=True,
+        line_geometry_separator_residual_px=1.4,
+        line_geometry_separator_span_ratio=0.88,
+        line_geometry_recommendation="perspective",
+        line_geometry_confidence=0.86,
+    )
+
+
+def test_output_canvas_alignment_preserves_crop_without_rescaling() -> None:
+    analysis = _sample_export_analysis()
+    canvas = output_canvas_info(
+        analysis,
+        enabled=True,
+        mode="custom",
+        requested_width=200,
+        requested_height=240,
+        canvas_width=200,
+        canvas_height=240,
+        align_x="right",
+        align_y="bottom",
+    )
+
+    assert canvas.width == 200
+    assert canvas.height == 240
+    assert canvas.content_box == (100, 90, 200, 240)
+
+    source = Image.new("RGB", (120, 180), (80, 90, 100))
+    exported = processed_image_with_canvas(source, analysis, canvas)
+    assert exported.size == (200, 240)
+    assert exported.getpixel((5, 5)) == (255, 255, 255)
+    assert exported.getpixel((150, 150)) == (80, 90, 100)
+
+
+def test_output_canvas_expands_instead_of_scaling_oversize_content() -> None:
+    analysis = _sample_export_analysis()
+    canvas = output_canvas_info(
+        analysis,
+        enabled=True,
+        mode="custom",
+        requested_width=80,
+        requested_height=100,
+        canvas_width=80,
+        canvas_height=100,
+        align_x="center",
+        align_y="center",
+    )
+
+    assert canvas.width == 100
+    assert canvas.height == 150
+    assert canvas.content_box == (0, 0, 100, 150)
+    assert canvas.expanded_width is True
+    assert canvas.expanded_height is True
+
+
+def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path) -> None:
+    analysis = _sample_export_analysis()
+    page = tmp_path / "0004.tif"
+    page.write_bytes(b"scan")
+    output = tmp_path / "processed" / "0004.tif"
+    canvas = output_canvas_info(
+        analysis,
+        enabled=True,
+        mode="batch_max",
+        requested_width=200,
+        requested_height=240,
+        canvas_width=200,
+        canvas_height=240,
+        align_x="center",
+        align_y="top",
+    )
+
+    metadata = tmp_path / "meta" / "0004.preprocess.json"
+    export_diagnostic_json(
+        page, analysis, metadata, output_path=output, canvas=canvas,
+    )
+    payload = json.loads(metadata.read_text(encoding="utf-8"))
+    assert payload["crop_box"] == [10, 20, 110, 170]
+    assert payload["line_geometry_rows"] == 24
+    assert payload["line_geometry_separator_residual_px"] == 1.4
+    assert payload["export"]["canvas"]["width"] == 200
+    assert payload["export"]["canvas"]["content_box"] == [50, 0, 150, 150]
+
+    summary = tmp_path / "preprocess_summary.csv"
+    export_summary_csv([(page, analysis, output, canvas)], summary)
+    text = summary.read_text(encoding="utf-8-sig")
+    assert "line_geometry_recommendation" in text
+    assert "separator_residual_px" in text
+    assert "canvas_content_x0" in text
+    assert "perspective" in text
+
+
 def test_preprocess_analysis_roundtrip_and_source_signature(tmp_path: Path) -> None:
     page = tmp_path / "0001.png"
     Image.new("RGB", (120, 180), "white").save(page)
@@ -417,6 +531,13 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert 'text="安全边界："' in source
     assert '"自动几何（推荐）"' in source
     assert '"UVDoc展平（Paddle高级）"' in source
+    assert 'text="统一白底画布"' in source
+    assert '"本批最大裁剪尺寸"' in source
+    assert '"自定义尺寸"' in source
+    assert '"左对齐", "居中", "右对齐"' in source
+    assert '"顶端对齐", "居中", "底部对齐"' in source
+    assert "export_diagnostic_json(" in source
+    assert "export_summary_csv(" in source
     assert 'text="手动四角"' in source
     assert 'text="重置四角"' in source
     assert 'text="px"' in source
