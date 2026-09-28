@@ -2733,6 +2733,120 @@ def _classify_visual_symbol_component(
     return None
 
 
+def _trusted_visual_marker_lanes(
+    lines: list[OCRLine],
+    inventory: dict[str, Any],
+    median_height: float,
+) -> dict[str, dict[str, Any]]:
+    """Derive stable marker lanes from OCR rows with explicit printed symbols.
+
+    Bracket-like CJK radicals are common enough that candidate symbols must not
+    define their own bracket lane.  When OCR explicitly sees the configured
+    opener (for example 【) on at least two rows, those rows provide an
+    independent X anchor for visual rescue.  Generic bracket shapes are then
+    allowed only near this trusted lane.
+    """
+    if not bool(inventory.get("lane_required", False)):
+        return {}
+
+    openers = tuple(
+        str(symbol)
+        for symbol in inventory.get("bracket_openers", ())
+        if str(symbol)
+    )
+    if not openers:
+        return {}
+
+    anchors: list[int] = []
+    for line in lines:
+        text = unicodedata.normalize("NFKC", str(line.text or "")).lstrip()
+        if not any(text.startswith(opener) for opener in openers):
+            continue
+        try:
+            anchors.append(int(line.box[0]))
+        except (TypeError, ValueError):
+            continue
+
+    # One OCR row can itself be a segmentation outlier.  Two independent rows
+    # are the minimum evidence required before generic shape rescue may use the
+    # lane.  Template-only rescue remains available when no lane can be learned.
+    if len(anchors) < 2:
+        return {}
+
+    line_h = max(8.0, float(median_height))
+    configured_tolerance = (
+        line_h
+        * max(
+            20,
+            min(
+                120,
+                int(inventory.get("lane_tolerance_percent") or 50),
+            ),
+        )
+        / 100.0
+    )
+    tolerance = max(8.0, min(configured_tolerance, line_h * 0.40))
+    return {
+        "bracket_open": {
+            "x": round(float(np.median(np.asarray(anchors, dtype=float))), 2),
+            "tolerance": round(float(tolerance), 2),
+            "count": len(anchors),
+            "source": "explicit_ocr_bracket_rows",
+        }
+    }
+
+
+def _apply_trusted_visual_marker_lanes(
+    candidates: list[dict[str, Any]],
+    trusted_lanes: dict[str, dict[str, Any]] | None,
+    *,
+    template_threshold: float,
+) -> list[dict[str, Any]]:
+    """Filter ambiguous visual brackets against independent lane evidence.
+
+    Generic bracket geometry is intentionally disabled when no trusted bracket
+    lane exists: Chinese body glyphs contain too many bracket-like connected
+    components.  A dictionary template may still rescue such a page, but when
+    it is the sole evidence it must clear a conservative 0.70 floor.
+    """
+    lanes = dict(trusted_lanes or {})
+    output: list[dict[str, Any]] = []
+    for item in candidates:
+        role = str(item.get("role") or "")
+        if role != "bracket_open":
+            output.append(item)
+            continue
+
+        lane = lanes.get(role)
+        family = str(item.get("family") or "")
+        if lane is None:
+            if family != "dictionary_template":
+                continue
+            if float(item.get("template_score") or 0.0) < max(
+                float(template_threshold), 0.70
+            ):
+                continue
+            item["lane_required"] = True
+            item["lane_source"] = "template_only_no_ocr_anchor"
+            item["lane_anchor_count"] = 0
+            output.append(item)
+            continue
+
+        lane_x = float(lane.get("x") or 0.0)
+        tolerance = max(1.0, float(lane.get("tolerance") or 1.0))
+        delta = abs(float(item.get("x0") or 0.0) - lane_x)
+        if delta > tolerance:
+            continue
+        item["lane_x"] = round(lane_x, 2)
+        item["lane_delta"] = round(delta, 2)
+        item["lane_required"] = True
+        item["lane_source"] = str(lane.get("source") or "trusted_lane")
+        item["lane_anchor_count"] = int(lane.get("count") or 0)
+        item["lane_tolerance"] = round(tolerance, 2)
+        output.append(item)
+    return output
+
+
 def _detect_visual_entry_markers(
     gray: np.ndarray,
     median_height: float,
@@ -2740,6 +2854,7 @@ def _detect_visual_entry_markers(
     *,
     lower_bound: int = 0,
     inventory: dict[str, Any] | None = None,
+    trusted_lanes: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Detect configured entry/bracket symbols directly from page pixels.
 
@@ -2872,8 +2987,20 @@ def _detect_visual_entry_markers(
     if not candidates:
         return []
 
+    candidates = _apply_trusted_visual_marker_lanes(
+        candidates,
+        trusted_lanes,
+        template_threshold=float(
+            inventory.get("visual_template_threshold") or 0.68
+        ),
+    )
+    if not candidates:
+        return []
+
     # Lane filtering is role-aware. A dictionary can therefore keep one marker
     # lane for ○/● and a nearby bracket lane without forcing both onto one X.
+    # Brackets with an explicit-OCR trusted lane were already filtered above;
+    # do not let surviving candidates vote themselves into a different lane.
     if bool(inventory.get("lane_required", False)):
         tolerance = max(
             6.0,
@@ -2883,6 +3010,9 @@ def _detect_visual_entry_markers(
         for role in ("entry_marker", "bracket_open"):
             group = [item for item in candidates if item.get("role") == role]
             if not group:
+                continue
+            if role in (trusted_lanes or {}):
+                filtered.extend(group)
                 continue
             if len(group) >= 3:
                 lane_x = float(np.median([item["x0"] for item in group]))
