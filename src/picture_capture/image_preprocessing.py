@@ -1341,7 +1341,7 @@ def analyze_preprocess_page(
                 evidence_safe = bool(
                     candidate.strength_px >= perspective_threshold
                     and line_supports_perspective
-                    and candidate.classification == "keystone"
+                    and str(getattr(candidate, "classification", "unknown")) == "keystone"
                 )
             elif source == "horizontal_vp":
                 evidence_safe = bool(
@@ -1411,7 +1411,8 @@ def analyze_preprocess_page(
         if (
             structural_candidate is not None
             and structural_polygons is not None
-            and structural_candidate.classification == "keystone"
+            and str(getattr(structural_candidate, "classification", "unknown"))
+            == "keystone"
         ):
             try:
                 horizontal_after_structural = (
@@ -1644,9 +1645,33 @@ def analyze_preprocess_page(
                         f"跨行 {text_scale_audit.cross_ratio_span_ratio * 100:.2f}%"
                     )
                 if not selected_entry["evidence_safe"]:
-                    review_reasons.append(
-                        "候选缺少与其类型匹配的结构/文本行证据"
+                    selected_source = str(
+                        getattr(
+                            selected_entry["candidate"],
+                            "candidate_source",
+                            "structural",
+                        )
                     )
+                    selected_classification = str(
+                        getattr(
+                            selected_entry["candidate"],
+                            "classification",
+                            "unknown",
+                        )
+                    )
+                    if selected_source == "structural" and not line_supports_perspective:
+                        review_reasons.append("文本行几何证据不足或不一致")
+                    elif (
+                        selected_source == "structural"
+                        and selected_classification == "parallel_drift"
+                    ):
+                        review_reasons.append(
+                            "首末结构边界主要呈同向平行漂移，更像旋转/剪切而非梯形透视"
+                        )
+                    else:
+                        review_reasons.append(
+                            "候选缺少与其类型匹配的结构/文本行证据"
+                        )
                 if review_reasons:
                     warnings.append(
                         "自动投影候选已拦截："
