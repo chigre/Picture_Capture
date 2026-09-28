@@ -19,6 +19,7 @@ from picture_capture.image_preprocessing import (
     output_canvas_info,
     overlay_excluded_regions,
     processed_image_with_canvas,
+    promote_processed_pages,
     export_diagnostic_json,
     export_summary_csv,
     save_analysis,
@@ -1025,6 +1026,77 @@ def test_manual_perspective_quad_roundtrip(tmp_path: Path) -> None:
     assert load_manual_perspective_quad(tmp_path, page) is None
 
 
+def test_promote_processed_pages_preserves_originals_in_before(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    pages = []
+    for index, value in enumerate((40, 80), start=1):
+        page = root / f"{index:04d}.tif"
+        Image.new("L", (40, 60), value).save(page)
+        pages.append(page)
+
+    output = image_preprocessing.processed_output_root(root)
+    for index, value in enumerate((180, 220), start=1):
+        Image.new("L", (32, 48), value).save(output / f"{index:04d}.tif")
+
+    backup, promoted = promote_processed_pages(root, pages)
+
+    assert backup == root / "__before__"
+    assert len(promoted) == 2
+    assert all(path.parent == root for path in promoted)
+    for index, original_value in enumerate((40, 80), start=1):
+        with Image.open(backup / f"{index:04d}.tif") as opened:
+            assert opened.size == (40, 60)
+            assert opened.getpixel((0, 0)) == original_value
+    for index, processed_value in enumerate((180, 220), start=1):
+        with Image.open(root / f"{index:04d}.tif") as opened:
+            assert opened.size == (32, 48)
+            assert opened.getpixel((0, 0)) == processed_value
+
+    # The exported processed set remains as provenance/reproducibility output.
+    assert (output / "0001.tif").is_file()
+    assert (output / "0002.tif").is_file()
+
+
+def test_promote_processed_pages_requires_complete_export_and_never_overwrites_backup(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    pages = []
+    for index in (1, 2):
+        page = root / f"{index:04d}.png"
+        Image.new("RGB", (30, 40), "white").save(page)
+        pages.append(page)
+
+    output = image_preprocessing.processed_output_root(root)
+    Image.new("RGB", (28, 38), "white").save(output / "0001.png")
+
+    try:
+        promote_processed_pages(root, pages)
+    except RuntimeError as exc:
+        assert "导出不完整" in str(exc)
+    else:
+        raise AssertionError("incomplete processed set must not be promoted")
+
+    assert all(page.is_file() for page in pages)
+    assert not (root / "__before__").exists()
+
+    Image.new("RGB", (28, 38), "white").save(output / "0002.png")
+    promote_processed_pages(root, pages)
+    assert (root / "__before__").is_dir()
+
+    try:
+        promote_processed_pages(
+            root,
+            [root / "0001.png", root / "0002.png"],
+        )
+    except RuntimeError as exc:
+        assert "__before__" in str(exc)
+    else:
+        raise AssertionError("existing original backup must never be overwritten")
+
+
 def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     root = Path(__file__).resolve().parents[1]
     source = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
@@ -1055,9 +1127,13 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert 'text="手动四角"' in source
     assert 'text="重置四角"' in source
     assert 'text="px"' in source
+    assert '"分析当前页"' not in source
     assert '"分析所选范围"' in source
+    assert '("诊断信息", self.show_preprocess_diagnostics)' in source
     assert 'text="导出检查小图"' in source
     assert 'text="导出预处理图片"' in source
+    assert 'text="设为工作图片"' in source
+    assert 'textvariable=self.preprocess_status_var' not in source
     assert 'section_keys = ("normal", "aux", "ocr", "actions", "postproduction")' in source
     assert '("review_window", "词条校对")' in source
     assert '("_settings_dialog", "设置中心")' in source
