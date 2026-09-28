@@ -1604,7 +1604,11 @@ def analyze_preprocess_page(
             before_column_trend = max(
                 (
                     abs(float(value))
-                    for value in horizontal_row_audit.before_column_trends_deg
+                    for value in getattr(
+                        horizontal_row_audit,
+                        "before_column_trends_deg",
+                        (),
+                    )
                 ),
                 default=0.0,
             )
