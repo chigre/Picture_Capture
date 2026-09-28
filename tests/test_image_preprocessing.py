@@ -215,6 +215,7 @@ def test_auto_geometry_uses_orthogonal_dewarp_not_uvdoc_for_nonlinear_rows(
             reference_x=500.0,
             row_count=40,
             valid_column_count=2,
+            separator_point_count=8,
             max_row_angle_deg=0.50,
             row_angle_span_deg=1.0,
             max_vertical_shift_px=4.4,
@@ -227,6 +228,26 @@ def test_auto_geometry_uses_orthogonal_dewarp_not_uvdoc_for_nonlinear_rows(
         image_preprocessing,
         "apply_orthogonal_warp_image",
         lambda source, *_args, **_kwargs: source.copy(),
+    )
+    separator_calls = 0
+
+    def fake_separator_track(_image, _polygons, _settings):
+        nonlocal separator_calls
+        separator_calls += 1
+        if separator_calls == 1:
+            return tuple(
+                (100.0 + i * 100.0, 500.0 + i * 1.5)
+                for i in range(8)
+            )
+        return tuple(
+            (100.0 + i * 100.0, 505.0 + i * 0.1)
+            for i in range(8)
+        )
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "separator_track_points",
+        fake_separator_track,
     )
 
     analysis = analyze_preprocess_page(
@@ -246,6 +267,8 @@ def test_auto_geometry_uses_orthogonal_dewarp_not_uvdoc_for_nonlinear_rows(
     assert analysis.final_alignment_top_edge_p90_abs_deg <= 0.18
     assert analysis.final_alignment_bottom_edge_p90_abs_deg <= 0.18
     assert analysis.final_alignment_edge_pair_delta_p90_deg <= 0.15
+    assert analysis.orthogonal_vertical_verdict == "passed"
+    assert analysis.orthogonal_after_separator_span_px <= 3.5
 
 
 def test_auto_geometry_rolls_back_orthogonal_candidate_without_real_improvement(
@@ -314,7 +337,7 @@ def test_auto_geometry_rolls_back_orthogonal_candidate_without_real_improvement(
     assert analysis.geometry_mode != "uvdoc"
     assert analysis.orthogonal_applied is False
     assert any(
-        "正交网格候选未通过重新检测后的闭环水平验收" in warning
+        "正交网格候选水平验收未通过" in warning
         for warning in analysis.warnings
     )
     assert any(
