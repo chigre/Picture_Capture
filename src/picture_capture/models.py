@@ -213,7 +213,7 @@ class AppSettings:
     # Non-destructive first-stage scan preprocessing.  These settings affect
     # only ImagePreprocess analysis/export and never rewrite source page files.
     preprocess_auto_deskew: bool = True
-    preprocess_safety_margin_percent: float = 1.5
+    preprocess_safety_margin_px: int = 20
     # Overlay editor presentation at 100% page scale. The page zoom multiplies
     # the base font, so text boxes zoom together with the scanned page.
     main_entry_font_family: str = "自动（系统推荐）"
