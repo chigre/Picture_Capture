@@ -215,7 +215,10 @@ def _fit_separator_track(
     global_score = global_dark_fraction * 0.82 + global_mean_dark * 0.18
     global_pos = int(np.argmax(global_score))
     global_strength = float(global_score[global_pos])
-    if global_strength < 0.075:
+    # Slanted separators distribute their ink over several neighboring X
+    # columns, so the full-height persistence threshold must stay permissive;
+    # the subsequent per-band continuity checks provide the stronger filter.
+    if global_strength < 0.035:
         return None
     anchor_x = x0 + global_pos
 
