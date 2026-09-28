@@ -3509,14 +3509,31 @@ def analyze_preprocess_page(
             )
             orthogonal_after_quality_score = float(actual_score)
             if pixel_driven and pixel_row_available:
-                orthogonal_alignment_verdict = str(
+                if (
+                    orthogonal_pixel_row_verdict == "passed"
+                    and (
+                        not pixel_tail_available
+                        or orthogonal_bottom_tail_verdict == "passed"
+                    )
+                ):
+                    orthogonal_alignment_verdict = "passed"
+                elif (
                     orthogonal_pixel_row_verdict
-                )
+                    in {"passed", "improved_review"}
+                    and (
+                        not pixel_tail_available
+                        or orthogonal_bottom_tail_verdict
+                        in {"passed", "improved_review"}
+                    )
+                ):
+                    orthogonal_alignment_verdict = "improved_review"
+                else:
+                    orthogonal_alignment_verdict = "failed"
             else:
                 orthogonal_alignment_verdict = str(actual_verdict)
             geometry_strength = max(
                 geometry_strength,
-                estimate.max_vertical_shift_px,
+                estimate.max_vertical_shift_px * float(row_gain),
                 estimate.max_horizontal_shift_px,
             )
             actual_geometry_mode = "orthogonal"
@@ -3573,6 +3590,22 @@ def analyze_preprocess_page(
                 orthogonal_after_pixel_row_worst_px = float(
                     retained_pixel_rows.worst_shift_px
                 )
+                orthogonal_bottom_tail_sample_count = int(
+                    retained_pixel_rows.bottom_tail_sample_count
+                )
+                if orthogonal_initial_bottom_tail_available:
+                    orthogonal_before_bottom_tail_p90_px = float(
+                        orthogonal_initial_bottom_tail_p90_px
+                    )
+                    orthogonal_before_bottom_tail_worst_px = float(
+                        orthogonal_initial_bottom_tail_worst_px
+                    )
+                orthogonal_after_bottom_tail_p90_px = float(
+                    retained_pixel_rows.bottom_tail_p90_shift_px
+                )
+                orthogonal_after_bottom_tail_worst_px = float(
+                    retained_pixel_rows.bottom_tail_worst_shift_px
+                )
                 retained_safe = bool(
                     retained_pixel_rows.p90_shift_px
                     <= PIXEL_ROW_PROFILE_P90_MAX_PX
@@ -3596,9 +3629,59 @@ def analyze_preprocess_page(
                     orthogonal_pixel_row_verdict = "improved_review"
                 else:
                     orthogonal_pixel_row_verdict = "failed"
-                orthogonal_alignment_verdict = str(
-                    orthogonal_pixel_row_verdict
+
+                retained_tail_available = bool(
+                    retained_pixel_rows.bottom_tail_sample_count >= 2
+                    and retained_pixel_rows.bottom_tail_valid_column_count >= 1
                 )
+                retained_tail_safe = bool(
+                    retained_tail_available
+                    and retained_pixel_rows.bottom_tail_p90_shift_px
+                    <= PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX
+                    and retained_pixel_rows.bottom_tail_worst_shift_px
+                    <= PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX
+                )
+                retained_tail_improved = bool(
+                    retained_tail_available
+                    and orthogonal_initial_bottom_tail_available
+                    and orthogonal_initial_bottom_tail_p90_px > 1e-6
+                    and retained_pixel_rows.bottom_tail_p90_shift_px
+                    <= orthogonal_initial_bottom_tail_p90_px * 0.70
+                    and retained_pixel_rows.bottom_tail_worst_shift_px
+                    <= max(
+                        PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX,
+                        orthogonal_initial_bottom_tail_worst_px * 0.80,
+                    )
+                )
+                if retained_tail_safe:
+                    orthogonal_bottom_tail_verdict = "passed"
+                elif retained_tail_improved:
+                    orthogonal_bottom_tail_verdict = "improved_review"
+                elif retained_tail_available:
+                    orthogonal_bottom_tail_verdict = "failed"
+                else:
+                    orthogonal_bottom_tail_verdict = "insufficient"
+
+                if (
+                    orthogonal_pixel_row_verdict == "passed"
+                    and (
+                        not retained_tail_available
+                        or orthogonal_bottom_tail_verdict == "passed"
+                    )
+                ):
+                    orthogonal_alignment_verdict = "passed"
+                elif (
+                    orthogonal_pixel_row_verdict
+                    in {"passed", "improved_review"}
+                    and (
+                        not retained_tail_available
+                        or orthogonal_bottom_tail_verdict
+                        in {"passed", "improved_review"}
+                    )
+                ):
+                    orthogonal_alignment_verdict = "improved_review"
+                else:
+                    orthogonal_alignment_verdict = "failed"
         except Exception as exc:
             warnings.append(
                 f"最终正交像素行复检不可用：{exc}"
