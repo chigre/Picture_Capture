@@ -9,6 +9,7 @@ from picture_capture.preprocess_geometry import (
     apply_layout_dewarp_image,
     estimate_layout_dewarp_from_polygons,
     estimate_perspective_from_polygons,
+    perspective_from_quad,
     transform_points_homography,
 )
 
@@ -45,6 +46,24 @@ def test_perspective_estimate_straightens_diverging_column_starts() -> None:
     assert np.max(np.abs(mapped - dst)) < 1e-5
     assert abs(mapped[0, 0] - mapped[3, 0]) < 1e-5
     assert abs(mapped[1, 0] - mapped[2, 0]) < 1e-5
+
+
+def test_manual_four_corner_perspective_maps_to_axis_aligned_rectangle() -> None:
+    quad = (
+        30.0, 20.0,
+        370.0, 35.0,
+        350.0, 480.0,
+        45.0, 465.0,
+    )
+    estimate = perspective_from_quad(quad, (400, 500))
+    source = np.asarray(quad, dtype=float).reshape(4, 2)
+    mapped = transform_points_homography(source, estimate.matrix)
+
+    assert abs(mapped[0, 1] - mapped[1, 1]) < 1e-5
+    assert abs(mapped[2, 1] - mapped[3, 1]) < 1e-5
+    assert abs(mapped[0, 0] - mapped[3, 0]) < 1e-5
+    assert abs(mapped[1, 0] - mapped[2, 0]) < 1e-5
+    assert estimate.strength_px > 0
 
 
 def test_layout_dewarp_detects_slow_column_bow() -> None:
