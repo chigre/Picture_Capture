@@ -780,10 +780,29 @@ def analyze_preprocess_page(
                 working_polygons, working.size, settings,
             )
             perspective_threshold = max(5.0, width * 0.002)
+            strong_candidate = perspective.strength_px >= perspective_threshold
+            line_supports_perspective = (
+                line_geometry.recommendation == "perspective"
+                and line_geometry.confidence >= 0.35
+            )
             apply_perspective = (
                 requested_geometry_mode == "perspective"
-                or perspective.strength_px >= perspective_threshold
+                or (
+                    requested_geometry_mode == "auto"
+                    and strong_candidate
+                    and line_supports_perspective
+                )
             )
+            if (
+                requested_geometry_mode == "auto"
+                and strong_candidate
+                and not line_supports_perspective
+            ):
+                warnings.append(
+                    "栏结构提示可能存在透视，但文本行几何证据不足或不一致；"
+                    "自动模式未执行透视，可人工选择“自动透视”复核。"
+                )
+                method_parts.append("perspective_review")
             if apply_perspective and perspective.strength_px >= 0.75:
                 perspective_matrix = perspective.matrix
                 geometry_strength = max(
