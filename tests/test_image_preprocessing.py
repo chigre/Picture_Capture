@@ -1800,3 +1800,245 @@ def test_auto_orthogonal_runs_second_residual_pass_after_improved_review(
     assert len(analysis.orthogonal_steps) == 2
     assert analysis.orthogonal_pixel_row_verdict == "passed"
     assert "orthogonal_residual_pass" in analysis.method
+
+
+
+def test_unit_gain_over_scale_budget_is_reduced_instead_of_rejected(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = _two_column_angle_field(lambda t: 0.35 - 0.70 * t)
+    applied_gains: list[float] = []
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=40,
+            recommendation="none",
+            confidence=0.9,
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_orthogonal_warp",
+        lambda *_args, **_kwargs: image_preprocessing.OrthogonalWarpEstimate(
+            y_knots=(180.0, 1092.0),
+            angle_knots_deg=(0.35, -0.35),
+            reference_x=500.0,
+            row_count=40,
+            valid_column_count=2,
+            pixel_angle_sample_count=18,
+            pixel_angle_used_count=18,
+            pixel_angle_confidence=0.30,
+            max_row_angle_deg=0.35,
+            row_angle_span_deg=0.70,
+            max_vertical_shift_px=4.0,
+            max_scale_deviation=0.06775,
+            confidence=0.95,
+            active=True,
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "transform_polygons_orthogonal",
+        lambda values, *_args, **_kwargs: list(values),
+    )
+
+    def fake_apply(source, _estimate, *, row_gain, separator_gain):
+        assert separator_gain == 1.0
+        applied_gains.append(float(row_gain))
+        return source.copy()
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_orthogonal_warp_image",
+        fake_apply,
+    )
+
+    class ScaleAudit:
+        verdict = "same"
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "audit_text_scale_stability",
+        lambda *_args, **_kwargs: ScaleAudit(),
+    )
+
+    pixel_calls = 0
+
+    def fake_pixel_rows(*_args, **_kwargs):
+        nonlocal pixel_calls
+        pixel_calls += 1
+        p90, worst = ((4.0, 5.0) if pixel_calls == 1 else (1.0, 1.5))
+        return type(
+            "PixelAudit",
+            (),
+            {
+                "sample_count": 24,
+                "valid_column_count": 2,
+                "p90_shift_px": p90,
+                "worst_shift_px": worst,
+                "bottom_tail_sample_count": 0,
+                "bottom_tail_valid_column_count": 0,
+                "bottom_tail_p90_shift_px": 0.0,
+                "bottom_tail_worst_shift_px": 0.0,
+                "bottom_tail_passed": False,
+                "passed": p90 <= 1.5 and worst <= 2.5,
+            },
+        )()
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "audit_pixel_row_profiles",
+        fake_pixel_rows,
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(layout_columns_policy="fixed", columns=2),
+        geometry_mode="auto",
+    )
+
+    expected_cap = (
+        image_preprocessing.ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
+        * image_preprocessing.ORTHOGONAL_SCALE_SAFETY_FRACTION
+        / 0.06775
+    )
+    assert analysis.orthogonal_applied is True
+    assert analysis.orthogonal_passes == 1
+    assert len(applied_gains) == 1
+    assert applied_gains[0] == pytest.approx(expected_cap, abs=1e-6)
+    assert analysis.orthogonal_safe_gain_cap == pytest.approx(
+        expected_cap, abs=1e-6
+    )
+    assert "orthogonal_gain_limited" in analysis.method
+
+
+def test_bottom_tail_review_triggers_second_residual_pass(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = _two_column_angle_field(lambda t: 0.25 - 0.50 * t)
+    estimate_calls = 0
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=40,
+            recommendation="none",
+            confidence=0.9,
+        ),
+    )
+
+    def fake_estimate(*_args, **_kwargs):
+        nonlocal estimate_calls
+        estimate_calls += 1
+        return image_preprocessing.OrthogonalWarpEstimate(
+            y_knots=(180.0, 1092.0),
+            angle_knots_deg=(0.25, -0.25),
+            reference_x=500.0,
+            row_count=40,
+            valid_column_count=2,
+            pixel_angle_sample_count=18,
+            pixel_angle_used_count=18,
+            pixel_angle_confidence=0.30,
+            max_row_angle_deg=0.25,
+            row_angle_span_deg=0.50,
+            max_vertical_shift_px=2.0,
+            max_scale_deviation=0.02,
+            confidence=0.95,
+            active=True,
+        )
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_orthogonal_warp",
+        fake_estimate,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "transform_polygons_orthogonal",
+        lambda values, *_args, **_kwargs: list(values),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_orthogonal_warp_image",
+        lambda source, *_args, **_kwargs: source.copy(),
+    )
+
+    class ScaleAudit:
+        verdict = "same"
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "audit_text_scale_stability",
+        lambda *_args, **_kwargs: ScaleAudit(),
+    )
+
+    metrics = iter(
+        [
+            # pass 1 baseline: body already good, bottom tail clearly bad
+            (1.0, 1.5, 6.0, 7.0),
+            # pass 1 candidate: tail clearly improves but is not yet passed
+            (1.0, 1.5, 3.0, 4.0),
+            # pass 2 baseline
+            (1.0, 1.5, 3.0, 4.0),
+            # pass 2 candidate: tail passes
+            (1.0, 1.5, 1.0, 1.5),
+            # retained final pixels
+            (1.0, 1.5, 1.0, 1.5),
+        ]
+    )
+
+    def fake_pixel_rows(*_args, **_kwargs):
+        p90, worst, tail_p90, tail_worst = next(metrics)
+        return type(
+            "PixelAudit",
+            (),
+            {
+                "sample_count": 24,
+                "valid_column_count": 2,
+                "p90_shift_px": p90,
+                "worst_shift_px": worst,
+                "bottom_tail_sample_count": 8,
+                "bottom_tail_valid_column_count": 2,
+                "bottom_tail_p90_shift_px": tail_p90,
+                "bottom_tail_worst_shift_px": tail_worst,
+                "bottom_tail_passed": (
+                    tail_p90 <= 1.5 and tail_worst <= 2.5
+                ),
+                "passed": p90 <= 1.5 and worst <= 2.5,
+            },
+        )()
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "audit_pixel_row_profiles",
+        fake_pixel_rows,
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(layout_columns_policy="fixed", columns=2),
+        geometry_mode="auto",
+    )
+
+    assert estimate_calls == 2
+    assert analysis.orthogonal_passes == 2
+    assert analysis.orthogonal_pixel_row_verdict == "passed"
+    assert analysis.orthogonal_bottom_tail_verdict == "passed"
+    assert analysis.orthogonal_before_bottom_tail_p90_px == 6.0
+    assert analysis.orthogonal_after_bottom_tail_p90_px == 1.0
+    assert "orthogonal_residual_pass" in analysis.method
