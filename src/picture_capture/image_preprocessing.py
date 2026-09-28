@@ -985,6 +985,16 @@ def analyze_preprocess_page(
                         + "。可人工选择“自动透视”复核。"
                     )
                     method_parts.append("perspective_review")
+            if (
+                requested_geometry_mode == "perspective"
+                and perspective.strength_px >= 0.75
+                and not perspective_auto_safe
+            ):
+                warnings.append(
+                    "已按用户显式选择执行透视；该候选未通过“自动几何”的保守安全门，"
+                    f"分类={perspective_classification}，预计上下横向尺度差 "
+                    f"{perspective_scale_delta_ratio * 100:.2f}%。"
+                )
             if apply_perspective and perspective.strength_px >= 0.75:
                 perspective_matrix = perspective.matrix
                 geometry_strength = max(
@@ -1516,6 +1526,17 @@ def export_summary_csv(
             "requested_geometry_mode": analysis.requested_geometry_mode,
             "geometry_mode": analysis.geometry_mode,
             "geometry_strength_px": analysis.geometry_strength_px,
+            "perspective_candidate_strength_px": analysis.perspective_candidate_strength_px,
+            "perspective_classification": analysis.perspective_classification,
+            "perspective_left_drift_px": analysis.perspective_left_drift_px,
+            "perspective_right_drift_px": analysis.perspective_right_drift_px,
+            "perspective_common_drift_px": analysis.perspective_common_drift_px,
+            "perspective_width_delta_px": analysis.perspective_width_delta_px,
+            "perspective_width_change_ratio": analysis.perspective_width_change_ratio,
+            "perspective_scale_top": analysis.perspective_scale_top,
+            "perspective_scale_bottom": analysis.perspective_scale_bottom,
+            "perspective_scale_delta_ratio": analysis.perspective_scale_delta_ratio,
+            "perspective_auto_safe": analysis.perspective_auto_safe,
             "crop_x0": analysis.crop_box[0],
             "crop_y0": analysis.crop_box[1],
             "crop_x1": analysis.crop_box[2],
@@ -1535,6 +1556,8 @@ def export_summary_csv(
             "separator_found": analysis.line_geometry_separator_found,
             "separator_residual_px": analysis.line_geometry_separator_residual_px,
             "separator_span_ratio": analysis.line_geometry_separator_span_ratio,
+            "separator_slope_px_per_1000y": analysis.line_geometry_separator_slope_px_per_1000y,
+            "separator_drift_px": analysis.line_geometry_separator_drift_px,
             "line_geometry_recommendation": analysis.line_geometry_recommendation,
             "line_geometry_confidence": analysis.line_geometry_confidence,
             "canvas_enabled": canvas.enabled,
@@ -1649,6 +1672,13 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         "manual_review": "人工复核",
         "insufficient": "证据不足",
     }
+    perspective_part = ""
+    if analysis.perspective_candidate_strength_px > 0:
+        perspective_part = (
+            f"｜透视候选 {analysis.perspective_candidate_strength_px:.1f}px"
+            f" / 尺度差 {analysis.perspective_scale_delta_ratio * 100:.2f}%"
+            f" / {analysis.perspective_classification}"
+        )
     line_part = ""
     if analysis.line_geometry_rows:
         separator = (
@@ -1665,7 +1695,7 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         f"{label}｜{geometry}{strength}｜"
         f"旋转 {analysis.applied_angle_deg:+.2f}°"
         f"（检测 {analysis.correction_angle_deg:+.2f}°）"
-        f"{line_part}｜"
+        f"{perspective_part}{line_part}｜"
         f"保留 {analysis.retained_ratio * 100:.1f}%｜"
         f"裁剪 L{x0} T{y0} R{x1} B{y1}"
     )
