@@ -253,7 +253,9 @@ def perspective_from_quad(
         p0 = src[index]
         p1 = src[(index + 1) % 4]
         p2 = src[(index + 2) % 4]
-        crosses.append(float(np.cross(p1 - p0, p2 - p1)))
+        first = p1 - p0
+        second = p2 - p1
+        crosses.append(float(first[0] * second[1] - first[1] * second[0]))
     if not (all(v > 0 for v in crosses) or all(v < 0 for v in crosses)):
         raise ValueError("四角顺序发生交叉，请保持左上→右上→右下→左下")
 
