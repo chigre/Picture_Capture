@@ -73,16 +73,19 @@ def test_text_polygon_detection_preserves_polygon_geometry(monkeypatch) -> None:
     assert polygons[0][2, 0] == 109
 
 
-def test_preprocess_combines_text_envelope_with_edge_artifact_guard(monkeypatch) -> None:
+def test_preprocess_crop_uses_layout_columns_not_edge_ink(monkeypatch) -> None:
     image = Image.new("RGB", (1000, 1400), "white")
     draw = ImageDraw.Draw(image)
-    # Simulate a dark scanner/binding trace near the left physical edge.
-    draw.rectangle((3, 80, 10, 1320), fill="black")
-    polygons = []
-    for row in range(12):
-        y = 170 + row * 82
-        draw.rectangle((120, y, 880, y + 25), fill="black")
-        polygons.append(_tilted_box(120, y, 760, 25, 0.0))
+    # Strong scanner/binding noise must not influence normal structural cropping.
+    draw.rectangle((3, 60, 12, 1340), fill="black")
+    polygons = [_tilted_box(350, 80, 120, 24, 0.0)]  # running header
+    for row in range(20):
+        y = 180 + row * 48
+        left = _tilted_box(100, y, 300, 24, 0.0)
+        right = _tilted_box(460, y, 300, 24, 0.0)
+        polygons.extend((left, right))
+        draw.rectangle((100, y, 400, y + 24), fill="black")
+        draw.rectangle((460, y, 760, y + 24), fill="black")
 
     monkeypatch.setattr(
         image_preprocessing,
@@ -91,19 +94,19 @@ def test_preprocess_combines_text_envelope_with_edge_artifact_guard(monkeypatch)
     )
     analysis = analyze_preprocess_page(
         image,
-        AppSettings(analysis_threshold_mode="fixed", darkness_threshold=600),
-        safety_margin_percent=1.5,
+        AppSettings(),
+        safety_margin_px=20,
         auto_deskew=True,
     )
 
     x0, y0, x1, y1 = analysis.crop_box
-    assert 25 < x0 < 120
-    assert x1 >= 880
-    assert y0 < 170
-    assert y1 > 170 + 11 * 82 + 25
-    assert analysis.source_boxes == 12
-    assert analysis.status == "review"
-    assert any("页边墨迹" in warning for warning in analysis.warnings)
+    assert x0 == 80
+    assert 775 <= x1 <= 785
+    assert y0 == 60
+    assert y1 < 1200
+    assert analysis.method.startswith("paddle_layout_roi")
+    assert analysis.source_boxes >= 40
+    assert not any("投影回退" in warning for warning in analysis.warnings)
 
 
 def test_preview_overlay_marks_only_nonretained_area() -> None:
@@ -133,8 +136,8 @@ def test_preprocess_analysis_roundtrip_and_source_signature(tmp_path: Path) -> N
         retained_ratio=0.73,
         confidence=0.9,
         status="normal",
-        method="paddle_text_polygons",
-        safety_margin_percent=1.5,
+        method="paddle_layout_roi",
+        safety_margin_px=20,
         auto_deskew=True,
         source_size_bytes=stat.st_size,
         source_mtime_ns=stat.st_mtime_ns,
@@ -147,13 +150,13 @@ def test_preprocess_analysis_roundtrip_and_source_signature(tmp_path: Path) -> N
     assert loaded.crop_box == analysis.crop_box
     assert loaded.auto_deskew is True
     assert analysis_is_current(
-        loaded, page, safety_margin_percent=1.5, auto_deskew=True
+        loaded, page, safety_margin_px=20, auto_deskew=True
     )
     assert not analysis_is_current(
-        loaded, page, safety_margin_percent=2.0, auto_deskew=True
+        loaded, page, safety_margin_px=30, auto_deskew=True
     )
     assert not analysis_is_current(
-        loaded, page, safety_margin_percent=1.5, auto_deskew=False
+        loaded, page, safety_margin_px=20, auto_deskew=False
     )
 
 
@@ -165,6 +168,7 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert 'text="进入预处理模式"' in source
     assert 'text="自动纠偏"' in source
     assert 'text="安全边界："' in source
+    assert 'text="px"' in source
     assert '"分析所选范围"' in source
     assert 'text="导出检查小图"' in source
     assert 'text="导出预处理图片"' in source
