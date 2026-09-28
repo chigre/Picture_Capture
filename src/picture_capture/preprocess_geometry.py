@@ -90,6 +90,7 @@ class HorizontalAlignmentAudit:
     row_count: int = 0
     column_count: int = 0
     valid_column_count: int = 0
+    valid_column_indices: tuple[int, ...] = ()
     column_row_counts: tuple[int, ...] = ()
     before_global_angle_deg: float = 0.0
     after_global_angle_deg: float = 0.0
@@ -1029,6 +1030,7 @@ def audit_horizontal_alignment(
             row_count=min(len(before_rows), len(after_rows)),
             column_count=column_count,
             valid_column_count=len(valid_pairs),
+            valid_column_indices=tuple(pair[2] for pair in valid_pairs),
             column_row_counts=column_row_counts,
         )
 
@@ -1154,6 +1156,7 @@ def audit_horizontal_alignment(
         row_count=min(len(before_rows), len(after_rows)),
         column_count=column_count,
         valid_column_count=len(valid_pairs),
+        valid_column_indices=tuple(valid_indices),
         column_row_counts=column_row_counts,
         before_global_angle_deg=before_global,
         after_global_angle_deg=after_global,
