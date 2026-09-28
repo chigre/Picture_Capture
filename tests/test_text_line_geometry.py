@@ -105,6 +105,22 @@ def test_line_geometry_recommends_perspective_for_coherent_angle_trend() -> None
     assert analysis.recommendation == "perspective"
 
 
+def test_perspective_recommendation_does_not_require_separator() -> None:
+    image = Image.new("RGB", (900, 1000), "white")
+
+    analysis = analyze_text_line_geometry(
+        image,
+        _two_column_polygons(angle_at=lambda t: -0.12 + 0.48 * t),
+        AppSettings(),
+    )
+
+    assert analysis.row_count >= 18
+    assert analysis.separator_found is False
+    assert analysis.angle_trend_deg > 0.35
+    assert analysis.recommendation == "perspective"
+    assert analysis.confidence >= 0.8
+
+
 def test_line_geometry_uses_curved_real_separator_for_uvdoc_review() -> None:
     image = Image.new("RGB", (900, 1000), "white")
     draw = ImageDraw.Draw(image)
