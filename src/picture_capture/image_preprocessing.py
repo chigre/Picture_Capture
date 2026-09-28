@@ -25,6 +25,8 @@ from .orthogonal_dewarp import (
     HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX,
     HORIZONTAL_RULE_MAX_RESIDUAL_WIDTH_RATIO,
     ORTHOGONAL_WARP_MAX_SCALE_DEVIATION,
+    PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX,
+    PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX,
     PIXEL_ROW_PROFILE_P90_MAX_PX,
     PIXEL_ROW_PROFILE_WORST_MAX_PX,
     OrthogonalWarpEstimate,
@@ -77,7 +79,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 22
+PREPROCESS_FORMAT_VERSION = 23
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -91,6 +93,8 @@ AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX = 0.035
 ORTHOGONAL_AUTO_MIN_CONFIDENCE = 0.45
 ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT = 0.25
 ORTHOGONAL_AUTO_GAINS = (0.55, 0.70, 0.85, 1.0, 1.10, 1.15)
+ORTHOGONAL_MIN_SAFE_GAIN = 0.45
+ORTHOGONAL_SCALE_SAFETY_FRACTION = 0.95
 ORTHOGONAL_MAX_AUTO_PASSES = 3
 POST_PERSPECTIVE_REDETECT_MIN_BOXES = 8
 ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX = 3.5
@@ -259,6 +263,13 @@ class PreprocessAnalysis:
     orthogonal_before_pixel_row_worst_px: float = 0.0
     orthogonal_after_pixel_row_worst_px: float = 0.0
     orthogonal_pixel_row_verdict: str = "insufficient"
+    orthogonal_bottom_tail_sample_count: int = 0
+    orthogonal_before_bottom_tail_p90_px: float = 0.0
+    orthogonal_after_bottom_tail_p90_px: float = 0.0
+    orthogonal_before_bottom_tail_worst_px: float = 0.0
+    orthogonal_after_bottom_tail_worst_px: float = 0.0
+    orthogonal_bottom_tail_verdict: str = "insufficient"
+    orthogonal_safe_gain_cap: float = 0.0
     orthogonal_confidence: float = 0.0
     orthogonal_column_spread_deg: float = 0.0
     orthogonal_max_row_angle_deg: float = 0.0
@@ -843,6 +854,28 @@ class PreprocessAnalysis:
             orthogonal_pixel_row_verdict=str(
                 payload.get("orthogonal_pixel_row_verdict", "insufficient")
                 or "insufficient"
+            ),
+            orthogonal_bottom_tail_sample_count=max(
+                0, int(payload.get("orthogonal_bottom_tail_sample_count", 0))
+            ),
+            orthogonal_before_bottom_tail_p90_px=max(
+                0.0, float(payload.get("orthogonal_before_bottom_tail_p90_px", 0.0))
+            ),
+            orthogonal_after_bottom_tail_p90_px=max(
+                0.0, float(payload.get("orthogonal_after_bottom_tail_p90_px", 0.0))
+            ),
+            orthogonal_before_bottom_tail_worst_px=max(
+                0.0, float(payload.get("orthogonal_before_bottom_tail_worst_px", 0.0))
+            ),
+            orthogonal_after_bottom_tail_worst_px=max(
+                0.0, float(payload.get("orthogonal_after_bottom_tail_worst_px", 0.0))
+            ),
+            orthogonal_bottom_tail_verdict=str(
+                payload.get("orthogonal_bottom_tail_verdict", "insufficient")
+                or "insufficient"
+            ),
+            orthogonal_safe_gain_cap=max(
+                0.0, float(payload.get("orthogonal_safe_gain_cap", 0.0))
             ),
             orthogonal_confidence=max(
                 0.0, min(1.0, float(payload.get("orthogonal_confidence", 0.0)))
