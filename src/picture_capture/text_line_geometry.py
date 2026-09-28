@@ -554,6 +554,92 @@ def separator_track_points(
     )
 
 
+def horizontal_rule_track_points(
+    image: Image.Image,
+    polygons: Iterable[np.ndarray],
+    settings: AppSettings,
+) -> tuple[tuple[float, float], ...]:
+    """Return robust (x, y) samples of the strongest page-header horizontal rule.
+
+    Dictionary scans often contain a long rule between the running header and
+    the two-column body. That rule is stronger structural evidence for absolute
+    horizontal orientation than the mean OCR angle: global deskew can make the
+    middle body look level while rotating an already-near-horizontal header rule
+    visibly away from level.
+
+    Reuse the persistent-track detector on a transposed image. In transposed
+    coordinates it tracks original-Y as a function of original-X, which is
+    exactly a horizontal rule y(x).
+    """
+    source = normalize_page_rgb(image)
+    width, height = source.size
+    polygon_list = [np.asarray(poly, dtype=float) for poly in polygons]
+    boxes = polygon_boxes(polygon_list, width, height)
+    if len(boxes) < 8:
+        return ()
+    try:
+        layout = infer_layout_from_boxes(
+            boxes,
+            source.size,
+            display_scale=1.0,
+            ink_mask=None,
+            columns_policy=settings.layout_columns_policy,
+            fixed_columns=settings.columns,
+            column_separator_mode=settings.layout_column_separator_mode,
+        )
+    except Exception:
+        return ()
+
+    body_top = max(0, min(height - 1, int(layout.start_y)))
+    if body_top < 40:
+        return ()
+
+    # Search a conservative band ending just below the inferred body start.
+    # The band is intentionally much taller than a rule stroke but far smaller
+    # than the full page, so text baselines cannot dominate a persistent track.
+    search_top = max(
+        0,
+        body_top - max(90, int(round(height * 0.075))),
+    )
+    search_bottom = min(
+        height,
+        body_top + max(12, int(round(height * 0.008))),
+    )
+    if search_bottom - search_top < 12:
+        return ()
+
+    # Use the text/body envelope horizontally, with a small inset to avoid scan
+    # edge marks. The header rule normally spans both columns.
+    box_left = min(item[0] for item in boxes)
+    box_right = max(item[2] for item in boxes)
+    inset = max(2, int(round(width * 0.01)))
+    content_left = max(inset, int(box_left))
+    content_right = min(width - inset, int(box_right))
+    if content_right - content_left < max(120, int(round(width * 0.45))):
+        content_left = inset
+        content_right = width - inset
+
+    gray = np.asarray(source.convert("L"), dtype=np.uint8)
+    transposed = gray.T
+    selected = _fit_separator_track(
+        transposed,
+        search_top,
+        search_bottom,
+        content_left,
+        content_right,
+    )
+    if selected is None:
+        return ()
+    if selected.span_ratio < 0.65 or selected.quality < 0.10:
+        return ()
+    # In the transposed image:
+    # selected.ys = original X, selected.xs = original Y.
+    return tuple(
+        (float(x), float(y))
+        for x, y in zip(selected.ys, selected.xs)
+    )
+
+
 def _separator_geometry(
     image: Image.Image,
     polygons: list[np.ndarray],

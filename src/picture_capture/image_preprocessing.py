@@ -21,10 +21,14 @@ from .layout_detection import (
 )
 from .models import AppSettings
 from .orthogonal_dewarp import (
+    HORIZONTAL_RULE_MAX_ANGLE_DEG,
+    HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX,
+    HORIZONTAL_RULE_MAX_RESIDUAL_WIDTH_RATIO,
     ORTHOGONAL_WARP_MAX_SCALE_DEVIATION,
     OrthogonalWarpEstimate,
     apply_orthogonal_warp_image,
     estimate_orthogonal_warp,
+    horizontal_rule_metrics,
     transform_polygons_orthogonal,
 )
 from .preprocess_geometry import (
@@ -69,7 +73,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 17
+PREPROCESS_FORMAT_VERSION = 18
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -82,7 +86,7 @@ AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX = 0.055
 AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX = 0.035
 ORTHOGONAL_AUTO_MIN_CONFIDENCE = 0.45
 ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT = 0.25
-ORTHOGONAL_AUTO_GAINS = (0.55, 0.70, 0.85, 1.0, 1.10)
+ORTHOGONAL_AUTO_GAINS = (0.55, 0.70, 0.85, 1.0, 1.10, 1.15)
 ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX = 3.5
 ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO = 0.0015
 PREVIEW_YELLOW = (255, 225, 110, 94)
@@ -220,8 +224,20 @@ class PreprocessAnalysis:
     orthogonal_reference_x: float = 0.0
     orthogonal_y_knots: tuple[float, ...] = ()
     orthogonal_angle_knots_deg: tuple[float, ...] = ()
+    orthogonal_x_knots: tuple[float, ...] = ()
+    orthogonal_row_grid_rows: int = 0
+    orthogonal_row_grid_cols: int = 0
+    orthogonal_row_angle_grid_deg: tuple[float, ...] = ()
+    orthogonal_row_displacement_grid_px: tuple[float, ...] = ()
     orthogonal_separator_y_knots: tuple[float, ...] = ()
     orthogonal_separator_shift_knots_px: tuple[float, ...] = ()
+    orthogonal_horizontal_rule_point_count: int = 0
+    orthogonal_horizontal_rule_y: float = 0.0
+    orthogonal_before_horizontal_rule_angle_deg: float = 0.0
+    orthogonal_after_horizontal_rule_angle_deg: float = 0.0
+    orthogonal_before_horizontal_rule_residual_px: float = 0.0
+    orthogonal_after_horizontal_rule_residual_px: float = 0.0
+    orthogonal_horizontal_rule_verdict: str = "insufficient"
     orthogonal_confidence: float = 0.0
     orthogonal_column_spread_deg: float = 0.0
     orthogonal_max_row_angle_deg: float = 0.0
@@ -687,6 +703,25 @@ class PreprocessAnalysis:
             orthogonal_angle_knots_deg=tuple(
                 float(v) for v in payload.get("orthogonal_angle_knots_deg", ())
             ),
+            orthogonal_x_knots=tuple(
+                float(v) for v in payload.get("orthogonal_x_knots", ())
+            ),
+            orthogonal_row_grid_rows=max(
+                0, int(payload.get("orthogonal_row_grid_rows", 0))
+            ),
+            orthogonal_row_grid_cols=max(
+                0, int(payload.get("orthogonal_row_grid_cols", 0))
+            ),
+            orthogonal_row_angle_grid_deg=tuple(
+                float(v)
+                for v in payload.get("orthogonal_row_angle_grid_deg", ())
+            ),
+            orthogonal_row_displacement_grid_px=tuple(
+                float(v)
+                for v in payload.get(
+                    "orthogonal_row_displacement_grid_px", ()
+                )
+            ),
             orthogonal_separator_y_knots=tuple(
                 float(v)
                 for v in payload.get("orthogonal_separator_y_knots", ())
@@ -696,6 +731,45 @@ class PreprocessAnalysis:
                 for v in payload.get(
                     "orthogonal_separator_shift_knots_px", ()
                 )
+            ),
+            orthogonal_horizontal_rule_point_count=max(
+                0,
+                int(payload.get("orthogonal_horizontal_rule_point_count", 0)),
+            ),
+            orthogonal_horizontal_rule_y=float(
+                payload.get("orthogonal_horizontal_rule_y", 0.0)
+            ),
+            orthogonal_before_horizontal_rule_angle_deg=float(
+                payload.get(
+                    "orthogonal_before_horizontal_rule_angle_deg", 0.0
+                )
+            ),
+            orthogonal_after_horizontal_rule_angle_deg=float(
+                payload.get(
+                    "orthogonal_after_horizontal_rule_angle_deg", 0.0
+                )
+            ),
+            orthogonal_before_horizontal_rule_residual_px=max(
+                0.0,
+                float(
+                    payload.get(
+                        "orthogonal_before_horizontal_rule_residual_px", 0.0
+                    )
+                ),
+            ),
+            orthogonal_after_horizontal_rule_residual_px=max(
+                0.0,
+                float(
+                    payload.get(
+                        "orthogonal_after_horizontal_rule_residual_px", 0.0
+                    )
+                ),
+            ),
+            orthogonal_horizontal_rule_verdict=str(
+                payload.get(
+                    "orthogonal_horizontal_rule_verdict", "insufficient"
+                )
+                or "insufficient"
             ),
             orthogonal_confidence=max(
                 0.0, min(1.0, float(payload.get("orthogonal_confidence", 0.0)))
@@ -1368,6 +1442,14 @@ def _choose_orthogonal_candidate(
             row_gain=float(gain),
             separator_gain=1.0,
         )
+        scale_audit = audit_text_scale_stability(
+            source_polygons,
+            mapped,
+            size,
+            writing_mode=settings.layout_writing_mode,
+        )
+        if scale_audit.verdict == "worse":
+            continue
         audit = audit_horizontal_alignment(
             source_polygons,
             mapped,
@@ -1437,6 +1519,15 @@ def geometry_corrected_image(
         estimate = OrthogonalWarpEstimate(
             y_knots=tuple(analysis.orthogonal_y_knots),
             angle_knots_deg=tuple(analysis.orthogonal_angle_knots_deg),
+            x_knots=tuple(analysis.orthogonal_x_knots),
+            row_grid_rows=int(analysis.orthogonal_row_grid_rows),
+            row_grid_cols=int(analysis.orthogonal_row_grid_cols),
+            row_angle_grid_deg=tuple(
+                analysis.orthogonal_row_angle_grid_deg
+            ),
+            row_displacement_grid_px=tuple(
+                analysis.orthogonal_row_displacement_grid_px
+            ),
             separator_y_knots=tuple(analysis.orthogonal_separator_y_knots),
             separator_shift_knots_px=tuple(
                 analysis.orthogonal_separator_shift_knots_px
@@ -1448,6 +1539,18 @@ def geometry_corrected_image(
             ),
             separator_point_count=int(
                 analysis.orthogonal_separator_point_count
+            ),
+            horizontal_rule_point_count=int(
+                analysis.orthogonal_horizontal_rule_point_count
+            ),
+            horizontal_rule_y=float(
+                analysis.orthogonal_horizontal_rule_y
+            ),
+            horizontal_rule_angle_deg=float(
+                analysis.orthogonal_before_horizontal_rule_angle_deg
+            ),
+            horizontal_rule_residual_span_px=float(
+                analysis.orthogonal_before_horizontal_rule_residual_px
             ),
             max_row_angle_deg=float(
                 analysis.orthogonal_max_row_angle_deg
@@ -2525,8 +2628,20 @@ def analyze_preprocess_page(
     orthogonal_reference_x = 0.0
     orthogonal_y_knots: tuple[float, ...] = ()
     orthogonal_angle_knots_deg: tuple[float, ...] = ()
+    orthogonal_x_knots: tuple[float, ...] = ()
+    orthogonal_row_grid_rows = 0
+    orthogonal_row_grid_cols = 0
+    orthogonal_row_angle_grid_deg: tuple[float, ...] = ()
+    orthogonal_row_displacement_grid_px: tuple[float, ...] = ()
     orthogonal_separator_y_knots: tuple[float, ...] = ()
     orthogonal_separator_shift_knots_px: tuple[float, ...] = ()
+    orthogonal_horizontal_rule_point_count = 0
+    orthogonal_horizontal_rule_y = 0.0
+    orthogonal_before_horizontal_rule_angle_deg = 0.0
+    orthogonal_after_horizontal_rule_angle_deg = 0.0
+    orthogonal_before_horizontal_rule_residual_px = 0.0
+    orthogonal_after_horizontal_rule_residual_px = 0.0
+    orthogonal_horizontal_rule_verdict = "insufficient"
     orthogonal_confidence = 0.0
     orthogonal_column_spread_deg = 0.0
     orthogonal_max_row_angle_deg = 0.0
@@ -2565,6 +2680,18 @@ def analyze_preprocess_page(
             )
             orthogonal_separator_point_count = int(
                 estimate.separator_point_count
+            )
+            orthogonal_horizontal_rule_point_count = int(
+                estimate.horizontal_rule_point_count
+            )
+            orthogonal_horizontal_rule_y = float(
+                estimate.horizontal_rule_y
+            )
+            orthogonal_before_horizontal_rule_angle_deg = float(
+                estimate.horizontal_rule_angle_deg
+            )
+            orthogonal_before_horizontal_rule_residual_px = float(
+                estimate.horizontal_rule_residual_span_px
             )
             orthogonal_confidence = float(estimate.confidence)
             orthogonal_column_spread_deg = float(
@@ -2721,16 +2848,66 @@ def analyze_preprocess_page(
             else:
                 orthogonal_vertical_verdict = "not_required"
 
-            actual_improved = bool(horizontal_improved and vertical_safe)
-            if not actual_improved:
-                reason = (
-                    "水平验收未通过"
-                    if not horizontal_improved
-                    else "实体竖线验收未通过"
+            header_rule_required = bool(
+                estimate.horizontal_rule_point_count >= 7
+            )
+            header_rule_safe = True
+            if header_rule_required:
+                (
+                    after_rule_count,
+                    after_rule_angle,
+                    after_rule_residual,
+                    _after_rule_y,
+                ) = horizontal_rule_metrics(
+                    candidate_image,
+                    candidate_polygons,
+                    settings,
                 )
+                orthogonal_after_horizontal_rule_angle_deg = float(
+                    after_rule_angle
+                )
+                orthogonal_after_horizontal_rule_residual_px = float(
+                    after_rule_residual
+                )
+                header_residual_limit = max(
+                    HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX,
+                    candidate_image.width
+                    * HORIZONTAL_RULE_MAX_RESIDUAL_WIDTH_RATIO,
+                )
+                header_rule_safe = bool(
+                    after_rule_count >= 7
+                    and abs(float(after_rule_angle))
+                    <= HORIZONTAL_RULE_MAX_ANGLE_DEG
+                    and float(after_rule_residual)
+                    <= header_residual_limit
+                )
+                orthogonal_horizontal_rule_verdict = (
+                    "passed" if header_rule_safe else "failed"
+                )
+            else:
+                orthogonal_horizontal_rule_verdict = "not_required"
+
+            actual_improved = bool(
+                horizontal_improved
+                and vertical_safe
+                and header_rule_safe
+            )
+            if not actual_improved:
+                if not horizontal_improved:
+                    reason = "正文水平验收未通过"
+                elif not header_rule_safe:
+                    reason = "页眉横线验收未通过"
+                else:
+                    reason = "实体竖线验收未通过"
                 warnings.append(
                     f"正交网格候选{reason}，"
-                    f"水平质量分 {baseline_score:.2f}→{actual_score:.2f}"
+                    f"正文水平质量分 {baseline_score:.2f}→{actual_score:.2f}"
+                    + (
+                        "，页眉横线 "
+                        f"{orthogonal_before_horizontal_rule_angle_deg:+.2f}°→"
+                        f"{orthogonal_after_horizontal_rule_angle_deg:+.2f}°"
+                        if header_rule_required else ""
+                    )
                     + (
                         "，竖线X跨度 "
                         f"{orthogonal_before_separator_span_px:.1f}px→"
@@ -2752,6 +2929,15 @@ def analyze_preprocess_page(
             orthogonal_reference_x = float(estimate.reference_x)
             orthogonal_y_knots = tuple(estimate.y_knots)
             orthogonal_angle_knots_deg = tuple(estimate.angle_knots_deg)
+            orthogonal_x_knots = tuple(estimate.x_knots)
+            orthogonal_row_grid_rows = int(estimate.row_grid_rows)
+            orthogonal_row_grid_cols = int(estimate.row_grid_cols)
+            orthogonal_row_angle_grid_deg = tuple(
+                estimate.row_angle_grid_deg
+            )
+            orthogonal_row_displacement_grid_px = tuple(
+                estimate.row_displacement_grid_px
+            )
             orthogonal_separator_y_knots = tuple(
                 estimate.separator_y_knots
             )
@@ -3154,12 +3340,46 @@ def analyze_preprocess_page(
         orthogonal_angle_knots_deg=tuple(
             round(float(v), 6) for v in orthogonal_angle_knots_deg
         ),
+        orthogonal_x_knots=tuple(
+            round(float(v), 4) for v in orthogonal_x_knots
+        ),
+        orthogonal_row_grid_rows=int(orthogonal_row_grid_rows),
+        orthogonal_row_grid_cols=int(orthogonal_row_grid_cols),
+        orthogonal_row_angle_grid_deg=tuple(
+            round(float(v), 6)
+            for v in orthogonal_row_angle_grid_deg
+        ),
+        orthogonal_row_displacement_grid_px=tuple(
+            round(float(v), 6)
+            for v in orthogonal_row_displacement_grid_px
+        ),
         orthogonal_separator_y_knots=tuple(
             round(float(v), 4) for v in orthogonal_separator_y_knots
         ),
         orthogonal_separator_shift_knots_px=tuple(
             round(float(v), 6)
             for v in orthogonal_separator_shift_knots_px
+        ),
+        orthogonal_horizontal_rule_point_count=int(
+            orthogonal_horizontal_rule_point_count
+        ),
+        orthogonal_horizontal_rule_y=round(
+            float(orthogonal_horizontal_rule_y), 3
+        ),
+        orthogonal_before_horizontal_rule_angle_deg=round(
+            float(orthogonal_before_horizontal_rule_angle_deg), 4
+        ),
+        orthogonal_after_horizontal_rule_angle_deg=round(
+            float(orthogonal_after_horizontal_rule_angle_deg), 4
+        ),
+        orthogonal_before_horizontal_rule_residual_px=round(
+            float(orthogonal_before_horizontal_rule_residual_px), 3
+        ),
+        orthogonal_after_horizontal_rule_residual_px=round(
+            float(orthogonal_after_horizontal_rule_residual_px), 3
+        ),
+        orthogonal_horizontal_rule_verdict=str(
+            orthogonal_horizontal_rule_verdict
         ),
         orthogonal_confidence=round(float(orthogonal_confidence), 6),
         orthogonal_column_spread_deg=round(
@@ -4060,6 +4280,29 @@ def export_summary_csv(
                 analysis.orthogonal_separator_point_count
             ),
             "orthogonal_row_gain": analysis.orthogonal_row_gain,
+            "orthogonal_row_grid_rows": analysis.orthogonal_row_grid_rows,
+            "orthogonal_row_grid_cols": analysis.orthogonal_row_grid_cols,
+            "orthogonal_horizontal_rule_point_count": (
+                analysis.orthogonal_horizontal_rule_point_count
+            ),
+            "orthogonal_horizontal_rule_y": (
+                analysis.orthogonal_horizontal_rule_y
+            ),
+            "orthogonal_before_horizontal_rule_angle_deg": (
+                analysis.orthogonal_before_horizontal_rule_angle_deg
+            ),
+            "orthogonal_after_horizontal_rule_angle_deg": (
+                analysis.orthogonal_after_horizontal_rule_angle_deg
+            ),
+            "orthogonal_before_horizontal_rule_residual_px": (
+                analysis.orthogonal_before_horizontal_rule_residual_px
+            ),
+            "orthogonal_after_horizontal_rule_residual_px": (
+                analysis.orthogonal_after_horizontal_rule_residual_px
+            ),
+            "orthogonal_horizontal_rule_verdict": (
+                analysis.orthogonal_horizontal_rule_verdict
+            ),
             "orthogonal_confidence": analysis.orthogonal_confidence,
             "orthogonal_column_spread_deg": (
                 analysis.orthogonal_column_spread_deg
