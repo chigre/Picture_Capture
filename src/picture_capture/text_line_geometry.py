@@ -423,10 +423,12 @@ def analyze_text_line_geometry(
 
     row_factor = min(1.0, len(rows) / 18.0)
     residual_factor = max(0.25, 1.0 - min(1.0, residual_mad / 0.45))
-    separator_factor = 1.0 if separator_found else 0.78
+    # Physical separators are optional structural evidence. Their absence must
+    # not reduce confidence in a coherent text-line trend, because many
+    # dictionaries have no ruling lines at all.
     confidence = max(
         0.0,
-        min(1.0, row_factor * residual_factor * separator_factor),
+        min(1.0, row_factor * residual_factor),
     )
 
     # A real long separator is a much stronger nonlinear-geometry witness than
