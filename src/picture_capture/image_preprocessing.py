@@ -37,6 +37,7 @@ from .preprocess_geometry import (
     compose_perspective_estimates,
     estimate_horizontal_perspective_from_polygons,
     estimate_perspective_from_polygons,
+    optimize_horizontal_perspective_strength,
     perspective_from_quad,
     transform_polygons_homography,
 )
@@ -54,7 +55,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 12
+PREPROCESS_FORMAT_VERSION = 13
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -126,6 +127,9 @@ class PreprocessAnalysis:
     perspective_horizontal_vanishing_x: float = 0.0
     perspective_horizontal_vanishing_y: float = 0.0
     perspective_horizontal_row_count: int = 0
+    perspective_horizontal_strength: float = 0.0
+    perspective_structural_applied: bool = False
+    perspective_structural_safe: bool = False
     perspective_row_before_top_angle_deg: float = 0.0
     perspective_row_after_top_angle_deg: float = 0.0
     perspective_row_before_bottom_angle_deg: float = 0.0
@@ -294,6 +298,19 @@ class PreprocessAnalysis:
             ),
             perspective_horizontal_row_count=max(
                 0, int(payload.get("perspective_horizontal_row_count", 0))
+            ),
+            perspective_horizontal_strength=max(
+                0.0,
+                min(
+                    1.0,
+                    float(payload.get("perspective_horizontal_strength", 0.0)),
+                ),
+            ),
+            perspective_structural_applied=bool(
+                payload.get("perspective_structural_applied", False)
+            ),
+            perspective_structural_safe=bool(
+                payload.get("perspective_structural_safe", False)
             ),
             perspective_row_before_top_angle_deg=float(
                 payload.get("perspective_row_before_top_angle_deg", 0.0)
@@ -1092,6 +1109,9 @@ def analyze_preprocess_page(
     perspective_horizontal_vanishing_x = 0.0
     perspective_horizontal_vanishing_y = 0.0
     perspective_horizontal_row_count = 0
+    perspective_horizontal_strength = 0.0
+    perspective_structural_applied = False
+    perspective_structural_safe = False
     perspective_row_before_top_angle_deg = 0.0
     perspective_row_after_top_angle_deg = 0.0
     perspective_row_before_bottom_angle_deg = 0.0
@@ -1869,6 +1889,11 @@ def analyze_preprocess_page(
             float(perspective_horizontal_vanishing_y), 3
         ),
         perspective_horizontal_row_count=int(perspective_horizontal_row_count),
+        perspective_horizontal_strength=round(
+            float(perspective_horizontal_strength), 6
+        ),
+        perspective_structural_applied=bool(perspective_structural_applied),
+        perspective_structural_safe=bool(perspective_structural_safe),
         perspective_row_before_top_angle_deg=round(
             float(perspective_row_before_top_angle_deg), 4
         ),
