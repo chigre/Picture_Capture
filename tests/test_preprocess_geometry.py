@@ -83,6 +83,36 @@ def test_horizontal_vanishing_candidate_flattens_y_dependent_row_angles() -> Non
     assert audit.improvement_ratio >= 0.5
 
 
+def test_horizontal_vanishing_candidate_does_not_flip_for_left_side_vp() -> None:
+    polygons: list[np.ndarray] = []
+    for row in range(22):
+        t = row / 21.0
+        y = 140 + row * 34
+        angle = -0.42 + 0.84 * t
+        polygons.extend(
+            (
+                _rotated_box(260, y, 280, 22, angle),
+                _rotated_box(650, y, 280, 22, angle),
+            )
+        )
+
+    estimate = estimate_horizontal_perspective_from_polygons(
+        polygons, (900, 1000),
+    )
+    transformed = transform_polygons_homography(polygons, estimate.matrix)
+    audit = audit_horizontal_alignment(polygons, transformed)
+
+    assert estimate.horizontal_vanishing_x < 0
+    assert audit.verdict == "improved"
+    # The first box should remain on the left half of the page; a homogeneous
+    # direction-sign mistake would rotate the page by ~180 degrees.
+    before_center = polygons[0].mean(axis=0)
+    after_center = transformed[0].mean(axis=0)
+    assert before_center[0] < 450
+    assert after_center[0] < 450
+    assert abs(audit.after_trend_deg) <= 0.12
+
+
 def test_horizontal_vanishing_candidate_keeps_character_scale_safe() -> None:
     polygons: list[np.ndarray] = []
     for row in range(22):
