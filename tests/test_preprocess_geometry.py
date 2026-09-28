@@ -281,6 +281,30 @@ def test_worst_column_residual_cannot_hide_in_page_average() -> None:
     assert audit.verdict != "improved"
 
 
+def test_horizontal_vp_evidence_includes_localized_region_span() -> None:
+    settings = AppSettings(layout_columns_policy="fixed", columns=2)
+    polygons: list[np.ndarray] = []
+    for column, cx in enumerate((260.0, 760.0)):
+        for row in range(21):
+            y = 145 + row * 40 + column * 7
+            # Most of each column is already level; only the lower third keeps
+            # a consistent residual. Robust trend fitting may down-weight this,
+            # so direct region span must still trigger horizontal-VP analysis.
+            angle = -0.22 if row >= 14 else 0.0
+            polygons.append(_rotated_box(cx, y, 300, 22, angle))
+
+    identity_audit = audit_horizontal_alignment(
+        polygons, polygons, size=(1050, 1100), settings=settings,
+    )
+    estimate = estimate_horizontal_perspective_from_polygons(
+        polygons, (1050, 1100), settings,
+    )
+
+    assert identity_audit.before_worst_region_span_deg >= 0.18
+    assert estimate.horizontal_column_count == 2
+    assert estimate.horizontal_row_count >= 30
+
+
 def test_localized_lower_right_tilt_is_caught_by_region_gate() -> None:
     settings = AppSettings(layout_columns_policy="fixed", columns=2)
     before: list[np.ndarray] = []
