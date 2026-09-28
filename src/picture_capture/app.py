@@ -13568,32 +13568,177 @@ class PictureCaptureApp(tk.Tk):
         except ValueError as exc:
             self.show_error("页面范围无效", exc)
             return
+
         project = self.project
         settings = replace(self.settings)
         safety, auto_deskew, geometry_mode = self._preprocess_config()
-        output = preprocess_processed_output_root(project.root)
+        (
+            canvas_enabled,
+            canvas_mode,
+            canvas_width,
+            canvas_height,
+            align_x,
+            align_y,
+        ) = self._preprocess_export_config()
+        if canvas_enabled and canvas_mode == "custom":
+            if canvas_width <= 0 or canvas_height <= 0:
+                messagebox.showerror(
+                    "统一白底画布",
+                    "自定义尺寸时，宽度和高度都必须大于 0 px。",
+                    parent=self,
+                )
+                return
 
-        def worker(index, _position, _total):
+        output = preprocess_processed_output_root(project.root)
+        metadata_output = preprocess_metadata_output_root(project.root)
+
+        # Stage 1 analyzes every page before writing images. This makes it
+        # possible to resolve one common batch canvas that is guaranteed to fit
+        # the largest retained crop, even when a custom requested size is too
+        # small. No scan content is rescaled.
+        def analyze_worker(index, _position, _total):
             page = project.images[int(index)]
             analysis = self._preprocess_analysis_for_export(
                 project, page, settings, safety, auto_deskew, geometry_mode,
             )
-            destination = output / page.name
-            save_processed_page(page, analysis, destination)
-            return int(index), analysis, destination
+            return int(index), analysis
 
-        def done(_completed, _total, _stopped, results, error):
+        def analyzed(_completed, _total, stopped, results, error):
             if error is not None or self.project is not project:
                 return
-            for index, analysis, _destination in results:
+            for index, analysis in results:
                 self._preprocess_results[project.images[int(index)].name] = analysis
-            self.status_var.set(
-                f"预处理图片已导出：{output}｜原扫描图未修改。"
-            )
+            if stopped or not results:
+                self.status_var.set("预处理图片导出已停止在分析阶段；尚未写入最终图片。")
+                return
+
+            analysis_by_index = {
+                int(index): analysis for index, analysis in results
+            }
+            content_widths = [
+                max(1, analysis.crop_box[2] - analysis.crop_box[0])
+                for analysis in analysis_by_index.values()
+            ]
+            content_heights = [
+                max(1, analysis.crop_box[3] - analysis.crop_box[1])
+                for analysis in analysis_by_index.values()
+            ]
+            max_content_width = max(content_widths)
+            max_content_height = max(content_heights)
+
+            if canvas_enabled:
+                if canvas_mode == "batch_max":
+                    requested_width = max_content_width
+                    requested_height = max_content_height
+                else:
+                    requested_width = canvas_width
+                    requested_height = canvas_height
+                effective_width = max(requested_width, max_content_width)
+                effective_height = max(requested_height, max_content_height)
+            else:
+                requested_width = 0
+                requested_height = 0
+                effective_width = 0
+                effective_height = 0
+
+            export_items = [
+                int(index) for index, _analysis in results
+            ]
+
+            def export_worker(index, _position, _total):
+                page = project.images[int(index)]
+                analysis = analysis_by_index[int(index)]
+                canvas = output_canvas_info(
+                    analysis,
+                    enabled=canvas_enabled,
+                    mode=canvas_mode,
+                    requested_width=requested_width,
+                    requested_height=requested_height,
+                    canvas_width=effective_width if canvas_enabled else None,
+                    canvas_height=effective_height if canvas_enabled else None,
+                    align_x=align_x,
+                    align_y=align_y,
+                )
+                destination = output / page.name
+                save_processed_page(
+                    page, analysis, destination, canvas=canvas,
+                )
+                metadata_destination = (
+                    metadata_output / f"{page.stem}.preprocess.json"
+                )
+                export_diagnostic_json(
+                    page,
+                    analysis,
+                    metadata_destination,
+                    output_path=destination,
+                    canvas=canvas,
+                )
+                return (
+                    int(index), analysis, destination, canvas,
+                    metadata_destination,
+                )
+
+            def exported(_done, _export_total, export_stopped, export_results, export_error):
+                if export_error is not None or self.project is not project:
+                    return
+                summary_records = []
+                for (
+                    index,
+                    analysis,
+                    destination,
+                    canvas,
+                    _metadata_destination,
+                ) in export_results:
+                    page = project.images[int(index)]
+                    self._preprocess_results[page.name] = analysis
+                    summary_records.append(
+                        (page, analysis, destination, canvas)
+                    )
+                summary_path = output.parent / "preprocess_summary.csv"
+                export_summary_csv(summary_records, summary_path)
+
+                canvas_note = ""
+                if canvas_enabled:
+                    canvas_note = (
+                        f"｜统一画布 {effective_width}×{effective_height}px"
+                        f"（X {self.preprocess_export_align_x_var.get()} / "
+                        f"Y {self.preprocess_export_align_y_var.get()}）"
+                    )
+                    if (
+                        canvas_mode == "custom"
+                        and (
+                            effective_width > requested_width
+                            or effective_height > requested_height
+                        )
+                    ):
+                        canvas_note += (
+                            f"｜自定义 {requested_width}×{requested_height}px "
+                            "不足，已整批扩容且未缩放正文"
+                        )
+                stop_note = "｜已安全停止，汇总仅含已完成页" if export_stopped else ""
+                self.status_var.set(
+                    f"预处理图片已导出：{output}"
+                    f"｜诊断参数：{metadata_output}"
+                    f"｜汇总：{summary_path.name}"
+                    f"{canvas_note}{stop_note}｜原扫描图未修改。"
+                )
+
+            def start_export_stage() -> None:
+                self._start_batch_task(
+                    "导出预处理图片", export_items, export_worker,
+                    on_done=exported,
+                    item_label=lambda index: project.images[int(index)].name,
+                    refresh_page_quality=False,
+                )
+
+            # _finish_batch_task clears the current batch callback/thread after
+            # invoking us, so schedule stage 2 for the next Tk turn instead of
+            # starting it re-entrantly inside the stage-1 completion callback.
+            self.after_idle(start_export_stage)
 
         self._start_batch_task(
-            "导出预处理图片", indices, worker,
-            on_done=done,
+            "分析预处理导出范围", indices, analyze_worker,
+            on_done=analyzed,
             item_label=lambda index: project.images[int(index)].name,
             refresh_page_quality=False,
         )
