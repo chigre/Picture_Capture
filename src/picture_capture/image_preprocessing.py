@@ -538,37 +538,94 @@ def _projection_skew_fallback(
     return float(fine[int(np.argmax(fine_scores))])
 
 
+def _normalize_geometry_mode(value: str | None) -> str:
+    mode = str(value or "auto").strip().lower()
+    aliases = {
+        "auto": "auto",
+        "deskew": "deskew",
+        "light": "deskew",
+        "perspective": "perspective",
+        "dewarp": "dewarp",
+        "mesh": "dewarp",
+    }
+    return aliases.get(mode, "auto")
+
+
+def _dewarp_payload_valid(
+    y_samples: tuple[float, ...],
+    target_starts: tuple[float, ...],
+    source_starts: tuple[tuple[float, ...], ...],
+) -> bool:
+    return (
+        len(y_samples) >= 2
+        and len(target_starts) >= 2
+        and len(source_starts) == len(y_samples)
+        and all(len(row) == len(target_starts) for row in source_starts)
+    )
+
+
+def geometry_corrected_image(
+    image: Image.Image,
+    analysis: PreprocessAnalysis,
+) -> Image.Image:
+    """Apply the saved geometric correction without cropping.
+
+    Export/preview reuse the exact analysis transform; they do not run Paddle
+    again, so a reviewed result remains deterministic.
+    """
+    corrected = deskew_image(image, analysis.applied_angle_deg)
+    if analysis.perspective_matrix is not None:
+        corrected = apply_homography_image(
+            corrected, analysis.perspective_matrix,
+        )
+    if _dewarp_payload_valid(
+        analysis.dewarp_y_samples,
+        analysis.dewarp_target_starts,
+        analysis.dewarp_source_starts,
+    ):
+        corrected = apply_layout_dewarp_image(
+            corrected,
+            dewarp_estimate_from_payload(
+                analysis.dewarp_y_samples,
+                analysis.dewarp_target_starts,
+                analysis.dewarp_source_starts,
+                analysis.geometry_strength_px,
+            ),
+        )
+    return corrected
+
+
 def analyze_preprocess_page(
     image: Image.Image,
     settings: AppSettings,
     *,
     safety_margin_px: int = DEFAULT_SAFETY_MARGIN_PX,
     auto_deskew: bool = True,
+    geometry_mode: str = "auto",
 ) -> PreprocessAnalysis:
     source = normalize_page_rgb(image)
     width, height = source.size
+    requested_geometry_mode = _normalize_geometry_mode(geometry_mode)
     warnings: list[str] = []
     polygons: list[np.ndarray] = []
-    method = "paddle_layout_roi"
-    layout_box_source: tuple[int, int, int, int] | None = None
+    method_parts = ["paddle_layout_roi"]
     layout_source_boxes = 0
 
     try:
         polygons = detect_text_polygons(source, settings)
-        layout_box_source, layout_estimate = _layout_content_box_from_polygons(
-            polygons, width, height, settings,
-        )
-        layout_source_boxes = int(layout_estimate.source_boxes)
+        if len(polygons) < 4:
+            raise RuntimeError("Paddle文本框过少")
     except Exception as exc:
-        method = "projection_fallback"
+        polygons = []
+        method_parts = ["projection_fallback"]
         warnings.append(f"版面结构检测不可用，裁边已使用投影回退：{exc}")
 
     correction, angle_samples, angle_mad = estimate_skew_from_polygons(
         polygons, writing_mode=settings.layout_writing_mode,
     )
     if angle_samples < 4:
-        if method != "projection_fallback":
-            method = "paddle_layout_roi+projection_angle"
+        if method_parts[0] != "projection_fallback":
+            method_parts.append("projection_angle")
         try:
             correction = _projection_skew_fallback(
                 source, settings, writing_mode=settings.layout_writing_mode,
@@ -586,49 +643,119 @@ def analyze_preprocess_page(
         applied = 0.0
         if auto_deskew and abs(correction) > DEFAULT_MAX_AUTO_DESKEW_DEG:
             warnings.append(
-                f"检测倾斜 {correction:+.2f}° 超过第一版自动纠偏上限 "
+                f"检测倾斜 {correction:+.2f}° 超过自动纠偏上限 "
                 f"{DEFAULT_MAX_AUTO_DESKEW_DEG:.1f}°，未自动旋转。"
             )
 
-    text_box = _rotated_text_box(polygons, width, height, applied)
-    if layout_box_source is not None:
-        # The structural rule is established from the detected source layout:
-        #   X = first-column-left .. actual last-column-right
-        #   Y = header-top .. body-bottom.
-        # After deskew, recompute those same structural anchors from the rotated
-        # detector polygons, then add the fixed safety margin in the corrected
-        # coordinate system.  This avoids enlarging a 20 px margin merely because
-        # an axis-aligned bounding box was taken around a rotated rectangle.
-        corrected_layout_box = layout_box_source
-        if abs(applied) >= 1e-9:
-            try:
-                corrected_polygons = _rotate_polygons_same_canvas(
-                    polygons, width, height, applied,
+    working = deskew_image(source, applied)
+    working_polygons = (
+        _rotate_polygons_same_canvas(polygons, width, height, applied)
+        if polygons else []
+    )
+    actual_geometry_mode = "deskew"
+    geometry_strength = 0.0
+    perspective_matrix: tuple[float, ...] | None = None
+    dewarp_estimate: LayoutDewarpEstimate | None = None
+
+    # Advanced geometry is deliberately estimated after the global small-angle
+    # correction. Perspective handles the remaining trapezoid/shear component;
+    # the mesh stage then removes slow local column curvature.
+    if working_polygons and requested_geometry_mode in {"auto", "perspective", "dewarp"}:
+        try:
+            perspective = estimate_perspective_from_polygons(
+                working_polygons, working.size, settings,
+            )
+            perspective_threshold = max(5.0, width * 0.002)
+            apply_perspective = (
+                requested_geometry_mode in {"perspective", "dewarp"}
+                or perspective.strength_px >= perspective_threshold
+            )
+            if apply_perspective and perspective.strength_px >= 0.75:
+                perspective_matrix = perspective.matrix
+                geometry_strength = max(
+                    geometry_strength, float(perspective.strength_px)
                 )
-                corrected_layout_box, _corrected_estimate = (
-                    _layout_content_box_from_polygons(
-                        corrected_polygons, width, height, settings,
-                    )
+                working = apply_homography_image(
+                    working, perspective_matrix,
                 )
-            except Exception as exc:
-                corrected_layout_box = _rotate_box_same_canvas(
-                    layout_box_source, width, height, applied,
+                working_polygons = transform_polygons_homography(
+                    working_polygons, perspective_matrix,
                 )
-                warnings.append(
-                    f"纠偏后版面边界重算失败，已使用几何变换回退：{exc}"
+                actual_geometry_mode = "perspective"
+                method_parts.append("perspective")
+        except Exception as exc:
+            if requested_geometry_mode in {"perspective", "dewarp"}:
+                warnings.append(f"自动透视纠正不可用：{exc}")
+
+    if working_polygons and requested_geometry_mode in {"auto", "dewarp"}:
+        try:
+            candidate = estimate_layout_dewarp_from_polygons(
+                working_polygons, working.size, settings,
+            )
+            dewarp_threshold = max(3.0, width * 0.0015)
+            apply_dewarp = (
+                requested_geometry_mode == "dewarp"
+                or candidate.strength_px >= dewarp_threshold
+            )
+            if apply_dewarp and candidate.strength_px >= 0.75:
+                dewarp_estimate = candidate
+                geometry_strength = max(
+                    geometry_strength, float(candidate.strength_px)
                 )
-        raw_content_box = corrected_layout_box
+                working = apply_layout_dewarp_image(
+                    working, dewarp_estimate,
+                )
+                working_polygons = transform_polygons_layout_dewarp(
+                    working_polygons, dewarp_estimate, width,
+                )
+                actual_geometry_mode = "dewarp"
+                method_parts.append("dewarp")
+        except Exception as exc:
+            if requested_geometry_mode == "dewarp":
+                warnings.append(f"版面去弯曲不可用：{exc}")
+
+    # Advanced transforms change the page geometry. Re-run TextDetection on the
+    # corrected image before final structural cropping. If that second pass
+    # fails, the mathematically transformed original polygons remain a safe
+    # fallback and preserve non-destructive export.
+    final_polygons = working_polygons
+    if polygons and actual_geometry_mode in {"perspective", "dewarp"}:
+        try:
+            redetected = detect_text_polygons(working, settings)
+            if len(redetected) >= 4:
+                final_polygons = redetected
+                method_parts.append("redetect")
+            else:
+                warnings.append("高级纠正后文本框过少，最终裁边沿用变换后的原检测框。")
+        except Exception as exc:
+            warnings.append(f"高级纠正后版面复检失败，沿用变换后的原检测框：{exc}")
+
+    layout_box: tuple[int, int, int, int] | None = None
+    if final_polygons:
+        try:
+            layout_box, layout_estimate = _layout_content_box_from_polygons(
+                final_polygons, width, height, settings,
+            )
+            layout_source_boxes = int(layout_estimate.source_boxes)
+        except Exception as exc:
+            warnings.append(f"纠正后结构裁边失败，已使用投影回退：{exc}")
+
+    if layout_box is not None:
+        raw_content_box = layout_box
         crop_box = _expand_box_px(
             raw_content_box, width, height, safety_margin_px,
         )
     else:
-        # Projection is now strictly a compatibility fallback. It no longer
-        # participates in ordinary Paddle/layout-driven crop decisions.
-        corrected = deskew_image(source, applied)
-        raw_content_box = _projection_content_box(corrected, settings)
+        if method_parts[0] != "projection_fallback":
+            method_parts.insert(0, "projection_fallback")
+        raw_content_box = _projection_content_box(working, settings)
         crop_box = _expand_box_px(
             raw_content_box, width, height, safety_margin_px,
         )
+
+    text_box = _rotated_text_box(
+        final_polygons, width, height, 0.0,
+    ) if final_polygons else None
 
     x0, y0, x1, y1 = crop_box
     retained_ratio = max(
@@ -640,20 +767,20 @@ def analyze_preprocess_page(
         warnings.append(f"文本框倾斜角离散较大（MAD {angle_mad:.2f}°）。")
     if abs(correction) > 3.0:
         warnings.append(f"页面倾斜较大（{correction:+.2f}°），建议人工确认。")
-    if len(polygons) < 8:
+    if polygons and len(polygons) < 8:
         warnings.append(f"有效文本框仅 {len(polygons)} 个，建议人工确认裁边。")
     if retained_ratio < 0.45:
         warnings.append(f"仅保留页面 {retained_ratio * 100:.1f}% 面积，裁剪幅度较大。")
     if retained_ratio > 0.975:
         warnings.append(f"保留页面 {retained_ratio * 100:.1f}% 面积，几乎未裁边。")
 
-    evidence_boxes = layout_source_boxes or len(polygons)
+    evidence_boxes = layout_source_boxes or len(final_polygons) or len(polygons)
     confidence = min(1.0, evidence_boxes / 40.0)
     if angle_samples:
         confidence *= max(0.25, 1.0 - min(1.0, angle_mad / 1.5))
     else:
         confidence *= 0.45
-    if method == "projection_fallback":
+    if "projection_fallback" in method_parts:
         confidence *= 0.55
     confidence = max(0.0, min(1.0, confidence))
     status = "review" if warnings or confidence < 0.45 else "normal"
@@ -672,10 +799,23 @@ def analyze_preprocess_page(
         retained_ratio=retained_ratio,
         confidence=confidence,
         status=status,
-        method=method,
+        method="+".join(dict.fromkeys(method_parts)),
         warnings=tuple(warnings),
         safety_margin_px=max(0, int(safety_margin_px)),
         auto_deskew=bool(auto_deskew),
+        requested_geometry_mode=requested_geometry_mode,
+        geometry_mode=actual_geometry_mode,
+        geometry_strength_px=round(float(geometry_strength), 3),
+        perspective_matrix=perspective_matrix,
+        dewarp_y_samples=(
+            tuple(dewarp_estimate.y_samples) if dewarp_estimate is not None else ()
+        ),
+        dewarp_target_starts=(
+            tuple(dewarp_estimate.target_starts) if dewarp_estimate is not None else ()
+        ),
+        dewarp_source_starts=(
+            tuple(dewarp_estimate.source_starts) if dewarp_estimate is not None else ()
+        ),
     )
 
 def analyze_preprocess_path(
