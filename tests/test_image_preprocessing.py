@@ -1026,11 +1026,14 @@ def test_manual_perspective_quad_roundtrip(tmp_path: Path) -> None:
     assert load_manual_perspective_quad(tmp_path, page) is None
 
 
-def test_promote_processed_pages_preserves_originals_in_before(tmp_path: Path) -> None:
+def test_promote_processed_pages_supports_incremental_selected_ranges(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "project"
     root.mkdir()
     pages = []
-    for index, value in enumerate((40, 80), start=1):
+    original_values = (40, 80, 120)
+    for index, value in enumerate(original_values, start=1):
         page = root / f"{index:04d}.tif"
         Image.new("L", (40, 60), value).save(page)
         pages.append(page)
@@ -1039,11 +1042,17 @@ def test_promote_processed_pages_preserves_originals_in_before(tmp_path: Path) -
     for index, value in enumerate((180, 220), start=1):
         Image.new("L", (32, 48), value).save(output / f"{index:04d}.tif")
 
-    backup, promoted = promote_processed_pages(root, pages)
+    # Promote only body pages 1-2. Page 3 represents an appendix/table page and
+    # must remain untouched even though the project contains it.
+    backup, promoted = promote_processed_pages(root, pages[:2])
 
     assert backup == root / "__before__"
     assert len(promoted) == 2
-    assert all(path.parent == root for path in promoted)
+    assert not (backup / "0003.tif").exists()
+    with Image.open(root / "0003.tif") as opened:
+        assert opened.size == (40, 60)
+        assert opened.getpixel((0, 0)) == 120
+
     for index, original_value in enumerate((40, 80), start=1):
         with Image.open(backup / f"{index:04d}.tif") as opened:
             assert opened.size == (40, 60)
@@ -1053,12 +1062,27 @@ def test_promote_processed_pages_preserves_originals_in_before(tmp_path: Path) -
             assert opened.size == (32, 48)
             assert opened.getpixel((0, 0)) == processed_value
 
-    # The exported processed set remains as provenance/reproducibility output.
+    # A later, different page range may be promoted into the same __before__
+    # directory without altering the originals already stored there.
+    Image.new("L", (34, 50), 240).save(output / "0003.tif")
+    promote_processed_pages(root, [root / "0003.tif"])
+
+    with Image.open(backup / "0001.tif") as opened:
+        assert opened.getpixel((0, 0)) == 40
+    with Image.open(backup / "0003.tif") as opened:
+        assert opened.size == (40, 60)
+        assert opened.getpixel((0, 0)) == 120
+    with Image.open(root / "0003.tif") as opened:
+        assert opened.size == (34, 50)
+        assert opened.getpixel((0, 0)) == 240
+
+    # Processed exports remain as provenance/reproducibility output.
     assert (output / "0001.tif").is_file()
     assert (output / "0002.tif").is_file()
+    assert (output / "0003.tif").is_file()
 
 
-def test_promote_processed_pages_requires_complete_export_and_never_overwrites_backup(
+def test_promote_processed_pages_requires_only_selected_exports_and_never_overwrites_page_backup(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "project"
@@ -1072,29 +1096,33 @@ def test_promote_processed_pages_requires_complete_export_and_never_overwrites_b
     output = image_preprocessing.processed_output_root(root)
     Image.new("RGB", (28, 38), "white").save(output / "0001.png")
 
+    # Requiring both pages still fails because page 2 is missing.
     try:
         promote_processed_pages(root, pages)
     except RuntimeError as exc:
-        assert "导出不完整" in str(exc)
+        assert "所选范围" in str(exc)
+        assert "0002.png" in str(exc)
     else:
-        raise AssertionError("incomplete processed set must not be promoted")
+        raise AssertionError("incomplete selected range must not be promoted")
 
     assert all(page.is_file() for page in pages)
     assert not (root / "__before__").exists()
 
-    Image.new("RGB", (28, 38), "white").save(output / "0002.png")
-    promote_processed_pages(root, pages)
-    assert (root / "__before__").is_dir()
+    # But selecting page 1 alone is valid; page 2 is not forced through this
+    # preprocessing path.
+    promote_processed_pages(root, [pages[0]])
+    assert (root / "__before__" / "0001.png").is_file()
+    assert (root / "0002.png").is_file()
+    assert not (root / "__before__" / "0002.png").exists()
 
+    # The immutable first-generation backup for a page is never overwritten.
     try:
-        promote_processed_pages(
-            root,
-            [root / "0001.png", root / "0002.png"],
-        )
+        promote_processed_pages(root, [root / "0001.png"])
     except RuntimeError as exc:
         assert "__before__" in str(exc)
+        assert "0001.png" in str(exc)
     else:
-        raise AssertionError("existing original backup must never be overwritten")
+        raise AssertionError("existing page backup must never be overwritten")
 
 
 def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
@@ -1132,7 +1160,7 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert '("诊断信息", self.show_preprocess_diagnostics)' in source
     assert 'text="导出检查小图"' in source
     assert 'text="导出预处理图片"' in source
-    assert 'text="设为工作图片"' in source
+    assert 'text="所选设为工作图片"' in source
     assert 'textvariable=self.preprocess_status_var' not in source
     assert 'section_keys = ("normal", "aux", "ocr", "actions", "postproduction")' in source
     assert '("review_window", "词条校对")' in source
