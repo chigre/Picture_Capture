@@ -266,6 +266,17 @@ def test_auto_perspective_applies_with_coherent_line_support(monkeypatch) -> Non
     class Perspective:
         strength_px = 20.0
         matrix = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+        source_quad = (100.0, 100.0, 800.0, 100.0, 795.0, 1200.0, 105.0, 1200.0)
+        target_quad = (105.0, 100.0, 795.0, 100.0, 795.0, 1200.0, 105.0, 1200.0)
+        classification = "keystone"
+        left_drift_px = 5.0
+        right_drift_px = -5.0
+        common_drift_px = 0.0
+        width_delta_px = -10.0
+        width_change_ratio = 0.014
+        scale_top = 0.986
+        scale_bottom = 1.0
+        scale_delta_ratio = 0.014
 
     monkeypatch.setattr(
         image_preprocessing,
@@ -306,6 +317,159 @@ def test_auto_perspective_applies_with_coherent_line_support(monkeypatch) -> Non
 
     assert analysis.geometry_mode == "perspective"
     assert "perspective" in analysis.method
+
+
+def test_0011_style_large_ocr_homography_is_blocked_without_separator(monkeypatch) -> None:
+    image = Image.new("RGB", (2480, 3567), "white")
+    polygons = [_tilted_box(900, 80, 160, 24, -0.46)]
+    for row in range(24):
+        y = 180 + row * 120
+        polygons.extend(
+            (
+                _tilted_box(170, y, 700, 24, -0.46),
+                _tilted_box(1250, y, 700, 24, -0.46),
+            )
+        )
+
+    class Perspective:
+        strength_px = 48.186
+        matrix = (
+            0.98365, -0.02503, 24.267,
+            0.0, 0.93815, 16.817,
+            0.0, -1.761e-5, 1.0,
+        )
+        source_quad = (
+            160.0, 178.0,
+            2330.0, 178.0,
+            2280.0, 3218.0,
+            185.0, 3218.0,
+        )
+        target_quad = (
+            180.0, 178.0,
+            2300.0, 178.0,
+            2300.0, 3218.0,
+            180.0, 3218.0,
+        )
+        classification = "keystone"
+        left_drift_px = 25.0
+        right_drift_px = -50.0
+        common_drift_px = -12.5
+        width_delta_px = -75.0
+        width_change_ratio = 0.035
+        scale_top = 0.9867
+        scale_bottom = 1.0427
+        scale_delta_ratio = 0.056
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_perspective_from_polygons",
+        lambda *_args, **_kwargs: Perspective(),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=57,
+            global_angle_deg=-0.4581,
+            angle_trend_deg=-0.7777,
+            residual_mad_deg=0.0791,
+            separator_found=False,
+            recommendation="perspective",
+            confidence=0.6429,
+        ),
+    )
+
+    def forbidden_homography(*_args, **_kwargs):
+        raise AssertionError("0011-style unsafe auto homography must be blocked")
+
+    monkeypatch.setattr(
+        image_preprocessing, "apply_homography_image", forbidden_homography,
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(),
+        geometry_mode="auto",
+    )
+
+    assert analysis.geometry_mode == "deskew"
+    assert analysis.perspective_candidate_strength_px == 48.186
+    assert analysis.perspective_scale_delta_ratio == 0.056
+    assert analysis.perspective_auto_safe is False
+    assert "perspective_review" in analysis.method
+    assert any("横向尺度差" in warning for warning in analysis.warnings)
+
+
+def test_auto_parallel_drift_candidate_is_blocked_even_with_line_support(monkeypatch) -> None:
+    image = Image.new("RGB", (1200, 1600), "white")
+    polygons = [_tilted_box(400, 80, 140, 24, 0.0)]
+    for row in range(20):
+        y = 180 + row * 60
+        polygons.extend(
+            (
+                _tilted_box(100, y, 360, 24, 0.0),
+                _tilted_box(620, y, 360, 24, 0.0),
+            )
+        )
+
+    class Perspective:
+        strength_px = 30.0
+        matrix = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+        source_quad = (100.0, 100.0, 800.0, 100.0, 830.0, 1400.0, 130.0, 1400.0)
+        target_quad = (115.0, 100.0, 815.0, 100.0, 815.0, 1400.0, 115.0, 1400.0)
+        classification = "parallel_drift"
+        left_drift_px = 30.0
+        right_drift_px = 30.0
+        common_drift_px = 30.0
+        width_delta_px = 0.0
+        width_change_ratio = 0.0
+        scale_top = 1.0
+        scale_bottom = 1.0
+        scale_delta_ratio = 0.0
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_perspective_from_polygons",
+        lambda *_args, **_kwargs: Perspective(),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=20,
+            angle_trend_deg=0.5,
+            recommendation="perspective",
+            confidence=0.9,
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_homography_image",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("parallel drift must not trigger auto homography")
+        ),
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(),
+        geometry_mode="auto",
+    )
+
+    assert analysis.geometry_mode == "deskew"
+    assert analysis.perspective_classification == "parallel_drift"
+    assert analysis.perspective_auto_safe is False
+    assert any("平行漂移" in warning for warning in analysis.warnings)
 
 
 def test_uvdoc_mode_redetects_layout_after_unwarping(monkeypatch) -> None:
