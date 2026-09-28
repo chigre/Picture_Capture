@@ -3757,6 +3757,7 @@ def analyze_preprocess_page(
         manual_perspective_quad=manual_quad,
         orthogonal_applied=bool(orthogonal_applied),
         orthogonal_passes=int(orthogonal_passes),
+        orthogonal_steps=tuple(dict(step) for step in orthogonal_steps),
         orthogonal_row_count=int(orthogonal_row_count),
         orthogonal_valid_column_count=int(orthogonal_valid_column_count),
         orthogonal_separator_point_count=int(
@@ -4408,6 +4409,10 @@ def export_diagnostic_json(
             ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT
         ),
         "orthogonal_auto_gains": list(ORTHOGONAL_AUTO_GAINS),
+        "orthogonal_max_auto_passes": ORTHOGONAL_MAX_AUTO_PASSES,
+        "post_perspective_redetect_min_boxes": (
+            POST_PERSPECTIVE_REDETECT_MIN_BOXES
+        ),
         "orthogonal_warp_max_scale_deviation": (
             ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
         ),
@@ -4745,6 +4750,7 @@ def export_summary_csv(
             "line_geometry_confidence": analysis.line_geometry_confidence,
             "orthogonal_applied": analysis.orthogonal_applied,
             "orthogonal_passes": analysis.orthogonal_passes,
+            "orthogonal_step_count": len(analysis.orthogonal_steps),
             "orthogonal_row_count": analysis.orthogonal_row_count,
             "orthogonal_valid_column_count": (
                 analysis.orthogonal_valid_column_count
