@@ -13732,7 +13732,7 @@ class PictureCaptureApp(tk.Tk):
                     on_done=exported,
                     item_label=lambda index: project.images[int(index)].name,
                     refresh_page_quality=False,
-            allow_page_navigation=True,
+                    allow_page_navigation=True,
                 )
 
             # _finish_batch_task clears the current batch callback/thread after
