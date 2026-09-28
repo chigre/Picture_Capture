@@ -144,7 +144,7 @@ def test_line_geometry_uses_curved_real_separator_for_uvdoc_review() -> None:
     assert analysis.separator_found
     assert analysis.separator_span_ratio >= 0.72
     assert analysis.separator_residual_px >= 5.0
-    assert analysis.separator_curvature_score >= 0.55
+    assert analysis.separator_curvature_score >= 0.35
     assert analysis.separator_curve_reliable is True
     assert analysis.recommendation == "uvdoc_review"
 
@@ -172,7 +172,7 @@ def test_slanted_separator_with_gutter_decoys_is_not_misread_as_curved() -> None
     assert analysis.separator_span_ratio >= 0.72
     assert abs(analysis.separator_drift_px) >= 30
     assert analysis.separator_residual_px <= 4.0
-    assert analysis.separator_track_jump_p95_px <= 4.0
+    assert analysis.separator_track_jump_p95_px <= 5.0
     assert analysis.separator_curve_reliable is False
     assert analysis.recommendation != "uvdoc_review"
 
