@@ -1469,3 +1469,38 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert "if self._preprocess_mode_active():" in source
     assert "self._redraw_preprocess_preview(size)" in source
     assert "普通编辑已锁定" in source
+
+
+
+def test_global_deskew_prefers_reliable_physical_header_rule(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = [
+        _tilted_box(120, 180 + row * 44, 330, 24, -0.80)
+        for row in range(22)
+    ]
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "horizontal_rule_metrics",
+        lambda *_args, **_kwargs: (30, -0.26, 0.8, 120.0),
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(),
+        geometry_mode="deskew",
+    )
+
+    assert analysis.deskew_anchor_source == "header_rule"
+    assert analysis.source_header_rule_point_count == 30
+    assert abs(analysis.source_header_rule_angle_deg + 0.26) < 1e-6
+    assert abs(analysis.ocr_correction_angle_deg + 0.80) <= 0.05
+    assert abs(analysis.applied_angle_deg + 0.26) < 1e-6
+    assert "header_rule_deskew" in analysis.method
