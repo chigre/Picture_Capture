@@ -498,9 +498,17 @@ def estimate_orthogonal_warp(
             valid_column_count=len(valid_columns),
         )
 
-    x_values: list[float] = [0.0, float(width - 1), float(reference_x)]
+    # A displacement grid stores the integral of the local row slope.
+    # If X knots exist only at the two column centres, linear interpolation of
+    # that integral turns one large interval into its average slope and leaves
+    # a visible residual at the column centres. Add a modest uniform support
+    # grid, then insert the measured centres/reference exactly.
+    x_values: list[float] = [
+        float(v) for v in np.linspace(0.0, float(width - 1), 11)
+    ]
+    x_values.append(float(reference_x))
     x_values.extend(float(v) for v in column_centres)
-    x_knots = _unique_sorted(x_values, tolerance=3.0)
+    x_knots = _unique_sorted(x_values, tolerance=2.0)
     if x_knots.size < 2:
         return OrthogonalWarpEstimate(
             row_count=len(all_rows),
