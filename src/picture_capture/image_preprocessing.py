@@ -37,6 +37,8 @@ PREPROCESS_FORMAT_VERSION = 9
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
+AUTO_PERSPECTIVE_SCALE_DELTA_WITH_SEPARATOR = 0.030
+AUTO_PERSPECTIVE_SCALE_DELTA_WITHOUT_SEPARATOR = 0.015
 PREVIEW_YELLOW = (255, 225, 110, 94)
 PREVIEW_OUTLINE = (218, 164, 24, 255)
 
@@ -951,7 +953,9 @@ def analyze_preprocess_page(
             # Missing a physical separator makes the OCR-only geometry less
             # trustworthy, so the automatic scale-gradient ceiling is tighter.
             max_auto_scale_delta = (
-                0.030 if line_geometry.separator_found else 0.015
+                AUTO_PERSPECTIVE_SCALE_DELTA_WITH_SEPARATOR
+                if line_geometry.separator_found
+                else AUTO_PERSPECTIVE_SCALE_DELTA_WITHOUT_SEPARATOR
             )
             scale_safe = (
                 perspective_scale_delta_ratio <= max_auto_scale_delta
@@ -1491,6 +1495,12 @@ def export_diagnostic_json(
     payload["algorithm_constants"] = {
         "max_auto_deskew_deg": DEFAULT_MAX_AUTO_DESKEW_DEG,
         "deskew_dead_zone_deg": DEFAULT_DESKEW_DEAD_ZONE_DEG,
+        "auto_perspective_scale_delta_with_separator": (
+            AUTO_PERSPECTIVE_SCALE_DELTA_WITH_SEPARATOR
+        ),
+        "auto_perspective_scale_delta_without_separator": (
+            AUTO_PERSPECTIVE_SCALE_DELTA_WITHOUT_SEPARATOR
+        ),
     }
     payload["export"] = {
         "output_filename": Path(output_path).name if output_path is not None else None,
