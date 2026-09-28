@@ -67,6 +67,25 @@ def test_line_geometry_recommends_deskew_for_uniform_row_angle() -> None:
     assert analysis.recommendation == "deskew"
 
 
+def test_line_geometry_tracks_slanted_physical_separator() -> None:
+    image = Image.new("RGB", (900, 1000), "white")
+    draw = ImageDraw.Draw(image)
+    top, bottom = 140, 870
+    draw.line((420, top, 438, bottom), fill="black", width=2)
+
+    analysis = analyze_text_line_geometry(
+        image,
+        _two_column_polygons(angle_at=lambda _t: 0.18),
+        AppSettings(),
+    )
+
+    assert analysis.separator_found
+    assert analysis.separator_span_ratio >= 0.55
+    assert abs(analysis.separator_drift_px) >= 10
+    assert abs(analysis.separator_slope_px_per_1000y) >= 10
+    assert analysis.separator_residual_px <= 3.0
+
+
 def test_line_geometry_recommends_perspective_for_coherent_angle_trend() -> None:
     image = Image.new("RGB", (900, 1000), "white")
     draw = ImageDraw.Draw(image)
