@@ -28,6 +28,28 @@ def _box(x0: float, y0: float, width: float = 220, height: float = 18) -> np.nda
     )
 
 
+def _dual_edge_box(
+    cx: float,
+    cy: float,
+    width: float,
+    height: float,
+    top_angle_deg: float,
+    bottom_angle_deg: float,
+) -> np.ndarray:
+    half = width / 2.0
+    top_dy = np.tan(np.deg2rad(top_angle_deg)) * width
+    bottom_dy = np.tan(np.deg2rad(bottom_angle_deg)) * width
+    return np.asarray(
+        [
+            [cx - half, cy - height / 2.0 - top_dy / 2.0],
+            [cx + half, cy - height / 2.0 + top_dy / 2.0],
+            [cx + half, cy + height / 2.0 + bottom_dy / 2.0],
+            [cx - half, cy + height / 2.0 - bottom_dy / 2.0],
+        ],
+        dtype=float,
+    )
+
+
 def _rotated_box(
     cx: float,
     cy: float,
@@ -298,6 +320,40 @@ def test_worst_column_residual_cannot_hide_in_page_average() -> None:
     assert audit.valid_column_count == 2
     assert audit.after_worst_column_index == 1
     assert audit.after_worst_region_deg > 0.18
+    assert audit.verdict != "improved"
+
+
+def test_horizontal_alignment_requires_both_text_box_edges_to_be_level() -> None:
+    settings = AppSettings(layout_columns_policy="fixed", columns=2)
+    before: list[np.ndarray] = []
+    after: list[np.ndarray] = []
+    for column, cx in enumerate((260.0, 760.0)):
+        for row in range(20):
+            t = row / 19.0
+            y = 150 + row * 40 + column * 7
+            before_angle = 0.32 - 0.64 * t
+            before.append(_rotated_box(cx, y, 300, 22, before_angle))
+            # Center/average direction is exactly horizontal, but the upper and
+            # lower boundaries tilt in opposite directions. A single collapsed
+            # polygon angle would falsely call this corrected.
+            after.append(
+                _dual_edge_box(
+                    cx, y, 300, 22,
+                    top_angle_deg=0.14,
+                    bottom_angle_deg=-0.14,
+                )
+            )
+
+    audit = audit_horizontal_alignment(
+        before, after, size=(1050, 1100), settings=settings,
+    )
+
+    assert abs(audit.after_trend_deg) <= 0.12
+    assert audit.after_worst_region_deg <= 0.18
+    assert audit.edge_pair_count >= 30
+    assert audit.after_top_edge_p90_abs_deg >= 0.13
+    assert audit.after_bottom_edge_p90_abs_deg >= 0.13
+    assert audit.after_edge_pair_delta_p90_deg >= 0.27
     assert audit.verdict != "improved"
 
 
