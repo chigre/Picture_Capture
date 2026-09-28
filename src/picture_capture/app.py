@@ -13073,7 +13073,7 @@ class PictureCaptureApp(tk.Tk):
                 "小角度纠偏后会同步变换四点，再做透视纠正，最后重新检测版面并裁边。"
             ),
             wraplength=max(560, display_size[0]),
-            justify="left",
+            anchor="w",
         ).pack(fill="x", pady=(7, 4))
 
         controls = ttk.Frame(body)
