@@ -35,14 +35,28 @@ class HomographyDistortionAudit:
 
 @dataclass(frozen=True, slots=True)
 class TextScaleStabilityAudit:
-    """Before/after spatial stability of the same detected text polygons.
+    """Paired scale field of the same detected text polygons.
 
-    The same polygons are measured before and after the candidate homography,
-    so natural differences in word length mostly cancel.  Cross-line size is
-    weighted more heavily because it is the more stable proxy for glyph scale.
+    Each text polygon is measured before and after the candidate transform and
+    converted to after/before inline and cross-line scale ratios. Natural font
+    size, word length, headings and phonetic annotations therefore cancel from
+    the primary safety signal; what remains is the scale field introduced by the
+    transform itself.
     """
 
     sample_count: int = 0
+    inline_ratio_p05: float = 1.0
+    inline_ratio_median: float = 1.0
+    inline_ratio_p95: float = 1.0
+    cross_ratio_p05: float = 1.0
+    cross_ratio_median: float = 1.0
+    cross_ratio_p95: float = 1.0
+    inline_ratio_span_ratio: float = 0.0
+    cross_ratio_span_ratio: float = 0.0
+    inline_ratio_gradient_ratio: float = 0.0
+    cross_ratio_gradient_ratio: float = 0.0
+    anisotropy_p95_ratio: float = 0.0
+    # Retain absolute before/after gradients as secondary diagnostics only.
     before_inline_gradient_ratio: float = 0.0
     after_inline_gradient_ratio: float = 0.0
     before_cross_gradient_ratio: float = 0.0
@@ -411,7 +425,7 @@ def audit_text_scale_stability(
     *,
     writing_mode: str = "horizontal-tb",
 ) -> TextScaleStabilityAudit:
-    """Compare spatial text-box scale stability before/after one candidate warp."""
+    """Measure the transform-induced scale field using paired text polygons."""
     before_list = list(before_polygons)
     after_list = list(after_polygons)
     count = min(len(before_list), len(after_list))
@@ -422,7 +436,12 @@ def audit_text_scale_stability(
     before_cross: list[tuple[float, float, float]] = []
     after_inline: list[tuple[float, float, float]] = []
     after_cross: list[tuple[float, float, float]] = []
-    paired = 0
+    inline_ratio_samples: list[tuple[float, float, float]] = []
+    cross_ratio_samples: list[tuple[float, float, float]] = []
+    anisotropy: list[float] = []
+    inline_ratios: list[float] = []
+    cross_ratios: list[float] = []
+
     for before, after in zip(before_list[:count], after_list[:count]):
         first = _polygon_inline_cross_size(before, writing_mode=writing_mode)
         second = _polygon_inline_cross_size(after, writing_mode=writing_mode)
@@ -430,32 +449,90 @@ def audit_text_scale_stability(
             continue
         bx, by, bi, bc = first
         ax, ay, ai, ac = second
+        if min(bi, bc, ai, ac) <= 1e-9:
+            continue
+        inline_ratio = float(ai / bi)
+        cross_ratio = float(ac / bc)
+        if (
+            not math.isfinite(inline_ratio)
+            or not math.isfinite(cross_ratio)
+            or inline_ratio <= 0.0
+            or cross_ratio <= 0.0
+        ):
+            continue
+
         before_inline.append((bx, by, bi))
         before_cross.append((bx, by, bc))
         after_inline.append((ax, ay, ai))
         after_cross.append((ax, ay, ac))
-        paired += 1
+        inline_ratio_samples.append((bx, by, inline_ratio))
+        cross_ratio_samples.append((bx, by, cross_ratio))
+        inline_ratios.append(inline_ratio)
+        cross_ratios.append(cross_ratio)
+        anisotropy.append(
+            max(inline_ratio / cross_ratio, cross_ratio / inline_ratio) - 1.0
+        )
 
+    paired = len(inline_ratios)
     if paired < 12:
         return TextScaleStabilityAudit(sample_count=paired)
 
+    inline_values = np.asarray(inline_ratios, dtype=float)
+    cross_values = np.asarray(cross_ratios, dtype=float)
+    anisotropy_values = np.asarray(anisotropy, dtype=float)
+    inline_p05, inline_median, inline_p95 = np.quantile(
+        inline_values, [0.05, 0.50, 0.95]
+    )
+    cross_p05, cross_median, cross_p95 = np.quantile(
+        cross_values, [0.05, 0.50, 0.95]
+    )
+    inline_span = (
+        float(inline_p95 - inline_p05) / max(1e-9, float(inline_median))
+    )
+    cross_span = (
+        float(cross_p95 - cross_p05) / max(1e-9, float(cross_median))
+    )
+    inline_gradient = _robust_spatial_gradient_ratio(
+        inline_ratio_samples, size
+    )
+    cross_gradient = _robust_spatial_gradient_ratio(
+        cross_ratio_samples, size
+    )
+    anisotropy_p95 = float(np.quantile(anisotropy_values, 0.95))
+
+    # Absolute size trends are useful for diagnostics but can be confounded by
+    # genuine typography (headwords, phonetics, mixed font sizes). They no
+    # longer decide whether the transform is safe.
     before_inline_gradient = _robust_spatial_gradient_ratio(before_inline, size)
     after_inline_gradient = _robust_spatial_gradient_ratio(after_inline, size)
     before_cross_gradient = _robust_spatial_gradient_ratio(before_cross, size)
     after_cross_gradient = _robust_spatial_gradient_ratio(after_cross, size)
-
-    # Cross-line size (character height in horizontal text; character width in
-    # vertical text) is substantially more stable than detected line length.
     before_score = 0.30 * before_inline_gradient + 0.70 * before_cross_gradient
     after_score = 0.30 * after_inline_gradient + 0.70 * after_cross_gradient
-    if after_score + 0.002 < before_score:
-        verdict = "improved"
-    elif after_score <= before_score + max(0.004, before_score * 0.25):
-        verdict = "stable"
-    else:
-        verdict = "worse"
+
+    # Slightly looser than the analytic Jacobian budget because polygon edge
+    # lengths also carry detector quantization/orientation noise.
+    safe = bool(
+        inline_span <= 0.045
+        and cross_span <= 0.075
+        and inline_gradient <= 0.045
+        and cross_gradient <= 0.075
+        and anisotropy_p95 <= 0.040
+    )
+    verdict = "stable" if safe else "worse"
     return TextScaleStabilityAudit(
         sample_count=paired,
+        inline_ratio_p05=float(inline_p05),
+        inline_ratio_median=float(inline_median),
+        inline_ratio_p95=float(inline_p95),
+        cross_ratio_p05=float(cross_p05),
+        cross_ratio_median=float(cross_median),
+        cross_ratio_p95=float(cross_p95),
+        inline_ratio_span_ratio=max(0.0, inline_span),
+        cross_ratio_span_ratio=max(0.0, cross_span),
+        inline_ratio_gradient_ratio=max(0.0, inline_gradient),
+        cross_ratio_gradient_ratio=max(0.0, cross_gradient),
+        anisotropy_p95_ratio=max(0.0, anisotropy_p95),
         before_inline_gradient_ratio=before_inline_gradient,
         after_inline_gradient_ratio=after_inline_gradient,
         before_cross_gradient_ratio=before_cross_gradient,
@@ -464,7 +541,6 @@ def audit_text_scale_stability(
         after_score=after_score,
         verdict=verdict,
     )
-
 
 def _homography(src: np.ndarray, dst: np.ndarray) -> np.ndarray:
     """Return a 3x3 matrix mapping src XY coordinates to dst XY coordinates."""
