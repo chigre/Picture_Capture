@@ -13637,7 +13637,6 @@ class PictureCaptureApp(tk.Tk):
             style="PC.FieldLabel.TLabel",
             wraplength=860,
             anchor="w",
-            justify="left",
         ).grid(row=0, column=0, sticky="ew", pady=(0, 8))
 
         text_frame = ttk.Frame(body)
