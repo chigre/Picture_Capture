@@ -13471,6 +13471,7 @@ class PictureCaptureApp(tk.Tk):
             on_done=done,
             item_label=lambda index: project.images[int(index)].name,
             refresh_page_quality=False,
+            allow_page_navigation=True,
         )
 
     def jump_preprocess_review(self, delta: int) -> None:
@@ -13554,6 +13555,7 @@ class PictureCaptureApp(tk.Tk):
             on_done=done,
             item_label=lambda index: project.images[int(index)].name,
             refresh_page_quality=False,
+            allow_page_navigation=True,
         )
 
     def export_preprocess_images(self) -> None:
@@ -13730,6 +13732,7 @@ class PictureCaptureApp(tk.Tk):
                     on_done=exported,
                     item_label=lambda index: project.images[int(index)].name,
                     refresh_page_quality=False,
+            allow_page_navigation=True,
                 )
 
             # _finish_batch_task clears the current batch callback/thread after
@@ -13742,6 +13745,7 @@ class PictureCaptureApp(tk.Tk):
             on_done=analyzed,
             item_label=lambda index: project.images[int(index)].name,
             refresh_page_quality=False,
+            allow_page_navigation=True,
         )
 
     def _get_preprocess_display_photo(
@@ -14816,6 +14820,7 @@ class PictureCaptureApp(tk.Tk):
         self, title: str, items, worker, on_done=None, item_label=None,
         *, foreground_page_edit: bool = False, page_indexer=None,
         refresh_page_quality: bool = True,
+        allow_page_navigation: bool = False,
     ) -> bool:
         """Run a multi-page task without blocking Tk.
 
@@ -14846,6 +14851,7 @@ class PictureCaptureApp(tk.Tk):
         self._batch_active = True
         self._batch_refresh_page_quality = bool(refresh_page_quality)
         self._batch_foreground_pages = bool(foreground_page_edit)
+        self._batch_allow_page_navigation = bool(allow_page_navigation)
         self._batch_skipped_count = 0
         indexer = page_indexer or (lambda item: int(item))
         with self._batch_state_lock:
@@ -15190,6 +15196,7 @@ class PictureCaptureApp(tk.Tk):
         self._batch_on_done = None
         self._batch_title = ""
         self._batch_foreground_pages = False
+        self._batch_allow_page_navigation = False
         with self._batch_state_lock:
             self._batch_page_states = {}
         if getattr(self, "_batch_refresh_page_quality", True):
@@ -16164,7 +16171,11 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def on_page_select(self, _event: tk.Event) -> None:
-        if getattr(self, "_batch_active", False) and not self._batch_foreground_pages:
+        if (
+            getattr(self, "_batch_active", False)
+            and not self._batch_foreground_pages
+            and not getattr(self, "_batch_allow_page_navigation", False)
+        ):
             if self.current_index >= 0:
                 self._set_page_list_selection(self.current_index, ensure_visible=True)
             self.status_var.set("当前批量任务运行中，暂不允许切换页面；可先暂停/停止。")
