@@ -585,7 +585,7 @@ def test_auto_geometry_can_use_horizontal_vanishing_point_without_ruling_line(
     assert "horizontal_vp" in analysis.method
 
 
-def test_safe_horizontal_vp_is_not_blocked_by_uvdoc_curve_review(
+def test_rejected_auto_uvdoc_can_fall_back_to_safe_horizontal_vp(
     monkeypatch,
 ) -> None:
     image = Image.new("RGB", (1000, 1400), "white")
@@ -629,6 +629,11 @@ def test_safe_horizontal_vp_is_not_blocked_by_uvdoc_curve_review(
             separator_curvature_score=0.9,
         ),
     )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "unwarp_document_image",
+        lambda source: source.copy(),
+    )
 
     analysis = analyze_preprocess_page(
         image,
@@ -641,7 +646,10 @@ def test_safe_horizontal_vp_is_not_blocked_by_uvdoc_curve_review(
     assert analysis.perspective_row_alignment_verdict == "improved"
     assert analysis.perspective_auto_safe is True
     assert "horizontal_vp" in analysis.method
-    assert any("UVDoc" in warning for warning in analysis.warnings)
+    assert any(
+        "自动 UVDoc 未通过双边缘水平验收" in warning
+        for warning in analysis.warnings
+    )
     assert any("双边缘水平审计" in warning for warning in analysis.warnings)
 
 
