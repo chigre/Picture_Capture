@@ -3738,6 +3738,338 @@ def test_oversized_cjk_box_never_guesses_missing_children_from_parent_text(
     assert not any(record.recovery for record in recovered)
 
 
+
+def test_explicit_ocr_bracket_headword_does_not_need_large_or_bold_visual_evidence():
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        profile_parser_controls_version=1,
+        profile_cjk_allow_bracketed_headword=True,
+        profile_cjk_require_left_edge=True,
+        profile_cjk_require_visual_evidence=True,
+        profile_symbol_inventory_version=1,
+        profile_symbol_inventory_enabled=False,
+        profile_bracket_open_symbols="【",
+        profile_symbol_visual_rescue_enabled=True,
+        profile_tail_structure_version=1,
+        profile_tail_require_selected=False,
+        profile_tail_allow_descriptor=False,
+        paddle_auto_header_rule=False,
+        paddle_left_tolerance=40,
+        paddle_band_left_margin=8,
+        paddle_min_candidate_score=1.0,
+        paddle_require_pos_or_symbol=False,
+        paddle_require_visual_cue=False,
+        paddle_rec_score_threshold=0.20,
+    )
+    profile = load_dictionary_profile(
+        preset="cjk_visual", language="chi_tra",
+    )
+    entries, diagnostics = filter_headword_records(
+        [OCRRecord("【艾艾】", 0.99, (2, 30, 100, 55))],
+        Image.new("RGB", (220, 120), "white"),
+        0,
+        0,
+        settings,
+        profile=profile,
+    )
+
+    assert [entry.word for entry in entries] == ["艾艾"]
+    rows = [row for row in diagnostics if "meta" not in row]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["accepted"] is True
+    assert row["features"]["cjk_bracket_explicit_ocr"] is True
+    assert row["features"]["cjk_bracket_explicit_symbol"] == "【"
+    assert row["features"]["cjk_bracket_extra_required"] is False
+
+
+def test_bracket_role_and_templates_remain_active_when_standalone_marker_inventory_is_off():
+    marker = Image.new("L", (20, 24), 255)
+    draw = ImageDraw.Draw(marker)
+    draw.rectangle((4, 2, 7, 21), fill=0)
+    draw.rectangle((4, 2, 14, 5), fill=0)
+    sample = build_visual_marker_sample(
+        marker.convert("RGB"),
+        role="bracket_open",
+        literal="【",
+        sample_id="bracket-sample",
+    )
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        profile_parser_controls_version=1,
+        profile_allow_marker_prefix=False,
+        profile_cjk_allow_bracketed_headword=True,
+        profile_symbol_inventory_version=1,
+        profile_symbol_inventory_enabled=False,
+        profile_entry_marker_symbols="",
+        profile_bracket_open_symbols="【",
+        profile_symbol_visual_rescue_enabled=True,
+        profile_symbol_template_version=1,
+        profile_symbol_template_mode="combined",
+        profile_symbol_templates_json=serialize_visual_marker_samples([sample]),
+    )
+    profile = load_dictionary_profile(
+        preset="cjk_visual", language="chi_tra",
+    )
+    inventory = paddle_headwords._configured_symbol_inventory(settings, profile)
+
+    assert inventory["enabled"] is True
+    assert inventory["standalone_inventory_enabled"] is False
+    assert inventory["entry_markers"] == ()
+    assert inventory["bracket_openers"] == ("【",)
+    assert inventory["bracket_role_enabled"] is True
+    assert len(inventory["visual_templates"]) == 1
+    assert inventory["visual_templates"][0]["role"] == "bracket_open"
+
+
+def test_image_first_cjk_rescue_recovers_run_without_any_parent_ocr_box(monkeypatch):
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        character_height=100,
+        profile_parser_controls_version=1,
+        profile_cjk_allow_single_headword=True,
+        paddle_rec_score_threshold=0.20,
+    )
+    profile = load_dictionary_profile(
+        preset="cjk_visual", language="chi_tra",
+    )
+    band = Image.new("RGB", (360, 700), "white")
+    monkeypatch.setattr(
+        paddle_headwords,
+        "_cjk_visual_projection_runs",
+        lambda *_args, **kwargs: (
+            90,
+            [(100, 190), (330, 425)] if kwargs.get("relaxed") else [],
+        ),
+    )
+    monkeypatch.setattr(
+        paddle_headwords,
+        "_header_cutoff",
+        lambda *_args, **_kwargs: 0,
+    )
+
+    words = iter(("啊", "安"))
+
+    class Result:
+        def __init__(self, word):
+            self.json = {
+                "res": {
+                    "rec_texts": [word],
+                    "rec_scores": [0.97],
+                    "rec_boxes": [[2, 3, 70, 78]],
+                }
+            }
+
+    class Engine:
+        def predict(self, _image, **_kwargs):
+            return [Result(next(words))]
+
+    recovered, details = paddle_headwords._recover_image_first_oversized_cjk_records(
+        [],
+        band,
+        settings,
+        profile,
+        engine=Engine(),
+    )
+
+    assert [row.text for row in recovered] == ["啊", "安"]
+    assert all(
+        row.recovery == "image_first_oversized_local_ocr"
+        for row in recovered
+    )
+    assert all(row.parent_box is None for row in recovered)
+    assert sum(bool(row.get("applied")) for row in details) == 2
+
+
+def test_image_first_cjk_rescue_skips_existing_good_head_and_recovers_missing_neighbor(
+    monkeypatch,
+):
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        character_height=100,
+        profile_parser_controls_version=1,
+        profile_cjk_allow_single_headword=True,
+        paddle_rec_score_threshold=0.20,
+    )
+    profile = load_dictionary_profile(
+        preset="cjk_visual", language="chi_tra",
+    )
+    band = Image.new("RGB", (360, 700), "white")
+    monkeypatch.setattr(
+        paddle_headwords,
+        "_cjk_visual_projection_runs",
+        lambda *_args, **kwargs: (
+            90,
+            [(100, 190), (330, 425)] if kwargs.get("relaxed") else [],
+        ),
+    )
+    monkeypatch.setattr(
+        paddle_headwords,
+        "_header_cutoff",
+        lambda *_args, **_kwargs: 0,
+    )
+
+    class Result:
+        json = {
+            "res": {
+                "rec_texts": ["安"],
+                "rec_scores": [0.98],
+                "rec_boxes": [[2, 3, 70, 78]],
+            }
+        }
+
+    class Engine:
+        def __init__(self):
+            self.calls = 0
+
+        def predict(self, _image, **_kwargs):
+            self.calls += 1
+            return [Result()]
+
+    engine = Engine()
+    recovered, details = paddle_headwords._recover_image_first_oversized_cjk_records(
+        [OCRRecord("啊", 0.99, (0, 100, 90, 190))],
+        band,
+        settings,
+        profile,
+        engine=engine,
+    )
+
+    assert [row.text for row in recovered] == ["啊", "安"]
+    assert engine.calls == 1
+    assert any(row.get("status") == "already_represented" for row in details)
+    assert any(row.get("status") == "recovered" for row in details)
+
+
+def test_image_first_cjk_rescue_accepts_sense_number_but_rejects_latin_initial(
+    monkeypatch,
+):
+    assert paddle_headwords._leading_cjk_ideograph("案1") == "案"
+    assert paddle_headwords._leading_cjk_ideograph("暗②") == "暗"
+    assert paddle_headwords._leading_cjk_ideograph("安定") == ""
+
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        character_height=100,
+        profile_parser_controls_version=1,
+        profile_cjk_allow_single_headword=True,
+        paddle_rec_score_threshold=0.20,
+    )
+    profile = load_dictionary_profile(
+        preset="cjk_visual", language="chi_tra",
+    )
+    band = Image.new("RGB", (360, 700), "white")
+    monkeypatch.setattr(
+        paddle_headwords,
+        "_cjk_visual_projection_runs",
+        lambda *_args, **kwargs: (
+            90,
+            [(100, 190), (330, 425)] if kwargs.get("relaxed") else [],
+        ),
+    )
+    monkeypatch.setattr(
+        paddle_headwords,
+        "_header_cutoff",
+        lambda *_args, **_kwargs: 0,
+    )
+
+    words = iter(("案1", "A"))
+
+    class Result:
+        def __init__(self, word):
+            self.json = {
+                "res": {
+                    "rec_texts": [word],
+                    "rec_scores": [0.96],
+                    "rec_boxes": [[2, 3, 70, 78]],
+                }
+            }
+
+    class Engine:
+        def predict(self, _image, **_kwargs):
+            return [Result(next(words))]
+
+    recovered, details = paddle_headwords._recover_image_first_oversized_cjk_records(
+        [],
+        band,
+        settings,
+        profile,
+        engine=Engine(),
+    )
+
+    assert [row.text for row in recovered] == ["案"]
+    assert recovered[0].recovery_source_text == "案1"
+    assert any(
+        row.get("status") == "local_ocr_no_single_cjk"
+        for row in details
+    )
+
+
+def test_image_first_recovered_cjk_head_is_auto_selected_and_refined(monkeypatch):
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        character_height=100,
+        profile_parser_controls_version=1,
+        profile_cjk_allow_single_headword=True,
+        profile_cjk_require_visual_evidence=True,
+        profile_cjk_require_left_edge=True,
+        paddle_auto_header_rule=False,
+        paddle_left_tolerance=40,
+        paddle_band_left_margin=8,
+        paddle_rec_score_threshold=0.20,
+    )
+    profile = load_dictionary_profile(
+        preset="cjk_visual", language="chi_tra",
+    )
+    record = OCRRecord(
+        "安",
+        0.96,
+        (0, 220, 90, 315),
+        recovery="image_first_oversized_local_ocr",
+        recovery_source_text="安",
+    )
+    monkeypatch.setattr(
+        paddle_headwords,
+        "_header_cutoff",
+        lambda *_args, **_kwargs: 0,
+    )
+
+    def fake_refine(_gray, coarse_y, *_args, **_kwargs):
+        refined = int(coarse_y) + 8
+        return refined, {
+            "enabled": True,
+            "reason": "test_image_first_refined",
+            "anchor_y": int(coarse_y) + 4,
+            "refined_y": refined,
+            "shift": 8,
+        }
+
+    monkeypatch.setattr(
+        paddle_headwords, "refine_first_content_y", fake_refine,
+    )
+    monkeypatch.setattr(
+        paddle_headwords, "refine_separator_y_adaptive", fake_refine,
+    )
+
+    entries, diagnostics = filter_headword_records(
+        [record],
+        Image.new("RGB", (360, 500), "white"),
+        0,
+        0,
+        settings,
+        profile=profile,
+    )
+
+    assert [entry.word for entry in entries] == ["安"]
+    rows = [row for row in diagnostics if "meta" not in row]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["accepted"] is True
+    assert row["features"]["cjk_oversized_recovery"] is True
+    assert row["separator_refinement"]["reason"] == "test_image_first_refined"
+    assert row["source_y"] == row["coarse_source_y"] + 8
+
+
 def test_cjk_visual_profile_defaults_separate_brackets_from_entry_markers():
     defaults = profile_symbol_inventory_defaults("cjk_visual")
     assert defaults["entry_markers"] == []
