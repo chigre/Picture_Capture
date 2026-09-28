@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 import csv
 import json
 import math
+import shutil
 from pathlib import Path
 from typing import Iterable
 
@@ -2828,6 +2829,112 @@ def processed_output_root(project_root: Path) -> Path:
     path = image_preprocess_output_root(project_root) / "processed"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def promote_processed_pages(
+    project_root: Path,
+    pages: Iterable[Path],
+    *,
+    backup_dirname: str = "__before__",
+) -> tuple[Path, tuple[Path, ...]]:
+    """Promote a complete processed page set to the project's working images.
+
+    The current root-level page images are preserved once under __before__.
+    Processed exports are copied to a staging directory and verified before any
+    original is moved. Publication then uses same-filesystem renames; on failure
+    the originals are rolled back. Existing __before__ is never overwritten, so
+    the first-generation source scans remain an immutable baseline.
+    """
+    root = Path(project_root).expanduser().resolve()
+    page_list = [Path(page).expanduser().resolve() for page in pages]
+    if not page_list:
+        raise ValueError("没有可提升为工作图片的页面")
+    for page in page_list:
+        if page.parent != root:
+            raise ValueError(f"工作页面不在项目根目录：{page}")
+        if not page.is_file():
+            raise FileNotFoundError(page)
+
+    processed_root = processed_output_root(root)
+    missing = [
+        page.name
+        for page in page_list
+        if not (processed_root / page.name).is_file()
+    ]
+    if missing:
+        sample = "、".join(missing[:8])
+        suffix = "…" if len(missing) > 8 else ""
+        raise RuntimeError(
+            "预处理导出不完整；请先对整个工作页范围执行【导出预处理图片】。"
+            f"缺少：{sample}{suffix}"
+        )
+
+    backup = root / str(backup_dirname or "__before__")
+    if backup.exists():
+        raise RuntimeError(
+            f"原图备份目录已存在：{backup.name}。为避免覆盖首次原图，"
+            "本次不会再次提升工作图片。"
+        )
+
+    backup_stage = root / f".{backup.name}.staging"
+    new_stage = root / ".__preprocess_working__.staging"
+    if backup_stage.exists() or new_stage.exists():
+        raise RuntimeError(
+            "发现上次未完成的预处理切换暂存目录；请先检查项目目录后再重试。"
+        )
+
+    moved_originals: list[tuple[Path, Path]] = []
+    published: list[Path] = []
+    try:
+        backup_stage.mkdir()
+        new_stage.mkdir()
+
+        # Copy + decode-verify all processed images before touching originals.
+        for page in page_list:
+            source = processed_root / page.name
+            staged = new_stage / page.name
+            shutil.copy2(source, staged)
+            with Image.open(staged) as opened:
+                opened.verify()
+
+        # Preserve original source scans by rename on the same filesystem.
+        for page in page_list:
+            stored = backup_stage / page.name
+            page.replace(stored)
+            moved_originals.append((page, stored))
+
+        # Publish processed pages under exactly the original working filenames.
+        for page in page_list:
+            staged = new_stage / page.name
+            target = root / page.name
+            staged.replace(target)
+            published.append(target)
+
+        backup_stage.replace(backup)
+        shutil.rmtree(new_stage, ignore_errors=True)
+        return backup, tuple(published)
+    except Exception:
+        # Remove any newly published pages before restoring original scans.
+        for target in reversed(published):
+            try:
+                if target.exists():
+                    target.unlink()
+            except OSError:
+                pass
+        for original, stored in reversed(moved_originals):
+            try:
+                if stored.exists() and not original.exists():
+                    stored.replace(original)
+            except OSError:
+                pass
+        shutil.rmtree(new_stage, ignore_errors=True)
+        if backup_stage.exists():
+            try:
+                if not any(backup_stage.iterdir()):
+                    backup_stage.rmdir()
+            except OSError:
+                pass
+        raise
 
 
 def save_review_preview(
