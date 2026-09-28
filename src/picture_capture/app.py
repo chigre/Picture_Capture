@@ -15987,6 +15987,100 @@ class PictureCaptureApp(tk.Tk):
             self.preprocess_safety_var.set(
                 str(int(self.settings.preprocess_safety_margin_px))
             )
+            self.preprocess_geometry_var.set(
+                {
+                    "deskew": "轻量：旋转+裁边",
+                    "perspective": "自动透视",
+                    "dewarp": "UVDoc展平（Paddle高级）",
+                    "uvdoc": "UVDoc展平（Paddle高级）",
+                    "auto": "自动几何（推荐）",
+                }.get(
+                    str(
+                        getattr(
+                            self.settings, "preprocess_geometry_mode", "auto"
+                        ) or "auto"
+                    ),
+                    "自动几何（推荐）",
+                )
+            )
+            self.preprocess_export_canvas_var.set(
+                bool(
+                    getattr(
+                        self.settings,
+                        "preprocess_export_canvas_enabled",
+                        False,
+                    )
+                )
+            )
+            self.preprocess_export_canvas_mode_var.set(
+                {
+                    "batch_max": "本批最大裁剪尺寸",
+                    "custom": "自定义尺寸",
+                }.get(
+                    str(
+                        getattr(
+                            self.settings,
+                            "preprocess_export_canvas_mode",
+                            "batch_max",
+                        ) or "batch_max"
+                    ),
+                    "本批最大裁剪尺寸",
+                )
+            )
+            self.preprocess_export_canvas_width_var.set(
+                str(
+                    int(
+                        getattr(
+                            self.settings,
+                            "preprocess_export_canvas_width",
+                            0,
+                        ) or 0
+                    )
+                )
+            )
+            self.preprocess_export_canvas_height_var.set(
+                str(
+                    int(
+                        getattr(
+                            self.settings,
+                            "preprocess_export_canvas_height",
+                            0,
+                        ) or 0
+                    )
+                )
+            )
+            self.preprocess_export_align_x_var.set(
+                {
+                    "left": "左对齐",
+                    "center": "居中",
+                    "right": "右对齐",
+                }.get(
+                    str(
+                        getattr(
+                            self.settings,
+                            "preprocess_export_align_x",
+                            "center",
+                        ) or "center"
+                    ),
+                    "居中",
+                )
+            )
+            self.preprocess_export_align_y_var.set(
+                {
+                    "top": "顶端对齐",
+                    "center": "居中",
+                    "bottom": "底部对齐",
+                }.get(
+                    str(
+                        getattr(
+                            self.settings,
+                            "preprocess_export_align_y",
+                            "top",
+                        ) or "top"
+                    ),
+                    "顶端对齐",
+                )
+            )
             self.preprocess_status_var.set("未分析")
             if recent_warning:
                 self._recent_projects_warning = recent_warning
