@@ -1483,11 +1483,11 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "分析大字右侧留白（仅辅助“大字单字”判断）" in text
     assert "大字右侧检测宽度：" in text
     assert "profile_cjk_right_context_width_percent" in text
-    assert "固定符号开头（○ / ● / ◆ …）可以作为词头" in text
+    assert "固定符号开头（○ / ● / ◆ …；不包括【括号】）可以作为词头" in text
     assert "本词典固定词头符号集" in text
     assert "启用本词典专用符号集" in text
-    assert "入口标记：" in text
-    assert "括号起始：" in text
+    assert "独立入口标记：" in text
+    assert "括号词头起始：" in text
     assert "OCR 漏掉/错认符号时允许视觉形状补救" in text
     assert "使用同栏 marker lane 过滤正文中的相似符号" in text
     assert "本词典视觉标记样本" in text
@@ -3538,7 +3538,9 @@ def test_oversized_cjk_box_never_guesses_missing_children_from_parent_text(
         engine=FailingEngine(),
     )
 
-    assert recovered == records
+    assert sorted(recovered, key=lambda row: (row.box[1], row.box[0])) == sorted(
+        records, key=lambda row: (row.box[1], row.box[0])
+    )
     assert details == []
     assert not any(record.recovery for record in recovered)
 
@@ -3547,7 +3549,7 @@ def test_cjk_visual_profile_defaults_separate_brackets_from_entry_markers():
     defaults = profile_symbol_inventory_defaults("cjk_visual")
     assert defaults["entry_markers"] == []
     assert defaults["bracket_openers"] == ["【"]
-    assert defaults["visual_rescue"] is True
+    assert defaults["visual_rescue"] is False
     assert defaults["lane_required"] is True
     assert defaults["lane_tolerance_percent"] == 45
 
@@ -3622,6 +3624,7 @@ def test_old_cjk_visual_settings_migrate_bracket_role_once(tmp_path):
     assert migrated.profile_entry_marker_symbols == ""
     assert migrated.profile_bracket_open_symbols == "【"
     assert migrated.profile_symbol_lane_required is True
+    assert migrated.profile_symbol_visual_rescue_enabled is False
     samples = parse_visual_marker_samples(
         migrated.profile_symbol_templates_json
     )
