@@ -18,6 +18,12 @@ TEXT_SCALE_INLINE_GRADIENT_MAX = 0.045
 TEXT_SCALE_CROSS_GRADIENT_MAX = 0.075
 TEXT_SCALE_ANISOTROPY_P95_MAX = 0.040
 
+HORIZONTAL_VP_MIN_TREND_DEG = 0.18
+HORIZONTAL_VP_MIN_ROWS = 8
+HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT = 0.50
+HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG = 0.12
+HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG = 0.18
+
 
 @dataclass(frozen=True, slots=True)
 class HomographyDistortionAudit:
@@ -74,6 +80,27 @@ class TextScaleStabilityAudit:
 
 
 @dataclass(frozen=True, slots=True)
+class HorizontalAlignmentAudit:
+    """Before/after horizontal-line geometry for one projective candidate."""
+
+    row_count: int = 0
+    before_global_angle_deg: float = 0.0
+    after_global_angle_deg: float = 0.0
+    before_top_angle_deg: float = 0.0
+    after_top_angle_deg: float = 0.0
+    before_bottom_angle_deg: float = 0.0
+    after_bottom_angle_deg: float = 0.0
+    before_trend_deg: float = 0.0
+    after_trend_deg: float = 0.0
+    before_residual_mad_deg: float = 0.0
+    after_residual_mad_deg: float = 0.0
+    before_metric_deg: float = 0.0
+    after_metric_deg: float = 0.0
+    improvement_ratio: float = 0.0
+    verdict: str = "insufficient"
+
+
+@dataclass(frozen=True, slots=True)
 class PerspectiveEstimate:
     """Projective correction inferred from structural column trajectories.
 
@@ -96,6 +123,10 @@ class PerspectiveEstimate:
     scale_bottom: float = 1.0
     scale_delta_ratio: float = 0.0
     classification: str = "unknown"
+    candidate_source: str = "structural"
+    horizontal_vanishing_x: float = 0.0
+    horizontal_vanishing_y: float = 0.0
+    horizontal_row_count: int = 0
 
 
 def polygon_boxes(
@@ -549,6 +580,439 @@ def audit_text_scale_stability(
         verdict=verdict,
     )
 
+def _normalize_text_angle(angle: float) -> float:
+    value = float(angle)
+    while value >= 90.0:
+        value -= 180.0
+    while value < -90.0:
+        value += 180.0
+    return value
+
+
+def _weighted_median_pairs(values: list[tuple[float, float]]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(
+        (float(value), max(0.0, float(weight)))
+        for value, weight in values
+    )
+    total = sum(weight for _value, weight in ordered)
+    if total <= 0.0:
+        return float(np.median([value for value, _weight in ordered]))
+    target = total / 2.0
+    running = 0.0
+    for value, weight in ordered:
+        running += weight
+        if running >= target:
+            return value
+    return ordered[-1][0]
+
+
+def _horizontal_polygon_sample(
+    raw: np.ndarray,
+) -> tuple[float, float, float, float, float] | None:
+    poly = np.asarray(raw, dtype=float)
+    if poly.ndim != 2 or poly.shape[0] < 3 or poly.shape[1] < 2:
+        return None
+    points = poly[:, :2]
+    if not np.isfinite(points).all():
+        return None
+    x0 = float(points[:, 0].min())
+    x1 = float(points[:, 0].max())
+    y0 = float(points[:, 1].min())
+    y1 = float(points[:, 1].max())
+    width = x1 - x0
+    height = y1 - y0
+    if width < max(12.0, height * 1.35) or height < 3.0:
+        return None
+
+    edges: list[tuple[float, float]] = []
+    for index in range(len(points)):
+        p0 = points[index]
+        p1 = points[(index + 1) % len(points)]
+        dx = float(p1[0] - p0[0])
+        dy = float(p1[1] - p0[1])
+        length = math.hypot(dx, dy)
+        if length < max(8.0, height * 1.2):
+            continue
+        angle = _normalize_text_angle(math.degrees(math.atan2(dy, dx)))
+        if abs(angle) <= 20.0 and abs(dx) >= abs(dy):
+            edges.append((angle, length))
+    if not edges:
+        return None
+    selected = sorted(edges, key=lambda item: item[1], reverse=True)[:2]
+    angle = _weighted_median_pairs(selected)
+    center = points.mean(axis=0)
+    return (
+        float(center[0]),
+        float(center[1]),
+        float(angle),
+        max(1.0, width),
+        max(1.0, height),
+    )
+
+
+def _horizontal_rows(
+    polygons: Iterable[np.ndarray],
+) -> list[tuple[float, float, float, float]]:
+    samples = [
+        sample
+        for raw in polygons
+        if (sample := _horizontal_polygon_sample(np.asarray(raw, dtype=float)))
+        is not None
+    ]
+    if not samples:
+        return []
+    median_height = float(np.median([sample[4] for sample in samples]))
+    tolerance = max(4.0, median_height * 0.72)
+    samples.sort(key=lambda item: item[1])
+
+    clusters: list[list[tuple[float, float, float, float, float]]] = []
+    for sample in samples:
+        if not clusters:
+            clusters.append([sample])
+            continue
+        cluster_y = _weighted_median_pairs(
+            [(item[1], item[3]) for item in clusters[-1]]
+        )
+        if abs(sample[1] - cluster_y) <= tolerance:
+            clusters[-1].append(sample)
+        else:
+            clusters.append([sample])
+
+    rows: list[tuple[float, float, float, float]] = []
+    for cluster in clusters:
+        x = _weighted_median_pairs([(item[0], item[3]) for item in cluster])
+        y = _weighted_median_pairs([(item[1], item[3]) for item in cluster])
+        angle = _weighted_median_pairs([(item[2], item[3]) for item in cluster])
+        weight = sum(item[3] for item in cluster)
+        rows.append((x, y, angle, max(1.0, weight)))
+    return rows
+
+
+def _horizontal_row_stats(
+    rows: list[tuple[float, float, float, float]],
+) -> tuple[float, float, float, float, float, float]:
+    if len(rows) < 5:
+        raise RuntimeError("有效文本行不足")
+    ys = np.asarray([row[1] for row in rows], dtype=float)
+    angles = np.asarray([row[2] for row in rows], dtype=float)
+    weights = np.sqrt(np.asarray([row[3] for row in rows], dtype=float))
+    y_min = float(ys.min())
+    y_max = float(ys.max())
+    span = max(1.0, y_max - y_min)
+    norm_y = (ys - y_min) / span - 0.5
+    keep = np.ones(len(rows), dtype=bool)
+
+    slope = 0.0
+    intercept = float(np.median(angles))
+    for _ in range(4):
+        if int(keep.sum()) < 5:
+            break
+        slope, intercept = np.polyfit(
+            norm_y[keep], angles[keep], 1, w=weights[keep],
+        )
+        residual = angles - (slope * norm_y + intercept)
+        center = float(np.median(residual[keep]))
+        mad = float(np.median(np.abs(residual[keep] - center)))
+        threshold = max(0.12, mad * 3.5)
+        new_keep = np.abs(residual - center) <= threshold
+        if int(new_keep.sum()) == int(keep.sum()):
+            keep = new_keep
+            break
+        keep = new_keep
+
+    if int(keep.sum()) >= 5:
+        slope, intercept = np.polyfit(
+            norm_y[keep], angles[keep], 1, w=weights[keep],
+        )
+    predicted = slope * norm_y + intercept
+    residual = angles - predicted
+    valid = residual[keep] if int(keep.sum()) else residual
+    center = float(np.median(valid))
+    residual_mad = float(np.median(np.abs(valid - center)))
+    top = float(intercept - slope * 0.5)
+    bottom = float(intercept + slope * 0.5)
+    return (
+        float(intercept),
+        top,
+        bottom,
+        float(slope),
+        max(0.0, residual_mad),
+        span,
+    )
+
+
+def audit_horizontal_alignment(
+    before_polygons: Iterable[np.ndarray],
+    after_polygons: Iterable[np.ndarray],
+) -> HorizontalAlignmentAudit:
+    before_rows = _horizontal_rows(before_polygons)
+    after_rows = _horizontal_rows(after_polygons)
+    if min(len(before_rows), len(after_rows)) < 5:
+        return HorizontalAlignmentAudit(
+            row_count=min(len(before_rows), len(after_rows)),
+        )
+    (
+        before_global,
+        before_top,
+        before_bottom,
+        before_trend,
+        before_mad,
+        _before_span,
+    ) = _horizontal_row_stats(before_rows)
+    (
+        after_global,
+        after_top,
+        after_bottom,
+        after_trend,
+        after_mad,
+        _after_span,
+    ) = _horizontal_row_stats(after_rows)
+    before_metric = (
+        max(abs(before_top), abs(before_bottom))
+        + 0.45 * abs(before_trend)
+        + 0.35 * before_mad
+    )
+    after_metric = (
+        max(abs(after_top), abs(after_bottom))
+        + 0.45 * abs(after_trend)
+        + 0.35 * after_mad
+    )
+    improvement = (
+        (before_metric - after_metric) / max(1e-6, before_metric)
+        if before_metric > 1e-6 else 0.0
+    )
+    edge_after = max(abs(after_top), abs(after_bottom))
+    if len(after_rows) < HORIZONTAL_VP_MIN_ROWS:
+        verdict = "insufficient"
+    elif (
+        abs(before_trend) >= HORIZONTAL_VP_MIN_TREND_DEG
+        and improvement >= HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT
+        and abs(after_trend) <= HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG
+        and edge_after <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
+        and after_mad <= max(0.16, before_mad + 0.03)
+    ):
+        verdict = "improved"
+    elif after_metric <= before_metric + 0.03:
+        verdict = "stable"
+    else:
+        verdict = "worse"
+    return HorizontalAlignmentAudit(
+        row_count=min(len(before_rows), len(after_rows)),
+        before_global_angle_deg=before_global,
+        after_global_angle_deg=after_global,
+        before_top_angle_deg=before_top,
+        after_top_angle_deg=after_top,
+        before_bottom_angle_deg=before_bottom,
+        after_bottom_angle_deg=after_bottom,
+        before_trend_deg=before_trend,
+        after_trend_deg=after_trend,
+        before_residual_mad_deg=before_mad,
+        after_residual_mad_deg=after_mad,
+        before_metric_deg=before_metric,
+        after_metric_deg=after_metric,
+        improvement_ratio=max(-10.0, min(1.0, improvement)),
+        verdict=verdict,
+    )
+
+
+def _fit_horizontal_vanishing_point(
+    rows: list[tuple[float, float, float, float]],
+) -> tuple[float, float]:
+    if len(rows) < HORIZONTAL_VP_MIN_ROWS:
+        raise RuntimeError("有效文本行不足，无法估计水平消失点")
+    angles = np.asarray([row[2] for row in rows], dtype=float)
+    if float(np.percentile(angles, 90) - np.percentile(angles, 10)) < 0.14:
+        raise RuntimeError("文本行角度变化过小，无需水平消失点校正")
+
+    equations: list[tuple[float, float, float, float]] = []
+    for x, y, angle_deg, weight in rows:
+        radians = math.radians(float(angle_deg))
+        a = -math.sin(radians)
+        b = math.cos(radians)
+        c = -(a * float(x) + b * float(y))
+        equations.append((a, b, c, max(1.0, float(weight))))
+
+    keep = np.ones(len(equations), dtype=bool)
+    point = np.zeros(2, dtype=float)
+    for _ in range(5):
+        if int(keep.sum()) < HORIZONTAL_VP_MIN_ROWS:
+            raise RuntimeError("水平消失点有效行不足")
+        selected = [equations[i] for i in range(len(equations)) if keep[i]]
+        a_mat = np.asarray([[item[0], item[1]] for item in selected], dtype=float)
+        b_vec = np.asarray([-item[2] for item in selected], dtype=float)
+        weights = np.sqrt(np.asarray([item[3] for item in selected], dtype=float))
+        weighted_a = a_mat * weights[:, None]
+        weighted_b = b_vec * weights
+        point, _residuals, rank, _singular = np.linalg.lstsq(
+            weighted_a, weighted_b, rcond=None,
+        )
+        if int(rank) < 2 or not np.isfinite(point).all():
+            raise RuntimeError("水平消失点估计退化")
+        residuals = np.asarray(
+            [
+                abs(a * point[0] + b * point[1] + cc)
+                for a, b, cc, _weight in equations
+            ],
+            dtype=float,
+        )
+        center = float(np.median(residuals[keep]))
+        mad = float(np.median(np.abs(residuals[keep] - center)))
+        threshold = max(2.0, center + mad * 4.0)
+        new_keep = residuals <= threshold
+        if int(new_keep.sum()) == int(keep.sum()):
+            keep = new_keep
+            break
+        keep = new_keep
+    return float(point[0]), float(point[1])
+
+
+def estimate_horizontal_perspective_from_polygons(
+    polygons: Iterable[np.ndarray],
+    size: tuple[int, int],
+) -> PerspectiveEstimate:
+    """Build a minimal projective rectifier from the horizontal vanishing point.
+
+    The transform sends the common vanishing point of text rows to infinity,
+    then rotates that infinite direction onto the image X axis.  At the page
+    center the projective component is identity, minimizing unnecessary local
+    scale change; downstream Jacobian and paired-text audits remain mandatory.
+    """
+    width, height = size
+    polygon_list = [np.asarray(poly, dtype=float) for poly in polygons]
+    rows = _horizontal_rows(polygon_list)
+    if len(rows) < HORIZONTAL_VP_MIN_ROWS:
+        raise RuntimeError("有效文本行不足，无法估计水平消失点")
+    (
+        _global_angle,
+        _top_angle,
+        _bottom_angle,
+        trend,
+        _residual_mad,
+        _span,
+    ) = _horizontal_row_stats(rows)
+    if abs(trend) < HORIZONTAL_VP_MIN_TREND_DEG:
+        raise RuntimeError("文本行上下角度变化不足，无需水平消失点校正")
+
+    vx, vy = _fit_horizontal_vanishing_point(rows)
+    cx = (float(width) - 1.0) / 2.0
+    cy = (float(height) - 1.0) / 2.0
+    vx_rel = vx - cx
+    vy_rel = vy - cy
+    if abs(vx_rel) < max(float(width) * 3.0, 500.0):
+        raise RuntimeError("水平消失点过近，候选投影变换过强")
+    if not (math.isfinite(vx_rel) and math.isfinite(vy_rel)):
+        raise RuntimeError("水平消失点无效")
+
+    to_center = np.asarray(
+        [[1.0, 0.0, -cx], [0.0, 1.0, -cy], [0.0, 0.0, 1.0]],
+        dtype=float,
+    )
+    from_center = np.asarray(
+        [[1.0, 0.0, cx], [0.0, 1.0, cy], [0.0, 0.0, 1.0]],
+        dtype=float,
+    )
+    projective = np.asarray(
+        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [-1.0 / vx_rel, 0.0, 1.0]],
+        dtype=float,
+    )
+    norm = math.hypot(vx_rel, vy_rel)
+    ux = vx_rel / max(1e-12, norm)
+    uy = vy_rel / max(1e-12, norm)
+    align = np.asarray(
+        [[ux, uy, 0.0], [-uy, ux, 0.0], [0.0, 0.0, 1.0]],
+        dtype=float,
+    )
+    matrix = from_center @ align @ projective @ to_center
+    matrix /= matrix[2, 2]
+
+    src = np.asarray(
+        [
+            [0.0, 0.0],
+            [float(width - 1), 0.0],
+            [float(width - 1), float(height - 1)],
+            [0.0, float(height - 1)],
+        ],
+        dtype=float,
+    )
+    dst = transform_points_homography(src, matrix.reshape(-1))
+    if not np.isfinite(dst).all():
+        raise RuntimeError("水平消失点候选映射无效")
+    strength = float(np.max(np.linalg.norm(src - dst, axis=1)))
+    top_width = float(np.linalg.norm(dst[1] - dst[0]))
+    bottom_width = float(np.linalg.norm(dst[2] - dst[3]))
+    mean_width = max(1.0, (top_width + bottom_width) / 2.0)
+    scale_top = top_width / max(1.0, float(width - 1))
+    scale_bottom = bottom_width / max(1.0, float(width - 1))
+    scale_mean = max(1e-9, (abs(scale_top) + abs(scale_bottom)) / 2.0)
+    return PerspectiveEstimate(
+        matrix=tuple(float(v) for v in matrix.reshape(-1)),
+        source_quad=tuple(float(v) for v in src.reshape(-1)),
+        target_quad=tuple(float(v) for v in dst.reshape(-1)),
+        strength_px=strength,
+        width_delta_px=float(bottom_width - top_width),
+        width_change_ratio=abs(bottom_width - top_width) / mean_width,
+        scale_top=scale_top,
+        scale_bottom=scale_bottom,
+        scale_delta_ratio=abs(scale_bottom - scale_top) / scale_mean,
+        classification="horizontal_vp",
+        candidate_source="horizontal_vp",
+        horizontal_vanishing_x=vx,
+        horizontal_vanishing_y=vy,
+        horizontal_row_count=len(rows),
+    )
+
+
+def compose_perspective_estimates(
+    first: PerspectiveEstimate,
+    second: PerspectiveEstimate,
+    size: tuple[int, int],
+) -> PerspectiveEstimate:
+    """Compose source→first and first→second candidate transforms."""
+    width, height = size
+    first_matrix = np.asarray(first.matrix, dtype=float).reshape(3, 3)
+    second_matrix = np.asarray(second.matrix, dtype=float).reshape(3, 3)
+    matrix = second_matrix @ first_matrix
+    matrix /= matrix[2, 2]
+    src = np.asarray(
+        [
+            [0.0, 0.0],
+            [float(width - 1), 0.0],
+            [float(width - 1), float(height - 1)],
+            [0.0, float(height - 1)],
+        ],
+        dtype=float,
+    )
+    dst = transform_points_homography(src, matrix.reshape(-1))
+    strength = float(np.max(np.linalg.norm(src - dst, axis=1)))
+    top_width = float(np.linalg.norm(dst[1] - dst[0]))
+    bottom_width = float(np.linalg.norm(dst[2] - dst[3]))
+    mean_width = max(1.0, (top_width + bottom_width) / 2.0)
+    scale_top = top_width / max(1.0, float(width - 1))
+    scale_bottom = bottom_width / max(1.0, float(width - 1))
+    scale_mean = max(1e-9, (abs(scale_top) + abs(scale_bottom)) / 2.0)
+    return PerspectiveEstimate(
+        matrix=tuple(float(v) for v in matrix.reshape(-1)),
+        source_quad=tuple(float(v) for v in src.reshape(-1)),
+        target_quad=tuple(float(v) for v in dst.reshape(-1)),
+        strength_px=strength,
+        left_drift_px=first.left_drift_px,
+        right_drift_px=first.right_drift_px,
+        common_drift_px=first.common_drift_px,
+        width_delta_px=float(bottom_width - top_width),
+        width_change_ratio=abs(bottom_width - top_width) / mean_width,
+        scale_top=scale_top,
+        scale_bottom=scale_bottom,
+        scale_delta_ratio=abs(scale_bottom - scale_top) / scale_mean,
+        classification="combined",
+        candidate_source="structural+horizontal_vp",
+        horizontal_vanishing_x=second.horizontal_vanishing_x,
+        horizontal_vanishing_y=second.horizontal_vanishing_y,
+        horizontal_row_count=second.horizontal_row_count,
+    )
+
+
 def _homography(src: np.ndarray, dst: np.ndarray) -> np.ndarray:
     """Return a 3x3 matrix mapping src XY coordinates to dst XY coordinates."""
     if src.shape != (4, 2) or dst.shape != (4, 2):
@@ -662,6 +1126,7 @@ def estimate_perspective_from_polygons(
         scale_bottom=scale_bottom,
         scale_delta_ratio=scale_delta_ratio,
         classification=classification,
+        candidate_source="structural",
     )
 
 
