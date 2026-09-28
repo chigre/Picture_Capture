@@ -1579,7 +1579,7 @@ def analyze_preprocess_page(
     # evidence, then re-detect text and require a measurable dual-edge/page
     # horizontality improvement before accepting the neural warp.
     advanced_redetected = False
-    run_auto_uvdoc = bool(auto_uvdoc_evidence and manual_quad is None)
+    run_auto_uvdoc = bool(auto_uvdoc_evidence)
     if requested_geometry_mode == "uvdoc" or run_auto_uvdoc:
         before_uvdoc = working
         before_uvdoc_polygons = list(working_polygons)
