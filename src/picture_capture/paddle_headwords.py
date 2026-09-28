@@ -3051,10 +3051,10 @@ def _parse_visual_configured_symbol_line(
 def _leading_cjk_ideograph(text: str) -> str:
     """Return a CJK glyph only when it is the actual leading token.
 
-    Visual single-character rescue must never mine an arbitrary Han character
-    from the middle of an ordinary definition line (for example "Âm: 波 ba ...").
-    The oversized glyph may be followed by pinyin/variants, but it must itself
-    start the OCR record.
+    This helper is used only inside visually localized oversized-CJK rescue.
+    Besides pinyin/variant tails it accepts a compact sense-number suffix such
+    as 案1 / 暗2 (circled digits normalize to ASCII digits under NFKC). The
+    image-level oversized-run gate remains mandatory.
     """
     normalized = unicodedata.normalize("NFKC", text or "").lstrip()
     if not normalized or not _is_single_cjk_ideograph(normalized[0]):
@@ -3062,16 +3062,18 @@ def _leading_cjk_ideograph(text: str) -> str:
     tail = normalized[1:].lstrip()
     if not tail:
         return normalized[0]
-    # A rescue record may append pinyin/pronunciation to the display glyph, but
-    # ordinary Chinese prose beginning with several Han characters is not a
-    # single-character headword record.
     first_tail = tail[0]
     if _is_single_cjk_ideograph(first_tail):
         return ""
     if first_tail.isalpha():
         return normalized[0]
+    sense = re.match(r"^\d{1,2}(?=$|\s|[([（［/·,，:：.\\-])", tail)
+    if sense is not None:
+        remainder = tail[sense.end():].lstrip(" \t([（［/·,，:：.-")
+        if not remainder or not _is_single_cjk_ideograph(remainder[0]):
+            return normalized[0]
     if first_tail in "([（［/·,，:：":
-        remainder = tail[1:].lstrip(" 	([（［/·,，:：")
+        remainder = tail[1:].lstrip(" \t([（［/·,，:：")
         if not remainder or (
             remainder[0].isalpha()
             and not _is_single_cjk_ideograph(remainder[0])
@@ -3079,9 +3081,13 @@ def _leading_cjk_ideograph(text: str) -> str:
             return normalized[0]
     return ""
 
-
 def _cjk_visual_projection_runs(
-    gray: np.ndarray, header_cutoff: int, settings: AppSettings, pixel_scale: float,
+    gray: np.ndarray,
+    header_cutoff: int,
+    settings: AppSettings,
+    pixel_scale: float,
+    *,
+    relaxed: bool = False,
 ) -> tuple[int, list[tuple[int, int]]]:
     """Locate oversized single-character rows from image geometry alone.
 
@@ -3134,8 +3140,24 @@ def _cjk_visual_projection_runs(
         plausible = [end - start for start, end in runs if end - start >= max(6, round(5 * ratio))]
         body_median = float(np.median(np.asarray(plausible, dtype=float))) if plausible else expected_body
 
-    minimum_large = max(body_median * 1.45, expected_body * 1.55)
-    maximum_large = max(minimum_large + 1.0, body_median * 3.6)
+    if relaxed:
+        # Discovery is deliberately high-recall; final promotion still requires
+        # a tightly cropped local OCR result that resolves to one Han headword.
+        # A lower-distribution reference prevents consecutive display heads from
+        # inflating the page median and hiding one another.
+        body_reference = (
+            float(np.percentile(np.asarray(body_heights, dtype=float), 35))
+            if body_heights else body_median
+        )
+        minimum_large = max(body_reference * 1.28, expected_body * 1.25)
+        maximum_large = max(
+            minimum_large + 1.0,
+            body_reference * 4.2,
+            expected_body * 4.0,
+        )
+    else:
+        minimum_large = max(body_median * 1.45, expected_body * 1.55)
+        maximum_large = max(minimum_large + 1.0, body_median * 3.6)
     result: list[tuple[int, int]] = []
     for start, end in runs:
         height = end - start
