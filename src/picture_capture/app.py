@@ -11828,14 +11828,19 @@ class PictureCaptureApp(tk.Tk):
         }
 
     def _page_list_bookmark_click(self, event: tk.Event) -> str | None:
-        """Toggle the bookmark cell without changing the active page."""
-        if self._preprocess_mode_active():
-            self.status_var.set("预处理模式中：仅保留页面浏览，不修改书签或其他项目数据。")
-            return "break"
+        """Toggle only the bookmark cell; never swallow ordinary page clicks."""
+        # This handler is bound to every left click on the Treeview. Determine
+        # whether the click actually targets the bookmark column *before*
+        # applying the preprocess read-only guard. Otherwise returning "break"
+        # in preprocess mode suppresses Treeview selection on the 页面 column and
+        # makes the page list appear frozen while analysis is running.
         if self.page_list.identify_region(event.x, event.y) != "cell":
             return None
         if self.page_list.identify_column(event.x) != "#1":
             return None
+        if self._preprocess_mode_active():
+            self.status_var.set("预处理模式中：仅保留页面浏览，不修改书签或其他项目数据。")
+            return "break"
         iid = self.page_list.identify_row(event.y)
         if not iid or not self.project:
             return "break"

@@ -8166,3 +8166,44 @@ def test_generated_app_icon_is_packaged_and_applied_to_root():
     assert '"data/*.png"' in pyproject
     assert 'icon_path = Path(__file__).resolve().parent / "data" / "app_icon.png"' in app_text
     assert "self.iconphoto(True, self._app_icon_photo)" in app_text
+
+
+
+def test_preprocess_page_list_click_keeps_normal_page_selection_available():
+    app = PictureCaptureApp.__new__(PictureCaptureApp)
+
+    class FakePageList:
+        def identify_region(self, _x, _y):
+            return "cell"
+
+        def identify_column(self, _x):
+            return "#2"  # 页面列，不是书签列
+
+    app.page_list = FakePageList()
+    app._preprocess_mode_active = lambda: True
+    messages = []
+    app.status_var = type("StatusVar", (), {"set": lambda self, value: messages.append(value)})()
+    event = type("Event", (), {"x": 10, "y": 10})()
+
+    result = PictureCaptureApp._page_list_bookmark_click(app, event)
+
+    assert result is None
+    assert messages == []
+
+
+def test_preprocess_analysis_keeps_viewer_zoom_available():
+    app = PictureCaptureApp.__new__(PictureCaptureApp)
+    app.image = Image.new("RGB", (1000, 1400), "white")
+    app.view_scale = 1.0
+    app._batch_active = True
+    app._batch_allow_page_navigation = True
+    app._preprocess_mode_active = lambda: True
+    redraws = []
+    app._update_view_zoom_label = lambda: None
+    app.redraw = lambda: redraws.append("redraw")
+    app._set_idle_cursor_status = lambda: None
+
+    PictureCaptureApp.zoom(app, 1.15)
+
+    assert abs(app.view_scale - 1.15) < 1e-9
+    assert redraws == ["redraw"]
