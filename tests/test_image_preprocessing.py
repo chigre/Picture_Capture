@@ -1568,6 +1568,11 @@ def test_pixel_row_geometry_can_accept_safe_candidate_when_ocr_tail_is_biased(
                     "valid_column_count": 2,
                     "p90_shift_px": 5.0,
                     "worst_shift_px": 6.0,
+                    "bottom_tail_sample_count": 0,
+                    "bottom_tail_valid_column_count": 0,
+                    "bottom_tail_p90_shift_px": 0.0,
+                    "bottom_tail_worst_shift_px": 0.0,
+                    "bottom_tail_passed": False,
                     "passed": False,
                 },
             )()
@@ -1768,6 +1773,11 @@ def test_auto_orthogonal_runs_second_residual_pass_after_improved_review(
                 "valid_column_count": 2,
                 "p90_shift_px": p90,
                 "worst_shift_px": worst,
+                "bottom_tail_sample_count": 0,
+                "bottom_tail_valid_column_count": 0,
+                "bottom_tail_p90_shift_px": 0.0,
+                "bottom_tail_worst_shift_px": 0.0,
+                "bottom_tail_passed": False,
                 "passed": p90 <= 1.5 and worst <= 2.5,
             },
         )()
