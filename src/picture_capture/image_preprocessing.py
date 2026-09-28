@@ -1157,6 +1157,7 @@ def analyze_preprocess_page(
             perspective_source_quad = tuple(manual_estimate.source_quad)
             perspective_target_quad = tuple(manual_estimate.target_quad)
             perspective_classification = str(manual_estimate.classification)
+            perspective_candidate_source = "manual"
             perspective_candidate_strength_px = float(manual_estimate.strength_px)
             perspective_left_drift_px = float(manual_estimate.left_drift_px)
             perspective_right_drift_px = float(manual_estimate.right_drift_px)
@@ -1184,6 +1185,20 @@ def analyze_preprocess_page(
                     working.size,
                     writing_mode=settings.layout_writing_mode,
                 )
+                row_audit = audit_horizontal_alignment(
+                    working_polygons,
+                    manual_candidate_polygons,
+                )
+                perspective_row_before_top_angle_deg = row_audit.before_top_angle_deg
+                perspective_row_after_top_angle_deg = row_audit.after_top_angle_deg
+                perspective_row_before_bottom_angle_deg = row_audit.before_bottom_angle_deg
+                perspective_row_after_bottom_angle_deg = row_audit.after_bottom_angle_deg
+                perspective_row_before_trend_deg = row_audit.before_trend_deg
+                perspective_row_after_trend_deg = row_audit.after_trend_deg
+                perspective_row_before_metric_deg = row_audit.before_metric_deg
+                perspective_row_after_metric_deg = row_audit.after_metric_deg
+                perspective_row_improvement_ratio = row_audit.improvement_ratio
+                perspective_row_alignment_verdict = row_audit.verdict
                 perspective_jacobian_samples = jacobian_audit.sample_count
                 perspective_jacobian_horizontal_scale_span_ratio = (
                     jacobian_audit.horizontal_scale_span_ratio
@@ -2404,6 +2419,17 @@ def export_diagnostic_json(
         "text_scale_inline_gradient_max": TEXT_SCALE_INLINE_GRADIENT_MAX,
         "text_scale_cross_gradient_max": TEXT_SCALE_CROSS_GRADIENT_MAX,
         "text_scale_anisotropy_p95_max": TEXT_SCALE_ANISOTROPY_P95_MAX,
+        "horizontal_vp_min_rows": HORIZONTAL_VP_MIN_ROWS,
+        "horizontal_vp_min_trend_deg": HORIZONTAL_VP_MIN_TREND_DEG,
+        "horizontal_alignment_min_improvement": (
+            HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT
+        ),
+        "horizontal_alignment_max_after_trend_deg": (
+            HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG
+        ),
+        "horizontal_alignment_max_after_edge_deg": (
+            HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
+        ),
         "separator_curve_span_min": SEPARATOR_CURVE_SPAN_MIN,
         "separator_track_quality_min": SEPARATOR_TRACK_QUALITY_MIN,
         "separator_curvature_score_min": SEPARATOR_CURVATURE_SCORE_MIN,
@@ -2457,6 +2483,46 @@ def export_summary_csv(
             "geometry_strength_px": analysis.geometry_strength_px,
             "perspective_candidate_strength_px": analysis.perspective_candidate_strength_px,
             "perspective_classification": analysis.perspective_classification,
+            "perspective_candidate_source": analysis.perspective_candidate_source,
+            "perspective_horizontal_vanishing_x": (
+                analysis.perspective_horizontal_vanishing_x
+            ),
+            "perspective_horizontal_vanishing_y": (
+                analysis.perspective_horizontal_vanishing_y
+            ),
+            "perspective_horizontal_row_count": (
+                analysis.perspective_horizontal_row_count
+            ),
+            "perspective_row_before_top_angle_deg": (
+                analysis.perspective_row_before_top_angle_deg
+            ),
+            "perspective_row_after_top_angle_deg": (
+                analysis.perspective_row_after_top_angle_deg
+            ),
+            "perspective_row_before_bottom_angle_deg": (
+                analysis.perspective_row_before_bottom_angle_deg
+            ),
+            "perspective_row_after_bottom_angle_deg": (
+                analysis.perspective_row_after_bottom_angle_deg
+            ),
+            "perspective_row_before_trend_deg": (
+                analysis.perspective_row_before_trend_deg
+            ),
+            "perspective_row_after_trend_deg": (
+                analysis.perspective_row_after_trend_deg
+            ),
+            "perspective_row_before_metric_deg": (
+                analysis.perspective_row_before_metric_deg
+            ),
+            "perspective_row_after_metric_deg": (
+                analysis.perspective_row_after_metric_deg
+            ),
+            "perspective_row_improvement_ratio": (
+                analysis.perspective_row_improvement_ratio
+            ),
+            "perspective_row_alignment_verdict": (
+                analysis.perspective_row_alignment_verdict
+            ),
             "perspective_left_drift_px": analysis.perspective_left_drift_px,
             "perspective_right_drift_px": analysis.perspective_right_drift_px,
             "perspective_common_drift_px": analysis.perspective_common_drift_px,
@@ -2714,10 +2780,17 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
                 f" I{analysis.perspective_text_scale_inline_ratio_span_ratio * 100:.1f}%"
                 f" C{analysis.perspective_text_scale_cross_ratio_span_ratio * 100:.1f}%"
             )
+        row_part = ""
+        if analysis.perspective_row_alignment_verdict != "insufficient":
+            row_part = (
+                f" / 行趋势 {analysis.perspective_row_before_trend_deg:+.2f}°"
+                f"→{analysis.perspective_row_after_trend_deg:+.2f}°"
+            )
         perspective_part = (
-            f"｜透视候选 {analysis.perspective_candidate_strength_px:.1f}px"
+            f"｜投影候选 {analysis.perspective_candidate_strength_px:.1f}px"
+            f" / {analysis.perspective_candidate_source}"
             f" / 旧尺度差 {analysis.perspective_scale_delta_ratio * 100:.2f}%"
-            f"{audit_part}{text_scale_part}"
+            f"{row_part}{audit_part}{text_scale_part}"
             f" / {analysis.perspective_classification}"
         )
     line_part = ""
