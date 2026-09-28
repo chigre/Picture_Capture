@@ -2777,6 +2777,12 @@ def analyze_preprocess_page(
     orthogonal_pixel_angle_sample_count = 0
     orthogonal_pixel_angle_used_count = 0
     orthogonal_pixel_angle_confidence = 0.0
+    orthogonal_pixel_row_sample_count = 0
+    orthogonal_before_pixel_row_p90_px = 0.0
+    orthogonal_after_pixel_row_p90_px = 0.0
+    orthogonal_before_pixel_row_worst_px = 0.0
+    orthogonal_after_pixel_row_worst_px = 0.0
+    orthogonal_pixel_row_verdict = "insufficient"
     orthogonal_confidence = 0.0
     orthogonal_column_spread_deg = 0.0
     orthogonal_max_row_angle_deg = 0.0
@@ -2974,6 +2980,31 @@ def analyze_preprocess_page(
                 size=candidate_image.size,
                 settings=settings,
             )
+            baseline_pixel_rows = audit_pixel_row_profiles(
+                working,
+                working_polygons,
+                settings,
+            )
+            candidate_pixel_rows = audit_pixel_row_profiles(
+                candidate_image,
+                candidate_polygons,
+                settings,
+            )
+            orthogonal_pixel_row_sample_count = int(
+                candidate_pixel_rows.sample_count
+            )
+            orthogonal_before_pixel_row_p90_px = float(
+                baseline_pixel_rows.p90_shift_px
+            )
+            orthogonal_after_pixel_row_p90_px = float(
+                candidate_pixel_rows.p90_shift_px
+            )
+            orthogonal_before_pixel_row_worst_px = float(
+                baseline_pixel_rows.worst_shift_px
+            )
+            orthogonal_after_pixel_row_worst_px = float(
+                candidate_pixel_rows.worst_shift_px
+            )
             baseline_verdict, baseline_score = _absolute_horizontal_quality(
                 baseline_audit
             )
@@ -3001,6 +3032,37 @@ def analyze_preprocess_page(
                 )
                 <= HORIZONTAL_ALIGNMENT_MAX_TAIL_DEG
             )
+            pixel_row_available = bool(
+                candidate_pixel_rows.sample_count >= 8
+                and candidate_pixel_rows.valid_column_count >= 1
+            )
+            pixel_row_safe = bool(
+                pixel_row_available
+                and candidate_pixel_rows.p90_shift_px
+                <= PIXEL_ROW_PROFILE_P90_MAX_PX
+                and candidate_pixel_rows.worst_shift_px
+                <= PIXEL_ROW_PROFILE_WORST_MAX_PX
+            )
+            pixel_row_improved = bool(
+                pixel_row_available
+                and baseline_pixel_rows.sample_count >= 8
+                and baseline_pixel_rows.p90_shift_px > 1e-6
+                and candidate_pixel_rows.p90_shift_px
+                <= baseline_pixel_rows.p90_shift_px * 0.70
+                and candidate_pixel_rows.worst_shift_px
+                <= max(
+                    PIXEL_ROW_PROFILE_WORST_MAX_PX,
+                    baseline_pixel_rows.worst_shift_px * 0.80,
+                )
+            )
+            if pixel_row_safe:
+                orthogonal_pixel_row_verdict = "passed"
+            elif pixel_row_improved:
+                orthogonal_pixel_row_verdict = "improved_review"
+            elif pixel_row_available:
+                orthogonal_pixel_row_verdict = "failed"
+            else:
+                orthogonal_pixel_row_verdict = "insufficient"
 
             vertical_required = bool(estimate.separator_point_count >= 7)
             vertical_safe = True
@@ -3084,14 +3146,35 @@ def analyze_preprocess_page(
             else:
                 orthogonal_horizontal_rule_verdict = "not_required"
 
+            body_geometry_safe = bool(
+                (
+                    pixel_driven
+                    and pixel_row_available
+                    and (pixel_row_safe or pixel_row_improved)
+                )
+                or (
+                    (not pixel_driven or not pixel_row_available)
+                    and horizontal_improved
+                    and tail_safe
+                )
+            )
             actual_improved = bool(
-                horizontal_improved
-                and tail_safe
+                body_geometry_safe
                 and vertical_safe
                 and header_rule_safe
             )
             if not actual_improved:
-                if not tail_safe:
+                if (
+                    pixel_driven
+                    and pixel_row_available
+                    and not (pixel_row_safe or pixel_row_improved)
+                ):
+                    reason = (
+                        "正文像素行曲率验收未通过"
+                        f"（P90 {candidate_pixel_rows.p90_shift_px:.1f}px，"
+                        f"最差 {candidate_pixel_rows.worst_shift_px:.1f}px）"
+                    )
+                elif not tail_safe:
                     reason = (
                         "正文页首/页尾局部验收未通过"
                         f"（最差尾部P90 "
@@ -3106,6 +3189,12 @@ def analyze_preprocess_page(
                 warnings.append(
                     f"正交网格候选{reason}，"
                     f"正文水平质量分 {baseline_score:.2f}→{actual_score:.2f}"
+                    + (
+                        "，像素行位移P90 "
+                        f"{baseline_pixel_rows.p90_shift_px:.1f}px→"
+                        f"{candidate_pixel_rows.p90_shift_px:.1f}px"
+                        if pixel_row_available else ""
+                    )
                     + (
                         "，页眉横线 "
                         f"{orthogonal_before_horizontal_rule_angle_deg:+.2f}°→"
