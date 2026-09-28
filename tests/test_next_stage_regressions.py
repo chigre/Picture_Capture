@@ -3823,6 +3823,26 @@ def test_bracket_role_and_templates_remain_active_when_standalone_marker_invento
     assert inventory["visual_templates"][0]["role"] == "bracket_open"
 
 
+
+def test_relaxed_cjk_visual_run_discovery_uses_configured_body_height_cap():
+    settings = AppSettings(
+        ocr_language="chi_tra",
+        character_height=122,
+    )
+    gray = np.full((500, 220), 255, dtype=np.uint8)
+    gray[120:280, 0:30] = 0
+
+    _zone, strict_runs = paddle_headwords._cjk_visual_projection_runs(
+        gray, 0, settings, 1.0,
+    )
+    _zone, relaxed_runs = paddle_headwords._cjk_visual_projection_runs(
+        gray, 0, settings, 1.0, relaxed=True,
+    )
+
+    assert strict_runs == []
+    assert relaxed_runs == [(120, 280)]
+
+
 def test_image_first_cjk_rescue_recovers_run_without_any_parent_ocr_box(monkeypatch):
     settings = AppSettings(
         ocr_language="chi_tra",
