@@ -21,7 +21,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 2
+PREPROCESS_FORMAT_VERSION = 3
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -276,6 +276,27 @@ def _rotate_point_same_canvas(
     )
 
 
+def _rotate_polygons_same_canvas(
+    polygons: Iterable[np.ndarray],
+    width: int,
+    height: int,
+    angle_deg: float,
+) -> list[np.ndarray]:
+    rotated: list[np.ndarray] = []
+    for raw in polygons:
+        poly = np.asarray(raw, dtype=float)
+        if poly.ndim != 2 or poly.shape[0] < 3 or poly.shape[1] < 2:
+            continue
+        points = [
+            _rotate_point_same_canvas(
+                float(x), float(y), width, height, angle_deg,
+            )
+            for x, y in poly[:, :2]
+        ]
+        rotated.append(np.asarray(points, dtype=float))
+    return rotated
+
+
 def _rotated_text_box(
     polygons: Iterable[np.ndarray], width: int, height: int, angle_deg: float,
 ) -> tuple[int, int, int, int] | None:
@@ -360,11 +381,16 @@ def _layout_content_box_from_polygons(
         * (max(1, int(estimate.column_width)) + max(0, int(estimate.gutter)))
     )
 
-    # The estimated column width is intentionally conservative for drawing and
-    # layout inference, so using last_start + column_width can retain too much
-    # white margin. For preprocessing, derive the actual final-column right edge
-    # from the detected body text in that lane. A high percentile is robust to
-    # short definitions while ignoring isolated extreme boxes.
+    # Preprocessing uses the column-specific outer edge retained by automatic
+    # layout detection, not the median column width used by drawing/layout logic.
+    # This keeps the final crop tied to the actual last occupied column.
+    rights = tuple(int(value) for value in estimate.column_rights)
+    if rights and len(rights) == len(starts):
+        right = rights[-1]
+    else:
+        right = int(last_start) + max(1, int(estimate.column_width))
+    right = max(int(last_start) + 1, min(width, right))
+
     heights = [box[3] - box[1] for box in boxes]
     median_h = max(4.0, float(np.median(heights)))
     filtered = [
@@ -372,26 +398,6 @@ def _layout_content_box_from_polygons(
         if box[3] - box[1] >= max(3.0, median_h * 0.40)
         and box[2] - box[0] <= width * 0.92
     ] or boxes
-    if len(starts) >= 2:
-        lane_left = (starts[-2] + starts[-1]) / 2.0
-    else:
-        lane_left = max(0.0, left - estimate.column_width * 0.15)
-    lane_right = min(width, last_start + max(estimate.column_width * 1.35, 24))
-    body_top_limit = max(0, int(estimate.start_y) - max(4, int(estimate.character_height)))
-    body_bottom_limit = min(
-        height, int(estimate.bottom_y) + max(4, int(estimate.character_height))
-    )
-    last_column_rights = [
-        box[2]
-        for box in filtered
-        if body_top_limit <= box[1] <= body_bottom_limit
-        and lane_left <= (box[0] + box[2]) / 2.0 <= lane_right
-    ]
-    if last_column_rights:
-        right = int(round(float(np.percentile(last_column_rights, 98))))
-    else:
-        right = int(last_start) + max(1, int(estimate.column_width))
-    right = max(int(last_start) + 1, min(width, right))
 
     # Reuse the detector population but estimate the header top independently
     # from body start_y. Only text spatially associated with the detected page
@@ -536,19 +542,34 @@ def analyze_preprocess_page(
 
     text_box = _rotated_text_box(polygons, width, height, applied)
     if layout_box_source is not None:
-        # The user-facing rule is defined before correction:
-        #   X = first-column-left .. last-column-right
-        #   Y = header-top .. body-bottom
-        # plus a fixed pixel safety margin. Rotate that exact ROI together with
-        # the page and only then take its axis-aligned box on the corrected canvas.
-        safe_source_box = _expand_box_px(
-            layout_box_source, width, height, safety_margin_px,
-        )
-        raw_content_box = _rotate_box_same_canvas(
-            layout_box_source, width, height, applied,
-        )
-        crop_box = _rotate_box_same_canvas(
-            safe_source_box, width, height, applied,
+        # The structural rule is established from the detected source layout:
+        #   X = first-column-left .. actual last-column-right
+        #   Y = header-top .. body-bottom.
+        # After deskew, recompute those same structural anchors from the rotated
+        # detector polygons, then add the fixed safety margin in the corrected
+        # coordinate system.  This avoids enlarging a 20 px margin merely because
+        # an axis-aligned bounding box was taken around a rotated rectangle.
+        corrected_layout_box = layout_box_source
+        if abs(applied) >= 1e-9:
+            try:
+                corrected_polygons = _rotate_polygons_same_canvas(
+                    polygons, width, height, applied,
+                )
+                corrected_layout_box, _corrected_estimate = (
+                    _layout_content_box_from_polygons(
+                        corrected_polygons, width, height, settings,
+                    )
+                )
+            except Exception as exc:
+                corrected_layout_box = _rotate_box_same_canvas(
+                    layout_box_source, width, height, applied,
+                )
+                warnings.append(
+                    f"纠偏后版面边界重算失败，已使用几何变换回退：{exc}"
+                )
+        raw_content_box = corrected_layout_box
+        crop_box = _expand_box_px(
+            raw_content_box, width, height, safety_margin_px,
         )
     else:
         # Projection is now strictly a compatibility fallback. It no longer
