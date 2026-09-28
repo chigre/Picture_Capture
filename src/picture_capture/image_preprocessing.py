@@ -19,21 +19,20 @@ from .layout_detection import (
 )
 from .models import AppSettings
 from .preprocess_geometry import (
-    LayoutDewarpEstimate,
     apply_homography_image,
-    apply_layout_dewarp_image,
-    dewarp_estimate_from_payload,
-    estimate_layout_dewarp_from_polygons,
     estimate_perspective_from_polygons,
     perspective_from_quad,
     transform_polygons_homography,
-    transform_polygons_layout_dewarp,
+)
+from .text_line_geometry import (
+    TextLineGeometryAnalysis,
+    analyze_text_line_geometry,
 )
 from .project_storage import image_preprocess_data_root, image_preprocess_output_root
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 7
+PREPROCESS_FORMAT_VERSION = 8
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -65,9 +64,19 @@ class PreprocessAnalysis:
     geometry_strength_px: float = 0.0
     perspective_matrix: tuple[float, ...] | None = None
     manual_perspective_quad: tuple[float, ...] | None = None
-    dewarp_y_samples: tuple[float, ...] = ()
-    dewarp_target_starts: tuple[float, ...] = ()
-    dewarp_source_starts: tuple[tuple[float, ...], ...] = ()
+    line_geometry_rows: int = 0
+    line_geometry_global_angle_deg: float = 0.0
+    line_geometry_top_angle_deg: float = 0.0
+    line_geometry_middle_angle_deg: float = 0.0
+    line_geometry_bottom_angle_deg: float = 0.0
+    line_geometry_trend_deg: float = 0.0
+    line_geometry_residual_mad_deg: float = 0.0
+    line_geometry_residual_span_deg: float = 0.0
+    line_geometry_separator_found: bool = False
+    line_geometry_separator_residual_px: float = 0.0
+    line_geometry_separator_span_ratio: float = 0.0
+    line_geometry_recommendation: str = "insufficient"
+    line_geometry_confidence: float = 0.0
     source_size_bytes: int = 0
     source_mtime_ns: int = 0
 
@@ -87,11 +96,6 @@ class PreprocessAnalysis:
             list(self.manual_perspective_quad)
             if self.manual_perspective_quad is not None else None
         )
-        payload["dewarp_y_samples"] = list(self.dewarp_y_samples)
-        payload["dewarp_target_starts"] = list(self.dewarp_target_starts)
-        payload["dewarp_source_starts"] = [
-            list(row) for row in self.dewarp_source_starts
-        ]
         return payload
 
     @classmethod
@@ -148,16 +152,50 @@ class PreprocessAnalysis:
                 and len(payload.get("manual_perspective_quad", ())) == 8
                 else None
             ),
-            dewarp_y_samples=tuple(
-                float(v) for v in payload.get("dewarp_y_samples", ())
+            line_geometry_rows=max(
+                0, int(payload.get("line_geometry_rows", 0))
             ),
-            dewarp_target_starts=tuple(
-                float(v) for v in payload.get("dewarp_target_starts", ())
+            line_geometry_global_angle_deg=float(
+                payload.get("line_geometry_global_angle_deg", 0.0)
             ),
-            dewarp_source_starts=tuple(
-                tuple(float(v) for v in row)
-                for row in payload.get("dewarp_source_starts", ())
-                if isinstance(row, (list, tuple))
+            line_geometry_top_angle_deg=float(
+                payload.get("line_geometry_top_angle_deg", 0.0)
+            ),
+            line_geometry_middle_angle_deg=float(
+                payload.get("line_geometry_middle_angle_deg", 0.0)
+            ),
+            line_geometry_bottom_angle_deg=float(
+                payload.get("line_geometry_bottom_angle_deg", 0.0)
+            ),
+            line_geometry_trend_deg=float(
+                payload.get("line_geometry_trend_deg", 0.0)
+            ),
+            line_geometry_residual_mad_deg=max(
+                0.0, float(payload.get("line_geometry_residual_mad_deg", 0.0))
+            ),
+            line_geometry_residual_span_deg=max(
+                0.0, float(payload.get("line_geometry_residual_span_deg", 0.0))
+            ),
+            line_geometry_separator_found=bool(
+                payload.get("line_geometry_separator_found", False)
+            ),
+            line_geometry_separator_residual_px=max(
+                0.0, float(payload.get("line_geometry_separator_residual_px", 0.0))
+            ),
+            line_geometry_separator_span_ratio=max(
+                0.0,
+                min(
+                    1.0,
+                    float(payload.get("line_geometry_separator_span_ratio", 0.0)),
+                ),
+            ),
+            line_geometry_recommendation=str(
+                payload.get("line_geometry_recommendation", "insufficient")
+                or "insufficient"
+            ),
+            line_geometry_confidence=max(
+                0.0,
+                min(1.0, float(payload.get("line_geometry_confidence", 0.0))),
             ),
             source_size_bytes=max(0, int(payload.get("source_size_bytes", 0))),
             source_mtime_ns=max(0, int(payload.get("source_mtime_ns", 0))),
@@ -558,25 +596,12 @@ def _normalize_geometry_mode(value: str | None) -> str:
         "deskew": "deskew",
         "light": "deskew",
         "perspective": "perspective",
-        "dewarp": "dewarp",
-        "mesh": "dewarp",
+        "dewarp": "uvdoc",
+        "mesh": "uvdoc",
         "uvdoc": "uvdoc",
         "paddle_unwarp": "uvdoc",
     }
     return aliases.get(mode, "auto")
-
-
-def _dewarp_payload_valid(
-    y_samples: tuple[float, ...],
-    target_starts: tuple[float, ...],
-    source_starts: tuple[tuple[float, ...], ...],
-) -> bool:
-    return (
-        len(y_samples) >= 2
-        and len(target_starts) >= 2
-        and len(source_starts) == len(y_samples)
-        and all(len(row) == len(target_starts) for row in source_starts)
-    )
 
 
 def geometry_corrected_image(
@@ -595,20 +620,6 @@ def geometry_corrected_image(
         )
     if analysis.geometry_mode == "uvdoc":
         corrected = unwarp_document_image(corrected)
-    if _dewarp_payload_valid(
-        analysis.dewarp_y_samples,
-        analysis.dewarp_target_starts,
-        analysis.dewarp_source_starts,
-    ):
-        corrected = apply_layout_dewarp_image(
-            corrected,
-            dewarp_estimate_from_payload(
-                analysis.dewarp_y_samples,
-                analysis.dewarp_target_starts,
-                analysis.dewarp_source_starts,
-                analysis.geometry_strength_px,
-            ),
-        )
     return corrected
 
 
@@ -642,6 +653,35 @@ def analyze_preprocess_page(
         polygons = []
         method_parts = ["projection_fallback"]
         warnings.append(f"版面结构检测不可用，裁边已使用投影回退：{exc}")
+
+    line_geometry = TextLineGeometryAnalysis()
+    if polygons:
+        try:
+            line_geometry = analyze_text_line_geometry(
+                source, polygons, settings,
+            )
+            method_parts.append("line_geometry")
+            if line_geometry.recommendation == "uvdoc_review":
+                warnings.append(
+                    "文本行与真实长直线共同提示非线性页面形变，建议使用"
+                    "“UVDoc展平（Paddle高级）”复核。"
+                )
+            elif line_geometry.recommendation == "manual_review":
+                if (
+                    line_geometry.separator_found
+                    and line_geometry.separator_residual_px
+                    < max(3.0, width * 0.0015)
+                ):
+                    warnings.append(
+                        "文本行方向存在局部不一致，但长直分隔线保持笔直；"
+                        "更可能是版式/OCR波动，不自动做非线性矫正。"
+                    )
+                else:
+                    warnings.append(
+                        "文本行方向存在不一致，当前证据不足以支持非线性矫正。"
+                    )
+        except Exception as exc:
+            warnings.append(f"文本行几何分析不可用：{exc}")
 
     correction, angle_samples, angle_mad = estimate_skew_from_polygons(
         polygons, writing_mode=settings.layout_writing_mode,
@@ -678,7 +718,6 @@ def analyze_preprocess_page(
     actual_geometry_mode = "deskew"
     geometry_strength = 0.0
     perspective_matrix: tuple[float, ...] | None = None
-    dewarp_estimate: LayoutDewarpEstimate | None = None
 
     # A saved manual quadrilateral is expressed in original-source pixels.
     # Rotate those four handles through the same small-angle correction first,
@@ -734,7 +773,7 @@ def analyze_preprocess_page(
     if (
         manual_quad is None
         and working_polygons
-        and requested_geometry_mode in {"auto", "perspective", "dewarp"}
+        and requested_geometry_mode in {"auto", "perspective"}
     ):
         try:
             perspective = estimate_perspective_from_polygons(
@@ -742,7 +781,7 @@ def analyze_preprocess_page(
             )
             perspective_threshold = max(5.0, width * 0.002)
             apply_perspective = (
-                requested_geometry_mode in {"perspective", "dewarp"}
+                requested_geometry_mode == "perspective"
                 or perspective.strength_px >= perspective_threshold
             )
             if apply_perspective and perspective.strength_px >= 0.75:
@@ -759,52 +798,15 @@ def analyze_preprocess_page(
                 actual_geometry_mode = "perspective"
                 method_parts.append("perspective")
         except Exception as exc:
-            if requested_geometry_mode in {"perspective", "dewarp"}:
+            if requested_geometry_mode == "perspective":
                 warnings.append(f"自动透视纠正不可用：{exc}")
-
-    if working_polygons and requested_geometry_mode in {"auto", "dewarp"}:
-        try:
-            candidate = estimate_layout_dewarp_from_polygons(
-                working_polygons, working.size, settings,
-            )
-            # Real-page validation (notably page 0004) showed that OCR-derived
-            # column-left trajectories can contain lexical/indentation jitter.
-            # Turning that signal directly into a nonlinear mesh can bend a
-            # genuinely straight separator into an S-curve.  Therefore mesh
-            # dewarp is NEVER applied by automatic mode.  Automatic mode only
-            # flags strong nonlinear evidence and leaves the image unchanged;
-            # UVDoc is the supported advanced unwarping path.
-            dewarp_threshold = max(6.0, width * 0.0025)
-            if requested_geometry_mode == "dewarp":
-                if candidate.strength_px >= 0.75:
-                    dewarp_estimate = candidate
-                    geometry_strength = max(
-                        geometry_strength, float(candidate.strength_px)
-                    )
-                    working = apply_layout_dewarp_image(
-                        working, dewarp_estimate,
-                    )
-                    working_polygons = transform_polygons_layout_dewarp(
-                        working_polygons, dewarp_estimate, width,
-                    )
-                    actual_geometry_mode = "dewarp"
-                    method_parts.append("dewarp_legacy")
-            elif candidate.strength_px >= dewarp_threshold:
-                warnings.append(
-                    "检测到疑似非线性页面形变；自动模式不会应用实验性 mesh，"
-                    "建议使用“UVDoc展平（Paddle高级）”复核。"
-                )
-                method_parts.append("nonlinear_review")
-        except Exception as exc:
-            if requested_geometry_mode == "dewarp":
-                warnings.append(f"实验性 mesh 去弯曲不可用：{exc}")
 
     # Advanced transforms change the page geometry. Re-run TextDetection on the
     # corrected image before final structural cropping. If that second pass
     # fails, the mathematically transformed original polygons remain a safe
     # fallback and preserve non-destructive export.
     final_polygons = working_polygons
-    if polygons and actual_geometry_mode in {"manual_perspective", "perspective", "dewarp", "uvdoc"}:
+    if polygons and actual_geometry_mode in {"manual_perspective", "perspective", "uvdoc"}:
         try:
             redetected = detect_text_polygons(working, settings)
             if len(redetected) >= 4:
@@ -893,15 +895,23 @@ def analyze_preprocess_page(
         geometry_strength_px=round(float(geometry_strength), 3),
         perspective_matrix=perspective_matrix,
         manual_perspective_quad=manual_quad,
-        dewarp_y_samples=(
-            tuple(dewarp_estimate.y_samples) if dewarp_estimate is not None else ()
+        line_geometry_rows=int(line_geometry.row_count),
+        line_geometry_global_angle_deg=float(line_geometry.global_angle_deg),
+        line_geometry_top_angle_deg=float(line_geometry.top_angle_deg),
+        line_geometry_middle_angle_deg=float(line_geometry.middle_angle_deg),
+        line_geometry_bottom_angle_deg=float(line_geometry.bottom_angle_deg),
+        line_geometry_trend_deg=float(line_geometry.angle_trend_deg),
+        line_geometry_residual_mad_deg=float(line_geometry.residual_mad_deg),
+        line_geometry_residual_span_deg=float(line_geometry.residual_span_deg),
+        line_geometry_separator_found=bool(line_geometry.separator_found),
+        line_geometry_separator_residual_px=float(
+            line_geometry.separator_residual_px
         ),
-        dewarp_target_starts=(
-            tuple(dewarp_estimate.target_starts) if dewarp_estimate is not None else ()
+        line_geometry_separator_span_ratio=float(
+            line_geometry.separator_span_ratio
         ),
-        dewarp_source_starts=(
-            tuple(dewarp_estimate.source_starts) if dewarp_estimate is not None else ()
-        ),
+        line_geometry_recommendation=str(line_geometry.recommendation),
+        line_geometry_confidence=float(line_geometry.confidence),
     )
 
 def analyze_preprocess_path(
@@ -1157,30 +1167,44 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         "deskew": "轻量纠偏",
         "perspective": "透视纠正",
         "manual_perspective": "手动四角",
-        "dewarp": "版面去弯曲",
         "uvdoc": "UVDoc 展平",
     }
     geometry = geometry_labels.get(analysis.geometry_mode, analysis.geometry_mode)
     if (
-        analysis.manual_perspective_quad is not None
-        and analysis.geometry_mode == "dewarp"
-    ):
-        geometry = "手动四角+去弯曲"
-    elif (
         analysis.manual_perspective_quad is not None
         and analysis.geometry_mode == "uvdoc"
     ):
         geometry = "手动四角+UVDoc"
     strength = (
         f" {analysis.geometry_strength_px:.1f}px"
-        if analysis.geometry_mode in {"manual_perspective", "perspective", "dewarp"}
-        and analysis.geometry_strength_px > 0
+        if analysis.geometry_mode in {"manual_perspective", "perspective"}        and analysis.geometry_strength_px > 0
         else ""
     )
+    line_labels = {
+        "none": "无需额外",
+        "deskew": "旋转",
+        "perspective": "透视",
+        "uvdoc_review": "建议UVDoc",
+        "manual_review": "人工复核",
+        "insufficient": "证据不足",
+    }
+    line_part = ""
+    if analysis.line_geometry_rows:
+        separator = (
+            f"｜直线残差 {analysis.line_geometry_separator_residual_px:.1f}px"
+            if analysis.line_geometry_separator_found else ""
+        )
+        line_part = (
+            f"｜行几何 {analysis.line_geometry_rows}行"
+            f" Δ角 {analysis.line_geometry_trend_deg:+.2f}°"
+            f"{separator}"
+            f" → {line_labels.get(analysis.line_geometry_recommendation, analysis.line_geometry_recommendation)}"
+        )
     return (
         f"{label}｜{geometry}{strength}｜"
         f"旋转 {analysis.applied_angle_deg:+.2f}°"
-        f"（检测 {analysis.correction_angle_deg:+.2f}°）｜"
+        f"（检测 {analysis.correction_angle_deg:+.2f}°）"
+        f"{line_part}｜"
         f"保留 {analysis.retained_ratio * 100:.1f}%｜"
         f"裁剪 L{x0} T{y0} R{x1} B{y1}"
     )
