@@ -1599,3 +1599,192 @@ def test_pixel_row_geometry_can_accept_safe_candidate_when_ocr_tail_is_biased(
     assert analysis.orthogonal_pixel_row_verdict == "passed"
     assert analysis.orthogonal_before_pixel_row_p90_px == 5.0
     assert analysis.orthogonal_after_pixel_row_p90_px == 1.0
+
+
+
+def test_geometry_corrected_image_replays_all_saved_orthogonal_steps(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (800, 1000), "white")
+    calls: list[tuple[float, float]] = []
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "deskew_image",
+        lambda source, _angle: source.copy(),
+    )
+
+    def fake_apply(source, estimate, *, row_gain, separator_gain):
+        calls.append((float(row_gain), float(estimate.reference_x)))
+        return source.copy()
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_orthogonal_warp_image",
+        fake_apply,
+    )
+
+    analysis = image_preprocessing.PreprocessAnalysis(
+        source_width=800,
+        source_height=1000,
+        correction_angle_deg=0.0,
+        applied_angle_deg=0.0,
+        crop_box=(0, 0, 800, 1000),
+        raw_content_box=(0, 0, 800, 1000),
+        text_box=None,
+        source_boxes=20,
+        angle_samples=20,
+        angle_mad_deg=0.1,
+        retained_ratio=1.0,
+        confidence=1.0,
+        status="ok",
+        method="test",
+        orthogonal_applied=True,
+        orthogonal_passes=2,
+        orthogonal_steps=(
+            {
+                "row_gain": 1.0,
+                "reference_x": 390.0,
+                "y_knots": [100.0, 900.0],
+                "angle_knots_deg": [0.3, -0.3],
+                "x_knots": [100.0, 700.0],
+                "row_grid_rows": 2,
+                "row_grid_cols": 2,
+                "row_angle_grid_deg": [0.3, 0.3, -0.3, -0.3],
+                "row_displacement_grid_px": [0.0, 3.0, 0.0, -3.0],
+                "separator_y_knots": [],
+                "separator_shift_knots_px": [],
+            },
+            {
+                "row_gain": 0.7,
+                "reference_x": 405.0,
+                "y_knots": [100.0, 900.0],
+                "angle_knots_deg": [0.1, -0.1],
+                "x_knots": [100.0, 700.0],
+                "row_grid_rows": 2,
+                "row_grid_cols": 2,
+                "row_angle_grid_deg": [0.1, 0.1, -0.1, -0.1],
+                "row_displacement_grid_px": [0.0, 1.0, 0.0, -1.0],
+                "separator_y_knots": [],
+                "separator_shift_knots_px": [],
+            },
+        ),
+    )
+
+    output = image_preprocessing.geometry_corrected_image(image, analysis)
+
+    assert output.size == image.size
+    assert calls == [(1.0, 390.0), (0.7, 405.0)]
+
+
+def test_auto_orthogonal_runs_second_residual_pass_after_improved_review(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = _two_column_angle_field(lambda t: 0.35 - 0.70 * t)
+    detect_calls = 0
+
+    def fake_detect(_image, _settings):
+        nonlocal detect_calls
+        detect_calls += 1
+        return polygons
+
+    monkeypatch.setattr(image_preprocessing, "detect_text_polygons", fake_detect)
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=40,
+            recommendation="none",
+            confidence=0.9,
+        ),
+    )
+
+    estimate_calls = 0
+
+    def fake_estimate(*_args, **_kwargs):
+        nonlocal estimate_calls
+        estimate_calls += 1
+        return image_preprocessing.OrthogonalWarpEstimate(
+            y_knots=(180.0, 1092.0),
+            angle_knots_deg=(0.25, -0.25),
+            x_knots=(180.0, 820.0),
+            row_grid_rows=2,
+            row_grid_cols=2,
+            row_angle_grid_deg=(0.25, 0.25, -0.25, -0.25),
+            row_displacement_grid_px=(0.0, 2.0, 0.0, -2.0),
+            reference_x=500.0,
+            row_count=40,
+            valid_column_count=2,
+            pixel_angle_sample_count=18,
+            pixel_angle_used_count=18,
+            pixel_angle_confidence=0.30,
+            max_row_angle_deg=0.25,
+            row_angle_span_deg=0.50,
+            max_vertical_shift_px=2.0,
+            max_scale_deviation=0.01,
+            confidence=0.95,
+            active=True,
+        )
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_orthogonal_warp",
+        fake_estimate,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "apply_orthogonal_warp_image",
+        lambda source, *_args, **_kwargs: source.copy(),
+    )
+
+    class ScaleAudit:
+        verdict = "same"
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "audit_text_scale_stability",
+        lambda *_args, **_kwargs: ScaleAudit(),
+    )
+
+    pixel_metrics = iter(
+        [
+            (5.0, 6.0),  # pass 1 baseline
+            (2.0, 3.0),  # pass 1 accepted but improved_review
+            (2.0, 3.0),  # pass 2 baseline
+            (1.0, 1.5),  # pass 2 passed -> stop
+        ]
+    )
+
+    def fake_pixel_audit(*_args, **_kwargs):
+        p90, worst = next(pixel_metrics)
+        return type(
+            "PixelAudit",
+            (),
+            {
+                "sample_count": 24,
+                "valid_column_count": 2,
+                "p90_shift_px": p90,
+                "worst_shift_px": worst,
+                "passed": p90 <= 1.5 and worst <= 2.5,
+            },
+        )()
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "audit_pixel_row_profiles",
+        fake_pixel_audit,
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(layout_columns_policy="fixed", columns=2),
+        geometry_mode="auto",
+    )
+
+    assert estimate_calls == 2
+    assert analysis.orthogonal_applied is True
+    assert analysis.orthogonal_passes == 2
+    assert len(analysis.orthogonal_steps) == 2
+    assert analysis.orthogonal_pixel_row_verdict == "passed"
+    assert "orthogonal_residual_pass" in analysis.method
