@@ -1469,7 +1469,40 @@ def analyze_preprocess_page(
                 )
 
             if requested_geometry_mode == "auto" and safe_entries:
-                selected_entry = min(safe_entries, key=candidate_sort_key)
+                # Do not trade away a real structural-keystone correction just
+                # because a horizontal-only candidate has slightly lower scale
+                # cost.  A safe combined candidate corrects both projective
+                # families; otherwise prefer safe structural rectification, then
+                # fall back to horizontal-VP when structure does not justify a
+                # keystone transform.
+                source_priority = (
+                    "structural+horizontal_vp",
+                    "structural",
+                    "horizontal_vp",
+                )
+                selected_entry = None
+                for preferred_source in source_priority:
+                    same_source = [
+                        entry
+                        for entry in safe_entries
+                        if str(
+                            getattr(
+                                entry["candidate"],
+                                "candidate_source",
+                                "structural",
+                            )
+                        )
+                        == preferred_source
+                    ]
+                    if same_source:
+                        selected_entry = min(
+                            same_source, key=candidate_sort_key,
+                        )
+                        break
+                if selected_entry is None:
+                    selected_entry = min(
+                        safe_entries, key=candidate_sort_key,
+                    )
             else:
                 selected_entry = min(candidate_entries, key=candidate_sort_key)
 
