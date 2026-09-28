@@ -4975,7 +4975,7 @@ def filter_headword_records(
             cjk_single_visual
             and leading_record is not None
             and str(getattr(leading_record, "recovery", "") or "")
-            == "oversized_multi_entry_local_ocr"
+            in _VERIFIED_OVERSIZED_CJK_RECOVERIES
         )
 
         cjk_candidate_right_context: dict[str, Any] | None = None
@@ -5133,9 +5133,43 @@ def filter_headword_records(
             and position_ok
             and script_compatible
         )
-        cjk_bracket_visual_supported = bool(large or bold)
+        normalized_line_text = unicodedata.normalize(
+            "NFKC", str(line.text or "")
+        ).lstrip()
+        configured_bracket_openers = tuple(
+            str(symbol)
+            for symbol in symbol_inventory.get("bracket_openers", ())
+            if str(symbol)
+        )
+        explicit_bracket_symbol = next(
+            (
+                symbol for symbol in configured_bracket_openers
+                if symbol in normalized_line_text[:24]
+            ),
+            "",
+        )
+        cjk_bracket_explicit_ocr = bool(
+            cjk_bracketed
+            and explicit_bracket_symbol
+            and parsed is not None
+            and parsed.parser_stage in {
+                "chinese_bracketed_headword",
+                "chinese_open_bracket_headword",
+            }
+        )
+        cjk_bracket_visual_marker = bool(
+            visual_entry_marker is not None
+            and str(visual_entry_marker.get("role") or "") == "bracket_open"
+        )
+        cjk_bracket_visual_supported = bool(
+            cjk_bracket_explicit_ocr
+            or cjk_bracket_visual_marker
+            or large
+            or bold
+        )
         cjk_bracket_extra_required = bool(
             cjk_bracketed
+            and not cjk_bracket_explicit_ocr
             and (cjk_brackets_in_body or cjk_require_visual_evidence)
         )
         tail_required = bool(
@@ -5468,6 +5502,9 @@ def filter_headword_records(
                 ),
                 "cjk_marker_prefixed": cjk_marker_prefixed,
                 "cjk_bracketed": cjk_bracketed,
+                "cjk_bracket_explicit_ocr": cjk_bracket_explicit_ocr,
+                "cjk_bracket_explicit_symbol": explicit_bracket_symbol,
+                "cjk_bracket_visual_marker": cjk_bracket_visual_marker,
                 "cjk_bracket_visual_supported": cjk_bracket_visual_supported,
                 "cjk_bracket_extra_required": cjk_bracket_extra_required,
                 "cjk_allow_single": cjk_allow_single,
@@ -7677,8 +7714,18 @@ def detect_paddle_headwords(
         # must be recomputed from raw records whenever Profile settings change.
         raw_paddle_records = list(records)
         oversized_recovery: list[dict[str, Any]] = []
-        if use_paddle and records:
-            records, oversized_recovery = _recover_oversized_cjk_ocr_records(
+        if use_paddle:
+            if records:
+                records, giant_box_recovery = _recover_oversized_cjk_ocr_records(
+                    records,
+                    analysis_band,
+                    settings,
+                    profile,
+                    engine=engine,
+                    pixel_scale=pixel_scale,
+                )
+                oversized_recovery.extend(giant_box_recovery)
+            records, image_first_recovery = _recover_image_first_oversized_cjk_records(
                 records,
                 analysis_band,
                 settings,
@@ -7686,6 +7733,7 @@ def detect_paddle_headwords(
                 engine=engine,
                 pixel_scale=pixel_scale,
             )
+            oversized_recovery.extend(image_first_recovery)
 
         paddle_lines = _records_as_merged_lines(records, settings)
         paddle_full_text = "\n".join(line.text for line in paddle_lines)
