@@ -13596,6 +13596,216 @@ class PictureCaptureApp(tk.Tk):
             allow_page_navigation=True,
         )
 
+    def show_preprocess_diagnostics(self) -> None:
+        """Show the current page's detailed preprocessing diagnostics on demand."""
+        if not self.project or self.current_page is None:
+            messagebox.showinfo("诊断信息", "请先打开项目。", parent=self)
+            return
+        analysis = self._preprocess_result_for_page(self.current_index)
+        if analysis is None:
+            messagebox.showinfo(
+                "诊断信息",
+                "当前页尚无预处理结果。请先执行【分析所选范围】。",
+                parent=self,
+            )
+            return
+
+        existing = getattr(self, "_preprocess_diagnostics_window", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.destroy()
+            except tk.TclError:
+                pass
+
+        window = tk.Toplevel(self)
+        self._preprocess_diagnostics_window = window
+        window.title(f"预处理诊断信息｜{self.current_page.name}")
+        window.transient(self)
+        fit_window_to_work_area(
+            window, 920, 720, min_width=700, min_height=500,
+        )
+
+        body = ttk.Frame(window, padding=10)
+        body.pack(fill="both", expand=True)
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(1, weight=1)
+
+        ttk.Label(
+            body,
+            text=preprocess_result_summary(analysis),
+            style="PC.FieldLabel.TLabel",
+            wraplength=860,
+            anchor="w",
+            justify="left",
+        ).grid(row=0, column=0, sticky="ew", pady=(0, 8))
+
+        text_frame = ttk.Frame(body)
+        text_frame.grid(row=1, column=0, sticky="nsew")
+        text_frame.columnconfigure(0, weight=1)
+        text_frame.rowconfigure(0, weight=1)
+        text_widget = tk.Text(
+            text_frame,
+            wrap="none",
+            undo=False,
+            padx=8,
+            pady=8,
+        )
+        yscroll = ttk.Scrollbar(
+            text_frame, orient="vertical", command=text_widget.yview,
+        )
+        xscroll = ttk.Scrollbar(
+            text_frame, orient="horizontal", command=text_widget.xview,
+        )
+        text_widget.configure(
+            yscrollcommand=yscroll.set,
+            xscrollcommand=xscroll.set,
+        )
+        text_widget.grid(row=0, column=0, sticky="nsew")
+        yscroll.grid(row=0, column=1, sticky="ns")
+        xscroll.grid(row=1, column=0, sticky="ew")
+
+        warnings = list(analysis.warnings or ())
+        header_lines = [
+            f"页面：{self.current_page.name}",
+            f"状态：{'需检查' if analysis.status == 'review' else '正常'}",
+            f"方法：{analysis.method}",
+            f"几何模式：{analysis.geometry_mode}",
+            "",
+            "警告：" if warnings else "警告：无",
+        ]
+        if warnings:
+            header_lines.extend(f"- {item}" for item in warnings)
+        header_lines.extend(
+            [
+                "",
+                "完整诊断参数（JSON）：",
+                json.dumps(
+                    analysis.to_dict(),
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                ),
+            ]
+        )
+        diagnostic_text = "\n".join(header_lines)
+        text_widget.insert("1.0", diagnostic_text)
+        text_widget.configure(state="disabled")
+
+        buttons = ttk.Frame(body)
+        buttons.grid(row=2, column=0, sticky="e", pady=(8, 0))
+
+        def copy_all() -> None:
+            try:
+                self.clipboard_clear()
+                self.clipboard_append(diagnostic_text)
+                self.status_var.set(
+                    f"已复制预处理诊断信息：{self.current_page.name}"
+                )
+            except tk.TclError:
+                pass
+
+        ttk.Button(
+            buttons, text="复制全部", command=copy_all,
+            style="PC.Compact.TButton",
+        ).pack(side="left")
+        ttk.Button(
+            buttons, text="关闭", command=window.destroy,
+            style="PC.Compact.TButton",
+        ).pack(side="left", padx=(6, 0))
+        window.bind("<Escape>", lambda _event: window.destroy())
+        window.protocol("WM_DELETE_WINDOW", window.destroy)
+
+    def promote_preprocessed_working_images(self) -> None:
+        """Replace root working scans with the verified processed export set."""
+        if not self.project:
+            messagebox.showinfo("设为工作图片", "请先打开项目。", parent=self)
+            return
+        if self._batch_active or self._ui_worker_key_active("preprocess-current"):
+            self.status_var.set("预处理任务仍在运行；完成后再设为工作图片。")
+            return
+
+        project = self.project
+        pages = list(project.images)
+        if not pages:
+            return
+
+        # Any existing coordinate-bearing work may no longer match after crop/
+        # projective correction. Warn explicitly, but do not silently delete it.
+        ordinary_data_pages = 0
+        for page in pages:
+            try:
+                has_data = (
+                    pdic_path(page).is_file()
+                    or ppp_read_path_for_image(page).is_file()
+                    or (ocr_cache_root(project.root) / f"{page.stem}.json").is_file()
+                )
+            except OSError:
+                has_data = False
+            if has_data:
+                ordinary_data_pages += 1
+
+        warning = (
+            "\n\n注意：检测到 "
+            f"{ordinary_data_pages} 页已有 PDIC/PPP/OCR 坐标数据。"
+            "预处理会改变页面坐标，这些旧坐标可能不再适用；软件不会自动删除它们。"
+            if ordinary_data_pages
+            else ""
+        )
+        confirmed = messagebox.askyesno(
+            "设为工作图片",
+            "将把已导出的整套预处理图片设为后续工作图片。\n\n"
+            f"当前工作页：{len(pages)} 页\n"
+            "原扫描图：移动到项目根目录下的 __before__\n"
+            "处理后图片：以相同文件名写回项目根目录\n"
+            "预处理导出和诊断文件：继续保留，不会删除\n\n"
+            "__before__ 只建立一次；如果已经存在，软件会拒绝覆盖原始备份。"
+            f"{warning}\n\n"
+            "确认继续吗？",
+            parent=self,
+        )
+        if not confirmed:
+            return
+
+        root = project.root
+        target_page = self.current_page.name if self.current_page is not None else None
+        target_index = self.current_index
+        target_view_scale = float(self.view_scale)
+        suffix = str(self.settings.image_suffix or "").strip() or None
+
+        try:
+            backup, promoted = promote_processed_pages(root, pages)
+        except Exception as exc:
+            self.show_error("设为工作图片失败", exc)
+            return
+
+        messagebox.showinfo(
+            "设为工作图片",
+            f"已切换 {len(promoted)} 页。\n\n"
+            f"原扫描图已保存在：{backup}\n"
+            "处理后图片现在位于项目根目录，并将作为后续 OCR、画线和切图的工作图片。\n\n"
+            "建议接下来重新检测版面参数；旧坐标型结果如来自原图，应重新生成。",
+            parent=self,
+        )
+
+        # Reload the same project from disk so page dimensions, thumbnails and
+        # all downstream geometry use the promoted images immediately.
+        if self._preprocess_mode_active():
+            self._set_preprocess_mode(False, analyze=False)
+        self._preprocess_results.clear()
+        self.current_page = None
+        self.image = None
+        self.photo = None
+        self.current_index = -1
+        self.project = None
+        self._load_project(
+            root,
+            requested_suffix=suffix,
+            target_page=target_page,
+            target_index=target_index,
+            target_view_scale=target_view_scale,
+        )
+
     def jump_preprocess_review(self, delta: int) -> None:
         if not self.project:
             return
