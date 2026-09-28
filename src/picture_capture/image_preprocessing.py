@@ -1577,6 +1577,65 @@ def _choose_orthogonal_candidate(
     )
 
 
+def _orthogonal_step_payload(
+    estimate: OrthogonalWarpEstimate,
+    row_gain: float,
+) -> dict[str, object]:
+    """Serialize only the geometry needed to replay one accepted warp pass."""
+    return {
+        "row_gain": float(row_gain),
+        "reference_x": float(estimate.reference_x),
+        "y_knots": [float(v) for v in estimate.y_knots],
+        "angle_knots_deg": [float(v) for v in estimate.angle_knots_deg],
+        "x_knots": [float(v) for v in estimate.x_knots],
+        "row_grid_rows": int(estimate.row_grid_rows),
+        "row_grid_cols": int(estimate.row_grid_cols),
+        "row_angle_grid_deg": [
+            float(v) for v in estimate.row_angle_grid_deg
+        ],
+        "row_displacement_grid_px": [
+            float(v) for v in estimate.row_displacement_grid_px
+        ],
+        "separator_y_knots": [
+            float(v) for v in estimate.separator_y_knots
+        ],
+        "separator_shift_knots_px": [
+            float(v) for v in estimate.separator_shift_knots_px
+        ],
+    }
+
+
+def _orthogonal_estimate_from_step(
+    payload: dict[str, object],
+) -> tuple[OrthogonalWarpEstimate, float]:
+    estimate = OrthogonalWarpEstimate(
+        y_knots=tuple(float(v) for v in payload.get("y_knots", ())),
+        angle_knots_deg=tuple(
+            float(v) for v in payload.get("angle_knots_deg", ())
+        ),
+        x_knots=tuple(float(v) for v in payload.get("x_knots", ())),
+        row_grid_rows=max(0, int(payload.get("row_grid_rows", 0) or 0)),
+        row_grid_cols=max(0, int(payload.get("row_grid_cols", 0) or 0)),
+        row_angle_grid_deg=tuple(
+            float(v) for v in payload.get("row_angle_grid_deg", ())
+        ),
+        row_displacement_grid_px=tuple(
+            float(v)
+            for v in payload.get("row_displacement_grid_px", ())
+        ),
+        separator_y_knots=tuple(
+            float(v) for v in payload.get("separator_y_knots", ())
+        ),
+        separator_shift_knots_px=tuple(
+            float(v)
+            for v in payload.get("separator_shift_knots_px", ())
+        ),
+        reference_x=float(payload.get("reference_x", 0.0) or 0.0),
+        active=True,
+    )
+    return estimate, max(0.0, float(payload.get("row_gain", 1.0) or 1.0))
+
+
 def _normalize_geometry_mode(value: str | None) -> str:
     mode = str(value or "auto").strip().lower()
     aliases = {
