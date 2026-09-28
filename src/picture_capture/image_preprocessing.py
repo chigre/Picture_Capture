@@ -1678,11 +1678,16 @@ def analyze_preprocess_page(
                     0.0,
                 )
             )
+            # A reliable nonlinear separator curve is a reason to keep the
+            # UVDoc review recommendation, but it must not veto a *separate*
+            # low-distortion global horizontal correction. Pages such as 0010
+            # and 0014 can have both: ~1° residual projective row drift that a
+            # safe homography removes, plus smaller nonlinear curvature that
+            # still deserves optional UVDoc review.
             horizontal_evidence_safe = bool(
                 int(getattr(horizontal_full, "horizontal_row_count", 0))
                 >= HORIZONTAL_VP_MIN_ROWS
                 and line_geometry.confidence >= 0.35
-                and not line_geometry.separator_curve_reliable
                 and horizontal_driver_trend >= HORIZONTAL_VP_MIN_TREND_DEG
                 and (
                     vp_column_spread <= HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG
@@ -1985,6 +1990,15 @@ def analyze_preprocess_page(
                 f"已改用安全的优化水平投影（λ={selected_horizontal_strength:.3f}），"
                 "不叠加危险的 structural 变换。"
             )
+        if (
+            requested_geometry_mode == "auto"
+            and selected_candidate is horizontal_total_candidate
+            and line_geometry.separator_curve_reliable
+        ):
+            warnings.append(
+                "已先执行通过尺度与双边缘水平审计的全局水平投影；"
+                "实体分隔线仍提示非线性弯曲，因此继续保留 UVDoc 复核建议。"
+            )
 
         if (
             requested_geometry_mode == "auto"
@@ -2105,8 +2119,18 @@ def analyze_preprocess_page(
                             0.0,
                         )
                     )
+                    edge_note = ""
+                    if int(getattr(horizontal_row_audit, "edge_pair_count", 0)) >= 8:
+                        edge_note = (
+                            "，字框上/下边缘P90 "
+                            f"{horizontal_row_audit.after_top_edge_p90_abs_deg:.2f}°/"
+                            f"{horizontal_row_audit.after_bottom_edge_p90_abs_deg:.2f}°"
+                            "，上下边缘分歧P90 "
+                            f"{horizontal_row_audit.after_edge_pair_delta_p90_deg:.2f}°"
+                        )
                     review_reasons.append(
-                        "残余水平投影优化未同时满足分栏水平改善与尺度安全："
+                        "残余水平投影优化未同时满足分栏水平改善、"
+                        "单行上下边缘水平性与尺度安全："
                         f"强度 {horizontal_strength:.3f}，"
                         f"全页Δ角 {horizontal_row_audit.before_trend_deg:+.2f}°→"
                         f"{horizontal_row_audit.after_trend_deg:+.2f}°，"
@@ -2115,6 +2139,7 @@ def analyze_preprocess_page(
                             f"（第 {worst_index} 栏）"
                             if worst_index else ""
                         )
+                        + edge_note
                         + (
                             f"，栏间VP分歧 {spread:.2f}°"
                             if spread > 0.0 else ""
