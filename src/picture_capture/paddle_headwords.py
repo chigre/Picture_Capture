@@ -3484,10 +3484,14 @@ def _single_cjk_from_local_records(
     records: list[OCRRecord],
     settings: AppSettings,
     profile: DictionaryProfile,
+    *,
+    max_left_x: int | None = None,
 ) -> tuple[str, float, str]:
     """Return the best single-Han head from a tightly cropped local OCR pass."""
     ranked: list[tuple[int, int, float, str, str]] = []
     for record in records:
+        if max_left_x is not None and int(record.box[0]) > int(max_left_x):
+            continue
         text = str(record.text or "").strip()
         if not text:
             continue
@@ -3629,7 +3633,12 @@ def _recover_oversized_cjk_ocr_records(
                     )
                     word, confidence, source_text = (
                         _single_cjk_from_local_records(
-                            local_records, settings, profile
+                            local_records,
+                            settings,
+                            profile,
+                            max_left_x=max(
+                                12, round(zone_width * 1.15)
+                            ),
                         )
                     )
                 except Exception:
