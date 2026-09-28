@@ -375,15 +375,10 @@
           "~",
           "→"
         ],
-        "entry_markers": [
-          "【",
-          "〔",
-          "［",
-          "["
-        ]
+        "entry_markers": []
       },
       "display_name": "视觉词头（大字/括号词头）",
-      "description": "以大字单字、【】/〔〕/［］括号词及明显视觉强调作为词头提示。",
+      "description": "默认识别大字单字与【括号词头】；【属于括号起始结构，不是 ○/●/◆ 那类独立入口标记。其他括号可按词典实际版式添加。",
       "family": "cjk_visual",
       "validated_examples": [
         "HZYLDZD",
@@ -401,18 +396,11 @@
         "enabled": true,
         "entry_markers": [],
         "bracket_openers": [
-          "【",
-          "〔",
-          "［",
-          "[",
-          "「",
-          "『",
-          "〈",
-          "《"
+          "【"
         ],
         "visual_rescue": true,
         "lane_expected": true,
-        "lane_tolerance_percent": 55,
+        "lane_tolerance_percent": 45,
         "visual_families": [
           "bracket_open"
         ]
