@@ -76,7 +76,7 @@ from .image_preprocessing import (
     PreprocessAnalysis,
     analysis_is_current as preprocess_analysis_is_current,
     analyze_preprocess_path,
-    deskew_image,
+    geometry_corrected_image,
     load_analysis as load_preprocess_analysis,
     overlay_excluded_regions,
     preview_output_root as preprocess_preview_output_root,
@@ -10015,6 +10015,17 @@ class PictureCaptureApp(tk.Tk):
         self.preprocess_safety_var = tk.StringVar(
             value=str(int(self.settings.preprocess_safety_margin_px))
         )
+        self.preprocess_geometry_var = tk.StringVar(
+            value={
+                "deskew": "轻量：旋转+裁边",
+                "perspective": "自动透视",
+                "dewarp": "版面去弯曲",
+                "auto": "自动几何（推荐）",
+            }.get(
+                str(getattr(self.settings, "preprocess_geometry_mode", "auto") or "auto"),
+                "自动几何（推荐）",
+            )
+        )
         self.preprocess_status_var = tk.StringVar(value="未分析")
         self._preprocess_results: dict[str, PreprocessAnalysis] = {}
         self._preprocess_photo: ImageTk.PhotoImage | None = None
@@ -12248,8 +12259,31 @@ class PictureCaptureApp(tk.Tk):
         safety_spin.bind("<Return>", self._preprocess_settings_changed)
         safety_spin.bind("<FocusOut>", self._preprocess_settings_changed)
 
+        preprocess_geometry_row = ttk.Frame(preprocess)
+        preprocess_geometry_row.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        ttk.Label(preprocess_geometry_row, text="几何纠正：").pack(side="left")
+        geometry_combo = ttk.Combobox(
+            preprocess_geometry_row,
+            textvariable=self.preprocess_geometry_var,
+            values=(
+                "自动几何（推荐）",
+                "轻量：旋转+裁边",
+                "自动透视",
+                "版面去弯曲",
+            ),
+            state="readonly",
+            width=18,
+        )
+        geometry_combo.pack(side="left", fill="x", expand=True)
+        geometry_combo.bind("<<ComboboxSelected>>", self._preprocess_settings_changed)
+        ttk.Label(
+            preprocess_geometry_row,
+            text="高级纠正后会重新检测版面再裁边",
+            style="PC.FieldLabel.TLabel",
+        ).pack(side="left", padx=(8, 0))
+
         preprocess_action_row = ttk.Frame(preprocess)
-        preprocess_action_row.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        preprocess_action_row.grid(row=2, column=0, sticky="ew", pady=(4, 0))
         for col in range(4):
             preprocess_action_row.columnconfigure(col, weight=1, uniform="preprocess-actions")
         for col, (text_value, command) in enumerate((
@@ -12264,7 +12298,7 @@ class PictureCaptureApp(tk.Tk):
             ).grid(row=0, column=col, sticky="ew", padx=(0 if col == 0 else 4, 0))
 
         preprocess_export_row = ttk.Frame(preprocess)
-        preprocess_export_row.grid(row=2, column=0, sticky="ew", pady=(4, 0))
+        preprocess_export_row.grid(row=3, column=0, sticky="ew", pady=(4, 0))
         preprocess_export_row.columnconfigure(0, weight=1, uniform="preprocess-export")
         preprocess_export_row.columnconfigure(1, weight=1, uniform="preprocess-export")
         ttk.Button(
@@ -12281,7 +12315,7 @@ class PictureCaptureApp(tk.Tk):
             preprocess, textvariable=self.preprocess_status_var,
             style="PC.FieldLabel.TLabel", anchor="w",
             wraplength=430,
-        ).grid(row=3, column=0, sticky="ew", pady=(4, 0))
+        ).grid(row=4, column=0, sticky="ew", pady=(4, 0))
 
         self._attach_tooltip(
             self.preprocess_mode_button,
@@ -12706,22 +12740,31 @@ class PictureCaptureApp(tk.Tk):
             hasattr(self, "preprocess_mode_var") and self.preprocess_mode_var.get()
         )
 
-    def _preprocess_config(self) -> tuple[int, bool]:
+    def _preprocess_config(self) -> tuple[int, bool, str]:
         try:
             safety = int(round(float(str(self.preprocess_safety_var.get()).strip())))
         except (TypeError, ValueError):
             safety = int(getattr(self.settings, "preprocess_safety_margin_px", 20))
         safety = max(0, min(500, safety))
-        return safety, bool(self.preprocess_auto_deskew_var.get())
+        geometry_label = str(self.preprocess_geometry_var.get() or "").strip()
+        geometry_mode = {
+            "自动几何（推荐）": "auto",
+            "轻量：旋转+裁边": "deskew",
+            "自动透视": "perspective",
+            "版面去弯曲": "dewarp",
+        }.get(geometry_label, "auto")
+        return safety, bool(self.preprocess_auto_deskew_var.get()), geometry_mode
 
     def _preprocess_settings_changed(self, _event=None) -> None:
-        safety, auto_deskew = self._preprocess_config()
+        safety, auto_deskew, geometry_mode = self._preprocess_config()
         self.preprocess_safety_var.set(str(safety))
         self.settings.preprocess_safety_margin_px = safety
         self.settings.preprocess_auto_deskew = auto_deskew
+        self.settings.preprocess_geometry_mode = geometry_mode
         if self.project is not None:
             self.project.settings.preprocess_safety_margin_px = safety
             self.project.settings.preprocess_auto_deskew = auto_deskew
+            self.project.settings.preprocess_geometry_mode = geometry_mode
             try:
                 self.settings.to_json(settings_path(self.project.root))
             except OSError:
@@ -12845,7 +12888,7 @@ class PictureCaptureApp(tk.Tk):
             if section is not None:
                 self._set_section_expanded(section, True)
             self.status_var.set(
-                "已进入预处理模式：仅进行纠偏/裁边复核；画线、OCR、SECTION 和后期制作已锁定。"
+                "已进入预处理模式：几何纠正后重新检测版面并裁边；画线、OCR、SECTION 和后期制作已锁定。"
             )
             self.redraw()
             if analyze:
@@ -12864,12 +12907,13 @@ class PictureCaptureApp(tk.Tk):
         if not self.project or not (0 <= index < len(self.project.images)):
             return None
         page = self.project.images[index]
-        safety, auto_deskew = self._preprocess_config()
+        safety, auto_deskew, geometry_mode = self._preprocess_config()
         cached = self._preprocess_results.get(page.name)
         if cached is not None and preprocess_analysis_is_current(
             cached, page,
             safety_margin_px=safety,
             auto_deskew=auto_deskew,
+            geometry_mode=geometry_mode,
         ):
             return cached
         loaded = load_preprocess_analysis(self.project.root, page)
@@ -12877,6 +12921,7 @@ class PictureCaptureApp(tk.Tk):
             loaded, page,
             safety_margin_px=safety,
             auto_deskew=auto_deskew,
+            geometry_mode=geometry_mode,
         ):
             self._preprocess_results[page.name] = loaded
             return loaded
@@ -12911,7 +12956,7 @@ class PictureCaptureApp(tk.Tk):
         page_index = self.current_index
         project = self.project
         settings = replace(self.settings)
-        safety, auto_deskew = self._preprocess_config()
+        safety, auto_deskew, geometry_mode = self._preprocess_config()
         current = self._preprocess_result_for_page(page_index)
         if current is not None:
             self._set_current_preprocess_status(current)
@@ -12932,6 +12977,7 @@ class PictureCaptureApp(tk.Tk):
                 page, settings,
                 safety_margin_px=safety,
                 auto_deskew=auto_deskew,
+                geometry_mode=geometry_mode,
             )
 
         def done(analysis: PreprocessAnalysis) -> None:
@@ -12980,7 +13026,7 @@ class PictureCaptureApp(tk.Tk):
             return
         project = self.project
         settings = replace(self.settings)
-        safety, auto_deskew = self._preprocess_config()
+        safety, auto_deskew, geometry_mode = self._preprocess_config()
 
         def worker(index, _position, _total):
             page = project.images[int(index)]
@@ -12988,6 +13034,7 @@ class PictureCaptureApp(tk.Tk):
                 page, settings,
                 safety_margin_px=safety,
                 auto_deskew=auto_deskew,
+                geometry_mode=geometry_mode,
             )
             save_preprocess_analysis(project.root, page, analysis)
             return int(index), analysis
@@ -13042,18 +13089,20 @@ class PictureCaptureApp(tk.Tk):
 
     def _preprocess_analysis_for_export(
         self, project: ProjectState, page: Path, settings: AppSettings,
-        safety: float, auto_deskew: bool,
+        safety: float, auto_deskew: bool, geometry_mode: str,
     ) -> PreprocessAnalysis:
         analysis = load_preprocess_analysis(project.root, page)
         if analysis is None or not preprocess_analysis_is_current(
             analysis, page,
             safety_margin_px=safety,
             auto_deskew=auto_deskew,
+            geometry_mode=geometry_mode,
         ):
             analysis = analyze_preprocess_path(
                 page, settings,
                 safety_margin_px=safety,
                 auto_deskew=auto_deskew,
+                geometry_mode=geometry_mode,
             )
             save_preprocess_analysis(project.root, page, analysis)
         return analysis
@@ -13072,13 +13121,13 @@ class PictureCaptureApp(tk.Tk):
             return
         project = self.project
         settings = replace(self.settings)
-        safety, auto_deskew = self._preprocess_config()
+        safety, auto_deskew, geometry_mode = self._preprocess_config()
         output = preprocess_preview_output_root(project.root)
 
         def worker(index, _position, _total):
             page = project.images[int(index)]
             analysis = self._preprocess_analysis_for_export(
-                project, page, settings, safety, auto_deskew,
+                project, page, settings, safety, auto_deskew, geometry_mode,
             )
             destination = output / f"{page.stem}_preview.jpg"
             save_review_preview(page, analysis, destination)
@@ -13112,13 +13161,13 @@ class PictureCaptureApp(tk.Tk):
             return
         project = self.project
         settings = replace(self.settings)
-        safety, auto_deskew = self._preprocess_config()
+        safety, auto_deskew, geometry_mode = self._preprocess_config()
         output = preprocess_processed_output_root(project.root)
 
         def worker(index, _position, _total):
             page = project.images[int(index)]
             analysis = self._preprocess_analysis_for_export(
-                project, page, settings, safety, auto_deskew,
+                project, page, settings, safety, auto_deskew, geometry_mode,
             )
             destination = output / page.name
             save_processed_page(page, analysis, destination)
@@ -13147,6 +13196,8 @@ class PictureCaptureApp(tk.Tk):
             raise RuntimeError("没有可显示的页面图像")
         analysis_key = (
             None if analysis is None else round(float(analysis.applied_angle_deg), 4),
+            None if analysis is None else analysis.geometry_mode,
+            None if analysis is None else round(float(analysis.geometry_strength_px), 3),
             None if analysis is None else tuple(int(value) for value in analysis.crop_box),
         )
         key = (
@@ -13156,9 +13207,12 @@ class PictureCaptureApp(tk.Tk):
         if self._preprocess_photo is not None and self._preprocess_photo_cache_key == key:
             return self._preprocess_photo
 
-        display = self.image.resize(size, Image.Resampling.LANCZOS)
         if analysis is not None:
-            display = deskew_image(display, analysis.applied_angle_deg)
+            display = geometry_corrected_image(self.image, analysis).resize(
+                size, Image.Resampling.LANCZOS
+            )
+        else:
+            display = self.image.resize(size, Image.Resampling.LANCZOS)
         display = themed_display_image(display, self.appearance_mode)
         if analysis is not None:
             sx = size[0] / max(1, analysis.source_width)
