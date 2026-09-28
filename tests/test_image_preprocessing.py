@@ -804,7 +804,7 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert '"自动几何（推荐）"' in source
     assert '"UVDoc展平（Paddle高级）"' in source
     assert 'text="统一最终页面"' in source
-    assert 'text="页边空(px)：" ' in source or 'text="页边空(px)："'.strip() in source
+    assert 'text="页边空(px)：" ' .strip() in source
     assert '"本批最大裁剪尺寸"' in source
     assert '"自定义尺寸"' in source
     assert '"左对齐", "居中", "右对齐"' in source
