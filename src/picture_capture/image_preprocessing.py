@@ -24,6 +24,7 @@ from .preprocess_geometry import (
     dewarp_estimate_from_payload,
     estimate_layout_dewarp_from_polygons,
     estimate_perspective_from_polygons,
+    perspective_from_quad,
     transform_polygons_homography,
     transform_polygons_layout_dewarp,
 )
@@ -31,7 +32,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 4
+PREPROCESS_FORMAT_VERSION = 5
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -62,6 +63,7 @@ class PreprocessAnalysis:
     geometry_mode: str = "deskew"
     geometry_strength_px: float = 0.0
     perspective_matrix: tuple[float, ...] | None = None
+    manual_perspective_quad: tuple[float, ...] | None = None
     dewarp_y_samples: tuple[float, ...] = ()
     dewarp_target_starts: tuple[float, ...] = ()
     dewarp_source_starts: tuple[tuple[float, ...], ...] = ()
@@ -79,6 +81,10 @@ class PreprocessAnalysis:
         payload["perspective_matrix"] = (
             list(self.perspective_matrix)
             if self.perspective_matrix is not None else None
+        )
+        payload["manual_perspective_quad"] = (
+            list(self.manual_perspective_quad)
+            if self.manual_perspective_quad is not None else None
         )
         payload["dewarp_y_samples"] = list(self.dewarp_y_samples)
         payload["dewarp_target_starts"] = list(self.dewarp_target_starts)
@@ -133,6 +139,12 @@ class PreprocessAnalysis:
                 tuple(float(v) for v in payload.get("perspective_matrix", ()))
                 if isinstance(payload.get("perspective_matrix"), (list, tuple))
                 and len(payload.get("perspective_matrix", ())) == 9
+                else None
+            ),
+            manual_perspective_quad=(
+                tuple(float(v) for v in payload.get("manual_perspective_quad", ()))
+                if isinstance(payload.get("manual_perspective_quad"), (list, tuple))
+                and len(payload.get("manual_perspective_quad", ())) == 8
                 else None
             ),
             dewarp_y_samples=tuple(
