@@ -20,7 +20,10 @@ ORTHOGONAL_WARP_MIN_ROWS = 12
 ORTHOGONAL_WARP_MIN_DRIVER_DEG = 0.14
 ORTHOGONAL_WARP_MIN_SEPARATOR_SHIFT_PX = 2.0
 ORTHOGONAL_WARP_MAX_ANGLE_DEG = 2.0
-ORTHOGONAL_WARP_MAX_SCALE_DEVIATION = 0.035
+# This is a catastrophic local-Jacobian ceiling, not the normal acceptance
+# threshold. Candidate acceptance also requires paired text-box scale stability
+# in image_preprocessing, which is the more relevant protection for glyphs.
+ORTHOGONAL_WARP_MAX_SCALE_DEVIATION = 0.065
 ORTHOGONAL_WARP_MAX_SEPARATOR_SHIFT_RATIO = 0.02
 ORTHOGONAL_WARP_MESH_STEP_PX = 40
 
