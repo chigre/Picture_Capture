@@ -415,26 +415,53 @@ def _split_configured_symbols(value: str | None) -> tuple[str, ...]:
 def _configured_symbol_inventory(
     settings: AppSettings, profile: DictionaryProfile,
 ) -> dict[str, Any]:
-    """Resolve dictionary-specific symbol roles with Project Profile overrides."""
+    """Resolve dictionary-specific symbol roles with Project Profile overrides.
+
+    Standalone entry markers (○/●/◆...) and bracket openers are separate roles.
+    The historical profile_symbol_inventory_enabled switch now controls only
+    the standalone-marker inventory. Bracket openers remain active whenever
+    the user enabled the explicit bracket-headword structure; otherwise a
+    configured bracket opener/template can be silently disabled merely because
+    the dictionary has no standalone marker prefix.
+    """
     base = dict(profile.symbol_inventory or {})
     has_role_aware_inventory = bool(profile.symbol_inventory is not None)
     entry = tuple(str(x) for x in base.get("entry_markers", []) if str(x))
-    # Legacy profiles stored every structural symbol in grammar.entry_markers.
-    # Once a role-aware inventory exists, an explicitly empty entry_markers list
-    # is meaningful (e.g. cjk_visual keeps 【 as a bracket opener, not an entry
-    # marker), so do not leak those bracket glyphs back into the entry role.
     if not entry and not has_role_aware_inventory:
         entry = tuple(str(x) for x in profile.entry_leading_symbols if str(x))
     bracket = tuple(str(x) for x in base.get("bracket_openers", []) if str(x))
+
+    parser_controls = int(
+        getattr(settings, "profile_parser_controls_version", 0) or 0
+    ) >= 1
+    marker_role_enabled = (
+        bool(getattr(settings, "profile_allow_marker_prefix", False))
+        if parser_controls else profile.uses_parser("cjk_marker_pinyin")
+    )
+    bracket_role_enabled = (
+        bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True))
+        if parser_controls else profile.uses_parser("cjk_bracketed")
+    )
+
     saved = int(getattr(settings, "profile_symbol_inventory_version", 0) or 0) >= 1
     if saved:
-        enabled = bool(getattr(settings, "profile_symbol_inventory_enabled", True))
-        entry = _split_configured_symbols(
-            getattr(settings, "profile_entry_marker_symbols", "")
-        ) if enabled else ()
-        bracket = _split_configured_symbols(
-            getattr(settings, "profile_bracket_open_symbols", "")
-        ) if enabled else ()
+        marker_inventory_enabled = bool(
+            getattr(settings, "profile_symbol_inventory_enabled", True)
+        )
+        entry = (
+            _split_configured_symbols(
+                getattr(settings, "profile_entry_marker_symbols", "")
+            )
+            if marker_inventory_enabled and marker_role_enabled else ()
+        )
+        # Bracket structure has its own explicit checkbox and must not be
+        # disabled by the standalone-marker switch.
+        bracket = (
+            _split_configured_symbols(
+                getattr(settings, "profile_bracket_open_symbols", "")
+            )
+            if bracket_role_enabled else ()
+        )
         visual_rescue = bool(
             getattr(settings, "profile_symbol_visual_rescue_enabled", True)
         )
@@ -448,29 +475,24 @@ def _configured_symbol_inventory(
             )
         )
     else:
-        enabled = bool(base.get("enabled", True))
+        marker_inventory_enabled = bool(base.get("enabled", True))
         visual_rescue = bool(base.get("visual_rescue", True))
         lane_required = bool(base.get("lane_expected", False))
         lane_tolerance = max(
             20, min(120, int(base.get("lane_tolerance_percent") or 50))
         )
-        # Parser-controls v1 predates dictionary-specific inventories. Preserve
-        # its documented "固定符号" checkbox semantics until the Project Profile
-        # explicitly saves an inventory (version 1).
+        if not marker_role_enabled:
+            entry = ()
+        if not bracket_role_enabled:
+            bracket = ()
         if (
             not entry
-            and int(getattr(settings, "profile_parser_controls_version", 0) or 0) >= 1
-            and bool(getattr(settings, "profile_allow_marker_prefix", False))
+            and parser_controls
+            and marker_role_enabled
+            and marker_inventory_enabled
         ):
             entry = ("○", "●", "◦", "•", "〓", "◆", "◇", "►", "▶")
-    families = {
-        _SYMBOL_FAMILY_BY_LITERAL[symbol]
-        for symbol in entry + bracket
-        if symbol in _SYMBOL_FAMILY_BY_LITERAL
-    }
-    families.update(
-        str(x) for x in base.get("visual_families", []) if str(x)
-    )
+
     template_mode = str(
         getattr(settings, "profile_symbol_template_mode", "combined") or "combined"
     )
@@ -494,8 +516,43 @@ def _configured_symbol_inventory(
         and template_mode != "off"
         else []
     )
+    templates = [
+        sample for sample in templates
+        if (
+            str(sample.get("role") or "") == "bracket_open"
+            and bracket_role_enabled
+        ) or (
+            str(sample.get("role") or "") == "entry_marker"
+            and marker_inventory_enabled
+            and marker_role_enabled
+        )
+    ]
+
+    effective_enabled = bool(
+        (marker_inventory_enabled and marker_role_enabled and entry)
+        or (bracket_role_enabled and bracket)
+        or templates
+    )
+    families = {
+        _SYMBOL_FAMILY_BY_LITERAL[symbol]
+        for symbol in entry + bracket
+        if symbol in _SYMBOL_FAMILY_BY_LITERAL
+    }
+    for family in (str(x) for x in base.get("visual_families", []) if str(x)):
+        if family == "bracket_open" and bracket_role_enabled:
+            families.add(family)
+        elif (
+            family != "bracket_open"
+            and marker_inventory_enabled
+            and marker_role_enabled
+        ):
+            families.add(family)
+
     return {
-        "enabled": enabled,
+        "enabled": effective_enabled,
+        "standalone_inventory_enabled": marker_inventory_enabled,
+        "marker_role_enabled": marker_role_enabled,
+        "bracket_role_enabled": bracket_role_enabled,
         "entry_markers": entry,
         "bracket_openers": bracket,
         "visual_rescue": visual_rescue,
@@ -507,7 +564,6 @@ def _configured_symbol_inventory(
         "visual_template_group_mode": group_mode,
         "visual_template_threshold": template_threshold,
     }
-
 
 def _starts_with_unconfigured_headword_symbol(
     text: str,
