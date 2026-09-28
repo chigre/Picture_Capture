@@ -20,14 +20,22 @@ from .layout_detection import (
 )
 from .models import AppSettings
 from .preprocess_geometry import (
+    HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG,
+    HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG,
+    HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT,
+    HORIZONTAL_VP_MIN_ROWS,
+    HORIZONTAL_VP_MIN_TREND_DEG,
     TEXT_SCALE_ANISOTROPY_P95_MAX,
     TEXT_SCALE_CROSS_GRADIENT_MAX,
     TEXT_SCALE_CROSS_SPAN_MAX,
     TEXT_SCALE_INLINE_GRADIENT_MAX,
     TEXT_SCALE_INLINE_SPAN_MAX,
     apply_homography_image,
+    audit_horizontal_alignment,
     audit_homography_distortion,
     audit_text_scale_stability,
+    compose_perspective_estimates,
+    estimate_horizontal_perspective_from_polygons,
     estimate_perspective_from_polygons,
     perspective_from_quad,
     transform_polygons_homography,
@@ -46,7 +54,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 11
+PREPROCESS_FORMAT_VERSION = 12
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -114,6 +122,20 @@ class PreprocessAnalysis:
     perspective_source_quad: tuple[float, ...] | None = None
     perspective_target_quad: tuple[float, ...] | None = None
     perspective_classification: str = "none"
+    perspective_candidate_source: str = "none"
+    perspective_horizontal_vanishing_x: float = 0.0
+    perspective_horizontal_vanishing_y: float = 0.0
+    perspective_horizontal_row_count: int = 0
+    perspective_row_before_top_angle_deg: float = 0.0
+    perspective_row_after_top_angle_deg: float = 0.0
+    perspective_row_before_bottom_angle_deg: float = 0.0
+    perspective_row_after_bottom_angle_deg: float = 0.0
+    perspective_row_before_trend_deg: float = 0.0
+    perspective_row_after_trend_deg: float = 0.0
+    perspective_row_before_metric_deg: float = 0.0
+    perspective_row_after_metric_deg: float = 0.0
+    perspective_row_improvement_ratio: float = 0.0
+    perspective_row_alignment_verdict: str = "insufficient"
     perspective_candidate_strength_px: float = 0.0
     perspective_left_drift_px: float = 0.0
     perspective_right_drift_px: float = 0.0
