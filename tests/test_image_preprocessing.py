@@ -1584,6 +1584,11 @@ def test_pixel_row_geometry_can_accept_safe_candidate_when_ocr_tail_is_biased(
                 "valid_column_count": 2,
                 "p90_shift_px": 1.0,
                 "worst_shift_px": 1.5,
+                "bottom_tail_sample_count": 0,
+                "bottom_tail_valid_column_count": 0,
+                "bottom_tail_p90_shift_px": 0.0,
+                "bottom_tail_worst_shift_px": 0.0,
+                "bottom_tail_passed": False,
                 "passed": True,
             },
         )()
@@ -1913,10 +1918,8 @@ def test_unit_gain_over_scale_budget_is_reduced_instead_of_rejected(
     assert analysis.orthogonal_applied is True
     assert analysis.orthogonal_passes == 1
     assert len(applied_gains) == 1
-    assert applied_gains[0] == pytest.approx(expected_cap, abs=1e-6)
-    assert analysis.orthogonal_safe_gain_cap == pytest.approx(
-        expected_cap, abs=1e-6
-    )
+    assert abs(applied_gains[0] - expected_cap) <= 1e-6
+    assert abs(analysis.orthogonal_safe_gain_cap - expected_cap) <= 1e-6
     assert "orthogonal_gain_limited" in analysis.method
 
 
