@@ -594,18 +594,18 @@ def estimate_orthogonal_warp(
     ) = _robust_track_fit(rule_points)
 
     y_values: list[float] = list(float(v) for v in body_y_knots)
-    # Preserve real top/bottom support for every populated column. A single
-    # page-wide 2/98 percentile knot can sit outside one column's last rows,
-    # which previously encouraged one-sided regression at the lower-right edge.
+    # Add a per-column lower support knot only when that column genuinely ends
+    # far from every regular body knot. Near-duplicate knots create an
+    # artificially steep d(displacement)/dy and can trip the scale-safety gate.
+    # Normal edge cases are handled by _local_column_angle's no-extrapolation
+    # rule without inserting extra knots.
+    boundary_gap_min = max(18.0, radius * 0.45)
     for rows in valid_columns:
         column_ys = np.asarray([row[1] for row in rows], dtype=float)
-        if column_ys.size >= 3:
-            y_values.extend(
-                [
-                    float(np.percentile(column_ys, 5.0)),
-                    float(np.percentile(column_ys, 95.0)),
-                ]
-            )
+        if column_ys.size >= 5:
+            lower_support = float(np.percentile(column_ys, 95.0))
+            if float(np.min(np.abs(body_y_knots - lower_support))) >= boundary_gap_min:
+                y_values.append(lower_support)
     if rule_count >= 7 and rule_y < y_hi:
         y_values.append(float(rule_y))
     knot_ys = _unique_sorted(y_values, tolerance=3.0)
