@@ -5720,6 +5720,22 @@ def filter_headword_records(
                     float(visual_entry_marker.get("lane_delta") or 0.0)
                     if visual_entry_marker else 0.0
                 ),
+                "visual_headword_symbol_lane_source": (
+                    str(visual_entry_marker.get("lane_source") or "")
+                    if visual_entry_marker else ""
+                ),
+                "visual_headword_symbol_lane_anchor_count": (
+                    int(visual_entry_marker.get("lane_anchor_count") or 0)
+                    if visual_entry_marker else 0
+                ),
+                "visual_headword_symbol_lane_tolerance": (
+                    float(visual_entry_marker.get("lane_tolerance") or 0.0)
+                    if visual_entry_marker else 0.0
+                ),
+                "visual_headword_symbol_x0": (
+                    int(visual_entry_marker.get("x0") or 0)
+                    if visual_entry_marker else 0
+                ),
                 "visual_entry_marker_density": (
                     float(visual_entry_marker.get("density") or 0.0)
                     if visual_entry_marker else 0.0
