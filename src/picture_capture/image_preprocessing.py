@@ -1278,6 +1278,70 @@ def _absolute_horizontal_quality(audit) -> tuple[str, float]:
     return ("passed" if passed else "failed"), float(score)
 
 
+def _choose_orthogonal_candidate(
+    polygons: Iterable[np.ndarray],
+    estimate: OrthogonalWarpEstimate,
+    size: tuple[int, int],
+    settings: AppSettings,
+) -> tuple[
+    float,
+    list[np.ndarray],
+    str,
+    float,
+    float,
+]:
+    """Select the mildest row-warp gain that best straightens current rows."""
+    source_polygons = [np.asarray(poly, dtype=float) for poly in polygons]
+    before_audit = audit_horizontal_alignment(
+        source_polygons,
+        source_polygons,
+        size=size,
+        settings=settings,
+    )
+    _before_verdict, before_score = _absolute_horizontal_quality(before_audit)
+
+    best_gain = 0.0
+    best_polygons = source_polygons
+    best_verdict = "insufficient"
+    best_score = float("inf")
+    best_objective = float("inf")
+    for gain in ORTHOGONAL_AUTO_GAINS:
+        mapped = transform_polygons_orthogonal(
+            source_polygons,
+            estimate,
+            row_gain=float(gain),
+            separator_gain=1.0,
+        )
+        audit = audit_horizontal_alignment(
+            source_polygons,
+            mapped,
+            size=size,
+            settings=settings,
+        )
+        verdict, score = _absolute_horizontal_quality(audit)
+        # Prefer a true pass. Otherwise minimize the normalized absolute
+        # residual, with a tiny regularizer that avoids over-correction.
+        objective = float(score) + 0.025 * abs(float(gain) - 1.0)
+        if verdict == "passed":
+            objective -= 0.20
+        if objective < best_objective:
+            best_objective = objective
+            best_gain = float(gain)
+            best_polygons = mapped
+            best_verdict = str(verdict)
+            best_score = float(score)
+
+    if not math.isfinite(best_score):
+        return 0.0, source_polygons, "insufficient", before_score, before_score
+    return (
+        best_gain,
+        best_polygons,
+        best_verdict,
+        float(before_score),
+        float(best_score),
+    )
+
+
 def _normalize_geometry_mode(value: str | None) -> str:
     mode = str(value or "auto").strip().lower()
     aliases = {
