@@ -3682,11 +3682,7 @@ def _recover_oversized_cjk_ocr_records(
                 ),
             })
 
-        if len(recovered) < 2:
-            continue
-
-        output = [record for record in output if record is not parent]
-        output.extend(recovered)
+        fully_recovered = len(recovered) == len(runs)
         details.append({
             "parent_box": [int(v) for v in parent.box],
             "parent_text": str(parent.text or ""),
@@ -3694,8 +3690,17 @@ def _recover_oversized_cjk_ocr_records(
             "normal_line_height": round(float(normal_height), 3),
             "visual_run_count": len(runs),
             "recovered_count": len(recovered),
+            "applied": bool(fully_recovered),
             "runs": run_debug,
         })
+        # Do not partially replace a giant box. Losing one physical head is
+        # worse than retaining the original imperfect record; a future forced
+        # refresh/local OCR pass may recover all runs.
+        if not fully_recovered:
+            continue
+
+        output = [record for record in output if record is not parent]
+        output.extend(recovered)
 
     output.sort(key=lambda item: (item.box[1], item.box[0]))
     return output, details
@@ -7351,6 +7356,10 @@ def detect_paddle_headwords(
         else:
             records = []
 
+        # Preserve raw Paddle records as the cache contract. Multi-entry CJK
+        # recovery is Profile-dependent candidate interpretation and therefore
+        # must be recomputed from raw records whenever Profile settings change.
+        raw_paddle_records = list(records)
         oversized_recovery: list[dict[str, Any]] = []
         if use_paddle and records:
             records, oversized_recovery = _recover_oversized_cjk_ocr_records(
@@ -7514,7 +7523,10 @@ def detect_paddle_headwords(
             "_column_axis_u": int(canonical_u),
             "_top_axis_v": int(source_top),
             "band_size": list(band.size),
-            "ocr_records": [asdict(record) for record in records],
+            "ocr_records": [asdict(record) for record in raw_paddle_records],
+            "paddle_effective_records": [
+                asdict(record) for record in records
+            ],
             "paddle_full_text": paddle_full_text,
             "paddle_merged_lines": [
                 {
