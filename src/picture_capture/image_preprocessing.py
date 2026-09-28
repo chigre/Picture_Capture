@@ -17,11 +17,21 @@ from .layout_detection import (
     infer_layout_from_boxes,
 )
 from .models import AppSettings
+from .preprocess_geometry import (
+    LayoutDewarpEstimate,
+    apply_homography_image,
+    apply_layout_dewarp_image,
+    dewarp_estimate_from_payload,
+    estimate_layout_dewarp_from_polygons,
+    estimate_perspective_from_polygons,
+    transform_polygons_homography,
+    transform_polygons_layout_dewarp,
+)
 from .project_storage import image_preprocess_data_root, image_preprocess_output_root
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 3
+PREPROCESS_FORMAT_VERSION = 4
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -48,6 +58,13 @@ class PreprocessAnalysis:
     warnings: tuple[str, ...] = ()
     safety_margin_px: int = DEFAULT_SAFETY_MARGIN_PX
     auto_deskew: bool = True
+    requested_geometry_mode: str = "auto"
+    geometry_mode: str = "deskew"
+    geometry_strength_px: float = 0.0
+    perspective_matrix: tuple[float, ...] | None = None
+    dewarp_y_samples: tuple[float, ...] = ()
+    dewarp_target_starts: tuple[float, ...] = ()
+    dewarp_source_starts: tuple[tuple[float, ...], ...] = ()
     source_size_bytes: int = 0
     source_mtime_ns: int = 0
 
@@ -59,6 +76,15 @@ class PreprocessAnalysis:
         payload["raw_content_box"] = list(self.raw_content_box)
         payload["text_box"] = list(self.text_box) if self.text_box is not None else None
         payload["warnings"] = list(self.warnings)
+        payload["perspective_matrix"] = (
+            list(self.perspective_matrix)
+            if self.perspective_matrix is not None else None
+        )
+        payload["dewarp_y_samples"] = list(self.dewarp_y_samples)
+        payload["dewarp_target_starts"] = list(self.dewarp_target_starts)
+        payload["dewarp_source_starts"] = [
+            list(row) for row in self.dewarp_source_starts
+        ]
         return payload
 
     @classmethod
@@ -96,6 +122,30 @@ class PreprocessAnalysis:
                 0, int(payload.get("safety_margin_px", DEFAULT_SAFETY_MARGIN_PX))
             ),
             auto_deskew=bool(payload.get("auto_deskew", True)),
+            requested_geometry_mode=str(
+                payload.get("requested_geometry_mode", "auto") or "auto"
+            ),
+            geometry_mode=str(payload.get("geometry_mode", "deskew") or "deskew"),
+            geometry_strength_px=max(
+                0.0, float(payload.get("geometry_strength_px", 0.0))
+            ),
+            perspective_matrix=(
+                tuple(float(v) for v in payload.get("perspective_matrix", ()))
+                if isinstance(payload.get("perspective_matrix"), (list, tuple))
+                and len(payload.get("perspective_matrix", ())) == 9
+                else None
+            ),
+            dewarp_y_samples=tuple(
+                float(v) for v in payload.get("dewarp_y_samples", ())
+            ),
+            dewarp_target_starts=tuple(
+                float(v) for v in payload.get("dewarp_target_starts", ())
+            ),
+            dewarp_source_starts=tuple(
+                tuple(float(v) for v in row)
+                for row in payload.get("dewarp_source_starts", ())
+                if isinstance(row, (list, tuple))
+            ),
             source_size_bytes=max(0, int(payload.get("source_size_bytes", 0))),
             source_mtime_ns=max(0, int(payload.get("source_mtime_ns", 0))),
         )
