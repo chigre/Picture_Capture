@@ -667,14 +667,37 @@ def estimate_orthogonal_warp(
         spreads.append(max(0.0, spread))
         median_angles.append(float(np.median(angle_grid[yi])))
 
-    # Smooth only through Y at each X knot; preserve the explicit header-rule
-    # anchor row exactly so OCR rows cannot pull it away from level.
+    # Smooth the body field independently from the header-rule anchor.
+    #
+    # The header rule is often only a few dozen pixels above the first body
+    # rows and can legitimately have a different residual angle. Mixing that
+    # structural anchor into a median/weighted smoother biases the first body
+    # knots toward the rule and leaves the upper-right text visibly tilted.
+    # First smooth OCR-derived body rows alone, then restore/insert the header
+    # rule unchanged; interpolation between the two provides the geometric
+    # transition without contaminating either measurement.
+    rule_index = -1
+    if rule_count >= 7:
+        rule_index = int(np.argmin(np.abs(knot_ys - rule_y)))
     for xi in range(angle_grid.shape[1]):
-        smoothed = _smooth_knots(angle_grid[:, xi])
-        if rule_count >= 7:
-            rule_index = int(np.argmin(np.abs(knot_ys - rule_y)))
-            smoothed[rule_index] = angle_grid[rule_index, xi]
-        angle_grid[:, xi] = smoothed
+        raw_column = angle_grid[:, xi].copy()
+        if rule_index >= 0:
+            body_indices = np.asarray(
+                [
+                    index
+                    for index in range(len(knot_ys))
+                    if index != rule_index
+                ],
+                dtype=int,
+            )
+            if body_indices.size:
+                body_smoothed = _smooth_knots(
+                    raw_column[body_indices]
+                )
+                angle_grid[body_indices, xi] = body_smoothed
+            angle_grid[rule_index, xi] = raw_column[rule_index]
+        else:
+            angle_grid[:, xi] = _smooth_knots(raw_column)
 
     displacement_grid = np.vstack(
         [
