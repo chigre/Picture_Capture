@@ -298,6 +298,28 @@ def test_auto_perspective_applies_with_coherent_line_support(monkeypatch) -> Non
             confidence=0.9,
         ),
     )
+    class RowAudit:
+        row_count = 20
+        before_global_angle_deg = 0.0
+        after_global_angle_deg = 0.0
+        before_top_angle_deg = 0.22
+        after_top_angle_deg = 0.04
+        before_bottom_angle_deg = -0.22
+        after_bottom_angle_deg = -0.04
+        before_trend_deg = -0.44
+        after_trend_deg = -0.08
+        before_residual_mad_deg = 0.04
+        after_residual_mad_deg = 0.04
+        before_metric_deg = 0.43
+        after_metric_deg = 0.09
+        improvement_ratio = 0.79
+        verdict = "improved"
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "audit_horizontal_alignment",
+        lambda *_args, **_kwargs: RowAudit(),
+    )
     monkeypatch.setattr(
         image_preprocessing,
         "apply_homography_image",
@@ -317,6 +339,62 @@ def test_auto_perspective_applies_with_coherent_line_support(monkeypatch) -> Non
 
     assert analysis.geometry_mode == "perspective"
     assert "perspective" in analysis.method
+
+
+def test_auto_geometry_can_use_horizontal_vanishing_point_without_ruling_line(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1000, 1400), "white")
+    polygons = [_tilted_box(350, 80, 120, 24, 0.0)]
+    for row in range(22):
+        y = 180 + row * 44
+        t = row / 21.0
+        angle = 0.38 - 0.76 * t
+        polygons.extend(
+            (
+                _tilted_box(100, y, 300, 24, angle),
+                _tilted_box(500, y, 300, 24, angle),
+            )
+        )
+
+    monkeypatch.setattr(
+        image_preprocessing,
+        "detect_text_polygons",
+        lambda _image, _settings: polygons,
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "estimate_perspective_from_polygons",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("no structural candidate")
+        ),
+    )
+    monkeypatch.setattr(
+        image_preprocessing,
+        "analyze_text_line_geometry",
+        lambda *_args, **_kwargs: image_preprocessing.TextLineGeometryAnalysis(
+            row_count=22,
+            angle_trend_deg=-0.76,
+            recommendation="perspective",
+            confidence=0.95,
+            separator_found=False,
+        ),
+    )
+
+    analysis = analyze_preprocess_page(
+        image,
+        AppSettings(),
+        geometry_mode="auto",
+    )
+
+    assert analysis.geometry_mode == "perspective"
+    assert analysis.perspective_candidate_source == "horizontal_vp"
+    assert analysis.perspective_classification == "horizontal_vp"
+    assert analysis.perspective_horizontal_row_count >= 18
+    assert analysis.perspective_row_alignment_verdict == "improved"
+    assert abs(analysis.perspective_row_after_trend_deg) <= 0.12
+    assert analysis.perspective_auto_safe is True
+    assert "horizontal_vp" in analysis.method
 
 
 def test_0011_style_large_ocr_homography_is_blocked_even_with_separator(monkeypatch) -> None:
