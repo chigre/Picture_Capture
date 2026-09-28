@@ -84,6 +84,8 @@ def test_line_geometry_tracks_slanted_physical_separator() -> None:
     assert abs(analysis.separator_drift_px) >= 10
     assert abs(analysis.separator_slope_px_per_1000y) >= 10
     assert analysis.separator_residual_px <= 3.0
+    assert analysis.separator_track_jump_p95_px <= 4.0
+    assert analysis.separator_curve_reliable is False
 
 
 def test_line_geometry_recommends_perspective_for_coherent_angle_trend() -> None:
@@ -140,9 +142,39 @@ def test_line_geometry_uses_curved_real_separator_for_uvdoc_review() -> None:
     )
 
     assert analysis.separator_found
-    assert analysis.separator_span_ratio >= 0.55
+    assert analysis.separator_span_ratio >= 0.72
     assert analysis.separator_residual_px >= 5.0
+    assert analysis.separator_curvature_score >= 0.55
+    assert analysis.separator_curve_reliable is True
     assert analysis.recommendation == "uvdoc_review"
+
+
+def test_slanted_separator_with_gutter_decoys_is_not_misread_as_curved() -> None:
+    image = Image.new("RGB", (900, 1000), "white")
+    draw = ImageDraw.Draw(image)
+    top, bottom = 140, 870
+
+    # A true separator drifts ~50 px over the body, analogous to an un-deskewed
+    # scan. Short high-contrast gutter strokes try to lure an independent
+    # per-band argmax away from the physical line.
+    draw.line((405, top, 455, bottom), fill="black", width=2)
+    for index, y in enumerate(range(top + 10, bottom - 20, 45)):
+        x = 418 if index % 2 == 0 else 444
+        draw.line((x, y, x, y + 22), fill="black", width=4)
+
+    analysis = analyze_text_line_geometry(
+        image,
+        _two_column_polygons(angle_at=lambda _t: 0.25),
+        AppSettings(),
+    )
+
+    assert analysis.separator_found
+    assert analysis.separator_span_ratio >= 0.72
+    assert abs(analysis.separator_drift_px) >= 30
+    assert analysis.separator_residual_px <= 4.0
+    assert analysis.separator_track_jump_p95_px <= 4.0
+    assert analysis.separator_curve_reliable is False
+    assert analysis.recommendation != "uvdoc_review"
 
 
 def test_straight_separator_blocks_false_nonlinear_interpretation() -> None:
@@ -167,4 +199,5 @@ def test_straight_separator_blocks_false_nonlinear_interpretation() -> None:
 
     assert analysis.separator_found
     assert analysis.separator_residual_px <= 2.5
+    assert analysis.separator_curve_reliable is False
     assert analysis.recommendation != "uvdoc_review"
