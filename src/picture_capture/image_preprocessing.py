@@ -2100,6 +2100,11 @@ def export_diagnostic_json(
         "auto_homography_anisotropy_p95_max": (
             AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
         ),
+        "text_scale_inline_span_max": TEXT_SCALE_INLINE_SPAN_MAX,
+        "text_scale_cross_span_max": TEXT_SCALE_CROSS_SPAN_MAX,
+        "text_scale_inline_gradient_max": TEXT_SCALE_INLINE_GRADIENT_MAX,
+        "text_scale_cross_gradient_max": TEXT_SCALE_CROSS_GRADIENT_MAX,
+        "text_scale_anisotropy_p95_max": TEXT_SCALE_ANISOTROPY_P95_MAX,
     }
     payload["export"] = {
         "output_filename": Path(output_path).name if output_path is not None else None,
@@ -2170,6 +2175,39 @@ def export_summary_csv(
                 analysis.perspective_jacobian_min_determinant
             ),
             "perspective_text_scale_samples": analysis.perspective_text_scale_samples,
+            "perspective_text_scale_inline_ratio_p05": (
+                analysis.perspective_text_scale_inline_ratio_p05
+            ),
+            "perspective_text_scale_inline_ratio_median": (
+                analysis.perspective_text_scale_inline_ratio_median
+            ),
+            "perspective_text_scale_inline_ratio_p95": (
+                analysis.perspective_text_scale_inline_ratio_p95
+            ),
+            "perspective_text_scale_cross_ratio_p05": (
+                analysis.perspective_text_scale_cross_ratio_p05
+            ),
+            "perspective_text_scale_cross_ratio_median": (
+                analysis.perspective_text_scale_cross_ratio_median
+            ),
+            "perspective_text_scale_cross_ratio_p95": (
+                analysis.perspective_text_scale_cross_ratio_p95
+            ),
+            "perspective_text_scale_inline_ratio_span_ratio": (
+                analysis.perspective_text_scale_inline_ratio_span_ratio
+            ),
+            "perspective_text_scale_cross_ratio_span_ratio": (
+                analysis.perspective_text_scale_cross_ratio_span_ratio
+            ),
+            "perspective_text_scale_inline_ratio_gradient_ratio": (
+                analysis.perspective_text_scale_inline_ratio_gradient_ratio
+            ),
+            "perspective_text_scale_cross_ratio_gradient_ratio": (
+                analysis.perspective_text_scale_cross_ratio_gradient_ratio
+            ),
+            "perspective_text_scale_anisotropy_p95_ratio": (
+                analysis.perspective_text_scale_anisotropy_p95_ratio
+            ),
             "perspective_text_scale_before_inline_gradient_ratio": (
                 analysis.perspective_text_scale_before_inline_gradient_ratio
             ),
@@ -2213,6 +2251,16 @@ def export_summary_csv(
             "separator_span_ratio": analysis.line_geometry_separator_span_ratio,
             "separator_slope_px_per_1000y": analysis.line_geometry_separator_slope_px_per_1000y,
             "separator_drift_px": analysis.line_geometry_separator_drift_px,
+            "separator_track_quality": analysis.line_geometry_separator_track_quality,
+            "separator_track_jump_p95_px": (
+                analysis.line_geometry_separator_track_jump_p95_px
+            ),
+            "separator_curvature_score": (
+                analysis.line_geometry_separator_curvature_score
+            ),
+            "separator_curve_reliable": (
+                analysis.line_geometry_separator_curve_reliable
+            ),
             "line_geometry_recommendation": analysis.line_geometry_recommendation,
             "line_geometry_confidence": analysis.line_geometry_confidence,
             "canvas_enabled": canvas.enabled,
@@ -2347,15 +2395,18 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         text_scale_part = ""
         if analysis.perspective_text_scale_samples:
             text_scale_label = {
-                "improved": "改善",
                 "stable": "稳定",
-                "worse": "变差",
+                "worse": "超限",
                 "insufficient": "证据不足",
             }.get(
                 analysis.perspective_text_scale_verdict,
                 analysis.perspective_text_scale_verdict,
             )
-            text_scale_part = f" / 字符尺度 {text_scale_label}"
+            text_scale_part = (
+                f" / 配对尺度 {text_scale_label}"
+                f" I{analysis.perspective_text_scale_inline_ratio_span_ratio * 100:.1f}%"
+                f" C{analysis.perspective_text_scale_cross_ratio_span_ratio * 100:.1f}%"
+            )
         perspective_part = (
             f"｜透视候选 {analysis.perspective_candidate_strength_px:.1f}px"
             f" / 旧尺度差 {analysis.perspective_scale_delta_ratio * 100:.2f}%"
@@ -2364,10 +2415,18 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         )
     line_part = ""
     if analysis.line_geometry_rows:
-        separator = (
-            f"｜直线残差 {analysis.line_geometry_separator_residual_px:.1f}px"
-            if analysis.line_geometry_separator_found else ""
-        )
+        separator = ""
+        if analysis.line_geometry_separator_found:
+            curve_flag = (
+                " 曲率可靠"
+                if analysis.line_geometry_separator_curve_reliable
+                else ""
+            )
+            separator = (
+                f"｜实体线残差 {analysis.line_geometry_separator_residual_px:.1f}px"
+                f" 跳变P95 {analysis.line_geometry_separator_track_jump_p95_px:.1f}px"
+                f"{curve_flag}"
+            )
         line_part = (
             f"｜行几何 {analysis.line_geometry_rows}行"
             f" Δ角 {analysis.line_geometry_trend_deg:+.2f}°"
