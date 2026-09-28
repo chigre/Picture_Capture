@@ -745,7 +745,11 @@ def analyze_preprocess_page(
             candidate = estimate_layout_dewarp_from_polygons(
                 working_polygons, working.size, settings,
             )
-            dewarp_threshold = max(3.0, width * 0.0015)
+            # Automatic mode should react to visible page bow, not normal
+            # TextDetection left-edge jitter.  On a ~2400 px scan this requires
+            # roughly 6 px of coherent structural drift; users can still force
+            # the dewarp mode explicitly for subtler cases.
+            dewarp_threshold = max(6.0, width * 0.0025)
             apply_dewarp = (
                 requested_geometry_mode == "dewarp"
                 or candidate.strength_px >= dewarp_threshold
@@ -1128,6 +1132,11 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         "dewarp": "版面去弯曲",
     }
     geometry = geometry_labels.get(analysis.geometry_mode, analysis.geometry_mode)
+    if (
+        analysis.manual_perspective_quad is not None
+        and analysis.geometry_mode == "dewarp"
+    ):
+        geometry = "手动四角+去弯曲"
     strength = (
         f" {analysis.geometry_strength_px:.1f}px"
         if analysis.geometry_mode in {"manual_perspective", "perspective", "dewarp"}
