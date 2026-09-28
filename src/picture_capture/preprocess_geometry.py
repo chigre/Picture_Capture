@@ -13,6 +13,46 @@ from .models import AppSettings
 
 
 @dataclass(frozen=True, slots=True)
+class HomographyDistortionAudit:
+    """Local scale distortion introduced by one projective transform.
+
+    The audit samples the analytic Jacobian over the text-bearing region.  It
+    therefore measures what the transform itself would do to character scale,
+    independent of OCR language, detected separators, or page decoration.
+    """
+
+    sample_count: int = 0
+    horizontal_scale_median: float = 1.0
+    vertical_scale_median: float = 1.0
+    area_scale_median: float = 1.0
+    horizontal_scale_span_ratio: float = 0.0
+    vertical_scale_span_ratio: float = 0.0
+    area_scale_span_ratio: float = 0.0
+    anisotropy_p95_ratio: float = 0.0
+    min_determinant: float = 1.0
+    valid: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class TextScaleStabilityAudit:
+    """Before/after spatial stability of the same detected text polygons.
+
+    The same polygons are measured before and after the candidate homography,
+    so natural differences in word length mostly cancel.  Cross-line size is
+    weighted more heavily because it is the more stable proxy for glyph scale.
+    """
+
+    sample_count: int = 0
+    before_inline_gradient_ratio: float = 0.0
+    after_inline_gradient_ratio: float = 0.0
+    before_cross_gradient_ratio: float = 0.0
+    after_cross_gradient_ratio: float = 0.0
+    before_score: float = 0.0
+    after_score: float = 0.0
+    verdict: str = "insufficient"
+
+
+@dataclass(frozen=True, slots=True)
 class PerspectiveEstimate:
     """Projective correction inferred from structural column trajectories.
 
@@ -139,6 +179,291 @@ def _robust_line(samples: list[tuple[float, float]]) -> tuple[float, float]:
         raise RuntimeError("栏左轨迹异常值过多")
     slope, intercept = np.polyfit(ys[keep], xs[keep], 1)
     return float(slope), float(intercept)
+
+
+def _robust_relative_span(values: np.ndarray) -> float:
+    finite = np.asarray(values, dtype=float)
+    finite = finite[np.isfinite(finite)]
+    if finite.size < 3:
+        return 0.0
+    q05, q95 = np.quantile(finite, [0.05, 0.95])
+    median = float(np.median(np.abs(finite)))
+    if median < 1e-9:
+        return 0.0
+    return max(0.0, float(q95 - q05) / median)
+
+
+def homography_jacobian(
+    matrix: Iterable[float], x: float, y: float,
+) -> np.ndarray:
+    """Return the analytic 2x2 Jacobian of a 3x3 homography at source XY."""
+    mat = np.asarray(tuple(matrix), dtype=float).reshape(3, 3)
+    a, b, c = mat[0]
+    d, e, f = mat[1]
+    g, h, i = mat[2]
+    denominator = g * float(x) + h * float(y) + i
+    if abs(denominator) < 1e-9:
+        raise ValueError("Homography Jacobian is singular at the requested point")
+    numerator_u = a * float(x) + b * float(y) + c
+    numerator_v = d * float(x) + e * float(y) + f
+    denom_sq = denominator * denominator
+    return np.asarray(
+        [
+            [
+                (a * denominator - g * numerator_u) / denom_sq,
+                (b * denominator - h * numerator_u) / denom_sq,
+            ],
+            [
+                (d * denominator - g * numerator_v) / denom_sq,
+                (e * denominator - h * numerator_v) / denom_sq,
+            ],
+        ],
+        dtype=float,
+    )
+
+
+def _audit_region_from_polygons(
+    polygons: Iterable[np.ndarray] | None,
+    size: tuple[int, int],
+) -> tuple[float, float, float, float]:
+    width, height = size
+    points: list[np.ndarray] = []
+    if polygons is not None:
+        for raw in polygons:
+            poly = np.asarray(raw, dtype=float)
+            if poly.ndim == 2 and poly.shape[0] >= 3 and poly.shape[1] >= 2:
+                valid = poly[:, :2]
+                valid = valid[np.isfinite(valid).all(axis=1)]
+                if len(valid):
+                    points.append(valid)
+    if points:
+        merged = np.vstack(points)
+        x0, x1 = np.quantile(merged[:, 0], [0.03, 0.97])
+        y0, y1 = np.quantile(merged[:, 1], [0.03, 0.97])
+        if x1 - x0 >= 20 and y1 - y0 >= 20:
+            return (
+                max(0.0, float(x0)),
+                max(0.0, float(y0)),
+                min(float(width - 1), float(x1)),
+                min(float(height - 1), float(y1)),
+            )
+    return (
+        float(width) * 0.08,
+        float(height) * 0.08,
+        float(width) * 0.92,
+        float(height) * 0.92,
+    )
+
+
+def audit_homography_distortion(
+    matrix: Iterable[float],
+    size: tuple[int, int],
+    *,
+    polygons: Iterable[np.ndarray] | None = None,
+    grid_x: int = 9,
+    grid_y: int = 13,
+) -> HomographyDistortionAudit:
+    """Measure local scale variation introduced by a candidate homography."""
+    matrix_values = tuple(float(v) for v in matrix)
+    if len(matrix_values) != 9:
+        raise ValueError("Homography audit requires a 3x3 matrix")
+    x0, y0, x1, y1 = _audit_region_from_polygons(polygons, size)
+    xs = np.linspace(x0, x1, max(3, int(grid_x)))
+    ys = np.linspace(y0, y1, max(3, int(grid_y)))
+
+    horizontal: list[float] = []
+    vertical: list[float] = []
+    area: list[float] = []
+    anisotropy: list[float] = []
+    determinants: list[float] = []
+
+    for y in ys:
+        for x in xs:
+            try:
+                jacobian = homography_jacobian(matrix_values, float(x), float(y))
+            except (ValueError, np.linalg.LinAlgError):
+                continue
+            if not np.isfinite(jacobian).all():
+                continue
+            determinant = float(np.linalg.det(jacobian))
+            singular = np.linalg.svd(jacobian, compute_uv=False)
+            if (
+                singular.size != 2
+                or not np.isfinite(singular).all()
+                or float(singular.min()) <= 1e-9
+            ):
+                continue
+            horizontal.append(float(np.linalg.norm(jacobian[:, 0])))
+            vertical.append(float(np.linalg.norm(jacobian[:, 1])))
+            area.append(math.sqrt(abs(determinant)))
+            anisotropy.append(float(singular.max() / singular.min() - 1.0))
+            determinants.append(determinant)
+
+    if not horizontal:
+        return HomographyDistortionAudit(
+            sample_count=0,
+            min_determinant=0.0,
+            valid=False,
+        )
+
+    h_values = np.asarray(horizontal, dtype=float)
+    v_values = np.asarray(vertical, dtype=float)
+    a_values = np.asarray(area, dtype=float)
+    an_values = np.asarray(anisotropy, dtype=float)
+    det_values = np.asarray(determinants, dtype=float)
+    min_det = float(np.min(det_values))
+    return HomographyDistortionAudit(
+        sample_count=int(len(h_values)),
+        horizontal_scale_median=float(np.median(h_values)),
+        vertical_scale_median=float(np.median(v_values)),
+        area_scale_median=float(np.median(a_values)),
+        horizontal_scale_span_ratio=_robust_relative_span(h_values),
+        vertical_scale_span_ratio=_robust_relative_span(v_values),
+        area_scale_span_ratio=_robust_relative_span(a_values),
+        anisotropy_p95_ratio=float(np.quantile(an_values, 0.95)),
+        min_determinant=min_det,
+        valid=bool(np.isfinite(min_det) and min_det > 0.0),
+    )
+
+
+def _polygon_inline_cross_size(
+    polygon: np.ndarray,
+    *,
+    writing_mode: str,
+) -> tuple[float, float, float, float] | None:
+    poly = np.asarray(polygon, dtype=float)
+    if poly.ndim != 2 or poly.shape[0] < 4 or poly.shape[1] < 2:
+        return None
+    points = poly[:4, :2]
+    if not np.isfinite(points).all():
+        return None
+    edge_a1 = points[1] - points[0]
+    edge_a2 = points[2] - points[3]
+    edge_b1 = points[2] - points[1]
+    edge_b2 = points[3] - points[0]
+    length_a = (float(np.linalg.norm(edge_a1)) + float(np.linalg.norm(edge_a2))) / 2.0
+    length_b = (float(np.linalg.norm(edge_b1)) + float(np.linalg.norm(edge_b2))) / 2.0
+    if min(length_a, length_b) < 1.0:
+        return None
+
+    vector_a = (edge_a1 + edge_a2) / 2.0
+    vector_b = (edge_b1 + edge_b2) / 2.0
+    vertical = str(writing_mode or "horizontal-tb").startswith("vertical")
+    if vertical:
+        score_a = abs(float(vector_a[1])) / max(1e-9, float(np.linalg.norm(vector_a)))
+        score_b = abs(float(vector_b[1])) / max(1e-9, float(np.linalg.norm(vector_b)))
+    else:
+        score_a = abs(float(vector_a[0])) / max(1e-9, float(np.linalg.norm(vector_a)))
+        score_b = abs(float(vector_b[0])) / max(1e-9, float(np.linalg.norm(vector_b)))
+    if score_a >= score_b:
+        inline, cross = length_a, length_b
+    else:
+        inline, cross = length_b, length_a
+    center = points.mean(axis=0)
+    return float(center[0]), float(center[1]), float(inline), float(cross)
+
+
+def _robust_spatial_gradient_ratio(
+    samples: list[tuple[float, float, float]],
+    size: tuple[int, int],
+) -> float:
+    """Estimate multiplicative size drift across the page with robust log-plane fit."""
+    if len(samples) < 12:
+        return 0.0
+    width, height = size
+    values = np.asarray([sample[2] for sample in samples], dtype=float)
+    xs = np.asarray([sample[0] for sample in samples], dtype=float)
+    ys = np.asarray([sample[1] for sample in samples], dtype=float)
+    valid = np.isfinite(values) & np.isfinite(xs) & np.isfinite(ys) & (values > 0.0)
+    if int(valid.sum()) < 12:
+        return 0.0
+    values = values[valid]
+    xs = xs[valid] / max(1.0, float(width)) - 0.5
+    ys = ys[valid] / max(1.0, float(height)) - 0.5
+    logs = np.log(values)
+    design = np.column_stack([np.ones(len(logs)), xs, ys])
+    keep = np.ones(len(logs), dtype=bool)
+    coeff = np.zeros(3, dtype=float)
+    for _ in range(4):
+        if int(keep.sum()) < 10:
+            break
+        coeff, *_ = np.linalg.lstsq(design[keep], logs[keep], rcond=None)
+        residual = logs - design @ coeff
+        center = float(np.median(residual[keep]))
+        mad = float(np.median(np.abs(residual[keep] - center)))
+        threshold = max(0.08, mad * 3.5)
+        new_keep = np.abs(residual - center) <= threshold
+        if int(new_keep.sum()) == int(keep.sum()):
+            keep = new_keep
+            break
+        keep = new_keep
+    if int(keep.sum()) < 10:
+        return 0.0
+    coeff, *_ = np.linalg.lstsq(design[keep], logs[keep], rcond=None)
+    gradient = math.hypot(float(coeff[1]), float(coeff[2]))
+    return max(0.0, math.exp(gradient) - 1.0)
+
+
+def audit_text_scale_stability(
+    before_polygons: Iterable[np.ndarray],
+    after_polygons: Iterable[np.ndarray],
+    size: tuple[int, int],
+    *,
+    writing_mode: str = "horizontal-tb",
+) -> TextScaleStabilityAudit:
+    """Compare spatial text-box scale stability before/after one candidate warp."""
+    before_list = list(before_polygons)
+    after_list = list(after_polygons)
+    count = min(len(before_list), len(after_list))
+    if count < 12:
+        return TextScaleStabilityAudit(sample_count=count)
+
+    before_inline: list[tuple[float, float, float]] = []
+    before_cross: list[tuple[float, float, float]] = []
+    after_inline: list[tuple[float, float, float]] = []
+    after_cross: list[tuple[float, float, float]] = []
+    paired = 0
+    for before, after in zip(before_list[:count], after_list[:count]):
+        first = _polygon_inline_cross_size(before, writing_mode=writing_mode)
+        second = _polygon_inline_cross_size(after, writing_mode=writing_mode)
+        if first is None or second is None:
+            continue
+        bx, by, bi, bc = first
+        ax, ay, ai, ac = second
+        before_inline.append((bx, by, bi))
+        before_cross.append((bx, by, bc))
+        after_inline.append((ax, ay, ai))
+        after_cross.append((ax, ay, ac))
+        paired += 1
+
+    if paired < 12:
+        return TextScaleStabilityAudit(sample_count=paired)
+
+    before_inline_gradient = _robust_spatial_gradient_ratio(before_inline, size)
+    after_inline_gradient = _robust_spatial_gradient_ratio(after_inline, size)
+    before_cross_gradient = _robust_spatial_gradient_ratio(before_cross, size)
+    after_cross_gradient = _robust_spatial_gradient_ratio(after_cross, size)
+
+    # Cross-line size (character height in horizontal text; character width in
+    # vertical text) is substantially more stable than detected line length.
+    before_score = 0.30 * before_inline_gradient + 0.70 * before_cross_gradient
+    after_score = 0.30 * after_inline_gradient + 0.70 * after_cross_gradient
+    if after_score + 0.002 < before_score:
+        verdict = "improved"
+    elif after_score <= before_score + max(0.004, before_score * 0.25):
+        verdict = "stable"
+    else:
+        verdict = "worse"
+    return TextScaleStabilityAudit(
+        sample_count=paired,
+        before_inline_gradient_ratio=before_inline_gradient,
+        after_inline_gradient_ratio=after_inline_gradient,
+        before_cross_gradient_ratio=before_cross_gradient,
+        after_cross_gradient_ratio=after_cross_gradient,
+        before_score=before_score,
+        after_score=after_score,
+        verdict=verdict,
+    )
 
 
 def _homography(src: np.ndarray, dst: np.ndarray) -> np.ndarray:
