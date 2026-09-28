@@ -157,3 +157,63 @@ def test_orthogonal_image_warp_preserves_canvas_size(
     output = apply_orthogonal_warp_image(image, estimate)
 
     assert output.size == image.size
+
+
+def test_2d_row_field_handles_column_disagreement_and_header_rule(
+    monkeypatch,
+) -> None:
+    image = Image.new("RGB", (1050, 1100), "white")
+    polygons: list[np.ndarray] = []
+    for row in range(24):
+        t = row / 23.0
+        y = 150.0 + row * 37.0
+        # Deliberately make the right upper column more tilted. The previous
+        # shared-angle implementation treated this >0.35° disagreement as a
+        # reason to disable the correction entirely.
+        left_angle = 0.38 - 0.78 * t
+        right_angle = 0.88 - 1.28 * t
+        polygons.append(_rotated_box(270.0, y, 330.0, 22.0, left_angle))
+        polygons.append(_rotated_box(760.0, y + 5.0, 330.0, 22.0, right_angle))
+
+    header = tuple(
+        (80.0 + index * 38.0, 105.0 + 0.010 * (80.0 + index * 38.0))
+        for index in range(24)
+    )
+    monkeypatch.setattr(
+        orthogonal_dewarp,
+        "separator_track_points",
+        lambda *_args, **_kwargs: (),
+    )
+    monkeypatch.setattr(
+        orthogonal_dewarp,
+        "horizontal_rule_track_points",
+        lambda *_args, **_kwargs: header,
+    )
+    settings = AppSettings(layout_columns_policy="fixed", columns=2)
+
+    estimate = estimate_orthogonal_warp(image, polygons, settings)
+
+    assert estimate.active is True
+    assert estimate.column_spread_deg > 0.35
+    assert estimate.row_grid_cols >= 4
+    assert estimate.horizontal_rule_point_count >= 20
+
+    transformed = transform_polygons_orthogonal(polygons, estimate)
+    audit = audit_horizontal_alignment(
+        polygons,
+        transformed,
+        size=image.size,
+        settings=settings,
+    )
+    assert audit.after_worst_region_deg <= 0.18
+    assert max(abs(value) for value in audit.after_column_trends_deg) <= 0.15
+
+    header_array = np.asarray(header, dtype=float)
+    mapped_header = transform_points_orthogonal(header_array, estimate)
+    slope, _intercept = np.polyfit(
+        mapped_header[:, 0],
+        mapped_header[:, 1],
+        1,
+    )
+    mapped_angle = math.degrees(math.atan(float(slope)))
+    assert abs(mapped_angle) <= 0.10
