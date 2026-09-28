@@ -164,6 +164,96 @@ def test_horizontal_strength_optimizer_avoids_full_strength_overshoot() -> None:
     ) <= 0.18
 
 
+def test_horizontal_geometry_separates_staggered_rows_across_three_columns() -> None:
+    settings = AppSettings(layout_columns_policy="fixed", columns=3)
+    polygons: list[np.ndarray] = []
+    centers = (190.0, 590.0, 990.0)
+    offsets = (0.0, 11.0, 23.0)
+    for column, (cx, offset) in enumerate(zip(centers, offsets)):
+        for row in range(20):
+            t = row / 19.0
+            y = 150 + row * 42 + offset
+            angle = 0.36 - 0.72 * t
+            polygons.append(_rotated_box(cx, y, 260, 22, angle))
+
+    estimate = estimate_horizontal_perspective_from_polygons(
+        polygons, (1200, 1100), settings,
+    )
+    optimized, audit, _strength = optimize_horizontal_perspective_strength(
+        polygons, (1200, 1100), estimate, settings,
+    )
+    transformed = transform_polygons_homography(polygons, optimized.matrix)
+    verified = audit_horizontal_alignment(
+        polygons, transformed, size=(1200, 1100), settings=settings,
+    )
+
+    assert estimate.horizontal_column_count == 3
+    assert audit.valid_column_count == 3
+    assert verified.valid_column_count == 3
+    assert len(verified.column_row_counts) == 3
+    assert min(verified.column_row_counts) >= 18
+    assert verified.verdict == "improved"
+    assert verified.after_worst_region_deg <= 0.18
+    assert max(abs(value) for value in verified.after_column_trends_deg) <= 0.12
+
+
+def test_horizontal_geometry_supports_two_three_and_n_columns() -> None:
+    for columns in (2, 3, 4, 5):
+        width = 300 * columns
+        settings = AppSettings(layout_columns_policy="fixed", columns=columns)
+        polygons: list[np.ndarray] = []
+        for column in range(columns):
+            cx = 150 + column * 300
+            y_offset = float((column % 3) * 7)
+            for row in range(18):
+                t = row / 17.0
+                y = 140 + row * 42 + y_offset
+                angle = 0.30 - 0.60 * t
+                polygons.append(_rotated_box(cx, y, 190, 20, angle))
+
+        estimate = estimate_horizontal_perspective_from_polygons(
+            polygons, (width, 1000), settings,
+        )
+        transformed = transform_polygons_homography(polygons, estimate.matrix)
+        audit = audit_horizontal_alignment(
+            polygons, transformed, size=(width, 1000), settings=settings,
+        )
+
+        assert estimate.horizontal_column_count == columns
+        assert audit.valid_column_count == columns
+        assert audit.verdict == "improved"
+        assert audit.after_worst_region_deg <= 0.18
+
+
+def test_worst_column_residual_cannot_hide_in_page_average() -> None:
+    settings = AppSettings(layout_columns_policy="fixed", columns=2)
+    before: list[np.ndarray] = []
+    after: list[np.ndarray] = []
+    for column, cx in enumerate((260.0, 760.0)):
+        for row in range(20):
+            t = row / 19.0
+            y = 150 + row * 40 + column * 9
+            before_angle = 0.32 - 0.64 * t
+            # Left column is fully corrected. Right-column lower third retains
+            # a visible tilt that a whole-page average must not conceal.
+            after_angle = (
+                -0.26
+                if column == 1 and row >= 13
+                else 0.0
+            )
+            before.append(_rotated_box(cx, y, 300, 22, before_angle))
+            after.append(_rotated_box(cx, y, 300, 22, after_angle))
+
+    audit = audit_horizontal_alignment(
+        before, after, size=(1050, 1100), settings=settings,
+    )
+
+    assert audit.valid_column_count == 2
+    assert audit.after_worst_column_index == 1
+    assert audit.after_worst_region_deg > 0.18
+    assert audit.verdict != "improved"
+
+
 def test_horizontal_vanishing_candidate_keeps_character_scale_safe() -> None:
     polygons: list[np.ndarray] = []
     for row in range(22):
