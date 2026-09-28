@@ -573,6 +573,62 @@ def test_output_canvas_alignment_preserves_crop_without_rescaling() -> None:
     assert exported.getpixel((150, 150)) == (80, 90, 100)
 
 
+def test_output_canvas_places_content_inside_page_body_margins() -> None:
+    analysis = _sample_export_analysis()
+    canvas = output_canvas_info(
+        analysis,
+        enabled=True,
+        mode="custom",
+        requested_width=240,
+        requested_height=260,
+        canvas_width=240,
+        canvas_height=260,
+        margin_top=20,
+        margin_bottom=30,
+        margin_left=15,
+        margin_right=25,
+        align_x="center",
+        align_y="top",
+    )
+
+    assert canvas.width == 240
+    assert canvas.height == 260
+    assert canvas.body_box == (15, 20, 215, 230)
+    assert canvas.content_box == (65, 20, 165, 170)
+
+    source = Image.new("RGB", (120, 180), (80, 90, 100))
+    exported = processed_image_with_canvas(source, analysis, canvas)
+    assert exported.size == (240, 260)
+    assert exported.getpixel((5, 5)) == (255, 255, 255)
+    assert exported.getpixel((70, 25)) == (80, 90, 100)
+
+
+def test_output_canvas_expands_page_to_preserve_body_margins() -> None:
+    analysis = _sample_export_analysis()
+    canvas = output_canvas_info(
+        analysis,
+        enabled=True,
+        mode="custom",
+        requested_width=120,
+        requested_height=160,
+        canvas_width=120,
+        canvas_height=160,
+        margin_top=10,
+        margin_bottom=20,
+        margin_left=12,
+        margin_right=18,
+        align_x="right",
+        align_y="bottom",
+    )
+
+    assert canvas.width == 130
+    assert canvas.height == 180
+    assert canvas.body_box == (12, 10, 112, 160)
+    assert canvas.content_box == (12, 10, 112, 160)
+    assert canvas.expanded_width is True
+    assert canvas.expanded_height is True
+
+
 def test_output_canvas_expands_instead_of_scaling_oversize_content() -> None:
     analysis = _sample_export_analysis()
     canvas = output_canvas_info(
@@ -607,6 +663,10 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
         requested_height=240,
         canvas_width=200,
         canvas_height=240,
+        margin_top=10,
+        margin_bottom=20,
+        margin_left=15,
+        margin_right=25,
         align_x="center",
         align_y="top",
     )
@@ -630,7 +690,8 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
     assert payload["line_geometry_rows"] == 24
     assert payload["line_geometry_separator_residual_px"] == 1.4
     assert payload["export"]["canvas"]["width"] == 200
-    assert payload["export"]["canvas"]["content_box"] == [50, 0, 150, 150]
+    assert payload["export"]["canvas"]["body_box"] == [15, 10, 175, 220]
+    assert payload["export"]["canvas"]["content_box"] == [45, 10, 145, 160]
     assert payload["effective_settings"]["fixed_columns"] == 3
     assert payload["effective_settings"]["layout_columns_policy"] == "fixed"
     assert payload["algorithm_constants"]["max_auto_deskew_deg"] == 5.0
@@ -643,6 +704,8 @@ def test_preprocess_export_writes_diagnostic_json_and_summary_csv(tmp_path: Path
     assert "separator_drift_px" in text
     assert "perspective_scale_delta_ratio" in text
     assert "perspective_auto_safe" in text
+    assert "canvas_body_x0" in text
+    assert "canvas_margin_top" in text
     assert "canvas_content_x0" in text
     assert "perspective" in text
 
@@ -696,6 +759,10 @@ def test_preprocess_export_canvas_settings_roundtrip(tmp_path: Path) -> None:
         preprocess_export_canvas_mode="custom",
         preprocess_export_canvas_width=1800,
         preprocess_export_canvas_height=2400,
+        preprocess_export_margin_top=30,
+        preprocess_export_margin_bottom=40,
+        preprocess_export_margin_left=50,
+        preprocess_export_margin_right=60,
         preprocess_export_align_x="right",
         preprocess_export_align_y="bottom",
     )
@@ -706,6 +773,10 @@ def test_preprocess_export_canvas_settings_roundtrip(tmp_path: Path) -> None:
     assert reopened.preprocess_export_canvas_mode == "custom"
     assert reopened.preprocess_export_canvas_width == 1800
     assert reopened.preprocess_export_canvas_height == 2400
+    assert reopened.preprocess_export_margin_top == 30
+    assert reopened.preprocess_export_margin_bottom == 40
+    assert reopened.preprocess_export_margin_left == 50
+    assert reopened.preprocess_export_margin_right == 60
     assert reopened.preprocess_export_align_x == "right"
     assert reopened.preprocess_export_align_y == "bottom"
 
@@ -732,10 +803,15 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert 'text="安全边界："' in source
     assert '"自动几何（推荐）"' in source
     assert '"UVDoc展平（Paddle高级）"' in source
-    assert 'text="统一白底画布"' in source
+    assert 'text="统一最终页面"' in source
+    assert 'text="页边空(px)：" ' in source or 'text="页边空(px)："'.strip() in source
     assert '"本批最大裁剪尺寸"' in source
     assert '"自定义尺寸"' in source
     assert '"左对齐", "居中", "右对齐"' in source
+    assert "preprocess_export_margin_top_var" in source
+    assert "preprocess_export_margin_bottom_var" in source
+    assert "preprocess_export_margin_left_var" in source
+    assert "preprocess_export_margin_right_var" in source
     assert '"顶端对齐", "居中", "底部对齐"' in source
     assert "export_diagnostic_json(" in source
     assert "export_summary_csv(" in source
