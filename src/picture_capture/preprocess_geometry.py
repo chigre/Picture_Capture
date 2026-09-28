@@ -675,17 +675,13 @@ def _horizontal_polygon_sample(
     )
 
 
-def _horizontal_rows(
-    polygons: Iterable[np.ndarray],
+def _cluster_horizontal_samples(
+    samples: list[tuple[float, float, float, float, float]],
 ) -> list[tuple[float, float, float, float]]:
-    samples = [
-        sample
-        for raw in polygons
-        if (sample := _horizontal_polygon_sample(np.asarray(raw, dtype=float)))
-        is not None
-    ]
+    """Cluster text-box orientation samples into rows *within one column*."""
     if not samples:
         return []
+    samples = list(samples)
     median_height = float(np.median([sample[4] for sample in samples]))
     tolerance = max(4.0, median_height * 0.72)
     samples.sort(key=lambda item: item[1])
@@ -711,6 +707,140 @@ def _horizontal_rows(
         weight = sum(item[3] for item in cluster)
         rows.append((x, y, angle, max(1.0, weight)))
     return rows
+
+
+def _horizontal_rows(
+    polygons: Iterable[np.ndarray],
+) -> list[tuple[float, float, float, float]]:
+    """Legacy/global helper; N-column analysis uses per-column clustering."""
+    samples = [
+        sample
+        for raw in polygons
+        if (sample := _horizontal_polygon_sample(np.asarray(raw, dtype=float)))
+        is not None
+    ]
+    return _cluster_horizontal_samples(samples)
+
+
+def _horizontal_column_indices(
+    polygons: list[np.ndarray],
+    size: tuple[int, int],
+    settings: AppSettings | None = None,
+) -> tuple[list[list[int]], tuple[int, ...]]:
+    """Assign text polygons to 1..N structural columns without cross-column rows.
+
+    Layout detection supplies column starts/rights. A polygon is assigned to one
+    column by maximal horizontal overlap; page-spanning headers/rules are
+    deliberately excluded from column row geometry.
+    """
+    width, height = size
+    if not polygons:
+        return [], ()
+    active_settings = settings or AppSettings()
+    boxes = polygon_boxes(polygons, width, height)
+    try:
+        estimate = infer_layout_from_boxes(
+            boxes,
+            size,
+            display_scale=1.0,
+            ink_mask=None,
+            columns_policy=active_settings.layout_columns_policy,
+            fixed_columns=active_settings.columns,
+            column_separator_mode=active_settings.layout_column_separator_mode,
+        )
+        starts = tuple(int(v) for v in estimate.column_starts)
+        rights = tuple(int(v) for v in estimate.column_rights)
+    except Exception:
+        starts = ()
+        rights = ()
+
+    if not starts:
+        return [list(range(len(polygons)))], (0,)
+    if len(rights) != len(starts):
+        inferred_rights: list[int] = []
+        for index, left in enumerate(starts):
+            if index + 1 < len(starts):
+                inferred_rights.append(
+                    int(round((left + starts[index + 1]) / 2.0))
+                )
+            else:
+                inferred_rights.append(width)
+        rights = tuple(inferred_rights)
+
+    bounds: list[tuple[float, float]] = []
+    for index, left in enumerate(starts):
+        right = rights[index] if index < len(rights) else width
+        if right <= left:
+            right = (
+                starts[index + 1]
+                if index + 1 < len(starts)
+                else width
+            )
+        bounds.append(
+            (
+                max(0.0, float(left)),
+                min(float(width), max(float(left) + 1.0, float(right))),
+            )
+        )
+
+    typical_width = float(
+        np.median([max(1.0, right - left) for left, right in bounds])
+    )
+    groups: list[list[int]] = [[] for _ in bounds]
+    for poly_index, raw in enumerate(polygons):
+        sample = _horizontal_polygon_sample(raw)
+        if sample is None:
+            continue
+        center_x, _center_y, _angle, box_width, _box_height = sample
+        x0 = center_x - box_width / 2.0
+        x1 = center_x + box_width / 2.0
+
+        # Headers and other elements spanning more than one designed column do
+        # not define the baseline orientation of any individual column.
+        if len(bounds) > 1 and box_width > typical_width * 1.35:
+            continue
+
+        overlaps = [
+            max(0.0, min(x1, right) - max(x0, left))
+            for left, right in bounds
+        ]
+        best_index = int(np.argmax(overlaps))
+        best_overlap = overlaps[best_index]
+        left, right = bounds[best_index]
+        center_inside = left <= center_x <= right
+        if best_overlap >= max(3.0, box_width * 0.42) or center_inside:
+            groups[best_index].append(poly_index)
+
+    # Keep all detected columns in diagnostics, even when a sparse column has
+    # too few usable row boxes; sparse columns simply do not drive the fit.
+    return groups, starts
+
+
+def _horizontal_column_rows(
+    polygons: list[np.ndarray],
+    size: tuple[int, int],
+    settings: AppSettings | None = None,
+    *,
+    fixed_groups: list[list[int]] | None = None,
+) -> tuple[list[list[tuple[float, float, float, float]]], list[list[int]]]:
+    groups, _starts = (
+        _horizontal_column_indices(polygons, size, settings)
+        if fixed_groups is None
+        else (fixed_groups, ())
+    )
+    result: list[list[tuple[float, float, float, float]]] = []
+    for indices in groups:
+        samples = [
+            sample
+            for index in indices
+            if 0 <= index < len(polygons)
+            and (
+                sample := _horizontal_polygon_sample(polygons[index])
+            )
+            is not None
+        ]
+        result.append(_cluster_horizontal_samples(samples))
+    return result, groups
 
 
 def _horizontal_row_stats(
@@ -766,54 +896,175 @@ def _horizontal_row_stats(
     )
 
 
+def _horizontal_metric(
+    middle: float,
+    top: float,
+    bottom: float,
+    trend: float,
+    mad: float,
+) -> float:
+    return (
+        max(abs(top), abs(middle), abs(bottom))
+        + 0.45 * abs(trend)
+        + 0.35 * max(0.0, mad)
+    )
+
+
 def audit_horizontal_alignment(
     before_polygons: Iterable[np.ndarray],
     after_polygons: Iterable[np.ndarray],
+    size: tuple[int, int] | None = None,
+    settings: AppSettings | None = None,
 ) -> HorizontalAlignmentAudit:
-    before_rows = _horizontal_rows(before_polygons)
-    after_rows = _horizontal_rows(after_polygons)
-    if min(len(before_rows), len(after_rows)) < 5:
+    """Audit global horizontality while preserving independent N-column rows."""
+    before_list = [np.asarray(poly, dtype=float) for poly in before_polygons]
+    after_list = [np.asarray(poly, dtype=float) for poly in after_polygons]
+    count = min(len(before_list), len(after_list))
+    before_list = before_list[:count]
+    after_list = after_list[:count]
+    if count < 5:
+        return HorizontalAlignmentAudit(row_count=count)
+
+    if size is None:
+        all_points = [
+            poly[:, :2]
+            for poly in before_list
+            if poly.ndim == 2 and poly.shape[0] >= 3
+        ]
+        if all_points:
+            stacked = np.vstack(all_points)
+            width = max(2, int(math.ceil(float(stacked[:, 0].max()))) + 2)
+            height = max(2, int(math.ceil(float(stacked[:, 1].max()))) + 2)
+            size = (width, height)
+        else:
+            size = (1000, 1000)
+
+    before_columns, groups = _horizontal_column_rows(
+        before_list, size, settings,
+    )
+    after_columns, _ = _horizontal_column_rows(
+        after_list, size, settings, fixed_groups=groups,
+    )
+    column_count = len(before_columns)
+    column_row_counts = tuple(len(rows) for rows in before_columns)
+
+    valid_pairs: list[
+        tuple[
+            tuple[float, float, float, float, float, float],
+            tuple[float, float, float, float, float, float],
+            int,
+        ]
+    ] = []
+    for index, (before_rows, after_rows) in enumerate(
+        zip(before_columns, after_columns)
+    ):
+        if min(len(before_rows), len(after_rows)) < 5:
+            continue
+        try:
+            before_stats = _horizontal_row_stats(before_rows)
+            after_stats = _horizontal_row_stats(after_rows)
+        except RuntimeError:
+            continue
+        valid_pairs.append((before_stats, after_stats, index))
+
+    before_rows = [row for column in before_columns for row in column]
+    after_rows = [row for column in after_columns for row in column]
+    if min(len(before_rows), len(after_rows)) < 5 or not valid_pairs:
         return HorizontalAlignmentAudit(
             row_count=min(len(before_rows), len(after_rows)),
+            column_count=column_count,
+            valid_column_count=len(valid_pairs),
+            column_row_counts=column_row_counts,
         )
-    (
-        before_global,
-        before_top,
-        before_bottom,
-        before_trend,
-        before_mad,
-        _before_span,
-    ) = _horizontal_row_stats(before_rows)
-    (
-        after_global,
-        after_top,
-        after_bottom,
-        after_trend,
-        after_mad,
-        _after_span,
-    ) = _horizontal_row_stats(after_rows)
+
+    before_global, before_top, before_bottom, before_trend, before_mad, _ = (
+        _horizontal_row_stats(before_rows)
+    )
+    after_global, after_top, after_bottom, after_trend, after_mad, _ = (
+        _horizontal_row_stats(after_rows)
+    )
+    global_before_metric = _horizontal_metric(
+        before_global, before_top, before_bottom, before_trend, before_mad,
+    )
+    global_after_metric = _horizontal_metric(
+        after_global, after_top, after_bottom, after_trend, after_mad,
+    )
+
+    before_tops: list[float] = []
+    after_tops: list[float] = []
+    before_middles: list[float] = []
+    after_middles: list[float] = []
+    before_bottoms: list[float] = []
+    after_bottoms: list[float] = []
+    before_trends: list[float] = []
+    after_trends: list[float] = []
+    before_metrics: list[float] = []
+    after_metrics: list[float] = []
+    valid_indices: list[int] = []
+
+    for before_stats, after_stats, index in valid_pairs:
+        bm, bt, bb, btrend, bmad, _bspan = before_stats
+        am, at, ab, atrend, amad, _aspan = after_stats
+        before_tops.append(bt)
+        after_tops.append(at)
+        before_middles.append(bm)
+        after_middles.append(am)
+        before_bottoms.append(bb)
+        after_bottoms.append(ab)
+        before_trends.append(btrend)
+        after_trends.append(atrend)
+        before_metrics.append(
+            _horizontal_metric(bm, bt, bb, btrend, bmad)
+        )
+        after_metrics.append(
+            _horizontal_metric(am, at, ab, atrend, amad)
+        )
+        valid_indices.append(index)
+
+    before_worst_region = max(
+        abs(value)
+        for values in (before_tops, before_middles, before_bottoms)
+        for value in values
+    )
+    after_worst_region = max(
+        abs(value)
+        for values in (after_tops, after_middles, after_bottoms)
+        for value in values
+    )
+    before_worst_column_metric = max(before_metrics)
+    after_worst_column_metric = max(after_metrics)
+    worst_position = int(np.argmax(after_metrics))
+    worst_column_index = valid_indices[worst_position]
+
+    # A page-wide average must not hide one bad lower/right column. The global
+    # component rewards coherent whole-page correction; the worst-column
+    # component keeps the optimizer accountable to every populated column.
     before_metric = (
-        max(abs(before_top), abs(before_bottom))
-        + 0.45 * abs(before_trend)
-        + 0.35 * before_mad
+        0.40 * global_before_metric
+        + 0.60 * before_worst_column_metric
     )
     after_metric = (
-        max(abs(after_top), abs(after_bottom))
-        + 0.45 * abs(after_trend)
-        + 0.35 * after_mad
+        0.40 * global_after_metric
+        + 0.60 * after_worst_column_metric
     )
     improvement = (
         (before_metric - after_metric) / max(1e-6, before_metric)
         if before_metric > 1e-6 else 0.0
     )
-    edge_after = max(abs(after_top), abs(after_bottom))
+    before_driver_trend = max(
+        [abs(before_trend)] + [abs(value) for value in before_trends]
+    )
+    after_worst_trend = max(
+        [abs(after_trend)] + [abs(value) for value in after_trends]
+    )
+
     if len(after_rows) < HORIZONTAL_VP_MIN_ROWS:
         verdict = "insufficient"
     elif (
-        abs(before_trend) >= HORIZONTAL_VP_MIN_TREND_DEG
+        before_driver_trend >= HORIZONTAL_VP_MIN_TREND_DEG
         and improvement >= HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT
-        and abs(after_trend) <= HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG
-        and edge_after <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
+        and after_worst_trend <= HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG
+        and after_worst_region <= HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
         and after_mad <= max(0.16, before_mad + 0.03)
     ):
         verdict = "improved"
@@ -821,8 +1072,12 @@ def audit_horizontal_alignment(
         verdict = "stable"
     else:
         verdict = "worse"
+
     return HorizontalAlignmentAudit(
         row_count=min(len(before_rows), len(after_rows)),
+        column_count=column_count,
+        valid_column_count=len(valid_pairs),
+        column_row_counts=column_row_counts,
         before_global_angle_deg=before_global,
         after_global_angle_deg=after_global,
         before_top_angle_deg=before_top,
@@ -835,27 +1090,58 @@ def audit_horizontal_alignment(
         after_residual_mad_deg=after_mad,
         before_metric_deg=before_metric,
         after_metric_deg=after_metric,
+        before_worst_region_deg=before_worst_region,
+        after_worst_region_deg=after_worst_region,
+        before_worst_column_metric_deg=before_worst_column_metric,
+        after_worst_column_metric_deg=after_worst_column_metric,
+        after_worst_column_index=worst_column_index,
+        before_column_top_angles_deg=tuple(before_tops),
+        after_column_top_angles_deg=tuple(after_tops),
+        before_column_middle_angles_deg=tuple(before_middles),
+        after_column_middle_angles_deg=tuple(after_middles),
+        before_column_bottom_angles_deg=tuple(before_bottoms),
+        after_column_bottom_angles_deg=tuple(after_bottoms),
+        before_column_trends_deg=tuple(before_trends),
+        after_column_trends_deg=tuple(after_trends),
+        before_column_metrics_deg=tuple(before_metrics),
+        after_column_metrics_deg=tuple(after_metrics),
         improvement_ratio=max(-10.0, min(1.0, improvement)),
         verdict=verdict,
     )
 
 
 def _fit_horizontal_vanishing_point(
-    rows: list[tuple[float, float, float, float]],
+    column_rows: list[list[tuple[float, float, float, float]]],
 ) -> tuple[float, float]:
-    if len(rows) < HORIZONTAL_VP_MIN_ROWS:
+    """Fit one common horizontal VP with equalized contribution per column."""
+    usable = [
+        rows for rows in column_rows if len(rows) >= 3
+    ]
+    total_rows = sum(len(rows) for rows in usable)
+    if total_rows < HORIZONTAL_VP_MIN_ROWS:
         raise RuntimeError("有效文本行不足，无法估计水平消失点")
-    angles = np.asarray([row[2] for row in rows], dtype=float)
-    if float(np.percentile(angles, 90) - np.percentile(angles, 10)) < 0.14:
+    all_angles = np.asarray(
+        [row[2] for rows in usable for row in rows],
+        dtype=float,
+    )
+    if float(np.percentile(all_angles, 90) - np.percentile(all_angles, 10)) < 0.14:
         raise RuntimeError("文本行角度变化过小，无需水平消失点校正")
 
     equations: list[tuple[float, float, float, float]] = []
-    for x, y, angle_deg, weight in rows:
-        radians = math.radians(float(angle_deg))
-        a = -math.sin(radians)
-        b = math.cos(radians)
-        c = -(a * float(x) + b * float(y))
-        equations.append((a, b, c, max(1.0, float(weight))))
+    for rows in usable:
+        total_weight = sum(max(1.0, float(row[3])) for row in rows)
+        for x, y, angle_deg, weight in rows:
+            radians = math.radians(float(angle_deg))
+            a = -math.sin(radians)
+            b = math.cos(radians)
+            cc = -(a * float(x) + b * float(y))
+            # Equal total influence for every populated column, then preserve
+            # within-column confidence using each row's relative line length.
+            balanced_weight = max(
+                1e-6,
+                max(1.0, float(weight)) / max(1.0, total_weight),
+            )
+            equations.append((a, b, cc, balanced_weight))
 
     keep = np.ones(len(equations), dtype=bool)
     point = np.zeros(2, dtype=float)
@@ -865,7 +1151,9 @@ def _fit_horizontal_vanishing_point(
         selected = [equations[i] for i in range(len(equations)) if keep[i]]
         a_mat = np.asarray([[item[0], item[1]] for item in selected], dtype=float)
         b_vec = np.asarray([-item[2] for item in selected], dtype=float)
-        weights = np.sqrt(np.asarray([item[3] for item in selected], dtype=float))
+        weights = np.sqrt(
+            np.asarray([item[3] for item in selected], dtype=float)
+        )
         weighted_a = a_mat * weights[:, None]
         weighted_b = b_vec * weights
         point, _residuals, rank, _singular = np.linalg.lstsq(
@@ -891,34 +1179,78 @@ def _fit_horizontal_vanishing_point(
     return float(point[0]), float(point[1])
 
 
+def _horizontal_vp_column_spread_deg(
+    column_rows: list[list[tuple[float, float, float, float]]],
+    common_vp: tuple[float, float],
+) -> float:
+    """Diagnostic angular disagreement between per-column and common VPs."""
+    differences: list[float] = []
+    common_x, common_y = common_vp
+    for rows in column_rows:
+        if len(rows) < HORIZONTAL_VP_MIN_ROWS:
+            continue
+        angles = np.asarray([row[2] for row in rows], dtype=float)
+        if float(np.percentile(angles, 90) - np.percentile(angles, 10)) < 0.14:
+            continue
+        try:
+            own_x, own_y = _fit_horizontal_vanishing_point([rows])
+        except RuntimeError:
+            continue
+        center_x = float(np.median([row[0] for row in rows]))
+        center_y = float(np.median([row[1] for row in rows]))
+        common_angle = _normalize_text_angle(
+            math.degrees(math.atan2(common_y - center_y, common_x - center_x))
+        )
+        own_angle = _normalize_text_angle(
+            math.degrees(math.atan2(own_y - center_y, own_x - center_x))
+        )
+        differences.append(
+            abs(_normalize_text_angle(common_angle - own_angle))
+        )
+    return (
+        float(np.percentile(differences, 90))
+        if len(differences) >= 2 else 0.0
+    )
+
+
 def estimate_horizontal_perspective_from_polygons(
     polygons: Iterable[np.ndarray],
     size: tuple[int, int],
+    settings: AppSettings | None = None,
 ) -> PerspectiveEstimate:
-    """Build a minimal projective rectifier from the horizontal vanishing point.
+    """Build one global projective rectifier from independent 1..N column rows.
 
-    The transform sends the common vanishing point of text rows to infinity,
-    then rotates that infinite direction onto the image X axis.  At the page
-    center the projective component is identity, minimizing unnecessary local
-    scale change; downstream Jacobian and paired-text audits remain mandatory.
+    Rows are reconstructed separately inside each detected/fixed layout column,
+    so text at similar Y positions in different columns is never treated as one
+    typographic line. All columns still vote for one common horizontal VP and
+    therefore one global homography.
     """
     width, height = size
     polygon_list = [np.asarray(poly, dtype=float) for poly in polygons]
-    rows = _horizontal_rows(polygon_list)
+    column_rows, _groups = _horizontal_column_rows(
+        polygon_list, size, settings,
+    )
+    usable_columns = [rows for rows in column_rows if len(rows) >= 5]
+    rows = [row for column in usable_columns for row in column]
     if len(rows) < HORIZONTAL_VP_MIN_ROWS:
         raise RuntimeError("有效文本行不足，无法估计水平消失点")
-    (
-        _global_angle,
-        _top_angle,
-        _bottom_angle,
-        trend,
-        _residual_mad,
-        _span,
-    ) = _horizontal_row_stats(rows)
-    if abs(trend) < HORIZONTAL_VP_MIN_TREND_DEG:
-        raise RuntimeError("文本行上下角度变化不足，无需水平消失点校正")
 
-    vx, vy = _fit_horizontal_vanishing_point(rows)
+    driver_trends: list[float] = []
+    for column in usable_columns:
+        try:
+            _mid, _top, _bottom, trend, _mad, _span = (
+                _horizontal_row_stats(column)
+            )
+            driver_trends.append(abs(float(trend)))
+        except RuntimeError:
+            continue
+    if not driver_trends or max(driver_trends) < HORIZONTAL_VP_MIN_TREND_DEG:
+        raise RuntimeError("各栏文本行上下角度变化不足，无需水平消失点校正")
+
+    vx, vy = _fit_horizontal_vanishing_point(usable_columns)
+    vp_spread = _horizontal_vp_column_spread_deg(
+        usable_columns, (vx, vy),
+    )
     cx = (float(width) - 1.0) / 2.0
     cy = (float(height) - 1.0) / 2.0
     vx_rel = vx - cx
@@ -940,9 +1272,6 @@ def estimate_horizontal_perspective_from_polygons(
         [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [-1.0 / vx_rel, 0.0, 1.0]],
         dtype=float,
     )
-    # A vanishing point at infinity is homogeneous: d and -d describe the
-    # same direction.  Force the representative to point toward +X so a VP on
-    # the left side of the page does not accidentally introduce a 180° flip.
     direction_x = vx_rel
     direction_y = vy_rel
     if direction_x < 0.0:
@@ -992,6 +1321,8 @@ def estimate_horizontal_perspective_from_polygons(
         horizontal_vanishing_x=vx,
         horizontal_vanishing_y=vy,
         horizontal_row_count=len(rows),
+        horizontal_column_count=len(usable_columns),
+        horizontal_vp_column_spread_deg=vp_spread,
     )
 
 
