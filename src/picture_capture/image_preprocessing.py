@@ -77,7 +77,7 @@ from .project_storage import image_preprocess_data_root, image_preprocess_output
 
 
 PREPROCESS_FORMAT = "picture-capture-image-preprocess"
-PREPROCESS_FORMAT_VERSION = 21
+PREPROCESS_FORMAT_VERSION = 22
 DEFAULT_SAFETY_MARGIN_PX = 20
 DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
 DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
@@ -91,6 +91,8 @@ AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX = 0.035
 ORTHOGONAL_AUTO_MIN_CONFIDENCE = 0.45
 ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT = 0.25
 ORTHOGONAL_AUTO_GAINS = (0.55, 0.70, 0.85, 1.0, 1.10, 1.15)
+ORTHOGONAL_MAX_AUTO_PASSES = 3
+POST_PERSPECTIVE_REDETECT_MIN_BOXES = 8
 ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX = 3.5
 ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO = 0.0015
 PREVIEW_YELLOW = (255, 225, 110, 94)
@@ -226,6 +228,7 @@ class PreprocessAnalysis:
     manual_perspective_quad: tuple[float, ...] | None = None
     orthogonal_applied: bool = False
     orthogonal_passes: int = 0
+    orthogonal_steps: tuple[dict[str, object], ...] = ()
     orthogonal_row_count: int = 0
     orthogonal_valid_column_count: int = 0
     orthogonal_separator_point_count: int = 0
@@ -720,6 +723,11 @@ class PreprocessAnalysis:
             ),
             orthogonal_applied=bool(payload.get("orthogonal_applied", False)),
             orthogonal_passes=max(0, int(payload.get("orthogonal_passes", 0))),
+            orthogonal_steps=tuple(
+                dict(item)
+                for item in payload.get("orthogonal_steps", ())
+                if isinstance(item, dict)
+            ),
             orthogonal_row_count=max(0, int(payload.get("orthogonal_row_count", 0))),
             orthogonal_valid_column_count=max(
                 0, int(payload.get("orthogonal_valid_column_count", 0))
