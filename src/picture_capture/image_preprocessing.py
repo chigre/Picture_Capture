@@ -614,10 +614,16 @@ def analyze_preprocess_page(
     safety_margin_px: int = DEFAULT_SAFETY_MARGIN_PX,
     auto_deskew: bool = True,
     geometry_mode: str = "auto",
+    manual_perspective_quad: tuple[float, ...] | None = None,
 ) -> PreprocessAnalysis:
     source = normalize_page_rgb(image)
     width, height = source.size
     requested_geometry_mode = _normalize_geometry_mode(geometry_mode)
+    manual_quad = (
+        tuple(float(v) for v in manual_perspective_quad)
+        if manual_perspective_quad is not None and len(manual_perspective_quad) == 8
+        else None
+    )
     warnings: list[str] = []
     polygons: list[np.ndarray] = []
     method_parts = ["paddle_layout_roi"]
@@ -669,10 +675,45 @@ def analyze_preprocess_page(
     perspective_matrix: tuple[float, ...] | None = None
     dewarp_estimate: LayoutDewarpEstimate | None = None
 
+    # A saved manual quadrilateral is expressed in original-source pixels.
+    # Rotate those four handles through the same small-angle correction first,
+    # then rectify before any automatic perspective/dewarp stage.
+    if manual_quad is not None:
+        try:
+            rotated_quad: list[float] = []
+            for index in range(0, 8, 2):
+                x, y = _rotate_point_same_canvas(
+                    manual_quad[index], manual_quad[index + 1],
+                    width, height, applied,
+                )
+                rotated_quad.extend((x, y))
+            manual_estimate = perspective_from_quad(
+                rotated_quad, working.size,
+            )
+            perspective_matrix = manual_estimate.matrix
+            geometry_strength = max(
+                geometry_strength, float(manual_estimate.strength_px)
+            )
+            working = apply_homography_image(
+                working, perspective_matrix,
+            )
+            if working_polygons:
+                working_polygons = transform_polygons_homography(
+                    working_polygons, perspective_matrix,
+                )
+            actual_geometry_mode = "manual_perspective"
+            method_parts.append("manual_perspective")
+        except Exception as exc:
+            warnings.append(f"手动四角透视纠正不可用：{exc}")
+
     # Advanced geometry is deliberately estimated after the global small-angle
     # correction. Perspective handles the remaining trapezoid/shear component;
     # the mesh stage then removes slow local column curvature.
-    if working_polygons and requested_geometry_mode in {"auto", "perspective", "dewarp"}:
+    if (
+        manual_quad is None
+        and working_polygons
+        and requested_geometry_mode in {"auto", "perspective", "dewarp"}
+    ):
         try:
             perspective = estimate_perspective_from_polygons(
                 working_polygons, working.size, settings,
@@ -731,7 +772,7 @@ def analyze_preprocess_page(
     # fails, the mathematically transformed original polygons remain a safe
     # fallback and preserve non-destructive export.
     final_polygons = working_polygons
-    if polygons and actual_geometry_mode in {"perspective", "dewarp"}:
+    if polygons and actual_geometry_mode in {"manual_perspective", "perspective", "dewarp"}:
         try:
             redetected = detect_text_polygons(working, settings)
             if len(redetected) >= 4:
@@ -819,6 +860,7 @@ def analyze_preprocess_page(
         geometry_mode=actual_geometry_mode,
         geometry_strength_px=round(float(geometry_strength), 3),
         perspective_matrix=perspective_matrix,
+        manual_perspective_quad=manual_quad,
         dewarp_y_samples=(
             tuple(dewarp_estimate.y_samples) if dewarp_estimate is not None else ()
         ),
@@ -837,6 +879,7 @@ def analyze_preprocess_path(
     safety_margin_px: int = DEFAULT_SAFETY_MARGIN_PX,
     auto_deskew: bool = True,
     geometry_mode: str = "auto",
+    manual_perspective_quad: tuple[float, ...] | None = None,
 ) -> PreprocessAnalysis:
     path = Path(path)
     with Image.open(path) as opened:
@@ -846,6 +889,7 @@ def analyze_preprocess_path(
             safety_margin_px=safety_margin_px,
             auto_deskew=auto_deskew,
             geometry_mode=geometry_mode,
+            manual_perspective_quad=manual_perspective_quad,
         )
     try:
         stat = path.stat()
