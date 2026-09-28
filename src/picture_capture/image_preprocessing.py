@@ -23,6 +23,9 @@ from .preprocess_geometry import (
     HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG,
     HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG,
     HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT,
+    HORIZONTAL_STRENGTH_COARSE_STEP,
+    HORIZONTAL_STRENGTH_FINE_STEP,
+    HORIZONTAL_STRENGTH_MIN,
     HORIZONTAL_VP_MIN_ROWS,
     HORIZONTAL_VP_MIN_TREND_DEG,
     TEXT_SCALE_ANISOTROPY_P95_MAX,
@@ -2526,6 +2529,9 @@ def export_diagnostic_json(
         "horizontal_alignment_max_after_edge_deg": (
             HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
         ),
+        "horizontal_strength_min": HORIZONTAL_STRENGTH_MIN,
+        "horizontal_strength_coarse_step": HORIZONTAL_STRENGTH_COARSE_STEP,
+        "horizontal_strength_fine_step": HORIZONTAL_STRENGTH_FINE_STEP,
         "separator_curve_span_min": SEPARATOR_CURVE_SPAN_MIN,
         "separator_track_quality_min": SEPARATOR_TRACK_QUALITY_MIN,
         "separator_curvature_score_min": SEPARATOR_CURVATURE_SCORE_MIN,
@@ -2588,6 +2594,15 @@ def export_summary_csv(
             ),
             "perspective_horizontal_row_count": (
                 analysis.perspective_horizontal_row_count
+            ),
+            "perspective_horizontal_strength": (
+                analysis.perspective_horizontal_strength
+            ),
+            "perspective_structural_applied": (
+                analysis.perspective_structural_applied
+            ),
+            "perspective_structural_safe": (
+                analysis.perspective_structural_safe
             ),
             "perspective_row_before_top_angle_deg": (
                 analysis.perspective_row_before_top_angle_deg
@@ -2878,9 +2893,15 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
             )
         row_part = ""
         if analysis.perspective_row_alignment_verdict != "insufficient":
+            strength_part = (
+                f" λ={analysis.perspective_horizontal_strength:.3f}"
+                if analysis.perspective_horizontal_strength > 0
+                else ""
+            )
             row_part = (
                 f" / 行趋势 {analysis.perspective_row_before_trend_deg:+.2f}°"
                 f"→{analysis.perspective_row_after_trend_deg:+.2f}°"
+                f"{strength_part}"
             )
         perspective_part = (
             f"｜投影候选 {analysis.perspective_candidate_strength_px:.1f}px"
