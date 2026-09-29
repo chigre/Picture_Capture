@@ -103,22 +103,23 @@ def test_ocr_candidate_band_ratio_is_relative_to_actual_column_width():
         follow_column_deformation=False,
     )
     geometry = derive_nominal_geometry(image.width, image.height, settings)
-    actual_column_width = int(geometry.column_widths[0])
+    # The last visual interval reaches the page edge (900px here), but the
+    # resolved dictionary column itself is 700px wide.
+    assert int(geometry.column_widths[0]) == 900
+    effective_column_width = int(settings.column_width)
 
     band60, _top, margin = paddle_headwords.unwrap_column_band(
         image, geometry, 0, settings
     )
     assert margin == 12
-    assert band60.width == max(
-        24, min(actual_column_width, round(actual_column_width * 0.60)) + margin
-    )
+    assert band60.width == round(effective_column_width * 0.60) + margin
     assert band60.width != round(settings.paddle_band_width * 0.60)
 
     settings.paddle_band_width_ratio = 100
     band100, _top, margin = paddle_headwords.unwrap_column_band(
         image, geometry, 0, settings
     )
-    assert band100.width == actual_column_width + margin
+    assert band100.width == effective_column_width + margin
 
 
 def test_combined_fusion_pairs_once_preserves_ordinary_geometry_and_ocr_semantics():
@@ -1105,6 +1106,7 @@ def test_raw_ocr_cache_signature_tracks_pixels_and_inference_settings():
     assert _cache_signature(image, geometry, replace(base, paddle_preprocessing="binary")) != sig
     assert _cache_signature(image, geometry, replace(base, paddle_max_input_side=1400)) != sig
     assert _cache_signature(image, geometry, replace(base, paddle_use_textline_orientation=True)) != sig
+    assert _cache_signature(image, geometry, replace(base, column_width=base.column_width + 17)) != sig
     moved_body = SimpleNamespace(
         transform=geometry.transform,
         column_paths=geometry.column_paths,
