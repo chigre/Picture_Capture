@@ -1130,8 +1130,8 @@ def test_usage_guide_is_modern_task_oriented_and_centered():
     assert '"环境中心"' in guide
     assert '"设置中心"' in guide
     assert "OCR画线是默认方式" in guide
-    assert "普通几何提供稳定定位" in guide
-    assert "默认先用融合画线验证代表页" in guide
+    assert "普通画线、仅OCR和融合画线+OCR" in guide
+    assert "默认先用 OCR画线验证代表页" in guide
     assert "sidebar_hint_text =" in guide
     assert "_wrap_mixed_ui_text(" in guide
     assert "wraplength=158" not in guide
