@@ -622,15 +622,14 @@ class ProcessingTests(unittest.TestCase):
             self.assertTrue(cache_path.exists())
             diagnostic_path = cache_path.with_name("page_ocr_diagnostics.txt")
             comparison_path = cache_path.with_name("page_ocr_comparison.txt")
-            self.assertTrue(diagnostic_path.exists())
-            self.assertTrue(comparison_path.exists())
-            self.assertIn("caffè s.m.", diagnostic_path.read_text(encoding="utf-8"))
-            self.assertEqual({len(line.split("\t")) for line in diagnostic_path.read_text(encoding="utf-8").splitlines()}, {12})
-            self.assertEqual({len(line.split("\t")) for line in comparison_path.read_text(encoding="utf-8").splitlines()}, {27})
+            self.assertFalse(diagnostic_path.exists())
+            self.assertFalse(comparison_path.exists())
             import json
             report = json.loads(cache_path.read_text(encoding="utf-8"))
-            self.assertIn("paddle_full_text", report["columns"][0])
-            self.assertIn("paddle_merged_lines", report["columns"][0])
+            self.assertEqual(report.get("cache_storage"), "compact-v1")
+            self.assertIn("ocr_records", report["columns"][0])
+            self.assertNotIn("paddle_full_text", report["columns"][0])
+            self.assertNotIn("paddle_merged_lines", report["columns"][0])
             cached = detect_paddle_headwords(
                 image, geometry, settings, cache_path=cache_path,
                 engine=object(),  # A valid cache must avoid calling the engine.
