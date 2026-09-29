@@ -355,7 +355,7 @@ class FormatTests(unittest.TestCase):
 
     def test_default_headword_ocr_uses_paddle_only(self) -> None:
         settings = AppSettings()
-        self.assertEqual(settings.detection_method, "combined")
+        self.assertEqual(settings.detection_method, "paddleocr")
         self.assertTrue(settings.paddle_use_paddleocr)
         self.assertFalse(settings.paddle_compare_tesseract)
         self.assertFalse(settings.paddle_dual_ocr_arbitration)
@@ -4757,7 +4757,7 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
 def test_action_and_postproduction_rows_use_equal_width_grid_columns():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
+    actions_start = text.index('            parent, "四、画线 / OCR / 插图 / 校对"')
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
     actions = text[actions_start:actions_end]
     assert 'row.columnconfigure(bi, weight=1, uniform=f"actions-row-{ri}")' in actions
@@ -5339,6 +5339,7 @@ def test_sidebar_defaults_fold_sections_two_through_five_and_keep_project_detail
     defaults_start = app_text.index("        self.section_expanded = {")
     defaults_end = app_text.index("\n        stored_sections =", defaults_start)
     defaults = app_text[defaults_start:defaults_end]
+    assert '"preprocess": False' in defaults
     assert '"normal": True' in defaults
     assert '"aux": False' in defaults
     assert '"ocr": False' in defaults
@@ -5350,7 +5351,7 @@ def test_sidebar_defaults_fold_sections_two_through_five_and_keep_project_detail
     assert "def _apply_new_project_sidebar_defaults(self) -> None:" in app_text
     assert "self._apply_new_project_sidebar_defaults()" in app_text
     assert 'parent, "五、后期词典制作", padding=5, section_key="postproduction"' in app_text
-    assert 'self._section_frame(parent, "四、画线与校对"' in app_text
+    assert '"四、画线 / OCR / 插图 / 校对"' in app_text
     assert 'self._section_frame(sidebar, "六、页面列表"' in app_text
     first_row = '(("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope))'
     second_row = '(("项目详情", self.open_project_details), ("导出PicDic索引", self.export_picdic_index), ("PicDic制作", self.build_picdic))'
