@@ -1810,6 +1810,121 @@ def test_ocr_resize_coordinates_round_trip():
 
 
 
+def test_peer_typography_marks_only_boundary_supported_soft_rejects():
+    diagnostics = []
+    for index in range(4):
+        diagnostics.append({
+            "accepted": True,
+            "confidence": 0.96,
+            "normalized_headword": f"head{index}",
+            "reject_reason": "",
+            "features": {
+                "at_left": True,
+                "below_header": True,
+                "height_ratio": 1.18 + index * 0.01,
+                "boldness_ratio": 1.31 + index * 0.01,
+                "preceding_gap": 18 + index,
+                "forced_accept": False,
+                "marker_noise": False,
+                "looks_like_continuation": False,
+            },
+            "parser_trace": [],
+            "bug_types": [],
+        })
+    candidate = {
+        "accepted": False,
+        "confidence": 0.87,
+        "normalized_headword": "borderline",
+        "reject_reason": "missing_pos_inflection_descriptor_or_symbol",
+        "features": {
+            "at_left": True,
+            "below_header": True,
+            "image_boundary_supported": True,
+            "height_ratio": 1.19,
+            "boldness_ratio": 1.32,
+            "preceding_gap": 19,
+        },
+        "parser_trace": [],
+        "bug_types": [],
+    }
+    diagnostics.append(candidate)
+
+    matched = paddle_headwords._annotate_peer_typography_matches(diagnostics)
+
+    assert matched == 1
+    assert candidate["features"]["peer_typography_match"] is True
+    assert candidate["features"]["peer_typography_votes"] >= 2
+    assert candidate["features"]["peer_typography_anchor_count"] == 4
+    assert "peer_typography_match" in candidate["parser_trace"]
+    assert "PEER_TYPOGRAPHY_MATCH" in candidate["bug_types"]
+
+
+def test_peer_typography_plus_image_boundary_can_rescue_single_engine_soft_reject():
+    candidate = {
+        "source_x": 20,
+        "source_y": 100,
+        "_axis_v": 100,
+        "_coarse_axis_v": 100,
+        "_anchor_axis_v": 100,
+        "normalized_headword": "borderline",
+        "confidence": 0.86,
+        "accepted": False,
+        "score": 2.0,
+        "reject_reason": "missing_pos_inflection_descriptor_or_symbol",
+        "features": {
+            "at_left": True,
+            "peer_typography_match": True,
+            "peer_typography_votes": 3,
+        },
+        "image_boundary_match": {"strength": 0.9, "y": 100},
+        "box": [0, 100, 90, 122],
+    }
+    pair = paddle_headwords._make_ocr_pair(candidate, None)
+    item = paddle_headwords._arbitrate_pair(
+        pair, 0, 20, AppSettings(), geometry=None,
+    )
+    assert item["selected"] is True
+    assert item["decision_reason"] == "multi_evidence_visual_boundary_rescue"
+    assert "MULTI_EVIDENCE_RESCUE" in item["issue_types"]
+
+
+def test_peer_typography_does_not_mark_hard_negative_candidate():
+    diagnostics = [
+        {
+            "accepted": True,
+            "confidence": 0.97,
+            "normalized_headword": f"h{i}",
+            "features": {
+                "at_left": True, "below_header": True,
+                "height_ratio": 1.2, "boldness_ratio": 1.3,
+                "preceding_gap": 20,
+            },
+        }
+        for i in range(4)
+    ]
+    candidate = {
+        "accepted": False,
+        "confidence": 0.99,
+        "normalized_headword": "body",
+        "reject_reason": "continuation_fragment",
+        "features": {
+            "at_left": True,
+            "below_header": True,
+            "image_boundary_supported": True,
+            "height_ratio": 1.2,
+            "boldness_ratio": 1.3,
+            "preceding_gap": 20,
+            "looks_like_continuation": True,
+        },
+        "parser_trace": [],
+        "bug_types": [],
+    }
+    diagnostics.append(candidate)
+    matched = paddle_headwords._annotate_peer_typography_matches(diagnostics)
+    assert matched == 0
+    assert not candidate["features"].get("peer_typography_match")
+
+
 def test_dual_ocr_consensus_plus_image_boundary_rescues_missing_structure():
     common = {
         "source_x": 20,
