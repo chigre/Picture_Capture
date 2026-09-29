@@ -147,6 +147,8 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert '"system": "跟随系统"' in app_source
     assert "def _poll_system_appearance(" in app_source
     assert '"system-appearance-detect"' in app_source
+    assert '"_pc_appearance_map_pending"' in app_source
+    assert "if getattr(widget, \"_pc_appearance_map_pending\", False):" in app_source
     assert 'key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)' in app_source
     assert 'display = themed_display_image(display, self.appearance_mode)' in app_source
     assert 'normalize_appearance_mode(preloaded.get("appearance_mode")) == self.appearance_mode' in app_source

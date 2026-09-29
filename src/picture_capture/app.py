@@ -10630,10 +10630,26 @@ class PictureCaptureApp(tk.Tk):
         widget = getattr(event, "widget", None)
         if widget is None:
             return
+        # Applying a native title-bar appearance may itself trigger another
+        # <Map> event on Windows.  Keep only one pending idle callback per
+        # Toplevel so icon/titlebar refreshes cannot form a remap loop.
+        if getattr(widget, "_pc_appearance_map_pending", False):
+            return
+        widget._pc_appearance_map_pending = True
+
+        def apply_mapped_appearance(w=widget) -> None:
+            try:
+                self._apply_current_appearance(w)
+            finally:
+                try:
+                    w._pc_appearance_map_pending = False
+                except (AttributeError, tk.TclError):
+                    pass
+
         try:
-            self.after_idle(lambda w=widget: self._apply_current_appearance(w))
+            self.after_idle(apply_mapped_appearance)
         except tk.TclError:
-            pass
+            widget._pc_appearance_map_pending = False
 
     def _appearance_mode_selected(self, _event: tk.Event | None = None) -> None:
         self.set_appearance_mode(
