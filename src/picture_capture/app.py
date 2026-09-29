@@ -12909,8 +12909,8 @@ class PictureCaptureApp(tk.Tk):
             variable=self.ocr_refresh_var, value="force",
         ).grid(row=0, column=3, columnspan=3, sticky="w")
         add_field(ocr, 1, 0, "OCR语言：", "ocr_language", str, 8)
-        add_field(ocr, 1, 2, "识别带宽%：", "paddle_band_width_ratio", int, 7)
-        add_field(ocr, 1, 4, "左缘容差：", "paddle_left_tolerance", int, 7)
+        add_field(ocr, 1, 2, "识别带宽%：", "paddle_band_width_ratio", float, 7)
+        add_field(ocr, 1, 4, "左缘容差：", "paddle_left_tolerance", float, 7)
         engine_row = ttk.Frame(ocr); engine_row.grid(row=2, column=0, columnspan=6, sticky="ew", pady=(4, 1))
         ttk.Label(engine_row, text="OCR引擎：").pack(side="left")
         for text, name in (("PaddleOCR", "paddle_use_paddleocr"), ("Tesseract", "paddle_compare_tesseract"), ("Google Lens", "paddle_enable_lens")):
@@ -13105,7 +13105,7 @@ class PictureCaptureApp(tk.Tk):
 
     def _preprocess_export_config(
         self,
-    ) -> tuple[bool, str, int, int, int, int, int, int, str, str]:
+    ) -> tuple[bool, str,int,int,int, str, str]:
         enabled = bool(self.preprocess_export_canvas_var.get())
         mode_label = str(self.preprocess_export_canvas_mode_var.get() or "").strip()
         mode = {
@@ -14666,8 +14666,8 @@ class PictureCaptureApp(tk.Tk):
                                 raise ValueError("页尾必须位于原图底部 35% 范围内。")
                             self.settings.profile_footer_percent = round(percent, 6)
                     value = int(value)
-                if name == "paddle_band_width_ratio" and not 1 <= int(value) <= 100:
-                    raise ValueError("候选带宽比例必须在 1–100 之间；100 即原候选带宽。")
+                if name == "paddle_band_width_ratio" and not 1.0 <= float(value) <= 100.0:
+                    raise ValueError("候选带宽比例必须在 1.0–100.0 之间；100.0 即原候选带宽。")
                 if name == "paddle_separator_safety_px" and not 0 <= int(value) <= 50:
                     raise ValueError("Y精修安全空间必须在 0–50 px 之间。")
                 if name == "paddle_separator_roi_width_ratio" and not 10 <= int(value) <= 100:
@@ -14823,7 +14823,7 @@ class PictureCaptureApp(tk.Tk):
             shutil.rmtree(staging, ignore_errors=True)
             zip_path.with_name(f".{zip_path.name}.tmp").unlink(missing_ok=True)
 
-        def worker(item, _position: int, _total: int):
+        def worker(item, _position:_total: int):
             try:
                 if item == "__prepare__":
                     export_root.mkdir(parents=True, exist_ok=True)
@@ -15049,7 +15049,7 @@ class PictureCaptureApp(tk.Tk):
         settings = replace(self.settings)
         pages = list(self.project.images)
 
-        def worker(index: int, _position: int, _total: int):
+        def worker(index:_position:_total: int):
             with Image.open(pages[index]) as opened:
                 return detect_layout_parameters(opened, settings)
 
@@ -15112,7 +15112,7 @@ class PictureCaptureApp(tk.Tk):
         range_name = pages[indices[0]].stem if len(indices) == 1 else f"{pages[indices[0]].stem}-{pages[indices[-1]].stem}"
         range_name = re.sub(r'[^0-9A-Za-z_.-]+', "_", range_name)
 
-        def worker(index: int, _position: int, _total: int):
+        def worker(index:_position:_total: int):
             with Image.open(pages[index]) as opened:
                 image_size = opened.size
                 estimate = detect_layout_consistency(opened, settings)
@@ -15514,7 +15514,7 @@ class PictureCaptureApp(tk.Tk):
         with self._batch_state_lock:
             return self._batch_page_states.get(int(index), "")
 
-    def _set_foreground_batch_state(self, index: int, state: str) -> None:
+    def _set_foreground_batch_state(self, index:state: str) -> None:
         with self._batch_state_lock:
             if index in self._batch_page_states:
                 self._batch_page_states[index] = state
@@ -15918,7 +15918,7 @@ class PictureCaptureApp(tk.Tk):
             delay = 8 if processed_events >= max_events_per_poll else 80
             self._batch_poll_job = self.after(delay, self._poll_batch_queue)
 
-    def _finish_batch_task(self, completed: int, total: int, stopped: bool, results, error) -> None:
+    def _finish_batch_task(self, completed:total:stopped: bool, results, error) -> None:
         callback = self._batch_on_done
         title = self._batch_title
         self._batch_active = False
