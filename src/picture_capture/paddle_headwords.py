@@ -7119,10 +7119,131 @@ def _atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> Non
 
 
 def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Write machine-owned OCR JSON compactly.
+
+    These files can contain thousands of OCR candidates. Pretty-printing them
+    adds substantial project size without helping normal users, so keep them
+    UTF-8/readable but remove structural whitespace.
+    """
     _atomic_write_text(
-        path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8",
+        path,
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
     )
 
+
+_OCR_REGENERABLE_SIDECAR_SUFFIXES = (
+    "_ocr_diagnostics.txt",
+    "_ocr_comparison.txt",
+    "_issues.tsv",
+    "_ocr_engines.tsv",
+    "_fusion.tsv",
+)
+
+
+def _compact_cached_candidate(row: Any) -> Any:
+    """Keep only candidate fields required by Project Profile coverage diagnostics."""
+    if not isinstance(row, dict):
+        return row
+    if "meta" in row:
+        return {"meta": _source_only_persistence(row.get("meta") or {})}
+    compact: dict[str, Any] = {}
+    for key in ("box", "accepted", "reject_reason"):
+        if key in row:
+            compact[key] = _source_only_persistence(row[key])
+    features = row.get("features")
+    if isinstance(features, dict):
+        kept_features = {
+            key: features[key]
+            for key in (
+                "visual_marker_template_score",
+                "ordinary_strong_edge_visual_rescue",
+            )
+            if key in features
+        }
+        if kept_features:
+            compact["features"] = kept_features
+    return compact
+
+
+def compact_ocr_cache_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return the reusable OCR cache in its compact persisted representation.
+
+    Runtime arbitration keeps rich per-engine diagnostics in memory. Persisted
+    cache only needs raw Paddle records for reuse, lightweight candidate facts
+    for Profile coverage, top-level review candidates for GUI review/manual
+    overrides, and final entries/quality metadata.
+    """
+    result = dict(payload)
+    compact_columns: list[dict[str, Any]] = []
+    for raw in list(payload.get("columns") or []):
+        if not isinstance(raw, dict):
+            continue
+        column: dict[str, Any] = {}
+        for key in ("column", "band_size", "ocr_records", "paddle_accepted_count"):
+            if key in raw:
+                column[key] = _source_only_persistence(raw[key])
+        candidates = [
+            _compact_cached_candidate(item)
+            for item in list(raw.get("candidates") or [])
+        ]
+        if candidates:
+            column["candidates"] = candidates
+        compact_columns.append(column)
+    result["columns"] = compact_columns
+    result["cache_storage"] = "compact-v1"
+    return _source_only_persistence(result)
+
+
+def _regenerable_sidecars(cache_path: Path) -> list[Path]:
+    return [
+        cache_path.with_name(f"{cache_path.stem}{suffix}")
+        for suffix in _OCR_REGENERABLE_SIDECAR_SUFFIXES
+    ]
+
+
+def compact_ocr_cache_file(cache_path: Path) -> tuple[int, int, int]:
+    """Compact one existing page cache and delete only regenerable diagnostics.
+
+    Returns (before_bytes, after_bytes, removed_sidecars). The main cache
+    remains reusable and *_manual_selection.json is intentionally preserved
+    because it contains user decisions rather than disposable diagnostics.
+    """
+    cache_path = Path(cache_path)
+    before_bytes = 0
+    if cache_path.exists():
+        try:
+            before_bytes += int(cache_path.stat().st_size)
+        except OSError:
+            pass
+    sidecars = _regenerable_sidecars(cache_path)
+    for path in sidecars:
+        if path.exists():
+            try:
+                before_bytes += int(path.stat().st_size)
+            except OSError:
+                pass
+
+    if cache_path.exists():
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"OCR cache is not a JSON object: {cache_path.name}")
+        _atomic_write_json(cache_path, compact_ocr_cache_payload(payload))
+
+    removed = 0
+    for path in sidecars:
+        if not path.exists():
+            continue
+        path.unlink()
+        removed += 1
+
+    after_bytes = 0
+    if cache_path.exists():
+        try:
+            after_bytes += int(cache_path.stat().st_size)
+        except OSError:
+            pass
+    return before_bytes, after_bytes, removed
 
 def _tsv_clean(value: Any) -> str:
     if value is None:
@@ -8391,28 +8512,13 @@ def detect_paddle_headwords(
             "final_entries": [asdict(entry) for entry in all_entries],
             "columns": report_columns,
         }
-        payload = _source_only_persistence(payload)
+        # Persist a compact reusable cache. Rich engine-by-engine diagnostics are
+        # intentionally runtime-only; historically duplicating them into five
+        # text/TSV sidecars made large dictionary projects grow unnecessarily.
+        payload = compact_ocr_cache_payload(payload)
         _atomic_write_json(cache_path, payload)
-        _atomic_write_text(
-            cache_path.with_name(f"{cache_path.stem}_ocr_diagnostics.txt"),
-            _diagnostic_text(report_columns), encoding="utf-8",
-        )
-        _atomic_write_text(
-            cache_path.with_name(f"{cache_path.stem}_ocr_comparison.txt"),
-            _comparison_text(report_columns), encoding="utf-8",
-        )
-        _atomic_write_text(
-            cache_path.with_name(f"{cache_path.stem}_issues.tsv"),
-            _issues_text(review_candidates), encoding="utf-8",
-        )
-        _atomic_write_text(
-            cache_path.with_name(f"{cache_path.stem}_ocr_engines.tsv"),
-            _engines_long_text(report_columns), encoding="utf-8",
-        )
-        _atomic_write_text(
-            cache_path.with_name(f"{cache_path.stem}_fusion.tsv"),
-            _fusion_text(review_candidates), encoding="utf-8",
-        )
+        for obsolete in _regenerable_sidecars(cache_path):
+            obsolete.unlink(missing_ok=True)
         _update_project_quality_summary(cache_path, agreement, review_candidates)
 
     return all_entries
