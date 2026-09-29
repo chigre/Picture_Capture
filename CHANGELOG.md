@@ -6,6 +6,8 @@
 - 【百分比数据】直接持久化为百分比的 `dark_area_percent`、`paddle_band_width_ratio`、`paddle_separator_roi_width_ratio`、`review_zoom_percent` 改为浮点类型；已有列跟踪百分比继续保持浮点语义。
 - 【设置中心】移除左侧每个参数及开关下方重复的长篇 inline 说明，只保留名称、控件、单位和 ⓘ；完整解释、调整建议、单位与版面图解统一显示在右侧，并随鼠标悬停、控件聚焦或点击 ⓘ 即时切换。
 - 【回归测试】增加百分比字段必须使用浮点解析、详细帮助不得重新回到左侧 inline 区域的约束。
+- 【PaddleOCR缓存】项目内 `_PictureCapture/QT/PaddleOCR` 改为紧凑存储：每页缓存 JSON 不再 pretty-print，并只持久化 OCR 复用、Project Profile 覆盖诊断、校对与质量摘要所需信息；不再默认重复写入 `diagnostics/comparison/issues/engines/fusion` 五类派生文本。
+- 【缓存压缩】主界面原【清理临时文件】升级为【压缩OCR缓存】：可原地压缩旧版 `<page>.json` 并删除可再生诊断副本，同时保留 `<page>_manual_selection.json` 人工选择和原始 OCR 记录，因此无需重新 OCR；重新识别页面时也会自动清理旧式重复 sidecar。
 
 ## v2.14.1 — 2026-09-29
 
