@@ -1109,37 +1109,46 @@ def _fuse_detection_entries(
     ordinary_rows.sort(key=lambda row: (row[1], row[3], row[2]))
     ocr_rows.sort(key=lambda row: (row[1], row[3], row[2]))
 
-    used_ocr: set[int] = set()
-    fused: list[Entry] = []
-    for ordinary, ordinary_col, _ordinary_u, ordinary_v in ordinary_rows:
-        best_index: int | None = None
-        best_delta: int | None = None
-        for index, (ocr, ocr_col, _ocr_u, ocr_v) in enumerate(ocr_rows):
-            if index in used_ocr or ocr_col != ordinary_col:
+    # Build all admissible cross-detector edges first, then greedily take
+    # the globally smallest ΔY edges.  This is order-independent and prevents
+    # an earlier ordinary row from stealing an OCR observation that is much
+    # closer to the following row.
+    pair_edges: list[tuple[int, int, int]] = []
+    for ordinary_index, (_ordinary, ordinary_col, _ordinary_u, ordinary_v) in enumerate(ordinary_rows):
+        for ocr_index, (ocr, ocr_col, _ocr_u, ocr_v) in enumerate(ocr_rows):
+            if ocr_col != ordinary_col:
                 continue
             tolerance = base_tolerance
             if _is_single_cjk_headword(ocr.word):
                 tolerance = max(tolerance, round(line_height * 0.55))
             delta = abs(int(ocr_v) - int(ordinary_v))
-            if delta > tolerance:
-                continue
-            if best_delta is None or delta < best_delta:
-                best_index = index
-                best_delta = delta
-        if best_index is None:
+            if delta <= tolerance:
+                pair_edges.append((delta, ordinary_index, ocr_index))
+    pair_edges.sort(key=lambda item: (item[0], item[1], item[2]))
+
+    ordinary_to_ocr: dict[int, int] = {}
+    used_ocr: set[int] = set()
+    for _delta, ordinary_index, ocr_index in pair_edges:
+        if ordinary_index in ordinary_to_ocr or ocr_index in used_ocr:
+            continue
+        ordinary_to_ocr[ordinary_index] = ocr_index
+        used_ocr.add(ocr_index)
+
+    fused: list[Entry] = []
+    for ordinary_index, (ordinary, _ordinary_col, _ordinary_u, _ordinary_v) in enumerate(ordinary_rows):
+        ocr_index = ordinary_to_ocr.get(ordinary_index)
+        if ocr_index is None:
             fused.append(ordinary)
             continue
-
-        used_ocr.add(best_index)
-        ocr = ocr_rows[best_index][0]
+        ocr = ocr_rows[ocr_index][0]
         fused.append(_entry_with_fused_metadata(
             ordinary,
             ocr,
             use_semantic_position=_is_single_cjk_headword(ocr.word),
         ))
 
-    for index, (ocr, _col, _u, _v) in enumerate(ocr_rows):
-        if index not in used_ocr:
+    for ocr_index, (ocr, _col, _u, _v) in enumerate(ocr_rows):
+        if ocr_index not in used_ocr:
             fused.append(ocr)
 
     # Second-stage de-duplication is intentionally tighter than cross-detector
@@ -1148,13 +1157,6 @@ def _fuse_detection_entries(
     ranked: list[tuple[Entry, int, int, int]] = []
     for entry in fused:
         col, u, v = axis(entry)
-        source = str(entry.ocr_source or "")
-        if source.startswith("combined:"):
-            priority = 3
-        elif entry.word or entry.candidate_id or entry.final_engine:
-            priority = 2
-        else:
-            priority = 1
         ranked.append((entry, col, u, v))
     ranked.sort(key=lambda row: (row[1], row[3], row[2]))
 
@@ -1167,8 +1169,8 @@ def _fuse_detection_entries(
             def priority(item: Entry) -> tuple[int, int, float]:
                 source = str(item.ocr_source or "")
                 return (
-                    3 if source.startswith("combined:") else (2 if item.word or item.candidate_id or item.final_engine else 1),
                     1 if item.manually_selected else 0,
+                    3 if source.startswith("combined:") else (2 if item.word or item.candidate_id or item.final_engine else 1),
                     float(item.confidence if item.confidence is not None else -1.0),
                 )
 
