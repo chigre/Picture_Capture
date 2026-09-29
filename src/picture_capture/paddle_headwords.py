@@ -6888,6 +6888,16 @@ def _arbitrate_pair(
             and not chosen_features.get("forced_reject")
         )
 
+        dual_reasons = {
+            str(pair.get("paddle_reject_reason", "") or ""),
+            str(pair.get("tesseract_reject_reason", "") or ""),
+        } if has_p and has_t else set()
+        dual_soft = bool(
+            has_p and has_t
+            and dual_reasons <= soft_reasons
+            and not (dual_reasons & hard_negative_reasons)
+        )
+
         # Two independent OCR engines that agree on the lemma plus an image
         # boundary are strong enough to survive a missing POS/structure glyph.
         # This is especially useful on dense Latin dictionaries where the
@@ -6895,7 +6905,7 @@ def _arbitrate_pair(
         if (
             has_p and has_t
             and sim >= 0.94
-            and chosen_reason in soft_reasons
+            and dual_soft
             and no_hard_negative
             and boundary_supported
             and min(
