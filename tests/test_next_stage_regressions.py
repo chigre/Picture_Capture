@@ -503,6 +503,32 @@ def test_combined_fusion_uses_soft_rejected_ocr_as_metadata_not_as_geometry():
     assert "COMBINED_LATENT_OCR_METADATA" in fused[0].issue_type
 
 
+def test_combined_latent_candidate_pairs_only_once_on_dense_rows():
+    settings = AppSettings(
+        columns=1, manual_x=20, column_width=360, gutter=0,
+        start_y=0, character_height=20,
+        paddle_alignment_y_tolerance_ratio=0.50,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 260, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [
+        Entry(word="", x=x, y=100),
+        Entry(word="", x=x, y=108),
+    ]
+    candidate = _latent_review_candidate(
+        y=106, word="nearest", confidence=0.93,
+    )
+
+    fused = _fuse_detection_entries(
+        ordinary, [], geometry, settings, review_candidates=[candidate],
+    )
+    assert [(item.word, item.y) for item in fused] == [
+        ("", 100),
+        ("nearest", 108),
+    ]
+
+
 def test_combined_fusion_suppresses_two_engine_hard_negative_ordinary_false_positive():
     settings = AppSettings(
         columns=1, manual_x=20, column_width=360, gutter=0,
