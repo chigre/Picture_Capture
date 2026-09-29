@@ -1140,21 +1140,106 @@ def _fuse_detection_entries(
         ordinary_to_ocr[ordinary_index] = ocr_index
         used_ocr.add(ocr_index)
 
+    # Oversized single-Han heads are taller than one ordinary text row. The
+    # ordinary VB detector can therefore fire twice inside the same physical
+    # glyph: once at the real entry boundary and once again on a lower ink run.
+    # A one-to-one fusion match removes only one of those rows, so the second
+    # ordinary-only row used to survive as a false "rescue".
+    #
+    # Do not solve this by widening global Y de-duplication. Instead, use OCR's
+    # own large-glyph geometry to define a *forward occupancy zone* for confirmed
+    # oversized single-CJK heads. Only unmatched ordinary rows inside that zone
+    # are suppressed. A following OCR headword creates a safety boundary so one
+    # large glyph can never swallow the next real entry.
+    suppressed_ordinary: set[int] = set()
+    suppressed_by_ocr: dict[int, int] = {}
+
+    def oversized_occupancy_span(entry: Entry) -> int:
+        normal = float(entry.ocr_line_height_reference or line_height)
+        if normal <= 0:
+            normal = float(line_height)
+        extent_candidates = [
+            float(entry.ocr_box_height or 0.0),
+            float(entry.ocr_visual_run_height or 0.0),
+        ]
+        if entry.ocr_leading_height_ratio:
+            extent_candidates.append(float(entry.ocr_leading_height_ratio) * normal)
+        extent = max(extent_candidates or [0.0])
+        oversized = bool(
+            entry.ocr_oversized_cjk
+            or (
+                (entry.ocr_single_cjk or _is_single_cjk_headword(entry.word))
+                and extent >= normal * 1.45
+            )
+        )
+        if not oversized:
+            return 0
+        # Cover the physical glyph plus a small separator margin, but cap the
+        # zone so a malformed OCR box cannot consume several following entries.
+        return max(
+            round(normal * 1.10),
+            min(round(normal * 2.80), round(extent + normal * 0.20)),
+        )
+
+    for ocr_index, (ocr, ocr_col, _ocr_u, ocr_v) in enumerate(ocr_rows):
+        span = oversized_occupancy_span(ocr)
+        if span <= 0:
+            continue
+        upper_v = int(ocr_v) + int(span)
+        # Protect the next OCR-confirmed entry in the same column. This is more
+        # permissive than a midpoint for the current big glyph but leaves a
+        # normal alignment-width guard before the next real headword.
+        for next_index in range(ocr_index + 1, len(ocr_rows)):
+            _next, next_col, _next_u, next_v = ocr_rows[next_index]
+            if next_col != ocr_col:
+                if next_col > ocr_col:
+                    break
+                continue
+            next_guard = max(base_tolerance, round(line_height * 0.55))
+            upper_v = min(upper_v, int(next_v) - next_guard)
+            break
+        if upper_v <= int(ocr_v) + strict_dedup:
+            continue
+
+        count = 0
+        for ordinary_index, (_ordinary, ordinary_col, _ordinary_u, ordinary_v) in enumerate(ordinary_rows):
+            if ordinary_index in ordinary_to_ocr or ordinary_col != ocr_col:
+                continue
+            if int(ocr_v) + strict_dedup < int(ordinary_v) <= upper_v:
+                suppressed_ordinary.add(ordinary_index)
+                count += 1
+        if count:
+            suppressed_by_ocr[ocr_index] = count
+
     fused: list[Entry] = []
     for ordinary_index, (ordinary, _ordinary_col, _ordinary_u, _ordinary_v) in enumerate(ordinary_rows):
         ocr_index = ordinary_to_ocr.get(ordinary_index)
         if ocr_index is None:
-            fused.append(ordinary)
+            if ordinary_index not in suppressed_ordinary:
+                fused.append(ordinary)
             continue
         ocr = ocr_rows[ocr_index][0]
-        fused.append(_entry_with_fused_metadata(
+        merged_entry = _entry_with_fused_metadata(
             ordinary,
             ocr,
             use_semantic_position=_is_single_cjk_headword(ocr.word),
-        ))
+        )
+        if suppressed_by_ocr.get(ocr_index):
+            issue = "FUSION_OVERSIZED_CJK_ORDINARY_SUPPRESSED"
+            existing = [part for part in str(merged_entry.issue_type or "").split(",") if part]
+            if issue not in existing:
+                existing.append(issue)
+                merged_entry.issue_type = ",".join(existing)
+        fused.append(merged_entry)
 
     for ocr_index, (ocr, _col, _u, _v) in enumerate(ocr_rows):
         if ocr_index not in used_ocr:
+            if suppressed_by_ocr.get(ocr_index):
+                issue = "FUSION_OVERSIZED_CJK_ORDINARY_SUPPRESSED"
+                existing = [part for part in str(ocr.issue_type or "").split(",") if part]
+                if issue not in existing:
+                    existing.append(issue)
+                    ocr.issue_type = ",".join(existing)
             fused.append(ocr)
 
     # Second-stage de-duplication is intentionally tighter than cross-detector
