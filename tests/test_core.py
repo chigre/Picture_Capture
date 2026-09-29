@@ -7959,7 +7959,7 @@ def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order()
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     aux_start = text.index('self._section_frame(parent, "二、显示设置"')
-    aux_end = text.index('ocr = self._section_frame(parent, "三、OCR画线参数（默认）"', aux_start)
+    aux_end = text.index('ocr = self._section_frame(parent, "三、融合 / OCR画线参数"', aux_start)
     aux = text[aux_start:aux_end]
 
     assert 'text="显示标尺"' in aux
