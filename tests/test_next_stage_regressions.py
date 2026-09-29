@@ -45,6 +45,7 @@ from picture_capture.profile_semantics import (
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
     _detect_visual_entry_markers, _entries_from_review_candidates,
+    compact_ocr_cache_file, compact_ocr_cache_payload,
     _headword_script_compatibility, _ordinary_strong_edge_visual_rescue,
     _ordinary_visual_rescue_thresholds,
     _repair_multiline_headword_state_machine,
@@ -1262,12 +1263,12 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     for tooltip_key in (
         '"普通画线":', '"仅OCR":', '"融合画线+OCR":', '"OCR画线(默认)":', '"清除画线":', '"清除文本":', '"精修画线":', '"新旧比较":',
         '"词条校对":', '"填充词条":', '"备份PDIC":', '"恢复PDIC":',
-        '"插图识别":', '"编辑插图":', '"清理临时文件":', '"保存当前页":',
+        '"插图识别":', '"编辑插图":', '"压缩OCR缓存":', '"保存当前页":',
     ):
         assert tooltip_key in actions
     assert '("恢复PDIC", self.restore_from_pdic_backup)' in actions
-    assert '("清理临时文件", self.cleanup_paddleocr_temp_selected_scope)' in actions
-    assert actions.index('("清理临时文件", self.cleanup_paddleocr_temp_selected_scope)') < actions.index('("保存当前页", self.save_current_page)')
+    assert '("压缩OCR缓存", self.cleanup_paddleocr_temp_selected_scope)' in actions
+    assert actions.index('("压缩OCR缓存", self.cleanup_paddleocr_temp_selected_scope)') < actions.index('("保存当前页", self.save_current_page)')
     assert '"success" if text == "保存当前页"' in actions
     assert '"primary" if text == "词条校对"' in actions
     assert '"danger_soft"' not in actions
@@ -3827,11 +3828,9 @@ def test_concurrency_review_atomic_ocr_cache_and_timeouts_are_enforced():
     assert "_QUALITY_SUMMARY_LOCK = threading.Lock()" in paddle
     assert "with _QUALITY_SUMMARY_LOCK:" in paddle
     assert "_atomic_write_json(cache_path, payload)" in paddle
-    for suffix in (
-        "_ocr_diagnostics.txt", "_ocr_comparison.txt", "_issues.tsv",
-        "_ocr_engines.tsv", "_fusion.tsv",
-    ):
-        assert suffix in paddle
+    assert "compact_ocr_cache_payload(payload)" in paddle
+    assert "_OCR_REGENERABLE_SIDECAR_SUFFIXES" in paddle
+    assert "for obsolete in _regenerable_sidecars(cache_path):" in paddle
     assert "timeout=120" in paddle
     assert "except subprocess.TimeoutExpired" in paddle
     assert "timeout=120" in processing
@@ -5002,7 +5001,7 @@ def test_cjk_profile_ui_explains_bracket_role_at_the_controls():
     assert "采【时按“括号起始”保存" in source
 
 
-def test_selected_paddle_temp_cleanup_is_scoped_warned_and_non_destructive():
+def test_selected_paddle_cache_compaction_is_scoped_and_preserves_reusable_ocr():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     start = text.index("    def cleanup_paddleocr_temp_selected_scope(self) -> None:")
@@ -5010,15 +5009,90 @@ def test_selected_paddle_temp_cleanup_is_scoped_warned_and_non_destructive():
     block = text[start:end]
     assert "indices = self.selected_page_indices()" in block
     assert "cache_root = ocr_cache_root(self.project.root)" in block
-    assert "_paddle_temp_matches_page" in block
-    assert "shutil.rmtree(target)" in block
-    assert "target.unlink(missing_ok=True)" in block
+    assert "compact_ocr_cache_file(cache_path)" in block
     assert "messagebox.askyesno(" in block
-    assert "该操作会删除这些页面的 OCR 缓存、诊断及复核临时文件" in block
-    assert "不会删除原始扫描图片、PDIC/PPP、已保存词条文字、校对结果或其他页面的数据" in block
-    assert "重新执行 OCR" in block
-    assert "无法在 Picture Capture 内撤销" in block
+    assert "保留 <page>_manual_selection.json 人工选择" in block
+    assert "保留 OCR 原始记录" in block
+    assert "无需重新 OCR" in block
+    assert "shutil.rmtree" not in block
 
+
+def test_paddle_cache_payload_compaction_keeps_only_reusable_column_data():
+    payload = {
+        "signature": "abc",
+        "review_candidates": [{"candidate_id": "c1", "word": "test"}],
+        "final_entries": [{"word": "test", "x": 1, "y": 2}],
+        "columns": [{
+            "column": 0,
+            "band_size": [400, 1200],
+            "ocr_records": [{"text": "test", "confidence": 0.9, "box": [1, 2, 30, 40]}],
+            "paddle_effective_records": [{"text": "duplicate"}],
+            "paddle_full_text": "large duplicate text",
+            "paddle_merged_lines": [{"text": "duplicate"}],
+            "candidates": [{
+                "box": [1, 2, 30, 40],
+                "accepted": False,
+                "reject_reason": "body_line",
+                "features": {
+                    "visual_marker_template_score": 0.81,
+                    "ordinary_strong_edge_visual_rescue": True,
+                    "large_unused_feature": "drop-me",
+                },
+                "large_unused_field": "drop-me",
+            }],
+            "tesseract": {"candidates": [{"text": "duplicate"}]},
+            "lens": {"candidates": [{"text": "duplicate"}]},
+            "ocr_y_comparison": [{"huge": "duplicate"}],
+            "review_candidates": [{"candidate_id": "duplicate"}],
+        }],
+    }
+    compact = compact_ocr_cache_payload(payload)
+    assert compact["cache_storage"] == "compact-v1"
+    assert compact["signature"] == "abc"
+    assert compact["review_candidates"] == payload["review_candidates"]
+    column = compact["columns"][0]
+    assert set(column) == {"column", "band_size", "ocr_records", "candidates"}
+    assert column["ocr_records"] == payload["columns"][0]["ocr_records"]
+    candidate = column["candidates"][0]
+    assert set(candidate) == {"box", "accepted", "reject_reason", "features"}
+    assert set(candidate["features"]) == {
+        "visual_marker_template_score", "ordinary_strong_edge_visual_rescue",
+    }
+
+
+def test_paddle_cache_file_compaction_preserves_manual_selection_and_removes_sidecars(tmp_path):
+    cache = tmp_path / "0001.json"
+    manual = tmp_path / "0001_manual_selection.json"
+    payload = {
+        "signature": "sig",
+        "review_candidates": [{"candidate_id": "c1", "word": "word"}],
+        "columns": [{
+            "column": 0, "band_size": [300, 900],
+            "ocr_records": [{"text": "word", "confidence": 0.9, "box": [1, 2, 20, 30]}],
+            "paddle_full_text": "x" * 5000,
+            "candidates": [],
+        }],
+    }
+    cache.write_text(__import__("json").dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    manual.write_text('{"version":1,"overrides":{"c1":{"selected":true}}}', encoding="utf-8")
+    suffixes = (
+        "_ocr_diagnostics.txt", "_ocr_comparison.txt", "_issues.tsv",
+        "_ocr_engines.tsv", "_fusion.tsv",
+    )
+    for suffix in suffixes:
+        (tmp_path / f"0001{suffix}").write_text("diagnostic" * 100, encoding="utf-8")
+
+    before, after, removed = compact_ocr_cache_file(cache)
+    assert removed == len(suffixes)
+    assert after < before
+    assert manual.exists()
+    assert "selected" in manual.read_text(encoding="utf-8")
+    compact = __import__("json").loads(cache.read_text(encoding="utf-8"))
+    assert compact["signature"] == "sig"
+    assert compact["cache_storage"] == "compact-v1"
+    assert compact["columns"][0]["ocr_records"][0]["text"] == "word"
+    assert "paddle_full_text" not in compact["columns"][0]
+    assert all(not (tmp_path / f"0001{suffix}").exists() for suffix in suffixes)
 
 def test_paddle_temp_page_match_uses_stem_boundaries():
     from picture_capture.app import PictureCaptureApp
