@@ -325,6 +325,43 @@ def test_ordinary_marker_text_ocr_fills_only_blank_without_moving_lines(monkeypa
     )
 
 
+
+
+def test_combined_drawing_automatically_runs_marker_text_ocr_for_blank_rescues():
+    import inspect
+    import picture_capture.app as app_module
+
+    source = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    detect_start = source.index("    def _detect_pages(")
+    detect_end = source.index("    def clear_entries(", detect_start)
+    batch = source[detect_start:detect_end]
+    assert 'if method == "combined":' in batch
+    assert "ocr_existing_entry_words_from_markers(" in batch
+    assert "only_blank=True" in batch
+    assert "融合画线自动补字意外修改了画线坐标" in batch
+    assert '"text_filled"' in batch
+    assert "普通救漏自动补字" in batch
+
+    current_start = source.index("    def auto_detect_current(")
+    current_end = source.index("    def paddle_detect_current(", current_start)
+    current = source[current_start:current_end]
+    assert 'if settings.detection_method == "combined":' in current
+    assert "ocr_existing_entry_words_from_markers(" in current
+    assert "only_blank=True" in current
+    assert "融合画线自动补字不得修改任何画线坐标" in current
+
+
+def test_cli_combined_autodraw_also_fills_blank_rescue_text():
+    import inspect
+    import picture_capture.cli as cli_module
+
+    source = Path(inspect.getsourcefile(cli_module)).read_text(encoding="utf-8")
+    assert 'if project.settings.detection_method == "combined":' in source
+    assert "ocr_existing_entry_words_from_markers(" in source
+    assert "only_blank=True" in source
+    assert "普通救漏补字" in source
+
+
 def test_ocr_candidate_band_ratio_is_relative_to_actual_column_width():
     image = Image.new("RGB", (1000, 500), "white")
     settings = AppSettings(
@@ -1167,6 +1204,7 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert '("运行OCR画线（单独）", self.run_ocr_draw_action)' in actions
     assert '("运行普通画线（单独）", self.run_normal_draw_action)' in actions
     assert '("普通画线后OCR文字", self.ocr_ordinary_lines_text_selected_scope)' in actions
+    assert "普通救漏线自动执行局部 OCR 补字" in actions
     assert actions.index('("运行融合画线（推荐）", self.run_combined_draw_action)') < actions.index('("运行OCR画线（单独）", self.run_ocr_draw_action)')
     assert '("填充词条", self.fill_existing_headwords)' in actions
     assert '("修复排序", self.repair_pdic_order_selected_scope)' in actions
