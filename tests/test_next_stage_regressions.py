@@ -133,6 +133,47 @@ def test_ordinary_mode_self_collapses_split_markers_inside_large_cjk_without_ocr
     assert "ORDINARY_OVERSIZED_CJK_SPLIT_COLLAPSED" in collapsed[0].issue_type
 
 
+
+
+def test_ordinary_large_cjk_collapse_bridges_tiny_internal_glyph_gap():
+    image = Image.new("RGB", (360, 260), "white")
+    draw = ImageDraw.Draw(image)
+    # One physical display glyph split into upper/lower ink fragments by a
+    # narrow horizontal white slit. Their X footprints overlap strongly.
+    draw.rectangle((20, 60, 82, 94), fill="black")
+    draw.rectangle((22, 100, 80, 130), fill="black")
+    # Normal body rows establish the ordinary line scale.
+    draw.rectangle((20, 160, 72, 184), fill="black")
+    draw.rectangle((20, 200, 78, 224), fill="black")
+
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=300,
+        gutter=0,
+        start_y=0,
+        character_height=30,
+        paddle_band_left_margin=0,
+        ocr_language="chi_sim",
+        paddle_language="ch",
+        dictionary_profile_id="cjk_visual",
+        profile_cjk_allow_single_headword=True,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    entries = [
+        Entry(word="", x=20, y=52),
+        Entry(word="", x=20, y=97),
+        Entry(word="", x=20, y=155),
+        Entry(word="", x=20, y=195),
+    ]
+
+    collapsed = _collapse_ordinary_oversized_cjk_split_markers(
+        image, entries, geometry, settings,
+    )
+    assert [entry.y for entry in collapsed] == [52, 155, 195]
+
+
 def test_ordinary_large_cjk_collapse_does_not_merge_normal_adjacent_entries():
     image = Image.new("RGB", (360, 220), "white")
     draw = ImageDraw.Draw(image)
