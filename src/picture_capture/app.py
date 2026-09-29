@@ -1516,7 +1516,8 @@ class UsageGuideWindow(tk.Toplevel):
                 (
                     "A", "融合画线：默认推荐",
                     "优先运行【融合画线】。普通模式与 OCR 模式各自完成检测和精修后，程序按同栏 Y 位置一对一融合，"
-                    "匹配项继承 OCR 文字且只保留一条横线，双方未匹配项继续承担救漏；默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启。"
+                    "匹配项继承 OCR 文字且只保留一条横线，双方未匹配项继续承担救漏；融合结束后，对仍无文字的普通救漏线"
+                    "自动执行【普通画线后OCR文字】同款局部 PaddleOCR：普通行与大字行使用不同高度框，但绝不改变画线数量或坐标。"
                 ),
                 (
                     "B", "有效缓存：OCR 不必每次重跑",
@@ -12839,7 +12840,7 @@ class PictureCaptureApp(tk.Tk):
         actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
         actions.pack(fill="x", pady=(4, 0))
         action_tooltips = {
-            "运行融合画线（推荐）": "推荐默认：普通几何与 OCR 语义独立检测后按位置融合、救漏并严格去重。",
+            "运行融合画线（推荐）": "推荐默认：普通几何与 OCR 语义独立检测后按位置融合、救漏并严格去重；融合完成后，对仍为空白的普通救漏线自动执行局部 OCR 补字，普通行和大字行使用不同高度框。",
             "运行OCR画线（单独）": "只运行 OCR 候选链，用于诊断 OCR/parser 侧漏检或误检。",
             "运行普通画线（单独）": "只运行高速左缘几何链，用于诊断缩进/栏左规则。",
             "普通画线后OCR文字": "只读取已有画线做局部 PaddleOCR 补字；普通行与大字行使用不同高度框，不新增、删除或移动任何画线，默认仅填空白词条。",
@@ -19445,14 +19446,35 @@ class PictureCaptureApp(tk.Tk):
                 profile_page_index=page_index,
                 page_sections=page_sections,
             )
-            return detected, geometry
+            text_stats = None
+            if settings.detection_method == "combined":
+                original_coords = [
+                    (int(entry.x), int(entry.y)) for entry in detected
+                ]
+                detected, text_stats = ocr_existing_entry_words_from_markers(
+                    image,
+                    detected,
+                    settings,
+                    load_replace_rules(replace_rules_path(project.root)),
+                    profile_page_index=page_index,
+                    page_sections=page_sections,
+                    profile_path=project_profile_path(project.root),
+                    only_blank=True,
+                )
+                if [
+                    (int(entry.x), int(entry.y)) for entry in detected
+                ] != original_coords:
+                    raise RuntimeError(
+                        "融合画线自动补字不得修改任何画线坐标"
+                    )
+            return detected, geometry, text_stats
 
         def done(_completed, _total, stopped, results, error):
             if error is not None or stopped or not results:
                 return
             if self.project is not project or self.current_page != page:
                 return
-            detected, geometry = results[-1]
+            detected, geometry, text_stats = results[-1]
             if clicked_x is None:
                 self.entries = list(detected)
             else:
@@ -19475,9 +19497,16 @@ class PictureCaptureApp(tk.Tk):
                 diag = ocr_cache_root(project.root) / f"{page.stem}_ocr_diagnostics.txt"
                 issues = ocr_cache_root(project.root) / f"{page.stem}_issues.tsv"
                 quality = self._current_page_quality_text()
+                fill_text = ""
+                if settings.detection_method == "combined" and text_stats:
+                    fill_text = (
+                        f"；普通救漏自动补字 {int(text_stats.get('filled', 0))} 条"
+                        f"（普通框 {int(text_stats.get('regular', 0))}，"
+                        f"大字框 {int(text_stats.get('large', 0))}）"
+                    )
                 self.status_var.set(
-                    f"智能画线完成：{len(self.entries)} 个词条；{quality}；"
-                    f"诊断 {diag.name}；复核 {issues.name}"
+                    f"智能画线完成：{len(self.entries)} 个词条；{quality}"
+                    f"{fill_text}；诊断 {diag.name}；复核 {issues.name}"
                 )
             else:
                 self.status_var.set(
@@ -19793,15 +19822,45 @@ class PictureCaptureApp(tk.Tk):
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
             cache_path = ocr_cache_root(project.root) / f"{page.stem}.json" if method in {"paddleocr", "combined"} else None
+            sections = read_page_sections(page)
             entries, _geometry = detect_entries(
                 image, settings, paddle_cache_path=cache_path,
                 force_paddle_refresh=force_refresh,
                 paddle_filter_rules_path=filter_path,
                 profile_page_index=index,
-                page_sections=read_page_sections(page),
+                page_sections=sections,
             )
+            text_stats = None
+            if method == "combined":
+                original_coords = [
+                    (int(entry.x), int(entry.y)) for entry in entries
+                ]
+                entries, text_stats = ocr_existing_entry_words_from_markers(
+                    image,
+                    entries,
+                    settings,
+                    load_replace_rules(replace_rules_path(project.root)),
+                    profile_page_index=index,
+                    page_sections=sections,
+                    profile_path=project_profile_path(project.root),
+                    only_blank=True,
+                )
+                if [
+                    (int(entry.x), int(entry.y)) for entry in entries
+                ] != original_coords:
+                    raise RuntimeError(
+                        f"{page.name} 融合画线自动补字意外修改了画线坐标"
+                    )
             write_pdic(pdic_path(page), entries, image.width, pages_info[index])
-            return {"index": int(index), "count": len(entries)}
+            result = {"index": int(index), "count": len(entries)}
+            if text_stats:
+                result.update({
+                    "text_filled": int(text_stats.get("filled", 0)),
+                    "text_regular": int(text_stats.get("regular", 0)),
+                    "text_large": int(text_stats.get("large", 0)),
+                    "text_failed": int(text_stats.get("failed", 0)),
+                })
+            return result
 
         def done(completed, total, stopped, results, error):
             if normal_executor is not None:
@@ -19813,6 +19872,27 @@ class PictureCaptureApp(tk.Tk):
             if method in {"paddleocr", "combined"}:
                 self._refresh_page_quality_colors()
                 quality_text = "；页面列表已按 OCR 一致性/质量状态更新"
+                if method == "combined":
+                    filled = sum(
+                        int((row or {}).get("text_filled", 0))
+                        for row in results
+                    )
+                    regular = sum(
+                        int((row or {}).get("text_regular", 0))
+                        for row in results
+                    )
+                    large = sum(
+                        int((row or {}).get("text_large", 0))
+                        for row in results
+                    )
+                    failed = sum(
+                        int((row or {}).get("text_failed", 0))
+                        for row in results
+                    )
+                    quality_text += (
+                        f"；普通救漏自动补字 {filled} 条"
+                        f"（普通框 {regular}，大字框 {large}，未识别 {failed}）"
+                    )
             else:
                 rows = [
                     value for value in results
