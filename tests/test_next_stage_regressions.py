@@ -1373,6 +1373,38 @@ def test_vertical_proxy_reuses_editor_membership_and_confidence_style():
     assert known == ("#c8e6c9", "#b0b0b0", 1)
     assert missing == ("#ffcdd2", "#d32f2f", 2)
 
+def test_main_entry_border_is_light_gray_when_wordslist_file_is_absent(tmp_path):
+    fake = SimpleNamespace(
+        project=SimpleNamespace(root=tmp_path),
+        _project_words=set(),
+        settings=AppSettings(main_entry_default_color="#ffffff", wordslist_path="missing_wordslist.txt"),
+        _main_ocr_review_option_enabled=lambda _name: False,
+        _confidence_bg=lambda _confidence: "#eeeeee",
+    )
+    style = PictureCaptureApp._entry_overlay_style(
+        fake, Entry("anything", 0, 0, confidence=None)
+    )
+    assert style == ("#ffffff", "#c7c7c7", 1)
+
+
+def test_main_entry_sequence_numbers_use_page_uniform_width():
+    fmt = PictureCaptureApp._entry_sequence_text
+    assert [fmt(i, 9) for i in (0, 8)] == ["0", "8"]
+    assert [fmt(i, 10) for i in (0, 9)] == ["00", "09"]
+    assert [fmt(i, 99) for i in (0, 98)] == ["00", "98"]
+    assert [fmt(i, 100) for i in (0, 99)] == ["000", "099"]
+
+
+def test_main_entry_sequence_label_uses_light_gray_black_style():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    draw_start = text.index("        index_label = tk.Label(")
+    draw_end = text.index("        index_label._pc_skip_classic_appearance", draw_start)
+    block = text[draw_start:draw_end]
+    assert "text=self._entry_sequence_text(index, len(self.entries))" in block
+    assert 'bg="#e6e6e6"' in block
+    assert 'fg="#000000"' in block
+
 
 def test_entry_sequence_label_sits_before_editor_in_reading_direction():
     assert entry_index_label_layout(

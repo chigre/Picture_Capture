@@ -17465,12 +17465,11 @@ class PictureCaptureApp(tk.Tk):
             rtl=rtl,
             vertical_box=vertical_box,
         )
-        marker_control_bg = str(self.settings.headword_marker_color)
         index_label = tk.Label(
             self.canvas,
-            text=str(index),
-            bg=marker_control_bg,
-            fg="#ffffff",
+            text=self._entry_sequence_text(index, len(self.entries)),
+            bg="#e6e6e6",
+            fg="#000000",
             bd=0,
             padx=2,
             pady=0,
@@ -17478,8 +17477,8 @@ class PictureCaptureApp(tk.Tk):
                 main_family, max(8, round(editor_font_size * 0.65)), False, False,
             ),
         )
-        # Sequence numbers and the visible delete control intentionally use the
-        # same colour as 【词头横线】 so the row controls read as one visual group.
+        # Sequence numbers intentionally use a neutral light-gray control style;
+        # the delete control remains red to preserve its destructive meaning.
         index_label._pc_skip_classic_appearance = True
         self.overlay_widgets.append(index_label)
         record["widgets"].append(index_label)
@@ -17565,13 +17564,24 @@ class PictureCaptureApp(tk.Tk):
             if bound_entry is not entry and widget not in widgets
         ]
 
+    @staticmethod
+    def _entry_sequence_text(index: int, total: int) -> str:
+        """Format zero-based row numbers to one uniform width for the page."""
+        width = max(1, len(str(max(1, int(total)))))
+        return f"{int(index):0{width}d}"
+
     def _refresh_entry_index_labels(self) -> None:
-        for index, entry in enumerate(self._ordered_entries_reading_order()):
+        ordered = self._ordered_entries_reading_order()
+        for index, entry in enumerate(ordered):
             record = self._entry_visuals.get(id(entry))
             widget = record.get("index_widget") if record else None
             if widget is not None:
                 try:
-                    widget.configure(text=str(index))
+                    widget.configure(
+                        text=self._entry_sequence_text(index, len(ordered)),
+                        bg="#e6e6e6",
+                        fg="#000000",
+                    )
                 except tk.TclError:
                     pass
 
@@ -18857,14 +18867,13 @@ class PictureCaptureApp(tk.Tk):
         else:
             options["disabledbackground"] = bg
         widget.configure(**options)
-        # Sequence follows the headword marker colour; [X] keeps a fixed
-        # destructive-control colour independent of OCR/editor backgrounds.
+        # Sequence labels use a fixed light-gray background with black text so
+        # row numbering stays visually stable regardless of marker/OCR colours.
         record = self.__dict__.get("_entry_visuals", {}).get(id(entry))
-        marker_bg = str(self.settings.headword_marker_color)
         index_control = record.get("index_widget") if record else None
         if index_control is not None:
             try:
-                index_control.configure(bg=marker_bg, fg="#ffffff")
+                index_control.configure(bg="#e6e6e6", fg="#000000")
             except tk.TclError:
                 pass
         delete_control = record.get("delete_widget") if record else None
@@ -18888,7 +18897,19 @@ class PictureCaptureApp(tk.Tk):
             if self._main_ocr_review_option_enabled("review_main_show_ocr_background")
             else self.settings.main_entry_default_color
         )
-        if in_wordlist:
+        project = getattr(self, "project", None)
+        wordslist_exists = bool(getattr(self, "_project_words", set())) if project is None else False
+        if project is not None:
+            try:
+                wordslist_exists = resolve_wordslist_path(
+                    project.root, self.settings.wordslist_path
+                ).is_file()
+            except OSError:
+                wordslist_exists = False
+        if not wordslist_exists:
+            border = "#c7c7c7"
+            thickness = 1
+        elif in_wordlist:
             border = "#b0b0b0"
             thickness = 1
         else:
