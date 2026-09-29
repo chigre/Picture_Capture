@@ -5201,7 +5201,7 @@ def test_crop_settings_v7_declares_source_coordinate_space():
     settings_class = text.split("class SettingsDialog", 1)[1].split("class CropSettingsDialog", 1)[0]
     assert '"start_y": "正文起始 Y"' in settings_class
     assert '"manual_x": "第一栏左缘 X"' in settings_class
-    assert '"paddle_left_tolerance": "原图px"' in settings_class
+    assert '"paddle_left_tolerance": "% 单栏宽"' in settings_class
     assert '"paddle_separator_safety_px": "原图px"' in settings_class
 
 
