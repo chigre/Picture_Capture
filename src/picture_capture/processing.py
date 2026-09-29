@@ -1301,6 +1301,9 @@ def _recover_ordinary_oversized_cjk_missing_markers(
         round(character_height * 3.2),
         int(getattr(settings, "paddle_band_left_margin", 0) or 0) + 72,
     )
+    # Recovery needs both the left projection *and* independent right-context
+    # evidence.  Keep a wider analysis band than the projection zone itself.
+    analysis_width = max(strip_width, round(character_height * 6.0), 180)
     duplicate_tolerance = max(5, round(character_height * 0.65))
 
     existing_by_column: dict[int, list[int]] = {
@@ -1319,7 +1322,7 @@ def _recover_ordinary_oversized_cjk_missing_markers(
                 geometry,
                 col,
                 settings,
-                source_width=strip_width,
+                source_width=analysis_width,
             )
         except (IndexError, ValueError):
             continue
