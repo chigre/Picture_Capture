@@ -321,7 +321,7 @@ class AppSettings:
     review_network_lookup_enabled: bool = True
     ocr_engine: str = "tesseract"
     # Headword markers may use combined ordinary geometry + OCR evidence, or either path alone.
-    detection_method: str = "combined"
+    detection_method: str = "paddleocr"
     # v2.10 dictionary detection profile. Stable IDs describe layout families,
     # while project-specific numeric edits are persisted as overrides.
     dictionary_profile_id: str = "latin_structured_symbols"
