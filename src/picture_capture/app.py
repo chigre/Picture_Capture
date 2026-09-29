@@ -1433,9 +1433,9 @@ class UsageGuideWindow(tk.Toplevel):
                     "四边百分比标尺默认开启，可直接辅助人工核对和填写。"
                 ),
                 (
-                    "03", "默认先用融合画线验证代表页",
-                    "先在 1–3 张典型页面运行【运行融合画线（推荐）】。融合模式同时利用普通几何定位与 OCR 语义/救漏；"
-                    "OCR画线和普通画线保留为单独诊断工具。模型和原图没有变化时保留“使用有效缓存（推荐）”。"
+                    "03", "默认先用 OCR画线验证代表页",
+                    "先在 1–3 张典型页面运行蓝色【OCR画线(默认)】。若需要普通几何补漏，再运行【融合画线+OCR】；"
+                    "【普通画线】和【仅OCR】可分别用于几何定位与已有线补文字。模型和原图没有变化时保留“使用有效缓存（推荐）”。"
                 ),
                 (
                     "04", "先校对误差模式，再决定是否调参",
@@ -1511,7 +1511,7 @@ class UsageGuideWindow(tk.Toplevel):
         (
             "drawing",
             "画线与 OCR",
-            "融合画线是默认推荐模式：普通几何提供稳定定位，OCR 提供语义确认和独立救漏；两个单独模式用于诊断各自误差。",
+            "OCR画线是默认方式；普通画线、仅OCR和融合画线+OCR分别用于几何定位、已有线补文字和双路径互补。",
             (
                 (
                     "A", "融合画线：默认推荐",
@@ -3379,14 +3379,14 @@ class SettingsDialog(tk.Toplevel):
         mode_group.columnconfigure(1, weight=1)
         method_var = tk.StringVar(
             value=DETECTION_LABELS.get(
-                parent.settings.detection_method, DETECTION_LABELS["combined"]
+                parent.settings.detection_method, DETECTION_LABELS["paddleocr"]
             )
         )
         self.vars["detection_method"] = method_var
 
         combined_mode = ttk.Radiobutton(
             mode_group,
-            text="融合画线（推荐）",
+            text="融合画线+OCR",
             variable=method_var,
             value=DETECTION_LABELS["combined"],
         )
@@ -3404,7 +3404,7 @@ class SettingsDialog(tk.Toplevel):
 
         ocr_mode = ttk.Radiobutton(
             mode_group,
-            text="OCR画线（单独诊断）",
+            text="OCR画线（默认）",
             variable=method_var,
             value=DETECTION_LABELS["paddleocr"],
         )
@@ -3441,7 +3441,7 @@ class SettingsDialog(tk.Toplevel):
         for widget, title, body in (
             (
                 combined_mode,
-                "融合画线（推荐）",
+                "融合画线+OCR",
                 "两条成熟路径各自完整运行后再融合：普通模式提供高速、稳定的几何词条边界；"
                 "OCR 模式提供词头文字、结构证据和普通模式之外的独立救漏。程序只在同栏、Y位置足够接近时一对一配对；"
                 "匹配项输出唯一横线并继承 OCR 文字，未匹配项保留各自救漏能力，最后再用更严格阈值去重。"
@@ -3449,7 +3449,7 @@ class SettingsDialog(tk.Toplevel):
             ),
             (
                 ocr_mode,
-                "OCR画线（单独诊断）",
+                "OCR画线（默认）",
                 "单独运行现有 OCR 候选链，用于排查 OCR、词头 parser、符号/字高/粗体等结构证据。"
                 "原始 OCR 缓存仍可复用。",
             ),
@@ -10248,7 +10248,7 @@ class PictureCaptureApp(tk.Tk):
         self._light_ttk_theme = str(ttk.Style(self).theme_use())
         self._configure_global_appearance()
         self.section_expanded = {
-            "preprocess": True,
+            "preprocess": False,
             "normal": True,
             "aux": False,
             "ocr": False,
@@ -12322,7 +12322,7 @@ class PictureCaptureApp(tk.Tk):
                 ).grid(row=row, column=col + 1, sticky="ew", padx=(0, 6), pady=1)
 
         preprocess = self._section_frame(
-            parent, "图片预处理（前置）", padding=5, section_key="preprocess"
+            parent, "图片预处理(前置)", padding=5, section_key="preprocess"
         )
         self.preprocess_panel = preprocess
         preprocess.pack(fill="x")
@@ -12838,13 +12838,16 @@ class PictureCaptureApp(tk.Tk):
         )
         for col in (1, 3, 5): ocr.columnconfigure(col, weight=1)
 
-        actions = self._section_frame(parent, "四、画线与校对", padding=5, section_key="actions")
+        actions = self._section_frame(
+            parent, "四、画线 / OCR / 插图 / 校对",
+            padding=5, section_key="actions",
+        )
         actions.pack(fill="x", pady=(4, 0))
         action_tooltips = {
-            "运行融合画线（推荐）": "推荐默认：普通几何与 OCR 语义独立检测后按位置融合、救漏并严格去重；融合完成后，对仍为空白的普通救漏线自动执行局部 OCR 补字，普通行和大字行使用不同高度框。",
-            "运行OCR画线（单独）": "只运行 OCR 候选链，用于诊断 OCR/parser 侧漏检或误检。",
-            "运行普通画线（单独）": "只运行高速左缘几何链，用于诊断缩进/栏左规则。",
-            "普通画线后OCR文字": "只读取已有画线做局部 PaddleOCR 补字；普通行与大字行使用不同高度框，不新增、删除或移动任何画线，默认仅填空白词条。",
+            "普通画线": "只运行高速左缘几何画线；适合正文缩进稳定的词典，不调用 OCR 来决定词条位置。",
+            "仅OCR": "只对已有画线做局部 PaddleOCR 文字识别；普通行与大字行使用不同高度框，不新增、删除或移动画线，默认仅填空白词条。",
+            "融合画线+OCR": "普通几何与 OCR 候选先融合、救漏和去重，再对仍为空白的普通救漏线自动做局部 OCR 补字。",
+            "OCR画线(默认)": "默认画线方式：由 OCR / parser / 视觉候选链识别词头并确定画线，同时得到 OCR 文字。",
             "清除画线": "清除当前页全部词条画线；不会删除扫描图片。",
             "清除文本": "清空当前页画线中的词条文字，但保留画线位置。",
             "精修画线": "仅在所选范围微调已有画线的 Y 位置，不新增或删除词条。",
@@ -12860,8 +12863,12 @@ class PictureCaptureApp(tk.Tk):
             "保存当前页": "立即保存当前页的画线/词条或插图编辑结果。",
         }
         rows = [
-            (("运行融合画线（推荐）", self.run_combined_draw_action), ("运行OCR画线（单独）", self.run_ocr_draw_action), ("运行普通画线（单独）", self.run_normal_draw_action)),
-            (("普通画线后OCR文字", self.ocr_ordinary_lines_text_selected_scope),),
+            (
+                ("普通画线", self.run_normal_draw_action),
+                ("仅OCR", self.ocr_ordinary_lines_text_selected_scope),
+                ("融合画线+OCR", self.run_combined_draw_action),
+                ("OCR画线(默认)", self.run_ocr_draw_action),
+            ),
             (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充词条", self.fill_existing_headwords), ("修复排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("恢复PDIC", self.restore_from_pdic_backup)),
             (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
@@ -12873,7 +12880,7 @@ class PictureCaptureApp(tk.Tk):
                 row.columnconfigure(bi, weight=1, uniform=f"actions-row-{ri}")
             for bi, (text, command) in enumerate(specs):
                 role = (
-                    "primary" if text == "运行融合画线（推荐）"
+                    "primary" if text == "OCR画线(默认)"
                     else "success" if text == "保存当前页"
                     else "primary" if text == "词条校对"
                     else "neutral"
