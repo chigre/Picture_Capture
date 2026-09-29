@@ -30,7 +30,8 @@ from picture_capture.processing import (
     _legacy_find_separator_y, _legacy_is_point, _fuse_detection_entries,
     _left_edge_ink_mask, apply_column_start_offsets,
     derive_geometry, derive_nominal_geometry, detect_entries,
-    ordinary_page_layout_settings, refine_existing_entries,
+    ordinary_page_layout_settings, ocr_existing_entry_words_from_markers,
+    refine_existing_entries,
 )
 from picture_capture.profile_semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
@@ -206,6 +207,122 @@ def test_ordinary_large_cjk_collapse_does_not_merge_normal_adjacent_entries():
         image, entries, geometry, settings,
     )
     assert [entry.y for entry in collapsed] == [52, 97, 147]
+
+
+
+
+def test_ordinary_marker_local_crop_uses_taller_box_for_visual_large_cjk():
+    image = Image.new("RGB", (360, 260), "white")
+    draw = ImageDraw.Draw(image)
+    # Large display head immediately below y=50.
+    draw.rectangle((20, 58, 80, 126), fill="black")
+    # A normal row lower on the page.
+    draw.rectangle((20, 170, 70, 194), fill="black")
+
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=300,
+        gutter=0,
+        start_y=0,
+        character_height=30,
+        row_padding=4,
+        ocr_language="chi_sim",
+        paddle_language="ch",
+        dictionary_profile_id="cjk_visual",
+        profile_cjk_allow_single_headword=True,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+
+    large_crop, large_flag = _ordinary_marker_local_crop(
+        image, Entry(word="", x=20, y=50), geometry, settings,
+    )
+    normal_crop, normal_flag = _ordinary_marker_local_crop(
+        image, Entry(word="", x=20, y=162), geometry, settings,
+    )
+
+    assert large_flag is True
+    assert normal_flag is False
+    assert large_crop.height > normal_crop.height
+
+
+def test_ordinary_marker_text_ocr_fills_only_blank_without_moving_lines(monkeypatch):
+    import picture_capture.paddle_headwords as ph
+
+    image = Image.new("RGB", (360, 260), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((20, 58, 80, 126), fill="black")
+    draw.rectangle((20, 170, 70, 194), fill="black")
+
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=300,
+        gutter=0,
+        start_y=0,
+        character_height=30,
+        row_padding=4,
+        ocr_language="chi_sim",
+        paddle_language="ch",
+        dictionary_profile_id="cjk_visual",
+        profile_cjk_allow_single_headword=True,
+        follow_column_deformation=False,
+    )
+    entries = [
+        Entry(word="", x=20, y=50),
+        Entry(word="", x=20, y=162),
+        Entry(word="已校对", x=20, y=210, manually_selected=True),
+    ]
+    original_coords = [(entry.x, entry.y) for entry in entries]
+
+    monkeypatch.setattr(ph, "get_paddle_engine", lambda _settings: object())
+    monkeypatch.setattr(
+        ph,
+        "run_paddle_band",
+        lambda crop, _settings, engine=None: [
+            OCRRecord("dummy", 0.95, (0, 0, max(10, crop.width // 3), max(8, crop.height // 2)))
+        ],
+    )
+    monkeypatch.setattr(
+        ph,
+        "_single_cjk_from_local_records",
+        lambda records, _settings, _profile, max_left_x=None: ("北", 0.98, "北"),
+    )
+    monkeypatch.setattr(
+        ph,
+        "group_ocr_records",
+        lambda records, y_ratio=0.55: [
+            SimpleNamespace(text="【枫】", confidence=0.94, box=(0, 0, 60, 24))
+        ],
+    )
+    monkeypatch.setattr(
+        ph,
+        "parse_headword_text",
+        lambda text, _settings, profile=None: SimpleNamespace(normalized="枫"),
+    )
+
+    updated, stats = ocr_existing_entry_words_from_markers(
+        image,
+        entries,
+        settings,
+        [],
+        profile_page_index=0,
+        page_sections=None,
+        profile_path=None,
+        only_blank=True,
+    )
+
+    assert [(entry.x, entry.y) for entry in updated] == original_coords
+    assert [entry.word for entry in updated] == ["北", "枫", "已校对"]
+    assert stats["filled"] == 2
+    assert stats["large"] == 1
+    assert stats["regular"] == 1
+    assert stats["skipped_existing"] == 1
+    assert all(
+        entry.ocr_source == "ordinary_marker:paddle"
+        for entry in updated[:2]
+    )
 
 
 def test_ocr_candidate_band_ratio_is_relative_to_actual_column_width():
@@ -1049,11 +1166,12 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert '("运行融合画线（推荐）", self.run_combined_draw_action)' in actions
     assert '("运行OCR画线（单独）", self.run_ocr_draw_action)' in actions
     assert '("运行普通画线（单独）", self.run_normal_draw_action)' in actions
+    assert '("普通画线后OCR文字", self.ocr_ordinary_lines_text_selected_scope)' in actions
     assert actions.index('("运行融合画线（推荐）", self.run_combined_draw_action)') < actions.index('("运行OCR画线（单独）", self.run_ocr_draw_action)')
     assert '("填充词条", self.fill_existing_headwords)' in actions
     assert '("修复排序", self.repair_pdic_order_selected_scope)' in actions
     for tooltip_key in (
-        '"清除画线":', '"清除文本":', '"精修画线":', '"新旧比较":',
+        '"普通画线后OCR文字":', '"清除画线":', '"清除文本":', '"精修画线":', '"新旧比较":',
         '"词条校对":', '"填充词条":', '"备份PDIC":', '"恢复PDIC":',
         '"插图识别":', '"编辑插图":', '"保存当前页":',
     ):
