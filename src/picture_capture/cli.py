@@ -10,7 +10,10 @@ from .formats import pdic_path, read_pdic, write_pdic
 from .image_utils import normalize_page_rgb
 from .models import ProjectState
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
-from .project_storage import headword_filter_rules_path, ocr_cache_root, qt_root, replace_rules_path
+from .project_storage import (
+    headword_filter_rules_path, ocr_cache_root, profile_path as project_profile_path,
+    qt_root, replace_rules_path,
+)
 from .page_sections import read_page_sections
 from .processing import (
     append_crop_log,
@@ -18,6 +21,7 @@ from .processing import (
     export_ocred,
     load_replace_rules,
     ocr_entries,
+    ocr_existing_entry_words_from_markers,
     sort_entries_reading_order,
     derive_geometry,
     split_single_lines,
@@ -78,14 +82,38 @@ def main(argv: list[str] | None = None) -> int:
                     ocr_cache_root(project.root) / f"{page.stem}.json"
                     if project.settings.detection_method in {"paddleocr", "combined"} else None
                 )
+                page_index = project.images.index(page)
+                sections = read_page_sections(page)
                 entries, _ = detect_entries(
                     image, project.settings, paddle_cache_path=cache_path,
                     paddle_filter_rules_path=headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME),
-                    profile_page_index=project.images.index(page),
-                    page_sections=read_page_sections(page),
+                    profile_page_index=page_index,
+                    page_sections=sections,
                 )
+                fill_stats = None
+                if project.settings.detection_method == "combined":
+                    original_coords = [(int(entry.x), int(entry.y)) for entry in entries]
+                    entries, fill_stats = ocr_existing_entry_words_from_markers(
+                        image,
+                        entries,
+                        project.settings,
+                        load_replace_rules(replace_rules_path(project.root)),
+                        profile_page_index=page_index,
+                        page_sections=sections,
+                        profile_path=project_profile_path(project.root),
+                        only_blank=True,
+                    )
+                    if [(int(entry.x), int(entry.y)) for entry in entries] != original_coords:
+                        raise RuntimeError("融合画线自动补字不得修改任何画线坐标")
                 write_pdic(pdic_path(page), entries, image.width, _neighbors(project, page))
-                print(f"[{number}/{len(pages)}] {page.name}: {len(entries)} 个标记")
+                fill_text = (
+                    f"，普通救漏补字 {int(fill_stats.get('filled', 0))} 条"
+                    if fill_stats else ""
+                )
+                print(
+                    f"[{number}/{len(pages)}] {page.name}: "
+                    f"{len(entries)} 个标记{fill_text}"
+                )
                 continue
 
             entries = read_pdic(pdic_path(page))
