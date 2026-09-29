@@ -1835,6 +1835,344 @@ def line_box(entry: Entry, geometry: Geometry, image: Image.Image, settings: App
     return clamp_box(geometry.transform.canonical_box_to_source(canonical_box, geometry.source_size), image)
 
 
+def _ordinary_marker_local_crop(
+    canonical: Image.Image,
+    entry: Entry,
+    geometry: Geometry,
+    settings: AppSettings,
+) -> tuple[Image.Image, bool]:
+    """Return a text-only OCR crop anchored to one existing ordinary marker.
+
+    The marker is the geometry authority. This helper never moves it. Horizontal
+    CJK display heads get a taller crop only when the original pixels immediately
+    below the marker form one oversized left-edge glyph; ordinary rows keep the
+    normal line-height crop. The distinction is image-driven and does not depend
+    on OCR having already recognized the character.
+    """
+    _u, marker_v = geometry.source_to_canonical(int(entry.x), int(entry.y))
+    col = column_index_for_click(int(entry.x), geometry, int(entry.y))
+    col = max(0, min(len(geometry.column_starts) - 1, int(col)))
+    tracked_x = int(geometry.x_at(col, int(marker_v)))
+    canonical_width, canonical_height = canonical.size
+
+    character_height = max(
+        2, int(round(float(getattr(settings, "character_height", 26) or 26)))
+    )
+    row_padding = max(0, int(round(float(getattr(settings, "row_padding", 0) or 0))))
+    column_width = max(
+        24,
+        int(
+            getattr(settings, "column_width", 0)
+            or (
+                geometry.column_widths[col]
+                if 0 <= col < len(geometry.column_widths)
+                else canonical_width
+            )
+        ),
+    )
+    left_pad = max(2, round(character_height * 0.12))
+    crop_left = max(0, tracked_x - left_pad)
+
+    profile_id = str(getattr(settings, "dictionary_profile_id", "") or "").lower()
+    lang = str(getattr(settings, "ocr_language", "") or "").lower()
+    paddle_lang = str(getattr(settings, "paddle_language", "") or "").lower()
+    cjk_mode = bool(
+        "cjk" in profile_id
+        or any(token in lang for token in ("chi_sim", "chi_tra", "chinese"))
+        or paddle_lang in {"ch", "chi_sim", "chi_tra", "chinese_cht"}
+    )
+
+    is_large = False
+    large_bottom = int(marker_v + character_height)
+    if (
+        cjk_mode
+        and bool(getattr(settings, "profile_cjk_allow_single_headword", True))
+        and not str(getattr(settings, "layout_writing_mode", "horizontal-tb")).startswith("vertical")
+    ):
+        probe_width = min(
+            max(1, canonical_width - crop_left),
+            max(72, round(character_height * 3.2)),
+        )
+        probe_top = max(0, int(marker_v))
+        probe_bottom = min(
+            canonical_height,
+            probe_top + max(round(character_height * 3.2), character_height + 8),
+        )
+        if probe_width >= 12 and probe_bottom > probe_top + 2:
+            probe = np.asarray(
+                ImageOps.grayscale(
+                    canonical.crop(
+                        (crop_left, probe_top, crop_left + probe_width, probe_bottom)
+                    )
+                ),
+                dtype=np.uint8,
+            )
+            threshold = _left_edge_otsu_threshold(probe)
+            dark = probe <= threshold
+            active = dark.sum(axis=1) >= max(3, round(probe_width * 0.015))
+
+            raw_runs: list[tuple[int, int]] = []
+            i = 0
+            active_list = active.tolist()
+            while i < len(active_list):
+                if not active_list[i]:
+                    i += 1
+                    continue
+                end = i + 1
+                while end < len(active_list) and active_list[end]:
+                    end += 1
+                raw_runs.append((i, end))
+                i = end
+
+            # Bridge only tiny internal white slits whose upper/lower fragments
+            # occupy essentially the same X footprint. This mirrors the ordinary
+            # large-CJK duplicate suppressor without merging neighbouring rows.
+            bridge_gap = max(2, round(character_height * 0.18))
+            runs: list[tuple[int, int]] = []
+            for start, end in raw_runs:
+                if not runs:
+                    runs.append((start, end))
+                    continue
+                prev_start, prev_end = runs[-1]
+                gap = start - prev_end
+                should_bridge = False
+                if 0 <= gap <= bridge_gap:
+                    prev_cols = dark[prev_start:prev_end].any(axis=0)
+                    next_cols = dark[start:end].any(axis=0)
+                    smaller = min(int(prev_cols.sum()), int(next_cols.sum()))
+                    overlap = int((prev_cols & next_cols).sum())
+                    should_bridge = bool(
+                        smaller > 0 and overlap / float(smaller) >= 0.65
+                    )
+                if should_bridge:
+                    runs[-1] = (prev_start, end)
+                else:
+                    runs.append((start, end))
+
+            minimum_large = max(
+                round(character_height * 1.45),
+                character_height + 1,
+            )
+            max_start_offset = max(4, round(character_height * 0.65))
+            for start, end in runs:
+                run_height = end - start
+                if start <= max_start_offset and run_height >= minimum_large:
+                    is_large = True
+                    large_bottom = min(
+                        canonical_height,
+                        probe_top + end + max(2, round(character_height * 0.15)),
+                    )
+                    break
+
+    if is_large:
+        # One display Han glyph: keep the crop tight horizontally so pinyin and
+        # definition text cannot overwhelm single-character recognition.
+        height = max(character_height, large_bottom - int(marker_v))
+        crop_width = min(
+            column_width,
+            max(round(height * 1.75), round(character_height * 2.6), 72),
+        )
+        crop_top = max(0, int(marker_v) - max(1, round(character_height * 0.06)))
+        crop_bottom = max(crop_top + 2, large_bottom)
+    else:
+        # Ordinary row: include enough right context for bracket/POS/pinyin
+        # parsers, but do not OCR the full definition line.
+        regular_height = max(
+            character_height + 2 * row_padding,
+            round(character_height * 1.20),
+        )
+        crop_width = min(
+            column_width,
+            max(
+                round(character_height * 9.0),
+                round(column_width * 0.45),
+                120,
+            ),
+        )
+        crop_top = max(0, int(marker_v) - row_padding)
+        crop_bottom = min(canonical_height, crop_top + regular_height)
+
+    crop_right = min(canonical_width, crop_left + max(24, int(crop_width)))
+    crop_bottom = min(canonical_height, max(crop_top + 2, int(crop_bottom)))
+    return normalize_page_rgb(
+        canonical.crop((crop_left, crop_top, crop_right, crop_bottom))
+    ), bool(is_large)
+
+
+def ocr_existing_entry_words_from_markers(
+    image: Image.Image,
+    entries: list[Entry],
+    settings: AppSettings,
+    replace_rules: list[tuple[str, str, str]],
+    *,
+    profile_page_index: int = 0,
+    page_sections: list[PageSection] | None = None,
+    profile_path: Path | None = None,
+    only_blank: bool = True,
+) -> tuple[list[Entry], dict[str, int]]:
+    """Fill text for existing markers without changing marker geometry.
+
+    This is the dedicated companion to ordinary drawing. Existing PDIC marker
+    coordinates/count are immutable; PaddleOCR is run only on a local crop below
+    each marker. Normal rows and visually oversized CJK display heads use
+    different crop heights. By default only empty, non-manual entries are filled.
+    """
+    source, effective, analysis_source, geometry = _page_geometry_context(
+        image, settings, profile_page_index,
+    )
+    canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
+    ordered = sort_entries_reading_order(entries, geometry, page_sections)
+
+    from .dictionary_profile import (
+        effective_project_profile_id,
+        load_dictionary_profile,
+    )
+    from .paddle_headwords import (
+        _single_cjk_from_local_records,
+        get_paddle_engine,
+        group_ocr_records,
+        parse_headword_text,
+        run_paddle_band,
+    )
+
+    profile = load_dictionary_profile(
+        profile_path,
+        preset=effective_project_profile_id(effective, profile_path),
+        language=effective.ocr_language,
+    )
+
+    stats = {
+        "total": len(ordered),
+        "filled": 0,
+        "large": 0,
+        "regular": 0,
+        "failed": 0,
+        "skipped_existing": 0,
+        "skipped_manual": 0,
+    }
+    targets = [
+        entry for entry in ordered
+        if not (
+            (only_blank and str(entry.word or "").strip())
+            or bool(entry.manually_selected)
+        )
+    ]
+    stats["skipped_existing"] = sum(
+        1 for entry in ordered
+        if only_blank and str(entry.word or "").strip()
+    )
+    stats["skipped_manual"] = sum(
+        1 for entry in ordered
+        if bool(entry.manually_selected)
+        and not (only_blank and str(entry.word or "").strip())
+    )
+    if not targets:
+        return ordered, stats
+
+    engine = get_paddle_engine(effective)
+    for entry in targets:
+        original_x, original_y = int(entry.x), int(entry.y)
+        crop, is_large = _ordinary_marker_local_crop(
+            canonical, entry, geometry, effective,
+        )
+        try:
+            records = run_paddle_band(crop, effective, engine=engine)
+        except Exception:
+            stats["failed"] += 1
+            continue
+        if not records:
+            stats["failed"] += 1
+            continue
+
+        word = ""
+        confidence: float | None = None
+        if is_large:
+            stats["large"] += 1
+            word, confidence_value, _source_text = _single_cjk_from_local_records(
+                records,
+                effective,
+                profile,
+                max_left_x=max(16, round(crop.width * 0.62)),
+            )
+            confidence = float(confidence_value) if word else None
+        else:
+            stats["regular"] += 1
+            lines = group_ocr_records(
+                records,
+                float(getattr(effective, "paddle_line_merge_y_ratio", 0.55) or 0.55),
+            )
+            # Prefer a structurally parsable line beginning nearest the crop left.
+            ranked_lines = sorted(
+                lines,
+                key=lambda line: (
+                    int(line.box[0]),
+                    int(line.box[1]),
+                    -float(line.confidence),
+                ),
+            )
+            for line in ranked_lines:
+                parsed = parse_headword_text(
+                    str(line.text or ""),
+                    effective,
+                    profile=profile,
+                )
+                if parsed is not None and str(parsed.normalized or "").strip():
+                    word = str(parsed.normalized).strip()
+                    confidence = float(line.confidence)
+                    break
+
+            # Geometry has already established that a headword exists. If the
+            # full parser cannot normalize it, use only the leftmost OCR record,
+            # never the whole definition crop.
+            if not word:
+                leftmost = min(
+                    records,
+                    key=lambda record: (
+                        int(record.box[0]),
+                        int(record.box[1]),
+                        -float(record.confidence),
+                    ),
+                )
+                if int(leftmost.box[0]) <= max(16, round(crop.width * 0.25)):
+                    fallback = str(leftmost.text or "").strip()
+                    if fallback and len(fallback) <= 64:
+                        parsed = parse_headword_text(
+                            fallback,
+                            effective,
+                            profile=profile,
+                        )
+                        word = (
+                            str(parsed.normalized).strip()
+                            if parsed is not None and str(parsed.normalized or "").strip()
+                            else fallback
+                        )
+                        confidence = float(leftmost.confidence)
+
+        if word:
+            if effective.ocr_replace:
+                word = process_ocr_text(
+                    word, replace_rules, bool(effective.lowercase_ocr)
+                )
+            entry.word = str(word).strip()
+            entry.confidence = confidence
+            entry.ocr_source = "ordinary_marker:paddle"
+            entry.final_engine = "paddle"
+            issue = "ORDINARY_MARKER_TEXT_OCR"
+            existing = [
+                part for part in str(entry.issue_type or "").split(",") if part
+            ]
+            if issue not in existing:
+                existing.append(issue)
+                entry.issue_type = ",".join(existing)
+            stats["filled"] += 1
+        else:
+            stats["failed"] += 1
+
+        if int(entry.x) != original_x or int(entry.y) != original_y:
+            raise RuntimeError("普通画线后OCR文字不得修改任何画线坐标")
+
+    return ordered, stats
+
 def ocr_entries(
     image: Image.Image,
     entries: list[Entry],
