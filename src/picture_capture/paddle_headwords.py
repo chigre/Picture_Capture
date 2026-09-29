@@ -6944,6 +6944,7 @@ def _arbitrate_pair(
             "raw": pair.get("paddle_raw"), "corrected": pair.get("paddle_corrected"), "POS": pair.get("paddle_pos"),
             "repairs": pair.get("paddle_repairs"), "text": pair.get("paddle_text"), "reason": pair.get("paddle_reject_reason"),
             "parser_trace": pair.get("paddle_parser_trace"),
+            "features": dict(pair.get("paddle_features", {}) or {}),
         },
         "tesseract": {
             "source_x": pair.get("tesseract_source_x"),
@@ -6962,6 +6963,7 @@ def _arbitrate_pair(
             "raw": pair.get("tesseract_raw"), "corrected": pair.get("tesseract_corrected"), "POS": pair.get("tesseract_pos"),
             "repairs": pair.get("tesseract_repairs"), "text": pair.get("tesseract_text"), "reason": pair.get("tesseract_reject_reason"),
             "parser_trace": pair.get("tesseract_parser_trace"),
+            "features": dict(pair.get("tesseract_features", {}) or {}),
         },
         "lens": {
             "source_x": pair.get("lens_source_x"),
@@ -6980,6 +6982,7 @@ def _arbitrate_pair(
             "raw": pair.get("lens_raw"), "corrected": pair.get("lens_corrected"), "POS": pair.get("lens_pos"),
             "repairs": pair.get("lens_repairs"), "text": pair.get("lens_text"), "reason": pair.get("lens_reject_reason"),
             "parser_trace": pair.get("lens_parser_trace"),
+            "features": dict(pair.get("lens_features", {}) or {}),
         },
         "alignment_method": pair.get("alignment_method", ""),
         "pair_reason": pair.get("reason", ""),
