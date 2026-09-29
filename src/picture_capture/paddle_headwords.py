@@ -6827,6 +6827,18 @@ def _engine_quality(pair: dict[str, Any], prefix: str) -> float:
         q += 0.35
     if features.get("peer_typography_match"):
         q += 0.30
+    boundary = pair.get(f"{prefix}_image_boundary_match", {}) or {}
+    if isinstance(boundary, dict) and boundary:
+        try:
+            boundary_strength = max(
+                0.0, min(1.0, float(boundary.get("strength") or 0.0))
+            )
+        except (TypeError, ValueError):
+            boundary_strength = 0.0
+        # Boundary detection is independent of OCR recognition and parser
+        # semantics. Reward a mutually matched blank->ink transition modestly;
+        # it should break close ties, not overpower a strong semantic mismatch.
+        q += 0.20 + 0.35 * boundary_strength
     if features.get("forced_accept"):
         q += 1.2
     if features.get("forced_reject"):
