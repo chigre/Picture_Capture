@@ -841,7 +841,10 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert '"column_width": "% 图宽"' in settings
     assert '"character_height": "% 图高"' in settings
     assert '"paddle_band_width_ratio": "%"' in settings
-    assert '"paddle_left_tolerance": "原图px"' in settings
+    assert '"paddle_left_tolerance": "% 单栏宽"' in settings
+    assert '"analysis_left": "% 图宽"' in settings
+    assert '"analysis_right": "% 图宽"' in settings
+    assert '"paddle_header_search_height": "% 图高"' in settings
     assert '"paddle_separator_safety_px": "原图px"' in settings
     assert '"column_track_radius": "% 单栏宽"' in settings
     assert '"column_track_block_height": "% 正文高度"' in settings
@@ -925,6 +928,23 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert 'self._show_setting_help("ocr_engine")' in settings
     assert 'self._show_setting_help("headword_sort_mode")' in settings
 
+
+
+def test_settings_center_restores_inline_detailed_parameter_help():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    settings_start = text.index("class SettingsDialog")
+    settings_end = text.index("class ", settings_start + len("class SettingsDialog"))
+    settings = text[settings_start:settings_end]
+    assert "inline_help = ttk.Label" in settings
+    assert "text=self.SETTING_HELP.get(" in settings
+    assert "check_help = ttk.Label" in settings
+    assert "text=self.CHECK_HELP.get(" in settings
+    assert '"analysis_left": "width"' in text
+    assert '"analysis_right": "width"' in text
+    assert '"paddle_header_search_height": "height"' in text
+    assert "def _column_pixels_to_percent(" in text
+    assert "def _column_percent_to_pixels(" in text
 
 def test_settings_center_is_reused_without_blocking_main_workspace():
     source = (
@@ -2048,7 +2068,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "编号开头（1. / 2. / …）可以作为词头" in text
     assert "词头专属性（当前结构的视觉证据）" in text
     assert 'text="栏左缘容差："' in text
-    assert "允许词头起点偏离栏左边界的最大距离；越小越严格" in text
+    assert "% 单栏宽（允许词头起点偏离栏左边界的最大距离；越小越严格）" in text
     assert 'text="文字大小倍率 ≥"' in text
     assert 'text="粗体倍率 ≥"' in text
     assert 'text="候选强度 ≥"' in text
@@ -2630,9 +2650,10 @@ def test_project_profile_exposes_clickable_column_left_line_nudging():
     text = source.read_text(encoding="utf-8")
     assert 'text="栏左线微调"' in text
     assert "点击右侧预览中的栏左线选择；选中线显示为橙色" in text
-    assert "每次移动 1 个原图 px" in text
-    assert 'text="← 左移"' in text
-    assert 'text="右移 →"' in text
+    assert "每次移动约 0.1% 单栏宽" in text
+    assert 'text="← 左移 0.1%"' in text
+    assert 'text="右移 0.1% →"' in text
+    assert "人工偏移 {percent:+.2f}% 单栏宽" in text
     assert 'text="重置当前"' in text
     assert 'text="重置全部"' in text
     assert "def _shift_selected_column" in text

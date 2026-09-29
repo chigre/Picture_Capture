@@ -282,6 +282,9 @@ LAYOUT_PERCENT_AXES = {
     "row_padding": "height",
     "body_indent": "width",
     "horizontal_tolerance": "width",
+    "analysis_left": "width",
+    "analysis_right": "width",
+    "paddle_header_search_height": "height",
 }
 
 
@@ -309,6 +312,18 @@ def _layout_percent_to_pixels(image: Image.Image | None, name: str, percent: int
 def _format_layout_percent(value: int | float) -> str:
     rendered = f"{float(value):.2f}".rstrip("0").rstrip(".")
     return rendered or "0"
+
+
+def _column_pixels_to_percent(settings: AppSettings, pixels: int | float) -> float:
+    """Convert a source-pixel horizontal distance to % of configured column width."""
+    denominator = float(max(1, int(getattr(settings, "column_width", 1) or 1)))
+    return float(pixels) * 100.0 / denominator
+
+
+def _column_percent_to_pixels(settings: AppSettings, percent: int | float) -> int:
+    """Convert % of configured column width back to source-image pixels."""
+    denominator = float(max(1, int(getattr(settings, "column_width", 1) or 1)))
+    return int(round(float(percent) * denominator / 100.0))
 
 
 def _review_height_pixels_to_percent(
@@ -2366,8 +2381,8 @@ class SettingsDialog(tk.Toplevel):
         "white_threshold_low": "作用：VB 白带定位逐级放宽的下限，默认 700。算法按 999、997、995……一直降到本值，寻找窄行距、轻微歪斜或上下伸字符之间仍足够亮的分隔行。\n\n过低可能把文字内部亮带误当行间空白。",
         "whitespace_adjustment": "作用：对应 VB.NET 的白带修正量，默认 2 px。第一阶段找到白行后会检查其上方连续高白度行并向白带中部修正；第二阶段也用它处理极窄行间隙和局部歪斜。单位始终是原图像素。",
         "upward_ratio": "作用：对应 VB.NET【向上比例 1/x】。从词头黑锚点向上搜索分隔线的最大距离 = (单行字高 + 行间空白) / 本值；默认 1.5。\n\n值越大，向上搜索范围越短；过短会找不到上一行与当前词头之间的白带。",
-        "analysis_left": "作用：普通画线原图 X 分析左边界。与右边界同时有效且右>左时，栏左锚点和横向白带分析都限制在该原图范围内；0/0 表示不额外限制。它不引入任何缩放坐标。",
-        "analysis_right": "作用：普通画线原图 X 分析右边界。与左边界配合使用；默认 0 表示整页。所有数值均为全分辨率原图 X。",
+        "analysis_left": "作用：普通画线分析区域的左边界。界面按页面宽度百分比显示和输入，0% 为图片最左侧；后台保存和运行时仍换算为当前原图 X 像素。与右边界同时有效且右>左时，栏左锚点和横向白带分析只在该范围内工作；左、右都为 0% 时表示不额外限制。\n\n调整：只有需要排除装订边、页边注释或固定非正文区域时才建议修改。使用百分比后，不同 DPI 或扫描宽度下保持相同版面含义。",
+        "analysis_right": "作用：普通画线分析区域的右边界。界面按页面宽度百分比显示和输入，100% 为图片最右侧；后台运行时换算为当前原图 X 像素。与左边界配合限制普通画线分析区域。\n\n调整：应覆盖全部正文栏而排除稳定的页边非正文内容。若保持历史默认 0/0，则继续表示整页分析，不强制裁定分析范围。",
         "row_step_multiplier": "作用：对应 VB.NET 找到候选并确定分隔 Y 后的跳步。下一次扫描从【当前分隔 Y + (单行字高+行间空白) × 本值】附近继续；默认 1.2。这样同一个词头的多个笔画和紧邻正文不会再次触发。",
         "column_track_radius": "作用：开启【跟随栏左缘倾斜/弯曲】后，搜索范围按当前页当前栏的实际栏宽计算：搜索半径 = 单栏宽 × 本百分比。默认 5%。因此不同 DPI、不同裁边或逐页自动版面参数下仍保持同一几何含义。\n\n调整：过小会跟不上明显倾斜/弯曲；过大则可能把正文缩进或邻栏墨迹吸进搜索走廊。",
         "column_track_block_height": "作用：沿正文有效高度分块跟踪栏左缘：分块高度 = 当前页正文有效高度 × 本百分比。默认 3%，即通常把正文纵向分成约 30 多段。\n\n调整：太小容易受单个粗字、插图和污点影响；太大则会把真实局部弯曲过度拉平。",
@@ -2378,14 +2393,14 @@ class SettingsDialog(tk.Toplevel):
         "paddle_max_input_side": "作用：限制送入 PaddleOCR 的图像最大长边，超出时按比例缩小。它主要平衡小字细节、推理速度、内存/显存和模型稳定性。\n\n调整：增大可保留更多细节，但会更慢、更占显存；减小更省资源但可能让小字号/附加符号变糊。改变此项会改变 OCR 输入图像，应视为可能需要重新 OCR，而不仅是重新评分候选。",
         "paddle_band_width_ratio": "作用：当前实际检测单栏宽度中，有多少百分比从栏左侧进入 OCR 候选带。100% 就是当前栏完整宽度；【候选带左侧余量】是在这个百分比之外另加的安全边距，不再以历史固定 600px 作为 100%。\n\n调整：太小会截断长词头、性别变体或紧随其后的 POS；太大则会引入更多释义正文、增加耗时和误候选。该比例随实际栏宽/DPI 自适应。",
         "paddle_band_left_margin": "作用：在 OCR 候选带左侧额外向外扩出的距离，单位为原图像素，用于保留略越出估计栏左缘、装饰符号或列跟踪误差附近的文字。运行时不做 1400px 或页面宽度归一化。\n\n调整：增加可救回被左边界裁切的词头；过大则会纳入页边线、污点或上一栏区域。",
-        "paddle_left_tolerance": "作用：词头候选允许偏离估计栏左缘的最大距离，单位为原图像素。这是“候选位置是否仍算栏左”的关键阈值；设置 34 就是原图 34 px，不会在宽图上自动变成 68/102 px。\n\n调整：增大可容纳缩进词头，但也更容易把正文缩进行吸进候选；减小更严格。",
+        "paddle_left_tolerance": "作用：词头候选允许偏离估计栏左缘的最大距离。界面按当前单栏正文宽度的百分比显示和输入，后台仍保存/运行原图像素值，因此同一版式在不同扫描 DPI 下具有一致含义。\n\n调整：增大可容纳缩进词头，但也更容易把正文缩进行吸进候选；减小更严格。通常先保持 Profile 推荐值，仅在真实词头系统性偏离栏左缘时调整。",
         "paddle_rec_score_threshold": "作用：在 OCR 碎片完成必要的同行/结构修复后，按识别置信度过滤低质量 OCR 行。低于阈值的行不会继续进入词头候选评分。\n\n调整：降低可提高召回、救回难字/粗体/重音符号，但会带入更多噪声；提高则更干净但更容易漏词。它和【词头候选最低分】不同：前者是 OCR 文字质量门槛，后者是综合结构评分门槛。",
         "paddle_line_merge_y_ratio": "作用：将同一印刷行被 OCR 拆成多个 box 时，允许多大的垂直差仍合并为一行。词头、性别变体和 POS 经常被模型拆成多个片段，因此这一步发生在后续语法解析之前。\n\n调整：增大可合并错开的碎片，但过大会把上下两行粘在一起；减小可避免串行，却可能让词头与 POS 分离。出现“同一行被拆开/上下行被合并”时才针对性调整。",
         "paddle_height_ratio": "作用：把候选行字高与页面候选行中位字高比较；达到该比例后获得“较大字”视觉提示并增加候选分。它是辅助证据，不是独立接受条件。\n\n调整：提高会让“字大”证据更难触发；降低会让更多正文也被视为大字。仅当词头确实通过字号区别于正文时才值得调，结构证据通常比字号更可靠。",
         "paddle_boldness_ratio": "作用：比较候选行前部墨迹密度与页面局部基准，达到该比例后获得“粗体/更黑”视觉提示并增加候选分。正文中的标签也可能粗体，所以它不是最强证据。\n\n调整：提高更严格、误触发少；降低更敏感，但扫描阴影/对比度变化会带来假粗体。应结合诊断中的 boldness_ratio，而不是仅凭肉眼猜测。",
         "paddle_gap_ratio": "作用：以“典型行高 + 行间空白”为尺度，判断当前候选前方是否存在足够大的纵向空白；满足时作为词条起始的弱视觉证据加分。\n\n调整：提高意味着需要更大的前置空白才算 separated；降低会让较小行距也触发该证据。它只贡献较弱分值，不应拿它替代 POS/变形等结构证据。",
         "paddle_min_candidate_score": "作用：候选在完成 lemma 解析、栏左位置、POS/变形/描述符、特殊符号、字高、粗体和行前空白等加权后，必须达到的综合最低分。\n\n调整：提高会减少误检但增加漏检；降低会提高召回但放入更多边缘候选。不要在不知道 reject_reason/score 构成时盲目下调；优先看 diagnostics 是缺结构、位置不对还是单纯分数不足。",
-        "paddle_header_search_height": "作用：自动页眉横线检测只在页面顶部这段高度内搜索，单位为原图像素。超出范围的横线不会被当作页眉规则线；该值不再按 1400px 基准缩放。\n\n调整：页眉线较低时可增大；太大可能把正文中的表格线/装饰线误当页眉。",
+        "paddle_header_search_height": "作用：自动页眉横线检测只在页面顶部指定范围内搜索。界面按页面高度百分比显示和输入，后台运行时换算为当前原图 Y 像素。超出该范围的横线不会被当作页眉规则线。\n\n调整：页眉线位置较低时可适当增大；过大可能把正文中的表格线、装饰线或词条分隔线误当页眉。不同 DPI/扫描高度下建议保持相同百分比，而不是固定像素。",
         "paddle_header_rule_ink_ratio": "作用：在页眉搜索区逐行计算黑色墨迹占比，达到该比例的行才有资格被视为贯穿式页眉横线。当前实现会把输入限制在合理范围后使用。\n\n调整：提高更严格，需要更长/更实的横线；降低可识别断裂或浅色横线，但也更容易把文字行误判为横线。只有【自动忽略页眉横线以上】开启时才有意义。",
         "paddle_header_rule_margin": "作用：识别到页眉横线后，再向正文方向额外留出的安全距离，单位为原图像素。该值不再按页面宽度缩放。\n\n调整：增大可避免页眉残留，但可能吃掉第一条正文词头；减小则更贴近横线。",
         "paddle_pos_search_chars": "作用：lemma 提取后，语法解析在其后的多长文本范围内寻找 POS/变形等结构提示。这样可利用近邻语法标签，同时避免把很后面的释义正文缩写误当词头证据。\n\n调整：长词头、长性别变体或 POS 距离较远时可适当增大；过大可能在定义正文里误命中缩写。存在活动 Dictionary Profile 时，POS 标签集合通常由 Profile 的 pos_labels 决定。",
@@ -2503,14 +2518,14 @@ class SettingsDialog(tk.Toplevel):
         "darkness_threshold": "RGB 和", "dark_area_percent": "%",
         "ordinary_right_divisor": "1/x", "white_threshold_high": "0–1000",
         "white_threshold_low": "0–1000", "whitespace_adjustment": "原图px",
-        "upward_ratio": "1/x", "analysis_left": "原图px", "analysis_right": "原图px",
+        "upward_ratio": "1/x", "analysis_left": "% 图宽", "analysis_right": "% 图宽",
         "row_step_multiplier": "×行高", "column_track_radius": "% 单栏宽",
         "column_track_block_height": "% 正文高度", "column_track_max_step": "% 分块高度",
         "paddle_band_width_ratio": "%", "paddle_band_left_margin": "原图px",
-        "paddle_left_tolerance": "原图px", "paddle_max_input_side": "px",
+        "paddle_left_tolerance": "% 单栏宽", "paddle_max_input_side": "px",
         "paddle_separator_safety_px": "原图px", "paddle_separator_band_radius": "原图px",
         "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "原图px",
-        "paddle_header_search_height": "原图px", "paddle_header_rule_margin": "原图px",
+        "paddle_header_search_height": "% 图高", "paddle_header_rule_margin": "原图px",
         "batch_interval": "秒", "illustration_detect_padding": "原图px",
         "illustration_detect_right_padding": "原图px", "main_entry_font_size": "pt",
         "review_entry_font_size": "pt", "review_entry_vertical_padding": "px",
@@ -2527,17 +2542,17 @@ class SettingsDialog(tk.Toplevel):
         "white_threshold_high": (0, 1000, 1), "white_threshold_low": (0, 1000, 1),
         "whitespace_adjustment": (0, 30, 1), "upward_ratio": (0.1, 10.0, 0.1),
         "row_step_multiplier": (0.5, 3.0, 0.1),
-        "analysis_left": (0, 50000, 1), "analysis_right": (0, 50000, 1),
+        "analysis_left": (0.0, 100.0, 0.1), "analysis_right": (0.0, 100.0, 0.1),
         "column_track_radius": (0.5, 50.0, 0.5),
         "column_track_block_height": (0.5, 25.0, 0.5),
         "column_track_max_step": (0.5, 50.0, 0.5),
         "paddle_band_width_ratio": (1, 100, 1), "paddle_band_left_margin": (0, 5000, 1),
-        "paddle_left_tolerance": (0, 5000, 1), "paddle_max_input_side": (256, 20000, 64),
+        "paddle_left_tolerance": (0.0, 100.0, 0.1), "paddle_max_input_side": (256, 20000, 64),
         "paddle_separator_safety_px": (0, 1000, 1),
         "paddle_separator_band_radius": (0, 200, 1),
         "paddle_separator_roi_width_ratio": (10, 100, 1),
         "paddle_separator_column_margin": (0, 2000, 1),
-        "paddle_header_search_height": (0, 5000, 1), "paddle_header_rule_margin": (0, 1000, 1),
+        "paddle_header_search_height": (0.0, 100.0, 0.1), "paddle_header_rule_margin": (0, 1000, 1),
         "batch_interval": (0.5, 3600, 0.5),
         "illustration_detect_padding": (0, 5000, 1),
         "illustration_detect_right_padding": (0, 5000, 1),
@@ -2846,6 +2861,10 @@ class SettingsDialog(tk.Toplevel):
         if choices:
             reverse = {value: label for label, value in choices.items()}
             value = reverse.get(str(raw), str(raw))
+        elif name == "paddle_left_tolerance":
+            value = _format_layout_percent(
+                _column_pixels_to_percent(self.parent.settings, raw)
+            )
         elif name in LAYOUT_PERCENT_AXES and self.parent.image is not None:
             source_value = (
                 self.parent._quick_geometry_value(name)
@@ -2999,7 +3018,25 @@ class SettingsDialog(tk.Toplevel):
             self._bind_help_widget(control, callback)
             self._bind_help_widget(info, callback)
             info.bind("<Button-1>", lambda _e, n=name: self._show_setting_help(n), add="+")
-            row += 1
+
+            inline_help = ttk.Label(
+                group,
+                text=self.SETTING_HELP.get(
+                    name,
+                    "作用：高级参数。当前主流程没有更具体的用户说明时，建议保持默认值。",
+                ),
+                foreground="#666b73",
+                justify="left",
+            )
+            inline_help.grid(
+                row=row + 1, column=0, columnspan=3,
+                sticky="ew", padx=(12, 8), pady=(0, 8),
+            )
+            self._bind_responsive_labels(
+                group, inline_help, horizontal_padding=34, min_wrap=180
+            )
+            self._bind_help_widget(inline_help, callback)
+            row += 2
         return group
 
     def _add_check_group(
@@ -3059,7 +3096,24 @@ class SettingsDialog(tk.Toplevel):
                 lambda _e, l=label, n=name: self._show_check_help(l, n),
                 add="+",
             )
-            row += 1
+            check_help = ttk.Label(
+                group,
+                text=self.CHECK_HELP.get(
+                    name,
+                    "作用：高级行为开关；不确定时建议保持默认。",
+                ),
+                foreground="#666b73",
+                justify="left",
+            )
+            check_help.grid(
+                row=row + 1, column=0, columnspan=2,
+                sticky="ew", padx=(22, 8), pady=(0, 7),
+            )
+            self._bind_responsive_labels(
+                group, check_help, horizontal_padding=34, min_wrap=180
+            )
+            self._bind_help_widget(check_help, callback)
+            row += 2
 
             if name == "ordinary_auto_layout" and auto_children:
                 child_grid = ttk.Frame(group)
@@ -4640,7 +4694,16 @@ class SettingsDialog(tk.Toplevel):
                     cast = self._casts.get(name, str)
                     setattr(self.parent.settings, name, cast(raw_value))
                 elif name in self._casts:
-                    if name in LAYOUT_PERCENT_AXES and self.parent.image is not None:
+                    if name == "paddle_left_tolerance":
+                        percent = float(value)
+                        if not 0.0 <= percent <= 100.0:
+                            raise ValueError("词头左缘容差必须在 0–100% 单栏宽之间。")
+                        setattr(
+                            self.parent.settings,
+                            name,
+                            _column_percent_to_pixels(self.parent.settings, percent),
+                        )
+                    elif name in LAYOUT_PERCENT_AXES and self.parent.image is not None:
                         percent = float(value)
                         if not 0.0 <= percent <= 100.0:
                             raise ValueError(f"{self.SETTING_LABELS.get(name, name)} 必须在 0–100% 之间。")

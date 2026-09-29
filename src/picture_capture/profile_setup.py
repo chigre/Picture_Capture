@@ -385,8 +385,13 @@ class ProjectProfileWizard(tk.Toplevel):
         self.headword_tuning_level_var = tk.IntVar(
             value=max(-2, min(2, int(getattr(s, "profile_headword_tuning_level", 0) or 0)))
         )
-        self.headword_left_tolerance_var = tk.IntVar(
-            value=max(4, int(getattr(s, "paddle_left_tolerance", 34) or 34))
+        column_width_px = max(1, int(getattr(s, "column_width", 700) or 700))
+        left_tolerance_percent = (
+            float(getattr(s, "paddle_left_tolerance", 34) or 34)
+            * 100.0 / column_width_px
+        )
+        self.headword_left_tolerance_var = tk.DoubleVar(
+            value=max(0.0, min(100.0, round(left_tolerance_percent, 2)))
         )
         self.headword_height_ratio_var = tk.DoubleVar(
             value=max(0.5, float(getattr(s, "paddle_height_ratio", 1.08) or 1.08))
@@ -1137,18 +1142,18 @@ class ProjectProfileWizard(tk.Toplevel):
         column_adjust.columnconfigure(0, weight=1)
         ttk.Label(
             column_adjust,
-            text="点击右侧预览中的栏左线选择；选中线显示为橙色。每次移动 1 个原图 px。",
+            text="点击右侧预览中的栏左线选择；选中线显示为橙色。每次移动约 0.1% 单栏宽。",
             foreground="#666666", wraplength=self._wizard_left_width,
         ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 5))
         ttk.Label(
             column_adjust, textvariable=self.column_adjust_status_var,
         ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 5))
         ttk.Button(
-            column_adjust, text="← 左移",
+            column_adjust, text="← 左移 0.1%",
             command=lambda: self._shift_selected_column(-1),
         ).grid(row=2, column=0, sticky="w")
         ttk.Button(
-            column_adjust, text="右移 →",
+            column_adjust, text="右移 0.1% →",
             command=lambda: self._shift_selected_column(1),
         ).grid(row=2, column=1, sticky="w", padx=(6, 0))
         ttk.Button(
@@ -1272,8 +1277,10 @@ class ProjectProfileWizard(tk.Toplevel):
             return
         index = self._selected_column_index()
         offsets = self._column_offsets_for_count()
+        column_width = max(1, int(getattr(self.working, "column_width", 1) or 1))
+        percent = float(offsets[index]) * 100.0 / column_width
         self.column_adjust_status_var.set(
-            f"当前：第 {index + 1} 栏｜人工偏移 {offsets[index]:+d} px"
+            f"当前：第 {index + 1} 栏｜人工偏移 {percent:+.2f}% 单栏宽"
         )
 
     def _update_template_column_highlight(self) -> None:
@@ -1314,7 +1321,13 @@ class ProjectProfileWizard(tk.Toplevel):
         index = self._selected_column_index()
         offsets = self._column_offsets_for_count()
         old_value = offsets[index]
-        offsets[index] = max(-250, min(250, old_value + int(delta)))
+        column_width = max(1, int(getattr(self.working, "column_width", 1) or 1))
+        step_px = max(1, int(round(column_width * 0.001)))
+        max_offset = max(step_px, int(round(column_width * 0.25)))
+        offsets[index] = max(
+            -max_offset,
+            min(max_offset, old_value + (step_px if int(delta) > 0 else -step_px)),
+        )
         actual_delta = offsets[index] - old_value
         if not actual_delta:
             return
@@ -1974,12 +1987,12 @@ class ProjectProfileWizard(tk.Toplevel):
 
         ttk.Label(specificity, text="栏左缘容差：").grid(row=1, column=0, sticky="e", pady=3)
         tk.Spinbox(
-            specificity, from_=4, to=120, increment=1, width=7,
-            textvariable=self.headword_left_tolerance_var,
+            specificity, from_=0.0, to=100.0, increment=0.1, width=7,
+            textvariable=self.headword_left_tolerance_var, format="%.2f",
         ).grid(row=1, column=1, sticky="w", pady=3)
         ttk.Label(
             specificity,
-            text="px（允许词头起点偏离栏左边界的最大距离；越小越严格）",
+            text="% 单栏宽（允许词头起点偏离栏左边界的最大距离；越小越严格）",
             foreground="#666666",
         ).grid(row=1, column=2, sticky="w")
 
@@ -2201,8 +2214,13 @@ class ProjectProfileWizard(tk.Toplevel):
         ).items():
             if hasattr(temp, name):
                 setattr(temp, name, value)
+        column_width = max(1, int(getattr(temp, "column_width", 700) or 700))
+        left_percent = (
+            float(getattr(temp, "paddle_left_tolerance", 34) or 34)
+            * 100.0 / column_width
+        )
         return (
-            int(getattr(temp, "paddle_left_tolerance", 34)),
+            left_percent,
             float(getattr(temp, "paddle_height_ratio", 1.08)),
             float(getattr(temp, "paddle_boldness_ratio", 1.12)),
             float(getattr(temp, "paddle_min_candidate_score", 1.0)),
@@ -2721,8 +2739,12 @@ class ProjectProfileWizard(tk.Toplevel):
         )
         # Wizard specificity values are explicit project overrides and therefore
         # take precedence over preset/tuning defaults.
+        left_percent = max(
+            0.0, min(100.0, float(self.headword_left_tolerance_var.get()))
+        )
+        column_width = max(1, int(getattr(s, "column_width", 1) or 1))
         s.paddle_left_tolerance = max(
-            4, min(120, int(self.headword_left_tolerance_var.get()))
+            1, int(round(column_width * left_percent / 100.0))
         )
         s.paddle_height_ratio = max(
             0.5, min(3.0, float(self.headword_height_ratio_var.get()))
@@ -3362,7 +3384,7 @@ class ProjectProfileWizard(tk.Toplevel):
         if new_level != old_level:
             if key == "cjk_visual":
                 self.headword_left_tolerance_var.set(max(
-                    4, int(self.headword_left_tolerance_var.get()) - 4 * delta
+                    0.0, round(float(self.headword_left_tolerance_var.get()) - 0.5 * delta, 2)
                 ))
                 self.headword_height_ratio_var.set(max(
                     0.5, round(float(self.headword_height_ratio_var.get()) + 0.04 * delta, 2)
@@ -3380,7 +3402,7 @@ class ProjectProfileWizard(tk.Toplevel):
                     self.cjk_require_left_edge_var.set(True)
             elif key in {"latin_regular", "legacy_spanish_structured"}:
                 self.headword_left_tolerance_var.set(max(
-                    4, int(self.headword_left_tolerance_var.get()) - 4 * delta
+                    0.0, round(float(self.headword_left_tolerance_var.get()) - 0.5 * delta, 2)
                 ))
                 self.headword_boldness_ratio_var.set(max(
                     0.5, round(float(self.headword_boldness_ratio_var.get()) + 0.06 * delta, 2)
@@ -3390,11 +3412,11 @@ class ProjectProfileWizard(tk.Toplevel):
                 ))
             elif key in {"numbered_prefix", "marker_prefixed"}:
                 self.headword_left_tolerance_var.set(max(
-                    4, int(self.headword_left_tolerance_var.get()) - 3 * delta
+                    0.0, round(float(self.headword_left_tolerance_var.get()) - 0.4 * delta, 2)
                 ))
             else:
                 self.headword_left_tolerance_var.set(max(
-                    4, int(self.headword_left_tolerance_var.get()) - 3 * delta
+                    0.0, round(float(self.headword_left_tolerance_var.get()) - 0.4 * delta, 2)
                 ))
                 self.headword_min_score_var.set(max(
                     0.0, round(float(self.headword_min_score_var.get()) + 0.35 * delta, 2)
