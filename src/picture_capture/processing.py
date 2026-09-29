@@ -1019,8 +1019,168 @@ def _detect_entries_left_edge(
                     int(y - upward + round(row_height * row_step_multiplier)),
                 )
 
+    entries = _collapse_ordinary_oversized_cjk_split_markers(
+        source, entries, geometry, settings,
+    )
     return sort_entries_reading_order(entries, geometry), geometry
 
+
+
+
+def _collapse_ordinary_oversized_cjk_split_markers(
+    image: Image.Image,
+    entries: list[Entry],
+    geometry: Geometry,
+    settings: AppSettings,
+) -> list[Entry]:
+    """Collapse duplicate ordinary markers created *inside* one oversized Han glyph.
+
+    The restored VB detector deliberately knows nothing about OCR semantics. On
+    CJK character dictionaries that is usually an advantage, but a display-size
+    one-character headword can be roughly two body rows tall. The ordinary scan
+    may then find a second apparently valid separator in an internal white/stroke
+    gap and emit two markers for one physical entry.
+
+    This post-pass is OCR-independent. It uses only the original page pixels and
+    the existing large-CJK left-strip projection detector. It never creates a
+    marker and never globally widens Y de-duplication: it removes a lower ordinary
+    marker only when both markers are associated with the same visually confirmed
+    oversized glyph run. Thus OCR may miss the character completely and ordinary
+    mode can still self-correct its own internal duplicate.
+    """
+    if len(entries) < 2:
+        return list(entries)
+    if str(getattr(settings, "layout_writing_mode", "horizontal-tb")).startswith("vertical"):
+        return list(entries)
+    if not bool(getattr(settings, "profile_cjk_allow_single_headword", True)):
+        return list(entries)
+
+    from .paddle_headwords import (
+        _cjk_visual_projection_runs,
+        _is_chinese_ocr,
+        unwrap_column_band,
+    )
+
+    profile_id = str(getattr(settings, "dictionary_profile_id", "") or "").lower()
+    if not (_is_chinese_ocr(settings) or "cjk" in profile_id):
+        return list(entries)
+
+    source = normalize_page_rgb(image)
+    character_height = max(
+        2, int(round(float(getattr(settings, "character_height", 26) or 26)))
+    )
+    top_margin = max(3, round(character_height * 0.55))
+    lower_margin = max(2, round(character_height * 0.15))
+    internal_floor = max(3, round(character_height * 0.22))
+    strip_width = max(
+        100,
+        round(character_height * 3.2),
+        int(getattr(settings, "paddle_band_left_margin", 0) or 0) + 72,
+    )
+
+    rows: list[tuple[Entry, int, int, int]] = []
+    for entry in entries:
+        u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
+        col = column_index_for_click(int(entry.x), geometry, int(entry.y))
+        rows.append((entry, int(col), int(u), int(v)))
+    rows.sort(key=lambda item: (item[1], item[3], item[2]))
+
+    suppressed: set[int] = set()
+    keeper_issue: set[int] = set()
+
+    for col in range(len(geometry.column_starts)):
+        column_rows = [
+            (index, row) for index, row in enumerate(rows)
+            if row[1] == col
+        ]
+        if len(column_rows) < 2:
+            continue
+
+        try:
+            band, source_top, _left_margin = unwrap_column_band(
+                source,
+                geometry,
+                col,
+                settings,
+                source_width=strip_width,
+            )
+        except (IndexError, ValueError):
+            continue
+        if band.height <= 1 or band.width <= 1:
+            continue
+
+        gray = np.asarray(ImageOps.grayscale(band), dtype=np.uint8)
+        _zone_width, visual_runs = _cjk_visual_projection_runs(
+            gray,
+            0,
+            settings,
+            1.0,
+            relaxed=False,
+        )
+        if not visual_runs:
+            continue
+
+        for run_start, run_end in visual_runs:
+            run_start_v = int(source_top + run_start)
+            run_end_v = int(source_top + run_end)
+            run_height = max(1, run_end_v - run_start_v)
+            if run_height < round(character_height * 1.45):
+                continue
+
+            # The true entry separator is normally just above the display glyph;
+            # the false VB separator is lower, inside the glyph's vertical span.
+            # Associate only rows around this one run and require a top boundary
+            # before suppressing anything.
+            associated: list[tuple[int, tuple[Entry, int, int, int]]] = []
+            for row_index, row in column_rows:
+                row_v = row[3]
+                if (
+                    run_start_v - top_margin
+                    <= row_v
+                    <= run_end_v + lower_margin
+                ):
+                    associated.append((row_index, row))
+            if len(associated) < 2:
+                continue
+            associated.sort(key=lambda item: item[1][3])
+
+            keeper_index, keeper_row = associated[0]
+            keeper_v = keeper_row[3]
+            if keeper_v > run_start_v + max(2, round(character_height * 0.25)):
+                # No credible top-of-glyph boundary: do not infer an entry from
+                # a large dark object or a title/illustration.
+                continue
+
+            local_losers = [
+                (row_index, row)
+                for row_index, row in associated[1:]
+                if (
+                    row[3] >= run_start_v + internal_floor
+                    and row[3] <= run_end_v + lower_margin
+                )
+            ]
+            if not local_losers:
+                continue
+
+            for row_index, _row in local_losers:
+                suppressed.add(row_index)
+            keeper_issue.add(keeper_index)
+
+    output: list[Entry] = []
+    for index, (entry, _col, _u, _v) in enumerate(rows):
+        if index in suppressed:
+            continue
+        if index in keeper_issue:
+            issue = "ORDINARY_OVERSIZED_CJK_SPLIT_COLLAPSED"
+            existing = [
+                part for part in str(entry.issue_type or "").split(",") if part
+            ]
+            if issue not in existing:
+                existing.append(issue)
+                entry.issue_type = ",".join(existing)
+        output.append(entry)
+
+    return sort_entries_reading_order(output, geometry)
 
 
 def _is_single_cjk_headword(word: str) -> bool:
