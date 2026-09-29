@@ -1195,7 +1195,7 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert 'relief="sunken"' not in ui
     assert 'relief="ridge"' not in ui
 
-    actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
+    actions_start = text.index('            parent, "四、画线 / OCR / 插图 / 校对"')
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
     actions = text[actions_start:actions_end]
     assert 'self._sidebar_action_button(row, text, command, role=role)' in actions
