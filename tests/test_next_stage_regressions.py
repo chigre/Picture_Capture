@@ -26,8 +26,9 @@ from picture_capture.models import (
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
-    _column_tracking_dimensions, _legacy_find_separator_y, _legacy_is_point,
-    _fuse_detection_entries, _left_edge_ink_mask, apply_column_start_offsets,
+    _collapse_ordinary_oversized_cjk_split_markers, _column_tracking_dimensions,
+    _legacy_find_separator_y, _legacy_is_point, _fuse_detection_entries,
+    _left_edge_ink_mask, apply_column_start_offsets,
     derive_geometry, derive_nominal_geometry, detect_entries,
     ordinary_page_layout_settings, refine_existing_entries,
 )
@@ -88,6 +89,82 @@ def test_projects_restore_independent_settings_and_natural_order(tmp_path):
         assert (state.settings.columns, state.settings.main_entry_font_size,
                 state.settings.ocr_language, state.settings.paddle_band_width_ratio) == expected
 
+
+
+
+
+def test_ordinary_mode_self_collapses_split_markers_inside_large_cjk_without_ocr():
+    image = Image.new("RGB", (360, 260), "white")
+    draw = ImageDraw.Draw(image)
+    # One display-size Han glyph surrogate. The ordinary detector can plausibly
+    # see a true boundary above it and a false separator in its interior.
+    draw.rectangle((20, 60, 82, 130), fill="black")
+    # Normal-height left-strip text establishes the page's ordinary line scale
+    # for the CJK visual projection detector.
+    draw.rectangle((20, 160, 72, 184), fill="black")
+    draw.rectangle((20, 200, 78, 224), fill="black")
+
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=300,
+        gutter=0,
+        start_y=0,
+        character_height=30,
+        paddle_band_left_margin=0,
+        ocr_language="chi_sim",
+        paddle_language="ch",
+        dictionary_profile_id="cjk_visual",
+        profile_cjk_allow_single_headword=True,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    entries = [
+        Entry(word="", x=20, y=52),   # true top boundary
+        Entry(word="", x=20, y=102),  # false internal VB separator
+        Entry(word="", x=20, y=155),  # unrelated normal row
+        Entry(word="", x=20, y=195),  # unrelated normal row
+    ]
+
+    collapsed = _collapse_ordinary_oversized_cjk_split_markers(
+        image, entries, geometry, settings,
+    )
+    assert [entry.y for entry in collapsed] == [52, 155, 195]
+    assert "ORDINARY_OVERSIZED_CJK_SPLIT_COLLAPSED" in collapsed[0].issue_type
+
+
+def test_ordinary_large_cjk_collapse_does_not_merge_normal_adjacent_entries():
+    image = Image.new("RGB", (360, 220), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((20, 60, 78, 84), fill="black")
+    draw.rectangle((20, 105, 80, 129), fill="black")
+    draw.rectangle((20, 155, 76, 179), fill="black")
+
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=300,
+        gutter=0,
+        start_y=0,
+        character_height=30,
+        paddle_band_left_margin=0,
+        ocr_language="chi_sim",
+        paddle_language="ch",
+        dictionary_profile_id="cjk_visual",
+        profile_cjk_allow_single_headword=True,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    entries = [
+        Entry(word="", x=20, y=52),
+        Entry(word="", x=20, y=97),
+        Entry(word="", x=20, y=147),
+    ]
+
+    collapsed = _collapse_ordinary_oversized_cjk_split_markers(
+        image, entries, geometry, settings,
+    )
+    assert [entry.y for entry in collapsed] == [52, 97, 147]
 
 
 def test_ocr_candidate_band_ratio_is_relative_to_actual_column_width():
