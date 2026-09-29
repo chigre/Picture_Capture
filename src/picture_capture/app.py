@@ -401,37 +401,57 @@ def _mixed_ui_wrap_tokens(paragraph: str) -> list[str]:
 
 
 def _wrap_mixed_ui_text(value: object, measure, max_width: int) -> str:
-    """Pixel-wrap Chinese/Latin UI prose without relying on Tk word boundaries."""
+    """Pixel-wrap Chinese/Latin UI prose without relying on Tk word boundaries.
+
+    Tk font.measure() crosses the Python/Tcl boundary and is comparatively
+    expensive on Windows.  Measure each token/character once and accumulate
+    widths instead of repeatedly measuring an ever-growing line prefix.
+    """
     text = _normalize_ui_paragraphs(value)
     limit = max(24, int(max_width))
     if not text:
         return ""
 
+    width_cache: dict[str, int] = {}
+
+    def width(piece: str) -> int:
+        cached = width_cache.get(piece)
+        if cached is None:
+            cached = int(measure(piece))
+            width_cache[piece] = cached
+        return cached
+
+    space_width = width(" ")
     wrapped_paragraphs: list[str] = []
     for paragraph in text.split("\n\n"):
         lines: list[str] = []
         current = ""
+        current_width = 0
         pending_space = False
 
         def flush_current() -> None:
-            nonlocal current
+            nonlocal current, current_width
             if current:
                 lines.append(current.rstrip())
                 current = ""
+                current_width = 0
 
         for token in _mixed_ui_wrap_tokens(paragraph):
             if token == " ":
                 pending_space = bool(current)
                 continue
             prefix = " " if pending_space and current else ""
-            candidate = current + prefix + token
-            if not current or measure(candidate) <= limit:
-                current = candidate
+            token_width = width(token)
+            candidate_width = current_width + (space_width if prefix else 0) + token_width
+            if not current or candidate_width <= limit:
+                current += prefix + token
+                current_width = candidate_width
                 pending_space = False
                 continue
 
             if token in _UI_WRAP_CLOSING_PUNCTUATION:
                 current += token
+                current_width += token_width
                 flush_current()
                 pending_space = False
                 continue
@@ -439,23 +459,28 @@ def _wrap_mixed_ui_text(value: object, measure, max_width: int) -> str:
             if current and current[-1] in _UI_WRAP_OPENING_PUNCTUATION:
                 opening = current[-1]
                 current = current[:-1].rstrip()
+                current_width = max(0, current_width - width(opening))
                 flush_current()
                 current = opening + token
+                current_width = width(opening) + token_width
                 pending_space = False
                 continue
 
             flush_current()
             token = token.lstrip()
-            if measure(token) <= limit:
+            token_width = width(token)
+            if token_width <= limit:
                 current = token
+                current_width = token_width
             else:
                 # Extremely long Latin/URL-like tokens are the only case where
                 # a word may be split; normal English words stay intact.
                 for char in token:
-                    candidate = current + char
-                    if current and measure(candidate) > limit:
+                    char_width = width(char)
+                    if current and current_width + char_width > limit:
                         flush_current()
                     current += char
+                    current_width += char_width
             pending_space = False
         flush_current()
         wrapped_paragraphs.append("\n".join(lines))

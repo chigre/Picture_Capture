@@ -1120,6 +1120,24 @@ def test_mixed_ui_wrap_collapses_hard_breaks_and_keeps_latin_words():
     assert "\n" in wrapped
 
 
+
+def test_mixed_ui_wrap_measures_tokens_incrementally_not_growing_prefixes():
+    from picture_capture.app import _wrap_mixed_ui_text
+
+    calls: list[str] = []
+
+    def measure(value: str) -> int:
+        calls.append(value)
+        return len(value) * 10
+
+    wrapped = _wrap_mixed_ui_text("测" * 240, measure, 120)
+    assert "\n" in wrapped
+    # Repeated CJK characters should be measured once from the cache rather
+    # than measuring 240 successively longer prefixes through Tk.
+    assert len(calls) <= 4
+    assert max(map(len, calls)) <= 1
+
+
 def test_usage_guide_is_modern_task_oriented_and_centered():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
