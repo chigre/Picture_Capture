@@ -139,6 +139,7 @@ from .processing import (
     load_replace_rules,
     parameter_scale,
     ocr_entries,
+    ocr_existing_entry_words_from_markers,
     split_single_lines,
     split_whole_entries,
     split_illustrations,
@@ -1523,9 +1524,10 @@ class UsageGuideWindow(tk.Toplevel):
                     "仅调整候选判定参数时通常无需强制重新识别。"
                 ),
                 (
-                    "C", "普通画线：备用而不是默认",
-                    "普通画线只依赖栏位置、墨迹和行高。它适合词头始终紧贴栏左、正文缩进稳定的简单版式，"
-                    "或 OCR 环境暂不可用时快速应急；若 OCR 可用，建议仍以 OCR画线作为主流程。"
+                    "C", "普通画线也可独立补 OCR 文字",
+                    "普通画线只依赖栏位置、墨迹和行高；定位确认后可直接运行【普通画线后OCR文字】。"
+                    "该步骤把现有画线当作唯一几何真值，只做局部 PaddleOCR 补字；普通行和大字行使用不同高度框，"
+                    "不会新增、删除或移动画线，默认只填写空白词条。"
                 ),
                 (
                     "D", "页面范围会影响批量任务",
@@ -12840,6 +12842,7 @@ class PictureCaptureApp(tk.Tk):
             "运行融合画线（推荐）": "推荐默认：普通几何与 OCR 语义独立检测后按位置融合、救漏并严格去重。",
             "运行OCR画线（单独）": "只运行 OCR 候选链，用于诊断 OCR/parser 侧漏检或误检。",
             "运行普通画线（单独）": "只运行高速左缘几何链，用于诊断缩进/栏左规则。",
+            "普通画线后OCR文字": "只读取已有画线做局部 PaddleOCR 补字；普通行与大字行使用不同高度框，不新增、删除或移动任何画线，默认仅填空白词条。",
             "清除画线": "清除当前页全部词条画线；不会删除扫描图片。",
             "清除文本": "清空当前页画线中的词条文字，但保留画线位置。",
             "精修画线": "仅在所选范围微调已有画线的 Y 位置，不新增或删除词条。",
@@ -12856,6 +12859,7 @@ class PictureCaptureApp(tk.Tk):
         }
         rows = [
             (("运行融合画线（推荐）", self.run_combined_draw_action), ("运行OCR画线（单独）", self.run_ocr_draw_action), ("运行普通画线（单独）", self.run_normal_draw_action)),
+            (("普通画线后OCR文字", self.ocr_ordinary_lines_text_selected_scope),),
             (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充词条", self.fill_existing_headwords), ("修复排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("恢复PDIC", self.restore_from_pdic_backup)),
             (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
@@ -19590,6 +19594,131 @@ class PictureCaptureApp(tk.Tk):
             worker,
             done,
             item_label=lambda i: pages[i].name,
+        )
+
+    def ocr_ordinary_lines_text_selected_scope(self) -> None:
+        """OCR text for existing ordinary markers without changing geometry."""
+        if not self.guard() or not self.apply_quick_settings(show_status=False):
+            return
+        if self._batch_active:
+            self.status_var.set("已有批量任务正在运行，请结束后再执行普通画线后OCR文字。")
+            return
+        if not self._guard_transformed_geometry("普通画线后OCR文字"):
+            return
+        try:
+            indices = self.selected_page_indices()
+        except Exception as exc:
+            self.show_error("页面范围无效", exc)
+            return
+        if not indices:
+            return
+
+        existing = [
+            index for index in indices
+            if read_pdic(pdic_path(self.project.images[index]))
+        ]
+        if not existing:
+            self.status_var.set("所选范围没有已有画线可执行OCR文字识别")
+            return
+
+        if len(existing) > 1 and not messagebox.askyesno(
+            "普通画线后OCR文字",
+            f"将对 {len(existing)} 个已有画线的页面逐条做局部 PaddleOCR。\n\n"
+            "只填充空白词条；已有文字和人工校对内容保持不变；"
+            "不会新增、删除或移动任何画线。继续？",
+            parent=self,
+        ):
+            return
+
+        try:
+            self._flush_deferred_page_save()
+            self._sync_entry_editor_texts()
+            self.save_pdic(silent=True, sync_editors=False)
+        except Exception as exc:
+            self.show_error("普通画线后OCR文字准备失败", exc)
+            return
+
+        project = self.project
+        settings = replace(self.settings)
+        rules = load_replace_rules(replace_rules_path(project.root))
+        filter_path = headword_filter_rules_path(
+            project.root, HEADWORD_FILTER_RULES_FILENAME
+        )
+        profile_path = filter_path.parent / PROFILE_FILENAME
+        pages_info = {i: self.pages_tuple(i) for i in existing}
+
+        def worker(index: int, _position: int, _total: int):
+            page = project.images[index]
+            entries = read_pdic(pdic_path(page))
+            original_count = len(entries)
+            original_coords = [(int(entry.x), int(entry.y)) for entry in entries]
+            protected_words = {
+                (int(entry.x), int(entry.y)): str(entry.word or "")
+                for entry in entries
+                if str(entry.word or "").strip() or bool(entry.manually_selected)
+            }
+            with Image.open(page) as opened:
+                image = normalize_page_rgb(opened)
+            sections = read_page_sections(page)
+            updated, stats = ocr_existing_entry_words_from_markers(
+                image,
+                entries,
+                settings,
+                rules,
+                profile_page_index=index,
+                page_sections=sections,
+                profile_path=profile_path,
+                only_blank=True,
+            )
+            if len(updated) != original_count:
+                raise RuntimeError(
+                    f"{page.name} OCR文字前后画线数变化："
+                    f"{original_count} → {len(updated)}"
+                )
+            if [(int(entry.x), int(entry.y)) for entry in updated] != original_coords:
+                raise RuntimeError(f"{page.name} OCR文字意外修改了画线坐标")
+            for entry in updated:
+                key = (int(entry.x), int(entry.y))
+                if key in protected_words and str(entry.word or "") != protected_words[key]:
+                    raise RuntimeError(f"{page.name} OCR文字意外覆盖了已有/人工文本")
+            write_pdic(pdic_path(page), updated, image.width, pages_info[index])
+            export_ocred(
+                qt_root(project.root) / f"{page.stem}.OCRed",
+                [entry.word for entry in updated],
+            )
+            return {"index": int(index), **stats}
+
+        def done(completed, total, stopped, results, error):
+            if error is not None:
+                return
+            if self.current_index in existing:
+                self.load_page(self.current_index, skip_current_save=True)
+            filled = sum(int((row or {}).get("filled", 0)) for row in results)
+            large = sum(int((row or {}).get("large", 0)) for row in results)
+            regular = sum(int((row or {}).get("regular", 0)) for row in results)
+            failed = sum(int((row or {}).get("failed", 0)) for row in results)
+            skipped = sum(
+                int((row or {}).get("skipped_existing", 0))
+                + int((row or {}).get("skipped_manual", 0))
+                for row in results
+            )
+            prefix = (
+                f"普通画线后OCR文字已停止：{completed}/{total} 页"
+                if stopped
+                else f"普通画线后OCR文字完成：{completed}/{total} 页"
+            )
+            self.status_var.set(
+                f"{prefix}；填入 {filled} 条"
+                f"（普通框 {regular}，大字框 {large}）"
+                f"；未识别 {failed} 条；保护已有/人工文本 {skipped} 条"
+            )
+
+        self._start_batch_task(
+            "普通画线后OCR文字",
+            existing,
+            worker,
+            done,
+            item_label=lambda index: project.images[index].name,
         )
 
     def run_combined_draw_action(self) -> None:
