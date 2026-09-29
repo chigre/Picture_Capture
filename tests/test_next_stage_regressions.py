@@ -941,16 +941,18 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
 
 
 
-def test_settings_center_restores_inline_detailed_parameter_help():
+def test_settings_center_keeps_detailed_parameter_help_in_right_pane():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     settings_start = text.index("class SettingsDialog")
     settings_end = text.index("class ", settings_start + len("class SettingsDialog"))
     settings = text[settings_start:settings_end]
-    assert "inline_help = ttk.Label" in settings
-    assert "text=self.SETTING_HELP.get(" in settings
-    assert "check_help = ttk.Label" in settings
-    assert "text=self.CHECK_HELP.get(" in settings
+    assert "inline_help = ttk.Label" not in settings
+    assert "check_help = ttk.Label" not in settings
+    assert 'help_box = ttk.LabelFrame(right, text="设置说明"' in settings
+    assert "self._show_setting_help(" in settings
+    assert "self._show_check_help(" in settings
+    assert "详细说明统一显示在右侧" in settings
     assert '"analysis_left": "width"' in text
     assert '"analysis_right": "width"' in text
     assert '"paddle_header_search_height": "height"' in text
