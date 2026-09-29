@@ -4983,6 +4983,8 @@ def test_settings_center_avoids_full_hidden_tab_idle_layout_cascade():
     assert "content.bind(" in text
     assert 'cv.configure(scrollregion=cv.bbox("all"))' in text
     assert "每个参数下方已直接显示详细说明" in text
+    assert 'pending["job"] = self.after(80, refresh)' in text
+    assert 'pending["job"] = self.after_idle(refresh)' not in text
 
 
 

@@ -2873,7 +2873,11 @@ class SettingsDialog(tk.Toplevel):
             try:
                 if pending["job"] is not None:
                     self.after_cancel(pending["job"])
-                pending["job"] = self.after_idle(refresh)
+                # Debounce onto the normal event loop instead of the idle queue.
+                # update_idletasks() drains idle callbacks synchronously; with
+                # many Settings Center help labels that turned one geometry
+                # flush into a full all-tab font-measure pass on Windows.
+                pending["job"] = self.after(80, refresh)
             except tk.TclError:
                 return
 
