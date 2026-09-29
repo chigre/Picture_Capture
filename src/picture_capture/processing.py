@@ -1061,6 +1061,12 @@ def _entry_with_fused_metadata(
         issue_type=str(semantic.issue_type or ""),
         parser_score=semantic.parser_score,
         manually_selected=bool(semantic.manually_selected),
+        ocr_box_height=semantic.ocr_box_height,
+        ocr_line_height_reference=semantic.ocr_line_height_reference,
+        ocr_visual_run_height=semantic.ocr_visual_run_height,
+        ocr_leading_height_ratio=semantic.ocr_leading_height_ratio,
+        ocr_single_cjk=bool(semantic.ocr_single_cjk),
+        ocr_oversized_cjk=bool(semantic.ocr_oversized_cjk),
     )
 
 
