@@ -4966,3 +4966,16 @@ def test_settings_center_avoids_full_hidden_tab_idle_layout_cascade():
     assert 'cv.configure(scrollregion=cv.bbox("all"))' in text
     assert "每个参数下方已直接显示详细说明" in text
 
+
+
+def test_responsive_help_wrapping_does_not_self_trigger_on_label_configure():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index("    def _bind_responsive_labels(")
+    end = text.index("    def _setting_var(", start)
+    block = text[start:end]
+    assert 'container.bind("<Configure>", schedule, add="+")' in block
+    assert 'label.bind("<Configure>", schedule, add="+")' not in block
+    assert "_pc_wrap_cache_key" in block
+    assert "_pc_wrap_width" in block
+

@@ -2825,13 +2825,20 @@ class SettingsDialog(tk.Toplevel):
                         label_width = cap
                     available = max(48, label_width - 12)
                     if getattr(label, "_pc_dynamic_textvariable", False):
+                        if getattr(label, "_pc_wrap_width", None) == available:
+                            continue
+                        label._pc_wrap_width = available
                         if int(float(label.cget("wraplength"))) != available:
                             label.configure(wraplength=available)
                         continue
                     raw = getattr(label, "_pc_wrap_source", label.cget("text"))
+                    cache_key = (str(raw), int(available))
+                    if getattr(label, "_pc_wrap_cache_key", None) == cache_key:
+                        continue
                     rendered = _wrap_mixed_ui_text(
                         raw, _label_measure(label), available
                     )
+                    label._pc_wrap_cache_key = cache_key
                     if label.cget("text") != rendered or int(float(label.cget("wraplength"))) != 0:
                         label.configure(text=rendered, wraplength=0)
                 except (tk.TclError, TypeError, ValueError):
@@ -2846,9 +2853,12 @@ class SettingsDialog(tk.Toplevel):
                 return
 
         try:
+            # Container width is the authoritative wrapping constraint. Binding
+            # each label's own <Configure> event creates a self-triggering loop:
+            # rewrapping changes label geometry, which schedules another rewrap.
+            # That became especially expensive after detailed inline Settings
+            # help was restored and could stall Windows/Tk indefinitely.
             container.bind("<Configure>", schedule, add="+")
-            for label in labels:
-                label.bind("<Configure>", schedule, add="+")
             schedule()
         except tk.TclError:
             pass
