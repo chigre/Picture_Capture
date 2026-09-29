@@ -1705,6 +1705,28 @@ def _fuse_detection_entries(
         ordinary_to_ocr[ordinary_index] = ocr_index
         used_ocr.add(ocr_index)
 
+    # Rejected OCR review candidates are also observations and must be paired
+    # one-to-one. Without global assignment, one rejected row could enrich or
+    # veto two adjacent ordinary boundaries on dense dictionary pages.
+    latent_edges: list[tuple[int, int, int]] = []
+    for ordinary_index, (_ordinary, ordinary_col, _ordinary_u, ordinary_v) in enumerate(ordinary_rows):
+        if ordinary_index in ordinary_to_ocr:
+            continue
+        for latent_index, (_candidate, latent_col, latent_v) in enumerate(latent_rows):
+            if latent_col != ordinary_col:
+                continue
+            delta = abs(int(latent_v) - int(ordinary_v))
+            if delta <= base_tolerance:
+                latent_edges.append((delta, ordinary_index, latent_index))
+    latent_edges.sort(key=lambda item: (item[0], item[1], item[2]))
+    ordinary_to_latent: dict[int, int] = {}
+    used_latent: set[int] = set()
+    for _delta, ordinary_index, latent_index in latent_edges:
+        if ordinary_index in ordinary_to_latent or latent_index in used_latent:
+            continue
+        ordinary_to_latent[ordinary_index] = latent_index
+        used_latent.add(latent_index)
+
     # Oversized single-Han heads are taller than one ordinary text row. The
     # ordinary VB detector can therefore fire twice inside the same physical
     # glyph: once at the real entry boundary and once again on a lower ink run.
@@ -1786,17 +1808,11 @@ def _fuse_detection_entries(
             # Candidate-level fusion: a rejected OCR row can still carry useful
             # semantics, or in the opposite direction can provide a highly
             # specific negative explanation for an ordinary false positive.
-            nearest_latent: dict | None = None
-            nearest_delta: int | None = None
-            for candidate, candidate_col, candidate_v in latent_rows:
-                if candidate_col != _ordinary_col:
-                    continue
-                delta = abs(int(candidate_v) - int(_ordinary_v))
-                if delta > base_tolerance:
-                    continue
-                if nearest_delta is None or delta < nearest_delta:
-                    nearest_latent = candidate
-                    nearest_delta = delta
+            latent_index = ordinary_to_latent.get(ordinary_index)
+            nearest_latent = (
+                latent_rows[latent_index][0]
+                if latent_index is not None else None
+            )
 
             if (
                 nearest_latent is not None
