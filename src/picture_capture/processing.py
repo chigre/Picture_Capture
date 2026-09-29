@@ -1110,13 +1110,84 @@ def _collapse_ordinary_oversized_cjk_split_markers(
             continue
 
         gray = np.asarray(ImageOps.grayscale(band), dtype=np.uint8)
-        _zone_width, visual_runs = _cjk_visual_projection_runs(
+        zone_width, visual_runs = _cjk_visual_projection_runs(
             gray,
             0,
             settings,
             1.0,
             relaxed=False,
         )
+
+        # A large Han glyph may contain a real horizontal white slit wider than
+        # the projection detector's tiny-hole filler. That is exactly where the
+        # ordinary VB separator can retrigger. Recover such a split glyph only
+        # when the two ink fragments are separated by a *very* small vertical
+        # gap and occupy strongly overlapping X columns. This is intentionally
+        # much stricter than line spacing, so two normal adjacent text rows stay
+        # separate.
+        projection_width = min(
+            gray.shape[1],
+            max(48, int(zone_width or 0), 100),
+        )
+        if projection_width > 0:
+            projection = gray[:, :projection_width]
+            threshold = _left_edge_otsu_threshold(projection)
+            dark = projection <= threshold
+            active = dark.sum(axis=1) >= max(
+                3, round(projection_width * 0.015)
+            )
+            active_list = active.tolist()
+            raw_runs: list[tuple[int, int]] = []
+            index = 0
+            while index < len(active_list):
+                if not active_list[index]:
+                    index += 1
+                    continue
+                end = index + 1
+                while end < len(active_list) and active_list[end]:
+                    end += 1
+                raw_runs.append((index, end))
+                index = end
+
+            bridge_gap = max(2, round(character_height * 0.18))
+            bridged: list[tuple[int, int]] = []
+            for start, end in raw_runs:
+                if not bridged:
+                    bridged.append((start, end))
+                    continue
+                prev_start, prev_end = bridged[-1]
+                gap = start - prev_end
+                should_bridge = False
+                if 0 <= gap <= bridge_gap:
+                    prev_cols = dark[prev_start:prev_end].any(axis=0)
+                    next_cols = dark[start:end].any(axis=0)
+                    smaller = min(
+                        int(prev_cols.sum()), int(next_cols.sum())
+                    )
+                    overlap = int((prev_cols & next_cols).sum())
+                    overlap_ratio = (
+                        overlap / float(smaller) if smaller > 0 else 0.0
+                    )
+                    should_bridge = overlap_ratio >= 0.65
+                if should_bridge:
+                    bridged[-1] = (prev_start, end)
+                else:
+                    bridged.append((start, end))
+
+            minimum_large = max(
+                round(character_height * 1.55),
+                character_height + 1,
+            )
+            for start, end in bridged:
+                if end - start < minimum_large:
+                    continue
+                if not any(
+                    max(start, existing_start) < min(end, existing_end)
+                    for existing_start, existing_end in visual_runs
+                ):
+                    visual_runs.append((start, end))
+            visual_runs.sort()
+
         if not visual_runs:
             continue
 
