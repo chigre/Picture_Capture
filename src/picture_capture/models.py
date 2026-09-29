@@ -179,7 +179,7 @@ class AppSettings:
     page_list_show_illustrations: bool = True
     page_bookmarks: list[str] = field(default_factory=list)
     darkness_threshold: int = 300
-    dark_area_percent: int = 90
+    dark_area_percent: float = 90.0
     batch_interval: float = 3.0
     # Page-level multiprocessing is used only for entry/illustration cropping.
     # 0 = automatic conservative worker count; 1 = serial crop processing.
@@ -252,7 +252,7 @@ class AppSettings:
     main_entry_default_color: str = "#e6e6e6"
     # 0 = automatic proofreading crop fit: fill 99% of the actual left image area.
     # Positive values are explicit/manual percentages and remain project-persisted.
-    review_zoom_percent: int = 0
+    review_zoom_percent: float = 0.0
     review_entry_font_family: str = "自动（系统推荐）"
     review_entry_font_size: int = 16
     # v2 means review_entry_font_size is the actual fixed editor font size.
@@ -439,7 +439,7 @@ class AppSettings:
     paddle_band_width: int = 600
     # Percentage of the current detected column width analyzed by headword OCR.
     # 100 means the full column; the separate left margin is added independently.
-    paddle_band_width_ratio: int = 100
+    paddle_band_width_ratio: float = 100.0
     # OCR-only guard/preprocessing; source pixels and canvas rendering are never replaced.
     paddle_max_input_side: int = 2800
     paddle_preprocessing: str = "original"
@@ -484,7 +484,7 @@ class AppSettings:
     # analysis, expressed as a percentage of the current straightened column.
     # Keeping this local prevents long definition text at the right side of a
     # column from pulling the separator toward the preceding line.
-    paddle_separator_roi_width_ratio: int = 60
+    paddle_separator_roi_width_ratio: float = 60.0
     paddle_separator_column_margin: int = 8
     # Optional second OCR pass for diagnostics / conservative rescue.  It uses
     # the same straightened candidate band and the existing Tesseract language/path.

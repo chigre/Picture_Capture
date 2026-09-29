@@ -850,6 +850,17 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert '"column_track_block_height": "% 正文高度"' in settings
     assert '"column_track_max_step": "% 分块高度"' in settings
     assert '"columns": (1, 12, 1)' in settings
+    percent_float_fields = (
+        "start_y", "manual_x", "column_width", "gutter", "body_indent",
+        "character_height", "row_padding", "horizontal_tolerance",
+        "dark_area_percent", "analysis_left", "analysis_right",
+        "column_track_radius", "column_track_block_height", "column_track_max_step",
+        "paddle_band_width_ratio", "paddle_left_tolerance",
+        "paddle_separator_roi_width_ratio", "paddle_header_search_height",
+        "right_ratio", "review_zoom_percent",
+    )
+    for name in percent_float_fields:
+        assert f'"{name}", float' in settings, name
     assert "def _show_setting_help(" in settings
     assert 'text="设置说明"' in settings
     assert "程序取第 1 个捕获组作为原始词头" in settings
