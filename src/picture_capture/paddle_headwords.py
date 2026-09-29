@@ -1001,14 +1001,23 @@ def unwrap_column_band(
         #
         # The old 600px reference made 60% become 360px on every scan, which
         # silently clipped long CJK headwords and changed meaning with DPI.
-        fallback_width = max(24, int(getattr(settings, "column_width", 0) or 0))
-        column_width = (
+        configured_column_width = max(
+            1, int(getattr(settings, "column_width", 0) or 0)
+        )
+        geometry_interval_width = (
             int(geometry.column_widths[column])
             if 0 <= column < len(geometry.column_widths)
-            else fallback_width
+            else configured_column_width
         )
-        content_width = max(1, round(max(1, column_width) * band_ratio))
-        band_width = max(24, min(column_width, content_width) + left_margin)
+        # Geometry's last interval may extend from the final column start all
+        # the way to the page edge, so it is only an upper bound here.  The
+        # effective per-page settings.column_width is the actual dictionary
+        # column width resolved by Profile/layout analysis.
+        column_width = max(
+            1, min(configured_column_width, max(1, geometry_interval_width))
+        )
+        content_width = max(1, round(column_width * band_ratio))
+        band_width = max(24, content_width + left_margin)
     top = max(0, geometry.top)
     canonical_size = geometry.transform.canonical_size(image.size)
     bottom = min(canonical_size[1], geometry.bottom)
@@ -6174,7 +6183,8 @@ def _cache_signature(image: Image.Image, geometry: "Geometry", settings: AppSett
         "geometry_top": int(geometry.top),
         "geometry_bottom": int(geometry.bottom),
         "column_widths": [int(value) for value in getattr(geometry, "column_widths", [])],
-        "band_width_semantics": "detected_column_ratio_v1",
+        "configured_column_width": int(getattr(settings, "column_width", 0) or 0),
+        "band_width_semantics": "effective_column_ratio_v2",
         "band_width_ratio": max(1, min(100, int(getattr(settings, "paddle_band_width_ratio", 100)))),
         "band_left_margin": settings.paddle_band_left_margin,
         "language": _paddle_language(settings),
