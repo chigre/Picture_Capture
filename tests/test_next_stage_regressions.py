@@ -42,8 +42,9 @@ from picture_capture.profile_semantics import (
 )
 from picture_capture.paddle_headwords import (
     OCRLine, OCRRecord, _cache_signature, _compile_patterns,
-    _detect_visual_entry_markers, _headword_script_compatibility,
-    _ordinary_strong_edge_visual_rescue, _ordinary_visual_rescue_thresholds,
+    _detect_visual_entry_markers, _entries_from_review_candidates,
+    _headword_script_compatibility, _ordinary_strong_edge_visual_rescue,
+    _ordinary_visual_rescue_thresholds,
     _repair_multiline_headword_state_machine,
     _selected_tail_structure_evidence, filter_headword_records, HeadwordParse,
     parse_headword_filter_rules, parse_headword_text, prepare_ocr_band,
@@ -209,6 +210,132 @@ def test_combined_fusion_keeps_oversized_single_cjk_ocr_separator():
     assert fused[0].word == "嗳"
     assert fused[0].y == 96
     assert fused[0].ocr_source == "combined:paddle"
+
+
+
+
+def test_review_candidate_exports_oversized_single_cjk_geometry_for_fusion():
+    entries = _entries_from_review_candidates([
+        {
+            "selected": True,
+            "column": 0,
+            "_axis_v": 100,
+            "_axis_u": 20,
+            "source_x": 20,
+            "source_y": 100,
+            "word": "北",
+            "final_engine": "paddle",
+            "confidence": 0.97,
+            "candidate_id": "big-cjk",
+            "issue_types": [],
+            "score": 8.0,
+            "line_height_reference": 30.0,
+            "paddle": {
+                "box": [0, 0, 62, 68],
+                "features": {
+                    "cjk_single_visual": True,
+                    "cjk_single_prominent": True,
+                    "leading_record_height_ratio": 2.1,
+                    "cjk_visual_run_height": 66,
+                },
+                "parser_trace": ["chinese_single_character"],
+            },
+            "tesseract": {},
+            "lens": {},
+        }
+    ])
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.ocr_single_cjk is True
+    assert entry.ocr_oversized_cjk is True
+    assert entry.ocr_box_height == 68
+    assert entry.ocr_line_height_reference == 30.0
+    assert entry.ocr_visual_run_height == 66
+    assert entry.ocr_leading_height_ratio == 2.1
+
+
+def test_combined_fusion_suppresses_ordinary_split_lines_inside_oversized_cjk_heads():
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=360,
+        gutter=0,
+        start_y=0,
+        character_height=30,
+        paddle_alignment_y_tolerance_ratio=0.50,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 500, settings)
+    x = int(geometry.column_starts[0])
+
+    # This mirrors the reported failure: each physical display head produces
+    # one correct boundary plus a second ordinary VB hit lower inside the same
+    # tall glyph.
+    ordinary = [
+        Entry(word="", x=x, y=30), Entry(word="", x=x, y=68),
+        Entry(word="", x=x, y=110), Entry(word="", x=x, y=151),
+        Entry(word="", x=x, y=350), Entry(word="", x=x, y=406),
+    ]
+    ocr = [
+        Entry(
+            word="鹎", x=x, y=30, confidence=0.98, ocr_source="paddle",
+            candidate_id="big1", final_engine="paddle",
+            ocr_box_height=64, ocr_line_height_reference=30,
+            ocr_visual_run_height=62, ocr_leading_height_ratio=2.0,
+            ocr_single_cjk=True, ocr_oversized_cjk=True,
+        ),
+        Entry(
+            word="筝", x=x, y=110, confidence=0.98, ocr_source="paddle",
+            candidate_id="big2", final_engine="paddle",
+            ocr_box_height=66, ocr_line_height_reference=30,
+            ocr_visual_run_height=64, ocr_leading_height_ratio=2.1,
+            ocr_single_cjk=True, ocr_oversized_cjk=True,
+        ),
+        Entry(
+            word="北", x=x, y=350, confidence=0.98, ocr_source="paddle",
+            candidate_id="big3", final_engine="paddle",
+            ocr_box_height=72, ocr_line_height_reference=30,
+            ocr_visual_run_height=70, ocr_leading_height_ratio=2.2,
+            ocr_single_cjk=True, ocr_oversized_cjk=True,
+        ),
+    ]
+
+    fused = _fuse_detection_entries(ordinary, ocr, geometry, settings)
+    assert [(entry.word, entry.y) for entry in fused] == [
+        ("鹎", 30), ("筝", 110), ("北", 350),
+    ]
+    assert all(
+        "FUSION_OVERSIZED_CJK_ORDINARY_SUPPRESSED" in entry.issue_type
+        for entry in fused
+    )
+
+
+def test_combined_fusion_does_not_suppress_after_normal_single_cjk():
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=360,
+        gutter=0,
+        start_y=0,
+        character_height=30,
+        paddle_alignment_y_tolerance_ratio=0.50,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 260, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [Entry(word="", x=x, y=100), Entry(word="", x=x, y=145)]
+    ocr = [
+        Entry(
+            word="中", x=x, y=100, confidence=0.96, ocr_source="paddle",
+            candidate_id="normal-single", final_engine="paddle",
+            ocr_box_height=29, ocr_line_height_reference=30,
+            ocr_leading_height_ratio=0.97,
+            ocr_single_cjk=True, ocr_oversized_cjk=False,
+        )
+    ]
+
+    fused = _fuse_detection_entries(ordinary, ocr, geometry, settings)
+    assert [(entry.word, entry.y) for entry in fused] == [("中", 100), ("", 145)]
 
 
 def test_settings_json_beats_profile_sidecar(tmp_path):
