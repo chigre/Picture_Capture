@@ -886,8 +886,8 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert '"parallel_workers"' in settings
     assert "self._save_integrated_crop_settings()" in settings
 
-    assert 'text="融合画线（推荐）"' in settings
-    assert 'text="OCR画线（单独诊断）"' in settings
+    assert 'text="融合画线+OCR"' in settings
+    assert 'text="OCR画线（默认）"' in settings
     assert 'text="普通画线（单独诊断）"' in settings
     assert 'value=DETECTION_LABELS["combined"]' in settings
     assert 'value=DETECTION_LABELS["left_edge"]' in settings
