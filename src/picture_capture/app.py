@@ -12923,6 +12923,7 @@ class PictureCaptureApp(tk.Tk):
             "恢复PDIC": "从备份文本覆盖恢复主界面所选范围的 PDIC；执行前请确认页面范围。",
             "插图识别": "在所选页面范围自动识别插图并写入 PPP；人工多边形会保留。",
             "编辑插图": "进入/退出插图多边形编辑模式，可新增、移动顶点并修改标签。",
+            "清理临时文件": "清理主界面当前页面范围对应的 PaddleOCR 临时缓存、诊断和复核文件；不会删除原始扫描图、PDIC/PPP 或已校对词条。",
             "保存当前页": "立即保存当前页的画线/词条或插图编辑结果。",
         }
         rows = [
@@ -12934,7 +12935,12 @@ class PictureCaptureApp(tk.Tk):
             ),
             (("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)),
             (("选择词条文件", self.select_existing_headwords_file), ("填充词条", self.fill_existing_headwords), ("修复排序", self.repair_pdic_order_selected_scope), ("备份PDIC", self.backup_pdic), ("恢复PDIC", self.restore_from_pdic_backup)),
-            (("插图识别", self.detect_illustrations_selected_scope), ("编辑插图", self.toggle_polygon_drawing), ("保存当前页", self.save_current_page)),
+            (
+                ("插图识别", self.detect_illustrations_selected_scope),
+                ("编辑插图", self.toggle_polygon_drawing),
+                ("清理临时文件", self.cleanup_paddleocr_temp_selected_scope),
+                ("保存当前页", self.save_current_page),
+            ),
         ]
         for ri, specs in enumerate(rows):
             row = ttk.Frame(actions)
@@ -15286,6 +15292,149 @@ class PictureCaptureApp(tk.Tk):
         if mode == "current": return [self.current_index] if self.current_index >= 0 else []
         if mode == "to_end": return list(range(max(0, self.current_index), len(self.project.images)))
         return self._parse_page_spec(self.page_range_spec_var.get())
+
+
+    @staticmethod
+    def _paddle_temp_matches_page(path: Path, page_stem: str) -> bool:
+        """Return True only for PaddleOCR temp entries owned by one page stem."""
+        name = path.name
+        stem = str(page_stem or "")
+        if not stem or name == stem:
+            return bool(stem and name == stem)
+        return any(
+            name.startswith(stem + suffix)
+            for suffix in (".", "_", "-")
+        )
+
+    def cleanup_paddleocr_temp_selected_scope(self) -> None:
+        """Delete PaddleOCR temporary files only for the currently selected page range."""
+        if not self.project:
+            messagebox.showinfo("清理临时文件", "请先打开项目。", parent=self)
+            return
+        try:
+            indices = self.selected_page_indices()
+        except Exception as exc:
+            self.show_error("页面范围无效", exc)
+            return
+        if not indices:
+            messagebox.showinfo("清理临时文件", "当前页面范围为空。", parent=self)
+            return
+
+        cache_root = ocr_cache_root(self.project.root)
+        if not cache_root.exists():
+            messagebox.showinfo(
+                "清理临时文件",
+                "当前项目没有 PaddleOCR 临时文件可清理。",
+                parent=self,
+            )
+            return
+
+        page_stems = {
+            self.project.images[index].stem
+            for index in indices
+            if 0 <= int(index) < len(self.project.images)
+        }
+        targets: list[Path] = []
+        total_bytes = 0
+        try:
+            for child in cache_root.iterdir():
+                if not any(
+                    self._paddle_temp_matches_page(child, page_stem)
+                    for page_stem in page_stems
+                ):
+                    continue
+                targets.append(child)
+                if child.is_file():
+                    try:
+                        total_bytes += int(child.stat().st_size)
+                    except OSError:
+                        pass
+                elif child.is_dir():
+                    for nested in child.rglob("*"):
+                        if nested.is_file():
+                            try:
+                                total_bytes += int(nested.stat().st_size)
+                            except OSError:
+                                pass
+        except OSError as exc:
+            self.show_error("无法检查临时文件", exc)
+            return
+
+        if not targets:
+            messagebox.showinfo(
+                "清理临时文件",
+                f"所选 {len(indices)} 页没有对应的 PaddleOCR 临时文件。",
+                parent=self,
+            )
+            return
+
+        def human_size(size: int) -> str:
+            value = float(max(0, size))
+            units = ("B", "KB", "MB", "GB", "TB")
+            for unit in units:
+                if value < 1024.0 or unit == units[-1]:
+                    return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+                value /= 1024.0
+            return f"{size} B"
+
+        confirmed = messagebox.askyesno(
+            "警告：清理 PaddleOCR 临时文件",
+            (
+                f"将清理当前所选页面范围内 {len(indices)} 页对应的 "
+                f"_PictureCapture\\QT\\PaddleOCR 临时文件。\n\n"
+                f"预计删除 {len(targets)} 个文件/目录，约 {human_size(total_bytes)}。\n\n"
+                "该操作会删除这些页面的 OCR 缓存、诊断及复核临时文件；"
+                "不会删除原始扫描图片、PDIC/PPP、已保存词条文字、校对结果或其他页面的数据。\n\n"
+                "清理后，如果再次对这些页面运行 OCR画线、OCR复核或依赖 OCR 缓存的功能，"
+                "程序需要重新执行 OCR，可能耗时较长。\n\n"
+                "此操作无法在 Picture Capture 内撤销。确定继续吗？"
+            ),
+            icon="warning",
+            parent=self,
+        )
+        if not confirmed:
+            return
+
+        removed = 0
+        failed: list[str] = []
+        for target in targets:
+            try:
+                if target.is_dir():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink(missing_ok=True)
+                removed += 1
+            except OSError as exc:
+                failed.append(f"{target.name}: {exc}")
+
+        if failed:
+            messagebox.showwarning(
+                "临时文件清理未完全完成",
+                (
+                    f"已删除 {removed}/{len(targets)} 个文件或目录。\n"
+                    f"以下项目删除失败：\n" + "\n".join(failed[:12])
+                    + ("\n…" if len(failed) > 12 else "")
+                ),
+                parent=self,
+            )
+            self.status_var.set(
+                f"临时文件清理部分完成：已删除 {removed}/{len(targets)} 项"
+            )
+            return
+
+        self.status_var.set(
+            f"已清理所选 {len(indices)} 页 PaddleOCR 临时文件："
+            f"{removed} 项，释放约 {human_size(total_bytes)}"
+        )
+        messagebox.showinfo(
+            "清理完成",
+            (
+                f"已清理所选 {len(indices)} 页对应的 PaddleOCR 临时文件。\n"
+                f"删除 {removed} 个文件/目录，释放约 {human_size(total_bytes)}。\n\n"
+                "原始扫描图、PDIC/PPP 和已保存校对结果均未删除。"
+            ),
+            parent=self,
+        )
 
     def jump_to_page_spec(self) -> None:
         """Navigate to the first page number typed in the specified-range box."""
