@@ -1003,7 +1003,24 @@ def _detect_entries_left_edge(
                 marker_x, _direction = _ordinary_source_column_edge(
                     geometry, col, final_y
                 )
-                entries.append(Entry(word="", x=int(marker_x), y=int(final_y)))
+                vb_reason = str(_vb_meta.get("reason", "") or "")
+                if vb_reason == "vb_full_white":
+                    ordinary_confidence = 0.98
+                    ordinary_issue = ""
+                else:
+                    threshold = int(_vb_meta.get("threshold", white_low) or white_low)
+                    span = max(1, white_high - white_low)
+                    whiteness = max(0.0, min(1.0, (threshold - white_low) / span))
+                    ordinary_confidence = 0.76 + 0.18 * whiteness
+                    ordinary_issue = "ORDINARY_VB_BRIGHTNESS_FALLBACK"
+                entries.append(Entry(
+                    word="",
+                    x=int(marker_x),
+                    y=int(final_y),
+                    confidence=float(round(ordinary_confidence, 4)),
+                    ocr_source="ordinary_vb",
+                    issue_type=ordinary_issue,
+                ))
 
                 # VB: y = separatorY + rowHeight * 1.2 (default).
                 y = max(
@@ -1559,21 +1576,19 @@ def _review_candidate_has_strong_positive_visual(candidate: dict) -> bool:
     return False
 
 
-def _review_candidate_hard_negative_consensus(candidate: dict) -> bool:
-    """Return True only for high-confidence OCR evidence that a row is internal.
+def _review_candidate_hard_negative_level(candidate: dict) -> str:
+    """Return '', 'single', or 'dual' for specific negative OCR evidence.
 
-    Combined mode keeps ordinary geometry as the high-recall channel, but it no
-    longer has to retain a geometrically plausible body line when OCR semantics
-    independently identify it as an internal/continuation structure. Two-engine
-    agreement is sufficient; a single engine must be exceptionally confident
-    and expose the matching semantic feature.
+    A dual verdict means both local OCR engines independently agree on the same
+    internal/continuation class. A single verdict is allowed only for an
+    exceptionally confident engine with a matching semantic feature.
     """
     if candidate.get("selected") or candidate.get("manual_override"):
-        return False
+        return ""
     if str(candidate.get("position_variant", "refined")) != "refined":
-        return False
+        return ""
     if _review_candidate_has_strong_positive_visual(candidate):
-        return False
+        return ""
 
     votes = 0
     strong_single = False
@@ -1602,8 +1617,15 @@ def _review_candidate_hard_negative_consensus(candidate: dict) -> bool:
         )
         if confidence >= 0.94 and matching_feature:
             strong_single = True
-    return votes >= 2 or strong_single
+    if votes >= 2:
+        return "dual"
+    if strong_single:
+        return "single"
+    return ""
 
+
+def _review_candidate_hard_negative_consensus(candidate: dict) -> bool:
+    return bool(_review_candidate_hard_negative_level(candidate))
 
 def _latent_review_rows(
     review_candidates: list[dict] | None,
@@ -1814,15 +1836,21 @@ def _fuse_detection_entries(
                 if latent_index is not None else None
             )
 
-            if (
-                nearest_latent is not None
-                and _review_candidate_hard_negative_consensus(nearest_latent)
-            ):
-                # Two semantic engines, or one exceptionally confident engine
-                # with a matching internal-structure feature, agree this is not
-                # an entry. This is intentionally much narrower than allowing
-                # generic OCR failure to veto ordinary geometry.
-                continue
+            hard_negative_level = (
+                _review_candidate_hard_negative_level(nearest_latent)
+                if nearest_latent is not None else ""
+            )
+            if hard_negative_level:
+                # A pristine full-white VB separator is itself strong,
+                # independent image evidence. One OCR engine is not enough to
+                # erase it; require dual semantic agreement. A weaker
+                # brightness-fallback ordinary marker may be vetoed by one
+                # exceptionally confident, feature-backed semantic negative.
+                ordinary_strength = float(
+                    ordinary.confidence if ordinary.confidence is not None else 0.0
+                )
+                if hard_negative_level == "dual" or ordinary_strength < 0.96:
+                    continue
 
             if nearest_latent is not None:
                 latent_entry = _review_candidate_to_entry(nearest_latent)
