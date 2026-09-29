@@ -1428,7 +1428,7 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     root = Path(__file__).resolve().parents[1]
     source = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
 
-    assert '"图片预处理（前置）"' in source
+    assert '"图片预处理(前置)"' in source
     assert 'text="进入预处理模式"' in source
     assert 'text="自动纠偏"' in source
     assert 'text="安全边界："' in source
