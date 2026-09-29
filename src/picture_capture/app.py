@@ -19422,11 +19422,11 @@ class PictureCaptureApp(tk.Tk):
         existing_entries = [replace(entry) for entry in self.entries]
         cache_path = (
             ocr_cache_root(project.root) / f"{page.stem}.json"
-            if settings.detection_method == "paddleocr" else None
+            if settings.detection_method in {"paddleocr", "combined"} else None
         )
         filter_path = (
             headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME)
-            if settings.detection_method == "paddleocr" else None
+            if settings.detection_method in {"paddleocr", "combined"} else None
         )
 
         def worker(_item, _position: int, _total: int):
@@ -19463,11 +19463,11 @@ class PictureCaptureApp(tk.Tk):
                 )
                 self.entries = merged
             self._sort_entries_reading_order()
-            if settings.detection_method == "paddleocr":
+            if settings.detection_method in {"paddleocr", "combined"}:
                 self._load_ocr_review_candidates()
                 self._refresh_page_quality_colors()
             self.redraw()
-            if settings.detection_method == "paddleocr":
+            if settings.detection_method in {"paddleocr", "combined"}:
                 diag = ocr_cache_root(project.root) / f"{page.stem}_ocr_diagnostics.txt"
                 issues = ocr_cache_root(project.root) / f"{page.stem}_issues.tsv"
                 quality = self._current_page_quality_text()
@@ -19480,11 +19480,14 @@ class PictureCaptureApp(tk.Tk):
                     f"智能画线完成：检测到 {len(self.entries)} 个词条；可手动增删后保存"
                 )
 
-        label = "PaddleOCR 当前页识别" if settings.detection_method == "paddleocr" else "当前页自动画线"
+        label = {
+            "combined": "融合画线 当前页识别",
+            "paddleocr": "PaddleOCR 当前页识别",
+        }.get(settings.detection_method, "当前页自动画线")
         self._start_batch_task(
             label, [page_index], worker, done,
             item_label=lambda _item: page.name,
-            refresh_page_quality=settings.detection_method == "paddleocr",
+            refresh_page_quality=settings.detection_method in {"paddleocr", "combined"},
         )
 
     def paddle_detect_current(self, force_refresh: bool = False) -> None:
