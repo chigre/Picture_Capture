@@ -151,17 +151,16 @@ X/Y 直接读取 PDIC 已保存比例值，不重新从像素计算，也不带 
 
 ### `QT/PaddleOCR/`
 
-OCR 缓存与诊断。最终词头与所有对外坐标使用 `source_x/source_y` 原图像素；OCR box 等临时坐标仅用于内部诊断，不得回写为项目设置。
+OCR 运行缓存。最终词头与所有对外坐标使用 `source_x/source_y` 原图像素；OCR box 等临时坐标只用于内部分析，不得回写为项目设置。
 
-主要文件：
+当前默认只长期保存两类每页文件：
 
-- `<page>.json`：OCR候选、几何、融合信息。
-- `<page>_manual_selection.json`：人工候选选择覆盖。
-- `<page>_ocr_diagnostics.txt`：OCR诊断文本。
-- `<page>_ocr_comparison.txt`：多 OCR 比较。
-- `<page>_issues.tsv`：需要人工复核的问题表。
+- `<page>.json`：紧凑 OCR 缓存。保留原始 PaddleOCR 记录、Project Profile 覆盖诊断所需的轻量候选信息、校对候选、最终结果与质量摘要；不再重复保存完整的多引擎诊断展开数据。
+- `<page>_manual_selection.json`：人工候选选择覆盖。属于用户决策数据，压缩缓存时始终保留。
 
-“复用缓存”会尽量使用这些结果；“强制重新识别”会重新运行 OCR。
+旧版本可能还留下 `*_ocr_diagnostics.txt`、`*_ocr_comparison.txt`、`*_issues.tsv`、`*_ocr_engines.tsv`、`*_fusion.tsv`。这些内容都可以从一次 OCR 运行重新生成，新版本不再默认逐页持久化，并会在该页重新 OCR 或执行【压缩OCR缓存】时清理。
+
+`<page>.json` 采用无缩进的紧凑 JSON 存储，以减少大型项目体积，但仍是标准 UTF-8 JSON。“复用缓存”继续直接复用其中的原始 OCR 记录；【压缩OCR缓存】不会删除这些原始记录，因此不需要重新 OCR。只有“强制重新识别”才会主动重新运行 OCR。
 
 ### `QT/PWW/`
 
