@@ -1017,7 +1017,7 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     assert "self._choose_new_project_image_suffix(root)" in open_project
     assert "if requested_suffix is None:" in open_project
 
-    actions_start = text.index('        actions = self._section_frame(parent, "四、画线与校对"')
+    actions_start = text.index('            parent, "四、画线 / OCR / 插图 / 校对"')
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
     actions = text[actions_start:actions_end]
     assert '("设置中心", self.open_settings)' not in actions
@@ -1199,17 +1199,18 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
     actions = text[actions_start:actions_end]
     assert 'self._sidebar_action_button(row, text, command, role=role)' in actions
-    assert '"primary" if text == "运行融合画线（推荐）"' in actions
-    assert '("运行融合画线（推荐）", self.run_combined_draw_action)' in actions
-    assert '("运行OCR画线（单独）", self.run_ocr_draw_action)' in actions
-    assert '("运行普通画线（单独）", self.run_normal_draw_action)' in actions
-    assert '("普通画线后OCR文字", self.ocr_ordinary_lines_text_selected_scope)' in actions
-    assert "普通救漏线自动执行局部 OCR 补字" in actions
-    assert actions.index('("运行融合画线（推荐）", self.run_combined_draw_action)') < actions.index('("运行OCR画线（单独）", self.run_ocr_draw_action)')
+    assert '"primary" if text == "OCR画线(默认)"' in actions
+    assert '("普通画线", self.run_normal_draw_action)' in actions
+    assert '("仅OCR", self.ocr_ordinary_lines_text_selected_scope)' in actions
+    assert '("融合画线+OCR", self.run_combined_draw_action)' in actions
+    assert '("OCR画线(默认)", self.run_ocr_draw_action)' in actions
+    assert actions.index('("普通画线", self.run_normal_draw_action)') < actions.index('("仅OCR", self.ocr_ordinary_lines_text_selected_scope)')
+    assert actions.index('("仅OCR", self.ocr_ordinary_lines_text_selected_scope)') < actions.index('("融合画线+OCR", self.run_combined_draw_action)')
+    assert actions.index('("融合画线+OCR", self.run_combined_draw_action)') < actions.index('("OCR画线(默认)", self.run_ocr_draw_action)')
     assert '("填充词条", self.fill_existing_headwords)' in actions
     assert '("修复排序", self.repair_pdic_order_selected_scope)' in actions
     for tooltip_key in (
-        '"普通画线后OCR文字":', '"清除画线":', '"清除文本":', '"精修画线":', '"新旧比较":',
+        '"普通画线":', '"仅OCR":', '"融合画线+OCR":', '"OCR画线(默认)":', '"清除画线":', '"清除文本":', '"精修画线":', '"新旧比较":',
         '"词条校对":', '"填充词条":', '"备份PDIC":', '"恢复PDIC":',
         '"插图识别":', '"编辑插图":', '"保存当前页":',
     ):
