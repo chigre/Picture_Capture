@@ -28,7 +28,7 @@ from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
     _collapse_ordinary_oversized_cjk_split_markers, _column_tracking_dimensions,
     _legacy_find_separator_y, _legacy_is_point, _fuse_detection_entries,
-    _left_edge_ink_mask, apply_column_start_offsets,
+    _left_edge_ink_mask, _ordinary_marker_local_crop, apply_column_start_offsets,
     derive_geometry, derive_nominal_geometry, detect_entries,
     ordinary_page_layout_settings, ocr_existing_entry_words_from_markers,
     refine_existing_entries,
