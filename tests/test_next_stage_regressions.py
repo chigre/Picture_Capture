@@ -160,6 +160,30 @@ def test_combined_fusion_pairs_once_preserves_ordinary_geometry_and_ocr_semantic
     assert fused[-1].candidate_id == "c3"
 
 
+
+def test_combined_fusion_matches_globally_nearest_row_not_first_row():
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=360,
+        gutter=0,
+        start_y=0,
+        character_height=20,
+        paddle_alignment_y_tolerance_ratio=0.50,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 300, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [Entry(word="", x=x, y=100), Entry(word="", x=x, y=108)]
+    ocr = [
+        Entry(word="nearest", x=x, y=106, confidence=0.95, ocr_source="paddle",
+              candidate_id="nearest", final_engine="paddle")
+    ]
+
+    fused = _fuse_detection_entries(ordinary, ocr, geometry, settings)
+    assert [(item.word, item.y) for item in fused] == [("", 100), ("nearest", 108)]
+
+
 def test_combined_fusion_keeps_oversized_single_cjk_ocr_separator():
     settings = AppSettings(
         columns=1,
