@@ -5530,7 +5530,7 @@ def test_review_zoom_defaults_to_auto_99_percent_left_pane_fit():
     assert "self.review_zoom_auto = stored_review_zoom <= 0" in app_text
     assert "widest_crop = max(crop.width for crop in raw_crops)" in app_text
     assert "widest_crop, auto_image_area_width, 0.99" in app_text
-    assert "return 0 if self.review_zoom_auto else round(self.review_zoom * 100)" in app_text
+    assert "return 0.0 if self.review_zoom_auto else round(self.review_zoom * 100.0, 2)" in app_text
     assert "not self.review_zoom_auto" in app_text
 
 
