@@ -1458,19 +1458,192 @@ def _entry_with_fused_metadata(
     )
 
 
+def _review_candidate_to_entry(candidate: dict) -> Entry | None:
+    """Convert one OCR review candidate into runtime Entry metadata."""
+    if str(candidate.get("position_variant", "refined")) != "refined":
+        return None
+    try:
+        x = int(candidate.get("source_x"))
+        y = int(candidate.get("source_y"))
+    except (TypeError, ValueError):
+        return None
+    if y <= 0:
+        return None
+
+    engine = str(candidate.get("final_engine") or "")
+    side = candidate.get(engine, {}) if engine else {}
+    side = side if isinstance(side, dict) else {}
+    features = side.get("features", {}) if isinstance(side, dict) else {}
+    features = features if isinstance(features, dict) else {}
+    box = candidate.get("box") or side.get("box") or []
+    box_height = None
+    if isinstance(box, (list, tuple)) and len(box) == 4:
+        try:
+            box_height = float(max(1, int(box[3]) - int(box[1])))
+        except (TypeError, ValueError):
+            box_height = None
+
+    issue_types = [
+        str(value) for value in list(candidate.get("issue_types", []) or [])
+        if str(value)
+    ]
+    return Entry(
+        word=str(candidate.get("word") or side.get("lemma") or ""),
+        x=x,
+        y=y,
+        confidence=(
+            float(candidate.get("confidence"))
+            if candidate.get("confidence") is not None else None
+        ),
+        ocr_source=f"latent:{engine or 'ocr'}",
+        alphabetical_warning=str(candidate.get("alphabetical_warning") or ""),
+        candidate_id=str(candidate.get("candidate_id") or ""),
+        final_engine=engine,
+        issue_type=",".join(issue_types),
+        parser_score=(
+            float(candidate.get("score"))
+            if candidate.get("score") is not None else None
+        ),
+        manually_selected=bool(candidate.get("manual_override")),
+        ocr_box_height=box_height,
+        ocr_line_height_reference=(
+            float(features.get("line_height_reference"))
+            if features.get("line_height_reference") is not None else None
+        ),
+        ocr_visual_run_height=(
+            float(features.get("cjk_visual_run_height"))
+            if features.get("cjk_visual_run_height") is not None else None
+        ),
+        ocr_leading_height_ratio=(
+            float(features.get("leading_record_height_ratio"))
+            if features.get("leading_record_height_ratio") is not None else None
+        ),
+        ocr_single_cjk=bool(features.get("cjk_single_visual")),
+        ocr_oversized_cjk=bool(
+            features.get("cjk_oversized_recovery")
+            or features.get("cjk_visual_projection_rescue")
+            or features.get("cjk_single_strong_visual")
+        ),
+    )
+
+
+_COMBINED_HARD_NEGATIVE_REASONS = {
+    "continuation_fragment",
+    "internal_article_symbol",
+    "internal_relation_label",
+    "internal_locution",
+}
+
+
+def _review_candidate_has_strong_positive_visual(candidate: dict) -> bool:
+    for engine in ("paddle", "tesseract", "lens"):
+        side = candidate.get(engine, {}) or {}
+        if not isinstance(side, dict):
+            continue
+        features = side.get("features", {}) or {}
+        if not isinstance(features, dict):
+            continue
+        if any(bool(features.get(key)) for key in (
+            "visual_entry_marker",
+            "configured_marker_evidence",
+            "numbered_prefix_evidence",
+            "cjk_single_strong_visual",
+            "cjk_visual_projection_rescue",
+            "cjk_visual_projection_confirmed",
+            "strong_visual_fallback",
+        )):
+            return True
+    return False
+
+
+def _review_candidate_hard_negative_consensus(candidate: dict) -> bool:
+    """Return True only for high-confidence OCR evidence that a row is internal.
+
+    Combined mode keeps ordinary geometry as the high-recall channel, but it no
+    longer has to retain a geometrically plausible body line when OCR semantics
+    independently identify it as an internal/continuation structure. Two-engine
+    agreement is sufficient; a single engine must be exceptionally confident
+    and expose the matching semantic feature.
+    """
+    if candidate.get("selected") or candidate.get("manual_override"):
+        return False
+    if str(candidate.get("position_variant", "refined")) != "refined":
+        return False
+    if _review_candidate_has_strong_positive_visual(candidate):
+        return False
+
+    votes = 0
+    strong_single = False
+    for engine in ("paddle", "tesseract"):
+        side = candidate.get(engine, {}) or {}
+        if not isinstance(side, dict) or side.get("y") is None:
+            continue
+        reason = str(side.get("reason") or "")
+        if reason not in _COMBINED_HARD_NEGATIVE_REASONS:
+            continue
+        try:
+            confidence = float(side.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            confidence = 0.0
+        if confidence < 0.84:
+            continue
+        votes += 1
+        features = side.get("features", {}) or {}
+        if not isinstance(features, dict):
+            features = {}
+        matching_feature = bool(
+            (reason == "continuation_fragment" and features.get("looks_like_continuation"))
+            or (reason == "internal_article_symbol" and features.get("internal_article_symbol"))
+            or (reason == "internal_relation_label" and features.get("internal_relation_label"))
+            or (reason == "internal_locution" and features.get("internal_locution"))
+        )
+        if confidence >= 0.94 and matching_feature:
+            strong_single = True
+    return votes >= 2 or strong_single
+
+
+def _latent_review_rows(
+    review_candidates: list[dict] | None,
+    geometry: Geometry,
+) -> list[tuple[dict, int, int]]:
+    rows: list[tuple[dict, int, int]] = []
+    for candidate in review_candidates or []:
+        if not isinstance(candidate, dict):
+            continue
+        if candidate.get("selected") or candidate.get("manual_override"):
+            continue
+        if str(candidate.get("position_variant", "refined")) != "refined":
+            continue
+        try:
+            x = int(candidate.get("source_x"))
+            y = int(candidate.get("source_y"))
+        except (TypeError, ValueError):
+            continue
+        if y <= 0:
+            continue
+        _u, v = geometry.source_to_canonical(x, y)
+        col = int(candidate.get("column", column_index_for_click(x, geometry, y)))
+        rows.append((candidate, col, int(v)))
+    return rows
+
+
 def _fuse_detection_entries(
     ordinary_entries: list[Entry],
     ocr_entries: list[Entry],
     geometry: Geometry,
     settings: AppSettings,
     page_sections: list[PageSection] | None = None,
+    review_candidates: list[dict] | None = None,
 ) -> list[Entry]:
     """Fuse the two independent detectors at the entry-event level.
 
     Ordinary drawing is treated as a strong geometric observation, while OCR is
-    the semantic observation and an independent rescue path.  We deliberately do
-    not union line rectangles and we do not let OCR failure veto a valid ordinary
-    marker.  Nearby observations in the same visual column are paired one-to-one;
+    the semantic observation and an independent rescue path. Evidence-fusion v3
+    additionally consults *rejected* OCR review candidates: high-confidence hard
+    semantic negatives may veto an unmatched ordinary false positive, while soft
+    rejected candidates may lend their recognized lemma to a geometrically valid
+    ordinary marker. Nearby accepted observations in the same visual column are
+    paired one-to-one;
     unmatched observations from either detector survive.  A final strict Y
     collapse guarantees exactly one marker for one physical entry boundary.
 
@@ -1492,6 +1665,7 @@ def _fuse_detection_entries(
     alignment_ratio = max(0.25, min(0.55, alignment_ratio))
     base_tolerance = max(4, round(line_height * alignment_ratio))
     strict_dedup = max(2, round(line_height * 0.22))
+    latent_rows = _latent_review_rows(review_candidates, geometry)
 
     def axis(entry: Entry) -> tuple[int, int, int]:
         u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
@@ -1603,8 +1777,53 @@ def _fuse_detection_entries(
     for ordinary_index, (ordinary, _ordinary_col, _ordinary_u, _ordinary_v) in enumerate(ordinary_rows):
         ocr_index = ordinary_to_ocr.get(ordinary_index)
         if ocr_index is None:
-            if ordinary_index not in suppressed_ordinary:
-                fused.append(ordinary)
+            if ordinary_index in suppressed_ordinary:
+                continue
+
+            # Candidate-level fusion: a rejected OCR row can still carry useful
+            # semantics, or in the opposite direction can provide a highly
+            # specific negative explanation for an ordinary false positive.
+            nearest_latent: dict | None = None
+            nearest_delta: int | None = None
+            for candidate, candidate_col, candidate_v in latent_rows:
+                if candidate_col != _ordinary_col:
+                    continue
+                delta = abs(int(candidate_v) - int(_ordinary_v))
+                if delta > base_tolerance:
+                    continue
+                if nearest_delta is None or delta < nearest_delta:
+                    nearest_latent = candidate
+                    nearest_delta = delta
+
+            if (
+                nearest_latent is not None
+                and _review_candidate_hard_negative_consensus(nearest_latent)
+            ):
+                # Two semantic engines, or one exceptionally confident engine
+                # with a matching internal-structure feature, agree this is not
+                # an entry. This is intentionally much narrower than allowing
+                # generic OCR failure to veto ordinary geometry.
+                continue
+
+            if nearest_latent is not None:
+                latent_entry = _review_candidate_to_entry(nearest_latent)
+                if (
+                    latent_entry is not None
+                    and latent_entry.word
+                    and (latent_entry.confidence or 0.0) >= 0.65
+                    and not _review_candidate_hard_negative_consensus(nearest_latent)
+                ):
+                    ordinary = _entry_with_fused_metadata(
+                        ordinary, latent_entry, use_semantic_position=False,
+                    )
+                    issues = [
+                        part for part in str(ordinary.issue_type or "").split(",")
+                        if part
+                    ]
+                    if "COMBINED_LATENT_OCR_METADATA" not in issues:
+                        issues.append("COMBINED_LATENT_OCR_METADATA")
+                        ordinary.issue_type = ",".join(issues)
+            fused.append(ordinary)
             continue
         ocr = ocr_rows[ocr_index][0]
         merged_entry = _entry_with_fused_metadata(
@@ -1697,8 +1916,24 @@ def detect_entries(
             ordinary_entries, _ordinary_geometry = _detect_entries_left_edge(
                 analysis_source, ordinary_effective, page_sections=page_sections
             )
+            review_candidates: list[dict] = []
+            if paddle_cache_path is not None and paddle_cache_path.exists():
+                try:
+                    cached_payload = json.loads(
+                        paddle_cache_path.read_text(encoding="utf-8")
+                    )
+                    if isinstance(cached_payload, dict):
+                        review_candidates = [
+                            item for item in list(
+                                cached_payload.get("review_candidates") or []
+                            )
+                            if isinstance(item, dict)
+                        ]
+                except (OSError, ValueError, TypeError):
+                    review_candidates = []
             entries = _fuse_detection_entries(
-                ordinary_entries, ocr_entries, geometry, effective, page_sections
+                ordinary_entries, ocr_entries, geometry, effective, page_sections,
+                review_candidates=review_candidates,
             )
         else:
             entries = ocr_entries
