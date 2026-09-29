@@ -672,6 +672,42 @@ def test_combined_fusion_pairs_once_preserves_ordinary_geometry_and_ocr_semantic
 
 
 
+def test_combined_fusion_uses_cleaner_local_whitespace_separator_position():
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=300,
+        gutter=0,
+        start_y=0,
+        character_height=20,
+        paddle_alignment_y_tolerance_ratio=0.50,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(360, 240, settings)
+    x = int(geometry.column_starts[0])
+    image = Image.new("RGB", (360, 240), "white")
+    draw = ImageDraw.Draw(image)
+    # Ordinary marker lies on ink, while the OCR marker is in a clean separator
+    # row only four pixels away. Fusion should use image evidence instead of
+    # blindly preferring ordinary Y for a non-CJK lemma.
+    draw.rectangle((x, 99, x + 150, 101), fill="black")
+    ordinary = [Entry(word="", x=x, y=100)]
+    ocr = [
+        Entry(
+            word="annual", x=x, y=104, confidence=0.95,
+            ocr_source="paddle", candidate_id="annual", final_engine="paddle",
+        )
+    ]
+
+    fused = _fuse_detection_entries(
+        ordinary, ocr, geometry, settings, image=image,
+    )
+    assert len(fused) == 1
+    assert fused[0].word == "annual"
+    assert fused[0].y == 104
+    assert "FUSION_WHITESPACE_POSITION_ARBITRATION" in fused[0].issue_type
+
+
 def test_combined_fusion_matches_globally_nearest_row_not_first_row():
     settings = AppSettings(
         columns=1,
