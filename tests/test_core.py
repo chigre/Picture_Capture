@@ -5423,9 +5423,11 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in app_text
     assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
     assert 'self.settings.illustration_label_border_width, overlay_scale' in app_text
-    # Sequence stays marker-filled; destructive [X] sits immediately to its left.
+    # Sequence uses a neutral light-gray background; destructive [X] remains separate.
     assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in app_text
-    assert 'marker_control_bg = str(self.settings.headword_marker_color)' in app_text
+    assert 'bg="#e6e6e6"' in app_text
+    assert 'fg="#000000"' in app_text
+    assert 'text=self._entry_sequence_text(index, len(self.entries))' in app_text
     assert 'bg=marker_control_bg' in app_text
     assert 'fg="#ffffff"' in app_text
     assert 'record["index_widget"] = index_label' in app_text
@@ -8156,7 +8158,9 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert '"""Fast filter pass using only PDIC and OCR JSON, never page pixels."""' in text
     assert 'focused-filter-scan-rest-' in text
     assert 'display_meta: list[tuple[int, int]] = []' in text
-    assert "marker_control_bg = str(self.settings.headword_marker_color)" in text
+    assert 'bg="#e6e6e6"' in text
+    assert 'fg="#000000"' in text
+    assert "def _entry_sequence_text(index: int, total: int) -> str:" in text
     assert 'text="[X]"' in text
     assert 'bg="#9d042f"' in text
     assert 'record["delete_widget"] = delete_button' in text
