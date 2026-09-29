@@ -5428,8 +5428,7 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'bg="#e6e6e6"' in app_text
     assert 'fg="#000000"' in app_text
     assert 'text=self._entry_sequence_text(index, len(self.entries))' in app_text
-    assert 'bg=marker_control_bg' in app_text
-    assert 'fg="#ffffff"' in app_text
+    assert 'marker_control_bg = str(self.settings.headword_marker_color)' not in app_text
     assert 'record["index_widget"] = index_label' in app_text
     assert 'record["delete_widget"] = delete_button' in app_text
     assert 'text="[X]"' in app_text
