@@ -7835,19 +7835,66 @@ def _entries_from_review_candidates(review_candidates: list[dict[str, Any]]) -> 
         int(item.get("_axis_v", item.get("source_y", 0))),
         int(item.get("_axis_u", item.get("source_x", 0))),
     ))
+
+    def _positive_float(value: Any) -> float | None:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 0 else None
+
     for item in selected:
+        engine_name = str(item.get("final_engine", ""))
+        side = item.get(engine_name, {}) or {} if engine_name else {}
+        features = dict(side.get("features", {}) or {})
+        box = side.get("box") or item.get("box") or []
+        box_height: float | None = None
+        if isinstance(box, (list, tuple)) and len(box) == 4:
+            try:
+                box_height = float(max(1, int(box[3]) - int(box[1])))
+            except (TypeError, ValueError):
+                box_height = None
+
+        line_height_reference = _positive_float(item.get("line_height_reference"))
+        visual_run_height = _positive_float(features.get("cjk_visual_run_height"))
+        leading_height_ratio = _positive_float(features.get("leading_record_height_ratio"))
+        single_cjk = _candidate_has_single_cjk_identity(item)
+        oversized_cjk = bool(
+            single_cjk
+            and (
+                bool(features.get("cjk_oversized_recovery"))
+                or (leading_height_ratio is not None and leading_height_ratio >= 1.45)
+                or (
+                    visual_run_height is not None
+                    and line_height_reference is not None
+                    and visual_run_height / line_height_reference >= 1.45
+                )
+                or (
+                    box_height is not None
+                    and line_height_reference is not None
+                    and box_height / line_height_reference >= 1.45
+                )
+            )
+        )
+
         entries.append(Entry(
             word=str(item.get("word", "")),
             x=int(item.get("source_x", 0)),
             y=int(item.get("source_y", 0)),
             confidence=(float(item.get("confidence")) if item.get("confidence") is not None else None),
-            ocr_source=str(item.get("final_engine", "")),
+            ocr_source=engine_name,
             alphabetical_warning=str(item.get("alphabetical_warning", "")),
             candidate_id=str(item.get("candidate_id", "")),
-            final_engine=str(item.get("final_engine", "")),
+            final_engine=engine_name,
             issue_type=",".join(str(x) for x in item.get("issue_types", []) or []),
             parser_score=(float(item.get("score")) if item.get("score") is not None else None),
             manually_selected=bool(item.get("manual_override", False)),
+            ocr_box_height=box_height,
+            ocr_line_height_reference=line_height_reference,
+            ocr_visual_run_height=visual_run_height,
+            ocr_leading_height_ratio=leading_height_ratio,
+            ocr_single_cjk=bool(single_cjk),
+            ocr_oversized_cjk=oversized_cjk,
         ))
     return entries
 
