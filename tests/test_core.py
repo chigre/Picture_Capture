@@ -5350,6 +5350,11 @@ def test_sidebar_defaults_fold_sections_two_through_five_and_keep_project_detail
     assert "sidebar_section_defaults_version" not in app_text
     assert "def _apply_new_project_sidebar_defaults(self) -> None:" in app_text
     assert "self._apply_new_project_sidebar_defaults()" in app_text
+    new_defaults_start = app_text.index("    def _apply_new_project_sidebar_defaults(self) -> None:")
+    new_defaults_end = app_text.index("\n    @staticmethod", new_defaults_start)
+    new_defaults = app_text[new_defaults_start:new_defaults_end]
+    assert '"preprocess": False' in new_defaults
+    assert 'parent, "图片预处理(前置)", padding=5, section_key="preprocess"' in app_text
     assert 'parent, "五、后期词典制作", padding=5, section_key="postproduction"' in app_text
     assert '"四、画线 / OCR / 插图 / 校对"' in app_text
     assert 'self._section_frame(sidebar, "六、页面列表"' in app_text
