@@ -11017,7 +11017,7 @@ class PictureCaptureApp(tk.Tk):
     def _apply_new_project_sidebar_defaults(self) -> None:
         """Apply the release workspace layout only to a newly created project."""
         defaults = {
-            "preprocess": True,
+            "preprocess": False,
             "normal": True,
             "aux": False,
             "ocr": False,
