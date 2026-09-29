@@ -1654,7 +1654,7 @@ def _fuse_detection_entries(
     """
     if not ordinary_entries:
         return sort_entries_reading_order(list(ocr_entries), geometry, page_sections)
-    if not ocr_entries:
+    if not ocr_entries and not review_candidates:
         return sort_entries_reading_order(list(ordinary_entries), geometry, page_sections)
 
     line_height = max(2, int(round(float(getattr(settings, "character_height", 26) or 26))))
