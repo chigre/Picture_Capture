@@ -94,6 +94,14 @@ class Entry:
     issue_type: str = ""
     parser_score: float | None = None
     manually_selected: bool = False
+    # OCR geometry used only by combined-mode arbitration. These fields are
+    # intentionally runtime-only so PDIC remains byte-for-byte compatible.
+    ocr_box_height: float | None = None
+    ocr_line_height_reference: float | None = None
+    ocr_visual_run_height: float | None = None
+    ocr_leading_height_ratio: float | None = None
+    ocr_single_cjk: bool = False
+    ocr_oversized_cjk: bool = False
 
 
 @dataclass(slots=True)
