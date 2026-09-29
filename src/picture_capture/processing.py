@@ -1022,6 +1022,9 @@ def _detect_entries_left_edge(
     entries = _collapse_ordinary_oversized_cjk_split_markers(
         source, entries, geometry, settings,
     )
+    entries = _recover_ordinary_oversized_cjk_missing_markers(
+        source, entries, geometry, settings,
+    )
     return sort_entries_reading_order(entries, geometry), geometry
 
 
@@ -1252,6 +1255,160 @@ def _collapse_ordinary_oversized_cjk_split_markers(
         output.append(entry)
 
     return sort_entries_reading_order(output, geometry)
+
+
+def _recover_ordinary_oversized_cjk_missing_markers(
+    image: Image.Image,
+    entries: list[Entry],
+    geometry: Geometry,
+    settings: AppSettings,
+) -> list[Entry]:
+    """Recover a missed oversized CJK entry from independent image evidence.
+
+    This is deliberately narrower than the OCR visual-rescue path: ordinary
+    mode has no recognized word to validate, so a new blank marker is added only
+    when three geometry cues agree — an oversized left-strip run, a sparse
+    right-side layout characteristic of display heads, and a plausible roughly
+    square glyph footprint. Existing markers always win.
+
+    The rescue is OCR-independent and therefore also gives combined mode a
+    genuinely independent observation when Paddle misses a large Han head.
+    """
+    if str(getattr(settings, "layout_writing_mode", "horizontal-tb")).startswith("vertical"):
+        return list(entries)
+    if not bool(getattr(settings, "profile_cjk_allow_single_headword", True)):
+        return list(entries)
+
+    from .paddle_headwords import (
+        _cjk_right_context_metrics,
+        _cjk_visual_projection_runs,
+        _is_chinese_ocr,
+        refine_separator_y_adaptive,
+        unwrap_column_band,
+    )
+
+    profile_id = str(getattr(settings, "dictionary_profile_id", "") or "").lower()
+    if not (_is_chinese_ocr(settings) or "cjk" in profile_id):
+        return list(entries)
+
+    source = normalize_page_rgb(image)
+    character_height = max(
+        2, int(round(float(getattr(settings, "character_height", 26) or 26)))
+    )
+    row_padding = max(0, int(round(float(getattr(settings, "row_padding", 0) or 0))))
+    strip_width = max(
+        100,
+        round(character_height * 3.2),
+        int(getattr(settings, "paddle_band_left_margin", 0) or 0) + 72,
+    )
+    duplicate_tolerance = max(5, round(character_height * 0.65))
+
+    existing_by_column: dict[int, list[int]] = {
+        col: [] for col in range(len(geometry.column_starts))
+    }
+    for entry in entries:
+        _u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
+        col = column_index_for_click(int(entry.x), geometry, int(entry.y))
+        existing_by_column.setdefault(int(col), []).append(int(v))
+
+    recovered = list(entries)
+    for col in range(len(geometry.column_starts)):
+        try:
+            band, source_top, _left_margin = unwrap_column_band(
+                source,
+                geometry,
+                col,
+                settings,
+                source_width=strip_width,
+            )
+        except (IndexError, ValueError):
+            continue
+        if band.height <= 1 or band.width <= 1:
+            continue
+
+        gray = np.asarray(ImageOps.grayscale(band), dtype=np.uint8)
+        zone_width, visual_runs = _cjk_visual_projection_runs(
+            gray, 0, settings, 1.0, relaxed=False,
+        )
+        if not visual_runs or zone_width <= 0:
+            continue
+
+        for run_index, (run_start, run_end) in enumerate(visual_runs):
+            run_height = max(1, int(run_end) - int(run_start))
+            if run_height < round(character_height * 1.50):
+                continue
+
+            context = _cjk_right_context_metrics(
+                gray, (run_start, run_end), zone_width, settings, header_cutoff=0,
+            )
+            if not (
+                context.get("available")
+                and context.get("sparse")
+                and int(context.get("sparse_votes", 0) or 0) >= 2
+                and float(context.get("baseline_ink_density", 0.0) or 0.0) >= 0.01
+            ):
+                continue
+
+            # Large Han display glyphs are approximately square. Reject long
+            # rules, illustrations and narrow vertical artifacts that can also
+            # create a tall left-strip projection.
+            projection_width = min(gray.shape[1], max(1, int(zone_width)))
+            roi = gray[max(0, run_start):min(gray.shape[0], run_end), :projection_width]
+            if roi.size == 0:
+                continue
+            threshold = _left_edge_otsu_threshold(roi)
+            dark = roi <= threshold
+            active_columns = np.where(dark.any(axis=0))[0]
+            if active_columns.size == 0:
+                continue
+            glyph_width = max(1, int(active_columns[-1] - active_columns[0] + 1))
+            aspect = float(run_height) / float(glyph_width)
+            if not 0.55 <= aspect <= 2.20:
+                continue
+
+            previous_end = (
+                int(visual_runs[run_index - 1][1])
+                if run_index > 0 else 0
+            )
+            preceding_gap = max(0, int(run_start) - previous_end)
+            coarse_band_y = max(0, int(run_start) - row_padding)
+            refined_band_y, _details = refine_separator_y_adaptive(
+                gray,
+                coarse_band_y,
+                max(2, character_height),
+                settings,
+                pixel_scale=1.0,
+                lower_bound=0,
+                content_top=int(run_start),
+                preceding_gap_hint=preceding_gap,
+            )
+            candidate_v = int(source_top + refined_band_y)
+            run_specific_tolerance = max(
+                duplicate_tolerance, round(run_height * 0.30)
+            )
+            if any(
+                abs(candidate_v - existing_v) <= run_specific_tolerance
+                for existing_v in existing_by_column.get(col, [])
+            ):
+                continue
+
+            marker_x, _direction = _ordinary_source_column_edge(
+                geometry, col, candidate_v
+            )
+            recovered.append(Entry(
+                word="",
+                x=int(marker_x),
+                y=int(candidate_v),
+                ocr_source="ordinary_visual",
+                issue_type="ORDINARY_CJK_VISUAL_RESCUE",
+                ocr_visual_run_height=float(run_height),
+                ocr_line_height_reference=float(character_height),
+                ocr_single_cjk=True,
+                ocr_oversized_cjk=True,
+            ))
+            existing_by_column.setdefault(col, []).append(candidate_v)
+
+    return sort_entries_reading_order(recovered, geometry)
 
 
 def _is_single_cjk_headword(word: str) -> bool:
