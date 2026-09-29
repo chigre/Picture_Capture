@@ -6830,6 +6830,109 @@ def _arbitrate_pair(
             selected = True
             decision_reason = "dual_consensus_visual_rescue"
             needs_review = True
+    # Evidence-fusion v3: a parser rejection is not equivalent to "not a
+    # headword".  OCR text, local image-boundary geometry and visual/structural
+    # evidence are independent observations.  Rescue only when at least two
+    # independent evidence families agree, and never override explicit/hard
+    # negative semantics.  Every rescue remains review-visible.
+    if chosen and not selected:
+        chosen_features = dict(pair.get(f"{chosen}_features", {}) or {})
+        chosen_reason = str(pair.get(f"{chosen}_reject_reason", "") or "")
+        hard_negative_reasons = {
+            "user_reject_rule",
+            "not_at_column_left",
+            "above_header_cutoff",
+            "continuation_fragment",
+            "marker_glyph_ocr_noise",
+            "internal_article_symbol",
+            "internal_relation_label",
+            "internal_locution",
+            "incompatible_headword_script",
+            "cjk_single_headword_disabled",
+            "cjk_bracketed_headword_disabled",
+        }
+        soft_reasons = {
+            "",
+            "missing_pos_inflection_descriptor_or_symbol",
+            "missing_selected_tail_structure",
+            "score_below_threshold",
+            "missing_structure_or_visual_cue",
+            "candidate_rejected",
+            "cjk_single_needs_stronger_visual_evidence",
+            "cjk_single_not_visually_prominent",
+            "cjk_bracket_needs_visual_evidence",
+        }
+        chosen_conf = float(pair.get(f"{chosen}_conf") or 0.0)
+        boundary = dict(pair.get(f"{chosen}_image_boundary_match", {}) or {})
+        boundary_supported = bool(
+            boundary
+            or chosen_features.get("image_boundary_supported")
+        )
+        strong_visual = bool(
+            chosen_features.get("strong_visual_fallback")
+            or chosen_features.get("ordinary_strong_edge_visual_rescue")
+            or chosen_features.get("visual_entry_marker")
+            or chosen_features.get("configured_marker_evidence")
+            or chosen_features.get("numbered_prefix_evidence")
+            or chosen_features.get("cjk_single_strong_visual")
+            or chosen_features.get("cjk_visual_projection_rescue")
+            or chosen_features.get("cjk_visual_projection_confirmed")
+        )
+        explicit_structure = bool(
+            chosen_features.get("structural_cue")
+            or chosen_features.get("front_structure_cue")
+            or chosen_features.get("tail_structure_satisfied")
+        )
+        no_hard_negative = bool(
+            chosen_reason not in hard_negative_reasons
+            and not chosen_features.get("forced_reject")
+        )
+
+        # Two independent OCR engines that agree on the lemma plus an image
+        # boundary are strong enough to survive a missing POS/structure glyph.
+        # This is especially useful on dense Latin dictionaries where the
+        # headword is clear but a tiny POS token is lost by both OCR parsers.
+        if (
+            has_p and has_t
+            and sim >= 0.94
+            and chosen_reason in soft_reasons
+            and no_hard_negative
+            and boundary_supported
+            and min(
+                float(pair.get("paddle_conf") or 0.0),
+                float(pair.get("tesseract_conf") or 0.0),
+            ) >= 0.88
+            and bool((pair.get("paddle_features", {}) or {}).get("at_left"))
+            and bool((pair.get("tesseract_features", {}) or {}).get("at_left"))
+        ):
+            selected = True
+            decision_reason = "dual_consensus_boundary_rescue"
+            needs_review = True
+        # A single OCR engine may be rescued only by explicit/strong visual
+        # evidence (marker, numbered prefix, oversized CJK, strong typography)
+        # *and* an independent local image boundary.  Generic bold text alone
+        # is deliberately insufficient.
+        elif (
+            chosen_reason in soft_reasons
+            and no_hard_negative
+            and boundary_supported
+            and strong_visual
+            and chosen_conf >= 0.68
+            and bool(chosen_features.get("at_left", True))
+            and (
+                explicit_structure
+                or chosen_features.get("visual_entry_marker")
+                or chosen_features.get("configured_marker_evidence")
+                or chosen_features.get("numbered_prefix_evidence")
+                or chosen_features.get("cjk_single_strong_visual")
+                or chosen_features.get("cjk_visual_projection_rescue")
+                or chosen_conf >= 0.82
+            )
+        ):
+            selected = True
+            decision_reason = "multi_evidence_visual_boundary_rescue"
+            needs_review = True
+
     # Arbitration may accept a strong Tesseract-only entry without the legacy
     # rescue switch; this is the core v2.0 dual-engine behaviour.
     features = pair.get(f"{chosen}_features", {}) or {} if chosen else {}
@@ -6872,6 +6975,10 @@ def _arbitrate_pair(
     issues = _issues_for_pair(pair, chosen, needs_review)
     if decision_reason == "dual_consensus_visual_rescue" and "DUAL_CONSENSUS_RESCUE" not in issues:
         issues.append("DUAL_CONSENSUS_RESCUE")
+    if decision_reason == "dual_consensus_boundary_rescue" and "DUAL_BOUNDARY_RESCUE" not in issues:
+        issues.append("DUAL_BOUNDARY_RESCUE")
+    if decision_reason == "multi_evidence_visual_boundary_rescue" and "MULTI_EVIDENCE_RESCUE" not in issues:
+        issues.append("MULTI_EVIDENCE_RESCUE")
     candidate_id = _stable_candidate_id(
         column, y, str(pair.get("paddle_text", "")), str(pair.get("tesseract_text", ""))
     )
