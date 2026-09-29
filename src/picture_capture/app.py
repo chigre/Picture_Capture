@@ -3252,8 +3252,8 @@ class SettingsDialog(tk.Toplevel):
         )
         help_hint = ttk.Label(
             help_box,
-            text="把鼠标停在设置项上，或用 Tab/鼠标进入输入框，"
-                 "这里会显示完整说明。高级设置不确定时保持默认即可。",
+            text="每个参数下方已直接显示详细说明；把鼠标停在设置项上、点击 ⓘ，"
+                 "或用 Tab/鼠标进入输入框时，右侧会同步显示完整说明与版面图解。",
             foreground="#7a8088",
             justify="left",
         )
@@ -3877,11 +3877,11 @@ class SettingsDialog(tk.Toplevel):
                 _var.trace_add("write", lambda *_args: self._schedule_autosave())
             except Exception:
                 pass
-        self.update_idletasks()
-        for _canvas in self._settings_canvases.values():
-            _bbox = _canvas.bbox("all")
-            if _bbox:
-                _canvas.configure(scrollregion=_bbox)
+        # Each scrollable settings page already updates its scrollregion from
+        # the content <Configure> event.  Do not force a synchronous
+        # update_idletasks() across every hidden tab here: after restoring
+        # detailed inline help that can trigger a very large wrapping/layout
+        # cascade on Windows/Tk and make Settings Center construction appear hung.
         # Keep Settings Center modeless: users often need to move the pointer
         # over the main image to read coordinates while entering layout values.
         # Do not use transient()/grab_set(), which would keep this window in

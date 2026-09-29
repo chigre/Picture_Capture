@@ -4948,3 +4948,21 @@ def test_paddle_temp_page_match_uses_stem_boundaries():
     assert matches(Path("0001-tiles"), "0001")
     assert not matches(Path("00010.json"), "0001")
     assert not matches(Path("other_0001.json"), "0001")
+
+
+def test_settings_center_avoids_full_hidden_tab_idle_layout_cascade():
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    text = source.read_text(encoding="utf-8")
+    start = text.index('    def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:')
+    end = text.index("    @staticmethod\n    def _crop_nonnegative_int", start)
+    block = text[start:end]
+    # The early update_idletasks() used only to obtain screen/window geometry is
+    # allowed.  The old trailing all-tab layout flush after autosave binding was
+    # the Windows/Tk hang and must not return.
+    tail = block[block.index("        self._autosave_ready = True"):]
+    assert "self.update_idletasks()" not in tail
+    assert "for _canvas in self._settings_canvases.values():" not in tail
+    assert "content.bind(" in text
+    assert 'cv.configure(scrollregion=cv.bbox("all"))' in text
+    assert "每个参数下方已直接显示详细说明" in text
+
