@@ -1961,6 +1961,35 @@ def test_peer_typography_does_not_mark_hard_negative_candidate():
     assert not candidate["features"].get("peer_typography_match")
 
 
+def test_engine_quality_uses_independent_image_boundary_to_break_close_tie():
+    base = {
+        "source_x": 20,
+        "source_y": 100,
+        "_axis_v": 100,
+        "_coarse_axis_v": 100,
+        "_anchor_axis_v": 100,
+        "normalized_headword": "annual",
+        "confidence": 0.92,
+        "accepted": True,
+        "score": 5.0,
+        "reject_reason": "",
+        "features": {"at_left": True, "structural_cue": True},
+        "box": [0, 100, 90, 122],
+    }
+    paddle = dict(base)
+    paddle["image_boundary_match"] = {"strength": 1.0, "y": 100}
+    tesseract = dict(base)
+    tesseract["image_boundary_match"] = None
+
+    pair = paddle_headwords._make_ocr_pair(paddle, tesseract)
+    item = paddle_headwords._arbitrate_pair(
+        pair, 0, 20, AppSettings(), geometry=None,
+    )
+    assert item["selected"] is True
+    assert item["final_engine"] == "paddle"
+    assert item["decision_reason"] == "dual_agree_higher_quality"
+
+
 def test_dual_ocr_consensus_plus_image_boundary_rescues_missing_structure():
     common = {
         "source_x": 20,
