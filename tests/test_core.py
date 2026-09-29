@@ -355,7 +355,7 @@ class FormatTests(unittest.TestCase):
 
     def test_default_headword_ocr_uses_paddle_only(self) -> None:
         settings = AppSettings()
-        self.assertEqual(settings.detection_method, "paddleocr")
+        self.assertEqual(settings.detection_method, "combined")
         self.assertTrue(settings.paddle_use_paddleocr)
         self.assertFalse(settings.paddle_compare_tesseract)
         self.assertFalse(settings.paddle_dual_ocr_arbitration)
@@ -4698,7 +4698,7 @@ def test_display_mode_and_color_mode_live_at_bottom_of_auxiliary_options():
     assert 'text="显示模式："' not in page_toolbar
 
     aux_start = text.index('self._section_frame(parent, "二、显示设置"')
-    aux_end = text.index('ocr = self._section_frame(parent, "三、OCR画线参数（默认）"', aux_start)
+    aux_end = text.index('ocr = self._section_frame(parent, "三、融合 / OCR画线参数"', aux_start)
     aux = text[aux_start:aux_end]
     assert 'display_mode_combo = ttk.Combobox(\n            option_row,' in aux
     assert 'text="颜色模式："' in aux
