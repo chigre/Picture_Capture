@@ -552,6 +552,62 @@ def test_combined_fusion_suppresses_two_engine_hard_negative_ordinary_false_posi
     assert fused == []
 
 
+def test_single_ocr_hard_negative_cannot_erase_strong_full_white_ordinary_boundary():
+    settings = AppSettings(
+        columns=1, manual_x=20, column_width=360, gutter=0,
+        start_y=0, character_height=20, follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 260, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [
+        Entry(
+            word="", x=x, y=100, confidence=0.98,
+            ocr_source="ordinary_vb",
+        )
+    ]
+    candidate = _latent_review_candidate(
+        y=101,
+        word="",
+        reason="continuation_fragment",
+        confidence=0.99,
+        two_engines=False,
+        features={"at_left": True, "looks_like_continuation": True},
+    )
+
+    fused = _fuse_detection_entries(
+        ordinary, [], geometry, settings, review_candidates=[candidate],
+    )
+    assert [(item.word, item.y) for item in fused] == [("", 100)]
+
+
+def test_dual_ocr_hard_negative_can_override_strong_ordinary_boundary():
+    settings = AppSettings(
+        columns=1, manual_x=20, column_width=360, gutter=0,
+        start_y=0, character_height=20, follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 260, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [
+        Entry(
+            word="", x=x, y=100, confidence=0.98,
+            ocr_source="ordinary_vb",
+        )
+    ]
+    candidate = _latent_review_candidate(
+        y=101,
+        word="",
+        reason="continuation_fragment",
+        confidence=0.96,
+        two_engines=True,
+        features={"at_left": True, "looks_like_continuation": True},
+    )
+
+    fused = _fuse_detection_entries(
+        ordinary, [], geometry, settings, review_candidates=[candidate],
+    )
+    assert fused == []
+
+
 def test_combined_fusion_never_lets_manual_deselection_be_auto_rescued_or_veto_geometry():
     settings = AppSettings(
         columns=1, manual_x=20, column_width=360, gutter=0,
