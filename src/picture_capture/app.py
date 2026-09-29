@@ -44,6 +44,7 @@ from .models import (
 from .paddle_headwords import (
     DEFAULT_HEADWORD_FILTER_RULES,
     HEADWORD_FILTER_RULES_FILENAME,
+    compact_ocr_cache_file,
     parse_headword_filter_rules,
 )
 from .environment_center import EnvironmentCenterWindow
@@ -12978,7 +12979,7 @@ class PictureCaptureApp(tk.Tk):
             "恢复PDIC": "从备份文本覆盖恢复主界面所选范围的 PDIC；执行前请确认页面范围。",
             "插图识别": "在所选页面范围自动识别插图并写入 PPP；人工多边形会保留。",
             "编辑插图": "进入/退出插图多边形编辑模式，可新增、移动顶点并修改标签。",
-            "清理临时文件": "清理主界面当前页面范围对应的 PaddleOCR 临时缓存、诊断和复核文件；不会删除原始扫描图、PDIC/PPP 或已校对词条。",
+            "压缩OCR缓存": "压缩当前页面范围的 PaddleOCR 缓存并删除可再生诊断副本；保留可复用 OCR 原始记录和人工选择，不需要重新 OCR。",
             "保存当前页": "立即保存当前页的画线/词条或插图编辑结果。",
         }
         rows = [
@@ -12993,7 +12994,7 @@ class PictureCaptureApp(tk.Tk):
             (
                 ("插图识别", self.detect_illustrations_selected_scope),
                 ("编辑插图", self.toggle_polygon_drawing),
-                ("清理临时文件", self.cleanup_paddleocr_temp_selected_scope),
+                ("压缩OCR缓存", self.cleanup_paddleocr_temp_selected_scope),
                 ("保存当前页", self.save_current_page),
             ),
         ]
@@ -15362,9 +15363,9 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def cleanup_paddleocr_temp_selected_scope(self) -> None:
-        """Delete PaddleOCR temporary files only for the currently selected page range."""
+        """Compact PaddleOCR cache for the selected pages without losing reusable OCR."""
         if not self.project:
-            messagebox.showinfo("清理临时文件", "请先打开项目。", parent=self)
+            messagebox.showinfo("压缩OCR缓存", "请先打开项目。", parent=self)
             return
         try:
             indices = self.selected_page_indices()
@@ -15372,56 +15373,27 @@ class PictureCaptureApp(tk.Tk):
             self.show_error("页面范围无效", exc)
             return
         if not indices:
-            messagebox.showinfo("清理临时文件", "当前页面范围为空。", parent=self)
+            messagebox.showinfo("压缩OCR缓存", "当前页面范围为空。", parent=self)
             return
 
         cache_root = ocr_cache_root(self.project.root)
         if not cache_root.exists():
             messagebox.showinfo(
-                "清理临时文件",
-                "当前项目没有 PaddleOCR 临时文件可清理。",
+                "压缩OCR缓存",
+                "当前项目没有 PaddleOCR 缓存可压缩。",
                 parent=self,
             )
             return
 
-        page_stems = {
+        page_stems = [
             self.project.images[index].stem
             for index in indices
             if 0 <= int(index) < len(self.project.images)
-        }
-        targets: list[Path] = []
-        total_bytes = 0
-        try:
-            for child in cache_root.iterdir():
-                if not any(
-                    self._paddle_temp_matches_page(child, page_stem)
-                    for page_stem in page_stems
-                ):
-                    continue
-                targets.append(child)
-                if child.is_file():
-                    try:
-                        total_bytes += int(child.stat().st_size)
-                    except OSError:
-                        pass
-                elif child.is_dir():
-                    for nested in child.rglob("*"):
-                        if nested.is_file():
-                            try:
-                                total_bytes += int(nested.stat().st_size)
-                            except OSError:
-                                pass
-        except OSError as exc:
-            self.show_error("无法检查临时文件", exc)
-            return
-
-        if not targets:
-            messagebox.showinfo(
-                "清理临时文件",
-                f"所选 {len(indices)} 页没有对应的 PaddleOCR 临时文件。",
-                parent=self,
-            )
-            return
+        ]
+        sidecar_suffixes = (
+            "_ocr_diagnostics.txt", "_ocr_comparison.txt", "_issues.tsv",
+            "_ocr_engines.tsv", "_fusion.tsv",
+        )
 
         def human_size(size: int) -> str:
             value = float(max(0, size))
@@ -15432,17 +15404,47 @@ class PictureCaptureApp(tk.Tk):
                 value /= 1024.0
             return f"{size} B"
 
+        existing_pages = 0
+        estimated_bytes = 0
+        legacy_sidecars = 0
+        for stem in page_stems:
+            cache_path = cache_root / f"{stem}.json"
+            found = False
+            paths = [cache_path]
+            paths.extend(cache_root / f"{stem}{suffix}" for suffix in sidecar_suffixes)
+            for path in paths:
+                if not path.exists() or not path.is_file():
+                    continue
+                found = True
+                try:
+                    estimated_bytes += int(path.stat().st_size)
+                except OSError:
+                    pass
+                if path != cache_path:
+                    legacy_sidecars += 1
+            if found:
+                existing_pages += 1
+
+        if not existing_pages:
+            messagebox.showinfo(
+                "压缩OCR缓存",
+                f"所选 {len(indices)} 页没有对应的 PaddleOCR 缓存。",
+                parent=self,
+            )
+            return
+
         confirmed = messagebox.askyesno(
-            "警告：清理 PaddleOCR 临时文件",
+            "压缩 PaddleOCR 缓存",
             (
-                f"将清理当前所选页面范围内 {len(indices)} 页对应的 "
-                f"_PictureCapture\\QT\\PaddleOCR 临时文件。\n\n"
-                f"预计删除 {len(targets)} 个文件/目录，约 {human_size(total_bytes)}。\n\n"
-                "该操作会删除这些页面的 OCR 缓存、诊断及复核临时文件；"
-                "不会删除原始扫描图片、PDIC/PPP、已保存词条文字、校对结果或其他页面的数据。\n\n"
-                "清理后，如果再次对这些页面运行 OCR画线、OCR复核或依赖 OCR 缓存的功能，"
-                "程序需要重新执行 OCR，可能耗时较长。\n\n"
-                "此操作无法在 Picture Capture 内撤销。确定继续吗？"
+                f"将优化所选范围内 {existing_pages} 页的 PaddleOCR 数据。\n\n"
+                f"当前相关缓存/诊断约 {human_size(estimated_bytes)}；"
+                f"发现 {legacy_sidecars} 个旧式可再生诊断文件。\n\n"
+                "操作会：\n"
+                "• 将 <page>.json 改写为紧凑缓存，只保留复用 OCR、Project Profile 诊断和校对所需信息；\n"
+                "• 删除重复的 diagnostics/comparison/issues/engines/fusion 文本副本；\n"
+                "• 保留 <page>_manual_selection.json 人工选择；\n"
+                "• 保留 OCR 原始记录，因此之后正常“复用缓存”无需重新 OCR。\n\n"
+                "原始扫描图、PDIC/PPP、词条文字和人工校对结果均不修改。是否继续？"
             ),
             icon="warning",
             parent=self,
@@ -15450,44 +15452,42 @@ class PictureCaptureApp(tk.Tk):
         if not confirmed:
             return
 
-        removed = 0
+        before_total = 0
+        after_total = 0
+        removed_sidecars = 0
+        compacted = 0
         failed: list[str] = []
-        for target in targets:
+        for stem in page_stems:
+            cache_path = cache_root / f"{stem}.json"
             try:
-                if target.is_dir():
-                    shutil.rmtree(target)
-                else:
-                    target.unlink(missing_ok=True)
-                removed += 1
-            except OSError as exc:
-                failed.append(f"{target.name}: {exc}")
+                before, after, removed = compact_ocr_cache_file(cache_path)
+                if before <= 0 and removed <= 0:
+                    continue
+                before_total += before
+                after_total += after
+                removed_sidecars += removed
+                compacted += 1
+            except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+                failed.append(f"{stem}: {exc}")
 
+        released = max(0, before_total - after_total)
+        summary = (
+            f"已优化 {compacted} 页 PaddleOCR 缓存；"
+            f"删除 {removed_sidecars} 个重复诊断文件；"
+            f"释放约 {human_size(released)}"
+        )
+        self.status_var.set(summary)
         if failed:
             messagebox.showwarning(
-                "临时文件清理未完全完成",
-                (
-                    f"已删除 {removed}/{len(targets)} 个文件或目录。\n"
-                    f"以下项目删除失败：\n" + "\n".join(failed[:12])
-                    + ("\n…" if len(failed) > 12 else "")
-                ),
+                "OCR缓存压缩部分完成",
+                summary + "\n\n以下页面未能压缩：\n" + "\n".join(failed[:12])
+                + ("\n…" if len(failed) > 12 else ""),
                 parent=self,
             )
-            self.status_var.set(
-                f"临时文件清理部分完成：已删除 {removed}/{len(targets)} 项"
-            )
             return
-
-        self.status_var.set(
-            f"已清理所选 {len(indices)} 页 PaddleOCR 临时文件："
-            f"{removed} 项，释放约 {human_size(total_bytes)}"
-        )
         messagebox.showinfo(
-            "清理完成",
-            (
-                f"已清理所选 {len(indices)} 页对应的 PaddleOCR 临时文件。\n"
-                f"删除 {removed} 个文件/目录，释放约 {human_size(total_bytes)}。\n\n"
-                "原始扫描图、PDIC/PPP 和已保存校对结果均未删除。"
-            ),
+            "OCR缓存压缩完成",
+            summary + "\n\n人工选择、可复用 OCR 原始记录、PDIC/PPP 和校对结果均已保留。",
             parent=self,
         )
 
@@ -19790,8 +19790,7 @@ class PictureCaptureApp(tk.Tk):
                 self._refresh_page_quality_colors()
             self.redraw()
             if settings.detection_method in {"paddleocr", "combined"}:
-                diag = ocr_cache_root(project.root) / f"{page.stem}_ocr_diagnostics.txt"
-                issues = ocr_cache_root(project.root) / f"{page.stem}_issues.tsv"
+                cache = ocr_cache_root(project.root) / f"{page.stem}.json"
                 quality = self._current_page_quality_text()
                 fill_text = ""
                 if settings.detection_method == "combined" and text_stats:
@@ -19802,7 +19801,7 @@ class PictureCaptureApp(tk.Tk):
                     )
                 self.status_var.set(
                     f"智能画线完成：{len(self.entries)} 个词条；{quality}"
-                    f"{fill_text}；诊断 {diag.name}；复核 {issues.name}"
+                    f"{fill_text}；紧凑OCR缓存 {cache.name}"
                 )
             else:
                 self.status_var.set(
