@@ -6,7 +6,7 @@ For CJK ordinary drawing the primary abstraction is now the dictionary page
 layout itself: reading direction, body, columns, ordinary type scale, indentation
 modes and display-size heads are inferred before any entry boundary is emitted.
 When that page model is reliable, its boundaries are authoritative and the
-historical candidate chain is not consulted.  Legacy processing remains as a
+historical candidate chain is not consulted. Legacy processing remains as a
 fallback for underdetermined pages and as the unchanged path for non-CJK
 projects.
 """
@@ -21,11 +21,13 @@ from PIL import Image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
 from . import processing_core as _core
-from .dictionary_page_design import detect_entries_from_page_design, DictionaryPageLayout
+from .dictionary_page_design import DictionaryPageLayout
+from .dictionary_page_design_refined import detect_entries_from_page_design
 from .ordinary_cjk_large_heads import recover_cjk_oversized_heads
 from .ordinary_indent_topology import finalize_indented_topology
 from .ordinary_postprocess import stabilize_ordinary_visual_entries
 from .ordinary_visual import recover_ordinary_visual_entries
+from .training_baseline import save_automatic_baseline
 
 
 for _name, _value in vars(_core).items():
@@ -79,8 +81,8 @@ def _detect_entries_left_edge(
     """Historical ordinary fallback and non-CJK visual recovery.
 
     Direct CJK ordinary drawing is normally intercepted by ``detect_entries``
-    before reaching this function.  Keeping this wrapper preserves combined-mode
-    compatibility while the new page-design path is validated more broadly.
+    before reaching this function. Keeping this wrapper preserves combined-mode
+    compatibility while the page-design path is validated more broadly.
 
     Source-contract markers retained for long-standing regression checks:
     _legacy_is_point(
@@ -124,7 +126,7 @@ def detect_entries(
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
-    """Detect entries, preferring a recovered page-design model for CJK ordinary mode."""
+    """Detect entries, preferring recovered page design for CJK ordinary mode."""
     method = str(getattr(settings, "detection_method", "") or "").strip().lower()
     if method not in {"paddleocr", "combined"} and _uses_cjk_indent_topology(settings):
         try:
@@ -176,7 +178,13 @@ def detect_entries_job(
     pages: tuple[str, str, str],
     profile_page_index: int = 0,
 ) -> int:
-    """Spawn-safe ordinary worker that executes the enhanced facade pipeline."""
+    """Spawn-safe ordinary worker that executes the enhanced facade pipeline.
+
+    The automatic marker set is snapshotted before writing the normal PDIC, so
+    later user additions/deletions can be exported as exact supervised diffs.
+    This direct call is important on Windows/macOS spawn workers, which do not
+    inherit GUI-launcher monkey patches.
+    """
     page = Path(image_path)
     with Image.open(page) as opened:
         image = _core.normalize_page_rgb(opened)
@@ -187,8 +195,10 @@ def detect_entries_job(
         profile_page_index=profile_page_index,
         page_sections=_core.read_page_sections(page),
     )
+    pdic = _core.pdic_path_for_image(page)
+    save_automatic_baseline(pdic, entries, image.width, pages)
     _core.write_pdic(
-        _core.pdic_path_for_image(page),
+        pdic,
         entries,
         image.width,
         pages,
