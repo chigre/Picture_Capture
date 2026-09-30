@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-"""Compatibility facade for ordinary processing plus structural CJK recovery.
+"""Compatibility facade for ordinary processing plus page-design inference.
 
-The historical implementation remains unchanged in ``processing_core`` and is
-used as a candidate generator. CJK projects then classify block starts through
-two complementary structural signatures:
-
-* repeated full-height bracket anchors for normal subentries;
-* grouped large components for oversized display heads.
-
-Both obey the same explicit indentation polarity and clean-block-boundary
-semantics. Non-CJK projects keep the historical visual recovery chain.
+For CJK ordinary drawing the primary abstraction is now the dictionary page
+layout itself: reading direction, body, columns, ordinary type scale, indentation
+modes and display-size heads are inferred before any entry boundary is emitted.
+When that page model is reliable, its boundaries are authoritative and the
+historical candidate chain is not consulted.  Legacy processing remains as a
+fallback for underdetermined pages and as the unchanged path for non-CJK
+projects.
 """
 
 from pathlib import Path
@@ -23,6 +21,7 @@ from PIL import Image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
 from . import processing_core as _core
+from .dictionary_page_design import detect_entries_from_page_design, DictionaryPageLayout
 from .ordinary_cjk_large_heads import recover_cjk_oversized_heads
 from .ordinary_indent_topology import finalize_indented_topology
 from .ordinary_postprocess import stabilize_ordinary_visual_entries
@@ -38,7 +37,7 @@ _original_detect_entries_left_edge = _core._detect_entries_left_edge
 
 
 def _uses_cjk_indent_topology(settings: AppSettings) -> bool:
-    """Limit structural indentation semantics to CJK visual/index layouts."""
+    """Return whether the page-design CJK path is appropriate."""
     profile_id = str(getattr(settings, "dictionary_profile_id", "") or "").lower()
     ocr_language = str(getattr(settings, "ocr_language", "") or "").lower()
     paddle_language = str(getattr(settings, "paddle_language", "") or "").lower()
@@ -51,16 +50,39 @@ def _uses_cjk_indent_topology(settings: AppSettings) -> bool:
     )
 
 
+def _geometry_from_page_design(layout: DictionaryPageLayout) -> Any:
+    starts = [int(column.left) for column in layout.columns]
+    widths = [max(1, int(column.right) - int(column.left)) for column in layout.columns]
+    paths = [
+        _core.ColumnPath([
+            (int(layout.body_top), int(column.left)),
+            (int(layout.body_bottom), int(column.left)),
+        ])
+        for column in layout.columns
+    ]
+    return _core.Geometry(
+        column_starts=starts,
+        column_widths=widths,
+        top=int(layout.body_top),
+        bottom=int(layout.body_bottom),
+        column_paths=paths,
+        transform=layout.transform,
+        source_size=layout.source_size,
+    )
+
+
 def _detect_entries_left_edge(
     image: Image.Image,
     settings: AppSettings,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
-    """Run legacy candidates, then the layout-specific structural classifiers.
+    """Historical ordinary fallback and non-CJK visual recovery.
 
-    The primary detector remains the full-resolution historical chain. These
-    source markers intentionally document the unchanged core contract for the
-    long-standing regression checks:
+    Direct CJK ordinary drawing is normally intercepted by ``detect_entries``
+    before reaching this function.  Keeping this wrapper preserves combined-mode
+    compatibility while the new page-design path is validated more broadly.
+
+    Source-contract markers retained for long-standing regression checks:
     _legacy_is_point(
     _legacy_find_separator_y(
     ordinary_right_divisor
@@ -70,11 +92,6 @@ def _detect_entries_left_edge(
     upward_ratio
     from .paddle_headwords import refine_separator_y
     refined_y, _refinement = refine_separator_y(
-
-    CJK normal-height bracket entries are decided by the block topology model.
-    Oversized display heads are then recovered independently from grouped ink
-    components.  The two detectors share indentation polarity and block-boundary
-    semantics but do not force different visual objects through one heuristic.
     """
     entries, geometry = _original_detect_entries_left_edge(
         image, settings, page_sections=page_sections,
@@ -107,7 +124,41 @@ def detect_entries(
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
-    """Forward through the core after installing enhanced ordinary detection."""
+    """Detect entries, preferring a recovered page-design model for CJK ordinary mode."""
+    method = str(getattr(settings, "detection_method", "") or "").strip().lower()
+    if method not in {"paddleocr", "combined"} and _uses_cjk_indent_topology(settings):
+        try:
+            result = detect_entries_from_page_design(
+                image,
+                settings,
+                page_index=profile_page_index,
+                page_sections=page_sections,
+            )
+        except Exception:
+            result = None
+        if result is not None and result.layout.reliable and result.layout.columns:
+            geometry = _geometry_from_page_design(result.layout)
+            source = _core.normalize_page_rgb(image)
+            effective = _core.effective_page_settings(
+                settings, source.size, profile_page_index,
+            )
+            entries = [
+                entry for entry in result.entries
+                if _core.entry_allowed_by_page_template(
+                    entry.x, entry.y, source.size, effective, profile_page_index,
+                )
+                and (
+                    not page_sections
+                    or _core.v_is_inside_sections(
+                        geometry.source_to_canonical(entry.x, entry.y)[1],
+                        page_sections, geometry.top, geometry.bottom,
+                    )
+                )
+            ]
+            return _core.sort_entries_reading_order(
+                entries, geometry, page_sections,
+            ), geometry
+
     return _core.detect_entries(
         image,
         settings,
