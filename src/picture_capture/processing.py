@@ -21,6 +21,7 @@ from PIL import Image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
 from . import processing_core as _core
+from .boundary_placement import refine_boundaries_toward_head_top
 from .dictionary_page_design import DictionaryPageLayout
 from .dictionary_page_design_refined import detect_entries_from_page_design
 from .ordinary_cjk_large_heads import recover_cjk_oversized_heads
@@ -144,8 +145,15 @@ def detect_entries(
             effective = _core.effective_page_settings(
                 settings, source.size, profile_page_index,
             )
+            placed = refine_boundaries_toward_head_top(
+                image,
+                settings,
+                result.layout,
+                result.entries,
+                page_index=profile_page_index,
+            )
             entries = [
-                entry for entry in result.entries
+                entry for entry in placed
                 if _core.entry_allowed_by_page_template(
                     entry.x, entry.y, source.size, effective, profile_page_index,
                 )
