@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pickle
+
 from PIL import Image, ImageDraw
 
+import picture_capture.processing as processing
+import picture_capture.processing_core as processing_core
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary_lane_polarity import suppress_inverted_legacy_body_lane
 from picture_capture.processing import derive_nominal_geometry
@@ -193,3 +197,12 @@ def test_secondary_lane_in_one_column_flips_dense_body_lane_in_other_column():
         item for item in result if item.ocr_source == "ordinary_visual_lane"
     ]
     assert len(recovered) == 4
+
+
+def test_gui_ordinary_spawn_job_is_owned_by_enhanced_processing_facade():
+    """Spawn must import processing.py, otherwise GUI silently runs legacy core."""
+    assert processing.detect_entries_job.__module__ == "picture_capture.processing"
+    assert processing_core.detect_entries_job.__module__ == "picture_capture.processing_core"
+    payload = pickle.dumps(processing.detect_entries_job)
+    assert b"picture_capture.processing" in payload
+    assert b"picture_capture.processing_core" not in payload
