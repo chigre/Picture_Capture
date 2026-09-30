@@ -27,7 +27,7 @@ ocr-gpu-cu129 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
-picture-capture = "picture_capture.app:main"
+picture-capture = "picture_capture.launcher:main"
 picture-capture-cli = "picture_capture.cli:main"
 
 [tool.uv]
@@ -97,6 +97,3 @@ ignore = ["E501"]
 # runtime so legacy/private integration points remain patchable. Ruff cannot
 # statically resolve names supplied by that dynamic module export.
 "src/picture_capture/evidence_fusion.py" = ["F821"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
