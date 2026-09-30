@@ -3,10 +3,9 @@ from __future__ import annotations
 """OCR-independent visual recovery for ordinary dictionary drawing.
 
 The legacy VB detector is deliberately retained as the primary ordinary path.
-This module recovers entry starts that a single left-edge lane cannot see and,
-when a repeated indented entry lane is strongly proven, suppresses the inverse
-legacy failure mode where body text at the physical column edge is mistaken for
-entries. It never recognizes text.
+This module only recovers entry starts that a single left-edge lane cannot see:
+repeated indented marker lanes (notably CJK ``【...】`` subentries) and oversized
+display headwords.  It never recognizes text.
 """
 
 from dataclasses import dataclass
@@ -234,6 +233,9 @@ def _separator_above(
     bottom = max(top, int(line_y))
     if bottom <= top:
         return None, 1.0
+    # A separator is a page-row property. Use nearly the entire column rather
+    # than only the indented lane; this avoids choosing whitespace that exists
+    # beside a wrapped definition line.
     span = max(16, min(ink.shape[1], round(ink.shape[1] * 0.97)))
     ratios = ink[top:bottom, :span].mean(axis=1)
     if ratios.size == 0:
@@ -248,6 +250,9 @@ def _separator_above(
         index = int(np.argmin(ratios))
         return top + index, minimum
 
+    # Prefer the clean run nearest the headword, but place the marker at the
+    # start of that whitespace run so ascenders/diacritics from the new entry
+    # cannot be cut away.
     run_start, _run_end = max(clean_runs, key=lambda pair: pair[1])
     return top + int(run_start), minimum
 
@@ -289,9 +294,9 @@ def _find_indented_lane_evidence(
 ) -> list[_IndentedLaneEvidence]:
     """Return strongly proven secondary entry lanes for the current page.
 
-    A secondary lane is not inferred from indentation alone. It must repeat,
+    A secondary lane is not inferred from indentation alone.  It must repeat,
     show a stable marker-like leading visual structure, and sit distinctly to
-    the right of the dominant body-text lane. The same evidence is reused for
+    the right of the dominant body-text lane.  The same evidence is reused for
     both recovery and polarity suppression so the two decisions cannot drift.
     """
     if not bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
@@ -336,6 +341,7 @@ def _find_indented_lane_evidence(
             if len(marker_rows) < 3 or len(marker_rows) / float(len(cluster)) < 0.45:
                 continue
             lane_center = float(np.median([line.start for line in marker_rows]))
+            # The secondary lane must be meaningfully distinct from body text.
             if lane_center - baseline < character_height * 0.85:
                 continue
             evidence.append(_IndentedLaneEvidence(
@@ -376,31 +382,28 @@ def _suppress_primary_body_lane_entries(
     page_sections: list[Any] | None,
     evidence: list[_IndentedLaneEvidence],
 ) -> list[Entry]:
-    """Suppress legacy main-lane body markers after a secondary lane is proven.
+    """Remove legacy VB markers that belong to the proven body-text lane.
 
-    Some CJK dictionaries invert the historical ordinary-mode prior: running
-    body/definition lines begin at the physical column edge while true
-    bracketed subentries live on a repeated indented lane. Once that secondary
-    lane is strongly proven, keeping every legacy main-lane marker produces an
-    inverted result. Only automatic legacy markers on the dominant normal-text
-    lane are removed; oversized display heads are independently recovered by
-    the connected-component pass that follows.
+    In some CJK dictionaries the historical ordinary-mode prior is reversed:
+    body/definition lines begin at the physical column edge, while true
+    bracketed entries live on a repeated indented lane.  Once that secondary
+    entry lane is proven from the page itself, keeping every legacy main-lane
+    marker produces the exact inverted result reported by users.
+
+    Suppression is deliberately conditional and conservative:
+    * it runs only in columns with a strongly proven secondary lane;
+    * it only removes automatic legacy ordinary markers;
+    * the marker must resolve to a normal-height line on the dominant body lane;
+    * oversized display heads are recovered afterwards by the independent
+      connected-component detector.
     """
-    del source, settings, page_sections  # evidence already captures page analysis
     if not evidence:
         return list(entries)
 
     character_height = max(
         8, int(round(float(getattr(settings, "character_height", 26) or 26)))
-    ) if False else 26
-    # Prefer the actual page-scale line reference stored implicitly by the
-    # evidence. The fallback keeps this helper independent of OCR.
-    if evidence and evidence[0].lines:
-        heights = [line.y1 - line.y0 for item in evidence for line in item.lines]
-        if heights:
-            character_height = max(8, int(round(float(np.median(heights)) / 0.72)))
+    )
     body_tolerance = max(5.0, character_height * 0.58)
-
     lane_by_column: dict[int, list[_IndentedLaneEvidence]] = {}
     for item in evidence:
         lane_by_column.setdefault(int(item.column), []).append(item)
@@ -422,7 +425,9 @@ def _suppress_primary_body_lane_entries(
         matched_body = False
         for item in lane_evidence:
             local_y = int(canonical_v) - int(item.top)
-            line = _line_after_separator(item.lines, local_y, character_height)
+            line = _line_after_separator(
+                item.lines, local_y, character_height,
+            )
             if line is None:
                 continue
             if abs(float(line.start) - float(item.baseline)) <= body_tolerance:
@@ -430,6 +435,8 @@ def _suppress_primary_body_lane_entries(
                 break
 
         if matched_body:
+            # Do not carry the legacy body-line false positive forward.  Any
+            # true oversized main-lane head is independently re-added below.
             continue
         output.append(entry)
     return output
@@ -656,7 +663,6 @@ def recover_ordinary_visual_entries(
     kind = str(getattr(getattr(geometry, "transform", None), "kind", "identity") or "identity")
     if kind not in {"identity", "mirror_x"}:
         return list(entries)
-
     lane_evidence = _find_indented_lane_evidence(
         source, geometry, settings,
     )
