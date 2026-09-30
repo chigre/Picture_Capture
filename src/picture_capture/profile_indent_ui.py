@@ -217,4 +217,10 @@ def build_project_profile_wizard(base_class: type[Any]) -> type[Any]:
 
     ProjectProfileWizard.__name__ = "ProjectProfileWizard"
     ProjectProfileWizard.__qualname__ = "ProjectProfileWizard"
-    return ProjectProfileWizard
+
+    # Step 4 is a separate concern from indentation/layout editing.  Compose the
+    # multi-mode validation bench last so it can consume the fully extended
+    # wizard while remaining independently testable.
+    from .profile_validation_modes import build_validation_mode_wizard
+
+    return build_validation_mode_wizard(ProjectProfileWizard)
