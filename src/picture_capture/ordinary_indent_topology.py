@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Structural topology for normal-height CJK bracket entries.
 
-The abstraction is a visual *block start*, not an isolated indented line.  A
+The abstraction is a visual *block start*, not an isolated indented line. A
 normal bracket entry is accepted when three independent page-layout facts agree:
 
 1. a continuous blank boundary exists immediately before the block;
@@ -12,10 +12,10 @@ normal bracket entry is accepted when three independent page-layout facts agree:
 
 Small numeric/superscript prefixes are explicitly ignored when locating the
 structural glyph, so ``【词】``, ``1【词】`` and ``12【词】`` belong to the same
-entry lane.  Oversized display heads are deliberately NOT handled here; they
+entry lane. Oversized display heads are deliberately NOT handled here; they
 have their own connected-component signature in ``ordinary_cjk_large_heads``.
 
-Only a left text-start strip is analysed.  A tall illustration on the right can
+Only a left text-start strip is analysed. A tall illustration on the right can
 therefore never merge several text rows into one projection run.
 """
 
@@ -39,6 +39,9 @@ from .ordinary_visual import (
     _runs,
     _source_edge,
 )
+
+
+_INDENT_SEMANTICS_VERSION = 2
 
 
 @dataclass(slots=True)
@@ -125,12 +128,12 @@ class IndentTopology:
 
 
 def _indent_type(settings: AppSettings) -> str:
-    # New UI exposes this as 词头缩进 / 正文缩进.  The existing persisted Boolean
-    # remains the compatibility backing field so old settings.json needs no
-    # migration and no project loses its saved profile.
-    value = str(getattr(settings, "profile_indent_type", "") or "").strip().lower()
-    if value in {"headword", "body"}:
-        return value
+    # Before semantics v2 the persisted Boolean meant the unrelated fact that
+    # bracket words may also occur inside definitions. It must not silently
+    # become indentation polarity. Old projects therefore default to headword
+    # indentation until the user explicitly saves the new Project Profile choice.
+    if int(getattr(settings, "profile_parser_controls_version", 0) or 0) < _INDENT_SEMANTICS_VERSION:
+        return "headword"
     return (
         "body"
         if bool(getattr(settings, "profile_cjk_brackets_in_body", False))
@@ -294,8 +297,6 @@ def _empirical_tolerance(
 
 
 def _separator_supported(ink: np.ndarray, row: BlockRow, reference: float) -> bool:
-    # This is the block-boundary evidence: separator_y is found in a continuous
-    # blank band immediately before the current visual block.
     return _separator_near_next_line(ink, int(row.y0), reference) is not None
 
 
@@ -326,7 +327,6 @@ def _lane_is_structural(
     marker_fraction: float,
     separator_fraction: float,
 ) -> bool:
-    """A geometric lane is not enough; it must repeat the same leading structure."""
     count = len(rows)
     if count >= 3:
         return bool(separator_fraction >= 0.40 and marker_fraction >= 0.28)
@@ -369,8 +369,6 @@ def _observe_column_raw(
     if not clusters:
         return None
 
-    # The dominant recurring text-start lane is the definition/body lane.  The
-    # user's explicit indentation type decides which side can contain entries.
     clusters.sort(key=lambda cluster: (-len(cluster), _cluster_center(cluster)))
     body_rows = clusters[0]
     body_center = _cluster_center(body_rows)
@@ -436,7 +434,6 @@ def _prototype_similarity(row: BlockRow, prototypes: list[np.ndarray]) -> float:
 
 
 def _seed_sparse_columns(topologies: dict[int, IndentTopology]) -> None:
-    """Use a proven sibling column to recover sparse occurrences of the same bracket."""
     proven = [topology for topology in topologies.values() if topology.is_proven]
     if not proven:
         return
@@ -590,7 +587,6 @@ def finalize_indented_topology(
         column = _entry_column(entry, geometry)
         topology = raw.get(column)
         if topology is None or not topology.is_proven:
-            # A single-lane or otherwise unproven column retains legacy output.
             output.append(entry)
             continue
         _u, marker_v = geometry.source_to_canonical(int(entry.x), int(entry.y))
