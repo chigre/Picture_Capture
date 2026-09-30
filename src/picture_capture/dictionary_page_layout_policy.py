@@ -14,8 +14,10 @@ changing the underlying typesetting semantics.  The explicit headword/body
 indent choice therefore controls semantic direction, not whether local evidence
 is observed.
 
-Per-page adaptation stays OCR-free: it uses the same deterministic projection
-layout primitive as page-design inference and never loads a recognition model.
+Per-page adaptation stays OCR-free.  In particular, automatic ``manual_x`` is a
+registration of the current scan against the Project template; it is not a
+fresh search for whichever text lane has the most ink.  This prevents an inward
+body lane from becoming the physical column edge on body-indented dictionaries.
 """
 
 from dataclasses import replace
@@ -28,6 +30,7 @@ from . import dictionary_page_design as base
 from . import dictionary_page_design_refined as refined
 from .layout_detection import analysis_ink_mask, _projection_layout_estimate, LayoutEstimate
 from .models import AppSettings
+from .page_x_registration import register_page_manual_x
 
 
 AUTO_LAYOUT_FIELDS: tuple[tuple[str, str], ...] = (
@@ -59,6 +62,12 @@ def resolve_page_layout_policy(
     off no per-page geometry detector is run.  When it is on, one OCR-free
     projection estimate is made and only explicitly selected fields replace
     their project-level values.
+
+    ``manual_x`` is special only in *how* its selected value is measured: the
+    projection estimate is treated as an observation, while the final value is
+    a semantic-aware page translation of the Project template.  This preserves
+    the meaning of "首栏X自动" without allowing a dominant inward body lane to
+    redefine the column origin.
     """
     current = replace(settings)
     if not bool(getattr(current, "ordinary_auto_layout", False)):
@@ -78,12 +87,21 @@ def resolve_page_layout_policy(
     estimate = _projection_layout_estimate(canonical, effective)
 
     applied: dict[str, int] = {}
+    # Resolve every selected scalar except X first.  X registration may use the
+    # newly allowed page-specific column count/width/gutter/line scale, while
+    # keeping the original Project manual_x as its origin.
     for field, switch in AUTO_LAYOUT_FIELDS:
-        if not bool(getattr(current, switch, False)):
+        if field == "manual_x" or not bool(getattr(current, switch, False)):
             continue
         value = int(getattr(estimate, field))
         setattr(current, field, value)
         applied[field] = value
+
+    if bool(getattr(current, "ordinary_auto_manual_x", False)):
+        registration = register_page_manual_x(canonical, current, estimate)
+        current.manual_x = int(registration.value)
+        applied["manual_x"] = int(registration.value)
+
     current.manual_columns = False
     return current, estimate, applied
 
@@ -104,37 +122,27 @@ def _policy_geometry(
     settings: AppSettings,
     estimate: LayoutEstimate | None,
 ) -> tuple[list[int], list[int], list[int]]:
+    """Build physical columns from the fields the user actually allowed to vary.
+
+    ``manual_x`` is the one registered page origin.  ``column_width`` and
+    ``gutter`` are separate switches, so unselected width/pitch must not leak in
+    through ``estimate.column_starts``.  Mild local scan curvature is handled by
+    Page Understanding inside each column rather than by giving every column an
+    unrelated automatically detected origin.
+    """
+    _ = estimate  # retained in the signature for compatibility/diagnostics
     count = max(1, min(12, int(getattr(settings, "columns", 1) or 1)))
     width = max(8, int(getattr(settings, "column_width", 700) or 700))
     gutter = max(0, int(getattr(settings, "gutter", 0) or 0))
     manual_x = max(0, int(getattr(settings, "manual_x", 0) or 0))
     offsets = _column_offsets(settings, count)
 
-    use_detected_starts = bool(
-        estimate is not None
-        and _auto_enabled(settings, "ordinary_auto_manual_x")
-        and len(tuple(getattr(estimate, "column_starts", ()) or ())) >= count
-    )
-    if use_detected_starts:
-        detected = list(tuple(estimate.column_starts)[:count])
-        starts = [int(detected[i]) + offsets[i] for i in range(count)]
-    else:
-        starts = [
-            manual_x + i * (width + gutter) + offsets[i]
-            for i in range(count)
-        ]
+    starts = [
+        manual_x + i * (width + gutter) + offsets[i]
+        for i in range(count)
+    ]
+    widths = [width] * count
 
-    detected_widths: list[int] = []
-    if (
-        estimate is not None
-        and _auto_enabled(settings, "ordinary_auto_column_width")
-        and len(tuple(getattr(estimate, "column_starts", ()) or ())) >= count
-        and len(tuple(getattr(estimate, "column_rights", ()) or ())) >= count
-    ):
-        for left, right in zip(estimate.column_starts[:count], estimate.column_rights[:count]):
-            detected_widths.append(max(8, int(right) - int(left)))
-
-    widths = detected_widths if len(detected_widths) == count else [width] * count
     clamped_starts: list[int] = []
     rights: list[int] = []
     for start, item_width in zip(starts, widths):
@@ -143,14 +151,7 @@ def _policy_geometry(
         clamped_starts.append(left)
         rights.append(right)
 
-    if _auto_enabled(settings, "ordinary_auto_gutter"):
-        gutters = [
-            max(0, clamped_starts[i + 1] - rights[i])
-            if i + 1 < count else 0
-            for i in range(count)
-        ]
-    else:
-        gutters = [gutter if i + 1 < count else 0 for i in range(count)]
+    gutters = [gutter if i + 1 < count else 0 for i in range(count)]
     return clamped_starts, rights, gutters
 
 
@@ -292,11 +293,17 @@ def infer_dictionary_page_layout(
     )
     policy = "fixed" if not bool(getattr(settings, "ordinary_auto_layout", False)) else "mixed"
     auto_names = ",".join(sorted(applied)) if applied else "none"
+    x_registration = ""
+    if estimate is not None and "manual_x" in applied:
+        x_registration = (
+            f"; x_registration={int(getattr(settings, 'manual_x', 0) or 0)}"
+            f"->{int(applied['manual_x'])} raw_projection={int(estimate.manual_x)}"
+        )
     reason = (
         f"{len(columns)} columns; body={body_lines}; entry={entry_lines}; "
         f"display={len(display_heads)}; line_h={reference:.1f}; "
         f"char_w={char_width:.1f}; pitch={pitch:.1f}; "
-        f"layout_policy={policy}; auto_fields={auto_names}"
+        f"layout_policy={policy}; auto_fields={auto_names}{x_registration}"
     )
     layout = base.DictionaryPageLayout(
         transform=transform,
@@ -365,7 +372,7 @@ def layout_diagnostics(layout: base.DictionaryPageLayout) -> dict[str, Any]:
         "mode": "fixed" if "layout_policy=fixed" in reason else "mixed",
         "principle": (
             "project fields are fixed unless their existing per-page auto switch is enabled; "
-            "indent families remain local page-instance measurements"
+            "manual_x is page-wide template registration; indent families remain local page-instance measurements"
         ),
     }
     return data
