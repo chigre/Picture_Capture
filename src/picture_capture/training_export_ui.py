@@ -32,14 +32,24 @@ def _page_number(text: str) -> int | None:
         return None
 
 
+def _resolve_exact_name(images: list[Path], text: str) -> int | None:
+    """Match a literal filename/stem only; never reinterpret a range as a number."""
+    value = str(text or "").strip().casefold()
+    if not value:
+        return None
+    for index, page in enumerate(images):
+        if value in {page.name.casefold(), page.stem.casefold()}:
+            return index
+    return None
+
+
 def _resolve_endpoint(images: list[Path], text: str) -> int | None:
     value = str(text or "").strip()
     if not value:
         return None
-    folded = value.casefold()
-    for index, page in enumerate(images):
-        if folded in {page.name.casefold(), page.stem.casefold()}:
-            return index
+    exact = _resolve_exact_name(images, value)
+    if exact is not None:
+        return exact
     number = _page_number(value)
     if number is not None:
         matches = [
@@ -60,21 +70,27 @@ def resolve_export_indices(
     if not text:
         return list(range(len(images))), None
 
-    # Prefer an exact page first: names may themselves contain hyphens.
-    exact = _resolve_endpoint(images, text)
+    # A real filename/stem may itself contain a hyphen, so literal page identity
+    # always wins.  Numeric fallback is deliberately delayed until after range
+    # parsing; otherwise "000092-96" would be misread as the single page 96.
+    exact = _resolve_exact_name(images, text)
     if exact is not None:
         return [exact], None
 
     parts = re.split(r"\s*(?:-|–|—|~|～|至|到)\s*", text, maxsplit=1)
-    if len(parts) != 2 or not parts[0] or not parts[1]:
-        return [], "请输入单页或连续范围，例如 020093 或 020089-020099。"
-    start = _resolve_endpoint(images, parts[0])
-    end = _resolve_endpoint(images, parts[1])
-    if start is None or end is None:
-        return [], "范围端点没有匹配到项目页面，请检查页名/页码。"
-    if start > end:
-        start, end = end, start
-    return list(range(start, end + 1)), None
+    if len(parts) == 2 and parts[0] and parts[1]:
+        start = _resolve_endpoint(images, parts[0])
+        end = _resolve_endpoint(images, parts[1])
+        if start is None or end is None:
+            return [], "范围端点没有匹配到项目页面，请检查页名/页码。"
+        if start > end:
+            start, end = end, start
+        return list(range(start, end + 1)), None
+
+    one = _resolve_endpoint(images, text)
+    if one is not None:
+        return [one], None
+    return [], "请输入单页或连续范围，例如 020093 或 020089-020099。"
 
 
 def export_training_package_selected_range(self) -> None:
