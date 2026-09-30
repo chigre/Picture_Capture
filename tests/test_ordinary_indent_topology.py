@@ -3,6 +3,7 @@ from __future__ import annotations
 from PIL import Image, ImageDraw
 
 from picture_capture.models import AppSettings, Entry
+from picture_capture.ordinary_cjk_large_heads import recover_cjk_oversized_heads
 from picture_capture.ordinary_indent_topology import (
     _observe_column,
     finalize_indented_topology,
@@ -42,19 +43,31 @@ def _block_page() -> tuple[Image.Image, list[int], list[int], list[int]]:
         draw.rectangle((6, y, 260, y + 9), fill="black")
 
     for y in plain_entries:
-        # Full-height bracket-like anchor at x=44, then lemma text after a gap.
         draw.rectangle((44, y, 49, y + 9), fill="black")
         draw.rectangle((56, y, 190, y + 8), fill="black")
 
     for index, y in enumerate(numbered_entries):
-        # Optional numeric/superscript prefix deliberately moves FIRST ink left.
-        # Its small height must not change the structural bracket anchor.
+        # Small prefix moves FIRST ink, but the full-height bracket anchor stays.
         prefix_x = 19 + index * 4
         draw.rectangle((prefix_x, y, prefix_x + 8, y + 3), fill="black")
         draw.rectangle((44, y, 49, y + 9), fill="black")
         draw.rectangle((56, y, 190, y + 8), fill="black")
 
     return image, body_rows, plain_entries, numbered_entries
+
+
+def _body_indented_page() -> tuple[Image.Image, list[int], list[int]]:
+    """Mirror semantic relation: body at x=46, headword bracket at x=8."""
+    image = Image.new("RGB", (340, 420), "white")
+    draw = ImageDraw.Draw(image)
+    body_rows = [40, 88, 136, 184, 232, 280, 328, 376]
+    entry_rows = [64, 160, 256, 352]
+    for y in body_rows:
+        draw.rectangle((46, y, 260, y + 9), fill="black")
+    for y in entry_rows:
+        draw.rectangle((8, y, 13, y + 9), fill="black")
+        draw.rectangle((20, y, 180, y + 8), fill="black")
+    return image, body_rows, entry_rows
 
 
 def test_structural_anchor_ignores_optional_number_prefix():
@@ -70,14 +83,13 @@ def test_structural_anchor_ignores_optional_number_prefix():
     assert len(topology.entry_centers) == 1
     assert abs(topology.entry_centers[0] - 44) <= 3
     assert len(topology.entry_rows) == len(plain_entries) + len(numbered_entries)
-    # FIRST ink differs strongly, but semantic starts collapse to one bracket lane.
     starts = [row.first_start for row in topology.entry_rows]
     structural = [row.start for row in topology.entry_rows]
     assert min(starts) < 30
     assert max(structural) - min(structural) <= 3
 
 
-def test_final_gate_rejects_body_and_recovers_all_bracket_blocks():
+def test_headword_indent_final_gate_rejects_body_and_recovers_all_bracket_blocks():
     image, body_rows, plain_entries, numbered_entries = _block_page()
     settings = _settings()
     geometry = derive_nominal_geometry(image.width, image.height, settings)
@@ -99,11 +111,34 @@ def test_final_gate_rejects_body_and_recovers_all_bracket_blocks():
     assert len(recovered) >= len(plain_entries) + len(numbered_entries) - 1
 
 
-def test_oversized_head_is_recovered_by_same_block_model():
+def test_body_indent_option_reverses_semantic_lane_direction():
+    image, _body_rows, entry_rows = _body_indented_page()
+    settings = _settings()
+    # Compatibility backing for the user-facing “正文缩进” option.
+    settings.profile_cjk_brackets_in_body = True
+    settings.bottom_y = 410
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+
+    topology = _observe_column(image, geometry, settings, 0)
+
+    assert topology is not None
+    assert topology.is_proven
+    assert topology.indent_type == "body"
+    assert abs(topology.body_center - 46) <= 3
+    assert len(topology.entry_centers) == 1
+    assert abs(topology.entry_centers[0] - 8) <= 3
+
+    result = finalize_indented_topology(image, [], geometry, settings)
+    recovered = [
+        entry for entry in result
+        if entry.issue_type == "ORDINARY_BLOCK_BRACKET_ENTRY"
+    ]
+    assert len(recovered) >= len(entry_rows) - 1
+
+
+def test_oversized_head_is_recovered_by_independent_block_signature():
     image, _body_rows, _plain_entries, _numbered_entries = _block_page()
     draw = ImageDraw.Draw(image)
-    # Put a tall display head in otherwise blank vertical space. Its first ink is
-    # on the same semantic (right/indented) side as the bracket entry structure.
     draw.rectangle((34, 8, 47, 38), fill="black")
     draw.rectangle((52, 8, 72, 38), fill="black")
 
@@ -111,7 +146,7 @@ def test_oversized_head_is_recovered_by_same_block_model():
     settings.start_y = 0
     geometry = derive_nominal_geometry(image.width, image.height, settings)
 
-    result = finalize_indented_topology(image, [], geometry, settings)
+    result = recover_cjk_oversized_heads(image, [], geometry, settings)
 
     heads = [
         entry for entry in result
