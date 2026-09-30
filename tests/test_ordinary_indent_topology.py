@@ -48,7 +48,6 @@ def _block_page() -> tuple[Image.Image, list[int], list[int], list[int]]:
         draw.rectangle((56, y, 190, y + 8), fill="black")
 
     for index, y in enumerate(numbered_entries):
-        # Small prefix moves FIRST ink, but the full-height bracket anchor stays.
         prefix_x = 19 + index * 4
         draw.rectangle((prefix_x, y, prefix_x + 8, y + 3), fill="black")
         draw.rectangle((44, y, 49, y + 9), fill="black")
@@ -116,8 +115,6 @@ def test_headword_indent_final_gate_rejects_body_and_recovers_all_bracket_blocks
 def test_body_indent_option_reverses_semantic_lane_direction():
     image, _body_rows, entry_rows = _body_indented_page()
     settings = _settings()
-    # Version 2 marks this as an explicit user choice, not the unrelated legacy
-    # meaning of profile_cjk_brackets_in_body.
     settings.profile_parser_controls_version = 2
     settings.profile_cjk_brackets_in_body = True
     settings.bottom_y = 410
@@ -202,20 +199,30 @@ def test_right_side_illustration_cannot_merge_left_body_lines_or_bypass_gate():
     assert not any(entry.y in {86, 182, 278} for entry in result)
 
 
-def test_body_only_continuation_column_suppresses_legacy_body_candidates():
-    """Regression for a column containing only continuation definition text.
+def _draw_distinct_body_glyph(draw: ImageDraw.ImageDraw, x: int, y: int, index: int) -> None:
+    """Draw connected, full-height but deliberately different leading glyphs."""
+    shapes = (
+        ((0, 0), (0, 9), (7, 9)),
+        ((0, 9), (0, 0), (7, 0)),
+        ((0, 0), (7, 4), (0, 9)),
+        ((0, 0), (7, 9), (7, 0), (0, 9)),
+        ((0, 0), (0, 9), (7, 4), (0, 0)),
+        ((0, 9), (7, 0), (7, 9), (0, 0)),
+        ((0, 0), (7, 0), (0, 9), (7, 9)),
+        ((0, 9), (7, 9), (0, 0), (7, 0)),
+    )
+    points = [(x + dx, y + dy) for dx, dy in shapes[index % len(shapes)]]
+    draw.line(points, fill="black", width=2)
 
-    Absence of an entry lane is not uncertainty once a stable ordinary body lane
-    is proven. Legacy candidates on that lane are explicit false positives.
-    """
+
+def test_body_only_continuation_column_suppresses_legacy_body_candidates():
+    """A continuation column with proven body is negative evidence for legacy lines."""
     image = Image.new("RGB", (340, 300), "white")
     draw = ImageDraw.Draw(image)
     rows = [32, 64, 96, 128, 160, 192, 224, 256]
     for index, y in enumerate(rows):
-        # Vary the leading glyph patch so this is ordinary prose, not a repeated
-        # structural marker lane. Every row nevertheless shares one body X lane.
-        draw.rectangle((6, y, 11 + (index % 3), y + 9), fill="black")
-        draw.rectangle((18 + (index % 4), y, 260, y + 8), fill="black")
+        _draw_distinct_body_glyph(draw, 6, y, index)
+        draw.rectangle((24, y, 260, y + 8), fill="black")
 
     settings = _settings()
     settings.bottom_y = 290
@@ -232,7 +239,6 @@ def test_body_only_continuation_column_suppresses_legacy_body_candidates():
         Entry(word="", x=x, y=y - 2, confidence=.9, ocr_source="ordinary_vb")
         for y in rows[1:7]
     ]
-    # A manual marker must never be removed by automatic topology filtering.
     manual = Entry(
         word="manual", x=x, y=rows[-1] - 2,
         confidence=1.0, ocr_source="ordinary_vb", manually_selected=True,
@@ -245,8 +251,8 @@ def test_body_only_continuation_column_suppresses_legacy_body_candidates():
     assert manual in result
 
 
-def test_repeated_headword_only_lane_is_not_declared_body():
-    """A list of repeated bracket starts must not become body by majority vote."""
+def test_repeated_headword_only_lane_is_not_used_as_body_negative_evidence():
+    """A pure repeated bracket lane stays uncertain rather than deleting itself."""
     image = Image.new("RGB", (340, 300), "white")
     draw = ImageDraw.Draw(image)
     rows = [32, 72, 112, 152, 192, 232]
@@ -259,9 +265,9 @@ def test_repeated_headword_only_lane_is_not_declared_body():
     geometry = derive_nominal_geometry(image.width, image.height, settings)
     topology = _observe_column_raw(image, geometry, settings, 0)
 
-    # Without a separate ordinary prose lane the model should remain uncertain,
-    # not relabel the repeated structural lane as body and delete it.
-    assert topology is None
+    assert topology is not None
+    assert not topology.body_is_proven
+    assert not topology.is_proven
 
     x = int(geometry.column_starts[0])
     legacy = [
