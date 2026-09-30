@@ -10,6 +10,7 @@ Evidence families remain separate while sharing one physical page coordinate
 model:
 * VB/ordinary detection supplies geometric separator observations;
 * Page Understanding supplies physical layout and block-role evidence;
+* sampled Symbol Evidence supplies project-specific visual marker observations;
 * OCR supplies textual/semantic observations.
 
 When Page Understanding is physically reliable, ordinary/VB, OCR and combined
@@ -39,6 +40,7 @@ from .page_understanding import (
     uses_cjk_role_model,
 )
 from .page_understanding_fusion import apply_page_understanding
+from .profile_indent_ui import indent_type_label
 from .training_baseline import save_automatic_baseline
 
 
@@ -55,8 +57,17 @@ _page_template_image = _core.page_template_analysis_image
 
 
 def _uses_cjk_indent_topology(settings: AppSettings) -> bool:
-    """Backward-compatible alias for the shared CJK page-role selector."""
-    return uses_cjk_role_model(settings)
+    """Return whether legacy CJK *directional-indent* recovery is allowed.
+
+    ``无明显缩进`` is an explicit page-design statement.  In that mode the
+    historical topology/display-head fallback must not quietly reintroduce an
+    entry-direction assumption after Page Understanding has deliberately
+    disabled it.
+    """
+    return bool(
+        uses_cjk_role_model(settings)
+        and indent_type_label(settings) != "无明显缩进"
+    )
 
 
 def _geometry_from_page_understanding(understanding: PageUnderstanding) -> Any:
@@ -99,6 +110,11 @@ def _detect_entries_left_edge(
     evidence family.  This prevents the same layout fact from being counted
     once as "ordinary" and again as "page design".
 
+    For explicit ``无明显缩进`` CJK pages we keep only the base VB geometric
+    observation.  Neither the old CJK indent topology nor the generic visual
+    lane recovery is allowed to infer an entry direction; sampled entry-marker
+    rescue is supplied independently by Symbol Evidence later.
+
     Source-contract markers retained for long-standing regression checks:
     _legacy_is_point(
     _legacy_find_separator_y(
@@ -114,16 +130,20 @@ def _detect_entries_left_edge(
         image, settings, page_sections=page_sections,
     )
     method = str(getattr(settings, "detection_method", "") or "").strip().lower()
-    if _uses_cjk_indent_topology(settings):
-        # Keep the older visual/topology chain only as an ordinary fallback.
-        # Combined uses raw VB as the independent geometric evidence family.
-        if method not in {"combined", "paddleocr"}:
-            entries = finalize_indented_topology(
-                image, entries, geometry, settings, page_sections=page_sections,
-            )
-            entries = recover_cjk_oversized_heads(
-                image, entries, geometry, settings, page_sections=page_sections,
-            )
+    cjk = uses_cjk_role_model(settings)
+    no_indent = indent_type_label(settings) == "无明显缩进"
+    if cjk:
+        if not no_indent and _uses_cjk_indent_topology(settings):
+            # Keep the older visual/topology chain only as an ordinary fallback.
+            # Combined uses raw VB as the independent geometric evidence family.
+            if method not in {"combined", "paddleocr"}:
+                entries = finalize_indented_topology(
+                    image, entries, geometry, settings, page_sections=page_sections,
+                )
+                entries = recover_cjk_oversized_heads(
+                    image, entries, geometry, settings, page_sections=page_sections,
+                )
+        # no-indent CJK intentionally stays raw VB here.
     else:
         entries = recover_ordinary_visual_entries(
             image, entries, geometry, settings, page_sections=page_sections,
