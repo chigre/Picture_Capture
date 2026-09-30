@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 from picture_capture.dictionary_page_design import (
@@ -14,12 +15,16 @@ from picture_capture.dictionary_page_design import (
 )
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings
+from picture_capture.page_understanding import _apply_explicit_indent_semantics
+from picture_capture.processing import _uses_cjk_indent_topology
 from picture_capture.profile_indent_ui import (
     INDENT_SEMANTICS_VERSION,
     apply_indent_type_label,
     indent_type_label,
 )
+from picture_capture.profile_validation_modes import _understanding_summary
 from picture_capture.symbol_evidence import (
+    SymbolEvidenceResult,
     detect_symbol_evidence,
     fuse_symbol_evidence,
 )
@@ -73,7 +78,7 @@ def _simple_layout() -> DictionaryPageLayout:
         anchor_width=18,
         anchor_height=20,
         gap_before=16,
-        patch=__import__("numpy").zeros((8, 8), dtype=bool),
+        patch=np.zeros((8, 8), dtype=bool),
         role="body",
     )
     body = IndentMode(center=6.0, tolerance=4.0, lines=[line], role="body")
@@ -169,3 +174,68 @@ def test_sampled_bracket_only_confirms_and_never_rescues_by_itself() -> None:
     fused, stats = fuse_symbol_evidence([], result, understanding)
     assert fused == []
     assert stats["symbol_rescued"] == 0
+
+
+def test_no_indent_neutralizes_directional_roles_and_legacy_cjk_topology() -> None:
+    layout = _simple_layout()
+    column = layout.columns[0]
+    entry_line = LayoutLine(
+        column=0,
+        y0=68,
+        y1=88,
+        first_x=32,
+        anchor_x=32,
+        anchor_width=18,
+        anchor_height=20,
+        gap_before=10,
+        patch=np.zeros((8, 8), dtype=bool),
+        role="entry",
+    )
+    entry_mode = IndentMode(
+        center=32.0,
+        tolerance=4.0,
+        lines=[entry_line],
+        role="entry",
+    )
+    column.lines.append(entry_line)
+    column.indent_modes.append(entry_mode)
+    column.entry_modes = [entry_mode]
+    layout.indent_type = "headword"
+
+    settings = AppSettings()
+    settings.dictionary_profile_id = "cjk_visual"
+    settings.ocr_language = "chi_tra"
+    apply_indent_type_label(settings, "无明显缩进")
+
+    label = _apply_explicit_indent_semantics(layout, settings)
+    assert label == "无明显缩进"
+    assert layout.indent_type == "none"
+    assert column.entry_modes == []
+    assert entry_line.role == "other_indent"
+    assert _uses_cjk_indent_topology(settings) is False
+
+
+def test_profile_validation_summary_reports_no_indent_and_symbol_counts() -> None:
+    layout = _simple_layout()
+    evidence = detect_symbol_evidence(
+        _page_with_ring_marker(),
+        _settings_for_sample("entry_marker"),
+        layout,
+    )
+    understanding = SimpleNamespace(
+        layout=layout,
+        physical_reliable=True,
+        semantic_reliable=False,
+        role_model="generic",
+        semantic_entries=[],
+        generic_body_indent_reliable=False,
+        symbol_evidence=evidence,
+    )
+    text = _understanding_summary(understanding)
+    assert "缩进版式：无明显缩进" in text
+    assert "不使用缩进方向判定" in text
+    assert "符号样本：入口 1 / 括号 0" in text
+
+
+def test_symbol_result_container_separates_entry_and_bracket_roles() -> None:
+    assert SymbolEvidenceResult(markers=[]).entry_candidates() == []
