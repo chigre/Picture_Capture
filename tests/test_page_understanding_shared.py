@@ -63,6 +63,18 @@ def _cjk_page() -> Image.Image:
     return image
 
 
+def _latin_body_indent_page() -> Image.Image:
+    image = Image.new("RGB", (360, 520), "white")
+    draw = ImageDraw.Draw(image)
+    # Explicit body-indent design: entries sit on the outer lane x=20 while
+    # continuation/body paragraphs sit on a stable inward lane x=70.
+    for y in (50, 170, 290, 410):
+        _draw_line(draw, 20, y, width=260)
+    for y in (82, 114, 202, 234, 322, 354, 442, 474):
+        _draw_line(draw, 70, y, width=210)
+    return image
+
+
 def test_cjk_ocr_observation_is_aligned_and_missing_layout_entries_are_rescued():
     image = _cjk_page()
     settings = _settings(cjk=True)
@@ -121,17 +133,7 @@ def test_hard_negative_consensus_blocks_layout_only_rescue():
 
 
 def test_generic_body_indent_is_negative_evidence_not_a_latin_entry_generator():
-    image = Image.new("RGB", (360, 520), "white")
-    draw = ImageDraw.Draw(image)
-    # Explicit body-indent design: entries sit on the outer lane x=20 while
-    # continuation/body paragraphs sit on a stable inward lane x=70.
-    entry_rows = (50, 170, 290, 410)
-    body_rows = (82, 114, 202, 234, 322, 354, 442, 474)
-    for y in entry_rows:
-        _draw_line(draw, 20, y, width=260)
-    for y in body_rows:
-        _draw_line(draw, 70, y, width=210)
-
+    image = _latin_body_indent_page()
     settings = _settings(cjk=False, body_indent=True)
     understanding = understand_page(image, settings)
 
@@ -159,6 +161,34 @@ def test_generic_body_indent_is_negative_evidence_not_a_latin_entry_generator():
     assert outer_candidate in filtered
     assert body_candidate not in filtered
     assert understanding.arbitration_stats["generic_body_suppressed"] == 1
+
+
+def test_accepted_ocr_semantic_positive_survives_body_lane_conflict_for_review():
+    image = _latin_body_indent_page()
+    settings = _settings(cjk=False, body_indent=True)
+    understanding = understand_page(image, settings)
+    column = understanding.layout.columns[0]
+    body_line = next(line for line in column.lines if line.role == "body")
+    body_y = base._boundary_before(
+        column.lines, body_line.y0, understanding.line_height,
+    )
+    ocr = Entry(
+        word="recognized-head",
+        x=column.left,
+        y=understanding.layout.body_top + body_y,
+        confidence=0.97,
+        ocr_source="paddle",
+        candidate_id="accepted-1",
+        final_engine="paddle",
+    )
+
+    filtered = apply_page_understanding([ocr], understanding, mode="ocr")
+
+    assert len(filtered) == 1
+    assert filtered[0].word == "recognized-head"
+    assert "PAGE_UNDERSTANDING_LAYOUT_CONFLICT" in filtered[0].issue_type
+    assert understanding.arbitration_stats["layout_conflicts"] == 1
+    assert understanding.arbitration_stats["generic_body_suppressed"] == 0
 
 
 def test_processing_builds_shared_understanding_before_all_detector_modes():
