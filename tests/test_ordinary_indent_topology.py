@@ -37,13 +37,9 @@ def _multi_lane_page() -> tuple[Image.Image, list[int], list[int], list[int]]:
     entry_a = [56, 152, 248, 344, 392]
     entry_b = [120, 216, 312]
 
-    # Dominant definition/prose lane.
     for y in body_rows:
         draw.rectangle((6, y, 260, y + 9), fill="black")
 
-    # Two genuine entry sub-lanes.  They deliberately differ by less than one
-    # character width, matching the real training page where bracketed and
-    # numbered/variant forms formed separate stable first-ink modes.
     for y in entry_a:
         draw.rectangle((32, y, 44, y + 9), fill="black")
         draw.rectangle((49, y, 190, y + 8), fill="black")
@@ -74,8 +70,6 @@ def test_topology_learns_body_and_multiple_entry_sublanes():
 def test_final_gate_keeps_all_proven_sublanes_and_rejects_body_or_other_rows():
     image, body_rows, entry_a, entry_b = _multi_lane_page()
     draw = ImageDraw.Draw(image)
-    # One isolated paragraph-like indent between body and entry lanes.  It has
-    # whitespace above but does not repeat enough to define a structural lane.
     draw.rectangle((20, 376, 230, 385), fill="black")
 
     settings = _settings()
@@ -85,8 +79,6 @@ def test_final_gate_keeps_all_proven_sublanes_and_rejects_body_or_other_rows():
     entries = [
         Entry(word="", x=x, y=body_rows[0] - 2, confidence=.8, ocr_source="ordinary_vb"),
         Entry(word="", x=x, y=body_rows[4] - 2, confidence=.9, ocr_source="ordinary_visual_lane"),
-        # Isolated non-lane indentation must also be rejected now that topology
-        # is proven; the old implementation preserved role="other".
         Entry(word="", x=x, y=374, confidence=.9, ocr_source="ordinary_vb"),
         Entry(word="", x=x, y=entry_a[0] - 2, confidence=.9, ocr_source="ordinary_vb"),
         Entry(word="", x=x, y=entry_b[0] - 2, confidence=.9, ocr_source="ordinary_vb"),
@@ -104,7 +96,6 @@ def test_final_gate_keeps_all_proven_sublanes_and_rejects_body_or_other_rows():
     assert not any(int(entry.y) in rejected_y for entry in result)
     assert any(entry.ocr_source == "ordinary_visual_head" for entry in result)
 
-    # Recovery should cover both proven sub-lanes, not only one chosen centre.
     topology_entries = [
         entry for entry in result
         if entry.issue_type == "ORDINARY_INDENT_TOPOLOGY_ENTRY"
@@ -128,6 +119,35 @@ def test_same_geometry_from_multiple_upstream_sources_cannot_bypass_final_gate()
 
     false_y = {entry.y for entry in entries}
     assert not any(entry.y in false_y for entry in result)
+
+
+def test_right_side_illustration_cannot_merge_left_body_lines_or_bypass_gate():
+    image, body_rows, _entry_a, _entry_b = _multi_lane_page()
+    draw = ImageDraw.Draw(image)
+
+    # A tall right-side figure contributes ink on every Y row. Full-column
+    # projection would merge the independent body rows into one giant run and
+    # leave the final gate unable to classify false boundaries.
+    draw.rectangle((230, 80, 315, 335), fill="black")
+
+    settings = _settings()
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    topology = _observe_column(image, geometry, settings, 0)
+
+    assert topology is not None
+    visible_body_y = {int(row.y0) + int(topology.top) for row in topology.body_rows}
+    assert any(abs(y - 104) <= 2 for y in visible_body_y)
+    assert any(abs(y - 200) <= 2 for y in visible_body_y)
+    assert any(abs(y - 296) <= 2 for y in visible_body_y)
+
+    x = int(geometry.column_starts[0])
+    false_entries = [
+        Entry(word="", x=x, y=102, ocr_source="ordinary_vb"),
+        Entry(word="", x=x, y=198, ocr_source="ordinary_vb"),
+        Entry(word="", x=x, y=294, ocr_source="ordinary_vb"),
+    ]
+    result = finalize_indented_topology(image, false_entries, geometry, settings)
+    assert not any(entry.y in {102, 198, 294} for entry in result)
 
 
 def test_single_lane_page_does_not_trigger_topology_suppression():
