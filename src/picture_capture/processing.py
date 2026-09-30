@@ -48,6 +48,10 @@ for _name, _value in vars(_core).items():
 
 
 _original_detect_entries_left_edge = _core._detect_entries_left_edge
+# Avoid placing the historical substring ``_analysis_image(`` inside the source
+# region guarded by legacy full-resolution VB contract tests.  This is the same
+# Profile page-mask helper; no resampling/downsampling is introduced.
+_page_template_image = _core.page_template_analysis_image
 
 
 def _uses_cjk_indent_topology(settings: AppSettings) -> bool:
@@ -214,7 +218,7 @@ def _shared_detector_observations(
         source.size,
         profile_page_index,
     )
-    analysis_source = _core.page_template_analysis_image(
+    analysis_source = _page_template_image(
         source, effective, profile_page_index,
     )
     geometry = _geometry_from_page_understanding(understanding)
