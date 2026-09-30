@@ -67,6 +67,34 @@ def _stable_outer_mode(
     )
 
 
+def _outer_entry_lines(
+    column: base.ColumnDesign,
+    reference: float,
+) -> list[base.LayoutLine]:
+    """Return the proven outer family plus nearby sparse typography variants.
+
+    A short lemma, superscript or unusual first glyph can split one true entry
+    row out of the main X cluster.  We only absorb such sparse rows *after* a
+    repeated outer family has been established, and only inside that family's
+    local tolerance while remaining clearly outside the body lane.
+    """
+    body = column.body_mode
+    outer = _stable_outer_mode(column, reference)
+    if body is None or outer is None:
+        return []
+    tolerance = max(float(outer.tolerance), reference * 0.32)
+    selected = {id(line): line for line in outer.lines}
+    for line in column.lines:
+        if line.anchor_x is None or id(line) in selected:
+            continue
+        anchor = float(line.anchor_x)
+        if float(body.center) - anchor < reference * 0.30:
+            continue
+        if abs(anchor - float(outer.center)) <= tolerance:
+            selected[id(line)] = line
+    return sorted(selected.values(), key=lambda item: int(item.y0))
+
+
 def _line_ids(mode: base.IndentMode | None) -> set[int]:
     if mode is None:
         return set()
@@ -123,7 +151,7 @@ def block_after_separator(
     body = column.body_mode
     outer = _stable_outer_mode(column, reference)
     body_ids = _line_ids(body)
-    outer_ids = _line_ids(outer)
+    outer_ids = {id(item) for item in _outer_entry_lines(column, reference)}
     on_body = id(line) in body_ids
     on_entry = id(line) in outer_ids
 
@@ -153,7 +181,7 @@ def block_after_separator(
 def generic_entry_candidates(
     understanding: PageUnderstanding,
 ) -> list[Entry]:
-    """Return repeated outer-lane block starts as layout-only entry candidates."""
+    """Return proven outer-lane block starts as layout-only entry candidates."""
     if (
         understanding.role_model != "generic"
         or not understanding.physical_reliable
@@ -166,10 +194,10 @@ def generic_entry_candidates(
     reference = understanding.line_height
     result: list[Entry] = []
     for column in layout.columns:
-        outer = _stable_outer_mode(column, reference)
-        if outer is None:
+        lines = _outer_entry_lines(column, reference)
+        if not lines:
             continue
-        for line in sorted(outer.lines, key=lambda item: int(item.y0)):
+        for line in lines:
             boundary_local = int(base._boundary_before(
                 column.lines, int(line.y0), reference,
             ))
