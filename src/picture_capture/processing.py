@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-"""Compatibility facade for ordinary processing plus visual-lane recovery.
+"""Compatibility facade for ordinary processing plus visual topology recovery.
 
-The historical implementation is kept unchanged in ``processing_core``.
-This facade adds an OCR-independent post-pass for entry structures that a
-single left-edge lane cannot see, then preserves the original import surface.
+The historical implementation is kept unchanged in ``processing_core``. This
+facade keeps it as a candidate generator, adds OCR-independent visual candidates,
+and then applies one authoritative column-level indentation topology gate before
+publishing ordinary entry markers.
 """
 
 from pathlib import Path
@@ -17,9 +18,8 @@ from PIL import Image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
 from . import processing_core as _core
-from .ordinary_lane_polarity import suppress_inverted_legacy_body_lane
+from .ordinary_indent_topology import finalize_indented_topology
 from .ordinary_postprocess import stabilize_ordinary_visual_entries
-from .ordinary_secondary_recovery import recover_proven_secondary_lane_variants
 from .ordinary_visual import recover_ordinary_visual_entries
 
 
@@ -37,7 +37,7 @@ def _detect_entries_left_edge(
     settings: AppSettings,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
-    """Run VB geometry, correct polarity, recover entries, then stabilize them.
+    """Run legacy candidate generation, visual recovery, then topology gating.
 
     The primary detector remains the full-resolution historical chain. These
     source markers intentionally document the unchanged core contract for the
@@ -52,19 +52,15 @@ def _detect_entries_left_edge(
     from .paddle_headwords import refine_separator_y
     refined_y, _refinement = refine_separator_y(
 
-    For ordinary layouts the VB output is retained exactly until page-level
-    evidence proves the narrow inverted CJK failure mode. The visual pass then
-    recovers indented lanes and oversized heads. A final stabilization pass
-    anchors recovered separators to the upcoming entry, adds projection-based
-    large-head recovery for multi-component ideographs, removes residual VB
-    body rows, and finally recovers numbered/shifted variants of an already
-    proven indented lane without requiring a second four-row X cluster.
+    For CJK layouts, upstream ordinary detectors are treated as candidate
+    generators only. The final semantic decision is made from the column's
+    first-ink topology: a dominant body/definition lane and, when proven, a
+    separate indented entry lane. Automatic normal-height candidates attached
+    to the body lane are suppressed regardless of which detector produced them;
+    oversized display heads remain an independent visual class.
     """
     entries, geometry = _original_detect_entries_left_edge(
         image, settings, page_sections=page_sections,
-    )
-    entries = suppress_inverted_legacy_body_lane(
-        image, entries, geometry, settings, page_sections=page_sections,
     )
     entries = recover_ordinary_visual_entries(
         image, entries, geometry, settings, page_sections=page_sections,
@@ -72,7 +68,7 @@ def _detect_entries_left_edge(
     entries = stabilize_ordinary_visual_entries(
         image, entries, geometry, settings, page_sections=page_sections,
     )
-    entries = recover_proven_secondary_lane_variants(
+    entries = finalize_indented_topology(
         image, entries, geometry, settings, page_sections=page_sections,
     )
     return _core.sort_entries_reading_order(
@@ -111,8 +107,8 @@ def detect_entries_job(
 
     GUI ordinary drawing runs in a ``spawn`` ProcessPool. Re-exporting the
     historical ``processing_core.detect_entries_job`` made the child process
-    import ``processing_core`` directly, so facade-only lane polarity and visual
-    recovery were silently bypassed. Keeping this worker physically defined in
+    import ``processing_core`` directly, so facade-only visual recovery was
+    silently bypassed. Keeping this worker physically defined in
     ``picture_capture.processing`` makes multiprocessing unpickle/import the
     enhanced module in the child before detection.
     """
