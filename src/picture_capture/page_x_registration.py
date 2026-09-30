@@ -68,13 +68,15 @@ def _line_family_candidate(
     column_width: int,
     seed: float,
     semantics: str,
+    search_left_floor: int = 0,
 ) -> tuple[int, int] | None:
     """Return (absolute outer-lane X, support) for one expected column.
 
     The search window is deliberately centered on the Project template rather
     than on the projection detector's left edge.  That lets a body-indented
     page recover a sparse outer entry lane even when the dominant body lane is
-    dozens of pixels inward.
+    dozens of pixels inward.  Later columns are additionally prevented from
+    reaching back into the preceding Project column.
     """
     height, width = ink.shape
     if bottom <= top or width <= 1:
@@ -86,7 +88,7 @@ def _line_family_candidate(
         round(max(1, column_width) * 0.035),
     )
     shift_window = min(shift_window, max(18, round(max(1, column_width) * 0.12)))
-    left = max(0, int(nominal_x) - shift_window)
+    left = max(0, int(search_left_floor), int(nominal_x) - shift_window)
     lead = max(
         round(seed * 6.0),
         round(max(1, column_width) * 0.24),
@@ -163,7 +165,7 @@ def _line_family_candidate(
         return None
 
     # ``anchor_x`` groups full-height glyphs.  Once the family is selected, use
-    # first ink to recover the physical outer edge, preserving small prefixes.
+    # first ink to recover the visual outer lane, preserving small prefixes.
     firsts = [float(line.first_x) for line in chosen.lines]
     if not firsts:
         return None
@@ -197,8 +199,19 @@ def _robust_page_delta(
         expanded: list[int] = []
         for delta, support in usable:
             expanded.extend([delta] * max(1, min(4, support)))
-        delta = int(round(float(np.median(np.asarray(expanded, dtype=float)))))
-        return max(-max_shift, min(max_shift, delta)), "semantic_lane"
+        values = np.asarray(expanded, dtype=float)
+        if semantics == "正文缩进":
+            # Even the selected outer entry family measures first printed ink,
+            # which can sit a few pixels inside the Project boundary.  Use the
+            # lower cross-column consensus so that glyph inset cannot become a
+            # fake page translation; inward body contamination is even farther
+            # right and therefore cannot win this statistic.
+            delta = int(round(float(np.quantile(values, 0.20))))
+            method = "semantic_outer_lane"
+        else:
+            delta = int(round(float(np.median(values))))
+            method = "semantic_lane"
+        return max(-max_shift, min(max_shift, delta)), method
 
     fallback = [delta for delta in projection_deltas if abs(delta) <= max_shift]
     if fallback:
@@ -240,9 +253,25 @@ def register_page_manual_x(
     bottom = min(canonical.height, max(top + 1, int(getattr(estimate, "bottom_y", canonical.height))))
     semantics = indent_type_label(settings)
     column_width = max(8, int(getattr(settings, "column_width", 700) or 700))
+    gutter = max(0, int(getattr(settings, "gutter", 0) or 0))
+
+    # Persistent divider rules can turn every row in a leading strip "active".
+    # Remove them before line segmentation; this is the same OCR-free geometric
+    # distinction already used by Dictionary Page Design.
+    rule_body = ink[max(0, top):max(top + 1, bottom), :]
+    rules = base._persistent_rule_mask(rule_body, seed)
+    if rules.size and bool(rules.any()):
+        ink = ink.copy()
+        ink[:, rules] = False
 
     lane_candidates: list[tuple[int, int, int]] = []
-    for expected in nominal:
+    for index, expected in enumerate(nominal):
+        search_left_floor = 0
+        if index > 0:
+            previous_right = nominal[index - 1] + column_width
+            # Stay out of the previous text column while retaining most of the
+            # gutter as room for legitimate scan translation.
+            search_left_floor = previous_right + max(1, round(gutter * 0.10))
         observed = _line_family_candidate(
             ink,
             top=top,
@@ -251,6 +280,7 @@ def register_page_manual_x(
             column_width=column_width,
             seed=seed,
             semantics=semantics,
+            search_left_floor=search_left_floor,
         )
         if observed is not None:
             candidate_x, support = observed
