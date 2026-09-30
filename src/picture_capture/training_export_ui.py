@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-"""UI extension for exporting a selected supervised training-page range."""
+"""UI extension for exporting supervised training pages.
+
+Training export deliberately reuses the main-window page selection.  The user
+chooses Current / Current-to-end / Specified once in the normal page-range bar;
+export must not maintain a second, potentially divergent range state.
+"""
 
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 import re
 import shutil
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox
 
 from . import __version__
 from .formats import pdic_path
@@ -33,7 +38,7 @@ def _page_number(text: str) -> int | None:
 
 
 def _resolve_exact_name(images: list[Path], text: str) -> int | None:
-    """Match a literal filename/stem only; never reinterpret a range as a number."""
+    """Match a literal filename/stem only; retained for compatibility/tests."""
     value = str(text or "").strip().casefold()
     if not value:
         return None
@@ -65,14 +70,15 @@ def resolve_export_indices(
     images: list[Path],
     range_text: str,
 ) -> tuple[list[int], str | None]:
-    """Resolve '', one page, or inclusive A-B page range before PDIC filtering."""
+    """Legacy-compatible standalone range parser.
+
+    The export button no longer calls this parser; it uses the main window's
+    ``selected_page_indices()`` so every batch operation shares one range state.
+    """
     text = str(range_text or "").strip()
     if not text:
         return list(range(len(images))), None
 
-    # A real filename/stem may itself contain a hyphen, so literal page identity
-    # always wins.  Numeric fallback is deliberately delayed until after range
-    # parsing; otherwise "000092-96" would be misread as the single page 96.
     exact = _resolve_exact_name(images, text)
     if exact is not None:
         return [exact], None
@@ -93,8 +99,25 @@ def resolve_export_indices(
     return [], "请输入单页或连续范围，例如 020093 或 020089-020099。"
 
 
+def _main_scope_label(self, indices: list[int]) -> str:
+    """Human-readable description of the already-selected main-window scope."""
+    if not self.project or not indices:
+        return "无"
+    first_name = self.project.images[indices[0]].name
+    last_name = self.project.images[indices[-1]].name
+    mode = self.page_range_var.get() if hasattr(self, "page_range_var") else "current"
+    if len(indices) == 1:
+        return first_name
+    if mode == "to_end":
+        return f"当前至末页：{first_name} → {last_name}"
+    if mode == "specified":
+        spec = self.page_range_spec_var.get().strip() if hasattr(self, "page_range_spec_var") else ""
+        return f"指定：{spec or (first_name + ' → ' + last_name)}"
+    return f"{first_name} → {last_name}"
+
+
 def export_training_package_selected_range(self) -> None:
-    """Export final PDIC plus automatic baseline/corrections for one page range."""
+    """Export final PDIC plus automatic baseline/corrections for main UI scope."""
     if not self.project or self._batch_active:
         if self._batch_active:
             self.status_var.set("已有批量任务正在运行，请结束后再导出训练标记包。")
@@ -113,54 +136,38 @@ def export_training_package_selected_range(self) -> None:
         return
 
     project = self.project
-    existing_all = [i for i, page in enumerate(project.images) if pdic_path(page).exists()]
-    if not existing_all:
+    # Single source of truth: exactly the same scope used by drawing, OCR,
+    # illustration detection and cropping.  Do not ask for a second range here.
+    try:
+        selected = list(self.selected_page_indices())
+    except Exception as exc:
+        self.show_error("读取主界面页面范围失败", exc)
+        return
+    selected = sorted({int(index) for index in selected if 0 <= int(index) < len(project.images)})
+    if not selected:
         messagebox.showinfo(
             "导出训练标记包",
-            "当前项目没有已保存的 .pdic 页面。请先人工确认并保存画线结果。",
+            "主界面当前页面范围没有有效页面。请先在页面列表上方选择范围。",
             parent=self,
         )
         return
 
-    default_range = ""
-    try:
-        if self.current_page is not None:
-            default_range = self.current_page.stem
-    except Exception:
-        default_range = ""
-    range_text = simpledialog.askstring(
-        "导出训练标记包｜页面范围",
-        "输入要导出的页面范围：\n"
-        "• 连续范围：020089-020099（也可写 89-99）\n"
-        "• 单页：020093\n"
-        "• 留空：全部已有 PDIC 页面\n\n"
-        "只会导出范围内已经保存 PDIC 的页面。",
-        initialvalue=default_range,
-        parent=self,
-    )
-    if range_text is None:
-        return
-    scope, error = resolve_export_indices(list(project.images), range_text)
-    if error:
-        messagebox.showerror("页面范围无效", error, parent=self)
-        return
-    scope_set = set(scope)
-    indices = [index for index in existing_all if index in scope_set]
+    indices = [index for index in selected if pdic_path(project.images[index]).exists()]
     if not indices:
         messagebox.showinfo(
             "导出训练标记包",
-            "所选页面范围内没有已保存的 .pdic 页面。",
+            "主界面当前页面范围内没有已保存的 .pdic 页面。请先人工确认并保存画线结果。",
             parent=self,
         )
         return
 
-    first_name = project.images[indices[0]].name
-    last_name = project.images[indices[-1]].name
-    scope_label = first_name if len(indices) == 1 else f"{first_name} → {last_name}"
+    scope_label = _main_scope_label(self, selected)
+    skipped = len(selected) - len(indices)
+    skipped_text = f"\n其中 {skipped} 页没有 PDIC，将自动跳过。" if skipped else ""
     if not messagebox.askyesno(
         "导出训练标记包",
-        f"范围：{scope_label}\n"
-        f"将导出其中 {len(indices)} 个已有 .pdic 的页面。\n\n"
+        f"使用主界面页面范围：{scope_label}\n"
+        f"将导出 {len(indices)} 个已有 .pdic 的页面。{skipped_text}\n\n"
         "每页会同时保存：\n"
         "1. 程序普通画线的自动 baseline（优先使用当时捕获的原始快照）；\n"
         "2. 当前人工增删后的最终 PDIC；\n"
@@ -198,8 +205,6 @@ def export_training_package_selected_range(self) -> None:
             if item == "__finalize__":
                 if self._batch_stop_event.is_set():
                     raise TrainingExportCancelled("训练标记包导出已停止")
-                # Worker completion can be out of order; manifest order should
-                # always follow the selected reading/page range.
                 page_records.sort(
                     key=lambda row: page_order.get(str(row.get("page") or ""), 10**9)
                 )
