@@ -4,21 +4,21 @@ from __future__ import annotations
 
 Step 4 of Project Profile is a user-facing validation bench, not an automatic
 model selector.  The user can run ordinary, OCR and combined drawing on the
-same representative pages, inspect each result page-by-page, and then choose
-which tested mode should become the project's default detection method.
+same representative pages, inspect each result page-by-page, switch among saved
+mode results without rerunning them, and then choose which tested mode should
+become the project's default detection method.
 
 The implementation deliberately wraps the existing wizard instead of importing
 ``profile_setup`` so it composes with the page-template/indent extension without
 creating another profile/processing import cycle.
 """
 
-from dataclasses import replace
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageTk
+from PIL import Image
 
 
 VALIDATION_MODES: tuple[tuple[str, str], ...] = (
@@ -43,12 +43,16 @@ def _understanding_summary(understanding: Any) -> str:
     """Return a compact, user-facing Page Understanding summary."""
     layout = understanding.layout
     columns = len(getattr(layout, "columns", []) or [])
-    line_height = max(1.0, float(getattr(layout, "ordinary_line_height", 0.0) or 0.0))
+    line_height = max(
+        1.0, float(getattr(layout, "ordinary_line_height", 0.0) or 0.0)
+    )
     indent_type = str(getattr(layout, "indent_type", "") or "")
     indent_label = "正文缩进" if indent_type == "body" else "词头缩进"
     physical = bool(getattr(understanding, "physical_reliable", False))
     semantic = bool(getattr(understanding, "semantic_reliable", False))
-    role_model = str(getattr(understanding, "role_model", "generic") or "generic")
+    role_model = str(
+        getattr(understanding, "role_model", "generic") or "generic"
+    )
     display = bool(getattr(layout, "has_display_heads", False))
     semantic_count = len(getattr(understanding, "semantic_entries", []) or [])
     generic_body = bool(
@@ -96,6 +100,7 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
             self._validation_mode_revision: dict[str, int] = {}
             self._validation_mode_status_vars: dict[str, tk.StringVar] = {}
             self._validation_mode_buttons: dict[str, ttk.Button] = {}
+            self._validation_mode_view_buttons: dict[str, ttk.Button] = {}
 
         def _build_validation_tab(self, tab: ttk.Frame) -> None:
             tab.columnconfigure(0, weight=1)
@@ -134,7 +139,7 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
 
             tests = ttk.LabelFrame(tab, text="分别测试", padding=(8, 7))
             tests.grid(row=3, column=0, sticky="ew", pady=(10, 0))
-            tests.columnconfigure(1, weight=1)
+            tests.columnconfigure(2, weight=1)
             for row, (mode, label) in enumerate(VALIDATION_MODES):
                 button = ttk.Button(
                     tests,
@@ -142,13 +147,21 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
                     command=lambda value=mode: self.validate_profile(value),
                 )
                 button.grid(row=row, column=0, sticky="w", pady=3)
+                view = ttk.Button(
+                    tests,
+                    text="查看结果",
+                    command=lambda value=mode: self._show_validation_mode(value),
+                    state="disabled",
+                )
+                view.grid(row=row, column=1, sticky="w", padx=(6, 0), pady=3)
                 status = tk.StringVar(value="尚未测试")
                 ttk.Label(
                     tests,
                     textvariable=status,
-                    wraplength=max(240, self._wizard_left_width - 150),
-                ).grid(row=row, column=1, sticky="w", padx=(10, 0), pady=3)
+                    wraplength=max(220, self._wizard_left_width - 225),
+                ).grid(row=row, column=2, sticky="w", padx=(10, 0), pady=3)
                 self._validation_mode_buttons[mode] = button
+                self._validation_mode_view_buttons[mode] = view
                 self._validation_mode_status_vars[mode] = status
 
             default_box = ttk.LabelFrame(
@@ -177,9 +190,7 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
                 wraplength=self._wizard_left_width,
             ).grid(row=5, column=0, sticky="w", pady=(9, 0))
 
-            self.validation_diagnostic_var = tk.StringVar(
-                value="尚无测试结果"
-            )
+            self.validation_diagnostic_var = tk.StringVar(value="尚无测试结果")
             ttk.Label(
                 tab,
                 textvariable=self.validation_diagnostic_var,
@@ -233,6 +244,11 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
                 wraplength=max(220, self._wizard_left_width - 250),
             ).grid(row=1, column=3, sticky="w", padx=(10, 0))
 
+        def _show_right_image_page(self, index: int) -> None:
+            super()._show_right_image_page(index)
+            if int(index) == 3 and hasattr(self, "right_heading_var"):
+                self.right_heading_var.set("多模式 / 多页测试结果")
+
         def _settings_from_ui(self):
             settings = super()._settings_from_ui()
             if hasattr(self, "validation_default_method_var"):
@@ -246,6 +262,8 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
             self.working.detection_method = mode
             self._sync_default_validation_state()
             self._refresh_summary()
+            if self._validation_results_by_mode.get(mode):
+                self._show_validation_mode(mode)
 
         def _sync_default_validation_state(self) -> None:
             mode = normalize_validation_mode(self.validation_default_method_var.get())
@@ -281,6 +299,28 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
         def _set_mode_buttons(self, state: str) -> None:
             for button in getattr(self, "_validation_mode_buttons", {}).values():
                 button.configure(state=state)
+
+        def _show_validation_mode(self, mode: str) -> None:
+            mode = normalize_validation_mode(mode)
+            results = self._validation_results_by_mode.get(mode, [])
+            if not results:
+                return
+            self._active_validation_mode = mode
+            self._validation_results = list(results)
+            self.validation_preview_slot = min(
+                int(self.validation_preview_slot), len(results) - 1
+            )
+            if mode_uses_ocr(mode):
+                revision_ok = self._validation_mode_revision.get(mode) == self._profile_revision
+                self._set_feedback_buttons("normal" if revision_ok else "disabled")
+                if revision_ok:
+                    self.validation_feedback_var.set("")
+            else:
+                self._set_feedback_buttons("disabled")
+                self.validation_feedback_var.set(
+                    "普通画线只展示结果；若不合适，请调整第②页面模板或第③词头结构后重测。"
+                )
+            self._render_validation_result()
 
         def validate_profile(self, mode: str | None = None) -> None:
             if self._closing or self._validation_running:
@@ -341,7 +381,8 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
                 f"正在用 {label} 测试 {len(indices)} 个代表页…"
             )
             self.validation_diagnostic_var.set(
-                f"测试方式：{label}" + ("（OCR强制重新识别）" if mode_uses_ocr(mode) else "")
+                f"测试方式：{label}"
+                + ("（OCR强制重新识别）" if mode_uses_ocr(mode) else "")
             )
             self.validation_understanding_var.set("正在恢复页面理解…")
             self._validation_results = []
@@ -469,10 +510,11 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
             results: list[tuple],
             understanding_summaries: dict[int, str],
         ) -> None:
-            label = VALIDATION_MODE_LABELS[mode]
             revision_changed = self._validation_revision_started != self._profile_revision
             self._validation_results_by_mode[mode] = list(results)
-            self._validation_understanding_by_mode[mode] = dict(understanding_summaries)
+            self._validation_understanding_by_mode[mode] = dict(
+                understanding_summaries
+            )
             self._validation_results = list(results)
             self._active_validation_mode = mode
             self.validation_preview_slot = 0
@@ -497,17 +539,12 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
                 self._validation_mode_status_vars[mode].set(
                     f"{len(results)} 页完成{count_text}"
                 )
+            self._validation_mode_view_buttons[mode].configure(
+                state="normal" if results else "disabled"
+            )
 
             self._sync_default_validation_state()
-            if results and not revision_changed and mode_uses_ocr(mode):
-                self._set_feedback_buttons("normal")
-            else:
-                self._set_feedback_buttons("disabled")
-                if mode == "left_edge":
-                    self.validation_feedback_var.set(
-                        "普通画线只展示结果；若不合适，请调整第②页面模板或第③词头结构后重测。"
-                    )
-            self._render_validation_result()
+            self._show_validation_mode(mode)
 
         def _move_validation_preview(self, delta: int) -> None:
             results = self._validation_results_by_mode.get(
