@@ -6,6 +6,7 @@ from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary_cjk_large_heads import recover_cjk_oversized_heads
 from picture_capture.ordinary_indent_topology import (
     _observe_column,
+    _observe_column_raw,
     finalize_indented_topology,
 )
 from picture_capture.processing import derive_nominal_geometry
@@ -79,6 +80,7 @@ def test_structural_anchor_ignores_optional_number_prefix():
 
     assert topology is not None
     assert topology.is_proven
+    assert topology.body_is_proven
     assert abs(topology.body_center - 6) <= 3
     assert len(topology.entry_centers) == 1
     assert abs(topology.entry_centers[0] - 44) <= 3
@@ -200,24 +202,70 @@ def test_right_side_illustration_cannot_merge_left_body_lines_or_bypass_gate():
     assert not any(entry.y in {86, 182, 278} for entry in result)
 
 
-def test_single_lane_page_does_not_trigger_normal_entry_suppression():
-    image = Image.new("RGB", (340, 260), "white")
+def test_body_only_continuation_column_suppresses_legacy_body_candidates():
+    """Regression for a column containing only continuation definition text.
+
+    Absence of an entry lane is not uncertainty once a stable ordinary body lane
+    is proven. Legacy candidates on that lane are explicit false positives.
+    """
+    image = Image.new("RGB", (340, 300), "white")
     draw = ImageDraw.Draw(image)
-    rows = [40, 72, 104, 136, 168, 200]
-    for y in rows:
-        draw.rectangle((6, y, 260, y + 9), fill="black")
+    rows = [32, 64, 96, 128, 160, 192, 224, 256]
+    for index, y in enumerate(rows):
+        # Vary the leading glyph patch so this is ordinary prose, not a repeated
+        # structural marker lane. Every row nevertheless shares one body X lane.
+        draw.rectangle((6, y, 11 + (index % 3), y + 9), fill="black")
+        draw.rectangle((18 + (index % 4), y, 260, y + 8), fill="black")
 
     settings = _settings()
-    settings.bottom_y = 250
+    settings.bottom_y = 290
     geometry = derive_nominal_geometry(image.width, image.height, settings)
+    topology = _observe_column_raw(image, geometry, settings, 0)
+
+    assert topology is not None
+    assert topology.body_is_proven
+    assert not topology.is_proven
+    assert not topology.entry_lanes
+
     x = int(geometry.column_starts[0])
     entries = [
-        Entry(word="", x=x, y=rows[1] - 2, confidence=.8, ocr_source="ordinary_vb"),
-        Entry(word="", x=x, y=rows[4] - 2, confidence=.8, ocr_source="ordinary_vb"),
+        Entry(word="", x=x, y=y - 2, confidence=.9, ocr_source="ordinary_vb")
+        for y in rows[1:7]
     ]
+    # A manual marker must never be removed by automatic topology filtering.
+    manual = Entry(
+        word="manual", x=x, y=rows[-1] - 2,
+        confidence=1.0, ocr_source="ordinary_vb", manually_selected=True,
+    )
+    result = finalize_indented_topology(
+        image, entries + [manual], geometry, settings,
+    )
 
-    result = finalize_indented_topology(image, entries, geometry, settings)
+    assert not [entry for entry in result if not entry.manually_selected]
+    assert manual in result
 
-    assert [(entry.x, entry.y, entry.ocr_source) for entry in result] == [
-        (entry.x, entry.y, entry.ocr_source) for entry in entries
+
+def test_repeated_headword_only_lane_is_not_declared_body():
+    """A list of repeated bracket starts must not become body by majority vote."""
+    image = Image.new("RGB", (340, 300), "white")
+    draw = ImageDraw.Draw(image)
+    rows = [32, 72, 112, 152, 192, 232]
+    for y in rows:
+        draw.rectangle((44, y, 49, y + 9), fill="black")
+        draw.rectangle((56, y, 180, y + 8), fill="black")
+
+    settings = _settings()
+    settings.bottom_y = 290
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    topology = _observe_column_raw(image, geometry, settings, 0)
+
+    # Without a separate ordinary prose lane the model should remain uncertain,
+    # not relabel the repeated structural lane as body and delete it.
+    assert topology is None
+
+    x = int(geometry.column_starts[0])
+    legacy = [
+        Entry(word="", x=x, y=rows[1] - 2, ocr_source="ordinary_vb")
     ]
+    result = finalize_indented_topology(image, legacy, geometry, settings)
+    assert result == legacy
