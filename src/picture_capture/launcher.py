@@ -1,9 +1,24 @@
 from __future__ import annotations
 
-"""Application launcher that installs small compatibility/extensions first."""
+"""Application launcher that installs compatibility/extensions before GUI use."""
+
+from typing import Any
 
 
-def main() -> int:
+_PREPARED_APP_MODULE: Any | None = None
+
+
+def prepare_app_module() -> Any:
+    """Install runtime extensions once and return the fully prepared app module.
+
+    GUI smoke tests call this same function as the real launcher so failures in
+    descriptor-preserving monkey patches or other launcher-only wiring are
+    exercised before a release is considered healthy.
+    """
+    global _PREPARED_APP_MODULE
+    if _PREPARED_APP_MODULE is not None:
+        return _PREPARED_APP_MODULE
+
     # Presentation terminology is installed before any Tk widgets are created.
     # Persisted setting names stay unchanged; every visible UI surface uses the
     # canonical labels “普通字/行高” and “行间空”.
@@ -68,4 +83,9 @@ def main() -> int:
         export_training_package_selected_range
     )
 
-    return app_module.main()
+    _PREPARED_APP_MODULE = app_module
+    return app_module
+
+
+def main() -> int:
+    return prepare_app_module().main()
