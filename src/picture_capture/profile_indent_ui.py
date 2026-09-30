@@ -36,7 +36,7 @@ AUTO_LAYOUT_FIELDS: tuple[tuple[str, str], ...] = (
     ("单栏宽", "ordinary_auto_column_width"),
     ("栏间空", "ordinary_auto_gutter"),
     ("普通字/行高", "ordinary_auto_character_height"),
-    ("行间参数", "ordinary_auto_row_padding"),
+    ("行间空", "ordinary_auto_row_padding"),
 )
 
 
