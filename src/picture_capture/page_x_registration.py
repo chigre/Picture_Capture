@@ -229,6 +229,25 @@ def _robust_page_delta(
     return 0, "project_fallback"
 
 
+def _narrow_persistent_rule_columns(body: np.ndarray, seed: float) -> np.ndarray:
+    """Keep only narrow persistent-X runs that plausibly represent divider rules.
+
+    A broad aligned text band can also have high vertical persistence on
+    synthetic pages or unusually repetitive dictionaries.  Removing every
+    persistent column would erase the very line-start families needed for X
+    registration.  Printed divider rules are narrow; broad runs stay as text.
+    """
+    raw = base._persistent_rule_mask(body, seed)
+    if raw.size == 0 or not bool(raw.any()):
+        return raw
+    result = np.zeros_like(raw, dtype=bool)
+    max_rule_width = max(3, round(seed * 0.28))
+    for x0, x1 in base._runs(raw):
+        if x1 - x0 <= max_rule_width:
+            result[x0:x1] = True
+    return result
+
+
 def register_page_manual_x(
     canonical: Image.Image,
     settings: AppSettings,
@@ -256,10 +275,10 @@ def register_page_manual_x(
     gutter = max(0, int(getattr(settings, "gutter", 0) or 0))
 
     # Persistent divider rules can turn every row in a leading strip "active".
-    # Remove them before line segmentation; this is the same OCR-free geometric
-    # distinction already used by Dictionary Page Design.
+    # Remove only narrow persistent runs.  Broad persistent regions may simply
+    # be repeated text columns and must remain available to lane inference.
     rule_body = ink[max(0, top):max(top + 1, bottom), :]
-    rules = base._persistent_rule_mask(rule_body, seed)
+    rules = _narrow_persistent_rule_columns(rule_body, seed)
     if rules.size and bool(rules.any()):
         ink = ink.copy()
         ink[:, rules] = False
