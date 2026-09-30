@@ -5,7 +5,8 @@ from __future__ import annotations
 Page understanding is not treated as an extra detector vote.  It supplies a
 separate evidence family: page/column geometry and the designed role of the
 block below a candidate.  VB remains geometric boundary evidence; OCR remains
-semantic evidence.
+semantic evidence.  A conflict between independent positive evidence is
+preserved for review rather than letting either family silently erase the other.
 """
 
 from dataclasses import replace
@@ -37,6 +38,20 @@ def _entry_canonical_v(understanding: PageUnderstanding, entry: Entry) -> int:
         int(entry.x), int(entry.y), understanding.layout.source_size,
     )
     return int(v)
+
+
+def _semantic_positive(entry: Entry) -> bool:
+    """Accepted OCR semantics are independent positive evidence."""
+    return bool(
+        str(entry.word or "").strip()
+        and (
+            str(entry.final_engine or "").strip()
+            or str(entry.candidate_id or "").strip()
+            or any(token in str(entry.ocr_source or "").lower() for token in (
+                "paddle", "tesseract", "lens", "combined",
+            ))
+        )
+    )
 
 
 def _merge_layout_position(detector: Entry, layout_entry: Entry) -> Entry:
@@ -85,7 +100,7 @@ def _deduplicate(
 
         def priority(item: Entry) -> tuple[int, int, int, float]:
             source = str(item.ocr_source or "")
-            semantic = bool(item.word or item.candidate_id or item.final_engine)
+            semantic = _semantic_positive(item)
             layout_confirmed = "PAGE_UNDERSTANDING_CONFIRMED" in str(item.issue_type or "")
             rescue = source.startswith("page_understanding:")
             return (
@@ -103,28 +118,40 @@ def _deduplicate(
 def _generic_body_indent_filter(
     entries: list[Entry],
     understanding: PageUnderstanding,
-) -> tuple[list[Entry], int]:
-    """Remove only candidates proven to start on the inward body lane."""
+    *,
+    mode: str,
+) -> tuple[list[Entry], int, int]:
+    """Use a proven inward body lane as negative layout evidence.
+
+    Pure geometric candidates may be removed.  An already accepted OCR semantic
+    positive is independent contradictory evidence and therefore survives with
+    an explicit conflict marker instead of being silently erased.
+    """
     if not understanding.generic_body_indent_reliable:
-        return list(entries), 0
+        return list(entries), 0, 0
     reference = understanding.line_height
     kept: list[Entry] = []
-    suppressed = 0
+    suppressed = conflicts = 0
     for entry in entries:
         if entry.manually_selected:
             kept.append(entry)
             continue
         evidence = block_evidence_for_entry(understanding, entry)
-        if (
+        body_conflict = bool(
             evidence is not None
             and evidence.boundary_distance <= reference * 0.80
             and evidence.on_body_lane
             and evidence.role == "body"
-        ):
-            suppressed += 1
+        )
+        if not body_conflict:
+            kept.append(entry)
             continue
-        kept.append(entry)
-    return kept, suppressed
+        if mode in {"ocr", "combined"} and _semantic_positive(entry):
+            kept.append(_append_issue(entry, "PAGE_UNDERSTANDING_LAYOUT_CONFLICT"))
+            conflicts += 1
+            continue
+        suppressed += 1
+    return kept, suppressed, conflicts
 
 
 def _hard_negative_blocks_layout_entry(
@@ -156,6 +183,7 @@ def _cjk_semantic_arbitration(
             "layout_confirmed": 0,
             "layout_rescued": 0,
             "layout_suppressed": 0,
+            "layout_conflicts": 0,
             "hard_negative_blocked_rescue": 0,
         }
 
@@ -183,7 +211,7 @@ def _cjk_semantic_arbitration(
         used_design.add(design_index)
 
     output: list[Entry] = []
-    confirmed = rescued = suppressed = blocked = 0
+    confirmed = rescued = suppressed = conflicts = blocked = 0
     for detector_index, detector in enumerate(entries):
         design_index = detector_to_design.get(detector_index)
         if design_index is not None:
@@ -194,13 +222,20 @@ def _cjk_semantic_arbitration(
             output.append(detector)
             continue
         evidence = block_evidence_for_entry(understanding, detector)
-        if (
+        layout_negative = bool(
             evidence is not None
             and evidence.boundary_distance <= reference * 0.68
             and evidence.role in {"body", "other_indent"}
             and not evidence.in_entry_direction
-        ):
-            suppressed += 1
+        )
+        if layout_negative:
+            if mode in {"ocr", "combined"} and _semantic_positive(detector):
+                output.append(_append_issue(
+                    detector, "PAGE_UNDERSTANDING_LAYOUT_CONFLICT"
+                ))
+                conflicts += 1
+            else:
+                suppressed += 1
             continue
         output.append(detector)
 
@@ -228,6 +263,7 @@ def _cjk_semantic_arbitration(
         "layout_confirmed": confirmed,
         "layout_rescued": rescued,
         "layout_suppressed": suppressed,
+        "layout_conflicts": conflicts,
         "hard_negative_blocked_rescue": blocked,
     }
 
@@ -256,16 +292,18 @@ def apply_page_understanding(
         "layout_confirmed": 0,
         "layout_rescued": 0,
         "layout_suppressed": 0,
+        "layout_conflicts": 0,
         "hard_negative_blocked_rescue": 0,
     }
 
     # Generic/non-CJK sharing is deliberately conservative: only an explicitly
-    # proven inward body lane is allowed to veto a candidate.  No new Latin
-    # entry is synthesized here.
-    current, generic_suppressed = _generic_body_indent_filter(
-        current, understanding,
+    # proven inward body lane is allowed to veto a geometric candidate.  OCR
+    # semantic positives survive disagreement as explicit conflicts.
+    current, generic_suppressed, generic_conflicts = _generic_body_indent_filter(
+        current, understanding, mode=normalized_mode,
     )
     stats["generic_body_suppressed"] = generic_suppressed
+    stats["layout_conflicts"] += generic_conflicts
 
     if understanding.role_model == "cjk":
         current, cjk_stats = _cjk_semantic_arbitration(
@@ -274,7 +312,11 @@ def apply_page_understanding(
             mode=normalized_mode,
             hard_negative_rows=hard_negative_rows,
         )
-        stats.update(cjk_stats)
+        for key, value in cjk_stats.items():
+            if key == "layout_conflicts":
+                stats[key] += int(value)
+            else:
+                stats[key] = int(value)
 
     current = _deduplicate(current, understanding)
     stats["output"] = len(current)
