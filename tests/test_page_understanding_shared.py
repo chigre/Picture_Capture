@@ -95,6 +95,31 @@ def test_cjk_ocr_observation_is_aligned_and_missing_layout_entries_are_rescued()
     )
 
 
+def test_hard_negative_consensus_blocks_layout_only_rescue():
+    image = _cjk_page()
+    settings = _settings(cjk=True)
+    understanding = understand_page(image, settings)
+    blocked_entry = understanding.semantic_entries[0]
+    located = processing._geometry_from_page_understanding(understanding)
+    column = processing.column_index_for_click(
+        blocked_entry.x, located, blocked_entry.y,
+    )
+    _u, v = located.source_to_canonical(blocked_entry.x, blocked_entry.y)
+
+    fused = apply_page_understanding(
+        [],
+        understanding,
+        mode="combined",
+        hard_negative_rows=[(int(column), int(v))],
+    )
+
+    assert not any(
+        abs(entry.y - blocked_entry.y) <= understanding.line_height * 0.28
+        for entry in fused
+    )
+    assert understanding.arbitration_stats["hard_negative_blocked_rescue"] == 1
+
+
 def test_generic_body_indent_is_negative_evidence_not_a_latin_entry_generator():
     image = Image.new("RGB", (360, 520), "white")
     draw = ImageDraw.Draw(image)
@@ -144,6 +169,7 @@ def test_processing_builds_shared_understanding_before_all_detector_modes():
     assert source.index("understand_page(") < source.index("_core.detect_entries(")
     assert '"ocr" if method == "paddleocr"' in source
     assert '"combined" if method == "combined"' in source
+    assert "_hard_negative_rows_from_cache" in source
 
 
 def test_combined_vb_observation_does_not_duplicate_cjk_layout_reasoning():
