@@ -92,6 +92,40 @@ def detect_entries(
     )
 
 
+def detect_entries_job(
+    image_path: str,
+    settings: AppSettings,
+    pages: tuple[str, str, str],
+    profile_page_index: int = 0,
+) -> int:
+    """Spawn-safe ordinary worker that executes the enhanced facade pipeline.
+
+    GUI ordinary drawing runs in a ``spawn`` ProcessPool.  Re-exporting the
+    historical ``processing_core.detect_entries_job`` made the child process
+    import ``processing_core`` directly, so facade-only lane polarity and visual
+    recovery were silently bypassed.  Keeping this worker physically defined in
+    ``picture_capture.processing`` makes multiprocessing unpickle/import the
+    enhanced module in the child before detection.
+    """
+    page = Path(image_path)
+    with Image.open(page) as opened:
+        image = _core.normalize_page_rgb(opened)
+    settings.detection_method = "left_edge"
+    entries, _geometry = detect_entries(
+        image,
+        settings,
+        profile_page_index=profile_page_index,
+        page_sections=_core.read_page_sections(page),
+    )
+    _core.write_pdic(
+        _core.pdic_path_for_image(page),
+        entries,
+        image.width,
+        pages,
+    )
+    return len(entries)
+
+
 def _publish_file_transaction(*args, **kwargs):
     """Compatibility forwarder; implementation stays in processing_core."""
     return _core._publish_file_transaction(*args, **kwargs)
@@ -148,6 +182,7 @@ def append_illustration_crop_log(*args, **kwargs):
 _core._detect_entries_left_edge = _detect_entries_left_edge
 globals()["_detect_entries_left_edge"] = _detect_entries_left_edge
 globals()["detect_entries"] = detect_entries
+globals()["detect_entries_job"] = detect_entries_job
 
 
 class _CoreProxyModule(types.ModuleType):
