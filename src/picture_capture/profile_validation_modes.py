@@ -47,7 +47,11 @@ def _understanding_summary(understanding: Any) -> str:
         1.0, float(getattr(layout, "ordinary_line_height", 0.0) or 0.0)
     )
     indent_type = str(getattr(layout, "indent_type", "") or "")
-    indent_label = "正文缩进" if indent_type == "body" else "词头缩进"
+    indent_label = {
+        "body": "正文缩进",
+        "none": "无明显缩进",
+        "headword": "词头缩进",
+    }.get(indent_type, "词头缩进")
     physical = bool(getattr(understanding, "physical_reliable", False))
     semantic = bool(getattr(understanding, "semantic_reliable", False))
     role_model = str(
@@ -58,18 +62,31 @@ def _understanding_summary(understanding: Any) -> str:
     generic_body = bool(
         getattr(understanding, "generic_body_indent_reliable", False)
     )
+    symbol_evidence = getattr(understanding, "symbol_evidence", None)
+    entry_markers = len(
+        getattr(symbol_evidence, "entry_markers", []) or []
+    ) if symbol_evidence is not None else 0
+    bracket_openers = len(
+        getattr(symbol_evidence, "bracket_openers", []) or []
+    ) if symbol_evidence is not None else 0
 
     if role_model == "cjk":
-        role_text = (
-            f"CJK词条结构：{'已建立' if semantic else '未稳定'}"
-            f"（版式词条 {semantic_count}）"
-        )
+        if indent_type == "none":
+            role_text = "CJK词条结构：缩进不参与判定"
+        else:
+            role_text = (
+                f"CJK词条结构：{'已建立' if semantic else '未稳定'}"
+                f"（版式词条 {semantic_count}）"
+            )
         display_text = f"大字头：{'有' if display else '未检出'}"
     else:
-        role_text = (
-            "通用版式角色："
-            + ("正文缩进 lane 已建立" if generic_body else "仅使用物理页面结构")
-        )
+        if indent_type == "none":
+            role_text = "通用版式角色：不使用缩进方向判定"
+        else:
+            role_text = (
+                "通用版式角色："
+                + ("正文缩进 lane 已建立" if generic_body else "仅使用物理页面结构")
+            )
         display_text = ""
 
     pieces = [
@@ -81,6 +98,10 @@ def _understanding_summary(understanding: Any) -> str:
     ]
     if display_text:
         pieces.append(display_text)
+    if entry_markers or bracket_openers:
+        pieces.append(
+            f"符号样本：入口 {entry_markers} / 括号 {bracket_openers}"
+        )
     return " ｜ ".join(pieces)
 
 
