@@ -2,36 +2,31 @@ from __future__ import annotations
 
 """Structural block model for indented CJK dictionary layouts.
 
-The useful abstraction for this layout family is not "an indented line".  A new
-entry is a *new visual block* whose first object has a stable structural role.
-Two recurring forms are especially important:
+A new entry is treated as a *new visual block*, not merely as an indented line.
+Two block-start signatures are modelled independently:
 
-* an oversized display head, substantially taller than an ordinary text row;
-* a normal-height bracketed head whose true bracket anchor is stable even when
-  a small numeric/superscript prefix appears before it.
+* oversized display heads are recovered from grouped connected components;
+* normal bracketed heads are recovered from a repeated full-height structural
+  anchor. Small number/superscript prefixes are ignored when locating it.
 
-The project explicitly tells us which side is semantic entry indentation:
-``headword`` means entry structures are farther inside the column than body
-text; ``body`` means body text is farther inside than entry structures.  This
-removes the old need to infer polarity from a few noisy rows.
-
-Only the left text-start strip is analysed.  Right-side illustrations must not
-participate in vertical projection, otherwise a tall figure can merge many text
-rows into one giant run and make the classifier blind exactly where false
-boundaries occur.
+The project supplies indentation polarity: ``headword`` means entry structures
+are farther inside than body text; ``body`` means body text is farther inside.
+Only a left text-start strip is analysed so right-side illustrations cannot join
+otherwise independent text rows during vertical projection.
 """
 
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from .image_utils import normalize_page_rgb
 from .models import AppSettings, Entry
 from .ordinary_postprocess import _separator_near_next_line
 from .ordinary_visual import (
     _column_band_gray,
+    _components,
     _duplicate,
     _entry_column,
     _fill_short_gaps,
@@ -56,7 +51,6 @@ class BlockRow:
 
     @property
     def start(self) -> int:
-        """Compatibility alias: semantic start, not optional prefix ink."""
         return int(
             self.structural_start
             if self.structural_start is not None
@@ -129,8 +123,17 @@ class IndentTopology:
 
 
 def _indent_type(settings: AppSettings) -> str:
-    value = str(getattr(settings, "profile_indent_type", "headword") or "headword")
-    return value if value in {"headword", "body"} else "headword"
+    # ``profile_indent_type`` is the public semantic setting.  During the branch
+    # migration an older persisted CJK boolean is accepted as a compatibility
+    # backing value so existing settings JSON remains readable.
+    value = str(getattr(settings, "profile_indent_type", "") or "").strip().lower()
+    if value in {"headword", "body"}:
+        return value
+    return (
+        "body"
+        if bool(getattr(settings, "profile_cjk_brackets_in_body", False))
+        else "headword"
+    )
 
 
 def _character_height(settings: AppSettings) -> int:
@@ -138,7 +141,6 @@ def _character_height(settings: AppSettings) -> int:
 
 
 def _topology_analysis_width(column_width: int, character_height: int) -> int:
-    """Cover entry/body starts but exclude most figures and long definitions."""
     target = max(
         96,
         round(float(character_height) * 6.25),
@@ -176,7 +178,6 @@ def _reference_height(runs: list[tuple[int, int]], fallback: float) -> float:
 
 
 def _component_runs(line: np.ndarray, reference: float) -> list[tuple[int, int, int]]:
-    """Return horizontal ink groups with their vertical ink span."""
     if line.size == 0:
         return []
     active = line.sum(axis=0) >= max(1, round(line.shape[0] * 0.055))
@@ -187,8 +188,7 @@ def _component_runs(line: np.ndarray, reference: float) -> list[tuple[int, int, 
         ys = np.flatnonzero(component.any(axis=1))
         if ys.size == 0:
             continue
-        vertical_span = int(ys[-1] - ys[0] + 1)
-        result.append((int(x0), int(x1), vertical_span))
+        result.append((int(x0), int(x1), int(ys[-1] - ys[0] + 1)))
     return result
 
 
@@ -198,25 +198,17 @@ def _structural_anchor(
     y1: int,
     reference: float,
 ) -> tuple[int | None, int, np.ndarray]:
-    """Ignore small number/superscript prefixes and return the first full row glyph.
-
-    In the target CJK layout a leading number is often visibly smaller than the
-    bracket/lemma line.  The bracket therefore remains at one structural X even
-    when first ink moves left.  The returned patch is centred on that structural
-    glyph and is later used to verify repeated bracket-like appearance.
-    """
+    """Skip small numeric prefixes and anchor on the first full-height glyph."""
     line = ink[int(y0):int(y1)]
-    components = _component_runs(line, reference)
     threshold = max(4, round(reference * 0.56))
     structural: tuple[int, int, int] | None = None
-    for component in components:
+    for component in _component_runs(line, reference):
         x0, x1, vertical_span = component
         if vertical_span >= threshold and x1 - x0 >= 2:
             structural = component
             break
     if structural is None:
         return None, 0, np.zeros((0, 0), dtype=bool)
-
     x0, _x1, vertical_span = structural
     py0 = max(0, int(y0) - round(reference * 0.10))
     py1 = min(ink.shape[0], int(y1) + round(reference * 0.10))
@@ -239,20 +231,98 @@ def _make_rows(
         if xs.size == 0:
             previous_end = y1
             continue
-        first_start = int(xs[0])
         structural_start, structural_height, patch = _structural_anchor(
             ink, y0, y1, reference,
         )
         result.append(BlockRow(
             y0=int(y0),
             y1=int(y1),
-            first_start=first_start,
+            first_start=int(xs[0]),
             structural_start=structural_start,
             patch=patch,
             gap_before=max(0, int(y0) - int(previous_end)),
             structural_height=structural_height,
         ))
         previous_end = y1
+    return result
+
+
+def _vertical_overlap(left: tuple[int, int, int, int], right: tuple[int, int, int, int]) -> float:
+    _lx0, ly0, _lx1, ly1 = left
+    _rx0, ry0, _rx1, ry1 = right
+    overlap = max(0, min(ly1, ry1) - max(ly0, ry0))
+    return overlap / float(max(1, min(ly1 - ly0, ry1 - ry0)))
+
+
+def _horizontal_gap(left: tuple[int, int, int, int], right: tuple[int, int, int, int]) -> int:
+    lx0, _ly0, lx1, _ly1 = left
+    rx0, _ry0, rx1, _ry1 = right
+    if lx1 < rx0:
+        return rx0 - lx1
+    if rx1 < lx0:
+        return lx0 - rx1
+    return 0
+
+
+def _merge_box(left: tuple[int, int, int, int], right: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    return (
+        min(left[0], right[0]), min(left[1], right[1]),
+        max(left[2], right[2]), max(left[3], right[3]),
+    )
+
+
+def _oversized_component_rows(ink: np.ndarray, reference: float) -> list[BlockRow]:
+    """Group nearby radicals/components before applying the large-head test.
+
+    This avoids the projection failure where a large ideograph touching the next
+    text row becomes one excessive vertical run, and also handles ideographs
+    whose radicals are disconnected in the binary scan.
+    """
+    if ink.size == 0:
+        return []
+    image = Image.fromarray((ink.astype(np.uint8) * 255), mode="L")
+    try:
+        joined = np.asarray(image.filter(ImageFilter.MaxFilter(3)), dtype=np.uint8) > 0
+    finally:
+        image.close()
+    raw_boxes = [
+        (int(x0), int(y0), int(x1), int(y1))
+        for x0, y0, x1, y1, area in _components(joined)
+        if area >= max(3, round(reference * reference * 0.015))
+    ]
+    raw_boxes.sort(key=lambda box: (box[1], box[0]))
+
+    groups: list[tuple[int, int, int, int]] = []
+    for box in raw_boxes:
+        merged_index: int | None = None
+        for index, group in enumerate(groups):
+            if (
+                _vertical_overlap(group, box) >= 0.48
+                and _horizontal_gap(group, box) <= reference * 0.58
+            ):
+                merged_index = index
+                break
+        if merged_index is None:
+            groups.append(box)
+        else:
+            groups[merged_index] = _merge_box(groups[merged_index], box)
+
+    result: list[BlockRow] = []
+    for x0, y0, x1, y1 in groups:
+        width = int(x1 - x0)
+        height = int(y1 - y0)
+        if not (reference * 1.45 <= height <= reference * 3.45):
+            continue
+        if width < reference * 0.72 or width > reference * 3.6:
+            continue
+        roi = ink[max(0, y0):min(ink.shape[0], y1), max(0, x0):min(ink.shape[1], x1)]
+        if roi.size == 0 or float(roi.mean()) < 0.035:
+            continue
+        result.append(BlockRow(
+            y0=int(y0), y1=int(y1), first_start=int(x0),
+            structural_start=int(x0), patch=roi.copy(), gap_before=0,
+            structural_height=height,
+        ))
     return result
 
 
@@ -331,10 +401,7 @@ def _lane_is_structural(
 ) -> bool:
     count = len(rows)
     if count >= 3:
-        return bool(
-            separator_fraction >= 0.40
-            and (marker_fraction >= 0.28 or count >= 5)
-        )
+        return bool(separator_fraction >= 0.40 and (marker_fraction >= 0.28 or count >= 5))
     if count == 2:
         return bool(separator_fraction >= 0.65 and marker_fraction >= 0.48)
     return False
@@ -352,7 +419,6 @@ def _observe_column_raw(
     band = _column_band_gray(source, geometry, column, top, bottom)
     if band.size == 0:
         return None
-
     analysis_width = _topology_analysis_width(band.shape[1], character_height)
     lane_band = band[:, :analysis_width]
     ink = lane_band <= _otsu(lane_band)
@@ -364,13 +430,8 @@ def _observe_column_raw(
         if reference * 0.48 <= row.height <= reference * 1.48
         and row.structural_start is not None
     ]
-    oversized = [
-        row for row in rows
-        if reference * 1.50 <= row.height <= reference * 3.45
-    ]
     if len(normal) < 4:
         return None
-
     clusters = [
         cluster for cluster in _cluster_rows(normal, max(3.0, reference * 0.18))
         if len(cluster) >= 2
@@ -400,23 +461,17 @@ def _observe_column_raw(
         entry_lanes.append(EntryLane(
             center=float(center),
             tolerance=_empirical_tolerance(cluster, center, reference),
-            rows=list(cluster),
-            marker_fraction=float(marker),
+            rows=list(cluster), marker_fraction=float(marker),
             separator_fraction=float(separator),
         ))
     entry_lanes.sort(key=lambda lane: lane.center)
 
     return IndentTopology(
-        column=int(column),
-        top=int(top),
-        ink=ink,
-        rows=rows,
-        reference_height=float(reference),
-        body_center=float(body_center),
-        body_tolerance=float(body_tolerance),
-        body_rows=list(body_rows),
+        column=int(column), top=int(top), ink=ink, rows=rows,
+        reference_height=float(reference), body_center=float(body_center),
+        body_tolerance=float(body_tolerance), body_rows=list(body_rows),
         entry_lanes=entry_lanes,
-        oversized_rows=oversized,
+        oversized_rows=_oversized_component_rows(ink, reference),
         indent_type=indent_type,
     )
 
@@ -427,7 +482,6 @@ def _observe_column(
     settings: AppSettings,
     column: int,
 ) -> IndentTopology | None:
-    """Public/test observation returns only a proven normal-height topology."""
     topology = _observe_column_raw(source, geometry, settings, column)
     return topology if topology is not None and topology.is_proven else None
 
@@ -439,13 +493,6 @@ def _prototype_similarity(row: BlockRow, prototypes: list[np.ndarray]) -> float:
 
 
 def _seed_sparse_columns(topologies: dict[int, IndentTopology]) -> None:
-    """Share page-level bracket structure so a sparse column can recover one row.
-
-    Dictionary columns are repeated instances of the same template.  Requiring
-    every column independently to contain 2-3 bracket rows causes avoidable
-    misses.  Once another column proves the structural lane, normalize its entry
-    offset by line height and use its repeated bracket patch as a page prototype.
-    """
     proven = [topology for topology in topologies.values() if topology.is_proven]
     if not proven:
         return
@@ -485,9 +532,7 @@ def _seed_sparse_columns(topologies: dict[int, IndentTopology]) -> None:
         topology.entry_lanes = [EntryLane(
             center=center,
             tolerance=_empirical_tolerance(candidates, center, topology.reference_height),
-            rows=candidates,
-            marker_fraction=1.0,
-            separator_fraction=1.0,
+            rows=candidates, marker_fraction=1.0, separator_fraction=1.0,
         )]
 
 
@@ -512,8 +557,6 @@ def _nearest_entry_lane(topology: IndentTopology, start: float) -> EntryLane | N
 
 
 def _row_role(topology: IndentTopology, row: BlockRow) -> str:
-    if row.height >= topology.reference_height * 1.50:
-        return "oversized"
     if row.structural_start is None:
         return "other"
     start = float(row.start)
@@ -528,25 +571,15 @@ def _row_role(topology: IndentTopology, row: BlockRow) -> str:
 
 
 def _oversized_is_entry(topology: IndentTopology, row: BlockRow) -> bool:
-    if row.height < topology.reference_height * 1.50:
-        return False
     sign = 1.0 if topology.indent_type == "headword" else -1.0
     signed_offset = sign * (float(row.first_start) - float(topology.body_center))
-    # Display heads can begin a little closer to the margin than bracket rows,
-    # but must still live on the semantic entry side selected by the user.
     if not (
-        topology.reference_height * 0.22
+        topology.reference_height * 0.18
         <= signed_offset
         <= topology.reference_height * 4.75
     ):
         return False
-    if not _separator_supported(topology.ink, row, topology.reference_height):
-        return False
-    roi_width = max(8, round(topology.reference_height * 1.25))
-    x0 = max(0, int(row.first_start))
-    x1 = min(topology.ink.shape[1], x0 + roi_width)
-    roi = topology.ink[int(row.y0):int(row.y1), x0:x1]
-    return bool(roi.size and float(roi.mean()) >= 0.025)
+    return _separator_supported(topology.ink, row, topology.reference_height)
 
 
 def _is_automatic_ordinary(entry: Entry) -> bool:
@@ -560,7 +593,6 @@ def _append_boundary(
     output: list[Entry],
     topology: IndentTopology,
     geometry: Any,
-    settings: AppSettings,
     page_sections: list[Any] | None,
     row: BlockRow,
     *,
@@ -569,9 +601,7 @@ def _append_boundary(
     confidence: float,
     oversized: bool = False,
 ) -> None:
-    separator = _separator_near_next_line(
-        topology.ink, int(row.y0), topology.reference_height,
-    )
+    separator = _separator_near_next_line(topology.ink, int(row.y0), topology.reference_height)
     if separator is None:
         return
     source_y = int(topology.top) + int(separator)
@@ -582,16 +612,12 @@ def _append_boundary(
         return
     marker_x, _direction = _source_edge(geometry, topology.column, source_y)
     output.append(Entry(
-        word="",
-        x=int(marker_x),
-        y=int(source_y),
-        confidence=float(confidence),
-        ocr_source=source_name,
+        word="", x=int(marker_x), y=int(source_y),
+        confidence=float(confidence), ocr_source=source_name,
         issue_type=issue_type,
         ocr_visual_run_height=float(row.height),
         ocr_line_height_reference=float(topology.reference_height),
-        ocr_single_cjk=bool(oversized),
-        ocr_oversized_cjk=bool(oversized),
+        ocr_single_cjk=bool(oversized), ocr_oversized_cjk=bool(oversized),
     ))
 
 
@@ -602,13 +628,6 @@ def finalize_indented_topology(
     settings: AppSettings,
     page_sections: list[Any] | None = None,
 ) -> list[Entry]:
-    """Publish CJK boundaries from explicit indentation + block-start structure.
-
-    Normal-height entries are proactively recovered from proven structural
-    bracket lanes.  Oversized display heads are recovered from tall block starts
-    in the same left analysis strip.  Legacy automatic candidates are only kept
-    if they map to a structural entry block; manual edits remain untouched.
-    """
     source = normalize_page_rgb(image)
     kind = str(
         getattr(getattr(geometry, "transform", None), "kind", "identity")
@@ -633,26 +652,16 @@ def finalize_indented_topology(
             continue
         column = _entry_column(entry, geometry)
         topology = raw.get(column)
-        if topology is None:
+        if topology is None or not topology.is_proven:
+            # No proven entry structure => do not reinterpret/suppress legacy
+            # candidates.  Oversized recovery below is independent of this.
             output.append(entry)
             continue
         _u, marker_v = geometry.source_to_canonical(int(entry.x), int(entry.y))
         row = _nearest_row(topology, int(marker_v))
         if row is None:
-            # Once this column has a proven entry lane, unexplained automatic
-            # markers must not bypass it.  On an unproven column preserve legacy
-            # behaviour rather than over-suppressing a different layout.
-            if not topology.is_proven:
-                output.append(entry)
             continue
-        role = _row_role(topology, row)
-        if role == "entry" and topology.is_proven:
-            output.append(entry)
-        elif role == "oversized" and bool(
-            getattr(settings, "profile_cjk_allow_single_headword", True)
-        ) and _oversized_is_entry(topology, row):
-            output.append(entry)
-        elif not topology.is_proven and role not in {"body", "other"}:
+        if _row_role(topology, row) == "entry":
             output.append(entry)
 
     if bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
@@ -662,10 +671,9 @@ def finalize_indented_topology(
             for lane in topology.entry_lanes:
                 for row in lane.rows:
                     _append_boundary(
-                        output, topology, geometry, settings, page_sections, row,
+                        output, topology, geometry, page_sections, row,
                         issue_type="ORDINARY_BLOCK_BRACKET_ENTRY",
-                        source_name="ordinary_visual_lane",
-                        confidence=0.98,
+                        source_name="ordinary_visual_lane", confidence=0.98,
                     )
 
     if bool(getattr(settings, "profile_cjk_allow_single_headword", True)):
@@ -674,10 +682,9 @@ def finalize_indented_topology(
                 if not _oversized_is_entry(topology, row):
                     continue
                 _append_boundary(
-                    output, topology, geometry, settings, page_sections, row,
+                    output, topology, geometry, page_sections, row,
                     issue_type="ORDINARY_BLOCK_OVERSIZED_HEAD",
-                    source_name="ordinary_visual_head",
-                    confidence=0.98,
+                    source_name="ordinary_visual_head", confidence=0.98,
                     oversized=True,
                 )
 
