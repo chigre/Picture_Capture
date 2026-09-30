@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-"""Arbitrate detector observations with the shared Page Understanding layer.
+"""Arbitrate detector observations with shared page/symbol understanding.
 
-Page understanding is not treated as an extra detector vote.  It supplies a
-separate evidence family: page/column geometry and the designed role of the
-block below a candidate.  VB remains geometric boundary evidence; OCR remains
-semantic evidence.  A conflict between independent positive evidence is
-preserved for review rather than letting either family silently erase the other.
+Page understanding is not treated as an extra detector vote.  Evidence families
+stay distinct:
+
+* VB supplies geometric boundary evidence;
+* Page Understanding supplies physical layout and designed block role;
+* sampled Symbol Evidence supplies project-specific printed entry/bracket cues;
+* OCR supplies semantic/textual evidence.
+
+A conflict between independent positive evidence is preserved for review rather
+than letting one family silently erase another.
 """
 
 from dataclasses import replace
@@ -17,6 +22,7 @@ from .page_understanding import (
     _column_for_source_point,
     block_evidence_for_entry,
 )
+from .symbol_evidence import fuse_symbol_evidence, is_symbol_positive_entry
 
 
 def _append_issue(entry: Entry, issue: str) -> Entry:
@@ -54,8 +60,12 @@ def _semantic_positive(entry: Entry) -> bool:
     )
 
 
+def _independent_positive(entry: Entry) -> bool:
+    return _semantic_positive(entry) or is_symbol_positive_entry(entry)
+
+
 def _merge_layout_position(detector: Entry, layout_entry: Entry) -> Entry:
-    """Use layout geometry while preserving OCR/combined semantic metadata."""
+    """Use layout geometry while preserving detector semantic/symbol metadata."""
     merged = replace(
         detector,
         x=int(layout_entry.x),
@@ -98,14 +108,16 @@ def _deduplicate(
             continue
         current = result[duplicate_index]
 
-        def priority(item: Entry) -> tuple[int, int, int, float]:
+        def priority(item: Entry) -> tuple[int, int, int, int, float]:
             source = str(item.ocr_source or "")
             semantic = _semantic_positive(item)
+            symbol = is_symbol_positive_entry(item)
             layout_confirmed = "PAGE_UNDERSTANDING_CONFIRMED" in str(item.issue_type or "")
             rescue = source.startswith("page_understanding:")
             return (
                 1 if item.manually_selected else 0,
                 1 if semantic else 0,
+                1 if symbol else 0,
                 1 if layout_confirmed else (0 if rescue else 0),
                 float(item.confidence if item.confidence is not None else -1.0),
             )
@@ -124,8 +136,8 @@ def _generic_body_indent_filter(
     """Use a proven inward body lane as negative layout evidence.
 
     Pure geometric candidates may be removed.  An already accepted OCR semantic
-    positive is independent contradictory evidence and therefore survives with
-    an explicit conflict marker instead of being silently erased.
+    positive or sampled explicit entry marker is independent contradictory
+    evidence and therefore survives with a conflict marker.
     """
     if not understanding.generic_body_indent_reliable:
         return list(entries), 0, 0
@@ -146,7 +158,7 @@ def _generic_body_indent_filter(
         if not body_conflict:
             kept.append(entry)
             continue
-        if mode in {"ocr", "combined"} and _semantic_positive(entry):
+        if _independent_positive(entry):
             kept.append(_append_issue(entry, "PAGE_UNDERSTANDING_LAYOUT_CONFLICT"))
             conflicts += 1
             continue
@@ -188,7 +200,14 @@ def _cjk_semantic_arbitration(
         }
 
     reference = understanding.line_height
-    design = list(understanding.semantic_entries)
+    # CJK ordinary fast-path stores sampled marker entries alongside layout
+    # entries so it can return them without detector-specific arbitration.
+    # Exclude those marker entries here: Symbol Evidence is fused independently
+    # below and must not be counted again as Page Layout evidence.
+    design = [
+        entry for entry in understanding.semantic_entries
+        if not is_symbol_positive_entry(entry)
+    ]
     edges: list[tuple[int, int, int]] = []
     for detector_index, detector in enumerate(entries):
         detector_column = _entry_column(understanding, detector)
@@ -212,6 +231,7 @@ def _cjk_semantic_arbitration(
 
     output: list[Entry] = []
     confirmed = rescued = suppressed = conflicts = blocked = 0
+    no_indent = understanding.layout.indent_type == "none"
     for detector_index, detector in enumerate(entries):
         design_index = detector_to_design.get(detector_index)
         if design_index is not None:
@@ -223,13 +243,14 @@ def _cjk_semantic_arbitration(
             continue
         evidence = block_evidence_for_entry(understanding, detector)
         layout_negative = bool(
-            evidence is not None
+            not no_indent
+            and evidence is not None
             and evidence.boundary_distance <= reference * 0.68
             and evidence.role in {"body", "other_indent"}
             and not evidence.in_entry_direction
         )
         if layout_negative:
-            if mode in {"ocr", "combined"} and _semantic_positive(detector):
+            if _independent_positive(detector):
                 output.append(_append_issue(
                     detector, "PAGE_UNDERSTANDING_LAYOUT_CONFLICT"
                 ))
@@ -240,9 +261,9 @@ def _cjk_semantic_arbitration(
         output.append(detector)
 
     # Layout can rescue OCR misses, but never overrule a high-confidence OCR
-    # hard-negative consensus at the same physical event.  This preserves the
-    # existing combined-mode safety contract while still allowing parser/lemma
-    # failures (soft negatives) to be recovered by independent layout evidence.
+    # hard-negative consensus at the same physical event.  Sampled explicit
+    # entry markers are handled separately and therefore are not mistaken for a
+    # layout-only rescue.
     negatives = list(hard_negative_rows or [])
     if mode in {"ocr", "combined", "ordinary"}:
         for design_index, layout_entry in enumerate(design):
@@ -275,11 +296,11 @@ def apply_page_understanding(
     mode: str,
     hard_negative_rows: list[tuple[int, int]] | None = None,
 ) -> list[Entry]:
-    """Apply layout-role evidence without conflating detector vote counts.
+    """Fuse Symbol + layout-role evidence without conflating detector votes.
 
     ``mode`` is one of ``ordinary``, ``ocr`` or ``combined``.  ``hard_negative_rows``
     contains canonical (column, V) positions where OCR review evidence reached
-    the existing hard-negative consensus; layout rescue is forbidden there.
+    the existing hard-negative consensus; layout-only rescue is forbidden there.
     """
     normalized_mode = str(mode or "ordinary").strip().lower()
     if normalized_mode not in {"ordinary", "ocr", "combined"}:
@@ -288,6 +309,9 @@ def apply_page_understanding(
     current = list(entries)
     stats = {
         "input": len(current),
+        "symbol_confirmed": 0,
+        "symbol_bracket_confirmed": 0,
+        "symbol_rescued": 0,
         "generic_body_suppressed": 0,
         "layout_confirmed": 0,
         "layout_rescued": 0,
@@ -296,9 +320,19 @@ def apply_page_understanding(
         "hard_negative_blocked_rescue": 0,
     }
 
+    # Symbol Evidence is a separate family and is fused before layout-role
+    # arbitration so subsequent conflicts can recognize a sampled entry marker
+    # as an independent positive rather than plain geometry.
+    current, symbol_stats = fuse_symbol_evidence(
+        current,
+        understanding.symbol_evidence,
+        understanding,
+    )
+    stats.update({key: int(value) for key, value in symbol_stats.items()})
+
     # Generic/non-CJK sharing is deliberately conservative: only an explicitly
-    # proven inward body lane is allowed to veto a geometric candidate.  OCR
-    # semantic positives survive disagreement as explicit conflicts.
+    # proven inward body lane is allowed to veto a geometric candidate.  OCR or
+    # sampled-marker positives survive disagreement as explicit conflicts.
     current, generic_suppressed, generic_conflicts = _generic_body_indent_filter(
         current, understanding, mode=normalized_mode,
     )
