@@ -200,3 +200,93 @@ def test_visual_recovery_respects_profile_switches():
         image, [], geometry, settings,
     )
     assert entries == []
+
+
+def test_proven_indented_lane_suppresses_legacy_body_lane_markers():
+    image = Image.new("RGB", (420, 620), "white")
+    draw = ImageDraw.Draw(image)
+    body_rows = (35, 70, 105, 140, 205, 240, 305, 340, 405, 440, 505, 540)
+    for y in body_rows:
+        _draw_body_line(draw, y)
+    for y in (170, 270, 370, 470):
+        _draw_bracket_entry(draw, y)
+
+    settings = _cjk_settings()
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    # Simulate the historical VB detector marking every main-lane body row.
+    legacy = [
+        Entry(
+            word="", x=20, y=max(1, y - 8),
+            confidence=0.98, ocr_source="ordinary_vb",
+        )
+        for y in body_rows
+    ]
+    entries = recover_ordinary_visual_entries(
+        image, legacy, geometry, settings,
+    )
+
+    assert not any(
+        entry.ocr_source == "ordinary_vb"
+        for entry in entries
+    )
+    assert len([
+        entry for entry in entries
+        if entry.ocr_source == "ordinary_visual_lane"
+    ]) == 4
+
+
+def test_without_proven_secondary_lane_legacy_body_markers_are_preserved():
+    image = Image.new("RGB", (420, 420), "white")
+    draw = ImageDraw.Draw(image)
+    body_rows = (35, 70, 105, 140, 205, 240, 305, 340)
+    for y in body_rows:
+        _draw_body_line(draw, y)
+    # Two indented rows are intentionally insufficient to prove an entry lane.
+    _draw_bracket_entry(draw, 170)
+    _draw_bracket_entry(draw, 270)
+
+    settings = _cjk_settings()
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    legacy = [
+        Entry(
+            word="", x=20, y=max(1, y - 8),
+            confidence=0.98, ocr_source="ordinary_vb",
+        )
+        for y in body_rows
+    ]
+    entries = recover_ordinary_visual_entries(
+        image, legacy, geometry, settings,
+    )
+
+    assert len([
+        entry for entry in entries
+        if entry.ocr_source == "ordinary_vb"
+    ]) == len(legacy)
+
+
+def test_secondary_lane_polarity_keeps_non_body_legacy_marker():
+    image = Image.new("RGB", (420, 620), "white")
+    draw = ImageDraw.Draw(image)
+    for y in (35, 70, 105, 140, 205, 240, 305, 340, 405, 440, 505, 540):
+        _draw_body_line(draw, y)
+    for y in (170, 270, 370, 470):
+        _draw_bracket_entry(draw, y)
+
+    settings = _cjk_settings()
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    # Marker near an indented structural row should not be removed by the
+    # body-lane suppression step; it will be de-duplicated against recovery.
+    legacy = [
+        Entry(
+            word="", x=20, y=162,
+            confidence=0.98, ocr_source="ordinary_vb",
+        )
+    ]
+    entries = recover_ordinary_visual_entries(
+        image, legacy, geometry, settings,
+    )
+
+    assert any(
+        abs(entry.y - 162) <= 8
+        for entry in entries
+    )
