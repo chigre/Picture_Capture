@@ -2,13 +2,11 @@ from __future__ import annotations
 
 """Persist the exact automatic marker set before later manual PDIC edits.
 
-The normal PDIC format intentionally stores only durable dictionary data and
-therefore drops runtime detector metadata.  For supervised error analysis we
-also need the *pre-edit* automatic result.  The launcher installs a small wrapper
-around ``formats.write_pdic`` before processing is imported.  Automatic Entry
-objects carry runtime evidence (source / issue type / confidence), whereas a
-PDIC loaded for manual editing does not; this lets us snapshot automatic writes
-without changing the historical PDIC format or manual-save workflow.
+Batch ordinary drawing writes its snapshot explicitly from the spawn-safe worker.
+The GUI also installs a conservative ``formats.write_pdic`` wrapper for direct
+(non-worker) automatic writes.  That wrapper only creates a missing snapshot;
+it never replaces an existing baseline during later manual editing.  A genuine
+new batch automatic run explicitly replaces the snapshot before writing PDIC.
 
 If a historical project has no snapshot, the training exporter can still
 recompute an ordinary baseline non-destructively and marks that provenance
@@ -64,8 +62,6 @@ def looks_like_automatic_result(entries: list[Entry]) -> bool:
     if not entries:
         return False
     evidenced = sum(_entry_runtime_evidence(entry) for entry in entries)
-    # A mixed list can occur after fusion/manual override.  Majority automatic
-    # runtime evidence is enough to identify the write as detector output.
     return evidenced >= max(1, (len(entries) + 1) // 2)
 
 
@@ -75,6 +71,7 @@ def save_automatic_baseline(
     image_width: int,
     pages: tuple[str, str, str],
 ) -> Path:
+    """Atomically replace the baseline; call only from a known automatic run."""
     target = baseline_path_for_pdic(pdic_path)
     payload = {
         "format": AUTO_BASELINE_FORMAT,
@@ -106,7 +103,7 @@ def load_automatic_baseline(pdic_path: Path) -> dict[str, Any]:
 def build_write_pdic_capture(
     original_write_pdic: Callable[[Path, list[Entry], int, tuple[str, str, str]], None],
 ):
-    """Return a drop-in write_pdic wrapper that snapshots automatic results."""
+    """Capture a missing direct-write baseline without clobbering later edits."""
     if bool(getattr(original_write_pdic, "_picture_capture_baseline_wrapper", False)):
         return original_write_pdic
 
@@ -116,7 +113,8 @@ def build_write_pdic_capture(
         image_width: int,
         pages: tuple[str, str, str],
     ) -> None:
-        if looks_like_automatic_result(entries):
+        snapshot = baseline_path_for_pdic(path)
+        if not snapshot.exists() and looks_like_automatic_result(entries):
             save_automatic_baseline(path, entries, image_width, pages)
         original_write_pdic(path, entries, image_width, pages)
 
