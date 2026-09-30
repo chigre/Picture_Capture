@@ -2,20 +2,22 @@ from __future__ import annotations
 
 """Column-level topology model for indented dictionary entry layouts.
 
-Some dictionaries use two stable first-ink lanes inside one text column:
+Some CJK dictionaries use one dominant body-text lane plus several stable
+secondary entry lanes.  The latter can differ because plain bracketed entries,
+numbered variants and other subentry forms do not always begin at exactly the
+same X coordinate.  Treating all of them as one centre forces a wide tolerance
+band and makes body/quote indentation much easier to misclassify.
 
-* a dominant left/body lane for definitions, quotations and wrapped prose;
-* a secondary right/entry lane for bracketed subentries such as ``【...】``.
+This module therefore learns a *lane family* per column:
 
-The important signal is therefore not whether one isolated row happens to have
-blank space above it, but which *lane* the following text line belongs to.  This
-module learns those lanes from the page image itself and acts as the final gate
-for automatic ordinary-mode candidates.  Oversized display heads remain a
-separate visual class and are never rejected merely for living outside the
-secondary lane.
+* one dominant body lane for definitions, quotations and wrapped prose;
+* one or more structurally proven entry sub-lanes to its right;
+* oversized display heads as a separate visual class handled upstream.
 
-The model is deliberately per-column.  A page may contain columns with different
-local mixtures of body text and entry rows, so no page-wide polarity is imposed.
+Once the topology is proven, it is authoritative for normal-height automatic
+ordinary candidates.  Candidates attached to neither a proven entry lane nor a
+strict right-shifted entry variant are rejected, regardless of which upstream
+detector produced them.
 """
 
 from dataclasses import dataclass
@@ -41,6 +43,14 @@ from .ordinary_visual import (
 
 
 @dataclass(slots=True)
+class EntryLane:
+    center: float
+    rows: list[Any]
+    marker_fraction: float
+    separator_fraction: float
+
+
+@dataclass(slots=True)
 class IndentTopology:
     column: int
     top: int
@@ -49,28 +59,36 @@ class IndentTopology:
     reference_height: float
     body_center: float
     body_rows: list[Any]
-    entry_center: float
-    entry_rows: list[Any]
-    lane_separation: float
-    marker_fraction: float
-    separator_fraction: float
+    entry_lanes: list[EntryLane]
+
+    @property
+    def entry_rows(self) -> list[Any]:
+        rows: list[Any] = []
+        seen: set[tuple[int, int, int]] = set()
+        for lane in self.entry_lanes:
+            for row in lane.rows:
+                key = (int(row.y0), int(row.y1), int(row.start))
+                if key in seen:
+                    continue
+                seen.add(key)
+                rows.append(row)
+        return rows
+
+    @property
+    def entry_centers(self) -> tuple[float, ...]:
+        return tuple(float(lane.center) for lane in self.entry_lanes)
 
     @property
     def is_proven(self) -> bool:
-        # The absolute row counts prevent a chance pair of aligned prose lines
-        # from defining a semantic lane.  The two softer evidence channels are
-        # alternatives: a repeated leading marker pattern, or enough rows that
-        # the geometric mode is already difficult to explain by chance.
-        return bool(
-            len(self.body_rows) >= 6
-            and len(self.entry_rows) >= 3
-            and self.lane_separation >= self.reference_height * 0.45
-            and self.lane_separation <= self.reference_height * 4.0
-            and self.separator_fraction >= 0.45
-            and (
-                self.marker_fraction >= 0.34
-                or len(self.entry_rows) >= 5
-            )
+        if len(self.body_rows) < 6 or not self.entry_lanes:
+            return False
+        total_rows = sum(len(lane.rows) for lane in self.entry_lanes)
+        if total_rows < 3:
+            return False
+        reference = float(self.reference_height)
+        return all(
+            reference * 0.45 <= float(lane.center) - float(self.body_center) <= reference * 4.0
+            for lane in self.entry_lanes
         )
 
 
@@ -98,9 +116,8 @@ def _normal_lines(lines: list[Any], reference: float) -> list[Any]:
 
 
 def _lane_clusters(lines: list[Any], reference: float, width: int) -> list[list[Any]]:
-    # Lane topology only concerns the left-side text starts.  Far-right starts
-    # are usually hanging fragments, examples or table material and should not
-    # define a first-ink mode.
+    # First-ink topology concerns only the left-side text starts. Far-right
+    # fragments should not define a semantic lane.
     maximum = min(float(width) * 0.32, reference * 6.0)
     candidates = [line for line in lines if float(line.start) <= maximum]
     return _cluster_lines(candidates, max(3.0, reference * 0.28))
@@ -135,6 +152,34 @@ def _marker_fraction(rows: list[Any]) -> float:
     return matched / float(len(rows))
 
 
+def _lane_is_structural(
+    *,
+    rows: list[Any],
+    marker_fraction: float,
+    separator_fraction: float,
+) -> bool:
+    """Require repeated geometry plus at least one independent confirmation.
+
+    Three or more aligned rows are enough when most rows have clean pre-entry
+    whitespace and either the leading visual pattern repeats or the population
+    is already substantial.  A two-row lane is accepted only when both visual
+    marker similarity and separator evidence are very strong; this supports a
+    sparse page without opening the gate to arbitrary paragraph indentation.
+    """
+    count = len(rows)
+    if count >= 3:
+        return bool(
+            separator_fraction >= 0.45
+            and (marker_fraction >= 0.34 or count >= 5)
+        )
+    if count == 2:
+        return bool(
+            separator_fraction >= 0.80
+            and marker_fraction >= 0.60
+        )
+    return False
+
+
 def _observe_column(
     source: Image.Image,
     geometry: Any,
@@ -151,18 +196,21 @@ def _observe_column(
     lines = _first_ink_lines(ink, character_height)
     reference = _reference_height(lines, float(character_height))
     normal = _normal_lines(lines, reference)
-    clusters = [cluster for cluster in _lane_clusters(normal, reference, ink.shape[1]) if len(cluster) >= 2]
+    clusters = [
+        cluster for cluster in _lane_clusters(normal, reference, ink.shape[1])
+        if len(cluster) >= 2
+    ]
     if not clusters:
         return None
 
-    # The body lane is the dominant first-ink mode, not necessarily the literal
-    # column edge.  Prefer population first, then the more leftward center for a
-    # deterministic tie break.
+    # Body text normally supplies the largest first-ink mode. Population is the
+    # main criterion; a leftward tie-break avoids choosing an indented lane when
+    # two modes happen to have equal counts.
     clusters.sort(key=lambda cluster: (-len(cluster), _cluster_center(cluster)))
     body_rows = clusters[0]
     body_center = _cluster_center(body_rows)
 
-    entry_candidates: list[tuple[float, list[Any], float, float]] = []
+    entry_lanes: list[EntryLane] = []
     for cluster in clusters[1:]:
         center = _cluster_center(cluster)
         separation = center - body_center
@@ -170,17 +218,25 @@ def _observe_column(
             continue
         marker = _marker_fraction(cluster)
         separator = _separator_fraction(ink, cluster, reference)
-        # Population is the strongest term; marker repetition and clean
-        # pre-entry whitespace are independent confirmation channels.
-        score = float(len(cluster)) + marker * 2.0 + separator * 1.5
-        entry_candidates.append((score, cluster, marker, separator))
+        if not _lane_is_structural(
+            rows=cluster,
+            marker_fraction=marker,
+            separator_fraction=separator,
+        ):
+            continue
+        entry_lanes.append(EntryLane(
+            center=float(center),
+            rows=list(cluster),
+            marker_fraction=float(marker),
+            separator_fraction=float(separator),
+        ))
 
-    if not entry_candidates:
+    if not entry_lanes:
         return None
-    entry_candidates.sort(key=lambda item: item[0], reverse=True)
-    _score, entry_rows, marker_fraction, separator_fraction = entry_candidates[0]
-    entry_center = _cluster_center(entry_rows)
 
+    # Keep distinct sub-lanes instead of collapsing them into one broad band.
+    # Ordering left-to-right makes diagnostics and variant matching stable.
+    entry_lanes.sort(key=lambda lane: lane.center)
     topology = IndentTopology(
         column=int(column),
         top=int(top),
@@ -189,11 +245,7 @@ def _observe_column(
         reference_height=float(reference),
         body_center=float(body_center),
         body_rows=list(body_rows),
-        entry_center=float(entry_center),
-        entry_rows=list(entry_rows),
-        lane_separation=float(entry_center - body_center),
-        marker_fraction=float(marker_fraction),
-        separator_fraction=float(separator_fraction),
+        entry_lanes=entry_lanes,
     )
     return topology if topology.is_proven else None
 
@@ -206,26 +258,64 @@ def _next_line(topology: IndentTopology, marker_v: int) -> Any | None:
     candidates = [line for line in topology.lines if lower <= int(line.y0) <= upper]
     if not candidates:
         return None
-    forward = [line for line in candidates if int(line.y0) >= local_v - round(reference * 0.08)]
+    forward = [
+        line for line in candidates
+        if int(line.y0) >= local_v - round(reference * 0.08)
+    ]
     pool = forward or candidates
     return min(pool, key=lambda line: abs(int(line.y0) - local_v))
+
+
+def _nearest_entry_lane(topology: IndentTopology, start: float) -> EntryLane | None:
+    if not topology.entry_lanes:
+        return None
+    return min(topology.entry_lanes, key=lambda lane: abs(float(start) - lane.center))
+
+
+def _variant_support(topology: IndentTopology, line: Any) -> bool:
+    """Accept a one-off numbered/right-shifted variant only with local support."""
+    lane = _nearest_entry_lane(topology, float(line.start))
+    if lane is None:
+        return False
+    reference = float(topology.reference_height)
+    shift = float(line.start) - float(lane.center)
+    if not (reference * 0.28 <= shift <= reference * 1.35):
+        return False
+    if _separator_near_next_line(
+        topology.ink, int(line.y0), reference,
+    ) is None:
+        return False
+    # The prefix may alter the first glyph substantially, so similarity is a
+    # supporting rather than mandatory signal.  Reject only if the candidate is
+    # visually unrelated to every proven lane row *and* barely clears the shift
+    # threshold, the region most vulnerable to paragraph indentation.
+    similarities = [
+        _patch_similarity(line.patch, row.patch)
+        for row in lane.rows
+    ]
+    best = max(similarities) if similarities else 0.0
+    if shift < reference * 0.50 and best < 0.22:
+        return False
+    return True
 
 
 def _line_role(topology: IndentTopology, line: Any) -> str:
     reference = float(topology.reference_height)
     start = float(line.start)
     body_distance = abs(start - float(topology.body_center))
-    entry_distance = abs(start - float(topology.entry_center))
     body_tolerance = max(4.0, reference * 0.38)
-    entry_tolerance = max(4.0, reference * 0.48)
+
+    lane = _nearest_entry_lane(topology, start)
+    entry_distance = (
+        abs(start - float(lane.center)) if lane is not None else float("inf")
+    )
+    entry_tolerance = max(4.0, reference * 0.38)
+
     if body_distance <= body_tolerance and body_distance < entry_distance:
         return "body"
     if entry_distance <= entry_tolerance:
         return "entry"
-    # A superscript/number prefix may move first ink to the right of the proven
-    # entry lane.  It may not move left into the body lane.
-    shift = start - float(topology.entry_center)
-    if reference * 0.30 <= shift <= reference * 1.50:
+    if _variant_support(topology, line):
         return "entry_variant"
     return "other"
 
@@ -253,18 +343,22 @@ def finalize_indented_topology(
     settings: AppSettings,
     page_sections: list[Any] | None = None,
 ) -> list[Entry]:
-    """Apply an authoritative per-column body-vs-entry lane gate.
+    """Apply an authoritative per-column body-vs-entry lane-family gate.
 
-    Once a column proves two stable first-ink lanes, normal-height automatic
-    candidates attached to the body lane are false entry boundaries regardless
-    of which upstream detector produced them.  Rows on the entry lane are kept
-    or recovered.  Ambiguous rows and oversized display heads are preserved.
+    Once a column proves its indentation topology, normal-height automatic
+    candidates are kept only when their following line belongs to a proven
+    entry sub-lane or to a strictly supported right-shifted variant.  Body-lane
+    and unclassified normal lines are suppressed.  Oversized display heads and
+    manual markers are never rejected by this gate.
     """
     if not bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
         return list(entries)
 
     source = normalize_page_rgb(image)
-    kind = str(getattr(getattr(geometry, "transform", None), "kind", "identity") or "identity")
+    kind = str(
+        getattr(getattr(geometry, "transform", None), "kind", "identity")
+        or "identity"
+    )
     if kind not in {"identity", "mirror_x"}:
         return list(entries)
 
@@ -297,34 +391,36 @@ def finalize_indented_topology(
             output.append(entry)
             continue
         role = _line_role(topology, line)
-        if role == "body":
-            continue
-        output.append(entry)
+        if role in {"entry", "entry_variant"}:
+            output.append(entry)
+        # Proven topology is authoritative: body and other normal-height lines
+        # are both false entry boundaries and are intentionally dropped.
 
-    # Recover the normal-height entry lane directly from the learned topology.
-    # This replaces the old secondary pass that tried to infer entryhood from a
-    # single row's indentation and whitespace in isolation.
+    # Recover every proven sub-lane directly from topology.  This is the crucial
+    # difference from the old single-centre model: a page may legitimately have
+    # several stable bracket/numbered entry starts.
     for column, topology in topologies.items():
-        tolerance = max(4, round(topology.reference_height * 0.45))
-        for line in topology.entry_rows:
-            separator = _separator_near_next_line(
-                topology.ink, int(line.y0), topology.reference_height,
-            )
-            if separator is None:
-                continue
-            source_y = int(topology.top) + int(separator)
-            if not _inside_sections(source_y, page_sections):
-                continue
-            if _duplicate(output, geometry, column, source_y, tolerance):
-                continue
-            marker_x, _direction = _source_edge(geometry, column, source_y)
-            output.append(Entry(
-                word="",
-                x=int(marker_x),
-                y=int(source_y),
-                confidence=0.97,
-                ocr_source="ordinary_visual_lane",
-                issue_type="ORDINARY_INDENT_TOPOLOGY_ENTRY",
-            ))
+        tolerance = max(4, round(topology.reference_height * 0.34))
+        for lane in topology.entry_lanes:
+            for line in lane.rows:
+                separator = _separator_near_next_line(
+                    topology.ink, int(line.y0), topology.reference_height,
+                )
+                if separator is None:
+                    continue
+                source_y = int(topology.top) + int(separator)
+                if not _inside_sections(source_y, page_sections):
+                    continue
+                if _duplicate(output, geometry, column, source_y, tolerance):
+                    continue
+                marker_x, _direction = _source_edge(geometry, column, source_y)
+                output.append(Entry(
+                    word="",
+                    x=int(marker_x),
+                    y=int(source_y),
+                    confidence=0.97,
+                    ocr_source="ordinary_visual_lane",
+                    issue_type="ORDINARY_INDENT_TOPOLOGY_ENTRY",
+                ))
 
     return output
