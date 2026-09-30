@@ -114,7 +114,9 @@ def test_headword_indent_final_gate_rejects_body_and_recovers_all_bracket_blocks
 def test_body_indent_option_reverses_semantic_lane_direction():
     image, _body_rows, entry_rows = _body_indented_page()
     settings = _settings()
-    # Compatibility backing for the user-facing “正文缩进” option.
+    # Version 2 marks this as an explicit user choice, not the unrelated legacy
+    # meaning of profile_cjk_brackets_in_body.
+    settings.profile_parser_controls_version = 2
     settings.profile_cjk_brackets_in_body = True
     settings.bottom_y = 410
     geometry = derive_nominal_geometry(image.width, image.height, settings)
