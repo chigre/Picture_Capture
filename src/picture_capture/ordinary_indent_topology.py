@@ -15,6 +15,12 @@ structural glyph, so ``【词】``, ``1【词】`` and ``12【词】`` belong to
 entry lane. Oversized display heads are deliberately NOT handled here; they
 have their own connected-component signature in ``ordinary_cjk_large_heads``.
 
+A stable body lane is useful negative evidence even when no entry lane occurs in
+a column. This matters for continuation columns containing only definition text:
+legacy line detectors may nominate every body row, but a proven body topology
+must be allowed to reject those candidates instead of preserving them merely
+because the column has no headword.
+
 Only a left text-start strip is analysed. A tall illustration on the right can
 therefore never merge several text rows into one projection run.
 """
@@ -88,6 +94,7 @@ class IndentTopology:
     body_tolerance: float
     body_rows: list[BlockRow]
     entry_lanes: list[EntryLane]
+    body_marker_fraction: float = 0.0
     indent_type: str = "headword"
 
     @property
@@ -112,8 +119,28 @@ class IndentTopology:
         return tuple(float(lane.center) for lane in self.entry_lanes)
 
     @property
+    def body_is_proven(self) -> bool:
+        """A repeated X lane is body only when its leading glyphs are not structural.
+
+        A bracket-only list can also form one very stable X cluster. Treating the
+        largest cluster as body unconditionally would invert the page semantics.
+        Body text instead has many aligned rows whose leading glyph patches vary.
+        """
+        if len(self.body_rows) < 5:
+            return False
+        normal_count = sum(
+            self.reference_height * 0.48 <= row.height <= self.reference_height * 1.48
+            and row.structural_start is not None
+            for row in self.rows
+        )
+        if normal_count <= 0:
+            return False
+        body_share = len(self.body_rows) / float(normal_count)
+        return bool(body_share >= 0.30 and self.body_marker_fraction < 0.48)
+
+    @property
     def is_proven(self) -> bool:
-        if len(self.body_rows) < 5 or not self.entry_lanes:
+        if not self.body_is_proven or not self.entry_lanes:
             return False
         if sum(len(lane.rows) for lane in self.entry_lanes) < 2:
             return False
@@ -369,8 +396,27 @@ def _observe_column_raw(
     if not clusters:
         return None
 
-    clusters.sort(key=lambda cluster: (-len(cluster), _cluster_center(cluster)))
-    body_rows = clusters[0]
+    # Classify repeated structural lanes before deciding which cluster is body.
+    # This prevents a page with many bracket entries from making the largest
+    # repeated 【 lane masquerade as the body lane.
+    stats = [
+        (
+            cluster,
+            _marker_fraction(cluster),
+            _separator_fraction(ink, cluster, reference),
+        )
+        for cluster in clusters
+    ]
+    body_candidates = [
+        item for item in stats
+        if item[1] < 0.48
+    ]
+    if not body_candidates:
+        return None
+    body_rows, body_marker, _body_separator = max(
+        body_candidates,
+        key=lambda item: (len(item[0]), -_cluster_center(item[0])),
+    )
     body_center = _cluster_center(body_rows)
     body_tolerance = _empirical_tolerance(
         body_rows,
@@ -384,13 +430,13 @@ def _observe_column_raw(
     indent_type = _indent_type(settings)
     sign = 1.0 if indent_type == "headword" else -1.0
     entry_lanes: list[EntryLane] = []
-    for cluster in clusters[1:]:
+    for cluster, marker, separator in stats:
+        if cluster is body_rows:
+            continue
         center = _cluster_center(cluster)
         signed_separation = sign * (center - body_center)
         if not (reference * 0.42 <= signed_separation <= reference * 4.75):
             continue
-        marker = _marker_fraction(cluster)
-        separator = _separator_fraction(ink, cluster, reference)
         if not _lane_is_structural(cluster, marker, separator):
             continue
         entry_lanes.append(EntryLane(
@@ -412,6 +458,7 @@ def _observe_column_raw(
         body_tolerance=float(body_tolerance),
         body_rows=list(body_rows),
         entry_lanes=entry_lanes,
+        body_marker_fraction=float(body_marker),
         indent_type=indent_type,
     )
 
@@ -453,7 +500,7 @@ def _seed_sparse_columns(topologies: dict[int, IndentTopology]) -> None:
 
     normalized_offset = float(np.median(np.asarray(offsets, dtype=float)))
     for topology in topologies.values():
-        if topology.is_proven:
+        if topology.is_proven or not topology.body_is_proven:
             continue
         sign = 1.0 if topology.indent_type == "headword" else -1.0
         predicted = (
@@ -561,7 +608,14 @@ def finalize_indented_topology(
     settings: AppSettings,
     page_sections: list[Any] | None = None,
 ) -> list[Entry]:
-    """Suppress body candidates and proactively publish proven bracket block starts."""
+    """Use positive entry evidence and negative body evidence in one final gate.
+
+    ``entry proven`` controls proactive bracket recovery. ``body proven`` is an
+    independent fact and is sufficient to reject legacy candidates that sit on
+    ordinary body rows, even in a continuation column with no headwords at all.
+    Unknown/off-lane candidates remain untouched unless a full entry topology is
+    proven, so singleton structures are not deleted merely for being rare.
+    """
     source = normalize_page_rgb(image)
     kind = str(
         getattr(getattr(geometry, "transform", None), "kind", "identity")
@@ -586,14 +640,28 @@ def finalize_indented_topology(
             continue
         column = _entry_column(entry, geometry)
         topology = raw.get(column)
-        if topology is None or not topology.is_proven:
+        if topology is None:
             output.append(entry)
             continue
+
         _u, marker_v = geometry.source_to_canonical(int(entry.x), int(entry.y))
         row = _nearest_row(topology, int(marker_v))
         if row is None:
+            if not topology.is_proven:
+                output.append(entry)
             continue
-        if _row_role(topology, row) == "entry":
+
+        role = _row_role(topology, row)
+        if role == "entry":
+            output.append(entry)
+            continue
+        if role == "body" and topology.body_is_proven:
+            # Stable body geometry is affirmative negative evidence. This is the
+            # critical continuation-column case: no entry lane is required in
+            # order to reject a line that is demonstrably ordinary body text.
+            continue
+        if not topology.is_proven:
+            # Body-only/partial topology: preserve genuinely unknown geometry.
             output.append(entry)
 
     if bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
