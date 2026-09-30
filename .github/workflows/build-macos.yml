@@ -1,0 +1,27 @@
+name: Build macOS app
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-15-intel
+            arch: intel
+          - os: macos-latest
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv pip install pyinstaller
+      - run: |
+          uv run pyinstaller --windowed --name PictureCapture \
+            --paths src --collect-all picture_capture run.py
+      - run: cd dist && zip -r ../PictureCapture-macos-${{ matrix.arch }}.zip PictureCapture.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PictureCapture-macos-${{ matrix.arch }}
+          path: PictureCapture-macos-${{ matrix.arch }}.zip
