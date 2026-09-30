@@ -4,14 +4,21 @@ from __future__ import annotations
 
 Indentation polarity is a *page-template* property, not a subtype of CJK
 headwords.  The helpers remain independent from ``profile_setup`` so low-level
-layout inference can read the explicit user meaning (词头缩进 / 正文缩进) without
-creating a processing/profile_setup circular dependency.
+layout inference can read the explicit user meaning without creating a
+processing/profile_setup circular dependency.
 
-The historical Boolean ``profile_cjk_brackets_in_body`` remains only a
-backward-compatible storage bit after semantics version 2:
-* version < 2: indentation type defaults to 词头缩进;
-* after the user explicitly saves the new choice, version 2 stores
-  词头缩进(False) / 正文缩进(True).
+The historical ``profile_cjk_brackets_in_body`` storage slot is retained for
+backward compatibility.  Project Profile indentation semantics v3 deliberately
+uses all three JSON-compatible states of that slot:
+
+* ``False`` -> 词头缩进;
+* ``True``  -> 正文缩进;
+* ``None``  -> 无明显缩进.
+
+Projects saved before v3 used only the first two states and therefore migrate
+losslessly.  ``无明显缩进`` means indentation must not be used as positive or
+negative entry-role evidence; OCR, typography and explicit marker evidence can
+still identify entries on the same physical lane as body text.
 
 The Project Profile also mirrors the existing ordinary-layout policy settings.
 There is still only one source of truth: ``ordinary_auto_layout`` plus its seven
@@ -26,8 +33,8 @@ from typing import Any
 from .models import AppSettings
 
 
-INDENT_TYPE_CHOICES = ("词头缩进", "正文缩进")
-INDENT_SEMANTICS_VERSION = 2
+INDENT_TYPE_CHOICES = ("词头缩进", "正文缩进", "无明显缩进")
+INDENT_SEMANTICS_VERSION = 3
 
 AUTO_LAYOUT_FIELDS: tuple[tuple[str, str], ...] = (
     ("分栏数", "ordinary_auto_columns"),
@@ -41,21 +48,33 @@ AUTO_LAYOUT_FIELDS: tuple[tuple[str, str], ...] = (
 
 
 def _indent_semantics_saved(settings: AppSettings) -> bool:
-    return int(getattr(settings, "profile_parser_controls_version", 0) or 0) >= INDENT_SEMANTICS_VERSION
+    return int(getattr(settings, "profile_parser_controls_version", 0) or 0) >= 2
 
 
 def indent_type_label(settings: AppSettings) -> str:
+    """Return the explicit page-template indentation semantics.
+
+    v2 projects only ever persisted True/False and retain that meaning.  v3 may
+    additionally persist ``None`` for pages where entry and body starts share
+    the same lane.
+    """
     if not _indent_semantics_saved(settings):
         return "词头缩进"
-    return (
-        "正文缩进"
-        if bool(getattr(settings, "profile_cjk_brackets_in_body", False))
-        else "词头缩进"
-    )
+    raw = getattr(settings, "profile_cjk_brackets_in_body", False)
+    version = int(getattr(settings, "profile_parser_controls_version", 0) or 0)
+    if version >= INDENT_SEMANTICS_VERSION and raw is None:
+        return "无明显缩进"
+    return "正文缩进" if bool(raw) else "词头缩进"
 
 
 def apply_indent_type_label(settings: AppSettings, label: str) -> None:
-    settings.profile_cjk_brackets_in_body = str(label) == "正文缩进"
+    normalized = str(label or "词头缩进")
+    if normalized == "无明显缩进":
+        # The historical field is intentionally tri-stated only from v3 onward.
+        # JSON serializes this as null; older True/False projects remain intact.
+        settings.profile_cjk_brackets_in_body = None  # type: ignore[assignment]
+    else:
+        settings.profile_cjk_brackets_in_body = normalized == "正文缩进"
     settings.profile_parser_controls_version = max(
         INDENT_SEMANTICS_VERSION,
         int(getattr(settings, "profile_parser_controls_version", 0) or 0),
@@ -98,14 +117,15 @@ def build_project_profile_wizard(base_class: type[Any]) -> type[Any]:
                 textvariable=self.cjk_indent_type_var,
                 values=INDENT_TYPE_CHOICES,
                 state="readonly",
-                width=12,
+                width=14,
             )
             self.cjk_indent_type_combo.grid(row=0, column=1, sticky="w", pady=3)
             ttk.Label(
                 indent,
                 text=(
                     "这是整本词典的页面排版语义，与词头是大字、【】、编号或普通文字无关。\n"
-                    "词头缩进＝entry 比正文更靠栏内；正文缩进＝正文比 entry 更靠栏内。"
+                    "词头缩进＝entry 比正文更靠栏内；正文缩进＝正文比 entry 更靠栏内；"
+                    "无明显缩进＝两者基本同栏起点，不使用缩进方向判定词条。"
                 ),
                 foreground="#666666",
                 wraplength=max(180, getattr(self, "_wizard_content_width", 520) - 30),
@@ -188,12 +208,13 @@ def build_project_profile_wizard(base_class: type[Any]) -> type[Any]:
                 self.after_idle(self._refresh_template_preview)
 
         def _indent_type_changed(self, _event=None) -> None:
-            apply_indent_type_label(self.working, self.cjk_indent_type_var.get())
-            # Keep the hidden legacy variable synchronized because the base
-            # wizard still serializes that compatibility field.
-            self.cjk_brackets_in_body_var.set(
-                self.cjk_indent_type_var.get() == "正文缩进"
-            )
+            label = self.cjk_indent_type_var.get()
+            apply_indent_type_label(self.working, label)
+            # Keep the hidden legacy Boolean variable synchronized for the base
+            # wizard.  ``无明显缩进`` has no Boolean representation; our
+            # _settings_from_ui override reapplies the tri-state *after* the base
+            # serializer has run, so False here is only a harmless UI fallback.
+            self.cjk_brackets_in_body_var.set(label == "正文缩进")
             self._profile_revision += 1
             self._mark_validation_stale()
             self._refresh_summary()
@@ -201,10 +222,9 @@ def build_project_profile_wizard(base_class: type[Any]) -> type[Any]:
         def _settings_from_ui(self) -> AppSettings:
             settings = super()._settings_from_ui()
             if hasattr(self, "cjk_indent_type_var"):
-                apply_indent_type_label(settings, self.cjk_indent_type_var.get())
-                self.cjk_brackets_in_body_var.set(
-                    self.cjk_indent_type_var.get() == "正文缩进"
-                )
+                label = self.cjk_indent_type_var.get()
+                apply_indent_type_label(settings, label)
+                self.cjk_brackets_in_body_var.set(label == "正文缩进")
             if hasattr(self, "layout_auto_var"):
                 settings.ordinary_auto_layout = bool(self.layout_auto_var.get())
                 for _label, field in AUTO_LAYOUT_FIELDS:
