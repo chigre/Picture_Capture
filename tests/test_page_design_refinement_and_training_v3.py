@@ -24,6 +24,7 @@ from picture_capture.training_export_v3 import (
     compare_automatic_and_final,
     select_page_range,
 )
+from picture_capture.training_export_ui import resolve_export_indices
 
 
 def _line(x: int, y: int, patch: np.ndarray) -> LayoutLine:
@@ -149,9 +150,10 @@ def test_automatic_pdic_snapshot_survives_later_manual_save(tmp_path: Path):
     first = json.loads(snapshot.read_text(encoding="utf-8"))
     assert first["entries"][0]["source_y"] == 133
 
-    # PDIC-loaded/manual entries carry no runtime detector evidence; this save
-    # must not replace the historical automatic baseline.
-    writer(pdic, [Entry(word="", x=45, y=160)], 3200, ("020093.png", "@", "@"))
+    # Even if a manual edit leaves many automatic Entry objects alive in memory,
+    # a normal later save must not replace the already captured baseline.
+    edited = automatic + [Entry(word="", x=45, y=160)]
+    writer(pdic, edited, 3200, ("020093.png", "@", "@"))
     second = json.loads(snapshot.read_text(encoding="utf-8"))
     assert second == first
     assert len(writes) == 2
@@ -163,3 +165,18 @@ def test_training_page_range_is_inclusive_and_accepts_numeric_ids():
     assert [page.stem for page in selected] == [
         "000092", "000093", "000094", "000095", "000096"
     ]
+
+
+def test_training_export_ui_range_accepts_named_numeric_and_reversed_ranges():
+    pages = [Path(f"{number:06d}.png") for number in range(89, 100)]
+    indices, error = resolve_export_indices(pages, "000092-96")
+    assert error is None
+    assert indices == [3, 4, 5, 6, 7]
+
+    reversed_indices, error = resolve_export_indices(pages, "99-97")
+    assert error is None
+    assert reversed_indices == [8, 9, 10]
+
+    one, error = resolve_export_indices(pages, "000093")
+    assert error is None
+    assert one == [4]
