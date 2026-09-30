@@ -1,26 +1,24 @@
 from __future__ import annotations
 
-"""High-level indentation semantics for the Project Profile UI.
+"""High-level indentation semantics and lazy Project Profile UI extension.
 
-The historical Boolean ``profile_cjk_brackets_in_body`` is reused only as a
-storage bit *after* parser/profile semantics version 2.  Older projects may have
-set that Boolean for the unrelated question “do bracket words also occur inside
-definitions”; interpreting it as indentation polarity would be unsafe.
+The semantic helpers in this module intentionally have no dependency on
+``profile_setup``.  Low-level layout inference can therefore read the explicit
+user meaning (词头缩进 / 正文缩进) without importing the GUI or creating a
+processing/profile_setup circular dependency.
 
-Migration rule:
-* version < 2: indentation type defaults to 词头缩进, regardless of the old bit;
-* once the user explicitly chooses/saves an indentation type, version becomes 2
-  and the bit stores 词头缩进(False) / 正文缩进(True).
-
-Thus no old project is silently reinterpreted, while settings.json remains fully
-backward-compatible without adding an unknown field to the slotted dataclass.
+The historical Boolean ``profile_cjk_brackets_in_body`` remains only a
+backward-compatible storage bit after semantics version 2:
+* version < 2: indentation type defaults to 词头缩进;
+* after the user explicitly saves the new choice, version 2 stores
+  词头缩进(False) / 正文缩进(True).
 """
 
 import tkinter as tk
 from tkinter import ttk
+from typing import Any
 
 from .models import AppSettings
-from .profile_setup import ProjectProfileWizard as _BaseProjectProfileWizard
 
 
 INDENT_TYPE_CHOICES = ("词头缩进", "正文缩进")
@@ -49,71 +47,75 @@ def apply_indent_type_label(settings: AppSettings, label: str) -> None:
     )
 
 
-class ProjectProfileWizard(_BaseProjectProfileWizard):
-    """Project Profile with an explicit CJK indentation-polarity control."""
+def build_project_profile_wizard(base_class: type[Any]) -> type[Any]:
+    """Return the indentation-aware wizard subclass without importing profile_setup here."""
 
-    def _build_vars(self) -> None:
-        super()._build_vars()
-        self.cjk_indent_type_var = tk.StringVar(
-            value=indent_type_label(self.working)
-        )
+    class ProjectProfileWizard(base_class):
+        """Project Profile with an explicit indentation-polarity control."""
 
-    def _build_headword_tab(self, tab: ttk.Frame) -> None:
-        super()._build_headword_tab(tab)
-        frame = getattr(self, "cjk_specificity_frame", None)
-        if frame is None:
-            return
+        def _build_vars(self) -> None:
+            super()._build_vars()
+            self.cjk_indent_type_var = tk.StringVar(
+                value=indent_type_label(self.working)
+            )
 
-        # Hide the historical implementation-detail question. It is not the same
-        # concept as indentation polarity and must no longer drive detection.
-        for child in frame.winfo_children():
-            try:
-                if child.cget("text") == "释义正文中也经常出现【括号词】":
-                    child.grid_remove()
-            except (tk.TclError, AttributeError):
-                continue
+        def _build_headword_tab(self, tab: ttk.Frame) -> None:
+            super()._build_headword_tab(tab)
+            frame = getattr(self, "cjk_specificity_frame", None)
+            if frame is None:
+                return
 
-        ttk.Label(frame, text="缩进类型：").grid(
-            row=1, column=0, sticky="e", pady=2
-        )
-        self.cjk_indent_type_combo = ttk.Combobox(
-            frame,
-            textvariable=self.cjk_indent_type_var,
-            values=INDENT_TYPE_CHOICES,
-            state="readonly",
-            width=12,
-        )
-        self.cjk_indent_type_combo.grid(
-            row=1, column=1, sticky="w", pady=2
-        )
-        ttk.Label(
-            frame,
-            text="词头缩进＝词头比正文更靠栏内；正文缩进＝正文比词头更靠栏内。",
-            foreground="#666666",
-            wraplength=max(180, getattr(self, "_wizard_content_width", 520) - 170),
-            justify="left",
-        ).grid(row=1, column=2, sticky="w", padx=(6, 0), pady=2)
-        self.cjk_indent_type_combo.bind(
-            "<<ComboboxSelected>>", self._indent_type_changed,
-        )
+            # Hide the historical implementation-detail question. It is not the
+            # same concept as indentation polarity and must no longer drive detection.
+            for child in frame.winfo_children():
+                try:
+                    if child.cget("text") == "释义正文中也经常出现【括号词】":
+                        child.grid_remove()
+                except (tk.TclError, AttributeError):
+                    continue
 
-    def _indent_type_changed(self, _event=None) -> None:
-        apply_indent_type_label(self.working, self.cjk_indent_type_var.get())
-        self.cjk_brackets_in_body_var.set(
-            self.cjk_indent_type_var.get() == "正文缩进"
-        )
-        self._profile_revision += 1
-        self._mark_validation_stale()
-        self._refresh_summary()
+            ttk.Label(frame, text="缩进类型：").grid(
+                row=1, column=0, sticky="e", pady=2
+            )
+            self.cjk_indent_type_combo = ttk.Combobox(
+                frame,
+                textvariable=self.cjk_indent_type_var,
+                values=INDENT_TYPE_CHOICES,
+                state="readonly",
+                width=12,
+            )
+            self.cjk_indent_type_combo.grid(
+                row=1, column=1, sticky="w", pady=2
+            )
+            ttk.Label(
+                frame,
+                text="词头缩进＝词头比正文更靠栏内；正文缩进＝正文比词头更靠栏内。",
+                foreground="#666666",
+                wraplength=max(180, getattr(self, "_wizard_content_width", 520) - 170),
+                justify="left",
+            ).grid(row=1, column=2, sticky="w", padx=(6, 0), pady=2)
+            self.cjk_indent_type_combo.bind(
+                "<<ComboboxSelected>>", self._indent_type_changed,
+            )
 
-    def _settings_from_ui(self) -> AppSettings:
-        # Let the established wizard populate every ordinary field first; then
-        # upgrade the semantics version and persist the explicit indentation
-        # choice so base code cannot reset the version to 1 afterward.
-        settings = super()._settings_from_ui()
-        if hasattr(self, "cjk_indent_type_var"):
-            apply_indent_type_label(settings, self.cjk_indent_type_var.get())
+        def _indent_type_changed(self, _event=None) -> None:
+            apply_indent_type_label(self.working, self.cjk_indent_type_var.get())
             self.cjk_brackets_in_body_var.set(
                 self.cjk_indent_type_var.get() == "正文缩进"
             )
-        return settings
+            self._profile_revision += 1
+            self._mark_validation_stale()
+            self._refresh_summary()
+
+        def _settings_from_ui(self) -> AppSettings:
+            settings = super()._settings_from_ui()
+            if hasattr(self, "cjk_indent_type_var"):
+                apply_indent_type_label(settings, self.cjk_indent_type_var.get())
+                self.cjk_brackets_in_body_var.set(
+                    self.cjk_indent_type_var.get() == "正文缩进"
+                )
+            return settings
+
+    ProjectProfileWizard.__name__ = "ProjectProfileWizard"
+    ProjectProfileWizard.__qualname__ = "ProjectProfileWizard"
+    return ProjectProfileWizard
