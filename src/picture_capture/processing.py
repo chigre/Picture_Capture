@@ -23,7 +23,7 @@ from .page_sections import PageSection
 from . import processing_core as _core
 from .boundary_placement import refine_boundaries_toward_head_top
 from .dictionary_page_design import DictionaryPageLayout
-from .dictionary_page_design_refined import detect_entries_from_page_design
+from .dictionary_page_layout_policy import detect_entries_from_page_design
 from .ordinary_cjk_large_heads import recover_cjk_oversized_heads
 from .ordinary_indent_topology import finalize_indented_topology
 from .ordinary_postprocess import stabilize_ordinary_visual_entries
