@@ -3,9 +3,10 @@ from __future__ import annotations
 """OCR-independent visual recovery for ordinary dictionary drawing.
 
 The legacy VB detector is deliberately retained as the primary ordinary path.
-This module only recovers entry starts that a single left-edge lane cannot see:
-repeated indented marker lanes (notably CJK ``【...】`` subentries) and oversized
-display headwords.  It never recognizes text.
+This module recovers entry starts that a single left-edge lane cannot see and,
+when a repeated indented entry lane is strongly proven, suppresses the inverse
+legacy failure mode where body text at the physical column edge is mistaken for
+entries. It never recognizes text.
 """
 
 from dataclasses import dataclass
@@ -25,6 +26,18 @@ class _VisualLine:
     start: int
     patch: np.ndarray
     max_similarity: float = 0.0
+
+
+@dataclass(slots=True)
+class _IndentedLaneEvidence:
+    column: int
+    top: int
+    ink: np.ndarray
+    lines: list[_VisualLine]
+    baseline: float
+    lane_center: float
+    marker_rows: list[_VisualLine]
+    cluster: list[_VisualLine]
 
 
 def _otsu(gray: np.ndarray) -> int:
@@ -221,9 +234,6 @@ def _separator_above(
     bottom = max(top, int(line_y))
     if bottom <= top:
         return None, 1.0
-    # A separator is a page-row property. Use nearly the entire column rather
-    # than only the indented lane; this avoids choosing whitespace that exists
-    # beside a wrapped definition line.
     span = max(16, min(ink.shape[1], round(ink.shape[1] * 0.97)))
     ratios = ink[top:bottom, :span].mean(axis=1)
     if ratios.size == 0:
@@ -238,9 +248,6 @@ def _separator_above(
         index = int(np.argmin(ratios))
         return top + index, minimum
 
-    # Prefer the clean run nearest the headword, but place the marker at the
-    # start of that whitespace run so ascenders/diacritics from the new entry
-    # cannot be cut away.
     run_start, _run_end = max(clean_runs, key=lambda pair: pair[1])
     return top + int(run_start), minimum
 
@@ -275,22 +282,27 @@ def _inside_sections(y: int, page_sections: list[Any] | None) -> bool:
     return any(int(section.top_v) <= int(y) < int(section.bottom_v) for section in page_sections)
 
 
-def _recover_indented_lanes(
+def _find_indented_lane_evidence(
     source: Image.Image,
-    entries: list[Entry],
     geometry: Any,
     settings: AppSettings,
-    page_sections: list[Any] | None,
-) -> list[Entry]:
+) -> list[_IndentedLaneEvidence]:
+    """Return strongly proven secondary entry lanes for the current page.
+
+    A secondary lane is not inferred from indentation alone. It must repeat,
+    show a stable marker-like leading visual structure, and sit distinctly to
+    the right of the dominant body-text lane. The same evidence is reused for
+    both recovery and polarity suppression so the two decisions cannot drift.
+    """
     if not bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
-        return list(entries)
+        return []
     if not _cjk_visual_mode(settings):
-        return list(entries)
+        return []
 
-    character_height = max(8, int(round(float(getattr(settings, "character_height", 26) or 26))))
-    duplicate_tolerance = max(4, round(character_height * 0.50))
-    recovered = list(entries)
-
+    character_height = max(
+        8, int(round(float(getattr(settings, "character_height", 26) or 26)))
+    )
+    evidence: list[_IndentedLaneEvidence] = []
     for column in range(len(geometry.column_starts)):
         top = max(0, int(geometry.top))
         bottom = min(source.height, int(geometry.bottom))
@@ -323,42 +335,162 @@ def _recover_indented_lanes(
             marker_rows = [line for line in cluster if line.max_similarity >= 0.50]
             if len(marker_rows) < 3 or len(marker_rows) / float(len(cluster)) < 0.45:
                 continue
-
             lane_center = float(np.median([line.start for line in marker_rows]))
-            # The marker-similarity gate establishes that this secondary lane is
-            # a repeated structural entry lane. Once proven, nearby numbered
-            # variants can join it even when the first glyph is a superscript
-            # number rather than the bracket itself.
-            for line in cluster:
-                if abs(float(line.start) - lane_center) > character_height * 0.85:
-                    continue
-                separator, blankness = _separator_above(
-                    ink, line.y0, character_height,
-                )
-                if separator is None:
-                    continue
-                source_y = top + int(separator)
-                if not _inside_sections(source_y, page_sections):
-                    continue
-                if _duplicate(
-                    recovered, geometry, column, source_y, duplicate_tolerance,
-                ):
-                    continue
-                marker_x, _direction = _source_edge(geometry, column, source_y)
-                confidence = min(
-                    0.98,
-                    0.86
-                    + 0.08 * min(1.0, len(marker_rows) / 6.0)
-                    + 0.04 * max(0.0, min(1.0, line.max_similarity)),
-                )
-                recovered.append(Entry(
-                    word="",
-                    x=int(marker_x),
-                    y=int(source_y),
-                    confidence=float(round(confidence, 4)),
-                    ocr_source="ordinary_visual_lane",
-                    issue_type="ORDINARY_INDENTED_ENTRY_LANE",
-                ))
+            if lane_center - baseline < character_height * 0.85:
+                continue
+            evidence.append(_IndentedLaneEvidence(
+                column=column,
+                top=top,
+                ink=ink,
+                lines=lines,
+                baseline=float(baseline),
+                lane_center=lane_center,
+                marker_rows=marker_rows,
+                cluster=cluster,
+            ))
+    return evidence
+
+
+def _line_after_separator(
+    lines: list[_VisualLine],
+    local_y: int,
+    character_height: int,
+) -> _VisualLine | None:
+    """Return the text line that starts immediately after one separator marker."""
+    lower = int(local_y) - max(2, round(character_height * 0.18))
+    upper = int(local_y) + max(8, round(character_height * 1.35))
+    candidates = [
+        line for line in lines
+        if lower <= int(line.y0) <= upper
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda line: abs(int(line.y0) - int(local_y)))
+
+
+def _suppress_primary_body_lane_entries(
+    source: Image.Image,
+    entries: list[Entry],
+    geometry: Any,
+    settings: AppSettings,
+    page_sections: list[Any] | None,
+    evidence: list[_IndentedLaneEvidence],
+) -> list[Entry]:
+    """Suppress legacy main-lane body markers after a secondary lane is proven.
+
+    Some CJK dictionaries invert the historical ordinary-mode prior: running
+    body/definition lines begin at the physical column edge while true
+    bracketed subentries live on a repeated indented lane. Once that secondary
+    lane is strongly proven, keeping every legacy main-lane marker produces an
+    inverted result. Only automatic legacy markers on the dominant normal-text
+    lane are removed; oversized display heads are independently recovered by
+    the connected-component pass that follows.
+    """
+    del source, settings, page_sections  # evidence already captures page analysis
+    if not evidence:
+        return list(entries)
+
+    character_height = max(
+        8, int(round(float(getattr(settings, "character_height", 26) or 26)))
+    ) if False else 26
+    # Prefer the actual page-scale line reference stored implicitly by the
+    # evidence. The fallback keeps this helper independent of OCR.
+    if evidence and evidence[0].lines:
+        heights = [line.y1 - line.y0 for item in evidence for line in item.lines]
+        if heights:
+            character_height = max(8, int(round(float(np.median(heights)) / 0.72)))
+    body_tolerance = max(5.0, character_height * 0.58)
+
+    lane_by_column: dict[int, list[_IndentedLaneEvidence]] = {}
+    for item in evidence:
+        lane_by_column.setdefault(int(item.column), []).append(item)
+
+    output: list[Entry] = []
+    for entry in entries:
+        source_name = str(getattr(entry, "ocr_source", "") or "")
+        if source_name not in {"", "ordinary_vb"}:
+            output.append(entry)
+            continue
+
+        column = _entry_column(entry, geometry)
+        lane_evidence = lane_by_column.get(column, [])
+        if not lane_evidence:
+            output.append(entry)
+            continue
+
+        _u, canonical_v = geometry.source_to_canonical(int(entry.x), int(entry.y))
+        matched_body = False
+        for item in lane_evidence:
+            local_y = int(canonical_v) - int(item.top)
+            line = _line_after_separator(item.lines, local_y, character_height)
+            if line is None:
+                continue
+            if abs(float(line.start) - float(item.baseline)) <= body_tolerance:
+                matched_body = True
+                break
+
+        if matched_body:
+            continue
+        output.append(entry)
+    return output
+
+
+def _recover_indented_lanes(
+    source: Image.Image,
+    entries: list[Entry],
+    geometry: Any,
+    settings: AppSettings,
+    page_sections: list[Any] | None,
+    evidence: list[_IndentedLaneEvidence] | None = None,
+) -> list[Entry]:
+    if not bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
+        return list(entries)
+    if not _cjk_visual_mode(settings):
+        return list(entries)
+
+    character_height = max(
+        8, int(round(float(getattr(settings, "character_height", 26) or 26)))
+    )
+    duplicate_tolerance = max(4, round(character_height * 0.50))
+    recovered = list(entries)
+    proven = (
+        list(evidence)
+        if evidence is not None
+        else _find_indented_lane_evidence(source, geometry, settings)
+    )
+
+    for item in proven:
+        column = int(item.column)
+        for line in item.cluster:
+            if abs(float(line.start) - item.lane_center) > character_height * 0.85:
+                continue
+            separator, blankness = _separator_above(
+                item.ink, line.y0, character_height,
+            )
+            if separator is None:
+                continue
+            source_y = int(item.top) + int(separator)
+            if not _inside_sections(source_y, page_sections):
+                continue
+            if _duplicate(
+                recovered, geometry, column, source_y, duplicate_tolerance,
+            ):
+                continue
+            marker_x, _direction = _source_edge(geometry, column, source_y)
+            confidence = min(
+                0.98,
+                0.86
+                + 0.08 * min(1.0, len(item.marker_rows) / 6.0)
+                + 0.04 * max(0.0, min(1.0, line.max_similarity)),
+            )
+            recovered.append(Entry(
+                word="",
+                x=int(marker_x),
+                y=int(source_y),
+                confidence=float(round(confidence, 4)),
+                ocr_source="ordinary_visual_lane",
+                issue_type="ORDINARY_INDENTED_ENTRY_LANE",
+            ))
     return recovered
 
 
@@ -519,13 +651,30 @@ def recover_ordinary_visual_entries(
     settings: AppSettings,
     page_sections: list[Any] | None = None,
 ) -> list[Entry]:
-    """Add OCR-independent multi-lane and display-head ordinary markers."""
+    """Apply OCR-independent lane polarity, recovery and display-head detection."""
     source = normalize_page_rgb(image)
     kind = str(getattr(getattr(geometry, "transform", None), "kind", "identity") or "identity")
     if kind not in {"identity", "mirror_x"}:
         return list(entries)
+
+    lane_evidence = _find_indented_lane_evidence(
+        source, geometry, settings,
+    )
+    recovered = _suppress_primary_body_lane_entries(
+        source,
+        list(entries),
+        geometry,
+        settings,
+        page_sections,
+        lane_evidence,
+    )
     recovered = _recover_indented_lanes(
-        source, list(entries), geometry, settings, page_sections,
+        source,
+        recovered,
+        geometry,
+        settings,
+        page_sections,
+        evidence=lane_evidence,
     )
     recovered = _recover_oversized_components(
         source, recovered, geometry, settings, page_sections,
