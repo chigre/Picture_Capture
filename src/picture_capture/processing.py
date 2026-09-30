@@ -18,6 +18,7 @@ an internal paragraph) without synthesizing new Latin headwords.
 """
 
 from pathlib import Path
+import json
 import sys
 import types
 from typing import Any
@@ -157,6 +158,38 @@ def _allowed_entries(
     ]
 
 
+def _hard_negative_rows_from_cache(
+    paddle_cache_path: Path | None,
+    geometry: Any,
+) -> list[tuple[int, int]]:
+    """Return canonical (column, V) events with OCR hard-negative consensus."""
+    if paddle_cache_path is None or not paddle_cache_path.exists():
+        return []
+    try:
+        payload = json.loads(paddle_cache_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return []
+    if not isinstance(payload, dict):
+        return []
+    candidates = [
+        item for item in list(payload.get("review_candidates") or [])
+        if isinstance(item, dict)
+    ]
+    try:
+        rows = _core._latent_review_rows(candidates, geometry)
+    except Exception:
+        return []
+    result: list[tuple[int, int]] = []
+    for candidate, column, v in rows:
+        try:
+            hard = bool(_core._review_candidate_hard_negative_consensus(candidate))
+        except Exception:
+            hard = False
+        if hard:
+            result.append((int(column), int(v)))
+    return result
+
+
 def detect_entries(
     image: Image.Image,
     settings: AppSettings,
@@ -233,10 +266,16 @@ def detect_entries(
         else "combined" if method == "combined"
         else "ordinary"
     )
+    hard_negative_rows = (
+        _hard_negative_rows_from_cache(paddle_cache_path, shared_geometry)
+        if mode in {"ocr", "combined"}
+        else []
+    )
     entries = apply_page_understanding(
         entries,
         understanding,
         mode=mode,
+        hard_negative_rows=hard_negative_rows,
     )
     entries = _allowed_entries(
         entries,
