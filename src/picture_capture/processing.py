@@ -3,10 +3,14 @@ from __future__ import annotations
 """Compatibility facade for ordinary processing plus structural CJK recovery.
 
 The historical implementation remains unchanged in ``processing_core`` and is
-used as a candidate generator.  CJK projects then pass those candidates through
-one authoritative block-start topology model which both recovers missed entries
-and removes body-text false positives.  Non-CJK projects keep the historical
-visual-recovery/stabilization chain.
+used as a candidate generator. CJK projects then classify block starts through
+two complementary structural signatures:
+
+* repeated full-height bracket anchors for normal subentries;
+* grouped large components for oversized display heads.
+
+Both obey the same explicit indentation polarity and clean-block-boundary
+semantics. Non-CJK projects keep the historical visual recovery chain.
 """
 
 from pathlib import Path
@@ -19,12 +23,12 @@ from PIL import Image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
 from . import processing_core as _core
+from .ordinary_cjk_large_heads import recover_cjk_oversized_heads
 from .ordinary_indent_topology import finalize_indented_topology
 from .ordinary_postprocess import stabilize_ordinary_visual_entries
 from .ordinary_visual import recover_ordinary_visual_entries
 
 
-# Re-export the complete historical processing API first.
 for _name, _value in vars(_core).items():
     if not _name.startswith("__"):
         globals()[_name] = _value
@@ -52,7 +56,7 @@ def _detect_entries_left_edge(
     settings: AppSettings,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
-    """Run legacy candidates, then one layout-specific visual classifier.
+    """Run legacy candidates, then the layout-specific structural classifiers.
 
     The primary detector remains the full-resolution historical chain. These
     source markers intentionally document the unchanged core contract for the
@@ -67,16 +71,19 @@ def _detect_entries_left_edge(
     from .paddle_headwords import refine_separator_y
     refined_y, _refinement = refine_separator_y(
 
-    For CJK layouts the old independent lane/head recovery stages are skipped.
-    ``finalize_indented_topology`` owns all normal-height bracket recovery,
-    optional-number handling, oversized display heads and final suppression.
-    This prevents one visual detector from undoing another detector's decision.
+    CJK normal-height bracket entries are decided by the block topology model.
+    Oversized display heads are then recovered independently from grouped ink
+    components.  The two detectors share indentation polarity and block-boundary
+    semantics but do not force different visual objects through one heuristic.
     """
     entries, geometry = _original_detect_entries_left_edge(
         image, settings, page_sections=page_sections,
     )
     if _uses_cjk_indent_topology(settings):
         entries = finalize_indented_topology(
+            image, entries, geometry, settings, page_sections=page_sections,
+        )
+        entries = recover_cjk_oversized_heads(
             image, entries, geometry, settings, page_sections=page_sections,
         )
     else:
@@ -118,15 +125,7 @@ def detect_entries_job(
     pages: tuple[str, str, str],
     profile_page_index: int = 0,
 ) -> int:
-    """Spawn-safe ordinary worker that executes the enhanced facade pipeline.
-
-    GUI ordinary drawing runs in a ``spawn`` ProcessPool. Re-exporting the
-    historical ``processing_core.detect_entries_job`` made the child process
-    import ``processing_core`` directly, so facade-only visual recovery was
-    silently bypassed. Keeping this worker physically defined in
-    ``picture_capture.processing`` makes multiprocessing unpickle/import the
-    enhanced module in the child before detection.
-    """
+    """Spawn-safe ordinary worker that executes the enhanced facade pipeline."""
     page = Path(image_path)
     with Image.open(page) as opened:
         image = _core.normalize_page_rgb(opened)
@@ -147,12 +146,10 @@ def detect_entries_job(
 
 
 def _publish_file_transaction(*args, **kwargs):
-    """Compatibility forwarder; implementation stays in processing_core."""
     return _core._publish_file_transaction(*args, **kwargs)
 
 
 def _stage_page_crop_plan(*args, **kwargs):
-    """Compatibility forwarder; implementation stays in processing_core."""
     return _core._stage_page_crop_plan(*args, **kwargs)
 
 
@@ -198,7 +195,6 @@ def append_illustration_crop_log(*args, **kwargs):
     return _core.append_illustration_crop_log(*args, **kwargs)
 
 
-# Core functions resolve module globals in processing_core at call time.
 _core._detect_entries_left_edge = _detect_entries_left_edge
 globals()["_detect_entries_left_edge"] = _detect_entries_left_edge
 globals()["detect_entries"] = detect_entries
@@ -206,7 +202,7 @@ globals()["detect_entries_job"] = detect_entries_job
 
 
 class _CoreProxyModule(types.ModuleType):
-    """Mirror monkeypatch/debug assignments from facade to the historical core."""
+    """Mirror monkeypatch/debug assignments from facade to historical core."""
 
     def __setattr__(self, name: str, value: Any) -> None:
         types.ModuleType.__setattr__(self, name, value)
