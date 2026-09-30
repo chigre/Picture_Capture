@@ -16,6 +16,7 @@ than letting one family silently erase another.
 
 from dataclasses import replace
 
+from .generic_block_roles import block_after_separator, generic_entry_candidates
 from .models import Entry
 from .page_understanding import (
     PageUnderstanding,
@@ -133,7 +134,12 @@ def _generic_body_indent_filter(
     *,
     mode: str,
 ) -> tuple[list[Entry], int, int]:
-    """Use a proven inward body lane as negative layout evidence.
+    """Use the *next actual block* on a proven body lane as negative evidence.
+
+    Detector separators and Page Design midpoint boundaries do not share an exact
+    Y convention.  The semantic question is therefore not which theoretical
+    boundary is closest, but which real visual block begins immediately after
+    the candidate separator.
 
     Pure geometric candidates may be removed.  An already accepted OCR semantic
     positive or sampled explicit entry marker is independent contradictory
@@ -148,10 +154,10 @@ def _generic_body_indent_filter(
         if entry.manually_selected:
             kept.append(entry)
             continue
-        evidence = block_evidence_for_entry(understanding, entry)
+        evidence = block_after_separator(understanding, entry)
         body_conflict = bool(
             evidence is not None
-            and evidence.boundary_distance <= reference * 0.80
+            and evidence.block_distance <= reference * 0.95
             and evidence.on_body_lane
             and evidence.role == "body"
         )
@@ -180,6 +186,87 @@ def _hard_negative_blocks_layout_entry(
         int(row_column) == column and abs(int(row_v) - v) <= tolerance
         for row_column, row_v in hard_negative_rows
     )
+
+
+def _generic_semantic_arbitration(
+    entries: list[Entry],
+    understanding: PageUnderstanding,
+    *,
+    mode: str,
+    hard_negative_rows: list[tuple[int, int]] | None = None,
+) -> tuple[list[Entry], dict[str, int]]:
+    """Use a page-proven outer lane as positive generic entry-role evidence."""
+    design = generic_entry_candidates(understanding)
+    if not design:
+        return list(entries), {
+            "generic_entry_confirmed": 0,
+            "generic_entry_rescued": 0,
+            "generic_hard_negative_blocked": 0,
+            "layout_confirmed": 0,
+            "layout_rescued": 0,
+            "hard_negative_blocked_rescue": 0,
+        }
+
+    reference = understanding.line_height
+    edges: list[tuple[int, int, int]] = []
+    for detector_index, detector in enumerate(entries):
+        detector_column = _entry_column(understanding, detector)
+        if detector_column < 0:
+            continue
+        for design_index, layout_entry in enumerate(design):
+            if _entry_column(understanding, layout_entry) != detector_column:
+                continue
+            delta = abs(int(detector.y) - int(layout_entry.y))
+            if delta <= reference * 0.78:
+                edges.append((delta, detector_index, design_index))
+    edges.sort()
+
+    detector_to_design: dict[int, int] = {}
+    used_design: set[int] = set()
+    for _delta, detector_index, design_index in edges:
+        if detector_index in detector_to_design or design_index in used_design:
+            continue
+        detector_to_design[detector_index] = design_index
+        used_design.add(design_index)
+
+    output: list[Entry] = []
+    confirmed = 0
+    for detector_index, detector in enumerate(entries):
+        if detector_index in detector_to_design:
+            # Keep a detector's already-good geometry for generic pages.  The
+            # layout family confirms the block role; unlike CJK authoritative
+            # Page Design, it need not reposition every existing separator.
+            output.append(_append_issue(
+                detector, "PAGE_UNDERSTANDING_GENERIC_ENTRY_CONFIRMED"
+            ))
+            confirmed += 1
+        else:
+            output.append(detector)
+
+    rescued = blocked = 0
+    negatives = list(hard_negative_rows or [])
+    for design_index, layout_entry in enumerate(design):
+        if design_index in used_design:
+            continue
+        if (
+            mode in {"ocr", "combined"}
+            and _hard_negative_blocks_layout_entry(
+                layout_entry, understanding, negatives,
+            )
+        ):
+            blocked += 1
+            continue
+        output.append(_layout_rescue(layout_entry, mode))
+        rescued += 1
+
+    return output, {
+        "generic_entry_confirmed": confirmed,
+        "generic_entry_rescued": rescued,
+        "generic_hard_negative_blocked": blocked,
+        "layout_confirmed": confirmed,
+        "layout_rescued": rescued,
+        "hard_negative_blocked_rescue": blocked,
+    }
 
 
 def _cjk_semantic_arbitration(
@@ -313,6 +400,9 @@ def apply_page_understanding(
         "symbol_bracket_confirmed": 0,
         "symbol_rescued": 0,
         "generic_body_suppressed": 0,
+        "generic_entry_confirmed": 0,
+        "generic_entry_rescued": 0,
+        "generic_hard_negative_blocked": 0,
         "layout_confirmed": 0,
         "layout_rescued": 0,
         "layout_suppressed": 0,
@@ -330,14 +420,25 @@ def apply_page_understanding(
     )
     stats.update({key: int(value) for key, value in symbol_stats.items()})
 
-    # Generic/non-CJK sharing is deliberately conservative: only an explicitly
-    # proven inward body lane is allowed to veto a geometric candidate.  OCR or
-    # sampled-marker positives survive disagreement as explicit conflicts.
+    # Generic/non-CJK body-indent pages use the same block-role model in both
+    # directions: body blocks provide negative evidence; a repeated outer lane
+    # provides positive entry evidence.  Both operate on the actual visual block
+    # after a separator rather than on detector-specific separator-Y conventions.
     current, generic_suppressed, generic_conflicts = _generic_body_indent_filter(
         current, understanding, mode=normalized_mode,
     )
     stats["generic_body_suppressed"] = generic_suppressed
     stats["layout_conflicts"] += generic_conflicts
+
+    if understanding.role_model == "generic":
+        current, generic_stats = _generic_semantic_arbitration(
+            current,
+            understanding,
+            mode=normalized_mode,
+            hard_negative_rows=hard_negative_rows,
+        )
+        for key, value in generic_stats.items():
+            stats[key] = int(stats.get(key, 0)) + int(value)
 
     if understanding.role_model == "cjk":
         current, cjk_stats = _cjk_semantic_arbitration(
