@@ -11,16 +11,14 @@ The separation is deliberate:
 * physical page understanding is language-agnostic (body, columns, ordinary
   scale, actual text rows and indentation distribution);
 * entry-role semantics are profile/layout-family specific;
+* sampled fixed symbols form an OCR-independent project-specific evidence family;
 * detector observations (VB separators or OCR candidates) remain independent
   evidence and are arbitrated against page understanding later.
 
-For CJK pages we reuse the validated refined entry-family/display-head model and
-therefore obtain authoritative layout-derived boundaries.  For non-CJK pages we
-currently keep semantic generation conservative: the physical model is shared,
-but it is used primarily as layout evidence/negative evidence.  In particular,
-when the user explicitly selects ``正文缩进``, a stable inward body lane can veto
-candidate rows that are demonstrably body paragraphs without inventing new
-Latin headwords.
+Indentation has three explicit semantic states: ``headword`` (词头缩进), ``body``
+(正文缩进) and ``none`` (无明显缩进).  ``none`` is a positive statement about the
+printed design, not a failed layout estimate: the physical page model remains
+usable, while indentation direction is forbidden from deciding entry/body role.
 """
 
 from dataclasses import dataclass, field
@@ -33,6 +31,8 @@ from . import dictionary_page_design_refined as refined
 from .boundary_placement import refine_boundaries_toward_head_top
 from .dictionary_page_layout_policy import infer_dictionary_page_layout
 from .models import AppSettings, Entry
+from .profile_indent_ui import indent_type_label
+from .symbol_evidence import SymbolEvidenceResult, detect_symbol_evidence
 
 
 @dataclass(slots=True)
@@ -62,6 +62,9 @@ class PageUnderstanding:
     semantic_entries: list[Entry] = field(default_factory=list)
     generic_body_indent_reliable: bool = False
     family_offset_ratio: float | None = None
+    symbol_evidence: SymbolEvidenceResult = field(
+        default_factory=lambda: SymbolEvidenceResult(markers=[])
+    )
     arbitration_stats: dict[str, int] = field(default_factory=dict)
 
     @property
@@ -104,6 +107,7 @@ def _generic_body_indent_is_proven(layout: base.DictionaryPageLayout) -> bool:
     This is intentionally only a *negative-evidence* gate.  It never generates
     Latin entries.  The explicit user choice ``正文缩进`` supplies the polarity;
     the page still has to show a stable body lane plus a separate outer lane.
+    ``无明显缩进`` can never activate this gate.
     """
     if layout.indent_type != "body" or not layout.columns:
         return False
@@ -133,8 +137,10 @@ def _generic_body_indent_is_proven(layout: base.DictionaryPageLayout) -> bool:
 
 
 def _clear_generic_entry_roles(layout: base.DictionaryPageLayout) -> None:
-    """Keep physical indent modes while refusing CJK-specific semantics."""
+    """Keep physical indent modes while refusing directional entry semantics."""
     for column in layout.columns:
+        # Retain whichever dominant lane the physical detector selected as body;
+        # it remains useful for geometry even when entry/body starts coincide.
         for mode in column.indent_modes:
             mode.role = "body" if mode is column.body_mode else "other_indent"
         column.entry_modes = []
@@ -143,6 +149,60 @@ def _clear_generic_entry_roles(layout: base.DictionaryPageLayout) -> None:
         }
         for line in column.lines:
             line.role = "body" if id(line) in body_ids else "other_indent"
+
+
+def _apply_explicit_indent_semantics(
+    layout: base.DictionaryPageLayout,
+    settings: AppSettings,
+) -> str:
+    """Apply Project Profile's three-state indentation meaning to a raw layout."""
+    label = indent_type_label(settings)
+    if label == "正文缩进":
+        layout.indent_type = "body"
+    elif label == "无明显缩进":
+        layout.indent_type = "none"
+        # The lower-level historical layout builder only knew two polarities and
+        # may already have assigned directional roles/display heads.  Neutralize
+        # those semantic conclusions while preserving physical rows/modes.
+        _clear_generic_entry_roles(layout)
+        layout.display_heads = []
+        layout.display_head_width = 0.0
+        layout.display_head_height = 0.0
+    else:
+        layout.indent_type = "headword"
+    return label
+
+
+def _entry_column(layout: base.DictionaryPageLayout, entry: Entry) -> int:
+    u, _v = layout.transform.source_to_canonical_point(
+        int(entry.x), int(entry.y), layout.source_size,
+    )
+    if not layout.columns:
+        return -1
+    return int(min(
+        layout.columns,
+        key=lambda column: abs(float(u) - float(column.left)),
+    ).index)
+
+
+def _merge_symbol_entries_for_authoritative_ordinary(
+    layout: base.DictionaryPageLayout,
+    entries: list[Entry],
+    symbol_evidence: SymbolEvidenceResult,
+) -> list[Entry]:
+    """Include independent entry-marker samples in CJK ordinary fast-path output."""
+    result = list(entries)
+    reference = max(1.0, float(layout.ordinary_line_height))
+    for candidate in symbol_evidence.entry_candidates():
+        column = _entry_column(layout, candidate)
+        duplicate = any(
+            _entry_column(layout, current) == column
+            and abs(int(current.y) - int(candidate.y)) <= reference * 0.30
+            for current in result
+        )
+        if not duplicate:
+            result.append(candidate)
+    return result
 
 
 def understand_page(
@@ -155,11 +215,13 @@ def understand_page(
     """Recover one page once for ordinary/OCR/combined drawing.
 
     No OCR engine is called here.  The existing fixed/per-page-auto layout policy
-    remains authoritative for physical fields.
+    remains authoritative for physical fields.  Sampled marker detection is also
+    performed here because it is a page fact shared by all three drawing modes.
     """
     layout, page_settings, applied = infer_dictionary_page_layout(
         image, settings, page_index=page_index,
     )
+    indent_label = _apply_explicit_indent_semantics(layout, page_settings)
     physical = _physical_reliable(layout)
     cjk = uses_cjk_role_model(page_settings)
     semantic_entries: list[Entry] = []
@@ -167,7 +229,17 @@ def understand_page(
     family_ratio: float | None = None
     role_model = "cjk" if cjk else "generic"
 
-    if cjk:
+    # Independent sampled-symbol evidence is detected once from pixels and then
+    # reused by ordinary/OCR/combined arbitration.
+    try:
+        symbol_evidence = detect_symbol_evidence(
+            image, page_settings, layout,
+        ) if physical else SymbolEvidenceResult(markers=[])
+    except Exception:
+        # A malformed/legacy sample must never make page understanding fatal.
+        symbol_evidence = SymbolEvidenceResult(markers=[])
+
+    if cjk and indent_label != "无明显缩进":
         family = refined.refine_indent_semantics(layout)
         if family is not None:
             family_ratio = float(family.offset_ratio)
@@ -198,10 +270,23 @@ def understand_page(
             and layout.reliable
             and (semantic_entries or family is not None or layout.display_heads)
         )
+    elif cjk:
+        # No-indent CJK pages deliberately do not infer entry role from X lanes.
+        # OCR/typography/sampled markers remain available.  A repeated explicit
+        # entry-marker template can still make ordinary drawing authoritative.
+        semantic_reliable = False
     else:
         # The physical model is shared, but do not reinterpret Latin/non-CJK
         # indent modes with the CJK structural-family selector.
         _clear_generic_entry_roles(layout)
+
+    if cjk and symbol_evidence.entry_markers:
+        semantic_entries = _merge_symbol_entries_for_authoritative_ordinary(
+            layout, semantic_entries, symbol_evidence,
+        )
+        # An explicit dictionary-specific entry-marker sample is a standalone
+        # structural cue even when indentation itself carries no information.
+        semantic_reliable = bool(physical and semantic_entries)
 
     generic_body = bool(
         not cjk
@@ -213,6 +298,8 @@ def understand_page(
         f" physical_reliable={int(physical)}"
         f" semantic_reliable={int(semantic_reliable)}"
         f" generic_body_indent={int(generic_body)}"
+        f" indent_semantics={layout.indent_type}"
+        f" symbol_markers={len(symbol_evidence.markers)}"
     )
     return PageUnderstanding(
         layout=layout,
@@ -224,6 +311,7 @@ def understand_page(
         semantic_entries=list(semantic_entries),
         generic_body_indent_reliable=generic_body,
         family_offset_ratio=family_ratio,
+        symbol_evidence=symbol_evidence,
     )
 
 
@@ -296,8 +384,13 @@ def block_evidence_for_entry(
         body_distance_ratio = abs(raw_offset) / reference
         body_tolerance = max(0.20, float(body.tolerance) / reference)
         on_body_lane = body_distance_ratio <= body_tolerance
-        sign = 1.0 if layout.indent_type == "headword" else -1.0
-        in_entry_direction = sign * anchor_offset_ratio >= 0.30
+        if layout.indent_type == "headword":
+            in_entry_direction = anchor_offset_ratio >= 0.30
+        elif layout.indent_type == "body":
+            in_entry_direction = -anchor_offset_ratio >= 0.30
+        else:
+            # Explicit no-indent mode forbids directional X evidence.
+            in_entry_direction = False
 
     _bx, boundary_source_y = layout.transform.canonical_to_source_point(
         int(column.left),
@@ -322,15 +415,22 @@ def page_understanding_diagnostics(
     """Serialize the shared layer for training-package/debug analysis."""
     from .dictionary_page_design import layout_diagnostics
 
+    symbols = understanding.symbol_evidence
     return {
         "role_model": understanding.role_model,
         "physical_reliable": bool(understanding.physical_reliable),
         "semantic_reliable": bool(understanding.semantic_reliable),
+        "indent_semantics": str(understanding.layout.indent_type),
         "generic_body_indent_reliable": bool(
             understanding.generic_body_indent_reliable
         ),
         "semantic_entry_count": len(understanding.semantic_entries),
         "entry_family_offset_ratio": understanding.family_offset_ratio,
+        "symbol_evidence": {
+            "marker_count": len(symbols.markers),
+            "entry_marker_count": len(symbols.entry_markers),
+            "bracket_open_count": len(symbols.bracket_openers),
+        },
         "auto_layout_fields": dict(understanding.applied_layout_fields),
         "arbitration_stats": dict(understanding.arbitration_stats),
         "layout": layout_diagnostics(understanding.layout),
