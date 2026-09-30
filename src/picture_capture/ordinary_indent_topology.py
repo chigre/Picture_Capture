@@ -8,17 +8,17 @@ numbered variants and other subentry forms do not always begin at exactly the
 same X coordinate.  Treating all of them as one centre forces a wide tolerance
 band and makes body/quote indentation much easier to misclassify.
 
-This module therefore learns a *lane family* per column:
+Topology is intentionally measured only in a left-side analysis strip.  Full
+column projection is unsafe for dictionaries: a tall illustration on the right
+can contribute ink on every Y row, merge many independent text lines into one
+giant run, and make the lane classifier blind exactly where false boundaries
+occur.
 
+The model learns:
 * one dominant body lane for definitions, quotations and wrapped prose;
 * one or more structurally proven entry sub-lanes to its right;
 * an empirical X tolerance for every lane, learned from its own dispersion;
 * oversized display heads as a separate visual class handled upstream.
-
-Once the topology is proven, it is authoritative for normal-height automatic
-ordinary candidates.  Candidates attached to neither a proven entry lane nor a
-strict right-shifted entry variant are rejected, regardless of which upstream
-detector produced them.
 """
 
 from dataclasses import dataclass
@@ -99,6 +99,16 @@ def _character_height(settings: AppSettings) -> int:
     return max(8, int(round(float(getattr(settings, "character_height", 26) or 26))))
 
 
+def _topology_analysis_width(column_width: int, character_height: int) -> int:
+    """Keep topology local to the text-start zone, away from illustrations."""
+    target = max(
+        96,
+        round(float(character_height) * 6.25),
+        round(float(column_width) * 0.28),
+    )
+    return max(1, min(int(column_width), int(target)))
+
+
 def _reference_height(lines: list[Any], fallback: float) -> float:
     heights = [
         int(line.y1) - int(line.y0)
@@ -119,7 +129,9 @@ def _normal_lines(lines: list[Any], reference: float) -> list[Any]:
 
 
 def _lane_clusters(lines: list[Any], reference: float, width: int) -> list[list[Any]]:
-    maximum = min(float(width) * 0.32, reference * 6.0)
+    # ``width`` is already a left-side analysis strip.  Search most of it while
+    # keeping a semantic cap of ~4.75 normal characters from the body edge.
+    maximum = min(float(width) * 0.80, reference * 4.75)
     candidates = [line for line in lines if float(line.start) <= maximum]
     return _cluster_lines(candidates, max(3.0, reference * 0.28))
 
@@ -206,7 +218,14 @@ def _observe_column(
     band = _column_band_gray(source, geometry, column, top, bottom)
     if band.size == 0:
         return None
-    ink = band <= _otsu(band)
+
+    # Critical isolation: projection and separator evidence come from the
+    # left-side text-start strip, not the entire column.  Right-side figures can
+    # otherwise join many text rows into one giant active run.
+    analysis_width = _topology_analysis_width(band.shape[1], character_height)
+    lane_band = band[:, :analysis_width]
+    ink = lane_band <= _otsu(lane_band)
+
     lines = _first_ink_lines(ink, character_height)
     reference = _reference_height(lines, float(character_height))
     normal = _normal_lines(lines, reference)
@@ -397,7 +416,9 @@ def finalize_indented_topology(
         _u, marker_v = geometry.source_to_canonical(int(entry.x), int(entry.y))
         line = _next_line(topology, int(marker_v))
         if line is None:
-            output.append(entry)
+            # A proven topology should not let an unresolvable automatic marker
+            # bypass the classifier.  Manual markers and display heads were
+            # already exempted above; unresolved ordinary markers are dropped.
             continue
         line_height = int(line.y1) - int(line.y0)
         if line_height >= topology.reference_height * 1.48:
