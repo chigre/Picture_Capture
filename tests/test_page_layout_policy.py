@@ -180,6 +180,43 @@ def test_body_indent_auto_x_uses_outer_entry_lane_not_dominant_body_lane(monkeyp
     assert starts[0] < 55  # never collapse onto the inward body lane at 72
 
 
+def test_body_indent_x_registration_ignores_persistent_gutter_rule(monkeypatch):
+    settings = _settings()
+    settings.gutter = 40
+    settings.ordinary_auto_layout = True
+    settings.ordinary_auto_manual_x = True
+    settings.profile_parser_controls_version = 3
+    settings.profile_cjk_brackets_in_body = True
+    image = Image.new("RGB", (400, 300), "white")
+    _draw_rows(image, [40, 200], body_indent=30, translated=2)
+    draw = ImageDraw.Draw(image)
+    # A persistent central divider must not merge all rows in the second search
+    # strip or become a fake line-start family.
+    draw.rectangle((179, 30, 181, 289), fill="black")
+    fake = LayoutEstimate(
+        columns=2,
+        start_y=30,
+        column_width=120,
+        gutter=40,
+        manual_x=72,
+        bottom_y=290,
+        character_height=24,
+        row_padding=3,
+        source_boxes=20,
+        method="projection_fallback",
+        canonical_width=400,
+        column_starts=(72, 232),
+        column_rights=(172, 332),
+    )
+    monkeypatch.setattr(policy, "_projection_layout_estimate", lambda *_a, **_k: fake)
+
+    resolved, estimate, _applied = policy.resolve_page_layout_policy(image, settings)
+    starts, _rights, _gutters = policy._policy_geometry(400, resolved, estimate)
+
+    assert 40 <= resolved.manual_x <= 45
+    assert starts == [resolved.manual_x, resolved.manual_x + 160]
+
+
 def test_headword_indent_auto_x_preserves_real_page_translation(monkeypatch):
     settings = _settings()
     settings.ordinary_auto_layout = True
