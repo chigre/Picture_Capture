@@ -8,6 +8,7 @@ import json
 
 from PIL import Image
 
+from .generic_block_roles import generic_entry_candidates
 from .image_utils import normalize_page_rgb
 from .page_sections import read_page_sections
 from .page_understanding import (
@@ -44,9 +45,19 @@ def build_export_training_page_with_understanding(
                 page_index=page_index,
                 page_sections=read_page_sections(Path(page)),
             )
-            annotation["page_understanding_diagnostics"] = (
-                page_understanding_diagnostics(understanding)
-            )
+            diagnostics = page_understanding_diagnostics(understanding)
+            diagnostics["generic_block_role_model"] = {
+                "enabled": bool(
+                    understanding.role_model == "generic"
+                    and understanding.generic_body_indent_reliable
+                    and understanding.layout.indent_type == "body"
+                ),
+                "association": "next_visual_block_after_separator",
+                "entry_candidate_count": len(
+                    generic_entry_candidates(understanding)
+                ),
+            }
+            annotation["page_understanding_diagnostics"] = diagnostics
         except Exception as exc:
             annotation["page_understanding_diagnostics"] = {
                 "available": False,
