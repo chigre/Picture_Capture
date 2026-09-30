@@ -47,9 +47,9 @@ def _settings() -> AppSettings:
     )
 
 
-def _legacy_entries(body_y: list[int], bracket_y: list[int]) -> list[Entry]:
+def _legacy_entries(body_y: list[int], bracket_y: list[int], *, x: int = 0) -> list[Entry]:
     return [
-        Entry(word="", x=0, y=y - 5, confidence=0.98, ocr_source="ordinary_vb")
+        Entry(word="", x=x, y=y - 5, confidence=0.98, ocr_source="ordinary_vb")
         for y in body_y if y not in bracket_y
     ]
 
@@ -127,3 +127,69 @@ def test_plain_ordinary_lane_detection_does_not_require_cjk_ocr_profile():
     assert len([
         item for item in result if item.ocr_source == "ordinary_visual_lane"
     ]) == 4
+
+
+def test_secondary_lane_in_one_column_flips_dense_body_lane_in_other_column():
+    """Layout polarity is page-level, not dependent on examples in each column."""
+    image = Image.new("RGB", (760, 520), "white")
+    draw = ImageDraw.Draw(image)
+    body_y = list(range(40, 400, 28))
+    right_brackets = body_y[2:6]
+
+    # Left column intentionally contains no bracketed subentry on this page.
+    for y in body_y:
+        draw.rectangle((6, y, 310, y + 9), fill="black")
+        for x in range(18, 305, 18):
+            draw.rectangle((x, y, x + 2, y + 9), fill="white")
+
+    # Right column proves the dictionary's repeated indented entry lane.
+    right_edge = 390
+    for y in body_y:
+        if y in right_brackets:
+            draw.rectangle((right_edge + 62, y, right_edge + 66, y + 11), fill="black")
+            draw.rectangle((right_edge + 70, y, right_edge + 78, y + 2), fill="black")
+            draw.rectangle((right_edge + 70, y + 9, right_edge + 78, y + 11), fill="black")
+            draw.rectangle((right_edge + 82, y + 2, right_edge + 260, y + 9), fill="black")
+        else:
+            draw.rectangle((right_edge + 6, y, right_edge + 310, y + 9), fill="black")
+            for x in range(right_edge + 18, right_edge + 305, 18):
+                draw.rectangle((x, y, x + 2, y + 9), fill="white")
+
+    settings = AppSettings(
+        columns=2,
+        manual_x=0,
+        column_width=350,
+        gutter=40,
+        start_y=20,
+        bottom_y=500,
+        crop_to_bottom_y=True,
+        character_height=20,
+        row_padding=0,
+        follow_column_deformation=False,
+        dictionary_profile_id="default",
+        ocr_language="eng",
+        paddle_language="en",
+        profile_cjk_allow_bracketed_headword=False,
+    )
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    x_left = int(geometry.column_starts[0])
+    x_right = int(geometry.column_starts[1])
+    legacy = _legacy_entries(body_y, [], x=x_left)
+    legacy += _legacy_entries(body_y, right_brackets, x=x_right)
+
+    result = suppress_inverted_legacy_body_lane(
+        image, legacy, geometry, settings,
+    )
+
+    assert not [
+        item for item in result
+        if item.ocr_source == "ordinary_vb" and item.x == x_left
+    ]
+    assert not [
+        item for item in result
+        if item.ocr_source == "ordinary_vb" and item.x == x_right
+    ]
+    recovered = [
+        item for item in result if item.ocr_source == "ordinary_visual_lane"
+    ]
+    assert len(recovered) == 4
