@@ -36,11 +36,12 @@ def _line(draw: ImageDraw.ImageDraw, x: int, y: int, width: int) -> None:
 def test_proven_outer_lane_absorbs_nearby_sparse_headword_variant():
     image = Image.new("RGB", (360, 520), "white")
     draw = ImageDraw.Draw(image)
-    # Three rows prove the outer family at x=20.  The final headword starts six
-    # pixels inward: enough to split from the normal clustering tolerance on a
-    # ~20 px line-height page, but still inside the proven family's local
-    # extension.  This models short/superscript Latin headwords.
-    for x, y in ((20, 50), (20, 170), (20, 290), (26, 410)):
+    # Three rows prove the outer family at x=20.  The final headword starts only
+    # three pixels inward.  At the observed ~12 px ink height this is outside the
+    # base clustering radius (~0.24h) but still inside the *already proven*
+    # family's conservative sparse-extension radius (~0.32h).  This models a
+    # short/superscript headword without turning distant body starts into entries.
+    for x, y in ((20, 50), (20, 170), (20, 290), (23, 410)):
         _line(draw, x, y, 250)
     for y in (82, 114, 202, 234, 322, 354, 442, 474):
         _line(draw, 70, y, 205)
