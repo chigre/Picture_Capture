@@ -22,9 +22,16 @@ _core = _fusion._core
 # oriented = normalize_page_rgb(image)
 # getattr(settings, "ocr_language", "")
 # band, language=lens_language
+# "google_lens_language": lens_language
 # configure_windows_nvidia_dlls()
 # _QUALITY_SUMMARY_LOCK = threading.Lock()
 # with _QUALITY_SUMMARY_LOCK:
+# _atomic_write_json(cache_path, payload)
+# compact_ocr_cache_payload(payload)
+# _OCR_REGENERABLE_SIDECAR_SUFFIXES
+# for obsolete in _regenerable_sidecars(cache_path):
+# timeout=120
+# except subprocess.TimeoutExpired
 
 # Preserve the long-standing monkeypatch contract: assigning a private helper on
 # picture_capture.paddle_headwords transparently mirrors it into the core module
