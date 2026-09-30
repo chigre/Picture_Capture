@@ -47,15 +47,19 @@ def _settings() -> AppSettings:
     )
 
 
+def _legacy_entries(body_y: list[int], bracket_y: list[int]) -> list[Entry]:
+    return [
+        Entry(word="", x=0, y=y - 5, confidence=0.98, ocr_source="ordinary_vb")
+        for y in body_y if y not in bracket_y
+    ]
+
+
 def test_dense_flush_left_vb_rows_are_suppressed_when_indented_entry_lane_is_proven():
     image, body_y, bracket_y = _page_with_body_and_indented_lane(bracket_rows=4)
     settings = _settings()
     geometry = derive_nominal_geometry(image.width, image.height, settings)
 
-    legacy = [
-        Entry(word="", x=0, y=y - 5, confidence=0.98, ocr_source="ordinary_vb")
-        for y in body_y if y not in bracket_y
-    ]
+    legacy = _legacy_entries(body_y, bracket_y)
     # Independent visual observations must never be removed by polarity repair.
     visual = Entry(
         word="", x=0, y=18, confidence=0.96,
@@ -67,16 +71,21 @@ def test_dense_flush_left_vb_rows_are_suppressed_when_indented_entry_lane_is_pro
 
     assert visual in result
     assert not [item for item in result if item.ocr_source == "ordinary_vb"]
+    recovered = [
+        item for item in result if item.ocr_source == "ordinary_visual_lane"
+    ]
+    assert len(recovered) == 4
+    assert all(
+        "ORDINARY_INDENTED_ENTRY_LANE_POLARITY" in item.issue_type
+        for item in recovered
+    )
 
 
 def test_sparse_indentation_never_flips_legacy_lane_polarity():
     image, body_y, bracket_y = _page_with_body_and_indented_lane(bracket_rows=2)
     settings = _settings()
     geometry = derive_nominal_geometry(image.width, image.height, settings)
-    legacy = [
-        Entry(word="", x=0, y=y - 5, confidence=0.98, ocr_source="ordinary_vb")
-        for y in body_y if y not in bracket_y
-    ]
+    legacy = _legacy_entries(body_y, bracket_y)
 
     result = suppress_inverted_legacy_body_lane(
         image, legacy, geometry, settings,
@@ -85,17 +94,36 @@ def test_sparse_indentation_never_flips_legacy_lane_polarity():
     assert all(item.ocr_source == "ordinary_vb" for item in result)
 
 
-def test_profile_switch_can_disable_polarity_correction():
+def test_parser_bracket_switch_does_not_disable_plain_ordinary_lane_detection():
     image, body_y, bracket_y = _page_with_body_and_indented_lane(bracket_rows=4)
     settings = _settings()
     settings.profile_cjk_allow_bracketed_headword = False
     geometry = derive_nominal_geometry(image.width, image.height, settings)
-    legacy = [
-        Entry(word="", x=0, y=y - 5, confidence=0.98, ocr_source="ordinary_vb")
-        for y in body_y if y not in bracket_y
-    ]
+    legacy = _legacy_entries(body_y, bracket_y)
 
     result = suppress_inverted_legacy_body_lane(
         image, legacy, geometry, settings,
     )
-    assert len(result) == len(legacy)
+    assert not [item for item in result if item.ocr_source == "ordinary_vb"]
+    assert len([
+        item for item in result if item.ocr_source == "ordinary_visual_lane"
+    ]) == 4
+
+
+def test_plain_ordinary_lane_detection_does_not_require_cjk_ocr_profile():
+    image, body_y, bracket_y = _page_with_body_and_indented_lane(bracket_rows=4)
+    settings = _settings()
+    settings.dictionary_profile_id = "default"
+    settings.ocr_language = "eng"
+    settings.paddle_language = "en"
+    settings.profile_cjk_allow_bracketed_headword = False
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    legacy = _legacy_entries(body_y, bracket_y)
+
+    result = suppress_inverted_legacy_body_lane(
+        image, legacy, geometry, settings,
+    )
+    assert not [item for item in result if item.ocr_source == "ordinary_vb"]
+    assert len([
+        item for item in result if item.ocr_source == "ordinary_visual_lane"
+    ]) == 4
