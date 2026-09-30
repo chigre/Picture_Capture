@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-"""Compatibility facade for ordinary processing plus visual topology recovery.
+"""Compatibility facade for ordinary processing plus structural CJK recovery.
 
-The historical implementation is kept unchanged in ``processing_core``. This
-facade keeps it as a candidate generator, adds OCR-independent display-head
-candidates, and then applies one authoritative column-level indentation topology
-gate before publishing ordinary entry markers.
+The historical implementation remains unchanged in ``processing_core`` and is
+used as a candidate generator.  CJK projects then pass those candidates through
+one authoritative block-start topology model which both recovers missed entries
+and removes body-text false positives.  Non-CJK projects keep the historical
+visual-recovery/stabilization chain.
 """
 
 from pathlib import Path
@@ -20,10 +21,7 @@ from .page_sections import PageSection
 from . import processing_core as _core
 from .ordinary_indent_topology import finalize_indented_topology
 from .ordinary_postprocess import stabilize_ordinary_visual_entries
-from .ordinary_visual import (
-    _recover_oversized_components,
-    recover_ordinary_visual_entries,
-)
+from .ordinary_visual import recover_ordinary_visual_entries
 
 
 # Re-export the complete historical processing API first.
@@ -36,7 +34,7 @@ _original_detect_entries_left_edge = _core._detect_entries_left_edge
 
 
 def _uses_cjk_indent_topology(settings: AppSettings) -> bool:
-    """Limit the multi-lane topology model to CJK visual/index layouts."""
+    """Limit structural indentation semantics to CJK visual/index layouts."""
     profile_id = str(getattr(settings, "dictionary_profile_id", "") or "").lower()
     ocr_language = str(getattr(settings, "ocr_language", "") or "").lower()
     paddle_language = str(getattr(settings, "paddle_language", "") or "").lower()
@@ -54,7 +52,7 @@ def _detect_entries_left_edge(
     settings: AppSettings,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
-    """Run legacy candidates, display-head recovery, then topology gating.
+    """Run legacy candidates, then one layout-specific visual classifier.
 
     The primary detector remains the full-resolution historical chain. These
     source markers intentionally document the unchanged core contract for the
@@ -69,39 +67,23 @@ def _detect_entries_left_edge(
     from .paddle_headwords import refine_separator_y
     refined_y, _refinement = refine_separator_y(
 
-    For CJK layouts, lane semantics are intentionally decided only once.  The
-    legacy detector supplies possible boundaries and the visual stage supplies
-    oversized display heads; neither an older polarity pass nor an independent
-    secondary-lane rescue is allowed to accept/reject normal-height indented
-    rows before the final topology model sees the complete column.  This avoids
-    contradictory detectors re-introducing body-text false positives.
+    For CJK layouts the old independent lane/head recovery stages are skipped.
+    ``finalize_indented_topology`` owns all normal-height bracket recovery,
+    optional-number handling, oversized display heads and final suppression.
+    This prevents one visual detector from undoing another detector's decision.
     """
     entries, geometry = _original_detect_entries_left_edge(
         image, settings, page_sections=page_sections,
     )
-    cjk_topology = _uses_cjk_indent_topology(settings)
-
-    if cjk_topology:
-        # In CJK topology mode, recover only the independent display-head class
-        # here.  Bracketed/indented normal-height rows are recovered later from
-        # the complete lane family, not from a competing single-lane detector.
-        entries = _recover_oversized_components(
+    if _uses_cjk_indent_topology(settings):
+        entries = finalize_indented_topology(
             image, entries, geometry, settings, page_sections=page_sections,
         )
     else:
         entries = recover_ordinary_visual_entries(
             image, entries, geometry, settings, page_sections=page_sections,
         )
-
-    # Projection-based display-head recovery remains useful in both paths.  In
-    # CJK topology mode there are no ordinary_visual_lane rows yet, so the old
-    # residual-VB lane suppression inside this stabilizer is inert.
-    entries = stabilize_ordinary_visual_entries(
-        image, entries, geometry, settings, page_sections=page_sections,
-    )
-
-    if cjk_topology:
-        entries = finalize_indented_topology(
+        entries = stabilize_ordinary_visual_entries(
             image, entries, geometry, settings, page_sections=page_sections,
         )
     return _core.sort_entries_reading_order(
