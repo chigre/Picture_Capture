@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import inspect
+from types import SimpleNamespace
 
 from picture_capture import profile_indent_ui, training_export_ui
-from picture_capture.ui_terminology import normalize_ui_text
+from picture_capture.ui_terminology import (
+    install_app_tooltip_terminology,
+    normalize_ui_text,
+)
 
 
 def test_layout_terms_are_canonical_in_profile_controls():
@@ -19,6 +23,26 @@ def test_legacy_ui_terms_normalize_everywhere():
     assert normalize_ui_text("自动检测单行高") == "自动检测普通字/行高"
     assert normalize_ui_text("行间参数") == "行间空"
     assert normalize_ui_text("行间空") == "行间空"
+
+
+def test_tooltip_terminology_preserves_staticmethod_binding():
+    class DummyApp:
+        @staticmethod
+        def _attach_tooltip(widget, text):
+            return widget, text
+
+    module = SimpleNamespace(PictureCaptureApp=DummyApp)
+    install_app_tooltip_terminology(module)
+
+    assert isinstance(DummyApp.__dict__["_attach_tooltip"], staticmethod)
+    assert DummyApp._attach_tooltip("widget", "单行高") == (
+        "widget", "普通字/行高"
+    )
+    # Instance access must remain unbound exactly like the original
+    # @staticmethod; otherwise startup gets an extra implicit ``self``.
+    assert DummyApp()._attach_tooltip("widget", "行间参数") == (
+        "widget", "行间空"
+    )
 
 
 def test_training_export_reuses_main_window_page_scope_without_second_prompt():
