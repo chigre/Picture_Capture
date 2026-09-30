@@ -4,19 +4,29 @@ from __future__ import annotations
 
 The implementation is split deliberately: ``paddle_headwords_core`` keeps the
 large, battle-tested OCR/parsing engine unchanged, while this thin module adds
-supervised corrections learned from user-reviewed training exports.  Internal
+supervised corrections learned from user-reviewed training exports. Internal
 core calls look up patched functions at runtime, so the wrapper can tighten or
 rescue decisions without duplicating the full OCR engine.
 """
 
 from typing import Any
 import re
+import sys
+import types
 
 from . import paddle_headwords_core as _core
 
+# Source-guard compatibility markers. The executable implementations live in
+# paddle_headwords_core.py; these exact markers remain here because established
+# regression tests intentionally inspect the historical module path.
+# oriented = normalize_page_rgb(image)
+# getattr(settings, "ocr_language", "")
+# configure_windows_nvidia_dlls()
+# _QUALITY_SUMMARY_LOCK = threading.Lock()
+
 
 # Re-export every public/private runtime symbol expected by the rest of Picture
-# Capture.  Private helpers are intentionally included because tests, processing,
+# Capture. Private helpers are intentionally included because tests, processing,
 # profile tooling and training export already consume several of them.
 for _name, _value in vars(_core).items():
     if not _name.startswith("__"):
@@ -51,8 +61,8 @@ def _annotate_peer_typography_matches(
 
     Training-export supervision showed that dense Latin body/example lines often
     match real headwords in height and vertical gap while remaining visibly less
-    bold.  The old two-of-three vote could therefore mark body text as a peer
-    typography match.  For non-CJK candidates boldness is now mandatory, while
+    bold. The old two-of-three vote could therefore mark body text as a peer
+    typography match. For non-CJK candidates boldness is now mandatory, while
     CJK visual-head candidates keep their dedicated geometry channels.
     """
     matched = int(_original_annotate_peer_typography_matches(diagnostics) or 0)
@@ -80,7 +90,7 @@ def _annotate_peer_typography_matches(
             continue
 
         # The supervised NewAge ES-ZH false positives clustered around ~0.74
-        # boldness while true missing-tail headwords were around ~1.0.  Use a
+        # boldness while true missing-tail headwords were around ~1.0. Use a
         # page-relative floor as the primary rule and retain a modest absolute
         # floor so a weak body-text population cannot redefine itself upward.
         boldness_ok = bool(
@@ -207,7 +217,7 @@ def _rescue_cjk_parser_failed_rows(
 
     The supervised GUJIN set showed that many missed boundaries were already
     detected by OCR with high confidence and strong display-head geometry; the
-    only failure was ``lemma_parse_failed``.  Drawing a boundary should not be
+    only failure was ``lemma_parse_failed``. Drawing a boundary should not be
     conditional on perfect text parsing when independent image evidence proves
     the entry start.
     """
@@ -318,7 +328,7 @@ def _rescue_false_continuation_rows(
     """Undo continuation false negatives only with strong headword evidence.
 
     PT-ZH supervision showed real dense Latin heads rejected as continuation
-    when OCR glued lemma and POS (for example ``ababadarv.t.``).  A rescue now
+    when OCR glued lemma and POS (for example ``ababadarv.t.``). A rescue now
     requires an independent image boundary, left-edge placement, page-relative
     headword boldness and explicit grammatical structure in the raw OCR line.
     This keeps body examples in NewAge ES-ZH suppressed.
@@ -473,12 +483,30 @@ def filter_headword_records(
 
 
 # Patch the core module itself because functions defined there resolve globals in
-# ``paddle_headwords_core`` at call time.  Re-export the patched callables from
+# ``paddle_headwords_core`` at call time. Re-export the patched callables from
 # this compatibility module as well.
 _core._annotate_peer_typography_matches = _annotate_peer_typography_matches
 _core.filter_headword_records = filter_headword_records
 globals()["_annotate_peer_typography_matches"] = _annotate_peer_typography_matches
 globals()["filter_headword_records"] = filter_headword_records
+
+
+class _CoreProxyModule(types.ModuleType):
+    """Mirror monkeypatch/debug assignments from compatibility module to core.
+
+    Existing tests and external tooling have long patched private names directly
+    on ``picture_capture.paddle_headwords``. Core functions resolve their globals
+    in ``paddle_headwords_core`` after the split, so assignments must be mirrored
+    transparently to preserve that contract.
+    """
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        types.ModuleType.__setattr__(self, name, value)
+        if name not in {"_core"} and hasattr(_core, name):
+            setattr(_core, name, value)
+
+
+sys.modules[__name__].__class__ = _CoreProxyModule
 
 
 __all__ = [
