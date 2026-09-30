@@ -4,12 +4,12 @@ import inspect
 
 from PIL import Image, ImageDraw
 
-from picture_capture import dictionary_page_design as base
-from picture_capture.models import AppSettings, Entry
-from picture_capture.page_understanding import (
-    block_evidence_for_entry,
-    understand_page,
+from picture_capture.generic_block_roles import (
+    block_after_separator,
+    generic_entry_candidates,
 )
+from picture_capture.models import AppSettings, Entry
+from picture_capture.page_understanding import understand_page
 from picture_capture.page_understanding_fusion import apply_page_understanding
 from picture_capture.profile_indent_ui import apply_indent_type_label
 import picture_capture.processing as processing
@@ -132,35 +132,85 @@ def test_hard_negative_consensus_blocks_layout_only_rescue():
     assert understanding.arbitration_stats["hard_negative_blocked_rescue"] == 1
 
 
-def test_generic_body_indent_is_negative_evidence_not_a_latin_entry_generator():
+def test_generic_body_indent_uses_next_visual_block_for_negative_evidence():
     image = _latin_body_indent_page()
     settings = _settings(cjk=False, body_indent=True)
     understanding = understand_page(image, settings)
 
     assert understanding.role_model == "generic"
     assert understanding.physical_reliable
-    assert not understanding.semantic_entries
     assert understanding.generic_body_indent_reliable
 
     column = understanding.layout.columns[0]
     body_line = next(line for line in column.lines if line.role == "body")
-    outer_line = next(line for line in column.lines if line.role == "other_indent")
     reference = understanding.line_height
+    # Deliberately place the detector separator close to the following body row,
+    # not at Page Design's own midpoint boundary.  This reproduces the real
+    # 新时代西汉 false positives where VB sat only ~7-13 px above a continuation.
+    marker_y = (
+        understanding.layout.body_top
+        + int(body_line.y0)
+        - max(2, round(reference * 0.25))
+    )
+    body_candidate = Entry(word="", x=column.left, y=marker_y)
 
-    body_y = base._boundary_before(column.lines, body_line.y0, reference)
-    outer_y = base._boundary_before(column.lines, outer_line.y0, reference)
-    body_candidate = Entry(word="", x=column.left, y=understanding.layout.body_top + body_y)
-    outer_candidate = Entry(word="", x=column.left, y=understanding.layout.body_top + outer_y)
-
-    body_evidence = block_evidence_for_entry(understanding, body_candidate)
-    assert body_evidence is not None and body_evidence.on_body_lane
+    evidence = block_after_separator(understanding, body_candidate)
+    assert evidence is not None
+    assert evidence.role == "body"
+    assert evidence.on_body_lane
+    assert evidence.block_distance <= reference * 0.35
 
     filtered = apply_page_understanding(
-        [body_candidate, outer_candidate], understanding, mode="ordinary"
+        [body_candidate], understanding, mode="ordinary"
     )
-    assert outer_candidate in filtered
     assert body_candidate not in filtered
     assert understanding.arbitration_stats["generic_body_suppressed"] == 1
+
+
+def test_generic_outer_entry_lane_is_positive_layout_evidence_and_rescues_misses():
+    image = _latin_body_indent_page()
+    settings = _settings(cjk=False, body_indent=True)
+    understanding = understand_page(image, settings)
+
+    candidates = generic_entry_candidates(understanding)
+    assert len(candidates) >= 4
+    assert all(
+        entry.ocr_source == "page_understanding:generic_entry_lane"
+        for entry in candidates
+    )
+
+    fused = apply_page_understanding([], understanding, mode="ordinary")
+    rescued = [
+        entry for entry in fused
+        if "PAGE_UNDERSTANDING_LAYOUT_RESCUE" in entry.issue_type
+    ]
+    assert len(rescued) == len(candidates)
+    assert understanding.arbitration_stats["generic_entry_rescued"] == len(candidates)
+    assert understanding.arbitration_stats["layout_rescued"] == len(candidates)
+
+
+def test_generic_hard_negative_blocks_outer_lane_rescue_in_combined_mode():
+    image = _latin_body_indent_page()
+    settings = _settings(cjk=False, body_indent=True)
+    understanding = understand_page(image, settings)
+    target = generic_entry_candidates(understanding)[0]
+    geometry = processing._geometry_from_page_understanding(understanding)
+    column = processing.column_index_for_click(target.x, geometry, target.y)
+    _u, v = geometry.source_to_canonical(target.x, target.y)
+
+    fused = apply_page_understanding(
+        [],
+        understanding,
+        mode="combined",
+        hard_negative_rows=[(int(column), int(v))],
+    )
+
+    assert not any(
+        abs(entry.y - target.y) <= understanding.line_height * 0.28
+        for entry in fused
+    )
+    assert understanding.arbitration_stats["generic_hard_negative_blocked"] == 1
+    assert understanding.arbitration_stats["hard_negative_blocked_rescue"] == 1
 
 
 def test_accepted_ocr_semantic_positive_survives_body_lane_conflict_for_review():
@@ -169,13 +219,16 @@ def test_accepted_ocr_semantic_positive_survives_body_lane_conflict_for_review()
     understanding = understand_page(image, settings)
     column = understanding.layout.columns[0]
     body_line = next(line for line in column.lines if line.role == "body")
-    body_y = base._boundary_before(
-        column.lines, body_line.y0, understanding.line_height,
+    reference = understanding.line_height
+    body_y = (
+        understanding.layout.body_top
+        + int(body_line.y0)
+        - max(2, round(reference * 0.25))
     )
     ocr = Entry(
         word="recognized-head",
         x=column.left,
-        y=understanding.layout.body_top + body_y,
+        y=body_y,
         confidence=0.97,
         ocr_source="paddle",
         candidate_id="accepted-1",
@@ -184,9 +237,9 @@ def test_accepted_ocr_semantic_positive_survives_body_lane_conflict_for_review()
 
     filtered = apply_page_understanding([ocr], understanding, mode="ocr")
 
-    assert len(filtered) == 1
-    assert filtered[0].word == "recognized-head"
-    assert "PAGE_UNDERSTANDING_LAYOUT_CONFLICT" in filtered[0].issue_type
+    recognized = [entry for entry in filtered if entry.word == "recognized-head"]
+    assert len(recognized) == 1
+    assert "PAGE_UNDERSTANDING_LAYOUT_CONFLICT" in recognized[0].issue_type
     assert understanding.arbitration_stats["layout_conflicts"] == 1
     assert understanding.arbitration_stats["generic_body_suppressed"] == 0
 
