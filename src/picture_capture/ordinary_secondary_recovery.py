@@ -72,7 +72,14 @@ def recover_proven_secondary_lane_variants(
     settings: AppSettings,
     page_sections: list[Any] | None = None,
 ) -> list[Entry]:
-    """Recover nearby indented variants after visual entry lanes are proven."""
+    """Recover right-shifted variants after visual entry lanes are proven.
+
+    This recovery exists for numbered/superscript variants whose first visible
+    ink is shifted *to the right* of an already-proven entry lane. It must not
+    widen the lane toward the body-text margin: wrapped definitions and quoted
+    examples often begin left of the indented subentry lane and can have equally
+    clean inter-line whitespace.
+    """
     proven_entries = [
         entry for entry in entries
         if str(getattr(entry, "ocr_source", "") or "") == "ordinary_visual_lane"
@@ -88,10 +95,11 @@ def recover_proven_secondary_lane_variants(
         for column in range(len(geometry.column_starts))
     }
 
-    # Learn normalized indentation from the rows that already survived the
-    # stricter repeated-marker detector. This lets one page/column teach another
-    # without hard-coding pixel offsets or DPI.
+    # Learn normalized indentation from rows that already survived the stricter
+    # repeated-marker detector. Keep both a global fallback and column-local
+    # evidence so one unusual column cannot pull another column's lane leftward.
     normalized_offsets: list[float] = []
+    offsets_by_column: dict[int, list[float]] = {}
     for entry in proven_entries:
         column = _entry_column(entry, geometry)
         top, _ink, lines, baseline, reference = data[column]
@@ -101,28 +109,36 @@ def recover_proven_secondary_lane_variants(
         line = _line_after_marker(lines, int(marker_v) - int(top), reference)
         if line is None:
             continue
-        normalized_offsets.append((float(line.start) - float(baseline)) / float(reference))
+        value = (float(line.start) - float(baseline)) / float(reference)
+        normalized_offsets.append(value)
+        offsets_by_column.setdefault(column, []).append(value)
     if len(normalized_offsets) < 3:
         return list(entries)
 
-    center = float(np.median(np.asarray(normalized_offsets, dtype=float)))
-    # Prefix numbers can shift first ink by roughly half to one full text
-    # character. Keep this broader than the initial X-cluster detector, but far
-    # narrower than arbitrary paragraph indentation.
-    lower_offset = max(0.75, center - 0.75)
-    upper_offset = min(4.20, center + 1.00)
+    global_center = float(np.median(np.asarray(normalized_offsets, dtype=float)))
 
     recovered = list(entries)
     for column, (top, ink, lines, baseline, reference) in data.items():
         if baseline is None or ink.size == 0:
             continue
+        local_offsets = offsets_by_column.get(column, [])
+        center = (
+            float(np.median(np.asarray(local_offsets, dtype=float)))
+            if len(local_offsets) >= 2
+            else global_center
+        )
         duplicate_tolerance = max(4, round(reference * 0.45))
         for line in lines:
             line_height = int(line.y1) - int(line.y0)
             if not (reference * 0.65 <= line_height <= reference * 1.35):
                 continue
             offset = (float(line.start) - float(baseline)) / float(reference)
-            if not (lower_offset <= offset <= upper_offset):
+            shift = offset - center
+            # Number/superscript variants are the only target of this pass.
+            # Their first ink moves right of the proven marker lane. The old
+            # center-0.75 lower bound admitted left-shifted wrapped definitions,
+            # creating a boundary on nearly every body line in dense CJK pages.
+            if not (0.40 <= shift <= 2.10):
                 continue
             separator = _separator_near_next_line(ink, int(line.y0), reference)
             if separator is None:
