@@ -27,6 +27,7 @@ from typing import Any
 
 from PIL import Image
 
+from .image_utils import build_analysis_image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
 from . import processing_core as _core
@@ -114,6 +115,10 @@ def _detect_entries_left_edge(
     observation.  Neither the old CJK indent topology nor the generic visual
     lane recovery is allowed to infer an entry direction; sampled entry-marker
     rescue is supplied independently by Symbol Evidence later.
+
+    The image arriving here is the shared full-resolution analysis image.  It
+    has the same pixel coordinates as the source scan but isolated scan specks
+    have already been removed once for every downstream visual detector.
 
     Source-contract markers retained for long-standing regression checks:
     _legacy_is_point(
@@ -296,18 +301,25 @@ def detect_entries(
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
-    """Detect entries with shared Page Understanding for every drawing mode."""
+    """Detect entries with one denoised full-resolution analysis page.
+
+    The source image remains authoritative for display and crop/export.  Every
+    automatic detection family receives one coordinate-identical analysis image
+    so layout, Page Understanding and ordinary/VB decisions cannot disagree
+    merely because one module saw scan dust that another module removed.
+    """
     source = _core.normalize_page_rgb(image)
     effective = _core.effective_page_settings(
         settings, source.size, profile_page_index,
     )
     method = str(getattr(effective, "detection_method", "") or "").strip().lower()
+    analysis_image = build_analysis_image(source, effective)
 
     understanding: PageUnderstanding | None
     try:
         understanding = understand_page(
-            image,
-            settings,
+            analysis_image,
+            effective,
             page_index=profile_page_index,
             page_sections=page_sections,
         )
@@ -327,7 +339,7 @@ def detect_entries(
         geometry = _geometry_from_page_understanding(understanding)
         entries = _allowed_entries(
             list(understanding.semantic_entries),
-            image,
+            source,
             settings,
             geometry,
             profile_page_index,
@@ -338,10 +350,10 @@ def detect_entries(
         ), geometry
 
     if understanding is None or not understanding.physical_reliable:
-        # Complete historical fallback: if the page model cannot establish a
-        # stable physical page, no new shared-layer assumption is forced.
+        # Complete historical fallback, but still consume the *same* cleaned
+        # full-resolution analysis pixels as the shared-understanding route.
         return _core.detect_entries(
-            image,
+            analysis_image,
             settings,
             paddle_cache_path=paddle_cache_path,
             force_paddle_refresh=force_paddle_refresh,
@@ -350,9 +362,10 @@ def detect_entries(
             page_sections=page_sections,
         )
 
-    # From this point on every detector uses the same body/column geometry.
+    # From this point on every detector uses the same body/column geometry and
+    # the same cleaned analysis pixels.
     entries, shared_geometry, review_candidates = _shared_detector_observations(
-        image,
+        analysis_image,
         understanding,
         method,
         paddle_cache_path=paddle_cache_path,
@@ -379,7 +392,7 @@ def detect_entries(
     )
     entries = _allowed_entries(
         entries,
-        image,
+        source,
         settings,
         shared_geometry,
         profile_page_index,
