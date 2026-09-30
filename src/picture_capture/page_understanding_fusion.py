@@ -32,6 +32,13 @@ def _entry_column(understanding: PageUnderstanding, entry: Entry) -> int:
     return int(located[0]) if located is not None else -1
 
 
+def _entry_canonical_v(understanding: PageUnderstanding, entry: Entry) -> int:
+    _u, v = understanding.layout.transform.source_to_canonical_point(
+        int(entry.x), int(entry.y), understanding.layout.source_size,
+    )
+    return int(v)
+
+
 def _merge_layout_position(detector: Entry, layout_entry: Entry) -> Entry:
     """Use layout geometry while preserving OCR/combined semantic metadata."""
     merged = replace(
@@ -120,11 +127,28 @@ def _generic_body_indent_filter(
     return kept, suppressed
 
 
+def _hard_negative_blocks_layout_entry(
+    layout_entry: Entry,
+    understanding: PageUnderstanding,
+    hard_negative_rows: list[tuple[int, int]],
+) -> bool:
+    if not hard_negative_rows:
+        return False
+    column = _entry_column(understanding, layout_entry)
+    v = _entry_canonical_v(understanding, layout_entry)
+    tolerance = understanding.line_height * 0.72
+    return any(
+        int(row_column) == column and abs(int(row_v) - v) <= tolerance
+        for row_column, row_v in hard_negative_rows
+    )
+
+
 def _cjk_semantic_arbitration(
     entries: list[Entry],
     understanding: PageUnderstanding,
     *,
     mode: str,
+    hard_negative_rows: list[tuple[int, int]] | None = None,
 ) -> tuple[list[Entry], dict[str, int]]:
     """Match detector events to authoritative CJK layout events one-to-one."""
     if not understanding.semantic_reliable:
@@ -132,6 +156,7 @@ def _cjk_semantic_arbitration(
             "layout_confirmed": 0,
             "layout_rescued": 0,
             "layout_suppressed": 0,
+            "hard_negative_blocked_rescue": 0,
         }
 
     reference = understanding.line_height
@@ -158,7 +183,7 @@ def _cjk_semantic_arbitration(
         used_design.add(design_index)
 
     output: list[Entry] = []
-    confirmed = rescued = suppressed = 0
+    confirmed = rescued = suppressed = blocked = 0
     for detector_index, detector in enumerate(entries):
         design_index = detector_to_design.get(detector_index)
         if design_index is not None:
@@ -179,13 +204,22 @@ def _cjk_semantic_arbitration(
             continue
         output.append(detector)
 
-    # A validated CJK layout boundary is independent of OCR recognition.  OCR
-    # mode therefore keeps the boundary even when no lemma was recognized; it
-    # remains a blank marker that can be filled/reviewed later.  Combined mode
-    # receives the same rescue as a third evidence family.
+    # Layout can rescue OCR misses, but never overrule a high-confidence OCR
+    # hard-negative consensus at the same physical event.  This preserves the
+    # existing combined-mode safety contract while still allowing parser/lemma
+    # failures (soft negatives) to be recovered by independent layout evidence.
+    negatives = list(hard_negative_rows or [])
     if mode in {"ocr", "combined", "ordinary"}:
         for design_index, layout_entry in enumerate(design):
             if design_index in used_design:
+                continue
+            if (
+                mode in {"ocr", "combined"}
+                and _hard_negative_blocks_layout_entry(
+                    layout_entry, understanding, negatives,
+                )
+            ):
+                blocked += 1
                 continue
             output.append(_layout_rescue(layout_entry, mode))
             rescued += 1
@@ -194,6 +228,7 @@ def _cjk_semantic_arbitration(
         "layout_confirmed": confirmed,
         "layout_rescued": rescued,
         "layout_suppressed": suppressed,
+        "hard_negative_blocked_rescue": blocked,
     }
 
 
@@ -202,10 +237,13 @@ def apply_page_understanding(
     understanding: PageUnderstanding,
     *,
     mode: str,
+    hard_negative_rows: list[tuple[int, int]] | None = None,
 ) -> list[Entry]:
     """Apply layout-role evidence without conflating detector vote counts.
 
-    ``mode`` is one of ``ordinary``, ``ocr`` or ``combined``.
+    ``mode`` is one of ``ordinary``, ``ocr`` or ``combined``.  ``hard_negative_rows``
+    contains canonical (column, V) positions where OCR review evidence reached
+    the existing hard-negative consensus; layout rescue is forbidden there.
     """
     normalized_mode = str(mode or "ordinary").strip().lower()
     if normalized_mode not in {"ordinary", "ocr", "combined"}:
@@ -218,6 +256,7 @@ def apply_page_understanding(
         "layout_confirmed": 0,
         "layout_rescued": 0,
         "layout_suppressed": 0,
+        "hard_negative_blocked_rescue": 0,
     }
 
     # Generic/non-CJK sharing is deliberately conservative: only an explicitly
@@ -230,7 +269,10 @@ def apply_page_understanding(
 
     if understanding.role_model == "cjk":
         current, cjk_stats = _cjk_semantic_arbitration(
-            current, understanding, mode=normalized_mode,
+            current,
+            understanding,
+            mode=normalized_mode,
+            hard_negative_rows=hard_negative_rows,
         )
         stats.update(cjk_stats)
 
