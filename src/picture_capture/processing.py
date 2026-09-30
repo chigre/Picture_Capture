@@ -19,6 +19,7 @@ from .page_sections import PageSection
 from . import processing_core as _core
 from .ordinary_lane_polarity import suppress_inverted_legacy_body_lane
 from .ordinary_postprocess import stabilize_ordinary_visual_entries
+from .ordinary_secondary_recovery import recover_proven_secondary_lane_variants
 from .ordinary_visual import recover_ordinary_visual_entries
 
 
@@ -52,11 +53,12 @@ def _detect_entries_left_edge(
     refined_y, _refinement = refine_separator_y(
 
     For ordinary layouts the VB output is retained exactly until page-level
-    evidence proves the narrow inverted CJK failure mode.  The visual pass then
-    recovers indented lanes and oversized heads.  A final stabilization pass
+    evidence proves the narrow inverted CJK failure mode. The visual pass then
+    recovers indented lanes and oversized heads. A final stabilization pass
     anchors recovered separators to the upcoming entry, adds projection-based
-    large-head recovery for multi-component ideographs, and removes residual VB
-    body rows that survived the conservative first polarity gate.
+    large-head recovery for multi-component ideographs, removes residual VB
+    body rows, and finally recovers numbered/shifted variants of an already
+    proven indented lane without requiring a second four-row X cluster.
     """
     entries, geometry = _original_detect_entries_left_edge(
         image, settings, page_sections=page_sections,
@@ -68,6 +70,9 @@ def _detect_entries_left_edge(
         image, entries, geometry, settings, page_sections=page_sections,
     )
     entries = stabilize_ordinary_visual_entries(
+        image, entries, geometry, settings, page_sections=page_sections,
+    )
+    entries = recover_proven_secondary_lane_variants(
         image, entries, geometry, settings, page_sections=page_sections,
     )
     return _core.sort_entries_reading_order(
@@ -104,10 +109,10 @@ def detect_entries_job(
 ) -> int:
     """Spawn-safe ordinary worker that executes the enhanced facade pipeline.
 
-    GUI ordinary drawing runs in a ``spawn`` ProcessPool.  Re-exporting the
+    GUI ordinary drawing runs in a ``spawn`` ProcessPool. Re-exporting the
     historical ``processing_core.detect_entries_job`` made the child process
     import ``processing_core`` directly, so facade-only lane polarity and visual
-    recovery were silently bypassed.  Keeping this worker physically defined in
+    recovery were silently bypassed. Keeping this worker physically defined in
     ``picture_capture.processing`` makes multiprocessing unpickle/import the
     enhanced module in the child before detection.
     """
