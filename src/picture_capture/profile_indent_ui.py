@@ -2,16 +2,18 @@ from __future__ import annotations
 
 """High-level indentation semantics for the Project Profile UI.
 
-The historical setting ``profile_cjk_brackets_in_body`` is retained as the
-on-disk compatibility bit so existing projects need no migration.  The user no
-longer sees that low-level question.  Instead the Project Profile exposes the
-layout fact the detector actually needs:
+The historical Boolean ``profile_cjk_brackets_in_body`` is reused only as a
+storage bit *after* parser/profile semantics version 2.  Older projects may have
+set that Boolean for the unrelated question “do bracket words also occur inside
+definitions”; interpreting it as indentation polarity would be unsafe.
 
-* 词头缩进: entry blocks are farther inside the column than body text;
-* 正文缩进: body text is farther inside the column than entry blocks.
+Migration rule:
+* version < 2: indentation type defaults to 词头缩进, regardless of the old bit;
+* once the user explicitly chooses/saves an indentation type, version becomes 2
+  and the bit stores 词头缩进(False) / 正文缩进(True).
 
-Keeping this translation in one small adapter also prevents UI wording from
-leaking into the image-analysis modules.
+Thus no old project is silently reinterpreted, while settings.json remains fully
+backward-compatible without adding an unknown field to the slotted dataclass.
 """
 
 import tkinter as tk
@@ -22,9 +24,16 @@ from .profile_setup import ProjectProfileWizard as _BaseProjectProfileWizard
 
 
 INDENT_TYPE_CHOICES = ("词头缩进", "正文缩进")
+INDENT_SEMANTICS_VERSION = 2
+
+
+def _indent_semantics_saved(settings: AppSettings) -> bool:
+    return int(getattr(settings, "profile_parser_controls_version", 0) or 0) >= INDENT_SEMANTICS_VERSION
 
 
 def indent_type_label(settings: AppSettings) -> str:
+    if not _indent_semantics_saved(settings):
+        return "词头缩进"
     return (
         "正文缩进"
         if bool(getattr(settings, "profile_cjk_brackets_in_body", False))
@@ -34,6 +43,10 @@ def indent_type_label(settings: AppSettings) -> str:
 
 def apply_indent_type_label(settings: AppSettings, label: str) -> None:
     settings.profile_cjk_brackets_in_body = str(label) == "正文缩进"
+    settings.profile_parser_controls_version = max(
+        INDENT_SEMANTICS_VERSION,
+        int(getattr(settings, "profile_parser_controls_version", 0) or 0),
+    )
 
 
 class ProjectProfileWizard(_BaseProjectProfileWizard):
@@ -51,10 +64,8 @@ class ProjectProfileWizard(_BaseProjectProfileWizard):
         if frame is None:
             return
 
-        # Hide the historical implementation-detail question.  It used the same
-        # persisted bit but asked whether bracket words occur in definitions,
-        # which is not equivalent to indentation polarity and confused the
-        # downstream model.
+        # Hide the historical implementation-detail question. It is not the same
+        # concept as indentation polarity and must no longer drive detection.
         for child in frame.winfo_children():
             try:
                 if child.cget("text") == "释义正文中也经常出现【括号词】":
@@ -79,7 +90,7 @@ class ProjectProfileWizard(_BaseProjectProfileWizard):
             frame,
             text="词头缩进＝词头比正文更靠栏内；正文缩进＝正文比词头更靠栏内。",
             foreground="#666666",
-            wraplength=max(180, self._wizard_content_width - 170),
+            wraplength=max(180, getattr(self, "_wizard_content_width", 520) - 170),
             justify="left",
         ).grid(row=1, column=2, sticky="w", padx=(6, 0), pady=2)
         self.cjk_indent_type_combo.bind(
@@ -88,8 +99,6 @@ class ProjectProfileWizard(_BaseProjectProfileWizard):
 
     def _indent_type_changed(self, _event=None) -> None:
         apply_indent_type_label(self.working, self.cjk_indent_type_var.get())
-        # Keep the base BooleanVar synchronized because _settings_from_ui in the
-        # established wizard owns persistence of the compatibility field.
         self.cjk_brackets_in_body_var.set(
             self.cjk_indent_type_var.get() == "正文缩进"
         )
@@ -98,8 +107,13 @@ class ProjectProfileWizard(_BaseProjectProfileWizard):
         self._refresh_summary()
 
     def _settings_from_ui(self) -> AppSettings:
+        # Let the established wizard populate every ordinary field first; then
+        # upgrade the semantics version and persist the explicit indentation
+        # choice so base code cannot reset the version to 1 afterward.
+        settings = super()._settings_from_ui()
         if hasattr(self, "cjk_indent_type_var"):
+            apply_indent_type_label(settings, self.cjk_indent_type_var.get())
             self.cjk_brackets_in_body_var.set(
                 self.cjk_indent_type_var.get() == "正文缩进"
             )
-        return super()._settings_from_ui()
+        return settings
