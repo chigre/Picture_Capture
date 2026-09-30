@@ -1,9 +1,33 @@
 name: Build macOS app
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v2.14.2)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" --repo "${{ github.repository }}" \
+            || gh release create "$TAG" --repo "${{ github.repository }}" \
+                 --title "$TAG" --generate-notes \
+                 --target "${{ github.sha }}"
+
   build:
+    needs: release
     strategy:
       matrix:
         include:
@@ -20,8 +44,10 @@ jobs:
       - run: |
           uv run pyinstaller --windowed --name PictureCapture \
             --paths src --collect-all picture_capture run.py
-      - run: cd dist && zip -r ../PictureCapture-macos-${{ matrix.arch }}.zip PictureCapture.app
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PictureCapture-macos-${{ matrix.arch }}
-          path: PictureCapture-macos-${{ matrix.arch }}.zip
+      - run: cd dist && zip -r ../PictureCapture-${{ env.TAG }}-macos-${{ matrix.arch }}.zip PictureCapture.app
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" \
+            PictureCapture-${{ env.TAG }}-macos-${{ matrix.arch }}.zip \
+            --repo "${{ github.repository }}" --clobber
