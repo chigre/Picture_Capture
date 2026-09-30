@@ -6,17 +6,18 @@ The page itself is analysed once before detector-specific logic: body/columns,
 ordinary type scale, real text rows and indentation structure are page facts,
 not properties of the "ordinary drawing" button.
 
-Evidence families then remain separate:
+Evidence families remain separate while sharing one physical page coordinate
+model:
 * VB/ordinary detection supplies geometric separator observations;
 * Page Understanding supplies physical layout and block-role evidence;
 * OCR supplies textual/semantic observations.
 
-Ordinary, OCR and combined drawing all consume the same page understanding.
-Validated CJK page semantics may be authoritative; generic/non-CJK pages use the
-physical layer conservatively (for example, a proven inward body lane may veto
-an internal paragraph) without synthesizing new Latin headwords.
+When Page Understanding is physically reliable, ordinary/VB, OCR and combined
+arbitration all operate in its column/body geometry.  The historical core
+pipeline remains the complete fallback when page understanding is uncertain.
 """
 
+from dataclasses import replace
 from pathlib import Path
 import json
 import sys
@@ -158,11 +159,9 @@ def _allowed_entries(
     ]
 
 
-def _hard_negative_rows_from_cache(
+def _review_candidates_from_cache(
     paddle_cache_path: Path | None,
-    geometry: Any,
-) -> list[tuple[int, int]]:
-    """Return canonical (column, V) events with OCR hard-negative consensus."""
+) -> list[dict]:
     if paddle_cache_path is None or not paddle_cache_path.exists():
         return []
     try:
@@ -171,12 +170,19 @@ def _hard_negative_rows_from_cache(
         return []
     if not isinstance(payload, dict):
         return []
-    candidates = [
+    return [
         item for item in list(payload.get("review_candidates") or [])
         if isinstance(item, dict)
     ]
+
+
+def _hard_negative_rows_from_candidates(
+    review_candidates: list[dict],
+    geometry: Any,
+) -> list[tuple[int, int]]:
+    """Return canonical (column, V) events with OCR hard-negative consensus."""
     try:
-        rows = _core._latent_review_rows(candidates, geometry)
+        rows = _core._latent_review_rows(review_candidates, geometry)
     except Exception:
         return []
     result: list[tuple[int, int]] = []
@@ -188,6 +194,73 @@ def _hard_negative_rows_from_cache(
         if hard:
             result.append((int(column), int(v)))
     return result
+
+
+def _shared_detector_observations(
+    image: Image.Image,
+    understanding: PageUnderstanding,
+    method: str,
+    *,
+    paddle_cache_path: Path | None,
+    force_paddle_refresh: bool,
+    paddle_filter_rules_path: Path | None,
+    profile_page_index: int,
+    page_sections: list[PageSection] | None,
+) -> tuple[list[Entry], Any, list[dict]]:
+    """Generate detector observations in the shared page coordinate model."""
+    source = _core.normalize_page_rgb(image)
+    effective = _core.effective_page_settings(
+        understanding.page_settings,
+        source.size,
+        profile_page_index,
+    )
+    analysis_source = _core.page_template_analysis_image(
+        source, effective, profile_page_index,
+    )
+    geometry = _geometry_from_page_understanding(understanding)
+
+    if method in {"paddleocr", "combined"}:
+        from .paddle_headwords import detect_paddle_headwords
+
+        ocr_entries = detect_paddle_headwords(
+            analysis_source,
+            geometry,
+            effective,
+            cache_path=paddle_cache_path,
+            force_refresh=force_paddle_refresh,
+            filter_rules_path=paddle_filter_rules_path,
+            page_sections=page_sections,
+        )
+        review_candidates = _review_candidates_from_cache(paddle_cache_path)
+        if method == "paddleocr":
+            return list(ocr_entries), geometry, review_candidates
+
+        ordinary_settings = replace(effective)
+        ordinary_settings.detection_method = "combined"
+        ordinary_entries, _ordinary_geometry = _detect_entries_left_edge(
+            analysis_source,
+            ordinary_settings,
+            page_sections=page_sections,
+        )
+        entries = _core._fuse_detection_entries(
+            ordinary_entries,
+            ocr_entries,
+            geometry,
+            effective,
+            page_sections,
+            review_candidates=review_candidates,
+            image=analysis_source,
+        )
+        return list(entries), geometry, review_candidates
+
+    ordinary_settings = replace(effective)
+    ordinary_settings.detection_method = str(method or "left_edge")
+    entries, _ordinary_geometry = _detect_entries_left_edge(
+        analysis_source,
+        ordinary_settings,
+        page_sections=page_sections,
+    )
+    return list(entries), geometry, []
 
 
 def detect_entries(
@@ -216,12 +289,10 @@ def detect_entries(
         )
     except Exception:
         # Page understanding is an evidence layer, never a startup/fatal
-        # dependency.  Existing detector paths remain the safe fallback.
+        # dependency. Existing detector paths remain the safe fallback.
         understanding = None
 
     # Validated CJK page semantics remain authoritative for ordinary drawing.
-    # Importantly, this is now one *consumer* of Page Understanding rather than
-    # the place where Page Design lives.
     if (
         method not in {"paddleocr", "combined"}
         and understanding is not None
@@ -242,24 +313,29 @@ def detect_entries(
             entries, geometry, page_sections,
         ), geometry
 
-    # Detector-specific observations are still generated by their proven paths.
-    entries, detector_geometry = _core.detect_entries(
+    if understanding is None or not understanding.physical_reliable:
+        # Complete historical fallback: if the page model cannot establish a
+        # stable physical page, no new shared-layer assumption is forced.
+        return _core.detect_entries(
+            image,
+            settings,
+            paddle_cache_path=paddle_cache_path,
+            force_paddle_refresh=force_paddle_refresh,
+            paddle_filter_rules_path=paddle_filter_rules_path,
+            profile_page_index=profile_page_index,
+            page_sections=page_sections,
+        )
+
+    # From this point on every detector uses the same body/column geometry.
+    entries, shared_geometry, review_candidates = _shared_detector_observations(
         image,
-        settings,
+        understanding,
+        method,
         paddle_cache_path=paddle_cache_path,
         force_paddle_refresh=force_paddle_refresh,
         paddle_filter_rules_path=paddle_filter_rules_path,
         profile_page_index=profile_page_index,
         page_sections=page_sections,
-    )
-
-    if understanding is None or not understanding.physical_reliable:
-        return entries, detector_geometry
-
-    shared_geometry = (
-        _geometry_from_page_understanding(understanding)
-        if understanding.layout.columns
-        else detector_geometry
     )
     mode = (
         "ocr" if method == "paddleocr"
@@ -267,7 +343,7 @@ def detect_entries(
         else "ordinary"
     )
     hard_negative_rows = (
-        _hard_negative_rows_from_cache(paddle_cache_path, shared_geometry)
+        _hard_negative_rows_from_candidates(review_candidates, shared_geometry)
         if mode in {"ocr", "combined"}
         else []
     )
