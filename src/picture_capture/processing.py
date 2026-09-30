@@ -32,6 +32,20 @@ for _name, _value in vars(_core).items():
 _original_detect_entries_left_edge = _core._detect_entries_left_edge
 
 
+def _uses_cjk_indent_topology(settings: AppSettings) -> bool:
+    """Limit the two-lane topology model to CJK visual/index layouts."""
+    profile_id = str(getattr(settings, "dictionary_profile_id", "") or "").lower()
+    ocr_language = str(getattr(settings, "ocr_language", "") or "").lower()
+    paddle_language = str(getattr(settings, "paddle_language", "") or "").lower()
+    return bool(
+        "cjk" in profile_id
+        or any(token in ocr_language for token in (
+            "chi_sim", "chi_tra", "chinese", "han", "jpn", "jpn_vert",
+        ))
+        or paddle_language in {"ch", "chi_sim", "chi_tra", "chinese_cht", "japan"}
+    )
+
+
 def _detect_entries_left_edge(
     image: Image.Image,
     settings: AppSettings,
@@ -68,9 +82,10 @@ def _detect_entries_left_edge(
     entries = stabilize_ordinary_visual_entries(
         image, entries, geometry, settings, page_sections=page_sections,
     )
-    entries = finalize_indented_topology(
-        image, entries, geometry, settings, page_sections=page_sections,
-    )
+    if _uses_cjk_indent_topology(settings):
+        entries = finalize_indented_topology(
+            image, entries, geometry, settings, page_sections=page_sections,
+        )
     return _core.sort_entries_reading_order(
         entries, geometry, page_sections,
     ), geometry
