@@ -33,14 +33,19 @@ from .ordinary_visual import (
 )
 
 
+_INDENT_SEMANTICS_VERSION = 2
+
+
 def _character_height(settings: AppSettings) -> int:
     return max(8, int(round(float(getattr(settings, "character_height", 26) or 26))))
 
 
 def _indent_type(settings: AppSettings) -> str:
-    value = str(getattr(settings, "profile_indent_type", "") or "").strip().lower()
-    if value in {"headword", "body"}:
-        return value
+    # Before semantics v2 the persisted Boolean meant something else
+    # (“bracket words can also occur in definitions”), so it must not be read as
+    # indentation polarity. Old projects safely default to headword indentation.
+    if int(getattr(settings, "profile_parser_controls_version", 0) or 0) < _INDENT_SEMANTICS_VERSION:
+        return "headword"
     return (
         "body"
         if bool(getattr(settings, "profile_cjk_brackets_in_body", False))
@@ -116,9 +121,6 @@ def _large_fragment(
     x0, y0, x1, y1 = box
     width = x1 - x0
     height = y1 - y0
-    # Long definition strokes/rows must not become radicals even if they sit
-    # immediately below a large head. Real large-head fragments stay within a
-    # few normal character cells and have at least one enlarged dimension.
     if width > character_height * 3.20 or height > character_height * 3.45:
         return False
     if height < character_height * 0.42:
