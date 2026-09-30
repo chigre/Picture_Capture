@@ -190,7 +190,7 @@ def _merge_symbol_entries_for_authoritative_ordinary(
     entries: list[Entry],
     symbol_evidence: SymbolEvidenceResult,
 ) -> list[Entry]:
-    """Include independent entry-marker samples in CJK ordinary fast-path output."""
+    """Include sampled entry markers only when Page Design was already reliable."""
     result = list(entries)
     reference = max(1.0, float(layout.ordinary_line_height))
     for candidate in symbol_evidence.entry_candidates():
@@ -272,21 +272,23 @@ def understand_page(
         )
     elif cjk:
         # No-indent CJK pages deliberately do not infer entry role from X lanes.
-        # OCR/typography/sampled markers remain available.  A repeated explicit
-        # entry-marker template can still make ordinary drawing authoritative.
+        # OCR/typography/sampled markers remain available, but a marker hit is a
+        # candidate-level fact and must not by itself declare the *whole page*
+        # semantic model authoritative.
         semantic_reliable = False
     else:
         # The physical model is shared, but do not reinterpret Latin/non-CJK
         # indent modes with the CJK structural-family selector.
         _clear_generic_entry_roles(layout)
 
-    if cjk and symbol_evidence.entry_markers:
+    # Only an already-reliable CJK Page Design fast path receives symbol entries
+    # here.  Otherwise they remain a separate evidence family and are fused with
+    # VB/OCR observations later; one symbol hit can never suppress other detector
+    # candidates by changing page-level reliability.
+    if cjk and semantic_reliable and symbol_evidence.entry_markers:
         semantic_entries = _merge_symbol_entries_for_authoritative_ordinary(
             layout, semantic_entries, symbol_evidence,
         )
-        # An explicit dictionary-specific entry-marker sample is a standalone
-        # structural cue even when indentation itself carries no information.
-        semantic_reliable = bool(physical and semantic_entries)
 
     generic_body = bool(
         not cjk
