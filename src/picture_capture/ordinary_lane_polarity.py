@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-"""Pure-visual page-level polarity correction for ordinary drawing.
+"""Page-level polarity correction for ordinary visual lanes.
 
-Some dictionaries invert the historical Draw_Auto assumption: dense body text
-starts at the physical column edge while the real subentries live on a repeated
-indented lane.  In that layout the faithful VB detector can fire on nearly
-every body row.
+Some dictionaries invert the legacy Draw_Auto assumption: dense body text is
+flush with the column edge while real subentries (for example ``【...】`` rows)
+live on a repeated indented lane. In that layout the faithful VB detector can
+fire on nearly every body row. This module keeps the VB detector intact, learns
+that page-level polarity from image geometry, suppresses only body-lane VB
+markers, and emits the proven secondary-lane separators.
 
-This module deliberately does *not* depend on OCR language, dictionary profile,
-or parser switches.  A secondary entry lane must prove itself from page pixels:
-it has to repeat, sit distinctly away from the dominant body lane, and show a
-stable marker-like leading shape.  Only then may dense legacy body markers be
-suppressed and the proven secondary boundaries be emitted.
+The detector is intentionally OCR/profile independent. Ordinary drawing must be
+able to infer a repeated visual lane even before OCR/parser configuration is
+complete.
 """
 
 from dataclasses import dataclass
@@ -26,6 +26,7 @@ from .ordinary_visual import (
     _body_lane,
     _cluster_lines,
     _column_band_gray,
+    _duplicate,
     _first_ink_lines,
     _otsu,
     _patch_similarity,
@@ -35,15 +36,25 @@ from .ordinary_visual import (
 
 
 @dataclass(slots=True)
-class _PolarityEvidence:
-    active: bool
-    body_line_y0: tuple[int, ...] = ()
-    secondary_line_y0: tuple[int, ...] = ()
-    secondary_separator_y: tuple[int, ...] = ()
-    baseline: float = 0.0
-    secondary_center: float = 0.0
-    legacy_count: int = 0
-    body_supported_legacy: int = 0
+class _ColumnObservation:
+    column: int
+    top: int
+    ink: np.ndarray
+    lines: list[Any]
+    baseline: float | None
+    body_lines: list[Any]
+    secondary_rows: list[Any]
+    secondary_cluster: list[Any]
+    secondary_center: float | None
+
+    @property
+    def proves_secondary_lane(self) -> bool:
+        return bool(
+            self.baseline is not None
+            and self.secondary_center is not None
+            and len(self.secondary_rows) >= 3
+            and len(self.secondary_cluster) >= 4
+        )
 
 
 def _entry_column(entry: Entry, geometry: Any) -> int:
@@ -54,15 +65,27 @@ def _entry_column(entry: Entry, geometry: Any) -> int:
     )
 
 
-def _secondary_lane_evidence(
-    ink: np.ndarray,
-    character_height: int,
-) -> tuple[float | None, list[Any], list[Any]]:
-    """Return body baseline, body rows, and strongest repeated indented lane."""
+def _observe_column(
+    source: Image.Image,
+    geometry: Any,
+    settings: AppSettings,
+    column: int,
+) -> _ColumnObservation:
+    character_height = max(
+        8, int(round(float(getattr(settings, "character_height", 26) or 26)))
+    )
+    top = max(0, int(geometry.top))
+    bottom = min(source.height, int(geometry.bottom))
+    band = _column_band_gray(source, geometry, column, top, bottom)
+    if band.size == 0:
+        return _ColumnObservation(column, top, band, [], None, [], [], [], None)
+
+    threshold = _otsu(band)
+    ink = band <= threshold
     lines = _first_ink_lines(ink, character_height)
     baseline = _body_lane(lines, ink.shape[1], character_height)
     if baseline is None:
-        return None, [], []
+        return _ColumnObservation(column, top, ink, lines, None, [], [], [], None)
 
     body_lines = [
         line for line in lines
@@ -77,7 +100,9 @@ def _secondary_lane_evidence(
         )
     ]
 
-    best: list[Any] = []
+    best_rows: list[Any] = []
+    best_cluster: list[Any] = []
+    best_center: float | None = None
     best_score = -1.0
     for cluster in _cluster_lines(candidates, character_height * 0.55):
         if len(cluster) < 4:
@@ -94,101 +119,166 @@ def _secondary_lane_evidence(
         marker_fraction = len(marker_rows) / float(len(cluster))
         if marker_fraction < 0.45:
             continue
-        lane_center = float(np.median([line.start for line in marker_rows]))
-        if lane_center - float(baseline) < character_height * 0.85:
+        center = float(np.median([line.start for line in marker_rows]))
+        if center - float(baseline) < character_height * 0.85:
             continue
         score = len(marker_rows) + marker_fraction
         if score > best_score:
-            best = marker_rows
+            best_rows = marker_rows
+            best_cluster = cluster
+            best_center = center
             best_score = score
-    return baseline, body_lines, best
+
+    return _ColumnObservation(
+        column=column,
+        top=top,
+        ink=ink,
+        lines=lines,
+        baseline=float(baseline),
+        body_lines=body_lines,
+        secondary_rows=best_rows,
+        secondary_cluster=best_cluster,
+        secondary_center=best_center,
+    )
 
 
-def _legacy_marker_followed_by_body_line(
-    marker_y: int,
-    body_line_y0: tuple[int, ...],
+def _next_visual_line(
+    observation: _ColumnObservation,
+    marker_v: int,
     character_height: int,
-) -> bool:
-    """VB markers sit in whitespace immediately above the line they describe."""
-    lower = max(1, round(character_height * 0.05))
-    upper = max(lower + 1, round(character_height * 1.20))
-    return any(lower <= int(line_y) - int(marker_y) <= upper for line_y in body_line_y0)
+) -> Any | None:
+    """Resolve the first normal text line immediately below a VB separator."""
+    local_v = int(marker_v) - int(observation.top)
+    lower = local_v - max(2, round(character_height * 0.18))
+    upper = local_v + max(8, round(character_height * 1.45))
+    candidates = [
+        line for line in observation.lines
+        if lower <= int(line.y0) <= upper
+    ]
+    if not candidates:
+        return None
+    # Prefer a line below the separator. If the legacy separator touches the
+    # first ink row exactly, allow a tiny negative delta rather than failing the
+    # body association altogether.
+    return min(
+        candidates,
+        key=lambda line: (
+            0 if int(line.y0) >= local_v - round(character_height * 0.08) else 1,
+            abs(int(line.y0) - local_v),
+        ),
+    )
 
 
-def _inside_sections(y: int, page_sections: list[Any] | None) -> bool:
-    if not page_sections:
-        return True
-    return any(int(section.top_v) <= int(y) < int(section.bottom_v) for section in page_sections)
-
-
-def _column_polarity_evidence(
-    source: Image.Image,
+def _legacy_body_support(
     entries: list[Entry],
     geometry: Any,
-    settings: AppSettings,
-    column: int,
-) -> _PolarityEvidence:
-    character_height = max(
-        8, int(round(float(getattr(settings, "character_height", 26) or 26)))
-    )
-    top = max(0, int(geometry.top))
-    bottom = min(source.height, int(geometry.bottom))
-    band = _column_band_gray(source, geometry, column, top, bottom)
-    if band.size == 0:
-        return _PolarityEvidence(False)
-    threshold = _otsu(band)
-    ink = band <= threshold
-    baseline, body_lines, secondary = _secondary_lane_evidence(
-        ink, character_height,
-    )
-    if baseline is None or len(secondary) < 3 or len(body_lines) < 8:
-        return _PolarityEvidence(False)
-
+    observation: _ColumnObservation,
+    character_height: int,
+) -> tuple[list[Entry], list[Entry]]:
     legacy = [
         entry for entry in entries
         if str(entry.ocr_source or "") == "ordinary_vb"
-        and _entry_column(entry, geometry) == column
+        and _entry_column(entry, geometry) == observation.column
     ]
-    if len(legacy) < 8:
-        return _PolarityEvidence(False)
-
-    body_y = tuple(int(top + line.y0) for line in body_lines)
-    secondary_y = tuple(int(top + line.y0) for line in secondary)
-    separator_y: list[int] = []
-    for line in secondary:
-        separator, _blankness = _separator_above(
-            ink, int(line.y0), character_height,
-        )
-        if separator is not None:
-            separator_y.append(int(top + separator))
-
-    body_supported = 0
+    supported: list[Entry] = []
+    if observation.baseline is None:
+        return legacy, supported
+    body_tolerance = max(5.0, character_height * 0.60)
     for entry in legacy:
-        _u, canonical_v = geometry.source_to_canonical(int(entry.x), int(entry.y))
-        if _legacy_marker_followed_by_body_line(
-            int(canonical_v), body_y, character_height,
-        ):
-            body_supported += 1
+        _u, marker_v = geometry.source_to_canonical(int(entry.x), int(entry.y))
+        line = _next_visual_line(observation, int(marker_v), character_height)
+        if line is None:
+            continue
+        line_height = int(line.y1) - int(line.y0)
+        if line_height > character_height * 1.38:
+            # Preserve oversized display heads; the dedicated visual detector
+            # handles them independently after polarity correction.
+            continue
+        if abs(float(line.start) - float(observation.baseline)) <= body_tolerance:
+            supported.append(entry)
+    return legacy, supported
 
-    legacy_body_fraction = body_supported / float(max(1, len(legacy)))
-    density_ratio = len(legacy) / float(max(1, len(secondary)))
-    active = bool(
-        len(separator_y) >= 3
-        and body_supported >= 7
-        and legacy_body_fraction >= 0.60
-        and density_ratio >= 1.45
+
+def _page_proves_inverted_layout(observations: list[_ColumnObservation]) -> bool:
+    """One strong column may establish a page-wide dictionary layout rule."""
+    proven = [obs for obs in observations if obs.proves_secondary_lane]
+    if not proven:
+        return False
+    # Require at least one genuinely repetitive lane, not a chance cluster.
+    return any(
+        len(obs.secondary_rows) >= 3
+        and len(obs.body_lines) >= 8
+        for obs in proven
     )
-    secondary_center = float(np.median([line.start for line in secondary]))
-    return _PolarityEvidence(
-        active=active,
-        body_line_y0=body_y,
-        secondary_line_y0=secondary_y,
-        secondary_separator_y=tuple(separator_y),
-        baseline=float(baseline),
-        secondary_center=secondary_center,
-        legacy_count=len(legacy),
-        body_supported_legacy=body_supported,
+
+
+def _column_inherits_page_polarity(
+    legacy_count: int,
+    body_supported_count: int,
+    observation: _ColumnObservation,
+) -> bool:
+    """Allow a column with no local subentries to inherit the page polarity.
+
+    This is the key case in multi-column dictionaries: one column can contain
+    only the continuation of a large headword while another column contains
+    several bracketed subentries. The layout rule belongs to the page/dictionary,
+    not to whichever column happens to contain examples on that page.
+    """
+    if observation.baseline is None or len(observation.body_lines) < 8:
+        return False
+    if legacy_count < 7 or body_supported_count < 5:
+        return False
+    fraction = body_supported_count / float(max(1, legacy_count))
+    return fraction >= 0.50
+
+
+def _recover_secondary_rows(
+    output: list[Entry],
+    geometry: Any,
+    settings: AppSettings,
+    observation: _ColumnObservation,
+    page_sections: list[Any] | None,
+) -> list[Entry]:
+    if not observation.proves_secondary_lane:
+        return output
+    character_height = max(
+        8, int(round(float(getattr(settings, "character_height", 26) or 26)))
     )
+    duplicate_tolerance = max(4, round(character_height * 0.50))
+    lane_center = float(observation.secondary_center or 0.0)
+
+    # Once the repeated marker-like lane is proven, nearby numbered variants in
+    # the same cluster may join even when their first glyph differs.
+    for line in observation.secondary_cluster:
+        if abs(float(line.start) - lane_center) > character_height * 0.85:
+            continue
+        separator, _blankness = _separator_above(
+            observation.ink, line.y0, character_height,
+        )
+        if separator is None:
+            continue
+        source_y = int(observation.top + int(separator))
+        if page_sections and not any(
+            int(section.top_v) <= source_y < int(section.bottom_v)
+            for section in page_sections
+        ):
+            continue
+        if _duplicate(
+            output, geometry, observation.column, source_y, duplicate_tolerance,
+        ):
+            continue
+        marker_x, _direction = _source_edge(
+            geometry, observation.column, source_y,
+        )
+        output.append(Entry(
+            word="",
+            x=int(marker_x),
+            y=source_y,
+            confidence=0.96,
+            ocr_source="ordinary_visual_lane",
+            issue_type="ORDINARY_INDENTED_ENTRY_LANE_POLARITY",
+        ))
+    return output
 
 
 def suppress_inverted_legacy_body_lane(
@@ -198,74 +288,48 @@ def suppress_inverted_legacy_body_lane(
     settings: AppSettings,
     page_sections: list[Any] | None = None,
 ) -> list[Entry]:
-    """Correct an inverted ordinary lane and emit its proven entry boundaries.
+    """Correct dense main-lane VB false positives on inverted dictionary layouts.
 
-    No OCR/Profile switch is consulted here.  The visual evidence itself is the
-    gate.  This matters for the plain ``普通画线`` action: a newly created
-    project must not need OCR parser configuration before a strongly repeated
-    indented entry lane can be recognized.
+    Detection is page-level and OCR/profile independent. A repeated indented
+    structural lane in any column can establish the page polarity. Other
+    columns may inherit it when their legacy output is densely attached to the
+    same dominant body-text lane. Only automatic ``ordinary_vb`` markers are
+    suppressed; manual/visual/OCR observations survive.
     """
     source = normalize_page_rgb(image)
     character_height = max(
         8, int(round(float(getattr(settings, "character_height", 26) or 26)))
     )
-    duplicate_tolerance = max(4, round(character_height * 0.50))
-    evidence_by_column = {
-        column: _column_polarity_evidence(
-            source, entries, geometry, settings, column,
-        )
+    observations = [
+        _observe_column(source, geometry, settings, column)
         for column in range(len(geometry.column_starts))
-    }
-    if not any(item.active for item in evidence_by_column.values()):
+    ]
+    if not _page_proves_inverted_layout(observations):
         return list(entries)
 
-    output: list[Entry] = []
-    for entry in entries:
-        if str(entry.ocr_source or "") != "ordinary_vb":
-            output.append(entry)
-            continue
-        column = _entry_column(entry, geometry)
-        evidence = evidence_by_column.get(column)
-        if evidence is None or not evidence.active:
-            output.append(entry)
-            continue
-        _u, canonical_v = geometry.source_to_canonical(int(entry.x), int(entry.y))
-        if not _legacy_marker_followed_by_body_line(
-            int(canonical_v), evidence.body_line_y0, character_height,
+    suppress_ids: set[int] = set()
+    for observation in observations:
+        legacy, body_supported = _legacy_body_support(
+            entries, geometry, observation, character_height,
+        )
+        if not _column_inherits_page_polarity(
+            len(legacy), len(body_supported), observation,
         ):
-            output.append(entry)
             continue
-        # Suppressed: this is one of the dense flush-left body rows that made
-        # the historical ordinary result appear visually inverted.
+        suppress_ids.update(id(entry) for entry in body_supported)
 
-    # The same evidence that justified suppression now emits the proven
-    # secondary entry boundaries.  This makes polarity correction self-contained
-    # and independent of the CJK/OCR-specific visual recovery pass that follows.
-    for column, evidence in evidence_by_column.items():
-        if not evidence.active:
-            continue
-        for source_y in evidence.secondary_separator_y:
-            if not _inside_sections(source_y, page_sections):
-                continue
-            duplicate = False
-            for entry in output:
-                if _entry_column(entry, geometry) != column:
-                    continue
-                _u, existing_v = geometry.source_to_canonical(
-                    int(entry.x), int(entry.y)
-                )
-                if abs(int(existing_v) - int(source_y)) <= duplicate_tolerance:
-                    duplicate = True
-                    break
-            if duplicate:
-                continue
-            marker_x, _direction = _source_edge(geometry, column, source_y)
-            output.append(Entry(
-                word="",
-                x=int(marker_x),
-                y=int(source_y),
-                confidence=0.97,
-                ocr_source="ordinary_visual_lane",
-                issue_type="ORDINARY_INDENTED_ENTRY_LANE_POLARITY",
-            ))
+    output = [
+        entry for entry in entries
+        if id(entry) not in suppress_ids
+    ]
+
+    # Emit the proven secondary-lane rows here as well. The subsequent generic
+    # ordinary-visual pass may see the same rows, but its normal de-duplication
+    # keeps one marker. Doing this in the polarity pass guarantees that the
+    # correction cannot delete body markers without also restoring the entry
+    # lane that justified the flip.
+    for observation in observations:
+        output = _recover_secondary_rows(
+            output, geometry, settings, observation, page_sections,
+        )
     return output
