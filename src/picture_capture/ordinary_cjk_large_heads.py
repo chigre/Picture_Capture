@@ -2,15 +2,15 @@ from __future__ import annotations
 
 """Recover oversized CJK display heads as structural block starts.
 
-Large dictionary heads are not ordinary text lines.  Detecting them through a
+Large dictionary heads are not ordinary text lines. Detecting them through a
 vertical line projection is fragile: disconnected radicals can split one glyph,
 and a glyph close to the following definition can merge into an over-tall run.
 
 This detector therefore works on connected ink components in the column's left
-text-start strip.  Nearby radicals are grouped into a glyph-sized object, then
-validated by explicit indentation polarity and by a clean block boundary above
-it.  It is intentionally independent of bracket-lane recovery; both are merely
-two signatures of the same higher-level concept, an entry block start.
+text-start strip. It first separates *large-glyph fragments* from normal text
+components, then groups only those fragments into a glyph-sized object. This is
+important when a display head sits only one or two pixels above its definition:
+the following normal text must never be absorbed into the large glyph.
 """
 
 from typing import Any
@@ -95,13 +95,11 @@ def _glyph_neighbors(
     right: tuple[int, int, int, int],
     character_height: int,
 ) -> bool:
-    # Side-by-side radicals of one ideograph.
     if (
         _vertical_overlap(left, right) >= 0.34
         and _horizontal_gap(left, right) <= character_height * 0.72
     ):
         return True
-    # Vertically stacked radicals of one ideograph.
     if (
         _horizontal_overlap(left, right) >= 0.28
         and _vertical_gap(left, right) <= character_height * 0.48
@@ -110,11 +108,35 @@ def _glyph_neighbors(
     return False
 
 
+def _large_fragment(
+    box: tuple[int, int, int, int],
+    character_height: int,
+) -> bool:
+    """Reject normal text components before radical grouping begins."""
+    x0, y0, x1, y1 = box
+    width = x1 - x0
+    height = y1 - y0
+    # Long definition strokes/rows must not become radicals even if they sit
+    # immediately below a large head. Real large-head fragments stay within a
+    # few normal character cells and have at least one enlarged dimension.
+    if width > character_height * 3.20 or height > character_height * 3.45:
+        return False
+    if height < character_height * 0.42:
+        return False
+    return bool(
+        height >= character_height * 1.10
+        or (
+            width >= character_height * 1.15
+            and height >= character_height * 0.62
+        )
+    )
+
+
 def _group_components(
     boxes: list[tuple[int, int, int, int]],
     character_height: int,
 ) -> list[tuple[int, int, int, int]]:
-    """Transitive grouping so multi-radical heads become one glyph object."""
+    """Transitive grouping only among already-qualified large fragments."""
     groups = list(boxes)
     changed = True
     while changed:
@@ -140,11 +162,15 @@ def _group_components(
 
 
 def _candidate_boxes(ink: np.ndarray, character_height: int) -> list[tuple[int, int, int, int]]:
-    raw = [
-        (int(x0), int(y0), int(x1), int(y1))
-        for x0, y0, x1, y1, area in _components(ink)
-        if area >= max(3, round(character_height * character_height * 0.012))
-    ]
+    raw: list[tuple[int, int, int, int]] = []
+    minimum_area = max(3, round(character_height * character_height * 0.012))
+    for x0, y0, x1, y1, area in _components(ink):
+        if area < minimum_area:
+            continue
+        box = (int(x0), int(y0), int(x1), int(y1))
+        if _large_fragment(box, character_height):
+            raw.append(box)
+
     groups = _group_components(raw, character_height)
     result: list[tuple[int, int, int, int]] = []
     for box in groups:
@@ -192,8 +218,6 @@ def recover_cjk_oversized_heads(
         gray = full_band[:, :width]
         ink = gray <= _otsu(gray)
 
-        # Infer the body anchor only from normal text lines.  If the page is too
-        # sparse, do not invent a polarity-sensitive large-head decision.
         normal_lines = _first_ink_lines(ink, character_height)
         body_center = _body_lane(normal_lines, ink.shape[1], character_height)
         if body_center is None:
