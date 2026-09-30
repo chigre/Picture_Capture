@@ -164,12 +164,21 @@ def test_generic_body_indent_is_negative_evidence_not_a_latin_entry_generator():
 def test_processing_builds_shared_understanding_before_all_detector_modes():
     source = inspect.getsource(processing.detect_entries)
     assert "understand_page(" in source
-    assert "_core.detect_entries(" in source
+    assert "_core.detect_entries(" in source  # complete fallback remains available
+    assert "_shared_detector_observations(" in source
     assert "apply_page_understanding(" in source
     assert source.index("understand_page(") < source.index("_core.detect_entries(")
     assert '"ocr" if method == "paddleocr"' in source
     assert '"combined" if method == "combined"' in source
-    assert "_hard_negative_rows_from_cache" in source
+    assert "_hard_negative_rows_from_candidates" in source
+
+
+def test_reliable_page_uses_one_geometry_for_ocr_and_combined_generation():
+    source = inspect.getsource(processing._shared_detector_observations)
+    assert "_geometry_from_page_understanding(understanding)" in source
+    assert "detect_paddle_headwords(" in source
+    assert "_fuse_detection_entries(" in source
+    assert "derive_geometry(" not in source
 
 
 def test_combined_vb_observation_does_not_duplicate_cjk_layout_reasoning():
