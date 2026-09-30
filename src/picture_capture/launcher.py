@@ -47,12 +47,14 @@ def prepare_app_module() -> Any:
     )
 
     # profile_setup imports processing; do this only after low-level extensions
-    # above have been installed.
+    # above have been installed. Compose page semantics first, then put all long
+    # parameter explanations in the persistent right-side help area.
     from . import profile_setup
+    from .parameter_help_ui import build_profile_parameter_help_wizard
     from .profile_indent_ui import build_project_profile_wizard
 
-    profile_setup.ProjectProfileWizard = build_project_profile_wizard(
-        profile_setup.ProjectProfileWizard
+    profile_setup.ProjectProfileWizard = build_profile_parameter_help_wizard(
+        build_project_profile_wizard(profile_setup.ProjectProfileWizard)
     )
 
     # 3) Enrich the existing training exporter without replacing its proven
@@ -84,9 +86,11 @@ def prepare_app_module() -> Any:
     # Import the GUI only after all function-level extensions above are in
     # place. Training export reuses the main-window page selection directly.
     from . import app as app_module
+    from .parameter_help_ui import install_settings_parameter_help
     from .training_export_ui import export_training_package_selected_range
     from .ui_terminology import install_app_tooltip_terminology
 
+    install_settings_parameter_help(app_module)
     install_app_tooltip_terminology(app_module)
     app_module.PictureCaptureApp.export_training_package = (
         export_training_package_selected_range
