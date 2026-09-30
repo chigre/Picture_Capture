@@ -12,6 +12,7 @@ This module therefore learns a *lane family* per column:
 
 * one dominant body lane for definitions, quotations and wrapped prose;
 * one or more structurally proven entry sub-lanes to its right;
+* an empirical X tolerance for every lane, learned from its own dispersion;
 * oversized display heads as a separate visual class handled upstream.
 
 Once the topology is proven, it is authoritative for normal-height automatic
@@ -45,6 +46,7 @@ from .ordinary_visual import (
 @dataclass(slots=True)
 class EntryLane:
     center: float
+    tolerance: float
     rows: list[Any]
     marker_fraction: float
     separator_fraction: float
@@ -58,6 +60,7 @@ class IndentTopology:
     lines: list[Any]
     reference_height: float
     body_center: float
+    body_tolerance: float
     body_rows: list[Any]
     entry_lanes: list[EntryLane]
 
@@ -116,8 +119,6 @@ def _normal_lines(lines: list[Any], reference: float) -> list[Any]:
 
 
 def _lane_clusters(lines: list[Any], reference: float, width: int) -> list[list[Any]]:
-    # First-ink topology concerns only the left-side text starts. Far-right
-    # fragments should not define a semantic lane.
     maximum = min(float(width) * 0.32, reference * 6.0)
     candidates = [line for line in lines if float(line.start) <= maximum]
     return _cluster_lines(candidates, max(3.0, reference * 0.28))
@@ -125,6 +126,27 @@ def _lane_clusters(lines: list[Any], reference: float, width: int) -> list[list[
 
 def _cluster_center(cluster: list[Any]) -> float:
     return float(np.median(np.asarray([float(line.start) for line in cluster], dtype=float)))
+
+
+def _empirical_tolerance(
+    rows: list[Any],
+    center: float,
+    reference: float,
+    *,
+    minimum_ratio: float,
+    padding_ratio: float,
+    maximum_ratio: float,
+) -> float:
+    starts = np.asarray([float(row.start) for row in rows], dtype=float)
+    if starts.size == 0:
+        return reference * minimum_ratio
+    deviations = np.abs(starts - float(center))
+    q90 = float(np.quantile(deviations, 0.90))
+    learned = q90 + reference * padding_ratio
+    return float(min(
+        reference * maximum_ratio,
+        max(reference * minimum_ratio, learned),
+    ))
 
 
 def _separator_fraction(ink: np.ndarray, rows: list[Any], reference: float) -> float:
@@ -158,14 +180,6 @@ def _lane_is_structural(
     marker_fraction: float,
     separator_fraction: float,
 ) -> bool:
-    """Require repeated geometry plus at least one independent confirmation.
-
-    Three or more aligned rows are enough when most rows have clean pre-entry
-    whitespace and either the leading visual pattern repeats or the population
-    is already substantial.  A two-row lane is accepted only when both visual
-    marker similarity and separator evidence are very strong; this supports a
-    sparse page without opening the gate to arbitrary paragraph indentation.
-    """
     count = len(rows)
     if count >= 3:
         return bool(
@@ -203,12 +217,17 @@ def _observe_column(
     if not clusters:
         return None
 
-    # Body text normally supplies the largest first-ink mode. Population is the
-    # main criterion; a leftward tie-break avoids choosing an indented lane when
-    # two modes happen to have equal counts.
     clusters.sort(key=lambda cluster: (-len(cluster), _cluster_center(cluster)))
     body_rows = clusters[0]
     body_center = _cluster_center(body_rows)
+    body_tolerance = _empirical_tolerance(
+        body_rows,
+        body_center,
+        reference,
+        minimum_ratio=0.18,
+        padding_ratio=0.08,
+        maximum_ratio=0.45,
+    )
 
     entry_lanes: list[EntryLane] = []
     for cluster in clusters[1:]:
@@ -224,8 +243,17 @@ def _observe_column(
             separator_fraction=separator,
         ):
             continue
+        tolerance = _empirical_tolerance(
+            cluster,
+            center,
+            reference,
+            minimum_ratio=0.16,
+            padding_ratio=0.10,
+            maximum_ratio=0.32,
+        )
         entry_lanes.append(EntryLane(
             center=float(center),
+            tolerance=float(tolerance),
             rows=list(cluster),
             marker_fraction=float(marker),
             separator_fraction=float(separator),
@@ -234,8 +262,6 @@ def _observe_column(
     if not entry_lanes:
         return None
 
-    # Keep distinct sub-lanes instead of collapsing them into one broad band.
-    # Ordering left-to-right makes diagnostics and variant matching stable.
     entry_lanes.sort(key=lambda lane: lane.center)
     topology = IndentTopology(
         column=int(column),
@@ -244,6 +270,7 @@ def _observe_column(
         lines=lines,
         reference_height=float(reference),
         body_center=float(body_center),
+        body_tolerance=float(body_tolerance),
         body_rows=list(body_rows),
         entry_lanes=entry_lanes,
     )
@@ -273,47 +300,41 @@ def _nearest_entry_lane(topology: IndentTopology, start: float) -> EntryLane | N
 
 
 def _variant_support(topology: IndentTopology, line: Any) -> bool:
-    """Accept a one-off numbered/right-shifted variant only with local support."""
     lane = _nearest_entry_lane(topology, float(line.start))
     if lane is None:
         return False
     reference = float(topology.reference_height)
     shift = float(line.start) - float(lane.center)
-    if not (reference * 0.28 <= shift <= reference * 1.35):
+    lower = max(float(lane.tolerance), reference * 0.28)
+    if not (lower <= shift <= reference * 1.20):
         return False
     if _separator_near_next_line(
         topology.ink, int(line.y0), reference,
     ) is None:
         return False
-    # The prefix may alter the first glyph substantially, so similarity is a
-    # supporting rather than mandatory signal.  Reject only if the candidate is
-    # visually unrelated to every proven lane row *and* barely clears the shift
-    # threshold, the region most vulnerable to paragraph indentation.
     similarities = [
         _patch_similarity(line.patch, row.patch)
         for row in lane.rows
     ]
     best = max(similarities) if similarities else 0.0
-    if shift < reference * 0.50 and best < 0.22:
-        return False
-    return True
+    return bool(best >= 0.28)
 
 
 def _line_role(topology: IndentTopology, line: Any) -> str:
-    reference = float(topology.reference_height)
     start = float(line.start)
     body_distance = abs(start - float(topology.body_center))
-    body_tolerance = max(4.0, reference * 0.38)
 
     lane = _nearest_entry_lane(topology, start)
     entry_distance = (
         abs(start - float(lane.center)) if lane is not None else float("inf")
     )
-    entry_tolerance = max(4.0, reference * 0.38)
 
-    if body_distance <= body_tolerance and body_distance < entry_distance:
+    if (
+        body_distance <= float(topology.body_tolerance)
+        and body_distance < entry_distance
+    ):
         return "body"
-    if entry_distance <= entry_tolerance:
+    if lane is not None and entry_distance <= float(lane.tolerance):
         return "entry"
     if _variant_support(topology, line):
         return "entry_variant"
@@ -343,14 +364,7 @@ def finalize_indented_topology(
     settings: AppSettings,
     page_sections: list[Any] | None = None,
 ) -> list[Entry]:
-    """Apply an authoritative per-column body-vs-entry lane-family gate.
-
-    Once a column proves its indentation topology, normal-height automatic
-    candidates are kept only when their following line belongs to a proven
-    entry sub-lane or to a strictly supported right-shifted variant.  Body-lane
-    and unclassified normal lines are suppressed.  Oversized display heads and
-    manual markers are never rejected by this gate.
-    """
+    """Apply an authoritative per-column body-vs-entry lane-family gate."""
     if not bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
         return list(entries)
 
@@ -387,20 +401,14 @@ def finalize_indented_topology(
             continue
         line_height = int(line.y1) - int(line.y0)
         if line_height >= topology.reference_height * 1.48:
-            # Main display heads are a third visual class, not body prose.
             output.append(entry)
             continue
         role = _line_role(topology, line)
         if role in {"entry", "entry_variant"}:
             output.append(entry)
-        # Proven topology is authoritative: body and other normal-height lines
-        # are both false entry boundaries and are intentionally dropped.
 
-    # Recover every proven sub-lane directly from topology.  This is the crucial
-    # difference from the old single-centre model: a page may legitimately have
-    # several stable bracket/numbered entry starts.
     for column, topology in topologies.items():
-        tolerance = max(4, round(topology.reference_height * 0.34))
+        tolerance = max(4, round(topology.reference_height * 0.30))
         for lane in topology.entry_lanes:
             for line in lane.rows:
                 separator = _separator_near_next_line(
