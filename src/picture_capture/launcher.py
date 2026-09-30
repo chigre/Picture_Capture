@@ -18,15 +18,11 @@ def main() -> int:
     # intentional: CJK ordinary drawing now uses multi-level indent families,
     # x(y) entry lanes and top/bottom guard bands.
     from . import dictionary_page_design
-    from .dictionary_page_design_refined import (
-        detect_entries_from_page_design,
-        layout_diagnostics,
-    )
+    from .dictionary_page_design_refined import detect_entries_from_page_design
 
     dictionary_page_design.detect_entries_from_page_design = (
         detect_entries_from_page_design
     )
-    dictionary_page_design.layout_diagnostics = layout_diagnostics
 
     # profile_setup imports processing; do this only after the two low-level
     # extensions above have been installed.
