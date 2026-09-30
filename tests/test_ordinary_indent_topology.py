@@ -17,7 +17,7 @@ def _settings() -> AppSettings:
         column_width=320,
         gutter=0,
         start_y=10,
-        bottom_y=430,
+        bottom_y=450,
         crop_to_bottom_y=True,
         character_height=20,
         row_padding=0,
@@ -30,27 +30,35 @@ def _settings() -> AppSettings:
     )
 
 
-def _multi_lane_page() -> tuple[Image.Image, list[int], list[int], list[int]]:
-    image = Image.new("RGB", (340, 440), "white")
+def _block_page() -> tuple[Image.Image, list[int], list[int], list[int]]:
+    """Body at x=6; bracket structure at x=44; optional small prefixes vary."""
+    image = Image.new("RGB", (340, 460), "white")
     draw = ImageDraw.Draw(image)
-    body_rows = [40, 72, 104, 136, 168, 200, 232, 264, 296, 328, 360, 408]
-    entry_a = [56, 152, 248, 344, 392]
-    entry_b = [120, 216, 312]
+    body_rows = [40, 88, 136, 184, 232, 280, 328, 424]
+    plain_entries = [64, 208, 352]
+    numbered_entries = [112, 256, 400]
 
     for y in body_rows:
         draw.rectangle((6, y, 260, y + 9), fill="black")
 
-    for y in entry_a:
-        draw.rectangle((32, y, 44, y + 9), fill="black")
-        draw.rectangle((49, y, 190, y + 8), fill="black")
-    for y in entry_b:
-        draw.rectangle((43, y, 55, y + 9), fill="black")
-        draw.rectangle((60, y, 195, y + 8), fill="black")
-    return image, body_rows, entry_a, entry_b
+    for y in plain_entries:
+        # Full-height bracket-like anchor at x=44, then lemma text after a gap.
+        draw.rectangle((44, y, 49, y + 9), fill="black")
+        draw.rectangle((56, y, 190, y + 8), fill="black")
+
+    for index, y in enumerate(numbered_entries):
+        # Optional numeric/superscript prefix deliberately moves FIRST ink left.
+        # Its small height must not change the structural bracket anchor.
+        prefix_x = 19 + index * 4
+        draw.rectangle((prefix_x, y, prefix_x + 8, y + 3), fill="black")
+        draw.rectangle((44, y, 49, y + 9), fill="black")
+        draw.rectangle((56, y, 190, y + 8), fill="black")
+
+    return image, body_rows, plain_entries, numbered_entries
 
 
-def test_topology_learns_body_and_multiple_entry_sublanes():
-    image, _body_rows, _entry_a, _entry_b = _multi_lane_page()
+def test_structural_anchor_ignores_optional_number_prefix():
+    image, _body_rows, plain_entries, numbered_entries = _block_page()
     settings = _settings()
     geometry = derive_nominal_geometry(image.width, image.height, settings)
 
@@ -59,56 +67,65 @@ def test_topology_learns_body_and_multiple_entry_sublanes():
     assert topology is not None
     assert topology.is_proven
     assert abs(topology.body_center - 6) <= 3
-    centers = list(topology.entry_centers)
-    assert len(centers) >= 2
-    assert any(abs(center - 32) <= 4 for center in centers)
-    assert any(abs(center - 43) <= 4 for center in centers)
-    assert len(topology.body_rows) >= 6
-    assert len(topology.entry_rows) >= 8
+    assert len(topology.entry_centers) == 1
+    assert abs(topology.entry_centers[0] - 44) <= 3
+    assert len(topology.entry_rows) == len(plain_entries) + len(numbered_entries)
+    # FIRST ink differs strongly, but semantic starts collapse to one bracket lane.
+    starts = [row.first_start for row in topology.entry_rows]
+    structural = [row.start for row in topology.entry_rows]
+    assert min(starts) < 30
+    assert max(structural) - min(structural) <= 3
 
 
-def test_final_gate_keeps_all_proven_sublanes_and_rejects_body_or_other_rows():
-    image, body_rows, entry_a, entry_b = _multi_lane_page()
-    draw = ImageDraw.Draw(image)
-    draw.rectangle((20, 376, 230, 385), fill="black")
-
+def test_final_gate_rejects_body_and_recovers_all_bracket_blocks():
+    image, body_rows, plain_entries, numbered_entries = _block_page()
     settings = _settings()
     geometry = derive_nominal_geometry(image.width, image.height, settings)
     x = int(geometry.column_starts[0])
 
     entries = [
-        Entry(word="", x=x, y=body_rows[0] - 2, confidence=.8, ocr_source="ordinary_vb"),
-        Entry(word="", x=x, y=body_rows[4] - 2, confidence=.9, ocr_source="ordinary_visual_lane"),
-        Entry(word="", x=x, y=374, confidence=.9, ocr_source="ordinary_vb"),
-        Entry(word="", x=x, y=entry_a[0] - 2, confidence=.9, ocr_source="ordinary_vb"),
-        Entry(word="", x=x, y=entry_b[0] - 2, confidence=.9, ocr_source="ordinary_vb"),
-        Entry(
-            word="", x=x, y=body_rows[8] - 2, confidence=.97,
-            ocr_source="ordinary_visual_head",
-            issue_type="ORDINARY_OVERSIZED_HEAD_PROJECTION",
-            ocr_oversized_cjk=True,
-        ),
+        Entry(word="", x=x, y=body_rows[1] - 2, ocr_source="ordinary_vb"),
+        Entry(word="", x=x, y=body_rows[4] - 2, ocr_source="ordinary_visual_lane"),
+        Entry(word="", x=x, y=plain_entries[0] - 2, ocr_source="ordinary_vb"),
     ]
 
     result = finalize_indented_topology(image, entries, geometry, settings)
 
-    rejected_y = {body_rows[0] - 2, body_rows[4] - 2, 374}
-    assert not any(int(entry.y) in rejected_y for entry in result)
-    assert any(entry.ocr_source == "ordinary_visual_head" for entry in result)
-
-    topology_entries = [
+    assert not any(entry.y in {body_rows[1] - 2, body_rows[4] - 2} for entry in result)
+    recovered = [
         entry for entry in result
-        if entry.issue_type == "ORDINARY_INDENT_TOPOLOGY_ENTRY"
+        if entry.issue_type == "ORDINARY_BLOCK_BRACKET_ENTRY"
     ]
-    assert len(topology_entries) >= 6
+    assert len(recovered) >= len(plain_entries) + len(numbered_entries) - 1
 
 
-def test_same_geometry_from_multiple_upstream_sources_cannot_bypass_final_gate():
-    image, body_rows, _entry_a, _entry_b = _multi_lane_page()
+def test_oversized_head_is_recovered_by_same_block_model():
+    image, _body_rows, _plain_entries, _numbered_entries = _block_page()
+    draw = ImageDraw.Draw(image)
+    # Put a tall display head in otherwise blank vertical space. Its first ink is
+    # on the same semantic (right/indented) side as the bracket entry structure.
+    draw.rectangle((34, 8, 47, 38), fill="black")
+    draw.rectangle((52, 8, 72, 38), fill="black")
+
+    settings = _settings()
+    settings.start_y = 0
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+
+    result = finalize_indented_topology(image, [], geometry, settings)
+
+    heads = [
+        entry for entry in result
+        if entry.issue_type == "ORDINARY_BLOCK_OVERSIZED_HEAD"
+    ]
+    assert heads
+    assert all(entry.ocr_oversized_cjk for entry in heads)
+
+
+def test_same_body_geometry_from_multiple_sources_cannot_bypass_final_gate():
+    image, body_rows, _plain_entries, _numbered_entries = _block_page()
     settings = _settings()
     geometry = derive_nominal_geometry(image.width, image.height, settings)
     x = int(geometry.column_starts[0])
-
     entries = [
         Entry(word="", x=x, y=body_rows[1] - 2, ocr_source="ordinary_vb"),
         Entry(word="", x=x, y=body_rows[3] - 2, ocr_source="ordinary_visual_lane"),
@@ -122,12 +139,8 @@ def test_same_geometry_from_multiple_upstream_sources_cannot_bypass_final_gate()
 
 
 def test_right_side_illustration_cannot_merge_left_body_lines_or_bypass_gate():
-    image, body_rows, _entry_a, _entry_b = _multi_lane_page()
+    image, body_rows, _plain_entries, _numbered_entries = _block_page()
     draw = ImageDraw.Draw(image)
-
-    # A tall right-side figure contributes ink on every Y row. Full-column
-    # projection would merge the independent body rows into one giant run and
-    # leave the final gate unable to classify false boundaries.
     draw.rectangle((230, 80, 315, 335), fill="black")
 
     settings = _settings()
@@ -136,21 +149,21 @@ def test_right_side_illustration_cannot_merge_left_body_lines_or_bypass_gate():
 
     assert topology is not None
     visible_body_y = {int(row.y0) + int(topology.top) for row in topology.body_rows}
-    assert any(abs(y - 104) <= 2 for y in visible_body_y)
-    assert any(abs(y - 200) <= 2 for y in visible_body_y)
-    assert any(abs(y - 296) <= 2 for y in visible_body_y)
+    assert any(abs(y - 88) <= 2 for y in visible_body_y)
+    assert any(abs(y - 184) <= 2 for y in visible_body_y)
+    assert any(abs(y - 280) <= 2 for y in visible_body_y)
 
     x = int(geometry.column_starts[0])
     false_entries = [
-        Entry(word="", x=x, y=102, ocr_source="ordinary_vb"),
-        Entry(word="", x=x, y=198, ocr_source="ordinary_vb"),
-        Entry(word="", x=x, y=294, ocr_source="ordinary_vb"),
+        Entry(word="", x=x, y=86, ocr_source="ordinary_vb"),
+        Entry(word="", x=x, y=182, ocr_source="ordinary_vb"),
+        Entry(word="", x=x, y=278, ocr_source="ordinary_vb"),
     ]
     result = finalize_indented_topology(image, false_entries, geometry, settings)
-    assert not any(entry.y in {102, 198, 294} for entry in result)
+    assert not any(entry.y in {86, 182, 278} for entry in result)
 
 
-def test_single_lane_page_does_not_trigger_topology_suppression():
+def test_single_lane_page_does_not_trigger_normal_entry_suppression():
     image = Image.new("RGB", (340, 260), "white")
     draw = ImageDraw.Draw(image)
     rows = [40, 72, 104, 136, 168, 200]
