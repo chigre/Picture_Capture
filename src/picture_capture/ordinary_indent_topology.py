@@ -120,11 +120,13 @@ class IndentTopology:
 
     @property
     def body_is_proven(self) -> bool:
-        """A repeated X lane is body only when its leading glyphs are not structural.
+        """Return whether this lane is reliable negative evidence for body text.
 
-        A bracket-only list can also form one very stable X cluster. Treating the
-        largest cluster as body unconditionally would invert the page semantics.
-        Body text instead has many aligned rows whose leading glyph patches vary.
+        With an independently proven entry lane, the opposing dominant lane is
+        enough to disambiguate body even if a synthetic/atypical page happens to
+        repeat similar leading glyph shapes. In a body-only column, however,
+        repeated leading structure is unsafe: a pure headword list could create
+        the same geometry. Such columns need varied leading-glyph evidence.
         """
         if len(self.body_rows) < 5:
             return False
@@ -136,7 +138,11 @@ class IndentTopology:
         if normal_count <= 0:
             return False
         body_share = len(self.body_rows) / float(normal_count)
-        return bool(body_share >= 0.30 and self.body_marker_fraction < 0.48)
+        if body_share < 0.30:
+            return False
+        if self.entry_lanes:
+            return True
+        return self.body_marker_fraction < 0.48
 
     @property
     def is_proven(self) -> bool:
@@ -155,10 +161,6 @@ class IndentTopology:
 
 
 def _indent_type(settings: AppSettings) -> str:
-    # Before semantics v2 the persisted Boolean meant the unrelated fact that
-    # bracket words may also occur inside definitions. It must not silently
-    # become indentation polarity. Old projects therefore default to headword
-    # indentation until the user explicitly saves the new Project Profile choice.
     if int(getattr(settings, "profile_parser_controls_version", 0) or 0) < _INDENT_SEMANTICS_VERSION:
         return "headword"
     return (
@@ -294,7 +296,7 @@ def _cluster_rows(rows: list[BlockRow], tolerance: float) -> list[list[BlockRow]
                 target = cluster
                 break
         if target is None:
-            clusters.append([row])
+            clusters.append([line for line in [row]])
         else:
             target.append(row)
     return clusters
@@ -396,9 +398,6 @@ def _observe_column_raw(
     if not clusters:
         return None
 
-    # Classify repeated structural lanes before deciding which cluster is body.
-    # This prevents a page with many bracket entries from making the largest
-    # repeated 【 lane masquerade as the body lane.
     stats = [
         (
             cluster,
@@ -407,14 +406,10 @@ def _observe_column_raw(
         )
         for cluster in clusters
     ]
-    body_candidates = [
-        item for item in stats
-        if item[1] < 0.48
-    ]
-    if not body_candidates:
-        return None
+    nonstructural = [item for item in stats if item[1] < 0.48]
+    body_pool = nonstructural or stats
     body_rows, body_marker, _body_separator = max(
-        body_candidates,
+        body_pool,
         key=lambda item: (len(item[0]), -_cluster_center(item[0])),
     )
     body_center = _cluster_center(body_rows)
@@ -608,14 +603,7 @@ def finalize_indented_topology(
     settings: AppSettings,
     page_sections: list[Any] | None = None,
 ) -> list[Entry]:
-    """Use positive entry evidence and negative body evidence in one final gate.
-
-    ``entry proven`` controls proactive bracket recovery. ``body proven`` is an
-    independent fact and is sufficient to reject legacy candidates that sit on
-    ordinary body rows, even in a continuation column with no headwords at all.
-    Unknown/off-lane candidates remain untouched unless a full entry topology is
-    proven, so singleton structures are not deleted merely for being rare.
-    """
+    """Use positive entry evidence and negative body evidence in one final gate."""
     source = normalize_page_rgb(image)
     kind = str(
         getattr(getattr(geometry, "transform", None), "kind", "identity")
@@ -656,12 +644,8 @@ def finalize_indented_topology(
             output.append(entry)
             continue
         if role == "body" and topology.body_is_proven:
-            # Stable body geometry is affirmative negative evidence. This is the
-            # critical continuation-column case: no entry lane is required in
-            # order to reject a line that is demonstrably ordinary body text.
             continue
         if not topology.is_proven:
-            # Body-only/partial topology: preserve genuinely unknown geometry.
             output.append(entry)
 
     if bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
