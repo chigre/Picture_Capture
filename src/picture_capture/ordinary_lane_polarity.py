@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-"""Page-level polarity correction for ordinary visual lanes.
+"""Pure-visual page-level polarity correction for ordinary drawing.
 
-Some CJK dictionaries invert the legacy Draw_Auto assumption: ordinary body
-text is flush with the column edge while real subentries (for example
-``【...】`` rows) live on a repeated indented lane.  In that layout the faithful
-VB detector can fire on nearly every body row.  This module does not replace
-VB geometry; it detects that *page-level polarity* and suppresses only VB
-markers that are demonstrably attached to the dense body lane.  Oversized
-heads and the later visual-lane recovery pass remain independent.
+Some dictionaries invert the historical Draw_Auto assumption: dense body text
+starts at the physical column edge while the real subentries live on a repeated
+indented lane.  In that layout the faithful VB detector can fire on nearly
+every body row.
+
+This module deliberately does *not* depend on OCR language, dictionary profile,
+or parser switches.  A secondary entry lane must prove itself from page pixels:
+it has to repeat, sit distinctly away from the dominant body lane, and show a
+stable marker-like leading shape.  Only then may dense legacy body markers be
+suppressed and the proven secondary boundaries be emitted.
 """
 
 from dataclasses import dataclass
@@ -26,6 +29,8 @@ from .ordinary_visual import (
     _first_ink_lines,
     _otsu,
     _patch_similarity,
+    _separator_above,
+    _source_edge,
 )
 
 
@@ -34,6 +39,7 @@ class _PolarityEvidence:
     active: bool
     body_line_y0: tuple[int, ...] = ()
     secondary_line_y0: tuple[int, ...] = ()
+    secondary_separator_y: tuple[int, ...] = ()
     baseline: float = 0.0
     secondary_center: float = 0.0
     legacy_count: int = 0
@@ -52,7 +58,7 @@ def _secondary_lane_evidence(
     ink: np.ndarray,
     character_height: int,
 ) -> tuple[float | None, list[Any], list[Any]]:
-    """Return body baseline, body lines, and strongest repeated indented lane."""
+    """Return body baseline, body rows, and strongest repeated indented lane."""
     lines = _first_ink_lines(ink, character_height)
     baseline = _body_lane(lines, ink.shape[1], character_height)
     if baseline is None:
@@ -88,6 +94,9 @@ def _secondary_lane_evidence(
         marker_fraction = len(marker_rows) / float(len(cluster))
         if marker_fraction < 0.45:
             continue
+        lane_center = float(np.median([line.start for line in marker_rows]))
+        if lane_center - float(baseline) < character_height * 0.85:
+            continue
         score = len(marker_rows) + marker_fraction
         if score > best_score:
             best = marker_rows
@@ -104,6 +113,12 @@ def _legacy_marker_followed_by_body_line(
     lower = max(1, round(character_height * 0.05))
     upper = max(lower + 1, round(character_height * 1.20))
     return any(lower <= int(line_y) - int(marker_y) <= upper for line_y in body_line_y0)
+
+
+def _inside_sections(y: int, page_sections: list[Any] | None) -> bool:
+    if not page_sections:
+        return True
+    return any(int(section.top_v) <= int(y) < int(section.bottom_v) for section in page_sections)
 
 
 def _column_polarity_evidence(
@@ -139,6 +154,14 @@ def _column_polarity_evidence(
 
     body_y = tuple(int(top + line.y0) for line in body_lines)
     secondary_y = tuple(int(top + line.y0) for line in secondary)
+    separator_y: list[int] = []
+    for line in secondary:
+        separator, _blankness = _separator_above(
+            ink, int(line.y0), character_height,
+        )
+        if separator is not None:
+            separator_y.append(int(top + separator))
+
     body_supported = 0
     for entry in legacy:
         _u, canonical_v = geometry.source_to_canonical(int(entry.x), int(entry.y))
@@ -150,7 +173,8 @@ def _column_polarity_evidence(
     legacy_body_fraction = body_supported / float(max(1, len(legacy)))
     density_ratio = len(legacy) / float(max(1, len(secondary)))
     active = bool(
-        body_supported >= 7
+        len(separator_y) >= 3
+        and body_supported >= 7
         and legacy_body_fraction >= 0.60
         and density_ratio >= 1.45
     )
@@ -159,6 +183,7 @@ def _column_polarity_evidence(
         active=active,
         body_line_y0=body_y,
         secondary_line_y0=secondary_y,
+        secondary_separator_y=tuple(separator_y),
         baseline=float(baseline),
         secondary_center=secondary_center,
         legacy_count=len(legacy),
@@ -173,34 +198,18 @@ def suppress_inverted_legacy_body_lane(
     settings: AppSettings,
     page_sections: list[Any] | None = None,
 ) -> list[Entry]:
-    """Remove dense false VB body markers when an indented entry lane is proven.
+    """Correct an inverted ordinary lane and emit its proven entry boundaries.
 
-    The correction is intentionally conservative and page-local.  It runs only
-    for CJK bracket-capable profiles, requires a repeated visually similar
-    secondary lane, and requires the legacy VB output to be implausibly dense on
-    the main body lane.  It suppresses only ``ordinary_vb`` rows that can be
-    associated with a body line immediately below.  Large display heads are not
-    normal body lines and therefore survive; the subsequent ordinary visual pass
-    can also recover them independently.
+    No OCR/Profile switch is consulted here.  The visual evidence itself is the
+    gate.  This matters for the plain ``普通画线`` action: a newly created
+    project must not need OCR parser configuration before a strongly repeated
+    indented entry lane can be recognized.
     """
-    if not bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
-        return list(entries)
-
-    profile_id = str(getattr(settings, "dictionary_profile_id", "") or "").lower()
-    ocr_language = str(getattr(settings, "ocr_language", "") or "").lower()
-    paddle_language = str(getattr(settings, "paddle_language", "") or "").lower()
-    cjk = bool(
-        "cjk" in profile_id
-        or any(token in ocr_language for token in ("chi_sim", "chi_tra", "chinese", "han"))
-        or paddle_language in {"ch", "chi_sim", "chi_tra", "chinese_cht"}
-    )
-    if not cjk:
-        return list(entries)
-
     source = normalize_page_rgb(image)
     character_height = max(
         8, int(round(float(getattr(settings, "character_height", 26) or 26)))
     )
+    duplicate_tolerance = max(4, round(character_height * 0.50))
     evidence_by_column = {
         column: _column_polarity_evidence(
             source, entries, geometry, settings, column,
@@ -226,8 +235,37 @@ def suppress_inverted_legacy_body_lane(
         ):
             output.append(entry)
             continue
-        # A dense flush-left body row on a page with a proven repeated indented
-        # structural lane is the inverted-layout failure mode.  Suppress it now;
-        # bracketed entries and oversized display heads are recovered by the
-        # independent visual pass that follows this function.
+        # Suppressed: this is one of the dense flush-left body rows that made
+        # the historical ordinary result appear visually inverted.
+
+    # The same evidence that justified suppression now emits the proven
+    # secondary entry boundaries.  This makes polarity correction self-contained
+    # and independent of the CJK/OCR-specific visual recovery pass that follows.
+    for column, evidence in evidence_by_column.items():
+        if not evidence.active:
+            continue
+        for source_y in evidence.secondary_separator_y:
+            if not _inside_sections(source_y, page_sections):
+                continue
+            duplicate = False
+            for entry in output:
+                if _entry_column(entry, geometry) != column:
+                    continue
+                _u, existing_v = geometry.source_to_canonical(
+                    int(entry.x), int(entry.y)
+                )
+                if abs(int(existing_v) - int(source_y)) <= duplicate_tolerance:
+                    duplicate = True
+                    break
+            if duplicate:
+                continue
+            marker_x, _direction = _source_edge(geometry, column, source_y)
+            output.append(Entry(
+                word="",
+                x=int(marker_x),
+                y=int(source_y),
+                confidence=0.97,
+                ocr_source="ordinary_visual_lane",
+                issue_type="ORDINARY_INDENTED_ENTRY_LANE_POLARITY",
+            ))
     return output
