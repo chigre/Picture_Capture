@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from picture_capture.models import AppSettings
 from picture_capture.profile_indent_ui import (
+    INDENT_SEMANTICS_VERSION,
     INDENT_TYPE_CHOICES,
     apply_indent_type_label,
     indent_type_label,
@@ -14,13 +15,22 @@ def test_indent_type_choices_are_user_level_layout_semantics():
 
 def test_indent_type_defaults_to_headword_indent():
     settings = AppSettings()
-    settings.profile_cjk_brackets_in_body = False
     assert indent_type_label(settings) == "词头缩进"
 
 
-def test_body_indent_round_trips_through_legacy_persistence_bit():
+def test_legacy_brackets_in_body_bit_is_not_reinterpreted_as_body_indent():
+    settings = AppSettings()
+    settings.profile_cjk_brackets_in_body = True
+    settings.profile_parser_controls_version = 1
+
+    assert indent_type_label(settings) == "词头缩进"
+
+
+def test_body_indent_round_trips_after_explicit_v2_choice():
     settings = AppSettings()
     apply_indent_type_label(settings, "正文缩进")
+
+    assert settings.profile_parser_controls_version >= INDENT_SEMANTICS_VERSION
     assert settings.profile_cjk_brackets_in_body is True
     assert indent_type_label(settings) == "正文缩进"
 
