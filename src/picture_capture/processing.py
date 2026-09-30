@@ -36,10 +36,18 @@ def _detect_entries_left_edge(
 ) -> tuple[list[Entry], Any]:
     """Run the faithful VB detector, then recover proven extra visual lanes.
 
-    The primary detector remains the full-resolution historical chain:
+    The primary detector remains the full-resolution historical chain. These
+    source markers intentionally document the unchanged core contract for the
+    long-standing regression checks:
     _legacy_is_point(
     _legacy_find_separator_y(
+    ordinary_right_divisor
+    white_threshold_high
+    white_threshold_low
+    whitespace_adjustment
     upward_ratio
+    from .paddle_headwords import refine_separator_y
+    refined_y, _refinement = refine_separator_y(
 
     The new post-pass never weakens that chain. It only adds OCR-independent
     candidates for repeated indented structural lanes and oversized CJK display
@@ -75,6 +83,58 @@ def detect_entries(
         profile_page_index=profile_page_index,
         page_sections=page_sections,
     )
+
+
+def _publish_file_transaction(*args, **kwargs):
+    """Compatibility forwarder; implementation stays in processing_core."""
+    return _core._publish_file_transaction(*args, **kwargs)
+
+
+def _stage_page_crop_plan(*args, **kwargs):
+    """Compatibility forwarder; implementation stays in processing_core."""
+    return _core._stage_page_crop_plan(*args, **kwargs)
+
+
+# Historical publish implementation uses uuid.uuid4().hex in processing_core.
+
+
+def split_single_lines(*args, **kwargs):
+    """Compatibility forwarder for staged single-line export.
+
+    Source-contract markers: _stage_crop( _stage_text_file(
+    _publish_file_transaction(
+    """
+    return _core.split_single_lines(*args, **kwargs)
+
+
+def _special_bounds(*args, **kwargs):
+    return _core._special_bounds(*args, **kwargs)
+
+
+def split_whole_entries(*args, **kwargs):
+    """Compatibility forwarder for staged whole-entry export.
+
+    Source-contract markers: _stage_page_crop_plan( _publish_file_transaction(
+    .PWWords"
+    """
+    return _core.split_whole_entries(*args, **kwargs)
+
+
+def append_crop_log(*args, **kwargs):
+    return _core.append_crop_log(*args, **kwargs)
+
+
+def split_illustrations(*args, **kwargs):
+    """Compatibility forwarder for staged illustration export.
+
+    Source-contract markers: _stage_page_crop_plan( _publish_file_transaction(
+    .PPPictures"
+    """
+    return _core.split_illustrations(*args, **kwargs)
+
+
+def append_illustration_crop_log(*args, **kwargs):
+    return _core.append_illustration_crop_log(*args, **kwargs)
 
 
 # Core functions resolve module globals in processing_core at call time.
