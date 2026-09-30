@@ -35,10 +35,10 @@ def prepare_app_module() -> Any:
 
     formats.write_pdic = build_write_pdic_capture(formats.write_pdic)
 
-    # 2) Promote page-design refinement before processing is imported. The
-    # processing facade imports this symbol by value, so installation order is
-    # intentional: CJK ordinary drawing now uses multi-level indent families,
-    # x(y) entry lanes and top/bottom guard bands.
+    # 2) Keep the refined page-design compatibility symbol installed for older
+    # callers.  The production processing facade now owns a higher shared Page
+    # Understanding layer, so this is no longer a special "ordinary drawing"
+    # promotion; it is only a compatibility bridge for direct module callers.
     from . import dictionary_page_design
     from .dictionary_page_design_refined import detect_entries_from_page_design
 
@@ -46,8 +46,8 @@ def prepare_app_module() -> Any:
         detect_entries_from_page_design
     )
 
-    # profile_setup imports processing; do this only after the two low-level
-    # extensions above have been installed.
+    # profile_setup imports processing; do this only after low-level extensions
+    # above have been installed.
     from . import profile_setup
     from .profile_indent_ui import build_project_profile_wizard
 
@@ -56,16 +56,25 @@ def prepare_app_module() -> Any:
     )
 
     # 3) Enrich the existing training exporter without replacing its proven
-    # image/PDIC/PPP/OCR-copying workflow. app.py imports these functions only
-    # after this point, so the normal export button receives v3 data.
+    # image/PDIC/PPP/OCR-copying workflow.  v3 keeps the exact automatic->human
+    # correction contract; a second wrapper adds the same Page Understanding
+    # diagnostics that ordinary/OCR/combined drawing now share.
     from . import training_export
     from .training_export_v3 import (
         build_export_training_page,
         build_write_training_manifest,
     )
+    from .training_export_page_understanding import (
+        build_export_training_page_with_understanding,
+    )
 
     training_export.export_training_page = build_export_training_page(
         training_export.export_training_page
+    )
+    training_export.export_training_page = (
+        build_export_training_page_with_understanding(
+            training_export.export_training_page
+        )
     )
     training_export.write_training_manifest = build_write_training_manifest(
         training_export.write_training_manifest
