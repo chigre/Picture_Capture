@@ -17,6 +17,7 @@ from PIL import Image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
 from . import processing_core as _core
+from .ordinary_lane_polarity import suppress_inverted_legacy_body_lane
 from .ordinary_visual import recover_ordinary_visual_entries
 
 
@@ -34,7 +35,7 @@ def _detect_entries_left_edge(
     settings: AppSettings,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
-    """Run the faithful VB detector, then recover proven extra visual lanes.
+    """Run VB geometry, correct proven lane polarity, then recover visual entries.
 
     The primary detector remains the full-resolution historical chain. These
     source markers intentionally document the unchanged core contract for the
@@ -49,12 +50,18 @@ def _detect_entries_left_edge(
     from .paddle_headwords import refine_separator_y
     refined_y, _refinement = refine_separator_y(
 
-    The new post-pass never weakens that chain. It only adds OCR-independent
-    candidates for repeated indented structural lanes and oversized CJK display
-    heads, with de-duplication against the VB markers.
+    For ordinary layouts the VB output is retained exactly.  On the narrower
+    CJK failure mode where dense body text is flush-left but a repeated bracket
+    entry lane is indented, a page-level polarity pass may suppress only those
+    ``ordinary_vb`` rows demonstrably attached to the dense body lane.  The
+    independent visual pass then recovers the indented entries and oversized
+    display heads.
     """
     entries, geometry = _original_detect_entries_left_edge(
         image, settings, page_sections=page_sections,
+    )
+    entries = suppress_inverted_legacy_body_lane(
+        image, entries, geometry, settings, page_sections=page_sections,
     )
     entries = recover_ordinary_visual_entries(
         image, entries, geometry, settings, page_sections=page_sections,
