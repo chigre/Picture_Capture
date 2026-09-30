@@ -4,6 +4,13 @@ from __future__ import annotations
 
 
 def main() -> int:
+    # Presentation terminology is installed before any Tk widgets are created.
+    # Persisted setting names stay unchanged; every visible UI surface uses the
+    # canonical labels “普通字/行高” and “行间空”.
+    from .ui_terminology import install_ui_terminology
+
+    install_ui_terminology()
+
     # 1) Capture the exact automatic PDIC result *before* processing imports
     # write_pdic into its own module namespace. Later manual saves load entries
     # from PDIC and therefore do not carry detector runtime evidence, so they do
@@ -51,11 +58,12 @@ def main() -> int:
     training_export.TRAINING_EXPORT_FORMAT = "picture-capture-training-v3"
 
     # Import the GUI only after all function-level extensions above are in
-    # place. Then replace the historical "all PDIC pages" exporter with an
-    # explicit inclusive page-range exporter.
+    # place. Training export reuses the main-window page selection directly.
     from . import app as app_module
     from .training_export_ui import export_training_package_selected_range
+    from .ui_terminology import install_app_tooltip_terminology
 
+    install_app_tooltip_terminology(app_module)
     app_module.PictureCaptureApp.export_training_package = (
         export_training_package_selected_range
     )
