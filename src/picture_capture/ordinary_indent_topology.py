@@ -95,6 +95,7 @@ class IndentTopology:
     body_rows: list[BlockRow]
     entry_lanes: list[EntryLane]
     body_marker_fraction: float = 0.0
+    body_structure_consensus: float = 0.0
     indent_type: str = "headword"
 
     @property
@@ -122,11 +123,10 @@ class IndentTopology:
     def body_is_proven(self) -> bool:
         """Return whether this lane is reliable negative evidence for body text.
 
-        With an independently proven entry lane, the opposing dominant lane is
-        enough to disambiguate body even if a synthetic/atypical page happens to
-        repeat similar leading glyph shapes. In a body-only column, however,
-        repeated leading structure is unsafe: a pure headword list could create
-        the same geometry. Such columns need varied leading-glyph evidence.
+        Pairwise similarity is not enough here: ordinary leading glyphs can form
+        a chain where every row resembles *some* other row. A structural marker
+        such as 【 is different because one common prototype explains most rows.
+        ``body_structure_consensus`` measures that page-level property.
         """
         if len(self.body_rows) < 5:
             return False
@@ -141,8 +141,12 @@ class IndentTopology:
         if body_share < 0.30:
             return False
         if self.entry_lanes:
+            # An independent repeated entry lane disambiguates the opposing body
+            # lane even on synthetic pages whose body glyph patches are identical.
             return True
-        return self.body_marker_fraction < 0.48
+        # Body-only continuation columns need low global structural consensus.
+        # A pure repeated-headword list stays deliberately uncertain.
+        return self.body_structure_consensus < 0.62
 
     @property
     def is_proven(self) -> bool:
@@ -296,7 +300,7 @@ def _cluster_rows(rows: list[BlockRow], tolerance: float) -> list[list[BlockRow]
                 target = cluster
                 break
         if target is None:
-            clusters.append([line for line in [row]])
+            clusters.append([row])
         else:
             target.append(row)
     return clusters
@@ -351,6 +355,21 @@ def _marker_fraction(rows: list[BlockRow]) -> float:
     return matched / float(len(usable))
 
 
+def _structure_consensus(rows: list[BlockRow]) -> float:
+    """Fraction of a lane explained by one common leading-glyph prototype."""
+    usable = [row for row in rows if row.patch.size]
+    if len(usable) < 2:
+        return 0.0
+    best = 0.0
+    for prototype in usable:
+        matches = sum(
+            _patch_similarity(prototype.patch, row.patch) >= 0.55
+            for row in usable
+        )
+        best = max(best, matches / float(len(usable)))
+    return float(best)
+
+
 def _lane_is_structural(
     rows: list[BlockRow],
     marker_fraction: float,
@@ -403,12 +422,13 @@ def _observe_column_raw(
             cluster,
             _marker_fraction(cluster),
             _separator_fraction(ink, cluster, reference),
+            _structure_consensus(cluster),
         )
         for cluster in clusters
     ]
-    nonstructural = [item for item in stats if item[1] < 0.48]
+    nonstructural = [item for item in stats if item[3] < 0.62]
     body_pool = nonstructural or stats
-    body_rows, body_marker, _body_separator = max(
+    body_rows, body_marker, _body_separator, body_consensus = max(
         body_pool,
         key=lambda item: (len(item[0]), -_cluster_center(item[0])),
     )
@@ -425,7 +445,7 @@ def _observe_column_raw(
     indent_type = _indent_type(settings)
     sign = 1.0 if indent_type == "headword" else -1.0
     entry_lanes: list[EntryLane] = []
-    for cluster, marker, separator in stats:
+    for cluster, marker, separator, _consensus in stats:
         if cluster is body_rows:
             continue
         center = _cluster_center(cluster)
@@ -454,6 +474,7 @@ def _observe_column_raw(
         body_rows=list(body_rows),
         entry_lanes=entry_lanes,
         body_marker_fraction=float(body_marker),
+        body_structure_consensus=float(body_consensus),
         indent_type=indent_type,
     )
 
