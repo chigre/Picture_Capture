@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-"""Compatibility facade for ordinary processing plus page-design inference.
+"""Detection facade with one shared dictionary Page Understanding layer.
 
-For CJK ordinary drawing the primary abstraction is now the dictionary page
-layout itself: reading direction, body, columns, ordinary type scale, indentation
-modes and display-size heads are inferred before any entry boundary is emitted.
-When that page model is reliable, its boundaries are authoritative and the
-historical candidate chain is not consulted. Legacy processing remains as a
-fallback for underdetermined pages and as the unchanged path for non-CJK
-projects.
+The page itself is analysed once before detector-specific logic: body/columns,
+ordinary type scale, real text rows and indentation structure are page facts,
+not properties of the "ordinary drawing" button.
+
+Evidence families then remain separate:
+* VB/ordinary detection supplies geometric separator observations;
+* Page Understanding supplies physical layout and block-role evidence;
+* OCR supplies textual/semantic observations.
+
+Ordinary, OCR and combined drawing all consume the same page understanding.
+Validated CJK page semantics may be authoritative; generic/non-CJK pages use the
+physical layer conservatively (for example, a proven inward body lane may veto
+an internal paragraph) without synthesizing new Latin headwords.
 """
 
 from pathlib import Path
@@ -21,13 +27,16 @@ from PIL import Image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
 from . import processing_core as _core
-from .boundary_placement import refine_boundaries_toward_head_top
-from .dictionary_page_design import DictionaryPageLayout
-from .dictionary_page_layout_policy import detect_entries_from_page_design
 from .ordinary_cjk_large_heads import recover_cjk_oversized_heads
 from .ordinary_indent_topology import finalize_indented_topology
 from .ordinary_postprocess import stabilize_ordinary_visual_entries
 from .ordinary_visual import recover_ordinary_visual_entries
+from .page_understanding import (
+    PageUnderstanding,
+    understand_page,
+    uses_cjk_role_model,
+)
+from .page_understanding_fusion import apply_page_understanding
 from .training_baseline import save_automatic_baseline
 
 
@@ -40,20 +49,12 @@ _original_detect_entries_left_edge = _core._detect_entries_left_edge
 
 
 def _uses_cjk_indent_topology(settings: AppSettings) -> bool:
-    """Return whether the page-design CJK path is appropriate."""
-    profile_id = str(getattr(settings, "dictionary_profile_id", "") or "").lower()
-    ocr_language = str(getattr(settings, "ocr_language", "") or "").lower()
-    paddle_language = str(getattr(settings, "paddle_language", "") or "").lower()
-    return bool(
-        "cjk" in profile_id
-        or any(token in ocr_language for token in (
-            "chi_sim", "chi_tra", "chinese", "han", "jpn", "jpn_vert",
-        ))
-        or paddle_language in {"ch", "chi_sim", "chi_tra", "chinese_cht", "japan"}
-    )
+    """Backward-compatible alias for the shared CJK page-role selector."""
+    return uses_cjk_role_model(settings)
 
 
-def _geometry_from_page_design(layout: DictionaryPageLayout) -> Any:
+def _geometry_from_page_understanding(understanding: PageUnderstanding) -> Any:
+    layout = understanding.layout
     starts = [int(column.left) for column in layout.columns]
     widths = [max(1, int(column.right) - int(column.left)) for column in layout.columns]
     paths = [
@@ -74,16 +75,23 @@ def _geometry_from_page_design(layout: DictionaryPageLayout) -> Any:
     )
 
 
+def _geometry_from_page_design(layout) -> Any:
+    """Compatibility helper retained for older tests/callers."""
+    placeholder = type("_Understanding", (), {"layout": layout})()
+    return _geometry_from_page_understanding(placeholder)  # type: ignore[arg-type]
+
+
 def _detect_entries_left_edge(
     image: Image.Image,
     settings: AppSettings,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
-    """Historical ordinary fallback and non-CJK visual recovery.
+    """Historical VB observation plus legacy fallback-only visual recovery.
 
-    Direct CJK ordinary drawing is normally intercepted by ``detect_entries``
-    before reaching this function. Keeping this wrapper preserves combined-mode
-    compatibility while the page-design path is validated more broadly.
+    In combined mode CJK topology/display-head reasoning is deliberately *not*
+    added here: those cues now belong to the independent Page Understanding
+    evidence family.  This prevents the same layout fact from being counted
+    once as "ordinary" and again as "page design".
 
     Source-contract markers retained for long-standing regression checks:
     _legacy_is_point(
@@ -99,13 +107,17 @@ def _detect_entries_left_edge(
     entries, geometry = _original_detect_entries_left_edge(
         image, settings, page_sections=page_sections,
     )
+    method = str(getattr(settings, "detection_method", "") or "").strip().lower()
     if _uses_cjk_indent_topology(settings):
-        entries = finalize_indented_topology(
-            image, entries, geometry, settings, page_sections=page_sections,
-        )
-        entries = recover_cjk_oversized_heads(
-            image, entries, geometry, settings, page_sections=page_sections,
-        )
+        # Keep the older visual/topology chain only as an ordinary fallback.
+        # Combined uses raw VB as the independent geometric evidence family.
+        if method not in {"combined", "paddleocr"}:
+            entries = finalize_indented_topology(
+                image, entries, geometry, settings, page_sections=page_sections,
+            )
+            entries = recover_cjk_oversized_heads(
+                image, entries, geometry, settings, page_sections=page_sections,
+            )
     else:
         entries = recover_ordinary_visual_entries(
             image, entries, geometry, settings, page_sections=page_sections,
@@ -118,6 +130,33 @@ def _detect_entries_left_edge(
     ), geometry
 
 
+def _allowed_entries(
+    entries: list[Entry],
+    image: Image.Image,
+    settings: AppSettings,
+    geometry: Any,
+    profile_page_index: int,
+    page_sections: list[PageSection] | None,
+) -> list[Entry]:
+    source = _core.normalize_page_rgb(image)
+    effective = _core.effective_page_settings(
+        settings, source.size, profile_page_index,
+    )
+    return [
+        entry for entry in entries
+        if _core.entry_allowed_by_page_template(
+            entry.x, entry.y, source.size, effective, profile_page_index,
+        )
+        and (
+            not page_sections
+            or _core.v_is_inside_sections(
+                geometry.source_to_canonical(entry.x, entry.y)[1],
+                page_sections, geometry.top, geometry.bottom,
+            )
+        )
+    ]
+
+
 def detect_entries(
     image: Image.Image,
     settings: AppSettings,
@@ -127,49 +166,51 @@ def detect_entries(
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
-    """Detect entries, preferring recovered page design for CJK ordinary mode."""
-    method = str(getattr(settings, "detection_method", "") or "").strip().lower()
-    if method not in {"paddleocr", "combined"} and _uses_cjk_indent_topology(settings):
-        try:
-            result = detect_entries_from_page_design(
-                image,
-                settings,
-                page_index=profile_page_index,
-                page_sections=page_sections,
-            )
-        except Exception:
-            result = None
-        if result is not None and result.layout.reliable and result.layout.columns:
-            geometry = _geometry_from_page_design(result.layout)
-            source = _core.normalize_page_rgb(image)
-            effective = _core.effective_page_settings(
-                settings, source.size, profile_page_index,
-            )
-            placed = refine_boundaries_toward_head_top(
-                image,
-                settings,
-                result.layout,
-                result.entries,
-                page_index=profile_page_index,
-            )
-            entries = [
-                entry for entry in placed
-                if _core.entry_allowed_by_page_template(
-                    entry.x, entry.y, source.size, effective, profile_page_index,
-                )
-                and (
-                    not page_sections
-                    or _core.v_is_inside_sections(
-                        geometry.source_to_canonical(entry.x, entry.y)[1],
-                        page_sections, geometry.top, geometry.bottom,
-                    )
-                )
-            ]
-            return _core.sort_entries_reading_order(
-                entries, geometry, page_sections,
-            ), geometry
+    """Detect entries with shared Page Understanding for every drawing mode."""
+    source = _core.normalize_page_rgb(image)
+    effective = _core.effective_page_settings(
+        settings, source.size, profile_page_index,
+    )
+    method = str(getattr(effective, "detection_method", "") or "").strip().lower()
 
-    return _core.detect_entries(
+    understanding: PageUnderstanding | None
+    try:
+        understanding = understand_page(
+            image,
+            settings,
+            page_index=profile_page_index,
+            page_sections=page_sections,
+        )
+    except Exception:
+        # Page understanding is an evidence layer, never a startup/fatal
+        # dependency.  Existing detector paths remain the safe fallback.
+        understanding = None
+
+    # Validated CJK page semantics remain authoritative for ordinary drawing.
+    # Importantly, this is now one *consumer* of Page Understanding rather than
+    # the place where Page Design lives.
+    if (
+        method not in {"paddleocr", "combined"}
+        and understanding is not None
+        and understanding.role_model == "cjk"
+        and understanding.semantic_reliable
+        and understanding.layout.columns
+    ):
+        geometry = _geometry_from_page_understanding(understanding)
+        entries = _allowed_entries(
+            list(understanding.semantic_entries),
+            image,
+            settings,
+            geometry,
+            profile_page_index,
+            page_sections,
+        )
+        return _core.sort_entries_reading_order(
+            entries, geometry, page_sections,
+        ), geometry
+
+    # Detector-specific observations are still generated by their proven paths.
+    entries, detector_geometry = _core.detect_entries(
         image,
         settings,
         paddle_cache_path=paddle_cache_path,
@@ -179,6 +220,36 @@ def detect_entries(
         page_sections=page_sections,
     )
 
+    if understanding is None or not understanding.physical_reliable:
+        return entries, detector_geometry
+
+    shared_geometry = (
+        _geometry_from_page_understanding(understanding)
+        if understanding.layout.columns
+        else detector_geometry
+    )
+    mode = (
+        "ocr" if method == "paddleocr"
+        else "combined" if method == "combined"
+        else "ordinary"
+    )
+    entries = apply_page_understanding(
+        entries,
+        understanding,
+        mode=mode,
+    )
+    entries = _allowed_entries(
+        entries,
+        image,
+        settings,
+        shared_geometry,
+        profile_page_index,
+        page_sections,
+    )
+    return _core.sort_entries_reading_order(
+        entries, shared_geometry, page_sections,
+    ), shared_geometry
+
 
 def detect_entries_job(
     image_path: str,
@@ -186,12 +257,12 @@ def detect_entries_job(
     pages: tuple[str, str, str],
     profile_page_index: int = 0,
 ) -> int:
-    """Spawn-safe ordinary worker that executes the enhanced facade pipeline.
+    """Spawn-safe ordinary worker that executes the shared-understanding pipeline.
 
     The automatic marker set is snapshotted before writing the normal PDIC, so
     later user additions/deletions can be exported as exact supervised diffs.
-    This direct call is important on Windows/macOS spawn workers, which do not
-    inherit GUI-launcher monkey patches.
+    Windows/macOS spawn workers import this module directly and therefore use
+    the same Page Understanding layer as the GUI process.
     """
     page = Path(image_path)
     with Image.open(page) as opened:
