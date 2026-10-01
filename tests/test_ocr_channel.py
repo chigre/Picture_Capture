@@ -14,6 +14,7 @@ from picture_capture.ocr_channel import (
 )
 from picture_capture.ocr_channel_legacy import (
     apply_channel_plan_to_legacy_boundary_settings,
+    route_legacy_boundary_ocr_through_channel,
 )
 
 
@@ -148,6 +149,17 @@ def test_diagnostic_lens_cannot_override_normal_ocr_text():
     assert selected.engine == "paddle"
 
 
+def test_shared_channel_owns_active_ocr_execution_not_legacy_parser():
+    import picture_capture.ocr_channel as channel
+
+    source = Path(channel.__file__).read_text(encoding="utf-8")
+    assert "def run_paddle_raw(" in source
+    assert "def run_tesseract_records(" in source
+    assert "def run_lens_records(" in source
+    assert "from .paddle_headwords" not in source
+    assert "paddle_headwords_core" not in source
+
+
 def test_marker_only_ocr_is_a_channel_consumer_not_single_engine_dispatch():
     import picture_capture.entry_classification_runtime as runtime
 
@@ -164,6 +176,7 @@ def test_ocr_boundary_detection_is_channel_neutral_consumer():
 
     source = Path(boundary.__file__).read_text(encoding="utf-8")
     assert "apply_channel_plan_to_legacy_boundary_settings" in source
+    assert "route_legacy_boundary_ocr_through_channel" in source
     assert "detect_ocr_headword_boundaries" in source
     assert "legacy_detect" in source
     assert "resolve_ocr_channel_plan" not in source
@@ -176,7 +189,7 @@ def test_ocr_boundary_detection_is_channel_neutral_consumer():
         assert legacy_flag not in source
 
 
-def test_legacy_boundary_adapter_is_only_translation_for_tesseract_fallback():
+def test_legacy_boundary_adapter_translates_tesseract_fallback():
     settings = AppSettings(
         paddle_use_paddleocr=False,
         paddle_compare_tesseract=False,
@@ -194,6 +207,59 @@ def test_legacy_boundary_adapter_is_only_translation_for_tesseract_fallback():
     assert routed.paddle_enable_lens is False
     assert routed.paddle_lens_mode == "off"
     assert settings.paddle_compare_tesseract is False
+
+
+def test_legacy_boundary_runner_bridge_is_scoped_and_restores_core():
+    from picture_capture import paddle_headwords_core as core
+
+    settings = AppSettings(
+        paddle_use_paddleocr=True,
+        paddle_compare_tesseract=True,
+        paddle_enable_lens=True,
+        paddle_lens_mode="diagnostic",
+    )
+    original = (
+        core.get_paddle_engine,
+        core.run_paddle_band,
+        core.run_tesseract_band_records,
+        core.run_google_lens,
+    )
+
+    with route_legacy_boundary_ocr_through_channel(settings):
+        active = (
+            core.get_paddle_engine,
+            core.run_paddle_band,
+            core.run_tesseract_band_records,
+            core.run_google_lens,
+        )
+        assert all(after is not before for before, after in zip(original, active))
+
+    restored = (
+        core.get_paddle_engine,
+        core.run_paddle_band,
+        core.run_tesseract_band_records,
+        core.run_google_lens,
+    )
+    assert restored == original
+
+
+def test_legacy_boundary_runner_bridge_respects_existing_monkeypatch(monkeypatch):
+    from picture_capture import paddle_headwords_core as core
+
+    def external_runner(*args, **kwargs):
+        return [], "external"
+
+    monkeypatch.setattr(core, "run_tesseract_band_records", external_runner)
+    settings = AppSettings(
+        paddle_use_paddleocr=False,
+        paddle_compare_tesseract=True,
+        paddle_enable_lens=False,
+    )
+
+    with route_legacy_boundary_ocr_through_channel(settings):
+        assert core.run_tesseract_band_records is external_runner
+
+    assert core.run_tesseract_band_records is external_runner
 
 
 def test_historical_paddle_headword_entrypoint_remains_boundary_consumer_alias():
