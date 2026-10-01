@@ -1,21 +1,23 @@
 from __future__ import annotations
 
-"""Direct main-panel installer for the display-only Layout overlay switch.
+"""Direct main-panel installer for Layout diagnostics and analysis display controls."""
 
-The Layout visualization switch is intentionally UI-local.  It is not a
-project/detection parameter and therefore must not be registered in
-``quick_bool_vars`` or written back to the slotted ``AppSettings`` dataclass.
-
-While Layout diagnostics are enabled, the existing global overlay visibility
-switch is temporarily forced on so ordinary guides/markers disappear.  Its
-previous value is restored when Layout diagnostics are disabled.
-"""
-
+import os
 from typing import Any
 import tkinter as tk
 from tkinter import ttk
 
+from .adaptive_denoise import DENOISE_ENV, normalize_denoise_strength
 from .layout_visualization_summary import draw_layout_visualization_detailed
+
+
+_DENOISE_LABEL_TO_VALUE = {
+    "关闭": "off",
+    "弱": "weak",
+    "自动": "auto",
+    "强": "strong",
+}
+_DENOISE_VALUE_TO_LABEL = {value: label for label, value in _DENOISE_LABEL_TO_VALUE.items()}
 
 
 def _hide_var(app: Any) -> Any | None:
@@ -26,15 +28,9 @@ def _hide_var(app: Any) -> Any | None:
 
 
 def _set_layout_exclusive_visibility(app: Any, enabled: bool) -> None:
-    """Hide ordinary overlays while Layout diagnostics are active.
-
-    This changes only the UI variable.  It deliberately does not call the
-    normal persistence callback, so project settings remain untouched.
-    """
     var = _hide_var(app)
     if var is None:
         return
-
     if enabled:
         if not hasattr(app, "_layout_visualization_previous_hide_value"):
             try:
@@ -46,7 +42,6 @@ def _set_layout_exclusive_visibility(app: Any, enabled: bool) -> None:
         except Exception:
             pass
         return
-
     previous = getattr(app, "_layout_visualization_previous_hide_value", None)
     if previous is not None:
         try:
@@ -59,14 +54,7 @@ def _set_layout_exclusive_visibility(app: Any, enabled: bool) -> None:
             pass
 
 
-def _add_layout_toggle(app: Any, section: Any) -> None:
-    """Add 【显示Layout】 directly to the existing 【二、显示设置】 section."""
-    if getattr(app, "_layout_visualization_toggle_widget", None) is not None:
-        return
-
-    var = tk.BooleanVar(value=False)
-    app._layout_visualization_var = var
-
+def _next_grid_row(section: Any) -> int:
     occupied_rows: list[int] = []
     for child in section.winfo_children():
         try:
@@ -75,15 +63,30 @@ def _add_layout_toggle(app: Any, section: Any) -> None:
                 occupied_rows.append(int(info.get("row", 0)))
         except Exception:
             pass
-    row = (max(occupied_rows) + 1) if occupied_rows else 0
+    return (max(occupied_rows) + 1) if occupied_rows else 0
+
+
+def _invalidate_layout_snapshot(app: Any) -> None:
+    app._layout_visualization_snapshot_key = None
+    app._layout_visualization_snapshot = None
+    try:
+        app._layout_visualization_indent_blocks = []
+    except Exception:
+        pass
+
+
+def _add_layout_toggle(app: Any, section: Any) -> None:
+    if getattr(app, "_layout_visualization_toggle_widget", None) is not None:
+        return
+
+    var = tk.BooleanVar(value=False)
+    app._layout_visualization_var = var
+    row = _next_grid_row(section)
 
     def toggle() -> None:
         enabled = bool(var.get())
         _set_layout_exclusive_visibility(app, enabled)
-        # The switch is display-only: invalidate only the visualization snapshot
-        # and redraw the canvas.  Do not touch AppSettings or detector state.
-        app._layout_visualization_snapshot_key = None
-        app._layout_visualization_snapshot = None
+        _invalidate_layout_snapshot(app)
         app.redraw()
 
     checkbox = ttk.Checkbutton(
@@ -98,14 +101,62 @@ def _add_layout_toggle(app: Any, section: Any) -> None:
     try:
         app._attach_tooltip(
             checkbox,
-            "显示当前页版面推理，并临时隐藏其他线框/标记；取消勾选后恢复原显示状态。摘要位于第一栏水平中心、body_top 下方 5 个行高。",
+            "显示当前页版面推理，并临时隐藏其他线框/标记；取消勾选后恢复原显示状态。",
         )
     except Exception:
         pass
 
 
+def _add_denoise_control(app: Any, section: Any) -> None:
+    """Add session-level shared-analysis denoise strength control."""
+    if getattr(app, "_analysis_denoise_strength_widget", None) is not None:
+        return
+
+    current = normalize_denoise_strength(os.environ.get(DENOISE_ENV, "auto"))
+    var = tk.StringVar(value=_DENOISE_VALUE_TO_LABEL.get(current, "自动"))
+    app._analysis_denoise_strength_var = var
+    row = _next_grid_row(section)
+
+    label = ttk.Label(section, text="去噪强度：")
+    label.grid(row=row, column=0, sticky="w", pady=(3, 0))
+    combo = ttk.Combobox(
+        section,
+        textvariable=var,
+        values=tuple(_DENOISE_LABEL_TO_VALUE),
+        state="readonly",
+        width=7,
+    )
+    combo.grid(row=row, column=1, sticky="w", padx=(4, 8), pady=(3, 0))
+
+    def apply_strength(_event: Any | None = None) -> None:
+        value = _DENOISE_LABEL_TO_VALUE.get(str(var.get()), "auto")
+        os.environ[DENOISE_ENV] = value
+        _invalidate_layout_snapshot(app)
+        # Redraw immediately so 【显示Layout】 recomputes its Page Understanding
+        # from the newly cleaned shared analysis image. Ordinary drawing jobs
+        # started afterwards inherit the same environment setting.
+        try:
+            app.redraw()
+        except Exception:
+            pass
+
+    combo.bind("<<ComboboxSelected>>", apply_strength)
+    app._analysis_denoise_strength_widget = combo
+
+    help_text = (
+        "共享分析图去噪强度。自动：先分析整页稀疏墨迹分布再选择阈值；"
+        "弱：更保护标点/小笔画；强：清理更多成团扫描残墨；关闭：不去噪。"
+        "该设置影响 Layout、Page Understanding 和普通画线使用的同一张分析图。"
+    )
+    for widget in (label, combo):
+        try:
+            app._attach_tooltip(widget, help_text)
+        except Exception:
+            pass
+
+
 def install_layout_visualization(app_module: Any) -> None:
-    """Install 【显示Layout】 directly into the main display-settings block."""
+    """Install Layout/denoise controls into the main display-settings block."""
     cls = app_module.PictureCaptureApp
     if getattr(cls, "_layout_visualization_v3_installed", False):
         return
@@ -138,21 +189,16 @@ def install_layout_visualization(app_module: Any) -> None:
         section = getattr(self, "_layout_visualization_display_section", None)
         if section is not None:
             _add_layout_toggle(self, section)
+            _add_denoise_control(self, section)
         return result
 
     def redraw(self: Any, *args: Any, **kwargs: Any) -> Any:
-        # When Layout is enabled, hide_var is True while the original redraw runs,
-        # so all ordinary overlays remain suppressed.
         result = original_redraw(self, *args, **kwargs)
-
         layout_var = getattr(self, "_layout_visualization_var", None)
         layout_enabled = bool(layout_var.get()) if layout_var is not None else False
         if not layout_enabled:
             return result
 
-        # The base Layout renderer historically respects hide_var.  Temporarily
-        # clear it only for this diagnostic draw, then restore the exclusive
-        # hidden state without triggering another redraw or persistence callback.
         hide = _hide_var(self)
         previous = None
         if hide is not None:
