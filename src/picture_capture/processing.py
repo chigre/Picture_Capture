@@ -99,6 +99,55 @@ def _geometry_from_page_design(layout) -> Any:
     return _geometry_from_page_understanding(placeholder)  # type: ignore[arg-type]
 
 
+def _ordinary_settings_for_shared_geometry(
+    effective: AppSettings,
+    geometry: Any,
+    *,
+    method: str,
+) -> AppSettings:
+    """Freeze ordinary/VB to the already-resolved shared page geometry.
+
+    ``understanding.page_settings`` already contains the current page's selected
+    auto-layout fields.  Historically we passed those settings back into the
+    legacy ordinary detector with ``ordinary_auto_layout`` still enabled, which
+    caused a second independent layout inference.  That could move column 2 even
+    though Page Understanding and the Layout overlay had already resolved the
+    page.  Build one literal settings copy from the shared geometry and disable
+    every mechanism that could infer or deform another coordinate model.
+    """
+    frozen = replace(effective)
+    frozen.detection_method = str(method or "left_edge")
+    frozen.ordinary_auto_layout = False
+    frozen.manual_columns = False
+    frozen.follow_column_deformation = False
+
+    starts = [int(value) for value in list(getattr(geometry, "column_starts", []) or [])]
+    widths = [int(value) for value in list(getattr(geometry, "column_widths", []) or [])]
+    frozen.columns = max(1, len(starts) or int(getattr(frozen, "columns", 1) or 1))
+    frozen.start_y = int(getattr(geometry, "top", getattr(frozen, "start_y", 0)))
+
+    if starts:
+        frozen.manual_x = starts[0]
+    if widths:
+        frozen.column_width = max(1, widths[0])
+
+    if len(starts) >= 2 and widths:
+        frozen.gutter = max(0, starts[1] - (starts[0] + widths[0]))
+
+    # Preserve non-uniform project column offsets while making them reproduce the
+    # shared starts exactly when the legacy geometry builder is invoked.
+    if starts:
+        base_width = max(1, int(getattr(frozen, "column_width", widths[0] if widths else 1)))
+        base_gutter = max(0, int(getattr(frozen, "gutter", 0) or 0))
+        pitch = base_width + base_gutter
+        frozen.column_start_offsets = [
+            int(start - (starts[0] + index * pitch))
+            for index, start in enumerate(starts)
+        ]
+
+    return frozen
+
+
 def _detect_entries_left_edge(
     image: Image.Image,
     settings: AppSettings,
@@ -264,9 +313,12 @@ def _shared_detector_observations(
         if method == "paddleocr":
             return list(ocr_entries), geometry, review_candidates
 
-        ordinary_settings = replace(effective)
-        ordinary_settings.detection_method = "combined"
-        ordinary_entries, _ordinary_geometry = _detect_entries_left_edge(
+        ordinary_settings = _ordinary_settings_for_shared_geometry(
+            effective,
+            geometry,
+            method="combined",
+        )
+        ordinary_entries, ordinary_geometry = _detect_entries_left_edge(
             analysis_source,
             ordinary_settings,
             page_sections=page_sections,
@@ -282,9 +334,12 @@ def _shared_detector_observations(
         )
         return list(entries), geometry, review_candidates
 
-    ordinary_settings = replace(effective)
-    ordinary_settings.detection_method = str(method or "left_edge")
-    entries, _ordinary_geometry = _detect_entries_left_edge(
+    ordinary_settings = _ordinary_settings_for_shared_geometry(
+        effective,
+        geometry,
+        method=str(method or "left_edge"),
+    )
+    entries, ordinary_geometry = _detect_entries_left_edge(
         analysis_source,
         ordinary_settings,
         page_sections=page_sections,
