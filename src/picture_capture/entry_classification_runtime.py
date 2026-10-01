@@ -9,7 +9,10 @@ from .entry_classification import (
     copy_layout_line_classification,
     get_entry_classification,
 )
-from .entry_ocr_crop import entry_ocr_crop_box
+from .entry_ocr_crop import (
+    entry_ocr_crop_box,
+    resolve_entry_ocr_row_metrics,
+)
 
 
 def _install_marker_ocr_crop(processing_module: Any) -> None:
@@ -18,8 +21,21 @@ def _install_marker_ocr_crop(processing_module: Any) -> None:
     if getattr(core, "_entry_classification_crop_installed", False):
         return
 
-    def classified_marker_crop(canonical, entry, geometry, settings):
-        box = entry_ocr_crop_box(entry, geometry, settings, canonical.size)
+    def classified_marker_crop(
+        canonical,
+        entry,
+        geometry,
+        settings,
+        *,
+        row_metrics=None,
+    ):
+        box = entry_ocr_crop_box(
+            entry,
+            geometry,
+            settings,
+            canonical.size,
+            row_metrics=row_metrics,
+        )
         meta = get_entry_classification(entry)
         return core.normalize_page_rgb(canonical.crop(box)), meta.entry_scale == "oversized"
 
@@ -50,6 +66,11 @@ def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
         )
         canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
         ordered = core.sort_entries_reading_order(entries, geometry, page_sections)
+        row_metrics = resolve_entry_ocr_row_metrics(
+            image,
+            settings,
+            page_index=profile_page_index,
+        )
 
         from .dictionary_profile import effective_project_profile_id, load_dictionary_profile
         from .paddle_headwords import parse_headword_text
@@ -101,15 +122,17 @@ def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
             parsed = parse_headword_text(text, effective, profile=profile)
             if parsed is not None and str(parsed.normalized or "").strip():
                 return str(parsed.normalized).strip()
-            # Geometry already proves that this crop starts at a headword. Keep a
-            # bounded raw fallback rather than silently discarding recognized text.
             first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
             return first_line[:64].strip()
 
         for entry in targets:
             original_x, original_y = int(entry.x), int(entry.y)
             crop, is_large = core._ordinary_marker_local_crop(
-                canonical, entry, geometry, effective,
+                canonical,
+                entry,
+                geometry,
+                effective,
+                row_metrics=row_metrics,
             )
             stats["large" if is_large else "regular"] += 1
             word = ""
@@ -148,8 +171,6 @@ def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
                                 confidence = float(line.confidence)
                                 break
                     if not word:
-                        # Structured parsing can fail while Paddle has still read
-                        # useful text. A direct crop OCR is the final fallback.
                         word = parsed_or_raw(
                             recognize_paddle_text(crop, effective, engine=paddle_engine)
                         )
