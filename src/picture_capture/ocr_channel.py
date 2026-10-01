@@ -21,7 +21,7 @@ import unicodedata
 from typing import Any, Callable, Iterable
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .image_utils import normalize_page_rgb
 from .models import AppSettings, resolved_tesseract_language
@@ -237,6 +237,75 @@ def _paddle_language(settings: AppSettings) -> str:
     return mapping.get(raw_language, raw_language)
 
 
+def _ocr_input_otsu_threshold(gray: np.ndarray) -> int:
+    """Return the same conservative Otsu threshold used by the mature runner."""
+
+    if gray.size == 0:
+        return 180
+    hist = np.bincount(gray.astype(np.uint8).ravel(), minlength=256).astype(np.float64)
+    total = float(gray.size)
+    weighted_total = float(np.dot(np.arange(256, dtype=np.float64), hist))
+    background_weight = 0.0
+    background_sum = 0.0
+    best_variance = -1.0
+    best_threshold = 180
+    for threshold in range(256):
+        background_weight += hist[threshold]
+        if background_weight <= 0:
+            continue
+        foreground_weight = total - background_weight
+        if foreground_weight <= 0:
+            break
+        background_sum += threshold * hist[threshold]
+        background_mean = background_sum / background_weight
+        foreground_mean = (weighted_total - background_sum) / foreground_weight
+        between = background_weight * foreground_weight * (background_mean - foreground_mean) ** 2
+        if between > best_variance:
+            best_variance = between
+            best_threshold = threshold
+    return int(min(220, max(80, best_threshold)))
+
+
+def prepare_ocr_input(
+    image: Image.Image,
+    *,
+    max_long_side: int = 2800,
+    mode: str = "original",
+) -> tuple[Image.Image, float]:
+    """Prepare a Paddle crop and return source-to-input coordinate scale.
+
+    This is the engine-level preprocessing formerly reached indirectly through
+    ``paddle_headwords_core.run_paddle_band``. Keeping it in the shared channel
+    preserves marker-only OCR behavior without importing the mature parser.
+    """
+
+    source = normalize_page_rgb(image)
+    normalized_mode = str(mode or "original").strip().lower()
+    if normalized_mode in {"grayscale", "gray", "auto_contrast", "binary"}:
+        gray = ImageOps.grayscale(source)
+        if normalized_mode in {"auto_contrast", "binary"}:
+            gray = ImageOps.autocontrast(gray)
+        if normalized_mode == "binary":
+            array = np.asarray(gray)
+            threshold = _ocr_input_otsu_threshold(array)
+            gray = Image.fromarray(
+                np.where(array > threshold, 255, 0).astype(np.uint8),
+                mode="L",
+            )
+        source = gray.convert("RGB")
+    limit = max(256, int(max_long_side or 2800))
+    scale = min(1.0, limit / max(source.size))
+    if scale < 1.0:
+        source = source.resize(
+            (
+                max(1, round(source.width * scale)),
+                max(1, round(source.height * scale)),
+            ),
+            Image.Resampling.LANCZOS,
+        )
+    return source, scale
+
+
 def clear_ocr_channel_paddle_engine_cache(
     *,
     keep_key: tuple[str, str, str, bool] | None = None,
@@ -367,6 +436,24 @@ def _extract_paddle_channel_records(result: Any) -> tuple[OcrChannelRecord, ...]
     return tuple(records)
 
 
+def _rescale_channel_records(
+    records: Iterable[OcrChannelRecord],
+    input_scale: float,
+) -> tuple[OcrChannelRecord, ...]:
+    collected = tuple(records)
+    if not collected or abs(float(input_scale) - 1.0) < 1e-9:
+        return collected
+    inverse = 1.0 / max(1e-9, float(input_scale))
+    return tuple(
+        OcrChannelRecord(
+            text=row.text,
+            confidence=row.confidence,
+            box=tuple(round(float(value) * inverse) for value in row.box),
+        )
+        for row in collected
+    )
+
+
 def _candidate_from_records(
     engine: str,
     records: Iterable[OcrChannelRecord],
@@ -454,14 +541,30 @@ class OcrChannelSession:
         *,
         engine: Any | None = None,
     ) -> OcrChannelCandidate:
-        """Run Paddle and normalize its records for channel-native consumers."""
+        """Run Paddle with mature crop preprocessing and source-coordinate boxes."""
 
         try:
-            results = self.run_paddle_raw(image, engine=engine)
+            prepared, input_scale = prepare_ocr_input(
+                image,
+                max_long_side=getattr(self.settings, "paddle_max_input_side", 2800),
+                mode=getattr(self.settings, "paddle_preprocessing", "original"),
+            )
+            results = self.run_paddle_raw(prepared, engine=engine)
             records: tuple[OcrChannelRecord, ...] = ()
             if results:
                 records = _extract_paddle_channel_records(results[0])
-            return _candidate_from_records("paddle", records)
+                records = _rescale_channel_records(records, input_scale)
+            return _candidate_from_records(
+                "paddle",
+                records,
+                metadata={
+                    "input_scale": float(input_scale),
+                    "preprocessing": str(
+                        getattr(self.settings, "paddle_preprocessing", "original")
+                        or "original"
+                    ),
+                },
+            )
         except Exception as exc:
             return OcrChannelCandidate(engine="paddle", error=str(exc))
 
@@ -706,5 +809,6 @@ __all__ = [
     "channel_text_key",
     "choose_ocr_text",
     "clear_ocr_channel_paddle_engine_cache",
+    "prepare_ocr_input",
     "resolve_ocr_channel_plan",
 ]
