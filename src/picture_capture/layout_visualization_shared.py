@@ -12,6 +12,7 @@ from typing import Any
 
 from .dictionary_page_layout_policy import resolve_page_layout_policy
 from .image_utils import build_analysis_image
+from .layout_physical_indent import normalized_physical_indents
 from .processing import (
     ORDINARY_AUTO_LAYOUT_FIELDS,
     _geometry_from_page_understanding,
@@ -61,28 +62,49 @@ def _indent_blocks_from_understanding(understanding: Any) -> list[dict[str, Any]
 
 
 def _indent_lanes_from_understanding(understanding: Any) -> list[dict[str, Any]]:
-    """Expose each per-column physical-indent cluster for visual auditing."""
+    """Expose physical-indent clusters in the same corrected space as role logic."""
     lanes: list[dict[str, Any]] = []
     for column in list(getattr(understanding.layout, "columns", []) or []):
         column_index = int(getattr(column, "index", 0) or 0)
+        column_lines = list(getattr(column, "lines", []) or [])
+        corrected_by_line = normalized_physical_indents(column_lines)
+
         for lane_index, mode in enumerate(list(getattr(column, "indent_modes", []) or [])):
-            values = sorted(
-                float(getattr(line, "first_x", 0) or 0)
-                for line in list(getattr(mode, "lines", []) or [])
+            mode_lines = list(getattr(mode, "lines", []) or [])
+            corrected_values = sorted(
+                float(corrected_by_line[id(line)])
+                for line in mode_lines
+                if id(line) in corrected_by_line
             )
-            if values:
-                low = float(values[0])
-                high = float(values[-1])
+            raw_values = sorted(
+                float(getattr(line, "first_x", 0) or 0)
+                for line in mode_lines
+            )
+
+            center = float(getattr(mode, "center", 0.0) or 0.0)
+            if corrected_values:
+                low = float(corrected_values[0])
+                high = float(corrected_values[-1])
             else:
-                center = float(getattr(mode, "center", 0.0) or 0.0)
-                low = high = center
+                tolerance = float(getattr(mode, "tolerance", 0.0) or 0.0)
+                low = center - tolerance
+                high = center + tolerance
+
+            if raw_values:
+                raw_low = float(raw_values[0])
+                raw_high = float(raw_values[-1])
+            else:
+                raw_low = raw_high = center
+
             lanes.append({
                 "column": column_index,
                 "lane": int(lane_index),
-                "center": float(getattr(mode, "center", 0.0) or 0.0),
+                "center": center,
                 "min": low,
                 "max": high,
-                "support": int(getattr(mode, "support", len(values)) or len(values)),
+                "raw_min": raw_low,
+                "raw_max": raw_high,
+                "support": int(getattr(mode, "support", len(mode_lines)) or len(mode_lines)),
                 "role": str(getattr(mode, "role", "") or "unknown"),
             })
     return lanes
