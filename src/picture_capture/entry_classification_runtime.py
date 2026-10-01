@@ -122,7 +122,12 @@ def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
             first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
             return first_line[:64].strip()
 
-        def resolve_candidate(candidate, *, is_large: bool) -> OcrTextChoice | None:
+        def resolve_candidate(
+            candidate,
+            *,
+            is_large: bool,
+            crop_width: int,
+        ) -> OcrTextChoice | None:
             if not candidate.ok:
                 return None
             word = ""
@@ -140,7 +145,7 @@ def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
                         records,
                         effective,
                         profile,
-                        max_left_x=max(16, round(max(1, int(candidate.metadata.get("crop_width", 0) or 0)) * 0.75)),
+                        max_left_x=max(16, round(max(1, int(crop_width)) * 0.75)),
                     )
                     if word:
                         confidence = float(confidence_value)
@@ -187,25 +192,17 @@ def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
                 else 7
             )
             result = channel.recognize_crop(crop, tesseract_psm=psm)
-
-            # Preserve crop width for the existing large-CJK local-record rule
-            # without teaching the generic OCR channel anything about headwords.
-            resolved: list[OcrTextChoice] = []
-            for candidate in result.candidates:
-                if candidate.engine == "paddle" and candidate.records:
-                    from .ocr_channel import OcrChannelCandidate
-                    candidate = OcrChannelCandidate(
-                        engine=candidate.engine,
-                        text=candidate.text,
-                        confidence=candidate.confidence,
-                        records=candidate.records,
-                        error=candidate.error,
-                        participates_in_fusion=candidate.participates_in_fusion,
-                        metadata={**candidate.metadata, "crop_width": int(crop.width)},
+            resolved = [
+                choice
+                for candidate in result.candidates
+                if (
+                    choice := resolve_candidate(
+                        candidate,
+                        is_large=is_large,
+                        crop_width=int(crop.width),
                     )
-                choice = resolve_candidate(candidate, is_large=is_large)
-                if choice is not None:
-                    resolved.append(choice)
+                ) is not None
+            ]
 
             selected, _agreed = choose_ocr_text(result.plan, resolved)
             word = str(selected.text).strip() if selected is not None else ""
