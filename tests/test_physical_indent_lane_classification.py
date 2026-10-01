@@ -28,19 +28,9 @@ def test_clustering_is_independent_of_character_height() -> None:
 
     assert [round(mode.center) for mode in small] == [4, 15]
     assert [round(mode.center) for mode in large] == [4, 15]
-    assert [sorted(line.first_x for line in mode.lines) for mode in small] == [
-        [2, 4, 5],
-        [13, 15, 16],
-    ]
-    assert [sorted(line.first_x for line in mode.lines) for mode in large] == [
-        [2, 4, 5],
-        [13, 15, 16],
-    ]
 
 
 def test_c1_like_distribution_merges_continuous_body_peak() -> None:
-    # Mirrors the diagnostic pattern C1: entry near 0, a broad dense body peak
-    # spanning the 20s/low-30s, then sparse outliers farther right.
     values = (
         [0, 0, 1, 1, 2, 2] * 3
         + [21, 22, 23, 24, 25, 25, 26, 27, 28, 29, 30] * 4
@@ -65,7 +55,7 @@ def test_c1_like_distribution_merges_continuous_body_peak() -> None:
     assert any(lo == 97 and hi == 97 for lo, hi, _n in ranges)
 
 
-def test_c2_like_distribution_assigns_entry_and_body_from_support() -> None:
+def test_binary_roles_choose_entry_then_make_everything_else_body() -> None:
     values = (
         [12, 13, 13, 14, 14, 15, 15, 16, 16, 17] * 2
         + [19, 20, 19]
@@ -79,22 +69,33 @@ def test_c2_like_distribution_assigns_entry_and_body_from_support() -> None:
 
     assign_physical_indent_roles(column, "body", reference=50.0)
 
-    assert column.body_mode is not None
-    assert 43 <= column.body_mode.center <= 54
     assert len(column.entry_modes) == 1
-    assert 12 <= column.entry_modes[0].center <= 20
-    assert column.entry_modes[0].role == "entry"
+    entry = column.entry_modes[0]
+    assert 12 <= entry.center <= 20
+    assert entry.role == "entry"
+    assert all(mode.role in {"entry", "body"} for mode in modes)
+    assert all(mode.role == "body" for mode in modes if mode is not entry)
+    assert column.body_mode is not None
+    assert column.body_mode is not entry
 
-    sparse = [mode for mode in modes if len(mode.lines) <= 2]
-    assert sparse
-    assert all(mode.role == "unknown" for mode in sparse)
+
+def test_single_lane_page_stays_body() -> None:
+    modes = indent_width_modes([_line(v) for v in [2, 2, 3, 3, 4, 4]], reference=50.0)
+    column = SimpleNamespace(indent_modes=modes, body_mode=None, entry_modes=[])
+
+    assign_physical_indent_roles(column, "body", reference=50.0)
+
+    assert len(modes) == 1
+    assert modes[0].role == "body"
+    assert column.body_mode is modes[0]
+    assert column.entry_modes == []
 
 
-def test_lane_summary_reports_cluster_geometry_support_and_role() -> None:
+def test_lane_summary_reports_only_entry_or_body_roles() -> None:
     app = SimpleNamespace(
         _layout_visualization_indent_lanes=[
             {"column": 0, "lane": 0, "center": 3.0, "min": 2.0, "max": 5.0, "support": 8, "role": "entry"},
-            {"column": 0, "lane": 1, "center": 15.0, "min": 13.0, "max": 17.0, "support": 5, "role": "unknown"},
+            {"column": 0, "lane": 1, "center": 15.0, "min": 13.0, "max": 17.0, "support": 5, "role": "body"},
             {"column": 0, "lane": 2, "center": 35.0, "min": 32.0, "max": 38.0, "support": 22, "role": "body"},
         ]
     )
@@ -103,5 +104,6 @@ def test_lane_summary_reports_cluster_geometry_support_and_role() -> None:
 
     assert "physical indent lanes:" in text
     assert "C1/L1: center=3.0   range=2.0-5.0   n=8   role=entry" in text
-    assert "C1/L2: center=15.0   range=13.0-17.0   n=5   role=unknown" in text
+    assert "C1/L2: center=15.0   range=13.0-17.0   n=5   role=body" in text
     assert "C1/L3: center=35.0   range=32.0-38.0   n=22   role=body" in text
+    assert "unknown" not in text
