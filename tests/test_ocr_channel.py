@@ -12,6 +12,9 @@ from picture_capture.ocr_channel import (
     choose_ocr_text,
     resolve_ocr_channel_plan,
 )
+from picture_capture.ocr_channel_legacy import (
+    apply_channel_plan_to_legacy_boundary_settings,
+)
 
 
 def test_channel_plan_uses_existing_multi_engine_switches():
@@ -156,13 +159,41 @@ def test_marker_only_ocr_is_a_channel_consumer_not_single_engine_dispatch():
     assert "OcrChannelCandidate(" not in source
 
 
-def test_ocr_boundary_detection_is_a_separate_channel_consumer():
+def test_ocr_boundary_detection_is_channel_neutral_consumer():
     import picture_capture.ocr_boundary_detection as boundary
 
     source = Path(boundary.__file__).read_text(encoding="utf-8")
-    assert "resolve_ocr_channel_plan" in source
+    assert "apply_channel_plan_to_legacy_boundary_settings" in source
     assert "detect_ocr_headword_boundaries" in source
     assert "legacy_detect" in source
+    assert "resolve_ocr_channel_plan" not in source
+    for legacy_flag in (
+        "paddle_use_paddleocr",
+        "paddle_compare_tesseract",
+        "paddle_enable_lens",
+        "paddle_lens_mode",
+    ):
+        assert legacy_flag not in source
+
+
+def test_legacy_boundary_adapter_is_only_translation_for_tesseract_fallback():
+    settings = AppSettings(
+        paddle_use_paddleocr=False,
+        paddle_compare_tesseract=False,
+        paddle_tesseract_rescue=False,
+        paddle_enable_lens=False,
+        paddle_lens_mode="off",
+        ocr_engine="tesseract",
+    )
+
+    routed = apply_channel_plan_to_legacy_boundary_settings(settings)
+
+    assert routed.paddle_use_paddleocr is False
+    assert routed.paddle_compare_tesseract is True
+    assert routed.paddle_tesseract_rescue is False
+    assert routed.paddle_enable_lens is False
+    assert routed.paddle_lens_mode == "off"
+    assert settings.paddle_compare_tesseract is False
 
 
 def test_historical_paddle_headword_entrypoint_remains_boundary_consumer_alias():
@@ -174,10 +205,24 @@ def test_historical_paddle_headword_entrypoint_remains_boundary_consumer_alias()
 def test_main_ui_presents_engine_selection_as_shared_ocr_channel():
     from picture_capture.ui_terminology import normalize_ui_text
 
-    assert normalize_ui_text("三、融合 / OCR画线参数") == "三、OCR通道 / OCR画线"
-    assert normalize_ui_text("三、OCR画线参数（默认）") == "三、OCR通道 / OCR画线"
+    assert normalize_ui_text("三、融合 / OCR画线参数") == "三、共享 OCR 通道 / OCR画线"
+    assert normalize_ui_text("三、OCR画线参数（默认）") == "三、共享 OCR 通道 / OCR画线"
     help_text = normalize_ui_text(
         "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启"
     )
     assert "共享 OCR 通道" in help_text
+    assert "可同时启用" in help_text
     assert "【仅OCR】与【OCR画线】共用" in help_text
+
+
+def test_marker_only_ui_copy_states_shared_multi_ocr_without_geometry_changes():
+    from picture_capture.ui_terminology import normalize_ui_text
+
+    text = normalize_ui_text(
+        "仅OCR：只对已有画线做局部 PaddleOCR 补文字，不新增、删除或移动 marker。"
+    )
+
+    assert "共享 OCR 通道" in text
+    assert "可同时使用多个 OCR" in text
+    assert "不新增、删除或移动 marker" in text
+    assert "局部 PaddleOCR" not in text
