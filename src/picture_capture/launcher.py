@@ -9,12 +9,7 @@ _PREPARED_APP_MODULE: Any | None = None
 
 
 def prepare_app_module() -> Any:
-    """Install runtime extensions once and return the fully prepared app module.
-
-    GUI smoke tests call this same function as the real launcher so failures in
-    descriptor-preserving monkey patches or other launcher-only wiring are
-    exercised before a release is considered healthy.
-    """
+    """Install runtime extensions once and return the fully prepared app module."""
     global _PREPARED_APP_MODULE
     if _PREPARED_APP_MODULE is not None:
         return _PREPARED_APP_MODULE
@@ -30,25 +25,16 @@ def prepare_app_module() -> Any:
 
     from . import dictionary_page_design
     from .dictionary_page_design_refined import detect_entries_from_page_design
-    from .layout_binary_finalize import install_binary_layout_finalizer
-    from .layout_binary_role_sync import install_binary_line_role_sync
-    from .layout_grid_inference import install_grid_line_and_indent_inference
     from .layout_line_start_refinement import install_robust_line_starts
+    from .layout_physical_indent import install_physical_indent_inference
 
     dictionary_page_design.detect_entries_from_page_design = (
         detect_entries_from_page_design
     )
-    # Detect real rows from projection, then cluster each column by that
-    # column's own physical leading-whitespace distribution.  Horizontal lane
-    # inference and role assignment are independent of character/line height.
-    install_grid_line_and_indent_inference()
+    # First refine each row's physical start, then install the single physical-
+    # indent lane/role implementation used by layout policy and Page Understanding.
     install_robust_line_starts()
-    # Keep lane and row roles synchronized during the primary semantics pass.
-    install_binary_line_role_sync()
-    # Legacy layout construction can still append sparse entry modes later.
-    # Normalize the final returned layout so every consumer sees the same
-    # strict physical-indent binary contract: one entry lane, everything else body.
-    install_binary_layout_finalizer()
+    install_physical_indent_inference()
 
     from . import profile_setup
     from .parameter_help_ui import build_profile_parameter_help_wizard
@@ -96,8 +82,6 @@ def prepare_app_module() -> Any:
     install_settings_parameter_help(app_module)
     install_app_tooltip_terminology(app_module)
     install_layout_visualization(app_module)
-    # The detailed summary module exists after install_layout_visualization();
-    # append the physical lane table that drives row-role classification.
     install_physical_lane_summary()
     app_module.PictureCaptureApp.export_training_package = (
         export_training_package_selected_range
