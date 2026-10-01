@@ -2,27 +2,30 @@ from __future__ import annotations
 
 """Shared OCR channel independent from how OCR results are consumed.
 
-The channel owns OCR-engine selection and execution.  Consumers decide what the
+The channel owns OCR-engine selection and execution. Consumers decide what the
 recognized text/boxes *mean*: existing-marker text fill, OCR-assisted headword
 boundary drawing, proofreading diagnostics, and future OCR features can all use
 the same engine plan without coupling OCR itself to separator generation.
 
 Historical ``paddle_*`` setting names remain storage/UI compatibility fields for
-now.  Runtime code should resolve them through :func:`resolve_ocr_channel_plan`
+now. Runtime code should resolve them through :func:`resolve_ocr_channel_plan`
 instead of reading them independently in every feature.
 """
 
 from dataclasses import dataclass, field
 from io import BytesIO
 import subprocess
+import threading
 import unicodedata
 from typing import Any, Callable, Iterable
 
+import numpy as np
 from PIL import Image
 
 from .image_utils import normalize_page_rgb
 from .models import AppSettings, resolved_tesseract_language
 from .ocr_engines import find_tesseract, run_google_lens
+from .runtime_environment import resolve_paddle_device
 
 
 OCR_ENGINE_ORDER: tuple[str, ...] = ("paddle", "tesseract", "lens")
@@ -34,6 +37,9 @@ _ENGINE_ALIASES = {
     "google_lens": "lens",
     "googlelens": "lens",
 }
+_RAW_OCR_THRESHOLD = 0.20
+_PADDLE_ENGINE_CACHE: dict[tuple[str, str, str, bool], Any] = {}
+_PADDLE_ENGINE_CACHE_LOCK = threading.RLock()
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +55,15 @@ class OcrChannelPlan:
 
     def votes(self, engine: str) -> bool:
         return str(engine or "").strip().lower() in self.voting_engines
+
+
+@dataclass(frozen=True, slots=True)
+class OcrChannelRecord:
+    """Engine-neutral OCR text fragment with source-crop geometry."""
+
+    text: str
+    confidence: float
+    box: tuple[int, int, int, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +113,7 @@ def resolve_ocr_channel_plan(settings: AppSettings) -> OcrChannelPlan:
     """Resolve the project-wide OCR engine selection.
 
     Existing main-window OCR checkboxes are the authoritative selection source:
-    Paddle, Tesseract and Lens can all be enabled together.  The historical
+    Paddle, Tesseract and Lens can all be enabled together. The historical
     single ``ocr_engine`` value is only a fallback when every multi-engine switch
     is disabled, preserving older projects and non-GUI callers.
     """
@@ -125,7 +140,7 @@ def resolve_ocr_channel_plan(settings: AppSettings) -> OcrChannelPlan:
         legacy = _normalized_engine_name(getattr(settings, "ocr_engine", ""))
         enabled.append(legacy or "tesseract")
         if enabled[0] == "lens":
-            # A legacy Lens-only project has no separate mode setting.  Treat it
+            # A legacy Lens-only project has no separate mode setting. Treat it
             # as a normal participating OCR rather than a diagnostic observer.
             lens_mode = "full"
 
@@ -154,7 +169,7 @@ def choose_ocr_text(
 ) -> tuple[OcrTextChoice | None, bool]:
     """Choose text without embedding any separator/headword drawing policy.
 
-    Exact normalized agreement between two enabled voting engines wins.  When
+    Exact normalized agreement between two enabled voting engines wins. When
     engines disagree, deterministic channel order is used instead of inventing a
     geometry/parser score here; higher-level consumers remain free to perform a
     richer arbitration before calling this helper. Diagnostic-only engines never
@@ -194,6 +209,167 @@ def choose_ocr_text(
     return voting[0], False
 
 
+def _paddle_language(settings: AppSettings) -> str:
+    configured = str(getattr(settings, "paddle_language", "") or "").strip()
+    if configured:
+        return configured
+    semantic = resolved_tesseract_language(settings).split("+", 1)[0].strip().lower()
+    mapping = {
+        "eng": "en",
+        "ita": "it",
+        "spa": "es",
+        "fra": "fr",
+        "por": "pt",
+        "deu": "de",
+        "chi_sim": "ch",
+        "chi_tra": "chinese_cht",
+        "jpn": "japan",
+        "jpn_vert": "japan",
+        "kor": "korean",
+        "rus": "ru",
+        "ara": "ar",
+    }
+    return mapping.get(semantic, semantic or "en")
+
+
+def _create_paddle_engine(settings: AppSettings) -> Any:
+    language = _paddle_language(settings)
+    orientation = bool(getattr(settings, "paddle_use_textline_orientation", False))
+    device = resolve_paddle_device()
+    version = str(getattr(settings, "paddle_ocr_version", "PP-OCRv5") or "PP-OCRv5")
+    key = (language, device, version, orientation)
+    with _PADDLE_ENGINE_CACHE_LOCK:
+        cached = _PADDLE_ENGINE_CACHE.get(key)
+        if cached is not None:
+            return cached
+        try:
+            from paddleocr import PaddleOCR
+        except Exception as exc:
+            raise RuntimeError(
+                "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或在受支持平台执行："
+                "uv sync --extra ocr-cpu"
+            ) from exc
+        try:
+            kwargs = dict(
+                lang=language,
+                ocr_version=version,
+                device=device,
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=orientation,
+                enable_mkldnn=False,
+            )
+            try:
+                engine = PaddleOCR(**kwargs)
+            except TypeError:
+                # Some PaddleOCR 3.x builds do not expose this constructor flag.
+                kwargs.pop("enable_mkldnn", None)
+                engine = PaddleOCR(**kwargs)
+        except Exception as exc:
+            raise RuntimeError(
+                f"PaddleOCR 初始化失败（语言={language}，设备={device}，版本={version}）：{exc}"
+            ) from exc
+        _PADDLE_ENGINE_CACHE[key] = engine
+        return engine
+
+
+def clear_ocr_channel_paddle_engine_cache() -> None:
+    """Drop cached Paddle engines owned by the shared OCR channel."""
+
+    with _PADDLE_ENGINE_CACHE_LOCK:
+        _PADDLE_ENGINE_CACHE.clear()
+
+
+def _paddle_json_payload(result: Any) -> dict[str, Any]:
+    if isinstance(result, dict):
+        payload = result
+    else:
+        payload = getattr(result, "json", None)
+        if callable(payload):
+            payload = payload()
+        if not isinstance(payload, dict):
+            payload = getattr(result, "res", None)
+        if not isinstance(payload, dict):
+            raise RuntimeError("PaddleOCR 返回了无法解析的结果格式")
+    nested = payload.get("res")
+    return nested if isinstance(nested, dict) else payload
+
+
+def _box_from_paddle_value(value: Any) -> tuple[int, int, int, int] | None:
+    try:
+        array = np.asarray(value, dtype=float)
+    except Exception:
+        return None
+    if array.size == 4:
+        flat = array.reshape(-1)
+        x0, y0, x1, y1 = (int(round(float(item))) for item in flat[:4])
+    elif array.ndim >= 2 and array.shape[-1] >= 2:
+        points = array.reshape(-1, array.shape[-1])
+        x0 = int(round(float(np.min(points[:, 0]))))
+        y0 = int(round(float(np.min(points[:, 1]))))
+        x1 = int(round(float(np.max(points[:, 0]))))
+        y1 = int(round(float(np.max(points[:, 1]))))
+    else:
+        return None
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return x0, y0, x1, y1
+
+
+def _extract_paddle_channel_records(result: Any) -> tuple[OcrChannelRecord, ...]:
+    payload = _paddle_json_payload(result)
+    raw_texts = payload.get("rec_texts")
+    raw_scores = payload.get("rec_scores")
+    raw_boxes = payload.get("rec_boxes")
+    if raw_boxes is None:
+        raw_boxes = payload.get("rec_polys")
+    texts = list(raw_texts) if raw_texts is not None else []
+    scores = list(raw_scores) if raw_scores is not None else []
+    boxes = list(raw_boxes) if raw_boxes is not None else []
+    records: list[OcrChannelRecord] = []
+    for index, text in enumerate(texts):
+        value = str(text or "").strip()
+        if not value or index >= len(boxes):
+            continue
+        box = _box_from_paddle_value(boxes[index])
+        if box is None:
+            continue
+        try:
+            confidence = float(scores[index]) if index < len(scores) else 0.0
+        except (TypeError, ValueError):
+            confidence = 0.0
+        records.append(OcrChannelRecord(value, confidence, box))
+    records.sort(key=lambda item: (item.box[1], item.box[0]))
+    return tuple(records)
+
+
+def _candidate_from_records(
+    engine: str,
+    records: Iterable[OcrChannelRecord],
+    *,
+    text: str = "",
+    metadata: dict[str, Any] | None = None,
+    participates_in_fusion: bool = True,
+) -> OcrChannelCandidate:
+    collected = tuple(records)
+    final_text = str(text or "").strip()
+    if not final_text:
+        final_text = " ".join(item.text for item in collected if item.text).strip()
+    confidence_values = [float(item.confidence) for item in collected]
+    confidence = (
+        sum(confidence_values) / len(confidence_values)
+        if confidence_values else None
+    )
+    return OcrChannelCandidate(
+        engine=engine,
+        text=final_text,
+        confidence=confidence,
+        records=collected,
+        participates_in_fusion=participates_in_fusion,
+        metadata=dict(metadata or {}),
+    )
+
+
 class OcrChannelSession:
     """Reusable multi-engine OCR session for many crops from one page/job."""
 
@@ -201,60 +377,88 @@ class OcrChannelSession:
         self,
         settings: AppSettings,
         *,
+        plan: OcrChannelPlan | None = None,
         paddle_runner: Callable[[Image.Image], OcrChannelCandidate] | None = None,
         tesseract_runner: Callable[[Image.Image, int], OcrChannelCandidate] | None = None,
         lens_runner: Callable[[Image.Image], OcrChannelCandidate] | None = None,
     ) -> None:
         self.settings = settings
-        self.plan = resolve_ocr_channel_plan(settings)
+        self.plan = plan or resolve_ocr_channel_plan(settings)
         self._paddle_runner = paddle_runner
         self._tesseract_runner = tesseract_runner
         self._lens_runner = lens_runner
         self._paddle_engine: Any | None = None
 
-    def _run_paddle(self, image: Image.Image) -> OcrChannelCandidate:
-        if self._paddle_runner is not None:
-            return self._paddle_runner(image)
-        try:
-            from .paddle_headwords import get_paddle_engine, run_paddle_band
+    def get_paddle_engine(self) -> Any:
+        """Return the channel-owned cached Paddle engine for this session."""
 
-            if self._paddle_engine is None:
-                self._paddle_engine = get_paddle_engine(self.settings)
-            records = tuple(
-                run_paddle_band(
-                    normalize_page_rgb(image),
-                    self.settings,
-                    engine=self._paddle_engine,
-                )
-            )
-            text = " ".join(
-                str(getattr(record, "text", "") or "").strip()
-                for record in records
-                if str(getattr(record, "text", "") or "").strip()
-            ).strip()
-            conf_values = [
-                float(getattr(record, "confidence", 0.0) or 0.0)
-                for record in records
-                if getattr(record, "confidence", None) is not None
-            ]
-            confidence = (
-                sum(conf_values) / len(conf_values)
-                if conf_values else None
-            )
-            return OcrChannelCandidate(
-                engine="paddle",
-                text=text,
-                confidence=confidence,
-                records=records,
-            )
+        if self._paddle_engine is None:
+            self._paddle_engine = _create_paddle_engine(self.settings)
+        return self._paddle_engine
+
+    def run_paddle_raw(
+        self,
+        image: Image.Image,
+        *,
+        engine: Any | None = None,
+    ) -> tuple[Any, ...]:
+        """Execute Paddle inference and return raw Paddle results.
+
+        This deliberately contains no headword/parser policy. The legacy
+        boundary bridge may reuse its battle-tested record normalization while
+        all actual engine invocation is owned by the shared OCR channel.
+        """
+
+        active = engine or self.get_paddle_engine()
+        try:
+            results = list(active.predict(
+                np.asarray(normalize_page_rgb(image)),
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=bool(
+                    getattr(self.settings, "paddle_use_textline_orientation", False)
+                ),
+                text_rec_score_thresh=_RAW_OCR_THRESHOLD,
+            ))
+        except Exception as exc:
+            raise RuntimeError(f"PaddleOCR 推理失败：{exc}") from exc
+        return tuple(results)
+
+    def run_paddle_records(
+        self,
+        image: Image.Image,
+        *,
+        engine: Any | None = None,
+    ) -> OcrChannelCandidate:
+        """Run Paddle and normalize its records for channel-native consumers."""
+
+        try:
+            results = self.run_paddle_raw(image, engine=engine)
+            records: tuple[OcrChannelRecord, ...] = ()
+            if results:
+                records = _extract_paddle_channel_records(results[0])
+            return _candidate_from_records("paddle", records)
         except Exception as exc:
             return OcrChannelCandidate(engine="paddle", error=str(exc))
 
-    def _run_tesseract(self, image: Image.Image, psm: int) -> OcrChannelCandidate:
+    def _run_paddle(self, image: Image.Image) -> OcrChannelCandidate:
+        if self._paddle_runner is not None:
+            return self._paddle_runner(image)
+        return self.run_paddle_records(image)
+
+    def run_tesseract_records(
+        self,
+        image: Image.Image,
+        psm: int,
+    ) -> OcrChannelCandidate:
+        """Run Tesseract TSV and retain word boxes for every consumer."""
+
         if self._tesseract_runner is not None:
             return self._tesseract_runner(image, int(psm))
         try:
-            resolved = find_tesseract(str(getattr(self.settings, "ocr_executable", "tesseract") or "tesseract"))
+            resolved = find_tesseract(
+                str(getattr(self.settings, "ocr_executable", "tesseract") or "tesseract")
+            )
             if not resolved:
                 raise RuntimeError("未找到 Tesseract OCR")
             payload = BytesIO()
@@ -267,6 +471,7 @@ class OcrChannelSession:
                 resolved_tesseract_language(self.settings),
                 "--psm",
                 str(max(1, int(psm))),
+                "tsv",
             ]
             proc = subprocess.run(
                 command,
@@ -279,58 +484,144 @@ class OcrChannelSession:
             if proc.returncode:
                 detail = proc.stderr.decode("utf-8", errors="replace").strip()
                 raise RuntimeError(detail or f"Tesseract exit={proc.returncode}")
-            text = proc.stdout.decode("utf-8", errors="replace").strip()
-            return OcrChannelCandidate(engine="tesseract", text=text)
+
+            lines = proc.stdout.decode("utf-8", errors="replace").splitlines()
+            records: list[OcrChannelRecord] = []
+            grouped_text: dict[tuple[int, int, int, int], list[tuple[int, str]]] = {}
+            for raw in lines[1:]:
+                columns = raw.split("\t", 11)
+                if len(columns) < 12:
+                    continue
+                text = columns[11].strip()
+                if not text:
+                    continue
+                try:
+                    level = int(columns[0])
+                    page_num = int(columns[1])
+                    block_num = int(columns[2])
+                    par_num = int(columns[3])
+                    line_num = int(columns[4])
+                    word_num = int(columns[5])
+                    left = int(columns[6])
+                    top = int(columns[7])
+                    width = int(columns[8])
+                    height = int(columns[9])
+                    raw_confidence = float(columns[10])
+                except (TypeError, ValueError):
+                    continue
+                if level != 5 or raw_confidence < 0 or width <= 0 or height <= 0:
+                    continue
+                confidence = max(0.0, min(1.0, raw_confidence / 100.0))
+                records.append(OcrChannelRecord(
+                    text=text,
+                    confidence=confidence,
+                    box=(left, top, left + width, top + height),
+                ))
+                key = (page_num, block_num, par_num, line_num)
+                grouped_text.setdefault(key, []).append((word_num, text))
+            records.sort(key=lambda item: (item.box[1], item.box[0]))
+            text_lines = [
+                " ".join(value for _word, value in sorted(words)).strip()
+                for _key, words in sorted(grouped_text.items())
+            ]
+            return _candidate_from_records(
+                "tesseract",
+                records,
+                text="\n".join(line for line in text_lines if line),
+                metadata={"psm": max(1, int(psm)), "executable": str(resolved)},
+            )
         except Exception as exc:
             return OcrChannelCandidate(engine="tesseract", error=str(exc))
 
-    def _run_lens(self, image: Image.Image) -> OcrChannelCandidate:
+    def _run_tesseract(self, image: Image.Image, psm: int) -> OcrChannelCandidate:
+        return self.run_tesseract_records(image, psm)
+
+    def run_lens_records(
+        self,
+        image: Image.Image,
+        *,
+        language: str | None = None,
+        timeout: int | None = None,
+        default_confidence: float | None = None,
+    ) -> OcrChannelCandidate:
+        """Run Lens and normalize its geometry without consumer policy."""
+
         if self._lens_runner is not None:
             return self._lens_runner(image)
+        participates = self.plan.lens_mode != "diagnostic"
         try:
-            records, text, version = run_google_lens(
-                normalize_page_rgb(image),
-                language=str(
-                    getattr(self.settings, "ocr_language", "")
-                    or getattr(self.settings, "paddle_lens_language", "")
-                    or ""
-                ),
-                timeout=int(getattr(self.settings, "paddle_lens_timeout", 60) or 60),
-                default_confidence=float(
-                    getattr(self.settings, "paddle_lens_default_confidence", 0.82)
-                    or 0.82
-                ),
-            )
-            conf_values = [float(record[1]) for record in records if len(record) >= 2]
-            confidence = (
-                sum(conf_values) / len(conf_values)
-                if conf_values
-                else float(
+            confidence_default = float(
+                default_confidence
+                if default_confidence is not None
+                else (
                     getattr(self.settings, "paddle_lens_default_confidence", 0.82)
                     or 0.82
                 )
             )
-            return OcrChannelCandidate(
-                engine="lens",
-                text=str(text or "").strip(),
-                confidence=confidence,
-                records=tuple(records),
-                participates_in_fusion=self.plan.lens_mode != "diagnostic",
-                metadata={"version": str(version or "")},
+            records, text, version = run_google_lens(
+                normalize_page_rgb(image),
+                language=str(
+                    language
+                    if language is not None
+                    else (
+                        getattr(self.settings, "ocr_language", "")
+                        or getattr(self.settings, "paddle_lens_language", "")
+                        or ""
+                    )
+                ),
+                timeout=int(
+                    timeout
+                    if timeout is not None
+                    else (getattr(self.settings, "paddle_lens_timeout", 60) or 60)
+                ),
+                default_confidence=confidence_default,
             )
+            normalized_records = tuple(
+                OcrChannelRecord(
+                    text=str(record[0] or "").strip(),
+                    confidence=float(record[1]),
+                    box=tuple(int(value) for value in record[2]),
+                )
+                for record in records
+                if len(record) >= 3 and str(record[0] or "").strip()
+            )
+            candidate = _candidate_from_records(
+                "lens",
+                normalized_records,
+                text=str(text or "").strip(),
+                metadata={"version": str(version or "")},
+                participates_in_fusion=participates,
+            )
+            if candidate.confidence is None:
+                return OcrChannelCandidate(
+                    engine="lens",
+                    text=candidate.text,
+                    confidence=confidence_default if candidate.text else None,
+                    records=candidate.records,
+                    participates_in_fusion=participates,
+                    metadata=candidate.metadata,
+                )
+            return candidate
         except Exception as exc:
             return OcrChannelCandidate(
                 engine="lens",
                 error=str(exc),
-                participates_in_fusion=self.plan.lens_mode != "diagnostic",
+                participates_in_fusion=participates,
             )
+
+    def _run_lens(self, image: Image.Image) -> OcrChannelCandidate:
+        return self.run_lens_records(image)
 
     @staticmethod
     def _needs_conflict_lens(candidates: Iterable[OcrChannelCandidate]) -> bool:
         successful = [item for item in candidates if item.ok]
         if len(successful) < 2:
             return True
-        keys = {channel_text_key(item.text) for item in successful if channel_text_key(item.text)}
+        keys = {
+            channel_text_key(item.text)
+            for item in successful
+            if channel_text_key(item.text)
+        }
         return len(keys) > 1
 
     def recognize_crop(
@@ -366,10 +657,12 @@ __all__ = [
     "OCR_ENGINE_ORDER",
     "OcrChannelCandidate",
     "OcrChannelPlan",
+    "OcrChannelRecord",
     "OcrChannelResult",
     "OcrChannelSession",
     "OcrTextChoice",
     "channel_text_key",
     "choose_ocr_text",
+    "clear_ocr_channel_paddle_engine_cache",
     "resolve_ocr_channel_plan",
 ]
