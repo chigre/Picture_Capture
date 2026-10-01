@@ -99,10 +99,12 @@ def prepare_app_module() -> Any:
     from .layout_visualization_role_theme import install_layout_role_theme
     from .layout_visualization_ui_v3 import install_layout_visualization
     from .parameter_help_ui import install_settings_parameter_help
+    from .settings_help_restore import install_settings_help_restore
     from .training_export_ui import export_training_package_selected_range
     from .ui_terminology import install_app_tooltip_terminology
 
     install_settings_parameter_help(app_module)
+    install_settings_help_restore(app_module)
     install_app_tooltip_terminology(app_module)
     install_layout_role_theme()
     install_layout_visualization(app_module)
