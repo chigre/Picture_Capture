@@ -3,8 +3,8 @@ from __future__ import annotations
 """Canonical settings names for the shared separator-Y refinement feature.
 
 Y refinement is shared by ordinary Layout drawing, OCR drawing and the manual
-PDIC Y-refine action.  The historical ``paddle_*`` names are therefore legacy
-storage/runtime implementation details only.  This module exposes neutral
+PDIC Y-refine action. The historical ``paddle_*`` names are therefore legacy
+storage/runtime implementation details only. This module exposes neutral
 ``separator_y_*`` names while keeping old projects loadable without changing
 refinement behaviour.
 """
@@ -26,9 +26,34 @@ LEGACY_TO_CANONICAL: dict[str, str] = {
     "paddle_separator_roi_width_ratio": "separator_y_roi_width_ratio",
     "paddle_separator_column_margin": "separator_y_column_margin",
 }
+CANONICAL_TO_LEGACY: dict[str, str] = {
+    canonical: legacy for legacy, canonical in LEGACY_TO_CANONICAL.items()
+}
 
 _INSTALLED = False
+_ORIGINAL_INIT: Any | None = None
 _ORIGINAL_FROM_JSON: Any | None = None
+
+
+def _install_constructor_migration() -> None:
+    """Allow new code to construct AppSettings with neutral separator-Y names."""
+    global _ORIGINAL_INIT
+    if _ORIGINAL_INIT is not None:
+        return
+
+    original_init = AppSettings.__init__
+    _ORIGINAL_INIT = original_init
+
+    def init(self: AppSettings, *args: Any, **kwargs: Any) -> None:
+        translated = dict(kwargs)
+        for canonical, legacy in CANONICAL_TO_LEGACY.items():
+            if canonical not in translated:
+                continue
+            # Canonical names are authoritative if a caller supplied both.
+            translated[legacy] = translated.pop(canonical)
+        original_init(self, *args, **translated)
+
+    AppSettings.__init__ = init  # type: ignore[method-assign]
 
 
 def _install_alias_properties() -> None:
@@ -117,6 +142,7 @@ def install_separator_y_settings() -> None:
     global _INSTALLED
     if _INSTALLED:
         return
+    _install_constructor_migration()
     _install_alias_properties()
     _install_json_migration()
     _INSTALLED = True
@@ -132,6 +158,7 @@ def canonical_separator_y_values(settings: AppSettings) -> dict[str, Any]:
 
 
 __all__ = [
+    "CANONICAL_TO_LEGACY",
     "LEGACY_TO_CANONICAL",
     "canonical_separator_y_values",
     "install_separator_y_settings",
