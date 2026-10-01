@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-"""Neutral crop-height settings shared by OCR and proofreading.
+"""Neutral entry-crop settings shared by OCR and proofreading.
 
-Historical review-only names remain compatibility storage slots.  Runtime code
-uses ``entry_regular_crop_height`` and ``entry_oversized_crop_height`` so crop
-semantics follow entry classification rather than language or UI surface.
+Historical review/Paddle names remain compatibility storage slots. Runtime code
+uses neutral entry terminology so crop semantics follow entry classification and
+are independent of OCR engine or UI surface.
 """
 
 from pathlib import Path
@@ -17,6 +17,7 @@ from .models import AppSettings
 LEGACY_TO_CANONICAL = {
     "review_regular_crop_height": "entry_regular_crop_height",
     "review_single_cjk_line_height": "entry_oversized_crop_height",
+    "paddle_band_width_ratio": "entry_ocr_right_ratio",
 }
 CANONICAL_TO_LEGACY = {canonical: legacy for legacy, canonical in LEGACY_TO_CANONICAL.items()}
 _INSTALLED = False
@@ -53,8 +54,8 @@ def install_entry_crop_settings() -> None:
         setattr(AppSettings, canonical, property(getter, setter))
 
     def to_json(self: AppSettings, path: Path) -> None:
-        # Let earlier migration layers (e.g. separator_y_*) serialize first,
-        # then rewrite only these two legacy crop keys to their canonical names.
+        # Let earlier migration layers serialize first, then rewrite these legacy
+        # storage keys to their canonical neutral names.
         original_to_json(self, path)
         target = Path(path)
         raw = json.loads(target.read_text(encoding="utf-8"))
