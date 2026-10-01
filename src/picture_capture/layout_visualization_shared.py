@@ -5,13 +5,14 @@ from __future__ import annotations
 The detector path resolves per-page geometry through Page Understanding.  The
 visual overlay must consume that exact policy result rather than run a second,
 independent reliable-layout detector, otherwise the user can see one C2/gutter
-while ordinary VB scans another.
+or one set of row roles while ordinary drawing consumes another.
 """
 
 from typing import Any
 
 from .dictionary_page_layout_policy import resolve_page_layout_policy
 from .image_utils import build_analysis_image
+from .ordinary_layout_primary import remember_visualized_understanding
 from .page_understanding import understand_page
 from .processing import ORDINARY_AUTO_LAYOUT_FIELDS, _geometry_from_page_understanding
 
@@ -101,12 +102,24 @@ def shared_snapshot_for_app(app: Any) -> Any:
 
     effective = app._current_effective_profile_settings()
     page_index = max(0, int(getattr(app, "current_index", 0)))
+    page_sections = list(getattr(app, "page_sections", []) or [])
     analysis = build_analysis_image(app.image, effective)
     try:
         understanding = understand_page(
             analysis,
             effective,
             page_index=page_index,
+            page_sections=page_sections,
+        )
+        # This is the exact semantic object whose role blocks are painted below.
+        # Ordinary drawing can reuse it only if image/settings/page/sections all
+        # still match, so what the user sees is what the draw action consumes.
+        remember_visualized_understanding(
+            app.image,
+            effective,
+            page_index,
+            page_sections,
+            understanding,
         )
         geometry = _geometry_from_page_understanding(understanding)
         used = understanding.page_settings
