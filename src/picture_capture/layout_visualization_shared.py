@@ -17,42 +17,49 @@ from .processing import ORDINARY_AUTO_LAYOUT_FIELDS, _geometry_from_page_underst
 
 
 def _indent_blocks_from_understanding(understanding: Any) -> list[dict[str, Any]]:
-    """Return canonical per-line indent spans for diagnostic visualization.
+    """Return canonical per-line *actual indent* spans for diagnostics.
 
-    ``LayoutLine.anchor_x`` and ``IndentMode.center`` are local X coordinates
-    inside a column strip, while line y0/y1 are local to ``body_top``.  Convert
-    both to canonical page coordinates here so every renderer consumes one
-    unambiguous coordinate system.
+    ``LayoutLine.first_x`` is the first real ink in the line, local to the
+    column strip.  This is the visually meaningful indent requested by the UI:
+    the highlighted span runs from the physical column left edge to that first
+    ink.  ``anchor_x`` is intentionally not used for the span because it skips
+    small prefixes/markers and can therefore make the overlay look as though an
+    interior glyph were the line start.
     """
     layout = understanding.layout
     blocks: list[dict[str, Any]] = []
     body_top = int(layout.body_top)
 
     for column in layout.columns:
-        body = getattr(column, "body_mode", None)
-        if body is None:
-            continue
-        body_local_x = float(body.center)
         column_left = int(column.left)
+        body = getattr(column, "body_mode", None)
+        body_local_x = float(body.center) if body is not None else None
         for line in list(getattr(column, "lines", []) or []):
+            first_local_x = max(0.0, float(getattr(line, "first_x", 0) or 0))
             anchor = getattr(line, "anchor_x", None)
-            if anchor is None:
-                continue
-            anchor_local_x = float(anchor)
-            x0 = column_left + min(anchor_local_x, body_local_x)
-            x1 = column_left + max(anchor_local_x, body_local_x)
+            anchor_local_x = float(anchor) if anchor is not None else None
+            x0 = float(column_left)
+            x1 = float(column_left) + first_local_x
             y0 = body_top + int(getattr(line, "y0", 0) or 0)
             y1 = body_top + int(getattr(line, "y1", 0) or 0)
             if y1 <= y0:
                 continue
             blocks.append({
                 "column": int(getattr(column, "index", 0) or 0),
-                "x0": float(x0),
-                "x1": float(x1),
+                "x0": x0,
+                "x1": x1,
                 "y0": int(y0),
                 "y1": int(y1),
-                "anchor_x": float(column_left + anchor_local_x),
-                "body_x": float(column_left + body_local_x),
+                "first_x": x1,
+                "anchor_x": (
+                    float(column_left) + anchor_local_x
+                    if anchor_local_x is not None else None
+                ),
+                "body_x": (
+                    float(column_left) + body_local_x
+                    if body_local_x is not None else None
+                ),
+                "indent_px": first_local_x,
                 "role": str(getattr(line, "role", "") or "unknown"),
             })
     return blocks
