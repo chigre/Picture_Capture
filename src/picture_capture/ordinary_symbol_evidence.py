@@ -93,8 +93,6 @@ def detect_ordinary_symbol_entries(
             if end_x <= start_x:
                 continue
 
-            # Give thin/tall punctuation a little vertical breathing room; the
-            # template normalizer will trim the actual component afterwards.
             pad_y = max(1, round(line_height * 0.18))
             y0 = max(0, canonical_y0 - pad_y)
             y1 = min(gray_page.shape[0], canonical_y1 + pad_y)
@@ -106,8 +104,6 @@ def detect_ordinary_symbol_entries(
             best: dict[str, Any] | None = None
             best_box: tuple[int, int, int, int] | None = None
             for x0, yy0, x1, yy1, _area in _candidate_components(ink, line_height):
-                # Only the first ~1.2 character widths from the physical line
-                # start are structural-marker territory.
                 if x0 > line_height * 1.25:
                     continue
                 component = ink[yy0:yy1, x0:x1]
@@ -134,6 +130,8 @@ def detect_ordinary_symbol_entries(
             if score < threshold:
                 continue
 
+            sample = best.get("sample") if isinstance(best.get("sample"), dict) else {}
+            role = str(sample.get("role") or "")
             source_x, source_y = layout.transform.canonical_to_source_point(
                 int(column.left),
                 canonical_y0,
@@ -147,7 +145,7 @@ def detect_ordinary_symbol_entries(
                 ocr_source="ordinary_symbol_evidence",
                 issue_type=(
                     "ORDINARY_VISUAL_BRACKET_SAMPLE"
-                    if str(best.get("role") or "") == "bracket_open"
+                    if role == "bracket_open"
                     else "ORDINARY_VISUAL_ENTRY_MARKER_SAMPLE"
                 ),
             ))
