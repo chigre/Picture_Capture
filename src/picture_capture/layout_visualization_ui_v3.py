@@ -5,6 +5,10 @@ from __future__ import annotations
 The Layout visualization switch is intentionally UI-local.  It is not a
 project/detection parameter and therefore must not be registered in
 ``quick_bool_vars`` or written back to the slotted ``AppSettings`` dataclass.
+
+While Layout diagnostics are enabled, the existing global overlay visibility
+switch is temporarily forced on so ordinary guides/markers disappear.  Its
+previous value is restored when Layout diagnostics are disabled.
 """
 
 from typing import Any
@@ -12,6 +16,47 @@ import tkinter as tk
 from tkinter import ttk
 
 from .layout_visualization_summary import draw_layout_visualization_detailed
+
+
+def _hide_var(app: Any) -> Any | None:
+    var = getattr(app, "hide_var", None)
+    if var is None or not hasattr(var, "get") or not hasattr(var, "set"):
+        return None
+    return var
+
+
+def _set_layout_exclusive_visibility(app: Any, enabled: bool) -> None:
+    """Hide ordinary overlays while Layout diagnostics are active.
+
+    This changes only the UI variable.  It deliberately does not call the
+    normal persistence callback, so project settings remain untouched.
+    """
+    var = _hide_var(app)
+    if var is None:
+        return
+
+    if enabled:
+        if not hasattr(app, "_layout_visualization_previous_hide_value"):
+            try:
+                app._layout_visualization_previous_hide_value = bool(var.get())
+            except Exception:
+                app._layout_visualization_previous_hide_value = False
+        try:
+            var.set(True)
+        except Exception:
+            pass
+        return
+
+    previous = getattr(app, "_layout_visualization_previous_hide_value", None)
+    if previous is not None:
+        try:
+            var.set(bool(previous))
+        except Exception:
+            pass
+        try:
+            delattr(app, "_layout_visualization_previous_hide_value")
+        except Exception:
+            pass
 
 
 def _add_layout_toggle(app: Any, section: Any) -> None:
@@ -33,6 +78,8 @@ def _add_layout_toggle(app: Any, section: Any) -> None:
     row = (max(occupied_rows) + 1) if occupied_rows else 0
 
     def toggle() -> None:
+        enabled = bool(var.get())
+        _set_layout_exclusive_visibility(app, enabled)
         # The switch is display-only: invalidate only the visualization snapshot
         # and redraw the canvas.  Do not touch AppSettings or detector state.
         app._layout_visualization_snapshot_key = None
@@ -51,7 +98,7 @@ def _add_layout_toggle(app: Any, section: Any) -> None:
     try:
         app._attach_tooltip(
             checkbox,
-            "在主图上显示当前页实际采用的版面推理：正文上下界、每栏几何、栏间宽度、推理方法/置信度及自动字段 raw/used 状态。仅影响显示。",
+            "显示当前页版面推理，并临时隐藏其他线框/标记；取消勾选后恢复原显示状态。摘要位于第一栏水平中心、body_top 下方 5 个行高。",
         )
     except Exception:
         pass
@@ -94,8 +141,34 @@ def install_layout_visualization(app_module: Any) -> None:
         return result
 
     def redraw(self: Any, *args: Any, **kwargs: Any) -> Any:
+        # When Layout is enabled, hide_var is True while the original redraw runs,
+        # so all ordinary overlays remain suppressed.
         result = original_redraw(self, *args, **kwargs)
-        draw_layout_visualization_detailed(self)
+
+        layout_var = getattr(self, "_layout_visualization_var", None)
+        layout_enabled = bool(layout_var.get()) if layout_var is not None else False
+        if not layout_enabled:
+            return result
+
+        # The base Layout renderer historically respects hide_var.  Temporarily
+        # clear it only for this diagnostic draw, then restore the exclusive
+        # hidden state without triggering another redraw or persistence callback.
+        hide = _hide_var(self)
+        previous = None
+        if hide is not None:
+            try:
+                previous = bool(hide.get())
+                hide.set(False)
+            except Exception:
+                previous = None
+        try:
+            draw_layout_visualization_detailed(self)
+        finally:
+            if hide is not None and previous is not None:
+                try:
+                    hide.set(previous)
+                except Exception:
+                    pass
         return result
 
     cls._section_frame = section_frame
