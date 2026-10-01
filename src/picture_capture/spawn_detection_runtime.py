@@ -47,24 +47,27 @@ def detect_entries_job_with_runtime(
     with Image.open(page) as opened:
         image = processing_module._core.normalize_page_rgb(opened)
 
-    current = replace(settings)
-    current.detection_method = "left_edge"
-    entries, _geometry = processing_module.detect_entries(
-        image,
-        current,
-        profile_page_index=profile_page_index,
-        page_sections=processing_module._core.read_page_sections(page),
-    )
+    try:
+        current = replace(settings)
+        current.detection_method = "left_edge"
+        entries, _geometry = processing_module.detect_entries(
+            image,
+            current,
+            profile_page_index=profile_page_index,
+            page_sections=processing_module._core.read_page_sections(page),
+        )
 
-    pdic = processing_module._core.pdic_path_for_image(page)
-    save_automatic_baseline(pdic, entries, image.width, pages)
-    formats.write_pdic(
-        pdic,
-        entries,
-        image.width,
-        pages,
-    )
-    return len(entries)
+        pdic = processing_module._core.pdic_path_for_image(page)
+        save_automatic_baseline(pdic, entries, image.width, pages)
+        formats.write_pdic(
+            pdic,
+            entries,
+            image.width,
+            pages,
+        )
+        return len(entries)
+    finally:
+        image.close()
 
 
 def install_spawn_detection_runtime(processing_module: Any) -> None:
