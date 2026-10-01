@@ -5,7 +5,8 @@ from __future__ import annotations
 The base overlay owns geometry drawing. This module intercepts the one summary
 text item so it can be placed at the horizontal centre of column 1, five
 line-heights below ``body_top``, while containing the physical evidence needed
-to audit layout inference.
+to audit layout inference.  It also renders Page Understanding's per-line
+indent spans as pale-yellow translucent-looking blocks.
 """
 
 from typing import Any, Callable
@@ -16,6 +17,8 @@ from .processing import ORDINARY_AUTO_LAYOUT_FIELDS
 
 
 _SUMMARY_TAG = "layout-visualization-summary"
+_INDENT_TAG = "layout-visualization-indent"
+_BASE_LAYOUT_TAG = "layout-visualization"
 
 
 def _append_tag(tags: object, tag: str) -> tuple[str, ...]:
@@ -40,6 +43,15 @@ def _format_summary(app: Any, snapshot: Any) -> str:
     if source_size == (0, 0) and getattr(app, "image", None) is not None:
         source_size = tuple(app.image.size)
 
+    indent_blocks = list(getattr(app, "_layout_visualization_indent_blocks", []) or [])
+    role_counts: dict[str, int] = {}
+    for block in indent_blocks:
+        role = str(block.get("role", "unknown") or "unknown")
+        role_counts[role] = role_counts.get(role, 0) + 1
+    role_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(role_counts.items())
+    ) or "none"
+
     lines = [
         f"Layout {'AUTO' if snapshot.auto_enabled else 'CURRENT'}",
         f"method={snapshot.method}   confidence={confidence}",
@@ -62,6 +74,7 @@ def _format_summary(app: Any, snapshot: Any) -> str:
             f"text scale: character_height={values['character_height']}   "
             f"row_padding={values['row_padding']}"
         ),
+        f"line indents: {len(indent_blocks)}   roles: {role_text}",
     ]
 
     top = int(geometry.top)
@@ -129,8 +142,75 @@ def _summary_anchor(app: Any, snapshot: Any) -> tuple[float, float]:
     return (sx * scale, sy * scale)
 
 
+def _draw_indent_blocks(app: Any, snapshot: Any) -> None:
+    """Draw each inferred line's indent span as a translucent-looking yellow block."""
+    canvas = getattr(app, "canvas", None)
+    if canvas is None:
+        return
+    try:
+        canvas.delete(_INDENT_TAG)
+    except Exception:
+        return
+
+    var = getattr(app, "_layout_visualization_var", None)
+    if var is None or not bool(var.get()):
+        return
+
+    geometry = snapshot.geometry
+    scale = float(getattr(app, "view_scale", 1.0) or 1.0)
+    blocks = list(getattr(app, "_layout_visualization_indent_blocks", []) or [])
+    if not blocks:
+        return
+
+    for block in blocks:
+        try:
+            x0 = float(block["x0"])
+            x1 = float(block["x1"])
+            y0 = int(block["y0"])
+            y1 = int(block["y1"])
+        except (KeyError, TypeError, ValueError):
+            continue
+
+        # Zero/near-zero indent is deliberately not painted: no yellow width is
+        # itself the visual statement that this row sits on the body baseline.
+        if abs(x1 - x0) < 1.0 or y1 <= y0:
+            continue
+
+        p0 = geometry.canonical_to_source(round(x0), y0)
+        p1 = geometry.canonical_to_source(round(x1), y1)
+        left = min(float(p0[0]), float(p1[0])) * scale
+        right = max(float(p0[0]), float(p1[0])) * scale
+        top = min(float(p0[1]), float(p1[1])) * scale
+        bottom = max(float(p0[1]), float(p1[1])) * scale
+        if right - left < 1.0 or bottom - top < 1.0:
+            continue
+
+        try:
+            canvas.create_rectangle(
+                left,
+                top,
+                right,
+                bottom,
+                fill="#fff59d",
+                outline="#f6d94a",
+                width=1,
+                stipple="gray50",
+                tags=(_INDENT_TAG,),
+            )
+        except Exception:
+            continue
+
+    # Blocks are created after the base overlay so they are visible above the
+    # page image. Lower them just beneath the base Layout guides/text so yellow
+    # never obscures diagnostic lines or labels.
+    try:
+        canvas.tag_lower(_INDENT_TAG, _BASE_LAYOUT_TAG)
+    except Exception:
+        pass
+
+
 def draw_layout_visualization_detailed(app: Any) -> None:
-    """Draw readable Layout overlay with a centred, detailed summary."""
+    """Draw readable Layout overlay with line indents and centred summary."""
     canvas = getattr(app, "canvas", None)
     if canvas is None:
         return
@@ -164,6 +244,8 @@ def draw_layout_visualization_detailed(app: Any) -> None:
         draw_layout_visualization_readable(app)
     finally:
         canvas.create_text = original_create_text
+
+    _draw_indent_blocks(app, snapshot)
 
     # Summary text and the readability rectangle share this tag. Raising the tag
     # after the complete overlay is drawn guarantees the panel stays on top.
