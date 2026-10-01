@@ -27,6 +27,7 @@ def prepare_app_module() -> Any:
     from .dictionary_page_design_refined import detect_entries_from_page_design
     from .layout_line_start_refinement import install_robust_line_starts
     from .layout_physical_indent import install_physical_indent_inference
+    from .ordinary_layout_primary import install_ordinary_layout_primary
 
     dictionary_page_design.detect_entries_from_page_design = (
         detect_entries_from_page_design
@@ -35,6 +36,10 @@ def prepare_app_module() -> Any:
     # indent lane/role implementation used by layout policy and Page Understanding.
     install_robust_line_starts()
     install_physical_indent_inference()
+    # Ordinary drawing treats final Layout roles as authoritative.  Historical
+    # VB is isolated behind this router and runs only when Layout cannot provide
+    # an entry role; it never modifies a successful Layout result.
+    install_ordinary_layout_primary()
 
     from . import profile_setup
     from .parameter_help_ui import build_profile_parameter_help_wizard
