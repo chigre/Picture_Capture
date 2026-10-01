@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-"""Compatibility facade for PaddleOCR headword detection.
+"""Compatibility facade for OCR-assisted headword detection.
 
-The stable OCR/parsing implementation lives in :mod:`paddle_headwords_core`.
-Training-export-driven decision refinements live in :mod:`evidence_fusion`.
-Separator-Y refinement is shared by Layout, OCR, and existing-PDIC workflows in
-:mod:`separator_y_refinement`.
+The reusable OCR engine selection/execution channel lives in
+:mod:`picture_capture.ocr_channel`.  OCR-assisted separator generation is a
+separate consumer in :mod:`picture_capture.ocr_boundary_detection`.
+
+The stable parser/evidence implementation remains in
+:mod:`picture_capture.paddle_headwords_core`; training-export-driven decision
+refinements remain in :mod:`picture_capture.evidence_fusion`; separator-Y
+refinement is shared by Layout, OCR, and existing-PDIC workflows in
+:mod:`picture_capture.separator_y_refinement`.
 
 This historical module path remains the public/runtime import surface so older
 plugins, tests and user tooling keep working unchanged.
@@ -15,6 +20,7 @@ import sys
 
 from . import evidence_fusion as _fusion
 from .evidence_fusion import *  # noqa: F401,F403
+from .ocr_boundary_detection import detect_ocr_headword_boundaries
 from .separator_y_refinement import refine_separator_y as _shared_refine_separator_y
 
 # Keep the shared core visible for diagnostic/tests that intentionally inspect it.
@@ -26,6 +32,10 @@ _core = _fusion._core
 # function through their module globals as well.
 refine_separator_y = _shared_refine_separator_y
 _core.refine_separator_y = _shared_refine_separator_y
+
+# Backward-compatible public name. New code should use the neutral consumer name
+# so "run OCR" and "use OCR to draw separators" are no longer synonymous.
+detect_paddle_headwords = detect_ocr_headword_boundaries
 
 # Historical source-contract markers. Several regression guards intentionally
 # inspect this public module path to ensure these safety behaviors remain part of
@@ -50,5 +60,6 @@ _core.refine_separator_y = _shared_refine_separator_y
 sys.modules[__name__].__class__ = _fusion._CoreProxyModule
 
 __all__ = list(_fusion.__all__)
-if "refine_separator_y" not in __all__:
-    __all__.append("refine_separator_y")
+for _name in ("refine_separator_y", "detect_ocr_headword_boundaries"):
+    if _name not in __all__:
+        __all__.append(_name)
