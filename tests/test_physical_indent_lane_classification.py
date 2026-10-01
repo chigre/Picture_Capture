@@ -7,19 +7,24 @@ import numpy as np
 from picture_capture.layout_lane_summary_extension import append_physical_lane_summary
 from picture_capture.layout_physical_indent import (
     assign_binary_roles,
+    estimate_column_slant,
     normalize_layout_roles,
     physical_indent_modes,
 )
 
 
-def _line(first_x: int) -> SimpleNamespace:
-    return SimpleNamespace(
+def _line(first_x: int | float, y0: int | None = None) -> SimpleNamespace:
+    payload = dict(
         first_x=first_x,
         anchor_x=first_x,
         has_small_prefix=False,
         patch=np.zeros((0, 0), dtype=bool),
         role="unknown",
     )
+    if y0 is not None:
+        payload["y0"] = int(y0)
+        payload["y1"] = int(y0) + 30
+    return SimpleNamespace(**payload)
 
 
 def test_clustering_is_independent_of_character_height() -> None:
@@ -57,7 +62,29 @@ def test_c1_like_distribution_merges_continuous_body_peak() -> None:
     assert any(lo == 97 and hi == 97 for lo, hi, _n in ranges)
 
 
-def test_binary_roles_choose_entry_and_sync_lines() -> None:
+def test_slanted_column_is_detrended_before_lane_clustering() -> None:
+    # One real body lane and one real headword lane both drift +30 px from top
+    # to bottom because the scanned column is tilted.
+    lines = [
+        _line(10 + 0.01 * y, y)
+        for y in range(0, 3000, 100)
+    ]
+    lines += [
+        _line(55 + 0.01 * y, y)
+        for y in (250, 1250, 2250)
+    ]
+
+    slope = estimate_column_slant(lines)
+    modes = physical_indent_modes(lines, 60.0)
+
+    assert 0.006 <= slope <= 0.014
+    assert len(modes) == 2
+    assert modes[0].support == 30
+    assert modes[1].support == 3
+    assert modes[1].center - modes[0].center > 35
+
+
+def test_binary_roles_partition_all_lanes_into_two_classes() -> None:
     values = (
         [12, 13, 13, 14, 14, 15, 15, 16, 16, 17] * 2
         + [19, 20, 19]
@@ -77,17 +104,35 @@ def test_binary_roles_choose_entry_and_sync_lines() -> None:
 
     assign_binary_roles(column, "body", 50.0)
 
-    assert len(column.entry_modes) == 1
-    entry = column.entry_modes[0]
-    assert 12 <= entry.center <= 20
-    assert all(line.role == "entry" for line in entry.lines)
-    assert all(mode.role == "body" for mode in modes if mode is not entry)
+    assert column.entry_modes
+    assert all(mode.role in {"entry", "body"} for mode in modes)
     assert all(
-        line.role == "body"
+        line.role == mode.role
         for mode in modes
-        if mode is not entry
         for line in mode.lines
     )
+    assert max(mode.center for mode in column.entry_modes) < column.body_mode.center
+
+
+def test_headword_indent_keeps_multiple_high_indent_entry_lanes() -> None:
+    body = SimpleNamespace(center=6.0, support=60, role="unknown", lines=[_line(6) for _ in range(60)])
+    normal_head = SimpleNamespace(center=45.0, support=8, role="unknown", lines=[_line(45) for _ in range(8)])
+    display_head = SimpleNamespace(center=88.0, support=1, role="unknown", lines=[_line(88)])
+    column = SimpleNamespace(
+        indent_modes=[body, normal_head, display_head],
+        lines=body.lines + normal_head.lines + display_head.lines,
+        body_mode=None,
+        entry_modes=[],
+    )
+
+    assign_binary_roles(column, "headword")
+
+    assert column.body_mode is body
+    assert column.entry_modes == [normal_head, display_head]
+    assert body.role == "body"
+    assert normal_head.role == "entry"
+    assert display_head.role == "entry"
+    assert display_head.lines[0].role == "entry"
 
 
 def test_final_normalization_removes_legacy_sparse_entry() -> None:
@@ -104,7 +149,6 @@ def test_final_normalization_removes_legacy_sparse_entry() -> None:
 
     normalize_layout_roles(layout)
 
-    assert column.entry_modes == [entry]
     assert entry.role == "entry"
     assert body.role == "body"
     assert stray.role == "body"
