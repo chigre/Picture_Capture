@@ -122,6 +122,10 @@ def test_shared_ocr_action_wording_no_longer_claims_marker_text_is_paddle_only()
 
 def test_ordinary_quick_apply_allows_all_ocr_engines_off_and_restores_selection():
     app = _app_for_ocr_selection()
+    # Model still contains the previously applied Paddle=True, while the user
+    # has just unchecked all three visible OCR controls and immediately clicks
+    # 【普通画线】. The visible controls must win.
+    app.settings.paddle_use_paddleocr = True
     app.sync_calls = 0
 
     def legacy_apply(*, show_status=False):
