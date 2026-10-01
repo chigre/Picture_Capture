@@ -285,9 +285,15 @@ def _install_page_understanding_finalization() -> None:
 def install_physical_indent_inference() -> None:
     """Install the single physical-indent implementation used by all consumers."""
     from . import dictionary_page_design as page_design
+    from .layout_profile_anchor import install_profile_layout_anchor
 
     if getattr(page_design, "_physical_indent_inference_installed", False):
         return
+
+    # Profile analysis already aggregates multiple representative pages.  Make
+    # those stable project values the anchor before any per-page layout policy
+    # is resolved in GUI, ordinary drawing, or spawned workers.
+    install_profile_layout_anchor()
 
     page_design._line_runs = projection_line_runs
     page_design._indent_modes = physical_indent_modes
