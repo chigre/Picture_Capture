@@ -16,3 +16,10 @@ install_separator_y_settings()
 from .entry_classification_fields import install_entry_classification_fields
 
 install_entry_classification_fields()
+
+# Install classification-aware PDIC IO for every consumer, not only the GUI
+# launcher.  CLI/scripts therefore see the same metadata persistence contract.
+from . import formats as _formats
+from .entry_classification import install_pdic_classification
+
+install_pdic_classification(_formats)
