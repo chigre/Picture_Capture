@@ -3,14 +3,16 @@ from __future__ import annotations
 """OCR-independent visual-symbol evidence for ordinary drawing.
 
 Project Profile may contain multiple real-page samples for structural symbols
-such as bracket openers (【) or standalone entry markers (○/◆).  Ordinary
-mode uses those samples directly, without OCR, and respects the corresponding
-Profile structure switches for each role.
+such as bracket openers (【) or standalone entry markers (○/◆). Ordinary mode
+uses those samples directly, without OCR.
 
-Important: ``profile_symbol_visual_rescue_enabled`` belongs to the OCR rescue
-path.  Ordinary drawing must not depend on that flag.  If visual samples exist
-and the template mode is not ``off``, they are an independent ordinary evidence
-family.
+Two invariants are intentional:
+
+* ``profile_symbol_visual_rescue_enabled`` belongs to OCR rescue and never gates
+  ordinary drawing;
+* an explicitly sampled template role is itself an ordinary-mode authorization.
+  Capturing five ``bracket_open`` samples must not be silently cancelled by an
+  older parser Boolean that happened to be saved before the samples existed.
 """
 
 from typing import Any
@@ -26,22 +28,17 @@ from .visual_marker_templates import (
 )
 
 
-def _allowed_roles(settings: AppSettings) -> set[str]:
-    roles: set[str] = set()
-    if bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
-        roles.add("bracket_open")
-    if bool(getattr(settings, "profile_allow_marker_prefix", False)):
-        roles.add("entry_marker")
-    return roles
+def _sampled_roles(settings: AppSettings) -> set[str]:
+    return {
+        str(sample.get("role") or "")
+        for sample in visual_marker_samples_from_settings(settings)
+        if str(sample.get("role") or "") in {"bracket_open", "entry_marker"}
+    }
 
 
 def _enabled(settings: AppSettings) -> bool:
     mode = str(getattr(settings, "profile_symbol_template_mode", "combined") or "combined")
-    return bool(
-        mode != "off"
-        and _allowed_roles(settings)
-        and visual_marker_samples_from_settings(settings)
-    )
+    return bool(mode != "off" and _sampled_roles(settings))
 
 
 def _candidate_components(mask: np.ndarray, line_height: float) -> list[tuple[int, int, int, int, int]]:
@@ -66,12 +63,12 @@ def detect_ordinary_symbol_entries(
     understanding: Any,
     settings: AppSettings,
 ) -> list[Entry]:
-    """Return entry boundaries whose row start matches an enabled sampled role."""
+    """Return entry boundaries whose row start matches a sampled symbol role."""
     if not _enabled(settings):
         return []
 
     samples = visual_marker_samples_from_settings(settings)
-    allowed_roles = _allowed_roles(settings)
+    allowed_roles = _sampled_roles(settings)
     if not samples or not allowed_roles:
         return []
     threshold = float(getattr(settings, "profile_symbol_template_threshold", 0.68) or 0.68)
@@ -101,9 +98,8 @@ def detect_ordinary_symbol_entries(
             if end_x <= start_x:
                 continue
 
-            # Search only around the physical row start.  A bracket-like glyph
-            # appearing later inside definition text therefore cannot promote
-            # that row to entry.
+            # Search only around the physical row start. A bracket-like glyph
+            # appearing later inside definition text cannot promote that row.
             pad_y = max(1, round(line_height * 0.18))
             y0 = max(0, canonical_y0 - pad_y)
             y1 = min(gray_page.shape[0], canonical_y1 + pad_y)
