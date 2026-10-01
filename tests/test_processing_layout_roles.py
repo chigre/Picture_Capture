@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-from picture_capture import layout_visualization_shared, processing
+from picture_capture import layout_physical_indent, layout_visualization_shared, processing
 from picture_capture.models import AppSettings, Entry
 
 
@@ -147,3 +147,17 @@ def test_layout_visualization_shares_processing_understanding_entrypoint() -> No
 
     assert "_understand_page_current(" in source
     assert "remember_visualized_understanding" not in source
+
+
+def test_layout_runtime_does_not_replace_canonical_entry_materializer() -> None:
+    runtime_source = inspect.getsource(layout_physical_indent)
+    install_source = inspect.getsource(layout_physical_indent.install_physical_indent_inference)
+
+    assert "_install_processing_entry_materializer" not in runtime_source
+    assert "_ENTRY_Y_BY_UNDERSTANDING" not in runtime_source
+    assert "processing._ordinary_entries_from_layout_roles" not in install_source
+
+    signature = inspect.signature(processing._ordinary_entries_from_layout_roles)
+    assert "image" in signature.parameters
+    assert "page_index" in signature.parameters
+    assert signature.parameters["page_index"].kind is inspect.Parameter.KEYWORD_ONLY
