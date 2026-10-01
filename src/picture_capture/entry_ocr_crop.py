@@ -133,7 +133,7 @@ def entry_ocr_content_height(
     *,
     row_metrics: EntryOcrRowMetrics | None = None,
 ) -> int:
-    """Return entry-content height, excluding half-gaps above/below.
+    """Return entry-content height, excluding surrounding row-gap margins.
 
     The detected physical regular line height is a hard minimum. Historical
     configured values may enlarge a crop but may never shrink it below what the
@@ -182,7 +182,7 @@ def entry_ocr_crop_box(
     left   = column_left - gutter/2
     right  = column_left + column_width * right_ratio + gutter/2
     top    = entry_y - physical_row_gap/2
-    bottom = entry_y + classified_content_height + physical_row_gap/2
+    bottom = entry_y + classified_content_height + physical_row_gap
     """
     image_width, image_height = map(int, image_size)
     column, marker_v = _column_at_entry(entry, geometry)
@@ -197,7 +197,6 @@ def entry_ocr_crop_box(
     half_gutter = int(round(gutter * 0.5))
     row_gap = entry_ocr_row_gap(settings, row_metrics=row_metrics)
     gap_before = row_gap // 2
-    gap_after = row_gap - gap_before
     right_ratio = float(
         getattr(settings, "entry_ocr_right_ratio", 100.0) or 100.0
     )
@@ -221,7 +220,7 @@ def entry_ocr_crop_box(
         image_height,
         max(
             crop_top + 2,
-            int(marker_v) + int(height) + gap_after,
+            int(marker_v) + int(height) + row_gap,
         ),
     )
     return crop_left, crop_top, crop_right, crop_bottom
