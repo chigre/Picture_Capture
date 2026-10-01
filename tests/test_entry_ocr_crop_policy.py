@@ -24,7 +24,7 @@ class _IdentityGeometry:
         return int(self.column_starts[column])
 
 
-def test_regular_ocr_crop_uses_column_gutter_ratio_and_half_row_gap():
+def test_regular_ocr_crop_uses_half_gap_above_and_full_gap_below():
     settings = AppSettings(
         character_height=40,
         row_padding=20,
@@ -38,9 +38,9 @@ def test_regular_ocr_crop_uses_column_gutter_ratio_and_half_row_gap():
     assert entry_ocr_content_height(entry, settings) == 40
     assert entry_ocr_crop_box(entry, _IdentityGeometry(), settings, (1000, 1500)) == (
         75,
-        190,
+        190,  # 200 - 1/2 * 20 row gap
         275,
-        250,
+        260,  # 200 + 40 content + 20 full trailing row gap
     )
 
 
@@ -64,9 +64,9 @@ def test_physical_line_pitch_replaces_legacy_row_padding_for_regular_crop():
         (1000, 1500),
         row_metrics=metrics,
     )
-    # Physical gap = 78 - 49 = 29. Split it 14px above and 15px below.
-    assert box == (75, 186, 275, 264)
-    assert box[3] - box[1] == 78
+    # Physical gap = 78 - 49 = 29. Keep 14px above and the full 29px below.
+    assert box == (75, 186, 275, 278)
+    assert box[3] - box[1] == 92
 
 
 def test_small_legacy_regular_height_cannot_shrink_below_physical_line():
@@ -103,7 +103,7 @@ def test_oversized_ocr_crop_changes_only_classified_content_height():
         75,
         190,
         275,
-        300,
+        310,  # 200 + 90 content + 20 full trailing row gap
     )
 
 
