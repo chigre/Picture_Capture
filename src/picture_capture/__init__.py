@@ -10,6 +10,13 @@ from .separator_y_settings import install_separator_y_settings
 
 install_separator_y_settings()
 
+# Crop-height semantics are shared by marker OCR and proofreading. Historical
+# review-only field names remain readable, while runtime/persistence use neutral
+# regular/oversized entry terminology.
+from .entry_crop_settings import install_entry_crop_settings
+
+install_entry_crop_settings()
+
 # Entry classification is likewise a package-wide API.  PDIC stays unchanged,
 # while Entry objects expose entry_source / entry_scale / detected_head_height /
 # entry_scale_manual backed by the shared classification registry and sidecar.
