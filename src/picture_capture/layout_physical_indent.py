@@ -12,9 +12,6 @@ from typing import Any, Callable
 import numpy as np
 
 
-_ENTRY_Y_BY_UNDERSTANDING: dict[int, dict[int, int]] = {}
-
-
 def _raw_projection_runs(ink: np.ndarray, scale: float) -> tuple[list[tuple[int, int]], np.ndarray, float]:
     from .ordinary_visual import _runs
 
@@ -270,25 +267,6 @@ def _install_policy_finalization() -> None:
     policy._physical_indent_finalizer_installed = True
 
 
-def _remember_refined_entry_y(image: Any, understanding: Any, *, page_index: int) -> None:
-    """Cache refined canonical separator Y without mutating Layout row geometry."""
-    try:
-        from .layout_entry_y_refinement import refined_entry_y_by_line
-
-        values = refined_entry_y_by_line(
-            image,
-            understanding,
-            page_index=int(page_index),
-        )
-    except Exception:
-        values = {}
-    _ENTRY_Y_BY_UNDERSTANDING[id(understanding)] = dict(values)
-    # Keep the cache bounded in long GUI sessions.
-    if len(_ENTRY_Y_BY_UNDERSTANDING) > 16:
-        for key in list(_ENTRY_Y_BY_UNDERSTANDING)[:-8]:
-            _ENTRY_Y_BY_UNDERSTANDING.pop(key, None)
-
-
 def _install_page_understanding_finalization() -> None:
     from . import page_understanding
 
@@ -300,62 +278,10 @@ def _install_page_understanding_finalization() -> None:
     def wrapped(*args: Any, **kwargs: Any) -> Any:
         understanding = original(*args, **kwargs)
         normalize_layout_roles(understanding.layout)
-        image = args[0] if args else kwargs.get("image")
-        if image is not None:
-            _remember_refined_entry_y(
-                image,
-                understanding,
-                page_index=int(kwargs.get("page_index", 0) or 0),
-            )
         return understanding
 
     page_understanding.understand_page = wrapped
     page_understanding._physical_indent_finalizer_installed = True
-
-
-def _install_processing_entry_materializer() -> None:
-    """Make ordinary drawing consume refined Y while preserving Layout roles."""
-    from . import processing
-
-    if getattr(processing, "_layout_entry_y_refinement_installed", False):
-        return
-
-    original: Callable[..., Any] = processing._ordinary_entries_from_layout_roles
-
-    def materialize(understanding: Any):
-        refined = _ENTRY_Y_BY_UNDERSTANDING.pop(id(understanding), {})
-        if not refined:
-            return original(understanding)
-
-        layout = understanding.layout
-        result = []
-        for column in list(getattr(layout, "columns", []) or []):
-            for line in list(getattr(column, "lines", []) or []):
-                if str(getattr(line, "role", "") or "") != "entry":
-                    continue
-                canonical_y = int(
-                    refined.get(
-                        id(line),
-                        int(layout.body_top) + int(getattr(line, "y0", 0) or 0),
-                    )
-                )
-                source_x, source_y = layout.transform.canonical_to_source_point(
-                    int(column.left),
-                    canonical_y,
-                    layout.source_size,
-                )
-                result.append(processing.Entry(
-                    word="",
-                    x=int(source_x),
-                    y=int(source_y),
-                    confidence=None,
-                    ocr_source="page_understanding:ordinary_layout_role_y_refined",
-                    issue_type="PAGE_UNDERSTANDING_ORDINARY_LAYOUT_ROLE_Y_REFINED",
-                ))
-        return result
-
-    processing._ordinary_entries_from_layout_roles = materialize
-    processing._layout_entry_y_refinement_installed = True
 
 
 def install_physical_indent_inference() -> None:
@@ -376,5 +302,4 @@ def install_physical_indent_inference() -> None:
     page_design._assign_indent_semantics = assign_binary_roles
     _install_policy_finalization()
     _install_page_understanding_finalization()
-    _install_processing_entry_materializer()
     page_design._physical_indent_inference_installed = True
