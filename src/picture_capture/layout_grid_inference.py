@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Projection-led line recovery and physical indent-width clustering.
+"""Projection-led line recovery and physical indent-lane semantics.
 
 Dictionary rows are first detected from real horizontal ink projection runs.
 The detected ordinary line height is only a structural prior: it rejects tiny
@@ -8,8 +8,10 @@ noise runs and helps split an abnormally tall connected run at a low-ink valley.
 It does *not* impose a repeated fixed row grid on the page.
 
 Indent modes are physical layout quantities and are clustered independently in
-each column from ``LayoutLine.first_x`` (the visible indent width).  ``anchor_x``
-remains secondary structural evidence rather than the lane coordinate.
+each column from ``LayoutLine.first_x`` (the visible indent width).  Row roles
+are then assigned from those physical lanes.  ``anchor_x`` and small-prefix
+metadata remain secondary evidence only; they do not determine lane membership
+or lane role.
 """
 
 from typing import Any
@@ -29,7 +31,7 @@ def _raw_projection_runs(ink: np.ndarray, scale: float) -> tuple[list[tuple[int,
     threshold = max(2.0, float(width) * 0.003)
     active = row_ink >= threshold
 
-    # Only bridge a truly tiny blank interruption.  Larger inter-row spaces must
+    # Only bridge a truly tiny blank interruption. Larger inter-row spaces must
     # remain visible to the projection rather than being forced into a row grid.
     max_gap = max(0, min(2, int(round(max(6.0, float(scale)) * 0.035))))
     if max_gap > 0:
@@ -56,8 +58,8 @@ def _split_tall_run(
     if height <= ref * 1.70:
         return [(int(y0), int(y1))]
 
-    # Search near one expected line height from the current top.  This uses the
-    # line-height estimate as a *prior* while the split location itself is chosen
+    # Search near one expected line height from the current top. This uses the
+    # line-height estimate as a prior while the split location itself is chosen
     # from the observed projection valley.
     lo = max(y0 + 2, int(round(y0 + ref * 0.62)))
     hi = min(y1 - 2, int(round(y0 + ref * 1.38)))
@@ -78,7 +80,7 @@ def _split_tall_run(
         return [(int(y0), int(y1))]
 
     # A separator valley should be close to blank relative to ordinary active
-    # rows.  This catches a one-pixel dust bridge without splitting naturally
+    # rows. This catches a one-pixel dust bridge without splitting naturally
     # tall glyphs or display heads simply because a fixed grid says so.
     body = row_ink[y0:y1]
     active_values = body[body >= threshold]
@@ -114,7 +116,11 @@ def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]
         height = y1 - y0
         if height < minimum:
             continue
-        parts = _split_tall_run(y0, y1, row_ink, threshold, ref) if height > maximum_single else [(y0, y1)]
+        parts = (
+            _split_tall_run(y0, y1, row_ink, threshold, ref)
+            if height > maximum_single
+            else [(y0, y1)]
+        )
         for part0, part1 in parts:
             part_height = part1 - part0
             if minimum <= part_height <= maximum_single:
@@ -124,7 +130,7 @@ def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]
 
 
 # Backward-compatible name retained for tests/importers from the immediately
-# preceding implementation.  Its semantics are now projection-led, not grid-led.
+# preceding implementation. Its semantics are now projection-led, not grid-led.
 grid_line_runs = projection_line_runs
 
 
@@ -172,8 +178,72 @@ def indent_width_modes(lines: list[Any], reference: float) -> list[Any]:
     return sorted(result, key=lambda mode: mode.center)
 
 
+def assign_physical_indent_roles(column: Any, indent_type: str, reference: float) -> None:
+    """Assign body/entry/unknown roles from physical-indent lanes only.
+
+    ``IndentMode.center`` is the median ``first_x`` of one physical lane within
+    the current column.  The configured dictionary indent convention tells us
+    which side of the dominant body lane can contain entry starts:
+
+    * ``body`` indentation: body text is farther from the column edge, so entry
+      lanes must be physically *less* indented than the body lane;
+    * ``headword`` indentation: the inverse relation applies.
+
+    Prefix metadata (``~``, numbering, bullets) does not move a row to another
+    lane and cannot by itself promote a lane to ``entry``.
+    """
+    modes = list(getattr(column, "indent_modes", []) or [])
+    column.body_mode = None
+    column.entry_modes = []
+    if not modes:
+        return
+
+    for mode in modes:
+        mode.role = "unknown"
+
+    total = max(1, sum(int(getattr(mode, "support", 0) or 0) for mode in modes))
+    stable_min = max(3, round(total * 0.12))
+    stable = [
+        mode for mode in modes
+        if int(getattr(mode, "support", 0) or 0) >= stable_min
+    ]
+    if not stable:
+        stable = [max(modes, key=lambda mode: int(getattr(mode, "support", 0) or 0))]
+
+    # Preserve the dictionary's physical indentation convention, but apply it to
+    # physical lane centers rather than anchor-derived centers.
+    if str(indent_type) == "headword":
+        body = min(stable, key=lambda mode: float(mode.center))
+        entry_direction = 1.0
+    else:
+        body = max(stable, key=lambda mode: float(mode.center))
+        entry_direction = -1.0
+
+    body.role = "body"
+    column.body_mode = body
+
+    ref = max(6.0, float(reference))
+    minimum_separation = ref * 0.42
+    maximum_separation = ref * 5.0
+    entries: list[Any] = []
+
+    for mode in modes:
+        if mode is body:
+            continue
+        separation = entry_direction * (float(mode.center) - float(body.center))
+        support = int(getattr(mode, "support", 0) or 0)
+        if (
+            minimum_separation <= separation <= maximum_separation
+            and support >= 2
+        ):
+            mode.role = "entry"
+            entries.append(mode)
+
+    column.entry_modes = entries
+
+
 def install_grid_line_and_indent_inference() -> None:
-    """Install projection-led line recovery and physical-indent clustering once."""
+    """Install projection-led rows plus physical-indent lane semantics once."""
     from . import dictionary_page_design as page_design
 
     if getattr(page_design, "_grid_line_indent_inference_installed", False):
@@ -181,4 +251,5 @@ def install_grid_line_and_indent_inference() -> None:
 
     page_design._line_runs = projection_line_runs
     page_design._indent_modes = indent_width_modes
+    page_design._assign_indent_semantics = assign_physical_indent_roles
     page_design._grid_line_indent_inference_installed = True
