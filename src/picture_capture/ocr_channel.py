@@ -336,6 +336,20 @@ def _create_paddle_engine(settings: AppSettings) -> Any:
         if existing is not None:
             return existing
 
+    # Preserve the mature runner's process bootstrap before constructing a new
+    # PaddleOCR pipeline. TextDetection and general OCR keep separate caches;
+    # dropping the former avoids retaining two heavyweight Paddle pipelines.
+    from .layout_detection import clear_text_detection_cache
+    clear_text_detection_cache()
+
+    # Paddle 3.x may otherwise re-enable the PIR path after another pipeline has
+    # run in the same process. Windows pip-wheel CUDA DLLs also need their
+    # directories registered before importing PaddleOCR.
+    import os
+    os.environ["FLAGS_enable_pir_api"] = "0"
+    from .windows_gpu_runtime import configure_windows_nvidia_dlls
+    configure_windows_nvidia_dlls()
+
     try:
         from paddleocr import PaddleOCR
     except Exception as exc:
