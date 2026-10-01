@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from picture_capture.entry_classification import register_entry_classification
@@ -64,10 +65,19 @@ def test_oversized_ocr_crop_changes_only_classified_content_height():
     )
 
 
-def test_entry_ocr_right_ratio_is_canonical_alias_for_legacy_paddle_band_width():
+def test_entry_ocr_right_ratio_is_canonical_alias_for_legacy_paddle_band_width(tmp_path: Path):
     settings = AppSettings(entry_ocr_right_ratio=72.5)
     assert settings.entry_ocr_right_ratio == 72.5
     assert settings.paddle_band_width_ratio == 72.5
+
+    path = tmp_path / "settings.json"
+    settings.to_json(path)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["entry_ocr_right_ratio"] == 72.5
+    assert "paddle_band_width_ratio" not in raw
+
+    restored = AppSettings.from_json(path)
+    assert restored.entry_ocr_right_ratio == 72.5
 
 
 def test_marker_ocr_dispatch_honors_configured_engine_and_shared_crop():
