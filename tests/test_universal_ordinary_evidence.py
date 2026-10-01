@@ -45,7 +45,9 @@ def _bracket_sample_settings(*, bracket_enabled: bool = True) -> tuple[Image.Ima
         sample_id="sample-1",
     )
     settings = AppSettings(
-        profile_symbol_visual_rescue_enabled=True,
+        # Deliberately OFF: this flag belongs to OCR rescue and must not gate
+        # the independent ordinary visual-sample evidence family.
+        profile_symbol_visual_rescue_enabled=False,
         profile_symbol_template_mode="template_first",
         profile_symbol_template_threshold=0.50,
         profile_symbol_templates_json=serialize_visual_marker_samples([sample]),
@@ -54,7 +56,7 @@ def _bracket_sample_settings(*, bracket_enabled: bool = True) -> tuple[Image.Ima
     return image, settings
 
 
-def test_visual_symbol_sample_promotes_no_indent_body_row():
+def test_visual_symbol_sample_promotes_no_indent_body_row_with_ocr_rescue_off():
     image, settings = _bracket_sample_settings()
     understanding, lines = _understanding_with_rows()
 
@@ -102,13 +104,15 @@ def test_large_head_detector_is_cjk_gated_and_independent_from_legacy_module():
     assert "def _candidate_boxes" in source
 
 
-def test_profile_ui_places_visual_evidence_with_headword_structure():
+def test_profile_ui_explains_visual_samples_are_ordinary_evidence():
     from picture_capture import profile_ordinary_evidence_ui as ui
 
     source = open(ui.__file__, "r", encoding="utf-8").read()
     assert "普通画线：视觉词头证据（OCR-independent）" in source
     assert "启用大字头 detector（CJK）" in source
-    assert "启用特定符号视觉样本" in source
+    assert "有有效样本即参与普通画线" in source
+    assert "OCR 漏掉/错认符号时允许视觉形状补救" in source
+    assert "完全独立" in source
     assert "从页面采样…" in source
     assert "多个样本按最佳匹配（max/OR）使用" in source
     assert 'child.cget("text") == "本词典视觉标记样本"' in source
