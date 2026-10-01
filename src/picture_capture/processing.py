@@ -71,12 +71,25 @@ def _understand_page_current(
     *,
     page_index: int,
     page_sections: list[PageSection] | None,
+    layout_only: bool = False,
 ) -> PageUnderstanding | None:
-    """Resolve Page Understanding from the live module after runtime setup."""
+    """Resolve the live Page Understanding implementation after runtime setup.
+
+    ``layout_only`` skips semantic enrichment, symbol evidence and OCR-adjacent
+    work.  It is the authoritative fast path for 【显示Layout】 and 【普通画线】.
+    """
     try:
         _ensure_layout_runtime()
-        from . import page_understanding as page_understanding_module
+        if layout_only:
+            from .layout_core_understanding import understand_layout_core
 
+            return understand_layout_core(
+                image,
+                settings,
+                page_index=page_index,
+            )
+
+        from . import page_understanding as page_understanding_module
         return page_understanding_module.understand_page(
             image,
             settings,
@@ -415,10 +428,11 @@ def detect_entries(
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
-    """Detect entries using one shared denoised Page Understanding.
+    """Detect entries using shared denoised page analysis.
 
-    Ordinary mode consumes final Layout row roles directly.  VB is never allowed
-    to modify, veto, add to, or replace a usable Layout role assignment.
+    Ordinary mode consumes the cached Layout Core row roles directly. VB is
+    never allowed to modify, veto, add to, or replace a usable Layout role
+    assignment. OCR/combined retain the full enriched Page Understanding path.
     """
     source = _core.normalize_page_rgb(image)
     effective = _core.effective_page_settings(
@@ -426,18 +440,18 @@ def detect_entries(
     )
     method = str(getattr(effective, "detection_method", "") or "").strip().lower()
     analysis_image = build_analysis_image(source, effective)
+    ordinary_mode = method not in {"paddleocr", "combined"}
 
     understanding = _understand_page_current(
         analysis_image,
         effective,
         page_index=profile_page_index,
         page_sections=page_sections,
+        layout_only=ordinary_mode,
     )
 
-    # Ordinary drawing is now a direct materialization of final Layout roles.
-    # This branch lives in the canonical processing function so GUI, CLI and
-    # spawned workers cannot diverge through launcher-time monkey patches.
-    if method not in {"paddleocr", "combined"}:
+    # Ordinary drawing is a direct materialization of final Layout Core roles.
+    if ordinary_mode:
         if (
             understanding is not None
             and list(getattr(understanding.layout, "columns", []) or [])
