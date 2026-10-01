@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
+from picture_capture.layout_binary_role_sync import _sync_column_line_roles
 from picture_capture.layout_grid_inference import (
     assign_physical_indent_roles,
     indent_width_modes,
@@ -17,6 +18,7 @@ def _line(first_x: int) -> SimpleNamespace:
         anchor_x=first_x,
         has_small_prefix=False,
         patch=np.zeros((0, 0), dtype=bool),
+        role="unknown",
     )
 
 
@@ -64,10 +66,17 @@ def test_binary_roles_choose_entry_then_make_everything_else_body() -> None:
         + [85, 90]
         + [118]
     )
-    modes = indent_width_modes([_line(v) for v in values], reference=50.0)
-    column = SimpleNamespace(indent_modes=modes, body_mode=None, entry_modes=[])
+    lines = [_line(v) for v in values]
+    modes = indent_width_modes(lines, reference=50.0)
+    column = SimpleNamespace(
+        indent_modes=modes,
+        lines=lines,
+        body_mode=None,
+        entry_modes=[],
+    )
 
     assign_physical_indent_roles(column, "body", reference=50.0)
+    _sync_column_line_roles(column)
 
     assert len(column.entry_modes) == 1
     entry = column.entry_modes[0]
@@ -75,18 +84,52 @@ def test_binary_roles_choose_entry_then_make_everything_else_body() -> None:
     assert entry.role == "entry"
     assert all(mode.role in {"entry", "body"} for mode in modes)
     assert all(mode.role == "body" for mode in modes if mode is not entry)
+    assert all(line.role == "entry" for line in entry.lines)
+    assert all(
+        line.role == "body"
+        for mode in modes
+        if mode is not entry
+        for line in mode.lines
+    )
     assert column.body_mode is not None
     assert column.body_mode is not entry
 
 
+def test_unclustered_rows_are_body_under_binary_policy() -> None:
+    entry_line = _line(2)
+    body_line = _line(30)
+    orphan_line = _line(70)
+    entry_mode = SimpleNamespace(lines=[entry_line], role="entry")
+    body_mode = SimpleNamespace(lines=[body_line], role="body")
+    column = SimpleNamespace(
+        indent_modes=[entry_mode, body_mode],
+        entry_modes=[entry_mode],
+        lines=[entry_line, body_line, orphan_line],
+    )
+
+    _sync_column_line_roles(column)
+
+    assert entry_line.role == "entry"
+    assert body_line.role == "body"
+    assert orphan_line.role == "body"
+
+
 def test_single_lane_page_stays_body() -> None:
-    modes = indent_width_modes([_line(v) for v in [2, 2, 3, 3, 4, 4]], reference=50.0)
-    column = SimpleNamespace(indent_modes=modes, body_mode=None, entry_modes=[])
+    lines = [_line(v) for v in [2, 2, 3, 3, 4, 4]]
+    modes = indent_width_modes(lines, reference=50.0)
+    column = SimpleNamespace(
+        indent_modes=modes,
+        lines=lines,
+        body_mode=None,
+        entry_modes=[],
+    )
 
     assign_physical_indent_roles(column, "body", reference=50.0)
+    _sync_column_line_roles(column)
 
     assert len(modes) == 1
     assert modes[0].role == "body"
+    assert all(line.role == "body" for line in lines)
     assert column.body_mode is modes[0]
     assert column.entry_modes == []
 
