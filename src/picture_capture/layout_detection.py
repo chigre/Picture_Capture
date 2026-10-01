@@ -11,7 +11,10 @@ shared cleaned page.
 """
 from __future__ import annotations
 
+from collections import OrderedDict
+import hashlib
 import sys
+from typing import Any
 
 from . import layout_detection_legacy as _legacy
 from .image_utils import build_analysis_image
@@ -23,11 +26,34 @@ for _name in dir(_legacy):
 
 _legacy_detect_layout_parameters = _legacy.detect_layout_parameters
 
+_LAYOUT_ESTIMATE_CACHE_LIMIT = 8
+_LAYOUT_ESTIMATE_CACHE: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
+
+
+def _layout_estimate_cache_key(image, settings) -> tuple[Any, ...]:
+    digest = hashlib.blake2b(image.tobytes(), digest_size=16).digest()
+    return (str(image.mode), tuple(image.size), digest, repr(settings))
+
+
+def clear_layout_estimate_cache() -> None:
+    _LAYOUT_ESTIMATE_CACHE.clear()
+
 
 def detect_layout_parameters(image, settings):
     from .layout_reliability import detect_layout_parameters_reliable
 
     analysis_image = build_analysis_image(image, settings)
-    return detect_layout_parameters_reliable(
+    key = _layout_estimate_cache_key(analysis_image, settings)
+    cached = _LAYOUT_ESTIMATE_CACHE.get(key)
+    if cached is not None:
+        _LAYOUT_ESTIMATE_CACHE.move_to_end(key)
+        return cached
+
+    result = detect_layout_parameters_reliable(
         analysis_image, settings, sys.modules[__name__]
     )
+    _LAYOUT_ESTIMATE_CACHE[key] = result
+    _LAYOUT_ESTIMATE_CACHE.move_to_end(key)
+    while len(_LAYOUT_ESTIMATE_CACHE) > _LAYOUT_ESTIMATE_CACHE_LIMIT:
+        _LAYOUT_ESTIMATE_CACHE.popitem(last=False)
+    return result
