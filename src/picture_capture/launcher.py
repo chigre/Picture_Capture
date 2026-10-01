@@ -41,10 +41,15 @@ def prepare_app_module() -> Any:
     # promotion; it is only a compatibility bridge for direct module callers.
     from . import dictionary_page_design
     from .dictionary_page_design_refined import detect_entries_from_page_design
+    from .layout_line_start_refinement import install_robust_line_starts
 
     dictionary_page_design.detect_entries_from_page_design = (
         detect_entries_from_page_design
     )
+    # Line-level indent evidence must be robust before profile_setup/processing
+    # import Page Understanding.  This refines only visual first_x; semantic
+    # anchor_x remains unchanged.
+    install_robust_line_starts()
 
     # profile_setup imports processing; do this only after low-level extensions
     # above have been installed. Compose page semantics first, then put all long
