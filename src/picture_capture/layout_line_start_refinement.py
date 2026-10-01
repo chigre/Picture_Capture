@@ -7,10 +7,10 @@ can still survive near a column edge.  The historical ``LayoutLine.first_x``
 used the first X column with minimal ink support, so one such remnant could make
 a visibly indented continuation line appear unindented.
 
-This module keeps semantic ``anchor_x`` unchanged.  It only refines ``first_x``
-into the first credible visual text component, while preserving a genuine small
-prefix (tilde, number, bullet-like mark) when it sits immediately before a
-substantial text component.
+This module keeps semantic ``anchor_x`` unchanged.  It refines ``first_x`` by
+anchoring on the first full-height structural glyph whenever one exists, then
+only admits nearby small prefixes (tilde, number, bullet-like mark) as the true
+visual start.  Distant residual specks therefore cannot redefine the indent.
 """
 
 from dataclasses import replace
@@ -28,8 +28,6 @@ def _component_stats(line: np.ndarray, reference: float) -> list[tuple[int, int,
     active = line.sum(axis=0) >= support
     gap = max(1, round(float(reference) * 0.025))
     if gap > 0 and active.size:
-        # Inline equivalent of the short-gap fill used by Page Design.  Keeping
-        # it local avoids importing private helpers into startup patch code.
         indices = np.flatnonzero(active)
         if indices.size >= 2:
             for left, right in zip(indices, indices[1:]):
@@ -56,39 +54,26 @@ def _component_stats(line: np.ndarray, reference: float) -> list[tuple[int, int,
     return runs
 
 
-def credible_first_text_x(line: np.ndarray, reference: float, fallback: int) -> int:
-    """Return the first visually meaningful text component in a line."""
-    components = _component_stats(line, reference)
-    if not components:
-        return int(fallback)
-
+def _prefix_start_before_anchor(
+    components: list[tuple[int, int, int, int]],
+    anchor_x: int,
+    reference: float,
+) -> int:
+    """Walk left from a trusted structural anchor through nearby real prefixes."""
     ref = max(6.0, float(reference))
-
-    def substantial(item: tuple[int, int, int, int]) -> bool:
-        x0, x1, h, area = item
-        width = x1 - x0
-        return bool(
-            area >= max(4, round(ref * ref * 0.012))
-            and (
-                h >= ref * 0.28
-                or width >= ref * 0.16
-            )
-        )
-
-    main_index = next((i for i, item in enumerate(components) if substantial(item)), None)
-    if main_index is None:
-        return int(fallback)
-
-    main = components[main_index]
-    first_x = int(main[0])
-
-    # Preserve one or more real small prefixes only when they are close to the
-    # first substantial glyph.  Distant dust remains excluded.
+    current_left = int(anchor_x)
+    first_x = int(anchor_x)
     prefix_gap_limit = max(3, round(ref * 0.62))
     prefix_area_min = max(2, round(ref * ref * 0.0025))
-    current_left = first_x
-    for item in reversed(components[:main_index]):
+
+    candidates = [item for item in components if int(item[1]) <= int(anchor_x)]
+    for item in reversed(candidates):
         x0, x1, h, area = item
+        # Ignore the structural anchor itself if component grouping reaches it.
+        if int(x0) <= int(anchor_x) < int(x1):
+            current_left = int(x0)
+            first_x = min(first_x, int(x0))
+            continue
         gap = current_left - int(x1)
         meaningful_prefix = bool(
             area >= prefix_area_min
@@ -97,12 +82,59 @@ def credible_first_text_x(line: np.ndarray, reference: float, fallback: int) -> 
                 or (x1 - x0) >= ref * 0.07
             )
         )
-        if gap < 0 or gap > prefix_gap_limit or not meaningful_prefix:
+        if gap < 0:
+            continue
+        if gap > prefix_gap_limit or not meaningful_prefix:
             break
         first_x = int(x0)
         current_left = int(x0)
 
     return int(first_x)
+
+
+def credible_first_text_x(
+    line: np.ndarray,
+    reference: float,
+    fallback: int,
+    anchor_x: int | None = None,
+) -> int:
+    """Return the first visually meaningful text start in a line.
+
+    ``anchor_x`` is the preferred trusted structural glyph reported by Page
+    Design.  Residual specks far to its left are ignored.  Only nearby small
+    components may extend the visual start leftward.  If no structural anchor
+    exists, fall back to a stricter component-size search.
+    """
+    components = _component_stats(line, reference)
+    if not components:
+        return int(fallback)
+
+    if anchor_x is not None:
+        return _prefix_start_before_anchor(
+            components, int(anchor_x), float(reference)
+        )
+
+    ref = max(6.0, float(reference))
+
+    def substantial(item: tuple[int, int, int, int]) -> bool:
+        x0, x1, h, area = item
+        width = x1 - x0
+        return bool(
+            area >= max(6, round(ref * ref * 0.022))
+            and (
+                h >= ref * 0.40
+                or width >= ref * 0.24
+            )
+        )
+
+    main_index = next((i for i, item in enumerate(components) if substantial(item)), None)
+    if main_index is None:
+        return int(fallback)
+
+    main = components[main_index]
+    return _prefix_start_before_anchor(
+        components[:main_index + 1], int(main[0]), float(reference)
+    )
 
 
 def install_robust_line_starts() -> None:
@@ -126,7 +158,12 @@ def install_robust_line_starts() -> None:
         if result is None:
             return None
         line = ink[y0:y1]
-        visual_start = credible_first_text_x(line, reference, int(result.first_x))
+        visual_start = credible_first_text_x(
+            line,
+            reference,
+            int(result.first_x),
+            None if result.anchor_x is None else int(result.anchor_x),
+        )
         if visual_start == int(result.first_x):
             return result
         return replace(result, first_x=int(visual_start))
