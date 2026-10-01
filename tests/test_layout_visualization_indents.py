@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from picture_capture.layout_visualization_shared import _indent_blocks_from_understanding
-from picture_capture.layout_visualization_summary import _format_summary
+from picture_capture.layout_visualization_summary import _format_summary, _role_style
 
 
 class _Column:
@@ -47,7 +47,15 @@ def test_indent_blocks_show_column_edge_to_first_real_ink() -> None:
     assert indented["role"] == "other_indent"
 
 
-def test_summary_reports_line_indent_role_counts() -> None:
+def test_line_role_styles_keep_indent_distinct_from_entry_semantics() -> None:
+    assert _role_style("entry") == ("#2e7d32", "词条行")
+    assert _role_style("headword") == ("#2e7d32", "词条行")
+    assert _role_style("body") == ("#1976d2", "正文行")
+    assert _role_style("other_indent") == ("#757575", "不确定")
+    assert _role_style("unknown") == ("#757575", "不确定")
+
+
+def test_summary_reports_semantic_role_counts_and_legend() -> None:
     geometry = SimpleNamespace(
         top=134,
         bottom=900,
@@ -77,6 +85,7 @@ def test_summary_reports_line_indent_role_counts() -> None:
     app = SimpleNamespace(
         image=SimpleNamespace(size=(2536, 3765)),
         _layout_visualization_indent_blocks=[
+            {"role": "entry"},
             {"role": "body"},
             {"role": "body"},
             {"role": "other_indent"},
@@ -88,6 +97,10 @@ def test_summary_reports_line_indent_role_counts() -> None:
         ),
     )
     text = _format_summary(app, snapshot)
-    assert "line indents: 3" in text
-    assert "body=2" in text
-    assert "other_indent=1" in text
+    assert "line indents: 4" in text
+    assert "词条行=1" in text
+    assert "正文行=2" in text
+    assert "不确定=1" in text
+    assert "绿色=词条行" in text
+    assert "蓝色=正文行" in text
+    assert "灰色=不确定" in text
