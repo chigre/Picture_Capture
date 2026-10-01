@@ -45,12 +45,13 @@ def _bracket_sample_settings(*, bracket_enabled: bool = True) -> tuple[Image.Ima
         sample_id="sample-1",
     )
     settings = AppSettings(
-        # Deliberately OFF: this flag belongs to OCR rescue and must not gate
-        # the independent ordinary visual-sample evidence family.
+        # Deliberately OFF: OCR rescue must not gate ordinary sampled evidence.
         profile_symbol_visual_rescue_enabled=False,
         profile_symbol_template_mode="template_first",
         profile_symbol_template_threshold=0.50,
         profile_symbol_templates_json=serialize_visual_marker_samples([sample]),
+        # Also parameterized to prove an explicitly sampled bracket role remains
+        # authoritative even if an older parser Boolean is off.
         profile_cjk_allow_bracketed_headword=bracket_enabled,
     )
     return image, settings
@@ -71,10 +72,12 @@ def test_visual_symbol_sample_promotes_no_indent_body_row_with_ocr_rescue_off():
     assert lines[1].role == "body"
 
 
-def test_disabled_bracket_structure_disables_bracket_visual_sample():
+def test_explicit_bracket_sample_is_authoritative_even_if_old_bracket_flag_is_off():
     image, settings = _bracket_sample_settings(bracket_enabled=False)
     understanding, _lines = _understanding_with_rows()
-    assert detect_ordinary_symbol_entries(image, understanding, settings) == []
+    evidence = detect_ordinary_symbol_entries(image, understanding, settings)
+    assert evidence
+    assert evidence[0].issue_type == "ORDINARY_VISUAL_BRACKET_SAMPLE"
 
 
 def test_visual_evidence_never_demotes_existing_indent_entry():
