@@ -192,17 +192,15 @@ def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
                 else 7
             )
             result = channel.recognize_crop(crop, tesseract_psm=psm)
-            resolved = [
-                choice
-                for candidate in result.candidates
-                if (
-                    choice := resolve_candidate(
-                        candidate,
-                        is_large=is_large,
-                        crop_width=int(crop.width),
-                    )
-                ) is not None
-            ]
+            resolved: list[OcrTextChoice] = []
+            for candidate in result.candidates:
+                choice = resolve_candidate(
+                    candidate,
+                    is_large=is_large,
+                    crop_width=int(crop.width),
+                )
+                if choice is not None:
+                    resolved.append(choice)
 
             selected, _agreed = choose_ocr_text(result.plan, resolved)
             word = str(selected.text).strip() if selected is not None else ""
