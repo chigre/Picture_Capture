@@ -104,6 +104,7 @@ def prepare_app_module() -> Any:
     from .layout_visualization_role_theme import install_layout_role_theme
     from .layout_visualization_ui_v3 import install_layout_visualization
     from .ocr_action_guard import install_ocr_action_guard
+    from .ordinary_action_runtime import install_ordinary_action_runtime
     from .parameter_help_ui import install_settings_parameter_help
     from .settings_help_restore import install_settings_help_restore
     from .training_export_ui import export_training_package_selected_range
@@ -111,6 +112,7 @@ def prepare_app_module() -> Any:
 
     install_settings_parameter_help(app_module)
     install_settings_help_restore(app_module)
+    install_ordinary_action_runtime(app_module)
     install_ocr_action_guard(app_module)
     install_app_tooltip_terminology(app_module)
     install_layout_role_theme()
