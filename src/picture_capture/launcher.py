@@ -41,6 +41,7 @@ def prepare_app_module() -> Any:
     from .profile_layout_bootstrap import install_profile_layout_bootstrap
     from .parameter_help_ui import build_profile_parameter_help_wizard
     from .profile_indent_ui import build_project_profile_wizard
+    from .profile_ordinary_evidence_ui import build_ordinary_evidence_profile_wizard
 
     # Profile creation establishes the stable geometry itself, so its
     # representative-page analysis must be anchor-free and OCR-free.  The main
@@ -48,7 +49,9 @@ def prepare_app_module() -> Any:
     install_profile_layout_bootstrap()
 
     profile_setup.ProjectProfileWizard = build_profile_parameter_help_wizard(
-        build_project_profile_wizard(profile_setup.ProjectProfileWizard)
+        build_ordinary_evidence_profile_wizard(
+            build_project_profile_wizard(profile_setup.ProjectProfileWizard)
+        )
     )
 
     from . import training_export
