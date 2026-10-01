@@ -6,6 +6,11 @@ Project Profile may contain multiple real-page samples for structural symbols
 such as bracket openers (【) or standalone entry markers (○/◆).  Ordinary
 mode uses those samples directly, without OCR, and respects the corresponding
 Profile structure switches for each role.
+
+Important: ``profile_symbol_visual_rescue_enabled`` belongs to the OCR rescue
+path.  Ordinary drawing must not depend on that flag.  If visual samples exist
+and the template mode is not ``off``, they are an independent ordinary evidence
+family.
 """
 
 from typing import Any
@@ -34,7 +39,6 @@ def _enabled(settings: AppSettings) -> bool:
     mode = str(getattr(settings, "profile_symbol_template_mode", "combined") or "combined")
     return bool(
         mode != "off"
-        and bool(getattr(settings, "profile_symbol_visual_rescue_enabled", True))
         and _allowed_roles(settings)
         and visual_marker_samples_from_settings(settings)
     )
