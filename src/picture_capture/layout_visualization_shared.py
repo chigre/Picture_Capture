@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-"""Make the Layout diagnostic overlay show the geometry ordinary drawing uses.
+"""Make the Layout diagnostic overlay show the exact geometry ordinary drawing uses.
 
-The detector path resolves per-page geometry through Page Understanding.  The
-visual overlay must consume that exact policy result rather than run a second,
-independent reliable-layout detector, otherwise the user can see one C2/gutter
-or one set of row roles while ordinary drawing consumes another.
+Both visualization and ordinary drawing resolve Page Understanding through the
+same processing facade entrypoint.  This prevents stale imported callables or
+launcher/worker differences from producing two role assignments for one page.
 """
 
 from typing import Any
 
 from .dictionary_page_layout_policy import resolve_page_layout_policy
 from .image_utils import build_analysis_image
-from .ordinary_layout_primary import remember_visualized_understanding
-from .page_understanding import understand_page
-from .processing import ORDINARY_AUTO_LAYOUT_FIELDS, _geometry_from_page_understanding
+from .processing import (
+    ORDINARY_AUTO_LAYOUT_FIELDS,
+    _geometry_from_page_understanding,
+    _understand_page_current,
+)
 
 
 def _indent_blocks_from_understanding(understanding: Any) -> list[dict[str, Any]]:
@@ -105,22 +106,15 @@ def shared_snapshot_for_app(app: Any) -> Any:
     page_sections = list(getattr(app, "page_sections", []) or [])
     analysis = build_analysis_image(app.image, effective)
     try:
-        understanding = understand_page(
+        understanding = _understand_page_current(
             analysis,
             effective,
             page_index=page_index,
             page_sections=page_sections,
         )
-        # This is the exact semantic object whose role blocks are painted below.
-        # Ordinary drawing can reuse it only if image/settings/page/sections all
-        # still match, so what the user sees is what the draw action consumes.
-        remember_visualized_understanding(
-            app.image,
-            effective,
-            page_index,
-            page_sections,
-            understanding,
-        )
+        if understanding is None:
+            raise RuntimeError("Page Understanding 未能生成版面结果")
+
         geometry = _geometry_from_page_understanding(understanding)
         used = understanding.page_settings
         app._layout_visualization_indent_blocks = _indent_blocks_from_understanding(
