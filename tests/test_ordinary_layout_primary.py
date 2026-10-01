@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 
+from picture_capture import page_understanding
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary_layout_primary import (
     build_ordinary_layout_primary,
@@ -63,7 +64,7 @@ def test_layout_role_entries_use_only_final_entry_rows() -> None:
     )
 
 
-def _fake_processing(understanding, *, vb_calls: list[int]):
+def _fake_processing(*, vb_calls: list[int]):
     geometry = SimpleNamespace()
 
     def vb_detector(_image, _settings, page_sections=None):
@@ -77,7 +78,10 @@ def _fake_processing(understanding, *, vb_calls: list[int]):
     )
     return SimpleNamespace(
         _core=core,
-        understand_page=lambda *_args, **_kwargs: understanding,
+        # Deliberately stale/incorrect. Ordinary routing must never use this
+        # bound reference; it must resolve page_understanding.understand_page
+        # dynamically after runtime installers have patched the module.
+        understand_page=lambda *_args, **_kwargs: _understanding(roles=[]),
         _geometry_from_page_understanding=lambda _understanding: geometry,
         _allowed_entries=lambda entries, *_args, **_kwargs: list(entries),
         _page_template_image=lambda image, _settings, _page_index: image,
@@ -85,14 +89,23 @@ def _fake_processing(understanding, *, vb_calls: list[int]):
     )
 
 
+def _install_understanding(monkeypatch, understanding) -> None:
+    monkeypatch.setattr(
+        page_understanding,
+        "understand_page",
+        lambda *_args, **_kwargs: understanding,
+    )
+
+
 def _forbidden_original(*_args, **_kwargs):
     raise AssertionError("ordinary layout-primary must not delegate to old pipeline")
 
 
-def test_successful_layout_primary_never_calls_vb() -> None:
+def test_successful_layout_primary_never_calls_vb(monkeypatch) -> None:
     understanding = _understanding(roles=["body", "entry", "body"])
+    _install_understanding(monkeypatch, understanding)
     vb_calls: list[int] = []
-    processing = _fake_processing(understanding, vb_calls=vb_calls)
+    processing = _fake_processing(vb_calls=vb_calls)
 
     detect = build_ordinary_layout_primary(processing, _forbidden_original)
     settings = AppSettings(detection_method="left_edge")
@@ -104,13 +117,33 @@ def test_successful_layout_primary_never_calls_vb() -> None:
     assert vb_calls == []
 
 
-def test_layout_roles_remain_authoritative_when_physical_reliable_is_false() -> None:
+def test_dynamic_module_function_wins_over_stale_processing_binding(monkeypatch) -> None:
+    current = _understanding(roles=["body", "entry", "body"])
+    _install_understanding(monkeypatch, current)
+    vb_calls: list[int] = []
+    processing = _fake_processing(vb_calls=vb_calls)
+
+    # The fake processing object intentionally contains a stale understand_page
+    # that returns no columns. If ordinary routing ever regresses to that bound
+    # symbol, this test falls into VB instead of returning the entry at Y=150.
+    detect = build_ordinary_layout_primary(processing, _forbidden_original)
+    entries, _geometry = detect(
+        Image.new("RGB", (800, 1000), "white"),
+        AppSettings(detection_method="left_edge"),
+    )
+
+    assert [entry.y for entry in entries] == [150]
+    assert vb_calls == []
+
+
+def test_layout_roles_remain_authoritative_when_physical_reliable_is_false(monkeypatch) -> None:
     understanding = _understanding(
         roles=["body", "entry", "body"],
         physical_reliable=False,
     )
+    _install_understanding(monkeypatch, understanding)
     vb_calls: list[int] = []
-    processing = _fake_processing(understanding, vb_calls=vb_calls)
+    processing = _fake_processing(vb_calls=vb_calls)
 
     detect = build_ordinary_layout_primary(processing, _forbidden_original)
     settings = AppSettings(detection_method="left_edge")
@@ -120,10 +153,11 @@ def test_layout_roles_remain_authoritative_when_physical_reliable_is_false() -> 
     assert vb_calls == []
 
 
-def test_zero_entry_layout_returns_zero_markers_without_vb() -> None:
+def test_zero_entry_layout_returns_zero_markers_without_vb(monkeypatch) -> None:
     understanding = _understanding(roles=["body", "body", "body"])
+    _install_understanding(monkeypatch, understanding)
     vb_calls: list[int] = []
-    processing = _fake_processing(understanding, vb_calls=vb_calls)
+    processing = _fake_processing(vb_calls=vb_calls)
 
     detect = build_ordinary_layout_primary(processing, _forbidden_original)
     settings = AppSettings(detection_method="left_edge")
@@ -133,10 +167,11 @@ def test_zero_entry_layout_returns_zero_markers_without_vb() -> None:
     assert vb_calls == []
 
 
-def test_vb_runs_only_when_page_understanding_has_no_columns() -> None:
+def test_vb_runs_only_when_page_understanding_has_no_columns(monkeypatch) -> None:
     understanding = _understanding(roles=[], with_columns=False)
+    _install_understanding(monkeypatch, understanding)
     vb_calls: list[int] = []
-    processing = _fake_processing(understanding, vb_calls=vb_calls)
+    processing = _fake_processing(vb_calls=vb_calls)
 
     detect = build_ordinary_layout_primary(processing, _forbidden_original)
     settings = AppSettings(detection_method="left_edge")
@@ -147,10 +182,10 @@ def test_vb_runs_only_when_page_understanding_has_no_columns() -> None:
     assert entries[0].ocr_source == "vb_fallback"
 
 
-def test_visualized_understanding_is_reused_without_second_inference() -> None:
+def test_visualized_understanding_is_reused_without_second_inference(monkeypatch) -> None:
     understanding = _understanding(roles=["body", "entry", "body"])
     vb_calls: list[int] = []
-    processing = _fake_processing(understanding, vb_calls=vb_calls)
+    processing = _fake_processing(vb_calls=vb_calls)
     image = Image.new("RGB", (800, 1000), "white")
     settings = AppSettings(detection_method="left_edge")
 
@@ -165,7 +200,7 @@ def test_visualized_understanding_is_reused_without_second_inference() -> None:
     def forbidden_inference(*_args, **_kwargs):
         raise AssertionError("ordinary drawing must reuse the visible Layout snapshot")
 
-    processing.understand_page = forbidden_inference
+    monkeypatch.setattr(page_understanding, "understand_page", forbidden_inference)
     detect = build_ordinary_layout_primary(processing, _forbidden_original)
 
     entries, _geometry = detect(image, settings)
@@ -175,9 +210,8 @@ def test_visualized_understanding_is_reused_without_second_inference() -> None:
 
 
 def test_combined_mode_still_delegates_to_existing_pipeline() -> None:
-    understanding = _understanding(roles=["body", "entry"])
     vb_calls: list[int] = []
-    processing = _fake_processing(understanding, vb_calls=vb_calls)
+    processing = _fake_processing(vb_calls=vb_calls)
     delegated: list[int] = []
 
     def original(*_args, **_kwargs):
