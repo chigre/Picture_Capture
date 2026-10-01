@@ -156,16 +156,17 @@ def test_transient_entry_ocr_right_ratio_migrates_to_visible_right_ratio(tmp_pat
     assert restored.paddle_band_width_ratio == 61.0
 
 
-def test_marker_ocr_dispatch_honors_configured_engine_and_shared_crop():
+def test_marker_ocr_uses_shared_multi_engine_channel_and_shared_crop():
     import picture_capture.entry_classification_runtime as runtime
 
     source = Path(runtime.__file__).read_text(encoding="utf-8")
     assert "resolve_entry_ocr_row_metrics(" in source
     assert "entry_ocr_crop_box(" in source
-    assert 'engine_name == "paddleocr"' in source
-    assert "core.run_tesseract(" in source
-    assert "run_paddle_band(" in source
-    assert "recognize_paddle_text(" in source
+    assert "OcrChannelSession" in source
+    assert "channel.recognize_crop(" in source
+    assert "choose_ocr_text(" in source
+    assert 'engine_name == "paddleocr"' not in source
+    assert "core.run_tesseract(" not in source
 
 
 def test_spawn_import_installs_marker_ocr_runtime_package_wide():
