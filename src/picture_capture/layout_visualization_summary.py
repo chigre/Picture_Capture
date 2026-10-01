@@ -5,8 +5,9 @@ from __future__ import annotations
 The base overlay owns geometry drawing. This module intercepts the one summary
 text item so it can be placed at the horizontal centre of column 1, five
 line-heights below ``body_top``, while containing the physical evidence needed
-to audit layout inference.  It also renders Page Understanding's per-line
-indent spans as pale-yellow translucent-looking blocks.
+to audit layout inference. It also renders Page Understanding's per-line
+indent spans as pale-yellow translucent-looking blocks and each inferred line
+role as a compact colour strip beside the physical column edge.
 """
 
 from typing import Any, Callable
@@ -18,7 +19,15 @@ from .processing import ORDINARY_AUTO_LAYOUT_FIELDS
 
 _SUMMARY_TAG = "layout-visualization-summary"
 _INDENT_TAG = "layout-visualization-indent"
+_ROLE_TAG = "layout-visualization-line-role"
 _BASE_LAYOUT_TAG = "layout-visualization"
+
+_ROLE_STYLE: dict[str, tuple[str, str]] = {
+    "entry": ("#2e7d32", "词条行"),
+    "headword": ("#2e7d32", "词条行"),
+    "body": ("#1976d2", "正文行"),
+}
+_UNKNOWN_ROLE_STYLE = ("#757575", "不确定")
 
 
 def _append_tag(tags: object, tag: str) -> tuple[str, ...]:
@@ -30,6 +39,11 @@ def _append_tag(tags: object, tag: str) -> tuple[str, ...]:
         except TypeError:
             values = ()
     return values if tag in values else values + (tag,)
+
+
+def _role_style(role: object) -> tuple[str, str]:
+    key = str(role or "unknown").strip().lower()
+    return _ROLE_STYLE.get(key, _UNKNOWN_ROLE_STYLE)
 
 
 def _format_summary(app: Any, snapshot: Any) -> str:
@@ -46,8 +60,8 @@ def _format_summary(app: Any, snapshot: Any) -> str:
     indent_blocks = list(getattr(app, "_layout_visualization_indent_blocks", []) or [])
     role_counts: dict[str, int] = {}
     for block in indent_blocks:
-        role = str(block.get("role", "unknown") or "unknown")
-        role_counts[role] = role_counts.get(role, 0) + 1
+        _color, label = _role_style(block.get("role", "unknown"))
+        role_counts[label] = role_counts.get(label, 0) + 1
     role_text = ", ".join(
         f"{name}={count}" for name, count in sorted(role_counts.items())
     ) or "none"
@@ -75,6 +89,7 @@ def _format_summary(app: Any, snapshot: Any) -> str:
             f"row_padding={values['row_padding']}"
         ),
         f"line indents: {len(indent_blocks)}   roles: {role_text}",
+        "role strips: 绿色=词条行   蓝色=正文行   灰色=不确定",
     ]
 
     top = int(geometry.top)
@@ -143,7 +158,7 @@ def _summary_anchor(app: Any, snapshot: Any) -> tuple[float, float]:
 
 
 def _draw_indent_blocks(app: Any, snapshot: Any) -> None:
-    """Draw each inferred line's indent span as a translucent-looking yellow block."""
+    """Draw each inferred line's actual indent as a pale-yellow block."""
     canvas = getattr(app, "canvas", None)
     if canvas is None:
         return
@@ -170,9 +185,6 @@ def _draw_indent_blocks(app: Any, snapshot: Any) -> None:
             y1 = int(block["y1"])
         except (KeyError, TypeError, ValueError):
             continue
-
-        # Zero/near-zero indent is deliberately not painted: no yellow width is
-        # itself the visual statement that this row sits on the body baseline.
         if abs(x1 - x0) < 1.0 or y1 <= y0:
             continue
 
@@ -200,17 +212,90 @@ def _draw_indent_blocks(app: Any, snapshot: Any) -> None:
         except Exception:
             continue
 
-    # Blocks are created after the base overlay so they are visible above the
-    # page image. Lower them just beneath the base Layout guides/text so yellow
-    # never obscures diagnostic lines or labels.
     try:
         canvas.tag_lower(_INDENT_TAG, _BASE_LAYOUT_TAG)
     except Exception:
         pass
 
 
+def _draw_role_strips(app: Any, snapshot: Any) -> None:
+    """Draw one narrow colour strip per line for inferred semantic role."""
+    canvas = getattr(app, "canvas", None)
+    if canvas is None:
+        return
+    try:
+        canvas.delete(_ROLE_TAG)
+    except Exception:
+        return
+
+    var = getattr(app, "_layout_visualization_var", None)
+    if var is None or not bool(var.get()):
+        return
+
+    geometry = snapshot.geometry
+    scale = float(getattr(app, "view_scale", 1.0) or 1.0)
+    blocks = list(getattr(app, "_layout_visualization_indent_blocks", []) or [])
+    if not blocks:
+        return
+
+    # Width is intentionally screen-readable but modest. It scales with the
+    # page so zooming preserves its relationship to the printed line height.
+    line_height = max(1, int(getattr(snapshot, "used_values", {}).get("character_height", 1) or 1))
+    strip_width = max(3, round(line_height * 0.12))
+
+    for block in blocks:
+        try:
+            column = int(block.get("column", 0) or 0)
+            y0 = int(block["y0"])
+            y1 = int(block["y1"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if y1 <= y0:
+            continue
+
+        # Follow the actual column edge at this line's vertical midpoint so the
+        # role strip remains aligned even when column deformation is enabled.
+        mid_y = int(round((y0 + y1) / 2.0))
+        column_index = max(0, min(column, len(geometry.column_starts) - 1))
+        try:
+            left_x = int(geometry.x_at(column_index, mid_y))
+        except Exception:
+            try:
+                left_x = int(block["x0"])
+            except (KeyError, TypeError, ValueError):
+                continue
+
+        x0 = left_x - strip_width - 2
+        x1 = left_x - 2
+        p0 = geometry.canonical_to_source(x0, y0)
+        p1 = geometry.canonical_to_source(x1, y1)
+        left = min(float(p0[0]), float(p1[0])) * scale
+        right = max(float(p0[0]), float(p1[0])) * scale
+        top = min(float(p0[1]), float(p1[1])) * scale
+        bottom = max(float(p0[1]), float(p1[1])) * scale
+        color, _label = _role_style(block.get("role", "unknown"))
+        try:
+            canvas.create_rectangle(
+                left,
+                top,
+                right,
+                bottom,
+                fill=color,
+                outline=color,
+                width=1,
+                tags=(_ROLE_TAG,),
+            )
+        except Exception:
+            continue
+
+    try:
+        canvas.tag_raise(_ROLE_TAG)
+    except Exception:
+        pass
+
+
 def draw_layout_visualization_detailed(app: Any) -> None:
-    """Draw readable Layout overlay with line indents and centred summary."""
+    """Draw readable Layout overlay with indents, line roles and summary."""
     canvas = getattr(app, "canvas", None)
     if canvas is None:
         return
@@ -218,7 +303,6 @@ def draw_layout_visualization_detailed(app: Any) -> None:
     try:
         snapshot = _snapshot_for_app(app)
     except Exception:
-        # Let the base diagnostic renderer show its normal error label.
         draw_layout_visualization_readable(app)
         return
 
@@ -246,9 +330,8 @@ def draw_layout_visualization_detailed(app: Any) -> None:
         canvas.create_text = original_create_text
 
     _draw_indent_blocks(app, snapshot)
+    _draw_role_strips(app, snapshot)
 
-    # Summary text and the readability rectangle share this tag. Raising the tag
-    # after the complete overlay is drawn guarantees the panel stays on top.
     try:
         canvas.tag_raise(_SUMMARY_TAG)
     except Exception:
