@@ -30,6 +30,7 @@ def prepare_app_module() -> Any:
 
     from . import dictionary_page_design
     from .dictionary_page_design_refined import detect_entries_from_page_design
+    from .layout_binary_role_sync import install_binary_line_role_sync
     from .layout_grid_inference import install_grid_line_and_indent_inference
     from .layout_line_start_refinement import install_robust_line_starts
 
@@ -41,6 +42,9 @@ def prepare_app_module() -> Any:
     # inference and role assignment are independent of character/line height.
     install_grid_line_and_indent_inference()
     install_robust_line_starts()
+    # The layout overlay reads LayoutLine.role, so propagate the binary lane
+    # decision (entry vs body) onto every row after each semantics pass.
+    install_binary_line_role_sync()
 
     from . import profile_setup
     from .parameter_help_ui import build_profile_parameter_help_wizard
