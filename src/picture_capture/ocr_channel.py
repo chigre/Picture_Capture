@@ -210,10 +210,11 @@ def choose_ocr_text(
 
 
 def _paddle_language(settings: AppSettings) -> str:
+    """Preserve the mature core's Paddle language/model resolution exactly."""
+
     configured = str(getattr(settings, "paddle_language", "") or "").strip()
     if configured:
         return configured
-    semantic = resolved_tesseract_language(settings).split("+", 1)[0].strip().lower()
     mapping = {
         "eng": "en",
         "ita": "it",
@@ -223,13 +224,16 @@ def _paddle_language(settings: AppSettings) -> str:
         "deu": "de",
         "chi_sim": "ch",
         "chi_tra": "chinese_cht",
-        "jpn": "japan",
-        "jpn_vert": "japan",
-        "kor": "korean",
-        "rus": "ru",
-        "ara": "ar",
     }
-    return mapping.get(semantic, semantic or "en")
+    # Tesseract accepts composite packs such as spa+eng; Paddle expects one
+    # language/model family. Prefer the first recognized component. A separate
+    # tesseract_language setting must never alter Paddle model selection.
+    raw_language = str(getattr(settings, "ocr_language", "") or "").strip()
+    parts = [part.strip() for part in raw_language.split("+") if part.strip()]
+    for part in parts:
+        if part in mapping:
+            return mapping[part]
+    return mapping.get(raw_language, raw_language)
 
 
 def _create_paddle_engine(settings: AppSettings) -> Any:
