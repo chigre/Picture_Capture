@@ -8,6 +8,7 @@ from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary_layout_primary import (
     build_ordinary_layout_primary,
     layout_role_entries,
+    remember_visualized_understanding,
 )
 
 
@@ -44,6 +45,12 @@ def test_layout_role_entries_use_only_final_entry_rows() -> None:
 
     assert len(entries) == 2
     assert all(entry.x == 10 for entry in entries)
+    # LayoutLine.y0 is body-local.  The ordinary marker must land on the exact
+    # top of each role=entry row, never at an old midpoint above it.
+    assert [entry.y for entry in entries] == [150, 210]
+    # Body rows are at source Y 120 and 180 and can never create a marker.
+    assert 120 not in {entry.y for entry in entries}
+    assert 180 not in {entry.y for entry in entries}
     assert all(
         entry.ocr_source == "page_understanding:ordinary_layout_role"
         for entry in entries
@@ -91,6 +98,39 @@ def test_successful_layout_primary_never_calls_vb() -> None:
 
     assert len(entries) == 1
     assert entries[0].ocr_source == "page_understanding:ordinary_layout_role"
+    assert entries[0].y == 150
+    assert vb_calls == []
+
+
+def test_visualized_understanding_is_reused_without_second_inference() -> None:
+    understanding = _understanding(roles=["body", "entry", "body"])
+    vb_calls: list[int] = []
+    processing = _fake_processing(understanding, vb_calls=vb_calls)
+    image = Image.new("RGB", (800, 1000), "white")
+    settings = AppSettings(detection_method="left_edge")
+
+    remember_visualized_understanding(
+        image,
+        settings,
+        0,
+        None,
+        understanding,
+    )
+
+    def forbidden_inference(*_args, **_kwargs):
+        raise AssertionError("ordinary drawing must reuse the visible Layout snapshot")
+
+    processing.understand_page = forbidden_inference
+    detect = build_ordinary_layout_primary(
+        processing,
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("ordinary layout-primary must not delegate")
+        ),
+    )
+
+    entries, _geometry = detect(image, settings)
+
+    assert [entry.y for entry in entries] == [150]
     assert vb_calls == []
 
 
