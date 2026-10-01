@@ -383,18 +383,75 @@ def _center(mode: Any) -> float:
     return float(getattr(mode, "center", 0.0) or 0.0)
 
 
-def _body_neighborhood_margin(body: Any, reference: float | None) -> float:
-    """Return a semantic body tolerance wider than the raw lane splitter.
+def _mode_range(mode: Any, normalized: dict[int, float]) -> tuple[float, float]:
+    values = [
+        float(normalized[id(line)])
+        for line in list(getattr(mode, "lines", []) or [])
+        if id(line) in normalized
+    ]
+    if values:
+        return float(min(values)), float(max(values))
+    center = _center(mode)
+    tolerance = float(getattr(mode, "tolerance", 1.0) or 1.0)
+    return center - tolerance, center + tolerance
 
-    Physical clustering intentionally preserves small X modes for diagnostics.
-    Role assignment is coarser: nearby modes around the dominant body lane are
-    normal first-X jitter, not separate headword semantics.
-    """
-    tolerance = float(getattr(body, "tolerance", 1.0) or 1.0)
+
+def _body_envelope_gap(reference: float | None) -> float:
+    """Maximum edge-to-edge gap that still belongs to ordinary body jitter."""
     if reference is None:
-        return max(2.5, min(8.0, tolerance + 1.5))
+        return 6.0
     ref = max(6.0, float(reference))
-    return max(2.5, min(10.0, max(tolerance + 1.5, ref * 0.14)))
+    return float(max(4.0, min(12.0, ref * 0.16)))
+
+
+def _body_semantic_modes(
+    column: Any,
+    body: Any,
+    reference: float | None,
+) -> set[int]:
+    """Grow the body semantic envelope across nearby physical lanes.
+
+    Physical clustering remains intentionally fine grained.  Semantic body
+    assignment starts from the dominant lane and absorbs neighboring lanes whose
+    *actual edge-to-edge gap* is small.  Expansion is capped so a chain of tiny
+    lanes cannot walk all the way into a genuinely indented headword region.
+    """
+    modes = list(getattr(column, "indent_modes", []) or [])
+    lines = list(getattr(column, "lines", []) or [])
+    normalized = normalized_physical_indents(lines)
+    ranges = {id(mode): _mode_range(mode, normalized) for mode in modes}
+    body_lo, body_hi = ranges.get(id(body), (_center(body), _center(body)))
+    body_center = _center(body)
+    gap_limit = _body_envelope_gap(reference)
+    ref = max(6.0, float(reference)) if reference is not None else 40.0
+    max_extension = max(12.0, min(24.0, ref * 0.35))
+
+    absorbed: set[int] = {id(body)}
+    changed = True
+    while changed:
+        changed = False
+        for mode in modes:
+            mode_id = id(mode)
+            if mode_id in absorbed:
+                continue
+            lo, hi = ranges[mode_id]
+            if hi < body_lo:
+                gap = body_lo - hi
+            elif lo > body_hi:
+                gap = lo - body_hi
+            else:
+                gap = 0.0
+            proposed_lo = min(body_lo, lo)
+            proposed_hi = max(body_hi, hi)
+            if (
+                gap <= gap_limit
+                and body_center - max_extension <= proposed_lo
+                and proposed_hi <= body_center + max_extension
+            ):
+                absorbed.add(mode_id)
+                body_lo, body_hi = proposed_lo, proposed_hi
+                changed = True
+    return absorbed
 
 
 def assign_binary_roles(
@@ -402,13 +459,13 @@ def assign_binary_roles(
     indent_type: str,
     _reference: float | None = None,
 ) -> None:
-    """Assign entry/body around a dominant body neighborhood.
+    """Assign entry/body from a dominant body envelope and indent direction.
 
-    The most-supported physical-indent lane is the body baseline. Adjacent
-    lanes within a small adaptive X neighborhood remain body because scan tilt,
-    thin leading strokes, and denoising can shift first-X by a few pixels.
-    Only lanes that clearly leave that neighborhood in the configured indent
-    direction become entry. Support never gates entry eligibility.
+    The most-supported physical-indent lane seeds the body class. Nearby lanes
+    whose *actual ranges* are separated from that body range by only a small gap
+    are absorbed into the body envelope. Only lanes clearly beyond the final
+    body envelope in the configured indent direction become entry. Support never
+    gates entry eligibility.
     """
     modes = list(getattr(column, "indent_modes", []) or [])
     lines = list(getattr(column, "lines", []) or [])
@@ -428,16 +485,21 @@ def assign_binary_roles(
         key=lambda mode: (_support(mode), -abs(_center(mode))),
     )
     column.body_mode = body
-    body_center = _center(body)
-    margin = _body_neighborhood_margin(body, _reference)
+    body_ids = _body_semantic_modes(column, body, _reference)
+
+    body_centers = [_center(mode) for mode in modes if id(mode) in body_ids]
+    body_min = min(body_centers) if body_centers else _center(body)
+    body_max = max(body_centers) if body_centers else _center(body)
 
     if str(indent_type) == "headword":
         entry_modes = [
-            mode for mode in modes if _center(mode) > body_center + margin
+            mode for mode in modes
+            if id(mode) not in body_ids and _center(mode) > body_max
         ]
     else:
         entry_modes = [
-            mode for mode in modes if _center(mode) < body_center - margin
+            mode for mode in modes
+            if id(mode) not in body_ids and _center(mode) < body_min
         ]
 
     for mode in entry_modes:
