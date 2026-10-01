@@ -19,26 +19,15 @@ def prepare_app_module() -> Any:
     if _PREPARED_APP_MODULE is not None:
         return _PREPARED_APP_MODULE
 
-    # Presentation terminology is installed before any Tk widgets are created.
-    # Persisted setting names stay unchanged; every visible UI surface uses the
-    # canonical labels “普通字/行高” and “行间空”.
     from .ui_terminology import install_ui_terminology
 
     install_ui_terminology()
 
-    # 1) Capture the exact automatic PDIC result *before* processing imports
-    # write_pdic into its own module namespace. Later manual saves load entries
-    # from PDIC and therefore do not carry detector runtime evidence, so they do
-    # not overwrite this baseline snapshot.
     from . import formats
     from .training_baseline import build_write_pdic_capture
 
     formats.write_pdic = build_write_pdic_capture(formats.write_pdic)
 
-    # 2) Keep the refined page-design compatibility symbol installed for older
-    # callers.  The production processing facade now owns a higher shared Page
-    # Understanding layer, so this is no longer a special "ordinary drawing"
-    # promotion; it is only a compatibility bridge for direct module callers.
     from . import dictionary_page_design
     from .dictionary_page_design_refined import detect_entries_from_page_design
     from .layout_grid_inference import install_grid_line_and_indent_inference
@@ -50,22 +39,12 @@ def prepare_app_module() -> Any:
     dictionary_page_design.detect_entries_from_page_design = (
         detect_entries_from_page_design
     )
-    # Recover rows from observed ink projection and cluster each column by
-    # physical indent width. Character height is only a structural prior for
-    # validating/splitting abnormal runs; it does not impose a fixed row grid.
+    # Detect real rows from projection, then cluster each column by physical
+    # leading whitespace.  Physical indent is the primary row-role signal.
     install_grid_line_and_indent_inference()
-    # Refine visual first_x from leading whitespace while ignoring residual
-    # specks; semantic anchor_x remains secondary evidence.
     install_robust_line_starts()
-    # Physical-indent lanes are layout facts. Assign semantics only after those
-    # lanes exist: the dominant lane is body and only the extreme stable lane on
-    # the configured entry side may become entry. Intermediate '~'/example/
-    # continuation lanes stay unknown.
     install_refined_physical_role_assignment()
 
-    # profile_setup imports processing; do this only after low-level extensions
-    # above have been installed. Compose page semantics first, then put all long
-    # parameter explanations in the persistent right-side help area.
     from . import profile_setup
     from .parameter_help_ui import build_profile_parameter_help_wizard
     from .profile_indent_ui import build_project_profile_wizard
@@ -74,10 +53,6 @@ def prepare_app_module() -> Any:
         build_project_profile_wizard(profile_setup.ProjectProfileWizard)
     )
 
-    # 3) Enrich the existing training exporter without replacing its proven
-    # image/PDIC/PPP/OCR-copying workflow.  v3 keeps the exact automatic->human
-    # correction contract; a second wrapper adds the same Page Understanding
-    # diagnostics that ordinary/OCR/combined drawing now share.
     from . import training_export
     from .training_export_v3 import (
         build_export_training_page,
@@ -100,17 +75,14 @@ def prepare_app_module() -> Any:
     )
     training_export.TRAINING_EXPORT_FORMAT = "picture-capture-training-v3"
 
-    # Import the GUI only after all function-level extensions above are in
-    # place. Training export reuses the main-window page selection directly.
     from . import app as app_module
     from .layout_visualization_shared import (
         install_shared_layout_visualization_source,
     )
 
-    # The overlay must bind to the exact Page Understanding geometry before the
-    # v3 summary module imports the snapshot function by name.
     install_shared_layout_visualization_source()
 
+    from .layout_lane_summary_extension import install_physical_lane_summary
     from .layout_visualization_ui_v3 import install_layout_visualization
     from .parameter_help_ui import install_settings_parameter_help
     from .training_export_ui import export_training_package_selected_range
@@ -119,6 +91,9 @@ def prepare_app_module() -> Any:
     install_settings_parameter_help(app_module)
     install_app_tooltip_terminology(app_module)
     install_layout_visualization(app_module)
+    # The detailed summary module exists after install_layout_visualization();
+    # append the physical lane table that drives row-role classification.
+    install_physical_lane_summary()
     app_module.PictureCaptureApp.export_training_package = (
         export_training_package_selected_range
     )
