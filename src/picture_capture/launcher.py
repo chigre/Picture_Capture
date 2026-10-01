@@ -75,6 +75,7 @@ def prepare_app_module() -> Any:
     from .layout_visualization_shared import (
         install_shared_layout_visualization_source,
     )
+    from .ordinary_layout_worker import detect_entries_job as ordinary_detect_entries_job
 
     install_shared_layout_visualization_source()
 
@@ -91,6 +92,10 @@ def prepare_app_module() -> Any:
     app_module.PictureCaptureApp.export_training_package = (
         export_training_package_selected_range
     )
+    # ``app.py`` imports the historical processing worker by value.  Replace
+    # that module-global binding so GUI ProcessPool submissions pickle the
+    # spawn-safe Layout-first worker instead of re-importing the old VB path.
+    app_module.detect_entries_job = ordinary_detect_entries_job
 
     _PREPARED_APP_MODULE = app_module
     return app_module
