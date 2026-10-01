@@ -6,41 +6,121 @@ Ordinary drawing has one primary source of truth: the final Page Understanding
 ``LayoutLine.role`` assignment.  Historical VB detection is isolated here as a
 fallback and is never fused back into a successful layout-role result.
 
+When the main-window Layout visualization has already inferred the current page,
+ordinary drawing reuses that exact PageUnderstanding object.  This prevents a
+second inference pass from disagreeing with the roles the user is looking at.
+
 PaddleOCR and combined modes are intentionally untouched.
 """
 
-from dataclasses import replace
+from dataclasses import fields, replace
 from pathlib import Path
 from typing import Any, Callable
+import weakref
 
 from PIL import Image
 
-from . import dictionary_page_design as page_design
 from .image_utils import build_analysis_image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
 from .page_understanding import PageUnderstanding
 
 
+# One small UI-facing cache: key the exact source Image object plus every input
+# that can affect Page Understanding.  Batch/background images therefore never
+# accidentally consume a main-window snapshot.
+_VISUALIZED_UNDERSTANDING: dict[
+    tuple[int, int, tuple[Any, ...], tuple[Any, ...]],
+    tuple[weakref.ReferenceType[Any] | None, PageUnderstanding],
+] = {}
+
+
+def _settings_signature(settings: AppSettings) -> tuple[Any, ...]:
+    """Return a stable, exhaustive signature for one effective settings object."""
+    try:
+        return tuple(
+            (item.name, repr(getattr(settings, item.name, None)))
+            for item in fields(settings)
+        )
+    except (TypeError, AttributeError):
+        return (repr(settings),)
+
+
+def _sections_signature(
+    page_sections: list[PageSection] | None,
+) -> tuple[Any, ...]:
+    return tuple(repr(section) for section in list(page_sections or []))
+
+
+def _snapshot_key(
+    image: Image.Image,
+    settings: AppSettings,
+    page_index: int,
+    page_sections: list[PageSection] | None,
+) -> tuple[int, int, tuple[Any, ...], tuple[Any, ...]]:
+    return (
+        id(image),
+        int(page_index),
+        _settings_signature(settings),
+        _sections_signature(page_sections),
+    )
+
+
+def remember_visualized_understanding(
+    image: Image.Image,
+    settings: AppSettings,
+    page_index: int,
+    page_sections: list[PageSection] | None,
+    understanding: PageUnderstanding,
+) -> None:
+    """Remember exactly what the current Layout overlay showed to the user."""
+    key = _snapshot_key(image, settings, page_index, page_sections)
+    try:
+        reference: weakref.ReferenceType[Any] | None = weakref.ref(image)
+    except TypeError:
+        reference = None
+    _VISUALIZED_UNDERSTANDING.clear()
+    _VISUALIZED_UNDERSTANDING[key] = (reference, understanding)
+
+
+def recall_visualized_understanding(
+    image: Image.Image,
+    settings: AppSettings,
+    page_index: int,
+    page_sections: list[PageSection] | None,
+) -> PageUnderstanding | None:
+    """Return the exact visible Layout result only when every input still matches."""
+    key = _snapshot_key(image, settings, page_index, page_sections)
+    cached = _VISUALIZED_UNDERSTANDING.get(key)
+    if cached is None:
+        return None
+    reference, understanding = cached
+    if reference is not None and reference() is not image:
+        _VISUALIZED_UNDERSTANDING.pop(key, None)
+        return None
+    return understanding
+
+
 def layout_role_entries(understanding: PageUnderstanding) -> list[Entry]:
-    """Convert final ``role=entry`` rows directly into ordinary draw markers."""
+    """Convert only final ``role=entry`` rows into ordinary draw markers.
+
+    The marker is anchored at the entry row's own physical top.  Do not use the
+    historical midpoint/whitespace ``_boundary_before`` helper here: that helper
+    can place an entry marker visually inside the preceding body row, which makes
+    the red line contradict the Layout role overlay even though the selected role
+    itself was correct.
+    """
     layout = understanding.layout
-    reference = max(1.0, float(understanding.line_height))
     result: list[Entry] = []
 
     for column in list(getattr(layout, "columns", []) or []):
-        lines = list(getattr(column, "lines", []) or [])
-        for line in lines:
+        for line in list(getattr(column, "lines", []) or []):
             if str(getattr(line, "role", "") or "") != "entry":
                 continue
-            boundary_local = int(page_design._boundary_before(
-                lines,
-                int(line.y0),
-                reference,
-            ))
+            canonical_y = int(layout.body_top) + int(line.y0)
             source_x, source_y = layout.transform.canonical_to_source_point(
                 int(column.left),
-                int(layout.body_top) + boundary_local,
+                canonical_y,
                 layout.source_size,
             )
             result.append(Entry(
@@ -149,17 +229,26 @@ def build_ordinary_layout_primary(
                 page_sections=page_sections,
             )
 
+        # Current-page ordinary drawing must consume the exact role assignment
+        # shown by Layout visualization whenever that snapshot is still valid.
+        understanding = recall_visualized_understanding(
+            image,
+            effective,
+            profile_page_index,
+            page_sections,
+        )
+
         analysis_image = build_analysis_image(source, effective)
-        understanding: PageUnderstanding | None
-        try:
-            understanding = processing_module.understand_page(
-                analysis_image,
-                effective,
-                page_index=profile_page_index,
-                page_sections=page_sections,
-            )
-        except Exception:
-            understanding = None
+        if understanding is None:
+            try:
+                understanding = processing_module.understand_page(
+                    analysis_image,
+                    effective,
+                    page_index=profile_page_index,
+                    page_sections=page_sections,
+                )
+            except Exception:
+                understanding = None
 
         if (
             understanding is not None
