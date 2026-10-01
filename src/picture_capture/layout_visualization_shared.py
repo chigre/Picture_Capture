@@ -17,15 +17,7 @@ from .processing import ORDINARY_AUTO_LAYOUT_FIELDS, _geometry_from_page_underst
 
 
 def _indent_blocks_from_understanding(understanding: Any) -> list[dict[str, Any]]:
-    """Return canonical per-line *actual indent* spans for diagnostics.
-
-    ``LayoutLine.first_x`` is the first real ink in the line, local to the
-    column strip.  This is the visually meaningful indent requested by the UI:
-    the highlighted span runs from the physical column left edge to that first
-    ink.  ``anchor_x`` is intentionally not used for the span because it skips
-    small prefixes/markers and can therefore make the overlay look as though an
-    interior glyph were the line start.
-    """
+    """Return canonical per-line actual-indent spans for diagnostics."""
     layout = understanding.layout
     blocks: list[dict[str, Any]] = []
     body_top = int(layout.body_top)
@@ -65,6 +57,34 @@ def _indent_blocks_from_understanding(understanding: Any) -> list[dict[str, Any]
     return blocks
 
 
+def _indent_lanes_from_understanding(understanding: Any) -> list[dict[str, Any]]:
+    """Expose each per-column physical-indent cluster for visual auditing."""
+    lanes: list[dict[str, Any]] = []
+    for column in list(getattr(understanding.layout, "columns", []) or []):
+        column_index = int(getattr(column, "index", 0) or 0)
+        for lane_index, mode in enumerate(list(getattr(column, "indent_modes", []) or [])):
+            values = sorted(
+                float(getattr(line, "first_x", 0) or 0)
+                for line in list(getattr(mode, "lines", []) or [])
+            )
+            if values:
+                low = float(values[0])
+                high = float(values[-1])
+            else:
+                center = float(getattr(mode, "center", 0.0) or 0.0)
+                low = high = center
+            lanes.append({
+                "column": column_index,
+                "lane": int(lane_index),
+                "center": float(getattr(mode, "center", 0.0) or 0.0),
+                "min": low,
+                "max": high,
+                "support": int(getattr(mode, "support", len(values)) or len(values)),
+                "role": str(getattr(mode, "role", "") or "unknown"),
+            })
+    return lanes
+
+
 def shared_snapshot_for_app(app: Any) -> Any:
     """Return a LayoutVisualizationSnapshot from the ordinary shared geometry."""
     from . import layout_visualization_ui as ui
@@ -93,10 +113,10 @@ def shared_snapshot_for_app(app: Any) -> Any:
         app._layout_visualization_indent_blocks = _indent_blocks_from_understanding(
             understanding
         )
+        app._layout_visualization_indent_lanes = _indent_lanes_from_understanding(
+            understanding
+        )
 
-        # Re-read the policy estimate only for diagnostics (raw/method/confidence).
-        # This is the same layout policy used by understand_page; it does not
-        # create a second geometry for drawing.
         _policy_settings, estimate, _policy_applied = resolve_page_layout_policy(
             analysis,
             effective,
