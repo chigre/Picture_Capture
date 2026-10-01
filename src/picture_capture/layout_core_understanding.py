@@ -107,14 +107,19 @@ def _body_lane_ids(
     return absorbed
 
 
-def _resolve_near_tied_body_lanes(layout: Any) -> None:
-    """Resolve the body seed by polarity, then fully reclassify nearby lanes.
+def _resolve_directional_body_lanes(layout: Any) -> None:
+    """Choose the body family from explicit indent polarity, not row counts.
 
-    Stable near-tied lanes use the Profile's explicit indent polarity to choose
-    the body seed.  After the seed is chosen, role assignment is always rebuilt,
-    even when that seed is unchanged from the previous pass.  This matters for
-    singleton lanes such as 19px next to a 24-33px body lane: they are separate
-    physical clusters but semantically the same body indentation family.
+    A dictionary column can contain more entry rows than body rows.  Therefore
+    the most-supported physical lane is not, by itself, a semantic body signal.
+    The Profile's explicit indentation polarity is authoritative among lanes
+    with substantial support:
+
+    - 正文缩进 (``body``): the inward/larger-indent stable lane seeds body.
+    - 词头缩进 (``headword``): the outward/smaller-indent stable lane seeds body.
+
+    Support is used only to prevent very sparse singleton/display lanes from
+    stealing the body seed.  Sparse lanes remain fully eligible as entry lanes.
     """
     indent_type = str(getattr(layout, "indent_type", "body") or "body")
     if indent_type == "none":
@@ -133,32 +138,29 @@ def _resolve_near_tied_body_lanes(layout: Any) -> None:
         if max_support <= 0:
             continue
 
-        # Prefer polarity only among lanes with substantial support. Sparse
-        # n=1/n=2 lanes remain eligible as entry evidence but cannot steal body.
-        major_threshold = max(2, int(math.ceil(float(max_support) * 0.72)))
-        major_modes = [
-            mode for mode in modes
-            if int(getattr(mode, "support", 0) or 0) >= major_threshold
+        # A stable body lane need not be near-tied with the most frequent lane.
+        # Requiring roughly one quarter of the dominant support still excludes
+        # n=1/n=2 display/singleton lanes while allowing pages where entries are
+        # more numerous than wrapped body rows (e.g. 45 entry vs 22 body lines).
+        stable_threshold = max(2, int(math.ceil(float(max_support) * 0.25)))
+        stable_modes = [
+            mode
+            for mode in modes
+            if int(getattr(mode, "support", 0) or 0) >= stable_threshold
         ]
+        if not stable_modes:
+            stable_modes = [max(modes, key=lambda mode: int(getattr(mode, "support", 0) or 0))]
 
-        if len(major_modes) >= 2:
-            if indent_type == "body":
-                desired_body = max(
-                    major_modes,
-                    key=lambda mode: float(getattr(mode, "center", 0.0) or 0.0),
-                )
-            else:
-                desired_body = min(
-                    major_modes,
-                    key=lambda mode: float(getattr(mode, "center", 0.0) or 0.0),
-                )
+        if indent_type == "body":
+            desired_body = max(
+                stable_modes,
+                key=lambda mode: float(getattr(mode, "center", 0.0) or 0.0),
+            )
         else:
-            desired_body = getattr(column, "body_mode", None)
-            if desired_body is None:
-                desired_body = max(
-                    modes,
-                    key=lambda mode: int(getattr(mode, "support", 0) or 0),
-                )
+            desired_body = min(
+                stable_modes,
+                key=lambda mode: float(getattr(mode, "center", 0.0) or 0.0),
+            )
 
         body_ids = _body_lane_ids(modes, desired_body, reference_arg)
         body_centers = [
@@ -176,13 +178,15 @@ def _resolve_near_tied_body_lanes(layout: Any) -> None:
 
         if indent_type == "headword":
             entry_modes = [
-                mode for mode in modes
+                mode
+                for mode in modes
                 if id(mode) not in body_ids
                 and float(getattr(mode, "center", 0.0) or 0.0) > body_max
             ]
         else:
             entry_modes = [
-                mode for mode in modes
+                mode
+                for mode in modes
                 if id(mode) not in body_ids
                 and float(getattr(mode, "center", 0.0) or 0.0) < body_min
             ]
@@ -225,7 +229,7 @@ def understand_layout_core(
     # makes the fast path independent of installer order and guarantees that the
     # cached object contains the same final entry/body roles ordinary drawing uses.
     normalize_layout_roles(layout)
-    _resolve_near_tied_body_lanes(layout)
+    _resolve_directional_body_lanes(layout)
 
     physical = _physical_reliable(layout)
     cjk = uses_cjk_role_model(page_settings)
