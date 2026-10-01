@@ -174,41 +174,69 @@ def infer_dictionary_page_layout(
         np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8), effective
     )
 
-    # Top is an explicit policy-controlled field. Bottom intentionally is not:
-    # it follows the page/Profile/footer domain, as in the historical ordinary
-    # layout contract, rather than becoming another hidden auto-layout switch.
+    # Top remains policy-controlled. Bottom is different: a projection estimate
+    # must not truncate the very text rows Page Understanding is supposed to
+    # inspect. Scan the full allowed page/template domain first, then derive the
+    # body bottom from the last real text run in the configured columns.
     top = max(0, min(canonical.height - 1, int(getattr(effective, "start_y", 0) or 0)))
     try:
-        _observed_top, observed_bottom, _unused_starts, _unused_rights = base._initial_geometry(
+        _observed_top, projection_bottom, _unused_starts, _unused_rights = base._initial_geometry(
             canonical, effective
         )
-        bottom = max(top + 1, min(canonical.height, int(observed_bottom)))
+        projection_bottom = max(top + 1, min(canonical.height, int(projection_bottom)))
     except Exception:
-        bottom = canonical.height
+        projection_bottom = canonical.height
 
     starts, rights, gutters = _policy_geometry(
         canonical.width, page_settings, estimate
     )
     seed = max(8.0, float(getattr(page_settings, "character_height", 26) or 26))
 
-    def column_strips(scale: float) -> tuple[list[np.ndarray], list[list[tuple[int, int]]]]:
+    def column_strips(
+        scale: float,
+        limit_bottom: int,
+    ) -> tuple[list[np.ndarray], list[list[tuple[int, int]]]]:
         strips: list[np.ndarray] = []
         runs: list[list[tuple[int, int]]] = []
+        bounded_bottom = max(top + 1, min(canonical.height, int(limit_bottom)))
         for left, right in zip(starts, rights):
             column_width = max(1, right - left)
             strip = page_ink[
-                top:bottom,
+                top:bounded_bottom,
                 left:min(canonical.width, left + base._leading_width(column_width, scale)),
             ]
             strips.append(strip)
             runs.append(base._line_runs(strip, scale))
         return strips, runs
 
-    strips, raw_runs = column_strips(seed)
-    # ``character_height`` is the fixed/auto *prior*. Actual ink height remains
-    # an observed page-instance property, bounded by that prior.
+    # First infer line scale without accepting projection_bottom as a hard crop.
+    full_bottom = canonical.height
+    strips, raw_runs = column_strips(seed, full_bottom)
     reference = base._normal_height(raw_runs, seed)
-    strips, raw_runs = column_strips(reference)
+    strips, raw_runs = column_strips(reference, full_bottom)
+
+    last_run_ends = [
+        int(y1)
+        for runs in raw_runs
+        for _y0, y1 in runs
+    ]
+    if last_run_ends:
+        # y coordinates in raw_runs are local to body_top. A modest trailing
+        # margin keeps descenders/anti-aliasing inside the body without letting a
+        # stale projection result clip real text. Profile/footer masking has
+        # already removed configured non-body regions from ``canonical``.
+        trailing_margin = max(2, round(reference * 0.55))
+        bottom = min(
+            canonical.height,
+            top + max(last_run_ends) + trailing_margin,
+        )
+        bottom = max(top + 1, int(bottom))
+    else:
+        bottom = projection_bottom
+
+    # Rebuild line runs in the resolved body domain so every downstream local-Y
+    # coordinate uses the same final bottom.
+    strips, raw_runs = column_strips(reference, bottom)
 
     indent_type = base._indent_type(page_settings)
     columns: list[base.ColumnDesign] = []
@@ -302,6 +330,7 @@ def infer_dictionary_page_layout(
         f"{len(columns)} columns; body={body_lines}; entry={entry_lines}; "
         f"display={len(display_heads)}; line_h={reference:.1f}; "
         f"char_w={char_width:.1f}; pitch={pitch:.1f}; "
+        f"body_bottom={bottom} projection_bottom={projection_bottom}; "
         f"layout_policy={policy}; auto_fields={auto_names}{x_registration}"
     )
     layout = base.DictionaryPageLayout(
