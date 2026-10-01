@@ -40,15 +40,21 @@ def _install_marker_ocr_crop(processing_module: Any) -> None:
 
         meta = get_entry_classification(entry)
         is_large = meta.entry_scale == "oversized"
-        regular_height = max(
+        automatic_regular = max(
             character_height + 2 * row_padding,
             round(character_height * 1.20),
+        )
+        configured_regular = max(
+            0, int(getattr(settings, "entry_regular_crop_height", 0) or 0)
+        )
+        configured_oversized = max(
+            0, int(getattr(settings, "entry_oversized_crop_height", 0) or 0)
         )
         crop_height = classified_entry_crop_height(
             entry,
             settings,
-            regular_height=regular_height,
-            oversized_height=0,
+            regular_height=configured_regular or automatic_regular,
+            oversized_height=configured_oversized,
         )
 
         if is_large:
@@ -101,7 +107,7 @@ def install_processing_entry_classification(processing_module: Any) -> None:
             if str(getattr(line, "role", "") or "") == "entry"
         ]
         # The original materializer emits one Entry for each final entry line in
-        # exactly this column/row order.  Classification is metadata only and
+        # exactly this column/row order. Classification is metadata only and
         # therefore must never add/remove/reorder separators.
         for line, entry in zip(lines, entries):
             meta = copy_layout_line_classification(line, entry)
