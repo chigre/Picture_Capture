@@ -156,15 +156,7 @@ def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]
 
 
 def _credible_first_ink_x(line: np.ndarray, reference: float) -> int | None:
-    """Return the first real leading mark, including thin horizontal glyphs.
-
-    ``dictionary_page_design._line_feature`` historically required a minimum
-    vertical ink count per X column.  That is useful for finding a full-height
-    anchor glyph, but it incorrectly treats thin leading glyphs such as 一, —,
-    or ~ as whitespace.  Here we inspect horizontal ink components directly and
-    accept either a sufficiently wide thin mark or a sufficiently tall mark,
-    while rejecting isolated speckles.
-    """
+    """Return the first real leading mark, including thin horizontal glyphs."""
     from .ordinary_visual import _fill_short_gaps, _runs
 
     if line.ndim != 2 or line.size == 0:
@@ -391,18 +383,32 @@ def _center(mode: Any) -> float:
     return float(getattr(mode, "center", 0.0) or 0.0)
 
 
+def _body_neighborhood_margin(body: Any, reference: float | None) -> float:
+    """Return a semantic body tolerance wider than the raw lane splitter.
+
+    Physical clustering intentionally preserves small X modes for diagnostics.
+    Role assignment is coarser: nearby modes around the dominant body lane are
+    normal first-X jitter, not separate headword semantics.
+    """
+    tolerance = float(getattr(body, "tolerance", 1.0) or 1.0)
+    if reference is None:
+        return max(2.5, min(8.0, tolerance + 1.5))
+    ref = max(6.0, float(reference))
+    return max(2.5, min(10.0, max(tolerance + 1.5, ref * 0.14)))
+
+
 def assign_binary_roles(
     column: Any,
     indent_type: str,
     _reference: float | None = None,
 ) -> None:
-    """Assign entry/body from the dominant body lane and indent direction.
+    """Assign entry/body around a dominant body neighborhood.
 
-    Physical-indent clustering has already removed within-lane variation. The
-    most-supported lane is therefore the body baseline. For ``headword``
-    indentation, every distinct lane to its right is entry; for ``body``
-    indentation, every distinct lane to its left is entry. Support never gates
-    entry eligibility, so singleton headwords remain valid.
+    The most-supported physical-indent lane is the body baseline. Adjacent
+    lanes within a small adaptive X neighborhood remain body because scan tilt,
+    thin leading strokes, and denoising can shift first-X by a few pixels.
+    Only lanes that clearly leave that neighborhood in the configured indent
+    direction become entry. Support never gates entry eligibility.
     """
     modes = list(getattr(column, "indent_modes", []) or [])
     lines = list(getattr(column, "lines", []) or [])
@@ -423,11 +429,16 @@ def assign_binary_roles(
     )
     column.body_mode = body
     body_center = _center(body)
+    margin = _body_neighborhood_margin(body, _reference)
 
     if str(indent_type) == "headword":
-        entry_modes = [mode for mode in modes if _center(mode) > body_center]
+        entry_modes = [
+            mode for mode in modes if _center(mode) > body_center + margin
+        ]
     else:
-        entry_modes = [mode for mode in modes if _center(mode) < body_center]
+        entry_modes = [
+            mode for mode in modes if _center(mode) < body_center - margin
+        ]
 
     for mode in entry_modes:
         mode.role = "entry"
@@ -437,12 +448,7 @@ def assign_binary_roles(
 
 
 def _suppress_display_head_duplicate_entries(layout: Any) -> None:
-    """Keep one entry boundary for one oversized display head.
-
-    Oversized typography can occupy two or more recovered logical row slots.
-    Those slots are useful for indent visualization, but they still belong to a
-    single headword and must not create repeated entry boundaries.
-    """
+    """Keep one entry boundary for one oversized display head."""
     columns = list(getattr(layout, "columns", []) or [])
     heads = list(getattr(layout, "display_heads", []) or [])
     if not columns or not heads:
@@ -488,8 +494,10 @@ def normalize_layout_roles(layout: Any) -> Any:
                 column.body_mode = max(column.indent_modes, key=_support)
         return layout
 
+    reference = float(getattr(layout, "ordinary_line_height", 0.0) or 0.0)
+    reference_arg = reference if reference > 0 else None
     for column in list(getattr(layout, "columns", []) or []):
-        assign_binary_roles(column, indent_type)
+        assign_binary_roles(column, indent_type, reference_arg)
     _suppress_display_head_duplicate_entries(layout)
     return layout
 
