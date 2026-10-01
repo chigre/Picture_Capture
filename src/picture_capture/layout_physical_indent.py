@@ -230,8 +230,19 @@ def assign_binary_roles(column: Any, indent_type: str, _reference: float | None 
 
 
 def normalize_layout_roles(layout: Any) -> Any:
-    """Remove downstream legacy sparse-entry additions and reapply binary roles."""
+    """Rebuild final entry/body roles from physical-indent lanes only."""
     indent_type = str(getattr(layout, "indent_type", "body") or "body")
+    if indent_type == "none":
+        for column in list(getattr(layout, "columns", []) or []):
+            for line in list(getattr(column, "lines", []) or []):
+                line.role = "body"
+            for mode in list(getattr(column, "indent_modes", []) or []):
+                mode.role = "body"
+            column.entry_modes = []
+            if column.indent_modes:
+                column.body_mode = max(column.indent_modes, key=_support)
+        return layout
+
     for column in list(getattr(layout, "columns", []) or []):
         assign_binary_roles(column, indent_type)
     return layout
@@ -254,30 +265,25 @@ def _install_policy_finalization() -> None:
     policy._physical_indent_finalizer_installed = True
 
 
-def _install_generic_role_preservation() -> None:
+def _install_page_understanding_finalization() -> None:
     from . import page_understanding
 
-    if getattr(page_understanding, "_physical_indent_generic_roles_installed", False):
+    if getattr(page_understanding, "_physical_indent_finalizer_installed", False):
         return
 
-    def clear_only_for_no_indent(layout: Any) -> None:
-        if str(getattr(layout, "indent_type", "") or "") != "none":
-            return
-        for column in list(getattr(layout, "columns", []) or []):
-            for mode in list(getattr(column, "indent_modes", []) or []):
-                mode.role = "body"
-            for line in list(getattr(column, "lines", []) or []):
-                line.role = "body"
-            column.entry_modes = []
-            if column.indent_modes:
-                column.body_mode = max(column.indent_modes, key=_support)
+    original: Callable[..., Any] = page_understanding.understand_page
 
-    page_understanding._clear_generic_entry_roles = clear_only_for_no_indent
-    page_understanding._physical_indent_generic_roles_installed = True
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        understanding = original(*args, **kwargs)
+        normalize_layout_roles(understanding.layout)
+        return understanding
+
+    page_understanding.understand_page = wrapped
+    page_understanding._physical_indent_finalizer_installed = True
 
 
 def install_physical_indent_inference() -> None:
-    """Install the single physical-indent implementation used by Page Understanding."""
+    """Install the single physical-indent implementation used by all consumers."""
     from . import dictionary_page_design as page_design
 
     if getattr(page_design, "_physical_indent_inference_installed", False):
@@ -287,5 +293,5 @@ def install_physical_indent_inference() -> None:
     page_design._indent_modes = physical_indent_modes
     page_design._assign_indent_semantics = assign_binary_roles
     _install_policy_finalization()
-    _install_generic_role_preservation()
+    _install_page_understanding_finalization()
     page_design._physical_indent_inference_installed = True
