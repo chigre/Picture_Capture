@@ -23,23 +23,20 @@ def prepare_app_module() -> Any:
 
     formats.write_pdic = build_write_pdic_capture(formats.write_pdic)
 
+    # The GUI Layout overlay also needs the same physical-indent runtime before
+    # app import.  Ordinary detection itself no longer depends on launcher-time
+    # patches: processing.detect_entries() prepares this runtime again
+    # idempotently in every process, including spawn workers.
     from . import dictionary_page_design
     from .dictionary_page_design_refined import detect_entries_from_page_design
     from .layout_line_start_refinement import install_robust_line_starts
     from .layout_physical_indent import install_physical_indent_inference
-    from .ordinary_layout_primary import install_ordinary_layout_primary
 
     dictionary_page_design.detect_entries_from_page_design = (
         detect_entries_from_page_design
     )
-    # First refine each row's physical start, then install the single physical-
-    # indent lane/role implementation used by layout policy and Page Understanding.
     install_robust_line_starts()
     install_physical_indent_inference()
-    # Ordinary drawing treats final Layout roles as authoritative.  Historical
-    # VB is isolated behind this router and runs only when Layout cannot provide
-    # an entry role; it never modifies a successful Layout result.
-    install_ordinary_layout_primary()
 
     from . import profile_setup
     from .parameter_help_ui import build_profile_parameter_help_wizard
@@ -75,7 +72,6 @@ def prepare_app_module() -> Any:
     from .layout_visualization_shared import (
         install_shared_layout_visualization_source,
     )
-    from .ordinary_layout_worker import detect_entries_job as ordinary_detect_entries_job
 
     install_shared_layout_visualization_source()
 
@@ -92,10 +88,6 @@ def prepare_app_module() -> Any:
     app_module.PictureCaptureApp.export_training_package = (
         export_training_package_selected_range
     )
-    # ``app.py`` imports the historical processing worker by value.  Replace
-    # that module-global binding so GUI ProcessPool submissions pickle the
-    # spawn-safe Layout-first worker instead of re-importing the old VB path.
-    app_module.detect_entries_job = ordinary_detect_entries_job
 
     _PREPARED_APP_MODULE = app_module
     return app_module
