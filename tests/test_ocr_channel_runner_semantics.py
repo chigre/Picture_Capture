@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
 
 from PIL import Image
 
@@ -59,6 +61,59 @@ def test_channel_paddle_result_normalization_preserves_polygon_fallback():
     assert records[0].text == "Alpha"
     assert records[0].confidence == 0.91
     assert records[0].box == (10, 5, 50, 25)
+
+
+def test_channel_paddle_engine_preserves_legacy_runtime_bootstrap(monkeypatch):
+    import picture_capture.ocr_channel as channel
+
+    events: list[str] = []
+
+    layout_module = ModuleType("picture_capture.layout_detection")
+    layout_module.clear_text_detection_cache = lambda: events.append(
+        "clear_text_detection_cache"
+    )
+    monkeypatch.setitem(sys.modules, "picture_capture.layout_detection", layout_module)
+
+    windows_module = ModuleType("picture_capture.windows_gpu_runtime")
+    windows_module.configure_windows_nvidia_dlls = lambda: events.append(
+        "configure_windows_nvidia_dlls"
+    )
+    monkeypatch.setitem(sys.modules, "picture_capture.windows_gpu_runtime", windows_module)
+
+    paddle_module = ModuleType("paddleocr")
+
+    class FakePaddleOCR:
+        def __init__(self, **kwargs):
+            events.append("PaddleOCR")
+            self.kwargs = dict(kwargs)
+
+    paddle_module.PaddleOCR = FakePaddleOCR
+    monkeypatch.setitem(sys.modules, "paddleocr", paddle_module)
+    monkeypatch.setattr(channel, "resolve_paddle_device", lambda: "cpu")
+    monkeypatch.setenv("FLAGS_enable_pir_api", "1")
+
+    channel.clear_ocr_channel_paddle_engine_cache()
+    settings = AppSettings(
+        paddle_language="en",
+        paddle_ocr_version="PP-OCRv5",
+        paddle_use_textline_orientation=False,
+    )
+
+    engine = channel._create_paddle_engine(settings)
+    cached = channel._create_paddle_engine(settings)
+
+    assert cached is engine
+    assert os.environ["FLAGS_enable_pir_api"] == "0"
+    assert events == [
+        "clear_text_detection_cache",
+        "configure_windows_nvidia_dlls",
+        "PaddleOCR",
+    ]
+    assert engine.kwargs["lang"] == "en"
+    assert engine.kwargs["device"] == "cpu"
+    assert engine.kwargs["ocr_version"] == "PP-OCRv5"
+    assert engine.kwargs["enable_mkldnn"] is False
+    channel.clear_ocr_channel_paddle_engine_cache()
 
 
 def test_legacy_boundary_bridge_no_longer_uses_core_paddle_runner_helpers():
