@@ -2,9 +2,10 @@ from __future__ import annotations
 
 """Richer, page-anchored summary for the Layout diagnostic overlay.
 
-The base overlay owns geometry drawing.  This module only intercepts the one
-summary text item so it can be placed inside column 1 immediately below
-``body_top`` and contain the physical evidence needed to audit layout inference.
+The base overlay owns geometry drawing. This module intercepts the one summary
+text item so it can be placed at the horizontal centre of column 1, five
+line-heights below ``body_top``, while containing the physical evidence needed
+to audit layout inference.
 """
 
 from typing import Any, Callable
@@ -106,25 +107,30 @@ def _format_summary(app: Any, snapshot: Any) -> str:
 
 
 def _summary_anchor(app: Any, snapshot: Any) -> tuple[float, float]:
-    """Return Canvas coordinates just inside column 1 below body_top."""
+    """Return Canvas coordinates at column-1 centre and +5 line-heights."""
     geometry = snapshot.geometry
     scale = float(getattr(app, "view_scale", 1.0) or 1.0)
     top = int(geometry.top)
-    if geometry.column_starts:
-        left = int(geometry.x_at(0, top))
+    bottom = int(geometry.bottom)
+
+    values = getattr(snapshot, "used_values", {})
+    line_height = max(1, int(values.get("character_height", 1) or 1))
+    anchor_y = min(bottom, top + 5 * line_height)
+
+    if geometry.column_starts and geometry.column_widths:
+        left = int(geometry.x_at(0, anchor_y))
+        width = int(geometry.column_widths[0])
     else:
-        left = int(getattr(snapshot, "used_values", {}).get("manual_x", 0))
-    sx, sy = geometry.canonical_to_source(left, top)
-    # Keep the box inside the body rather than overlapping the body_top line.
-    y_offset_source = max(
-        6,
-        round(float(snapshot.used_values.get("row_padding", 0) or 0) + 4),
-    )
-    return (sx * scale + 6, (sy + y_offset_source) * scale)
+        left = int(values.get("manual_x", 0) or 0)
+        width = int(values.get("column_width", 0) or 0)
+
+    centre_x = left + width / 2.0
+    sx, sy = geometry.canonical_to_source(round(centre_x), anchor_y)
+    return (sx * scale, sy * scale)
 
 
 def draw_layout_visualization_detailed(app: Any) -> None:
-    """Draw readable Layout overlay with a detailed top-of-column summary."""
+    """Draw readable Layout overlay with a centred, detailed summary."""
     canvas = getattr(app, "canvas", None)
     if canvas is None:
         return
@@ -147,7 +153,8 @@ def draw_layout_visualization_detailed(app: Any) -> None:
             if len(args) < 2:
                 kwargs["x"] = summary_x
                 kwargs["y"] = summary_y
-            kwargs["anchor"] = "nw"
+            kwargs["anchor"] = "n"
+            kwargs["justify"] = "center"
             kwargs["text"] = summary_text
             kwargs["tags"] = _append_tag(kwargs.get("tags", ()), _SUMMARY_TAG)
         return original_create_text(*args, **kwargs)
