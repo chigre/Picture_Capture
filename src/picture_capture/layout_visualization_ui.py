@@ -348,7 +348,7 @@ def _install_display_toggle(app: Any, parent: Any) -> None:
 
     checkbox = ttk.Checkbutton(
         section,
-        text="显示版面参数可视化",
+        text="显示Layout",
         variable=var,
         command=toggle,
     )
