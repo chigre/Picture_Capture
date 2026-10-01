@@ -27,6 +27,7 @@ from .ocr_channel import (
     OcrChannelCandidate,
     OcrChannelPlan,
     OcrChannelSession,
+    normalize_paddle_result,
     prepare_ocr_input,
     resolve_ocr_channel_plan,
 )
@@ -101,12 +102,7 @@ def _channel_paddle_band_runner(
     settings: AppSettings,
     engine: Any | None = None,
 ):
-    """Preserve mature Paddle result normalization around channel inference.
-
-    Input preprocessing and engine execution now belong to the shared channel;
-    only conversion back into the mature parser's historical ``OCRRecord`` type
-    remains in this compatibility seam.
-    """
+    """Adapt shared Paddle records into the mature parser's historical type."""
 
     prepared, input_scale = prepare_ocr_input(
         band,
@@ -116,7 +112,7 @@ def _channel_paddle_band_runner(
     results = session.run_paddle_raw(prepared, engine=engine)
     if not results:
         return []
-    records = list(_legacy_core.extract_ocr_records(results[0]))
+    records = [_legacy_record(row) for row in normalize_paddle_result(results[0])]
     if not records or abs(float(input_scale) - 1.0) < 1e-9:
         return records
 
