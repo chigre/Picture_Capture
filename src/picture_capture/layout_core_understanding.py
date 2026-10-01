@@ -2,10 +2,11 @@ from __future__ import annotations
 
 """Fast physical Layout understanding shared by display and ordinary drawing.
 
-This module deliberately stops after physical page layout and final line roles.
-It does not run sampled-symbol evidence, semantic entry enrichment, OCR, or
-candidate fusion.  The result is cached by analysis-image content and settings
-so 【显示Layout】 and 【普通画线】 can reuse exactly the same role assignment.
+The core resolves physical page geometry and final line roles once, then adds
+OCR-independent ordinary evidence from sampled structural symbols and oversized
+display heads.  It never runs OCR or semantic parser fusion.  The result is
+cached by analysis-image content and settings so 【显示Layout】 and 【普通画线】
+reuse exactly the same final role assignment.
 """
 
 from collections import OrderedDict
@@ -21,6 +22,9 @@ from .layout_physical_indent import (
     normalize_layout_roles,
 )
 from .models import AppSettings
+from .ordinary_evidence_fusion import promote_evidence_to_layout_roles
+from .ordinary_large_head_evidence import detect_ordinary_large_head_entries
+from .ordinary_symbol_evidence import detect_ordinary_symbol_entries
 from .page_understanding import (
     PageUnderstanding,
     _apply_explicit_indent_semantics,
@@ -64,15 +68,7 @@ def _body_lane_ids(
     body: Any,
     reference: float | None,
 ) -> set[int]:
-    """Absorb lanes genuinely adjacent to body in physical-indent space.
-
-    Clustering is intentionally fine grained, so a one-line lane may be split
-    from the dominant body lane even though their physical intervals are only a
-    few pixels apart.  Semantic body assignment therefore grows from the chosen
-    body lane using *mode.center/tolerance*, the same normalized-X space used to
-    form the lanes.  This avoids mixing raw first-X ranges with detrended lane
-    centres.
-    """
+    """Absorb lanes genuinely adjacent to body in physical-indent space."""
     body_center = float(getattr(body, "center", 0.0) or 0.0)
     body_lo, body_hi = _mode_interval(body)
     ref = max(6.0, float(reference)) if reference is not None else 40.0
@@ -108,21 +104,18 @@ def _body_lane_ids(
 
 
 def _resolve_directional_body_lanes(layout: Any) -> None:
-    """Choose the body family from explicit indent polarity, not row counts.
-
-    A dictionary column can contain more entry rows than body rows.  Therefore
-    the most-supported physical lane is not, by itself, a semantic body signal.
-    The Profile's explicit indentation polarity is authoritative among lanes
-    with substantial support:
-
-    - 正文缩进 (``body``): the inward/larger-indent stable lane seeds body.
-    - 词头缩进 (``headword``): the outward/smaller-indent stable lane seeds body.
-
-    Support is used only to prevent very sparse singleton/display lanes from
-    stealing the body seed.  Sparse lanes remain fully eligible as entry lanes.
-    """
+    """Choose the body family from explicit indent polarity, not row counts."""
     indent_type = str(getattr(layout, "indent_type", "body") or "body")
     if indent_type == "none":
+        # No-indent pages deliberately leave directional indentation out of the
+        # entry decision.  Visual-symbol and large-head evidence can still
+        # promote rows later in this module.
+        for column in list(getattr(layout, "columns", []) or []):
+            for line in list(getattr(column, "lines", []) or []):
+                line.role = "body"
+            for mode in list(getattr(column, "indent_modes", []) or []):
+                mode.role = "body"
+            column.entry_modes = []
         return
 
     reference = float(getattr(layout, "ordinary_line_height", 0.0) or 0.0)
@@ -138,10 +131,6 @@ def _resolve_directional_body_lanes(layout: Any) -> None:
         if max_support <= 0:
             continue
 
-        # A stable body lane need not be near-tied with the most frequent lane.
-        # Requiring roughly one quarter of the dominant support still excludes
-        # n=1/n=2 display/singleton lanes while allowing pages where entries are
-        # more numerous than wrapped body rows (e.g. 45 entry vs 22 body lines).
         stable_threshold = max(2, int(math.ceil(float(max_support) * 0.25)))
         stable_modes = [
             mode
@@ -202,13 +191,29 @@ def _resolve_directional_body_lanes(layout: Any) -> None:
     _suppress_display_head_duplicate_entries(layout)
 
 
+def _apply_universal_ordinary_evidence(
+    image: Image.Image,
+    understanding: PageUnderstanding,
+    settings: AppSettings,
+) -> tuple[int, int]:
+    """OR-promote sampled-symbol and oversized-head evidence onto Layout rows."""
+    symbol_entries = detect_ordinary_symbol_entries(image, understanding, settings)
+    large_entries = detect_ordinary_large_head_entries(image, understanding, settings)
+    symbol_promoted = promote_evidence_to_layout_roles(understanding, symbol_entries)
+    large_promoted = promote_evidence_to_layout_roles(understanding, large_entries)
+    # A large display glyph may occupy more than one recovered logical row.
+    # Keep one entry boundary per display head after all evidence is promoted.
+    _suppress_display_head_duplicate_entries(understanding.layout)
+    return symbol_promoted, large_promoted
+
+
 def understand_layout_core(
     image: Image.Image,
     settings: AppSettings,
     *,
     page_index: int = 0,
 ) -> PageUnderstanding:
-    """Return physical Layout + final line roles, with no semantic/OCR layers."""
+    """Return physical Layout + final universal ordinary-mode line roles."""
     key = (
         _image_fingerprint(image),
         _settings_fingerprint(settings),
@@ -225,9 +230,6 @@ def understand_layout_core(
         page_index=int(page_index),
     )
     _apply_explicit_indent_semantics(layout, page_settings)
-    # The policy finalizer normally does this too. Calling it explicitly here
-    # makes the fast path independent of installer order and guarantees that the
-    # cached object contains the same final entry/body roles ordinary drawing uses.
     normalize_layout_roles(layout)
     _resolve_directional_body_lanes(layout)
 
@@ -239,14 +241,7 @@ def understand_layout_core(
         and _generic_body_indent_is_proven(layout)
     )
     role_model = "cjk" if cjk else "generic"
-    layout.reason += (
-        f"; page_understanding={role_model}:layout_core"
-        f" physical_reliable={int(physical)}"
-        f" semantic_reliable=0"
-        f" generic_body_indent={int(generic_body)}"
-        f" indent_semantics={layout.indent_type}"
-        f" symbol_markers=0"
-    )
+
     result = PageUnderstanding(
         layout=layout,
         page_settings=page_settings,
@@ -258,6 +253,21 @@ def understand_layout_core(
         generic_body_indent_reliable=generic_body,
         family_offset_ratio=None,
         symbol_evidence=SymbolEvidenceResult(markers=[]),
+    )
+
+    symbol_promoted, large_promoted = _apply_universal_ordinary_evidence(
+        image,
+        result,
+        page_settings,
+    )
+    layout.reason += (
+        f"; page_understanding={role_model}:layout_core"
+        f" physical_reliable={int(physical)}"
+        f" semantic_reliable=0"
+        f" generic_body_indent={int(generic_body)}"
+        f" indent_semantics={layout.indent_type}"
+        f" ordinary_symbol_promoted={int(symbol_promoted)}"
+        f" ordinary_large_head_promoted={int(large_promoted)}"
     )
 
     _LAYOUT_CACHE[key] = result
