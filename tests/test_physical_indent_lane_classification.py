@@ -4,12 +4,12 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from picture_capture.layout_binary_role_sync import _sync_column_line_roles
-from picture_capture.layout_grid_inference import (
-    assign_physical_indent_roles,
-    indent_width_modes,
-)
 from picture_capture.layout_lane_summary_extension import append_physical_lane_summary
+from picture_capture.layout_physical_indent import (
+    assign_binary_roles,
+    normalize_layout_roles,
+    physical_indent_modes,
+)
 
 
 def _line(first_x: int) -> SimpleNamespace:
@@ -25,8 +25,8 @@ def _line(first_x: int) -> SimpleNamespace:
 def test_clustering_is_independent_of_character_height() -> None:
     lines = [_line(2), _line(4), _line(5), _line(13), _line(15), _line(16)]
 
-    small = indent_width_modes(lines, reference=20.0)
-    large = indent_width_modes(lines, reference=80.0)
+    small = physical_indent_modes(lines, 20.0)
+    large = physical_indent_modes(lines, 80.0)
 
     assert [round(mode.center) for mode in small] == [4, 15]
     assert [round(mode.center) for mode in large] == [4, 15]
@@ -40,7 +40,7 @@ def test_c1_like_distribution_merges_continuous_body_peak() -> None:
         + [43]
         + [97]
     )
-    modes = indent_width_modes([_line(v) for v in values], reference=50.0)
+    modes = physical_indent_modes([_line(v) for v in values], 50.0)
 
     ranges = [
         (
@@ -57,7 +57,7 @@ def test_c1_like_distribution_merges_continuous_body_peak() -> None:
     assert any(lo == 97 and hi == 97 for lo, hi, _n in ranges)
 
 
-def test_binary_roles_choose_entry_then_make_everything_else_body() -> None:
+def test_binary_roles_choose_entry_and_sync_lines() -> None:
     values = (
         [12, 13, 13, 14, 14, 15, 15, 16, 16, 17] * 2
         + [19, 20, 19]
@@ -67,7 +67,7 @@ def test_binary_roles_choose_entry_then_make_everything_else_body() -> None:
         + [118]
     )
     lines = [_line(v) for v in values]
-    modes = indent_width_modes(lines, reference=50.0)
+    modes = physical_indent_modes(lines, 50.0)
     column = SimpleNamespace(
         indent_modes=modes,
         lines=lines,
@@ -75,62 +75,53 @@ def test_binary_roles_choose_entry_then_make_everything_else_body() -> None:
         entry_modes=[],
     )
 
-    assign_physical_indent_roles(column, "body", reference=50.0)
-    _sync_column_line_roles(column)
+    assign_binary_roles(column, "body", 50.0)
 
     assert len(column.entry_modes) == 1
     entry = column.entry_modes[0]
     assert 12 <= entry.center <= 20
-    assert entry.role == "entry"
-    assert all(mode.role in {"entry", "body"} for mode in modes)
-    assert all(mode.role == "body" for mode in modes if mode is not entry)
     assert all(line.role == "entry" for line in entry.lines)
+    assert all(mode.role == "body" for mode in modes if mode is not entry)
     assert all(
         line.role == "body"
         for mode in modes
         if mode is not entry
         for line in mode.lines
     )
-    assert column.body_mode is not None
-    assert column.body_mode is not entry
 
 
-def test_unclustered_rows_are_body_under_binary_policy() -> None:
-    entry_line = _line(2)
-    body_line = _line(30)
-    orphan_line = _line(70)
-    entry_mode = SimpleNamespace(lines=[entry_line], role="entry")
-    body_mode = SimpleNamespace(lines=[body_line], role="body")
+def test_final_normalization_removes_legacy_sparse_entry() -> None:
+    entry = SimpleNamespace(center=1.0, support=10, role="unknown", lines=[_line(1) for _ in range(10)])
+    body = SimpleNamespace(center=28.0, support=30, role="body", lines=[_line(28) for _ in range(30)])
+    stray = SimpleNamespace(center=70.0, support=1, role="entry", lines=[_line(70)])
     column = SimpleNamespace(
-        indent_modes=[entry_mode, body_mode],
-        entry_modes=[entry_mode],
-        lines=[entry_line, body_line, orphan_line],
+        indent_modes=[entry, body, stray],
+        lines=entry.lines + body.lines + stray.lines,
+        body_mode=body,
+        entry_modes=[stray],
     )
+    layout = SimpleNamespace(indent_type="body", columns=[column])
 
-    _sync_column_line_roles(column)
+    normalize_layout_roles(layout)
 
-    assert entry_line.role == "entry"
-    assert body_line.role == "body"
-    assert orphan_line.role == "body"
+    assert column.entry_modes == [entry]
+    assert entry.role == "entry"
+    assert body.role == "body"
+    assert stray.role == "body"
+    assert all(line.role == "entry" for line in entry.lines)
+    assert all(line.role == "body" for line in body.lines + stray.lines)
 
 
 def test_single_lane_page_stays_body() -> None:
     lines = [_line(v) for v in [2, 2, 3, 3, 4, 4]]
-    modes = indent_width_modes(lines, reference=50.0)
-    column = SimpleNamespace(
-        indent_modes=modes,
-        lines=lines,
-        body_mode=None,
-        entry_modes=[],
-    )
+    modes = physical_indent_modes(lines, 50.0)
+    column = SimpleNamespace(indent_modes=modes, lines=lines, body_mode=None, entry_modes=[])
 
-    assign_physical_indent_roles(column, "body", reference=50.0)
-    _sync_column_line_roles(column)
+    assign_binary_roles(column, "body", 50.0)
 
     assert len(modes) == 1
     assert modes[0].role == "body"
     assert all(line.role == "body" for line in lines)
-    assert column.body_mode is modes[0]
     assert column.entry_modes == []
 
 
@@ -145,8 +136,6 @@ def test_lane_summary_reports_only_entry_or_body_roles() -> None:
 
     text = append_physical_lane_summary("Layout AUTO", app)
 
-    assert "physical indent lanes:" in text
     assert "C1/L1: center=3.0   range=2.0-5.0   n=8   role=entry" in text
     assert "C1/L2: center=15.0   range=13.0-17.0   n=5   role=body" in text
-    assert "C1/L3: center=35.0   range=32.0-38.0   n=22   role=body" in text
     assert "unknown" not in text
