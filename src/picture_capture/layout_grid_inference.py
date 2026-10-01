@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-"""Grid-based line recovery and indent-width clustering for Page Understanding.
+"""Projection-led line recovery and physical indent-width clustering.
 
-A dictionary body already supplies a vertical extent and a reliable ordinary
-character/line scale.  Treating each connected row-projection run as a line is
-therefore unnecessarily fragile: scan dust can bridge adjacent rows and make a
-tall run disappear entirely.  This module instead establishes repeated row
-slots from the known line scale, aligns slot boundaries to low-ink valleys, and
-then measures the real ink inside each slot.
+Dictionary rows are first detected from real horizontal ink projection runs.
+The detected ordinary line height is only a structural prior: it rejects tiny
+noise runs and helps split an abnormally tall connected run at a low-ink valley.
+It does *not* impose a repeated fixed row grid on the page.
 
-Indent modes are likewise physical layout quantities.  They are clustered from
-``LayoutLine.first_x`` (the actual visible indent width inside one column), not
-from semantic ``anchor_x``.  Anchor geometry remains available as secondary
-structural evidence, but no longer determines the lane assignment.
+Indent modes are physical layout quantities and are clustered independently in
+each column from ``LayoutLine.first_x`` (the visible indent width).  ``anchor_x``
+remains secondary structural evidence rather than the lane coordinate.
 """
 
 from typing import Any
@@ -20,72 +17,115 @@ from typing import Any
 import numpy as np
 
 
-def grid_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]:
-    """Return text-line runs recovered from a body-height/line-height grid.
+def _raw_projection_runs(ink: np.ndarray, scale: float) -> tuple[list[tuple[int, int]], np.ndarray, float]:
+    """Return real row-projection runs before height-based interpretation."""
+    from .ordinary_visual import _runs
 
-    ``ink`` is one column's leading body strip in body-local coordinates.  The
-    expected slot pitch is the detected ordinary line height plus a minimal
-    inter-line gap.  A phase search chooses boundaries with the least ink, so
-    descenders/ascenders are kept on the appropriate side without allowing a
-    few bridging specks to merge two complete rows.
-    """
     if ink.ndim != 2 or ink.size == 0:
-        return []
+        return [], np.zeros(0, dtype=float), 0.0
 
-    height, width = ink.shape
-    reference = max(6.0, float(scale))
-    # character_height is the application-level row text scale.  The historical
-    # default row_padding is one pixel; allow a tiny proportional allowance so
-    # high-DPI pages do not accumulate phase error over the whole body.
-    pitch = max(4, int(round(reference + max(1.0, reference * 0.025))))
-    pitch = min(pitch, max(4, height))
-
+    width = max(1, int(ink.shape[1]))
     row_ink = np.asarray(ink, dtype=np.uint8).sum(axis=1).astype(np.float64)
-    active_threshold = max(2.0, float(width) * 0.003)
+    threshold = max(2.0, float(width) * 0.003)
+    active = row_ink >= threshold
 
-    # Pick a repeated slot boundary through low-ink valleys.  Use a three-row
-    # boundary cost so one noisy pixel row cannot dictate the phase.
-    best_phase = 0
+    # Only bridge a truly tiny blank interruption.  Larger inter-row spaces must
+    # remain visible to the projection rather than being forced into a row grid.
+    max_gap = max(0, min(2, int(round(max(6.0, float(scale)) * 0.035))))
+    if max_gap > 0:
+        indices = np.flatnonzero(active)
+        if indices.size >= 2:
+            for left, right in zip(indices, indices[1:]):
+                gap = int(right - left - 1)
+                if 0 < gap <= max_gap:
+                    active[left:right + 1] = True
+
+    return [(int(a), int(b)) for a, b in _runs(active)], row_ink, threshold
+
+
+def _split_tall_run(
+    y0: int,
+    y1: int,
+    row_ink: np.ndarray,
+    threshold: float,
+    reference: float,
+) -> list[tuple[int, int]]:
+    """Split a connected multi-line run only when a convincing ink valley exists."""
+    height = int(y1 - y0)
+    ref = max(6.0, float(reference))
+    if height <= ref * 1.70:
+        return [(int(y0), int(y1))]
+
+    # Search near one expected line height from the current top.  This uses the
+    # line-height estimate as a *prior* while the split location itself is chosen
+    # from the observed projection valley.
+    lo = max(y0 + 2, int(round(y0 + ref * 0.62)))
+    hi = min(y1 - 2, int(round(y0 + ref * 1.38)))
+    if hi <= lo:
+        return [(int(y0), int(y1))]
+
+    best_y: int | None = None
     best_cost: float | None = None
-    for phase in range(pitch):
-        positions = np.arange(phase, height, pitch, dtype=int)
-        positions = positions[(positions > 1) & (positions < height - 2)]
-        if positions.size < 2:
-            continue
-        cost = float(np.mean(
-            row_ink[positions - 1] + row_ink[positions] + row_ink[positions + 1]
-        ))
+    for y in range(lo, hi + 1):
+        a = max(y0, y - 1)
+        b = min(y1, y + 2)
+        cost = float(np.mean(row_ink[a:b])) if b > a else float(row_ink[y])
         if best_cost is None or cost < best_cost:
             best_cost = cost
-            best_phase = phase
+            best_y = y
 
-    boundaries = list(range(best_phase, height + pitch, pitch))
-    boundaries = [value for value in boundaries if 0 < value < height]
-    edges = [0, *boundaries, height]
+    if best_y is None or best_cost is None:
+        return [(int(y0), int(y1))]
 
-    runs: list[tuple[int, int]] = []
-    minimum_height = max(3, int(round(reference * 0.20)))
-    minimum_area = max(6, int(round(reference * reference * 0.025)))
+    # A separator valley should be close to blank relative to ordinary active
+    # rows.  This catches a one-pixel dust bridge without splitting naturally
+    # tall glyphs or display heads simply because a fixed grid says so.
+    body = row_ink[y0:y1]
+    active_values = body[body >= threshold]
+    typical = float(np.median(active_values)) if active_values.size else threshold
+    valley_limit = max(threshold * 1.8, typical * 0.18)
+    if best_cost > valley_limit:
+        return [(int(y0), int(y1))]
 
-    for slot0, slot1 in zip(edges, edges[1:]):
-        if slot1 - slot0 < minimum_height:
+    left = (int(y0), int(best_y))
+    right = (int(best_y), int(y1))
+    minimum = max(3, int(round(ref * 0.20)))
+    if left[1] - left[0] < minimum or right[1] - right[0] < minimum:
+        return [(int(y0), int(y1))]
+
+    result: list[tuple[int, int]] = []
+    for part0, part1 in (left, right):
+        result.extend(_split_tall_run(part0, part1, row_ink, threshold, ref))
+    return result
+
+
+def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]:
+    """Detect rows from observed ink runs, using line height only for validation/splitting."""
+    raw, row_ink, threshold = _raw_projection_runs(ink, scale)
+    if not raw:
+        return []
+
+    ref = max(6.0, float(scale))
+    minimum = ref * 0.26
+    maximum_single = ref * 1.90
+    result: list[tuple[int, int]] = []
+
+    for y0, y1 in raw:
+        height = y1 - y0
+        if height < minimum:
             continue
-        slot = ink[slot0:slot1]
-        row_active = slot.sum(axis=1) >= active_threshold
-        ys = np.flatnonzero(row_active)
-        if ys.size == 0 or int(slot.sum()) < minimum_area:
-            continue
+        parts = _split_tall_run(y0, y1, row_ink, threshold, ref) if height > maximum_single else [(y0, y1)]
+        for part0, part1 in parts:
+            part_height = part1 - part0
+            if minimum <= part_height <= maximum_single:
+                result.append((int(part0), int(part1)))
 
-        y0 = slot0 + int(ys[0])
-        y1 = slot0 + int(ys[-1]) + 1
-        # Keep sparse punctuation-only slots out, but do not impose the old
-        # upper-height cutoff: the grid itself already prevents two rows from
-        # becoming one giant run.
-        if y1 - y0 < minimum_height:
-            continue
-        runs.append((int(y0), int(y1)))
+    return result
 
-    return runs
+
+# Backward-compatible name retained for tests/importers from the immediately
+# preceding implementation.  Its semantics are now projection-led, not grid-led.
+grid_line_runs = projection_line_runs
 
 
 def indent_width_modes(lines: list[Any], reference: float) -> list[Any]:
@@ -133,12 +173,12 @@ def indent_width_modes(lines: list[Any], reference: float) -> list[Any]:
 
 
 def install_grid_line_and_indent_inference() -> None:
-    """Install grid line recovery and physical-indent clustering exactly once."""
+    """Install projection-led line recovery and physical-indent clustering once."""
     from . import dictionary_page_design as page_design
 
     if getattr(page_design, "_grid_line_indent_inference_installed", False):
         return
 
-    page_design._line_runs = grid_line_runs
+    page_design._line_runs = projection_line_runs
     page_design._indent_modes = indent_width_modes
     page_design._grid_line_indent_inference_installed = True
