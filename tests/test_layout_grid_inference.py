@@ -4,24 +4,43 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from picture_capture.layout_grid_inference import grid_line_runs, indent_width_modes
+from picture_capture.layout_grid_inference import projection_line_runs, indent_width_modes
 
 
-def test_body_grid_splits_rows_even_when_specks_bridge_them() -> None:
+def test_projection_preserves_real_nonuniform_row_positions() -> None:
+    ink = np.zeros((120, 140), dtype=bool)
+    ink[7:22, 18:100] = True
+    ink[31:49, 24:108] = True
+    ink[66:84, 14:96] = True
+
+    runs = projection_line_runs(ink, 20.0)
+
+    assert runs == [(7, 22), (31, 49), (66, 84)]
+
+
+def test_projection_splits_only_tall_run_when_sparse_bridge_connects_rows() -> None:
     ink = np.zeros((90, 120), dtype=bool)
-    # Two ordinary text rows with a thin scan-artifact bridge at the far left.
+    # Two real rows plus a one-pixel dust bridge in the inter-line valley.
     ink[8:24, 20:92] = True
-    ink[30:46, 18:88] = True
+    ink[31:47, 18:88] = True
     ink[23:32, 2:3] = True
 
-    runs = grid_line_runs(ink, 20.0)
+    runs = projection_line_runs(ink, 20.0)
 
-    assert len(runs) >= 2
-    # Grid slots must prevent the bridge from turning both rows into one tall run.
-    assert all((y1 - y0) <= 23 for y0, y1 in runs)
+    assert len(runs) == 2
     centers = [(y0 + y1) / 2.0 for y0, y1 in runs]
-    assert any(12 <= center <= 22 for center in centers)
-    assert any(33 <= center <= 43 for center in centers)
+    assert 14 <= centers[0] <= 19
+    assert 36 <= centers[1] <= 42
+
+
+def test_single_tall_dense_glyph_run_is_not_forced_onto_grid() -> None:
+    ink = np.zeros((80, 120), dtype=bool)
+    # Dense tall display typography: there is no low-ink internal separator.
+    ink[10:42, 20:78] = True
+
+    runs = projection_line_runs(ink, 20.0)
+
+    assert runs == [(10, 42)]
 
 
 def _line(first_x: int, anchor_x: int) -> SimpleNamespace:
@@ -33,9 +52,8 @@ def _line(first_x: int, anchor_x: int) -> SimpleNamespace:
 
 
 def test_indent_modes_cluster_by_first_x_not_anchor_x() -> None:
-    # Anchor positions intentionally cross the physical indent groups.  If the
-    # old anchor-based clustering returns, these four rows would be paired 2+2
-    # by anchor instead of by the visible indent widths below.
+    # Anchor positions intentionally cross the physical indent groups.  Lane
+    # grouping must follow visible indent widths within this column.
     lines = [
         _line(4, 20),
         _line(6, 52),
