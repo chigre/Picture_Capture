@@ -32,6 +32,7 @@ from .ordinary_visual import recover_ordinary_visual_entries
 from .page_understanding import PageUnderstanding, uses_cjk_role_model
 from .page_understanding_fusion import apply_page_understanding
 from .profile_indent_ui import indent_type_label
+from .separator_y_refinement import refined_layout_entry_y_by_line
 from .training_baseline import save_automatic_baseline
 
 
@@ -237,15 +238,30 @@ def _allowed_entries(
 
 def _ordinary_entries_from_layout_roles(
     understanding: PageUnderstanding,
+    image: Image.Image | None = None,
+    *,
+    page_index: int = 0,
 ) -> list[Entry]:
-    """Materialize exactly the final Layout ``entry`` rows as ordinary markers."""
+    """Materialize final Layout entry rows, refining only their separator Y."""
     layout = understanding.layout
+    refined_y_by_line = (
+        refined_layout_entry_y_by_line(
+            image,
+            understanding,
+            page_index=int(page_index),
+        )
+        if image is not None
+        else {}
+    )
     result: list[Entry] = []
     for column in list(getattr(layout, "columns", []) or []):
         for line in list(getattr(column, "lines", []) or []):
             if str(getattr(line, "role", "") or "") != "entry":
                 continue
-            canonical_y = int(layout.body_top) + int(line.y0)
+            canonical_y = int(refined_y_by_line.get(
+                id(line),
+                int(layout.body_top) + int(line.y0),
+            ))
             source_x, source_y = layout.transform.canonical_to_source_point(
                 int(column.left),
                 canonical_y,
@@ -427,7 +443,11 @@ def detect_entries(
             and list(getattr(understanding.layout, "columns", []) or [])
         ):
             geometry = _geometry_from_page_understanding(understanding)
-            entries = _ordinary_entries_from_layout_roles(understanding)
+            entries = _ordinary_entries_from_layout_roles(
+                understanding,
+                analysis_image,
+                page_index=profile_page_index,
+            )
             entries = _allowed_entries(
                 entries,
                 source,
