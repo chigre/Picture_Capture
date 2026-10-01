@@ -15,7 +15,12 @@ from PIL import Image
 from .layout_detection import analysis_ink_mask
 
 
-def _canonical_ink(image: Image.Image, understanding: Any) -> np.ndarray:
+def _canonical_ink(
+    image: Image.Image,
+    understanding: Any,
+    *,
+    page_index: int,
+) -> np.ndarray:
     """Return the same canonical ink domain used by dictionary page layout."""
     from . import dictionary_page_design as page_design
 
@@ -23,7 +28,7 @@ def _canonical_ink(image: Image.Image, understanding: Any) -> np.ndarray:
     _source, canonical, _transform, effective = page_design._analysis_page(
         image,
         settings,
-        int(getattr(understanding, "page_index", 0) or 0),
+        int(page_index),
     )
     gray = np.asarray(canonical.convert("L"), dtype=np.uint8)
     return analysis_ink_mask(gray, effective)
@@ -124,10 +129,15 @@ def refine_entry_separator_y(
     return max(int(body_top), min(int(body_bottom) - 1, int(refined)))
 
 
-def refined_entry_y_by_line(image: Image.Image, understanding: Any) -> dict[int, int]:
+def refined_entry_y_by_line(
+    image: Image.Image,
+    understanding: Any,
+    *,
+    page_index: int = 0,
+) -> dict[int, int]:
     """Return canonical refined Y for each already-classified entry line."""
     try:
-        ink = _canonical_ink(image, understanding)
+        ink = _canonical_ink(image, understanding, page_index=int(page_index))
     except Exception:
         return {}
 
