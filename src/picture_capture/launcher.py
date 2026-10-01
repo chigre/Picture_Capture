@@ -32,18 +32,15 @@ def prepare_app_module() -> Any:
     from .dictionary_page_design_refined import detect_entries_from_page_design
     from .layout_grid_inference import install_grid_line_and_indent_inference
     from .layout_line_start_refinement import install_robust_line_starts
-    from .layout_physical_role_refinement import (
-        install_refined_physical_role_assignment,
-    )
 
     dictionary_page_design.detect_entries_from_page_design = (
         detect_entries_from_page_design
     )
-    # Detect real rows from projection, then cluster each column by physical
-    # leading whitespace.  Physical indent is the primary row-role signal.
+    # Detect real rows from projection, then cluster each column by that
+    # column's own physical leading-whitespace distribution.  Horizontal lane
+    # inference and role assignment are independent of character/line height.
     install_grid_line_and_indent_inference()
     install_robust_line_starts()
-    install_refined_physical_role_assignment()
 
     from . import profile_setup
     from .parameter_help_ui import build_profile_parameter_help_wizard
