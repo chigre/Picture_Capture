@@ -10,10 +10,11 @@ field names or algorithm semantics.
 Only narrow presentation strings are changed:
 * 单行高 -> 普通字/行高
 * 行间参数 -> 行间空
-* the main OCR section is presented as a shared OCR channel + OCR drawing
+* the main OCR section is presented as a shared OCR channel plus an OCR-assisted
+  boundary consumer
 
-The OCR wording matters because Paddle/Tesseract/Lens selection is now shared by
-【仅OCR】 and OCR-assisted boundary detection.  Engine selection is no longer a
+The OCR wording matters because Paddle/Tesseract/Lens selection is shared by
+【仅OCR】 and OCR-assisted boundary detection. Engine selection is no longer a
 private sub-feature of “OCR画线”.
 """
 
@@ -21,11 +22,19 @@ from typing import Any
 
 
 _REPLACEMENTS = (
-    ("三、融合 / OCR画线参数", "三、OCR通道 / OCR画线"),
-    ("三、OCR画线参数（默认）", "三、OCR通道 / OCR画线"),
+    ("三、融合 / OCR画线参数", "三、共享 OCR 通道 / OCR画线"),
+    ("三、OCR画线参数（默认）", "三、共享 OCR 通道 / OCR画线"),
     (
         "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启",
-        "共享 OCR 通道默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启；【仅OCR】与【OCR画线】共用这些选择",
+        "共享 OCR 通道默认只启用 PaddleOCR；Tesseract 与 Google Lens 可同时启用；【仅OCR】与【OCR画线】共用这些选择",
+    ),
+    (
+        "只对已有画线做局部 PaddleOCR 补文字",
+        "只对已有画线调用共享 OCR 通道补文字，可同时使用多个 OCR",
+    ),
+    (
+        "按 marker 做局部 PaddleOCR 补字",
+        "按 marker 调用共享 OCR 通道补字",
     ),
     ("单行高", "普通字/行高"),
     ("行间参数", "行间空"),
@@ -53,7 +62,7 @@ def _normalize_values(value: Any) -> Any:
 def install_ui_terminology() -> None:
     """Normalize canonical UI terms on all Tk/ttk text surfaces.
 
-    This runs before any application windows are constructed.  It is a
+    This runs before any application windows are constructed. It is a
     presentation-only compatibility layer for the large historical ``app.py``;
     new modules should write the canonical labels directly.
     """
@@ -120,8 +129,8 @@ def install_app_tooltip_terminology(app_module: Any) -> None:
     """Normalize tooltip/help text while preserving the original descriptor.
 
     ``PictureCaptureApp._attach_tooltip`` is a ``@staticmethod`` in the legacy
-    monolithic UI.  Replacing it with a normal function would make Python bind
-    ``self`` on instance access and therefore add one positional argument.  The
+    monolithic UI. Replacing it with a normal function would make Python bind
+    ``self`` on instance access and therefore add one positional argument. The
     wrapper deliberately inspects ``__dict__`` and re-installs the same
     descriptor kind so runtime calling semantics cannot change.
     """
