@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Main-canvas preview for the exact crops sent to entry OCR.
 
-The preview is deliberately visualization-only.  It calls the same canonical
+The preview is deliberately visualization-only. It calls the same canonical
 ``entry_ocr_crop_box`` helper used by 【仅OCR】, then converts that canonical box
 back to source-image coordinates before drawing it on the canvas.
 """
@@ -12,7 +12,10 @@ import tkinter as tk
 from tkinter import ttk
 
 from .entry_classification import get_entry_classification
-from .entry_ocr_crop import entry_ocr_crop_box
+from .entry_ocr_crop import (
+    entry_ocr_crop_box,
+    resolve_entry_ocr_row_metrics,
+)
 
 
 REGULAR_COLOR = "#2B7FFF"
@@ -86,16 +89,22 @@ def install_ocr_crop_preview(app_module: Any) -> None:
         except Exception:
             pass
 
+        page_index = int(getattr(self, "current_index", 0) or 0)
         try:
             from . import processing as processing_module
 
             source, effective, analysis_source, geometry = processing_module._page_geometry_context(
                 self.image,
                 self.settings,
-                int(getattr(self, "current_index", 0) or 0),
+                page_index,
             )
             canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
             canonical_size = canonical.size
+            row_metrics = resolve_entry_ocr_row_metrics(
+                self.image,
+                self.settings,
+                page_index=page_index,
+            )
         except Exception:
             return
 
@@ -111,6 +120,7 @@ def install_ocr_crop_preview(app_module: Any) -> None:
                     geometry,
                     effective,
                     canonical_size,
+                    row_metrics=row_metrics,
                 )
                 source_box = geometry.transform.canonical_box_to_source(
                     canonical_box,
@@ -139,13 +149,15 @@ def install_ocr_crop_preview(app_module: Any) -> None:
                 rectangle_kwargs["dash"] = dash
             self.canvas.create_rectangle(dx0, dy0, dx1, dy1, **rectangle_kwargs)
 
-            # Keep labels compact for all rows; expose full provenance on the
-            # actively proofread row so the page does not become text-heavy.
             short_scale = "大" if oversized else "普"
             label = f"OCR-{short_scale}"
             if active:
                 source_label = str(meta.entry_source or "unknown")
-                label = f"{label}｜{source_label}｜{engine_label}"
+                label = (
+                    f"{label}｜{source_label}｜{engine_label}"
+                    f"｜line={row_metrics.line_height:.1f}"
+                    f" pitch={row_metrics.line_pitch:.1f}"
+                )
             self.canvas.create_text(
                 dx0 + 3,
                 dy0 + 2,
@@ -166,7 +178,6 @@ def install_ocr_crop_preview(app_module: Any) -> None:
         try:
             draw_preview(self)
         except Exception:
-            # A diagnostic overlay must never prevent the normal page redraw.
             pass
         return result
 
@@ -188,7 +199,7 @@ def install_ocr_crop_preview(app_module: Any) -> None:
                 try:
                     attach_tooltip(
                         checkbox,
-                        "显示【仅OCR】真正送入OCR引擎的裁剪区域。蓝框=普通词条，橙框=大字头；校对当前词条用红框高亮。",
+                        "显示【仅OCR】真正送入OCR引擎的裁剪区域。蓝框=普通词条，橙框=大字头；纵向范围使用Layout检测到的真实行高与行距。",
                     )
                 except Exception:
                     pass
