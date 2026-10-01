@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-"""Projection-led line recovery and physical indent-lane semantics.
+"""Projection-led line recovery and data-driven physical-indent lanes.
 
-Dictionary rows are first detected from real horizontal ink projection runs.
-The detected ordinary line height is only a structural prior: it rejects tiny
-noise runs and helps split an abnormally tall connected run at a low-ink valley.
-It does *not* impose a repeated fixed row grid on the page.
+Rows are detected from real horizontal ink projection.  Character height is a
+vertical prior used only for row validation/splitting; it is deliberately not
+used to cluster horizontal indentation.
 
-Indent modes are physical layout quantities and are clustered independently in
-each column from ``LayoutLine.first_x`` (the visible indent width).  Row roles
-are then assigned from those physical lanes.  ``anchor_x`` and small-prefix
-metadata remain secondary evidence only; they do not determine lane membership
-or lane role.
+Indent modes are inferred independently in each column from the observed
+``LayoutLine.first_x`` distribution.  Lane membership and lane roles therefore
+come from physical leading whitespace only, not from line height, ``anchor_x``
+or small-prefix metadata.
 """
 
 from typing import Any
@@ -94,7 +92,7 @@ def _split_tall_run(
 
 
 def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]:
-    """Detect rows from observed ink runs, using line height only for validation/splitting."""
+    """Detect rows from observed ink runs, using line height only vertically."""
     raw, row_ink, threshold = _raw_projection_runs(ink, scale)
     if not raw:
         return []
@@ -124,59 +122,104 @@ def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]
 grid_line_runs = projection_line_runs
 
 
-def indent_width_modes(lines: list[Any], reference: float) -> list[Any]:
-    """Cluster one column's rows by physical indent width (``first_x``).
+def _indent_gap_threshold(values: np.ndarray) -> float:
+    """Estimate the within-lane gap tolerance from one column's indent samples.
 
-    The old 0.24×line-height radius was broad enough to merge visibly different
-    lanes on high-DPI dictionary pages (for example a flush-left headword lane
-    and a nearby ``~`` continuation lane).  Physical indentation is now treated
-    as the primary classification signal, so the lane radius is deliberately
-    tighter: about 0.12×line-height, with a 3-pixel floor.
+    Only horizontal sample spacing is used.  Dense physical lanes usually have
+    repeated/nearby integer ``first_x`` values, while genuine lane boundaries
+    appear as much larger gaps.  The threshold is estimated from the lower half
+    of positive adjacent gaps so sparse outliers cannot inflate it.
+    """
+    if values.size < 2:
+        return 2.0
+
+    unique = np.unique(np.sort(values.astype(float)))
+    if unique.size < 2:
+        return 2.0
+    gaps = np.diff(unique)
+    positive = gaps[gaps > 0]
+    if positive.size == 0:
+        return 2.0
+
+    median_gap = float(np.median(positive))
+    local = positive[positive <= median_gap]
+    if local.size == 0:
+        local = np.asarray([float(np.min(positive))], dtype=float)
+    typical = float(np.median(local))
+    mad = float(np.median(np.abs(local - typical))) if local.size else 0.0
+
+    # Pixel-domain measurement noise is normally only a few columns.  The cap
+    # prevents a sparse page with only two remote lanes from merging them.
+    return float(max(2.0, min(6.0, typical + 2.0 * mad + 1.0)))
+
+
+def indent_width_modes(lines: list[Any], reference: float | None = None) -> list[Any]:
+    """Cluster one column by its own physical-indent distribution.
+
+    ``reference`` is accepted only for API compatibility and is intentionally
+    ignored: horizontal indent clustering must not depend on vertical line
+    height.
     """
     from . import dictionary_page_design as page_design
 
     if not lines:
         return []
 
+    ordered = sorted(
+        lines,
+        key=lambda item: float(getattr(item, "first_x", 0) or 0),
+    )
+    values = np.asarray(
+        [float(getattr(item, "first_x", 0) or 0) for item in ordered],
+        dtype=float,
+    )
+    gap_threshold = _indent_gap_threshold(values)
+
     clusters: list[list[Any]] = []
-    tolerance = max(3.0, float(reference) * 0.12)
-    for line in sorted(lines, key=lambda item: int(getattr(item, "first_x", 0) or 0)):
+    current: list[Any] = []
+    previous_value: float | None = None
+    for line in ordered:
         value = float(getattr(line, "first_x", 0) or 0)
-        target: list[Any] | None = None
-        for cluster in clusters:
-            center = float(np.median([
-                float(getattr(item, "first_x", 0) or 0) for item in cluster
-            ]))
-            if abs(value - center) <= tolerance:
-                target = cluster
-                break
-        if target is None:
-            clusters.append([line])
-        else:
-            target.append(line)
+        if (
+            current
+            and previous_value is not None
+            and (value - previous_value) > gap_threshold
+        ):
+            clusters.append(current)
+            current = []
+        current.append(line)
+        previous_value = value
+    if current:
+        clusters.append(current)
 
     result: list[Any] = []
     for cluster in clusters:
-        values = np.asarray([
-            float(getattr(line, "first_x", 0) or 0) for line in cluster
-        ], dtype=float)
-        center = float(np.median(values))
-        deviation = np.abs(values - center)
-        q90 = float(np.quantile(deviation, 0.90)) if deviation.size else 0.0
-        result.append(page_design.IndentMode(
-            center=center,
-            tolerance=max(
-                float(reference) * 0.07,
-                min(float(reference) * 0.18, q90 + float(reference) * 0.04),
-            ),
-            lines=list(cluster),
-            shape_consensus=page_design._shape_consensus(cluster),
-        ))
+        cluster_values = np.asarray(
+            [float(getattr(line, "first_x", 0) or 0) for line in cluster],
+            dtype=float,
+        )
+        center = float(np.median(cluster_values))
+        lo = float(np.min(cluster_values))
+        hi = float(np.max(cluster_values))
+        tolerance = max(1.0, max(center - lo, hi - center) + 1.0)
+        result.append(
+            page_design.IndentMode(
+                center=center,
+                tolerance=tolerance,
+                lines=list(cluster),
+                shape_consensus=page_design._shape_consensus(cluster),
+            )
+        )
     return sorted(result, key=lambda mode: mode.center)
 
 
-def assign_physical_indent_roles(column: Any, indent_type: str, reference: float) -> None:
-    """Assign body/entry/unknown roles from physical-indent lanes only."""
+def assign_physical_indent_roles(column: Any, indent_type: str, reference: float | None = None) -> None:
+    """Assign body/entry/unknown roles from physical lanes only.
+
+    The dominant lane (largest support) is body.  On the configured entry side,
+    the outermost sufficiently supported lane is entry.  Intermediate lanes and
+    sparse outliers remain unknown.  No vertical scale is used.
+    """
     modes = list(getattr(column, "indent_modes", []) or [])
     column.body_mode = None
     column.entry_modes = []
@@ -186,44 +229,51 @@ def assign_physical_indent_roles(column: Any, indent_type: str, reference: float
     for mode in modes:
         mode.role = "unknown"
 
-    total = max(1, sum(int(getattr(mode, "support", 0) or 0) for mode in modes))
-    stable_min = max(3, round(total * 0.12))
-    stable = [
-        mode for mode in modes
-        if int(getattr(mode, "support", 0) or 0) >= stable_min
-    ]
-    if not stable:
-        stable = [max(modes, key=lambda mode: int(getattr(mode, "support", 0) or 0))]
+    def support(mode: Any) -> int:
+        try:
+            return int(getattr(mode, "support", 0) or 0)
+        except (TypeError, ValueError):
+            return 0
 
-    if str(indent_type) == "headword":
-        body = min(stable, key=lambda mode: float(mode.center))
-        entry_direction = 1.0
-    else:
-        body = max(stable, key=lambda mode: float(mode.center))
-        entry_direction = -1.0
+    def center(mode: Any) -> float:
+        try:
+            return float(getattr(mode, "center", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
 
+    body = max(modes, key=lambda mode: (support(mode), -abs(center(mode))))
     body.role = "body"
     column.body_mode = body
 
-    ref = max(6.0, float(reference))
-    minimum_separation = ref * 0.30
-    maximum_separation = ref * 5.0
-    entries: list[Any] = []
+    total = max(1, sum(support(mode) for mode in modes))
+    entry_min_support = max(2, int(np.ceil(total * 0.06)))
 
-    for mode in modes:
-        if mode is body:
-            continue
-        separation = entry_direction * (float(mode.center) - float(body.center))
-        support = int(getattr(mode, "support", 0) or 0)
-        if minimum_separation <= separation <= maximum_separation and support >= 2:
-            mode.role = "entry"
-            entries.append(mode)
+    if str(indent_type) == "headword":
+        candidates = [
+            mode
+            for mode in modes
+            if mode is not body
+            and center(mode) > center(body)
+            and support(mode) >= entry_min_support
+        ]
+        entry = max(candidates, key=center) if candidates else None
+    else:
+        candidates = [
+            mode
+            for mode in modes
+            if mode is not body
+            and center(mode) < center(body)
+            and support(mode) >= entry_min_support
+        ]
+        entry = min(candidates, key=center) if candidates else None
 
-    column.entry_modes = entries
+    if entry is not None:
+        entry.role = "entry"
+        column.entry_modes = [entry]
 
 
 def install_grid_line_and_indent_inference() -> None:
-    """Install projection-led rows plus physical-indent lane semantics once."""
+    """Install projection-led rows and pure physical-indent lane semantics."""
     from . import dictionary_page_design as page_design
 
     if getattr(page_design, "_grid_line_indent_inference_installed", False):
