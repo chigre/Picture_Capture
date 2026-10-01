@@ -234,6 +234,7 @@ def trim_visual_marker_crop(
     bottom = int(ys.max()) + 1
     return image.crop((left, top, right, bottom)), (left, top, right, bottom)
 
+
 def normalize_visual_marker_crop(
     image: Image.Image, *, canvas_size: int = DEFAULT_TEMPLATE_SIZE
 ) -> dict[str, Any]:
@@ -382,7 +383,14 @@ def match_visual_marker_template(
     *,
     roles: set[str] | None = None,
 ) -> dict[str, Any] | None:
-    """Return the best dictionary-specific template match for one component."""
+    """Return the best dictionary-specific template match for one component.
+
+    ``bracket_open`` is an open structural delimiter.  Closed components such
+    as boxed numbers, circles or square bullets are therefore impossible
+    bracket-open matches even when their vertical/horizontal projections look
+    similar.  Standalone ``entry_marker`` templates intentionally retain the
+    softer topology score because many valid markers (○/□/◇) are closed.
+    """
     sample_list = [
         sample for sample in samples
         if _valid_sample(sample)
@@ -395,6 +403,14 @@ def match_visual_marker_template(
     candidate_bitmap = _sample_bitmap(candidate)
     best: dict[str, Any] | None = None
     for sample in sample_list:
+        role = str(sample.get("role") or "")
+        candidate_holes = int(candidate.get("hole_count", 0) or 0)
+        # Hard topology guard for bracket templates.  A closed box/circle at the
+        # row start may resemble 【 in projection, but it is not an opening
+        # bracket and must never promote a body row to entry.
+        if role == "bracket_open" and candidate_holes > 0:
+            continue
+
         sample_bitmap = _sample_bitmap(sample)
         if sample_bitmap.shape != candidate_bitmap.shape:
             sample_image = Image.fromarray(
@@ -417,7 +433,7 @@ def match_visual_marker_template(
         )
         hole_similarity = (
             1.0
-            if int(candidate["hole_count"]) == int(sample.get("hole_count", 0) or 0)
+            if candidate_holes == int(sample.get("hole_count", 0) or 0)
             else 0.35
         )
         score = (
