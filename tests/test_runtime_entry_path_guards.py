@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from picture_capture.ocr_action_guard import _ineffective_lens_only_selection
+from picture_capture.ordinary_action_runtime import _apply_quick_settings_for_ordinary
 from picture_capture.settings_help_restore import install_settings_help_restore
 from picture_capture.spawn_detection_runtime import (
     detect_entries_job_with_runtime,
@@ -18,6 +19,9 @@ class _Var:
 
     def get(self):
         return self.value
+
+    def set(self, value):
+        self.value = value
 
 
 class _FakeSettingsDialog:
@@ -114,6 +118,65 @@ def test_shared_ocr_action_wording_no_longer_claims_marker_text_is_paddle_only()
     assert "共享 OCR 通道" in tooltip
     assert "PaddleOCR 文字识别" not in tooltip
     assert "共享 OCR 通道" in confirm
+
+
+def test_ordinary_quick_apply_allows_all_ocr_engines_off_and_restores_selection():
+    app = _app_for_ocr_selection()
+    app.sync_calls = 0
+
+    def legacy_apply(*, show_status=False):
+        assert show_status is False
+        paddle = bool(app.quick_bool_vars["paddle_use_paddleocr"].get())
+        tesseract = bool(app.quick_bool_vars["paddle_compare_tesseract"].get())
+        lens = bool(app.quick_bool_vars["paddle_enable_lens"].get())
+        if not (paddle or tesseract or lens):
+            raise ValueError("OCR引擎至少需要勾选一个。")
+        app.settings.paddle_use_paddleocr = paddle
+        app.settings.paddle_compare_tesseract = tesseract
+        app.settings.paddle_enable_lens = lens
+        return True
+
+    def sync_quick_settings():
+        app.sync_calls += 1
+        app.quick_bool_vars["paddle_use_paddleocr"].set(
+            app.settings.paddle_use_paddleocr
+        )
+
+    app.apply_quick_settings = legacy_apply
+    app.sync_quick_settings = sync_quick_settings
+
+    assert _apply_quick_settings_for_ordinary(app) is True
+    assert app.settings.paddle_use_paddleocr is False
+    assert app.quick_bool_vars["paddle_use_paddleocr"].get() is False
+    assert app.sync_calls == 1
+
+
+def test_ordinary_quick_apply_uses_normal_validator_when_ocr_is_selected():
+    app = _app_for_ocr_selection(paddle=True)
+    calls = []
+    app.apply_quick_settings = lambda **kwargs: calls.append(kwargs) or True
+    assert _apply_quick_settings_for_ordinary(app) is True
+    assert calls == [{"show_status": False}]
+
+
+def test_launcher_installs_ordinary_action_runtime():
+    launcher = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "launcher.py"
+    ).read_text(encoding="utf-8")
+    assert "from .ordinary_action_runtime import install_ordinary_action_runtime" in launcher
+    assert "install_ordinary_action_runtime(app_module)" in launcher
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "ordinary_action_runtime.py"
+    ).read_text(encoding="utf-8")
+    assert 'self.settings.detection_method = "left_edge"' in source
+    assert 'self._detect_pages(indices, method="left_edge", force_refresh=False)' in source
 
 
 def test_spawn_worker_is_top_level_pickleable_and_installed_before_app_import():
