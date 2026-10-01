@@ -2,9 +2,10 @@ from __future__ import annotations
 
 """Make the Layout diagnostic overlay show the exact geometry ordinary drawing uses.
 
-Both visualization and ordinary drawing resolve Page Understanding through the
-same processing facade entrypoint.  This prevents stale imported callables or
-launcher/worker differences from producing two role assignments for one page.
+Both visualization and ordinary drawing resolve the same cached Layout Core
+through the processing facade. This prevents stale imported callables,
+launcher/worker differences, and duplicate physical page analysis from producing
+two role assignments for one page.
 """
 
 from typing import Any
@@ -111,6 +112,7 @@ def shared_snapshot_for_app(app: Any) -> Any:
             effective,
             page_index=page_index,
             page_sections=page_sections,
+            layout_only=True,
         )
         if understanding is None:
             raise RuntimeError("Page Understanding 未能生成版面结果")
@@ -161,10 +163,10 @@ def shared_snapshot_for_app(app: Any) -> Any:
             "bottom_y": int(getattr(geometry, "bottom", 0)),
         }
 
-        method = "page_understanding"
+        method = "layout_core"
         if estimate is not None:
             estimate_method = str(getattr(estimate, "method", "layout") or "layout")
-            method = f"page_understanding:{estimate_method}"
+            method = f"layout_core:{estimate_method}"
 
         confidence = None
         if estimate is not None and getattr(estimate, "confidence", None) is not None:
