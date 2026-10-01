@@ -16,6 +16,12 @@ that happens, ordinary drawing obeys its row roles exactly:
 quality diagnostic for layout inference, not permission for VB to overwrite an
 already materialized row-role assignment.
 
+The active ``page_understanding.understand_page`` function is resolved from the
+module at call time.  This is important because the physical-indent runtime
+installs the final role normalizer after module import; retaining an earlier
+``from ... import understand_page`` reference would silently bypass that runtime
+in GUI and spawned worker processes.
+
 When the main-window Layout visualization has already inferred the current page,
 ordinary drawing reuses that exact PageUnderstanding object when it runs in the
 same process. Batch/spawn workers recompute the same Page Understanding from the
@@ -172,6 +178,33 @@ def _vb_fallback(
     ), geometry
 
 
+def _current_understanding(
+    processing_module: Any,
+    analysis_image: Image.Image,
+    effective: AppSettings,
+    *,
+    profile_page_index: int,
+    page_sections: list[PageSection] | None,
+) -> PageUnderstanding | None:
+    """Call the currently installed Page Understanding implementation.
+
+    Never call ``processing_module.understand_page`` here: ``processing.py`` may
+    have imported that symbol before the physical-indent runtime replaced the
+    module function, leaving a stale callable bound forever.
+    """
+    try:
+        from . import page_understanding as page_understanding_module
+
+        return page_understanding_module.understand_page(
+            analysis_image,
+            effective,
+            page_index=profile_page_index,
+            page_sections=page_sections,
+        )
+    except Exception:
+        return None
+
+
 def build_ordinary_layout_primary(
     processing_module: Any,
     original_detect_entries: Callable[..., tuple[list[Entry], Any]],
@@ -217,15 +250,13 @@ def build_ordinary_layout_primary(
 
         analysis_image = build_analysis_image(source, effective)
         if understanding is None:
-            try:
-                understanding = processing_module.understand_page(
-                    analysis_image,
-                    effective,
-                    page_index=profile_page_index,
-                    page_sections=page_sections,
-                )
-            except Exception:
-                understanding = None
+            understanding = _current_understanding(
+                processing_module,
+                analysis_image,
+                effective,
+                profile_page_index=profile_page_index,
+                page_sections=page_sections,
+            )
 
         # Layout roles are authoritative whenever Page Understanding produced
         # real columns. Do not gate this on physical_reliable and do not fall
