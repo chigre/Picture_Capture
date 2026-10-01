@@ -19,17 +19,24 @@ def build_ordinary_evidence_profile_wizard(base_class: type[Any]) -> type[Any]:
             super()._build_headword_tab(tab)
 
             inventory = getattr(self, "symbol_inventory_frame", None)
-            host = inventory or getattr(self, "cjk_specificity_frame", None)
+            cjk_host = getattr(self, "cjk_specificity_frame", None)
+            host = inventory or cjk_host
             if host is None:
                 return
 
-            # Hide the older template-only sub-panel.  The same settings/actions
-            # are exposed below together with the large-head detector so users
-            # see one coherent ordinary-mode evidence section.
+            # Hide older duplicate controls while reusing their exact backing
+            # variables/settings.  There remains only one source of truth.
             if inventory is not None:
                 for child in inventory.winfo_children():
                     try:
                         if child.cget("text") == "本词典视觉标记样本":
+                            child.grid_remove()
+                    except (tk.TclError, AttributeError):
+                        continue
+            if cjk_host is not None:
+                for child in cjk_host.winfo_children():
+                    try:
+                        if child.cget("text") == "大字单字可以作为词头":
                             child.grid_remove()
                     except (tk.TclError, AttributeError):
                         continue
@@ -66,7 +73,7 @@ def build_ordinary_evidence_profile_wizard(base_class: type[Any]) -> type[Any]:
 
             ttk.Checkbutton(
                 panel,
-                text="启用大字头 detector",
+                text="启用大字头 detector（CJK）",
                 variable=self.cjk_allow_single_var,
                 command=self._headword_specificity_changed,
             ).grid(row=1, column=0, columnspan=3, sticky="w", pady=2)
