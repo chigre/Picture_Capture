@@ -5,6 +5,8 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
+from .adaptive_denoise import adaptive_speck_remove_mask, resolve_denoise_strength
+
 
 def normalize_page_rgb(image: Image.Image) -> Image.Image:
     """Return a detached, EXIF-oriented RGB page image.
@@ -39,7 +41,7 @@ def normalize_page_rgb(image: Image.Image) -> Image.Image:
 
 
 def _box_sum(mask: np.ndarray, radius_y: int, radius_x: int) -> np.ndarray:
-    """Return a local foreground count with the same shape as ``mask``."""
+    """Backward-compatible local foreground count helper."""
     ry = max(0, int(radius_y))
     rx = max(0, int(radius_x))
     src = np.pad(
@@ -62,17 +64,9 @@ def _box_sum(mask: np.ndarray, radius_y: int, radius_x: int) -> np.ndarray:
 
 
 def _generic_analysis_ink(gray_image: Image.Image) -> np.ndarray:
-    """Return a conservative local-contrast ink mask for shared preprocessing.
-
-    This mask is intentionally independent of any one detector.  It is only
-    used to decide whether a dark pixel is an *isolated speck*; downstream
-    modules remain free to apply their own thresholds to the cleaned image.
-    """
+    """Return a conservative local-contrast ink mask for shared preprocessing."""
     gray = np.asarray(gray_image, dtype=np.int16)
     local = np.asarray(gray_image.filter(ImageFilter.BoxBlur(5)), dtype=np.int16)
-    # Require both absolute darkness and local contrast.  The absolute branch
-    # keeps black specks detectable on already-white scans, while the local
-    # branch handles yellow/gray paper without whitening the page globally.
     return (gray <= 150) | ((gray <= 205) & (gray + 20 <= local))
 
 
@@ -82,28 +76,18 @@ def build_analysis_image(
     *,
     ink_mask: np.ndarray | None = None,
 ) -> Image.Image:
-    """Return the shared full-resolution image used by detection/analysis.
+    """Return the shared, coordinate-identical analysis image.
 
-    The analysis image has exactly the same width, height and coordinate system
-    as the normalized source page.  Only tiny *isolated* dark specks are painted
-    white.  It is therefore safe for layout analysis, ordinary/VB drawing,
-    Page Understanding and other visual evidence modules to share one cleaned
-    page without introducing coordinate drift.
+    The full page is profiled before any pixel is removed.  The amount of sparse
+    ink on this page determines the automatic cleanup strength, while the user
+    may override it with off/weak/auto/strong.  The source scan is never mutated,
+    resized, cropped or deskewed here.
 
-    Important contract:
-    * this function never resizes, crops or deskews;
-    * the original scan remains untouched and should still be used for display
-      and final crop/export;
-    * punctuation/diacritics near real glyph strokes are protected by the wider
-      neighbourhood test;
-    * long one-pixel rules/stems are protected by directional support tests.
-
-    ``settings`` is accepted deliberately so callers can use one stable API;
-    the first version is detector-independent and does not require a setting.
-    A caller with a more specific already-computed foreground mask may pass it
-    through ``ink_mask`` while retaining the same cleanup semantics.
+    Real punctuation and detached glyph parts near dense text are protected by a
+    wider-neighbourhood guard; long thin rules/stems are protected by directional
+    support.  The resulting image is shared by Layout, Page Understanding,
+    ordinary/VB and other visual evidence so they see the same cleaned pixels.
     """
-    del settings  # reserved for future user-configurable cleanup strength
     source = normalize_page_rgb(image)
     gray_image = ImageOps.grayscale(source)
     try:
@@ -118,27 +102,32 @@ def build_analysis_image(
         if ink.size == 0 or not bool(np.any(ink)):
             return source
 
-        # Shared preprocessing is intentionally more conservative than the old
-        # layout-only cleanup.  A candidate pixel must have almost no nearby
-        # support before it can disappear.  This removes scan dust while keeping
-        # periods, accents and detached glyph pieces that sit near normal text.
-        local5 = _box_sum(ink, 2, 2)
-        local11 = _box_sum(ink, 5, 5)
-        vertical13 = _box_sum(ink, 6, 0)
-        horizontal13 = _box_sum(ink, 0, 6)
-        remove = (
-            ink
-            & (local5 <= 3)
-            & (local11 <= 4)
-            & (vertical13 <= 2)
-            & (horizontal13 <= 2)
-        )
+        strength = resolve_denoise_strength(settings)
+        remove, profile = adaptive_speck_remove_mask(ink, strength=strength)
+
+        # Keep diagnostics attached to the in-memory analysis image.  This is
+        # deliberately metadata only; no detector depends on it.
+        profile_payload = {
+            "requested": profile.requested,
+            "effective_scale": profile.effective_scale,
+            "ink_pixels": profile.ink_pixels,
+            "sparse_ratio": profile.sparse_ratio,
+            "local5_limit": profile.local5_limit,
+            "local11_limit": profile.local11_limit,
+            "directional_limit": profile.directional_limit,
+            "near_text_limit": profile.near_text_limit,
+            "candidate_pixels": profile.candidate_pixels,
+            "removed_pixels": profile.removed_pixels,
+        }
+
         if not bool(np.any(remove)):
+            source.info["analysis_denoise_profile"] = profile_payload
             return source
 
         arr = np.asarray(source).copy()
         arr[remove] = 255
         cleaned = Image.fromarray(arr, mode="RGB")
+        cleaned.info["analysis_denoise_profile"] = profile_payload
         source.close()
         return cleaned
     finally:
