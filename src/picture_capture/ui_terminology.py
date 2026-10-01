@@ -2,22 +2,31 @@ from __future__ import annotations
 
 """Small runtime terminology normalizer for the legacy monolithic UI.
 
-The application still has several UI surfaces in ``app.py`` that historically
-called ``character_height`` “单行高”.  The page-design model now uses the more
-accurate user term “普通字/行高”.  This module keeps that wording consistent
-without changing persisted field names or algorithm semantics.
+The application still has several UI surfaces in ``app.py`` whose historical
+wording exposes implementation history rather than the current architecture.
+This module keeps presentation terminology aligned without changing persisted
+field names or algorithm semantics.
 
-Only presentation strings are changed:
+Only narrow presentation strings are changed:
 * 单行高 -> 普通字/行高
 * 行间参数 -> 行间空
+* the main OCR section is presented as a shared OCR channel + OCR drawing
 
-The replacement is deliberately narrow and idempotent.
+The OCR wording matters because Paddle/Tesseract/Lens selection is now shared by
+【仅OCR】 and OCR-assisted boundary detection.  Engine selection is no longer a
+private sub-feature of “OCR画线”.
 """
 
 from typing import Any
 
 
 _REPLACEMENTS = (
+    ("三、融合 / OCR画线参数", "三、OCR通道 / OCR画线"),
+    ("三、OCR画线参数（默认）", "三、OCR通道 / OCR画线"),
+    (
+        "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启",
+        "共享 OCR 通道默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启；【仅OCR】与【OCR画线】共用这些选择",
+    ),
     ("单行高", "普通字/行高"),
     ("行间参数", "行间空"),
 )
@@ -42,7 +51,7 @@ def _normalize_values(value: Any) -> Any:
 
 
 def install_ui_terminology() -> None:
-    """Normalize the two layout terms on all Tk/ttk text surfaces.
+    """Normalize canonical UI terms on all Tk/ttk text surfaces.
 
     This runs before any application windows are constructed.  It is a
     presentation-only compatibility layer for the large historical ``app.py``;
