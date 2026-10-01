@@ -388,52 +388,46 @@ def _paddle_json_payload(result: Any) -> dict[str, Any]:
     return nested if isinstance(nested, dict) else payload
 
 
-def _box_from_paddle_value(value: Any) -> tuple[int, int, int, int] | None:
-    try:
-        array = np.asarray(value, dtype=float)
-    except Exception:
-        return None
-    if array.size == 4:
-        flat = array.reshape(-1)
-        x0, y0, x1, y1 = (int(round(float(item))) for item in flat[:4])
-    elif array.ndim >= 2 and array.shape[-1] >= 2:
-        points = array.reshape(-1, array.shape[-1])
-        x0 = int(round(float(np.min(points[:, 0]))))
-        y0 = int(round(float(np.min(points[:, 1]))))
-        x1 = int(round(float(np.max(points[:, 0]))))
-        y1 = int(round(float(np.max(points[:, 1]))))
-    else:
-        return None
-    if x1 <= x0 or y1 <= y0:
-        return None
-    return x0, y0, x1, y1
+def normalize_paddle_result(result: Any) -> tuple[OcrChannelRecord, ...]:
+    """Normalize one Paddle result using the mature runner's record semantics."""
 
-
-def _extract_paddle_channel_records(result: Any) -> tuple[OcrChannelRecord, ...]:
     payload = _paddle_json_payload(result)
     raw_texts = payload.get("rec_texts")
     raw_scores = payload.get("rec_scores")
     raw_boxes = payload.get("rec_boxes")
-    if raw_boxes is None:
-        raw_boxes = payload.get("rec_polys")
     texts = list(raw_texts) if raw_texts is not None else []
     scores = list(raw_scores) if raw_scores is not None else []
     boxes = list(raw_boxes) if raw_boxes is not None else []
+    if not boxes:
+        raw_polygons = payload.get("rec_polys")
+        polygons = list(raw_polygons) if raw_polygons is not None else []
+        for polygon in polygons:
+            array = np.asarray(polygon)
+            boxes.append([
+                array[:, 0].min(),
+                array[:, 1].min(),
+                array[:, 0].max(),
+                array[:, 1].max(),
+            ])
+
     records: list[OcrChannelRecord] = []
-    for index, text in enumerate(texts):
-        value = str(text or "").strip()
-        if not value or index >= len(boxes):
-            continue
-        box = _box_from_paddle_value(boxes[index])
-        if box is None:
-            continue
+    for text, score, box in zip(texts, scores, boxes):
         try:
-            confidence = float(scores[index]) if index < len(scores) else 0.0
+            values = [int(round(float(value))) for value in list(box)]
+            confidence = float(score)
         except (TypeError, ValueError):
-            confidence = 0.0
-        records.append(OcrChannelRecord(value, confidence, box))
-    records.sort(key=lambda item: (item.box[1], item.box[0]))
-    return tuple(records)
+            continue
+        if len(values) != 4:
+            continue
+        x0, y0, x1, y1 = values
+        if x1 <= x0 or y1 <= y0:
+            continue
+        records.append(OcrChannelRecord(
+            str(text).strip(),
+            confidence,
+            (x0, y0, x1, y1),
+        ))
+    return tuple(sorted(records, key=lambda item: (item.box[1], item.box[0])))
 
 
 def _rescale_channel_records(
@@ -515,9 +509,9 @@ class OcrChannelSession:
     ) -> tuple[Any, ...]:
         """Execute Paddle inference and return raw Paddle results.
 
-        This deliberately contains no headword/parser policy. The legacy
-        boundary bridge may reuse its battle-tested record normalization while
-        all actual engine invocation is owned by the shared OCR channel.
+        This deliberately contains no headword/parser policy. The shared channel
+        also owns Paddle result normalization; compatibility consumers only adapt
+        the neutral records into their historical record type.
         """
 
         active = engine or self.get_paddle_engine()
@@ -552,7 +546,7 @@ class OcrChannelSession:
             results = self.run_paddle_raw(prepared, engine=engine)
             records: tuple[OcrChannelRecord, ...] = ()
             if results:
-                records = _extract_paddle_channel_records(results[0])
+                records = normalize_paddle_result(results[0])
                 records = _rescale_channel_records(records, input_scale)
             return _candidate_from_records(
                 "paddle",
@@ -809,6 +803,7 @@ __all__ = [
     "channel_text_key",
     "choose_ocr_text",
     "clear_ocr_channel_paddle_engine_cache",
+    "normalize_paddle_result",
     "prepare_ocr_input",
     "resolve_ocr_channel_plan",
 ]
