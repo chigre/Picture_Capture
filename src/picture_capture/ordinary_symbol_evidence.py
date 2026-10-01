@@ -58,6 +58,34 @@ def _candidate_components(mask: np.ndarray, line_height: float) -> list[tuple[in
     return result
 
 
+def _strict_sample_match(match: dict[str, Any], role: str, configured_threshold: float) -> bool:
+    """Use actual sampled glyph similarity as the authority for bracket roles.
+
+    A sampled ``【`` must look like one of the real captured ``【`` bitmaps, not
+    merely collect a high weighted score from a few bracket-like features.  The
+    three direct similarity measures are therefore conjunctive for
+    ``bracket_open``.  Standalone entry markers retain the generic matcher because
+    their legal shapes are intentionally heterogeneous (○/□/◇/etc.).
+    """
+    score = float(match.get("score", 0.0) or 0.0)
+    if role != "bracket_open":
+        return score >= configured_threshold
+
+    # Real-page samples vary slightly with scan/thresholding, so keep enough
+    # tolerance for the same printed glyph while requiring overall bitmap shape,
+    # row/column projection and aspect to agree simultaneously.
+    iou = float(match.get("iou", 0.0) or 0.0)
+    projection = float(match.get("projection", 0.0) or 0.0)
+    aspect = float(match.get("aspect_similarity", 0.0) or 0.0)
+    strict_score = max(float(configured_threshold), 0.76)
+    return bool(
+        score >= strict_score
+        and iou >= 0.46
+        and projection >= 0.76
+        and aspect >= 0.72
+    )
+
+
 def detect_ordinary_symbol_entries(
     image: Image.Image,
     understanding: Any,
@@ -125,16 +153,18 @@ def detect_ordinary_symbol_entries(
                     continue
                 if match is None:
                     continue
+                sample = match.get("sample") if isinstance(match.get("sample"), dict) else {}
+                role = str(sample.get("role") or "")
+                if not _strict_sample_match(match, role, threshold):
+                    continue
                 score = float(match.get("score", 0.0) or 0.0)
                 if best is None or score > float(best.get("score", 0.0) or 0.0):
                     best = match
 
             if best is None:
                 continue
-            score = float(best.get("score", 0.0) or 0.0)
-            if score < threshold:
-                continue
 
+            score = float(best.get("score", 0.0) or 0.0)
             sample = best.get("sample") if isinstance(best.get("sample"), dict) else {}
             role = str(sample.get("role") or "")
             source_x, source_y = layout.transform.canonical_to_source_point(
