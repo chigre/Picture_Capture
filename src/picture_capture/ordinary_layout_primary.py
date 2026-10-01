@@ -3,12 +3,23 @@ from __future__ import annotations
 """Make final Layout roles authoritative for ordinary drawing.
 
 Ordinary drawing has one primary source of truth: the final Page Understanding
-``LayoutLine.role`` assignment.  Historical VB detection is isolated here as a
-fallback and is never fused back into a successful layout-role result.
+``LayoutLine.role`` assignment. Historical VB detection is isolated here as a
+true emergency fallback and is never fused back into a usable Layout result.
+
+A usable Layout means Page Understanding returned at least one column. Once
+that happens, ordinary drawing obeys its row roles exactly:
+* ``entry`` rows create markers;
+* every non-entry row creates no marker;
+* zero entry rows means zero ordinary markers, not a VB retry.
+
+``physical_reliable`` is intentionally *not* a routing gate here. It is a
+quality diagnostic for layout inference, not permission for VB to overwrite an
+already materialized row-role assignment.
 
 When the main-window Layout visualization has already inferred the current page,
-ordinary drawing reuses that exact PageUnderstanding object.  This prevents a
-second inference pass from disagreeing with the roles the user is looking at.
+ordinary drawing reuses that exact PageUnderstanding object when it runs in the
+same process. Batch/spawn workers recompute the same Page Understanding from the
+same settings and page sections.
 
 PaddleOCR and combined modes are intentionally untouched.
 """
@@ -26,9 +37,6 @@ from .page_sections import PageSection
 from .page_understanding import PageUnderstanding
 
 
-# One small UI-facing cache: key the exact source Image object plus every input
-# that can affect Page Understanding.  Batch/background images therefore never
-# accidentally consume a main-window snapshot.
 _VISUALIZED_UNDERSTANDING: dict[
     tuple[int, int, tuple[Any, ...], tuple[Any, ...]],
     tuple[weakref.ReferenceType[Any] | None, PageUnderstanding],
@@ -36,7 +44,6 @@ _VISUALIZED_UNDERSTANDING: dict[
 
 
 def _settings_signature(settings: AppSettings) -> tuple[Any, ...]:
-    """Return a stable, exhaustive signature for one effective settings object."""
     try:
         return tuple(
             (item.name, repr(getattr(settings, item.name, None)))
@@ -102,14 +109,7 @@ def recall_visualized_understanding(
 
 
 def layout_role_entries(understanding: PageUnderstanding) -> list[Entry]:
-    """Convert only final ``role=entry`` rows into ordinary draw markers.
-
-    The marker is anchored at the entry row's own physical top.  Do not use the
-    historical midpoint/whitespace ``_boundary_before`` helper here: that helper
-    can place an entry marker visually inside the preceding body row, which makes
-    the red line contradict the Layout role overlay even though the selected role
-    itself was correct.
-    """
+    """Convert only final ``role=entry`` rows into ordinary draw markers."""
     layout = understanding.layout
     result: list[Entry] = []
 
@@ -140,37 +140,18 @@ def _vb_fallback(
     source: Image.Image,
     settings: AppSettings,
     effective: AppSettings,
-    understanding: PageUnderstanding | None,
     *,
     profile_page_index: int,
     page_sections: list[PageSection] | None,
 ) -> tuple[list[Entry], Any]:
-    """Run historical VB only when authoritative layout roles are unavailable."""
-    if (
-        understanding is not None
-        and understanding.physical_reliable
-        and understanding.layout.columns
-    ):
-        geometry = processing_module._geometry_from_page_understanding(understanding)
-        vb_settings = processing_module._ordinary_settings_for_shared_geometry(
-            effective,
-            geometry,
-            method="left_edge",
-        )
-        vb_image = processing_module._page_template_image(
-            analysis_image,
-            vb_settings,
-            profile_page_index,
-        )
-    else:
-        vb_settings = replace(effective)
-        vb_settings.detection_method = "left_edge"
-        vb_image = processing_module._page_template_image(
-            analysis_image,
-            vb_settings,
-            profile_page_index,
-        )
-
+    """Run historical VB only when Page Understanding produced no usable Layout."""
+    vb_settings = replace(effective)
+    vb_settings.detection_method = "left_edge"
+    vb_image = processing_module._page_template_image(
+        analysis_image,
+        vb_settings,
+        profile_page_index,
+    )
     entries, geometry = processing_module._original_detect_entries_left_edge(
         vb_image,
         vb_settings,
@@ -195,7 +176,7 @@ def build_ordinary_layout_primary(
     processing_module: Any,
     original_detect_entries: Callable[..., tuple[list[Entry], Any]],
 ) -> Callable[..., tuple[list[Entry], Any]]:
-    """Build the ordinary routing rule without changing OCR/combined behavior."""
+    """Build ordinary routing without changing OCR/combined behavior."""
 
     def detect_entries(
         image: Image.Image,
@@ -216,8 +197,6 @@ def build_ordinary_layout_primary(
             getattr(effective, "detection_method", "") or ""
         ).strip().lower()
 
-        # OCR and combined have their own evidence-fusion contracts.  This
-        # change is deliberately limited to the user-facing ordinary mode.
         if method in {"paddleocr", "combined"}:
             return original_detect_entries(
                 image,
@@ -229,8 +208,6 @@ def build_ordinary_layout_primary(
                 page_sections=page_sections,
             )
 
-        # Current-page ordinary drawing must consume the exact role assignment
-        # shown by Layout visualization whenever that snapshot is still valid.
         understanding = recall_visualized_understanding(
             image,
             effective,
@@ -250,32 +227,30 @@ def build_ordinary_layout_primary(
             except Exception:
                 understanding = None
 
+        # Layout roles are authoritative whenever Page Understanding produced
+        # real columns. Do not gate this on physical_reliable and do not fall
+        # back to VB merely because the correct result contains zero entries.
         if (
             understanding is not None
-            and understanding.physical_reliable
-            and understanding.layout.columns
+            and list(getattr(understanding.layout, "columns", []) or [])
         ):
-            # Presence of any final entry role makes Layout authoritative.  Do
-            # not run VB afterward, even if template/section filtering removes
-            # every marker; those exclusions are intentional display geometry.
+            geometry = processing_module._geometry_from_page_understanding(
+                understanding
+            )
             layout_primary = layout_role_entries(understanding)
-            if layout_primary:
-                geometry = processing_module._geometry_from_page_understanding(
-                    understanding
-                )
-                entries = processing_module._allowed_entries(
-                    layout_primary,
-                    source,
-                    settings,
-                    geometry,
-                    profile_page_index,
-                    page_sections,
-                )
-                return processing_module._core.sort_entries_reading_order(
-                    entries,
-                    geometry,
-                    page_sections,
-                ), geometry
+            entries = processing_module._allowed_entries(
+                layout_primary,
+                source,
+                settings,
+                geometry,
+                profile_page_index,
+                page_sections,
+            )
+            return processing_module._core.sort_entries_reading_order(
+                entries,
+                geometry,
+                page_sections,
+            ), geometry
 
         return _vb_fallback(
             processing_module,
@@ -283,7 +258,6 @@ def build_ordinary_layout_primary(
             source,
             settings,
             effective,
-            understanding,
             profile_page_index=profile_page_index,
             page_sections=page_sections,
         )
