@@ -27,6 +27,7 @@ from .ocr_channel import (
     OcrChannelCandidate,
     OcrChannelPlan,
     OcrChannelSession,
+    prepare_ocr_input,
     resolve_ocr_channel_plan,
 )
 
@@ -100,14 +101,14 @@ def _channel_paddle_band_runner(
     settings: AppSettings,
     engine: Any | None = None,
 ):
-    """Preserve legacy preprocessing/record normalization around channel inference.
+    """Preserve mature Paddle result normalization around channel inference.
 
-    The mature parser's preprocessing and Paddle-result normalization are stable
-    parser-adjacent compatibility helpers. Engine construction/inference itself
-    is now owned by ``OcrChannelSession``.
+    Input preprocessing and engine execution now belong to the shared channel;
+    only conversion back into the mature parser's historical ``OCRRecord`` type
+    remains in this compatibility seam.
     """
 
-    prepared, input_scale = _legacy_core.prepare_ocr_band(
+    prepared, input_scale = prepare_ocr_input(
         band,
         max_long_side=getattr(settings, "paddle_max_input_side", 2800),
         mode=getattr(settings, "paddle_preprocessing", "original"),
