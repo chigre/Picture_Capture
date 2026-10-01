@@ -3,21 +3,21 @@ from __future__ import annotations
 """Policy-aware dictionary page-design inference.
 
 The dictionary has one project-level template, while each scan is a page
-instance.  Existing ``ordinary_auto_layout`` controls which physical template
-fields may be replaced by measurements from the current page.  Fields that are
+instance. Existing ``ordinary_auto_layout`` controls which physical template
+fields may be replaced by measurements from the current page. Fields that are
 not selected remain fixed project/Profile priors.
 
-This is intentionally different from indentation-family analysis.  Body/entry
+This is intentionally different from indentation-family analysis. Body/entry
 indent families are always measured in each page's *local column coordinates*,
 because scanner translation, skew and book curvature change absolute X without
-changing the underlying typesetting semantics.  The explicit headword/body
+changing the underlying typesetting semantics. The explicit headword/body
 indent choice therefore controls semantic direction, not whether local evidence
 is observed.
 
-Per-page adaptation stays OCR-free.  In particular, automatic ``manual_x`` is a
-registration of the current scan against the Project template; it is not a
-fresh search for whichever text lane has the most ink.  This prevents an inward
-body lane from becoming the physical column edge on body-indented dictionaries.
+Per-page adaptation is recognition-free: the physical layout estimator may use
+page pixels and text-box geometry, but never recognized word content. Automatic
+``manual_x`` remains a registration of the current scan against the Project
+template rather than a search for whichever text lane has the most ink.
 """
 
 from dataclasses import replace
@@ -28,7 +28,7 @@ from PIL import Image, ImageOps
 
 from . import dictionary_page_design as base
 from . import dictionary_page_design_refined as refined
-from .layout_detection import analysis_ink_mask, _projection_layout_estimate, LayoutEstimate
+from .layout_detection import analysis_ink_mask, detect_layout_parameters, LayoutEstimate
 from .models import AppSettings
 from .page_x_registration import register_page_manual_x
 
@@ -56,18 +56,18 @@ def resolve_page_layout_policy(
     *,
     page_index: int = 0,
 ) -> tuple[AppSettings, LayoutEstimate | None, dict[str, int]]:
-    """Resolve the existing master/per-field layout policy for one page.
+    """Resolve the master/per-field layout policy for one page.
 
-    The project settings object is never mutated.  When the master switch is
-    off no per-page geometry detector is run.  When it is on, one OCR-free
-    projection estimate is made and only explicitly selected fields replace
-    their project-level values.
+    The project settings object is never mutated. When the master switch is off
+    no per-page geometry detector is run. When it is on, the same reliable
+    physical layout estimator used by ordinary auto-layout is run once and only
+    explicitly selected fields replace their project-level values.
 
     ``manual_x`` is special only in *how* its selected value is measured: the
-    projection estimate is treated as an observation, while the final value is
-    a semantic-aware page translation of the Project template.  This preserves
-    the meaning of "首栏X自动" without allowing a dominant inward body lane to
-    redefine the column origin.
+    reliable estimate is treated as an observation, while the final value is a
+    semantic-aware page translation of the Project template. This preserves the
+    meaning of "首栏X自动" without allowing a dominant inward body lane to redefine
+    the column origin.
     """
     current = replace(settings)
     if not bool(getattr(current, "ordinary_auto_layout", False)):
@@ -78,16 +78,18 @@ def resolve_page_layout_policy(
     if bool(getattr(current, "ordinary_auto_columns", False)):
         detector_settings.layout_columns_policy = "detect"
 
-    # Use the same masked/canonical page domain as the page-design model itself.
-    # This is deliberately projection-only: ordinary drawing must not acquire a
-    # hidden Paddle/OCR dependency merely because per-page adaptation is enabled.
-    _source, canonical, _transform, effective = base._analysis_page(
+    # One authoritative physical estimate. This replaces the projection-only
+    # Page Understanding path that could disagree with ordinary auto-layout and
+    # with the on-image Layout diagnostic overlay.
+    estimate = detect_layout_parameters(image, detector_settings)
+
+    # Build the same canonical domain used by Page Design for X registration.
+    _source, canonical, _transform, _effective = base._analysis_page(
         image, detector_settings, page_index
     )
-    estimate = _projection_layout_estimate(canonical, effective)
 
     applied: dict[str, int] = {}
-    # Resolve every selected scalar except X first.  X registration may use the
+    # Resolve every selected scalar except X first. X registration may use the
     # newly allowed page-specific column count/width/gutter/line scale, while
     # keeping the original Project manual_x as its origin.
     for field, switch in AUTO_LAYOUT_FIELDS:
@@ -124,9 +126,9 @@ def _policy_geometry(
 ) -> tuple[list[int], list[int], list[int]]:
     """Build physical columns from the fields the user actually allowed to vary.
 
-    ``manual_x`` is the one registered page origin.  ``column_width`` and
+    ``manual_x`` is the one registered page origin. ``column_width`` and
     ``gutter`` are separate switches, so unselected width/pitch must not leak in
-    through ``estimate.column_starts``.  Mild local scan curvature is handled by
+    through ``estimate.column_starts``. Mild local scan curvature is handled by
     Page Understanding inside each column rather than by giving every column an
     unrelated automatically detected origin.
     """
@@ -204,9 +206,7 @@ def infer_dictionary_page_layout(
 
     strips, raw_runs = column_strips(seed)
     # ``character_height`` is the fixed/auto *prior*. Actual ink height remains
-    # an observed page-instance property, bounded by that prior. This preserves
-    # robustness across scan scale/ink spread without silently changing the
-    # user's physical column geometry.
+    # an observed page-instance property, bounded by that prior.
     reference = base._normal_height(raw_runs, seed)
     strips, raw_runs = column_strips(reference)
 
@@ -226,8 +226,7 @@ def infer_dictionary_page_layout(
         base._assign_indent_semantics(column, indent_type, reference)
         columns.append(column)
 
-    # Preserve the base sparse-lane transfer. The second-stage refinement will
-    # still demote continuation/quotation families and choose one entry family.
+    # Preserve the base sparse-lane transfer.
     sign = 1.0 if indent_type == "headword" else -1.0
     offsets = [
         sign * (mode.center - column.body_mode.center) / max(1.0, reference)
@@ -297,7 +296,7 @@ def infer_dictionary_page_layout(
     if estimate is not None and "manual_x" in applied:
         x_registration = (
             f"; x_registration={int(getattr(settings, 'manual_x', 0) or 0)}"
-            f"->{int(applied['manual_x'])} raw_projection={int(estimate.manual_x)}"
+            f"->{int(applied['manual_x'])} raw_layout={int(estimate.manual_x)}"
         )
     reason = (
         f"{len(columns)} columns; body={body_lines}; entry={entry_lines}; "
