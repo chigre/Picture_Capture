@@ -17,7 +17,6 @@ from PIL import Image
 
 from .dictionary_page_layout_policy import infer_dictionary_page_layout
 from .layout_physical_indent import (
-    _body_semantic_modes,
     _suppress_display_head_duplicate_entries,
     normalize_layout_roles,
 )
@@ -53,18 +52,69 @@ def clear_layout_understanding_cache() -> None:
     _LAYOUT_CACHE.clear()
 
 
+def _mode_interval(mode: Any) -> tuple[float, float]:
+    """Return one physical lane interval in the same normalized-X space."""
+    center = float(getattr(mode, "center", 0.0) or 0.0)
+    tolerance = max(1.0, float(getattr(mode, "tolerance", 1.0) or 1.0))
+    return center - tolerance, center + tolerance
+
+
+def _body_lane_ids(
+    modes: list[Any],
+    body: Any,
+    reference: float | None,
+) -> set[int]:
+    """Absorb lanes genuinely adjacent to body in physical-indent space.
+
+    Clustering is intentionally fine grained, so a one-line lane may be split
+    from the dominant body lane even though their physical intervals are only a
+    few pixels apart.  Semantic body assignment therefore grows from the chosen
+    body lane using *mode.center/tolerance*, the same normalized-X space used to
+    form the lanes.  This avoids mixing raw first-X ranges with detrended lane
+    centres.
+    """
+    body_center = float(getattr(body, "center", 0.0) or 0.0)
+    body_lo, body_hi = _mode_interval(body)
+    ref = max(6.0, float(reference)) if reference is not None else 40.0
+    gap_limit = max(4.0, min(12.0, ref * 0.18))
+    max_extension = max(14.0, min(28.0, ref * 0.50))
+
+    absorbed: set[int] = {id(body)}
+    changed = True
+    while changed:
+        changed = False
+        for mode in modes:
+            mode_id = id(mode)
+            if mode_id in absorbed:
+                continue
+            lo, hi = _mode_interval(mode)
+            if hi < body_lo:
+                gap = body_lo - hi
+            elif lo > body_hi:
+                gap = lo - body_hi
+            else:
+                gap = 0.0
+            proposed_lo = min(body_lo, lo)
+            proposed_hi = max(body_hi, hi)
+            if (
+                gap <= gap_limit
+                and proposed_lo >= body_center - max_extension
+                and proposed_hi <= body_center + max_extension
+            ):
+                absorbed.add(mode_id)
+                body_lo, body_hi = proposed_lo, proposed_hi
+                changed = True
+    return absorbed
+
+
 def _resolve_near_tied_body_lanes(layout: Any) -> None:
-    """Use explicit indent polarity to break ties between stable physical lanes.
+    """Resolve the body seed by polarity, then fully reclassify nearby lanes.
 
-    Physical clustering is intentionally independent of semantics.  A problem
-    remains when two stable lanes have almost equal support: choosing body by
-    support alone can flip the meaning of a whole column because of a one-row
-    count difference.  In that near-tie case the Profile's explicit polarity is
-    authoritative: 正文缩进 => the inward/larger-indent stable lane is body;
-    词头缩进 => the outer/smaller-indent stable lane is body.
-
-    Sparse/singleton lanes stay fully eligible as entry evidence, but are not
-    allowed to steal the body seed from a well-supported lane.
+    Stable near-tied lanes use the Profile's explicit indent polarity to choose
+    the body seed.  After the seed is chosen, role assignment is always rebuilt,
+    even when that seed is unchanged from the previous pass.  This matters for
+    singleton lanes such as 19px next to a 24-33px body lane: they are separate
+    physical clusters but semantically the same body indentation family.
     """
     indent_type = str(getattr(layout, "indent_type", "body") or "body")
     if indent_type == "none":
@@ -75,37 +125,42 @@ def _resolve_near_tied_body_lanes(layout: Any) -> None:
 
     for column in list(getattr(layout, "columns", []) or []):
         modes = list(getattr(column, "indent_modes", []) or [])
-        if len(modes) < 2:
+        if not modes:
             continue
 
         supports = [int(getattr(mode, "support", 0) or 0) for mode in modes]
         max_support = max(supports, default=0)
-        if max_support < 2:
+        if max_support <= 0:
             continue
 
+        # Prefer polarity only among lanes with substantial support. Sparse
+        # n=1/n=2 lanes remain eligible as entry evidence but cannot steal body.
         major_threshold = max(2, int(math.ceil(float(max_support) * 0.72)))
         major_modes = [
             mode for mode in modes
             if int(getattr(mode, "support", 0) or 0) >= major_threshold
         ]
-        if len(major_modes) < 2:
-            continue
 
-        if indent_type == "body":
-            desired_body = max(
-                major_modes,
-                key=lambda mode: float(getattr(mode, "center", 0.0) or 0.0),
-            )
+        if len(major_modes) >= 2:
+            if indent_type == "body":
+                desired_body = max(
+                    major_modes,
+                    key=lambda mode: float(getattr(mode, "center", 0.0) or 0.0),
+                )
+            else:
+                desired_body = min(
+                    major_modes,
+                    key=lambda mode: float(getattr(mode, "center", 0.0) or 0.0),
+                )
         else:
-            desired_body = min(
-                major_modes,
-                key=lambda mode: float(getattr(mode, "center", 0.0) or 0.0),
-            )
+            desired_body = getattr(column, "body_mode", None)
+            if desired_body is None:
+                desired_body = max(
+                    modes,
+                    key=lambda mode: int(getattr(mode, "support", 0) or 0),
+                )
 
-        if desired_body is getattr(column, "body_mode", None):
-            continue
-
-        body_ids = _body_semantic_modes(column, desired_body, reference_arg)
+        body_ids = _body_lane_ids(modes, desired_body, reference_arg)
         body_centers = [
             float(getattr(mode, "center", 0.0) or 0.0)
             for mode in modes
