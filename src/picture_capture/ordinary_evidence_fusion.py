@@ -7,10 +7,15 @@ Universal ordinary drawing keeps one canonical output model: final Layout
 symbols, oversized display heads) therefore meet here by one-way promotion.
 No evidence family may demote or veto another, and separator Y remains owned by
 the shared Y-refinement module after role materialization.
+
+The same fusion point also records *why* a row became an entry and whether it is
+regular or oversized.  This structural metadata is consumed later by OCR crops
+and proofreading; it never changes the role decision itself.
 """
 
 from typing import Any, Iterable
 
+from .entry_classification import register_layout_line_classification
 from .models import Entry
 
 
@@ -18,7 +23,7 @@ def promote_evidence_to_layout_roles(
     understanding: Any,
     evidence_entries: Iterable[Entry],
 ) -> int:
-    """Promote nearest physical rows to entry without changing row geometry."""
+    """Promote nearest physical rows to entry and retain evidence classification."""
     layout = understanding.layout
     line_height = max(4.0, float(getattr(layout, "ordinary_line_height", 1.0) or 1.0))
     max_distance = max(5.0, line_height * 0.90)
@@ -53,6 +58,10 @@ def promote_evidence_to_layout_roles(
         if best is None:
             continue
         _score, _column, line = best
+        # Metadata is recorded even when another evidence family already made
+        # this row an entry.  In particular, large-head evidence must be able to
+        # upgrade a previously indented/symbol row from regular to oversized.
+        register_layout_line_classification(line, evidence)
         if str(getattr(line, "role", "") or "") != "entry":
             line.role = "entry"
             promoted += 1
