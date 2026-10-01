@@ -59,29 +59,26 @@ def _candidate_components(mask: np.ndarray, line_height: float) -> list[tuple[in
 
 
 def _strict_sample_match(match: dict[str, Any], role: str, configured_threshold: float) -> bool:
-    """Use actual sampled glyph similarity as the authority for bracket roles.
+    """Use the captured glyph bitmap itself as authority for bracket samples.
 
-    A sampled ``【`` must look like one of the real captured ``【`` bitmaps, not
-    merely collect a high weighted score from a few bracket-like features.  The
-    three direct similarity measures are therefore conjunctive for
-    ``bracket_open``.  Standalone entry markers retain the generic matcher because
-    their legal shapes are intentionally heterogeneous (○/□/◇/etc.).
+    For ``bracket_open`` the candidate must be genuinely close to at least one
+    real sampled bracket in normalized bitmap overlap, projection and aspect.
+    This intentionally rejects box-like row numbers that only resemble a bracket
+    in a few coarse features.  Standalone entry-marker samples keep the generic
+    matcher because their valid shapes are intentionally heterogeneous.
     """
     score = float(match.get("score", 0.0) or 0.0)
     if role != "bracket_open":
         return score >= configured_threshold
 
-    # Real-page samples vary slightly with scan/thresholding, so keep enough
-    # tolerance for the same printed glyph while requiring overall bitmap shape,
-    # row/column projection and aspect to agree simultaneously.
     iou = float(match.get("iou", 0.0) or 0.0)
     projection = float(match.get("projection", 0.0) or 0.0)
     aspect = float(match.get("aspect_similarity", 0.0) or 0.0)
-    strict_score = max(float(configured_threshold), 0.76)
+    strict_score = max(float(configured_threshold), 0.78)
     return bool(
         score >= strict_score
-        and iou >= 0.46
-        and projection >= 0.76
+        and iou >= 0.68
+        and projection >= 0.78
         and aspect >= 0.72
     )
 
