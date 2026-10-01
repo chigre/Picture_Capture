@@ -2,18 +2,10 @@ from __future__ import annotations
 
 """Semantic-aware horizontal registration for dictionary page instances.
 
-``manual_x`` is a Project Profile template coordinate.  Per-page adaptation must
-therefore estimate how the *scan* moved relative to that template, not ask which
-text lane has the most ink.  The distinction matters for body-indented
-Latin dictionaries: definition/continuation rows greatly outnumber entry rows,
-so a raw projection can mistake the inward body lane for the physical column
-edge.
-
-This module keeps registration OCR-free.  It inspects repeated visual line-start
-families around the expected Project column locations, interprets them using the
-explicit three-state indentation semantics, and reduces the observations to one
-page-wide translation.  Individual columns are not allowed to invent unrelated
-X origins.
+``manual_x`` is a Project Profile template coordinate. Per-page adaptation is
+therefore a small page-wide translation of that stable template, never a fresh
+column-origin estimate. Multiple columns should support the same translation;
+a sparse first column must not drag every column to a new X position.
 """
 
 from dataclasses import dataclass
@@ -70,36 +62,18 @@ def _line_family_candidate(
     semantics: str,
     search_left_floor: int = 0,
 ) -> tuple[int, int] | None:
-    """Return (absolute outer-lane X, support) for one expected column.
-
-    The search window is deliberately centered on the Project template rather
-    than on the projection detector's left edge.  That lets a body-indented
-    page recover a sparse outer entry lane even when the dominant body lane is
-    dozens of pixels inward.  Later columns are additionally prevented from
-    reaching back into the preceding Project column.
-    """
     height, width = ink.shape
     if bottom <= top or width <= 1:
         return None
 
-    shift_window = max(
-        14,
-        round(seed * 2.2),
-        round(max(1, column_width) * 0.035),
-    )
+    shift_window = max(14, round(seed * 2.2), round(max(1, column_width) * 0.035))
     shift_window = min(shift_window, max(18, round(max(1, column_width) * 0.12)))
     left = max(0, int(search_left_floor), int(nominal_x) - shift_window)
-    lead = max(
-        round(seed * 6.0),
-        round(max(1, column_width) * 0.24),
-        96,
-    )
+    lead = max(round(seed * 6.0), round(max(1, column_width) * 0.24), 96)
     right = min(width, int(nominal_x) + lead)
     if right - left < 12:
         return None
 
-    # Include a little context above an automatically detected body top so the
-    # first entry on a section-opening page remains observable.
     local_top = max(0, int(top) - max(4, round(seed * 1.25)))
     local_bottom = min(height, int(bottom))
     strip = ink[local_top:local_bottom, left:right]
@@ -129,13 +103,8 @@ def _line_family_candidate(
         column.lines = list(lines)
         column.indent_modes = list(modes)
         base._assign_indent_semantics(column, "body", reference)
-        # The physical/entry lane is outside the dominant inward body lane.
-        # Prefer a repeated entry family; do not infer an outer edge from a
-        # single speck or punctuation fragment.
         eligible = [mode for mode in column.entry_modes if mode.support >= 2]
         if eligible:
-            # Stronger repetition wins; distance to the Project edge only breaks
-            # ties.  This avoids a two-row noise lane stealing the registration.
             chosen = max(
                 eligible,
                 key=lambda mode: (
@@ -148,36 +117,47 @@ def _line_family_candidate(
         column.lines = list(lines)
         column.indent_modes = list(modes)
         base._assign_indent_semantics(column, "headword", reference)
-        # For headword-indent pages the ordinary body lane is the outer physical
-        # lane and is therefore the correct column registration anchor.
         chosen = column.body_mode
     else:
-        # No-indent pages have no directional entry/body meaning.  The most
-        # repeated line-start family is the best registration anchor.
         total = max(1, sum(mode.support for mode in modes))
-        stable = [
-            mode for mode in modes
-            if mode.support >= max(2, round(total * 0.08))
-        ] or list(modes)
+        stable = [mode for mode in modes if mode.support >= max(2, round(total * 0.08))] or list(modes)
         chosen = max(stable, key=lambda mode: mode.support)
 
     if chosen is None or chosen.support < 2:
         return None
-
-    # ``anchor_x`` groups full-height glyphs.  Once the family is selected, use
-    # first ink to recover the visual outer lane, preserving small prefixes.
     firsts = [float(line.first_x) for line in chosen.lines]
     if not firsts:
         return None
     candidate = int(round(left + float(np.median(firsts))))
-    max_shift = max(
-        round(reference * 2.6),
-        round(max(1, column_width) * 0.065),
-        18,
-    )
+    max_shift = max(round(reference * 2.6), round(max(1, column_width) * 0.065), 18)
     if abs(candidate - int(nominal_x)) > max_shift:
         return None
     return candidate, int(chosen.support)
+
+
+def _consensus_delta(
+    deltas: list[int],
+    *,
+    max_shift: int,
+    tolerance: int,
+) -> tuple[int | None, int]:
+    """Return the strongest page-wide delta cluster and its column support."""
+    if not deltas:
+        return None, 0
+    ordered = sorted(int(value) for value in deltas if abs(int(value)) <= max_shift)
+    if not ordered:
+        return None, 0
+    best: list[int] = []
+    for value in ordered:
+        cluster = [other for other in ordered if abs(other - value) <= tolerance]
+        if len(cluster) > len(best):
+            best = cluster
+        elif len(cluster) == len(best) and cluster:
+            if abs(float(np.median(cluster))) < abs(float(np.median(best))):
+                best = cluster
+    if not best:
+        return None, 0
+    return int(round(float(np.median(np.asarray(best, dtype=float))))), len(best)
 
 
 def _robust_page_delta(
@@ -186,57 +166,46 @@ def _robust_page_delta(
     projection_deltas: list[int],
     semantics: str,
     max_shift: int,
+    expected_columns: int,
+    seed: float,
 ) -> tuple[int, str]:
-    """Reduce column observations to one page-wide scan translation."""
-    usable = [
-        (int(candidate_x) - int(nominal_x), int(support))
-        for nominal_x, candidate_x, support in candidates
+    """Reduce observations to one bounded page translation.
+
+    A single sparse column can no longer move the whole page. With two or more
+    expected columns, at least two column observations must agree before lane
+    evidence is allowed to translate the Project/Profile template. Projection
+    starts provide an independent multi-column fallback.
+    """
+    lane_deltas = [
+        int(candidate_x) - int(nominal_x)
+        for nominal_x, candidate_x, _support in candidates
         if abs(int(candidate_x) - int(nominal_x)) <= max_shift
     ]
-    if usable:
-        # Repeat each delta only up to a modest cap: support should stabilize a
-        # lane, not let one verbose column dominate the whole page.
-        expanded: list[int] = []
-        for delta, support in usable:
-            expanded.extend([delta] * max(1, min(4, support)))
-        values = np.asarray(expanded, dtype=float)
-        if semantics == "正文缩进":
-            # Even the selected outer entry family measures first printed ink,
-            # which can sit a few pixels inside the Project boundary.  Use the
-            # lower cross-column consensus so that glyph inset cannot become a
-            # fake page translation; inward body contamination is even farther
-            # right and therefore cannot win this statistic.
-            delta = int(round(float(np.quantile(values, 0.20))))
-            method = "semantic_outer_lane"
-        else:
-            delta = int(round(float(np.median(values))))
-            method = "semantic_lane"
-        return max(-max_shift, min(max_shift, delta)), method
+    tolerance = max(3, min(12, int(round(max(8.0, seed) * 0.22))))
+    lane_delta, lane_support = _consensus_delta(
+        lane_deltas,
+        max_shift=max_shift,
+        tolerance=tolerance,
+    )
+    required = 1 if int(expected_columns) <= 1 else 2
+    if lane_delta is not None and lane_support >= required:
+        return max(-max_shift, min(max_shift, int(lane_delta))), "multi_column_semantic"
 
-    fallback = [delta for delta in projection_deltas if abs(delta) <= max_shift]
-    if fallback:
-        if semantics == "正文缩进":
-            # A raw projection can land on the inward body lane, which can only
-            # move the detected start further into the column.  The outermost
-            # plausible projection delta is therefore the safe fallback.
-            delta = min(fallback)
-            method = "projection_outer"
-        else:
-            delta = int(round(float(np.median(np.asarray(fallback, dtype=float)))))
-            method = "projection_consensus"
-        return max(-max_shift, min(max_shift, int(delta))), method
+    projection_delta, projection_support = _consensus_delta(
+        list(projection_deltas),
+        max_shift=max_shift,
+        tolerance=tolerance,
+    )
+    if projection_delta is not None and projection_support >= required:
+        return max(-max_shift, min(max_shift, int(projection_delta))), "multi_column_projection"
 
-    return 0, "project_fallback"
+    # If no multi-column agreement exists, keep the stable Profile X. A lone
+    # first-column observation is exactly the failure mode seen on sparse opening
+    # pages and is not sufficient evidence for a page-wide translation.
+    return 0, "profile_anchor"
 
 
 def _narrow_persistent_rule_columns(body: np.ndarray, seed: float) -> np.ndarray:
-    """Keep only narrow persistent-X runs that plausibly represent divider rules.
-
-    A broad aligned text band can also have high vertical persistence on
-    synthetic pages or unusually repetitive dictionaries.  Removing every
-    persistent column would erase the very line-start families needed for X
-    registration.  Printed divider rules are narrow; broad runs stay as text.
-    """
     raw = base._persistent_rule_mask(body, seed)
     if raw.size == 0 or not bool(raw.any()):
         return raw
@@ -253,17 +222,11 @@ def register_page_manual_x(
     settings: AppSettings,
     estimate: LayoutEstimate,
 ) -> XRegistrationResult:
-    """Register current-page X as a translation of the Project template.
-
-    ``settings.manual_x`` must still contain the Project/Profile value.  Other
-    selected auto fields may already have been applied; this is intentional, so
-    a page whose width/gutter scale was explicitly allowed to change uses that
-    resolved pitch while still preserving one shared X origin.
-    """
+    """Register current-page X as one shared translation of Profile columns."""
     project_x = max(0, int(getattr(settings, "manual_x", 0) or 0))
     nominal = _nominal_starts(settings)
     if not nominal:
-        return XRegistrationResult(project_x, 0, "project_fallback")
+        return XRegistrationResult(project_x, 0, "profile_anchor")
 
     gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
     ink = analysis_ink_mask(gray, settings)
@@ -274,9 +237,6 @@ def register_page_manual_x(
     column_width = max(8, int(getattr(settings, "column_width", 700) or 700))
     gutter = max(0, int(getattr(settings, "gutter", 0) or 0))
 
-    # Persistent divider rules can turn every row in a leading strip "active".
-    # Remove only narrow persistent runs.  Broad persistent regions may simply
-    # be repeated text columns and must remain available to lane inference.
     rule_body = ink[max(0, top):max(top + 1, bottom), :]
     rules = _narrow_persistent_rule_columns(rule_body, seed)
     if rules.size and bool(rules.any()):
@@ -288,8 +248,6 @@ def register_page_manual_x(
         search_left_floor = 0
         if index > 0:
             previous_right = nominal[index - 1] + column_width
-            # Stay out of the previous text column while retaining most of the
-            # gutter as room for legitimate scan translation.
             search_left_floor = previous_right + max(1, round(gutter * 0.10))
         observed = _line_family_candidate(
             ink,
@@ -311,16 +269,18 @@ def register_page_manual_x(
         for index, expected in enumerate(nominal)
         if index < len(detected)
     ]
-    max_shift = max(
-        20,
-        round(seed * 2.7),
-        round(column_width * 0.075),
-    )
+
+    # Translation is intentionally much tighter than raw layout-search windows:
+    # the Project/Profile already defines the dictionary template. Auto X only
+    # registers scan movement around that stable template.
+    max_shift = max(8, min(24, round(seed * 0.45), round(column_width * 0.018)))
     delta, method = _robust_page_delta(
         lane_candidates,
         projection_deltas=projection_deltas,
         semantics=semantics,
         max_shift=max_shift,
+        expected_columns=len(nominal),
+        seed=seed,
     )
     value = max(0, project_x + int(delta))
     return XRegistrationResult(
