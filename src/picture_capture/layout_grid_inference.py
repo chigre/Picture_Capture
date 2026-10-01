@@ -31,8 +31,6 @@ def _raw_projection_runs(ink: np.ndarray, scale: float) -> tuple[list[tuple[int,
     threshold = max(2.0, float(width) * 0.003)
     active = row_ink >= threshold
 
-    # Only bridge a truly tiny blank interruption. Larger inter-row spaces must
-    # remain visible to the projection rather than being forced into a row grid.
     max_gap = max(0, min(2, int(round(max(6.0, float(scale)) * 0.035))))
     if max_gap > 0:
         indices = np.flatnonzero(active)
@@ -58,9 +56,6 @@ def _split_tall_run(
     if height <= ref * 1.70:
         return [(int(y0), int(y1))]
 
-    # Search near one expected line height from the current top. This uses the
-    # line-height estimate as a prior while the split location itself is chosen
-    # from the observed projection valley.
     lo = max(y0 + 2, int(round(y0 + ref * 0.62)))
     hi = min(y1 - 2, int(round(y0 + ref * 1.38)))
     if hi <= lo:
@@ -79,9 +74,6 @@ def _split_tall_run(
     if best_y is None or best_cost is None:
         return [(int(y0), int(y1))]
 
-    # A separator valley should be close to blank relative to ordinary active
-    # rows. This catches a one-pixel dust bridge without splitting naturally
-    # tall glyphs or display heads simply because a fixed grid says so.
     body = row_ink[y0:y1]
     active_values = body[body >= threshold]
     typical = float(np.median(active_values)) if active_values.size else threshold
@@ -129,20 +121,25 @@ def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]
     return result
 
 
-# Backward-compatible name retained for tests/importers from the immediately
-# preceding implementation. Its semantics are now projection-led, not grid-led.
 grid_line_runs = projection_line_runs
 
 
 def indent_width_modes(lines: list[Any], reference: float) -> list[Any]:
-    """Cluster one column's lines by physical indent width (``first_x``)."""
+    """Cluster one column's rows by physical indent width (``first_x``).
+
+    The old 0.24×line-height radius was broad enough to merge visibly different
+    lanes on high-DPI dictionary pages (for example a flush-left headword lane
+    and a nearby ``~`` continuation lane).  Physical indentation is now treated
+    as the primary classification signal, so the lane radius is deliberately
+    tighter: about 0.12×line-height, with a 3-pixel floor.
+    """
     from . import dictionary_page_design as page_design
 
     if not lines:
         return []
 
     clusters: list[list[Any]] = []
-    tolerance = max(3.0, float(reference) * 0.24)
+    tolerance = max(3.0, float(reference) * 0.12)
     for line in sorted(lines, key=lambda item: int(getattr(item, "first_x", 0) or 0)):
         value = float(getattr(line, "first_x", 0) or 0)
         target: list[Any] | None = None
@@ -169,8 +166,8 @@ def indent_width_modes(lines: list[Any], reference: float) -> list[Any]:
         result.append(page_design.IndentMode(
             center=center,
             tolerance=max(
-                float(reference) * 0.14,
-                min(float(reference) * 0.34, q90 + float(reference) * 0.08),
+                float(reference) * 0.07,
+                min(float(reference) * 0.18, q90 + float(reference) * 0.04),
             ),
             lines=list(cluster),
             shape_consensus=page_design._shape_consensus(cluster),
@@ -179,19 +176,7 @@ def indent_width_modes(lines: list[Any], reference: float) -> list[Any]:
 
 
 def assign_physical_indent_roles(column: Any, indent_type: str, reference: float) -> None:
-    """Assign body/entry/unknown roles from physical-indent lanes only.
-
-    ``IndentMode.center`` is the median ``first_x`` of one physical lane within
-    the current column.  The configured dictionary indent convention tells us
-    which side of the dominant body lane can contain entry starts:
-
-    * ``body`` indentation: body text is farther from the column edge, so entry
-      lanes must be physically *less* indented than the body lane;
-    * ``headword`` indentation: the inverse relation applies.
-
-    Prefix metadata (``~``, numbering, bullets) does not move a row to another
-    lane and cannot by itself promote a lane to ``entry``.
-    """
+    """Assign body/entry/unknown roles from physical-indent lanes only."""
     modes = list(getattr(column, "indent_modes", []) or [])
     column.body_mode = None
     column.entry_modes = []
@@ -210,8 +195,6 @@ def assign_physical_indent_roles(column: Any, indent_type: str, reference: float
     if not stable:
         stable = [max(modes, key=lambda mode: int(getattr(mode, "support", 0) or 0))]
 
-    # Preserve the dictionary's physical indentation convention, but apply it to
-    # physical lane centers rather than anchor-derived centers.
     if str(indent_type) == "headword":
         body = min(stable, key=lambda mode: float(mode.center))
         entry_direction = 1.0
@@ -223,7 +206,7 @@ def assign_physical_indent_roles(column: Any, indent_type: str, reference: float
     column.body_mode = body
 
     ref = max(6.0, float(reference))
-    minimum_separation = ref * 0.42
+    minimum_separation = ref * 0.30
     maximum_separation = ref * 5.0
     entries: list[Any] = []
 
@@ -232,10 +215,7 @@ def assign_physical_indent_roles(column: Any, indent_type: str, reference: float
             continue
         separation = entry_direction * (float(mode.center) - float(body.center))
         support = int(getattr(mode, "support", 0) or 0)
-        if (
-            minimum_separation <= separation <= maximum_separation
-            and support >= 2
-        ):
+        if minimum_separation <= separation <= maximum_separation and support >= 2:
             mode.role = "entry"
             entries.append(mode)
 
