@@ -153,6 +153,7 @@ def test_marker_only_ocr_is_a_channel_consumer_not_single_engine_dispatch():
     assert "channel.recognize_crop(" in source
     assert "choose_ocr_text(" in source
     assert 'engine_name == "paddleocr"' not in source
+    assert "OcrChannelCandidate(" not in source
 
 
 def test_ocr_boundary_detection_is_a_separate_channel_consumer():
@@ -162,3 +163,21 @@ def test_ocr_boundary_detection_is_a_separate_channel_consumer():
     assert "resolve_ocr_channel_plan" in source
     assert "detect_ocr_headword_boundaries" in source
     assert "legacy_detect" in source
+
+
+def test_historical_paddle_headword_entrypoint_remains_boundary_consumer_alias():
+    import picture_capture.paddle_headwords as public
+
+    assert public.detect_paddle_headwords is public.detect_ocr_headword_boundaries
+
+
+def test_main_ui_presents_engine_selection_as_shared_ocr_channel():
+    from picture_capture.ui_terminology import normalize_ui_text
+
+    assert normalize_ui_text("三、融合 / OCR画线参数") == "三、OCR通道 / OCR画线"
+    assert normalize_ui_text("三、OCR画线参数（默认）") == "三、OCR通道 / OCR画线"
+    help_text = normalize_ui_text(
+        "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启"
+    )
+    assert "共享 OCR 通道" in help_text
+    assert "【仅OCR】与【OCR画线】共用" in help_text
