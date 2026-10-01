@@ -86,12 +86,14 @@ def prepare_app_module() -> Any:
     # Import the GUI only after all function-level extensions above are in
     # place. Training export reuses the main-window page selection directly.
     from . import app as app_module
+    from .layout_visualization_ui import install_layout_visualization
     from .parameter_help_ui import install_settings_parameter_help
     from .training_export_ui import export_training_package_selected_range
     from .ui_terminology import install_app_tooltip_terminology
 
     install_settings_parameter_help(app_module)
     install_app_tooltip_terminology(app_module)
+    install_layout_visualization(app_module)
     app_module.PictureCaptureApp.export_training_package = (
         export_training_package_selected_range
     )
