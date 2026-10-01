@@ -41,14 +41,20 @@ def prepare_app_module() -> Any:
     # promotion; it is only a compatibility bridge for direct module callers.
     from . import dictionary_page_design
     from .dictionary_page_design_refined import detect_entries_from_page_design
+    from .layout_grid_inference import install_grid_line_and_indent_inference
     from .layout_line_start_refinement import install_robust_line_starts
 
     dictionary_page_design.detect_entries_from_page_design = (
         detect_entries_from_page_design
     )
+    # Recover text rows from the known body/line grid and cluster each column by
+    # physical indent width before semantic role assignment. This prevents
+    # bridging specks from merging adjacent rows and keeps role lanes aligned
+    # with the same first_x quantity shown by Layout diagnostics.
+    install_grid_line_and_indent_inference()
     # Line-level indent evidence must be robust before profile_setup/processing
-    # import Page Understanding.  This refines only visual first_x; semantic
-    # anchor_x remains unchanged.
+    # import Page Understanding. This refines visual first_x after the grid has
+    # isolated a single row; semantic anchor_x remains secondary evidence.
     install_robust_line_starts()
 
     # profile_setup imports processing; do this only after low-level extensions
