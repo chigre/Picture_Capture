@@ -95,8 +95,6 @@ def test_closed_box_cannot_match_bracket_open_sample():
         sample_id="bracket",
     )
 
-    # Boxed-number outlines are closed topology.  Even if their projections are
-    # superficially bracket-like, they must not be accepted as bracket_open.
     boxed = np.zeros((24, 12), dtype=bool)
     boxed[1:23, 1:3] = True
     boxed[1:23, 9:11] = True
@@ -107,6 +105,25 @@ def test_closed_box_cannot_match_bracket_open_sample():
         [sample],
         roles={"bracket_open"},
     ) is None
+
+
+def test_broken_boxed_number_does_not_match_real_bracket_sample():
+    _sample_image, settings = _bracket_sample_settings()
+    image = Image.new("RGB", (100, 80), "white")
+    draw = ImageDraw.Draw(image)
+
+    # Deliberately break the right border so this shape has no enclosed hole.
+    # It remains a box-like numbered marker, not the sampled 【 glyph.
+    draw.line((10, 10, 10, 29), fill="black", width=2)
+    draw.line((10, 10, 18, 10), fill="black", width=2)
+    draw.line((10, 29, 18, 29), fill="black", width=2)
+    draw.line((18, 10, 18, 16), fill="black", width=2)
+    draw.line((18, 23, 18, 29), fill="black", width=2)
+
+    understanding, lines = _understanding_with_rows()
+    evidence = detect_ordinary_symbol_entries(image, understanding, settings)
+    assert evidence == []
+    assert lines[0].role == "body"
 
 
 def test_visual_evidence_never_demotes_existing_indent_entry():
