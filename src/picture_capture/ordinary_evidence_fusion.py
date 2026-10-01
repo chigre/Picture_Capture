@@ -9,11 +9,12 @@ structures:
 * sampled structural symbols at a row start;
 * oversized display-head typography.
 
-No evidence family is allowed to veto another.  Fusion only deduplicates nearby
-boundaries and keeps the strongest runtime metadata for diagnostics.
+No evidence family is allowed to veto another.  The canonical ordinary output
+still materializes Layout rows, so non-indent evidence is promoted onto the
+nearest physical row before separator-Y refinement.
 """
 
-from typing import Iterable
+from typing import Any, Iterable
 
 from .models import Entry
 
@@ -42,9 +43,6 @@ def fuse_ordinary_entry_evidence(
     if not candidates:
         return []
 
-    # Same entry detectors can disagree slightly on separator Y.  Keep that
-    # disagreement local to one ordinary row and leave final Y placement to the
-    # shared separator-Y refinement stage.
     y_tolerance = max(3, round(float(line_height) * 0.58))
     x_tolerance = max(4, round(float(line_height) * 1.10))
 
@@ -67,3 +65,56 @@ def fuse_ordinary_entry_evidence(
             fused[duplicate_index] = candidate
 
     return fused
+
+
+def promote_evidence_to_layout_roles(
+    understanding: Any,
+    evidence_entries: Iterable[Entry],
+) -> int:
+    """Promote nearest physical rows to entry without changing row geometry.
+
+    This is deliberately one-way: visual symbol / large-head evidence may add
+    an entry role, but can never turn an indent-derived entry back into body.
+    The final separator Y is still refined later by the shared Y-refinement
+    module when the row is materialized.
+    """
+    layout = understanding.layout
+    line_height = max(4.0, float(getattr(layout, "ordinary_line_height", 1.0) or 1.0))
+    max_distance = max(5.0, line_height * 0.90)
+    promoted = 0
+
+    # Build a source-space index because evidence modules emit source PDIC-like
+    # coordinates while Layout rows live in canonical coordinates.
+    row_index: list[tuple[Any, Any, int, int]] = []
+    for column in list(getattr(layout, "columns", []) or []):
+        for line in list(getattr(column, "lines", []) or []):
+            canonical_y = int(layout.body_top) + int(line.y0)
+            source_x, source_y = layout.transform.canonical_to_source_point(
+                int(column.left),
+                canonical_y,
+                layout.source_size,
+            )
+            row_index.append((column, line, int(source_x), int(source_y)))
+
+    for evidence in evidence_entries:
+        best: tuple[float, Any, Any] | None = None
+        for column, line, source_x, source_y in row_index:
+            dx = abs(int(evidence.x) - source_x)
+            dy = abs(int(evidence.y) - source_y)
+            if dy > max_distance:
+                continue
+            # Same-column rows should have a source-edge X close to the evidence
+            # marker.  A generous allowance handles rotated/mirrored pages.
+            if dx > max(line_height * 2.0, 12.0):
+                continue
+            score = float(dy) + 0.15 * float(dx)
+            if best is None or score < best[0]:
+                best = (score, column, line)
+        if best is None:
+            continue
+        _score, _column, line = best
+        if str(getattr(line, "role", "") or "") != "entry":
+            line.role = "entry"
+            promoted += 1
+
+    return promoted
