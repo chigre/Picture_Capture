@@ -11,7 +11,7 @@ from typing import Any
 import tkinter as tk
 from tkinter import ttk
 
-from .layout_visualization_readability import draw_layout_visualization_readable
+from .layout_visualization_summary import draw_layout_visualization_detailed
 
 
 def _add_layout_toggle(app: Any, section: Any) -> None:
@@ -51,7 +51,7 @@ def _add_layout_toggle(app: Any, section: Any) -> None:
     try:
         app._attach_tooltip(
             checkbox,
-            "在主图上显示当前页实际采用的版面推理：正文上下界、各栏左右边界、栏间中心、推理方法/置信度及自动字段采用情况。仅影响显示。",
+            "在主图上显示当前页实际采用的版面推理：正文上下界、每栏几何、栏间宽度、推理方法/置信度及自动字段 raw/used 状态。仅影响显示。",
         )
     except Exception:
         pass
@@ -95,7 +95,7 @@ def install_layout_visualization(app_module: Any) -> None:
 
     def redraw(self: Any, *args: Any, **kwargs: Any) -> Any:
         result = original_redraw(self, *args, **kwargs)
-        draw_layout_visualization_readable(self)
+        draw_layout_visualization_detailed(self)
         return result
 
     cls._section_frame = section_frame
