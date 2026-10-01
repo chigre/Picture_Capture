@@ -183,6 +183,10 @@ def entry_ocr_crop_box(
     right  = column_left + column_width * right_ratio + gutter/2
     top    = entry_y - physical_row_gap/2
     bottom = entry_y + classified_content_height + physical_row_gap
+
+    ``right_ratio`` is the same user-visible 【向右比例 %】 used by the existing
+    entry box/crop geometry. Paddle's independent ``paddle_band_width_ratio``
+    only controls PaddleOCR's own full-column detection band.
     """
     image_width, image_height = map(int, image_size)
     column, marker_v = _column_at_entry(entry, geometry)
@@ -197,9 +201,7 @@ def entry_ocr_crop_box(
     half_gutter = int(round(gutter * 0.5))
     row_gap = entry_ocr_row_gap(settings, row_metrics=row_metrics)
     gap_before = row_gap // 2
-    right_ratio = float(
-        getattr(settings, "entry_ocr_right_ratio", 100.0) or 100.0
-    )
+    right_ratio = float(getattr(settings, "right_ratio", 100.0) or 100.0)
     right_ratio = max(5.0, min(200.0, right_ratio)) / 100.0
     height = entry_ocr_content_height(
         entry,
