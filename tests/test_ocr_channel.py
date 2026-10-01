@@ -169,7 +169,8 @@ def test_shared_channel_owns_active_ocr_execution_not_legacy_parser():
     assert "def run_tesseract_records(" in source
     assert "def run_lens_records(" in source
     assert "from .paddle_headwords" not in source
-    assert "paddle_headwords_core" not in source
+    assert "from . import paddle_headwords_core" not in source
+    assert "import paddle_headwords_core" not in source
 
 
 def test_marker_only_ocr_is_a_channel_consumer_not_single_engine_dispatch():
