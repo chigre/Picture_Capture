@@ -48,24 +48,27 @@ def _apply_quick_settings_for_ordinary(app: Any) -> bool:
         "paddle_use_paddleocr"
     )
     if paddle_var is None:
-        # A normal GUI always has this variable.  Keep unusual callers safe by
+        # A normal GUI always has this variable. Keep unusual callers safe by
         # falling back to the original validator rather than mutating settings
         # behind their back.
         return bool(app.apply_quick_settings(show_status=False))
 
     settings = getattr(app, "settings", None)
-    original_setting = bool(getattr(settings, "paddle_use_paddleocr", False))
     try:
+        # Satisfy only the legacy OCR-presence check. The ordinary action never
+        # consumes this temporary engine choice.
         paddle_var.set(True)
         accepted = bool(app.apply_quick_settings(show_status=False))
     finally:
-        # ``persist`` defaults to False, so the temporary value has not reached
-        # settings.json. Restore both the model and control before the caller's
-        # ordinary action saves its actual configuration.
+        # The controls are authoritative here: a user may have just unchecked
+        # Paddle while settings still contains the previous True value. Restore
+        # the values captured from the visible UI, not the stale model value.
         if settings is not None:
-            settings.paddle_use_paddleocr = original_setting
+            settings.paddle_use_paddleocr = paddle
+            settings.paddle_compare_tesseract = tesseract
+            settings.paddle_enable_lens = lens
         try:
-            paddle_var.set(False)
+            paddle_var.set(paddle)
         except Exception:
             pass
         try:
