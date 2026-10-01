@@ -157,7 +157,8 @@ def choose_ocr_text(
     Exact normalized agreement between two enabled voting engines wins.  When
     engines disagree, deterministic channel order is used instead of inventing a
     geometry/parser score here; higher-level consumers remain free to perform a
-    richer arbitration before calling this helper.
+    richer arbitration before calling this helper. Diagnostic-only engines never
+    become the selected text source, even when all voting engines fail.
     """
 
     by_engine = {
@@ -167,11 +168,9 @@ def choose_ocr_text(
     }
     voting = [
         by_engine[name]
-        for name in plan.enabled_engines
-        if name in by_engine and (plan.votes(name) or not plan.voting_engines)
+        for name in plan.voting_engines
+        if name in by_engine
     ]
-    if not voting:
-        voting = [by_engine[name] for name in plan.enabled_engines if name in by_engine]
     if not voting:
         return None, False
 
