@@ -169,17 +169,53 @@ def test_single_lane_page_stays_body() -> None:
     assert column.entry_modes == []
 
 
-def test_lane_summary_reports_only_entry_or_body_roles() -> None:
+def test_lane_summary_distinguishes_corrected_and_raw_ranges() -> None:
     app = SimpleNamespace(
         _layout_visualization_indent_lanes=[
-            {"column": 0, "lane": 0, "center": 3.0, "min": 2.0, "max": 5.0, "support": 8, "role": "entry"},
-            {"column": 0, "lane": 1, "center": 15.0, "min": 13.0, "max": 17.0, "support": 5, "role": "body"},
-            {"column": 0, "lane": 2, "center": 35.0, "min": 32.0, "max": 38.0, "support": 22, "role": "body"},
+            {
+                "column": 0,
+                "lane": 0,
+                "center": 3.0,
+                "min": 2.0,
+                "max": 5.0,
+                "raw_min": 4.0,
+                "raw_max": 9.0,
+                "support": 8,
+                "role": "entry",
+            },
+            {
+                "column": 0,
+                "lane": 1,
+                "center": 15.0,
+                "min": 13.0,
+                "max": 17.0,
+                "raw_min": 16.0,
+                "raw_max": 22.0,
+                "support": 5,
+                "role": "body",
+            },
+            {
+                "column": 0,
+                "lane": 2,
+                "center": 35.0,
+                "min": 32.0,
+                "max": 38.0,
+                "raw_min": 35.0,
+                "raw_max": 43.0,
+                "support": 22,
+                "role": "body",
+            },
         ]
     )
 
     text = append_physical_lane_summary("Layout AUTO", app)
 
-    assert "C1/L1: center=3.0   range=2.0-5.0   n=8   role=entry" in text
-    assert "C1/L2: center=15.0   range=13.0-17.0   n=5   role=body" in text
+    assert (
+        "C1/L1: center=3.0   corrected=2.0-5.0   raw=4.0-9.0   "
+        "n=8   role=entry"
+    ) in text
+    assert (
+        "C1/L2: center=15.0   corrected=13.0-17.0   raw=16.0-22.0   "
+        "n=5   role=body"
+    ) in text
     assert "unknown" not in text
