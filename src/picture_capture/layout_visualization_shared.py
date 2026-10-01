@@ -16,6 +16,48 @@ from .page_understanding import understand_page
 from .processing import ORDINARY_AUTO_LAYOUT_FIELDS, _geometry_from_page_understanding
 
 
+def _indent_blocks_from_understanding(understanding: Any) -> list[dict[str, Any]]:
+    """Return canonical per-line indent spans for diagnostic visualization.
+
+    ``LayoutLine.anchor_x`` and ``IndentMode.center`` are local X coordinates
+    inside a column strip, while line y0/y1 are local to ``body_top``.  Convert
+    both to canonical page coordinates here so every renderer consumes one
+    unambiguous coordinate system.
+    """
+    layout = understanding.layout
+    blocks: list[dict[str, Any]] = []
+    body_top = int(layout.body_top)
+
+    for column in layout.columns:
+        body = getattr(column, "body_mode", None)
+        if body is None:
+            continue
+        body_local_x = float(body.center)
+        column_left = int(column.left)
+        for line in list(getattr(column, "lines", []) or []):
+            anchor = getattr(line, "anchor_x", None)
+            if anchor is None:
+                continue
+            anchor_local_x = float(anchor)
+            x0 = column_left + min(anchor_local_x, body_local_x)
+            x1 = column_left + max(anchor_local_x, body_local_x)
+            y0 = body_top + int(getattr(line, "y0", 0) or 0)
+            y1 = body_top + int(getattr(line, "y1", 0) or 0)
+            if y1 <= y0:
+                continue
+            blocks.append({
+                "column": int(getattr(column, "index", 0) or 0),
+                "x0": float(x0),
+                "x1": float(x1),
+                "y0": int(y0),
+                "y1": int(y1),
+                "anchor_x": float(column_left + anchor_local_x),
+                "body_x": float(column_left + body_local_x),
+                "role": str(getattr(line, "role", "") or "unknown"),
+            })
+    return blocks
+
+
 def shared_snapshot_for_app(app: Any) -> Any:
     """Return a LayoutVisualizationSnapshot from the ordinary shared geometry."""
     from . import layout_visualization_ui as ui
@@ -41,10 +83,13 @@ def shared_snapshot_for_app(app: Any) -> Any:
         )
         geometry = _geometry_from_page_understanding(understanding)
         used = understanding.page_settings
+        app._layout_visualization_indent_blocks = _indent_blocks_from_understanding(
+            understanding
+        )
 
         # Re-read the policy estimate only for diagnostics (raw/method/confidence).
-        # This is the same projection policy used by understand_page, not the
-        # unrelated reliable-fusion detector that used to power the overlay.
+        # This is the same layout policy used by understand_page; it does not
+        # create a second geometry for drawing.
         _policy_settings, estimate, _policy_applied = resolve_page_layout_policy(
             analysis,
             effective,
@@ -84,7 +129,7 @@ def shared_snapshot_for_app(app: Any) -> Any:
 
         method = "page_understanding"
         if estimate is not None:
-            estimate_method = str(getattr(estimate, "method", "projection") or "projection")
+            estimate_method = str(getattr(estimate, "method", "layout") or "layout")
             method = f"page_understanding:{estimate_method}"
 
         confidence = None
