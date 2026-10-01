@@ -5,6 +5,10 @@ from types import SimpleNamespace
 
 from picture_capture.ocr_action_guard import _ineffective_lens_only_selection
 from picture_capture.settings_help_restore import install_settings_help_restore
+from picture_capture.spawn_detection_runtime import (
+    detect_entries_job_with_runtime,
+    install_spawn_detection_runtime,
+)
 
 
 class _Var:
@@ -101,3 +105,34 @@ def test_launcher_installs_ocr_guard_before_user_actions_run():
     ).read_text(encoding="utf-8")
     assert "from .ocr_action_guard import install_ocr_action_guard" in launcher
     assert "install_ocr_action_guard(app_module)" in launcher
+
+
+def test_spawn_worker_is_top_level_pickleable_and_installed_before_app_import():
+    assert detect_entries_job_with_runtime.__module__ == "picture_capture.spawn_detection_runtime"
+
+    processing = SimpleNamespace()
+    install_spawn_detection_runtime(processing)
+    assert processing.detect_entries_job is detect_entries_job_with_runtime
+
+    launcher = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "launcher.py"
+    ).read_text(encoding="utf-8")
+    install_at = launcher.index("install_spawn_detection_runtime(processing_module)")
+    app_import_at = launcher.index("from . import app as app_module")
+    assert install_at < app_import_at
+
+
+def test_spawn_worker_bootstraps_classification_and_writes_sidecar_aware_pdic():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "spawn_detection_runtime.py"
+    ).read_text(encoding="utf-8")
+    assert "install_pdic_classification(formats)" in source
+    assert "install_processing_entry_classification(processing_module)" in source
+    assert "formats.write_pdic(" in source
+    assert "current = replace(settings)" in source
