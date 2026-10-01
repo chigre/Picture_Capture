@@ -11,27 +11,37 @@ class _Column:
     left = 1302
     body_mode = SimpleNamespace(center=24.0)
     lines = [
-        SimpleNamespace(y0=10, y1=42, anchor_x=24.0, role="body"),
-        SimpleNamespace(y0=60, y1=94, anchor_x=7.0, role="other_indent"),
+        SimpleNamespace(
+            y0=10, y1=42, first_x=0, anchor_x=24.0, role="body"
+        ),
+        SimpleNamespace(
+            y0=60, y1=94, first_x=17, anchor_x=24.0, role="other_indent"
+        ),
     ]
 
 
-def test_indent_blocks_convert_column_local_coordinates_to_page_coordinates() -> None:
+def test_indent_blocks_show_column_edge_to_first_real_ink() -> None:
     understanding = SimpleNamespace(
         layout=SimpleNamespace(body_top=134, columns=[_Column()])
     )
     blocks = _indent_blocks_from_understanding(understanding)
     assert len(blocks) == 2
 
-    body = blocks[0]
-    assert body["body_x"] == 1326.0
-    assert body["anchor_x"] == 1326.0
-    assert body["y0"] == 144
-    assert body["y1"] == 176
+    flush = blocks[0]
+    assert flush["x0"] == 1302.0
+    assert flush["x1"] == 1302.0
+    assert flush["first_x"] == 1302.0
+    assert flush["anchor_x"] == 1326.0
+    assert flush["body_x"] == 1326.0
+    assert flush["indent_px"] == 0.0
+    assert flush["y0"] == 144
+    assert flush["y1"] == 176
 
     indented = blocks[1]
-    assert indented["x0"] == 1309.0
-    assert indented["x1"] == 1326.0
+    assert indented["x0"] == 1302.0
+    assert indented["x1"] == 1319.0
+    assert indented["indent_px"] == 17.0
+    assert indented["anchor_x"] == 1326.0
     assert indented["y0"] == 194
     assert indented["y1"] == 228
     assert indented["role"] == "other_indent"
