@@ -69,10 +69,12 @@ def _snapshot():
     )
 
 
-def test_summary_anchor_is_inside_first_column_below_body_top() -> None:
+def test_summary_anchor_is_centered_in_first_column_at_five_line_heights() -> None:
     x, y = _summary_anchor(_App(), _snapshot())
-    assert x == 50 * 2.0 + 6
-    assert y > 100 * 2.0
+    # body_top=100; five 26-px line heights -> canonical y=230.
+    assert y == 230 * 2.0
+    # At y=230 the first-column left track is x=54; centre is 54 + 340/2.
+    assert x == (54 + 170) * 2.0
 
 
 def test_detailed_summary_contains_geometry_gutters_and_raw_used_state() -> None:
