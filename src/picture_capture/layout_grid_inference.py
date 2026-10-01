@@ -2,12 +2,12 @@ from __future__ import annotations
 
 """Projection-led line recovery and data-driven physical-indent lanes.
 
-Rows are detected from real horizontal ink projection.  Character height is a
+Rows are detected from real horizontal ink projection. Character height is a
 vertical prior used only for row validation/splitting; it is deliberately not
 used to cluster horizontal indentation.
 
 Indent modes are inferred independently in each column from the observed
-``LayoutLine.first_x`` distribution.  Lane membership and lane roles therefore
+``LayoutLine.first_x`` distribution. Lane membership and row roles therefore
 come from physical leading whitespace only, not from line height, ``anchor_x``
 or small-prefix metadata.
 """
@@ -123,13 +123,7 @@ grid_line_runs = projection_line_runs
 
 
 def _indent_gap_threshold(values: np.ndarray) -> float:
-    """Estimate the within-lane gap tolerance from one column's indent samples.
-
-    Only horizontal sample spacing is used.  Dense physical lanes usually have
-    repeated/nearby integer ``first_x`` values, while genuine lane boundaries
-    appear as much larger gaps.  The threshold is estimated from the lower half
-    of positive adjacent gaps so sparse outliers cannot inflate it.
-    """
+    """Estimate the within-lane gap tolerance from one column's indent samples."""
     if values.size < 2:
         return 2.0
 
@@ -147,9 +141,6 @@ def _indent_gap_threshold(values: np.ndarray) -> float:
         local = np.asarray([float(np.min(positive))], dtype=float)
     typical = float(np.median(local))
     mad = float(np.median(np.abs(local - typical))) if local.size else 0.0
-
-    # Pixel-domain measurement noise is normally only a few columns.  The cap
-    # prevents a sparse page with only two remote lanes from merging them.
     return float(max(2.0, min(6.0, typical + 2.0 * mad + 1.0)))
 
 
@@ -214,20 +205,18 @@ def indent_width_modes(lines: list[Any], reference: float | None = None) -> list
 
 
 def assign_physical_indent_roles(column: Any, indent_type: str, reference: float | None = None) -> None:
-    """Assign body/entry/unknown roles from physical lanes only.
+    """Binary classification: choose entry lane first; every other lane is body.
 
-    The dominant lane (largest support) is body.  On the configured entry side,
-    the outermost sufficiently supported lane is entry.  Intermediate lanes and
-    sparse outliers remain unknown.  No vertical scale is used.
+    Role assignment uses physical-indent lanes only.  There is no ``unknown``
+    class: once the entry lane is selected, all remaining lanes are body.  The
+    dominant body lane is retained as ``column.body_mode`` for downstream body
+    geometry/reference calculations.
     """
     modes = list(getattr(column, "indent_modes", []) or [])
     column.body_mode = None
     column.entry_modes = []
     if not modes:
         return
-
-    for mode in modes:
-        mode.role = "unknown"
 
     def support(mode: Any) -> int:
         try:
@@ -241,35 +230,38 @@ def assign_physical_indent_roles(column: Any, indent_type: str, reference: float
         except (TypeError, ValueError):
             return 0.0
 
-    body = max(modes, key=lambda mode: (support(mode), -abs(center(mode))))
-    body.role = "body"
-    column.body_mode = body
+    # Start from the two-class default: everything is body.
+    for mode in modes:
+        mode.role = "body"
 
     total = max(1, sum(support(mode) for mode in modes))
     entry_min_support = max(2, int(np.ceil(total * 0.06)))
+    eligible = [mode for mode in modes if support(mode) >= entry_min_support]
 
-    if str(indent_type) == "headword":
-        candidates = [
-            mode
-            for mode in modes
-            if mode is not body
-            and center(mode) > center(body)
-            and support(mode) >= entry_min_support
-        ]
-        entry = max(candidates, key=center) if candidates else None
-    else:
-        candidates = [
-            mode
-            for mode in modes
-            if mode is not body
-            and center(mode) < center(body)
-            and support(mode) >= entry_min_support
-        ]
-        entry = min(candidates, key=center) if candidates else None
+    entry = None
+    if eligible:
+        if str(indent_type) == "headword":
+            entry = max(eligible, key=center)
+        else:
+            entry = min(eligible, key=center)
 
     if entry is not None:
         entry.role = "entry"
         column.entry_modes = [entry]
+
+    body_modes = [mode for mode in modes if mode is not entry]
+    if body_modes:
+        column.body_mode = max(
+            body_modes,
+            key=lambda mode: (support(mode), -abs(center(mode))),
+        )
+    else:
+        # Degenerate one-lane page: keep the lane as body rather than claiming
+        # every row is an entry solely because no alternative body lane exists.
+        if entry is not None:
+            entry.role = "body"
+        column.entry_modes = []
+        column.body_mode = modes[0]
 
 
 def install_grid_line_and_indent_inference() -> None:
