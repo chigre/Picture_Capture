@@ -89,6 +89,7 @@ def install_review_entry_classification(app_module: Any) -> None:
     ReviewWindow = app_module.ReviewWindow
     original_init = ReviewWindow.__init__
     original_request = ReviewWindow._request_render_rows
+    original_set_active = ReviewWindow.set_active
 
     def sync_control(self) -> None:
         entry = _entry_for_active(self)
@@ -155,6 +156,11 @@ def install_review_entry_classification(app_module: Any) -> None:
         sync_control(self)
         return original_request(self, *args, **kwargs)
 
+    def set_active(self, index: int):
+        result = original_set_active(self, index)
+        sync_control(self)
+        return result
+
     def _set_shortcut(self, label: str):
         self.entry_scale_classification_var.set(label)
         change_classification(self)
@@ -185,6 +191,7 @@ def install_review_entry_classification(app_module: Any) -> None:
 
     ReviewWindow.__init__ = init
     ReviewWindow._request_render_rows = request
+    ReviewWindow.set_active = set_active
     ReviewWindow._sync_entry_classification_control = sync_control
     ReviewWindow._change_entry_classification = change_classification
     ReviewWindow._set_entry_classification_shortcut = _set_shortcut
