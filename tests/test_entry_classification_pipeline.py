@@ -14,6 +14,22 @@ from picture_capture.entry_classification import (
 from picture_capture.models import AppSettings, Entry
 
 
+def test_entry_exposes_canonical_classification_fields():
+    entry = Entry(word="", x=10, y=20, ocr_source="ordinary_symbol_evidence")
+    assert entry.entry_source == "symbol_sample"
+    assert entry.entry_scale == "regular"
+    assert entry.detected_head_height == 0.0
+    assert entry.entry_scale_manual is False
+
+    entry.entry_scale = "oversized"
+    assert entry.entry_scale == "oversized"
+    entry.entry_scale_manual = True
+    assert entry.entry_scale_manual is True
+    entry.entry_scale_manual = False
+    assert entry.entry_scale == "oversized"
+    assert entry.entry_scale_manual is False
+
+
 def test_symbol_and_large_head_evidence_share_one_scale_model():
     symbol_line = SimpleNamespace(role="body")
     large_line = SimpleNamespace(role="body")
@@ -108,3 +124,11 @@ def test_launcher_installs_classification_before_app_and_review_ui_after_app():
     assert "install_pdic_classification(formats)" in source
     assert "install_processing_entry_classification(processing_module)" in source
     assert "install_review_entry_classification(app_module)" in source
+
+
+def test_package_installs_pdic_classification_for_non_gui_consumers():
+    import picture_capture
+
+    source = Path(picture_capture.__file__).read_text(encoding="utf-8")
+    assert "install_entry_classification_fields()" in source
+    assert "install_pdic_classification(_formats)" in source
