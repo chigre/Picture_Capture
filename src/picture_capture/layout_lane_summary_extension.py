@@ -27,11 +27,15 @@ def append_physical_lane_summary(base_text: str, app: Any) -> str:
         center = float(lane.get("center", 0.0))
         low = float(lane.get("min", center))
         high = float(lane.get("max", center))
+        raw_low = float(lane.get("raw_min", low))
+        raw_high = float(lane.get("raw_max", high))
         support = int(lane.get("support", 0))
         role = _role_label(lane.get("role", "unknown"))
         lines.append(
             f"  C{column}/L{index}: center={center:.1f}   "
-            f"range={low:.1f}-{high:.1f}   n={support}   role={role}"
+            f"corrected={low:.1f}-{high:.1f}   "
+            f"raw={raw_low:.1f}-{raw_high:.1f}   "
+            f"n={support}   role={role}"
         )
     return "\n".join(lines)
 
