@@ -86,6 +86,14 @@ def prepare_app_module() -> Any:
     # Import the GUI only after all function-level extensions above are in
     # place. Training export reuses the main-window page selection directly.
     from . import app as app_module
+    from .layout_visualization_shared import (
+        install_shared_layout_visualization_source,
+    )
+
+    # The overlay must bind to the exact Page Understanding geometry before the
+    # v3 summary module imports the snapshot function by name.
+    install_shared_layout_visualization_source()
+
     from .layout_visualization_ui_v3 import install_layout_visualization
     from .parameter_help_ui import install_settings_parameter_help
     from .training_export_ui import export_training_package_selected_range
