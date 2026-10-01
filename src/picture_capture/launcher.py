@@ -89,9 +89,11 @@ def prepare_app_module() -> Any:
     from . import app as app_module
     from .layout_visualization_shared import install_shared_layout_visualization_source
     from .review_entry_classification_ui import install_review_entry_classification
+    from .ocr_crop_preview_ui import install_ocr_crop_preview
 
     install_shared_layout_visualization_source()
     install_review_entry_classification(app_module)
+    install_ocr_crop_preview(app_module)
 
     from .layout_lane_summary_extension import install_physical_lane_summary
     from .layout_visualization_role_theme import install_layout_role_theme
