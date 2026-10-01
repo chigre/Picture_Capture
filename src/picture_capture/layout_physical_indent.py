@@ -15,6 +15,9 @@ from typing import Any, Callable
 import numpy as np
 
 
+_BASE_LINE_FEATURE: Callable[..., Any] | None = None
+
+
 def _raw_projection_runs(
     ink: np.ndarray,
     scale: float,
@@ -149,6 +152,89 @@ def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]
                     if minimum <= slot_height <= maximum_single:
                         result.append((int(slot0), int(slot1)))
 
+    return result
+
+
+def _credible_first_ink_x(line: np.ndarray, reference: float) -> int | None:
+    """Return the first real leading mark, including thin horizontal glyphs.
+
+    ``dictionary_page_design._line_feature`` historically required a minimum
+    vertical ink count per X column.  That is useful for finding a full-height
+    anchor glyph, but it incorrectly treats thin leading glyphs such as 一, —,
+    or ~ as whitespace.  Here we inspect horizontal ink components directly and
+    accept either a sufficiently wide thin mark or a sufficiently tall mark,
+    while rejecting isolated speckles.
+    """
+    from .ordinary_visual import _fill_short_gaps, _runs
+
+    if line.ndim != 2 or line.size == 0:
+        return None
+
+    ref = max(6.0, float(reference))
+    active = np.asarray(line, dtype=bool).any(axis=0)
+    active = _fill_short_gaps(active, max(1, round(ref * 0.025)))
+    minimum_area = max(2, int(round(ref * 0.04)))
+    minimum_wide = max(3, int(round(ref * 0.10)))
+    minimum_tall = max(3, int(round(ref * 0.22)))
+
+    for x0, x1 in _runs(active):
+        component = np.asarray(line[:, x0:x1], dtype=bool)
+        if component.size == 0:
+            continue
+        area = int(component.sum())
+        if area < minimum_area:
+            continue
+        ys = np.flatnonzero(component.any(axis=1))
+        if ys.size == 0:
+            continue
+        width = int(x1 - x0)
+        height = int(ys[-1] - ys[0] + 1)
+        if width >= minimum_wide or (width >= 2 and height >= minimum_tall):
+            return int(x0)
+    return None
+
+
+def physical_line_feature(
+    column: int,
+    ink: np.ndarray,
+    y0: int,
+    y1: int,
+    reference: float,
+    previous_end: int,
+) -> Any | None:
+    """Measure one row with raw-leading-ink and robust-anchor semantics."""
+    from . import dictionary_page_design as page_design
+
+    line_ink = ink[y0:y1]
+    first_x = _credible_first_ink_x(line_ink, reference)
+
+    result = (
+        _BASE_LINE_FEATURE(column, ink, y0, y1, reference, previous_end)
+        if _BASE_LINE_FEATURE is not None
+        else None
+    )
+    if result is None:
+        if first_x is None:
+            return None
+        return page_design.LayoutLine(
+            column=column,
+            y0=int(y0),
+            y1=int(y1),
+            first_x=int(first_x),
+            anchor_x=None,
+            anchor_width=0,
+            anchor_height=0,
+            gap_before=max(0, int(y0) - int(previous_end)),
+            patch=np.zeros((0, 0), dtype=bool),
+            has_small_prefix=False,
+        )
+
+    if first_x is not None and int(first_x) < int(result.first_x):
+        result.first_x = int(first_x)
+        result.has_small_prefix = bool(
+            result.anchor_x is not None
+            and int(first_x) < float(result.anchor_x) - float(reference) * 0.12
+        )
     return result
 
 
@@ -447,11 +533,15 @@ def install_physical_indent_inference() -> None:
     from . import dictionary_page_design as page_design
     from .layout_profile_anchor import install_profile_layout_anchor
 
+    global _BASE_LINE_FEATURE
     if getattr(page_design, "_physical_indent_inference_installed", False):
         return
 
     install_profile_layout_anchor()
+    if _BASE_LINE_FEATURE is None:
+        _BASE_LINE_FEATURE = page_design._line_feature
     page_design._line_runs = projection_line_runs
+    page_design._line_feature = physical_line_feature
     page_design._indent_modes = physical_indent_modes
     page_design._assign_indent_semantics = assign_binary_roles
     _install_policy_finalization()
