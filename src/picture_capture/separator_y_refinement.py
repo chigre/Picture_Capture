@@ -8,10 +8,13 @@ manual/PDIC markers, historical VB fallback), then this module may move each
 candidate a small distance to a safer local inter-line boundary.  It never adds,
 removes, accepts, rejects, or reclassifies entries.
 
-The mature refinement engine historically lived in ``paddle_headwords_core``.
-Keep that proven implementation as the numerical engine while exposing it from a
-neutral module so Layout drawing, OCR drawing, and the standalone PDIC Y-refine
-action all share one API.
+The public settings contract is now neutral and shared:
+``separator_y_refine_enabled``, ``separator_y_search_ratio``,
+``separator_y_band_radius``, ``separator_y_safety_px``,
+``separator_y_roi_width_ratio`` and ``separator_y_column_margin``.
+Historical ``paddle_*`` names are isolated behind the compatibility bridge in
+``separator_y_settings`` so old projects and the mature numerical engine keep
+working without leaking OCR-specific naming into new code.
 """
 
 from typing import Any
@@ -20,10 +23,12 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from .models import AppSettings
+from .separator_y_settings import install_separator_y_settings
+
+install_separator_y_settings()
 
 # Capture the mature engine before compatibility facades redirect their public
-# ``refine_separator_y`` symbol back to this module.  This prevents recursion and
-# keeps the existing Project/Profile refinement controls fully compatible.
+# ``refine_separator_y`` symbol back to this module. This prevents recursion.
 from . import paddle_headwords_core as _paddle_core
 
 _ENGINE_REFINE_SEPARATOR_Y = _paddle_core.refine_separator_y
@@ -37,12 +42,13 @@ def refine_separator_y(
     *args: Any,
     **kwargs: Any,
 ) -> tuple[int, dict[str, Any]]:
-    """Refine one existing separator candidate without changing its semantics.
+    """Refine one existing separator candidate without changing its semantics."""
+    if not bool(getattr(settings, "separator_y_refine_enabled", True)):
+        return int(coarse_y), {
+            "refiner": "shared_separator_y",
+            "enabled": False,
+        }
 
-    The signature intentionally accepts the historical optional arguments so
-    OCR and the existing-PDIC refinement action can migrate without behavior or
-    settings-file changes.
-    """
     refined_y, details = _ENGINE_REFINE_SEPARATOR_Y(
         gray,
         int(coarse_y),
@@ -53,6 +59,23 @@ def refine_separator_y(
     )
     payload = dict(details or {})
     payload.setdefault("refiner", "shared_separator_y")
+    payload.setdefault("enabled", True)
+    payload.setdefault(
+        "search_ratio",
+        float(getattr(settings, "separator_y_search_ratio", 0.30) or 0.30),
+    )
+    payload.setdefault(
+        "band_radius",
+        int(getattr(settings, "separator_y_band_radius", 2) or 2),
+    )
+    payload.setdefault(
+        "safety_px",
+        int(getattr(settings, "separator_y_safety_px", 2) or 0),
+    )
+    payload.setdefault(
+        "roi_width_ratio",
+        float(getattr(settings, "separator_y_roi_width_ratio", 60.0) or 60.0),
+    )
     return int(refined_y), payload
 
 
@@ -64,7 +87,7 @@ def refined_layout_entry_y_by_line(
 ) -> dict[int, int]:
     """Apply the shared refiner to rows already classified as Layout entries.
 
-    Layout remains authoritative for entry/body membership.  This adapter only
+    Layout remains authoritative for entry/body membership. This adapter only
     supplies the common Y refiner with each entry row's coarse Y and column ROI.
     """
     try:
@@ -116,7 +139,7 @@ def refined_layout_entry_y_by_line(
             except Exception:
                 refined = coarse
 
-            # The shared engine already has its own safety controls.  Retain an
+            # The shared engine already has its own safety controls. Retain an
             # adapter-level guard as well so a Layout entry can never jump to a
             # neighboring row because of an unusual scan artifact.
             max_move = max(3, int(round(line_height * 0.45)))
