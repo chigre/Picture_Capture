@@ -148,10 +148,13 @@ def _channel_tesseract_band_runner(
     settings: AppSettings,
     psm_override: int | None = None,
 ):
-    psm = int(
-        psm_override
-        if psm_override is not None
-        else (getattr(settings, "paddle_tesseract_psm", 6) or 6)
+    psm = max(
+        3,
+        int(
+            psm_override
+            if psm_override is not None
+            else (getattr(settings, "paddle_tesseract_psm", 6) or 6)
+        ),
     )
     candidate = session.run_tesseract_records(band, psm)
     _raise_candidate_error(candidate, "tesseract")
