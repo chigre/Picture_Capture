@@ -1,8 +1,21 @@
 # Picture Capture v2.1 — Headword pipeline
 
+## Shared OCR channel and consumers
+
+OCR recognition and OCR-assisted separator drawing are intentionally different layers.
+
+- `ocr_channel.py` is the reusable OCR channel. It resolves the enabled PaddleOCR / Tesseract / Google Lens sources, runs multiple enabled engines on the same crop, preserves Lens `off / diagnostic / conflict / full` semantics, and exposes engine results without deciding where a dictionary separator belongs.
+- `entry_classification_runtime.py` is the existing-marker text consumer used by 【仅OCR】. It first obtains the canonical crop from the already-established marker, then sends that same crop through the OCR channel. OCR may fill/replace text but is forbidden to change marker X/Y.
+- `ocr_boundary_detection.py` is the OCR-assisted drawing consumer. It borrows OCR-channel evidence and passes it into the mature headword parser/arbitration stack to infer separator positions. Drawing policy therefore remains outside the OCR channel.
+- `paddle_headwords_core.py` remains the mature low-level parser/evidence backend. The historical `detect_paddle_headwords` public name is compatibility only; new code should treat OCR-assisted boundary detection as a consumer, not as the OCR channel itself.
+
+The historical settings names `paddle_use_paddleocr`, `paddle_compare_tesseract`, `paddle_enable_lens`, and `paddle_lens_mode` remain persisted/UI-compatible for existing projects. Runtime consumers must resolve them through `resolve_ocr_channel_plan()` rather than independently implementing engine-selection rules. The old single `ocr_engine` setting is only a fallback when every multi-engine channel switch is disabled.
+
+This separation means 【仅OCR】 and 【OCR画线】 can use the same selected OCR sources while remaining functionally independent: enabling an OCR engine does not imply that OCR is allowed to create/move a separator, and using OCR to draw separators does not own OCR engine execution.
+
 ## Core stages
 
-1. PaddleOCR and Tesseract run on the same rectified column-left band. Google Lens can be off, diagnostic-only, conflict-triggered, or full-page.
+1. The OCR-assisted boundary consumer requests the shared channel plan. PaddleOCR and Tesseract can run on the same rectified column-left band; Google Lens can be off, diagnostic-only, conflict-triggered, or full participation.
 2. OCR fragments are grouped, same-row fragments are actively absorbed, and a multi-line state machine may attach wrapped grammatical cues without moving the first-line Y.
 3. A dictionary profile separates POS evidence from usage/domain metadata and internal article symbols; `parse_headword_text()` then produces lemma, variants, inflections, POS, usage, definition, parser trace and repair types.
 4. Paddle/Tesseract candidates are aligned per column with `SequenceMatcher` sequence anchors, then unresolved blocks use lemma similarity + Y distance.
