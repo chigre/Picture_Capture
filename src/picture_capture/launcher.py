@@ -20,8 +20,13 @@ def prepare_app_module() -> Any:
 
     from . import formats
     from .training_baseline import build_write_pdic_capture
+    from .entry_classification import install_pdic_classification
 
+    # Baseline capture remains the inner compatibility writer; classification is
+    # the outer persistence layer so every GUI save also updates the metadata
+    # sidecar without changing the historical PDIC format.
     formats.write_pdic = build_write_pdic_capture(formats.write_pdic)
+    install_pdic_classification(formats)
 
     # The GUI Layout overlay also needs the same physical-indent runtime before
     # app import. Ordinary detection itself prepares this runtime again
@@ -76,10 +81,17 @@ def prepare_app_module() -> Any:
     )
     training_export.TRAINING_EXPORT_FORMAT = "picture-capture-training-v3"
 
+    from . import processing as processing_module
+    from .entry_classification_runtime import install_processing_entry_classification
+
+    install_processing_entry_classification(processing_module)
+
     from . import app as app_module
     from .layout_visualization_shared import install_shared_layout_visualization_source
+    from .review_entry_classification_ui import install_review_entry_classification
 
     install_shared_layout_visualization_source()
+    install_review_entry_classification(app_module)
 
     from .layout_lane_summary_extension import install_physical_lane_summary
     from .layout_visualization_role_theme import install_layout_role_theme
