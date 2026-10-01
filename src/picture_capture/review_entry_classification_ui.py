@@ -63,10 +63,16 @@ def install_review_entry_classification(app_module: Any) -> None:
         return
 
     # Replace the old text heuristic ("one Han character == oversized") with the
-    # same structural classification used by ordinary drawing and future OCR crops.
+    # same structural classification used by ordinary drawing and marker OCR.
     def review_line_box(entry, geometry, image, settings, next_entry=None):
-        regular_height = app_module._effective_review_regular_crop_height(settings)
-        oversized_height = app_module._effective_review_single_cjk_line_height(settings)
+        configured_regular = max(
+            0, int(getattr(settings, "entry_regular_crop_height", 0) or 0)
+        )
+        configured_oversized = max(
+            0, int(getattr(settings, "entry_oversized_crop_height", 0) or 0)
+        )
+        regular_height = configured_regular or app_module._effective_review_regular_crop_height(settings)
+        oversized_height = configured_oversized or app_module._effective_review_single_cjk_line_height(settings)
         height = classified_entry_crop_height(
             entry,
             settings,
@@ -166,9 +172,9 @@ def install_review_entry_classification(app_module: Any) -> None:
         change_classification(self)
         return "break"
 
-    # Improve wording of the existing global height control.  The setting value
-    # remains compatible; only the UI stops implying that every single CJK word
-    # is necessarily a display head.
+    # Improve wording of the existing global height control. The compatibility
+    # slot may still be historical, but the public field/UI now means oversized
+    # entry crop height, independent of language or character count.
     original_build = getattr(ReviewWindow, "_build", None)
     if callable(original_build):
         def build(self, *args, **kwargs):
