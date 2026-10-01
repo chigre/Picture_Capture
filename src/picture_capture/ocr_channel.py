@@ -13,6 +13,7 @@ instead of reading them independently in every feature.
 """
 
 from dataclasses import dataclass, field
+import gc
 from io import BytesIO
 import subprocess
 import threading
@@ -236,6 +237,25 @@ def _paddle_language(settings: AppSettings) -> str:
     return mapping.get(raw_language, raw_language)
 
 
+def clear_ocr_channel_paddle_engine_cache(
+    *,
+    keep_key: tuple[str, str, str, bool] | None = None,
+) -> None:
+    """Drop channel-owned Paddle engines that are no longer active.
+
+    Local references held by in-flight OCR calls remain valid. Keeping only one
+    strongly cached configuration preserves the mature runner's memory behavior
+    when users switch language/model/device settings.
+    """
+
+    with _PADDLE_ENGINE_CACHE_LOCK:
+        stale = [key for key in _PADDLE_ENGINE_CACHE if key != keep_key]
+        for key in stale:
+            _PADDLE_ENGINE_CACHE.pop(key, None)
+    if stale:
+        gc.collect()
+
+
 def _create_paddle_engine(settings: AppSettings) -> Any:
     language = _paddle_language(settings)
     orientation = bool(getattr(settings, "paddle_use_textline_orientation", False))
@@ -243,45 +263,45 @@ def _create_paddle_engine(settings: AppSettings) -> Any:
     version = str(getattr(settings, "paddle_ocr_version", "PP-OCRv5") or "PP-OCRv5")
     key = (language, device, version, orientation)
     with _PADDLE_ENGINE_CACHE_LOCK:
-        cached = _PADDLE_ENGINE_CACHE.get(key)
-        if cached is not None:
-            return cached
+        existing = _PADDLE_ENGINE_CACHE.get(key)
+        if existing is not None:
+            return existing
+
+    try:
+        from paddleocr import PaddleOCR
+    except Exception as exc:
+        raise RuntimeError(
+            "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或在受支持平台执行："
+            "uv sync --extra ocr-cpu"
+        ) from exc
+    try:
+        kwargs = dict(
+            lang=language,
+            ocr_version=version,
+            device=device,
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=orientation,
+            enable_mkldnn=False,
+        )
         try:
-            from paddleocr import PaddleOCR
-        except Exception as exc:
-            raise RuntimeError(
-                "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或在受支持平台执行："
-                "uv sync --extra ocr-cpu"
-            ) from exc
-        try:
-            kwargs = dict(
-                lang=language,
-                ocr_version=version,
-                device=device,
-                use_doc_orientation_classify=False,
-                use_doc_unwarping=False,
-                use_textline_orientation=orientation,
-                enable_mkldnn=False,
-            )
-            try:
-                engine = PaddleOCR(**kwargs)
-            except TypeError:
-                # Some PaddleOCR 3.x builds do not expose this constructor flag.
-                kwargs.pop("enable_mkldnn", None)
-                engine = PaddleOCR(**kwargs)
-        except Exception as exc:
-            raise RuntimeError(
-                f"PaddleOCR 初始化失败（语言={language}，设备={device}，版本={version}）：{exc}"
-            ) from exc
-        _PADDLE_ENGINE_CACHE[key] = engine
-        return engine
+            engine = PaddleOCR(**kwargs)
+        except TypeError:
+            # Some PaddleOCR 3.x builds do not expose this constructor flag.
+            kwargs.pop("enable_mkldnn", None)
+            engine = PaddleOCR(**kwargs)
+    except Exception as exc:
+        raise RuntimeError(
+            f"PaddleOCR 初始化失败（语言={language}，设备={device}，版本={version}）：{exc}"
+        ) from exc
 
-
-def clear_ocr_channel_paddle_engine_cache() -> None:
-    """Drop cached Paddle engines owned by the shared OCR channel."""
-
+    clear_ocr_channel_paddle_engine_cache(keep_key=key)
     with _PADDLE_ENGINE_CACHE_LOCK:
-        _PADDLE_ENGINE_CACHE.clear()
+        existing = _PADDLE_ENGINE_CACHE.get(key)
+        if existing is not None:
+            return existing
+        _PADDLE_ENGINE_CACHE[key] = engine
+    return engine
 
 
 def _paddle_json_payload(result: Any) -> dict[str, Any]:
@@ -467,6 +487,7 @@ class OcrChannelSession:
                 raise RuntimeError("未找到 Tesseract OCR")
             payload = BytesIO()
             normalize_page_rgb(image).save(payload, format="PNG")
+            effective_psm = max(1, int(psm))
             command = [
                 str(resolved),
                 "stdin",
@@ -474,7 +495,7 @@ class OcrChannelSession:
                 "-l",
                 resolved_tesseract_language(self.settings),
                 "--psm",
-                str(max(1, int(psm))),
+                str(effective_psm),
                 "tsv",
             ]
             proc = subprocess.run(
@@ -489,50 +510,67 @@ class OcrChannelSession:
                 detail = proc.stderr.decode("utf-8", errors="replace").strip()
                 raise RuntimeError(detail or f"Tesseract exit={proc.returncode}")
 
-            lines = proc.stdout.decode("utf-8", errors="replace").splitlines()
+            tsv = proc.stdout.decode("utf-8", errors="replace")
+            lines = tsv.splitlines()
+            if not lines:
+                return _candidate_from_records(
+                    "tesseract", (), metadata={"psm": effective_psm, "executable": str(resolved)}
+                )
+            header = lines[0].split("\t")
+            index = {name: i for i, name in enumerate(header)}
+            required = {"level", "left", "top", "width", "height", "conf", "text"}
+            if not required.issubset(index):
+                raise RuntimeError("Tesseract TSV 缺少必要字段")
+
             records: list[OcrChannelRecord] = []
+            line_fields = ("page_num", "block_num", "par_num", "line_num", "word_num")
+            can_group = all(name in index for name in line_fields)
             grouped_text: dict[tuple[int, int, int, int], list[tuple[int, str]]] = {}
             for raw in lines[1:]:
-                columns = raw.split("\t", 11)
-                if len(columns) < 12:
-                    continue
-                text = columns[11].strip()
-                if not text:
-                    continue
+                cells = raw.split("\t")
                 try:
-                    level = int(columns[0])
-                    page_num = int(columns[1])
-                    block_num = int(columns[2])
-                    par_num = int(columns[3])
-                    line_num = int(columns[4])
-                    word_num = int(columns[5])
-                    left = int(columns[6])
-                    top = int(columns[7])
-                    width = int(columns[8])
-                    height = int(columns[9])
-                    raw_confidence = float(columns[10])
-                except (TypeError, ValueError):
+                    if int(cells[index["level"]]) != 5:
+                        continue
+                    text = cells[index["text"]].strip()
+                    if not text:
+                        continue
+                    confidence = float(cells[index["conf"]]) / 100.0
+                    left = int(cells[index["left"]])
+                    top = int(cells[index["top"]])
+                    width = int(cells[index["width"]])
+                    height = int(cells[index["height"]])
+                    if can_group:
+                        page_num = int(cells[index["page_num"]])
+                        block_num = int(cells[index["block_num"]])
+                        par_num = int(cells[index["par_num"]])
+                        line_num = int(cells[index["line_num"]])
+                        word_num = int(cells[index["word_num"]])
+                except (ValueError, IndexError):
                     continue
-                if level != 5 or raw_confidence < 0 or width <= 0 or height <= 0:
+                if width <= 0 or height <= 0:
                     continue
-                confidence = max(0.0, min(1.0, raw_confidence / 100.0))
                 records.append(OcrChannelRecord(
                     text=text,
-                    confidence=confidence,
+                    confidence=max(0.0, confidence),
                     box=(left, top, left + width, top + height),
                 ))
-                key = (page_num, block_num, par_num, line_num)
-                grouped_text.setdefault(key, []).append((word_num, text))
+                if can_group:
+                    key = (page_num, block_num, par_num, line_num)
+                    grouped_text.setdefault(key, []).append((word_num, text))
             records.sort(key=lambda item: (item.box[1], item.box[0]))
-            text_lines = [
-                " ".join(value for _word, value in sorted(words)).strip()
-                for _key, words in sorted(grouped_text.items())
-            ]
+            if can_group:
+                text_lines = [
+                    " ".join(value for _word, value in sorted(words)).strip()
+                    for _key, words in sorted(grouped_text.items())
+                ]
+                text = "\n".join(line for line in text_lines if line)
+            else:
+                text = " ".join(record.text for record in records).strip()
             return _candidate_from_records(
                 "tesseract",
                 records,
-                text="\n".join(line for line in text_lines if line),
-                metadata={"psm": max(1, int(psm)), "executable": str(resolved)},
+                text=text,
+                metadata={"psm": effective_psm, "executable": str(resolved)},
             )
         except Exception as exc:
             return OcrChannelCandidate(engine="tesseract", error=str(exc))
