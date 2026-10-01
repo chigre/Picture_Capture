@@ -4,9 +4,8 @@ from __future__ import annotations
 
 Project Profile may contain multiple real-page samples for structural symbols
 such as bracket openers (【) or standalone entry markers (○/◆).  Ordinary
-mode must be able to use those samples directly, without OCR.  This module is
-intentionally independent from parser/OCR fusion: it only asks whether a
-physical Layout row begins with one of the configured visual templates.
+mode uses those samples directly, without OCR, and respects the corresponding
+Profile structure switches for each role.
 """
 
 from typing import Any
@@ -22,11 +21,21 @@ from .visual_marker_templates import (
 )
 
 
+def _allowed_roles(settings: AppSettings) -> set[str]:
+    roles: set[str] = set()
+    if bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
+        roles.add("bracket_open")
+    if bool(getattr(settings, "profile_allow_marker_prefix", False)):
+        roles.add("entry_marker")
+    return roles
+
+
 def _enabled(settings: AppSettings) -> bool:
     mode = str(getattr(settings, "profile_symbol_template_mode", "combined") or "combined")
     return bool(
         mode != "off"
         and bool(getattr(settings, "profile_symbol_visual_rescue_enabled", True))
+        and _allowed_roles(settings)
         and visual_marker_samples_from_settings(settings)
     )
 
@@ -53,18 +62,13 @@ def detect_ordinary_symbol_entries(
     understanding: Any,
     settings: AppSettings,
 ) -> list[Entry]:
-    """Return entry boundaries whose row start matches a sampled symbol.
-
-    Matching is deliberately restricted to a narrow neighborhood around each
-    Layout row start.  A look-alike bracket in the middle of a definition can
-    therefore never become an ordinary-mode entry merely because it resembles
-    a Profile sample.
-    """
+    """Return entry boundaries whose row start matches an enabled sampled role."""
     if not _enabled(settings):
         return []
 
     samples = visual_marker_samples_from_settings(settings)
-    if not samples:
+    allowed_roles = _allowed_roles(settings)
+    if not samples or not allowed_roles:
         return []
     threshold = float(getattr(settings, "profile_symbol_template_threshold", 0.68) or 0.68)
     threshold = max(0.30, min(0.98, threshold))
@@ -93,6 +97,9 @@ def detect_ordinary_symbol_entries(
             if end_x <= start_x:
                 continue
 
+            # Search only around the physical row start.  A bracket-like glyph
+            # appearing later inside definition text therefore cannot promote
+            # that row to entry.
             pad_y = max(1, round(line_height * 0.18))
             y0 = max(0, canonical_y0 - pad_y)
             y1 = min(gray_page.shape[0], canonical_y1 + pad_y)
@@ -102,7 +109,6 @@ def detect_ordinary_symbol_entries(
             ink = region <= _otsu(region)
 
             best: dict[str, Any] | None = None
-            best_box: tuple[int, int, int, int] | None = None
             for x0, yy0, x1, yy1, _area in _candidate_components(ink, line_height):
                 if x0 > line_height * 1.25:
                     continue
@@ -113,7 +119,7 @@ def detect_ordinary_symbol_entries(
                     match = match_visual_marker_template(
                         component,
                         samples,
-                        roles={"bracket_open", "entry_marker"},
+                        roles=allowed_roles,
                     )
                 except (ValueError, TypeError):
                     continue
@@ -122,9 +128,8 @@ def detect_ordinary_symbol_entries(
                 score = float(match.get("score", 0.0) or 0.0)
                 if best is None or score > float(best.get("score", 0.0) or 0.0):
                     best = match
-                    best_box = (x0, yy0, x1, yy1)
 
-            if best is None or best_box is None:
+            if best is None:
                 continue
             score = float(best.get("score", 0.0) or 0.0)
             if score < threshold:
