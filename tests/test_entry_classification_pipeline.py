@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -28,6 +29,43 @@ def test_entry_exposes_canonical_classification_fields():
     entry.entry_scale_manual = False
     assert entry.entry_scale == "oversized"
     assert entry.entry_scale_manual is False
+
+
+def test_shared_entry_crop_fields_construct_and_persist(tmp_path: Path):
+    settings = AppSettings(
+        entry_regular_crop_height=42,
+        entry_oversized_crop_height=96,
+    )
+    assert settings.entry_regular_crop_height == 42
+    assert settings.entry_oversized_crop_height == 96
+
+    path = tmp_path / "settings.json"
+    settings.to_json(path)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["entry_regular_crop_height"] == 42
+    assert raw["entry_oversized_crop_height"] == 96
+    assert "review_regular_crop_height" not in raw
+    assert "review_single_cjk_line_height" not in raw
+
+    restored = AppSettings.from_json(path)
+    assert restored.entry_regular_crop_height == 42
+    assert restored.entry_oversized_crop_height == 96
+
+
+def test_legacy_review_crop_fields_remain_readable(tmp_path: Path):
+    settings = AppSettings()
+    path = tmp_path / "old-settings.json"
+    settings.to_json(path)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw.pop("entry_regular_crop_height", None)
+    raw.pop("entry_oversized_crop_height", None)
+    raw["review_regular_crop_height"] = 38
+    raw["review_single_cjk_line_height"] = 88
+    path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+
+    restored = AppSettings.from_json(path)
+    assert restored.entry_regular_crop_height == 38
+    assert restored.entry_oversized_crop_height == 88
 
 
 def test_symbol_and_large_head_evidence_share_one_scale_model():
@@ -111,8 +149,12 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     review_source = Path(review.__file__).read_text(encoding="utf-8")
 
     assert "classified_entry_crop_height(" in runtime_source
+    assert "entry_regular_crop_height" in runtime_source
+    assert "entry_oversized_crop_height" in runtime_source
     assert "meta.entry_scale == \"oversized\"" in runtime_source
     assert "classified_entry_crop_height(" in review_source
+    assert "entry_regular_crop_height" in review_source
+    assert "entry_oversized_crop_height" in review_source
     assert "_is_single_cjk_review_headword" not in review_source
     assert '("自动", "普通词条", "大字头")' in review_source
 
@@ -130,5 +172,6 @@ def test_package_installs_pdic_classification_for_non_gui_consumers():
     import picture_capture
 
     source = Path(picture_capture.__file__).read_text(encoding="utf-8")
+    assert "install_entry_crop_settings()" in source
     assert "install_entry_classification_fields()" in source
     assert "install_pdic_classification(_formats)" in source
