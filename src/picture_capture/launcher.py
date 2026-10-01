@@ -43,19 +43,25 @@ def prepare_app_module() -> Any:
     from .dictionary_page_design_refined import detect_entries_from_page_design
     from .layout_grid_inference import install_grid_line_and_indent_inference
     from .layout_line_start_refinement import install_robust_line_starts
+    from .layout_physical_role_refinement import (
+        install_refined_physical_role_assignment,
+    )
 
     dictionary_page_design.detect_entries_from_page_design = (
         detect_entries_from_page_design
     )
-    # Recover text rows from the known body/line grid and cluster each column by
-    # physical indent width before semantic role assignment. This prevents
-    # bridging specks from merging adjacent rows and keeps role lanes aligned
-    # with the same first_x quantity shown by Layout diagnostics.
+    # Recover rows from observed ink projection and cluster each column by
+    # physical indent width. Character height is only a structural prior for
+    # validating/splitting abnormal runs; it does not impose a fixed row grid.
     install_grid_line_and_indent_inference()
-    # Line-level indent evidence must be robust before profile_setup/processing
-    # import Page Understanding. This refines visual first_x after the grid has
-    # isolated a single row; semantic anchor_x remains secondary evidence.
+    # Refine visual first_x from leading whitespace while ignoring residual
+    # specks; semantic anchor_x remains secondary evidence.
     install_robust_line_starts()
+    # Physical-indent lanes are layout facts. Assign semantics only after those
+    # lanes exist: the dominant lane is body and only the extreme stable lane on
+    # the configured entry side may become entry. Intermediate '~'/example/
+    # continuation lanes stay unknown.
+    install_refined_physical_role_assignment()
 
     # profile_setup imports processing; do this only after low-level extensions
     # above have been installed. Compose page semantics first, then put all long
