@@ -24,8 +24,7 @@ def prepare_app_module() -> Any:
     formats.write_pdic = build_write_pdic_capture(formats.write_pdic)
 
     # The GUI Layout overlay also needs the same physical-indent runtime before
-    # app import.  Ordinary detection itself no longer depends on launcher-time
-    # patches: processing.detect_entries() prepares this runtime again
+    # app import. Ordinary detection itself prepares this runtime again
     # idempotently in every process, including spawn workers.
     from . import dictionary_page_design
     from .dictionary_page_design_refined import detect_entries_from_page_design
@@ -69,13 +68,12 @@ def prepare_app_module() -> Any:
     training_export.TRAINING_EXPORT_FORMAT = "picture-capture-training-v3"
 
     from . import app as app_module
-    from .layout_visualization_shared import (
-        install_shared_layout_visualization_source,
-    )
+    from .layout_visualization_shared import install_shared_layout_visualization_source
 
     install_shared_layout_visualization_source()
 
     from .layout_lane_summary_extension import install_physical_lane_summary
+    from .layout_visualization_role_theme import install_layout_role_theme
     from .layout_visualization_ui_v3 import install_layout_visualization
     from .parameter_help_ui import install_settings_parameter_help
     from .training_export_ui import export_training_package_selected_range
@@ -83,6 +81,7 @@ def prepare_app_module() -> Any:
 
     install_settings_parameter_help(app_module)
     install_app_tooltip_terminology(app_module)
+    install_layout_role_theme()
     install_layout_visualization(app_module)
     install_physical_lane_summary()
     app_module.PictureCaptureApp.export_training_package = (
