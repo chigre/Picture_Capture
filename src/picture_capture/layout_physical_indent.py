@@ -190,7 +190,13 @@ def _center(mode: Any) -> float:
 
 
 def assign_binary_roles(column: Any, indent_type: str, _reference: float | None = None) -> None:
-    """Choose one entry lane; every other detected row is body."""
+    """Choose the directional outer physical lane as entry; all others are body.
+
+    Support count is diagnostic only. A section-opening page may contain just one
+    real headword, so an already separated physical-indent lane remains a valid
+    entry lane even when ``support == 1``. The only all-body case is a column
+    with fewer than two distinct physical-indent lanes.
+    """
     modes = list(getattr(column, "indent_modes", []) or [])
     lines = list(getattr(column, "lines", []) or [])
 
@@ -204,16 +210,12 @@ def assign_binary_roles(column: Any, indent_type: str, _reference: float | None 
     if not modes:
         return
 
-    total = max(1, sum(_support(mode) for mode in modes))
-    minimum_support = max(2, int(np.ceil(total * 0.06)))
-    eligible = [mode for mode in modes if _support(mode) >= minimum_support]
-
     entry = None
-    if len(eligible) >= 2:
+    if len(modes) >= 2:
         entry = (
-            max(eligible, key=_center)
+            max(modes, key=_center)
             if str(indent_type) == "headword"
-            else min(eligible, key=_center)
+            else min(modes, key=_center)
         )
 
     if entry is not None:
@@ -290,7 +292,7 @@ def install_physical_indent_inference() -> None:
     if getattr(page_design, "_physical_indent_inference_installed", False):
         return
 
-    # Profile analysis already aggregates multiple representative pages.  Make
+    # Profile analysis already aggregates multiple representative pages. Make
     # those stable project values the anchor before any per-page layout policy
     # is resolved in GUI, ordinary drawing, or spawned workers.
     install_profile_layout_anchor()
