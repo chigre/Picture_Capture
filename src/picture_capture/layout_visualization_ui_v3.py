@@ -11,7 +11,7 @@ from typing import Any
 import tkinter as tk
 from tkinter import ttk
 
-from .layout_visualization_ui import draw_layout_visualization
+from .layout_visualization_readability import draw_layout_visualization_readable
 
 
 def _add_layout_toggle(app: Any, section: Any) -> None:
@@ -95,7 +95,7 @@ def install_layout_visualization(app_module: Any) -> None:
 
     def redraw(self: Any, *args: Any, **kwargs: Any) -> Any:
         result = original_redraw(self, *args, **kwargs)
-        draw_layout_visualization(self)
+        draw_layout_visualization_readable(self)
         return result
 
     cls._section_frame = section_frame
