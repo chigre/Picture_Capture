@@ -2,9 +2,9 @@ from __future__ import annotations
 
 """Project Profile UI for OCR-independent universal ordinary evidence.
 
-The existing settings remain the single source of truth.  This wrapper only
-moves the user-facing controls to the headword-structure area where their
-meaning is clear: sampled symbols and oversized heads are ordinary visual
+The existing settings remain the single source of truth.  This wrapper moves the
+user-facing controls to the headword-structure / symbol-evidence area where
+their meaning is clear: sampled symbols and oversized heads are ordinary visual
 entry evidence, not OCR settings.
 """
 
@@ -18,18 +18,18 @@ def build_ordinary_evidence_profile_wizard(base_class: type[Any]) -> type[Any]:
         def _build_headword_tab(self, tab: ttk.Frame) -> None:
             super()._build_headword_tab(tab)
 
-            host = getattr(self, "cjk_specificity_frame", None)
+            inventory = getattr(self, "symbol_inventory_frame", None)
+            host = inventory or getattr(self, "cjk_specificity_frame", None)
             if host is None:
                 return
 
-            # Hide the older template sub-panel from the symbol-inventory area;
-            # the same variables/actions are exposed below in the ordinary-mode
-            # evidence panel so there is one clear user-facing location.
-            inventory = getattr(self, "symbol_inventory_frame", None)
+            # Hide the older template-only sub-panel.  The same settings/actions
+            # are exposed below together with the large-head detector so users
+            # see one coherent ordinary-mode evidence section.
             if inventory is not None:
                 for child in inventory.winfo_children():
                     try:
-                        if isinstance(child, ttk.LabelFrame) and child.cget("text") == "本词典视觉标记样本":
+                        if child.cget("text") == "本词典视觉标记样本":
                             child.grid_remove()
                     except (tk.TclError, AttributeError):
                         continue
