@@ -4,7 +4,11 @@ import json
 from pathlib import Path
 
 from picture_capture.entry_classification import register_entry_classification
-from picture_capture.entry_ocr_crop import entry_ocr_content_height, entry_ocr_crop_box
+from picture_capture.entry_ocr_crop import (
+    EntryOcrRowMetrics,
+    entry_ocr_content_height,
+    entry_ocr_crop_box,
+)
 from picture_capture.models import AppSettings, Entry
 
 
@@ -33,11 +37,49 @@ def test_regular_ocr_crop_uses_column_gutter_ratio_and_half_row_gap():
 
     assert entry_ocr_content_height(entry, settings) == 40
     assert entry_ocr_crop_box(entry, _IdentityGeometry(), settings, (1000, 1500)) == (
-        75,   # 100 - 1/2 * 50 gutter
-        190,  # 200 - 1/2 * 20 row gap
-        275,  # 100 + 250 * 0.60 + 25
-        250,  # 200 + 40 + 10
+        75,
+        190,
+        275,
+        250,
     )
+
+
+def test_physical_line_pitch_replaces_legacy_row_padding_for_regular_crop():
+    settings = AppSettings(
+        character_height=49,
+        row_padding=1,
+        gutter=50,
+        entry_regular_crop_height=0,
+        entry_ocr_right_ratio=60.0,
+    )
+    entry = Entry(word="", x=100, y=200)
+    register_entry_classification(entry, entry_source="symbol_sample", entry_scale="regular")
+    metrics = EntryOcrRowMetrics(line_height=49.0, line_pitch=78.0)
+
+    assert entry_ocr_content_height(entry, settings, row_metrics=metrics) == 49
+    box = entry_ocr_crop_box(
+        entry,
+        _IdentityGeometry(),
+        settings,
+        (1000, 1500),
+        row_metrics=metrics,
+    )
+    # Physical gap = 78 - 49 = 29. Split it 14px above and 15px below.
+    assert box == (75, 186, 275, 264)
+    assert box[3] - box[1] == 78
+
+
+def test_small_legacy_regular_height_cannot_shrink_below_physical_line():
+    settings = AppSettings(
+        character_height=24,
+        row_padding=1,
+        entry_regular_crop_height=20,
+    )
+    entry = Entry(word="", x=100, y=200)
+    register_entry_classification(entry, entry_source="indent", entry_scale="regular")
+    metrics = EntryOcrRowMetrics(line_height=49.0, line_pitch=78.0)
+
+    assert entry_ocr_content_height(entry, settings, row_metrics=metrics) == 49
 
 
 def test_oversized_ocr_crop_changes_only_classified_content_height():
@@ -61,7 +103,7 @@ def test_oversized_ocr_crop_changes_only_classified_content_height():
         75,
         190,
         275,
-        300,  # 200 + 90 + 10
+        300,
     )
 
 
@@ -84,6 +126,7 @@ def test_marker_ocr_dispatch_honors_configured_engine_and_shared_crop():
     import picture_capture.entry_classification_runtime as runtime
 
     source = Path(runtime.__file__).read_text(encoding="utf-8")
+    assert "resolve_entry_ocr_row_metrics(" in source
     assert "entry_ocr_crop_box(" in source
     assert 'engine_name == "paddleocr"' in source
     assert "core.run_tesseract(" in source
