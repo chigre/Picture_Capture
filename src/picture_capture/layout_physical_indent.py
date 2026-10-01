@@ -3,11 +3,11 @@ from __future__ import annotations
 """Projection-led row recovery and binary physical-indent roles.
 
 Horizontal indentation is inferred from each column's physical leading-whitespace
-measurements.  Before clustering, a common per-column X drift is removed from
+measurements. Before clustering, a common per-column X drift is removed from
 ``first_x`` so a slightly tilted scan does not split one real indent lane into
-many artificial lanes.  Character height remains a vertical prior for row
-recovery only; it is not used to cluster horizontal indentation or assign
-entry/body roles.
+many artificial lanes. Character height is a vertical prior for row recovery
+only; it is not used to cluster horizontal indentation or assign entry/body
+roles.
 """
 
 from typing import Any, Callable
@@ -95,15 +95,7 @@ def _logical_slots_for_oversized_run(
     y1: int,
     reference: float,
 ) -> list[tuple[int, int]]:
-    """Expand one continuous oversized text run into logical row spans.
-
-    Display-size headwords can remain vertically connected for roughly two or
-    three ordinary rows, so a valley-only splitter cannot separate them.  Once
-    the observed run is clearly taller than one ordinary row, recover the row
-    *slots* it occupies from the stable ordinary-line reference.  The later
-    line-feature stage still measures real ink independently inside each slot;
-    this function never assigns semantic roles by itself.
-    """
+    """Expand one continuous oversized text run into logical row spans."""
     height = max(0, int(y1) - int(y0))
     ref = max(6.0, float(reference))
     if height < ref * 1.55:
@@ -125,13 +117,7 @@ def _logical_slots_for_oversized_run(
 
 
 def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]:
-    """Detect rows from observed horizontal ink runs.
-
-    Ordinary text remains projection-led.  A continuous oversized typography
-    run that cannot be separated by a real horizontal valley is expanded into
-    the logical ordinary-row spans it occupies, so each span can still receive
-    an independent physical-indent measurement.
-    """
+    """Detect rows from observed ink runs, including oversized logical rows."""
     raw, row_ink, threshold = _raw_projection_runs(ink, scale)
     if not raw:
         return []
@@ -198,13 +184,7 @@ def _line_mid_y(line: Any) -> float | None:
 
 
 def estimate_column_slant(lines: list[Any]) -> float:
-    """Estimate common horizontal drift per vertical pixel for one column.
-
-    The estimate is intentionally based on pairwise slopes rather than an
-    ordinary least-squares fit.  Different indent lanes have different
-    intercepts; their shared page tilt is the robust median slope after removing
-    implausibly steep cross-lane pairs.
-    """
+    """Estimate common horizontal drift per vertical pixel for one column."""
     samples: list[tuple[float, float]] = []
     for line in lines:
         y = _line_mid_y(line)
@@ -325,44 +305,18 @@ def _center(mode: Any) -> float:
     return float(getattr(mode, "center", 0.0) or 0.0)
 
 
-def _weighted_sse(modes: list[Any]) -> float:
-    if not modes:
-        return 0.0
-    weights = np.asarray([max(1, _support(mode)) for mode in modes], dtype=float)
-    centers = np.asarray([_center(mode) for mode in modes], dtype=float)
-    mean = float(np.average(centers, weights=weights))
-    return float(np.sum(weights * (centers - mean) ** 2))
-
-
-def _binary_mode_groups(modes: list[Any]) -> tuple[list[Any], list[Any]]:
-    """Partition physical lanes into lower- and higher-indent classes."""
-    ordered = sorted(modes, key=_center)
-    if len(ordered) < 2:
-        return ordered, []
-
-    best_index = 1
-    best_cost: float | None = None
-    for index in range(1, len(ordered)):
-        low = ordered[:index]
-        high = ordered[index:]
-        cost = _weighted_sse(low) + _weighted_sse(high)
-        if best_cost is None or cost < best_cost:
-            best_cost = cost
-            best_index = index
-    return ordered[:best_index], ordered[best_index:]
-
-
 def assign_binary_roles(
     column: Any,
     indent_type: str,
     _reference: float | None = None,
 ) -> None:
-    """Assign exactly two semantic classes from physical-indent lanes.
+    """Assign entry/body from the dominant body lane and indent direction.
 
-    ``headword`` means the higher-indent class is entry; ``body`` means the
-    lower-indent class is entry.  Support is used only to stabilize the two-class
-    partition, never as a minimum-support gate, so a legitimate singleton entry
-    remains possible.  Every remaining line is body.
+    Physical-indent clustering has already removed within-lane variation. The
+    most-supported lane is therefore the body baseline. For ``headword``
+    indentation, every distinct lane to its right is entry; for ``body``
+    indentation, every distinct lane to its left is entry. Support never gates
+    entry eligibility, so singleton headwords remain valid.
     """
     modes = list(getattr(column, "indent_modes", []) or [])
     lines = list(getattr(column, "lines", []) or [])
@@ -376,24 +330,62 @@ def assign_binary_roles(
     column.body_mode = None
     if not modes:
         return
-    if len(modes) == 1:
-        column.body_mode = modes[0]
-        return
 
-    low, high = _binary_mode_groups(modes)
-    entry_modes = high if str(indent_type) == "headword" else low
-    body_modes = low if str(indent_type) == "headword" else high
+    body = max(
+        modes,
+        key=lambda mode: (_support(mode), -abs(_center(mode))),
+    )
+    column.body_mode = body
+    body_center = _center(body)
+
+    if str(indent_type) == "headword":
+        entry_modes = [mode for mode in modes if _center(mode) > body_center]
+    else:
+        entry_modes = [mode for mode in modes if _center(mode) < body_center]
 
     for mode in entry_modes:
         mode.role = "entry"
         for line in list(getattr(mode, "lines", []) or []):
             line.role = "entry"
-
     column.entry_modes = list(entry_modes)
-    column.body_mode = max(
-        body_modes or modes,
-        key=lambda mode: (_support(mode), -abs(_center(mode))),
-    )
+
+
+def _suppress_display_head_duplicate_entries(layout: Any) -> None:
+    """Keep one entry boundary for one oversized display head.
+
+    Oversized typography can occupy two or more recovered logical row slots.
+    Those slots are useful for indent visualization, but they still belong to a
+    single headword and must not create repeated entry boundaries.
+    """
+    columns = list(getattr(layout, "columns", []) or [])
+    heads = list(getattr(layout, "display_heads", []) or [])
+    if not columns or not heads:
+        return
+
+    for head in heads:
+        try:
+            column_index = int(getattr(head, "column"))
+            head_y0 = int(getattr(head, "y0"))
+            head_y1 = int(getattr(head, "y1"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if not (0 <= column_index < len(columns)):
+            continue
+
+        column = columns[column_index]
+        overlapping = [
+            line
+            for line in list(getattr(column, "lines", []) or [])
+            if str(getattr(line, "role", "body")) == "entry"
+            and int(getattr(line, "y1", 0)) > head_y0
+            and int(getattr(line, "y0", 0)) < head_y1
+        ]
+        if len(overlapping) <= 1:
+            continue
+
+        overlapping.sort(key=lambda line: (int(line.y0), int(line.y1)))
+        for line in overlapping[1:]:
+            line.role = "body"
 
 
 def normalize_layout_roles(layout: Any) -> Any:
@@ -412,6 +404,7 @@ def normalize_layout_roles(layout: Any) -> Any:
 
     for column in list(getattr(layout, "columns", []) or []):
         assign_binary_roles(column, indent_type)
+    _suppress_display_head_duplicate_entries(layout)
     return layout
 
 
