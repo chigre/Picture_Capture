@@ -159,7 +159,18 @@ def _channel_tesseract_band_runner(
     candidate = session.run_tesseract_records(band, psm)
     _raise_candidate_error(candidate, "tesseract")
     records = [_legacy_record(record) for record in candidate.records]
-    return records, str(candidate.text or "")
+    # Preserve the mature boundary backend's historical line reconstruction.
+    # Tesseract's TSV line IDs are not the parser contract: mixed dictionary
+    # typography is deliberately regrouped from geometry using the configured
+    # y-overlap tolerance before diagnostics/arbitration consume full_text.
+    full_text = "\n".join(
+        line.text
+        for line in _legacy_core.group_ocr_records(
+            records,
+            settings.paddle_line_merge_y_ratio,
+        )
+    )
+    return records, full_text
 
 
 def _channel_lens_runner(
