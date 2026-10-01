@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 from picture_capture.layout_transform import LayoutTransform
@@ -11,6 +12,7 @@ from picture_capture.ordinary_large_head_evidence import detect_ordinary_large_h
 from picture_capture.ordinary_symbol_evidence import detect_ordinary_symbol_entries
 from picture_capture.visual_marker_templates import (
     build_visual_marker_sample,
+    match_visual_marker_template,
     serialize_visual_marker_samples,
 )
 
@@ -78,6 +80,33 @@ def test_explicit_bracket_sample_is_authoritative_even_if_old_bracket_flag_is_of
     evidence = detect_ordinary_symbol_entries(image, understanding, settings)
     assert evidence
     assert evidence[0].issue_type == "ORDINARY_VISUAL_BRACKET_SAMPLE"
+
+
+def test_closed_box_cannot_match_bracket_open_sample():
+    sample_image = Image.new("RGB", (12, 24), "white")
+    draw = ImageDraw.Draw(sample_image)
+    draw.line((1, 1, 1, 22), fill="black", width=2)
+    draw.line((1, 1, 8, 1), fill="black", width=2)
+    draw.line((1, 22, 8, 22), fill="black", width=2)
+    sample = build_visual_marker_sample(
+        sample_image,
+        role="bracket_open",
+        literal="【",
+        sample_id="bracket",
+    )
+
+    # Boxed-number outlines are closed topology.  Even if their projections are
+    # superficially bracket-like, they must not be accepted as bracket_open.
+    boxed = np.zeros((24, 12), dtype=bool)
+    boxed[1:23, 1:3] = True
+    boxed[1:23, 9:11] = True
+    boxed[1:3, 1:11] = True
+    boxed[21:23, 1:11] = True
+    assert match_visual_marker_template(
+        boxed,
+        [sample],
+        roles={"bracket_open"},
+    ) is None
 
 
 def test_visual_evidence_never_demotes_existing_indent_entry():
