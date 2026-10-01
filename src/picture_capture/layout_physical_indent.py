@@ -90,8 +90,48 @@ def _split_tall_run(
     return result
 
 
+def _logical_slots_for_oversized_run(
+    y0: int,
+    y1: int,
+    reference: float,
+) -> list[tuple[int, int]]:
+    """Expand one continuous oversized text run into logical row spans.
+
+    Display-size headwords can remain vertically connected for roughly two or
+    three ordinary rows, so a valley-only splitter cannot separate them.  Once
+    the observed run is clearly taller than one ordinary row, recover the row
+    *slots* it occupies from the stable ordinary-line reference.  The later
+    line-feature stage still measures real ink independently inside each slot;
+    this function never assigns semantic roles by itself.
+    """
+    height = max(0, int(y1) - int(y0))
+    ref = max(6.0, float(reference))
+    if height < ref * 1.55:
+        return [(int(y0), int(y1))]
+
+    count = int(round(height / ref))
+    count = max(2, min(4, count))
+    if height / float(count) < ref * 0.48:
+        return [(int(y0), int(y1))]
+
+    edges = np.linspace(float(y0), float(y1), count + 1)
+    slots: list[tuple[int, int]] = []
+    for index in range(count):
+        a = int(round(edges[index]))
+        b = int(round(edges[index + 1]))
+        if b > a:
+            slots.append((a, b))
+    return slots or [(int(y0), int(y1))]
+
+
 def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]:
-    """Detect rows from observed horizontal ink runs."""
+    """Detect rows from observed horizontal ink runs.
+
+    Ordinary text remains projection-led.  A continuous oversized typography
+    run that cannot be separated by a real horizontal valley is expanded into
+    the logical ordinary-row spans it occupies, so each span can still receive
+    an independent physical-indent measurement.
+    """
     raw, row_ink, threshold = _raw_projection_runs(ink, scale)
     if not raw:
         return []
@@ -114,6 +154,14 @@ def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]
             part_height = part1 - part0
             if minimum <= part_height <= maximum_single:
                 result.append((int(part0), int(part1)))
+                continue
+            if part_height > maximum_single:
+                for slot0, slot1 in _logical_slots_for_oversized_run(
+                    part0, part1, ref
+                ):
+                    slot_height = slot1 - slot0
+                    if minimum <= slot_height <= maximum_single:
+                        result.append((int(slot0), int(slot1)))
 
     return result
 
@@ -185,9 +233,6 @@ def estimate_column_slant(lines: list[Any]) -> float:
             if dy < minimum_dy:
                 continue
             slope = float((x1 - x0) / dy)
-            # More than 3 px horizontal drift per 100 vertical pixels is not a
-            # plausible page/column tilt here; it is almost certainly a change
-            # of indentation lane.
             if abs(slope) <= 0.03:
                 slopes.append(slope)
 
