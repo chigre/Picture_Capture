@@ -4,7 +4,11 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from picture_capture.layout_grid_inference import projection_line_runs, indent_width_modes
+from picture_capture.layout_grid_inference import (
+    assign_physical_indent_roles,
+    indent_width_modes,
+    projection_line_runs,
+)
 
 
 def test_projection_preserves_real_nonuniform_row_positions() -> None:
@@ -43,16 +47,17 @@ def test_single_tall_dense_glyph_run_is_not_forced_onto_grid() -> None:
     assert runs == [(10, 42)]
 
 
-def _line(first_x: int, anchor_x: int) -> SimpleNamespace:
+def _line(first_x: int, anchor_x: int, *, small_prefix: bool = False) -> SimpleNamespace:
     return SimpleNamespace(
         first_x=first_x,
         anchor_x=anchor_x,
+        has_small_prefix=small_prefix,
         patch=np.zeros((0, 0), dtype=bool),
     )
 
 
 def test_indent_modes_cluster_by_first_x_not_anchor_x() -> None:
-    # Anchor positions intentionally cross the physical indent groups.  Lane
+    # Anchor positions intentionally cross the physical indent groups. Lane
     # grouping must follow visible indent widths within this column.
     lines = [
         _line(4, 20),
@@ -67,3 +72,56 @@ def test_indent_modes_cluster_by_first_x_not_anchor_x() -> None:
     assert [round(mode.center) for mode in modes] == [5, 35]
     assert {line.first_x for line in modes[0].lines} == {4, 6}
     assert {line.first_x for line in modes[1].lines} == {34, 36}
+
+
+def test_small_prefix_does_not_change_physical_lane_membership() -> None:
+    # A '~'-like prefix may move anchor_x, but the visible indent is the same.
+    lines = [
+        _line(34, 34),
+        _line(35, 58, small_prefix=True),
+        _line(36, 61, small_prefix=True),
+    ]
+
+    modes = indent_width_modes(lines, reference=20.0)
+
+    assert len(modes) == 1
+    assert round(modes[0].center) == 35
+    assert len(modes[0].lines) == 3
+
+
+def test_roles_are_assigned_from_physical_lanes_only() -> None:
+    # Typical 'body indentation' page: entry rows sit near the column edge,
+    # while the dominant body lane is farther inward. Anchor positions are
+    # deliberately noisy and must not affect role assignment.
+    entry_lines = [
+        _line(4, 40),
+        _line(5, 70, small_prefix=True),
+        _line(6, 18),
+    ]
+    body_lines = [
+        _line(34, 34),
+        _line(35, 61),
+        _line(36, 22),
+        _line(35, 55),
+        _line(34, 48),
+        _line(36, 66),
+    ]
+    uncertain_lines = [
+        _line(58, 12, small_prefix=True),
+        _line(60, 90),
+    ]
+
+    modes = indent_width_modes(
+        entry_lines + body_lines + uncertain_lines,
+        reference=20.0,
+    )
+    column = SimpleNamespace(indent_modes=modes, body_mode=None, entry_modes=[])
+
+    assign_physical_indent_roles(column, "body", 20.0)
+
+    by_center = {round(mode.center): mode for mode in modes}
+    assert by_center[5].role == "entry"
+    assert by_center[35].role == "body"
+    assert by_center[59].role == "unknown"
+    assert column.body_mode is by_center[35]
+    assert column.entry_modes == [by_center[5]]
