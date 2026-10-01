@@ -9,43 +9,19 @@ on existing markers must not implicitly run, depend on, or mutate boundary
 placement logic.
 
 The mature parser/arbitration implementation still lives behind
-``evidence_fusion.detect_paddle_headwords``.  This adapter makes the shared OCR
-channel plan authoritative before entering that stable implementation and gives
-new callers a neutral function name.
+``evidence_fusion.detect_paddle_headwords``.  Historical ``paddle_*`` setting
+translation is isolated in :mod:`picture_capture.ocr_channel_legacy`; this
+consumer therefore depends only on the shared OCR-channel contract plus the
+stable parser backend.
 """
 
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
 
 from .models import AppSettings
-from .ocr_channel import resolve_ocr_channel_plan
-
-
-def _settings_for_boundary_consumer(settings: AppSettings) -> AppSettings:
-    """Translate the shared channel plan into legacy core compatibility fields."""
-
-    routed = replace(settings)
-    plan = resolve_ocr_channel_plan(settings)
-
-    routed.paddle_use_paddleocr = plan.enabled("paddle")
-    if not plan.enabled("tesseract"):
-        routed.paddle_compare_tesseract = False
-        routed.paddle_tesseract_rescue = False
-        routed.paddle_dual_ocr_arbitration = False
-    elif not (
-        bool(getattr(routed, "paddle_compare_tesseract", False))
-        or bool(getattr(routed, "paddle_tesseract_rescue", False))
-    ):
-        # Channel selection says Tesseract is enabled, but an older/non-GUI
-        # caller may not have populated the historical mode flags.
-        routed.paddle_compare_tesseract = True
-
-    routed.paddle_enable_lens = plan.enabled("lens")
-    routed.paddle_lens_mode = plan.lens_mode if plan.enabled("lens") else "off"
-    return routed
+from .ocr_channel_legacy import apply_channel_plan_to_legacy_boundary_settings
 
 
 def detect_ocr_headword_boundaries(
@@ -58,11 +34,13 @@ def detect_ocr_headword_boundaries(
     filter_rules_path: Path | None = None,
     page_sections=None,
 ):
-    """Use shared OCR-channel evidence to infer headword separator positions.
+    """Borrow shared OCR-channel evidence to infer separator positions.
 
-    This function intentionally returns the established ``Entry`` output of the
-    mature OCR drawing pipeline.  The recognition channel itself is reusable and
-    has no dependency on separator placement.
+    OCR engine selection belongs to the channel.  This consumer owns only the
+    meaning of those OCR results for headword parsing and separator generation.
+    It intentionally returns the established ``Entry`` output of the mature OCR
+    drawing pipeline while the compatibility adapter keeps legacy fields out of
+    this module.
     """
 
     from .evidence_fusion import detect_paddle_headwords as legacy_detect
@@ -70,7 +48,7 @@ def detect_ocr_headword_boundaries(
     return legacy_detect(
         image,
         geometry,
-        _settings_for_boundary_consumer(settings),
+        apply_channel_plan_to_legacy_boundary_settings(settings),
         cache_path=cache_path,
         force_refresh=force_refresh,
         filter_rules_path=filter_rules_path,
@@ -78,6 +56,4 @@ def detect_ocr_headword_boundaries(
     )
 
 
-__all__ = [
-    "detect_ocr_headword_boundaries",
-]
+__all__ = ["detect_ocr_headword_boundaries"]
