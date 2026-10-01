@@ -4,19 +4,28 @@
 
 OCR recognition and OCR-assisted separator drawing are intentionally different layers.
 
-- `ocr_channel.py` is the reusable OCR channel. It resolves the enabled PaddleOCR / Tesseract / Google Lens sources, runs multiple enabled engines on the same crop, preserves Lens `off / diagnostic / conflict / full` semantics, and exposes engine results without deciding where a dictionary separator belongs.
-- `entry_classification_runtime.py` is the existing-marker text consumer used by 【仅OCR】. It first obtains the canonical crop from the already-established marker, then sends that same crop through the OCR channel. OCR may fill/replace text but is forbidden to change marker X/Y.
-- `ocr_boundary_detection.py` is the OCR-assisted drawing consumer. It borrows OCR-channel evidence and passes it into the mature headword parser/arbitration stack to infer separator positions. Drawing policy therefore remains outside the OCR channel.
-- `paddle_headwords_core.py` remains the mature low-level parser/evidence backend. The historical `detect_paddle_headwords` public name is compatibility only; new code should treat OCR-assisted boundary detection as a consumer, not as the OCR channel itself.
+- `ocr_channel.py` is the reusable OCR capability layer. It resolves the enabled PaddleOCR / Tesseract / Google Lens sources, can run multiple enabled engines on the same crop, preserves Lens `off / diagnostic / conflict / full` semantics, and exposes OCR results without deciding where a dictionary separator belongs.
+- `entry_classification_runtime.py` is the existing-marker text consumer used by 【仅OCR】. It first obtains the canonical crop from the already-established marker, then sends that same crop through the OCR channel. OCR may fill/replace text but is forbidden to create, delete or move marker X/Y.
+- `ocr_boundary_detection.py` is the OCR-assisted drawing consumer. It borrows the shared OCR selection/capability contract, then applies dictionary parser / structural evidence / arbitration to infer separator positions. Drawing policy therefore remains outside the OCR channel.
+- `ocr_channel_legacy.py` is a narrow compatibility adapter for the mature historical boundary backend. It is the only new-layer module allowed to translate the neutral OCR-channel plan back into persisted `paddle_*` switches required by the old parser implementation.
+- `paddle_headwords_core.py` remains the mature low-level OCR/parser/evidence backend during migration. It still contains historical engine execution needed by the established boundary pipeline; this is an isolated compatibility seam, not a second public OCR selection API. The historical `detect_paddle_headwords` public name is compatibility only.
 
-The historical settings names `paddle_use_paddleocr`, `paddle_compare_tesseract`, `paddle_enable_lens`, and `paddle_lens_mode` remain persisted/UI-compatible for existing projects. Runtime consumers must resolve them through `resolve_ocr_channel_plan()` rather than independently implementing engine-selection rules. The old single `ocr_engine` setting is only a fallback when every multi-engine channel switch is disabled.
+The historical settings names `paddle_use_paddleocr`, `paddle_compare_tesseract`, `paddle_enable_lens`, and `paddle_lens_mode` remain persisted/UI-compatible for existing projects. New runtime consumers must resolve engine selection through `resolve_ocr_channel_plan()` instead of independently implementing selection rules. The old single `ocr_engine` setting is only a fallback when every multi-engine channel switch is disabled. Legacy boundary settings translation belongs only in `ocr_channel_legacy.py`.
 
-This separation means 【仅OCR】 and 【OCR画线】 can use the same selected OCR sources while remaining functionally independent: enabling an OCR engine does not imply that OCR is allowed to create/move a separator, and using OCR to draw separators does not own OCR engine execution.
+This separation means 【仅OCR】 and 【OCR画线】 share one OCR selection model while remaining functionally independent: enabling an OCR engine does not grant permission to create/move a separator; 【仅OCR】 can use several OCR engines on the same marker crop without changing geometry; and 【OCR画线】 is specifically the consumer that borrows OCR evidence to create separator candidates.
+
+### Migration rule
+
+The target dependency direction is:
+
+`OCR engines -> ocr_channel -> consumer`
+
+Consumers must not add their own engine-selection branches. During migration, OCR-assisted boundary detection may pass through `ocr_channel_legacy -> paddle_headwords_core` so the battle-tested parser/arbitration code remains stable. New OCR features must not depend on that legacy backend; they should consume `ocr_channel` directly. When the mature parser is eventually detached from its historical engine runners, only the compatibility seam should disappear—the consumer contracts and UI engine selection should not change.
 
 ## Core stages
 
-1. The OCR-assisted boundary consumer requests the shared channel plan. PaddleOCR and Tesseract can run on the same rectified column-left band; Google Lens can be off, diagnostic-only, conflict-triggered, or full participation.
-2. OCR fragments are grouped, same-row fragments are actively absorbed, and a multi-line state machine may attach wrapped grammatical cues without moving the first-line Y.
+1. A consumer resolves the shared OCR channel plan. For marker-only OCR, all selected local engines run on the same marker crop. For the mature boundary backend, the compatibility adapter mirrors that plan into its legacy execution fields. Google Lens remains off, diagnostic-only, conflict-triggered, or full participation according to the same channel policy.
+2. In OCR-assisted boundary detection, OCR fragments are grouped, same-row fragments are actively absorbed, and a multi-line state machine may attach wrapped grammatical cues without moving the first-line Y.
 3. A dictionary profile separates POS evidence from usage/domain metadata and internal article symbols; `parse_headword_text()` then produces lemma, variants, inflections, POS, usage, definition, parser trace and repair types.
 4. Paddle/Tesseract candidates are aligned per column with `SequenceMatcher` sequence anchors, then unresolved blocks use lemma similarity + Y distance.
 5. Arbitration ranks up to three engine candidates using parser score, OCR confidence, structural/visual evidence and repair penalty. Lens can break a local spelling conflict; two agreeing local engines are not silently overturned.
