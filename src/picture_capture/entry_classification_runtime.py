@@ -13,6 +13,7 @@ from .entry_ocr_crop import (
     entry_ocr_crop_box,
     resolve_entry_ocr_row_metrics,
 )
+from .ocr_channel import OcrChannelSession, OcrTextChoice, choose_ocr_text
 
 
 def _install_marker_ocr_crop(processing_module: Any) -> None:
@@ -45,7 +46,7 @@ def _install_marker_ocr_crop(processing_module: Any) -> None:
 
 
 def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
-    """Make 【仅OCR】 honor the configured OCR engine on one shared crop."""
+    """Make 【仅OCR】 consume the shared multi-engine OCR channel."""
     core = processing_module._core
     if getattr(core, "_entry_marker_ocr_dispatch_installed", False):
         return
@@ -107,13 +108,9 @@ def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
         if not targets:
             return ordered, stats
 
-        engine_name = str(
-            getattr(effective, "ocr_engine", "tesseract") or "tesseract"
-        ).strip().lower()
-        paddle_engine = None
-        if engine_name == "paddleocr":
-            from .paddle_headwords import get_paddle_engine
-            paddle_engine = get_paddle_engine(effective)
+        # One session is reused across all entry crops so heavy OCR runtimes
+        # (especially PaddleOCR) are initialized once, not once per marker.
+        channel = OcrChannelSession(effective)
 
         def parsed_or_raw(raw: str) -> str:
             text = str(raw or "").strip()
@@ -125,6 +122,54 @@ def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
             first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
             return first_line[:64].strip()
 
+        def resolve_candidate(candidate, *, is_large: bool) -> OcrTextChoice | None:
+            if not candidate.ok:
+                return None
+            word = ""
+            confidence = candidate.confidence
+
+            if candidate.engine == "paddle" and candidate.records:
+                from .paddle_headwords import (
+                    _single_cjk_from_local_records,
+                    group_ocr_records,
+                )
+
+                records = list(candidate.records)
+                if is_large:
+                    word, confidence_value, _source_text = _single_cjk_from_local_records(
+                        records,
+                        effective,
+                        profile,
+                        max_left_x=max(16, round(max(1, int(candidate.metadata.get("crop_width", 0) or 0)) * 0.75)),
+                    )
+                    if word:
+                        confidence = float(confidence_value)
+                else:
+                    lines = group_ocr_records(
+                        records,
+                        float(getattr(effective, "paddle_line_merge_y_ratio", 0.55) or 0.55),
+                    )
+                    for line in sorted(
+                        lines,
+                        key=lambda value: (
+                            int(value.box[0]), int(value.box[1]), -float(value.confidence),
+                        ),
+                    ):
+                        word = parsed_or_raw(str(line.text or ""))
+                        if word:
+                            confidence = float(line.confidence)
+                            break
+
+            if not word:
+                word = parsed_or_raw(candidate.text)
+            if not word:
+                return None
+            return OcrTextChoice(
+                engine=candidate.engine,
+                text=str(word).strip(),
+                confidence=confidence,
+            )
+
         for entry in targets:
             original_x, original_y = int(entry.x), int(entry.y)
             crop, is_large = core._ordinary_marker_local_crop(
@@ -135,60 +180,36 @@ def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
                 row_metrics=row_metrics,
             )
             stats["large" if is_large else "regular"] += 1
-            word = ""
-            confidence = None
 
-            try:
-                if engine_name == "paddleocr":
-                    from .paddle_headwords import (
-                        _single_cjk_from_local_records,
-                        group_ocr_records,
-                        recognize_paddle_text,
-                        run_paddle_band,
+            psm = (
+                5
+                if str(getattr(effective, "layout_writing_mode", "")).startswith("vertical")
+                else 7
+            )
+            result = channel.recognize_crop(crop, tesseract_psm=psm)
+
+            # Preserve crop width for the existing large-CJK local-record rule
+            # without teaching the generic OCR channel anything about headwords.
+            resolved: list[OcrTextChoice] = []
+            for candidate in result.candidates:
+                if candidate.engine == "paddle" and candidate.records:
+                    from .ocr_channel import OcrChannelCandidate
+                    candidate = OcrChannelCandidate(
+                        engine=candidate.engine,
+                        text=candidate.text,
+                        confidence=candidate.confidence,
+                        records=candidate.records,
+                        error=candidate.error,
+                        participates_in_fusion=candidate.participates_in_fusion,
+                        metadata={**candidate.metadata, "crop_width": int(crop.width)},
                     )
-                    records = run_paddle_band(crop, effective, engine=paddle_engine)
-                    if records and is_large:
-                        word, confidence_value, _source_text = _single_cjk_from_local_records(
-                            records,
-                            effective,
-                            profile,
-                            max_left_x=max(16, round(crop.width * 0.75)),
-                        )
-                        confidence = float(confidence_value) if word else None
-                    elif records:
-                        lines = group_ocr_records(
-                            records,
-                            float(getattr(effective, "paddle_line_merge_y_ratio", 0.55) or 0.55),
-                        )
-                        for line in sorted(
-                            lines,
-                            key=lambda value: (
-                                int(value.box[0]), int(value.box[1]), -float(value.confidence),
-                            ),
-                        ):
-                            word = parsed_or_raw(str(line.text or ""))
-                            if word:
-                                confidence = float(line.confidence)
-                                break
-                    if not word:
-                        word = parsed_or_raw(
-                            recognize_paddle_text(crop, effective, engine=paddle_engine)
-                        )
-                else:
-                    psm = (
-                        5
-                        if str(getattr(effective, "layout_writing_mode", "")).startswith("vertical")
-                        else 7
-                    )
-                    raw = core.run_tesseract(
-                        crop,
-                        core.resolved_tesseract_language(effective),
-                        effective.ocr_executable,
-                        psm=psm,
-                    )
-                    word = parsed_or_raw(raw)
-            except Exception:
-                word = ""
+                choice = resolve_candidate(candidate, is_large=is_large)
+                if choice is not None:
+                    resolved.append(choice)
+
+            selected, _agreed = choose_ocr_text(result.plan, resolved)
+            word = str(selected.text).strip() if selected is not None else ""
+            confidence = selected.confidence if selected is not None else None
 
             if word:
                 if effective.ocr_replace:
@@ -197,9 +218,9 @@ def _install_marker_ocr_engine_dispatch(processing_module: Any) -> None:
                     )
                 entry.word = str(word).strip()
                 entry.confidence = confidence
-                paddle = engine_name == "paddleocr"
-                entry.ocr_source = f"ordinary_marker:{'paddle' if paddle else 'tesseract'}"
-                entry.final_engine = "paddle" if paddle else "tesseract"
+                engine = str(selected.engine)
+                entry.ocr_source = f"ordinary_marker:{engine}"
+                entry.final_engine = engine
                 issue = "ORDINARY_MARKER_TEXT_OCR"
                 existing = [part for part in str(entry.issue_type or "").split(",") if part]
                 if issue not in existing:
