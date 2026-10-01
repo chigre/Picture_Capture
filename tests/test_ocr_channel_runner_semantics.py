@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from PIL import Image
 
 from picture_capture.models import AppSettings
-from picture_capture.ocr_channel import OcrChannelSession
+from picture_capture.ocr_channel import OcrChannelSession, normalize_paddle_result
 
 
 def test_channel_paddle_preserves_crop_scaling_and_source_box_coordinates():
@@ -42,6 +43,32 @@ def test_channel_paddle_preserves_crop_scaling_and_source_box_coordinates():
     assert result.records[0].box == (20, 10, 100, 50)
     assert result.metadata["input_scale"] == 0.5
     assert result.metadata["preprocessing"] == "grayscale"
+
+
+def test_channel_paddle_result_normalization_preserves_polygon_fallback():
+    records = normalize_paddle_result({
+        "res": {
+            "rec_texts": ["Alpha"],
+            "rec_scores": [0.91],
+            "rec_boxes": [],
+            "rec_polys": [[[10, 5], [50, 5], [50, 25], [10, 25]]],
+        }
+    })
+
+    assert len(records) == 1
+    assert records[0].text == "Alpha"
+    assert records[0].confidence == 0.91
+    assert records[0].box == (10, 5, 50, 25)
+
+
+def test_legacy_boundary_bridge_no_longer_uses_core_paddle_runner_helpers():
+    import picture_capture.ocr_channel_legacy as legacy
+
+    source = Path(legacy.__file__).read_text(encoding="utf-8")
+    assert "normalize_paddle_result" in source
+    assert "prepare_ocr_input" in source
+    assert "_legacy_core.extract_ocr_records" not in source
+    assert "_legacy_core.prepare_ocr_band" not in source
 
 
 def test_channel_tesseract_parses_tsv_by_header_name(monkeypatch):
