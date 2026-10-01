@@ -63,6 +63,18 @@ def test_single_engine_setting_is_only_fallback_when_channel_switches_are_off():
     assert plan.voting_engines == ("tesseract",)
 
 
+def test_paddle_language_ignores_tesseract_specific_override():
+    from picture_capture.ocr_channel import _paddle_language
+
+    settings = AppSettings(
+        ocr_language="spa+eng",
+        tesseract_language="fra",
+        paddle_language="",
+    )
+
+    assert _paddle_language(settings) == "es"
+
+
 def test_one_crop_can_run_paddle_and_tesseract_together():
     settings = AppSettings(
         paddle_use_paddleocr=True,
