@@ -3,11 +3,11 @@ from __future__ import annotations
 """Richer, page-anchored summary for the Layout diagnostic overlay.
 
 The base overlay owns geometry drawing. This module intercepts the one summary
-text item so it can be placed at the horizontal centre of column 1, five
-line-heights below ``body_top``, while containing the physical evidence needed
-to audit layout inference. It also renders Page Understanding's per-line
-indent spans as pale-yellow translucent-looking blocks and each inferred line
-role as a compact colour strip beside the physical column edge.
+text item so it can be placed five line-heights below ``body_top`` inside the
+rightmost 80% of column 1, while containing the physical evidence needed to
+audit layout inference. It also renders Page Understanding's per-line indent
+spans as pale-yellow translucent-looking blocks and each inferred line role as
+a compact colour strip beside the physical column edge.
 """
 
 from typing import Any, Callable
@@ -134,8 +134,8 @@ def _format_summary(app: Any, snapshot: Any) -> str:
     return "\n".join(lines)
 
 
-def _summary_anchor(app: Any, snapshot: Any) -> tuple[float, float]:
-    """Return Canvas coordinates at column-1 centre and +5 line-heights."""
+def _summary_box(app: Any, snapshot: Any) -> tuple[float, float, float]:
+    """Return Canvas (centre_x, top_y, width) for column-1 rightmost 80%."""
     geometry = snapshot.geometry
     scale = float(getattr(app, "view_scale", 1.0) or 1.0)
     top = int(geometry.top)
@@ -147,14 +147,27 @@ def _summary_anchor(app: Any, snapshot: Any) -> tuple[float, float]:
 
     if geometry.column_starts and geometry.column_widths:
         left = int(geometry.x_at(0, anchor_y))
-        width = int(geometry.column_widths[0])
+        width = max(1, int(geometry.column_widths[0]))
     else:
         left = int(values.get("manual_x", 0) or 0)
-        width = int(values.get("column_width", 0) or 0)
+        width = max(1, int(values.get("column_width", 1) or 1))
 
-    centre_x = left + width / 2.0
-    sx, sy = geometry.canonical_to_source(round(centre_x), anchor_y)
-    return (sx * scale, sy * scale)
+    # The summary occupies exactly the rightmost 80% of column 1.  Using the
+    # transformed source endpoints keeps zoom/rotation handling consistent with
+    # the rest of the overlay and gives Canvas a real wrapping width.
+    right = left + width
+    box_left = left + 0.20 * width
+    box_centre = (box_left + right) / 2.0
+
+    source_left = geometry.canonical_to_source(round(box_left), anchor_y)
+    source_right = geometry.canonical_to_source(round(right), anchor_y)
+    source_centre = geometry.canonical_to_source(round(box_centre), anchor_y)
+    _sx_y, sy = source_centre
+    display_width = max(
+        24.0,
+        abs(float(source_right[0]) - float(source_left[0])) * scale,
+    )
+    return (float(source_centre[0]) * scale, float(sy) * scale, display_width)
 
 
 def _draw_indent_blocks(app: Any, snapshot: Any) -> None:
@@ -303,7 +316,7 @@ def draw_layout_visualization_detailed(app: Any) -> None:
         return
 
     summary_text = _format_summary(app, snapshot)
-    summary_x, summary_y = _summary_anchor(app, snapshot)
+    summary_x, summary_y, summary_width = _summary_box(app, snapshot)
     original_create_text: Callable[..., Any] = canvas.create_text
 
     def create_text_repositioned(*args: Any, **kwargs: Any) -> Any:
@@ -314,7 +327,8 @@ def draw_layout_visualization_detailed(app: Any) -> None:
                 kwargs["x"] = summary_x
                 kwargs["y"] = summary_y
             kwargs["anchor"] = "n"
-            kwargs["justify"] = "center"
+            kwargs["justify"] = "left"
+            kwargs["width"] = summary_width
             kwargs["text"] = summary_text
             kwargs["tags"] = _append_tag(kwargs.get("tags", ()), _SUMMARY_TAG)
         return original_create_text(*args, **kwargs)
