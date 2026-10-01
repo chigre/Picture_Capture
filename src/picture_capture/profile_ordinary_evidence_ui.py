@@ -25,7 +25,7 @@ def build_ordinary_evidence_profile_wizard(base_class: type[Any]) -> type[Any]:
                 return
 
             # Hide older duplicate controls while reusing their exact backing
-            # variables/settings.  There remains only one source of truth.
+            # settings.  There remains only one persisted sample collection.
             if inventory is not None:
                 for child in inventory.winfo_children():
                     try:
@@ -85,17 +85,16 @@ def build_ordinary_evidence_profile_wizard(base_class: type[Any]) -> type[Any]:
                 justify="left",
             ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(0, 5))
 
-            ttk.Checkbutton(
+            ttk.Label(
                 panel,
-                text="启用特定符号视觉样本",
-                variable=self.symbol_visual_rescue_var,
-                command=self._headword_specificity_changed,
+                text="特定符号视觉样本：有有效样本即参与普通画线",
             ).grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
             ttk.Label(
                 panel,
                 text=(
-                    "用于【、〔、○、◆等词典特定入口结构。可从不同页面采多个样本；普通画线只在"
-                    "每个 Layout 行首的小窗口匹配，正文中间的相似符号不会触发。"
+                    "用于【、〔、○、◆等词典特定入口结构。普通画线直接读取这些视觉样本，"
+                    "与上方“OCR 漏掉/错认符号时允许视觉形状补救”开关完全独立。"
+                    "可从不同页面采多个样本；只在每个 Layout 行首的小窗口匹配。"
                 ),
                 foreground="#666666",
                 wraplength=max(220, getattr(self, "_wizard_content_width", 520) - 45),
