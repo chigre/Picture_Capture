@@ -2,9 +2,12 @@ from __future__ import annotations
 
 """Projection-led row recovery and binary physical-indent roles.
 
-Horizontal indentation is inferred only from each column's observed ``first_x``
-distribution. Character height is a vertical prior for row recovery only; it is
-not used to cluster horizontal indentation or assign entry/body roles.
+Horizontal indentation is inferred from each column's physical leading-whitespace
+measurements.  Before clustering, a common per-column X drift is removed from
+``first_x`` so a slightly tilted scan does not split one real indent lane into
+many artificial lanes.  Character height remains a vertical prior for row
+recovery only; it is not used to cluster horizontal indentation or assign
+entry/body roles.
 """
 
 from typing import Any, Callable
@@ -12,7 +15,10 @@ from typing import Any, Callable
 import numpy as np
 
 
-def _raw_projection_runs(ink: np.ndarray, scale: float) -> tuple[list[tuple[int, int]], np.ndarray, float]:
+def _raw_projection_runs(
+    ink: np.ndarray,
+    scale: float,
+) -> tuple[list[tuple[int, int]], np.ndarray, float]:
     from .ordinary_visual import _runs
 
     if ink.ndim != 2 or ink.size == 0:
@@ -134,39 +140,124 @@ def _indent_gap_threshold(values: np.ndarray) -> float:
     return float(max(2.0, min(6.0, typical + 2.0 * mad + 1.0)))
 
 
+def _line_mid_y(line: Any) -> float | None:
+    try:
+        y0 = float(getattr(line, "y0"))
+        y1 = float(getattr(line, "y1"))
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return (y0 + y1) / 2.0
+
+
+def estimate_column_slant(lines: list[Any]) -> float:
+    """Estimate common horizontal drift per vertical pixel for one column.
+
+    The estimate is intentionally based on pairwise slopes rather than an
+    ordinary least-squares fit.  Different indent lanes have different
+    intercepts; their shared page tilt is the robust median slope after removing
+    implausibly steep cross-lane pairs.
+    """
+    samples: list[tuple[float, float]] = []
+    for line in lines:
+        y = _line_mid_y(line)
+        if y is None:
+            continue
+        try:
+            x = float(getattr(line, "first_x", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        samples.append((y, x))
+
+    if len(samples) < 6:
+        return 0.0
+
+    samples.sort(key=lambda item: item[0])
+    ys = np.asarray([item[0] for item in samples], dtype=float)
+    span = float(ys[-1] - ys[0])
+    if span < 80.0:
+        return 0.0
+
+    minimum_dy = max(24.0, span * 0.08)
+    slopes: list[float] = []
+    for i, (y0, x0) in enumerate(samples[:-1]):
+        for y1, x1 in samples[i + 1:]:
+            dy = float(y1 - y0)
+            if dy < minimum_dy:
+                continue
+            slope = float((x1 - x0) / dy)
+            # More than 3 px horizontal drift per 100 vertical pixels is not a
+            # plausible page/column tilt here; it is almost certainly a change
+            # of indentation lane.
+            if abs(slope) <= 0.03:
+                slopes.append(slope)
+
+    if len(slopes) < 5:
+        return 0.0
+
+    values = np.asarray(slopes, dtype=float)
+    center = float(np.median(values))
+    deviation = np.abs(values - center)
+    mad = float(np.median(deviation)) if deviation.size else 0.0
+    if mad > 0:
+        kept = values[deviation <= max(0.0015, 3.5 * mad)]
+        if kept.size >= 3:
+            center = float(np.median(kept))
+    return float(max(-0.03, min(0.03, center)))
+
+
+def normalized_physical_indents(lines: list[Any]) -> dict[int, float]:
+    """Return first-X values after removing one column's shared X-vs-Y drift."""
+    if not lines:
+        return {}
+    slope = estimate_column_slant(lines)
+    ys = [y for line in lines if (y := _line_mid_y(line)) is not None]
+    y_ref = float(np.median(np.asarray(ys, dtype=float))) if ys else 0.0
+
+    result: dict[int, float] = {}
+    for line in lines:
+        raw = float(getattr(line, "first_x", 0) or 0)
+        y = _line_mid_y(line)
+        corrected = raw if y is None else raw - slope * (float(y) - y_ref)
+        result[id(line)] = float(corrected)
+    return result
+
+
 def physical_indent_modes(lines: list[Any], _reference: float | None = None) -> list[Any]:
-    """Cluster one column using only physical leading whitespace (``first_x``)."""
+    """Cluster one column by slant-normalized physical leading whitespace."""
     from . import dictionary_page_design as page_design
 
     if not lines:
         return []
 
-    ordered = sorted(lines, key=lambda item: float(getattr(item, "first_x", 0) or 0))
-    values = np.asarray(
-        [float(getattr(item, "first_x", 0) or 0) for item in ordered],
-        dtype=float,
-    )
+    normalized = normalized_physical_indents(lines)
+
+    def value(line: Any) -> float:
+        return float(normalized.get(id(line), float(getattr(line, "first_x", 0) or 0)))
+
+    ordered = sorted(lines, key=value)
+    values = np.asarray([value(line) for line in ordered], dtype=float)
     gap_threshold = _indent_gap_threshold(values)
 
     clusters: list[list[Any]] = []
     current: list[Any] = []
     previous_value: float | None = None
     for line in ordered:
-        value = float(getattr(line, "first_x", 0) or 0)
-        if current and previous_value is not None and value - previous_value > gap_threshold:
+        current_value = value(line)
+        if (
+            current
+            and previous_value is not None
+            and current_value - previous_value > gap_threshold
+        ):
             clusters.append(current)
             current = []
         current.append(line)
-        previous_value = value
+        previous_value = current_value
     if current:
         clusters.append(current)
 
     result: list[Any] = []
     for cluster in clusters:
-        cluster_values = np.asarray(
-            [float(getattr(line, "first_x", 0) or 0) for line in cluster],
-            dtype=float,
-        )
+        cluster_values = np.asarray([value(line) for line in cluster], dtype=float)
         center = float(np.median(cluster_values))
         lo = float(np.min(cluster_values))
         hi = float(np.max(cluster_values))
@@ -189,13 +280,44 @@ def _center(mode: Any) -> float:
     return float(getattr(mode, "center", 0.0) or 0.0)
 
 
-def assign_binary_roles(column: Any, indent_type: str, _reference: float | None = None) -> None:
-    """Choose the directional outer physical lane as entry; all others are body.
+def _weighted_sse(modes: list[Any]) -> float:
+    if not modes:
+        return 0.0
+    weights = np.asarray([max(1, _support(mode)) for mode in modes], dtype=float)
+    centers = np.asarray([_center(mode) for mode in modes], dtype=float)
+    mean = float(np.average(centers, weights=weights))
+    return float(np.sum(weights * (centers - mean) ** 2))
 
-    Support count is diagnostic only. A section-opening page may contain just one
-    real headword, so an already separated physical-indent lane remains a valid
-    entry lane even when ``support == 1``. The only all-body case is a column
-    with fewer than two distinct physical-indent lanes.
+
+def _binary_mode_groups(modes: list[Any]) -> tuple[list[Any], list[Any]]:
+    """Partition physical lanes into lower- and higher-indent classes."""
+    ordered = sorted(modes, key=_center)
+    if len(ordered) < 2:
+        return ordered, []
+
+    best_index = 1
+    best_cost: float | None = None
+    for index in range(1, len(ordered)):
+        low = ordered[:index]
+        high = ordered[index:]
+        cost = _weighted_sse(low) + _weighted_sse(high)
+        if best_cost is None or cost < best_cost:
+            best_cost = cost
+            best_index = index
+    return ordered[:best_index], ordered[best_index:]
+
+
+def assign_binary_roles(
+    column: Any,
+    indent_type: str,
+    _reference: float | None = None,
+) -> None:
+    """Assign exactly two semantic classes from physical-indent lanes.
+
+    ``headword`` means the higher-indent class is entry; ``body`` means the
+    lower-indent class is entry.  Support is used only to stabilize the two-class
+    partition, never as a minimum-support gate, so a legitimate singleton entry
+    remains possible.  Every remaining line is body.
     """
     modes = list(getattr(column, "indent_modes", []) or [])
     lines = list(getattr(column, "lines", []) or [])
@@ -209,22 +331,20 @@ def assign_binary_roles(column: Any, indent_type: str, _reference: float | None 
     column.body_mode = None
     if not modes:
         return
+    if len(modes) == 1:
+        column.body_mode = modes[0]
+        return
 
-    entry = None
-    if len(modes) >= 2:
-        entry = (
-            max(modes, key=_center)
-            if str(indent_type) == "headword"
-            else min(modes, key=_center)
-        )
+    low, high = _binary_mode_groups(modes)
+    entry_modes = high if str(indent_type) == "headword" else low
+    body_modes = low if str(indent_type) == "headword" else high
 
-    if entry is not None:
-        entry.role = "entry"
-        for line in list(getattr(entry, "lines", []) or []):
+    for mode in entry_modes:
+        mode.role = "entry"
+        for line in list(getattr(mode, "lines", []) or []):
             line.role = "entry"
-        column.entry_modes = [entry]
 
-    body_modes = [mode for mode in modes if mode is not entry]
+    column.entry_modes = list(entry_modes)
     column.body_mode = max(
         body_modes or modes,
         key=lambda mode: (_support(mode), -abs(_center(mode))),
@@ -292,11 +412,7 @@ def install_physical_indent_inference() -> None:
     if getattr(page_design, "_physical_indent_inference_installed", False):
         return
 
-    # Profile analysis already aggregates multiple representative pages. Make
-    # those stable project values the anchor before any per-page layout policy
-    # is resolved in GUI, ordinary drawing, or spawned workers.
     install_profile_layout_anchor()
-
     page_design._line_runs = projection_line_runs
     page_design._indent_modes = physical_indent_modes
     page_design._assign_indent_semantics = assign_binary_roles
