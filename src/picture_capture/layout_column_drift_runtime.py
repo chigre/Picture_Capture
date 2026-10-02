@@ -13,8 +13,12 @@ recovered row in a wider analysis window that extends to the left.  The measured
 ``first_x`` remains expressed relative to the original semantic ``column.left``
 and is therefore allowed to be negative before common-drift normalization.
 
-The same left safety band is used by universal oversized-head evidence so a
-large CJK display head is not clipped before duplicate-entry suppression.
+Important ownership rule: this module owns *indent remeasurement only*.  It must
+never replace the universal large-head detector.  Large-head detection has its
+own stricter row-front/oversized authorization runtime; replacing that callable
+here used to silently disable those guards in the real GUI/spawn import order.
+The helper ``_analysis_left_for_column`` remains public so the strict large-head
+detector can reuse exactly the same left safety band without changing ownership.
 """
 
 from typing import Any, Callable
@@ -159,97 +163,9 @@ def _remeasure_policy_layout(
     return layout, page_settings, applied
 
 
-def _detect_large_heads_with_left_safety(
-    image: Image.Image,
-    understanding: Any,
-    settings: Any,
-) -> list[Any]:
-    """Universal large-head detector with the same unclipped leading window."""
-    from .models import Entry
-    from .ordinary_large_head_evidence import (
-        _candidate_boxes,
-        _otsu,
-        _uses_cjk_large_heads,
-    )
-
-    if not _uses_cjk_large_heads(settings):
-        return []
-
-    layout = understanding.layout
-    canonical = layout.transform.canonical_image_for_analysis(image.convert("RGB"))
-    try:
-        gray_page = np.asarray(canonical.convert("L"), dtype=np.uint8)
-        reference = max(
-            8.0,
-            float(getattr(layout, "ordinary_line_height", 1.0) or 1.0),
-        )
-        found: list[Any] = []
-        top = max(0, int(getattr(layout, "body_top", 0) or 0))
-        bottom = min(
-            gray_page.shape[0],
-            int(getattr(layout, "body_bottom", gray_page.shape[0]) or gray_page.shape[0]),
-        )
-        columns = list(getattr(layout, "columns", []) or [])
-
-        for position, column in enumerate(columns):
-            semantic_left = max(0, int(getattr(column, "left", 0) or 0))
-            semantic_right = min(
-                gray_page.shape[1],
-                int(getattr(column, "right", semantic_left + 1) or semantic_left + 1),
-            )
-            analysis_left = _analysis_left_for_column(columns, position, reference)
-            if semantic_right <= analysis_left or bottom <= top:
-                continue
-
-            gray = gray_page[top:bottom, analysis_left:semantic_right]
-            if gray.size == 0:
-                continue
-            ink = gray <= _otsu(gray)
-            for _x0, y0, _x1, y1 in _candidate_boxes(ink, reference):
-                height = float(y1 - y0)
-                canonical_y = top + int(y0)
-                source_x, source_y = layout.transform.canonical_to_source_point(
-                    semantic_left,
-                    canonical_y,
-                    layout.source_size,
-                )
-                found.append(Entry(
-                    word="",
-                    x=int(source_x),
-                    y=int(source_y),
-                    confidence=min(0.995, max(0.90, height / max(1.0, reference * 2.5))),
-                    ocr_source="ordinary_large_head_evidence",
-                    issue_type="ORDINARY_OVERSIZED_DISPLAY_HEAD",
-                    ocr_visual_run_height=height,
-                    ocr_line_height_reference=reference,
-                    ocr_leading_height_ratio=height / max(1.0, reference),
-                    ocr_single_cjk=True,
-                    ocr_oversized_cjk=True,
-                ))
-    finally:
-        try:
-            canonical.close()
-        except Exception:
-            pass
-
-    found.sort(key=lambda item: (item.x, item.y))
-    deduped: list[Any] = []
-    tolerance = max(4, round(reference * 0.80))
-    for entry in found:
-        if any(
-            abs(entry.x - prior.x) <= tolerance
-            and abs(entry.y - prior.y) <= tolerance
-            for prior in deduped
-        ):
-            continue
-        deduped.append(entry)
-    return deduped
-
-
 def install_layout_column_drift_runtime() -> None:
-    """Install unclipped indent + large-head measurement before Layout Core use."""
+    """Install unclipped indent measurement without touching evidence detectors."""
     from . import dictionary_page_layout_policy as policy
-    from . import ordinary_large_head_evidence as large_head
 
     if bool(getattr(policy, "_column_drift_runtime_installed", False)):
         return
@@ -270,14 +186,12 @@ def install_layout_column_drift_runtime() -> None:
         )
 
     policy.infer_dictionary_page_layout = wrapped
-    large_head.detect_ordinary_large_head_entries = _detect_large_heads_with_left_safety
     policy._column_drift_runtime_installed = True
 
 
 __all__ = [
     "_analysis_left_for_column",
     "_left_safety",
-    "_detect_large_heads_with_left_safety",
     "install_layout_column_drift_runtime",
     "remeasure_layout_indents_from_ink",
 ]
