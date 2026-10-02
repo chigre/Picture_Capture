@@ -28,6 +28,15 @@ def prepare_app_module() -> Any:
     formats.write_pdic = build_write_pdic_capture(formats.write_pdic)
     install_pdic_classification(formats)
 
+    # Character-height recovery must be installed before Page Design/policy
+    # modules import detect_layout_parameters by value.  Only pages explicitly
+    # marked fallback=character_height are eligible for this correction.
+    from .layout_character_height_runtime import (
+        install_character_height_fallback_runtime,
+    )
+
+    install_character_height_fallback_runtime()
+
     # The GUI Layout overlay also needs the same physical-indent runtime before
     # app import. Ordinary detection itself prepares this runtime again
     # idempotently in every process, including spawn workers.
