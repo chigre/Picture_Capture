@@ -12,6 +12,15 @@ from .layout_character_height_runtime import install_character_height_fallback_r
 
 install_character_height_fallback_runtime()
 
+# Large-head evidence is structurally strong enough to override physical
+# indentation, so its own eligibility must be hardened before Layout Core imports
+# the detector callable by value.  The runtime requires a page-observed ordinary
+# row scale and a row-front candidate; mid-definition tall objects can never
+# promote a near-zero-indent body line to entry.
+from .ordinary_large_head_runtime import install_ordinary_large_head_runtime
+
+install_ordinary_large_head_runtime()
+
 # Install neutral, shared separator-Y setting names at package import time so
 # every consumer (GUI, ordinary Layout, OCR and PDIC refinement) sees the same
 # canonical API. Legacy ``paddle_*`` keys remain readable through the migration
