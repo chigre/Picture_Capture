@@ -30,6 +30,23 @@ def _left_safety(reference: float, column_width: int) -> int:
     return max(12, min(round(ref * 1.75), round(width * 0.14), 96))
 
 
+def _analysis_left_for_column(
+    columns: list[Any],
+    index: int,
+    reference: float,
+) -> int:
+    """Extend left into margin/gutter but never into the previous text column."""
+    column = columns[index]
+    semantic_left = int(getattr(column, "left", 0) or 0)
+    semantic_right = int(getattr(column, "right", semantic_left + 1) or semantic_left + 1)
+    safety = _left_safety(reference, max(1, semantic_right - semantic_left))
+    candidate = max(0, semantic_left - safety)
+    if index <= 0:
+        return candidate
+    previous_right = int(getattr(columns[index - 1], "right", 0) or 0)
+    return max(candidate, previous_right + 1)
+
+
 def remeasure_layout_indents_from_ink(
     layout: Any,
     page_ink: np.ndarray,
@@ -54,14 +71,14 @@ def remeasure_layout_indents_from_ink(
     body_top = int(getattr(layout, "body_top", 0) or 0)
     height, width = page_ink.shape
     updated: dict[int, int] = {}
+    columns = list(getattr(layout, "columns", []) or [])
 
-    for column in list(getattr(layout, "columns", []) or []):
-        column_index = int(getattr(column, "index", 0) or 0)
+    for position, column in enumerate(columns):
+        column_index = int(getattr(column, "index", position) or position)
         semantic_left = int(getattr(column, "left", 0) or 0)
         semantic_right = int(getattr(column, "right", semantic_left + 1) or semantic_left + 1)
         column_width = max(1, semantic_right - semantic_left)
-        safety = _left_safety(reference, column_width)
-        analysis_left = max(0, semantic_left - safety)
+        analysis_left = _analysis_left_for_column(columns, position, reference)
         analysis_right = min(
             width,
             semantic_left + base._leading_width(column_width, reference),
@@ -113,7 +130,7 @@ def _remeasure_policy_layout(
         settings,
         page_index=page_index,
     )
-    _source, canonical, _transform, effective = base._analysis_page(
+    source, canonical, _transform, effective = base._analysis_page(
         image,
         page_settings,
         int(page_index),
@@ -127,6 +144,10 @@ def _remeasure_policy_layout(
     finally:
         try:
             canonical.close()
+        except Exception:
+            pass
+        try:
+            source.close()
         except Exception:
             pass
 
@@ -168,15 +189,15 @@ def _detect_large_heads_with_left_safety(
             gray_page.shape[0],
             int(getattr(layout, "body_bottom", gray_page.shape[0]) or gray_page.shape[0]),
         )
+        columns = list(getattr(layout, "columns", []) or [])
 
-        for column in list(getattr(layout, "columns", []) or []):
+        for position, column in enumerate(columns):
             semantic_left = max(0, int(getattr(column, "left", 0) or 0))
             semantic_right = min(
                 gray_page.shape[1],
                 int(getattr(column, "right", semantic_left + 1) or semantic_left + 1),
             )
-            safety = _left_safety(reference, max(1, semantic_right - semantic_left))
-            analysis_left = max(0, semantic_left - safety)
+            analysis_left = _analysis_left_for_column(columns, position, reference)
             if semantic_right <= analysis_left or bottom <= top:
                 continue
 
@@ -254,6 +275,7 @@ def install_layout_column_drift_runtime() -> None:
 
 
 __all__ = [
+    "_analysis_left_for_column",
     "_left_safety",
     "_detect_large_heads_with_left_safety",
     "install_layout_column_drift_runtime",
