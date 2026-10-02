@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from picture_capture.overlay_opacity_runtime import (
+    _install_settings_properties,
+    _normalize_opacity,
+    render_alpha_line_overlay,
+)
+
+
+def test_opacity_values_are_clamped_to_visible_percentage_range():
+    assert _normalize_opacity(-10) == 0.0
+    assert _normalize_opacity(0) == 0.0
+    assert _normalize_opacity(37.5) == 37.5
+    assert _normalize_opacity(100) == 100.0
+    assert _normalize_opacity(180) == 100.0
+
+
+def test_true_alpha_line_overlay_uses_rgba_not_stipple_simulation():
+    overlay, left, top = render_alpha_line_overlay(
+        [10, 10, 90, 10],
+        color="#ff0000",
+        width=4,
+        opacity=50,
+    )
+    assert overlay.mode == "RGBA"
+    assert left < 10
+    assert top < 10
+    alpha = overlay.getchannel("A")
+    assert alpha.getbbox() is not None
+    # 50% source alpha survives antialiased downsampling near the line centre.
+    assert 120 <= max(alpha.getdata()) <= 135
+
+
+def test_full_opacity_overlay_has_opaque_line_pixels():
+    overlay, _left, _top = render_alpha_line_overlay(
+        [5, 5, 40, 40],
+        color="#1976d2",
+        width=3,
+        opacity=100,
+        smooth=True,
+    )
+    assert max(overlay.getchannel("A").getdata()) >= 250
+
+
+class _FakeSettings:
+    __slots__ = ()
+    __dataclass_fields__ = {}
+
+    def to_json(self, path: Path) -> None:
+        Path(path).write_text(json.dumps({"base": 1}), encoding="utf-8")
+
+    @classmethod
+    def from_json(cls, path: Path):
+        json.loads(Path(path).read_text(encoding="utf-8"))
+        return cls()
+
+
+def test_runtime_opacity_properties_roundtrip_in_project_json(tmp_path: Path):
+    _install_settings_properties(_FakeSettings)
+    settings = _FakeSettings()
+    assert settings.guide_opacity == 100.0
+    assert settings.headword_marker_opacity == 100.0
+
+    settings.guide_opacity = 42.5
+    settings.headword_marker_opacity = 65
+    path = tmp_path / "settings.json"
+    settings.to_json(path)
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["guide_opacity"] == 42.5
+    assert payload["headword_marker_opacity"] == 65.0
+
+    reopened = _FakeSettings.from_json(path)
+    assert reopened.guide_opacity == 42.5
+    assert reopened.headword_marker_opacity == 65.0
+
+
+def test_launcher_installs_opacity_after_other_drawing_wrappers():
+    launcher = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "launcher.py"
+    ).read_text(encoding="utf-8")
+    assert "from .overlay_opacity_runtime import install_overlay_opacity_runtime" in launcher
+    opacity = launcher.index("install_overlay_opacity_runtime(app_module)")
+    layout = launcher.index("install_layout_visualization(app_module)")
+    lanes = launcher.index("install_physical_lane_summary()")
+    assert layout < opacity
+    assert lanes < opacity
+
+
+def test_opacity_runtime_exposes_independent_guide_and_marker_controls():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "overlay_opacity_runtime.py"
+    ).read_text(encoding="utf-8")
+    assert '"guide_opacity": "栏左垂线不透明度"' in source
+    assert '"headword_marker_opacity": "词头横线不透明度"' in source
+    assert "ImageTk.PhotoImage" in source
+    assert 'name="guide_opacity"' in source
+    assert 'name="headword_marker_opacity"' in source
