@@ -129,6 +129,10 @@ def prepare_app_module() -> Any:
     from .ocr_action_guard import install_ocr_action_guard
     from .ordinary_action_runtime import install_ordinary_action_runtime
     from .overlay_opacity_runtime import install_overlay_opacity_runtime
+    from .illustration_fill_opacity_runtime import (
+        configure_overlay_opacity_defaults,
+        install_illustration_fill_opacity_runtime,
+    )
     from .overlay_line_anchor_runtime import install_overlay_line_anchor_runtime
     from .parameter_help_ui import install_settings_parameter_help
     from .settings_help_restore import install_settings_help_restore
@@ -146,9 +150,14 @@ def prepare_app_module() -> Any:
     # Install after the final Layout summary wrappers so both C1/C2 prepared
     # indent spans stay visible and the per-column block counts are reported.
     install_layout_indent_visibility()
-    # Opacity first wraps the final drawing methods; line anchoring then patches
-    # that shared renderer so both 100% Canvas and RGBA paths grow one-sidedly.
+    # Set all display-overlay defaults before the line opacity runtime creates
+    # AppSettings properties. Existing settings.json values remain authoritative.
+    configure_overlay_opacity_defaults()
     install_overlay_opacity_runtime(app_module)
+    # Illustration fill uses a real RGBA image under the editable Canvas polygon,
+    # rather than Tk's historical gray50 stipple approximation.
+    install_illustration_fill_opacity_runtime(app_module)
+    # Line anchoring patches the shared line renderer after opacity is installed.
     install_overlay_line_anchor_runtime(app_module)
     app_module.PictureCaptureApp.export_training_package = (
         export_training_package_selected_range
