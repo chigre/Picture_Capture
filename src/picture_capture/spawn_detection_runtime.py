@@ -36,12 +36,18 @@ def detect_entries_job_with_runtime(
     from . import processing as processing_module
     from .entry_classification import install_pdic_classification
     from .entry_classification_runtime import install_processing_entry_classification
+    from .layout_column_drift_runtime import install_layout_column_drift_runtime
     from .training_baseline import save_automatic_baseline
 
     # Every spawn process has its own module globals.  Reinstall these wrappers
     # here rather than relying on launcher-time monkey patches from the parent.
     install_pdic_classification(formats)
     install_processing_entry_classification(processing_module)
+    # Install before processing imports Layout Core for the first ordinary page.
+    # The worker may later install the physical-indent finalizer around this
+    # wrapper; both orders are safe because the remeasurement rebuilds modes and
+    # the finalizer remains idempotent.
+    install_layout_column_drift_runtime()
 
     page = Path(image_path)
     with Image.open(page) as opened:
