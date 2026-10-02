@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from picture_capture.overlay_line_anchor_runtime import one_sided_line_coordinates
 from picture_capture.overlay_opacity_runtime import (
     _install_settings_properties,
     _normalize_opacity,
@@ -46,6 +47,22 @@ def test_full_opacity_overlay_has_opaque_line_pixels():
     assert max(overlay.getchannel("A").getdata()) >= 250
 
 
+def test_headword_line_added_thickness_grows_down_only():
+    baseline = (10.0, 20.0, 90.0, 20.0)
+    assert one_sided_line_coordinates(baseline, width=1, growth="down") == baseline
+    assert one_sided_line_coordinates(baseline, width=5, growth="down") == (
+        10.0, 22.0, 90.0, 22.0,
+    )
+
+
+def test_column_guide_added_thickness_grows_left_only():
+    baseline = (30.0, 10.0, 30.0, 90.0)
+    assert one_sided_line_coordinates(baseline, width=1, growth="left") == baseline
+    assert one_sided_line_coordinates(baseline, width=5, growth="left") == (
+        28.0, 10.0, 28.0, 90.0,
+    )
+
+
 class _FakeSettings:
     __slots__ = ()
     __dataclass_fields__ = {}
@@ -87,11 +104,14 @@ def test_launcher_installs_opacity_after_other_drawing_wrappers():
         / "launcher.py"
     ).read_text(encoding="utf-8")
     assert "from .overlay_opacity_runtime import install_overlay_opacity_runtime" in launcher
+    assert "from .overlay_line_anchor_runtime import install_overlay_line_anchor_runtime" in launcher
     opacity = launcher.index("install_overlay_opacity_runtime(app_module)")
+    anchor = launcher.index("install_overlay_line_anchor_runtime(app_module)")
     layout = launcher.index("install_layout_visualization(app_module)")
     lanes = launcher.index("install_physical_lane_summary()")
     assert layout < opacity
     assert lanes < opacity
+    assert opacity < anchor
 
 
 def test_opacity_runtime_exposes_independent_guide_and_marker_controls():
@@ -106,3 +126,15 @@ def test_opacity_runtime_exposes_independent_guide_and_marker_controls():
     assert "ImageTk.PhotoImage" in source
     assert 'name="guide_opacity"' in source
     assert 'name="headword_marker_opacity"' in source
+
+
+def test_marker_opacity_control_is_moved_before_illustration_label_controls():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "overlay_line_anchor_runtime.py"
+    ).read_text(encoding="utf-8")
+    assert 'target = _find_checkbutton(row, "插图标签：外框")' in source
+    assert 'widget.pack_configure(before=target)' in source
+    assert 'growth = "left" if bool(options.get("smooth", False)) else "down"' in source
