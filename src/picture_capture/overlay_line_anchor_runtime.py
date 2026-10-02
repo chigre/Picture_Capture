@@ -4,7 +4,7 @@ from __future__ import annotations
 
 The stored/detected coordinates are boundaries, not visual centre lines:
 - a headword marker's Y is its *top* anchor, so extra thickness grows downward;
-- a column guide's X/path is its *right* anchor, so extra thickness grows left.
+- a column guide's X/path is its *left* anchor, so extra thickness grows right.
 
 A one-pixel line therefore stays exactly where it was.  Only the additional
 thickness beyond that original pixel is displaced to the requested side.  This
@@ -26,7 +26,7 @@ def one_sided_line_coordinates(
     width: float,
     growth: str,
 ) -> tuple[float, ...]:
-    """Shift a centred stroke so added width grows only down or left.
+    """Shift a centred stroke so added width grows only down/left/right.
 
     Width=1 is the historical reference stroke and is intentionally unchanged.
     For width W, only (W-1)/2 is used as the centre-line offset, preserving the
@@ -58,6 +58,9 @@ def one_sided_line_coordinates(
     elif normalized == "left":
         for index in range(0, len(flattened), 2):
             flattened[index] -= offset
+    elif normalized == "right":
+        for index in range(0, len(flattened), 2):
+            flattened[index] += offset
     return tuple(flattened)
 
 
@@ -134,7 +137,7 @@ def install_overlay_line_anchor_runtime(app_module: Any) -> None:
         opacity: float,
     ) -> int:
         # Column guides are the smooth paths; headword markers are straight.
-        growth = "left" if bool(options.get("smooth", False)) else "down"
+        growth = "right" if bool(options.get("smooth", False)) else "down"
         shifted = one_sided_line_coordinates(
             coordinates,
             width=float(options.get("width") or 1.0),
@@ -160,7 +163,7 @@ def install_overlay_line_anchor_runtime(app_module: Any) -> None:
     if "guide_width" in help_map:
         help_map["guide_width"] = (
             str(help_map["guide_width"]).rstrip()
-            + "\n\n粗细方向：栏左路径为右边界锚点；宽度增加时只向左侧扩展，不向正文栏内扩展。"
+            + "\n\n粗细方向：栏左路径为左边界锚点；宽度增加时只向右侧扩展，不向栏外扩展。"
         )
     app_module.SettingsDialog.SETTING_HELP = help_map
 
