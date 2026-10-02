@@ -7,14 +7,14 @@ otherwise-correct physical-indent role:
 
 * the size reference must describe the *observed ordinary rows* on this page,
   not only a possibly underestimated project/fallback character height;
-* the oversized object must live at the physical start of its Layout row.  A
+* the oversized object must live at the physical start of its Layout row. A
   large/merged object in the middle of definition text is not a headword merely
   because its bounding box is tall.
 
-The historical detector intentionally scans physical ink without OCR.  This
-adapter keeps that property and reuses its fragment/group/split implementation;
-it only strengthens the reference scale and row-start eligibility before
-emitting evidence.
+The detector also reuses the Layout column-drift runtime's analysis-only left
+safety band.  This is intentionally done *inside* the guarded detector: the
+column-drift installer must never replace this callable, otherwise import order
+can silently disable row-front/strong-oversized authorization.
 """
 
 from typing import Any
@@ -41,9 +41,6 @@ def observed_body_line_reference(layout: Any) -> float:
                 continue
             if height <= 0:
                 continue
-            # Keep plausible physical rows but exclude obviously merged multi-row
-            # bands.  The upper bound is deliberately loose when baseline itself
-            # was underestimated.
             if baseline * 0.42 <= height <= baseline * 2.20:
                 all_heights.append(height)
                 if str(getattr(line, "role", "body") or "body") == "body":
@@ -62,9 +59,6 @@ def observed_body_line_reference(layout: Any) -> float:
         if kept.size >= 6:
             center = float(np.median(kept))
 
-    # Never make large-head evidence *easier* merely because page-row recovery
-    # produced a smaller number.  Upward correction is bounded only to avoid one
-    # pathological row family redefining the scale.
     return float(max(baseline, min(center, baseline * 1.80)))
 
 
@@ -103,9 +97,6 @@ def candidate_starts_at_row_front(
     except (TypeError, ValueError):
         anchor_x = None
 
-    # A superscript number or tiny marker may precede the actual large glyph.
-    # Allow that prefix through anchor_x, plus a generous fixed allowance, while
-    # categorically rejecting objects hundreds of pixels into definition text.
     allowed_forward = reference * 2.50
     if anchor_x is not None and anchor_x >= first_x:
         allowed_forward = max(
@@ -125,55 +116,82 @@ def detect_ordinary_large_head_entries_guarded(
 ) -> list[Entry]:
     """Detect only row-leading oversized CJK heads with a page-observed scale."""
     from . import ordinary_large_head_evidence as base
+    from .layout_column_drift_runtime import _analysis_left_for_column
 
     if not base._uses_cjk_large_heads(settings):
         return []
 
     layout = understanding.layout
     canonical = layout.transform.canonical_image_for_analysis(image.convert("RGB"))
-    gray_page = np.asarray(canonical.convert("L"), dtype=np.uint8)
-    line_height = observed_body_line_reference(layout)
-    found: list[Entry] = []
+    try:
+        gray_page = np.asarray(canonical.convert("L"), dtype=np.uint8)
+        line_height = observed_body_line_reference(layout)
+        found: list[Entry] = []
+        columns = list(getattr(layout, "columns", []) or [])
+        top = max(0, int(getattr(layout, "body_top", 0) or 0))
+        bottom = min(
+            gray_page.shape[0],
+            int(getattr(layout, "body_bottom", gray_page.shape[0]) or gray_page.shape[0]),
+        )
 
-    for column in list(getattr(layout, "columns", []) or []):
-        left = max(0, int(column.left))
-        right = min(gray_page.shape[1], int(column.right))
-        top = max(0, int(layout.body_top))
-        bottom = min(gray_page.shape[0], int(layout.body_bottom))
-        if right <= left or bottom <= top:
-            continue
-
-        gray = gray_page[top:bottom, left:right]
-        if gray.size == 0:
-            continue
-        ink = gray <= base._otsu(gray)
-        for box in base._candidate_boxes(ink, line_height):
-            if not candidate_starts_at_row_front(column, box, line_height):
-                continue
-            x0, y0, _x1, y1 = box
-            height = float(y1 - y0)
-            canonical_y = top + int(y0)
-            source_x, source_y = layout.transform.canonical_to_source_point(
-                int(column.left),
-                canonical_y,
-                layout.source_size,
+        for position, column in enumerate(columns):
+            semantic_left = max(0, int(getattr(column, "left", 0) or 0))
+            semantic_right = min(
+                gray_page.shape[1],
+                int(getattr(column, "right", semantic_left + 1) or semantic_left + 1),
             )
-            found.append(Entry(
-                word="",
-                x=int(source_x),
-                y=int(source_y),
-                confidence=min(
-                    0.995,
-                    max(0.90, height / max(1.0, line_height * 2.5)),
-                ),
-                ocr_source="ordinary_large_head_evidence",
-                issue_type="ORDINARY_OVERSIZED_DISPLAY_HEAD",
-                ocr_visual_run_height=height,
-                ocr_line_height_reference=line_height,
-                ocr_leading_height_ratio=height / max(1.0, line_height),
-                ocr_single_cjk=True,
-                ocr_oversized_cjk=True,
-            ))
+            analysis_left = _analysis_left_for_column(columns, position, line_height)
+            if semantic_right <= analysis_left or bottom <= top:
+                continue
+
+            gray = gray_page[top:bottom, analysis_left:semantic_right]
+            if gray.size == 0:
+                continue
+            ink = gray <= base._otsu(gray)
+            local_shift = int(analysis_left - semantic_left)
+
+            for raw_box in base._candidate_boxes(ink, line_height):
+                x0, y0, x1, y1 = raw_box
+                # Candidate X is local to the widened analysis band. Convert it
+                # back to semantic-column-local coordinates before comparing it
+                # with LayoutLine.first_x / anchor_x.
+                semantic_box = (
+                    int(x0 + local_shift),
+                    int(y0),
+                    int(x1 + local_shift),
+                    int(y1),
+                )
+                if not candidate_starts_at_row_front(column, semantic_box, line_height):
+                    continue
+
+                height = float(y1 - y0)
+                canonical_y = top + int(y0)
+                source_x, source_y = layout.transform.canonical_to_source_point(
+                    semantic_left,
+                    canonical_y,
+                    layout.source_size,
+                )
+                found.append(Entry(
+                    word="",
+                    x=int(source_x),
+                    y=int(source_y),
+                    confidence=min(
+                        0.995,
+                        max(0.90, height / max(1.0, line_height * 2.5)),
+                    ),
+                    ocr_source="ordinary_large_head_evidence",
+                    issue_type="ORDINARY_OVERSIZED_DISPLAY_HEAD",
+                    ocr_visual_run_height=height,
+                    ocr_line_height_reference=line_height,
+                    ocr_leading_height_ratio=height / max(1.0, line_height),
+                    ocr_single_cjk=True,
+                    ocr_oversized_cjk=True,
+                ))
+    finally:
+        try:
+            canonical.close()
+        except Exception:
+            pass
 
     found.sort(key=lambda item: (item.x, item.y))
     deduped: list[Entry] = []
