@@ -66,3 +66,31 @@ def test_package_installs_large_head_guard_before_processing_import():
     assert package.index("install_ordinary_large_head_runtime()") < package.index(
         "from . import processing as _processing"
     )
+
+
+def test_column_drift_runtime_never_replaces_large_head_detector():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    drift = (root / "src/picture_capture/layout_column_drift_runtime.py").read_text(
+        encoding="utf-8"
+    )
+
+    # Column drift owns first-X remeasurement only. Reintroducing an assignment
+    # here would silently bypass row-front/strong-oversized guards because Layout
+    # Core imports the detector later in the real GUI/spawn path.
+    assert "large_head.detect_ordinary_large_head_entries =" not in drift
+    assert "ordinary_large_head_evidence as large_head" not in drift
+
+
+def test_guarded_large_head_detector_reuses_left_safety_without_losing_semantics():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    runtime = (root / "src/picture_capture/ordinary_large_head_runtime.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "_analysis_left_for_column" in runtime
+    assert "semantic_box" in runtime
+    assert "candidate_starts_at_row_front(column, semantic_box, line_height)" in runtime
