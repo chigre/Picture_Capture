@@ -100,6 +100,7 @@ def prepare_app_module() -> Any:
     install_review_entry_classification(app_module)
     install_ocr_crop_preview(app_module)
 
+    from .layout_indent_visibility_runtime import install_layout_indent_visibility
     from .layout_lane_summary_extension import install_physical_lane_summary
     from .layout_visualization_role_theme import install_layout_role_theme
     from .layout_visualization_ui_v3 import install_layout_visualization
@@ -120,6 +121,9 @@ def prepare_app_module() -> Any:
     install_layout_role_theme()
     install_layout_visualization(app_module)
     install_physical_lane_summary()
+    # Install after the final Layout summary wrappers so both C1/C2 prepared
+    # indent spans stay visible and the per-column block counts are reported.
+    install_layout_indent_visibility()
     # Opacity first wraps the final drawing methods; line anchoring then patches
     # that shared renderer so both 100% Canvas and RGBA paths grow one-sidedly.
     install_overlay_opacity_runtime(app_module)
