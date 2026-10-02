@@ -32,6 +32,15 @@ def detect_entries_job_with_runtime(
 ) -> int:
     """Run one ordinary-drawing job with spawn-local runtime installers."""
 
+    # Install character-height fallback before importing processing: processing
+    # imports Page Understanding modules that may capture detect_layout_parameters
+    # by value during module import.
+    from .layout_character_height_runtime import (
+        install_character_height_fallback_runtime,
+    )
+
+    install_character_height_fallback_runtime()
+
     from . import formats
     from . import processing as processing_module
     from .entry_classification import install_pdic_classification
