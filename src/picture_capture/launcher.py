@@ -98,10 +98,12 @@ def prepare_app_module() -> Any:
 
     from . import app as app_module
     from .layout_visualization_shared import install_shared_layout_visualization_source
+    from .layout_local_indent_visualization_runtime import install_local_indent_visualization
     from .review_entry_classification_ui import install_review_entry_classification
     from .ocr_crop_preview_ui import install_ocr_crop_preview
 
     install_shared_layout_visualization_source()
+    install_local_indent_visualization()
     install_review_entry_classification(app_module)
     install_ocr_crop_preview(app_module)
 
