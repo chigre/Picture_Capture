@@ -2,6 +2,16 @@
 
 __version__ = "2.14.2"
 
+# Character-height recovery must be installed before *any* module can import
+# layout_detection.detect_layout_parameters by value.  Package import itself
+# later imports processing, whose page-understanding chain imports
+# dictionary_page_layout_policy; installing only in launcher.py is therefore too
+# late for GUI/EXE/spawn processes.  The installer is narrow and only changes
+# pages explicitly marked fallback=character_height.
+from .layout_character_height_runtime import install_character_height_fallback_runtime
+
+install_character_height_fallback_runtime()
+
 # Install neutral, shared separator-Y setting names at package import time so
 # every consumer (GUI, ordinary Layout, OCR and PDIC refinement) sees the same
 # canonical API. Legacy ``paddle_*`` keys remain readable through the migration
