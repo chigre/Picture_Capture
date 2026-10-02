@@ -12,6 +12,14 @@ from .layout_character_height_runtime import install_character_height_fallback_r
 
 install_character_height_fallback_runtime()
 
+# Page Layout historically imports the detector callable by value. Keep that
+# consumer permanently pointed at the live layout_detection module so a runtime
+# detector wrapper can never produce contradictory states such as
+# ``used=39 raw=59 APPLIED`` merely because of import order.
+from .layout_detector_live_binding import install_live_layout_detector_binding
+
+install_live_layout_detector_binding()
+
 # Large-head evidence is structurally strong enough to override physical
 # indentation, so its own eligibility must be hardened before Layout Core imports
 # the detector callable by value.  The first runtime keeps the detector tied to
