@@ -12,7 +12,7 @@ reuse exactly the same final role assignment.
 from collections import OrderedDict
 import hashlib
 import math
-from typing import Any
+from typing import Any, Iterable
 
 from PIL import Image
 
@@ -21,7 +21,7 @@ from .layout_physical_indent import (
     _suppress_display_head_duplicate_entries,
     normalize_layout_roles,
 )
-from .models import AppSettings
+from .models import AppSettings, Entry
 from .ordinary_evidence_fusion import promote_evidence_to_layout_roles
 from .ordinary_large_head_evidence import detect_ordinary_large_head_entries
 from .ordinary_symbol_evidence import detect_ordinary_symbol_entries
@@ -191,6 +191,92 @@ def _resolve_directional_body_lanes(layout: Any) -> None:
     _suppress_display_head_duplicate_entries(layout)
 
 
+def _suppress_large_evidence_duplicate_entries(
+    layout: Any,
+    large_entries: Iterable[Entry],
+) -> int:
+    """Keep one Layout entry row inside each detected oversized head extent.
+
+    The historical duplicate suppressor consumes ``layout.display_heads``.  The
+    universal ordinary large-head detector is newer and can positively detect an
+    oversized glyph even when that older list is absent or vertically too short.
+    Its evidence already carries the observed glyph height, so use that same
+    physical evidence to collapse every logical row start that falls *inside*
+    the glyph.  The first/top entry boundary is retained; later rows are body.
+
+    This only demotes duplicate rows within a positively detected oversized-head
+    box.  It does not widen generic Y de-duplication and cannot merge unrelated
+    ordinary entries outside that observed glyph extent.
+    """
+    columns = list(getattr(layout, "columns", []) or [])
+    if not columns:
+        return 0
+
+    source_size = tuple(getattr(layout, "source_size", (0, 0)) or (0, 0))
+    body_top = int(getattr(layout, "body_top", 0) or 0)
+    reference = max(4.0, float(getattr(layout, "ordinary_line_height", 1.0) or 1.0))
+    removed = 0
+
+    for evidence in list(large_entries):
+        try:
+            observed_height = float(getattr(evidence, "ocr_visual_run_height", 0.0) or 0.0)
+            if observed_height < reference * 1.20:
+                continue
+            canonical_x, canonical_y = layout.transform.source_to_canonical_point(
+                int(evidence.x),
+                int(evidence.y),
+                source_size,
+            )
+            canonical_x = float(canonical_x)
+            top = float(canonical_y) - float(body_top)
+        except (AttributeError, TypeError, ValueError):
+            continue
+
+        # Evidence is emitted at column.left.  Prefer the containing column and
+        # otherwise use the nearest left edge so tiny transform rounding cannot
+        # make us miss the correct column.
+        containing = [
+            column
+            for column in columns
+            if float(getattr(column, "left", 0) or 0) - 1.0
+            <= canonical_x
+            <= float(getattr(column, "right", 0) or 0) + 1.0
+        ]
+        column = min(
+            containing or columns,
+            key=lambda item: abs(float(getattr(item, "left", 0) or 0) - canonical_x),
+        )
+
+        bottom = top + observed_height
+        top_tolerance = min(reference * 0.35, max(3.0, observed_height * 0.12))
+        overlapping = [
+            line
+            for line in list(getattr(column, "lines", []) or [])
+            if str(getattr(line, "role", "body") or "body") == "entry"
+            and float(getattr(line, "y0", 0) or 0) >= top - top_tolerance
+            and float(getattr(line, "y0", 0) or 0) < bottom
+        ]
+        if len(overlapping) <= 1:
+            continue
+
+        # Keep the boundary that best represents the physical top of the glyph;
+        # this is also the row to which large-head evidence was promoted.
+        keeper = min(
+            overlapping,
+            key=lambda line: (
+                abs(float(getattr(line, "y0", 0) or 0) - top),
+                float(getattr(line, "y0", 0) or 0),
+            ),
+        )
+        for line in overlapping:
+            if line is keeper:
+                continue
+            line.role = "body"
+            removed += 1
+
+    return removed
+
+
 def _apply_universal_ordinary_evidence(
     image: Image.Image,
     understanding: PageUnderstanding,
@@ -201,9 +287,12 @@ def _apply_universal_ordinary_evidence(
     large_entries = detect_ordinary_large_head_entries(image, understanding, settings)
     symbol_promoted = promote_evidence_to_layout_roles(understanding, symbol_entries)
     large_promoted = promote_evidence_to_layout_roles(understanding, large_entries)
-    # A large display glyph may occupy more than one recovered logical row.
-    # Keep one entry boundary per display head after all evidence is promoted.
+    # First retain the historical display-head safeguard, then consume the
+    # current large-head evidence itself.  The latter closes the gap where the
+    # newer detector sees a 2-3-row display glyph but layout.display_heads does
+    # not cover its full vertical extent.
     _suppress_display_head_duplicate_entries(understanding.layout)
+    _suppress_large_evidence_duplicate_entries(understanding.layout, large_entries)
     return symbol_promoted, large_promoted
 
 
