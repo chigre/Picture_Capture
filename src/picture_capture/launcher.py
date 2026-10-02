@@ -35,12 +35,17 @@ def prepare_app_module() -> Any:
     from .dictionary_page_design_refined import detect_entries_from_page_design
     from .layout_line_start_refinement import install_robust_line_starts
     from .layout_physical_indent import install_physical_indent_inference
+    from .layout_column_drift_runtime import install_layout_column_drift_runtime
 
     dictionary_page_design.detect_entries_from_page_design = (
         detect_entries_from_page_design
     )
     install_robust_line_starts()
     install_physical_indent_inference()
+    # Keep semantic column geometry fixed while allowing analysis pixels to
+    # extend left of it on slanted/curved scans. This must be ready before the
+    # shared Layout Core imports policy/large-head callables by value.
+    install_layout_column_drift_runtime()
 
     from . import profile_setup
     from .profile_layout_bootstrap import install_profile_layout_bootstrap
