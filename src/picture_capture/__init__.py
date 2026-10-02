@@ -14,12 +14,14 @@ install_character_height_fallback_runtime()
 
 # Large-head evidence is structurally strong enough to override physical
 # indentation, so its own eligibility must be hardened before Layout Core imports
-# the detector callable by value.  The runtime requires a page-observed ordinary
-# row scale and a row-front candidate; mid-definition tall objects can never
-# promote a near-zero-indent body line to entry.
+# the detector callable by value.  The first runtime keeps the detector tied to
+# page-observed row scale / row-front geometry; the second separates a weak
+# oversized candidate from evidence strong enough to manufacture a new entry.
 from .ordinary_large_head_runtime import install_ordinary_large_head_runtime
+from .ordinary_large_head_role_guard import install_ordinary_large_head_role_guard
 
 install_ordinary_large_head_runtime()
+install_ordinary_large_head_role_guard()
 
 # Install neutral, shared separator-Y setting names at package import time so
 # every consumer (GUI, ordinary Layout, OCR and PDIC refinement) sees the same
