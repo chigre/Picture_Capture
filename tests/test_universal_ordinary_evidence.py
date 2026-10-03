@@ -174,9 +174,9 @@ def test_profile_ui_explains_visual_samples_are_ordinary_evidence():
     assert 'child.cget("text") == "大字单字可以作为词头"' in source
 
 
-def test_launcher_installs_universal_ordinary_profile_ui():
-    import picture_capture.launcher as launcher
+def test_gui_composition_installs_universal_ordinary_profile_ui():
+    import picture_capture.bootstrap.gui as gui_bootstrap
 
-    source = open(launcher.__file__, "r", encoding="utf-8").read()
+    source = open(gui_bootstrap.__file__, "r", encoding="utf-8").read()
     assert "build_ordinary_evidence_profile_wizard" in source
     assert "build_project_profile_wizard(profile_setup.ProjectProfileWizard)" in source

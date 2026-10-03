@@ -45,3 +45,25 @@ def test_importing_bootstrap_does_not_import_gui_app_module() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_gui_composition_is_owned_by_bootstrap_and_launcher_is_only_a_facade() -> None:
+    application = (
+        ROOT / "src" / "picture_capture" / "bootstrap" / "application.py"
+    ).read_text(encoding="utf-8")
+    gui = (
+        ROOT / "src" / "picture_capture" / "bootstrap" / "gui.py"
+    ).read_text(encoding="utf-8")
+    launcher = (
+        ROOT / "src" / "picture_capture" / "launcher.py"
+    ).read_text(encoding="utf-8")
+
+    assert "from .gui import prepare_gui_application" in application
+    assert "return prepare_gui_application()" in application
+    assert "def prepare_gui_application()" in gui
+    assert "install_ui_terminology()" in gui
+    assert "install_spawn_detection_runtime(processing_module)" in gui
+    assert "from .bootstrap.application import build_application" in launcher
+    assert "from .bootstrap.application import main as bootstrap_main" in launcher
+    assert "install_ui_terminology()" not in launcher
+    assert "install_spawn_detection_runtime(processing_module)" not in launcher

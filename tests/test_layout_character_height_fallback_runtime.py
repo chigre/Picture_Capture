@@ -76,22 +76,24 @@ def test_runtime_is_installed_before_any_page_layout_import_can_capture_detector
 
     root = Path(__file__).resolve().parents[1]
     package_init = (root / "src/picture_capture/__init__.py").read_text(encoding="utf-8")
-    launcher = (root / "src/picture_capture/launcher.py").read_text(encoding="utf-8")
+    composition = (
+        root / "src/picture_capture/bootstrap/gui.py"
+    ).read_text(encoding="utf-8")
     spawn = (root / "src/picture_capture/spawn_detection_runtime.py").read_text(encoding="utf-8")
 
     # This is the crucial process-wide ordering rule. Importing the package runs
-    # __init__.py before launcher/main or any spawn target body. __init__ itself
-    # imports processing, which imports Page Understanding and the policy module
-    # that binds detect_layout_parameters by value.
+    # __init__.py before the GUI composition root or any spawn target body.
+    # __init__ itself imports processing, which imports Page Understanding and
+    # the policy module that binds detect_layout_parameters by value.
     assert package_init.index("install_character_height_fallback_runtime()") < package_init.index(
         "from . import processing as _processing"
     )
 
-    # Keep the more local guards too: they document the same contract for users
-    # of launcher and for the spawn job body even though package init now makes
-    # the process-level ordering safe first.
-    assert launcher.index("install_character_height_fallback_runtime()") < launcher.index(
-        "from . import dictionary_page_design"
+    # Keep the more local guards too: they document the same contract for GUI
+    # composition and for the spawn job body even though package init currently
+    # makes the process-level ordering safe first.
+    assert composition.index("install_character_height_fallback_runtime()") < composition.index(
+        "from .. import dictionary_page_design"
     )
     assert spawn.index("install_character_height_fallback_runtime()") < spawn.index(
         "from . import processing as processing_module"

@@ -174,8 +174,8 @@ def test_single_line_merge_is_output_only_and_page_worker_reads_crop_option():
     worker_source = (
         root / "src" / "picture_capture" / "single_line_parallel.py"
     ).read_text(encoding="utf-8")
-    launcher_source = (
-        root / "src" / "picture_capture" / "launcher.py"
+    composition_source = (
+        root / "src" / "picture_capture" / "bootstrap" / "gui.py"
     ).read_text(encoding="utf-8")
 
     assert MERGE_LABEL == "单行切图按页合并"
@@ -191,4 +191,4 @@ def test_single_line_merge_is_output_only_and_page_worker_reads_crop_option():
     assert "load_merge_by_page(project_root)" in worker_source
     assert "character_height" not in merge_source
     assert "row_padding" not in merge_source
-    assert "install_single_line_merge_settings_ui(app_module)" in launcher_source
+    assert "install_single_line_merge_settings_ui(app_module)" in composition_source

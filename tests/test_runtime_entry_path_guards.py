@@ -36,6 +36,16 @@ class _FakeAppModule:
     SettingsDialog = _FakeSettingsDialog
 
 
+def _gui_composition_source() -> str:
+    return (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "bootstrap"
+        / "gui.py"
+    ).read_text(encoding="utf-8")
+
+
 def test_settings_help_restore_installs_current_shared_ocr_wording_without_tk_root():
     install_settings_help_restore(_FakeAppModule)
     dialog = _FakeAppModule.SettingsDialog()
@@ -44,15 +54,10 @@ def test_settings_help_restore_installs_current_shared_ocr_wording_without_tk_ro
     assert "共享 OCR 通道" in _FakeAppModule.SettingsDialog.CHECK_HELP["paddle_use_paddleocr"]
 
 
-def test_launcher_installs_help_restore_after_compact_right_pane_builder():
-    launcher = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "picture_capture"
-        / "launcher.py"
-    ).read_text(encoding="utf-8")
-    compact = launcher.index("install_settings_parameter_help(app_module)")
-    restore = launcher.index("install_settings_help_restore(app_module)")
+def test_gui_composition_installs_help_restore_after_compact_right_pane_builder():
+    source = _gui_composition_source()
+    compact = source.index("install_settings_parameter_help(app_module)")
+    restore = source.index("install_settings_help_restore(app_module)")
     assert compact < restore
 
 
@@ -101,15 +106,10 @@ def test_lens_checkbox_with_mode_off_is_not_a_runnable_lens_only_selection():
     assert _ineffective_lens_only_selection(tesseract_rescue_present, app_module) is False
 
 
-def test_launcher_installs_ocr_guard_before_user_actions_run():
-    launcher = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "picture_capture"
-        / "launcher.py"
-    ).read_text(encoding="utf-8")
-    assert "from .ocr_action_guard import install_ocr_action_guard" in launcher
-    assert "install_ocr_action_guard(app_module)" in launcher
+def test_gui_composition_installs_ocr_guard_before_user_actions_run():
+    source = _gui_composition_source()
+    assert "install_ocr_action_guard" in source
+    assert "install_ocr_action_guard(app_module)" in source
 
 
 def test_shared_ocr_action_wording_no_longer_claims_marker_text_is_paddle_only():
@@ -163,24 +163,19 @@ def test_ordinary_quick_apply_uses_normal_validator_when_ocr_is_selected():
     assert calls == [{"show_status": False}]
 
 
-def test_launcher_installs_ordinary_action_runtime():
-    launcher = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "picture_capture"
-        / "launcher.py"
-    ).read_text(encoding="utf-8")
-    assert "from .ordinary_action_runtime import install_ordinary_action_runtime" in launcher
-    assert "install_ordinary_action_runtime(app_module)" in launcher
+def test_gui_composition_installs_ordinary_action_runtime():
+    source = _gui_composition_source()
+    assert "install_ordinary_action_runtime" in source
+    assert "install_ordinary_action_runtime(app_module)" in source
 
-    source = (
+    ordinary_source = (
         Path(__file__).resolve().parents[1]
         / "src"
         / "picture_capture"
         / "ordinary_action_runtime.py"
     ).read_text(encoding="utf-8")
-    assert 'self.settings.detection_method = "left_edge"' in source
-    assert 'self._detect_pages(indices, method="left_edge", force_refresh=False)' in source
+    assert 'self.settings.detection_method = "left_edge"' in ordinary_source
+    assert 'self._detect_pages(indices, method="left_edge", force_refresh=False)' in ordinary_source
 
 
 def test_spawn_worker_is_top_level_pickleable_and_installed_before_app_import():
@@ -190,14 +185,9 @@ def test_spawn_worker_is_top_level_pickleable_and_installed_before_app_import():
     install_spawn_detection_runtime(processing)
     assert processing.detect_entries_job is detect_entries_job_with_runtime
 
-    launcher = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "picture_capture"
-        / "launcher.py"
-    ).read_text(encoding="utf-8")
-    install_at = launcher.index("install_spawn_detection_runtime(processing_module)")
-    app_import_at = launcher.index("from . import app as app_module")
+    source = _gui_composition_source()
+    install_at = source.index("install_spawn_detection_runtime(processing_module)")
+    app_import_at = source.index("from .. import app as app_module")
     assert install_at < app_import_at
 
 

@@ -111,10 +111,14 @@ def test_runtime_installed_before_processing_and_in_spawn_worker_source_contract
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
-    launcher = (root / "src/picture_capture/launcher.py").read_text(encoding="utf-8")
-    worker = (root / "src/picture_capture/spawn_detection_runtime.py").read_text(encoding="utf-8")
+    composition = (
+        root / "src/picture_capture/bootstrap/gui.py"
+    ).read_text(encoding="utf-8")
+    worker = (
+        root / "src/picture_capture/spawn_detection_runtime.py"
+    ).read_text(encoding="utf-8")
 
-    assert launcher.index("install_layout_column_drift_runtime()") < launcher.index(
-        "from . import processing as processing_module"
+    assert composition.index("install_layout_column_drift_runtime()") < composition.index(
+        "from .. import processing as processing_module"
     )
     assert "install_layout_column_drift_runtime()" in worker
