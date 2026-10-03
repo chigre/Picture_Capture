@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-import queue
 
 from picture_capture.models import Entry
 import picture_capture.postproduction_single_line_runtime as runtime
+import picture_capture.single_line_parallel as parallel
 
 
 def test_single_line_worker_reuses_proofreading_crop_path(tmp_path, monkeypatch):
@@ -13,14 +13,15 @@ def test_single_line_worker_reuses_proofreading_crop_path(tmp_path, monkeypatch)
     images = (root / "page1.jpg", root / "page2.jpg")
     calls: list[dict] = []
     logged: list[list] = []
+    progress: list[tuple] = []
 
-    monkeypatch.setattr(runtime.formats, "pdic_path", lambda path: path.with_suffix(".pdic"))
+    monkeypatch.setattr(parallel.formats, "pdic_path", lambda path: path.with_suffix(".pdic"))
     monkeypatch.setattr(
-        runtime.formats,
+        parallel.formats,
         "read_pdic",
         lambda path: [Entry(path.stem, 10, 20)],
     )
-    monkeypatch.setattr(runtime, "read_page_sections", lambda path: [f"section:{path.stem}"])
+    monkeypatch.setattr(parallel, "read_page_sections", lambda path: [f"section:{path.stem}"])
 
     def fake_split(image_path, entries, settings, output_dir, **kwargs):
         calls.append({
@@ -32,12 +33,19 @@ def test_single_line_worker_reuses_proofreading_crop_path(tmp_path, monkeypatch)
         })
         return [f"record:{image_path.stem}"]
 
-    monkeypatch.setattr(runtime, "split_single_lines", fake_split)
-    monkeypatch.setattr(runtime, "append_crop_log", lambda _root, records: logged.append(list(records)))
+    monkeypatch.setattr(parallel, "split_single_lines", fake_split)
+    monkeypatch.setattr(parallel, "append_crop_log", lambda _root, records: logged.append(list(records)))
+    monkeypatch.setattr(parallel, "load_merge_by_page", lambda _root: False)
+    monkeypatch.setattr(parallel, "configured_single_line_workers", lambda _root: 1)
 
-    events: queue.Queue = queue.Queue()
     settings = object()
-    runtime._single_line_worker(root, images, (1, 0), settings, events)
+    result = parallel.run_single_line_pages(
+        root,
+        images,
+        (1, 0),
+        settings,
+        lambda *args: progress.append(tuple(args)),
+    )
 
     assert [call["image_path"].name for call in calls] == ["page2.jpg", "page1.jpg"]
     assert [call["profile_page_index"] for call in calls] == [1, 0]
@@ -48,35 +56,39 @@ def test_single_line_worker_reuses_proofreading_crop_path(tmp_path, monkeypatch)
     assert all(call["output_dir"] == root / "QT" / "PSW" for call in calls)
     assert all(call["settings"] is settings for call in calls)
     assert logged == [["record:page2"], ["record:page1"]]
-
-    emitted = []
-    while not events.empty():
-        emitted.append(events.get_nowait())
-    assert [kind for kind, _payload in emitted] == ["progress", "progress", "done"]
-    assert emitted[-1][1][0:2] == (2, 2)
-    assert emitted[-1][1][2] == root / "QT" / "PSW"
+    assert [item[0:2] for item in progress] == [(1, 2), (2, 2)]
+    assert result[0:2] == (2, 2)
+    assert result[2] == root / "QT" / "PSW"
+    assert result[4] == 1
 
 
 def test_runtime_contract_keeps_main_button_left_of_entry_crop_and_uses_selected_scope():
     root = Path(__file__).resolve().parents[1]
-    source = (root / "src" / "picture_capture" / "postproduction_single_line_runtime.py").read_text(
+    runtime_source = (root / "src" / "picture_capture" / "postproduction_single_line_runtime.py").read_text(
+        encoding="utf-8"
+    )
+    worker_source = (root / "src" / "picture_capture" / "single_line_parallel.py").read_text(
         encoding="utf-8"
     )
 
-    assert '_BUTTON_TEXT = "单行切图"' in source
-    assert '_TARGET_TEXT = "词条切图"' in source
-    assert "_pack_before(button, target)" in source
-    assert "_grid_before(button, target)" in source
-    assert "app.selected_page_indices()" in source
-    assert "split_single_lines(" in source
-    assert 'qt_root(project_root) / "PSW"' in source
-    assert "profile_page_index=index" in source
-    assert "page_sections=sections" in source
-    # The main-window action must not fork a second line-box algorithm.
-    worker = source[source.index("def _single_line_worker("):source.index("\ndef _start_single_line_export(")]
-    assert ".crop(" not in worker
-    assert "character_height" not in worker
-    assert "row_padding" not in worker
+    assert '_BUTTON_TEXT = "单行切图"' in runtime_source
+    assert '_TARGET_TEXT = "词条切图"' in runtime_source
+    assert "_pack_before(button, target)" in runtime_source
+    assert "_grid_before(button, target)" in runtime_source
+    assert "app.selected_page_indices()" in runtime_source
+
+    # Page-level work owns the mature crop call; the Tk runtime only schedules it.
+    assert "split_single_lines(" in worker_source
+    assert 'qt_root(project_root) / "PSW"' in worker_source
+    assert "profile_page_index=int(page_index)" in worker_source
+    assert "page_sections=sections" in worker_source
+    page_job = worker_source[
+        worker_source.index("def single_line_page_job("):
+        worker_source.index("\ndef run_single_line_pages(")
+    ]
+    assert ".crop(" not in page_job
+    assert "character_height" not in page_job
+    assert "row_padding" not in page_job
 
 
 def test_launcher_installs_single_line_postproduction_extension():
