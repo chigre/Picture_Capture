@@ -17,12 +17,50 @@ def install_entry_classification_fields() -> None:
 
     from .entry_classification import (
         get_entry_classification,
+        infer_entry_classification,
         register_entry_classification,
         set_entry_scale_manual,
     )
 
+    def current_classification(entry: Entry):
+        """Return metadata consistent with this concrete Entry's own evidence.
+
+        The historical registry is keyed by ``id(entry)``. CPython may recycle an
+        object id after a temporary Entry is collected, so a long-running app or
+        a large test suite can otherwise attach stale automatic metadata to a new
+        Entry. Explicit/manual or sidecar-only metadata remains authoritative;
+        automatic evidence is refreshed only when the new Entry itself carries a
+        non-unknown structural source.
+        """
+        current = get_entry_classification(entry)
+        inferred = infer_entry_classification(entry)
+        if (
+            not current.manual_override
+            and inferred.entry_source != "unknown"
+            and (
+                current.entry_source != inferred.entry_source
+                or current.auto_entry_source != inferred.auto_entry_source
+                or current.entry_scale != inferred.entry_scale
+                or current.auto_entry_scale != inferred.auto_entry_scale
+                or (
+                    inferred.detected_head_height > 0
+                    and abs(current.detected_head_height - inferred.detected_head_height) > 0.01
+                )
+            )
+        ):
+            current = register_entry_classification(
+                entry,
+                entry_source=inferred.entry_source,
+                entry_scale=inferred.entry_scale,
+                detected_head_height=inferred.detected_head_height,
+                manual_override=False,
+                auto_entry_source=inferred.auto_entry_source,
+                auto_entry_scale=inferred.auto_entry_scale,
+            )
+        return current
+
     def source_get(entry: Entry) -> str:
-        return get_entry_classification(entry).entry_source
+        return current_classification(entry).entry_source
 
     def source_set(entry: Entry, value: Any) -> None:
         source = str(value or "unknown")
@@ -33,7 +71,7 @@ def install_entry_classification_fields() -> None:
         )
 
     def scale_get(entry: Entry) -> str:
-        return get_entry_classification(entry).entry_scale
+        return current_classification(entry).entry_scale
 
     def scale_set(entry: Entry, value: Any) -> None:
         scale = str(value or "regular")
@@ -44,7 +82,7 @@ def install_entry_classification_fields() -> None:
         )
 
     def height_get(entry: Entry) -> float:
-        return float(get_entry_classification(entry).detected_head_height)
+        return float(current_classification(entry).detected_head_height)
 
     def height_set(entry: Entry, value: Any) -> None:
         try:
@@ -54,10 +92,10 @@ def install_entry_classification_fields() -> None:
         register_entry_classification(entry, detected_head_height=height)
 
     def manual_get(entry: Entry) -> bool:
-        return bool(get_entry_classification(entry).manual_override)
+        return bool(current_classification(entry).manual_override)
 
     def manual_set(entry: Entry, value: Any) -> None:
-        current = get_entry_classification(entry)
+        current = current_classification(entry)
         if bool(value):
             set_entry_scale_manual(entry, current.entry_scale)
         else:
