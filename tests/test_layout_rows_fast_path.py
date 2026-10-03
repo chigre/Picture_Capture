@@ -119,13 +119,23 @@ def test_unlined_export_worker_is_replaced_by_physical_fast_path():
         export_unlined_page_job_fast,
         install_unlined_fast_path,
     )
+    from picture_capture.unlined_physical_rows_resolver import (
+        resolve_unlined_physical_rows,
+    )
 
     install_unlined_fast_path()
     assert exporter.export_unlined_page_job is export_unlined_page_job_fast
     source = inspect.getsource(export_unlined_page_job_fast)
-    assert "resolve_physical_rows_layout" in source
+    assert "resolve_unlined_physical_rows" in source
     assert "understand_layout_core" not in source
     assert "build_analysis_image" not in source
+
+    resolver_source = inspect.getsource(resolve_unlined_physical_rows)
+    assert "understand_layout_core" not in resolver_source
+    assert "symbol" not in resolver_source.lower()
+    assert "large_head" not in resolver_source.lower()
+    # Reliable detector escalation is permitted only through physical policy.
+    assert "infer_dictionary_page_layout" in resolver_source
 
 
 def test_launcher_and_spawn_worker_seed_layout_rows_for_future_qa():
