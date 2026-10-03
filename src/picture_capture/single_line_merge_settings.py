@@ -222,7 +222,14 @@ def _install_checkbox(dialog: Any) -> None:
     variable = tk.BooleanVar(value=load_merge_by_page(root))
     dialog.single_line_crop_merge_by_page_var = variable
 
-    check = ttk.Checkbutton(group, text=MERGE_LABEL, variable=variable)
+    check = ttk.Checkbutton(
+        group,
+        text=MERGE_LABEL,
+        variable=variable,
+        # Settings Center is auto-save. Persist immediately on the same user
+        # gesture instead of inventing a separate save/close lifecycle.
+        command=lambda: _persist_dialog_value(dialog),
+    )
     manager = ""
     try:
         children = group.winfo_children()
@@ -247,13 +254,13 @@ def _install_checkbox(dialog: Any) -> None:
 
     def show_help(_event=None) -> None:
         try:
-            dialog.help_title_var.set(MERGE_LABEL)
-            dialog.help_body_var.set(MERGE_HELP)
+            dialog._show_check_help(MERGE_KEY)
             return
         except Exception:
             pass
         try:
-            dialog._show_check_help(MERGE_KEY)
+            dialog.help_title_var.set(MERGE_LABEL)
+            dialog.help_body_var.set(MERGE_HELP)
         except Exception:
             pass
 
@@ -281,9 +288,11 @@ def install_single_line_merge_settings_ui(app_module: Any) -> None:
         dialog.CHECK_HELP = dict(dialog.CHECK_HELP)
         dialog.CHECK_HELP[MERGE_KEY] = MERGE_HELP
 
-    # Persist after normal save/apply methods so an existing crop-settings writer
-    # cannot drop the new optional key while serializing its known fields.
+    # The integrated crop page rewrites _CropSettings.json whenever another crop
+    # control auto-saves. Re-append this optional key after that writer so it can
+    # never be dropped by the older fixed-schema payload.
     for method_name in (
+        "_save_integrated_crop_settings",
         "save", "_save", "apply", "_apply", "save_settings", "_save_settings",
         "apply_settings", "_apply_settings", "save_and_close", "_save_and_close",
     ):
