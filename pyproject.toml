@@ -27,7 +27,7 @@ ocr-gpu-cu129 = ["paddleocr>=3.7,<4", "paddlepaddle-gpu==3.3.0", "chrome-lens-py
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
-picture-capture = "picture_capture.launcher:main"
+picture-capture = "picture_capture.bootstrap.application:main"
 picture-capture-cli = "picture_capture.cli:main"
 
 [tool.uv]
