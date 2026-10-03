@@ -107,15 +107,22 @@ def test_large_head_left_of_semantic_column_is_still_detected():
     assert all(entry.x == 50 for entry in entries)
 
 
-def test_runtime_installed_before_processing_in_gui_and_worker_composition():
+def test_runtime_order_is_preserved_across_core_gui_and_worker_composition():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
+    core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
 
-    assert gui.index("install_layout_column_drift_runtime()") < gui.index(
+    # Shared process setup is complete before processing is imported.
+    assert core.index("install_ordinary_large_head_role_guard()") < core.index(
         "from .. import processing as processing_module"
+    )
+
+    # GUI and worker retain the same physical Layout order after shared core.
+    assert gui.index("install_layout_row_recovery_runtime()") < gui.index(
+        "install_layout_column_drift_runtime()"
     )
     assert worker.index("install_layout_row_recovery_runtime()") < worker.index(
         "install_layout_column_drift_runtime()"
