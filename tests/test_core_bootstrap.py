@@ -43,7 +43,7 @@ def test_core_composition_preserves_import_sensitive_install_order() -> None:
     assert source.index("install_processing_entry_classification(processing_module)") > processing_import
 
 
-def test_core_profile_covers_current_package_import_compatibility_chain() -> None:
+def test_core_profile_owns_former_package_import_compatibility_chain() -> None:
     core = (
         ROOT / "src" / "picture_capture" / "bootstrap" / "core.py"
     ).read_text(encoding="utf-8")
@@ -66,5 +66,8 @@ def test_core_profile_covers_current_package_import_compatibility_chain() -> Non
         "install_layout_illustration_mask_runtime",
     )
     for name in installers:
-        assert f"{name}(" in package_init
         assert f"{name}(" in core
+        assert f"{name}(" not in package_init
+
+    assert "__version__" in package_init
+    assert "from ." not in package_init
