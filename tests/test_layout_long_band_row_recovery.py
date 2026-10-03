@@ -35,10 +35,11 @@ def test_runtime_replaces_physical_indent_fallback():
 
 
 def test_gui_and_spawn_paths_install_long_band_recovery():
-    from picture_capture import launcher, spawn_detection_runtime
+    from picture_capture.bootstrap import gui as gui_bootstrap
+    from picture_capture import spawn_detection_runtime
 
-    launcher_source = inspect.getsource(launcher.prepare_app_module)
+    gui_source = inspect.getsource(gui_bootstrap.prepare_gui_application)
     spawn_source = inspect.getsource(spawn_detection_runtime.detect_entries_job_with_runtime)
 
-    assert "install_layout_row_recovery_runtime" in launcher_source
+    assert "install_layout_row_recovery_runtime" in gui_source
     assert "install_layout_row_recovery_runtime" in spawn_source
