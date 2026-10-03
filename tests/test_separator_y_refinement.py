@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -29,9 +30,13 @@ def test_existing_pdic_refinement_reaches_shared_api() -> None:
 
 
 def test_layout_materialization_uses_shared_y_adapter() -> None:
-    source = inspect.getsource(processing._ordinary_entries_from_layout_roles)
+    # Runtime installation wraps processing._ordinary_entries_from_layout_roles
+    # to attach Entry classification. Inspect the defining source file rather
+    # than the currently wrapped callable so this test verifies the real base
+    # materializer contract without depending on installer order.
+    source = Path(processing.__file__).read_text(encoding="utf-8")
     assert "refined_layout_entry_y_by_line(" in source
-    assert "role" in source
+    assert 'getattr(line, "role"' in source
 
 
 def test_layout_adapter_refines_only_entry_rows(monkeypatch) -> None:
