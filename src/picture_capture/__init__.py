@@ -74,8 +74,14 @@ install_pdic_classification(_formats)
 from . import processing as _processing
 from .entry_classification_runtime import install_processing_entry_classification
 from .layout_illustration_mask_runtime import install_layout_illustration_mask_runtime
+from .spawn_layout_runtime import install_spawn_layout_runtime
 
 install_processing_entry_classification(_processing)
+# Every process must prepare the same physical Layout chain.  The GUI launcher
+# already installs row recovery + column drift; spawn workers used to stop after
+# robust line starts + physical indent, which could make the right column treat
+# many ordinary body rows as false indentation entries.
+install_spawn_layout_runtime(_processing)
 # The same Page Understanding pre-filter must exist in spawn workers and CLI,
 # not only in launcher-created GUI processes.  The installer is idempotent.
 install_layout_illustration_mask_runtime(_processing)
