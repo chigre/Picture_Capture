@@ -100,19 +100,20 @@ def test_runtime_opacity_properties_roundtrip_in_project_json(tmp_path: Path):
     assert reopened.headword_marker_opacity == 65.0
 
 
-def test_launcher_installs_opacity_after_other_drawing_wrappers():
-    launcher = (
+def test_gui_composition_installs_opacity_after_other_drawing_wrappers():
+    source = (
         Path(__file__).resolve().parents[1]
         / "src"
         / "picture_capture"
-        / "launcher.py"
+        / "bootstrap"
+        / "gui.py"
     ).read_text(encoding="utf-8")
-    assert "from .overlay_opacity_runtime import install_overlay_opacity_runtime" in launcher
-    assert "from .overlay_line_anchor_runtime import install_overlay_line_anchor_runtime" in launcher
-    opacity = launcher.index("install_overlay_opacity_runtime(app_module)")
-    anchor = launcher.index("install_overlay_line_anchor_runtime(app_module)")
-    layout = launcher.index("install_layout_visualization(app_module)")
-    lanes = launcher.index("install_physical_lane_summary()")
+    assert "install_overlay_opacity_runtime" in source
+    assert "install_overlay_line_anchor_runtime" in source
+    opacity = source.index("install_overlay_opacity_runtime(app_module)")
+    anchor = source.index("install_overlay_line_anchor_runtime(app_module)")
+    layout = source.index("install_layout_visualization(app_module)")
+    lanes = source.index("install_physical_lane_summary()")
     assert layout < opacity
     assert lanes < opacity
     assert opacity < anchor
