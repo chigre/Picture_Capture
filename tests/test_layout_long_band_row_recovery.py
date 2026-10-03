@@ -34,12 +34,12 @@ def test_runtime_replaces_physical_indent_fallback():
     assert physical._logical_slots_for_oversized_run is logical_slots_without_loss
 
 
-def test_gui_and_spawn_paths_install_long_band_recovery():
+def test_gui_and_worker_bootstraps_install_long_band_recovery():
     from picture_capture.bootstrap import gui as gui_bootstrap
-    from picture_capture import spawn_detection_runtime
+    from picture_capture.bootstrap import worker as worker_bootstrap
 
     gui_source = inspect.getsource(gui_bootstrap.prepare_gui_application)
-    spawn_source = inspect.getsource(spawn_detection_runtime.detect_entries_job_with_runtime)
+    worker_source = inspect.getsource(worker_bootstrap.build_worker_services)
 
     assert "install_layout_row_recovery_runtime" in gui_source
-    assert "install_layout_row_recovery_runtime" in spawn_source
+    assert "install_layout_row_recovery_runtime" in worker_source
