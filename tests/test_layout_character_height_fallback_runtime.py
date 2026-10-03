@@ -76,25 +76,22 @@ def test_runtime_is_installed_before_any_page_layout_import_can_capture_detector
 
     root = Path(__file__).resolve().parents[1]
     package_init = (root / "src/picture_capture/__init__.py").read_text(encoding="utf-8")
-    composition = (
-        root / "src/picture_capture/bootstrap/gui.py"
-    ).read_text(encoding="utf-8")
-    spawn = (root / "src/picture_capture/spawn_detection_runtime.py").read_text(encoding="utf-8")
+    gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
+    worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
 
-    # This is the crucial process-wide ordering rule. Importing the package runs
-    # __init__.py before the GUI composition root or any spawn target body.
-    # __init__ itself imports processing, which imports Page Understanding and
-    # the policy module that binds detect_layout_parameters by value.
+    # This remains the process-wide compatibility rule during Phase 1C. Package
+    # import still prepares character-height recovery before importing processing;
+    # removing package import side effects is intentionally a later PR.
     assert package_init.index("install_character_height_fallback_runtime()") < package_init.index(
         "from . import processing as _processing"
     )
 
-    # Keep the more local guards too: they document the same contract for GUI
-    # composition and for the spawn job body even though package init currently
-    # makes the process-level ordering safe first.
-    assert composition.index("install_character_height_fallback_runtime()") < composition.index(
+    # Both explicit process profiles also document and preserve their local
+    # ordering, so Phase 1D can later remove the package-level compatibility path
+    # without changing GUI/worker semantics.
+    assert gui.index("install_character_height_fallback_runtime()") < gui.index(
         "from .. import dictionary_page_design"
     )
-    assert spawn.index("install_character_height_fallback_runtime()") < spawn.index(
-        "from . import processing as processing_module"
+    assert worker.index("install_character_height_fallback_runtime()") < worker.index(
+        "from .. import processing as processing_module"
     )
