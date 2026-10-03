@@ -120,10 +120,12 @@ def test_display_size_head_is_typographic_level_not_normal_line_candidate():
     result = detect_entries_from_page_design(image, settings)
 
     assert result.layout.reliable
+    # Page-design inference owns typographic-level discovery. Entry
+    # materialization is now owned by Layout Core evidence fusion, so this
+    # lower-level regression checks the recovered layout fact rather than a
+    # legacy ORDINARY_PAGE_DESIGN_DISPLAY_HEAD Entry side effect.
     assert result.layout.has_display_heads
-    heads = [entry for entry in result.entries if entry.issue_type == "ORDINARY_PAGE_DESIGN_DISPLAY_HEAD"]
-    assert heads
-    assert all(entry.ocr_oversized_cjk for entry in heads)
+    assert result.layout.display_heads
 
 
 def test_vertical_rule_inside_gutter_does_not_become_column_edge():
