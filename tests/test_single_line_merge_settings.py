@@ -80,6 +80,8 @@ def test_single_line_merge_is_output_only_and_main_runtime_reads_crop_option():
 
     assert MERGE_LABEL == "单行切图按页合并"
     assert 'CROP_SETTINGS_FILENAME = "_CropSettings.json"' in merge_source
+    assert 'command=lambda: _persist_dialog_value(dialog)' in merge_source
+    assert '"_save_integrated_crop_settings"' in merge_source
     assert "split_single_lines(" in runtime_source
     assert "merge_page_line_images(image_path, records, output_dir)" in runtime_source
     assert runtime_source.index("split_single_lines(") < runtime_source.index(
