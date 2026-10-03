@@ -27,6 +27,11 @@ for _name in dir(_legacy):
         continue
     globals()[_name] = getattr(_legacy, _name)
 
+# Keep this dependency explicit as well as dynamically re-exported. The facade
+# intentionally owns this injection seam so tests/callers can monkeypatch the
+# detector without initializing PaddleOCR; an explicit alias also makes the
+# contract visible to static undefined-name checks.
+_get_text_detector = _legacy._get_text_detector
 _legacy_detect_layout_parameters = _legacy.detect_layout_parameters
 
 _LAYOUT_ESTIMATE_CACHE_LIMIT = 8
