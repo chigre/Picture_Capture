@@ -1,6 +1,6 @@
 import multiprocessing
 
-from .launcher import main
+from .bootstrap.application import main
 
 
 if __name__ == "__main__":
