@@ -46,9 +46,9 @@ def test_repair_preserves_selection_replacement_semantics():
 def test_repair_handles_mixed_bmp_and_non_bmp_commit():
     committed = f"甲{RARE_CJK}乙"
     assert "甲??乙" in legacy_tk_renderings(committed)
-    current = TextSnapshot("前甲??乙后", 6)
+    current = TextSnapshot("前甲??乙后", 5)
     repaired = plan_non_bmp_repair(current, committed)
-    assert repaired == TextSnapshot(f"前{committed}后", 5, None)
+    assert repaired == TextSnapshot(f"前{committed}后", 4, None)
 
 
 def test_already_correct_non_bmp_commit_is_never_duplicated():
