@@ -135,6 +135,9 @@ def prepare_app_module() -> Any:
     )
     from .overlay_line_anchor_runtime import install_overlay_line_anchor_runtime
     from .parameter_help_ui import install_settings_parameter_help
+    from .postproduction_single_line_runtime import (
+        install_postproduction_single_line_runtime,
+    )
     from .settings_help_restore import install_settings_help_restore
     from .training_export_ui import export_training_package_selected_range
     from .ui_terminology import install_app_tooltip_terminology
@@ -143,6 +146,7 @@ def prepare_app_module() -> Any:
     install_settings_help_restore(app_module)
     install_ordinary_action_runtime(app_module)
     install_ocr_action_guard(app_module)
+    install_postproduction_single_line_runtime(app_module)
     install_app_tooltip_terminology(app_module)
     install_layout_role_theme()
     install_layout_visualization(app_module)
