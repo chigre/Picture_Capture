@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Canonical per-entry classification shared by drawing, OCR crop and review.
 
-PDIC remains unchanged for downstream compatibility.  Structural metadata is
+PDIC remains unchanged for downstream compatibility. Structural metadata is
 stored in a project-local JSON sidecar and also kept in a lightweight runtime
 registry keyed by the concrete Entry/LayoutLine object.
 """
@@ -46,7 +46,37 @@ class EntryClassification:
 
 
 _ENTRY_META: dict[int, EntryClassification] = {}
+# ``id(obj)`` is reusable after an Entry is collected. Keep a tiny ownership
+# signature beside each id so a recycled id cannot inherit metadata from an old
+# marker. Coordinates/page are stable for one materialized marker during its
+# classification lifetime; moved/reloaded markers are restored from the sidecar.
+_ENTRY_OWNER: dict[int, tuple[int, int, str]] = {}
 _LINE_META: dict[int, EntryClassification] = {}
+
+
+def _entry_owner_signature(entry: Entry) -> tuple[int, int, str]:
+    return (
+        int(getattr(entry, "x", 0) or 0),
+        int(getattr(entry, "y", 0) or 0),
+        str(getattr(entry, "current_page", "") or ""),
+    )
+
+
+def _stored_entry_meta(entry: Entry) -> EntryClassification | None:
+    key = id(entry)
+    if _ENTRY_OWNER.get(key) != _entry_owner_signature(entry):
+        _ENTRY_META.pop(key, None)
+        _ENTRY_OWNER.pop(key, None)
+        return None
+    return _ENTRY_META.get(key)
+
+
+def _store_entry_meta(entry: Entry, meta: EntryClassification) -> EntryClassification:
+    normalized = meta.normalized()
+    key = id(entry)
+    _ENTRY_META[key] = normalized
+    _ENTRY_OWNER[key] = _entry_owner_signature(entry)
+    return normalized
 
 
 def infer_entry_classification(entry: Entry) -> EntryClassification:
@@ -80,10 +110,22 @@ def infer_entry_classification(entry: Entry) -> EntryClassification:
 
 
 def get_entry_classification(entry: Entry) -> EntryClassification:
-    current = _ENTRY_META.get(id(entry))
+    current = _stored_entry_meta(entry)
+    inferred = infer_entry_classification(entry)
     if current is None:
-        current = infer_entry_classification(entry)
-        _ENTRY_META[id(entry)] = current
+        return _store_entry_meta(entry, inferred)
+
+    # Automatic concrete evidence carried by this Entry is authoritative about
+    # ownership. This also catches the extremely rare case where CPython reuses
+    # an id for another marker at the same coordinates.
+    if inferred.entry_source != "unknown" and (
+        current.auto_entry_source != inferred.auto_entry_source
+        or (
+            not current.manual_override
+            and current.entry_source != inferred.entry_source
+        )
+    ):
+        return _store_entry_meta(entry, inferred)
     return current.normalized()
 
 
@@ -100,12 +142,25 @@ def register_entry_classification(
     prior = get_entry_classification(entry)
     auto_source = str(auto_entry_source or entry_source or prior.auto_entry_source or "unknown")
     auto_scale = str(auto_entry_scale or entry_scale or prior.auto_entry_scale or "regular")
-    manual = prior.manual_override if manual_override is None else bool(manual_override)
+
+    # Preserve a real manual override only when the incoming automatic evidence
+    # belongs to the same structural source. A recycled-id record from another
+    # source must never veto an explicit classification for this Entry.
+    preserve_manual = bool(
+        prior.manual_override
+        and manual_override is None
+        and (entry_source is None or prior.auto_entry_source == str(entry_source))
+    )
+    if manual_override is None:
+        manual = preserve_manual
+    else:
+        manual = bool(manual_override)
+
     source = str(entry_source or prior.entry_source or auto_source)
     scale = str(entry_scale or prior.entry_scale or auto_scale)
-    if manual and prior.manual_override and manual_override is None:
+    if preserve_manual:
         # Automatic refreshes may update provenance/geometry but never overwrite
-        # an explicit user scale choice.
+        # an explicit user scale choice for the same structural Entry.
         scale = prior.entry_scale
     meta = EntryClassification(
         entry_source=source,
@@ -119,8 +174,7 @@ def register_entry_classification(
         auto_entry_source=auto_source,
         auto_entry_scale=auto_scale,
     ).normalized()
-    _ENTRY_META[id(entry)] = meta
-    return meta
+    return _store_entry_meta(entry, meta)
 
 
 def set_entry_scale_manual(entry: Entry, scale: str | None) -> EntryClassification:
@@ -146,8 +200,7 @@ def set_entry_scale_manual(entry: Entry, scale: str | None) -> EntryClassificati
             auto_entry_source=current.auto_entry_source,
             auto_entry_scale=current.auto_entry_scale,
         )
-    _ENTRY_META[id(entry)] = meta
-    return meta
+    return _store_entry_meta(entry, meta)
 
 
 def classification_from_evidence(entry: Entry) -> EntryClassification:
@@ -279,7 +332,7 @@ def apply_classification_sidecar(entries: Iterable[Entry], pdic_path: Path) -> N
         if row is None:
             get_entry_classification(entry)
             continue
-        _ENTRY_META[id(entry)] = _meta_from_row(row)
+        _store_entry_meta(entry, _meta_from_row(row))
 
 
 def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
@@ -317,7 +370,7 @@ def write_classification_sidecar(entries: Iterable[Entry], pdic_path: Path) -> N
                     auto_entry_source=meta.auto_entry_source,
                     auto_entry_scale=meta.auto_entry_scale,
                 ).normalized()
-                _ENTRY_META[id(entry)] = meta
+                _store_entry_meta(entry, meta)
         row = {
             "x": int(entry.x),
             "y": int(entry.y),
@@ -359,6 +412,7 @@ __all__ = [
     "copy_layout_line_classification",
     "get_entry_classification",
     "get_layout_line_classification",
+    "infer_entry_classification",
     "install_pdic_classification",
     "register_entry_classification",
     "register_layout_line_classification",
