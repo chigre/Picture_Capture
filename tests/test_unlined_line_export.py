@@ -248,15 +248,17 @@ def test_unlined_filter_settings_share_crop_store_and_preserve_existing_keys(tmp
 
 def test_unlined_ui_is_installed_after_single_line_button_and_reuses_parallel_crop_setting():
     root = Path(__file__).resolve().parents[1]
-    launcher = (root / "src" / "picture_capture" / "launcher.py").read_text(encoding="utf-8")
+    composition = (
+        root / "src" / "picture_capture" / "bootstrap" / "gui.py"
+    ).read_text(encoding="utf-8")
     ui = (root / "src" / "picture_capture" / "unlined_line_export_ui.py").read_text(encoding="utf-8")
     exporter = (root / "src" / "picture_capture" / "unlined_line_export.py").read_text(encoding="utf-8")
     filters = (root / "src" / "picture_capture" / "unlined_export_filter_settings.py").read_text(encoding="utf-8")
 
-    assert 'install_postproduction_single_line_runtime(app_module)' in launcher
-    assert 'install_unlined_line_export_ui(app_module)' in launcher
-    assert 'install_unlined_export_filter_settings_ui(app_module)' in launcher
-    assert launcher.index('install_postproduction_single_line_runtime(app_module)') < launcher.index(
+    assert 'install_postproduction_single_line_runtime(app_module)' in composition
+    assert 'install_unlined_line_export_ui(app_module)' in composition
+    assert 'install_unlined_export_filter_settings_ui(app_module)' in composition
+    assert composition.index('install_postproduction_single_line_runtime(app_module)') < composition.index(
         'install_unlined_line_export_ui(app_module)'
     )
     assert '_BUTTON_TEXT = "未画线行导出"' in ui
