@@ -31,8 +31,10 @@ def test_live_binding_is_installed_before_processing_import():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
+    core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     package = (root / "src/picture_capture/__init__.py").read_text(encoding="utf-8")
 
-    live_install = package.index("install_live_layout_detector_binding()")
-    processing_import = package.index("from . import processing as _processing")
+    live_install = core.index("install_live_layout_detector_binding()")
+    processing_import = core.index("from .. import processing as processing_module")
     assert live_install < processing_import
+    assert "install_live_layout_detector_binding()" not in package
