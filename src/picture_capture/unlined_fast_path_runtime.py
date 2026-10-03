@@ -9,10 +9,11 @@ worker for a version that resolves physical rows in this order:
 
 1. persisted ``data/LayoutRows/<page>.json``;
 2. Profile-geometry projection recovery (no Paddle, symbol or large-head work);
-3. full reliable Layout Core only when the fast physical geometry is implausible.
+3. physical reliable layout detection only when the fast geometry is implausible.
 
-The existing PDIC matching, near-blank filter, white-border handling and output
-format remain unchanged.
+Even the fallback stops before symbol/large-head evidence fusion.  The existing
+PDIC matching, near-blank filter, white-border handling and output format remain
+unchanged.
 """
 
 from pathlib import Path
@@ -22,9 +23,9 @@ from PIL import Image
 
 from . import formats
 from .image_utils import normalize_page_rgb
-from .layout_rows_cache import resolve_physical_rows_layout
 from .page_sections import read_page_sections
 from .project_storage import qt_root
+from .unlined_physical_rows_resolver import resolve_unlined_physical_rows
 
 
 def export_unlined_page_job_fast(
@@ -54,7 +55,7 @@ def export_unlined_page_job_fast(
     with Image.open(page) as opened:
         source = normalize_page_rgb(opened)
     try:
-        layout, _source = resolve_physical_rows_layout(
+        layout, _source = resolve_unlined_physical_rows(
             root,
             page,
             source,
