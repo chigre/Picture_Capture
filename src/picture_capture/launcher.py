@@ -60,6 +60,13 @@ def prepare_app_module() -> Any:
     # shared Layout Core imports policy/large-head callables by value.
     install_layout_column_drift_runtime()
 
+    # Physical LayoutRows are a persistent, semantic-free cache used by
+    # post-production QA. Install after the final physical Layout runtimes so a
+    # normal drawing/display pass can seed exactly the rows it actually used.
+    from .layout_rows_cache import install_layout_rows_persistence_runtime
+
+    install_layout_rows_persistence_runtime()
+
     from . import profile_setup
     from .profile_layout_bootstrap import install_profile_layout_bootstrap
     from .parameter_help_ui import build_profile_parameter_help_wizard
@@ -111,11 +118,15 @@ def prepare_app_module() -> Any:
 
     from . import app as app_module
     from .layout_visualization_shared import install_shared_layout_visualization_source
+    from .layout_rows_cache import install_layout_visualization_cache_context
     from .layout_local_indent_visualization_runtime import install_local_indent_visualization
     from .layout_role_provenance_runtime import install_layout_role_provenance
     from .review_entry_classification_ui import install_review_entry_classification
     from .ocr_crop_preview_ui import install_ocr_crop_preview
 
+    # Wrap the shared Layout snapshot before it is published to the UI. When a
+    # user displays Layout, the exact physical rows are persisted for later QA.
+    install_layout_visualization_cache_context()
     install_shared_layout_visualization_source()
     install_local_indent_visualization()
     install_layout_role_provenance()
@@ -145,6 +156,7 @@ def prepare_app_module() -> Any:
     from .unlined_export_filter_settings import (
         install_unlined_export_filter_settings_ui,
     )
+    from .unlined_fast_path_runtime import install_unlined_fast_path
     from .unlined_line_export_ui import install_unlined_line_export_ui
 
     install_settings_parameter_help(app_module)
@@ -155,6 +167,9 @@ def prepare_app_module() -> Any:
     install_unlined_export_filter_settings_ui(app_module)
     install_ordinary_action_runtime(app_module)
     install_ocr_action_guard(app_module)
+    # Unlined QA now resolves physical rows from LayoutRows cache/Profile
+    # projection before allowing any full Layout/Paddle fallback.
+    install_unlined_fast_path()
     # Install in this order: the unlined-row action locates the concrete
     # 【单行切图】 button and inserts itself immediately to its right.
     install_postproduction_single_line_runtime(app_module)
