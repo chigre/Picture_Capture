@@ -1,11 +1,17 @@
-"""Explicit application bootstrap entrypoints.
+"""Explicit Picture Capture composition-root entrypoints.
 
-The bootstrap package is the stable composition-root surface for Picture
-Capture.  During the migration, the historical installer chain remains in
-``picture_capture.launcher`` behind this API; subsequent refactor PRs move that
-implementation here without changing the public startup path again.
+GUI startup and multiprocessing detection workers both enter through this
+package.  Their concrete installers live in dedicated ``gui`` and ``worker``
+modules so process-specific composition is explicit rather than determined by
+which legacy entry module happened to be imported first.
 """
 
 from .application import build_application, main
+from .worker import WorkerServices, build_worker_services
 
-__all__ = ["build_application", "main"]
+__all__ = [
+    "WorkerServices",
+    "build_application",
+    "build_worker_services",
+    "main",
+]
