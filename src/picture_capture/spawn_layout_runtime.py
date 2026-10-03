@@ -10,11 +10,9 @@ can turn many body rows into false indentation entries even though the GUI Layou
 diagnostic is correct.
 
 This compatibility adapter extends the worker helper rather than duplicating the
-Page Understanding algorithm.  During Phase 1 it is still installed from
-``picture_capture.__init__`` so fresh multiprocessing ``spawn`` interpreters and
-non-GUI processing consumers receive the same physical Layout chain.  Ownership
-of worker-local detection preparation now lives in ``bootstrap.worker``; removing
-this package-import compatibility path is a later migration step.
+Page Understanding algorithm. The explicit shared ``bootstrap.core`` profile
+installs it for GUI, worker, CLI and other composed application consumers; bare
+package import intentionally performs no runtime installation.
 """
 
 from functools import wraps
