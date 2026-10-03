@@ -1,5 +1,6 @@
 from dataclasses import fields, replace
 from pathlib import Path
+import pickle
 
 from PIL import Image
 
@@ -25,6 +26,12 @@ def test_layout_illustration_mask_is_native_persistable_setting(tmp_path: Path):
     enabled = AppSettings(layout_mask_illustrations=True)
     copied = replace(enabled)
     assert copied.layout_mask_illustrations is True
+
+    # ProcessPool spawn serializes AppSettings.  The runtime-extended native
+    # dataclass must resolve back through picture_capture.models.AppSettings.
+    spawned = pickle.loads(pickle.dumps(enabled))
+    assert type(spawned) is AppSettings
+    assert spawned.layout_mask_illustrations is True
 
     path = tmp_path / "settings.json"
     enabled.to_json(path)
