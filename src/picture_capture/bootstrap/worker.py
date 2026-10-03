@@ -5,12 +5,8 @@ from __future__ import annotations
 Shared process-wide runtime preparation is resolved through
 ``build_core_services`` before worker-specific LayoutRows extensions are added.
 The pickleable spawn job therefore consumes one worker profile rather than
-reconstructing import-order-sensitive dependencies itself.
-
-Package-wide import-time installers still exist in ``picture_capture.__init__``
-at this migration stage as an idempotent compatibility fallback. Removing those
-side effects is a separate PR after GUI and worker profiles both prove they can
-build the same shared core explicitly.
+reconstructing import-order-sensitive dependencies itself. Bare package import
+performs no runtime installation.
 """
 
 from dataclasses import dataclass
@@ -31,8 +27,8 @@ class WorkerServices:
 def build_worker_services() -> WorkerServices:
     """Prepare one spawn process and return its explicit worker dependencies.
 
-    The shared core owns package-wide runtime ordering. Worker-local additions
-    remain idempotent and preserve the pre-refactor ordinary-detection behavior.
+    The shared core owns common runtime ordering. Worker-local additions remain
+    idempotent and preserve the pre-refactor ordinary-detection behavior.
     """
     from .core import build_core_services
 
