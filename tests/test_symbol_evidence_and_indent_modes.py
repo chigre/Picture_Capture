@@ -67,6 +67,15 @@ def _ring_image(size: int = 24) -> Image.Image:
     return image
 
 
+def _bracket_image(size: int = 24) -> Image.Image:
+    image = Image.new("L", (size, size), 255)
+    draw = ImageDraw.Draw(image)
+    draw.line((4, 2, 4, size - 3), fill=0, width=3)
+    draw.line((4, 2, 12, 2), fill=0, width=3)
+    draw.line((4, size - 3, 12, size - 3), fill=0, width=3)
+    return image
+
+
 def _simple_layout() -> DictionaryPageLayout:
     transform = LayoutTransform("identity")
     line = LayoutLine(
@@ -120,15 +129,26 @@ def _page_with_ring_marker() -> Image.Image:
     page = Image.new("RGB", (120, 100), "white")
     draw = ImageDraw.Draw(page)
     draw.ellipse((5, 39, 24, 58), outline="black", width=4)
-    # Separate text block on the same visual line.  It is deliberately detached
+    # Separate text block on the same visual line. It is deliberately detached
     # so connected-component matching sees the sampled marker by itself.
     draw.rectangle((36, 42, 88, 56), fill="black")
     return page
 
 
+def _page_with_bracket_marker() -> Image.Image:
+    page = Image.new("RGB", (120, 100), "white")
+    draw = ImageDraw.Draw(page)
+    draw.line((6, 38, 6, 59), fill="black", width=3)
+    draw.line((6, 38, 14, 38), fill="black", width=3)
+    draw.line((6, 59, 14, 59), fill="black", width=3)
+    draw.rectangle((36, 42, 88, 56), fill="black")
+    return page
+
+
 def _settings_for_sample(role: str) -> AppSettings:
+    sample_image = _ring_image() if role == "entry_marker" else _bracket_image()
     sample = build_visual_marker_sample(
-        _ring_image(),
+        sample_image,
         role=role,
         literal="○" if role == "entry_marker" else "【",
         sample_id=f"sample-{role}",
@@ -162,7 +182,7 @@ def test_sampled_entry_marker_is_an_ocr_free_candidate() -> None:
 def test_sampled_bracket_only_confirms_and_never_rescues_by_itself() -> None:
     layout = _simple_layout()
     result = detect_symbol_evidence(
-        _page_with_ring_marker(),
+        _page_with_bracket_marker(),
         _settings_for_sample("bracket_open"),
         layout,
     )
