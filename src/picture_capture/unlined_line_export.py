@@ -8,6 +8,11 @@ actually has drawn.  This module deliberately computes ``Layout rows - PDIC
 matched rows`` rather than treating ``role == body`` as synonymous with
 "unlined"; role classification can be wrong while the visible marker state is
 still unambiguous.
+
+Optional export filters are evaluated on the original Layout row crop before any
+white-border trimming.  That ordering is essential for the ``blank`` filter: a
+nearly empty full-width row must not become a tiny high-density speck crop before
+its blankness is measured.
 """
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -17,6 +22,7 @@ from pathlib import Path
 import os
 from typing import Any, Callable
 
+import numpy as np
 from PIL import Image
 
 from . import dictionary_page_design as page_design
@@ -27,6 +33,10 @@ from .page_sections import read_page_sections, section_index_for_v, v_is_inside_
 from .project_storage import qt_root
 from .single_line_merge_settings import _trim_white_border, load_merge_by_page
 from .single_line_parallel import configured_single_line_workers
+from .unlined_export_filter_settings import (
+    DEFAULT_BLANK_INK_PERCENT,
+    load_unlined_filter_settings,
+)
 
 
 OUTPUT_DIRNAME = "PSW_UNLINED"
@@ -51,6 +61,7 @@ class UnlinedPageResult:
     unlined_rows: int
     exported_images: int
     blank_rows: int
+    filtered_out_rows: int
     merged: bool
     physical_reliable: bool
 
@@ -81,9 +92,9 @@ def _line_boundary_local(column: Any, line: Any, reference: float) -> int:
 def matched_lined_row_keys(layout: Any, entries: list[Any]) -> set[tuple[int, int]]:
     """Map every current PDIC marker to its nearest Layout row in that column.
 
-    A drawn marker is a boundary *before* a row, not the row's ink top.  Matching
+    A drawn marker is a boundary *before* a row, not the row's ink top. Matching
     therefore uses the same ``_boundary_before`` model that Layout uses to place
-    entry boundaries.  We intentionally do not inspect ``line.role`` here.
+    entry boundaries. We intentionally do not inspect ``line.role`` here.
     """
     columns = list(getattr(layout, "columns", []) or [])
     if not columns:
@@ -182,11 +193,44 @@ def unlined_rows_from_layout(
                 ),
             ))
 
-    # line_index follows canonical top-to-bottom order inside each column.  Do
+    # line_index follows canonical top-to-bottom order inside each column. Do
     # not sort by source Y because rotated/flipped Layout transforms can make
     # source-space Y differ from logical reading order.
     rows.sort(key=lambda row: (row.section_index, row.column_index, row.line_index))
     return rows, len(eligible_keys), len(lined & eligible_keys)
+
+
+def row_ink_percent(image: Image.Image) -> float:
+    """Return effective foreground-ink percentage for one original row crop.
+
+    The paper background is estimated from the bright tail of the crop itself,
+    so yellow/aged paper is not mistaken for text merely because it is darker
+    than pure white. Pixels at least about 18 gray levels below that local
+    background (capped at 235) count as ink. The result must be computed before
+    any content-tight trimming.
+    """
+    gray_image = image.convert("L")
+    try:
+        gray = np.asarray(gray_image, dtype=np.uint8)
+    finally:
+        gray_image.close()
+    if gray.size == 0:
+        return 0.0
+    background = float(np.percentile(gray, 90.0))
+    cutoff = int(max(0.0, min(235.0, background - 18.0)))
+    ink = gray <= cutoff
+    return float(ink.mean() * 100.0)
+
+
+def is_near_blank_row(
+    image: Image.Image,
+    max_ink_percent: float = DEFAULT_BLANK_INK_PERCENT,
+) -> bool:
+    try:
+        limit = max(0.0, float(max_ink_percent))
+    except (TypeError, ValueError):
+        limit = DEFAULT_BLANK_INK_PERCENT
+    return row_ink_percent(image) <= limit
 
 
 def _atomic_text(path: Path, text: str) -> None:
@@ -199,38 +243,69 @@ def _atomic_text(path: Path, text: str) -> None:
         raise
 
 
-def _save_trimmed_unlined_rows(
+def _save_unlined_rows(
     source: Image.Image,
     image_path: Path,
     rows: list[UnlinedRow],
     output_dir: Path,
     *,
     merge_by_page: bool,
-) -> tuple[int, int, bool]:
-    """Save content-tight unlined rows, optionally merging one page vertically."""
+    filter_enabled: bool,
+    filter_blank: bool,
+    blank_ink_percent: float,
+) -> tuple[int, int, int, bool]:
+    """Filter then save unlined rows, optionally merging one page vertically.
+
+    Blank filtering uses the untrimmed Layout crop. When that filter is active,
+    retained images intentionally preserve their original row frame so users can
+    visually see that the row is nearly empty. Without the blank filter, normal
+    content rows are white-trimmed for compact output, while a genuinely all-white
+    row is retained rather than silently discarded because this exporter is a
+    diagnostic surface.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     stem = image_path.stem
     manifest = output_dir / f"{stem}{MANIFEST_SUFFIX}"
     stale = list(output_dir.glob(f"{stem}_UL_*.png"))
-    trimmed_images: list[Image.Image] = []
+    images: list[Image.Image] = []
     blank_rows = 0
+    filtered_out = 0
+    blank_filter_active = bool(filter_enabled and filter_blank)
+
     try:
         for row in rows:
             crop = source.crop(row.source_box)
             try:
+                ink_percent = row_ink_percent(crop)
+                near_blank = ink_percent <= max(0.0, float(blank_ink_percent))
+                if near_blank:
+                    blank_rows += 1
+                if blank_filter_active and not near_blank:
+                    filtered_out += 1
+                    continue
+
+                if blank_filter_active:
+                    # Preserve the whole row frame: trimming a near-blank slice
+                    # down to one dust speck would destroy the visual evidence
+                    # that it was almost entirely blank.
+                    images.append(crop.convert("RGB"))
+                    continue
+
                 trimmed = _trim_white_border(crop)
+                if trimmed is None:
+                    # Unlike ordinary single-line merge, blank rows are meaningful
+                    # diagnostics here and must survive the unfiltered export.
+                    images.append(crop.convert("RGB"))
+                else:
+                    images.append(trimmed)
             finally:
                 crop.close()
-            if trimmed is None:
-                blank_rows += 1
-                continue
-            trimmed_images.append(trimmed)
 
-        if not trimmed_images:
+        if not images:
             _atomic_text(manifest, "")
             for path in stale:
                 path.unlink(missing_ok=True)
-            return 0, blank_rows, False
+            return 0, blank_rows, filtered_out, False
 
         replacements: list[tuple[Path, Path]] = []
         names: list[str] = []
@@ -239,12 +314,12 @@ def _save_trimmed_unlined_rows(
             name = f"{stem}_UL_PAGE.png"
             target = output_dir / name
             temp = output_dir / f".{name}.tmp"
-            width = max(image.width for image in trimmed_images)
-            height = sum(image.height for image in trimmed_images)
+            width = max(image.width for image in images)
+            height = sum(image.height for image in images)
             canvas = Image.new("RGB", (max(1, width), max(1, height)), "white")
             try:
                 y = 0
-                for image in trimmed_images:
+                for image in images:
                     canvas.paste(image, (0, y))
                     y += image.height
                 canvas.save(temp, format="PNG")
@@ -254,7 +329,7 @@ def _save_trimmed_unlined_rows(
             names.append(name)
             merged = True
         else:
-            for index, image in enumerate(trimmed_images):
+            for index, image in enumerate(images):
                 name = f"{stem}_UL_{index:03d}.png"
                 target = output_dir / name
                 temp = output_dir / f".{name}.tmp"
@@ -278,9 +353,9 @@ def _save_trimmed_unlined_rows(
         for path in stale:
             if path.resolve() not in keep:
                 path.unlink(missing_ok=True)
-        return len(trimmed_images) if not merged else 1, blank_rows, merged
+        return len(images) if not merged else 1, blank_rows, filtered_out, merged
     finally:
-        for image in trimmed_images:
+        for image in images:
             image.close()
 
 
@@ -290,6 +365,9 @@ def export_unlined_page_job(
     page_index: int,
     settings: Any,
     merge_by_page: bool,
+    filter_enabled: bool,
+    filter_blank: bool,
+    blank_ink_percent: float,
 ) -> UnlinedPageResult:
     """Spawn-safe one-page exporter."""
     project_root = Path(project_root)
@@ -314,19 +392,22 @@ def export_unlined_page_job(
 
         if not bool(getattr(understanding, "physical_reliable", False)):
             return UnlinedPageResult(
-                int(page_index), image_path.name, 0, 0, 0, 0, 0, False, False
+                int(page_index), image_path.name, 0, 0, 0, 0, 0, 0, False, False
             )
         rows, layout_rows, lined_rows = unlined_rows_from_layout(
             understanding.layout,
             entries,
             sections,
         )
-        exported, blanks, merged = _save_trimmed_unlined_rows(
+        exported, blanks, filtered_out, merged = _save_unlined_rows(
             source,
             image_path,
             rows,
             output_dir,
             merge_by_page=bool(merge_by_page),
+            filter_enabled=bool(filter_enabled),
+            filter_blank=bool(filter_blank),
+            blank_ink_percent=float(blank_ink_percent),
         )
         return UnlinedPageResult(
             int(page_index),
@@ -336,6 +417,7 @@ def export_unlined_page_job(
             len(rows),
             int(exported),
             int(blanks),
+            int(filtered_out),
             bool(merged),
             True,
         )
@@ -355,6 +437,9 @@ def run_unlined_export(
     output_dir = qt_root(project_root) / OUTPUT_DIRNAME
     output_dir.mkdir(parents=True, exist_ok=True)
     merge_by_page = load_merge_by_page(project_root)
+    filter_enabled, filter_blank, blank_ink_percent = load_unlined_filter_settings(
+        project_root
+    )
     total = len(indices)
     workers = max(1, min(configured_single_line_workers(project_root), max(1, total)))
     completed = 0
@@ -371,10 +456,17 @@ def run_unlined_export(
             unreliable += 1
         progress(completed, total, result, workers)
 
+    job_args = (
+        bool(merge_by_page),
+        bool(filter_enabled),
+        bool(filter_blank),
+        float(blank_ink_percent),
+    )
+
     if workers <= 1:
         for index in indices:
             consume(export_unlined_page_job(
-                project_root, images[index], index, settings, merge_by_page
+                project_root, images[index], index, settings, *job_args
             ))
         return total, total_unlined, total_exported, unreliable, output_dir, merge_by_page, 1
 
@@ -389,7 +481,7 @@ def run_unlined_export(
                 str(images[index]),
                 int(index),
                 settings,
-                bool(merge_by_page),
+                *job_args,
             ))
         for future in as_completed(futures):
             consume(future.result())
@@ -410,7 +502,9 @@ __all__ = [
     "UnlinedPageResult",
     "UnlinedRow",
     "export_unlined_page_job",
+    "is_near_blank_row",
     "matched_lined_row_keys",
+    "row_ink_percent",
     "run_unlined_export",
     "unlined_rows_from_layout",
 ]
