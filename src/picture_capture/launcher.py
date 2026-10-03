@@ -142,13 +142,17 @@ def prepare_app_module() -> Any:
     from .single_line_merge_settings import install_single_line_merge_settings_ui
     from .training_export_ui import export_training_package_selected_range
     from .ui_terminology import install_app_tooltip_terminology
+    from .unlined_line_export_ui import install_unlined_line_export_ui
 
     install_settings_parameter_help(app_module)
     install_settings_help_restore(app_module)
     install_single_line_merge_settings_ui(app_module)
     install_ordinary_action_runtime(app_module)
     install_ocr_action_guard(app_module)
+    # Install in this order: the unlined-row action locates the concrete
+    # 【单行切图】 button and inserts itself immediately to its right.
     install_postproduction_single_line_runtime(app_module)
+    install_unlined_line_export_ui(app_module)
     install_app_tooltip_terminology(app_module)
     install_layout_role_theme()
     install_layout_visualization(app_module)
