@@ -69,6 +69,24 @@ def test_gui_composition_is_owned_by_bootstrap_and_launcher_is_only_a_facade() -
     assert "install_spawn_detection_runtime(processing_module)" not in launcher
 
 
+def test_gui_and_worker_profiles_share_one_core_composition_root() -> None:
+    bootstrap_init = (
+        ROOT / "src" / "picture_capture" / "bootstrap" / "__init__.py"
+    ).read_text(encoding="utf-8")
+    gui = (
+        ROOT / "src" / "picture_capture" / "bootstrap" / "gui.py"
+    ).read_text(encoding="utf-8")
+    worker = (
+        ROOT / "src" / "picture_capture" / "bootstrap" / "worker.py"
+    ).read_text(encoding="utf-8")
+
+    assert "from .core import CoreServices, build_core_services" in bootstrap_init
+    assert "from .core import build_core_services" in gui
+    assert "core_services = build_core_services()" in gui
+    assert "from .core import build_core_services" in worker
+    assert "core_services = build_core_services()" in worker
+
+
 def test_spawn_detection_routes_through_worker_composition_root() -> None:
     bootstrap_init = (
         ROOT / "src" / "picture_capture" / "bootstrap" / "__init__.py"
