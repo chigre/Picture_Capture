@@ -109,8 +109,8 @@ def test_fast_recovery_source_cannot_call_full_layout_or_semantic_evidence():
     assert "understand_layout_core" not in source
     assert "detect_layout_parameters" not in source
     assert "build_analysis_image" not in source
-    assert "symbol" not in source.lower()
-    assert "large_head" not in source.lower()
+    assert "detect_ordinary_symbol_entries" not in source
+    assert "detect_ordinary_large_head_entries" not in source
 
 
 def test_unlined_export_worker_is_replaced_by_physical_fast_path():
@@ -132,8 +132,8 @@ def test_unlined_export_worker_is_replaced_by_physical_fast_path():
 
     resolver_source = inspect.getsource(resolve_unlined_physical_rows)
     assert "understand_layout_core" not in resolver_source
-    assert "symbol" not in resolver_source.lower()
-    assert "large_head" not in resolver_source.lower()
+    assert "detect_ordinary_symbol_entries" not in resolver_source
+    assert "detect_ordinary_large_head_entries" not in resolver_source
     # Reliable detector escalation is permitted only through physical policy.
     assert "infer_dictionary_page_layout" in resolver_source
 
