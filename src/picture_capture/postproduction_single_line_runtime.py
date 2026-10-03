@@ -23,6 +23,7 @@ from .ordinary_action_runtime import _apply_quick_settings_for_ordinary
 from .page_sections import read_page_sections
 from .processing import append_crop_log, split_single_lines
 from .project_storage import qt_root
+from .single_line_merge_settings import load_merge_by_page, merge_page_line_images
 
 
 _BUTTON_TEXT = "单行切图"
@@ -153,7 +154,7 @@ def _insert_single_line_button(app: Any) -> tk.Misc | None:
     try:
         app._attach_tooltip(
             button,
-            "将【选定范围】内各页按校对界面相同的单行裁切逻辑批量输出到 QT/PSW。",
+            "将【选定范围】内各页按校对界面相同的单行裁切逻辑批量输出到 QT/PSW；可在【设置中心 → 切图】选择是否按页合并。",
         )
     except Exception:
         pass
@@ -214,6 +215,7 @@ def _single_line_worker(
 ) -> None:
     output_dir = qt_root(project_root) / "PSW"
     output_dir.mkdir(parents=True, exist_ok=True)
+    merge_by_page = load_merge_by_page(project_root)
     total_records = 0
     try:
         for position, index in enumerate(indices, 1):
@@ -229,9 +231,21 @@ def _single_line_worker(
                 page_sections=sections,
             )
             append_crop_log(project_root, records)
+            merged_path = None
+            if merge_by_page:
+                merged_path = merge_page_line_images(image_path, records, output_dir)
             total_records += len(records)
-            events.put(("progress", (position, len(indices), image_path.name, len(records))))
-        events.put(("done", (len(indices), total_records, output_dir)))
+            events.put((
+                "progress",
+                (
+                    position,
+                    len(indices),
+                    image_path.name,
+                    len(records),
+                    merged_path is not None,
+                ),
+            ))
+        events.put(("done", (len(indices), total_records, output_dir, merge_by_page)))
     except Exception as exc:
         events.put(("error", (exc, traceback.format_exc())))
 
@@ -272,16 +286,18 @@ def _start_single_line_export(app: Any) -> None:
             while True:
                 kind, payload = events.get_nowait()
                 if kind == "progress":
-                    position, total, filename, count = payload
+                    position, total, filename, count, merged = payload
+                    suffix = "，已合并为 1 张" if merged else ""
                     _status(
                         app,
-                        f"单行切图：{position}/{total} {filename}（{count} 行）",
+                        f"单行切图：{position}/{total} {filename}（{count} 行{suffix}）",
                     )
                 elif kind == "done":
-                    pages, records, output_dir = payload
+                    pages, records, output_dir, merged = payload
+                    mode = "；每页已合并为 1 张图" if merged else ""
                     _status(
                         app,
-                        f"单行切图完成：{pages} 页，共 {records} 行；已保存到 {output_dir}",
+                        f"单行切图完成：{pages} 页，共 {records} 行{mode}；已保存到 {output_dir}",
                     )
                     finished = True
                 elif kind == "error":
