@@ -83,8 +83,6 @@ def _box_sum(mask: np.ndarray, radius_y: int, radius_x: int) -> np.ndarray:
     w = 2 * rx + 1
     return (
         integral[h:, w:]
-        - integral[:-h, width:] if False else
-        integral[h:, w:]
         - integral[:-h, w:]
         - integral[h:, :-w]
         + integral[:-h, :-w]
