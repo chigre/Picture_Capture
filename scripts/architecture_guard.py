@@ -86,15 +86,21 @@ def _python_files() -> list[Path]:
     return sorted(PACKAGE_ROOT.rglob("*.py"))
 
 
+def _normalized_source_size(path: Path) -> int:
+    """Return repository-style byte size independent of checkout line endings."""
+    data = path.read_bytes()
+    # The baseline sizes come from Git blobs, whose Python sources use LF.
+    # A Windows checkout may materialize CRLF without any source-code change.
+    return len(data.replace(b"\r\n", b"\n").replace(b"\r", b"\n"))
+
+
 def collect_violations() -> list[str]:
     violations: list[str] = []
 
-    oversized_now: dict[str, int] = {}
     for path in _python_files():
-        size = path.stat().st_size
+        size = _normalized_source_size(path)
         if size > MAX_NORMAL_MODULE_BYTES:
             rel = path.relative_to(PACKAGE_ROOT).as_posix()
-            oversized_now[rel] = size
             baseline = OVERSIZED_MODULE_BASELINE.get(rel)
             if baseline is None:
                 violations.append(
