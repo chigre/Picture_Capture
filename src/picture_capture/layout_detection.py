@@ -3,9 +3,9 @@
 The original detector implementation is kept in layout_detection_legacy.py so
 all existing public/private helpers and test monkeypatch points remain available.
 
-Layout is no longer the owner of page denoising.  It consumes the same
+Layout is no longer the owner of page denoising. It consumes the same
 full-resolution, coordinate-identical analysis image as ordinary drawing and
-Page Understanding.  The reliability layer may still apply its stricter
+Page Understanding. The reliability layer may still apply its stricter
 layout-specific speck guard afterwards, but every detector now starts from one
 shared cleaned page.
 """
@@ -13,11 +13,14 @@ from __future__ import annotations
 
 from collections import OrderedDict
 import hashlib
+import os
 import sys
 from typing import Any
 
+import numpy as np
+
 from . import layout_detection_legacy as _legacy
-from .image_utils import build_analysis_image
+from .image_utils import build_analysis_image, normalize_page_rgb
 
 for _name in dir(_legacy):
     if _name.startswith("__") or _name == "detect_layout_parameters":
@@ -37,6 +40,47 @@ def _layout_estimate_cache_key(image, settings) -> tuple[Any, ...]:
 
 def clear_layout_estimate_cache() -> None:
     _LAYOUT_ESTIMATE_CACHE.clear()
+
+
+def detect_text_polygons(image, settings, *, limit_side_len: int = 2400):
+    """Detect source-image text polygons through the facade injection seam.
+
+    The legacy implementation's function globals belong to its defining module,
+    so merely re-exporting that function made monkeypatching
+    ``layout_detection._get_text_detector`` ineffective. Keep this small wrapper
+    in the facade so tests and callers can inject a detector without importing or
+    initializing PaddleOCR, while preserving the exact polygon semantics.
+    """
+    source = normalize_page_rgb(image)
+    detector = _get_text_detector(settings)
+    os.environ["FLAGS_enable_pir_api"] = "0"
+    try:
+        results = list(
+            detector.predict(
+                np.asarray(source), batch_size=1,
+                limit_side_len=max(256, int(limit_side_len)),
+            )
+        )
+    except TypeError:
+        results = list(detector.predict(np.asarray(source)))
+    if not results:
+        return []
+    payload = _legacy._result_payload(results[0])
+    raw_polys = payload.get("dt_polys")
+    if raw_polys is None:
+        raw_polys = payload.get("polys")
+    polygons: list[np.ndarray] = []
+    if raw_polys is None:
+        return polygons
+    for raw in list(raw_polys):
+        arr = np.asarray(raw, dtype=float)
+        if arr.ndim != 2 or arr.shape[0] < 3 or arr.shape[1] < 2:
+            continue
+        arr = arr[:, :2].copy()
+        arr[:, 0] = np.clip(arr[:, 0], 0, max(0, source.width - 1))
+        arr[:, 1] = np.clip(arr[:, 1], 0, max(0, source.height - 1))
+        polygons.append(arr)
+    return polygons
 
 
 def detect_layout_parameters(image, settings):
