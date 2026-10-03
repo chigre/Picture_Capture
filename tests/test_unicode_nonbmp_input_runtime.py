@@ -61,10 +61,12 @@ def test_bmp_commits_are_outside_compatibility_path():
     assert plan_non_bmp_repair(current, "汉") is None
 
 
-def test_launcher_installs_nonbmp_bridge_before_app_instances_exist():
+def test_gui_composition_installs_nonbmp_bridge_before_app_instances_exist():
     root = Path(__file__).resolve().parents[1]
-    source = (root / "src" / "picture_capture" / "launcher.py").read_text(encoding="utf-8")
-    assert "from .unicode_nonbmp_input_runtime import install_nonbmp_unicode_input" in source
+    source = (
+        root / "src" / "picture_capture" / "bootstrap" / "gui.py"
+    ).read_text(encoding="utf-8")
+    assert "install_nonbmp_unicode_input" in source
     assert "install_nonbmp_unicode_input(app_module)" in source
     assert source.index("install_nonbmp_unicode_input(app_module)") < source.index(
         "_PREPARED_APP_MODULE = app_module"
