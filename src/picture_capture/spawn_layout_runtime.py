@@ -3,16 +3,18 @@ from __future__ import annotations
 """Keep Page/Layout runtime installation identical in GUI and spawn workers.
 
 ``processing._understand_page_current`` calls ``_ensure_layout_runtime`` inside
-ordinary-drawing workers.  The launcher installs four physical Layout runtimes
-in this order, but historically the worker-local helper installed only the first
-two.  On pages whose second column drifts slightly, that difference can turn
-many body rows into false indentation entries even though the GUI Layout
+ordinary-drawing workers.  The GUI composition root installs four physical
+Layout runtimes in this order, but historically the worker-local helper installed
+only the first two.  On pages whose second column drifts slightly, that difference
+can turn many body rows into false indentation entries even though the GUI Layout
 diagnostic is correct.
 
-This package-level adapter extends the worker helper rather than duplicating the
-Page Understanding algorithm.  It is installed from ``picture_capture.__init__``
-so fresh multiprocessing ``spawn`` interpreters receive the same runtime chain
-without needing to execute the GUI launcher.
+This compatibility adapter extends the worker helper rather than duplicating the
+Page Understanding algorithm.  During Phase 1 it is still installed from
+``picture_capture.__init__`` so fresh multiprocessing ``spawn`` interpreters and
+non-GUI processing consumers receive the same physical Layout chain.  Ownership
+of worker-local detection preparation now lives in ``bootstrap.worker``; removing
+this package-import compatibility path is a later migration step.
 """
 
 from functools import wraps
@@ -20,7 +22,7 @@ from typing import Any
 
 
 def install_spawn_layout_runtime(processing_module: Any) -> None:
-    """Extend ``_ensure_layout_runtime`` to match the launcher runtime order."""
+    """Extend ``_ensure_layout_runtime`` to match GUI composition order."""
     if bool(getattr(processing_module, "_pc_spawn_layout_runtime_installed", False)):
         return
 
@@ -32,7 +34,7 @@ def install_spawn_layout_runtime(processing_module: Any) -> None:
         #   robust_line_starts -> physical_indent
         original()
 
-        # The GUI launcher then installs these two.  Spawn workers must do the
+        # GUI composition then installs these two. Spawn workers must do the
         # same before Layout Core imports/calls the page policy.
         from .layout_row_recovery_runtime import install_layout_row_recovery_runtime
         from .layout_column_drift_runtime import install_layout_column_drift_runtime
