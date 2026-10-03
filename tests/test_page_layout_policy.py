@@ -79,7 +79,7 @@ def test_master_off_uses_project_geometry_without_running_page_estimator(monkeyp
     def forbidden(*_args, **_kwargs):
         raise AssertionError("per-page estimator must not run when master switch is off")
 
-    monkeypatch.setattr(policy, "_projection_layout_estimate", forbidden)
+    monkeypatch.setattr(policy, "detect_layout_parameters", forbidden)
     resolved, estimate, applied = policy.resolve_page_layout_policy(image, settings)
 
     assert estimate is None
@@ -103,7 +103,7 @@ def test_master_on_replaces_only_selected_fields(monkeypatch):
     image = Image.new("RGB", (500, 520), "white")
     fake = _estimate()
 
-    monkeypatch.setattr(policy, "_projection_layout_estimate", lambda *_a, **_k: fake)
+    monkeypatch.setattr(policy, "detect_layout_parameters", lambda *_a, **_k: fake)
     resolved, estimate, applied = policy.resolve_page_layout_policy(image, settings)
 
     assert estimate is fake
@@ -133,7 +133,7 @@ def test_unselected_first_column_x_stays_fixed_even_when_page_estimate_moves(mon
     image = Image.new("RGB", (500, 520), "white")
     fake = _estimate()
 
-    monkeypatch.setattr(policy, "_projection_layout_estimate", lambda *_a, **_k: fake)
+    monkeypatch.setattr(policy, "detect_layout_parameters", lambda *_a, **_k: fake)
     resolved, estimate, applied = policy.resolve_page_layout_policy(image, settings)
     starts, rights, _gutters = policy._policy_geometry(500, resolved, estimate)
 
@@ -169,7 +169,7 @@ def test_body_indent_auto_x_uses_outer_entry_lane_not_dominant_body_lane(monkeyp
         column_starts=(72, 212),
         column_rights=(172, 312),
     )
-    monkeypatch.setattr(policy, "_projection_layout_estimate", lambda *_a, **_k: fake)
+    monkeypatch.setattr(policy, "detect_layout_parameters", lambda *_a, **_k: fake)
 
     resolved, estimate, applied = policy.resolve_page_layout_policy(image, settings)
     starts, _rights, _gutters = policy._policy_geometry(360, resolved, estimate)
@@ -208,7 +208,7 @@ def test_body_indent_x_registration_ignores_persistent_gutter_rule(monkeypatch):
         column_starts=(72, 232),
         column_rights=(172, 332),
     )
-    monkeypatch.setattr(policy, "_projection_layout_estimate", lambda *_a, **_k: fake)
+    monkeypatch.setattr(policy, "detect_layout_parameters", lambda *_a, **_k: fake)
 
     resolved, estimate, _applied = policy.resolve_page_layout_policy(image, settings)
     starts, _rights, _gutters = policy._policy_geometry(400, resolved, estimate)
@@ -242,7 +242,7 @@ def test_headword_indent_auto_x_preserves_real_page_translation(monkeypatch):
         column_starts=(48, 188),
         column_rights=(168, 308),
     )
-    monkeypatch.setattr(policy, "_projection_layout_estimate", lambda *_a, **_k: fake)
+    monkeypatch.setattr(policy, "detect_layout_parameters", lambda *_a, **_k: fake)
 
     resolved, estimate, applied = policy.resolve_page_layout_policy(image, settings)
     starts, _rights, _gutters = policy._policy_geometry(360, resolved, estimate)
