@@ -6,12 +6,6 @@ Historical review height names remain compatibility storage slots.  The
 user-visible ``right_ratio`` is the canonical width control for existing-entry
 boxes and marker OCR crops.  Paddle's ``paddle_band_width_ratio`` remains an
 independent OCR-detector setting and must never be repurposed for marker crops.
-
-The main-window single-line export also owns one crop-output preference:
-``single_line_crop_merge_by_page``.  ``AppSettings`` is a slotted dataclass and
-this late-added compatibility setting intentionally does not change the core
-field layout; it is exposed as a property and persisted in settings.json by the
-same migration bridge.
 """
 
 from pathlib import Path
@@ -29,17 +23,7 @@ CANONICAL_TO_LEGACY = {
     canonical: legacy for legacy, canonical in LEGACY_TO_CANONICAL.items()
 }
 _TRANSIENT_OCR_RIGHT_RATIO = "entry_ocr_right_ratio"
-_SINGLE_LINE_MERGE_KEY = "single_line_crop_merge_by_page"
-_SINGLE_LINE_MERGE_VALUES: dict[int, bool] = {}
 _INSTALLED = False
-
-
-def _get_single_line_merge(settings: AppSettings) -> bool:
-    return bool(_SINGLE_LINE_MERGE_VALUES.get(id(settings), False))
-
-
-def _set_single_line_merge(settings: AppSettings, value: Any) -> None:
-    _SINGLE_LINE_MERGE_VALUES[id(settings)] = bool(value)
 
 
 def install_entry_crop_settings() -> None:
@@ -53,7 +37,6 @@ def install_entry_crop_settings() -> None:
 
     def init(self: AppSettings, *args: Any, **kwargs: Any) -> None:
         translated = dict(kwargs)
-        merge_by_page = bool(translated.pop(_SINGLE_LINE_MERGE_KEY, False))
 
         # A few intermediate builds persisted this temporary name.  Preserve its
         # value for compatibility, but the established visible ``right_ratio``
@@ -66,7 +49,6 @@ def install_entry_crop_settings() -> None:
             if canonical in translated:
                 translated[legacy] = translated.pop(canonical)
         original_init(self, *args, **translated)
-        _set_single_line_merge(self, merge_by_page)
 
     AppSettings.__init__ = init  # type: ignore[method-assign]
 
@@ -97,13 +79,6 @@ def install_entry_crop_settings() -> None:
             property(get_transient_ratio, set_transient_ratio),
         )
 
-    if not hasattr(AppSettings, _SINGLE_LINE_MERGE_KEY):
-        setattr(
-            AppSettings,
-            _SINGLE_LINE_MERGE_KEY,
-            property(_get_single_line_merge, _set_single_line_merge),
-        )
-
     def to_json(self: AppSettings, path: Path) -> None:
         # Let earlier migration layers serialize first, then expose neutral height
         # names. Width persists under the long-established ``right_ratio`` key;
@@ -117,7 +92,6 @@ def install_entry_crop_settings() -> None:
             if legacy in raw:
                 raw[canonical] = raw.pop(legacy)
         raw.pop(_TRANSIENT_OCR_RIGHT_RATIO, None)
-        raw[_SINGLE_LINE_MERGE_KEY] = _get_single_line_merge(self)
         target.write_text(
             json.dumps(raw, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -131,8 +105,7 @@ def install_entry_crop_settings() -> None:
             return original_from_json(cls, source)
 
         translated = dict(raw)
-        merge_by_page = bool(translated.pop(_SINGLE_LINE_MERGE_KEY, False))
-        changed = _SINGLE_LINE_MERGE_KEY in raw
+        changed = False
 
         # Migrate only the temporary marker-crop width key.  Never interpret
         # paddle_band_width_ratio as the visible marker-crop right ratio.
@@ -147,9 +120,7 @@ def install_entry_crop_settings() -> None:
                 changed = True
 
         if not changed:
-            result = original_from_json(cls, source)
-            _set_single_line_merge(result, merge_by_page)
-            return result
+            return original_from_json(cls, source)
 
         with tempfile.NamedTemporaryFile(
             mode="w",
@@ -160,9 +131,7 @@ def install_entry_crop_settings() -> None:
             temp_path = Path(handle.name)
             json.dump(translated, handle, ensure_ascii=False)
         try:
-            result = original_from_json(cls, temp_path)
-            _set_single_line_merge(result, merge_by_page)
-            return result
+            return original_from_json(cls, temp_path)
         finally:
             temp_path.unlink(missing_ok=True)
 
