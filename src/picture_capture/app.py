@@ -53,6 +53,7 @@ from .ui_compat import (
     AUTO_FONT_FAMILY, bind_context_menu, fit_window_to_work_area,
     normalize_content_font_setting, preferred_font_family, resolve_content_font_family,
 )
+from .ui.widgets.vertical_word import VerticalWordText
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
 from .layout_transform import LayoutTransform
 from .coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
@@ -575,49 +576,6 @@ def binary_preview_image(source: Image.Image) -> Image.Image:
             threshold = value
     return gray.point(lambda pixel: 255 if pixel > threshold else 0, mode="1").convert("RGB")
 
-
-class VerticalWordText(tk.Text):
-    """A real editable Tk widget that presents a headword as a narrow vertical column.
-
-    It intentionally exposes the small subset of Entry-like methods used by the
-    main overlay code, so OCR fill, autosave, wordslist styling, and manual edit
-    persistence share the same code path as horizontal Entry widgets.
-    """
-
-    @staticmethod
-    def _entry_index(index) -> str:
-        if index in {"end", tk.END}:
-            return "end-1c"
-        if isinstance(index, int):
-            return f"1.{max(0, index)}"
-        if str(index) == "0":
-            return "1.0"
-        return str(index)
-
-    def get(self, *args):
-        if args:
-            return super().get(*args)
-        # Main-overlay words are single logical strings.  A pasted newline must
-        # not become part of the dictionary headword.
-        return super().get("1.0", "end-1c").replace("\n", "")
-
-    def delete(self, first=0, last=None):
-        first_index = self._entry_index(first)
-        if last is None:
-            return super().delete(first_index)
-        return super().delete(first_index, self._entry_index(last))
-
-    def insert(self, index, chars, *args):
-        return super().insert(self._entry_index(index), chars, *args)
-
-    def icursor(self, index) -> None:
-        target = self._entry_index(index)
-        self.mark_set("insert", target)
-        self.see(target)
-
-    def selection_range(self, start, end) -> None:
-        self.tag_remove("sel", "1.0", "end")
-        self.tag_add("sel", self._entry_index(start), self._entry_index(end))
 
 
 def vertical_marker_contact_gap(marker_line_width: int) -> int:
