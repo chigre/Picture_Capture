@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture.layout_visualization_summary import _format_summary, _summary_anchor
+from picture_capture.layout_visualization_summary import _format_summary, _summary_box
 
 
 class _Geometry:
@@ -69,12 +69,14 @@ def _snapshot():
     )
 
 
-def test_summary_anchor_is_centered_in_first_column_at_five_line_heights() -> None:
-    x, y = _summary_anchor(_App(), _snapshot())
+def test_summary_box_uses_rightmost_eighty_percent_at_five_line_heights() -> None:
+    x, y, width = _summary_box(_App(), _snapshot())
     # body_top=100; five 26-px line heights -> canonical y=230.
     assert y == 230 * 2.0
-    # At y=230 the first-column left track is x=54; centre is 54 + 340/2.
-    assert x == (54 + 170) * 2.0
+    # At y=230 the first-column left track is x=54.  The summary occupies the
+    # rightmost 80%: 54+68 .. 54+340, centred at x=258.
+    assert x == 258 * 2.0
+    assert width == 272 * 2.0
 
 
 def test_detailed_summary_contains_geometry_gutters_and_raw_used_state() -> None:
