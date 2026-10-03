@@ -126,11 +126,11 @@ def test_processing_uses_shared_in_memory_illustration_detector_and_wrapper():
     assert bool(getattr(processing, "_pc_layout_illustration_mask_installed", False))
 
 
-def test_launcher_exposes_switch_before_generic_settings_help_scan():
+def test_gui_composition_exposes_switch_before_generic_settings_help_scan():
     root = Path(__file__).resolve().parents[1]
-    source = (root / "src" / "picture_capture" / "launcher.py").read_text(
-        encoding="utf-8"
-    )
+    source = (
+        root / "src" / "picture_capture" / "bootstrap" / "gui.py"
+    ).read_text(encoding="utf-8")
     ui_install = source.index("install_layout_illustration_mask_ui(app_module)")
     help_install = source.index("install_settings_parameter_help(app_module)")
     assert ui_install < help_install
