@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from picture_capture.dictionary_page_design import ColumnDesign, IndentMode, LayoutLine
 from picture_capture.layout_physical_indent import assign_binary_roles
 
 
-def _line(y: int) -> LayoutLine:
+def _line(y: int, x: float) -> LayoutLine:
     return LayoutLine(
         column=0,
         y0=y,
         y1=y + 20,
-        first_x=0,
-        anchor_x=0,
+        first_x=int(round(x)),
+        anchor_x=int(round(x)),
         anchor_width=10,
         anchor_height=18,
         gap_before=0,
@@ -21,7 +19,10 @@ def _line(y: int) -> LayoutLine:
 
 
 def _mode(center: float, support: int, y0: int) -> IndentMode:
-    lines = [_line(y0 + index * 24) for index in range(support)]
+    # The semantic-neighborhood implementation deliberately uses each mode's
+    # actual physical line coordinates rather than trusting the mode.center
+    # label alone. Keep the synthetic rows consistent with the requested lane.
+    lines = [_line(y0 + index * 24, center) for index in range(support)]
     return IndentMode(center=center, tolerance=1.5, lines=lines)
 
 
