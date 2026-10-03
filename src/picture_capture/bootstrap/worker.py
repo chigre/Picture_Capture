@@ -2,15 +2,15 @@ from __future__ import annotations
 
 """Explicit composition root for multiprocessing detection workers.
 
-This module owns the worker-local runtime preparation that historically lived
-inside ``spawn_detection_runtime.detect_entries_job_with_runtime``.  It is kept
-lazy on purpose: character-height recovery must be installed before importing
-``picture_capture.processing`` because Page Understanding modules can capture
-layout callables by value during import.
+Shared process-wide runtime preparation is resolved through
+``build_core_services`` before worker-specific LayoutRows extensions are added.
+The pickleable spawn job therefore consumes one worker profile rather than
+reconstructing import-order-sensitive dependencies itself.
 
 Package-wide import-time installers still exist in ``picture_capture.__init__``
-at this stage.  Removing those side effects is a separate migration step after
-both GUI and worker composition roots are explicit and covered by tests.
+at this migration stage as an idempotent compatibility fallback. Removing those
+side effects is a separate PR after GUI and worker profiles both prove they can
+build the same shared core explicitly.
 """
 
 from dataclasses import dataclass
@@ -31,22 +31,15 @@ class WorkerServices:
 def build_worker_services() -> WorkerServices:
     """Prepare one spawn process and return its explicit worker dependencies.
 
-    The installer order intentionally matches the pre-refactor worker target.
-    Installers are idempotent, so calling this for each submitted job preserves
-    the historical semantics while removing composition ownership from the job
-    function itself.
+    The shared core owns package-wide runtime ordering. Worker-local additions
+    remain idempotent and preserve the pre-refactor ordinary-detection behavior.
     """
+    from .core import build_core_services
 
-    # Must happen before importing processing: its Page Understanding chain may
-    # bind detect_layout_parameters by value during module import.
-    from ..layout_character_height_runtime import (
-        install_character_height_fallback_runtime,
-    )
+    core_services = build_core_services()
+    formats = core_services.formats
+    processing_module = core_services.processing
 
-    install_character_height_fallback_runtime()
-
-    from .. import formats
-    from .. import processing as processing_module
     from ..entry_classification import install_pdic_classification
     from ..entry_classification_runtime import install_processing_entry_classification
     from ..layout_column_drift_runtime import install_layout_column_drift_runtime
@@ -57,6 +50,9 @@ def build_worker_services() -> WorkerServices:
     )
     from ..training_baseline import save_automatic_baseline
 
+    # These calls remain local ordering guards during migration. Core composition
+    # already installed the shared classification chain, so they are no-ops in a
+    # normally prepared process and preserve historical direct-worker behavior.
     install_pdic_classification(formats)
     install_processing_entry_classification(processing_module)
     install_layout_row_recovery_runtime()
