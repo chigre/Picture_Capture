@@ -33,9 +33,9 @@ def test_ocr_crop_preview_highlights_proofreading_active_entry():
     assert "engine_label" in source
 
 
-def test_launcher_installs_ocr_crop_preview():
-    import picture_capture.launcher as launcher
+def test_gui_composition_installs_ocr_crop_preview():
+    import picture_capture.bootstrap.gui as gui_bootstrap
 
-    source = Path(launcher.__file__).read_text(encoding="utf-8")
-    assert "from .ocr_crop_preview_ui import install_ocr_crop_preview" in source
+    source = Path(gui_bootstrap.__file__).read_text(encoding="utf-8")
+    assert "install_ocr_crop_preview" in source
     assert "install_ocr_crop_preview(app_module)" in source
