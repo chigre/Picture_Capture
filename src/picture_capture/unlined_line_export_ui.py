@@ -133,14 +133,16 @@ def _insert_button(app: Any) -> tk.Misc | None:
     return button
 
 
-def _set_button_state(app: Any, active: bool) -> None:
-    button = getattr(app, "_pc_unlined_export_button", None)
-    if button is None:
-        return
-    try:
-        button.configure(state="disabled" if active else "normal")
-    except tk.TclError:
-        pass
+def _set_job_button_state(app: Any, active: bool) -> None:
+    """Disable both related exporters while either output job is active."""
+    for name in ("_pc_unlined_export_button", "_pc_single_line_crop_button"):
+        button = getattr(app, name, None)
+        if button is None:
+            continue
+        try:
+            button.configure(state="disabled" if active else "normal")
+        except tk.TclError:
+            pass
 
 
 def _status(app: Any, text: str) -> None:
@@ -191,7 +193,7 @@ def _start_unlined_export(app: Any) -> None:
     token = object()
     app._pc_unlined_export_active = True
     app._pc_unlined_export_token = token
-    _set_button_state(app, True)
+    _set_job_button_state(app, True)
 
     workers = max(1, min(configured_single_line_workers(project_root), len(indices)))
     worker_text = "串行" if workers <= 1 else f"并行×{workers}"
@@ -257,7 +259,7 @@ def _start_unlined_export(app: Any) -> None:
 
         if finished:
             app._pc_unlined_export_active = False
-            _set_button_state(app, False)
+            _set_job_button_state(app, False)
             return
         try:
             app.after(80, poll)
