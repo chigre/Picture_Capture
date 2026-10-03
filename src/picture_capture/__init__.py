@@ -2,6 +2,14 @@
 
 __version__ = "2.14.2"
 
+# Layout illustration masking is a real AppSettings dataclass field rather than
+# a dynamic property because Profile/page resolution uses dataclasses.replace().
+# Install it before any consumer imports AppSettings so GUI and spawn workers
+# preserve the project switch identically.
+from .layout_illustration_mask_runtime import install_layout_illustration_mask_settings
+
+install_layout_illustration_mask_settings()
+
 # Character-height recovery must be installed before *any* module can import
 # layout_detection.detect_layout_parameters by value.  Package import itself
 # later imports processing, whose page-understanding chain imports
@@ -65,5 +73,9 @@ install_pdic_classification(_formats)
 # interpreter and must receive the same crop/engine dispatch as the GUI process.
 from . import processing as _processing
 from .entry_classification_runtime import install_processing_entry_classification
+from .layout_illustration_mask_runtime import install_layout_illustration_mask_runtime
 
 install_processing_entry_classification(_processing)
+# The same Page Understanding pre-filter must exist in spawn workers and CLI,
+# not only in launcher-created GUI processes.  The installer is idempotent.
+install_layout_illustration_mask_runtime(_processing)
