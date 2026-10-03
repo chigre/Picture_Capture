@@ -12,7 +12,7 @@ _SRC = _PROJECT_ROOT / "src"
 
 def main() -> int:
     sys.path.insert(0, str(_SRC))
-    from picture_capture.app import main as app_main
+    from picture_capture.launcher import main as app_main
 
     return app_main()
 

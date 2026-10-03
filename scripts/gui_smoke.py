@@ -12,7 +12,16 @@ def _stage(message: str) -> None:
 
 
 def main() -> int:
-    from picture_capture.app import PictureCaptureApp, SettingsDialog, UsageGuideWindow
+    # Exercise the same launcher preparation path as run.py / python -m
+    # picture_capture.  Importing app.py directly would miss launcher-only
+    # compatibility patches and previously allowed startup regressions to pass
+    # CI even though the downloaded branch could not construct the main window.
+    from picture_capture.launcher import prepare_app_module
+
+    app_module = prepare_app_module()
+    PictureCaptureApp = app_module.PictureCaptureApp
+    SettingsDialog = app_module.SettingsDialog
+    UsageGuideWindow = app_module.UsageGuideWindow
     from picture_capture.environment_center import EnvironmentCenterWindow
 
     finished = threading.Event()
@@ -28,7 +37,7 @@ def main() -> int:
         target=watchdog, name="gui-smoke-watchdog", daemon=True,
     ).start()
 
-    _stage("construct PictureCaptureApp")
+    _stage("construct PictureCaptureApp through launcher-prepared module")
     app = PictureCaptureApp()
     try:
         _stage("PictureCaptureApp constructed")

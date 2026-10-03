@@ -1,0 +1,119 @@
+from __future__ import annotations
+
+"""Spawn-safe ordinary drawing worker with the same runtime metadata as the GUI.
+
+The main launcher installs Entry classification by wrapping both Layout-row
+materialization and PDIC IO.  A ``multiprocessing`` worker started with the
+``spawn`` context imports ``picture_capture.processing`` directly and does not
+run the GUI launcher, so those process-local wrappers are otherwise absent.
+
+That mismatch is especially dangerous when ordinary drawing replaces an existing
+PDIC: the old EntryClassification sidecar can survive while the marker geometry
+changes, and the GUI may later match stale regular/oversized/manual metadata onto
+the newly detected markers.
+
+This top-level function is intentionally pickleable.  It bootstraps the same
+classification runtime inside each spawned worker before detection and writes the
+new PDIC through the classification-aware formats writer.  It also captures the
+physical Layout rows used by ordinary drawing into ``data/LayoutRows`` so later
+post-production QA can reuse them without re-running full Layout analysis.
+"""
+
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
+
+from PIL import Image
+
+
+def detect_entries_job_with_runtime(
+    image_path: str,
+    settings: Any,
+    pages: tuple[str, str, str],
+    profile_page_index: int = 0,
+) -> int:
+    """Run one ordinary-drawing job with spawn-local runtime installers."""
+
+    # Install character-height fallback before importing processing: processing
+    # imports Page Understanding modules that may capture detect_layout_parameters
+    # by value during module import.
+    from .layout_character_height_runtime import (
+        install_character_height_fallback_runtime,
+    )
+
+    install_character_height_fallback_runtime()
+
+    from . import formats
+    from . import processing as processing_module
+    from .entry_classification import install_pdic_classification
+    from .entry_classification_runtime import install_processing_entry_classification
+    from .layout_row_recovery_runtime import install_layout_row_recovery_runtime
+    from .layout_column_drift_runtime import install_layout_column_drift_runtime
+    from .layout_rows_cache import (
+        capture_layout_rows,
+        install_layout_rows_persistence_runtime,
+    )
+    from .training_baseline import save_automatic_baseline
+
+    # Every spawn process has its own module globals.  Reinstall these wrappers
+    # here rather than relying on launcher-time monkey patches from the parent.
+    install_pdic_classification(formats)
+    install_processing_entry_classification(processing_module)
+    install_layout_row_recovery_runtime()
+    # Install before processing imports Layout Core for the first ordinary page.
+    # The worker may later install the physical-indent finalizer around this
+    # wrapper; both orders are safe because the remeasurement rebuilds modes and
+    # the finalizer remains idempotent.
+    install_layout_column_drift_runtime()
+    install_layout_rows_persistence_runtime()
+
+    page = Path(image_path)
+    with Image.open(page) as opened:
+        image = processing_module._core.normalize_page_rgb(opened)
+
+    try:
+        current = replace(settings)
+        current.detection_method = "left_edge"
+        # The full ordinary Layout result is already being computed here. Capture
+        # its physical rows once instead of making post-production rebuild them.
+        # Cache validity is keyed by the persisted/project settings rather than
+        # the temporary worker-only detection_method override.
+        with capture_layout_rows(
+            page.parent,
+            page,
+            int(profile_page_index),
+            settings,
+        ):
+            entries, _geometry = processing_module.detect_entries(
+                image,
+                current,
+                profile_page_index=profile_page_index,
+                page_sections=processing_module._core.read_page_sections(page),
+            )
+
+        pdic = processing_module._core.pdic_path_for_image(page)
+        save_automatic_baseline(pdic, entries, image.width, pages)
+        formats.write_pdic(
+            pdic,
+            entries,
+            image.width,
+            pages,
+        )
+        return len(entries)
+    finally:
+        image.close()
+
+
+def install_spawn_detection_runtime(processing_module: Any) -> None:
+    """Expose the spawn-safe top-level worker before ``app`` imports it."""
+
+    if bool(getattr(processing_module, "_spawn_detection_runtime_installed", False)):
+        return
+    processing_module.detect_entries_job = detect_entries_job_with_runtime
+    processing_module._spawn_detection_runtime_installed = True
+
+
+__all__ = [
+    "detect_entries_job_with_runtime",
+    "install_spawn_detection_runtime",
+]

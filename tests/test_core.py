@@ -67,6 +67,7 @@ from picture_capture.processing import (
     clamp_box,
     derive_geometry, derive_nominal_geometry,
     detect_entries,
+    _detect_entries_left_edge as legacy_detect_entries,
     column_index,
     import_ocred,
     export_ocred,
@@ -512,7 +513,7 @@ class ProcessingTests(unittest.TestCase):
                 start_y=40, detection_method="left_edge",
                 ordinary_auto_layout=False,
             )
-            entries, geometry = detect_entries(image, settings)
+            entries, geometry = legacy_detect_entries(image, settings)
             self.assertEqual(len(geometry.column_starts), 2)
             self.assertEqual(len(entries), 6)
             self.assertTrue(all(entry.word == "" for entry in entries))
@@ -539,9 +540,9 @@ class ProcessingTests(unittest.TestCase):
         geometry = derive_geometry(image, settings)
         self.assertAlmostEqual(geometry.x_at(0, 100), 38, delta=8)
         self.assertAlmostEqual(geometry.x_at(0, 600), 78, delta=8)
-        tracked, _ = detect_entries(image, settings)
+        tracked, _ = legacy_detect_entries(image, settings)
         settings.follow_column_deformation = False
-        fixed, _ = detect_entries(image, settings)
+        fixed, _ = legacy_detect_entries(image, settings)
         self.assertEqual(len(tracked), 26)
         self.assertLess(len(fixed), len(tracked))
 
@@ -622,15 +623,14 @@ class ProcessingTests(unittest.TestCase):
             self.assertTrue(cache_path.exists())
             diagnostic_path = cache_path.with_name("page_ocr_diagnostics.txt")
             comparison_path = cache_path.with_name("page_ocr_comparison.txt")
-            self.assertTrue(diagnostic_path.exists())
-            self.assertTrue(comparison_path.exists())
-            self.assertIn("caffè s.m.", diagnostic_path.read_text(encoding="utf-8"))
-            self.assertEqual({len(line.split("\t")) for line in diagnostic_path.read_text(encoding="utf-8").splitlines()}, {12})
-            self.assertEqual({len(line.split("\t")) for line in comparison_path.read_text(encoding="utf-8").splitlines()}, {27})
+            self.assertFalse(diagnostic_path.exists())
+            self.assertFalse(comparison_path.exists())
             import json
             report = json.loads(cache_path.read_text(encoding="utf-8"))
-            self.assertIn("paddle_full_text", report["columns"][0])
-            self.assertIn("paddle_merged_lines", report["columns"][0])
+            self.assertEqual(report.get("cache_storage"), "compact-v1")
+            self.assertIn("ocr_records", report["columns"][0])
+            self.assertNotIn("paddle_full_text", report["columns"][0])
+            self.assertNotIn("paddle_merged_lines", report["columns"][0])
             cached = detect_paddle_headwords(
                 image, geometry, settings, cache_path=cache_path,
                 engine=object(),  # A valid cache must avoid calling the engine.
@@ -7508,7 +7508,7 @@ def test_rtl_ordinary_drawing_detects_source_physical_right_edge():
         paddle_refine_separator_y=False,
     )
 
-    entries, _geometry = detect_entries(source, settings)
+    entries, _geometry = legacy_detect_entries(source, settings)
 
     assert len(entries) == 4
     assert all(entry.x > 300 for entry in entries)

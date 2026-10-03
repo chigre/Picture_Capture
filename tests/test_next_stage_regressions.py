@@ -27,9 +27,11 @@ from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
     _collapse_ordinary_oversized_cjk_split_markers, _column_tracking_dimensions,
+    _recover_ordinary_oversized_cjk_missing_markers,
     _legacy_find_separator_y, _legacy_is_point, _fuse_detection_entries,
     _left_edge_ink_mask, _ordinary_marker_local_crop, apply_column_start_offsets,
     derive_geometry, derive_nominal_geometry, detect_entries,
+    _detect_entries_left_edge as legacy_detect_entries,
     ordinary_page_layout_settings, ocr_existing_entry_words_from_markers,
     refine_existing_entries,
 )
@@ -138,6 +140,46 @@ def test_ordinary_mode_self_collapses_split_markers_inside_large_cjk_without_ocr
 
 
 
+
+def test_ordinary_mode_recovers_missing_oversized_cjk_from_three_visual_cues():
+    image = Image.new("RGB", (360, 300), "white")
+    draw = ImageDraw.Draw(image)
+    # Oversized approximately-square display head at the column left.
+    draw.rectangle((20, 60, 78, 126), fill="black")
+    # Ordinary body rows establish the normal line scale and provide baseline
+    # ink to the right of the display-head zone.
+    draw.rectangle((20, 165, 72, 188), fill="black")
+    draw.rectangle((105, 165, 170, 188), fill="black")
+    draw.rectangle((20, 210, 74, 233), fill="black")
+    draw.rectangle((105, 210, 175, 233), fill="black")
+
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=300,
+        gutter=0,
+        start_y=0,
+        character_height=30,
+        row_padding=1,
+        paddle_band_left_margin=0,
+        ocr_language="chi_sim",
+        paddle_language="ch",
+        dictionary_profile_id="cjk_visual",
+        profile_cjk_allow_single_headword=True,
+        profile_cjk_right_context_enabled=True,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(image.width, image.height, settings)
+    recovered = _recover_ordinary_oversized_cjk_missing_markers(
+        image, [], geometry, settings,
+    )
+    assert len(recovered) == 1
+    assert 45 <= recovered[0].y <= 65
+    assert recovered[0].ocr_source == "ordinary_visual"
+    assert "ORDINARY_CJK_VISUAL_RESCUE" in recovered[0].issue_type
+    assert recovered[0].ocr_oversized_cjk is True
+
+
 def test_ordinary_large_cjk_collapse_bridges_tiny_internal_glyph_gap():
     image = Image.new("RGB", (360, 260), "white")
     draw = ImageDraw.Draw(image)
@@ -238,7 +280,7 @@ def test_ordinary_marker_local_crop_uses_taller_box_for_visual_large_cjk():
     geometry = derive_nominal_geometry(image.width, image.height, settings)
 
     large_crop, large_flag = _ordinary_marker_local_crop(
-        image, Entry(word="", x=20, y=50), geometry, settings,
+        image, Entry(word="", x=20, y=50, ocr_source="ordinary_large_head_evidence", issue_type="ORDINARY_OVERSIZED_DISPLAY_HEAD", ocr_visual_run_height=68.0, ocr_oversized_cjk=True), geometry, settings,
     )
     normal_crop, normal_flag = _ordinary_marker_local_crop(
         image, Entry(word="", x=20, y=162), geometry, settings,
@@ -251,6 +293,7 @@ def test_ordinary_marker_local_crop_uses_taller_box_for_visual_large_cjk():
 
 def test_ordinary_marker_text_ocr_fills_only_blank_without_moving_lines(monkeypatch):
     import picture_capture.paddle_headwords as ph
+    import picture_capture.entry_classification_runtime as ecr
 
     image = Image.new("RGB", (360, 260), "white")
     draw = ImageDraw.Draw(image)
@@ -272,7 +315,7 @@ def test_ordinary_marker_text_ocr_fills_only_blank_without_moving_lines(monkeypa
         follow_column_deformation=False,
     )
     entries = [
-        Entry(word="", x=20, y=50),
+        Entry(word="", x=20, y=50, ocr_source="ordinary_large_head_evidence", issue_type="ORDINARY_OVERSIZED_DISPLAY_HEAD", ocr_visual_run_height=68.0, ocr_oversized_cjk=True),
         Entry(word="", x=20, y=162),
         Entry(word="已校对", x=20, y=210, manually_selected=True),
     ]
@@ -302,6 +345,26 @@ def test_ordinary_marker_text_ocr_fills_only_blank_without_moving_lines(monkeypa
         ph,
         "parse_headword_text",
         lambda text, _settings, profile=None: SimpleNamespace(normalized="枫"),
+    )
+
+    class FakeChannel:
+        def __init__(self, _settings):
+            pass
+
+        def recognize_crop(self, crop, **_kwargs):
+            return SimpleNamespace(
+                plan=None,
+                candidates=[SimpleNamespace(
+                    ok=True, engine="paddle",
+                    records=[OCRRecord("dummy", 0.95, (0, 0, max(10, crop.width // 3), max(8, crop.height // 2)))],
+                    text="dummy", confidence=0.95,
+                )],
+            )
+
+    monkeypatch.setattr(ecr, "OcrChannelSession", FakeChannel)
+    monkeypatch.setattr(
+        ecr, "choose_ocr_text",
+        lambda _plan, resolved: (resolved[0] if resolved else None, False),
     )
 
     updated, stats = ocr_existing_entry_words_from_markers(
@@ -397,6 +460,200 @@ def test_ocr_candidate_band_ratio_is_relative_to_actual_column_width():
     assert band100.width == effective_column_width + margin
 
 
+
+
+def _latent_review_candidate(
+    *,
+    y=100,
+    word="annual",
+    selected=False,
+    reason="missing_pos_inflection_descriptor_or_symbol",
+    confidence=0.96,
+    two_engines=False,
+    features=None,
+):
+    features = dict(features or {"at_left": True})
+    candidate = {
+        "candidate_id": "latent-c1",
+        "column": 0,
+        "source_x": 20,
+        "source_y": y,
+        "position_variant": "refined",
+        "selected": selected,
+        "manual_override": False,
+        "word": word,
+        "final_engine": "paddle",
+        "confidence": confidence,
+        "score": 3.0,
+        "issue_types": [],
+        "paddle": {
+            "source_x": 20, "source_y": y, "y": y,
+            "confidence": confidence, "accepted": False,
+            "score": 3.0, "lemma": word, "reason": reason,
+            "features": features,
+        },
+        "tesseract": {},
+        "lens": {},
+    }
+    if two_engines:
+        candidate["tesseract"] = {
+            "source_x": 20, "source_y": y, "y": y,
+            "confidence": confidence, "accepted": False,
+            "score": 3.0, "lemma": word, "reason": reason,
+            "features": features,
+        }
+    return candidate
+
+
+def test_combined_fusion_uses_soft_rejected_ocr_as_metadata_not_as_geometry():
+    settings = AppSettings(
+        columns=1, manual_x=20, column_width=360, gutter=0,
+        start_y=0, character_height=20, follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 260, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [Entry(word="", x=x, y=100)]
+    candidate = _latent_review_candidate(y=103, word="annual", confidence=0.91)
+
+    fused = _fuse_detection_entries(
+        ordinary, [], geometry, settings, review_candidates=[candidate],
+    )
+    assert len(fused) == 1
+    assert fused[0].y == 100
+    assert fused[0].word == "annual"
+    assert fused[0].ocr_source.startswith("combined:latent:")
+    assert "COMBINED_LATENT_OCR_METADATA" in fused[0].issue_type
+
+
+def test_combined_latent_candidate_pairs_only_once_on_dense_rows():
+    settings = AppSettings(
+        columns=1, manual_x=20, column_width=360, gutter=0,
+        start_y=0, character_height=20,
+        paddle_alignment_y_tolerance_ratio=0.50,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 260, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [
+        Entry(word="", x=x, y=100),
+        Entry(word="", x=x, y=108),
+    ]
+    candidate = _latent_review_candidate(
+        y=106, word="nearest", confidence=0.93,
+    )
+
+    fused = _fuse_detection_entries(
+        ordinary, [], geometry, settings, review_candidates=[candidate],
+    )
+    assert [(item.word, item.y) for item in fused] == [
+        ("", 100),
+        ("nearest", 108),
+    ]
+
+
+def test_combined_fusion_suppresses_two_engine_hard_negative_ordinary_false_positive():
+    settings = AppSettings(
+        columns=1, manual_x=20, column_width=360, gutter=0,
+        start_y=0, character_height=20, follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 260, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [Entry(word="", x=x, y=100)]
+    candidate = _latent_review_candidate(
+        y=101,
+        word="",
+        reason="continuation_fragment",
+        confidence=0.96,
+        two_engines=True,
+        features={"at_left": True, "looks_like_continuation": True},
+    )
+
+    fused = _fuse_detection_entries(
+        ordinary, [], geometry, settings, review_candidates=[candidate],
+    )
+    assert fused == []
+
+
+def test_single_ocr_hard_negative_cannot_erase_strong_full_white_ordinary_boundary():
+    settings = AppSettings(
+        columns=1, manual_x=20, column_width=360, gutter=0,
+        start_y=0, character_height=20, follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 260, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [
+        Entry(
+            word="", x=x, y=100, confidence=0.98,
+            ocr_source="ordinary_vb",
+        )
+    ]
+    candidate = _latent_review_candidate(
+        y=101,
+        word="",
+        reason="continuation_fragment",
+        confidence=0.99,
+        two_engines=False,
+        features={"at_left": True, "looks_like_continuation": True},
+    )
+
+    fused = _fuse_detection_entries(
+        ordinary, [], geometry, settings, review_candidates=[candidate],
+    )
+    assert [(item.word, item.y) for item in fused] == [("", 100)]
+
+
+def test_dual_ocr_hard_negative_can_override_strong_ordinary_boundary():
+    settings = AppSettings(
+        columns=1, manual_x=20, column_width=360, gutter=0,
+        start_y=0, character_height=20, follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 260, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [
+        Entry(
+            word="", x=x, y=100, confidence=0.98,
+            ocr_source="ordinary_vb",
+        )
+    ]
+    candidate = _latent_review_candidate(
+        y=101,
+        word="",
+        reason="continuation_fragment",
+        confidence=0.96,
+        two_engines=True,
+        features={"at_left": True, "looks_like_continuation": True},
+    )
+
+    fused = _fuse_detection_entries(
+        ordinary, [], geometry, settings, review_candidates=[candidate],
+    )
+    assert fused == []
+
+
+def test_combined_fusion_never_lets_manual_deselection_be_auto_rescued_or_veto_geometry():
+    settings = AppSettings(
+        columns=1, manual_x=20, column_width=360, gutter=0,
+        start_y=0, character_height=20, follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(420, 260, settings)
+    x = int(geometry.column_starts[0])
+    ordinary = [Entry(word="", x=x, y=100)]
+    candidate = _latent_review_candidate(
+        y=101,
+        word="wrong",
+        reason="continuation_fragment",
+        confidence=0.99,
+        two_engines=True,
+        features={"at_left": True, "looks_like_continuation": True},
+    )
+    candidate["manual_override"] = True
+    candidate["selected"] = False
+
+    fused = _fuse_detection_entries(
+        ordinary, [], geometry, settings, review_candidates=[candidate],
+    )
+    assert [(item.word, item.y) for item in fused] == [("", 100)]
+
 def test_combined_fusion_pairs_once_preserves_ordinary_geometry_and_ocr_semantics():
     settings = AppSettings(
         columns=1,
@@ -435,6 +692,42 @@ def test_combined_fusion_pairs_once_preserves_ordinary_geometry_and_ocr_semantic
     assert fused[0].ocr_source == "combined:paddle"
     assert fused[-1].candidate_id == "c3"
 
+
+
+def test_combined_fusion_uses_cleaner_local_whitespace_separator_position():
+    settings = AppSettings(
+        columns=1,
+        manual_x=20,
+        column_width=300,
+        gutter=0,
+        start_y=0,
+        character_height=20,
+        paddle_alignment_y_tolerance_ratio=0.50,
+        follow_column_deformation=False,
+    )
+    geometry = derive_nominal_geometry(360, 240, settings)
+    x = int(geometry.column_starts[0])
+    image = Image.new("RGB", (360, 240), "white")
+    draw = ImageDraw.Draw(image)
+    # Ordinary marker lies on ink, while the OCR marker is in a clean separator
+    # row only four pixels away. Fusion should use image evidence instead of
+    # blindly preferring ordinary Y for a non-CJK lemma.
+    draw.rectangle((x, 99, x + 150, 101), fill="black")
+    ordinary = [Entry(word="", x=x, y=100)]
+    ocr = [
+        Entry(
+            word="annual", x=x, y=104, confidence=0.95,
+            ocr_source="paddle", candidate_id="annual", final_engine="paddle",
+        )
+    ]
+
+    fused = _fuse_detection_entries(
+        ordinary, ocr, geometry, settings, image=image,
+    )
+    assert len(fused) == 1
+    assert fused[0].word == "annual"
+    assert fused[0].y == 104
+    assert "FUSION_WHITESPACE_POSITION_ARBITRATION" in fused[0].issue_type
 
 
 def test_combined_fusion_matches_globally_nearest_row_not_first_row():
@@ -1572,6 +1865,233 @@ def test_ocr_resize_coordinates_round_trip():
     assert records == [OCRRecord("word", .9, (200, 400, 600, 800))]
 
 
+
+
+
+def test_peer_typography_marks_only_boundary_supported_soft_rejects():
+    diagnostics = []
+    for index in range(4):
+        diagnostics.append({
+            "accepted": True,
+            "confidence": 0.96,
+            "normalized_headword": f"head{index}",
+            "reject_reason": "",
+            "features": {
+                "at_left": True,
+                "below_header": True,
+                "height_ratio": 1.18 + index * 0.01,
+                "boldness_ratio": 1.31 + index * 0.01,
+                "preceding_gap": 18 + index,
+                "forced_accept": False,
+                "marker_noise": False,
+                "looks_like_continuation": False,
+            },
+            "parser_trace": [],
+            "bug_types": [],
+        })
+    candidate = {
+        "accepted": False,
+        "confidence": 0.87,
+        "normalized_headword": "borderline",
+        "reject_reason": "missing_pos_inflection_descriptor_or_symbol",
+        "features": {
+            "at_left": True,
+            "below_header": True,
+            "image_boundary_supported": True,
+            "height_ratio": 1.19,
+            "boldness_ratio": 1.32,
+            "preceding_gap": 19,
+        },
+        "parser_trace": [],
+        "bug_types": [],
+    }
+    diagnostics.append(candidate)
+
+    matched = paddle_headwords._annotate_peer_typography_matches(diagnostics)
+
+    assert matched == 1
+    assert candidate["features"]["peer_typography_match"] is True
+    assert candidate["features"]["peer_typography_votes"] >= 2
+    assert candidate["features"]["peer_typography_anchor_count"] == 4
+    assert "peer_typography_match" in candidate["parser_trace"]
+    assert "PEER_TYPOGRAPHY_MATCH" in candidate["bug_types"]
+
+
+def test_peer_typography_plus_image_boundary_can_rescue_single_engine_soft_reject():
+    candidate = {
+        "source_x": 20,
+        "source_y": 100,
+        "_axis_v": 100,
+        "_coarse_axis_v": 100,
+        "_anchor_axis_v": 100,
+        "normalized_headword": "borderline",
+        "confidence": 0.86,
+        "accepted": False,
+        "score": 2.0,
+        "reject_reason": "missing_pos_inflection_descriptor_or_symbol",
+        "features": {
+            "at_left": True,
+            "peer_typography_match": True,
+            "peer_typography_votes": 3,
+        },
+        "image_boundary_match": {"strength": 0.9, "y": 100},
+        "box": [0, 100, 90, 122],
+    }
+    pair = paddle_headwords._make_ocr_pair(candidate, None)
+    item = paddle_headwords._arbitrate_pair(
+        pair, 0, 20, AppSettings(), geometry=None,
+    )
+    assert item["selected"] is True
+    assert item["decision_reason"] == "multi_evidence_visual_boundary_rescue"
+    assert "MULTI_EVIDENCE_RESCUE" in item["issue_types"]
+
+
+def test_peer_typography_does_not_mark_hard_negative_candidate():
+    diagnostics = [
+        {
+            "accepted": True,
+            "confidence": 0.97,
+            "normalized_headword": f"h{i}",
+            "features": {
+                "at_left": True, "below_header": True,
+                "height_ratio": 1.2, "boldness_ratio": 1.3,
+                "preceding_gap": 20,
+            },
+        }
+        for i in range(4)
+    ]
+    candidate = {
+        "accepted": False,
+        "confidence": 0.99,
+        "normalized_headword": "body",
+        "reject_reason": "continuation_fragment",
+        "features": {
+            "at_left": True,
+            "below_header": True,
+            "image_boundary_supported": True,
+            "height_ratio": 1.2,
+            "boldness_ratio": 1.3,
+            "preceding_gap": 20,
+            "looks_like_continuation": True,
+        },
+        "parser_trace": [],
+        "bug_types": [],
+    }
+    diagnostics.append(candidate)
+    matched = paddle_headwords._annotate_peer_typography_matches(diagnostics)
+    assert matched == 0
+    assert not candidate["features"].get("peer_typography_match")
+
+
+def test_engine_quality_uses_independent_image_boundary_to_break_close_tie():
+    base = {
+        "source_x": 20,
+        "source_y": 100,
+        "_axis_v": 100,
+        "_coarse_axis_v": 100,
+        "_anchor_axis_v": 100,
+        "normalized_headword": "annual",
+        "confidence": 0.92,
+        "accepted": True,
+        "score": 5.0,
+        "reject_reason": "",
+        "features": {"at_left": True, "structural_cue": True},
+        "box": [0, 100, 90, 122],
+    }
+    paddle = dict(base)
+    paddle["image_boundary_match"] = {"strength": 1.0, "y": 100}
+    tesseract = dict(base)
+    tesseract["image_boundary_match"] = None
+
+    pair = paddle_headwords._make_ocr_pair(paddle, tesseract)
+    item = paddle_headwords._arbitrate_pair(
+        pair, 0, 20, AppSettings(), geometry=None,
+    )
+    assert item["selected"] is True
+    assert item["final_engine"] == "paddle"
+    assert item["decision_reason"] == "dual_agree_higher_quality"
+
+
+def test_dual_ocr_consensus_plus_image_boundary_rescues_missing_structure():
+    common = {
+        "source_x": 20,
+        "source_y": 100,
+        "_axis_v": 100,
+        "_coarse_axis_v": 100,
+        "_anchor_axis_v": 100,
+        "normalized_headword": "annual",
+        "confidence": 0.95,
+        "accepted": False,
+        "score": 3.0,
+        "reject_reason": "missing_pos_inflection_descriptor_or_symbol",
+        "features": {"at_left": True},
+        "image_boundary_match": {"strength": 0.9, "y": 100},
+        "box": [0, 100, 90, 122],
+    }
+    pair = paddle_headwords._make_ocr_pair(dict(common), dict(common))
+    item = paddle_headwords._arbitrate_pair(
+        pair, 0, 20, AppSettings(), geometry=None,
+    )
+    assert item["selected"] is True
+    assert item["decision_reason"] == "dual_consensus_boundary_rescue"
+    assert "DUAL_BOUNDARY_RESCUE" in item["issue_types"]
+    assert item["needs_review"] is True
+
+
+def test_single_engine_explicit_visual_plus_boundary_rescues_soft_parser_reject():
+    candidate = {
+        "source_x": 20,
+        "source_y": 100,
+        "_axis_v": 100,
+        "_coarse_axis_v": 100,
+        "_anchor_axis_v": 100,
+        "normalized_headword": "○词",
+        "confidence": 0.86,
+        "accepted": False,
+        "score": 2.0,
+        "reject_reason": "missing_pos_inflection_descriptor_or_symbol",
+        "features": {
+            "at_left": True,
+            "visual_entry_marker": True,
+            "configured_marker_evidence": True,
+        },
+        "image_boundary_match": {"strength": 0.8, "y": 100},
+        "box": [0, 100, 80, 124],
+    }
+    pair = paddle_headwords._make_ocr_pair(candidate, None)
+    item = paddle_headwords._arbitrate_pair(
+        pair, 0, 20, AppSettings(), geometry=None,
+    )
+    assert item["selected"] is True
+    assert item["decision_reason"] == "multi_evidence_visual_boundary_rescue"
+    assert "MULTI_EVIDENCE_RESCUE" in item["issue_types"]
+
+
+def test_multi_evidence_rescue_never_overrides_hard_negative_semantics():
+    candidate = {
+        "source_x": 20,
+        "source_y": 100,
+        "_axis_v": 100,
+        "_coarse_axis_v": 100,
+        "_anchor_axis_v": 100,
+        "normalized_headword": "body",
+        "confidence": 0.99,
+        "accepted": False,
+        "score": 8.0,
+        "reject_reason": "continuation_fragment",
+        "features": {
+            "at_left": True,
+            "visual_entry_marker": True,
+            "looks_like_continuation": True,
+        },
+        "image_boundary_match": {"strength": 1.0, "y": 100},
+        "box": [0, 100, 80, 124],
+    }
+    pair = paddle_headwords._make_ocr_pair(candidate, None)
+    item = paddle_headwords._arbitrate_pair(
+        pair, 0, 20, AppSettings(), geometry=None,
+    )
+    assert item["selected"] is False
 
 def test_raw_ocr_cache_signature_tracks_pixels_and_inference_settings():
     class PathStub:
@@ -2951,14 +3471,14 @@ def test_ordinary_drawing_auto_refine_y_is_shared_and_switchable(monkeypatch):
         follow_column_deformation=False,
         paddle_refine_separator_y=True,
     )
-    refined, _ = detect_entries(image, settings)
+    refined, _ = legacy_detect_entries(image, settings)
     assert refined
     assert calls
     refined_calls = len(calls)
 
     calls.clear()
     settings.paddle_refine_separator_y = False
-    coarse, _ = detect_entries(image, settings)
+    coarse, _ = legacy_detect_entries(image, settings)
     assert coarse
     assert calls == []
     assert len(refined) == len(coarse)
@@ -3071,7 +3591,7 @@ def test_ordinary_drawing_restores_vb_left_edge_gate():
         ordinary_auto_layout=False,
         paddle_refine_separator_y=False,
     )
-    entries, _ = detect_entries(image, settings)
+    entries, _ = legacy_detect_entries(image, settings)
 
     assert len(entries) == 2
     assert abs(entries[0].y - 45) <= 3
@@ -3102,7 +3622,7 @@ def test_legacy_manual_columns_and_manual_y_no_longer_change_ordinary_start():
         follow_column_deformation=False,
         paddle_refine_separator_y=False,
     )
-    entries, _ = detect_entries(image, settings)
+    entries, _ = legacy_detect_entries(image, settings)
     assert len(entries) == 2
 
 
@@ -3207,11 +3727,11 @@ def test_ordinary_micro_tolerance_is_not_clipped_by_body_indent():
         ordinary_auto_layout=False,
         paddle_refine_separator_y=False,
     )
-    accepted, _ = detect_entries(image, settings)
+    accepted, _ = legacy_detect_entries(image, settings)
     assert len(accepted) == 1
 
     settings.horizontal_tolerance = 8
-    rejected, _ = detect_entries(image, settings)
+    rejected, _ = legacy_detect_entries(image, settings)
     assert rejected == []
 
 
@@ -3237,11 +3757,11 @@ def test_ordinary_micro_tolerance_controls_headword_anchor_lane():
         ordinary_auto_layout=False,
         paddle_refine_separator_y=False,
     )
-    accepted, _ = detect_entries(image, settings)
+    accepted, _ = legacy_detect_entries(image, settings)
     assert len(accepted) == 1
 
     settings.horizontal_tolerance = 4
-    rejected, _ = detect_entries(image, settings)
+    rejected, _ = legacy_detect_entries(image, settings)
     assert rejected == []
 
 
@@ -3275,7 +3795,7 @@ def test_ordinary_y_refinement_receives_full_resolution_coordinates(monkeypatch)
         follow_column_deformation=False,
         paddle_refine_separator_y=True,
     )
-    entries, _ = detect_entries(image, settings)
+    entries, _ = legacy_detect_entries(image, settings)
     assert entries and seen
     # Ordinary candidate and VB separator placement are already full-resolution;
     # the optional modern refiner receives the same source-resolution Y axis.
