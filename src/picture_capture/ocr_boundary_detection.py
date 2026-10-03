@@ -34,6 +34,7 @@ def detect_ocr_headword_boundaries(
     *,
     cache_path: Path | None = None,
     force_refresh: bool = False,
+    engine: Any | None = None,
     filter_rules_path: Path | None = None,
     page_sections=None,
 ):
@@ -44,9 +45,27 @@ def detect_ocr_headword_boundaries(
     generation. It intentionally returns the established ``Entry`` output of the
     mature OCR drawing pipeline; the compatibility seam keeps legacy settings,
     records, and runner call sites out of this module.
+
+    ``engine`` is retained solely for the historical public
+    ``detect_paddle_headwords(..., engine=...)`` test/integration seam. An
+    explicitly injected legacy engine bypasses shared-channel execution and is
+    forwarded to the mature backend exactly as before; normal application calls
+    leave it ``None`` and use the canonical shared OCR channel.
     """
 
     from .evidence_fusion import detect_paddle_headwords as legacy_detect
+
+    if engine is not None:
+        return legacy_detect(
+            image,
+            geometry,
+            settings,
+            cache_path=cache_path,
+            force_refresh=force_refresh,
+            engine=engine,
+            filter_rules_path=filter_rules_path,
+            page_sections=page_sections,
+        )
 
     routed_settings = apply_channel_plan_to_legacy_boundary_settings(settings)
     with route_legacy_boundary_ocr_through_channel(settings):
