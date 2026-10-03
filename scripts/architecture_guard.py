@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-"""Fail CI only when architectural debt grows beyond the PR #161 baseline.
+"""Fail CI when architectural debt grows beyond the ratcheted baseline.
 
-Phase 0 intentionally does not refactor production code.  This guard records the
-known debt at the Evidence Fusion v3 baseline and makes the allowed set
-monotonically decreasing: deleting/shrinking legacy structures is allowed,
-adding new ones is not.
+The guard began at the PR #161 baseline and is intentionally monotonic: once a
+legacy structure is removed, it must not return. Individual debt categories are
+ratcheted independently as the modular-architecture refactor progresses.
 """
 
 from pathlib import Path
@@ -63,22 +62,9 @@ MODULE_PROXY_MARKERS = (
     "sys.modules[__name__].__class__",
 )
 
-# Package import currently performs these installers.  Phase 1 will move them
-# behind the explicit bootstrap.  Until then, additions are forbidden.
-INIT_INSTALLER_BASELINE = {
-    "install_layout_illustration_mask_settings",
-    "install_character_height_fallback_runtime",
-    "install_live_layout_detector_binding",
-    "install_ordinary_large_head_runtime",
-    "install_ordinary_large_head_role_guard",
-    "install_separator_y_settings",
-    "install_entry_crop_settings",
-    "install_entry_classification_fields",
-    "install_pdic_classification",
-    "install_processing_entry_classification",
-    "install_spawn_layout_runtime",
-    "install_layout_illustration_mask_runtime",
-}
+# Phase 1 has paid off package-import installer debt completely. Any future
+# install_* call in picture_capture.__init__ is therefore a regression.
+INIT_INSTALLER_BASELINE: set[str] = set()
 _INSTALL_CALL_RE = re.compile(r"^\s*(install_[A-Za-z0-9_]+)\(", re.MULTILINE)
 
 
@@ -144,7 +130,7 @@ def main() -> int:
         for violation in violations:
             print(f"- {violation}")
         return 1
-    print("Architecture guard passed: no debt added beyond the PR #161 baseline.")
+    print("Architecture guard passed: no debt added beyond the ratcheted baseline.")
     return 0
 
 
