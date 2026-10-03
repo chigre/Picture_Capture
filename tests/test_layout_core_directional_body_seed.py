@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from picture_capture.layout_core_understanding import _resolve_near_tied_body_lanes
+from picture_capture.layout_core_understanding import _resolve_directional_body_lanes
 
 
 def _line(first_x: float) -> SimpleNamespace:
@@ -44,7 +44,7 @@ def test_body_indent_near_tie_uses_inward_lane_as_body() -> None:
         display_heads=[],
     )
 
-    _resolve_near_tied_body_lanes(layout)
+    _resolve_directional_body_lanes(layout)
 
     assert column.body_mode is inward
     assert outer.role == "entry"
@@ -70,7 +70,7 @@ def test_headword_indent_near_tie_uses_outer_lane_as_body() -> None:
         display_heads=[],
     )
 
-    _resolve_near_tied_body_lanes(layout)
+    _resolve_directional_body_lanes(layout)
 
     assert column.body_mode is outer
     assert outer.role == "body"
