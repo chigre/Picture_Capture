@@ -27,7 +27,7 @@ _ROLE_STYLE: dict[str, tuple[str, str]] = {
     "headword": ("#2e7d32", "词条行"),
     "body": ("#1976d2", "正文行"),
 }
-_BODY_ROLE_STYLE = ("#1976d2", "正文行")
+_UNKNOWN_ROLE_STYLE = ("#757575", "不确定")
 
 
 def _append_tag(tags: object, tag: str) -> tuple[str, ...]:
@@ -42,8 +42,8 @@ def _append_tag(tags: object, tag: str) -> tuple[str, ...]:
 
 
 def _role_style(role: object) -> tuple[str, str]:
-    key = str(role or "body").strip().lower()
-    return _ROLE_STYLE.get(key, _BODY_ROLE_STYLE)
+    key = str(role or "unknown").strip().lower()
+    return _ROLE_STYLE.get(key, _UNKNOWN_ROLE_STYLE)
 
 
 def _format_summary(app: Any, snapshot: Any) -> str:
@@ -60,7 +60,7 @@ def _format_summary(app: Any, snapshot: Any) -> str:
     indent_blocks = list(getattr(app, "_layout_visualization_indent_blocks", []) or [])
     role_counts: dict[str, int] = {}
     for block in indent_blocks:
-        _color, label = _role_style(block.get("role", "body"))
+        _color, label = _role_style(block.get("role", "unknown"))
         role_counts[label] = role_counts.get(label, 0) + 1
     role_text = ", ".join(
         f"{name}={count}" for name, count in sorted(role_counts.items())
@@ -89,7 +89,7 @@ def _format_summary(app: Any, snapshot: Any) -> str:
             f"row_padding={values['row_padding']}"
         ),
         f"line indents: {len(indent_blocks)}   roles: {role_text}",
-        "role strips: 绿色=词条行   蓝色=正文行",
+        "role strips: 绿色=词条行   蓝色=正文行   灰色=不确定",
     ]
 
     top = int(geometry.top)
@@ -282,7 +282,7 @@ def _draw_role_strips(app: Any, snapshot: Any) -> None:
         right = max(float(p0[0]), float(p1[0])) * scale
         top = min(float(p0[1]), float(p1[1])) * scale
         bottom = max(float(p0[1]), float(p1[1])) * scale
-        color, _label = _role_style(block.get("role", "body"))
+        color, _label = _role_style(block.get("role", "unknown"))
         try:
             canvas.create_rectangle(
                 left,
