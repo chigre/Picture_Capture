@@ -14,7 +14,9 @@ the newly detected markers.
 
 This top-level function is intentionally pickleable.  It bootstraps the same
 classification runtime inside each spawned worker before detection and writes the
-new PDIC through the classification-aware formats writer.
+new PDIC through the classification-aware formats writer.  It also captures the
+physical Layout rows used by ordinary drawing into ``data/LayoutRows`` so later
+post-production QA can reuse them without re-running full Layout analysis.
 """
 
 from dataclasses import replace
@@ -47,6 +49,10 @@ def detect_entries_job_with_runtime(
     from .entry_classification_runtime import install_processing_entry_classification
     from .layout_row_recovery_runtime import install_layout_row_recovery_runtime
     from .layout_column_drift_runtime import install_layout_column_drift_runtime
+    from .layout_rows_cache import (
+        capture_layout_rows,
+        install_layout_rows_persistence_runtime,
+    )
     from .training_baseline import save_automatic_baseline
 
     # Every spawn process has its own module globals.  Reinstall these wrappers
@@ -59,6 +65,7 @@ def detect_entries_job_with_runtime(
     # wrapper; both orders are safe because the remeasurement rebuilds modes and
     # the finalizer remains idempotent.
     install_layout_column_drift_runtime()
+    install_layout_rows_persistence_runtime()
 
     page = Path(image_path)
     with Image.open(page) as opened:
@@ -67,12 +74,20 @@ def detect_entries_job_with_runtime(
     try:
         current = replace(settings)
         current.detection_method = "left_edge"
-        entries, _geometry = processing_module.detect_entries(
-            image,
+        # The full ordinary Layout result is already being computed here. Capture
+        # its physical rows once instead of making post-production rebuild them.
+        with capture_layout_rows(
+            page.parent,
+            page,
+            int(profile_page_index),
             current,
-            profile_page_index=profile_page_index,
-            page_sections=processing_module._core.read_page_sections(page),
-        )
+        ):
+            entries, _geometry = processing_module.detect_entries(
+                image,
+                current,
+                profile_page_index=profile_page_index,
+                page_sections=processing_module._core.read_page_sections(page),
+            )
 
         pdic = processing_module._core.pdic_path_for_image(page)
         save_automatic_baseline(pdic, entries, image.width, pages)
