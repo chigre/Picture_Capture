@@ -25,12 +25,15 @@ jobs:
           from pathlib import Path
 
           def function_block(text: str, name: str) -> tuple[int, int, str]:
-              needle = f"def {name}("
-              start = text.index(needle)
-              next_top = text.find("\ndef ", start + len(needle))
-              next_method = text.find("\n    def ", start + len(needle))
-              candidates = [value for value in (next_top, next_method) if value >= 0]
-              end = min(candidates) if candidates else len(text)
+              bare = f"def {name}("
+              raw_start = text.index(bare)
+              line_start = text.rfind("\n", 0, raw_start) + 1
+              indent = text[line_start:raw_start]
+              start = raw_start
+              needle = "\n" + indent + "def "
+              end = text.find(needle, raw_start + len(bare))
+              if end < 0:
+                  end = len(text)
               return start, end, text[start:end]
 
           def replace_in_function(path: Path, name: str, old: str, new: str, *, minimum: int = 1) -> None:
@@ -77,8 +80,6 @@ jobs:
           ):
               replace_in_function(nxt, name, "detect_entries(", "legacy_detect_entries(")
 
-          # Marker crop classification is no longer rediscovered from pixels at
-          # crop time.  Materialized entries carry the structural classification.
           replace_in_function(
               nxt,
               "test_ordinary_marker_local_crop_uses_taller_box_for_visual_large_cjk",
@@ -86,8 +87,6 @@ jobs:
               'Entry(word="", x=20, y=50, ocr_source="ordinary_large_head_evidence", issue_type="ORDINARY_OVERSIZED_DISPLAY_HEAD", ocr_visual_run_height=68.0, ocr_oversized_cjk=True)',
           )
 
-          # Marker OCR now goes through the shared OCR channel. Keep the test's
-          # original semantic assertions but inject at that public runtime seam.
           text = nxt.read_text(encoding="utf-8")
           start, end, block = function_block(text, "test_ordinary_marker_text_ocr_fills_only_blank_without_moving_lines")
           block = block.replace(
@@ -122,8 +121,6 @@ jobs:
           )
           shared.write_text(text, encoding="utf-8")
 
-          # This workflow is a one-shot transport for editing two legacy files
-          # that the connector cannot patch in place. Do not leave it behind.
           Path(".github/workflows/pr161-closeout-patch.yml").unlink()
           PY
 
