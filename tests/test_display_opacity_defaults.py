@@ -30,9 +30,11 @@ def test_illustration_polygon_uses_true_40_percent_alpha():
         overlay.close()
 
 
-def test_launcher_sets_defaults_before_installing_line_opacity():
+def test_gui_composition_sets_defaults_before_installing_line_opacity():
     root = Path(__file__).resolve().parents[1]
-    source = (root / "src/picture_capture/launcher.py").read_text(encoding="utf-8")
+    source = (
+        root / "src/picture_capture/bootstrap/gui.py"
+    ).read_text(encoding="utf-8")
     assert source.index("configure_overlay_opacity_defaults()") < source.index(
         "install_overlay_opacity_runtime(app_module)"
     )
