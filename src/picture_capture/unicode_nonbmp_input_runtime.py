@@ -3,27 +3,27 @@ from __future__ import annotations
 """Windows/Tk 8.6 compatibility for direct non-BMP Unicode text input.
 
 Tk 8.6 on Windows can lose supplementary-plane characters while translating
-WM_CHAR messages through its historical ANSI key-input path.  A typical CJK
-Extension-B character (for example U+28906) therefore reaches an Entry as
+WM_CHAR messages through its historical ANSI key-input path. A typical CJK
+Extension-B character (for example U+28906) may therefore reach an Entry as
 ``??`` even though Python strings and the project's UTF-8 persistence layer can
 store it perfectly.
 
 The compatibility bridge is deliberately narrow:
 
-* it is active only on Windows with Tk < 9;
-* it observes committed IME result strings through the Unicode IMM32 API;
-* it also watches WM_CHAR surrogate pairs when Windows exposes them to the
-  thread message hook;
-* it repairs only commits containing at least one code point above U+FFFF;
+* active only on Windows with Tk < 9;
+* observes committed IME result strings through the Unicode IMM32 API;
+* also watches WM_CHAR surrogate pairs when Windows exposes them to the thread
+  message hook;
+* repairs only commits containing at least one code point above U+FFFF;
 * normal BMP input, shortcuts and widget bindings remain owned by Tk.
 
 No OCR, PDIC, collation or normalization semantics are changed here.
 """
 
 from collections import deque
-from dataclasses import dataclass
 import ctypes
 from ctypes import wintypes
+from dataclasses import dataclass
 import platform
 import time
 from typing import Any
@@ -65,9 +65,6 @@ def legacy_tk_renderings(text: str) -> tuple[str, ...]:
             question.append(char)
             replacement.append(char)
             continue
-        # Windows represents one supplementary character as two UTF-16 code
-        # units.  Tk 8.6's old ANSI path commonly turns those units into two
-        # question/replacement characters.
         units = max(2, len(char.encode("utf-16-le")) // 2)
         question.append("?" * units)
         replacement.append("\ufffd" * units)
@@ -83,21 +80,13 @@ def plan_non_bmp_repair(
     committed: str,
     previous: TextSnapshot | None = None,
 ) -> TextSnapshot | None:
-    """Plan a conservative repair after Tk has processed one native commit.
-
-    The local suffix repair handles the usual ``??`` case without needing a
-    pre-edit snapshot.  The previous snapshot additionally covers a commit that
-    Tk dropped completely or inserted while replacing a selection.
-    """
+    """Plan a conservative repair after Tk has processed one native commit."""
     committed = str(committed or "")
     if not committed or not contains_non_bmp(committed):
         return None
 
     text = str(current.text)
     insert = max(0, min(len(text), int(current.insert)))
-
-    # Already correct: do not touch a Tk 9/backported implementation that
-    # successfully inserted the supplementary character itself.
     start = max(0, insert - len(committed))
     if text[start:insert] == committed:
         return None
@@ -125,8 +114,6 @@ def plan_non_bmp_repair(
     expected = base[:old_insert] + committed + base[old_insert:]
     if text == expected:
         return None
-
-    # Tk may discard the non-BMP result entirely.
     if text == base:
         return TextSnapshot(expected, old_insert + len(committed), None)
 
@@ -138,7 +125,7 @@ def plan_non_bmp_repair(
 
 
 def _python_index_from_tk_units(text: str, tk_units: int) -> int:
-    """Translate Tk-8.6/Windows UTF-16-style character units to Python index."""
+    """Translate Tk-8.6/Windows UTF-16-style units to a Python string index."""
     target = max(0, int(tk_units))
     units = 0
     for index, char in enumerate(str(text)):
@@ -159,7 +146,7 @@ def _tk_units_from_python_prefix(text: str, python_index: int) -> int:
 def _read_widget_snapshot(widget: Any) -> TextSnapshot | None:
     try:
         klass = str(widget.winfo_class())
-        if klass == "Entry" or klass == "TEntry":
+        if klass in {"Entry", "TEntry"}:
             text = str(widget.get())
             insert = _python_index_from_tk_units(text, int(widget.index("insert")))
             selection = None
@@ -196,7 +183,7 @@ def _read_widget_snapshot(widget: Any) -> TextSnapshot | None:
 def _write_widget_snapshot(widget: Any, state: TextSnapshot) -> bool:
     try:
         klass = str(widget.winfo_class())
-        if klass == "Entry" or klass == "TEntry":
+        if klass in {"Entry", "TEntry"}:
             widget.delete(0, "end")
             widget.insert(0, state.text)
             widget.icursor(_tk_units_from_python_prefix(state.text, state.insert))
@@ -234,7 +221,20 @@ class _WindowsNonBmpBridge:
     @staticmethod
     def _read_ime_result(hwnd: int) -> str:
         imm32 = ctypes.windll.imm32
-        himc = imm32.ImmGetContext(wintypes.HWND(hwnd))
+        imm32.ImmGetContext.argtypes = [wintypes.HWND]
+        imm32.ImmGetContext.restype = wintypes.HANDLE
+        imm32.ImmGetCompositionStringW.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+        ]
+        imm32.ImmGetCompositionStringW.restype = wintypes.LONG
+        imm32.ImmReleaseContext.argtypes = [wintypes.HWND, wintypes.HANDLE]
+        imm32.ImmReleaseContext.restype = wintypes.BOOL
+
+        target = wintypes.HWND(hwnd)
+        himc = imm32.ImmGetContext(target)
         if not himc:
             return ""
         try:
@@ -246,7 +246,7 @@ class _WindowsNonBmpBridge:
                 imm32.ImmGetCompositionStringW(
                     himc,
                     GCS_RESULTSTR,
-                    ctypes.byref(buffer),
+                    ctypes.cast(buffer, ctypes.c_void_p),
                     size,
                 )
             )
@@ -254,16 +254,13 @@ class _WindowsNonBmpBridge:
                 return ""
             return bytes(buffer.raw[:copied]).decode("utf-16-le", errors="surrogatepass")
         finally:
-            imm32.ImmReleaseContext(wintypes.HWND(hwnd), himc)
+            imm32.ImmReleaseContext(target, himc)
 
     def _queue_commit(self, text: str, source: str) -> None:
         text = str(text or "")
         if not contains_non_bmp(text):
             return
         now = time.monotonic()
-        # IME-result and WM_CHAR hooks can observe the same commit.  Repair it
-        # once only; a second identical observation inside one event burst is a
-        # duplicate, not a second user input.
         if self._last_native is not None:
             previous_text, previous_at = self._last_native
             if previous_text == text and now - previous_at < 0.12:
@@ -274,8 +271,8 @@ class _WindowsNonBmpBridge:
     def _install_hooks(self) -> None:
         user32 = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
-
-        ULONG_PTR = wintypes.WPARAM
+        lresult_type = ctypes.c_ssize_t
+        hhook_type = wintypes.HANDLE
 
         class MSG(ctypes.Structure):
             _fields_ = [
@@ -295,28 +292,31 @@ class _WindowsNonBmpBridge:
                 ("hwnd", wintypes.HWND),
             ]
 
-        HOOKPROC = ctypes.WINFUNCTYPE(
-            wintypes.LRESULT,
+        hook_proc_type = ctypes.WINFUNCTYPE(
+            lresult_type,
             ctypes.c_int,
             wintypes.WPARAM,
             wintypes.LPARAM,
         )
         user32.CallNextHookEx.argtypes = [
-            wintypes.HHOOK,
+            hhook_type,
             ctypes.c_int,
             wintypes.WPARAM,
             wintypes.LPARAM,
         ]
-        user32.CallNextHookEx.restype = wintypes.LRESULT
+        user32.CallNextHookEx.restype = lresult_type
         user32.SetWindowsHookExW.argtypes = [
             ctypes.c_int,
-            HOOKPROC,
+            hook_proc_type,
             wintypes.HINSTANCE,
             wintypes.DWORD,
         ]
-        user32.SetWindowsHookExW.restype = wintypes.HHOOK
+        user32.SetWindowsHookExW.restype = hhook_type
+        user32.UnhookWindowsHookEx.argtypes = [hhook_type]
+        user32.UnhookWindowsHookEx.restype = wintypes.BOOL
+        kernel32.GetCurrentThreadId.restype = wintypes.DWORD
 
-        @HOOKPROC
+        @hook_proc_type
         def getmessage_proc(code, wparam, lparam):
             try:
                 if code >= 0 and lparam:
@@ -337,7 +337,7 @@ class _WindowsNonBmpBridge:
                 pass
             return user32.CallNextHookEx(self._hook_getmessage, code, wparam, lparam)
 
-        @HOOKPROC
+        @hook_proc_type
         def callwndproc_proc(code, wparam, lparam):
             try:
                 if code >= 0 and lparam:
@@ -349,7 +349,8 @@ class _WindowsNonBmpBridge:
                     elif message == WM_IME_ENDCOMPOSITION:
                         self._composition_active = False
                     elif message == WM_IME_COMPOSITION and (int(packet.lParam) & GCS_RESULTSTR):
-                        committed = self._read_ime_result(int(packet.hwnd))
+                        hwnd = int(packet.hwnd or 0)
+                        committed = self._read_ime_result(hwnd) if hwnd else ""
                         if committed:
                             self._queue_commit(committed, "ime")
             except Exception:
@@ -403,13 +404,14 @@ class _WindowsNonBmpBridge:
         if self._closed:
             return
         try:
+            while self._commits:
+                self._process_one(self._commits.popleft())
+
             focused = self._capture_focus()
             if focused is not None:
                 self._last_snapshot = focused
                 if self._composition_active and self._composition_snapshot is None:
                     self._composition_snapshot = focused
-            while self._commits:
-                self._process_one(self._commits.popleft())
             if not self._composition_active:
                 self._composition_snapshot = None
         finally:
@@ -468,8 +470,6 @@ def install_nonbmp_unicode_input(app_module: Any) -> None:
             try:
                 self._pc_nonbmp_unicode_bridge = _WindowsNonBmpBridge(self)
             except Exception:
-                # Input compatibility must never prevent the main application
-                # from starting.  UTF-8 persistence/paste still remain usable.
                 self._pc_nonbmp_unicode_bridge = None
 
     def wrapped_destroy(self, *args, **kwargs):
