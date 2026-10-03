@@ -10,6 +10,7 @@ from PIL import Image
 
 from .generic_block_roles import generic_entry_candidates
 from .image_utils import normalize_page_rgb
+from .layout_illustration_mask_runtime import mask_large_illustrations_for_layout
 from .page_sections import read_page_sections
 from .page_understanding import (
     page_understanding_diagnostics,
@@ -36,16 +37,30 @@ def build_export_training_page_with_understanding(
         annotation_path = staging_root / str(record["annotation"])
         annotation = json.loads(annotation_path.read_text(encoding="utf-8"))
 
+        image: Image.Image | None = None
+        analysis_image: Image.Image | None = None
         try:
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
-            understanding = understand_page(
+            analysis_image, mask_stats = mask_large_illustrations_for_layout(
                 image,
+                settings,
+                profile_page_index=int(page_index),
+            )
+            understanding = understand_page(
+                analysis_image,
                 settings,
                 page_index=page_index,
                 page_sections=read_page_sections(Path(page)),
             )
             diagnostics = page_understanding_diagnostics(understanding)
+            diagnostics["layout_illustration_mask"] = {
+                "enabled": bool(getattr(settings, "layout_mask_illustrations", False)),
+                "detected": int(mask_stats.detected),
+                "masked": int(mask_stats.masked),
+                "rejected_small": int(mask_stats.rejected_small),
+                "rejected_headlike": int(mask_stats.rejected_headlike),
+            }
             diagnostics["generic_block_role_model"] = {
                 "enabled": bool(
                     understanding.role_model == "generic"
@@ -63,6 +78,17 @@ def build_export_training_page_with_understanding(
                 "available": False,
                 "error": f"{type(exc).__name__}: {exc}",
             }
+        finally:
+            if analysis_image is not None and analysis_image is not image:
+                try:
+                    analysis_image.close()
+                except Exception:
+                    pass
+            if image is not None:
+                try:
+                    image.close()
+                except Exception:
+                    pass
 
         annotation_path.write_text(
             json.dumps(annotation, ensure_ascii=False, indent=2),
