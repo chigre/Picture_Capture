@@ -28,26 +28,22 @@ def install_entry_classification_fields() -> None:
         The historical registry is keyed by ``id(entry)``. CPython may recycle an
         object id after a temporary Entry is collected, so a long-running app or
         a large test suite can otherwise attach stale automatic metadata to a new
-        Entry. Explicit/manual or sidecar-only metadata remains authoritative;
-        automatic evidence is refreshed only when the new Entry itself carries a
-        non-unknown structural source.
+        Entry. Refresh only when the structural *source* carried by the concrete
+        Entry proves that the registry belongs to another object. Scale/height
+        may be intentionally assigned later through the public Entry properties,
+        so differences in those fields alone must never overwrite an explicit
+        assignment.
         """
         current = get_entry_classification(entry)
         inferred = infer_entry_classification(entry)
-        if (
-            not current.manual_override
-            and inferred.entry_source != "unknown"
+        source_mismatch = bool(
+            inferred.entry_source != "unknown"
             and (
                 current.entry_source != inferred.entry_source
                 or current.auto_entry_source != inferred.auto_entry_source
-                or current.entry_scale != inferred.entry_scale
-                or current.auto_entry_scale != inferred.auto_entry_scale
-                or (
-                    inferred.detected_head_height > 0
-                    and abs(current.detected_head_height - inferred.detected_head_height) > 0.01
-                )
             )
-        ):
+        )
+        if not current.manual_override and source_mismatch:
             current = register_entry_classification(
                 entry,
                 entry_source=inferred.entry_source,
