@@ -106,6 +106,7 @@ def merge_page_line_images(
         return None
 
     images: list[Image.Image] = []
+    merged: Image.Image | None = None
     try:
         for path in existing:
             with Image.open(path) as opened:
@@ -138,6 +139,8 @@ def merge_page_line_images(
                 path.unlink(missing_ok=True)
         return merged_path
     finally:
+        if merged is not None:
+            merged.close()
         for image in images:
             image.close()
 
