@@ -34,7 +34,7 @@ def test_all_supported_gui_entrypoints_route_through_bootstrap() -> None:
 def test_importing_bootstrap_does_not_import_gui_app_module() -> None:
     code = (
         "import sys; "
-        "import picture_capture.bootstrap.application; "
+        "import picture_capture.bootstrap; "
         "assert 'picture_capture.app' not in sys.modules"
     )
     result = subprocess.run(
@@ -67,3 +67,20 @@ def test_gui_composition_is_owned_by_bootstrap_and_launcher_is_only_a_facade() -
     assert "from .bootstrap.application import main as bootstrap_main" in launcher
     assert "install_ui_terminology()" not in launcher
     assert "install_spawn_detection_runtime(processing_module)" not in launcher
+
+
+def test_spawn_detection_routes_through_worker_composition_root() -> None:
+    bootstrap_init = (
+        ROOT / "src" / "picture_capture" / "bootstrap" / "__init__.py"
+    ).read_text(encoding="utf-8")
+    worker = (
+        ROOT / "src" / "picture_capture" / "bootstrap" / "worker.py"
+    ).read_text(encoding="utf-8")
+    spawn = (
+        ROOT / "src" / "picture_capture" / "spawn_detection_runtime.py"
+    ).read_text(encoding="utf-8")
+
+    assert "from .worker import WorkerServices, build_worker_services" in bootstrap_init
+    assert "def build_worker_services()" in worker
+    assert "from .bootstrap.worker import build_worker_services" in spawn
+    assert "services = build_worker_services()" in spawn

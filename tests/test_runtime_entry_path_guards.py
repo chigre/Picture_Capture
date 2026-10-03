@@ -46,6 +46,16 @@ def _gui_composition_source() -> str:
     ).read_text(encoding="utf-8")
 
 
+def _worker_composition_source() -> str:
+    return (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "bootstrap"
+        / "worker.py"
+    ).read_text(encoding="utf-8")
+
+
 def test_settings_help_restore_installs_current_shared_ocr_wording_without_tk_root():
     install_settings_help_restore(_FakeAppModule)
     dialog = _FakeAppModule.SettingsDialog()
@@ -191,14 +201,25 @@ def test_spawn_worker_is_top_level_pickleable_and_installed_before_app_import():
     assert install_at < app_import_at
 
 
-def test_spawn_worker_bootstraps_classification_and_writes_sidecar_aware_pdic():
-    source = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "picture_capture"
-        / "spawn_detection_runtime.py"
+def test_spawn_worker_uses_explicit_worker_composition_and_sidecar_aware_pdic():
+    root = Path(__file__).resolve().parents[1]
+    worker = _worker_composition_source()
+    job = (
+        root / "src" / "picture_capture" / "spawn_detection_runtime.py"
     ).read_text(encoding="utf-8")
-    assert "install_pdic_classification(formats)" in source
-    assert "install_processing_entry_classification(processing_module)" in source
-    assert "formats.write_pdic(" in source
-    assert "current = replace(settings)" in source
+
+    assert "install_pdic_classification(formats)" in worker
+    assert "install_processing_entry_classification(processing_module)" in worker
+    assert "install_layout_row_recovery_runtime()" in worker
+    assert "install_layout_column_drift_runtime()" in worker
+    assert "install_layout_rows_persistence_runtime()" in worker
+
+    assert "services = build_worker_services()" in job
+    assert "formats.write_pdic(" in job
+    assert "current = replace(settings)" in job
+    # Composition ownership must not drift back into the pickleable job target.
+    assert "install_pdic_classification(formats)" not in job
+    assert "install_processing_entry_classification(processing_module)" not in job
+    assert "install_layout_row_recovery_runtime()" not in job
+    assert "install_layout_column_drift_runtime()" not in job
+    assert "install_layout_rows_persistence_runtime()" not in job

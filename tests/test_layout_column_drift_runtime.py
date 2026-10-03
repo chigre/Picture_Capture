@@ -107,18 +107,17 @@ def test_large_head_left_of_semantic_column_is_still_detected():
     assert all(entry.x == 50 for entry in entries)
 
 
-def test_runtime_installed_before_processing_and_in_spawn_worker_source_contract():
+def test_runtime_installed_before_processing_in_gui_and_worker_composition():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
-    composition = (
-        root / "src/picture_capture/bootstrap/gui.py"
-    ).read_text(encoding="utf-8")
-    worker = (
-        root / "src/picture_capture/spawn_detection_runtime.py"
-    ).read_text(encoding="utf-8")
+    gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
+    worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
 
-    assert composition.index("install_layout_column_drift_runtime()") < composition.index(
+    assert gui.index("install_layout_column_drift_runtime()") < gui.index(
         "from .. import processing as processing_module"
+    )
+    assert worker.index("install_layout_row_recovery_runtime()") < worker.index(
+        "install_layout_column_drift_runtime()"
     )
     assert "install_layout_column_drift_runtime()" in worker
