@@ -7,19 +7,21 @@ from PIL import Image, ImageDraw
 
 from picture_capture.dictionary_page_design import LayoutLine
 from picture_capture.layout_column_drift_runtime import (
-    _detect_large_heads_with_left_safety,
     _left_safety,
     remeasure_layout_indents_from_ink,
 )
 from picture_capture.layout_transform import LayoutTransform
+from picture_capture.ordinary_large_head_runtime import (
+    detect_ordinary_large_head_entries_guarded,
+)
 
 
-def _line(y0: int, y1: int) -> LayoutLine:
+def _line(y0: int, y1: int, *, first_x: int = 0) -> LayoutLine:
     return LayoutLine(
         column=0,
         y0=y0,
         y1=y1,
-        first_x=0,
+        first_x=first_x,
         anchor_x=None,
         anchor_width=0,
         anchor_height=0,
@@ -71,11 +73,13 @@ def test_left_safety_is_large_enough_for_scan_drift_but_bounded():
 def test_large_head_left_of_semantic_column_is_still_detected():
     image = Image.new("RGB", (220, 180), "white")
     draw = ImageDraw.Draw(image)
-    # Large display glyph begins 12 px left of the semantic column edge.  The
-    # historical fixed strip x>=50 clipped it; the safety window must retain it.
+    # Large display glyph begins 12 px left of the semantic column edge. The
+    # guarded detector must use the shared safety band without moving the
+    # semantic column edge or bypassing row-front authorization.
     draw.rectangle((38, 24, 68, 74), fill="black")
 
-    column = SimpleNamespace(index=0, left=50, right=170, lines=[])
+    row = _line(24, 75, first_x=-12)
+    column = SimpleNamespace(index=0, left=50, right=170, lines=[row])
     layout = SimpleNamespace(
         transform=LayoutTransform(),
         source_size=image.size,
@@ -92,7 +96,9 @@ def test_large_head_left_of_semantic_column_is_still_detected():
         paddle_language="ch",
     )
 
-    entries = _detect_large_heads_with_left_safety(image, understanding, settings)
+    entries = detect_ordinary_large_head_entries_guarded(
+        image, understanding, settings,
+    )
 
     assert entries
     assert any(entry.ocr_oversized_cjk for entry in entries)
