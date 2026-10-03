@@ -95,7 +95,7 @@ def test_master_off_uses_project_geometry_without_running_page_estimator(monkeyp
     assert gutters == [20, 0]
 
 
-def test_master_on_replaces_only_selected_fields(monkeypatch):
+def test_master_on_replaces_selected_y_but_blank_page_keeps_profile_x(monkeypatch):
     settings = _settings()
     settings.ordinary_auto_layout = True
     settings.ordinary_auto_start_y = True
@@ -107,9 +107,12 @@ def test_master_on_replaces_only_selected_fields(monkeypatch):
     resolved, estimate, applied = policy.resolve_page_layout_policy(image, settings)
 
     assert estimate is fake
-    assert applied == {"start_y": 77, "manual_x": 70}
+    # manual_x is not copied blindly from the detector. It is a semantic page
+    # registration against the Project/Profile origin; with no page ink there is
+    # no evidence for a +30 translation, so the stable project X is retained.
+    assert applied == {"start_y": 77, "manual_x": 40}
     assert resolved.start_y == 77
-    assert resolved.manual_x == 70
+    assert resolved.manual_x == 40
     # Unselected fields remain the project/Profile baseline.
     assert resolved.columns == 2
     assert resolved.column_width == 120
@@ -117,11 +120,8 @@ def test_master_on_replaces_only_selected_fields(monkeypatch):
     assert resolved.character_height == 24
 
     starts, rights, gutters = policy._policy_geometry(500, resolved, estimate)
-    # Only the page origin moved.  Width/gutter were not selected, so the
-    # second column remains at the fixed Project pitch instead of inheriting an
-    # unrelated absolute start from the projection detector.
-    assert starts == [70, 210]
-    assert rights == [190, 330]
+    assert starts == [40, 180]
+    assert rights == [160, 300]
     assert gutters == [20, 0]
 
 
