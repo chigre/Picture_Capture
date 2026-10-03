@@ -123,6 +123,8 @@ def matched_lined_row_keys(layout: Any, entries: list[Any]) -> set[tuple[int, in
 def _source_box_for_line(layout: Any, column: Any, line: Any) -> tuple[int, int, int, int]:
     """Convert one canonical Layout row rectangle back to a source-image box."""
     source_width, source_height = tuple(getattr(layout, "source_size", (0, 0)) or (0, 0))
+    if source_width <= 0 or source_height <= 0:
+        raise ValueError("Layout source size is invalid")
     body_top = int(getattr(layout, "body_top", 0) or 0)
     reference = max(1.0, float(getattr(layout, "ordinary_line_height", 1.0) or 1.0))
     pad_y = max(1, round(reference * 0.05))
@@ -139,9 +141,9 @@ def _source_box_for_line(layout: Any, column: Any, line: Any) -> tuple[int, int,
     ]
     xs = [int(point[0]) for point in corners]
     ys = [int(point[1]) for point in corners]
-    left = max(0, min(source_width, min(xs)))
+    left = max(0, min(source_width - 1, min(xs)))
     right = max(left + 1, min(source_width, max(xs)))
-    top = max(0, min(source_height, min(ys)))
+    top = max(0, min(source_height - 1, min(ys)))
     bottom = max(top + 1, min(source_height, max(ys)))
     return left, top, right, bottom
 
@@ -156,7 +158,7 @@ def unlined_rows_from_layout(
     body_top = int(getattr(layout, "body_top", 0) or 0)
     body_bottom = int(getattr(layout, "body_bottom", body_top + 1) or (body_top + 1))
     rows: list[UnlinedRow] = []
-    layout_rows = 0
+    eligible_keys: set[tuple[int, int]] = set()
 
     for column in list(getattr(layout, "columns", []) or []):
         column_index = int(getattr(column, "index", 0))
@@ -166,8 +168,9 @@ def unlined_rows_from_layout(
             )
             if not v_is_inside_sections(center_v, page_sections, body_top, body_bottom):
                 continue
-            layout_rows += 1
-            if (column_index, line_index) in lined:
+            key = (column_index, int(line_index))
+            eligible_keys.add(key)
+            if key in lined:
                 continue
             rows.append(UnlinedRow(
                 column_index=column_index,
@@ -179,8 +182,11 @@ def unlined_rows_from_layout(
                 ),
             ))
 
-    rows.sort(key=lambda row: (row.section_index, row.column_index, row.source_box[1], row.line_index))
-    return rows, layout_rows, len(lined)
+    # line_index follows canonical top-to-bottom order inside each column.  Do
+    # not sort by source Y because rotated/flipped Layout transforms can make
+    # source-space Y differ from logical reading order.
+    rows.sort(key=lambda row: (row.section_index, row.column_index, row.line_index))
+    return rows, len(eligible_keys), len(lined & eligible_keys)
 
 
 def _atomic_text(path: Path, text: str) -> None:
