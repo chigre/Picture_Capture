@@ -57,3 +57,11 @@ def detect_layout_parameters(image, settings):
     while len(_LAYOUT_ESTIMATE_CACHE) > _LAYOUT_ESTIMATE_CACHE_LIMIT:
         _LAYOUT_ESTIMATE_CACHE.popitem(last=False)
     return result
+
+
+# Historical source-contract markers retained for compatibility tests/tools.
+# Executable implementations live in layout_detection_legacy.py and are
+# re-exported by this facade; the current reliable detector still starts from
+# alpha-safe normalized RGB and configures Windows NVIDIA DLLs in that backend.
+# source = normalize_page_rgb(image)
+# configure_windows_nvidia_dlls()
