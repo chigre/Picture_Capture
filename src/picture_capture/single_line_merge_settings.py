@@ -24,10 +24,15 @@ from .project_storage import crop_settings_path
 CROP_SETTINGS_FILENAME = "_CropSettings.json"
 MERGE_KEY = "single_line_crop_merge_by_page"
 MERGE_LABEL = "单行切图按页合并"
+# Scanned/JPEG paper that is visually white often contains tiny 251–254 level
+# compression variations. Treat those as white background while preserving
+# ordinary gray/black printed strokes.
+WHITE_TRIM_THRESHOLD = 250
 MERGE_HELP = (
-    "开启后，主界面【单行切图】仍按校对界面的同一裁切规则逐行取图，"
-    "但输出阶段会把同一页的所有单行图按阅读顺序纵向合成为一张 PNG，"
-    "每页只保留一张合并图。关闭时保持一行一张小图。此选项不改变校对窗口内部的逐行显示。"
+    "开启后，主界面【单行切图】仍按校对界面的同一裁切规则逐行取图。"
+    "合并前会先对每个小切片进行四周白边裁切，完全空白的切片直接丢弃；"
+    "剩余有效切片再按阅读顺序纵向合成为一张 PNG，每页只保留一张合并图。"
+    "关闭时保持一行一张小图。此选项不改变校对窗口内部的逐行显示。"
 )
 
 
@@ -85,16 +90,56 @@ def save_merge_by_page(project_root: Path, enabled: bool) -> Path:
     return path
 
 
+def _trim_white_border(
+    image: Image.Image,
+    *,
+    threshold: int = WHITE_TRIM_THRESHOLD,
+) -> Image.Image | None:
+    """Return content-tight RGB crop, or ``None`` for an all-white slice.
+
+    The threshold intentionally treats only near-white paper as background.
+    Geometry of the original line crop is not recomputed; this is a pure output
+    compaction step used only after ``split_single_lines`` has finished.
+    """
+    rgb = image.convert("RGB")
+    gray = rgb.convert("L")
+    mask = gray.point(lambda value: 255 if int(value) < int(threshold) else 0)
+    try:
+        bbox = mask.getbbox()
+    finally:
+        mask.close()
+        gray.close()
+    if bbox is None:
+        rgb.close()
+        return None
+    if bbox == (0, 0, rgb.width, rgb.height):
+        return rgb
+    trimmed = rgb.crop(bbox)
+    rgb.close()
+    return trimmed
+
+
+def _write_manifest_atomic(path: Path, text: str) -> None:
+    temp = path.with_name(f".{path.name}.tmp")
+    try:
+        temp.write_text(text, encoding="utf-8")
+        os.replace(temp, path)
+    except Exception:
+        temp.unlink(missing_ok=True)
+        raise
+
+
 def merge_page_line_images(
     image_path: Path,
     records: list[Any],
     output_dir: Path,
 ) -> Path | None:
-    """Stack one page's already-generated line crops into one lossless PNG.
+    """Trim and stack one page's generated line crops into one lossless PNG.
 
     ``records`` come directly from the mature ``split_single_lines`` path, so
-    crop geometry is never recalculated here.  The helper only composes the
-    resulting pixels in record/read order and then removes the per-line PNGs.
+    crop geometry is never recalculated here. Each generated line image first
+    loses its near-white outer border; fully white slices are discarded. The
+    remaining content-tight slices are then composed in record/read order.
     """
     if not records:
         return None
@@ -105,12 +150,29 @@ def merge_page_line_images(
     if not existing:
         return None
 
+    page_stem = Path(image_path).stem
+    merged_name = f"{page_stem}_SW_PAGE.png"
+    merged_path = output_dir / merged_name
+    manifest_path = output_dir / f"{page_stem}.PSWords"
+
     images: list[Image.Image] = []
     merged: Image.Image | None = None
     try:
         for path in existing:
             with Image.open(path) as opened:
-                images.append(opened.convert("RGB"))
+                trimmed = _trim_white_border(opened)
+            if trimmed is not None:
+                images.append(trimmed)
+
+        # A page can legitimately contain only false/empty line slices. Do not
+        # manufacture a useless white page image in that case.
+        if not images:
+            _write_manifest_atomic(manifest_path, "")
+            merged_path.unlink(missing_ok=True)
+            for path in existing:
+                path.unlink(missing_ok=True)
+            return None
+
         width = max(image.width for image in images)
         height = sum(image.height for image in images)
         merged = Image.new("RGB", (max(1, width), max(1, height)), "white")
@@ -119,9 +181,6 @@ def merge_page_line_images(
             merged.paste(image, (0, y))
             y += image.height
 
-        merged_name = f"{Path(image_path).stem}_SW_PAGE.png"
-        merged_path = output_dir / merged_name
-        manifest_path = output_dir / f"{Path(image_path).stem}.PSWords"
         merged_temp = output_dir / f".{merged_name}.tmp"
         manifest_temp = output_dir / f".{manifest_path.name}.tmp"
         try:
@@ -134,6 +193,8 @@ def merge_page_line_images(
             manifest_temp.unlink(missing_ok=True)
             raise
 
+        # Delete source slices only after the merged image and manifest have
+        # both been published successfully. Blank slices are removed here too.
         for path in existing:
             if path != merged_path:
                 path.unlink(missing_ok=True)
@@ -326,6 +387,8 @@ def install_single_line_merge_settings_ui(app_module: Any) -> None:
 __all__ = [
     "MERGE_KEY",
     "MERGE_LABEL",
+    "WHITE_TRIM_THRESHOLD",
+    "_trim_white_border",
     "load_merge_by_page",
     "merge_page_line_images",
     "save_merge_by_page",
