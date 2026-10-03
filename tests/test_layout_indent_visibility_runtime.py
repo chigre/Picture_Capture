@@ -87,12 +87,13 @@ def test_visible_renderer_draws_left_and_right_column_indent_blocks():
     assert canvas.raised, "indent blocks must be raised above the scan/base overlay"
 
 
-def test_launcher_installs_indent_visibility_after_lane_summary():
+def test_gui_composition_installs_indent_visibility_after_lane_summary():
     source = (
         Path(__file__).resolve().parents[1]
         / "src"
         / "picture_capture"
-        / "launcher.py"
+        / "bootstrap"
+        / "gui.py"
     ).read_text(encoding="utf-8")
     lane = source.index("install_physical_lane_summary()")
     visible = source.index("install_layout_indent_visibility()")
