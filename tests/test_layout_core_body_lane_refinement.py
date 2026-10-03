@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from picture_capture.layout_core_understanding import _resolve_near_tied_body_lanes
+from picture_capture.layout_core_understanding import _resolve_directional_body_lanes
 
 
 def _line():
@@ -39,7 +39,7 @@ def test_singleton_19px_lane_is_body_next_to_24_33px_body_family() -> None:
         display_heads=[],
     )
 
-    _resolve_near_tied_body_lanes(layout)
+    _resolve_directional_body_lanes(layout)
 
     assert entry.role == "entry"
     assert near_body.role == "body"
