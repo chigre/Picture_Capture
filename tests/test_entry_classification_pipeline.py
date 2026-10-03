@@ -117,8 +117,6 @@ def test_oversized_crop_prefers_observed_head_height():
 def test_manual_scale_override_survives_sidecar_round_trip(tmp_path: Path):
     pdic = tmp_path / "page.pdic"
     entry = Entry(word="字", x=40, y=100, ocr_source="ordinary_large_head_evidence")
-    # Simulate a reviewer correcting an automatic large-head classification to
-    # an ordinary row.
     set_entry_scale_manual(entry, "regular")
     write_classification_sidecar([entry], pdic)
 
@@ -148,10 +146,11 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     runtime_source = Path(runtime.__file__).read_text(encoding="utf-8")
     review_source = Path(review.__file__).read_text(encoding="utf-8")
 
-    assert "classified_entry_crop_height(" in runtime_source
-    assert "entry_regular_crop_height" in runtime_source
-    assert "entry_oversized_crop_height" in runtime_source
-    assert "meta.entry_scale == \"oversized\"" in runtime_source
+    # Marker OCR now delegates crop geometry to the shared entry_ocr_crop layer;
+    # proofreading retains the same canonical regular/oversized classification.
+    assert "entry_ocr_crop_box(" in runtime_source
+    assert "resolve_entry_ocr_row_metrics(" in runtime_source
+    assert 'meta.entry_scale == "oversized"' in runtime_source
     assert "classified_entry_crop_height(" in review_source
     assert "entry_regular_crop_height" in review_source
     assert "entry_oversized_crop_height" in review_source
