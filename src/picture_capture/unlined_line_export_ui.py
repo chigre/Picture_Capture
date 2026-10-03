@@ -12,6 +12,7 @@ from tkinter import messagebox, ttk
 
 from .postproduction_single_line_runtime import _snapshot_scope
 from .single_line_parallel import configured_single_line_workers
+from .unlined_export_filter_settings import load_unlined_filter_settings
 from .unlined_line_export import UnlinedPageResult, run_unlined_export
 
 
@@ -126,7 +127,8 @@ def _insert_button(app: Any) -> tk.Misc | None:
         app._attach_tooltip(
             button,
             "将【选定范围】内 Layout 已恢复、但当前 PDIC 没有横线的文字行导出到 QT/PSW_UNLINED。"
-            "不以 entry/body 角色决定是否导出；复用单行切图的白边裁切、按页合并和并行进程设置。",
+            "可在【设置中心 → 切图】启用【未画线行导出过滤 → 空白】只检查近空白候选；"
+            "不以 entry/body 角色决定是否导出，并复用按页合并和切图并行进程设置。",
         )
     except Exception:
         pass
@@ -197,7 +199,16 @@ def _start_unlined_export(app: Any) -> None:
 
     workers = max(1, min(configured_single_line_workers(project_root), len(indices)))
     worker_text = "串行" if workers <= 1 else f"并行×{workers}"
-    _status(app, f"未画线行导出：准备分析 {len(indices)} 页（{worker_text}）…")
+    filter_enabled, filter_blank, blank_threshold = load_unlined_filter_settings(project_root)
+    filter_text = (
+        f"；仅近空白≤{blank_threshold:g}%墨迹"
+        if filter_enabled and filter_blank
+        else ""
+    )
+    _status(
+        app,
+        f"未画线行导出：准备分析 {len(indices)} 页（{worker_text}{filter_text}）…",
+    )
 
     thread = threading.Thread(
         target=_worker,
@@ -220,11 +231,16 @@ def _start_unlined_export(app: Any) -> None:
                     parallel = "" if worker_count <= 1 else f"，并行×{worker_count}"
                     if result.physical_reliable:
                         merged = "，按页合并" if result.merged else ""
+                        filter_stats = ""
+                        if filter_enabled and filter_blank:
+                            filter_stats = (
+                                f"，近空白 {result.blank_rows} 行，过滤掉 {result.filtered_out_rows} 行"
+                            )
                         _status(
                             app,
                             f"未画线行导出：{completed}/{total} {result.filename} "
-                            f"（Layout {result.layout_rows} 行，未画线 {result.unlined_rows} 行，"
-                            f"有效输出 {result.exported_images} 张{merged}{parallel}）",
+                            f"（Layout {result.layout_rows} 行，未画线 {result.unlined_rows} 行"
+                            f"{filter_stats}，有效输出 {result.exported_images} 张{merged}{parallel}）",
                         )
                     else:
                         _status(
@@ -235,11 +251,16 @@ def _start_unlined_export(app: Any) -> None:
                     pages, unlined, exported, unreliable, output_dir, merged, worker_count = payload
                     parallel = "串行" if worker_count <= 1 else f"并行×{worker_count}"
                     mode = "；按页合并" if merged else ""
+                    filtered = (
+                        f"；空白过滤≤{blank_threshold:g}%墨迹"
+                        if filter_enabled and filter_blank
+                        else ""
+                    )
                     skipped = f"；Layout不可靠跳过 {unreliable} 页" if unreliable else ""
                     _status(
                         app,
                         f"未画线行导出完成：{pages} 页，发现 {unlined} 个未画线行，"
-                        f"输出 {exported} 张{mode}{skipped}；{parallel}；保存到 {output_dir}",
+                        f"输出 {exported} 张{filtered}{mode}{skipped}；{parallel}；保存到 {output_dir}",
                     )
                     finished = True
                 elif kind == "error":
