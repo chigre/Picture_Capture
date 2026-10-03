@@ -574,8 +574,8 @@ def binary_preview_image(source: Image.Image) -> Image.Image:
         if variance > best_variance:
             best_variance = variance
             threshold = value
-    return gray.point(lambda pixel: 255 
-l", self._entry_index(start), self._entry_index(end))
+    return gray.point(lambda pixel: 255 if pixel > threshold else 0, mode="1").convert("RGB")
+
 
 
 def vertical_marker_contact_gap(marker_line_width: int) -> int:
