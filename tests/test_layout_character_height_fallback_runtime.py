@@ -76,22 +76,25 @@ def test_runtime_is_installed_before_any_page_layout_import_can_capture_detector
 
     root = Path(__file__).resolve().parents[1]
     package_init = (root / "src/picture_capture/__init__.py").read_text(encoding="utf-8")
+    core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
 
-    # This remains the process-wide compatibility rule during Phase 1C. Package
-    # import still prepares character-height recovery before importing processing;
-    # removing package import side effects is intentionally a later PR.
+    # Package import remains a compatibility fallback during Phase 1D1.
     assert package_init.index("install_character_height_fallback_runtime()") < package_init.index(
         "from . import processing as _processing"
     )
 
-    # Both explicit process profiles also document and preserve their local
-    # ordering, so Phase 1D can later remove the package-level compatibility path
-    # without changing GUI/worker semantics.
+    # The explicit shared core now owns the same import-sensitive ordering and
+    # must establish character-height recovery before importing processing.
+    assert core.index("install_character_height_fallback_runtime()") < core.index(
+        "from .. import processing as processing_module"
+    )
+
+    # GUI retains its local idempotent ordering guard while worker delegates that
+    # responsibility to core before installing worker-specific extensions.
     assert gui.index("install_character_height_fallback_runtime()") < gui.index(
         "from .. import dictionary_page_design"
     )
-    assert worker.index("install_character_height_fallback_runtime()") < worker.index(
-        "from .. import processing as processing_module"
-    )
+    assert "core_services = build_core_services()" in worker
+    assert "install_character_height_fallback_runtime()" not in worker
