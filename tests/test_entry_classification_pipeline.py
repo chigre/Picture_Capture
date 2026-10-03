@@ -158,13 +158,19 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     assert '("自动", "普通词条", "大字头")' in review_source
 
 
-def test_launcher_installs_classification_before_app_and_review_ui_after_app():
-    import picture_capture.launcher as launcher
+def test_gui_composition_installs_classification_before_app_and_review_ui_after_app():
+    import picture_capture.bootstrap.gui as gui_bootstrap
 
-    source = Path(launcher.__file__).read_text(encoding="utf-8")
+    source = Path(gui_bootstrap.__file__).read_text(encoding="utf-8")
     assert "install_pdic_classification(formats)" in source
     assert "install_processing_entry_classification(processing_module)" in source
     assert "install_review_entry_classification(app_module)" in source
+    assert source.index("install_processing_entry_classification(processing_module)") < source.index(
+        "from .. import app as app_module"
+    )
+    assert source.index("from .. import app as app_module") < source.index(
+        "install_review_entry_classification(app_module)"
+    )
 
 
 def test_package_installs_pdic_classification_for_non_gui_consumers():
