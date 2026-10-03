@@ -18,12 +18,11 @@ from typing import Any, Iterable
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from . import formats
 from .ordinary_action_runtime import _apply_quick_settings_for_ordinary
-from .page_sections import read_page_sections
-from .processing import append_crop_log, split_single_lines
-from .project_storage import qt_root
-from .single_line_merge_settings import load_merge_by_page, merge_page_line_images
+from .single_line_parallel import (
+    configured_single_line_workers,
+    run_single_line_pages,
+)
 
 
 _BUTTON_TEXT = "单行切图"
@@ -142,9 +141,6 @@ def _insert_single_line_button(app: Any) -> tk.Misc | None:
         elif manager == "grid":
             _grid_before(button, target)
         else:
-            # The current main action row uses pack/grid.  Keep an explicit
-            # fallback for old custom layouts instead of silently losing the
-            # requested action.
             button.pack(side="left", before=target)
     except tk.TclError:
         button.destroy()
@@ -154,7 +150,8 @@ def _insert_single_line_button(app: Any) -> tk.Misc | None:
     try:
         app._attach_tooltip(
             button,
-            "将【选定范围】内各页按校对界面相同的单行裁切逻辑批量输出到 QT/PSW；可在【设置中心 → 切图】选择是否按页合并。",
+            "将【选定范围】内各页按校对界面相同的单行裁切逻辑批量输出到 QT/PSW；"
+            "可在【设置中心 → 切图】选择是否按页合并，并复用切图并行进程数。",
         )
     except Exception:
         pass
@@ -213,39 +210,28 @@ def _single_line_worker(
     settings: Any,
     events: "queue.Queue[tuple[str, Any]]",
 ) -> None:
-    output_dir = qt_root(project_root) / "PSW"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    merge_by_page = load_merge_by_page(project_root)
-    total_records = 0
     try:
-        for position, index in enumerate(indices, 1):
-            image_path = images[index]
-            entries = formats.read_pdic(formats.pdic_path(image_path))
-            sections = read_page_sections(image_path)
-            records = split_single_lines(
-                image_path,
-                entries,
-                settings,
-                output_dir,
-                profile_page_index=index,
-                page_sections=sections,
-            )
-            append_crop_log(project_root, records)
-            merged_path = None
-            if merge_by_page:
-                merged_path = merge_page_line_images(image_path, records, output_dir)
-            total_records += len(records)
+        def progress(
+            completed: int,
+            total: int,
+            filename: str,
+            count: int,
+            merged: bool,
+            workers: int,
+        ) -> None:
             events.put((
                 "progress",
-                (
-                    position,
-                    len(indices),
-                    image_path.name,
-                    len(records),
-                    merged_path is not None,
-                ),
+                (completed, total, filename, count, merged, workers),
             ))
-        events.put(("done", (len(indices), total_records, output_dir, merge_by_page)))
+
+        result = run_single_line_pages(
+            project_root,
+            images,
+            indices,
+            settings,
+            progress,
+        )
+        events.put(("done", result))
     except Exception as exc:
         events.put(("error", (exc, traceback.format_exc())))
 
@@ -267,7 +253,9 @@ def _start_single_line_export(app: Any) -> None:
     app._pc_single_line_crop_active = True
     app._pc_single_line_crop_token = token
     _set_job_button_state(app, True)
-    _status(app, f"单行切图：准备处理 {len(indices)} 页…")
+    workers = max(1, min(configured_single_line_workers(project_root), len(indices)))
+    worker_text = "串行" if workers <= 1 else f"并行×{workers}"
+    _status(app, f"单行切图：准备处理 {len(indices)} 页（{worker_text}）…")
 
     worker = threading.Thread(
         target=_single_line_worker,
@@ -286,18 +274,20 @@ def _start_single_line_export(app: Any) -> None:
             while True:
                 kind, payload = events.get_nowait()
                 if kind == "progress":
-                    position, total, filename, count, merged = payload
+                    completed, total, filename, count, merged, worker_count = payload
                     suffix = "，已合并为 1 张" if merged else ""
+                    parallel = "" if worker_count <= 1 else f"，并行×{worker_count}"
                     _status(
                         app,
-                        f"单行切图：{position}/{total} {filename}（{count} 行{suffix}）",
+                        f"单行切图：{completed}/{total} {filename}（{count} 行{suffix}{parallel}）",
                     )
                 elif kind == "done":
-                    pages, records, output_dir, merged = payload
+                    pages, records, output_dir, merged, worker_count = payload
                     mode = "；每页已合并为 1 张图" if merged else ""
+                    parallel = "串行" if worker_count <= 1 else f"并行×{worker_count}"
                     _status(
                         app,
-                        f"单行切图完成：{pages} 页，共 {records} 行{mode}；已保存到 {output_dir}",
+                        f"单行切图完成：{pages} 页，共 {records} 行{mode}；{parallel}；已保存到 {output_dir}",
                     )
                     finished = True
                 elif kind == "error":
