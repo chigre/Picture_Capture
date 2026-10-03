@@ -76,11 +76,13 @@ def detect_entries_job_with_runtime(
         current.detection_method = "left_edge"
         # The full ordinary Layout result is already being computed here. Capture
         # its physical rows once instead of making post-production rebuild them.
+        # Cache validity is keyed by the persisted/project settings rather than
+        # the temporary worker-only detection_method override.
         with capture_layout_rows(
             page.parent,
             page,
             int(profile_page_index),
-            current,
+            settings,
         ):
             entries, _geometry = processing_module.detect_entries(
                 image,
