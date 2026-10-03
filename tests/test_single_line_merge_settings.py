@@ -166,13 +166,13 @@ def test_merge_all_blank_page_creates_no_useless_page_image(tmp_path):
     assert manifest.read_text(encoding="utf-8") == ""
 
 
-def test_single_line_merge_is_output_only_and_main_runtime_reads_crop_option():
+def test_single_line_merge_is_output_only_and_page_worker_reads_crop_option():
     root = Path(__file__).resolve().parents[1]
     merge_source = (
         root / "src" / "picture_capture" / "single_line_merge_settings.py"
     ).read_text(encoding="utf-8")
-    runtime_source = (
-        root / "src" / "picture_capture" / "postproduction_single_line_runtime.py"
+    worker_source = (
+        root / "src" / "picture_capture" / "single_line_parallel.py"
     ).read_text(encoding="utf-8")
     launcher_source = (
         root / "src" / "picture_capture" / "launcher.py"
@@ -183,12 +183,12 @@ def test_single_line_merge_is_output_only_and_main_runtime_reads_crop_option():
     assert 'command=lambda: _persist_dialog_value(dialog)' in merge_source
     assert '"_save_integrated_crop_settings"' in merge_source
     assert "_trim_white_border(opened)" in merge_source
-    assert "split_single_lines(" in runtime_source
-    assert "merge_page_line_images(image_path, records, output_dir)" in runtime_source
-    assert runtime_source.index("split_single_lines(") < runtime_source.index(
+    assert "split_single_lines(" in worker_source
+    assert "merge_page_line_images(image_path, records, output_dir)" in worker_source
+    assert worker_source.index("split_single_lines(") < worker_source.index(
         "merge_page_line_images(image_path, records, output_dir)"
     )
-    assert "load_merge_by_page(project_root)" in runtime_source
+    assert "load_merge_by_page(project_root)" in worker_source
     assert "character_height" not in merge_source
     assert "row_padding" not in merge_source
     assert "install_single_line_merge_settings_ui(app_module)" in launcher_source
