@@ -82,8 +82,6 @@ def leading_whitespace_end(
     height, width = line.shape
     support = np.asarray(line, dtype=np.uint8).sum(axis=0)
 
-    # A real row start should occupy more than one narrow pixel column.  The
-    # window stays small enough for punctuation/tilde prefixes to remain valid.
     window = max(4, round(ref * 0.18))
     window = min(window, max(1, width))
     column_support = max(1, round(max(1, height) * 0.075))
@@ -102,8 +100,6 @@ def leading_whitespace_end(
         if area < min_area or active_columns < min_active_columns:
             continue
 
-        # Find the first actually supported ink column within the accepted
-        # window so the reported indent hugs the printed prefix/glyph itself.
         local = np.flatnonzero(active[x:x1])
         if local.size == 0:
             continue
@@ -111,8 +107,6 @@ def leading_whitespace_end(
 
         if anchor_x is not None and onset < int(anchor_x):
             distance = int(anchor_x) - onset
-            # A very distant candidate before the structural anchor needs a
-            # slightly stronger local footprint to be trusted as a true prefix.
             if distance > ref * 1.35:
                 strong_area = max(min_area * 2, round(ref * ref * 0.020))
                 strong_columns = max(min_active_columns + 1, round(window * 0.48))
@@ -167,23 +161,37 @@ def credible_first_text_x(
     fallback: int,
     anchor_x: int | None = None,
 ) -> int:
-    """Return the physical row start measured from leading whitespace."""
+    """Return the physical row start measured from leading whitespace.
+
+    When a structural anchor is available, any earlier prefix must form a
+    contiguous component chain back to that anchor.  This prevents a large but
+    disconnected scan remnant near the column edge from overriding a trustworthy
+    anchor, while preserving real nearby prefixes such as tildes/number markers.
+    """
     onset = leading_whitespace_end(
         line,
         reference,
         anchor_x=anchor_x,
     )
+    components = _component_stats(line, reference)
+
+    if anchor_x is not None:
+        if not components:
+            return int(anchor_x if onset is None else onset)
+        chained = _prefix_start_before_anchor(
+            components, int(anchor_x), float(reference)
+        )
+        if onset is None:
+            return int(chained)
+        if int(onset) < int(anchor_x):
+            return int(chained)
+        return int(onset)
+
     if onset is not None:
         return int(onset)
 
-    components = _component_stats(line, reference)
     if not components:
         return int(fallback)
-
-    if anchor_x is not None:
-        return _prefix_start_before_anchor(
-            components, int(anchor_x), float(reference)
-        )
 
     ref = max(6.0, float(reference))
 
