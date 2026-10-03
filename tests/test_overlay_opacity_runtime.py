@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from picture_capture.illustration_fill_opacity_runtime import configure_overlay_opacity_defaults
 from picture_capture.overlay_line_anchor_runtime import one_sided_line_coordinates
 from picture_capture.overlay_opacity_runtime import (
     _install_settings_properties,
@@ -55,11 +56,11 @@ def test_headword_line_added_thickness_grows_down_only():
     )
 
 
-def test_column_guide_added_thickness_grows_left_only():
+def test_column_guide_added_thickness_grows_right_only():
     baseline = (30.0, 10.0, 30.0, 90.0)
-    assert one_sided_line_coordinates(baseline, width=1, growth="left") == baseline
-    assert one_sided_line_coordinates(baseline, width=5, growth="left") == (
-        28.0, 10.0, 28.0, 90.0,
+    assert one_sided_line_coordinates(baseline, width=1, growth="right") == baseline
+    assert one_sided_line_coordinates(baseline, width=5, growth="right") == (
+        32.0, 10.0, 32.0, 90.0,
     )
 
 
@@ -77,10 +78,13 @@ class _FakeSettings:
 
 
 def test_runtime_opacity_properties_roundtrip_in_project_json(tmp_path: Path):
+    # Production startup establishes the requested 40% display defaults before
+    # the dynamic line-opacity properties are installed.
+    configure_overlay_opacity_defaults()
     _install_settings_properties(_FakeSettings)
     settings = _FakeSettings()
-    assert settings.guide_opacity == 100.0
-    assert settings.headword_marker_opacity == 100.0
+    assert settings.guide_opacity == 40.0
+    assert settings.headword_marker_opacity == 40.0
 
     settings.guide_opacity = 42.5
     settings.headword_marker_opacity = 65
@@ -137,4 +141,4 @@ def test_marker_opacity_control_is_moved_before_illustration_label_controls():
     ).read_text(encoding="utf-8")
     assert 'target = _find_checkbutton(row, "插图标签：外框")' in source
     assert 'widget.pack_configure(before=target)' in source
-    assert 'growth = "left" if bool(options.get("smooth", False)) else "down"' in source
+    assert 'growth = "right" if bool(options.get("smooth", False)) else "down"' in source
