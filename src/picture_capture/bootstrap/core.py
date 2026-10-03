@@ -2,12 +2,11 @@ from __future__ import annotations
 
 """Shared non-GUI composition profile for Picture Capture.
 
-This module deliberately mirrors the package-wide runtime preparation that still
-exists in ``picture_capture.__init__`` during the migration.  GUI and spawn
-workers now enter through this explicit profile first; the legacy package-import
-path remains temporarily as an idempotent compatibility fallback.  A subsequent
-PR can therefore remove import-time package installation without simultaneously
-inventing a new runtime order.
+Bare ``import picture_capture`` is intentionally runtime-inert. GUI startup,
+spawn workers, CLI entrypoints and application-level test/diagnostic harnesses
+enter through this module when they need the composed project/detection runtime.
+The historical installer order remains explicit here until later phases replace
+runtime monkey patches with native service implementations.
 """
 
 from dataclasses import dataclass
@@ -23,12 +22,7 @@ class CoreServices:
 
 
 def build_core_services() -> CoreServices:
-    """Install the shared runtime contract in the historical package order.
-
-    Every installer is idempotent.  Keeping the exact order here while
-    ``picture_capture.__init__`` still provides the compatibility path makes this
-    a characterization step rather than a behavior change.
-    """
+    """Install the shared runtime contract in its compatibility-safe order."""
     # AppSettings must have the real dataclass field before consumers use
     # dataclasses.replace() or pickle settings into spawn workers.
     from ..layout_illustration_mask_runtime import (
