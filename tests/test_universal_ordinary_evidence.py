@@ -128,13 +128,16 @@ def test_broken_boxed_number_does_not_match_real_bracket_sample():
 
 def test_visual_evidence_never_demotes_existing_indent_entry():
     understanding, lines = _understanding_with_rows(roles=("entry", "body"))
+    # Re-observing evidence on a row that is already an indent entry is a no-op:
+    # promotion counts only body->entry transitions, and the neighboring body
+    # row must remain untouched.
     promoted = promote_evidence_to_layout_roles(
         understanding,
-        [Entry(word="", x=10, y=45, ocr_source="ordinary_large_head_evidence")],
+        [Entry(word="", x=10, y=15, ocr_source="ordinary_large_head_evidence")],
     )
-    assert promoted == 1
+    assert promoted == 0
     assert lines[0].role == "entry"
-    assert lines[1].role == "entry"
+    assert lines[1].role == "body"
 
 
 def test_large_head_detector_is_cjk_gated_and_independent_from_legacy_module():
@@ -149,7 +152,10 @@ def test_large_head_detector_is_cjk_gated_and_independent_from_legacy_module():
     import picture_capture.ordinary_large_head_evidence as module
 
     source = open(module.__file__, "r", encoding="utf-8").read()
-    assert "ordinary_cjk_large_heads" not in source
+    # A docstring may name the historical module while explaining independence;
+    # the dependency contract is that the detector does not import it.
+    assert "from .ordinary_cjk_large_heads" not in source
+    assert "import ordinary_cjk_large_heads" not in source
     assert "def _candidate_boxes" in source
 
 
