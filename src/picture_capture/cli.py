@@ -6,6 +6,13 @@ import sys
 
 from PIL import Image, ImageOps
 
+from .bootstrap.core import build_core_services
+
+
+# CLI is a real application entrypoint. Prepare the same non-GUI runtime contract
+# as GUI and spawn workers before importing formats/processing callables by value.
+build_core_services()
+
 from .formats import pdic_path, read_pdic, write_pdic
 from .image_utils import normalize_page_rgb
 from .models import ProjectState

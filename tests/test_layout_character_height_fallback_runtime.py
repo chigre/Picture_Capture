@@ -80,13 +80,12 @@ def test_runtime_is_installed_before_any_page_layout_import_can_capture_detector
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
 
-    # Package import remains a compatibility fallback during Phase 1D1.
-    assert package_init.index("install_character_height_fallback_runtime()") < package_init.index(
-        "from . import processing as _processing"
-    )
+    # Bare package import must no longer perform any runtime installation.
+    assert "install_character_height_fallback_runtime()" not in package_init
+    assert "processing" not in package_init
 
-    # The explicit shared core now owns the same import-sensitive ordering and
-    # must establish character-height recovery before importing processing.
+    # The explicit shared core owns the import-sensitive ordering and must
+    # establish character-height recovery before importing processing.
     assert core.index("install_character_height_fallback_runtime()") < core.index(
         "from .. import processing as processing_module"
     )

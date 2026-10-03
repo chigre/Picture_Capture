@@ -16,6 +16,11 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from picture_capture.bootstrap.core import build_core_services  # noqa: E402
+
+
+build_core_services()
+
 from picture_capture.dictionary_profile import language_effective_settings, profile_library_path  # noqa: E402
 from picture_capture.coordinate_space import CANONICAL_COORDINATE_SPACE  # noqa: E402
 from picture_capture.image_utils import normalize_page_rgb  # noqa: E402

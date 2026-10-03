@@ -57,15 +57,21 @@ def test_large_head_after_small_prefix_remains_eligible():
     )
 
 
-def test_package_installs_large_head_guard_before_processing_import():
+def test_core_installs_large_head_guard_before_processing_import():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
+    core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     package = (root / "src/picture_capture/__init__.py").read_text(encoding="utf-8")
 
-    assert package.index("install_ordinary_large_head_runtime()") < package.index(
-        "from . import processing as _processing"
+    assert core.index("install_ordinary_large_head_runtime()") < core.index(
+        "from .. import processing as processing_module"
     )
+    assert core.index("install_ordinary_large_head_role_guard()") < core.index(
+        "from .. import processing as processing_module"
+    )
+    assert "install_ordinary_large_head_runtime()" not in package
+    assert "install_ordinary_large_head_role_guard()" not in package
 
 
 def test_column_drift_runtime_never_replaces_large_head_detector():

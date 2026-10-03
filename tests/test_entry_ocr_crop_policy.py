@@ -169,8 +169,21 @@ def test_marker_ocr_uses_shared_multi_engine_channel_and_shared_crop():
     assert "core.run_tesseract(" not in source
 
 
-def test_spawn_import_installs_marker_ocr_runtime_package_wide():
+def test_core_composition_installs_marker_ocr_runtime_for_non_gui_consumers():
     import picture_capture
+    from picture_capture import processing
+    from picture_capture.bootstrap.core import build_core_services
 
-    source = Path(picture_capture.__file__).read_text(encoding="utf-8")
-    assert "install_processing_entry_classification(_processing)" in source
+    build_core_services()
+    package_source = Path(picture_capture.__file__).read_text(encoding="utf-8")
+    core_source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "bootstrap"
+        / "core.py"
+    ).read_text(encoding="utf-8")
+
+    assert "install_processing_entry_classification(_processing)" not in package_source
+    assert "install_processing_entry_classification(processing_module)" in core_source
+    assert bool(getattr(processing, "_entry_classification_runtime_installed", False))
