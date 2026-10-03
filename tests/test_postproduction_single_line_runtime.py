@@ -91,8 +91,10 @@ def test_runtime_contract_keeps_main_button_left_of_entry_crop_and_uses_selected
     assert "row_padding" not in page_job
 
 
-def test_launcher_installs_single_line_postproduction_extension():
+def test_gui_composition_installs_single_line_postproduction_extension():
     root = Path(__file__).resolve().parents[1]
-    launcher = (root / "src" / "picture_capture" / "launcher.py").read_text(encoding="utf-8")
-    assert "from .postproduction_single_line_runtime import (" in launcher
-    assert "install_postproduction_single_line_runtime(app_module)" in launcher
+    source = (
+        root / "src" / "picture_capture" / "bootstrap" / "gui.py"
+    ).read_text(encoding="utf-8")
+    assert "install_postproduction_single_line_runtime" in source
+    assert "install_postproduction_single_line_runtime(app_module)" in source
