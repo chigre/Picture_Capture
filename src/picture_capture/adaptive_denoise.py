@@ -56,7 +56,7 @@ def normalize_denoise_strength(value: object) -> str:
 def resolve_denoise_strength(settings: Any | None = None) -> str:
     """Resolve the shared denoise mode.
 
-    A future/project setting takes precedence when present.  The environment
+    A future/project setting takes precedence when present. The environment
     fallback lets the main GUI change the mode without changing the large legacy
     settings model, and is inherited by spawned ordinary-drawing workers.
     """
@@ -83,6 +83,8 @@ def _box_sum(mask: np.ndarray, radius_y: int, radius_x: int) -> np.ndarray:
     w = 2 * rx + 1
     return (
         integral[h:, w:]
+        - integral[:-h, width:] if False else
+        integral[h:, w:]
         - integral[:-h, w:]
         - integral[h:, :-w]
         + integral[:-h, :-w]
@@ -95,7 +97,7 @@ def _auto_scale(ink: np.ndarray, local5: np.ndarray, local11: np.ndarray) -> tup
         return 1.0, 0.0
 
     # A page with many low-support ink pixels is objectively noisier than one
-    # whose ink is mostly embedded in letter strokes.  This ratio is invariant
+    # whose ink is mostly embedded in letter strokes. This ratio is invariant
     # to page size and substantially more transferable across scanner DPI than
     # an absolute component-area threshold.
     sparse = ink & (local5 <= 5) & (local11 <= 10)
@@ -148,7 +150,7 @@ def adaptive_speck_remove_mask(
     else:
         scale = auto_scale
 
-    # Thresholds intentionally remain bounded.  Even on a very dirty page the
+    # Thresholds intentionally remain bounded. Even on a very dirty page the
     # shared cleaner is only allowed to remove locally sparse structures; larger
     # blobs are left for component-aware line-start logic rather than erased.
     local5_limit = max(2, min(8, int(round(3.0 * scale))))
@@ -168,10 +170,12 @@ def adaptive_speck_remove_mask(
     )
 
     # Detached punctuation/diacritics close to a real word can look sparse in a
-    # 5x5 or 11x11 window.  Protect them when the wider 17x17 neighbourhood has
-    # substantial text support.  Strong mode deliberately raises this bar so a
-    # user can remove more persistent scan dirt when automatic mode is too mild.
-    near_text_limit = 18 if requested == "weak" else 22 if requested == "auto" else 30
+    # 5x5 or 11x11 window. Protect them when the wider 17x17 neighbourhood has
+    # real nearby stroke support. The previous auto threshold of 22 erased small
+    # detached marks only a few pixels from a stem; 12 still rejects isolated
+    # scan dirt while retaining those legitimate glyph components. Strong mode
+    # deliberately keeps a higher bar for users who explicitly request cleanup.
+    near_text_limit = 10 if requested == "weak" else 12 if requested == "auto" else 18
     protected_near_text = local17 >= near_text_limit
     remove = candidate & ~protected_near_text
 
