@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-"""Stable application composition-root API.
-
-Phase 1 introduces this module before moving the historical installer chain out
-of :mod:`picture_capture.launcher`.  Keeping the public bootstrap stable first
-lets packaged scripts, ``python -m`` and GUI smoke tests converge on one entry
-path while the internal migration remains independently reviewable.
-"""
+"""Stable application composition-root API."""
 
 from typing import Any
 
@@ -14,14 +8,12 @@ from typing import Any
 def build_application() -> Any:
     """Return the fully prepared GUI application module.
 
-    The launcher call is deliberately lazy so importing ``picture_capture`` or
-    this bootstrap package does not import Tk/application code by itself.
-    ``launcher.prepare_app_module`` remains the compatibility implementation for
-    this first migration step and will be moved behind this function next.
+    Importing this module remains lightweight; the GUI composition chain is
+    imported only when an application is actually requested.
     """
-    from ..launcher import prepare_app_module
+    from .gui import prepare_gui_application
 
-    return prepare_app_module()
+    return prepare_gui_application()
 
 
 def main() -> int:
