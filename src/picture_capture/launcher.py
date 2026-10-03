@@ -142,11 +142,17 @@ def prepare_app_module() -> Any:
     from .single_line_merge_settings import install_single_line_merge_settings_ui
     from .training_export_ui import export_training_package_selected_range
     from .ui_terminology import install_app_tooltip_terminology
+    from .unlined_export_filter_settings import (
+        install_unlined_export_filter_settings_ui,
+    )
     from .unlined_line_export_ui import install_unlined_line_export_ui
 
     install_settings_parameter_help(app_module)
     install_settings_help_restore(app_module)
     install_single_line_merge_settings_ui(app_module)
+    # Filter controls belong to the same integrated crop-settings surface and
+    # are installed after the per-page merge switch so they appear beneath it.
+    install_unlined_export_filter_settings_ui(app_module)
     install_ordinary_action_runtime(app_module)
     install_ocr_action_guard(app_module)
     # Install in this order: the unlined-row action locates the concrete
