@@ -168,7 +168,11 @@ def prepare_app_module() -> Any:
     )
     from .unlined_fast_path_runtime import install_unlined_fast_path
     from .unlined_line_export_ui import install_unlined_line_export_ui
+    from .layout_illustration_mask_runtime import install_layout_illustration_mask_ui
 
+    # Add the Layout analysis switch before generic Settings Center help scans
+    # visible controls, so the new checkbox receives its dedicated explanation.
+    install_layout_illustration_mask_ui(app_module)
     install_settings_parameter_help(app_module)
     install_settings_help_restore(app_module)
     install_single_line_merge_settings_ui(app_module)
