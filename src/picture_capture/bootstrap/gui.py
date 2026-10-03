@@ -2,10 +2,10 @@ from __future__ import annotations
 
 """GUI composition root.
 
-This module owns the historical runtime installer chain.  The order is preserved
-from the pre-refactor launcher because several compatibility extensions depend on
-being installed before modules capture callables by value or before GUI classes
-are constructed.
+This module owns the historical GUI-specific installer chain. Shared non-GUI
+runtime preparation is resolved first through ``build_core_services`` so GUI and
+spawn workers converge on one explicit process foundation before their
+profile-specific extensions are installed.
 """
 
 from typing import Any
@@ -20,11 +20,15 @@ def prepare_gui_application() -> Any:
     if _PREPARED_APP_MODULE is not None:
         return _PREPARED_APP_MODULE
 
+    from .core import build_core_services
+
+    core_services = build_core_services()
+
     from ..ui_terminology import install_ui_terminology
 
     install_ui_terminology()
 
-    from .. import formats
+    formats = core_services.formats
     from ..training_baseline import build_write_pdic_capture
     from ..entry_classification import install_pdic_classification
 
@@ -35,8 +39,9 @@ def prepare_gui_application() -> Any:
     install_pdic_classification(formats)
 
     # Character-height recovery must be installed before Page Design/policy
-    # modules import detect_layout_parameters by value.  Only pages explicitly
-    # marked fallback=character_height are eligible for this correction.
+    # modules import detect_layout_parameters by value.  Core composition has
+    # already established it; this local call remains as an idempotent ordering
+    # guard while the legacy runtime chain is being retired.
     from ..layout_character_height_runtime import (
         install_character_height_fallback_runtime,
     )
@@ -112,7 +117,7 @@ def prepare_gui_application() -> Any:
     )
     training_export.TRAINING_EXPORT_FORMAT = "picture-capture-training-v3"
 
-    from .. import processing as processing_module
+    processing_module = core_services.processing
     from ..entry_classification_runtime import install_processing_entry_classification
     from ..spawn_detection_runtime import install_spawn_detection_runtime
 
