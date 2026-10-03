@@ -144,9 +144,6 @@ def test_generic_body_indent_uses_next_visual_block_for_negative_evidence():
     column = understanding.layout.columns[0]
     body_line = next(line for line in column.lines if line.role == "body")
     reference = understanding.line_height
-    # Deliberately place the detector separator close to the following body row,
-    # not at Page Design's own midpoint boundary.  This reproduces the real
-    # 新时代西汉 false positives where VB sat only ~7-13 px above a continuation.
     marker_y = (
         understanding.layout.body_top
         + int(body_line.y0)
@@ -246,13 +243,14 @@ def test_accepted_ocr_semantic_positive_survives_body_lane_conflict_for_review()
 
 def test_processing_builds_shared_understanding_before_all_detector_modes():
     source = inspect.getsource(processing.detect_entries)
-    assert "understand_page(" in source
-    assert "_core.detect_entries(" in source  # complete fallback remains available
+    # The canonical helper owns runtime preparation and dispatches either the
+    # Layout-only understanding (ordinary) or enriched understand_page (OCR).
+    assert "_understand_page_current(" in source
+    assert "_core.detect_entries(" in source  # complete OCR/combined fallback remains available
     assert "_shared_detector_observations(" in source
     assert "apply_page_understanding(" in source
-    assert source.index("understand_page(") < source.index("_core.detect_entries(")
-    assert '"ocr" if method == "paddleocr"' in source
-    assert '"combined" if method == "combined"' in source
+    assert source.index("_understand_page_current(") < source.index("_core.detect_entries(")
+    assert 'mode = "ocr" if method == "paddleocr" else "combined"' in source
     assert "_hard_negative_rows_from_candidates" in source
 
 
