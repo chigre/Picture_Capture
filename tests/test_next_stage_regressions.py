@@ -31,6 +31,7 @@ from picture_capture.processing import (
     _legacy_find_separator_y, _legacy_is_point, _fuse_detection_entries,
     _left_edge_ink_mask, _ordinary_marker_local_crop, apply_column_start_offsets,
     derive_geometry, derive_nominal_geometry, detect_entries,
+    _detect_entries_left_edge as legacy_detect_entries,
     ordinary_page_layout_settings, ocr_existing_entry_words_from_markers,
     refine_existing_entries,
 )
@@ -279,7 +280,7 @@ def test_ordinary_marker_local_crop_uses_taller_box_for_visual_large_cjk():
     geometry = derive_nominal_geometry(image.width, image.height, settings)
 
     large_crop, large_flag = _ordinary_marker_local_crop(
-        image, Entry(word="", x=20, y=50), geometry, settings,
+        image, Entry(word="", x=20, y=50, ocr_source="ordinary_large_head_evidence", issue_type="ORDINARY_OVERSIZED_DISPLAY_HEAD", ocr_visual_run_height=68.0, ocr_oversized_cjk=True), geometry, settings,
     )
     normal_crop, normal_flag = _ordinary_marker_local_crop(
         image, Entry(word="", x=20, y=162), geometry, settings,
@@ -292,6 +293,7 @@ def test_ordinary_marker_local_crop_uses_taller_box_for_visual_large_cjk():
 
 def test_ordinary_marker_text_ocr_fills_only_blank_without_moving_lines(monkeypatch):
     import picture_capture.paddle_headwords as ph
+    import picture_capture.entry_classification_runtime as ecr
 
     image = Image.new("RGB", (360, 260), "white")
     draw = ImageDraw.Draw(image)
@@ -313,7 +315,7 @@ def test_ordinary_marker_text_ocr_fills_only_blank_without_moving_lines(monkeypa
         follow_column_deformation=False,
     )
     entries = [
-        Entry(word="", x=20, y=50),
+        Entry(word="", x=20, y=50, ocr_source="ordinary_large_head_evidence", issue_type="ORDINARY_OVERSIZED_DISPLAY_HEAD", ocr_visual_run_height=68.0, ocr_oversized_cjk=True),
         Entry(word="", x=20, y=162),
         Entry(word="已校对", x=20, y=210, manually_selected=True),
     ]
@@ -343,6 +345,26 @@ def test_ordinary_marker_text_ocr_fills_only_blank_without_moving_lines(monkeypa
         ph,
         "parse_headword_text",
         lambda text, _settings, profile=None: SimpleNamespace(normalized="枫"),
+    )
+
+    class FakeChannel:
+        def __init__(self, _settings):
+            pass
+
+        def recognize_crop(self, crop, **_kwargs):
+            return SimpleNamespace(
+                plan=None,
+                candidates=[SimpleNamespace(
+                    ok=True, engine="paddle",
+                    records=[OCRRecord("dummy", 0.95, (0, 0, max(10, crop.width // 3), max(8, crop.height // 2)))],
+                    text="dummy", confidence=0.95,
+                )],
+            )
+
+    monkeypatch.setattr(ecr, "OcrChannelSession", FakeChannel)
+    monkeypatch.setattr(
+        ecr, "choose_ocr_text",
+        lambda _plan, resolved: (resolved[0] if resolved else None, False),
     )
 
     updated, stats = ocr_existing_entry_words_from_markers(
@@ -3449,14 +3471,14 @@ def test_ordinary_drawing_auto_refine_y_is_shared_and_switchable(monkeypatch):
         follow_column_deformation=False,
         paddle_refine_separator_y=True,
     )
-    refined, _ = detect_entries(image, settings)
+    refined, _ = legacy_detect_entries(image, settings)
     assert refined
     assert calls
     refined_calls = len(calls)
 
     calls.clear()
     settings.paddle_refine_separator_y = False
-    coarse, _ = detect_entries(image, settings)
+    coarse, _ = legacy_detect_entries(image, settings)
     assert coarse
     assert calls == []
     assert len(refined) == len(coarse)
@@ -3569,7 +3591,7 @@ def test_ordinary_drawing_restores_vb_left_edge_gate():
         ordinary_auto_layout=False,
         paddle_refine_separator_y=False,
     )
-    entries, _ = detect_entries(image, settings)
+    entries, _ = legacy_detect_entries(image, settings)
 
     assert len(entries) == 2
     assert abs(entries[0].y - 45) <= 3
@@ -3600,7 +3622,7 @@ def test_legacy_manual_columns_and_manual_y_no_longer_change_ordinary_start():
         follow_column_deformation=False,
         paddle_refine_separator_y=False,
     )
-    entries, _ = detect_entries(image, settings)
+    entries, _ = legacy_detect_entries(image, settings)
     assert len(entries) == 2
 
 
@@ -3705,11 +3727,11 @@ def test_ordinary_micro_tolerance_is_not_clipped_by_body_indent():
         ordinary_auto_layout=False,
         paddle_refine_separator_y=False,
     )
-    accepted, _ = detect_entries(image, settings)
+    accepted, _ = legacy_detect_entries(image, settings)
     assert len(accepted) == 1
 
     settings.horizontal_tolerance = 8
-    rejected, _ = detect_entries(image, settings)
+    rejected, _ = legacy_detect_entries(image, settings)
     assert rejected == []
 
 
@@ -3735,11 +3757,11 @@ def test_ordinary_micro_tolerance_controls_headword_anchor_lane():
         ordinary_auto_layout=False,
         paddle_refine_separator_y=False,
     )
-    accepted, _ = detect_entries(image, settings)
+    accepted, _ = legacy_detect_entries(image, settings)
     assert len(accepted) == 1
 
     settings.horizontal_tolerance = 4
-    rejected, _ = detect_entries(image, settings)
+    rejected, _ = legacy_detect_entries(image, settings)
     assert rejected == []
 
 
@@ -3773,7 +3795,7 @@ def test_ordinary_y_refinement_receives_full_resolution_coordinates(monkeypatch)
         follow_column_deformation=False,
         paddle_refine_separator_y=True,
     )
-    entries, _ = detect_entries(image, settings)
+    entries, _ = legacy_detect_entries(image, settings)
     assert entries and seen
     # Ordinary candidate and VB separator placement are already full-resolution;
     # the optional modern refiner receives the same source-resolution Y axis.

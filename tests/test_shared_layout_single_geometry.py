@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from PIL import Image
 
 from picture_capture import dictionary_page_layout_policy as policy
+from picture_capture import layout_detection
 from picture_capture.models import AppSettings
 from picture_capture.processing import _ordinary_settings_for_shared_geometry
 
@@ -38,7 +39,7 @@ def test_page_policy_uses_reliable_layout_estimate(monkeypatch) -> None:
         method="reliable_fusion",
         confidence=0.93,
     )
-    monkeypatch.setattr(policy, "detect_layout_parameters", lambda image, s: estimate)
+    monkeypatch.setattr(layout_detection, "detect_layout_parameters", lambda image, s: estimate)
 
     page_settings, returned_estimate, applied = policy.resolve_page_layout_policy(
         Image.new("RGB", (2536, 3765), "white"),

@@ -67,6 +67,7 @@ from picture_capture.processing import (
     clamp_box,
     derive_geometry, derive_nominal_geometry,
     detect_entries,
+    _detect_entries_left_edge as legacy_detect_entries,
     column_index,
     import_ocred,
     export_ocred,
@@ -512,7 +513,7 @@ class ProcessingTests(unittest.TestCase):
                 start_y=40, detection_method="left_edge",
                 ordinary_auto_layout=False,
             )
-            entries, geometry = detect_entries(image, settings)
+            entries, geometry = legacy_detect_entries(image, settings)
             self.assertEqual(len(geometry.column_starts), 2)
             self.assertEqual(len(entries), 6)
             self.assertTrue(all(entry.word == "" for entry in entries))
@@ -539,9 +540,9 @@ class ProcessingTests(unittest.TestCase):
         geometry = derive_geometry(image, settings)
         self.assertAlmostEqual(geometry.x_at(0, 100), 38, delta=8)
         self.assertAlmostEqual(geometry.x_at(0, 600), 78, delta=8)
-        tracked, _ = detect_entries(image, settings)
+        tracked, _ = legacy_detect_entries(image, settings)
         settings.follow_column_deformation = False
-        fixed, _ = detect_entries(image, settings)
+        fixed, _ = legacy_detect_entries(image, settings)
         self.assertEqual(len(tracked), 26)
         self.assertLess(len(fixed), len(tracked))
 
@@ -7507,7 +7508,7 @@ def test_rtl_ordinary_drawing_detects_source_physical_right_edge():
         paddle_refine_separator_y=False,
     )
 
-    entries, _geometry = detect_entries(source, settings)
+    entries, _geometry = legacy_detect_entries(source, settings)
 
     assert len(entries) == 4
     assert all(entry.x > 300 for entry in entries)
