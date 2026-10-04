@@ -59,6 +59,7 @@ from .ui.settings import help as _settings_help_ui
 from .ui.settings import profile as _settings_profile_ui
 from .ui.settings import rules as _settings_rules_ui
 from .ui.settings import lifecycle as _settings_lifecycle_ui
+from .ui.settings import window as _settings_window_ui
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
     _wrap_mixed_ui_text,
@@ -2494,64 +2495,13 @@ class SettingsDialog(tk.Toplevel):
         )
 
     def _configure_settings_appearance_styles(self) -> None:
-        style = ttk.Style(self)
-        base = appearance_palette(self.parent.appearance_mode)
-        if self.parent.appearance_mode == "dark":
-            selected_bg = base["surface"]
-            active_bg = base["button_hover"]
-            idle_bg = base["surface_alt"]
-            selected_fg = base["text"]
-            idle_fg = base["muted"]
-        else:
-            selected_bg = str(style.lookup("TFrame", "background") or "#f6f7f9")
-            active_bg = "#f1f3f6"
-            idle_bg = "#e6eaf0"
-            selected_fg = "#111827"
-            idle_fg = "#4b5563"
-        style.configure(
-            "PC.Settings.TNotebook",
-            background=selected_bg,
-            borderwidth=0,
-            tabmargins=(0, 2, 0, 0),
-        )
-        style.configure(
-            "PC.Settings.TNotebook.Tab",
-            padding=(13, 7),
-            borderwidth=1,
-            relief="raised",
-            background=idle_bg,
-            foreground=idle_fg,
-        )
-        style.map(
-            "PC.Settings.TNotebook.Tab",
-            background=[
-                ("selected", selected_bg),
-                ("active", active_bg),
-                ("!selected", idle_bg),
-            ],
-            foreground=[
-                ("selected", selected_fg),
-                ("active", selected_fg),
-                ("!selected", idle_fg),
-            ],
-            relief=[("selected", "sunken"), ("!selected", "raised")],
-        )
+        _settings_window_ui.configure_settings_appearance_styles(self)
 
     def refresh_appearance(self) -> None:
-        """Apply the global appearance without touching unsaved setting values."""
-        self._configure_settings_appearance_styles()
-        self.parent._apply_current_appearance(self)
-        self._schedule_settings_help_image_render()
+        _settings_window_ui.refresh_appearance(self)
 
     def select_tab(self, key: str | None) -> None:
-        """Select a requested settings task when reusing the modeless window."""
-        if not hasattr(self, "notebook") or not hasattr(self, "_settings_tabs"):
-            return
-        tab = self._settings_tabs.get(key or "common", self._settings_tabs["common"])
-        try:
-            self.notebook.select(tab)
-        except tk.TclError:
-            pass
+        _settings_window_ui.select_tab(self, key)
 
     def _build_project_details_tab(self, tab: ttk.Frame) -> None:
         """Build project metadata fields without mixing them into OCR controls."""
