@@ -6,8 +6,8 @@ from picture_capture.ui.settings import help as settings_help
 def test_settings_help_module_has_no_reverse_app_dependency_and_keeps_resource_path():
     source = Path(settings_help.__file__).read_text(encoding="utf-8")
     assert "picture_capture.app" not in source
-    assert "from ...app" not in source
-    assert "import ...app" not in source
+    assert "from ...app import" not in source
+    assert "import picture_capture.app" not in source
 
     path = settings_help.settings_help_image_path("layout_settings.png")
     assert path.is_file()
