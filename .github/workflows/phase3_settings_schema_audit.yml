@@ -1,0 +1,49 @@
+name: Phase 3 Settings schema audit
+
+on:
+  push:
+    branches:
+      - refactor/phase3-settings-schema
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/phase3-settings-schema
+      - name: Audit SettingsDialog class metadata
+        shell: python
+        run: |
+          import ast
+          from pathlib import Path
+
+          path = Path("src/picture_capture/app.py")
+          text = path.read_text(encoding="utf-8")
+          tree = ast.parse(text)
+          cls = next(
+              node for node in tree.body
+              if isinstance(node, ast.ClassDef) and node.name == "SettingsDialog"
+          )
+          assignments = []
+          for node in cls.body:
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                  break
+              if isinstance(node, ast.Assign):
+                  assert len(node.targets) == 1 and isinstance(node.targets[0], ast.Name), ast.dump(node)
+                  name = node.targets[0].id
+                  refs = sorted({
+                      child.id for child in ast.walk(node.value)
+                      if isinstance(child, ast.Name)
+                  } - {"str", "int", "float", "bool", "tuple", "list", "dict", "set"})
+                  assignments.append((name, refs, node.lineno, node.end_lineno))
+              elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                  continue
+              else:
+                  raise AssertionError(f"unexpected pre-method node: {ast.dump(node)}")
+
+          print(f"COUNT={len(assignments)}")
+          for name, refs, start, end in assignments:
+              print(f"{name}\tlines={start}-{end}\trefs={','.join(refs) or '-'}")
+          external = sorted({ref for _name, refs, _s, _e in assignments for ref in refs})
+          print("EXTERNAL=" + (",".join(external) or "-"))
