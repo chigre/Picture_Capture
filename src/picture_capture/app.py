@@ -62,7 +62,9 @@ from .ui.settings import lifecycle as _settings_lifecycle_ui
 from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
-from .ui.controllers import PageController
+from .ui.controllers import (
+    PageController, SESSION_STATE_FILENAME, SessionController,
+)
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
     _wrap_mixed_ui_text,
@@ -196,7 +198,6 @@ LENS_MODE_LABELS = {
 LENS_MODE_VALUES = {label: value for value, label in LENS_MODE_LABELS.items()}
 APPEARANCE_MODE_LABELS = {"light": "浅色", "dark": "深色", "system": "跟随系统"}
 APPEARANCE_MODE_VALUES = {label: value for value, label in APPEARANCE_MODE_LABELS.items()}
-SESSION_STATE_FILENAME = "session_state.json"
 
 # ISO 639-1 codes for project metadata. Common dictionary languages are kept at
 # the front of the readonly selectors; the rest remain alphabetized.
@@ -7478,6 +7479,7 @@ class PictureCaptureApp(tk.Tk):
         self._ui_worker_shutdown = False
         self._ui_close_requested = False
         self._pending_page_index: int | None = None
+        self.session_controller = SessionController(self)
         self._session_path = self._default_session_state_path()
         self._last_session = self._read_session_state()
         requested_appearance = normalize_appearance_preference(
@@ -8294,71 +8296,16 @@ class PictureCaptureApp(tk.Tk):
 
     @staticmethod
     def _default_session_state_path() -> Path:
-        return user_config_root() / SESSION_STATE_FILENAME
+        return SessionController.default_state_path()
 
     def _read_session_state(self) -> dict:
-        candidates = (self._session_path, *legacy_user_config_files(SESSION_STATE_FILENAME))
-        for candidate in candidates:
-            try:
-                if candidate.exists():
-                    raw = json.loads(candidate.read_text(encoding="utf-8"))
-                    if isinstance(raw, dict):
-                        return raw
-            except (OSError, ValueError, TypeError):
-                continue
-        return {}
+        return self.session_controller.read_state()
 
     def _save_session_state(self) -> None:
-        try:
-            self._session_path.parent.mkdir(parents=True, exist_ok=True)
-            state = {
-                "last_project": str(self.project.root) if self.project else "",
-                "last_page": self.current_page.name if self.current_page else "",
-                "last_page_index": self.current_index,
-                "image_suffix": self.settings.image_suffix,
-                "page_range": self.page_range_var.get() if hasattr(self, "page_range_var") else "current",
-                "page_range_spec": self.page_range_spec_var.get() if hasattr(self, "page_range_spec_var") else "",
-                "view_zoom_percent": round(self.view_scale * 100),
-                "appearance_mode": self.appearance_preference,
-                "section_expanded": dict(self.section_expanded),
-            }
-            tmp = self._session_path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-            tmp.replace(self._session_path)
-            self._last_session = state
-        except OSError:
-            # Session restoration is a convenience feature; never block editing
-            # because a locked-down Windows profile cannot persist it.
-            pass
+        self.session_controller.save_state()
 
     def restore_last_session(self) -> None:
-        state = self._last_session or {}
-        root_text = str(state.get("last_project") or "").strip()
-        if not root_text:
-            return
-        root = Path(root_text).expanduser()
-        if not root.is_dir():
-            self.status_var.set(f"上次项目不可用：{root}")
-            return
-        if state.get("page_range") in {"current", "to_end", "specified"}:
-            self.page_range_var.set(str(state.get("page_range")))
-        self.page_range_spec_var.set(str(state.get("page_range_spec") or ""))
-        try:
-            zoom_value = state.get("view_zoom_percent")
-            try:
-                target_view_scale = min(3.0, max(0.08, float(zoom_value) / 100.0)) if zoom_value is not None else None
-            except (TypeError, ValueError):
-                target_view_scale = None
-            self.status_var.set(f"正在后台恢复上次项目：{root}")
-            self._load_project(
-                root,
-                requested_suffix=str(state.get("image_suffix") or "").strip() or None,
-                target_page=str(state.get("last_page") or "").strip() or None,
-                target_index=state.get("last_page_index"),
-                target_view_scale=target_view_scale,
-            )
-        except Exception as exc:
-            self.status_var.set(f"无法恢复上次项目：{exc}")
+        self.session_controller.restore_last_session()
 
     def on_close(self) -> None:
         if getattr(self, "_batch_active", False):

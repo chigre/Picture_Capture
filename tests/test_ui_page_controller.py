@@ -109,7 +109,8 @@ def test_page_controller_wiring_keeps_picture_capture_app_compatibility_methods(
         ROOT / "src" / "picture_capture" / "ui" / "controllers" / "page.py"
     ).read_text(encoding="utf-8")
 
-    assert "from .ui.controllers import PageController" in app
+    imports = app[:app.index("class PictureCaptureApp")]
+    assert "PageController" in imports
     assert "self.page_controller = PageController(self)" in app
     assert app.index("self.page_controller = PageController(self)") < app.index("self._build_ui()")
 
