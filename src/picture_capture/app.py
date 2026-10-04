@@ -63,8 +63,8 @@ from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.controllers import (
-    CanvasController, PageController, ProjectController, ReviewController,
-    SESSION_STATE_FILENAME, SessionController,
+    CanvasController, DetectionController, PageController, ProjectController,
+    ReviewController, SESSION_STATE_FILENAME, SessionController,
 )
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
@@ -7513,6 +7513,7 @@ class PictureCaptureApp(tk.Tk):
         self.section_title_font.configure(weight="bold")
         self._configure_main_workspace_styles()
         self.canvas_controller = CanvasController(self)
+        self.detection_controller = DetectionController(self)
         self.project_controller = ProjectController(self)
         self.page_controller = PageController(self)
         self.review_controller = ReviewController(self)
@@ -16515,11 +16516,16 @@ class PictureCaptureApp(tk.Tk):
             refresh_page_quality=settings.detection_method in {"paddleocr", "combined"},
         )
 
+    def _detection_controller_for_call(self) -> DetectionController:
+        controller = self.__dict__.get("detection_controller")
+        if controller is None:
+            controller = DetectionController(self)
+            self.__dict__["detection_controller"] = controller
+        return controller
+
     def paddle_detect_current(self, force_refresh: bool = False) -> None:
-        self.settings.detection_method = "paddleocr"
-        self.sync_quick_settings()
-        self.save_settings()
-        self.auto_detect_current(force_paddle_refresh=force_refresh)
+        self._detection_controller_for_call().paddle_detect_current(force_refresh)
+
 
     def refine_lines_selected_scope(self) -> None:
         """Re-run only Y refinement for existing PDIC markers in the selected range.
@@ -16743,24 +16749,12 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def run_combined_draw_action(self) -> None:
-        if not self.guard() or not self.apply_quick_settings(show_status=False): return
-        try: indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc); return
-        self.settings.detection_method = "combined"; self.save_settings()
-        self._detect_pages(
-            indices,
-            method="combined",
-            force_refresh=self.ocr_refresh_var.get() == "force",
-        )
+        self._detection_controller_for_call().run_combined_draw_action()
+
 
     def run_ocr_draw_action(self) -> None:
-        if not self.guard() or not self.apply_quick_settings(show_status=False): return
-        try: indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc); return
-        self.settings.detection_method = "paddleocr"; self.save_settings()
-        self._detect_pages(indices, method="paddleocr", force_refresh=self.ocr_refresh_var.get() == "force")
+        self._detection_controller_for_call().run_ocr_draw_action()
+
 
     def run_normal_draw_action(self) -> None:
         if not self.guard() or not self.apply_quick_settings(show_status=False): return
@@ -16771,10 +16765,8 @@ class PictureCaptureApp(tk.Tk):
         self._detect_pages(indices, method="left_edge", force_refresh=False)
 
     def run_ocr_draw(self, scope: str, force_refresh: bool) -> None:
-        if not self.guard() or not self.apply_quick_settings(show_status=False): return
-        self.settings.detection_method = "paddleocr"
-        indices = [self.current_index] if scope == "current" else list(range(len(self.project.images)))
-        self._detect_pages(indices, method="paddleocr", force_refresh=force_refresh)
+        self._detection_controller_for_call().run_ocr_draw(scope, force_refresh)
+
 
     def _detect_pages(self, indices: list[int], *, method: str, force_refresh: bool) -> None:
         if not self.project or not indices:
