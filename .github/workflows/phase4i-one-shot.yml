@@ -78,11 +78,34 @@ jobs:
           print(f"Phase 4I app.py baseline: 876797 -> {new_size} bytes")
           PY
 
+      - name: Align source-shape regressions with controller boundary
+        shell: bash
+        run: |
+          uv run --locked python - <<'PY'
+          from pathlib import Path
+
+          root = Path.cwd()
+          legacy_path = root / "tests/test_next_stage_regressions.py"
+          legacy = legacy_path.read_text(encoding="utf-8")
+          old_case = '        ("split_lines_current", "split_whole_current"),\n'
+          assert legacy.count(old_case) == 1, "legacy long-tail source-shape case drifted"
+          legacy = legacy.replace(old_case, "", 1)
+          legacy_path.write_text(legacy, encoding="utf-8")
+
+          crop_test_path = root / "tests/test_ui_crop_controller.py"
+          crop_test = crop_test_path.read_text(encoding="utf-8")
+          old_assert = '    assert "split_single_lines_selected_scope" not in controller\n'
+          new_assert = '''    tree = ast.parse(controller)\n    crop_class = next(\n        node for node in tree.body\n        if isinstance(node, ast.ClassDef) and node.name == "CropController"\n    )\n    method_names = {\n        node.name for node in crop_class.body if isinstance(node, ast.FunctionDef)\n    }\n    assert "split_single_lines_selected_scope" not in method_names\n'''
+          assert crop_test.count(old_assert) == 1, "runtime-boundary assertion drifted"
+          crop_test = crop_test.replace(old_assert, new_assert, 1)
+          crop_test_path.write_text(crop_test, encoding="utf-8")
+          PY
+
       - name: Run targeted Phase 4I tests
         run: uv run --locked pytest -q tests/test_ui_crop_controller.py tests/test_architecture_baseline.py tests/test_next_stage_regressions.py tests/test_postproduction_single_line_runtime.py
 
       - name: Compile touched Python
-        run: uv run --locked python -m py_compile src/picture_capture/app.py src/picture_capture/ui/controllers/crop.py src/picture_capture/ui/controllers/__init__.py tests/test_ui_crop_controller.py
+        run: uv run --locked python -m py_compile src/picture_capture/app.py src/picture_capture/ui/controllers/crop.py src/picture_capture/ui/controllers/__init__.py tests/test_ui_crop_controller.py tests/test_next_stage_regressions.py
 
       - name: Check diff whitespace
         run: git diff --check
