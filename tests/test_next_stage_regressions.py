@@ -1086,13 +1086,16 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     assert 'text="环境中心"' in settings
 
     review_start = source.index("class ReviewWindow")
-    review_end = source.index("class OCRConflictReviewDialog", review_start)
+    review_end = source.index("class CropSettingsDialog", review_start)
     review = source[review_start:review_end]
     assert '_build_modern_dialog_heading(' not in review
 
-    conflict_start = source.index("class OCRConflictReviewDialog")
-    conflict_end = source.index("class CropSettingsDialog", conflict_start)
-    conflict = source[conflict_start:conflict_end]
+    conflict_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "dialogs" / "ocr_conflict.py"
+    ).read_text(encoding="utf-8")
+    conflict_start = conflict_source.index("class OCRConflictReviewDialog")
+    conflict = conflict_source[conflict_start:]
     assert '"OCR 词头冲突复核"' in conflict
     assert 'text="所选候选"' in conflict
     assert 'text="关闭"' in conflict
