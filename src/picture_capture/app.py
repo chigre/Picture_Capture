@@ -56,6 +56,7 @@ from .ui_compat import (
 from .ui.widgets.vertical_word import VerticalWordText
 from .ui.settings import schema as _settings_schema
 from .ui.settings import help as _settings_help_ui
+from .ui.settings import profile as _settings_profile_ui
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
     _wrap_mixed_ui_text,
@@ -2796,191 +2797,63 @@ class SettingsDialog(tk.Toplevel):
         self.after_idle(self._refresh_profile_status)
 
     def _build_profile_choice_labels(self) -> dict[str, str]:
-        """Return numbered Profile labels, always keeping custom as the last item."""
-        profiles = list(available_dictionary_profiles())
-        profiles.sort(key=lambda profile: profile.key == "custom")
-        custom_name = (
-            str(self.custom_profile_name_var.get()).strip()
-            if hasattr(self, "custom_profile_name_var") else ""
-        )
-        labels: dict[str, str] = {}
-        for index, profile in enumerate(profiles, start=1):
-            display_name = profile.display_name
-            if profile.key == "custom" and custom_name:
-                display_name = f"{custom_name}（自定义）"
-            labels[f"{index}. {display_name}"] = profile.key
-        return labels
+        return _settings_profile_ui.build_profile_choice_labels(self)
 
     def _profile_label_for_key(self, key: str) -> str:
-        for label, value in self._profile_label_to_key.items():
-            if value == key:
-                return label
-        # Compatibility aliases use the display name of their visible base
-        # profile; map them back to that numbered visible choice.
-        try:
-            wanted_name = dictionary_profile_preset(key).display_name
-        except Exception:
-            wanted_name = ""
-        for label, value in self._profile_label_to_key.items():
-            try:
-                if dictionary_profile_preset(value).display_name == wanted_name:
-                    return label
-            except Exception:
-                continue
-        return next(iter(self._profile_label_to_key), "")
+        return _settings_profile_ui.profile_label_for_key(self, key)
 
     def _profile_display_name(self, key: str) -> str:
-        if key == "custom":
-            custom_name = str(self.custom_profile_name_var.get()).strip()
-            if custom_name:
-                return f"{custom_name}（自定义）"
-        return dictionary_profile_preset(key).display_name
+        return _settings_profile_ui.profile_display_name(self, key)
 
     def _sync_custom_profile_name_state(self) -> None:
-        if not hasattr(self, "custom_profile_name_entry"):
-            return
-        state = "normal" if self._current_profile_key() == "custom" else "disabled"
-        self.custom_profile_name_entry.configure(state=state)
+        _settings_profile_ui.sync_custom_profile_name_state(self)
 
     def _on_custom_profile_name_changed(self) -> None:
-        if not hasattr(self, "profile_combo"):
-            return
-        current_key = self._current_profile_key()
-        self._profile_label_to_key = self._build_profile_choice_labels()
-        self.profile_combo.configure(values=tuple(self._profile_label_to_key.keys()))
-        self.profile_choice_var.set(self._profile_label_for_key(current_key))
-        self._sync_custom_profile_name_state()
-        self._refresh_profile_summary()
-        self._refresh_profile_status()
+        _settings_profile_ui.on_custom_profile_name_changed(self)
 
     def _current_profile_key(self) -> str:
-        if hasattr(self, "profile_choice_var"):
-            return self._profile_label_to_key.get(
-                self.profile_choice_var.get(), self._active_profile_key or DEFAULT_PROFILE_ID
-            )
-        return str(self._active_profile_key or self.parent.settings.dictionary_profile_id or DEFAULT_PROFILE_ID)
+        return _settings_profile_ui.current_profile_key(self)
 
     def _refresh_profile_summary(self) -> None:
-        profile = dictionary_profile_preset(self._current_profile_key())
-        self.profile_description_var.set(profile.description)
-        try:
-            columns = max(1, int(self.vars.get("columns").get())) if self.vars.get("columns") else 1
-        except (TypeError, ValueError, tk.TclError):
-            columns = 1
-        layout = {
-            "writing_mode": str(self.vars.get("layout_writing_mode").get()) if self.vars.get("layout_writing_mode") else "horizontal-tb",
-            "text_direction": str(self.vars.get("layout_text_direction").get()) if self.vars.get("layout_text_direction") else "ltr",
-            "canonical_transform": str(self.vars.get("layout_transform").get()) if self.vars.get("layout_transform") else "identity",
-            "columns": columns,
-            "column_separator": str(self.vars.get("layout_column_separator_mode").get()) if self.vars.get("layout_column_separator_mode") else "auto",
-        }
-        language = str(self.vars.get("ocr_language").get()) if self.vars.get("ocr_language") else ""
-        self.profile_layout_summary_var.set(
-            f"{language} · {self._profile_display_name(profile.key)} · {profile_layout_summary(profile, layout)}"
-        )
-        if profile.examples:
-            names = "；".join(example.dictionary for example in profile.examples)
-            self.profile_examples_var.set(f"经典样例：{names}")
-        else:
-            self.profile_examples_var.set("经典样例：通用兼容型（当前未内置样页）")
+        _settings_profile_ui.refresh_profile_summary(self)
 
     def _coerce_profile_var(self, name: str):
-        var = self.vars.get(name)
-        if var is None:
-            return None
-        value = var.get()
-        if isinstance(var, tk.BooleanVar):
-            return bool(value)
-        cast = self._casts.get(name, str)
-        try:
-            return cast(value)
-        except Exception:
-            return value
+        return _settings_profile_ui.coerce_profile_var(self, name)
 
     def _refresh_profile_status(self) -> None:
-        if not hasattr(self, "profile_status_var"):
-            return
-        key = self._current_profile_key()
-        current_language = str(self.vars.get("ocr_language").get() if self.vars.get("ocr_language") else "")
-        defaults = profile_effective_settings(key, current_language=current_language)
-        changed = []
-        for name, expected in defaults.items():
-            if name not in self.vars:
-                continue
-            if self._coerce_profile_var(name) != expected:
-                changed.append(name)
-        suffix = "（使用预设默认值）" if not changed else f"（项目调整 {len(changed)} 项）"
-        self.profile_status_var.set(f"{self._profile_display_name(key)} {suffix}")
+        _settings_profile_ui.refresh_profile_status(self)
 
-    def _apply_profile_defaults_to_vars(self, key: str, *, keep_supported_language: bool = True) -> None:
-        current_language = ""
-        if keep_supported_language and self.vars.get("ocr_language") is not None:
-            current_language = str(self.vars["ocr_language"].get())
-        defaults = profile_effective_settings(key, current_language=current_language)
-        for name, value in defaults.items():
-            if name not in self.vars:
-                continue
-            self.vars[name].set(value)
-        self._active_profile_key = key
-        self._refresh_profile_summary()
-        self._on_profile_language_changed(update_profile_paddle=False)
-        self._refresh_profile_status()
+    def _apply_profile_defaults_to_vars(
+        self,
+        key: str,
+        *,
+        keep_supported_language: bool = True,
+    ) -> None:
+        _settings_profile_ui.apply_profile_defaults_to_vars(
+            self,
+            key,
+            keep_supported_language=keep_supported_language,
+        )
 
     def _on_profile_selected(self, _event=None) -> None:
-        key = self._current_profile_key()
-        self._profile_selection_changed = True
-        self._sync_custom_profile_name_state()
-        self._apply_profile_defaults_to_vars(key, keep_supported_language=True)
+        _settings_profile_ui.on_profile_selected(self, _event)
 
     def restore_profile_defaults(self) -> None:
-        self._apply_profile_defaults_to_vars(self._current_profile_key(), keep_supported_language=True)
+        _settings_profile_ui.restore_profile_defaults(self)
 
     def _on_profile_language_changed(self, update_profile_paddle: bool = True) -> None:
-        key = self._current_profile_key()
-        profile = dictionary_profile_preset(key)
-        language = str(self.vars.get("ocr_language").get() if self.vars.get("ocr_language") else "")
-        base = next((part.strip() for part in language.split("+") if part.strip()), "")
-        if update_profile_paddle and self.vars.get("paddle_language") is not None:
-            recommended = profile.paddle_language_by_language.get(base)
-            if recommended:
-                self.vars["paddle_language"].set(recommended)
-        writing = str(self.vars.get("layout_writing_mode").get()) if self.vars.get("layout_writing_mode") else "horizontal-tb"
-        for name, value in language_effective_settings(language, writing).items():
-            if name in self.vars and (update_profile_paddle or name != "paddle_language"):
-                self.vars[name].set(value)
-        self._refresh_sort_choices()
-        self._refresh_profile_summary()
-        self._refresh_profile_status()
+        _settings_profile_ui.on_profile_language_changed(
+            self, update_profile_paddle=update_profile_paddle
+        )
 
     def _sync_layout_semantics(self) -> None:
-        writing = str(self.vars["layout_writing_mode"].get())
-        direction = str(self.vars["layout_text_direction"].get())
-        transform = "rotate_ccw90" if writing == "vertical-rl" else "rotate_cw90" if writing == "vertical-lr" else "mirror_x" if direction == "rtl" else "identity"
-        self.vars["layout_transform"].set(transform)
-        self._on_profile_language_changed()
+        _settings_profile_ui.sync_layout_semantics(self)
 
     def _refresh_sort_choices(self, initial: bool = False) -> None:
-        if not hasattr(self, "sort_combo"):
-            return
-        language = str(self.vars.get("ocr_language").get() if self.vars.get("ocr_language") else self.parent.settings.ocr_language).strip() or "eng"
-        self.sort_language_var.set(language)
-        mapping = available_profile_labels(language)
-        self._sort_label_to_value = mapping
-        self.sort_combo.configure(values=tuple(mapping.keys()))
-        current_key = getattr(self.parent.settings, "headword_sort_mode", "auto") if initial else mapping.get(self.sort_mode_var.get(), "auto")
-        # Preserve a currently selected key only if it belongs to the new language-specific menu.
-        valid_values = set(mapping.values())
-        if current_key not in valid_values:
-            current_key = "auto"
-        label = next((label for label, value in mapping.items() if value == current_key), next(iter(mapping)))
-        self.sort_mode_var.set(label)
-        self._toggle_custom_sort_state()
+        _settings_profile_ui.refresh_sort_choices(self, initial=initial)
 
     def _toggle_custom_sort_state(self) -> None:
-        key = self._sort_label_to_value.get(self.sort_mode_var.get(), "auto")
-        state = "normal" if key == "custom" else "disabled"
-        self.custom_order_entry.configure(state=state)
-        self.custom_fold_check.configure(state=state)
+        _settings_profile_ui.toggle_custom_sort_state(self)
 
     def _browse_wordslist_setting(self, var: tk.StringVar) -> None:
         initialdir = str(self.parent.project.root) if self.parent.project else None
