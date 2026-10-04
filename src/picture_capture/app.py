@@ -17235,20 +17235,7 @@ class PictureCaptureApp(tk.Tk):
         self._illustration_controller_for_call().detect_illustrations_selected_scope()
 
     def split_illustrations_selected_scope(self) -> None:
-        """Export PPP illustrations immediately using the shared 切图设置 snapshot."""
-        if self._batch_active:
-            self.status_var.set("已有批量任务正在运行，请结束后再执行插图切图。")
-            return
-        if not self.project or not self.current_page or self.image is None:
-            messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=self)
-            return
-        try: indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc); return
-        if not indices: return
-        self._sync_polygon_label_texts()
-        write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
-        self._start_illustration_crop(indices, self._load_crop_settings())
+        self._illustration_controller_for_call().split_illustrations_selected_scope()
 
     def _start_illustration_crop(self, indices: list[int], config: dict) -> None:
         """Start PPP illustration export from the shared crop-settings snapshot."""

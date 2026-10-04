@@ -2,11 +2,11 @@ from __future__ import annotations
 
 """User-action orchestration for illustration detection workflows.
 
-Phase 4M intentionally moves only the stable selected-scope illustration
-*detection* entry seam. Illustration export/cropping remains in
-``PictureCaptureApp`` for a later independent unit, while the detection
-algorithm remains in ``processing`` and project path policy remains exposed
-through the existing app compatibility boundary.
+Phase 4M moved the stable selected-scope illustration detection entry seam.
+Phase 4N also moves the stable illustration-crop action entry while retaining
+the actual crop runner on ``PictureCaptureApp``. Detection/crop algorithms
+remain outside this controller, and project path policy stays exposed through
+the existing app compatibility boundary.
 """
 
 from dataclasses import replace
@@ -22,6 +22,34 @@ class IllustrationController:
 
     def __init__(self, app: Any) -> None:
         self.app = app
+
+    def split_illustrations_selected_scope(self) -> None:
+        app = self.app
+        if app._batch_active:
+            app.status_var.set("已有批量任务正在运行，请结束后再执行插图切图。")
+            return
+        if not app.project or not app.current_page or app.image is None:
+            messagebox.showinfo(
+                "尚未打开",
+                "请先打开包含扫描图片的项目目录。",
+                parent=app,
+            )
+            return
+        try:
+            indices = app.selected_page_indices()
+        except Exception as exc:
+            app.show_error("页面范围无效", exc)
+            return
+        if not indices:
+            return
+
+        app._sync_polygon_label_texts()
+        write_ppp(
+            app._ppp_write_path(app.current_page),
+            app.polygons,
+            app.current_page.stem,
+        )
+        app._start_illustration_crop(indices, app._load_crop_settings())
 
     def detect_illustrations_selected_scope(self) -> None:
         app = self.app

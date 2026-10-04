@@ -331,7 +331,8 @@ def test_illustration_controller_wiring_preserves_app_compatibility_method() -> 
     assert '"IllustrationController"' in controllers
 
 
-def test_phase4m_leaves_illustration_export_and_runtime_paths_in_app() -> None:
+
+def test_phase4n_moves_only_illustration_crop_entry_and_preserves_runtime_boundary() -> None:
     app = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
     controller = (
         ROOT / "src/picture_capture/ui/controllers/illustration.py"
@@ -341,8 +342,11 @@ def test_phase4m_leaves_illustration_export_and_runtime_paths_in_app() -> None:
     ).read_text(encoding="utf-8")
 
     assert "def split_illustrations_selected_scope(self)" in app
+    assert "self._illustration_controller_for_call().split_illustrations_selected_scope()" in app
     assert "def _start_illustration_crop(self, indices: list[int], config: dict)" in app
-    assert "split_illustrations_selected_scope" not in controller
-    assert "_start_illustration_crop" not in controller
+    assert "def split_illustrations_selected_scope(self)" in controller
+    assert "def _start_illustration_crop" not in controller
+    assert "split_illustrations_job" not in controller
     assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" in runtime
     assert "detect_illustrations_selected_scope" not in runtime
+    assert "split_illustrations_selected_scope" not in runtime
