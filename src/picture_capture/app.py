@@ -63,8 +63,8 @@ from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.controllers import (
-    CanvasController, DetectionController, PageController, ProjectController,
-    ReviewController, SESSION_STATE_FILENAME, SessionController,
+    CanvasController, DetectionController, ExportController, PageController,
+    ProjectController, ReviewController, SESSION_STATE_FILENAME, SessionController,
 )
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
@@ -7514,6 +7514,7 @@ class PictureCaptureApp(tk.Tk):
         self._configure_main_workspace_styles()
         self.canvas_controller = CanvasController(self)
         self.detection_controller = DetectionController(self)
+        self.export_controller = ExportController(self)
         self.project_controller = ProjectController(self)
         self.page_controller = PageController(self)
         self.review_controller = ReviewController(self)
@@ -17159,21 +17160,18 @@ class PictureCaptureApp(tk.Tk):
             item_label=lambda _item: page.name,
         )
 
+    def _export_controller_for_call(self) -> ExportController:
+        controller = self.__dict__.get("export_controller")
+        if controller is None:
+            controller = ExportController(self)
+            self.__dict__["export_controller"] = controller
+        return controller
+
     def export_text(self) -> None:
-        if not self.guard(): return
-        export_ocred(qt_root(self.project.root) / f"{self.current_page.stem}.OCRed",
-                     [e.word for e in self._ordered_entries_reading_order()])
-        self.status_var.set("当前文本已导出")
+        self._export_controller_for_call().export_text()
 
     def import_text(self) -> None:
-        if not self.guard(): return
-        path = qt_root(self.project.root) / f"{self.current_page.stem}.OCRed"
-        try:
-            texts = import_ocred(path)
-            if len(texts) != len(self.entries): raise ValueError(f"文本 {len(texts)} 行，画线 {len(self.entries)} 条，数量不一致")
-            for entry, text in zip(self._ordered_entries_reading_order(), texts): entry.word = text
-            self.redraw(); self.status_var.set("当前文本已导入")
-        except Exception as exc: self.show_error("导入失败", exc)
+        self._export_controller_for_call().import_text()
 
     def split_lines_current(self) -> None:
         """Backward-compatible single-line crop export routed off the Tk thread."""
