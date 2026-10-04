@@ -4439,14 +4439,17 @@ def test_v2101_auto_illustration_detection_writes_ppp_and_preserves_manual(tmp_p
 
 def test_v2101_illustration_detection_button_uses_selected_scope_and_auto_ppp():
     from pathlib import Path
-    text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    assert '("插图识别", self.detect_illustrations_selected_scope)' in text
-    start = text.index("    def detect_illustrations_selected_scope(")
-    end = text.index("    def split_illustrations_selected_scope(", start)
-    block = text[start:end]
-    assert "selected_page_indices()" in block
-    assert "人工绘制的 PPP 多边形会保留" in block
-    assert "foreground_page_edit=True" in block
+    root = Path(__file__).parents[1]
+    app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    controller = (root / "src" / "picture_capture" / "ui" / "controllers" / "illustration.py").read_text(encoding="utf-8")
+    assert '("插图识别", self.detect_illustrations_selected_scope)' in app
+    start = app.index("    def detect_illustrations_selected_scope(")
+    end = app.index("    def split_illustrations_selected_scope(", start)
+    wrapper = app[start:end]
+    assert "self._illustration_controller_for_call().detect_illustrations_selected_scope()" in wrapper
+    assert "selected_page_indices()" in controller
+    assert "人工绘制的 PPP 多边形会保留" in controller
+    assert "foreground_page_edit=True" in controller
 
 
 def test_v2102_wordslist_path_default_and_project_relative_load(tmp_path):
