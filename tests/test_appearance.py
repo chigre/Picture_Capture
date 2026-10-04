@@ -141,6 +141,9 @@ def test_native_titlebar_helper_is_safe_off_windows(monkeypatch) -> None:
 
 def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> None:
     app_source = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
+    session_source = (
+        ROOT / "src/picture_capture/ui/controllers/session.py"
+    ).read_text(encoding="utf-8")
     settings_help_source = (
         ROOT / "src/picture_capture/ui/settings/help.py"
     ).read_text(encoding="utf-8")
@@ -149,7 +152,7 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     ).read_text(encoding="utf-8")
     profile_source = (ROOT / "src/picture_capture/profile_setup.py").read_text(encoding="utf-8")
 
-    assert '"appearance_mode": self.appearance_preference' in app_source
+    assert '"appearance_mode": app.appearance_preference' in session_source
     assert '"system": "跟随系统"' in app_source
     assert "def _poll_system_appearance(" in app_source
     assert '"system-appearance-detect"' in app_source
