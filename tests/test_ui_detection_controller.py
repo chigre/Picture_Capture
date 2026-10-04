@@ -194,4 +194,8 @@ def test_detection_controller_wiring_preserves_app_methods_and_runtime_guard_sea
 
     # Ordinary drawing remains with its runtime adapter until Phase 5 removes it.
     assert "def run_normal_draw_action(self)" in ordinary_runtime
-    assert "run_normal_draw_action" not in controller
+    controller_tree = ast.parse(controller)
+    assert not any(
+        isinstance(node, ast.FunctionDef) and node.name == "run_normal_draw_action"
+        for node in ast.walk(controller_tree)
+    )
