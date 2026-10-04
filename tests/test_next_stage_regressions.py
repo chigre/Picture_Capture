@@ -1094,7 +1094,7 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "dialogs" / "ocr_conflict.py"
     ).read_text(encoding="utf-8")
-    conflict_start = conflict_source.index("class OCRConflictReviewDialog")
+    conflict_start = conflict_source.index("class CropSettingsDialog")
     conflict = conflict_source[conflict_start:]
     assert '"OCR 词头冲突复核"' in conflict
     assert 'text="所选候选"' in conflict
@@ -4057,7 +4057,7 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     assert "statistics.fmean(" not in ui_finalized
 
     review_start = app_text.index("class ReviewWindow")
-    review_end = app_text.index("class OCRConflictReviewDialog", review_start)
+    review_end = app_text.index("class CropSettingsDialog", review_start)
     review = app_text[review_start:review_end]
     request_start = review.index("    def _request_render_rows(")
     render_start = review.index("    def render_rows(", request_start)
@@ -4123,7 +4123,7 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
     assert "self.parent._request_wordslist_reload(persist=False, redraw=False)" in settings
 
     review_start = text.index("class ReviewWindow")
-    review_end = text.index("class OCRConflictReviewDialog", review_start)
+    review_end = text.index("class CropSettingsDialog", review_start)
     review = text[review_start:review_end]
     assert "self.parent._request_wordslist_reload(" in review
     assert "reload_wordslist_reference(Path(chosen)" not in review
@@ -4284,7 +4284,7 @@ def test_focused_filter_streams_complete_batches_and_prefetches_next_batch():
     root = Path(__file__).resolve().parents[1]
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     review_start = app.index("class ReviewWindow")
-    review_end = app.index("class OCRConflictReviewDialog", review_start)
+    review_end = app.index("class CropSettingsDialog", review_start)
     review = app[review_start:review_end]
 
     focused_start = review.index("    def run_focused_filter(")
