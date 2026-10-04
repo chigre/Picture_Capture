@@ -1445,16 +1445,19 @@ def test_mixed_ui_wrap_measures_tokens_incrementally_not_growing_prefixes():
 
 
 def test_usage_guide_is_modern_task_oriented_and_centered():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1]
+    app_source = root / "src" / "picture_capture" / "app.py"
+    guide_source = root / "src" / "picture_capture" / "ui" / "dialogs" / "usage_guide.py"
+    text = app_source.read_text(encoding="utf-8")
+    guide_text = guide_source.read_text(encoding="utf-8")
 
-    guide_start = text.index("class UsageGuideWindow(tk.Toplevel):")
-    guide_end = text.index("class SettingsDialog(tk.Toplevel):", guide_start)
-    guide = text[guide_start:guide_end]
+    guide_start = guide_text.index("class UsageGuideWindow(tk.Toplevel):")
+    guide_end = len(guide_text)
+    guide = guide_text[guide_start:guide_end]
 
     assert '"快速开始"' in guide
     assert 'self.title("Picture Capture · 帮助中心")' in guide
-    assert "work_x, work_y, work_w, work_h = _screen_work_area(self)" in guide
+    assert "work_x, work_y, work_w, work_h = screen_work_area(self)" in guide
     assert "x = work_x + max(0, (work_w - width) // 2)" in guide
     assert "y = work_y + max(0, (work_h - height) // 2)" in guide
     assert 'self.geometry(f"{width}x{height}+{x}+{y}")' in guide
