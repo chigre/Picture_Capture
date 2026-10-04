@@ -59,6 +59,7 @@ from .ui.text_wrap import (
     _wrap_mixed_ui_text,
 )
 from .ui.dialogs.usage_guide import UsageGuideWindow
+from .ui.dialogs.common import _build_modern_dialog_heading
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
 from .layout_transform import LayoutTransform
 from .coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
@@ -1232,37 +1233,6 @@ def _compare_page_word_mappings(
             if kind in {"新增", "删除", "修改"}:
                 counts[kind] += 1
     return changes, counts
-
-
-def _build_modern_dialog_heading(
-    parent: tk.Misc, title: str, subtitle: str,
-) -> ttk.Frame:
-    """Shared heading block for secondary work windows."""
-    block = ttk.Frame(parent)
-    block.pack(fill="x", pady=(0, 12))
-    base = font.nametofont("TkDefaultFont").copy()
-    heading_font = base.copy()
-    heading_font.configure(
-        size=max(13, abs(int(base.cget("size"))) + 4),
-        weight="bold",
-    )
-    ttk.Label(block, text=title, font=heading_font).pack(anchor="w")
-    subtitle_label = ttk.Label(
-        block,
-        text=subtitle,
-        foreground="#666666",
-        justify="left",
-    )
-    subtitle_label.pack(anchor="w", fill="x", pady=(3, 0))
-
-    def resize_subtitle(event: tk.Event) -> None:
-        try:
-            subtitle_label.configure(wraplength=max(160, int(event.width) - 4))
-        except tk.TclError:
-            pass
-
-    block.bind("<Configure>", resize_subtitle, add="+")
-    return block
 
 
 
