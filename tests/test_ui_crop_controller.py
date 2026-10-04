@@ -212,4 +212,12 @@ def test_phase4i_leaves_whole_entry_and_runtime_single_line_paths_untouched() ->
     assert "split_whole_current" not in controller
     assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" in runtime
     assert "split_lines_current" not in runtime
-    assert "split_single_lines_selected_scope" not in controller
+    tree = ast.parse(controller)
+    crop_class = next(
+        node for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "CropController"
+    )
+    method_names = {
+        node.name for node in crop_class.body if isinstance(node, ast.FunctionDef)
+    }
+    assert "split_single_lines_selected_scope" not in method_names

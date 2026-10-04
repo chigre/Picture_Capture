@@ -63,8 +63,9 @@ from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.controllers import (
-    CanvasController, DetectionController, ExportController, PageController,
-    ProjectController, ReviewController, SESSION_STATE_FILENAME, SessionController,
+    CanvasController, CropController, DetectionController, ExportController,
+    PageController, ProjectController, ReviewController, SESSION_STATE_FILENAME,
+    SessionController,
 )
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
@@ -7513,6 +7514,7 @@ class PictureCaptureApp(tk.Tk):
         self.section_title_font.configure(weight="bold")
         self._configure_main_workspace_styles()
         self.canvas_controller = CanvasController(self)
+        self.crop_controller = CropController(self)
         self.detection_controller = DetectionController(self)
         self.export_controller = ExportController(self)
         self.project_controller = ProjectController(self)
@@ -17173,38 +17175,15 @@ class PictureCaptureApp(tk.Tk):
     def import_text(self) -> None:
         self._export_controller_for_call().import_text()
 
+    def _crop_controller_for_call(self) -> CropController:
+        controller = self.__dict__.get("crop_controller")
+        if controller is None:
+            controller = CropController(self)
+            self.__dict__["crop_controller"] = controller
+        return controller
+
     def split_lines_current(self) -> None:
-        """Backward-compatible single-line crop export routed off the Tk thread."""
-        if self._batch_active:
-            self.status_var.set("已有批量任务正在运行，请结束后再执行单行切图。")
-            return
-        if not self.guard():
-            return
-        if not self._guard_transformed_geometry("单行切图"):
-            return
-        project = self.project
-        page = self.current_page
-        page_index = int(self.current_index)
-        entries = [replace(entry) for entry in self.entries]
-        settings = replace(self.settings)
-        out_dir = qt_root(project.root) / "PSW"
-
-        def worker(_item, _position: int, _total: int):
-            records = split_single_lines(
-                page, entries, settings, out_dir,
-                profile_page_index=page_index,
-            )
-            append_crop_log(project.root, records)
-            return len(records)
-
-        def done(_completed, _total, stopped, results, error):
-            if error is None and not stopped and results:
-                self.status_var.set(f"已导出 {int(results[-1] or 0)} 张词条单行图")
-
-        self._start_batch_task(
-            "当前页单行切图", [page_index], worker, done,
-            item_label=lambda _item: page.name,
-        )
+        self._crop_controller_for_call().split_lines_current()
 
     def split_whole_current(self) -> None:
         """Backward-compatible whole-entry crop export routed off the Tk thread."""
