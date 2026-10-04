@@ -63,7 +63,7 @@ from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.controllers import (
-    PageController, SESSION_STATE_FILENAME, SessionController,
+    CanvasController, PageController, SESSION_STATE_FILENAME, SessionController,
 )
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
@@ -7511,6 +7511,7 @@ class PictureCaptureApp(tk.Tk):
         self.section_title_font = font.nametofont("TkDefaultFont").copy()
         self.section_title_font.configure(weight="bold")
         self._configure_main_workspace_styles()
+        self.canvas_controller = CanvasController(self)
         self.page_controller = PageController(self)
         self._build_ui()
         self.bind_class("Toplevel", "<Map>", self._appearance_toplevel_mapped, add="+")
@@ -14176,66 +14177,32 @@ class PictureCaptureApp(tk.Tk):
             self._display_photo_cache_key = key
         return self.photo
 
+    def _canvas_controller_for_call(self) -> CanvasController:
+        controller = self.__dict__.get("canvas_controller")
+        if controller is None:
+            controller = CanvasController(self)
+            self.__dict__["canvas_controller"] = controller
+        return controller
+
     def _display_mode_from_flags(self) -> str:
-        """Return the compact viewer mode represented by the existing flags."""
-        if self.crop_preview_var.get():
-            return "切图预览"
-        binary = bool(self.binary_preview_var.get())
-        hidden = bool(self.hide_var.get())
-        if hidden:
-            return "仅二值" if binary else "仅原图"
-        return "二值+标注" if binary else "原图+标注"
+        return self._canvas_controller_for_call().display_mode_from_flags()
+
 
     def _sync_display_mode_from_flags(self) -> None:
-        if getattr(self, "_display_mode_syncing", False):
-            return
-        try:
-            self._display_mode_syncing = True
-            self.display_mode_var.set(self._display_mode_from_flags())
-        finally:
-            self._display_mode_syncing = False
+        self._canvas_controller_for_call().sync_display_mode_from_flags()
+
 
     def _apply_display_mode(self, _event=None) -> None:
-        """Apply one of the practical combinations already supported by the viewer."""
-        states = {
-            "原图+标注": (False, False, False),
-            "二值+标注": (True, False, False),
-            "仅原图": (False, True, False),
-            "仅二值": (True, True, False),
-            "切图预览": (False, False, True),
-        }
-        mode = str(self.display_mode_var.get() or "原图+标注")
-        binary, hidden, crop_preview = states.get(mode, states["原图+标注"])
-        previous_binary = bool(self.binary_preview_var.get())
-        try:
-            self._display_mode_syncing = True
-            self.binary_preview_var.set(binary)
-            self.hide_var.set(hidden)
-            self.crop_preview_var.set(crop_preview)
-        finally:
-            self._display_mode_syncing = False
-        if previous_binary != binary:
-            self.photo = None
-            self._display_photo_cache_key = None
-        if crop_preview:
-            self.status_var.set(
-                "切图预览：普通编辑线框已临时隐藏；切回其他显示模式即可恢复编辑。"
-            )
-        self.redraw()
+        self._canvas_controller_for_call().apply_display_mode(_event)
+
 
     def _toggle_binary_preview(self) -> None:
-        """Invalidate only the canvas bitmap; source/OCR geometry stays intact."""
-        self.photo = None
-        self._display_photo_cache_key = None
-        self._sync_display_mode_from_flags()
-        self.redraw()
+        self._canvas_controller_for_call().toggle_binary_preview()
+
 
     def _toggle_hide_overlays(self) -> None:
-        """Keep the legacy overlay switch and the page-toolbar mode selector aligned."""
-        if self.hide_var.get() and self.crop_preview_var.get():
-            self.crop_preview_var.set(False)
-        self._sync_display_mode_from_flags()
-        self.redraw()
+        self._canvas_controller_for_call().toggle_hide_overlays()
+
 
     def _current_effective_profile_settings(self) -> AppSettings:
         """Resolve the current page's Project Profile template without mutating project settings."""
@@ -14673,20 +14640,8 @@ class PictureCaptureApp(tk.Tk):
             self._set_idle_cursor_status()
 
     def _toggle_crop_preview(self) -> None:
-        """Switch between the editable overlays and the complete crop-plan preview."""
-        if self.crop_preview_var.get():
-            # Crop-plan preview is a distinct mode; keep it on the original page
-            # background and ignore the ordinary overlay-hiding state.
-            if self.binary_preview_var.get():
-                self.binary_preview_var.set(False)
-                self.photo = None
-                self._display_photo_cache_key = None
-            self.hide_var.set(False)
-            self.status_var.set(
-                "切图预览：普通编辑线框已临时隐藏；关闭预览即可恢复编辑。"
-            )
-        self._sync_display_mode_from_flags()
-        self.redraw()
+        self._canvas_controller_for_call().toggle_crop_preview()
+
 
     def _current_page_crop_plan(self):
         if self.image is None or self.current_page is None:
@@ -15129,76 +15084,44 @@ class PictureCaptureApp(tk.Tk):
         self._apply_current_appearance(self.canvas)
 
     def _update_view_zoom_label(self) -> None:
-        if hasattr(self, "view_zoom_var"):
-            self.view_zoom_var.set(f"{round(self.view_scale * 100):d}%")
+        self._canvas_controller_for_call().update_view_zoom_label()
+
 
     def zoom(self, factor: float) -> None:
-        if self.image:
-            self.view_scale = min(3.0, max(0.08, self.view_scale * factor))
-            self._update_view_zoom_label()
-            self.redraw()
-            self._set_idle_cursor_status()
+        self._canvas_controller_for_call().zoom(factor)
+
 
     def apply_view_zoom_text(self, _event=None) -> None:
-        if not self.image:
-            return
-        try:
-            percent = float(self.view_zoom_var.get().strip().rstrip("%"))
-        except ValueError:
-            self._update_view_zoom_label()
-            return
-        self.view_scale = min(3.0, max(0.08, percent / 100.0))
-        self._update_view_zoom_label()
-        self.redraw()
-        self._set_idle_cursor_status()
+        self._canvas_controller_for_call().apply_view_zoom_text(_event)
+
 
     def fit_page_width(self) -> None:
-        if not self.image:
-            return
-        self.update_idletasks()
-        available = max(120, self.canvas.winfo_width() - 24)
-        self.view_scale = min(3.0, max(0.08, available / self.image.width))
-        self._update_view_zoom_label()
-        self.redraw()
-        self._set_idle_cursor_status()
-        self.canvas.xview_moveto(0.0)
+        self._canvas_controller_for_call().fit_page_width()
+
 
     def fit_page_height(self) -> None:
-        if not self.image:
-            return
-        self.update_idletasks()
-        available = max(120, self.canvas.winfo_height() - 24)
-        self.view_scale = min(3.0, max(0.08, available / self.image.height))
-        self._update_view_zoom_label()
-        self.redraw()
-        self._set_idle_cursor_status()
-        self.canvas.yview_moveto(0.0)
+        self._canvas_controller_for_call().fit_page_height()
+
 
     def canvas_mousewheel(self, event: tk.Event) -> str:
-        step = -1 if event.delta > 0 else 1
-        self.canvas.yview_scroll(step * 3, "units")
-        return "break"
+        return self._canvas_controller_for_call().canvas_mousewheel(event)
+
 
     def canvas_shift_mousewheel(self, event: tk.Event) -> str:
-        step = -1 if event.delta > 0 else 1
-        self.canvas.xview_scroll(step * 3, "units")
-        return "break"
+        return self._canvas_controller_for_call().canvas_shift_mousewheel(event)
+
 
     def canvas_ctrl_mousewheel(self, event: tk.Event) -> str:
-        self.zoom(1.15 if event.delta > 0 else 0.87)
-        return "break"
+        return self._canvas_controller_for_call().canvas_ctrl_mousewheel(event)
+
 
     def canvas_linux_mousewheel(self, event: tk.Event, step: int) -> str:
-        if event.state & 0x0004:
-            self.zoom(0.87 if step > 0 else 1.15)
-        elif event.state & 0x0001:
-            self.canvas.xview_scroll(step * 3, "units")
-        else:
-            self.canvas.yview_scroll(step * 3, "units")
-        return "break"
+        return self._canvas_controller_for_call().canvas_linux_mousewheel(event, step)
+
 
     def original_xy(self, event: tk.Event) -> tuple[int, int]:
-        return round(self.canvas.canvasx(event.x) / self.view_scale), round(self.canvas.canvasy(event.y) / self.view_scale)
+        return self._canvas_controller_for_call().original_xy(event)
+
 
     def draw_cursor_guides(self, canvas_x: float, canvas_y: float) -> None:
         """Draw the blue dashed crosshair in the current canvas view."""
