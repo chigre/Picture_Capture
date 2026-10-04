@@ -1,0 +1,147 @@
+name: Phase 3 one-shot Settings crop extraction
+
+on:
+  push:
+    branches:
+      - refactor/phase3-settings-crop-behavior
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase3-settings-crop-behavior
+
+      - name: Extract Settings crop methods
+        shell: python
+        run: |
+          import ast
+          from pathlib import Path
+          import py_compile
+          import textwrap
+
+          app_path = Path("src/picture_capture/app.py")
+          guard_path = Path("scripts/architecture_guard.py")
+          test_path = Path("tests/test_next_stage_regressions.py")
+          crop_path = Path("src/picture_capture/ui/settings/crop.py")
+
+          text = app_path.read_text(encoding="utf-8")
+          import_anchor = "from .ui.settings import window as _settings_window_ui\n"
+          assert text.count(import_anchor) == 1
+          assert "from .ui.settings import crop as _settings_crop_ui" not in text
+          text = text.replace(
+              import_anchor,
+              import_anchor + "from .ui.settings import crop as _settings_crop_ui\n",
+              1,
+          )
+
+          tree = ast.parse(text)
+          cls = next(
+              node for node in tree.body
+              if isinstance(node, ast.ClassDef) and node.name == "SettingsDialog"
+          )
+          methods = [
+              node for node in cls.body
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+          ]
+          target_names = [
+              "_crop_nonnegative_int",
+              "_build_crop_settings_tab",
+              "_crop_settings_payload",
+              "_save_integrated_crop_settings",
+          ]
+          first_index = next(i for i, node in enumerate(methods) if node.name == target_names[0])
+          assert [node.name for node in methods[first_index:first_index + len(target_names)]] == target_names
+          assert methods[first_index + len(target_names)].name == "_configure_settings_appearance_styles"
+          method_map = {node.name: node for node in methods}
+
+          wrapper_source = textwrap.dedent('''
+          @staticmethod
+          def _crop_nonnegative_int(value: object, label: str) -> int:
+              return _settings_crop_ui.crop_nonnegative_int(value, label)
+
+          def _build_crop_settings_tab(self, tab: ttk.Frame) -> None:
+              _settings_crop_ui.build_crop_settings_tab(self, tab)
+
+          def _crop_settings_payload(self) -> dict:
+              return _settings_crop_ui.crop_settings_payload(self)
+
+          def _save_integrated_crop_settings(self) -> None:
+              _settings_crop_ui.save_integrated_crop_settings(self)
+          ''').lstrip("\n")
+          wrappers = textwrap.indent(wrapper_source, "    ") + "\n"
+
+          first = method_map[target_names[0]]
+          next_method = method_map["_configure_settings_appearance_styles"]
+          start_lineno = min(
+              [first.lineno] + [decorator.lineno for decorator in first.decorator_list]
+          )
+          lines = text.splitlines(keepends=True)
+          text = (
+              "".join(lines[: start_lineno - 1])
+              + wrappers
+              + "".join(lines[next_method.lineno - 1 :])
+          )
+          app_path.write_text(text, encoding="utf-8", newline="\n")
+
+          tests = test_path.read_text(encoding="utf-8")
+          window_block = '''    window_source = (\n        Path(__file__).resolve().parents[1]\n        / "src" / "picture_capture" / "ui" / "settings" / "window.py"\n    ).read_text(encoding="utf-8")\n'''
+          assert tests.count(window_block) == 1
+          assert "crop_source = (" not in tests
+          crop_block = '''    crop_source = (\n        Path(__file__).resolve().parents[1]\n        / "src" / "picture_capture" / "ui" / "settings" / "crop.py"\n    ).read_text(encoding="utf-8")\n'''
+          tests = tests.replace(window_block, window_block + crop_block, 1)
+          for field in (
+              "general_top_y",
+              "general_bottom_y",
+              "entry_left_padding_x",
+              "entry_right_padding_x",
+              "integrate_illustrations",
+              "polygon_margin",
+              "parallel_workers",
+          ):
+              old = f'''    assert '\"{field}\"' in settings\n'''
+              new = f'''    assert '\"{field}\"' in crop_source\n'''
+              assert tests.count(old) == 1, field
+              tests = tests.replace(old, new, 1)
+          test_path.write_text(tests, encoding="utf-8", newline="\n")
+
+          py_compile.compile(str(app_path), doraise=True)
+          py_compile.compile(str(crop_path), doraise=True)
+
+          size = len(app_path.read_bytes())
+          guard = guard_path.read_text(encoding="utf-8")
+          old = '    "app.py": 920_725,'
+          assert guard.count(old) == 1
+          rendered = f"{size:,}".replace(",", "_")
+          guard = guard.replace(old, f'    "app.py": {rendered},', 1)
+          guard_path.write_text(guard, encoding="utf-8", newline="\n")
+          print(f"APP_BYTES={size}")
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install locked dev dependencies
+        run: uv sync --locked --group dev
+
+      - name: Run full pytest suite
+        run: uv run --locked pytest
+
+      - name: Remove one-shot workflow and commit extraction
+        shell: bash
+        run: |
+          rm .github/workflows/phase3_extract_settings_crop_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/picture_capture/app.py scripts/architecture_guard.py tests/test_next_stage_regressions.py .github/workflows/phase3_extract_settings_crop_once.yml
+          git commit -m "refactor: route Settings crop behavior through helper"
+          git push origin HEAD:refactor/phase3-settings-crop-behavior
