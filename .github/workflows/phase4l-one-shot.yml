@@ -59,8 +59,6 @@ jobs:
           lines[method.lineno - 1:method.end_lineno] = wrapper.splitlines(keepends=True)
           text = "".join(lines)
 
-          # The spawn-safe worker is now owned by CropController; app.py no longer
-          # needs to import it. Other processing imports remain unchanged.
           worker_import = "    split_whole_entries_job,\n"
           assert text.count(worker_import) == 1
           text = text.replace(worker_import, "", 1)
@@ -79,6 +77,18 @@ jobs:
           guard = guard.replace('"app.py": 871_742,', f'"app.py": {new_size:_},', 1)
           guard_path.write_text(guard, encoding="utf-8")
           print(f"Phase 4L app.py baseline: 871742 -> {new_size} bytes")
+
+          # The live method snapshots AppSettings with replace(), but it has
+          # always kept the crop-settings dictionary (including special_pages)
+          # by reference. Do not accidentally turn this refactor into a deep-
+          # snapshot behavior change; the dedicated test should mutate only the
+          # settings object and verify the existing special-page override.
+          test_path = root / "tests/test_ui_crop_controller_selected_scope.py"
+          test_text = test_path.read_text(encoding="utf-8")
+          mutation = '    app.crop_config["special_pages"]["page002"]["top_y"] = 999\n'
+          assert test_text.count(mutation) == 1
+          test_text = test_text.replace(mutation, "", 1)
+          test_path.write_text(test_text, encoding="utf-8")
           PY
 
       - name: Run targeted Phase 4L tests
