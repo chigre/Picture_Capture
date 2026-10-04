@@ -86,7 +86,7 @@ jobs:
           double_crop = 'text.split("class CropSettingsDialog", 1)[1].split("class PictureCaptureApp", 1)[0]'
           single_crop = "text.split('class CropSettingsDialog', 1)[1].split('class PictureCaptureApp', 1)[0]"
           crop_shape_count = core.count(double_crop) + core.count(single_crop)
-          assert crop_shape_count == 3, crop_shape_count
+          assert crop_shape_count == 4, crop_shape_count
           core = core.replace(double_crop, crop_read).replace(single_crop, crop_read)
 
           old_settings_boundary = 'text.split("class SettingsDialog", 1)[1].split("class CropSettingsDialog", 1)[0]'
