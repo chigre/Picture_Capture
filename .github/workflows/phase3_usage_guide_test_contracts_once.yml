@@ -1,0 +1,83 @@
+name: Phase 3 one-shot usage guide test contract migration
+
+on:
+  push:
+    branches:
+      - refactor/phase3-usage-guide
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase3-usage-guide
+
+      - name: Move stale source assertions to the extracted guide module
+        shell: python
+        run: |
+          from pathlib import Path
+          import py_compile
+
+          appearance_path = Path("tests/test_appearance.py")
+          text = appearance_path.read_text(encoding="utf-8")
+          old = '''    app_source = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")\n    profile_source = (ROOT / "src/picture_capture/profile_setup.py").read_text(encoding="utf-8")\n'''
+          new = '''    app_source = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")\n    guide_source = (\n        ROOT / "src/picture_capture/ui/dialogs/usage_guide.py"\n    ).read_text(encoding="utf-8")\n    profile_source = (ROOT / "src/picture_capture/profile_setup.py").read_text(encoding="utf-8")\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          for assertion in (
+              '    assert \'activebackground=colors["accent_soft"]\' in app_source\n',
+              '    assert \'highlightthickness=0, takefocus=False\' in app_source\n',
+              '    assert \'self.parent_app._apply_current_appearance(self)\' in app_source\n',
+          ):
+              assert text.count(assertion) == 1, assertion
+              text = text.replace(assertion, assertion.replace("app_source", "guide_source"), 1)
+          appearance_path.write_text(text, encoding="utf-8", newline="\n")
+
+          regressions_path = Path("tests/test_next_stage_regressions.py")
+          text = regressions_path.read_text(encoding="utf-8")
+          old = '''def test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only():\n    app_source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"\n    app_text = app_source.read_text(encoding="utf-8")\n    assert 'self.ocr_refresh_var = tk.StringVar(value="reuse")' in app_text\n    assert "使用有效缓存（推荐）" in app_text\n    assert "重新OCR（模型/图像改变时）" in app_text\n    assert "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启" in app_text\n    assert 'LENS_MODE_LABELS["off"]' in app_text\n'''
+          new = '''def test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only():\n    root = Path(__file__).resolve().parents[1]\n    app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")\n    guide_text = (\n        root / "src" / "picture_capture" / "ui" / "dialogs" / "usage_guide.py"\n    ).read_text(encoding="utf-8")\n    assert 'self.ocr_refresh_var = tk.StringVar(value="reuse")' in app_text\n    assert "使用有效缓存（推荐）" in app_text\n    assert "重新OCR（模型/图像改变时）" in app_text\n    assert "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启" in guide_text\n    assert 'LENS_MODE_LABELS["off"]' in app_text\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          regressions_path.write_text(text, encoding="utf-8", newline="\n")
+
+          boundary_path = Path("tests/test_ui_dialog_boundaries.py")
+          text = boundary_path.read_text(encoding="utf-8")
+          old = '    assert "from ...app" not in source\n'
+          new = '    assert "from ...app import" not in source\n'
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          boundary_path.write_text(text, encoding="utf-8", newline="\n")
+
+          for path in (appearance_path, regressions_path, boundary_path):
+              py_compile.compile(str(path), doraise=True)
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install locked dev dependencies
+        run: uv sync --locked --group dev
+
+      - name: Run affected tests
+        run: >-
+          uv run --locked pytest
+          tests/test_appearance.py::test_dark_mode_is_integrated_without_changing_project_image_semantics
+          tests/test_next_stage_regressions.py::test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only
+          tests/test_ui_dialog_boundaries.py
+
+      - name: Remove one-shot workflow and commit test migration
+        shell: bash
+        run: |
+          rm .github/workflows/phase3_usage_guide_test_contracts_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/test_appearance.py tests/test_next_stage_regressions.py tests/test_ui_dialog_boundaries.py .github/workflows/phase3_usage_guide_test_contracts_once.yml
+          git commit -m "test: align usage guide source contracts"
+          git push origin HEAD:refactor/phase3-usage-guide
