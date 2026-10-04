@@ -1445,16 +1445,19 @@ def test_mixed_ui_wrap_measures_tokens_incrementally_not_growing_prefixes():
 
 
 def test_usage_guide_is_modern_task_oriented_and_centered():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1]
+    app_source = root / "src" / "picture_capture" / "app.py"
+    guide_source = root / "src" / "picture_capture" / "ui" / "dialogs" / "usage_guide.py"
+    text = app_source.read_text(encoding="utf-8")
+    guide_text = guide_source.read_text(encoding="utf-8")
 
-    guide_start = text.index("class UsageGuideWindow(tk.Toplevel):")
-    guide_end = text.index("class SettingsDialog(tk.Toplevel):", guide_start)
-    guide = text[guide_start:guide_end]
+    guide_start = guide_text.index("class UsageGuideWindow(tk.Toplevel):")
+    guide_end = len(guide_text)
+    guide = guide_text[guide_start:guide_end]
 
     assert '"快速开始"' in guide
     assert 'self.title("Picture Capture · 帮助中心")' in guide
-    assert "work_x, work_y, work_w, work_h = _screen_work_area(self)" in guide
+    assert "work_x, work_y, work_w, work_h = screen_work_area(self)" in guide
     assert "x = work_x + max(0, (work_w - width) // 2)" in guide
     assert "y = work_y + max(0, (work_h - height) // 2)" in guide
     assert 'self.geometry(f"{width}x{height}+{x}+{y}")' in guide
@@ -3360,12 +3363,15 @@ def test_project_profile_wizard_is_the_normal_entry_path():
 
 
 def test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only():
-    app_source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    app_text = app_source.read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1]
+    app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    guide_text = (
+        root / "src" / "picture_capture" / "ui" / "dialogs" / "usage_guide.py"
+    ).read_text(encoding="utf-8")
     assert 'self.ocr_refresh_var = tk.StringVar(value="reuse")' in app_text
     assert "使用有效缓存（推荐）" in app_text
     assert "重新OCR（模型/图像改变时）" in app_text
-    assert "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启" in app_text
+    assert "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启" in guide_text
     assert 'LENS_MODE_LABELS["off"]' in app_text
 
     settings = AppSettings()

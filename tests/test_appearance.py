@@ -141,6 +141,9 @@ def test_native_titlebar_helper_is_safe_off_windows(monkeypatch) -> None:
 
 def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> None:
     app_source = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
+    guide_source = (
+        ROOT / "src/picture_capture/ui/dialogs/usage_guide.py"
+    ).read_text(encoding="utf-8")
     profile_source = (ROOT / "src/picture_capture/profile_setup.py").read_text(encoding="utf-8")
 
     assert '"appearance_mode": self.appearance_preference' in app_source
@@ -160,9 +163,9 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'apply_native_titlebar_appearance(root, self.appearance_mode)' in app_source
     assert 'if isinstance(widget, tk.Toplevel)' in app_source
     assert 'button._pc_skip_classic_appearance = True' in app_source
-    assert 'activebackground=colors["accent_soft"]' in app_source
-    assert 'highlightthickness=0, takefocus=False' in app_source
-    assert 'self.parent_app._apply_current_appearance(self)' in app_source
+    assert 'activebackground=colors["accent_soft"]' in guide_source
+    assert 'highlightthickness=0, takefocus=False' in guide_source
+    assert 'self.parent_app._apply_current_appearance(self)' in guide_source
     assert 'word_list_default_fg = palette["input_fg"]' in app_source
     assert 'background="#d9d9d9", foreground="#111827"' in app_source
     assert 'editor_frame._pc_skip_classic_appearance = True' in app_source
