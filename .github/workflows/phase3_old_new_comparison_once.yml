@@ -1,0 +1,117 @@
+name: Phase 3 one-shot old-new comparison extraction
+
+on:
+  push:
+    branches:
+      - refactor/phase3-old-new-comparison
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase3-old-new-comparison
+
+      - name: Extract OldNewComparisonWindow from app.py
+        shell: python
+        run: |
+          from pathlib import Path
+          import py_compile
+          import re
+
+          app_path = Path("src/picture_capture/app.py")
+          text = app_path.read_text(encoding="utf-8")
+          start_token = "\nclass OldNewComparisonWindow(tk.Toplevel):"
+          end_token = "\nclass PictureCaptureApp(tk.Tk):"
+          assert text.count(start_token) == 1, "OldNewComparisonWindow start boundary changed"
+          assert text.count(end_token) == 1, "PictureCaptureApp boundary changed"
+          start = text.index(start_token)
+          end = text.index(end_token, start)
+          extracted = text[start + 1:end]
+          for contract in (
+              'class OldNewComparisonWindow(tk.Toplevel):',
+              'def refresh_appearance(self) -> None:',
+              'def _save_diff_report(self) -> None:',
+              'def _close(self) -> None:',
+              'self.parent.compare_old_new_selected_scope(force_choose=False)',
+              'self.parent.compare_old_new_selected_scope(force_choose=True)',
+          ):
+              assert contract in extracted, f"missing comparison dialog contract: {contract}"
+
+          module_header = '''from __future__ import annotations\n\nfrom datetime import datetime\nfrom pathlib import Path\nimport re\nimport tkinter as tk\nfrom tkinter import filedialog, ttk\n\nfrom ...project_storage import exports_root\nfrom ...ui_compat import fit_window_to_work_area\nfrom .common import _build_modern_dialog_heading\n\n\n'''
+          module_path = Path("src/picture_capture/ui/dialogs/old_new_comparison.py")
+          assert not module_path.exists(), "old_new_comparison.py already exists"
+          module_path.write_text(
+              module_header + extracted.rstrip() + '\n\n\n__all__ = ["OldNewComparisonWindow"]\n',
+              encoding="utf-8", newline="\n",
+          )
+
+          # Delete first, then insert the compatibility import so offsets stay valid.
+          text = text[:start] + "\n" + text[end:]
+          anchor = "from .ui.dialogs.common import _build_modern_dialog_heading\n"
+          dialog_import = "from .ui.dialogs.old_new_comparison import OldNewComparisonWindow\n"
+          assert text.count(anchor) == 1, "dialog common import anchor changed"
+          assert dialog_import not in text
+          text = text.replace(anchor, anchor + dialog_import, 1)
+          assert "class OldNewComparisonWindow(tk.Toplevel):" not in text
+          assert text.count(dialog_import) == 1
+          app_path.write_text(text, encoding="utf-8", newline="\n")
+
+          init_path = Path("src/picture_capture/ui/dialogs/__init__.py")
+          init_text = init_path.read_text(encoding="utf-8")
+          old_init = '''from .usage_guide import UsageGuideWindow\n\n__all__ = ["UsageGuideWindow"]\n'''
+          new_init = '''from .old_new_comparison import OldNewComparisonWindow\nfrom .usage_guide import UsageGuideWindow\n\n__all__ = ["OldNewComparisonWindow", "UsageGuideWindow"]\n'''
+          assert init_text.count(old_init) == 1, "dialogs package exports changed"
+          init_path.write_text(init_text.replace(old_init, new_init, 1), encoding="utf-8", newline="\n")
+
+          # Preserve existing source-contract coverage after the class moves.
+          test_path = Path("tests/test_next_stage_regressions.py")
+          tests = test_path.read_text(encoding="utf-8")
+          old_crop = '    crop_end = source.index("class OldNewComparisonWindow", crop_start)\n'
+          new_crop = '    crop_end = source.index("class PictureCaptureApp", crop_start)\n'
+          assert tests.count(old_crop) == 1, "CropSettings source boundary changed"
+          tests = tests.replace(old_crop, new_crop, 1)
+
+          old_compare = '''    compare_start = source.index("class OldNewComparisonWindow")\n    compare_end = source.index("class PictureCaptureApp", compare_start)\n    compare = source[compare_start:compare_end]\n'''
+          new_compare = '''    compare_source = (\n        Path(__file__).resolve().parents[1]\n        / "src" / "picture_capture" / "ui" / "dialogs" / "old_new_comparison.py"\n    ).read_text(encoding="utf-8")\n    compare_start = compare_source.index("class OldNewComparisonWindow")\n    compare = compare_source[compare_start:]\n'''
+          assert tests.count(old_compare) == 1, "OldNewComparison source contract changed"
+          tests = tests.replace(old_compare, new_compare, 1)
+          test_path.write_text(tests, encoding="utf-8", newline="\n")
+
+          normalized_size = len(app_path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n"))
+          guard_path = Path("scripts/architecture_guard.py")
+          guard = guard_path.read_text(encoding="utf-8")
+          match = re.search(r'("app\.py":\s*)([0-9_]+)(,)', guard)
+          assert match, "app.py architecture baseline not found"
+          old_size = int(match.group(2).replace("_", ""))
+          assert normalized_size < old_size, (normalized_size, old_size)
+          guard = guard[:match.start(2)] + f"{normalized_size:_}" + guard[match.end(2):]
+          guard_path.write_text(guard, encoding="utf-8", newline="\n")
+          print(f"app.py architecture baseline: {old_size} -> {normalized_size}")
+
+          for path in (
+              app_path,
+              module_path,
+              init_path,
+              test_path,
+              Path("tests/test_ui_old_new_comparison.py"),
+          ):
+              py_compile.compile(str(path), doraise=True)
+
+      - name: Verify architecture guard
+        run: python scripts/architecture_guard.py
+
+      - name: Remove one-shot workflow and commit extraction
+        shell: bash
+        run: |
+          rm .github/workflows/phase3_old_new_comparison_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/picture_capture/app.py src/picture_capture/ui/dialogs tests/test_next_stage_regressions.py tests/test_ui_old_new_comparison.py scripts/architecture_guard.py .github/workflows/phase3_old_new_comparison_once.yml
+          git commit -m "refactor: extract old-new comparison dialog"
+          git push origin HEAD:refactor/phase3-old-new-comparison
