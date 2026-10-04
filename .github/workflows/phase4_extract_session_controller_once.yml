@@ -1,0 +1,195 @@
+name: Phase 4 one-shot SessionController wiring
+
+on:
+  push:
+    branches:
+      - refactor/phase4-session-controller
+    paths:
+      - .github/workflows/phase4_extract_session_controller_once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase4-session-controller
+
+      - name: Wire SessionController into PictureCaptureApp
+        shell: python
+        run: |
+          import ast
+          from pathlib import Path
+          import py_compile
+
+          app_path = Path("src/picture_capture/app.py")
+          init_path = Path("src/picture_capture/ui/controllers/__init__.py")
+          controller_path = Path("src/picture_capture/ui/controllers/session.py")
+          guard_path = Path("scripts/architecture_guard.py")
+
+          app = app_path.read_text(encoding="utf-8")
+
+          old_import = "from .ui.controllers import PageController\n"
+          new_import = (
+              "from .ui.controllers import (\n"
+              "    PageController, SESSION_STATE_FILENAME, SessionController,\n"
+              ")\n"
+          )
+          assert app.count(old_import) == 1
+          app = app.replace(old_import, new_import, 1)
+
+          old_constant = 'SESSION_STATE_FILENAME = "session_state.json"\n'
+          assert app.count(old_constant) == 1
+          app = app.replace(old_constant, "", 1)
+
+          init_anchor = (
+              "        self._pending_page_index: int | None = None\n"
+              "        self._session_path = self._default_session_state_path()\n"
+          )
+          assert app.count(init_anchor) == 1
+          app = app.replace(
+              init_anchor,
+              "        self._pending_page_index: int | None = None\n"
+              "        self.session_controller = SessionController(self)\n"
+              "        self._session_path = self._default_session_state_path()\n",
+              1,
+          )
+
+          tree = ast.parse(app)
+          cls = next(
+              node for node in tree.body
+              if isinstance(node, ast.ClassDef) and node.name == "PictureCaptureApp"
+          )
+          methods = [
+              node for node in cls.body
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+          ]
+          by_name = {node.name: node for node in methods}
+          names = [node.name for node in methods]
+          expected = [
+              "_default_session_state_path",
+              "_read_session_state",
+              "_save_session_state",
+              "restore_last_session",
+              "on_close",
+          ]
+          positions = [names.index(name) for name in expected]
+          assert positions == list(range(positions[0], positions[0] + len(expected))), positions
+
+          default = by_name["_default_session_state_path"]
+          read = by_name["_read_session_state"]
+          save = by_name["_save_session_state"]
+          restore = by_name["restore_last_session"]
+          on_close = by_name["on_close"]
+          lines = app.splitlines(keepends=True)
+
+          default_wrapper = (
+              "    @staticmethod\n"
+              "    def _default_session_state_path() -> Path:\n"
+              "        return SessionController.default_state_path()\n\n"
+          )
+          read_wrapper = (
+              "    def _read_session_state(self) -> dict:\n"
+              "        return self.session_controller.read_state()\n\n"
+          )
+          save_wrapper = (
+              "    def _save_session_state(self) -> None:\n"
+              "        self.session_controller.save_state()\n\n"
+          )
+          restore_wrapper = (
+              "    def restore_last_session(self) -> None:\n"
+              "        self.session_controller.restore_last_session()\n\n"
+          )
+
+          # Bottom-up replacements preserve original AST line offsets.
+          lines[restore.lineno - 1 : on_close.lineno - 1] = restore_wrapper.splitlines(keepends=True)
+          lines[save.lineno - 1 : restore.lineno - 1] = save_wrapper.splitlines(keepends=True)
+          lines[read.lineno - 1 : save.lineno - 1] = read_wrapper.splitlines(keepends=True)
+          # Include the original @staticmethod decorator line.
+          decorator_line = min(
+              [default.lineno] + [d.lineno for d in default.decorator_list]
+          )
+          lines[decorator_line - 1 : read.lineno - 1] = default_wrapper.splitlines(keepends=True)
+          app = "".join(lines)
+          app_path.write_text(app, encoding="utf-8", newline="\n")
+
+          controllers_init = init_path.read_text(encoding="utf-8")
+          old_init = (
+              "from .page import PageController\n\n"
+              '__all__ = ["PageController"]\n'
+          )
+          assert controllers_init.count(old_init) == 1
+          controllers_init = controllers_init.replace(
+              old_init,
+              "from .page import PageController\n"
+              "from .session import SESSION_STATE_FILENAME, SessionController\n\n"
+              '__all__ = ["PageController", "SessionController", "SESSION_STATE_FILENAME"]\n',
+              1,
+          )
+          init_path.write_text(controllers_init, encoding="utf-8", newline="\n")
+
+          updated = app_path.read_text(encoding="utf-8")
+          assert updated.count("self.session_controller = SessionController(self)") == 1
+          assert updated.index("self.session_controller = SessionController(self)") < updated.index(
+              "self._session_path = self._default_session_state_path()"
+          )
+          assert "legacy_user_config_files(SESSION_STATE_FILENAME)" not in updated
+          assert '"last_project": str(self.project.root)' not in updated
+          assert "self.session_controller.restore_last_session()" in updated
+
+          controller = controller_path.read_text(encoding="utf-8")
+          controller_tree = ast.parse(controller)
+          for node in ast.walk(controller_tree):
+              if isinstance(node, ast.Import):
+                  assert all(alias.name != "picture_capture.app" for alias in node.names)
+              elif isinstance(node, ast.ImportFrom):
+                  assert node.module not in {"app", "picture_capture.app"}
+          assert 'SESSION_STATE_FILENAME = "session_state.json"' in controller
+          assert '"last_project": str(app.project.root)' in controller
+          assert "app._load_project(" in controller
+
+          py_compile.compile(str(app_path), doraise=True)
+          py_compile.compile(str(controller_path), doraise=True)
+          py_compile.compile(str(init_path), doraise=True)
+
+          size = len(app_path.read_bytes())
+          guard = guard_path.read_text(encoding="utf-8")
+          old_guard = '    "app.py": 894_475,'
+          assert guard.count(old_guard) == 1
+          rendered = f"{size:,}".replace(",", "_")
+          guard = guard.replace(old_guard, f'    "app.py": {rendered},', 1)
+          guard_path.write_text(guard, encoding="utf-8", newline="\n")
+          print(f"APP_BYTES={size}")
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install locked dev dependencies
+        run: uv sync --locked --group dev
+
+      - name: Run full pytest suite
+        run: uv run --locked pytest
+
+      - name: Remove one-shot workflow and commit SessionController wiring
+        shell: bash
+        run: |
+          rm .github/workflows/phase4_extract_session_controller_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            scripts/architecture_guard.py \
+            src/picture_capture/app.py \
+            src/picture_capture/ui/controllers/__init__.py \
+            src/picture_capture/ui/controllers/session.py \
+            tests/test_ui_session_controller.py \
+            .github/workflows/phase4_extract_session_controller_once.yml
+          git commit -m "refactor: route session lifecycle through SessionController"
+          git push origin HEAD:refactor/phase4-session-controller
