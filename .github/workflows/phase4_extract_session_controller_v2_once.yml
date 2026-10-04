@@ -1,0 +1,100 @@
+name: Phase 4 one-shot SessionController wiring v2
+
+on:
+  push:
+    branches:
+      - refactor/phase4-session-controller
+    paths:
+      - .github/workflows/phase4_extract_session_controller_v2_once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase4-session-controller
+
+      - name: Apply original wiring and migrate source contracts
+        shell: python
+        run: |
+          from pathlib import Path
+          import textwrap
+
+          workflow_path = Path(".github/workflows/phase4_extract_session_controller_once.yml")
+          workflow = workflow_path.read_text(encoding="utf-8")
+          marker = "      - name: Wire SessionController into PictureCaptureApp\n        shell: python\n        run: |\n"
+          assert workflow.count(marker) == 1
+          source = workflow.split(marker, 1)[1].split("\n      - name: Check patch whitespace", 1)[0]
+          source = textwrap.dedent(source)
+          exec(compile(source, str(workflow_path) + ":wiring", "exec"), {})
+
+          appearance_path = Path("tests/test_appearance.py")
+          appearance = appearance_path.read_text(encoding="utf-8")
+          old_setup = '    app_source = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")\n'
+          assert appearance.count(old_setup) == 1
+          appearance = appearance.replace(
+              old_setup,
+              old_setup
+              + '    session_source = (\n'
+              + '        ROOT / "src/picture_capture/ui/controllers/session.py"\n'
+              + '    ).read_text(encoding="utf-8")\n',
+              1,
+          )
+          old_assert = '    assert \'"appearance_mode": self.appearance_preference\' in app_source\n'
+          assert appearance.count(old_assert) == 1
+          appearance = appearance.replace(
+              old_assert,
+              '    assert \'"appearance_mode": app.appearance_preference\' in session_source\n',
+              1,
+          )
+          appearance_path.write_text(appearance, encoding="utf-8", newline="\n")
+
+          page_test_path = Path("tests/test_ui_page_controller.py")
+          page_test = page_test_path.read_text(encoding="utf-8")
+          old_page_assert = '    assert "from .ui.controllers import PageController" in app\n'
+          assert page_test.count(old_page_assert) == 1
+          page_test = page_test.replace(
+              old_page_assert,
+              '    imports = app[:app.index("class PictureCaptureApp")]\n'
+              '    assert "PageController" in imports\n',
+              1,
+          )
+          page_test_path.write_text(page_test, encoding="utf-8", newline="\n")
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install locked dev dependencies
+        run: uv sync --locked --group dev
+
+      - name: Run full pytest suite
+        run: uv run --locked pytest
+
+      - name: Remove one-shot workflows and commit SessionController wiring
+        shell: bash
+        run: |
+          rm .github/workflows/phase4_extract_session_controller_once.yml
+          rm .github/workflows/phase4_extract_session_controller_v2_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            scripts/architecture_guard.py \
+            src/picture_capture/app.py \
+            src/picture_capture/ui/controllers/__init__.py \
+            src/picture_capture/ui/controllers/session.py \
+            tests/test_ui_session_controller.py \
+            tests/test_appearance.py \
+            tests/test_ui_page_controller.py \
+            .github/workflows/phase4_extract_session_controller_once.yml \
+            .github/workflows/phase4_extract_session_controller_v2_once.yml
+          git commit -m "refactor: route session lifecycle through SessionController"
+          git push origin HEAD:refactor/phase4-session-controller
