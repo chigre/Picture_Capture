@@ -63,7 +63,7 @@ from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.controllers import (
-    CanvasController, PageController, ReviewController,
+    CanvasController, PageController, ProjectController, ReviewController,
     SESSION_STATE_FILENAME, SessionController,
 )
 from .ui.text_wrap import (
@@ -7513,6 +7513,7 @@ class PictureCaptureApp(tk.Tk):
         self.section_title_font.configure(weight="bold")
         self._configure_main_workspace_styles()
         self.canvas_controller = CanvasController(self)
+        self.project_controller = ProjectController(self)
         self.page_controller = PageController(self)
         self.review_controller = ReviewController(self)
         self._build_ui()
@@ -13598,72 +13599,20 @@ class PictureCaptureApp(tk.Tk):
         widget.bind("<Leave>", hide, add="+")
         widget.bind("<Destroy>", hide, add="+")
 
+    def _project_controller_for_call(self) -> ProjectController:
+        controller = self.__dict__.get("project_controller")
+        if controller is None:
+            controller = ProjectController(self)
+            self.__dict__["project_controller"] = controller
+        return controller
+
     def _choose_new_project_image_suffix(self, root: Path) -> str | None:
-        """Choose the scan-image extension once when creating a project.
+        return self._project_controller_for_call().choose_new_project_image_suffix(root)
 
-        The native directory chooser cannot filter by file extension.  After the
-        user selects a folder, inspect its actual page images instead: one
-        detected extension is accepted automatically; multiple extensions ask
-        the user which set belongs to this project.
-        """
-        pages = project_page_images(root)
-        if not pages:
-            raise ValueError("所选目录中没有 tif/tiff/png/jpg/jpeg/bmp 扫描图片。")
-
-        counts: dict[str, int] = {}
-        for page in pages:
-            suffix = page.suffix.lower()
-            counts[suffix] = counts.get(suffix, 0) + 1
-        suffixes = sorted(counts, key=lambda item: (-counts[item], item))
-        if len(suffixes) == 1:
-            return suffixes[0]
-
-        choices = "，".join(f"{suffix}（{counts[suffix]} 张）" for suffix in suffixes)
-        initial = suffixes[0]
-        while True:
-            value = simpledialog.askstring(
-                "选择扫描图片格式",
-                "检测到该文件夹包含多种扫描图片格式：\n"
-                f"{choices}\n\n"
-                "请输入本项目要使用的图片后缀（例如 .png 或 .tif）：",
-                initialvalue=initial,
-                parent=self,
-            )
-            if value is None:
-                return None
-            suffix = self._normalize_suffix(value)
-            if suffix in counts:
-                return suffix
-            messagebox.showerror(
-                "图片格式不存在",
-                f"该文件夹中没有 {suffix} 扫描图片。\n可选格式：{', '.join(suffixes)}",
-                parent=self,
-            )
-            initial = suffix
 
     def open_project(self) -> None:
-        chosen = filedialog.askdirectory(title="选择词典扫描项目目录")
-        if not chosen:
-            return
-        try:
-            if is_managed_project(Path(chosen)) and not messagebox.askyesno(
-                "既有项目", "此目录已经包含 Picture Capture 项目资料。是否作为既有项目打开？", parent=self,
-            ):
-                return
-            root = Path(chosen)
-            existing_project = is_managed_project(root) or has_legacy_project_data(root)
-            requested_suffix = None
-            if not existing_project:
-                requested_suffix = self._choose_new_project_image_suffix(root)
-                if requested_suffix is None:
-                    return
-            self._load_project(
-                root,
-                requested_suffix=requested_suffix,
-                launch_profile_setup=not existing_project,
-            )
-        except Exception as exc:
-            self.show_error("无法打开项目", exc)
+        self._project_controller_for_call().open_project()
+
 
     def _load_project(
         self, root: Path, *, requested_suffix: str | None = None,
