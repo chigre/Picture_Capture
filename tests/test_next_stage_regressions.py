@@ -1145,6 +1145,10 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "window.py"
     ).read_text(encoding="utf-8")
+    crop_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "crop.py"
+    ).read_text(encoding="utf-8")
 
     assert '"bottom_y", int' in schema
     assert '"bottom_y": "正文结束 Y"' in schema
@@ -1209,13 +1213,13 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert '(crop_tab, "切图")' in settings
     assert '"crop": crop_tab' in settings
     assert "def _build_crop_settings_tab(" in settings
-    assert '"general_top_y"' in settings
-    assert '"general_bottom_y"' in settings
-    assert '"entry_left_padding_x"' in settings
-    assert '"entry_right_padding_x"' in settings
-    assert '"integrate_illustrations"' in settings
-    assert '"polygon_margin"' in settings
-    assert '"parallel_workers"' in settings
+    assert '"general_top_y"' in crop_source
+    assert '"general_bottom_y"' in crop_source
+    assert '"entry_left_padding_x"' in crop_source
+    assert '"entry_right_padding_x"' in crop_source
+    assert '"integrate_illustrations"' in crop_source
+    assert '"polygon_margin"' in crop_source
+    assert '"parallel_workers"' in crop_source
     assert "self._save_integrated_crop_settings()" in settings
 
     assert 'text="融合画线+OCR"' in settings
