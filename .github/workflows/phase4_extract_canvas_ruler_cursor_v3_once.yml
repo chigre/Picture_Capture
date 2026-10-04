@@ -1,0 +1,175 @@
+name: Phase 4 one-shot CanvasController ruler cursor wiring v3
+
+on:
+  push:
+    branches:
+      - refactor/phase4-canvas-controller-ruler-cursor
+    paths:
+      - .github/workflows/phase4_extract_canvas_ruler_cursor_v3_once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase4-canvas-controller-ruler-cursor
+
+      - name: Apply original wiring and scoped source-contract migration
+        shell: python
+        run: |
+          from pathlib import Path
+          import py_compile
+          import textwrap
+
+          workflow_path = Path(".github/workflows/phase4_extract_canvas_ruler_cursor_once.yml")
+          workflow = workflow_path.read_text(encoding="utf-8")
+          marker = (
+              "      - name: Wire ruler and cursor feedback through CanvasController\n"
+              "        shell: python\n"
+              "        run: |\n"
+          )
+          assert workflow.count(marker) == 1
+          source = workflow.split(marker, 1)[1].split(
+              "\n      - name: Check patch whitespace", 1
+          )[0]
+          exec(compile(textwrap.dedent(source), str(workflow_path) + ":wiring", "exec"), {})
+
+          core_path = Path("tests/test_core.py")
+          core = core_path.read_text(encoding="utf-8")
+          start = core.index("def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded():")
+          end = core.index("\ndef ", start + 10)
+          block = core[start:end]
+          setup = (
+              'def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded():\n'
+              '    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"\n'
+              '    text = source.read_text(encoding="utf-8")\n'
+          )
+          replacement = (
+              'def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded():\n'
+              '    root = Path(__file__).resolve().parents[1]\n'
+              '    source = root / "src" / "picture_capture" / "app.py"\n'
+              '    text = source.read_text(encoding="utf-8")\n'
+              '    canvas_controller = (\n'
+              '        root / "src" / "picture_capture" / "ui" / "controllers" / "canvas.py"\n'
+              '    ).read_text(encoding="utf-8")\n'
+          )
+          assert block.count(setup) == 1
+          block = block.replace(setup, replacement, 1)
+          old = '    assert "if self.image is None or self._section_editing:" in text\n'
+          new = '    assert "if app.image is None or app._section_editing:" in canvas_controller\n'
+          assert block.count(old) == 1
+          block = block.replace(old, new, 1)
+          old = '    assert \'self.canvas.delete("cursor-guide")\' in text\n'
+          new = '    assert \'app.canvas.delete("cursor-guide")\' in canvas_controller\n'
+          assert block.count(old) == 1
+          block = block.replace(old, new, 1)
+          core = core[:start] + block + core[end:]
+          core_path.write_text(core, encoding="utf-8", newline="\n")
+
+          regressions_path = Path("tests/test_next_stage_regressions.py")
+          regressions = regressions_path.read_text(encoding="utf-8")
+          start = regressions.index("def test_main_canvas_percentage_rulers_are_fixed_display_only_overlays():")
+          end = regressions.index("\ndef ", start + 10)
+          block = regressions[start:end]
+          setup = (
+              '    app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")\n'
+              '    models = (root / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")\n\n'
+          )
+          replacement = (
+              '    app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")\n'
+              '    canvas_controller = (\n'
+              '        root / "src" / "picture_capture" / "ui" / "controllers" / "canvas.py"\n'
+              '    ).read_text(encoding="utf-8")\n'
+              '    models = (root / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")\n\n'
+          )
+          assert block.count(setup) == 1
+          block = block.replace(setup, replacement, 1)
+
+          literals = [
+              'for ruler_id, y in (("top", 0.0), ("bottom", display_height)):',
+              'for ruler_id, x in (("left", 0.0), ("right", display_width)):',
+              'for half_percent in range(201):',
+              'pct = half_percent * 0.5',
+              'for value in range(5, 100, 5):',
+              'label_x = x - label_gap if ruler_id == "left" else x + label_gap',
+              'anchor = "e" if ruler_id == "left" else "w"',
+              'tags=("ruler-margin",)',
+              'fill=margin_color, outline=""',
+              '标尺可以帮助版面参数的手动填写。',
+          ]
+          for literal in literals:
+              old = f'    assert {literal!r} in app\n'
+              new = f'    assert {literal!r} in canvas_controller\n'
+              assert block.count(old) == 1, (literal, block.count(old))
+              block = block.replace(old, new, 1)
+
+          for legacy in ("_drag_ruler_id", "_ruler_drag_last_canvas"):
+              old = f'    assert "{legacy}" not in app\n'
+              new = (
+                  f'    assert "{legacy}" not in app\n'
+                  f'    assert "{legacy}" not in canvas_controller\n'
+              )
+              assert block.count(old) == 1
+              block = block.replace(old, new, 1)
+
+          old_block = (
+              '    assert "build_page_crop_plan" not in app[\n'
+              '        app.index("    def _draw_percentage_rulers"):\n'
+              '        app.index("    def redraw(", app.index("    def _draw_percentage_rulers"))\n'
+              '    ]\n'
+          )
+          new_block = (
+              '    assert "build_page_crop_plan" not in canvas_controller[\n'
+              '        canvas_controller.index("    def draw_percentage_rulers"):\n'
+              '        canvas_controller.index(\n'
+              '            "    def ruler_hit_id",\n'
+              '            canvas_controller.index("    def draw_percentage_rulers"),\n'
+              '        )\n'
+              '    ]\n'
+          )
+          assert block.count(old_block) == 1
+          block = block.replace(old_block, new_block, 1)
+          regressions = regressions[:start] + block + regressions[end:]
+          regressions_path.write_text(regressions, encoding="utf-8", newline="\n")
+
+          py_compile.compile(str(core_path), doraise=True)
+          py_compile.compile(str(regressions_path), doraise=True)
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install locked dev dependencies
+        run: uv sync --locked --group dev
+
+      - name: Run full pytest suite
+        run: uv run --locked pytest
+
+      - name: Remove one-shot workflows and commit ruler cursor wiring
+        shell: bash
+        run: |
+          rm .github/workflows/phase4_extract_canvas_ruler_cursor_once.yml
+          rm .github/workflows/phase4_extract_canvas_ruler_cursor_v2_once.yml
+          rm .github/workflows/phase4_extract_canvas_ruler_cursor_v3_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            scripts/architecture_guard.py \
+            src/picture_capture/app.py \
+            src/picture_capture/ui/controllers/canvas.py \
+            tests/test_core.py \
+            tests/test_next_stage_regressions.py \
+            tests/test_ui_canvas_controller.py \
+            .github/workflows/phase4_extract_canvas_ruler_cursor_once.yml \
+            .github/workflows/phase4_extract_canvas_ruler_cursor_v2_once.yml \
+            .github/workflows/phase4_extract_canvas_ruler_cursor_v3_once.yml
+          git commit -m "refactor: route canvas ruler and cursor feedback through CanvasController"
+          git push origin HEAD:refactor/phase4-canvas-controller-ruler-cursor
