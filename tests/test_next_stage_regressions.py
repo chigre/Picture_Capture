@@ -1133,6 +1133,10 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
     ).read_text(encoding="utf-8")
+    help_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "help.py"
+    ).read_text(encoding="utf-8")
 
     assert '"bottom_y", int' in schema
     assert '"bottom_y": "正文结束 Y"' in schema
@@ -1179,11 +1183,11 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert 'panes.add(right, weight=2)' in settings
     assert 'panes.sashpos(0, int(width * 0.60))' in settings
     assert "def _bind_responsive_labels(" in settings
-    assert "label_width = int(label.winfo_width())" in settings
-    assert "available = max(48, label_width - 12)" in settings
-    assert "_wrap_mixed_ui_text(" in settings
-    assert "label.configure(text=rendered, wraplength=0)" in settings
-    assert "label._pc_dynamic_textvariable = bool(textvariable)" in settings
+    assert "label_width = int(label.winfo_width())" in help_source
+    assert "available = max(48, label_width - 12)" in help_source
+    assert "_wrap_mixed_ui_text(" in help_source
+    assert "label.configure(text=rendered, wraplength=0)" in help_source
+    assert "label._pc_dynamic_textvariable = bool(textvariable)" in help_source
     assert "control.columnconfigure(0, weight=1)" in settings
     assert 'widget.grid(row=0, column=0, sticky="ew")' in settings
     assert "wraplength=0 if single_line_labels else 180" in settings
@@ -1286,6 +1290,7 @@ def test_common_layout_settings_show_packaged_context_diagrams():
     end = app_text.index("class ReviewWindow", start)
     settings = app_text[start:end]
     schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
+    help_source = (root / "src" / "picture_capture" / "ui" / "settings" / "help.py").read_text(encoding="utf-8")
 
     assert '"columns": "layout_col_number.png"' in schema
     for field in (
@@ -1295,10 +1300,11 @@ def test_common_layout_settings_show_packaged_context_diagrams():
         assert f'"{field}": "layout_settings.png"' in schema
     assert "help_images=True" in settings
     assert "show_layout_image: bool = False" in settings
-    assert '/ "data"' in settings
-    assert '/ "layout_example"' in settings
-    assert "Image.Resampling.LANCZOS" in settings
-    assert "ImageTk.PhotoImage(themed_display_image(rendered, self.parent.appearance_mode))" in settings
+    assert '/ "data"' in help_source
+    assert '/ "layout_example"' in help_source
+    assert "Image.Resampling.LANCZOS" in help_source
+    assert "ImageTk.PhotoImage(" in help_source
+    assert "themed_display_image(rendered, dialog.parent.appearance_mode)" in help_source
 
     layout_dir = root / "src" / "picture_capture" / "data" / "layout_example"
     assert (layout_dir / "layout_col_number.png").is_file()
@@ -5648,6 +5654,10 @@ def test_paddle_temp_page_match_uses_stem_boundaries():
 def test_settings_center_avoids_full_hidden_tab_idle_layout_cascade():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
+    help_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "help.py"
+    ).read_text(encoding="utf-8")
     start = text.index('    def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:')
     end = text.index("    @staticmethod\n    def _crop_nonnegative_int", start)
     block = text[start:end]
@@ -5660,17 +5670,19 @@ def test_settings_center_avoids_full_hidden_tab_idle_layout_cascade():
     assert "content.bind(" in text
     assert 'cv.configure(scrollregion=cv.bbox("all"))' in text
     assert "每个参数下方已直接显示详细说明" in text
-    assert 'pending["job"] = self.after(80, refresh)' in text
-    assert 'pending["job"] = self.after_idle(refresh)' not in text
+    assert 'pending["job"] = dialog.after(80, refresh)' in help_source
+    assert 'pending["job"] = dialog.after_idle(refresh)' not in help_source
 
 
 
 def test_responsive_help_wrapping_does_not_self_trigger_on_label_configure():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "help.py"
+    )
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _bind_responsive_labels(")
-    end = text.index("    def _setting_var(", start)
-    block = text[start:end]
+    start = text.index("def bind_responsive_labels(")
+    block = text[start:]
     assert 'container.bind("<Configure>", schedule, add="+")' in block
     assert 'label.bind("<Configure>", schedule, add="+")' not in block
     assert "_pc_wrap_cache_key" in block
