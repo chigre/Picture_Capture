@@ -2,16 +2,189 @@ from __future__ import annotations
 
 from typing import Any
 import tkinter as tk
+from tkinter import ttk
 
 from ...collation import available_profile_labels
 from ...dictionary_profile import (
     DEFAULT_PROFILE_ID,
     available_dictionary_profiles,
     dictionary_profile_preset,
+    effective_project_profile_id,
     language_effective_settings,
     profile_effective_settings,
     profile_layout_summary,
 )
+from ...project_storage import profile_path as project_profile_path
+
+
+def build_profile_tab(dialog: Any, tab: ttk.Frame) -> None:
+    tab.columnconfigure(0, weight=1)
+    tab.rowconfigure(1, weight=1)
+    top = ttk.Frame(tab, padding=(14, 12, 14, 8))
+    top.grid(row=0, column=0, sticky="ew")
+    top.columnconfigure(1, weight=1)
+
+    selected_key = effective_project_profile_id(
+        dialog.parent.settings,
+        project_profile_path(dialog.parent.project.root) if dialog.parent.project else None,
+    )
+    try:
+        selected = dictionary_profile_preset(selected_key)
+    except Exception:
+        selected = dictionary_profile_preset(DEFAULT_PROFILE_ID)
+        selected_key = selected.key
+    dialog._active_profile_key = selected_key
+    dialog._profile_selection_changed = False
+    dialog.custom_profile_name_var = tk.StringVar(
+        value=str(getattr(dialog.parent.settings, "dictionary_custom_profile_name", "") or "")
+    )
+    dialog.vars["dictionary_custom_profile_name"] = dialog.custom_profile_name_var
+    dialog._profile_label_to_key = dialog._build_profile_choice_labels()
+    dialog.profile_choice_var = tk.StringVar(value=dialog._profile_label_for_key(selected_key))
+    ttk.Label(top, text="词头类型：").grid(row=0, column=0, sticky="e", padx=(0, 8), pady=4)
+    dialog.profile_combo = ttk.Combobox(
+        top, textvariable=dialog.profile_choice_var,
+        values=tuple(dialog._profile_label_to_key.keys()), state="readonly", width=44,
+    )
+    dialog.profile_combo.grid(row=0, column=1, sticky="ew", pady=4)
+    dialog.profile_combo.bind("<<ComboboxSelected>>", dialog._on_profile_selected)
+    ttk.Button(top, text="恢复 Profile 默认值", command=dialog.restore_profile_defaults).grid(
+        row=0, column=2, padx=(10, 0), pady=4
+    )
+
+    ttk.Label(top, text="自定义结构名称：").grid(
+        row=1, column=0, sticky="e", padx=(0, 8), pady=4
+    )
+    dialog.custom_profile_name_entry = ttk.Entry(
+        top, textvariable=dialog.custom_profile_name_var, width=32,
+    )
+    dialog.custom_profile_name_entry.grid(row=1, column=1, sticky="ew", pady=4)
+    ttk.Label(
+        top,
+        text="仅修改当前项目中“自定义结构”的显示名称；底层 Profile key 仍为 custom。",
+        foreground="#666666",
+    ).grid(row=1, column=2, columnspan=2, sticky="w", padx=(10, 0), pady=4)
+    dialog.custom_profile_name_var.trace_add(
+        "write", lambda *_args: dialog.after_idle(dialog._on_custom_profile_name_changed)
+    )
+
+    dialog.profile_description_var = tk.StringVar(value="")
+    dialog.profile_examples_var = tk.StringVar(value="")
+    dialog.profile_layout_summary_var = tk.StringVar(value="")
+    profile_description = ttk.Label(
+        top, textvariable=dialog.profile_description_var, justify="left"
+    )
+    profile_description.grid(
+        row=2, column=0, columnspan=4, sticky="ew", pady=(8, 2)
+    )
+    profile_examples = ttk.Label(
+        top, textvariable=dialog.profile_examples_var, justify="left"
+    )
+    profile_examples.grid(
+        row=3, column=0, columnspan=4, sticky="ew", pady=(2, 0)
+    )
+    dialog._bind_responsive_labels(
+        top,
+        profile_description,
+        profile_examples,
+        horizontal_padding=20,
+        min_wrap=180,
+    )
+    ttk.Label(
+        top, textvariable=dialog.profile_layout_summary_var,
+        font=("TkDefaultFont", 10, "bold"), foreground="#245a86",
+    ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(5, 0))
+    dialog._sync_custom_profile_name_state()
+
+    profile_scroll_host = ttk.Frame(tab)
+    profile_scroll_host.grid(row=1, column=0, sticky="nsew")
+    profile_scroll_host.rowconfigure(0, weight=1)
+    profile_scroll_host.columnconfigure(0, weight=1)
+    profile_canvas = tk.Canvas(profile_scroll_host, highlightthickness=0, borderwidth=0)
+    dialog.profile_canvas = profile_canvas
+    profile_scrollbar = ttk.Scrollbar(
+        profile_scroll_host, orient="vertical", command=profile_canvas.yview,
+    )
+    profile_canvas.configure(yscrollcommand=profile_scrollbar.set)
+    profile_canvas.grid(row=0, column=0, sticky="nsew")
+    profile_scrollbar.grid(row=0, column=1, sticky="ns")
+    body = ttk.Frame(profile_canvas, padding=(14, 0, 14, 10))
+    profile_window = profile_canvas.create_window((0, 0), window=body, anchor="nw")
+
+    def _profile_sync_scrollregion(_event=None) -> None:
+        bbox = profile_canvas.bbox("all")
+        if bbox:
+            profile_canvas.configure(scrollregion=bbox)
+
+    def _profile_fit_width(event) -> None:
+        profile_canvas.itemconfigure(profile_window, width=event.width)
+
+    body.bind("<Configure>", _profile_sync_scrollregion)
+    profile_canvas.bind("<Configure>", _profile_fit_width)
+    body.columnconfigure(0, weight=1)
+    body.columnconfigure(1, weight=1)
+    field_meta = dialog._field_meta
+    for gi, (title, names) in enumerate(dialog.PROFILE_FIELD_GROUPS):
+        group = ttk.LabelFrame(body, text=title, padding=(10, 7))
+        group.grid(row=gi // 2, column=gi % 2, sticky="nsew", padx=(0 if gi % 2 == 0 else 6, 6 if gi % 2 == 0 else 0), pady=(0, 8))
+        group.columnconfigure(1, weight=1)
+        for row, name in enumerate(names):
+            label, _cast = field_meta[name]
+            ttk.Label(group, text=label).grid(row=row, column=0, sticky="e", padx=(0, 7), pady=3)
+            if name not in dialog.vars:
+                dialog.vars[name] = tk.StringVar(value=str(getattr(dialog.parent.settings, name)))
+            var = dialog.vars[name]
+            if name == "ocr_language":
+                widget = ttk.Combobox(group, textvariable=var, values=dialog.OCR_LANGUAGES, state="normal", width=24)
+                widget.bind("<<ComboboxSelected>>", lambda _e: dialog._on_profile_language_changed())
+                widget.bind("<FocusOut>", lambda _e: dialog._on_profile_language_changed())
+                var.trace_add("write", lambda *_args: dialog.after_idle(dialog._refresh_sort_choices))
+            elif name == "layout_writing_mode":
+                widget = ttk.Combobox(
+                    group, textvariable=var, values=("horizontal-tb", "vertical-rl", "vertical-lr"),
+                    state="readonly", width=24,
+                )
+                widget.bind("<<ComboboxSelected>>", lambda _e: dialog._sync_layout_semantics())
+            elif name == "layout_text_direction":
+                widget = ttk.Combobox(group, textvariable=var, values=("ltr", "rtl"), state="readonly", width=24)
+                widget.bind("<<ComboboxSelected>>", lambda _e: dialog._sync_layout_semantics())
+            elif name == "layout_columns_policy":
+                widget = ttk.Combobox(group, textvariable=var, values=("detect", "fixed"), state="readonly", width=24)
+            elif name == "layout_column_separator_mode":
+                widget = ttk.Combobox(group, textvariable=var, values=("auto", "present", "absent"), state="readonly", width=24)
+            elif name == "analysis_threshold_mode":
+                widget = ttk.Combobox(group, textvariable=var, values=("auto", "otsu", "adaptive", "fixed"), state="readonly", width=24)
+            elif name == "layout_transform":
+                widget = ttk.Entry(group, textvariable=var, width=24, state="readonly")
+            else:
+                widget = ttk.Entry(group, textvariable=var, width=24)
+            widget.grid(row=row, column=1, sticky="ew", pady=3)
+            try:
+                var.trace_add("write", lambda *_args: dialog.after_idle(dialog._refresh_profile_status))
+            except tk.TclError:
+                pass
+
+    check_group = ttk.LabelFrame(body, text="识别行为", padding=(10, 7))
+    check_group.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(0, 8))
+    for row, (label, name) in enumerate(dialog.PROFILE_CHECKS):
+        if name not in dialog.vars:
+            dialog.vars[name] = tk.BooleanVar(value=bool(getattr(dialog.parent.settings, name)))
+        ttk.Checkbutton(check_group, text=label, variable=dialog.vars[name]).grid(row=row, column=0, sticky="w", pady=3)
+        try:
+            dialog.vars[name].trace_add("write", lambda *_args: dialog.after_idle(dialog._refresh_profile_status))
+        except tk.TclError:
+            pass
+
+    dialog.profile_status_var = tk.StringVar(value="")
+    status = ttk.Frame(tab, padding=(14, 0, 14, 10))
+    status.grid(row=2, column=0, sticky="ew")
+    ttk.Label(status, textvariable=dialog.profile_status_var).pack(side="left")
+    ttk.Label(
+        status,
+        text="Profile 默认值是起点；这里的手工调整会作为项目 overrides 保存，不会改写内置 Profile。",
+    ).pack(side="right")
+    dialog._refresh_profile_summary()
+    dialog.after_idle(dialog._refresh_profile_status)
 
 
 def build_profile_choice_labels(dialog: Any) -> dict[str, str]:

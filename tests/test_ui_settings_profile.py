@@ -30,6 +30,7 @@ def test_settings_profile_extraction_keeps_dialog_wrappers_and_behavior_boundary
     settings = app[settings_start:settings_end]
 
     for method, helper_name in (
+        ("_build_profile_tab", "build_profile_tab"),
         ("_build_profile_choice_labels", "build_profile_choice_labels"),
         ("_profile_label_for_key", "profile_label_for_key"),
         ("_profile_display_name", "profile_display_name"),
@@ -49,6 +50,11 @@ def test_settings_profile_extraction_keeps_dialog_wrappers_and_behavior_boundary
     ):
         assert f"def {method}(" in settings
         assert f"_settings_profile_ui.{helper_name}(" in settings
+
+    assert "self.profile_canvas = profile_canvas" not in settings
+    assert "dialog.profile_canvas = profile_canvas" in helper
+    assert "profile_scrollbar" in helper
+    assert 'text="自定义结构名称："' in helper
 
     assert "profiles = list(available_dictionary_profiles())" not in settings
     assert "profiles = list(available_dictionary_profiles())" in helper

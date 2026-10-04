@@ -1392,12 +1392,13 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     ):
         assert tooltip_key in post
 
-    profile_start = text.index("    def _build_profile_tab(")
-    profile_end = text.index("    def _build_profile_choice_labels(", profile_start)
-    profile = text[profile_start:profile_end]
-    assert "self.profile_canvas = profile_canvas" in profile
-    assert "profile_scrollbar" in profile
-    assert 'text="自定义结构名称："' in profile
+    profile_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "profile.py"
+    ).read_text(encoding="utf-8")
+    assert "dialog.profile_canvas = profile_canvas" in profile_source
+    assert "profile_scrollbar" in profile_source
+    assert 'text="自定义结构名称："' in profile_source
     assert "ProjectProfileWizard(self, new_project=new_project)" in text
 
 
