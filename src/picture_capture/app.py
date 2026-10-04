@@ -64,8 +64,8 @@ from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.controllers import (
     CanvasController, CropController, DetectionController, ExportController,
-    PageController, ProjectController, ReviewController, SESSION_STATE_FILENAME,
-    SessionController,
+    IllustrationController, PageController, ProjectController, ReviewController,
+    SESSION_STATE_FILENAME, SessionController,
 )
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
@@ -178,7 +178,6 @@ from .processing import (
     resolve_crop_worker_count,
     refine_existing_entries,
     split_illustrations_job,
-    detect_illustrations_job,
 )
 
 
@@ -7516,6 +7515,7 @@ class PictureCaptureApp(tk.Tk):
         self.crop_controller = CropController(self)
         self.detection_controller = DetectionController(self)
         self.export_controller = ExportController(self)
+        self.illustration_controller = IllustrationController(self)
         self.project_controller = ProjectController(self)
         self.page_controller = PageController(self)
         self.review_controller = ReviewController(self)
@@ -17224,63 +17224,15 @@ class PictureCaptureApp(tk.Tk):
     def split_entries_selected_scope(self) -> None:
         self._crop_controller_for_call().split_entries_selected_scope()
 
+    def _illustration_controller_for_call(self) -> IllustrationController:
+        controller = self.__dict__.get("illustration_controller")
+        if controller is None:
+            controller = IllustrationController(self)
+            self.__dict__["illustration_controller"] = controller
+        return controller
+
     def detect_illustrations_selected_scope(self) -> None:
-        """Automatically detect illustrations on the selected page range and save PPP polygons."""
-        if self._batch_active:
-            self.status_var.set("已有批量任务正在运行，请结束后再执行插图识别。")
-            return
-        if not self.project or not self.current_page or self.image is None:
-            messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=self)
-            return
-        try:
-            indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc)
-            return
-        if not indices:
-            return
-        # Persist the current foreground polygon edits before the worker sees it.
-        write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
-        first = self.project.images[indices[0]].name
-        last = self.project.images[indices[-1]].name
-        if not messagebox.askyesno(
-            "插图识别",
-            f"将在所选范围自动识别插图并写入 PPP：\n{first} → {last}（共 {len(indices)} 页）\n\n"
-            "人工绘制的 PPP 多边形会保留；再次识别只替换此前自动生成的 AUTO 区域。\n"
-            "识别结果可继续用“绘制插图多边形”手工修正。\n\n开始识别？",
-            parent=self,
-        ):
-            return
-        project = self.project
-        settings = replace(self.settings)
-
-        def worker(index: int, _position: int, _total: int):
-            page = project.images[index]
-            return detect_illustrations_job(str(page), settings, index)
-
-        def done(completed, total_pages, stopped, results, error):
-            if error is not None:
-                return
-            auto_count = sum(int((r or {}).get("auto", 0)) for r in results)
-            if stopped:
-                self.status_var.set(
-                    f"插图识别已停止：完成 {completed}/{total_pages} 页，自动识别 {auto_count} 个插图区域"
-                )
-            else:
-                self.status_var.set(
-                    f"插图识别完成：{completed} 页，自动识别 {auto_count} 个插图区域；人工 PPP 已保留"
-                )
-            if self.current_index in indices and self.current_page is not None:
-                self.polygons = read_ppp(self._ppp_read_path(self.current_page))
-                self._update_page_row(self.current_index)
-                self.polygon_var.set(True)
-                self.redraw()
-
-        self._start_batch_task(
-            "插图识别", indices, worker, done,
-            item_label=lambda i: project.images[i].name,
-            foreground_page_edit=True, page_indexer=lambda i: int(i),
-        )
+        self._illustration_controller_for_call().detect_illustrations_selected_scope()
 
     def split_illustrations_selected_scope(self) -> None:
         """Export PPP illustrations immediately using the shared 切图设置 snapshot."""
