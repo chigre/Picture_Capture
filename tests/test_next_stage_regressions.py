@@ -1137,6 +1137,10 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "help.py"
     ).read_text(encoding="utf-8")
+    lifecycle_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "lifecycle.py"
+    ).read_text(encoding="utf-8")
 
     assert '"bottom_y", int' in schema
     assert '"bottom_y": "正文结束 Y"' in schema
@@ -1219,8 +1223,8 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
 
     assert 'text="校验当前设置"' in settings
     assert 'self.bind("<Escape>", lambda _event: self._close_validated())' in settings
-    assert "✓ 已自动保存" in settings
-    assert "⚠ 当前输入暂未保存" in settings
+    assert "✓ 已自动保存" in lifecycle_source
+    assert "⚠ 当前输入暂未保存" in lifecycle_source
 
     # Every Settings Center field/check must have a real help entry; avoid
     # silently falling back to the generic "专家参数" text as the UI grows.
