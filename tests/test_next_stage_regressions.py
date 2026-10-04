@@ -1129,29 +1129,33 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     start = text.index("class SettingsDialog")
     end = text.index("class ReviewWindow", start)
     settings = text[start:end]
+    schema = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
+    ).read_text(encoding="utf-8")
 
-    assert '"bottom_y", int' in settings
-    assert '"bottom_y": "正文结束 Y"' in settings
-    common_start = settings.index("    COMMON_FIELDS = (")
-    common_end = settings.index("\n    NORMAL_COMMON_FIELDS", common_start)
-    common_fields = settings[common_start:common_end]
+    assert '"bottom_y", int' in schema
+    assert '"bottom_y": "正文结束 Y"' in schema
+    common_start = schema.index("COMMON_FIELDS = (")
+    common_end = schema.index("\nNORMAL_COMMON_FIELDS", common_start)
+    common_fields = schema[common_start:common_end]
     assert '"bottom_y"' not in common_fields
-    assert '"columns": "正文栏数"' in settings
-    assert '"manual_x": "第一栏左缘 X"' in settings
-    assert '"start_y": "% 图高"' in settings
-    assert '"manual_x": "% 图宽"' in settings
-    assert '"column_width": "% 图宽"' in settings
-    assert '"character_height": "% 图高"' in settings
-    assert '"paddle_band_width_ratio": "%"' in settings
-    assert '"paddle_left_tolerance": "% 单栏宽"' in settings
-    assert '"analysis_left": "% 图宽"' in settings
-    assert '"analysis_right": "% 图宽"' in settings
-    assert '"paddle_header_search_height": "% 图高"' in settings
-    assert '"paddle_separator_safety_px": "原图px"' in settings
-    assert '"column_track_radius": "% 单栏宽"' in settings
-    assert '"column_track_block_height": "% 正文高度"' in settings
-    assert '"column_track_max_step": "% 分块高度"' in settings
-    assert '"columns": (1, 12, 1)' in settings
+    assert '"columns": "正文栏数"' in schema
+    assert '"manual_x": "第一栏左缘 X"' in schema
+    assert '"start_y": "% 图高"' in schema
+    assert '"manual_x": "% 图宽"' in schema
+    assert '"column_width": "% 图宽"' in schema
+    assert '"character_height": "% 图高"' in schema
+    assert '"paddle_band_width_ratio": "%"' in schema
+    assert '"paddle_left_tolerance": "% 单栏宽"' in schema
+    assert '"analysis_left": "% 图宽"' in schema
+    assert '"analysis_right": "% 图宽"' in schema
+    assert '"paddle_header_search_height": "% 图高"' in schema
+    assert '"paddle_separator_safety_px": "原图px"' in schema
+    assert '"column_track_radius": "% 单栏宽"' in schema
+    assert '"column_track_block_height": "% 正文高度"' in schema
+    assert '"column_track_max_step": "% 分块高度"' in schema
+    assert '"columns": (1, 12, 1)' in schema
     percent_float_fields = (
         "start_y", "manual_x", "column_width", "gutter", "body_indent",
         "character_height", "row_padding", "horizontal_tolerance",
@@ -1162,13 +1166,13 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
         "right_ratio", "review_zoom_percent",
     )
     for name in percent_float_fields:
-        assert f'"{name}", float' in settings, name
+        assert f'"{name}", float' in schema, name
     assert "def _show_setting_help(" in settings
     assert 'text="设置说明"' in settings
-    assert "程序取第 1 个捕获组作为原始词头" in settings
-    assert "实际 POS 正则由 Profile 的 pos_labels 动态生成" in settings
-    assert "可作为新词条起始证据" in settings
-    assert "命中只增加一项结构证据，不会无条件把该行接受为词头" in settings
+    assert "程序取第 1 个捕获组作为原始词头" in schema
+    assert "实际 POS 正则由 Profile 的 pos_labels 动态生成" in schema
+    assert "可作为新词条起始证据" in schema
+    assert "命中只增加一项结构证据，不会无条件把该行接受为词头" in schema
     assert 'text="ⓘ"' in settings
     assert 'panes = ttk.Panedwindow(host, orient="horizontal")' in settings
     assert 'panes.add(left, weight=3)' in settings
@@ -1281,13 +1285,14 @@ def test_common_layout_settings_show_packaged_context_diagrams():
     start = app_text.index("class SettingsDialog")
     end = app_text.index("class ReviewWindow", start)
     settings = app_text[start:end]
+    schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
 
-    assert '"columns": "layout_col_number.png"' in settings
+    assert '"columns": "layout_col_number.png"' in schema
     for field in (
         "start_y", "bottom_y", "manual_x", "column_width",
         "gutter", "character_height", "row_padding",
     ):
-        assert f'"{field}": "layout_settings.png"' in settings
+        assert f'"{field}": "layout_settings.png"' in schema
     assert "help_images=True" in settings
     assert "show_layout_image: bool = False" in settings
     assert '/ "data"' in settings
@@ -2392,6 +2397,7 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
 
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
+    schema = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
     assert '"start_y": "height"' in text
     assert '"manual_x": "width"' in text
     assert '"body_indent": "width"' in text
@@ -2414,8 +2420,8 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     detect = text[detect_start:detect_end]
     assert 'numeric_summary="mean"' not in detect
     assert "多页数值参数将取稳健中位数" in detect
-    assert '"start_y": "% 图高"' in text
-    assert '"manual_x": "% 图宽"' in text
+    assert '"start_y": "% 图高"' in schema
+    assert '"manual_x": "% 图宽"' in schema
     assert "def _quick_percent_parameter_changed(self, name: str)" in text
     assert "def _quick_pixel_parameter_changed(self, name: str)" in text
     assert 'self._quick_geometry_edit_source[name] = "pixel"' in text
@@ -3505,13 +3511,14 @@ def test_ordinary_only_controls_stay_out_of_main_layout_section():
         / "src" / "picture_capture" / "app.py"
     ).read_text(encoding="utf-8")
 
-    settings_start = source.index("class SettingsDialog")
-    settings_end = source.index("class ReviewWindow", settings_start)
-    settings_text = source[settings_start:settings_end]
+    schema = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
+    ).read_text(encoding="utf-8")
 
-    normal_checks_start = settings_text.index("    NORMAL_CHECKS = (")
-    normal_checks_end = settings_text.index("    OCR_COMMON_CHECKS = (", normal_checks_start)
-    normal_checks = settings_text[normal_checks_start:normal_checks_end]
+    normal_checks_start = schema.index("NORMAL_CHECKS = (")
+    normal_checks_end = schema.index("OCR_COMMON_CHECKS = (", normal_checks_start)
+    normal_checks = schema[normal_checks_start:normal_checks_end]
     assert '("自动精修横线 Y", "paddle_refine_separator_y")' in normal_checks
     assert '("使用自动版面参数", "ordinary_auto_layout")' in normal_checks
 
@@ -3705,17 +3712,17 @@ def test_ordinary_auto_layout_applies_only_checked_page_specific_fields(monkeypa
 
 
 def test_restored_vb_controls_are_exposed_separately_from_modern_right_ratio():
-    app_source = (
+    schema_source = (
         Path(__file__).resolve().parents[1]
-        / "src" / "picture_capture" / "app.py"
+        / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
     ).read_text(encoding="utf-8")
-    assert '("向右比例 %", "right_ratio", float)' in app_source
-    assert '("VB 向右比例 1/x", "ordinary_right_divisor", float)' in app_source
+    assert '("向右比例 %", "right_ratio", float)' in schema_source
+    assert '("VB 向右比例 1/x", "ordinary_right_divisor", float)' in schema_source
     for name in (
         "white_threshold_high", "white_threshold_low", "whitespace_adjustment",
         "upward_ratio", "analysis_left", "analysis_right",
     ):
-        assert name in app_source
+        assert name in schema_source
 
 
 def test_ordinary_micro_tolerance_is_not_clipped_by_body_indent():
