@@ -33,6 +33,7 @@ jobs:
           sed -i 's/)\\n",/)",/' scripts/phase4n_patch_worker.py
           python scripts/phase4n_patch_worker.py
           python scripts/phase4n_fix_stale_core_test.py
+          rm scripts/phase4n_fix_stale_core_test.py
 
       - name: Check diff and app size
         shell: bash
@@ -56,7 +57,7 @@ jobs:
       - name: Commit validated Phase 4N change
         shell: bash
         run: |
-          rm .github/workflows/phase4n-patch.yml scripts/phase4n_patch_worker.py scripts/phase4n_fix_stale_core_test.py
+          rm .github/workflows/phase4n-patch.yml scripts/phase4n_patch_worker.py
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
