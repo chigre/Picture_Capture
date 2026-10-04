@@ -196,13 +196,13 @@ def test_job_builder_uses_storage_ppp_helper_overrides_and_settings_snapshot(mon
         ("ppp", Path("/pages/page002.png"), Path("/ppp/page002.ppp")),
     ]
     assert payload == (
-        "/pages/page002.png",
-        "/pdic/page002.pdic",
+        str(Path("/pages/page002.png")),
+        str(Path("/pdic/page002.pdic")),
         _Settings(start_y=11, crop_parallel_workers=3, marker=7),
-        "/normalized/QT/PWW",
+        str(Path("/normalized/QT") / "PWW"),
         23,
         456,
-        "/ppp/page002.ppp",
+        str(Path("/ppp/page002.ppp")),
         4,
         7,
         False,
