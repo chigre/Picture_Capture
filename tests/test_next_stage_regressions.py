@@ -4433,11 +4433,16 @@ def test_concurrency_review_workers_use_snapshots_not_live_app_state():
     assert "tesseract_status(executable, language)" in worker
     assert "opencc_runtime_status(retry=True)" in worker
 
-    split_start = app.index("    def batch_split_whole(")
-    split_end = app.index("\n    def repair_pdic_order_selected_scope", split_start)
-    split = app[split_start:split_end]
-    worker = split[split.index("        def worker("):split.index("        def done(", split.index("        def worker("))]
-    assert "self._ppp_read_path" not in worker
+    crop_source = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "crop.py"
+    ).read_text(encoding="utf-8")
+    split_start = crop_source.index("    def batch_split_whole(")
+    split = crop_source[split_start:]
+    worker = split[
+        split.index("        def worker("):
+        split.index("        def done(", split.index("        def worker("))
+    ]
+    assert "app._ppp_read_path" not in worker
     assert "ppp_read_path_for_image(page)" in worker
 
     restore_start = app.index("    def restore_from_pdic_backup(")
