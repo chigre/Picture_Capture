@@ -16,7 +16,7 @@ class OldNewComparisonWindow(tk.Toplevel):
 
     FILTERS = ("全部差异", "新增", "删除", "修改")
 
-    def __init__(self, parent: "PictureCaptureApp", payload: dict[str, object]) -> None:
+    def __init__(self, parent: tk.Misc, payload: dict[str, object]) -> None:
         super().__init__(parent)
         self.parent = parent
         self.payload = payload
