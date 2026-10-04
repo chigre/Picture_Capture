@@ -1094,7 +1094,7 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "dialogs" / "ocr_conflict.py"
     ).read_text(encoding="utf-8")
-    conflict_start = conflict_source.index("class CropSettingsDialog")
+    conflict_start = conflict_source.index("class OCRConflictReviewDialog")
     conflict = conflict_source[conflict_start:]
     assert '"OCR 词头冲突复核"' in conflict
     assert 'text="所选候选"' in conflict
