@@ -1,0 +1,118 @@
+name: Phase 3 prepare Settings help source tests
+
+on:
+  push:
+    branches:
+      - refactor/phase3-settings-dialog-behavior
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase3-settings-dialog-behavior
+
+      - name: Migrate remaining help source-location tests
+        shell: python
+        run: |
+          from pathlib import Path
+          import py_compile
+
+          appearance_path = Path("tests/test_appearance.py")
+          next_path = Path("tests/test_next_stage_regressions.py")
+
+          def replace_once(text: str, old: str, new: str) -> str:
+              count = text.count(old)
+              assert count == 1, (old, count)
+              return text.replace(old, new, 1)
+
+          appearance = appearance_path.read_text(encoding="utf-8")
+          anchor = '    app_source = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")\n'
+          appearance = replace_once(
+              appearance,
+              anchor,
+              anchor
+              + '    settings_help_source = (\n'
+              + '        ROOT / "src/picture_capture/ui/settings/help.py"\n'
+              + '    ).read_text(encoding="utf-8")\n',
+          )
+          appearance = replace_once(
+              appearance,
+              "    assert 'themed_display_image(rendered, self.parent.appearance_mode)' in app_source",
+              "    assert 'themed_display_image(rendered, dialog.parent.appearance_mode)' in settings_help_source",
+          )
+          appearance_path.write_text(appearance, encoding="utf-8", newline="\n")
+          py_compile.compile(str(appearance_path), doraise=True)
+
+          text = next_path.read_text(encoding="utf-8")
+
+          def get_block(source: str, name: str):
+              start = source.index(f"def {name}(")
+              end = source.find("\ndef ", start + 10)
+              if end < 0:
+                  end = len(source)
+              return start, end, source[start:end]
+
+          start, end, block = get_block(
+              text, "test_settings_center_avoids_full_hidden_tab_idle_layout_cascade"
+          )
+          block = replace_once(
+              block,
+              '    text = source.read_text(encoding="utf-8")\n',
+              '    text = source.read_text(encoding="utf-8")\n'
+              '    help_source = (\n'
+              '        Path(__file__).resolve().parents[1]\n'
+              '        / "src" / "picture_capture" / "ui" / "settings" / "help.py"\n'
+              '    ).read_text(encoding="utf-8")\n',
+          )
+          block = replace_once(
+              block,
+              '    assert \'pending["job"] = self.after(80, refresh)\' in text\n',
+              '    assert \'pending["job"] = dialog.after(80, refresh)\' in help_source\n',
+          )
+          block = replace_once(
+              block,
+              '    assert \'pending["job"] = self.after_idle(refresh)\' not in text\n',
+              '    assert \'pending["job"] = dialog.after_idle(refresh)\' not in help_source\n',
+          )
+          text = text[:start] + block + text[end:]
+
+          start, end, block = get_block(
+              text, "test_responsive_help_wrapping_does_not_self_trigger_on_label_configure"
+          )
+          old_setup = (
+              '    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"\n'
+              '    text = source.read_text(encoding="utf-8")\n'
+              '    start = text.index("    def _bind_responsive_labels(")\n'
+              '    end = text.index("    def _setting_var(", start)\n'
+              '    block = text[start:end]\n'
+          )
+          new_setup = (
+              '    source = (\n'
+              '        Path(__file__).resolve().parents[1]\n'
+              '        / "src" / "picture_capture" / "ui" / "settings" / "help.py"\n'
+              '    )\n'
+              '    text = source.read_text(encoding="utf-8")\n'
+              '    start = text.index("def bind_responsive_labels(")\n'
+              '    block = text[start:]\n'
+          )
+          block = replace_once(block, old_setup, new_setup)
+          text = text[:start] + block + text[end:]
+
+          next_path.write_text(text, encoding="utf-8", newline="\n")
+          py_compile.compile(str(next_path), doraise=True)
+
+      - name: Remove workflow and commit test migration
+        shell: bash
+        run: |
+          rm .github/workflows/phase3_prepare_settings_help_tests_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/test_appearance.py tests/test_next_stage_regressions.py .github/workflows/phase3_prepare_settings_help_tests_once.yml
+          git commit -m "test: follow extracted Settings help behavior"
+          git push origin HEAD:refactor/phase3-settings-dialog-behavior
