@@ -99,7 +99,7 @@ class CanvasController:
         app = self.app
         if app.image:
             app.view_scale = min(3.0, max(0.08, app.view_scale * factor))
-            self.update_view_zoom_label()
+            app._update_view_zoom_label()
             app.redraw()
             app._set_idle_cursor_status()
 
@@ -110,10 +110,10 @@ class CanvasController:
         try:
             percent = float(app.view_zoom_var.get().strip().rstrip("%"))
         except ValueError:
-            self.update_view_zoom_label()
+            app._update_view_zoom_label()
             return
         app.view_scale = min(3.0, max(0.08, percent / 100.0))
-        self.update_view_zoom_label()
+        app._update_view_zoom_label()
         app.redraw()
         app._set_idle_cursor_status()
 
@@ -124,7 +124,7 @@ class CanvasController:
         app.update_idletasks()
         available = max(120, app.canvas.winfo_width() - 24)
         app.view_scale = min(3.0, max(0.08, available / app.image.width))
-        self.update_view_zoom_label()
+        app._update_view_zoom_label()
         app.redraw()
         app._set_idle_cursor_status()
         app.canvas.xview_moveto(0.0)
@@ -136,7 +136,7 @@ class CanvasController:
         app.update_idletasks()
         available = max(120, app.canvas.winfo_height() - 24)
         app.view_scale = min(3.0, max(0.08, available / app.image.height))
-        self.update_view_zoom_label()
+        app._update_view_zoom_label()
         app.redraw()
         app._set_idle_cursor_status()
         app.canvas.yview_moveto(0.0)

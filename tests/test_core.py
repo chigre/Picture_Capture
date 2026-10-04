@@ -4680,15 +4680,23 @@ def test_v2116_page_illustration_count_uses_ppp_without_opening_page_pixels(tmp_
 def test_main_crop_preview_is_selected_only_through_display_mode():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
+    controller_text = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "controllers" / "canvas.py"
+    ).read_text(encoding="utf-8")
     assert 'text="显示切图预览"' not in text
     assert 'values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览")' in text
-    assert '"切图预览": (False, False, True)' in text
+    assert '"切图预览": (False, False, True)' in controller_text
     assert 'def _draw_crop_plan_preview' in text
 
 
 def test_display_mode_and_color_mode_live_at_bottom_of_auxiliary_options():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
+    controller_text = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "controllers" / "canvas.py"
+    ).read_text(encoding="utf-8")
     assert 'text="显示模式："' in text
     assert 'values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览")' in text
     assert 'display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)' in text
@@ -4708,11 +4716,11 @@ def test_display_mode_and_color_mode_live_at_bottom_of_auxiliary_options():
     assert aux.index('text="隐藏线框(插图除外)"') < aux.index('text="显示模式："')
     assert aux.index('text="显示模式："') < aux.index('text="颜色模式："')
     assert 'text="◧"' not in text
-    assert '"原图+标注": (False, False, False)' in text
-    assert '"二值+标注": (True, False, False)' in text
-    assert '"仅原图": (False, True, False)' in text
-    assert '"仅二值": (True, True, False)' in text
-    assert '"切图预览": (False, False, True)' in text
+    assert '"原图+标注": (False, False, False)' in controller_text
+    assert '"二值+标注": (True, False, False)' in controller_text
+    assert '"仅原图": (False, True, False)' in controller_text
+    assert '"仅二值": (True, True, False)' in controller_text
+    assert '"切图预览": (False, False, True)' in controller_text
 
 
 def test_page_list_compact_labels_navigation_order_and_consistency_minimum():

@@ -77,6 +77,9 @@ class _App:
     def _set_idle_cursor_status(self) -> None:
         self.idle_status_calls += 1
 
+    def _update_view_zoom_label(self) -> None:
+        self.view_zoom_var.set(f"{round(self.view_scale * 100):d}%")
+
     def update_idletasks(self) -> None:
         self.update_idle_calls += 1
 
@@ -183,10 +186,10 @@ def test_canvas_scroll_and_coordinate_mapping_remain_compatible() -> None:
     assert controller.canvas_linux_mousewheel(SimpleNamespace(state=0x0001), -1) == "break"
     assert app.canvas.xscroll[-1] == (-3, "units")
 
+    assert controller.original_xy(SimpleNamespace(x=30, y=40)) == (20, 30)
     before = app.view_scale
     assert controller.canvas_ctrl_mousewheel(SimpleNamespace(delta=120)) == "break"
     assert app.view_scale > before
-    assert controller.original_xy(SimpleNamespace(x=30, y=40)) == (20, 30)
 
 
 def test_canvas_controller_has_no_reverse_dependency_on_app_module() -> None:
@@ -206,6 +209,8 @@ def test_canvas_controller_wiring_keeps_picture_capture_app_compatibility_method
     imports = app[: app.index("class PictureCaptureApp")]
     assert "CanvasController" in imports
     assert "self.canvas_controller = CanvasController(self)" in app
+    assert "def _canvas_controller_for_call(" in app
+    assert 'self.__dict__.get("canvas_controller")' in app
     assert app.index("self.canvas_controller = CanvasController(self)") < app.index("self._build_ui()")
 
     expected = {
@@ -228,5 +233,5 @@ def test_canvas_controller_wiring_keeps_picture_capture_app_compatibility_method
     }
     for app_method, controller_method in expected.items():
         assert f"def {app_method}(" in app
-        assert f"self.canvas_controller.{controller_method}" in app
+        assert f"self._canvas_controller_for_call().{controller_method}" in app
         assert f"def {controller_method}(" in controller
