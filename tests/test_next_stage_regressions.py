@@ -1358,20 +1358,24 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     assert 'text="图片后缀："' not in text
     assert "self.image_suffix_var" not in text
 
-    suffix_choice_start = text.index("    def _choose_new_project_image_suffix(")
-    suffix_choice_end = text.index("\n    def open_project(", suffix_choice_start)
-    suffix_choice = text[suffix_choice_start:suffix_choice_end]
+    controller_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "controllers" / "project.py"
+    ).read_text(encoding="utf-8")
+    suffix_choice_start = controller_source.index("    def choose_new_project_image_suffix(")
+    suffix_choice_end = controller_source.index("\n    def open_project(", suffix_choice_start)
+    suffix_choice = controller_source[suffix_choice_start:suffix_choice_end]
     assert "project_page_images(root)" in suffix_choice
-    assert "if len(suffixes) == 1:" in suffix_choice
     assert "simpledialog.askstring(" in suffix_choice
-    assert "if suffix in counts:" in suffix_choice
-
-    open_start = text.index("    def open_project(self) -> None:")
-    open_end = text.index("\n    def _load_project(", open_start)
-    open_project = text[open_start:open_end]
+    open_start = controller_source.index("    def open_project(self) -> None:")
+    open_project = controller_source[open_start:]
     assert "if not existing_project:" in open_project
-    assert "self._choose_new_project_image_suffix(root)" in open_project
+    assert "self.choose_new_project_image_suffix(root)" in open_project
     assert "if requested_suffix is None:" in open_project
+    assert "def _choose_new_project_image_suffix(" in text
+    assert "self._project_controller_for_call().choose_new_project_image_suffix(root)" in text
+    assert "def open_project(self) -> None:" in text
+    assert "self._project_controller_for_call().open_project()" in text
 
     actions_start = text.index('            parent, "四、画线 / OCR / 插图 / 校对"')
     actions_end = text.index("        postproduction = self._section_frame(", actions_start)
@@ -3378,7 +3382,11 @@ def test_project_profile_wizard_is_the_normal_entry_path():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     assert "ProjectProfileWizard(self, new_project=new_project)" in text
-    assert "launch_profile_setup=not existing_project" in text
+    project_controller_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "controllers" / "project.py"
+    ).read_text(encoding="utf-8")
+    assert "launch_profile_setup=not existing_project" in project_controller_source
 
     profile_source = (
         Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
