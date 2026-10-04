@@ -1098,7 +1098,7 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     assert 'text="关闭"' in conflict
 
     crop_start = source.index("class CropSettingsDialog")
-    crop_end = source.index("class OldNewComparisonWindow", crop_start)
+    crop_end = source.index("class PictureCaptureApp", crop_start)
     crop = source[crop_start:crop_end]
     assert '"通用切图规则"' in crop
     assert '"特殊页面范围"' in crop
@@ -1106,9 +1106,12 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     assert '"特殊页面覆盖"' not in crop
     assert 'text="保存并关闭"' in crop
 
-    compare_start = source.index("class OldNewComparisonWindow")
-    compare_end = source.index("class PictureCaptureApp", compare_start)
-    compare = source[compare_start:compare_end]
+    compare_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "dialogs" / "old_new_comparison.py"
+    ).read_text(encoding="utf-8")
+    compare_start = compare_source.index("class OldNewComparisonWindow")
+    compare = compare_source[compare_start:]
     assert '"新旧比较"' in compare
     assert 'text="比较来源"' in compare
     assert 'text="比较摘要"' in compare

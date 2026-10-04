@@ -6328,12 +6328,17 @@ def test_v21122_hotfix3_main_actions_put_compare_before_review():
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    dialog_text = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "dialogs" / "old_new_comparison.py"
+    ).read_text(encoding="utf-8")
     row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review))'
     assert row in text
-    assert "class OldNewComparisonWindow" in text
-    assert 'notebook.add(diff_tab, text="差异")' in text
-    assert 'self._add_text_tab(notebook, "当前 PDIC 合集"' in text
-    assert 'self._add_text_tab(notebook, "旧 wordslist 片段"' in text
+    assert "from .ui.dialogs.old_new_comparison import OldNewComparisonWindow" in text
+    assert "class OldNewComparisonWindow" in dialog_text
+    assert 'notebook.add(diff_tab, text="差异")' in dialog_text
+    assert 'self._add_text_tab(notebook, "当前 PDIC 合集"' in dialog_text
+    assert 'self._add_text_tab(notebook, "旧 wordslist 片段"' in dialog_text
 
 
 def test_v21122_hotfix3_compare_uses_selected_scope_and_page_aware_wordslist():
