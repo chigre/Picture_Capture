@@ -63,7 +63,8 @@ from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.controllers import (
-    CanvasController, PageController, SESSION_STATE_FILENAME, SessionController,
+    CanvasController, PageController, ReviewController,
+    SESSION_STATE_FILENAME, SessionController,
 )
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
@@ -7513,6 +7514,7 @@ class PictureCaptureApp(tk.Tk):
         self._configure_main_workspace_styles()
         self.canvas_controller = CanvasController(self)
         self.page_controller = PageController(self)
+        self.review_controller = ReviewController(self)
         self._build_ui()
         self.bind_class("Toplevel", "<Map>", self._appearance_toplevel_mapped, add="+")
         self.set_appearance_mode(requested_appearance, persist=False)
@@ -15865,33 +15867,24 @@ class PictureCaptureApp(tk.Tk):
         cache = self._paddle_cache_path()
         return cache.with_name(f"{cache.stem}_manual_selection.json") if cache else None
 
+    def _review_controller_for_call(self) -> ReviewController:
+        controller = self.__dict__.get("review_controller")
+        if controller is None:
+            controller = ReviewController(self)
+            self.__dict__["review_controller"] = controller
+        return controller
+
     def _load_ocr_review_candidates(self) -> None:
-        self.ocr_review_candidates = []
-        path = self._paddle_cache_path()
-        if not path or not path.exists():
-            return
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            self.ocr_review_candidates = list(payload.get("review_candidates") or [])
-        except Exception:
-            self.ocr_review_candidates = []
+        self._review_controller_for_call().load_ocr_review_candidates()
+
 
     def get_review_candidate(self, candidate_id: str) -> dict | None:
-        for item in self.ocr_review_candidates:
-            if str(item.get("candidate_id", "")) == candidate_id:
-                return item
-        return None
+        return self._review_controller_for_call().get_review_candidate(candidate_id)
+
 
     def _candidate_is_selected(self, cand: dict) -> bool:
-        cid = str(cand.get("candidate_id", ""))
-        y = int(cand.get("source_y", -99999))
-        x = int(cand.get("source_x", -99999))
-        for entry in self.entries:
-            if cid and entry.candidate_id == cid:
-                return True
-            if abs(entry.x - x) <= 12 and abs(entry.y - y) <= max(5, round(self._quick_geometry_value("character_height") * 0.45)):
-                return True
-        return False
+        return self._review_controller_for_call().candidate_is_selected(cand)
+
 
     def _read_manual_overrides(self) -> dict:
         path = self._manual_selection_path()
@@ -16005,13 +15998,8 @@ class PictureCaptureApp(tk.Tk):
         self._flush_pending_manual_override()
 
     def _entry_for_candidate(self, cand: dict) -> WordEntry | None:
-        cid = str(cand.get("candidate_id", "")); y = int(cand.get("source_y", -99999)); x = int(cand.get("source_x", -99999))
-        for entry in self.entries:
-            if cid and entry.candidate_id == cid:
-                return entry
-            if abs(entry.x - x) <= 12 and abs(entry.y - y) <= max(5, round(self._quick_geometry_value("character_height") * 0.45)):
-                return entry
-        return None
+        return self._review_controller_for_call().entry_for_candidate(cand)
+
 
     def set_candidate_selected(self, cand: dict, selected: bool) -> bool:
         if not self._claim_page_for_manual_edit():
@@ -16127,19 +16115,12 @@ class PictureCaptureApp(tk.Tk):
                 var.set(self._candidate_is_selected(cand))
 
     def clear_review_entry_highlight(self) -> None:
-        self._review_entry_highlight_target = None
-        self._review_entry_highlight_photo = None
-        try:
-            self.canvas.delete("proofread-entry-highlight")
-        except tk.TclError:
-            pass
+        self._review_controller_for_call().clear_review_entry_highlight()
+
 
     def highlight_review_entry(self, entry: WordEntry) -> None:
-        """Mirror the focused proofreading row on the main page in pale yellow."""
-        if self.image is None or self.current_index < 0:
-            return
-        self._review_entry_highlight_target = (self.current_index, int(entry.x), int(entry.y))
-        self._draw_review_entry_highlight()
+        self._review_controller_for_call().highlight_review_entry(entry)
+
 
     def _draw_review_entry_highlight(self, geometry=None) -> None:
         self._review_entry_highlight_photo = None
@@ -16197,29 +16178,8 @@ class PictureCaptureApp(tk.Tk):
             pass
 
     def jump_to_review_candidate(self, cand: dict) -> None:
-        if not self.image: return
-        y = int(cand.get("source_y", 0))
-        # Scroll so the candidate appears around the upper third of the viewport.
-        canvas_h = max(1, self.canvas.winfo_height())
-        target = max(0.0, y * self.view_scale - canvas_h * 0.30)
-        total = max(1.0, self.image.height * self.view_scale)
-        self.canvas.yview_moveto(min(1.0, target / total))
-        self.canvas.delete("review-highlight")
-        geometry = self._get_cached_display_geometry()
-        col = max(0, min(len(geometry.column_starts) - 1, int(cand.get("column", 0))))
-        x_source = int(cand.get("source_x", 0))
-        _u, v = geometry.source_to_canonical(x_source, y)
-        canonical_box = (
-            geometry.x_at(col, v), v - 5,
-            geometry.x_at(col, v) + round(geometry.column_widths[col] * 0.98), v + 18,
-        )
-        x0, y0, x1, y1 = geometry.transform.canonical_box_to_source(canonical_box, self.image.size)
-        self.canvas.create_rectangle(
-            x0 * self.view_scale, y0 * self.view_scale,
-            x1 * self.view_scale, y1 * self.view_scale,
-            outline="#00bcd4", width=3, tags=("review-highlight",),
-        )
-        self.canvas.tag_raise("review-highlight")
+        self._review_controller_for_call().jump_to_review_candidate(cand)
+
 
     def open_ocr_conflict_review(self) -> None:
         if not self.guard(): return
