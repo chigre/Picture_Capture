@@ -2566,30 +2566,7 @@ class SettingsDialog(tk.Toplevel):
         _settings_profile_ui.toggle_custom_sort_state(self)
 
     def _browse_wordslist_setting(self, var: tk.StringVar) -> None:
-        initialdir = str(self.parent.project.root) if self.parent.project else None
-        current = str(var.get()).strip()
-        if self.parent.project and current:
-            try:
-                current_path = resolve_wordslist_path(self.parent.project.root, current)
-                if current_path.parent.exists():
-                    initialdir = str(current_path.parent)
-            except Exception:
-                pass
-        chosen = filedialog.askopenfilename(
-            parent=self, title="选择 wordslist 参考词表", initialdir=initialdir,
-            filetypes=[("文本文件", "*.txt"), ("所有文件", "*.*")],
-        )
-        if not chosen:
-            return
-        path = Path(chosen)
-        if self.parent.project:
-            try:
-                path_text = path.resolve().relative_to(self.parent.project.root.resolve()).as_posix()
-            except ValueError:
-                path_text = str(path.resolve())
-        else:
-            path_text = str(path)
-        var.set(path_text)
+        _settings_project_ui.browse_wordslist_setting(self, var)
 
     def _rules_path(self) -> Path | None:
         return _settings_rules_ui.rules_path(self)
