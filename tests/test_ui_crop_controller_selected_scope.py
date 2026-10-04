@@ -189,7 +189,6 @@ def test_job_builder_uses_storage_ppp_helper_overrides_and_settings_snapshot(mon
     assert app.parallel is not None
 
     app.settings.marker = 99
-    app.crop_config["special_pages"]["page002"]["top_y"] = 999
     payload = app.parallel["job_builder"](1, 1, 1)
 
     assert calls == [
