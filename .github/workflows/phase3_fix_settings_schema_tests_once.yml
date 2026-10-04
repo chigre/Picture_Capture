@@ -38,8 +38,8 @@ jobs:
               assert count == 1, (old, count)
               return text.replace(old, new, 1)
 
-          # test_core.py: only metadata location moves; crop/dialog behavior stays where it is.
           core = core_path.read_text(encoding="utf-8")
+
           start, end, block = get_block(core, "test_crop_settings_v7_declares_source_coordinate_space")
           block = replace_once(
               block,
@@ -77,8 +77,8 @@ jobs:
           core_path.write_text(core, encoding="utf-8", newline="\n")
           py_compile.compile(str(core_path), doraise=True)
 
-          # test_next_stage_regressions.py: preserve app behavior assertions; move only metadata assertions.
           text = next_path.read_text(encoding="utf-8")
+
           start, end, block = get_block(text, "test_settings_center_uses_context_help_units_and_user_facing_modes")
           block = replace_once(
               block,
@@ -144,47 +144,31 @@ jobs:
           text = text[:start] + block + text[end:]
 
           start, end, block = get_block(text, "test_ordinary_only_controls_stay_out_of_main_layout_section")
-          old = '''    source = (
-              Path(__file__).resolve().parents[1]
-              / "src" / "picture_capture" / "app.py"
-          ).read_text(encoding="utf-8")
-
-              settings_start = source.index("class SettingsDialog")
-              settings_end = source.index("class ReviewWindow", settings_start)
-              settings_text = source[settings_start:settings_end]
-
-              normal_checks_start = settings_text.index("    NORMAL_CHECKS = (")
-              normal_checks_end = settings_text.index("    OCR_COMMON_CHECKS = (", normal_checks_start)
-              normal_checks = settings_text[normal_checks_start:normal_checks_end]
-          '''
-          # Triple-quoted workflow indentation leaves four extra spaces on continuation lines.
-          old = old.replace("\n              ", "\n        ").replace("\n          ).", "\n    ).").replace("\n          '''", "")
-          new = '''    root = Path(__file__).resolve().parents[1]
-              source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-              schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
-
-              normal_checks_start = schema.index("NORMAL_CHECKS = (")
-              normal_checks_end = schema.index("OCR_COMMON_CHECKS = (", normal_checks_start)
-              normal_checks = schema[normal_checks_start:normal_checks_end]
-          '''
-          new = new.replace("\n              ", "\n    ").replace("\n          '''", "")
-          block = replace_once(block, old, new)
+          schema_line = (
+              '    schema = (\n'
+              '        Path(__file__).resolve().parents[1]\n'
+              '        / "src" / "picture_capture" / "ui" / "settings" / "schema.py"\n'
+              '    ).read_text(encoding="utf-8")\n'
+          )
+          block = replace_once(
+              block,
+              '    settings_start = source.index("class SettingsDialog")\n',
+              schema_line,
+          )
+          block = replace_once(block, '    settings_end = source.index("class ReviewWindow", settings_start)\n', '')
+          block = replace_once(block, '    settings_text = source[settings_start:settings_end]\n', '')
+          block = replace_once(block, '    normal_checks_start = settings_text.index("    NORMAL_CHECKS = (")\n', '    normal_checks_start = schema.index("NORMAL_CHECKS = (")\n')
+          block = replace_once(block, '    normal_checks_end = settings_text.index("    OCR_COMMON_CHECKS = (", normal_checks_start)\n', '    normal_checks_end = schema.index("OCR_COMMON_CHECKS = (", normal_checks_start)\n')
+          block = replace_once(block, '    normal_checks = settings_text[normal_checks_start:normal_checks_end]\n', '    normal_checks = schema[normal_checks_start:normal_checks_end]\n')
           text = text[:start] + block + text[end:]
 
           start, end, block = get_block(text, "test_restored_vb_controls_are_exposed_separately_from_modern_right_ratio")
-          old = '''    app_source = (
-              Path(__file__).resolve().parents[1]
-              / "src" / "picture_capture" / "app.py"
-          ).read_text(encoding="utf-8")
-          '''
-          old = old.replace("\n              ", "\n        ").replace("\n          ).", "\n    ).").rstrip() + "\n"
-          new = '''    schema_source = (
-              Path(__file__).resolve().parents[1]
-              / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
-          ).read_text(encoding="utf-8")
-          '''
-          new = new.replace("\n              ", "\n        ").replace("\n          ).", "\n    ).").rstrip() + "\n"
-          block = replace_once(block, old, new)
+          block = replace_once(block, '    app_source = (\n', '    schema_source = (\n')
+          block = replace_once(
+              block,
+              '        / "src" / "picture_capture" / "app.py"\n',
+              '        / "src" / "picture_capture" / "ui" / "settings" / "schema.py"\n',
+          )
           count = block.count(" in app_source")
           assert count >= 3, count
           block = block.replace(" in app_source", " in schema_source")
