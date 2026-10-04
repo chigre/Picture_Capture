@@ -1,0 +1,86 @@
+name: Phase 3 one-shot shared dialog helper extraction
+
+on:
+  push:
+    branches:
+      - refactor/phase3-secondary-dialogs
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase3-secondary-dialogs
+
+      - name: Move shared dialog heading helper out of app.py
+        shell: python
+        run: |
+          from pathlib import Path
+          import py_compile
+          import re
+
+          app_path = Path("src/picture_capture/app.py")
+          text = app_path.read_text(encoding="utf-8")
+          start_token = "\ndef _build_modern_dialog_heading("
+          end_token = "\nclass SettingsDialog(tk.Toplevel):"
+          assert text.count(start_token) == 1, "dialog heading helper boundary changed"
+          assert text.count(end_token) == 1, "SettingsDialog boundary changed"
+          start = text.index(start_token)
+          end = text.index(end_token, start)
+          extracted = text[start:end]
+          for contract in (
+              'def _build_modern_dialog_heading(',
+              'font.nametofont("TkDefaultFont").copy()',
+              'block.bind("<Configure>", resize_subtitle, add="+")',
+              'return block',
+          ):
+              assert contract in extracted, f"missing helper contract: {contract}"
+
+          # Delete first so inserting the import cannot invalidate offsets.
+          text = text[:start] + "\n" + text[end:]
+          anchor = "from .ui.dialogs.usage_guide import UsageGuideWindow\n"
+          helper_import = "from .ui.dialogs.common import _build_modern_dialog_heading\n"
+          assert text.count(anchor) == 1, "usage guide import anchor changed"
+          assert helper_import not in text
+          text = text.replace(anchor, anchor + helper_import, 1)
+          assert "def _build_modern_dialog_heading(" not in text
+          assert text.count(helper_import) == 1
+          # Existing consumers remain in app.py and must still call the alias.
+          assert text.count("_build_modern_dialog_heading(") >= 3
+          app_path.write_text(text, encoding="utf-8", newline="\n")
+
+          normalized_size = len(app_path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n"))
+          guard_path = Path("scripts/architecture_guard.py")
+          guard = guard_path.read_text(encoding="utf-8")
+          match = re.search(r'("app\.py":\s*)([0-9_]+)(,)', guard)
+          assert match, "app.py architecture baseline not found"
+          old_size = int(match.group(2).replace("_", ""))
+          assert normalized_size < old_size, (normalized_size, old_size)
+          guard = guard[:match.start(2)] + f"{normalized_size:_}" + guard[match.end(2):]
+          guard_path.write_text(guard, encoding="utf-8", newline="\n")
+          print(f"app.py architecture baseline: {old_size} -> {normalized_size}")
+
+          for path in (
+              app_path,
+              Path("src/picture_capture/ui/dialogs/common.py"),
+              Path("tests/test_ui_dialog_common.py"),
+          ):
+              py_compile.compile(str(path), doraise=True)
+
+      - name: Verify architecture guard
+        run: python scripts/architecture_guard.py
+
+      - name: Remove one-shot workflow and commit extraction
+        shell: bash
+        run: |
+          rm .github/workflows/phase3_dialog_common_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/picture_capture/app.py src/picture_capture/ui/dialogs/common.py tests/test_ui_dialog_common.py scripts/architecture_guard.py .github/workflows/phase3_dialog_common_once.yml
+          git commit -m "refactor: share secondary dialog heading helper"
+          git push origin HEAD:refactor/phase3-secondary-dialogs
