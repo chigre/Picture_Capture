@@ -14741,132 +14741,24 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def _rulers_visible(self) -> bool:
-        if self.image is None:
-            return False
-        visible = (
-            self.quick_bool_vars.get("show_rulers").get()
-            if hasattr(self, "quick_bool_vars") and "show_rulers" in self.quick_bool_vars
-            else bool(getattr(self.settings, "show_rulers", False))
-        )
-        return bool(visible) and not bool(self.hide_var.get())
+        return self._canvas_controller_for_call().rulers_visible()
+
 
     def _draw_percentage_rulers(self, geometry=None) -> None:
-        """Draw four fixed percentage rulers on the page edges."""
-        _ = geometry
-        if not self._rulers_visible() or self.image is None:
-            return
-        display_width = float(max(1, self.image.width - 1)) * self.view_scale
-        display_height = float(max(1, self.image.height - 1)) * self.view_scale
-        color = str(getattr(self.settings, "ruler_color", "#1976d2") or "#1976d2")
-        margin = 28
-        margin_color = str(
-            getattr(self, "_main_ui_colors", {}).get(
-                "ruler_margin",
-                "#20252b" if self.appearance_mode == "dark" else "#f1f3f6",
-            )
-        )
-        # Only the out-of-image ruler gutters get this background.  The page
-        # image and the rest of the canvas keep their existing colours.
-        self.canvas.create_rectangle(
-            -margin, 0, 0, display_height + margin,
-            fill=margin_color, outline="", tags=("ruler-margin",),
-        )
-        self.canvas.create_rectangle(
-            display_width, 0, display_width + margin, display_height + margin,
-            fill=margin_color, outline="", tags=("ruler-margin",),
-        )
-        self.canvas.create_rectangle(
-            0, display_height, display_width, display_height + margin,
-            fill=margin_color, outline="", tags=("ruler-margin",),
-        )
+        self._canvas_controller_for_call().draw_percentage_rulers(geometry)
 
-        major_tick = 7
-        minor_tick = 4
-        label_gap = major_tick + 2
-        font_spec = ("TkDefaultFont", 8)
-
-        for ruler_id, y in (("top", 0.0), ("bottom", display_height)):
-            tags = ("measurement-ruler", "ruler-horizontal", f"ruler-{ruler_id}")
-            self.canvas.create_line(
-                0, y, display_width, y,
-                fill=color, width=1, tags=tags,
-            )
-            for half_percent in range(201):
-                pct = half_percent * 0.5
-                x = display_width * pct / 100.0
-                tick = major_tick if half_percent % 2 == 0 else minor_tick
-                self.canvas.create_line(
-                    x, y - tick, x, y + tick,
-                    fill=color, width=1, tags=tags,
-                )
-            for value in range(5, 100, 5):
-                x = display_width * value / 100.0
-                self.canvas.create_text(
-                    x, y + label_gap, text=str(value), fill=color,
-                    anchor="n", font=font_spec, tags=tags,
-                )
-
-        for ruler_id, x in (("left", 0.0), ("right", display_width)):
-            tags = ("measurement-ruler", "ruler-vertical", f"ruler-{ruler_id}")
-            self.canvas.create_line(
-                x, 0, x, display_height,
-                fill=color, width=1, tags=tags,
-            )
-            for half_percent in range(201):
-                pct = half_percent * 0.5
-                y = display_height * pct / 100.0
-                tick = major_tick if half_percent % 2 == 0 else minor_tick
-                self.canvas.create_line(
-                    x - tick, y, x + tick, y,
-                    fill=color, width=1, tags=tags,
-                )
-            label_x = x - label_gap if ruler_id == "left" else x + label_gap
-            anchor = "e" if ruler_id == "left" else "w"
-            for value in range(5, 100, 5):
-                y = display_height * value / 100.0
-                self.canvas.create_text(
-                    label_x, y, text=str(value), fill=color,
-                    anchor=anchor, font=font_spec, tags=tags,
-                )
 
     def _ruler_hit_id(self, source_x: float, source_y: float) -> str | None:
-        if not self._rulers_visible() or self.image is None:
-            return None
-        max_x = float(max(1, self.image.width - 1))
-        max_y = float(max(1, self.image.height - 1))
-        tolerance = max(3.0, 8.0 / max(0.05, float(self.view_scale)))
-        distances = {
-            "top": abs(float(source_y)),
-            "bottom": abs(float(source_y) - max_y),
-            "left": abs(float(source_x)),
-            "right": abs(float(source_x) - max_x),
-        }
-        ruler_id, distance = min(distances.items(), key=lambda item: item[1])
-        return ruler_id if distance <= tolerance else None
+        return self._canvas_controller_for_call().ruler_hit_id(source_x, source_y)
+
 
     def _hide_ruler_hint(self) -> None:
-        popup = getattr(self, "_ruler_hint", None)
-        if popup is not None:
-            try:
-                popup.destroy()
-            except tk.TclError:
-                pass
-        self._ruler_hint = None
+        self._canvas_controller_for_call().hide_ruler_hint()
+
 
     def _show_ruler_hint(self, event: tk.Event) -> None:
-        text = "标尺可以帮助版面参数的手动填写。"
-        popup = getattr(self, "_ruler_hint", None)
-        if popup is None:
-            popup = tk.Toplevel(self.canvas)
-            popup.wm_overrideredirect(True)
-            ttk.Label(
-                popup, text=text, padding=(7, 4), relief="solid",
-            ).pack()
-            self._ruler_hint = popup
-        try:
-            popup.wm_geometry(f"+{event.x_root + 14}+{event.y_root + 18}")
-        except tk.TclError:
-            self._ruler_hint = None
+        self._canvas_controller_for_call().show_ruler_hint(event)
+
 
     def redraw(self) -> None:
         self._sync_polygon_label_texts()
@@ -15124,31 +15016,16 @@ class PictureCaptureApp(tk.Tk):
 
 
     def draw_cursor_guides(self, canvas_x: float, canvas_y: float) -> None:
-        """Draw the blue dashed crosshair in the current canvas view."""
-        self.canvas.delete("cursor-guide")
-        if self.image is None or self._section_editing:
-            return
-        width = self.image.width * self.view_scale
-        height = self.image.height * self.view_scale
-        if not (0 <= canvas_x < width and 0 <= canvas_y < height):
-            return
-        style = dict(fill="#1976d2", width=1, dash=(4, 4), tags=("cursor-guide",))
-        self.canvas.create_line(0, canvas_y, width, canvas_y, **style)
-        self.canvas.create_line(canvas_x, 0, canvas_x, height, **style)
-        self.canvas.tag_raise("cursor-guide")
+        self._canvas_controller_for_call().draw_cursor_guides(canvas_x, canvas_y)
+
 
     def canvas_leave(self, _event: tk.Event) -> None:
-        self.cursor_canvas_xy = None
-        self.canvas.delete("cursor-guide")
-        self._hide_ruler_hint()
-        self._set_idle_cursor_status()
+        self._canvas_controller_for_call().canvas_leave(_event)
+
 
     def _set_idle_cursor_status(self) -> None:
-        zoom = round(self.view_scale * 100)
-        if self._preprocess_mode_active():
-            self.cursor_status_var.set(f"坐标：—｜预处理预览｜缩放 {zoom}%")
-        else:
-            self.cursor_status_var.set(f"坐标：—｜缩放 {zoom}%｜词条 {len(self.entries)}")
+        self._canvas_controller_for_call().set_idle_cursor_status()
+
 
     @staticmethod
     def _polygon_display_name(region: PolygonRegion, index: int) -> str:

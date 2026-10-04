@@ -8054,8 +8054,12 @@ def test_ocr_strategy_order_and_defaults_are_single_engine_first():
 
 
 def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    root = Path(__file__).resolve().parents[1]
+    source = root / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
+    canvas_controller = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "canvas.py"
+    ).read_text(encoding="utf-8")
     assert 'self.page_list.heading("section", text="Section", anchor="w")' in text
     assert 'self.page_list.bind("<Double-1>", self._page_list_section_double_click, add="+")' in text
     assert "minvalue=0, maxvalue=10" in text
@@ -8064,8 +8068,8 @@ def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded(
     assert "该位置位于 SECTION 间空白区，不添加词条。" in text
     assert "page_sections=list(self.page_sections)" in text
     assert 'self.canvas.configure(cursor="hand2" if self._section_editing else "")' in text
-    assert "if self.image is None or self._section_editing:" in text
-    assert 'self.canvas.delete("cursor-guide")' in text
+    assert "if app.image is None or app._section_editing:" in canvas_controller
+    assert 'app.canvas.delete("cursor-guide")' in canvas_controller
     assert 'text="双击进入Section编辑模式"' in text
     assert '"确认后：拖动虚线定位Section，双击左键确认并退出编辑。"' in text
     assert 'self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)' in text

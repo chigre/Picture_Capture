@@ -2378,6 +2378,9 @@ def test_page_template_alternating_ab_side_widths_are_independent():
 def test_main_canvas_percentage_rulers_are_fixed_display_only_overlays():
     root = Path(__file__).resolve().parents[1]
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    canvas_controller = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "canvas.py"
+    ).read_text(encoding="utf-8")
     models = (root / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
 
     assert "show_rulers: bool = True" in models
@@ -2386,24 +2389,29 @@ def test_main_canvas_percentage_rulers_are_fixed_display_only_overlays():
     assert "ruler_bottom_y_ratio" not in models
     assert "ruler_left_x_ratio" not in models
     assert "ruler_right_x_ratio" not in models
-    assert 'for ruler_id, y in (("top", 0.0), ("bottom", display_height)):' in app
-    assert 'for ruler_id, x in (("left", 0.0), ("right", display_width)):' in app
-    assert "for half_percent in range(201):" in app
-    assert "pct = half_percent * 0.5" in app
-    assert "for value in range(5, 100, 5):" in app
-    assert 'label_x = x - label_gap if ruler_id == "left" else x + label_gap' in app
-    assert 'anchor = "e" if ruler_id == "left" else "w"' in app
+    assert 'for ruler_id, y in (("top", 0.0), ("bottom", display_height)):' in canvas_controller
+    assert 'for ruler_id, x in (("left", 0.0), ("right", display_width)):' in canvas_controller
+    assert "for half_percent in range(201):" in canvas_controller
+    assert "pct = half_percent * 0.5" in canvas_controller
+    assert "for value in range(5, 100, 5):" in canvas_controller
+    assert 'label_x = x - label_gap if ruler_id == "left" else x + label_gap' in canvas_controller
+    assert 'anchor = "e" if ruler_id == "left" else "w"' in canvas_controller
     assert '"ruler_margin": "#f1f3f6"' in app
     assert '"ruler_margin": "#20252b"' in app
-    assert 'tags=("ruler-margin",)' in app
-    assert 'fill=margin_color, outline=""' in app
-    assert "标尺可以帮助版面参数的手动填写。" in app
+    assert 'tags=("ruler-margin",)' in canvas_controller
+    assert 'fill=margin_color, outline=""' in canvas_controller
+    assert "标尺可以帮助版面参数的手动填写。" in canvas_controller
     assert "_drag_ruler_id" not in app
+    assert "_drag_ruler_id" not in canvas_controller
     assert "_ruler_drag_last_canvas" not in app
+    assert "_ruler_drag_last_canvas" not in canvas_controller
     assert "self.canvas.move(tag" not in app
-    assert "build_page_crop_plan" not in app[
-        app.index("    def _draw_percentage_rulers"):
-        app.index("    def redraw(", app.index("    def _draw_percentage_rulers"))
+    assert "build_page_crop_plan" not in canvas_controller[
+        canvas_controller.index("    def draw_percentage_rulers"):
+        canvas_controller.index(
+            "    def ruler_hit_id",
+            canvas_controller.index("    def draw_percentage_rulers"),
+        )
     ]
 
 
