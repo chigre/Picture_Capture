@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
 import tkinter as tk
-from tkinter import ttk
+from tkinter import filedialog, ttk
+
+from ...models import resolve_wordslist_path
 
 
 def build_project_details_tab(
@@ -127,3 +130,37 @@ def build_project_details_tab(
         text="这些资料随当前项目保存在 _PictureCapture/settings.json 中。",
         foreground="#666666",
     ).grid(row=1, column=0, sticky="w", padx=18)
+
+
+def browse_wordslist_setting(dialog, var: tk.StringVar) -> None:
+    """Choose a wordslist and persist a portable project-relative path when possible."""
+    initialdir = str(dialog.parent.project.root) if dialog.parent.project else None
+    current = str(var.get()).strip()
+    if dialog.parent.project and current:
+        try:
+            current_path = resolve_wordslist_path(dialog.parent.project.root, current)
+            if current_path.parent.exists():
+                initialdir = str(current_path.parent)
+        except Exception:
+            pass
+
+    chosen = filedialog.askopenfilename(
+        parent=dialog,
+        title="选择 wordslist 参考词表",
+        initialdir=initialdir,
+        filetypes=[("文本文件", "*.txt"), ("所有文件", "*.*")],
+    )
+    if not chosen:
+        return
+
+    path = Path(chosen)
+    if dialog.parent.project:
+        try:
+            path_text = path.resolve().relative_to(
+                dialog.parent.project.root.resolve()
+            ).as_posix()
+        except ValueError:
+            path_text = str(path.resolve())
+    else:
+        path_text = str(path)
+    var.set(path_text)
