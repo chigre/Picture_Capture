@@ -57,6 +57,7 @@ from .ui.widgets.vertical_word import VerticalWordText
 from .ui.settings import schema as _settings_schema
 from .ui.settings import help as _settings_help_ui
 from .ui.settings import profile as _settings_profile_ui
+from .ui.settings import rules as _settings_rules_ui
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
     _wrap_mixed_ui_text,
@@ -2882,48 +2883,19 @@ class SettingsDialog(tk.Toplevel):
         var.set(path_text)
 
     def _rules_path(self) -> Path | None:
-        if self.parent.project:
-            return headword_filter_rules_path(self.parent.project.root, HEADWORD_FILTER_RULES_FILENAME)
-        return None
+        return _settings_rules_ui.rules_path(self)
 
     def load_rules_editor(self) -> None:
-        path = self._rules_path()
-        if path and path.exists():
-            text, _encoding = read_text_detected(path)
-            self.rules_status_var.set(path.name)
-        else:
-            text = DEFAULT_HEADWORD_FILTER_RULES
-            self.rules_status_var.set("尚未保存，将在保存参数时创建规则文件")
-        self.rules_text.delete("1.0", "end"); self.rules_text.insert("1.0", text)
+        _settings_rules_ui.load_rules_editor(self)
 
     def restore_default_rules(self) -> None:
-        if not messagebox.askyesno("恢复默认规则", "将规则编辑框恢复为默认模板？保存参数前不会写入磁盘。", parent=self):
-            return
-        self.rules_text.delete("1.0", "end"); self.rules_text.insert("1.0", DEFAULT_HEADWORD_FILTER_RULES)
-        self.rules_status_var.set("已恢复默认模板（尚未保存）")
+        _settings_rules_ui.restore_default_rules(self)
 
     def import_rules(self) -> None:
-        path = filedialog.askopenfilename(parent=self, title="导入词头规则", filetypes=[("文本文件", "*.txt"), ("所有文件", "*.*")])
-        if not path:
-            return
-        try:
-            text, _encoding = read_text_detected(path); parse_headword_filter_rules(text, path)
-        except Exception as exc:
-            messagebox.showerror("规则无效", str(exc), parent=self); return
-        self.rules_text.delete("1.0", "end"); self.rules_text.insert("1.0", text)
-        self.rules_status_var.set(f"已导入 {Path(path).name}（尚未保存到项目）")
+        _settings_rules_ui.import_rules(self)
 
     def export_rules(self) -> None:
-        text = self.rules_text.get("1.0", "end-1c")
-        try:
-            parse_headword_filter_rules(text, "规则编辑框")
-        except Exception as exc:
-            messagebox.showerror("规则无效", str(exc), parent=self); return
-        path = filedialog.asksaveasfilename(parent=self, title="导出词头规则", defaultextension=".txt", initialfile=HEADWORD_FILTER_RULES_FILENAME, filetypes=[("文本文件", "*.txt"), ("所有文件", "*.*")])
-        if not path:
-            return
-        Path(path).write_text(text.rstrip() + "\n", encoding="utf-8")
-        self.rules_status_var.set(f"已导出 {Path(path).name}")
+        _settings_rules_ui.export_rules(self)
 
     def _schedule_autosave(self) -> None:
         if not getattr(self, "_autosave_ready", False):
