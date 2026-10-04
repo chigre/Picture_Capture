@@ -1,0 +1,210 @@
+name: Phase 4 one-shot PageController wiring
+
+on:
+  push:
+    branches:
+      - refactor/phase4-page-controller-navigation
+    paths:
+      - .github/workflows/phase4_extract_page_controller_once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase4-page-controller-navigation
+
+      - name: Wire PageController into PictureCaptureApp
+        shell: python
+        run: |
+          import ast
+          from pathlib import Path
+          import py_compile
+
+          app_path = Path("src/picture_capture/app.py")
+          controller_path = Path("src/picture_capture/ui/controllers/page.py")
+          regression_path = Path("tests/test_next_stage_regressions.py")
+          guard_path = Path("scripts/architecture_guard.py")
+
+          app = app_path.read_text(encoding="utf-8")
+          assert "from .ui.controllers import PageController" not in app
+          import_anchor = "from .ui.settings import project as _settings_project_ui\n"
+          assert app.count(import_anchor) == 1
+          app = app.replace(
+              import_anchor,
+              import_anchor + "from .ui.controllers import PageController\n",
+              1,
+          )
+
+          wiring_anchor = (
+              "        self._configure_main_workspace_styles()\n"
+              "        self._build_ui()\n"
+          )
+          assert app.count(wiring_anchor) == 1
+          app = app.replace(
+              wiring_anchor,
+              "        self._configure_main_workspace_styles()\n"
+              "        self.page_controller = PageController(self)\n"
+              "        self._build_ui()\n",
+              1,
+          )
+
+          tree = ast.parse(app)
+          cls = next(
+              node for node in tree.body
+              if isinstance(node, ast.ClassDef) and node.name == "PictureCaptureApp"
+          )
+          methods = [
+              node for node in cls.body
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+          ]
+          by_name = {node.name: node for node in methods}
+          names = [node.name for node in methods]
+          expected = [
+              "on_page_select", "_request_page_load", "load_page",
+              "change_page", "_get_cached_display_photo",
+          ]
+          positions = [names.index(name) for name in expected]
+          assert positions == list(range(positions[0], positions[0] + len(expected))), positions
+
+          select = by_name["on_page_select"]
+          request = by_name["_request_page_load"]
+          load = by_name["load_page"]
+          change = by_name["change_page"]
+          after_change = by_name["_get_cached_display_photo"]
+
+          lines = app.splitlines(keepends=True)
+          select_wrapper = (
+              "    def on_page_select(self, _event: tk.Event) -> None:\n"
+              "        self.page_controller.on_page_select(_event)\n\n"
+          )
+          request_wrapper = (
+              "    def _request_page_load(\n"
+              "        self, index: int, *, reset_zoom: bool = False,\n"
+              "        current_already_saved: bool = False, force: bool = False,\n"
+              "    ) -> bool:\n"
+              "        return self.page_controller.request_page_load(\n"
+              "            index,\n"
+              "            reset_zoom=reset_zoom,\n"
+              "            current_already_saved=current_already_saved,\n"
+              "            force=force,\n"
+              "        )\n\n"
+          )
+          change_wrapper = (
+              "    def change_page(\n"
+              "        self, delta: int, *, preloaded: dict | None = None,\n"
+              "        current_already_saved: bool = False, async_allowed: bool = True,\n"
+              "    ) -> bool:\n"
+              "        return self.page_controller.change_page(\n"
+              "            delta,\n"
+              "            preloaded=preloaded,\n"
+              "            current_already_saved=current_already_saved,\n"
+              "            async_allowed=async_allowed,\n"
+              "        )\n\n"
+          )
+
+          # Apply bottom-up so original AST line offsets stay valid.
+          lines[change.lineno - 1 : after_change.lineno - 1] = change_wrapper.splitlines(keepends=True)
+          lines[request.lineno - 1 : load.lineno - 1] = request_wrapper.splitlines(keepends=True)
+          lines[select.lineno - 1 : request.lineno - 1] = select_wrapper.splitlines(keepends=True)
+          app = "".join(lines)
+          app_path.write_text(app, encoding="utf-8", newline="\n")
+
+          # Preserve the old source-shape test as a behavior-boundary test:
+          # preload implementation moves to the controller; app methods remain wrappers.
+          regression = regression_path.read_text(encoding="utf-8")
+          old_block = (
+              "    page_request = text.index(\"    def _request_page_load(\", app_start)\n"
+              "    page_load = text.index(\"    def load_page(\", page_request)\n"
+              "    page_block = text[page_request:page_load]\n"
+              "    assert \"with Image.open(page) as opened:\" in page_block\n"
+              "    assert 'self._start_ui_worker(\"page-load\"' in page_block\n"
+              "    select_start = text.index(\"    def on_page_select(\", app_start)\n"
+              "    assert \"self._request_page_load(index)\" in text[select_start:page_request]\n"
+          )
+          assert regression.count(old_block) == 1, regression.count(old_block)
+          new_block = (
+              "    page_controller = (\n"
+              "        Path(__file__).resolve().parents[1]\n"
+              "        / \"src\" / \"picture_capture\" / \"ui\" / \"controllers\" / \"page.py\"\n"
+              "    ).read_text(encoding=\"utf-8\")\n"
+              "    page_request = text.index(\"    def _request_page_load(\", app_start)\n"
+              "    page_load = text.index(\"    def load_page(\", page_request)\n"
+              "    page_block = text[page_request:page_load]\n"
+              "    assert \"self.page_controller.request_page_load(\" in page_block\n"
+              "    assert \"with Image.open(page) as opened:\" in page_controller\n"
+              "    assert 'app._start_ui_worker(\"page-load\"' in page_controller\n"
+              "    select_start = text.index(\"    def on_page_select(\", app_start)\n"
+              "    assert \"self.page_controller.on_page_select(_event)\" in text[select_start:page_request]\n"
+          )
+          regression = regression.replace(old_block, new_block, 1)
+          regression_path.write_text(regression, encoding="utf-8", newline="\n")
+
+          # Explicit boundary checks before running pytest.
+          updated = app_path.read_text(encoding="utf-8")
+          assert updated.count("from .ui.controllers import PageController") == 1
+          assert updated.count("self.page_controller = PageController(self)") == 1
+          assert updated.index("self.page_controller = PageController(self)") < updated.index("self._build_ui()")
+          app_start = updated.index("class PictureCaptureApp")
+          select_start = updated.index("    def on_page_select(", app_start)
+          request_start = updated.index("    def _request_page_load(", select_start)
+          load_start = updated.index("    def load_page(", request_start)
+          change_start = updated.index("    def change_page(", load_start)
+          after_change_start = updated.index("    def _get_cached_display_photo(", change_start)
+          assert "with Image.open(page) as opened:" not in updated[request_start:load_start]
+          assert "self.current_index = index" in updated[load_start:change_start]
+          assert "self.redraw()" in updated[load_start:change_start]
+          assert "self.page_controller.change_page(" in updated[change_start:after_change_start]
+
+          controller = controller_path.read_text(encoding="utf-8")
+          assert "from ...app" not in controller
+          assert "import picture_capture.app" not in controller
+          assert "with Image.open(page) as opened:" in controller
+          assert 'app._start_ui_worker("page-load"' in controller
+
+          py_compile.compile(str(app_path), doraise=True)
+          py_compile.compile(str(controller_path), doraise=True)
+
+          size = len(app_path.read_bytes())
+          guard = guard_path.read_text(encoding="utf-8")
+          old_guard = '    "app.py": 898_937,'
+          assert guard.count(old_guard) == 1
+          rendered = f"{size:,}".replace(",", "_")
+          guard = guard.replace(old_guard, f'    "app.py": {rendered},', 1)
+          guard_path.write_text(guard, encoding="utf-8", newline="\n")
+          print(f"APP_BYTES={size}")
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install locked dev dependencies
+        run: uv sync --locked --group dev
+
+      - name: Run full pytest suite
+        run: uv run --locked pytest
+
+      - name: Remove one-shot workflow and commit PageController wiring
+        shell: bash
+        run: |
+          rm .github/workflows/phase4_extract_page_controller_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            scripts/architecture_guard.py \
+            src/picture_capture/app.py \
+            src/picture_capture/ui/controllers/__init__.py \
+            src/picture_capture/ui/controllers/page.py \
+            tests/test_ui_page_controller.py \
+            tests/test_next_stage_regressions.py \
+            .github/workflows/phase4_extract_page_controller_once.yml
+          git commit -m "refactor: route page navigation through PageController"
+          git push origin HEAD:refactor/phase4-page-controller-navigation
