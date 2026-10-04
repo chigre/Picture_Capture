@@ -17186,50 +17186,7 @@ class PictureCaptureApp(tk.Tk):
         self._crop_controller_for_call().split_lines_current()
 
     def split_whole_current(self) -> None:
-        """Backward-compatible whole-entry crop export routed off the Tk thread."""
-        if self._batch_active:
-            self.status_var.set("已有批量任务正在运行，请结束后再执行整体切图。")
-            return
-        if not self.guard():
-            return
-        if not self._guard_transformed_geometry("整体切图"):
-            return
-
-        project = self.project
-        page = self.current_page
-        page_index = int(self.current_index)
-        entries = [replace(entry) for entry in self.entries]
-        polygons = list(self.polygons)
-        settings = replace(self.settings)
-        config = self._load_crop_settings()
-        special = config.get("special_pages", {}).get(page.stem, {})
-        top_y = int(special.get("top_y", config.get("general_top_y", settings.start_y)))
-        bottom_y = int(special.get("bottom_y", config.get("general_bottom_y", 0)))
-        entry_left = int(config.get("entry_left_padding_x", 0))
-        entry_right = int(config.get("entry_right_padding_x", 0))
-        integrate_illustrations = bool(config.get("integrate_illustrations", True))
-        out_dir = qt_root(project.root) / "PWW"
-
-        def worker(_item, _position: int, _total: int):
-            records = split_whole_entries(
-                page, entries, settings, out_dir,
-                top_y=top_y, bottom_y=bottom_y, polygons=polygons,
-                entry_left_padding=entry_left,
-                entry_right_padding=entry_right,
-                integrate_illustrations=integrate_illustrations,
-                profile_page_index=page_index,
-            )
-            append_crop_log(project.root, records)
-            return len(records)
-
-        def done(_completed, _total, stopped, results, error):
-            if error is None and not stopped and results:
-                self.status_var.set(f"已导出 {int(results[-1] or 0)} 张词条整体图")
-
-        self._start_batch_task(
-            "当前页整体切图", [page_index], worker, done,
-            item_label=lambda _item: page.name,
-        )
+        self._crop_controller_for_call().split_whole_current()
 
     def _crop_settings_defaults(self) -> dict:
         default_bottom = self.settings.bottom_y if self.settings.crop_to_bottom_y else 0
