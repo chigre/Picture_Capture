@@ -1,0 +1,111 @@
+name: Phase 3 one-shot usage guide extraction
+
+on:
+  push:
+    branches:
+      - refactor/phase3-usage-guide
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase3-usage-guide
+
+      - name: Extract UsageGuideWindow from app.py
+        shell: python
+        run: |
+          from pathlib import Path
+          import py_compile
+          import re
+
+          app_path = Path("src/picture_capture/app.py")
+          text = app_path.read_text(encoding="utf-8")
+
+          start_token = "\nclass UsageGuideWindow(tk.Toplevel):"
+          end_token = "\nclass SettingsDialog(tk.Toplevel):"
+          assert text.count(start_token) == 1, "UsageGuideWindow start boundary changed"
+          assert text.count(end_token) == 1, "SettingsDialog boundary changed"
+          start = text.index(start_token)
+          end = text.index(end_token, start)
+          extracted = text[start + 1:end]
+          assert extracted.startswith("class UsageGuideWindow(tk.Toplevel):")
+          for contract in (
+              'self.title("Picture Capture · 帮助中心")',
+              'def refresh_appearance(self) -> None:',
+              'def _show_page(self, key: str) -> None:',
+              'def _mousewheel(self, event: tk.Event) -> str | None:',
+          ):
+              assert contract in extracted, f"missing guide contract: {contract}"
+          assert extracted.count("_screen_work_area(self)") == 1
+
+          dialog_body = extracted.replace("_screen_work_area(self)", "screen_work_area(self)")
+          dialog_header = '''from __future__ import annotations\n\nimport tkinter as tk\nfrom tkinter import font, ttk\n\nfrom ...appearance import usage_guide_palette\nfrom ...ui_compat import screen_work_area\nfrom ..text_wrap import _label_measure, _normalize_ui_paragraphs, _wrap_mixed_ui_text\n\n\n'''
+          dialog_path = Path("src/picture_capture/ui/dialogs/usage_guide.py")
+          assert not dialog_path.exists(), "usage_guide.py already exists"
+          dialog_path.write_text(dialog_header + dialog_body.rstrip() + "\n\n\n__all__ = [\"UsageGuideWindow\"]\n", encoding="utf-8", newline="\n")
+
+          # Delete the class before inserting its compatibility import so source
+          # offsets cannot be invalidated by the new import block.
+          text = text[:start] + "\n" + text[end:]
+          anchor = '''from .ui.text_wrap import (\n    _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,\n    _wrap_mixed_ui_text,\n)\n'''
+          guide_import = "from .ui.dialogs.usage_guide import UsageGuideWindow\n"
+          assert text.count(anchor) == 1, "shared text-wrap import anchor changed"
+          assert guide_import not in text
+          text = text.replace(anchor, anchor + guide_import, 1)
+          assert "class UsageGuideWindow(tk.Toplevel):" not in text
+          assert text.count(guide_import) == 1
+          app_path.write_text(text, encoding="utf-8", newline="\n")
+
+          # Keep the existing source-contract test meaningful: dialog assertions
+          # read the extracted module, while show_help_dialog assertions still
+          # read app.py.
+          test_path = Path("tests/test_next_stage_regressions.py")
+          tests = test_path.read_text(encoding="utf-8")
+          old_source = '''    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"\n    text = source.read_text(encoding="utf-8")\n\n    guide_start = text.index("class UsageGuideWindow(tk.Toplevel):")\n    guide_end = text.index("class SettingsDialog(tk.Toplevel):", guide_start)\n    guide = text[guide_start:guide_end]\n'''
+          new_source = '''    root = Path(__file__).resolve().parents[1]\n    app_source = root / "src" / "picture_capture" / "app.py"\n    guide_source = root / "src" / "picture_capture" / "ui" / "dialogs" / "usage_guide.py"\n    text = app_source.read_text(encoding="utf-8")\n    guide_text = guide_source.read_text(encoding="utf-8")\n\n    guide_start = guide_text.index("class UsageGuideWindow(tk.Toplevel):")\n    guide_end = len(guide_text)\n    guide = guide_text[guide_start:guide_end]\n'''
+          assert tests.count(old_source) == 1, "usage guide source test prelude changed"
+          tests = tests.replace(old_source, new_source, 1)
+          old_work_area = '    assert "work_x, work_y, work_w, work_h = _screen_work_area(self)" in guide\n'
+          new_work_area = '    assert "work_x, work_y, work_w, work_h = screen_work_area(self)" in guide\n'
+          assert tests.count(old_work_area) == 1, "usage guide work-area assertion changed"
+          tests = tests.replace(old_work_area, new_work_area, 1)
+          test_path.write_text(tests, encoding="utf-8", newline="\n")
+
+          normalized_size = len(app_path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n"))
+          guard_path = Path("scripts/architecture_guard.py")
+          guard = guard_path.read_text(encoding="utf-8")
+          match = re.search(r'("app\.py":\s*)([0-9_]+)(,)', guard)
+          assert match, "app.py architecture baseline not found"
+          old_size = int(match.group(2).replace("_", ""))
+          assert normalized_size < old_size, (normalized_size, old_size)
+          guard = guard[:match.start(2)] + f"{normalized_size:_}" + guard[match.end(2):]
+          guard_path.write_text(guard, encoding="utf-8", newline="\n")
+          print(f"app.py architecture baseline: {old_size} -> {normalized_size}")
+
+          for path in (
+              app_path,
+              dialog_path,
+              Path("src/picture_capture/ui/dialogs/__init__.py"),
+              test_path,
+              Path("tests/test_ui_dialog_boundaries.py"),
+          ):
+              py_compile.compile(str(path), doraise=True)
+
+      - name: Verify architecture guard
+        run: python scripts/architecture_guard.py
+
+      - name: Remove one-shot workflow and commit extraction
+        shell: bash
+        run: |
+          rm .github/workflows/phase3_usage_guide_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/picture_capture/app.py src/picture_capture/ui/dialogs tests/test_next_stage_regressions.py tests/test_ui_dialog_boundaries.py scripts/architecture_guard.py .github/workflows/phase3_usage_guide_once.yml
+          git commit -m "refactor: extract usage guide dialog"
+          git push origin HEAD:refactor/phase3-usage-guide
