@@ -17697,46 +17697,7 @@ class PictureCaptureApp(tk.Tk):
         self._start_batch_task("批量 OCR", indices, worker, done, item_label=lambda i: project.images[i].name)
 
     def batch_split_whole(self) -> None:
-        if not self.project or self._batch_active: return
-        if not self._guard_transformed_geometry("批量整体切图"):
-            return
-        project = self.project
-        settings = replace(self.settings)
-        indices = list(range(len(project.images)))
-        out_dir = qt_root(project.root) / "PWW"
-        config = self._load_crop_settings()
-        general_top = int(config.get("general_top_y", settings.start_y))
-        general_bottom = int(config.get("general_bottom_y", 0))
-        entry_left = int(config.get("entry_left_padding_x", 0))
-        entry_right = int(config.get("entry_right_padding_x", 0))
-        integrate_illustrations = bool(config.get("integrate_illustrations", True))
-        specials = config.get("special_pages", {}) if isinstance(config.get("special_pages", {}), dict) else {}
-
-        def worker(index: int, _position: int, _total: int):
-            page = project.images[index]
-            entries = read_pdic(pdic_path(page))
-            polygons = read_ppp(ppp_read_path_for_image(page))
-            special = specials.get(page.stem, {}) if isinstance(specials.get(page.stem, {}), dict) else {}
-            top_y = int(special.get("top_y", general_top))
-            bottom_y = int(special.get("bottom_y", general_bottom))
-            records = split_whole_entries(
-                page, entries, settings, out_dir, top_y=top_y, bottom_y=bottom_y, polygons=polygons,
-                entry_left_padding=entry_left, entry_right_padding=entry_right,
-                integrate_illustrations=integrate_illustrations,
-                profile_page_index=index,
-            )
-            append_crop_log(project.root, records)
-            return len(records)
-
-        def done(completed, total_pages, stopped, results, error):
-            if error is not None: return
-            count = sum(int(v or 0) for v in results)
-            if stopped:
-                self.status_var.set(f"批量整体切图已停止：完成 {completed}/{total_pages} 页，共 {count} 张")
-            else:
-                self.status_var.set(f"批量整体切图完成：{count} 张")
-
-        self._start_batch_task("批量整体切图", indices, worker, done, item_label=lambda i: project.images[i].name)
+        self._crop_controller_for_call().batch_split_whole()
 
     def repair_pdic_order_selected_scope(self) -> None:
         """Rewrite selected-page PDIC files in stable column/Y order.
