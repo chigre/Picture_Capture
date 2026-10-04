@@ -1,0 +1,53 @@
+name: Phase 3 one-shot old-new source contract migration
+
+on:
+  push:
+    branches:
+      - refactor/phase3-old-new-comparison
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase3-old-new-comparison
+
+      - name: Point legacy source assertions at extracted dialog
+        shell: python
+        run: |
+          from pathlib import Path
+          import py_compile
+
+          path = Path("tests/test_core.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")\n    row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review))'\n    assert row in text\n    assert "class OldNewComparisonWindow" in text\n    assert 'notebook.add(diff_tab, text="差异")' in text\n    assert 'self._add_text_tab(notebook, "当前 PDIC 合集"' in text\n    assert 'self._add_text_tab(notebook, "旧 wordslist 片段"' in text\n'''
+          new = '''    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")\n    dialog_text = (\n        Path(__file__).resolve().parents[1]\n        / "src" / "picture_capture" / "ui" / "dialogs" / "old_new_comparison.py"\n    ).read_text(encoding="utf-8")\n    row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review))'\n    assert row in text\n    assert "from .ui.dialogs.old_new_comparison import OldNewComparisonWindow" in text\n    assert "class OldNewComparisonWindow" in dialog_text\n    assert 'notebook.add(diff_tab, text="差异")' in dialog_text\n    assert 'self._add_text_tab(notebook, "当前 PDIC 合集"' in dialog_text\n    assert 'self._add_text_tab(notebook, "旧 wordslist 片段"' in dialog_text\n'''
+          assert text.count(old) == 1, "legacy OldNewComparison source-contract block changed"
+          path.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
+          py_compile.compile(str(path), doraise=True)
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install locked dev dependencies
+        run: uv sync --locked --group dev
+
+      - name: Run affected test
+        run: uv run --locked pytest tests/test_core.py::test_v21122_hotfix3_main_actions_put_compare_before_review
+
+      - name: Remove workflow and commit test migration
+        shell: bash
+        run: |
+          rm .github/workflows/phase3_old_new_test_contract_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/test_core.py .github/workflows/phase3_old_new_test_contract_once.yml
+          git commit -m "test: align old-new comparison source contract"
+          git push origin HEAD:refactor/phase3-old-new-comparison
