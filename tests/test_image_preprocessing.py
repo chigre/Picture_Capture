@@ -1427,6 +1427,9 @@ def test_promote_processed_pages_requires_only_selected_exports_and_never_overwr
 def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     root = Path(__file__).resolve().parents[1]
     source = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
+    page_controller = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "page.py"
+    ).read_text(encoding="utf-8")
 
     assert '"图片预处理(前置)"' in source
     assert 'text="进入预处理模式"' in source
@@ -1448,8 +1451,8 @@ def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
     assert "export_summary_csv(" in source
     assert "allow_page_navigation: bool = False" in source
     assert source.count("allow_page_navigation=True") >= 4
-    assert source.count(
-        'and not getattr(self, "_batch_allow_page_navigation", False)'
+    assert page_controller.count(
+        'and not getattr(app, "_batch_allow_page_navigation", False)'
     ) >= 2
     assert 'text="手动四角"' in source
     assert 'text="重置四角"' in source

@@ -1821,8 +1821,11 @@ def test_v275_main_ocr_button_has_fixed_compact_label():
 
 
 def test_v275_page_switch_saves_current_editing_mode_before_loading_new_page():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    controller = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "page.py"
+    ).read_text(encoding="utf-8")
 
     load_start = text.index("    def load_page(")
     load_end = text.index("    def change_page(", load_start)
@@ -1830,10 +1833,7 @@ def test_v275_page_switch_saves_current_editing_mode_before_loading_new_page():
     assert "self._save_current_page_by_mode()" in load_block
     assert load_block.index("self._save_current_page_by_mode()") < load_block.index("self.current_index = index")
 
-    change_start = load_end
-    change_end = text.index("    def redraw(", change_start)
-    change_block = text[change_start:change_end]
-    assert "self._save_current_page_by_mode()" in change_block
+    assert "app._save_current_page_by_mode()" in controller
 
 
 def test_v2810_save_current_page_is_mode_specific():

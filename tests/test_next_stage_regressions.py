@@ -3992,13 +3992,18 @@ def test_round1_blocking_ui_paths_use_background_workers():
     assert "def worker():" in refresh
     assert 'self.app._start_ui_worker(f"environment-center-' in refresh
 
+    page_controller = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "controllers" / "page.py"
+    ).read_text(encoding="utf-8")
     page_request = text.index("    def _request_page_load(", app_start)
     page_load = text.index("    def load_page(", page_request)
     page_block = text[page_request:page_load]
-    assert "with Image.open(page) as opened:" in page_block
-    assert 'self._start_ui_worker("page-load"' in page_block
+    assert "self.page_controller.request_page_load(" in page_block
+    assert "with Image.open(page) as opened:" in page_controller
+    assert 'app._start_ui_worker("page-load"' in page_controller
     select_start = text.index("    def on_page_select(", app_start)
-    assert "self._request_page_load(index)" in text[select_start:page_request]
+    assert "self.page_controller.on_page_select(_event)" in text[select_start:page_request]
 
     project_start = text.index("    def _load_project(", app_start)
     project_end = text.index("\n    def on_page_select", project_start)
