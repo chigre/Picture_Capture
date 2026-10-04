@@ -1,0 +1,88 @@
+name: Phase 3 one-shot dialog dependency audit
+
+on:
+  push:
+    branches:
+      - refactor/phase3-secondary-dialogs
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase3-secondary-dialogs
+
+      - name: Report standalone dialog dependency surfaces
+        shell: python
+        run: |
+          from pathlib import Path
+          import ast
+          import builtins
+
+          path = Path("src/picture_capture/app.py")
+          text = path.read_text(encoding="utf-8")
+          tree = ast.parse(text)
+          candidates = {
+              "OCRConflictReviewDialog",
+              "CropSettingsDialog",
+              "OldNewComparisonWindow",
+              "SettingsDialog",
+              "ReviewWindow",
+          }
+          builtin_names = set(dir(builtins))
+
+          def root_chain(node):
+              parts = []
+              while isinstance(node, ast.Attribute):
+                  parts.append(node.attr)
+                  node = node.value
+              if isinstance(node, ast.Name):
+                  parts.append(node.id)
+              return list(reversed(parts))
+
+          for cls in [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name in candidates]:
+              defined = {n.name for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+              assigned = set()
+              loaded = set()
+              parent_calls = set()
+              self_calls = set()
+              for node in ast.walk(cls):
+                  if isinstance(node, ast.Name):
+                      if isinstance(node.ctx, (ast.Store, ast.Param)):
+                          assigned.add(node.id)
+                      elif isinstance(node.ctx, ast.Load):
+                          loaded.add(node.id)
+                  elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                      chain = root_chain(node.func)
+                      if len(chain) >= 3 and chain[:2] in (["self", "parent"], ["self", "parent_app"]):
+                          parent_calls.add(".".join(chain))
+                      elif len(chain) >= 2 and chain[0] == "self":
+                          self_calls.add(".".join(chain[:2]))
+              external = sorted(
+                  name for name in loaded
+                  if name not in assigned
+                  and name not in defined
+                  and name not in builtin_names
+                  and name not in {"self", "super"}
+              )
+              print("=" * 78)
+              print(cls.name)
+              print(f"lines={cls.lineno}-{cls.end_lineno} span={cls.end_lineno - cls.lineno + 1}")
+              print(f"methods={len(defined)}")
+              print("parent_calls=", sorted(parent_calls))
+              print("external_names=", external)
+
+      - name: Remove audit workflow
+        shell: bash
+        run: |
+          rm .github/workflows/phase3_dialog_dependency_audit_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/phase3_dialog_dependency_audit_once.yml
+          git commit -m "chore: remove one-shot dialog dependency audit"
+          git push origin HEAD:refactor/phase3-secondary-dialogs
