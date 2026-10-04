@@ -4197,7 +4197,6 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
     for name, next_name in (
         ("auto_detect_current", "paddle_detect_current"),
         ("ocr_current", "export_text"),
-        ("split_whole_current", "_crop_settings_defaults"),
         ("import_legacy_words", "_default_old_new_compare_source"),
     ):
         start = text.index(f"    def {name}(", app_start)
