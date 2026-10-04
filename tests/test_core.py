@@ -4498,7 +4498,7 @@ def test_v2102_reload_wordslist_updates_project_membership_and_persists_relative
 def test_v2102_review_ui_uses_wordslist_selector_not_wordsofpages_import():
     text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'text="选择文件"' in review
     assert 'text="导入_WordsOfPages.txt"' not in review
@@ -4525,7 +4525,7 @@ def test_v2103_wordslist_lookup_key_is_lightweight_unicode_fold():
 def test_v2103_review_wordslist_uses_virtual_window_and_cached_membership():
     text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert "self.word_window_radius = 250" in review
     assert 'text="前100"' in review and 'text="后100"' in review
@@ -4942,7 +4942,7 @@ def test_v2111_ui_restores_hide_overlay_and_removes_crop_dialog_preview():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     assert 'text="隐藏线框(插图除外)"' in text
-    crop_class = text.split('class CropSettingsDialog', 1)[1].split('class PictureCaptureApp', 1)[0]
+    crop_class = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "dialogs" / "crop_settings.py").read_text(encoding="utf-8")
     assert 'preview_canvas' not in crop_class
     assert '主界面完整预览' not in crop_class
     assert '词条右侧额外留白' in crop_class
@@ -5065,11 +5065,12 @@ def test_v2117_ppp_label_avoids_right_edge_without_covering_polygon():
 def test_v2118_crop_settings_exposes_integrate_illustrations_toggle():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    crop_class = text.split("class CropSettingsDialog", 1)[1].split("class PictureCaptureApp", 1)[0]
+    crop_class = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "dialogs" / "crop_settings.py").read_text(encoding="utf-8")
     assert 'text="是否综合插图计算切图信息"' in crop_class
     assert 'self.integrate_illustrations_var = tk.BooleanVar(value=True)' in crop_class
     assert '"integrate_illustrations": bool(self.integrate_illustrations_var.get())' in crop_class
-    assert '"integrate_illustrations": True' in text
+    schema = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "crop" / "settings.py").read_text(encoding="utf-8")
+    assert '"integrate_illustrations": True' in schema
 
 
 def test_v2118_crop_plan_can_ignore_ppp_for_entry_geometry_but_keep_relations():
@@ -5167,8 +5168,8 @@ def test_v2118_partial_ppp_exports_standalone_when_entry_integration_off(tmp_pat
 def test_v2119_crop_controls_live_only_in_crop_settings_dialog():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    settings_class = text.split("class SettingsDialog", 1)[1].split("class CropSettingsDialog", 1)[0]
-    crop_class = text.split("class CropSettingsDialog", 1)[1].split("class PictureCaptureApp", 1)[0]
+    settings_class = text.split("class SettingsDialog", 1)[1].split("class ReviewWindow", 1)[0]
+    crop_class = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "dialogs" / "crop_settings.py").read_text(encoding="utf-8")
     # Crop-only controls must not remain duplicated in More Parameters.
     assert '("裁剪终点 Y", "bottom_y", int)' not in settings_class
     assert '"crop_parallel_workers"' not in settings_class
@@ -5190,7 +5191,7 @@ def test_v2119_crop_controls_live_only_in_crop_settings_dialog():
 def test_crop_settings_v7_declares_source_coordinate_space():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    crop_class = text.split("class CropSettingsDialog", 1)[1].split("class PictureCaptureApp", 1)[0]
+    crop_class = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "dialogs" / "crop_settings.py").read_text(encoding="utf-8")
     assert '"version": CROP_SETTINGS_VERSION' in crop_class
     assert '"coordinate_space": SOURCE_COORDINATE_SPACE' in crop_class
     assert '"general_top_y"' in crop_class
@@ -5198,7 +5199,7 @@ def test_crop_settings_v7_declares_source_coordinate_space():
     assert '"entry_left_padding_x"' in crop_class
     assert '"entry_right_padding_x"' in crop_class
     assert "原图像素" in crop_class
-    settings_class = text.split("class SettingsDialog", 1)[1].split("class CropSettingsDialog", 1)[0]
+    settings_class = text.split("class SettingsDialog", 1)[1].split("class ReviewWindow", 1)[0]
     assert '"start_y": "正文起始 Y"' in settings_class
     assert '"manual_x": "第一栏左缘 X"' in settings_class
     assert '"paddle_left_tolerance": "% 单栏宽"' in settings_class
@@ -5642,7 +5643,7 @@ def test_v21116_review_ui_exposes_editable_digit_map_and_grouped_vowels():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'right, "digit", "数字替换映射"' in review
     assert 'text="启用", variable=self.replace_digits' in review
@@ -5678,7 +5679,7 @@ def test_v21117_review_layout_matches_compact_workflow():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'self._review_flat_button(row1, "保存", self.save, role="primary")' in review
     assert 'textvariable=self.autosave_label_var' in review
@@ -5708,7 +5709,7 @@ def test_review_toolbar_controls_are_grouped_by_function():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     build_start = review.index("    def _build(self) -> None:")
     build_end = review.index("    def _toggle_review_panel(", build_start)
@@ -5757,7 +5758,7 @@ def test_review_right_sections_use_requested_default_expansion_states():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'for key in ("display", "digit", "accent", "ocr", "network", "reference")' in review
     assert 'key: tk.BooleanVar(value=(key not in {"digit", "accent"}))' in review
@@ -5783,7 +5784,7 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
 
     styles_start = review.index("    def _configure_review_styles(")
@@ -5827,7 +5828,7 @@ def test_review_screenshot_polish_prevents_right_pane_clipping():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
 
     section_start = review.index("    def _review_collapsible_section(")
@@ -5930,7 +5931,7 @@ def test_v21117_review_autosave_reuses_main_autosave_variable_and_tick():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'variable=self.parent.autosave_var' in review
     assert 'self.parent.toggle_autosave()' in review
@@ -5947,7 +5948,7 @@ def test_v21118_review_page_nav_buttons_use_darker_gray():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'review_nav_bg = "#d7d7d7"' in review
     assert 'review_nav_active_bg = "#c8c8c8"' in review
@@ -5961,7 +5962,7 @@ def test_v21118_review_page_change_resets_crop_text_scroll_to_top():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("    def _reset_rows_scroll_top", text.index("class ReviewWindow"))
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     body = text[start:end]
     assert "self.canvas.yview_moveto(0.0)" in body
     assert "self.after_idle(reset_after_layout)" in body
@@ -6007,7 +6008,7 @@ def test_v21119_review_ui_exposes_text_left_padding_and_live_ocr_similarity():
     import picture_capture.app as app_module
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'text="文本左边距："' in review
     assert 'textvariable=self.review_left_padding_var' in review
@@ -6065,7 +6066,7 @@ def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wir
     assert "def _sidebar_mousewheel(" in text
     assert "height=max(viewport_height, requested_height)" in text
     review_start = text.index("class ReviewWindow")
-    review_end = text.index("class CropSettingsDialog", review_start)
+    review_end = text.index("class PictureCaptureApp", review_start)
     review = text[review_start:review_end]
     assert '"行间空："' in review
     assert '"普通词条行切图高："' in review
@@ -6114,7 +6115,7 @@ def test_v21121_review_ui_exposes_selectable_ocr_compare_after_check_and_arrow_n
     import picture_capture.app as app_module
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     check_pos = review.index('text="排序检查"')
     compare_pos = review.index('text="与OCR比较："')
@@ -6186,7 +6187,7 @@ def test_v21122_review_ui_exposes_vertical_safety_padding_and_applies_ipady():
     import picture_capture.app as app_module
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'self.review_vertical_padding_var = tk.StringVar(' in review
     assert 'self._review_vertical_padding_apply_job: str | None = None' in review
@@ -6238,7 +6239,7 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert '"单行高："' in review
     assert '"单字行高："' in review
@@ -6365,7 +6366,7 @@ def test_v21122_hotfix5_review_rows_expose_x_delete_and_grave_shortcut():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'text="[X]"' in review
     assert 'command=lambda i=index: self.delete_review_entry(i)' in review
@@ -6616,7 +6617,7 @@ def test_v2122_review_ui_has_free_network_check_and_locator_mode():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert "词条联网核验结果" in review
     assert 'right, "network", "网络词汇核验（免费，无需 Token）"' not in review
@@ -6643,7 +6644,7 @@ def test_v2123_review_ui_renames_sort_controls_and_adds_simplified_controls_afte
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'text="排序规则"' in review
     assert 'text="词条排序规则"' not in review
@@ -6720,7 +6721,7 @@ def test_v2124_review_simplified_is_editable_saved_and_has_network_button():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'state="readonly"' not in review[review.index('simplified_editor = tk.Entry'):review.index('simplified_editor.grid', review.index('simplified_editor = tk.Entry'))]
     assert 'text="网查"' in review
@@ -6924,7 +6925,7 @@ def test_review_network_status_uses_single_line_result_block():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'value="网络词汇核验：等待选择词条"' in review
     assert '"✓ 有词典收录：" + "、".join(found_names)' in review
@@ -6953,7 +6954,7 @@ def test_v2140_reference_list_shows_smaller_line_numbers_before_words():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert "self.word_list = tk.Text(" in review
     assert '"wordslist_number", font=(number_family, 10)' in review
@@ -6970,7 +6971,7 @@ def test_v2128_review_network_toolbar_has_compact_source_badges():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'text="自动检查"' in review
     assert 'text="立即"' in review
@@ -7052,7 +7053,7 @@ def test_v2129_ocr_results_are_compact_single_row():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'right, "ocr", "OCR结果"' in review
     assert 'slots = (("P", "paddle"), ("T", "tesseract"), ("L", "lens"), ("融", "fusion"))' in review
@@ -7101,7 +7102,7 @@ def test_v21210_review_toolbar_has_cc_simplified_comparison():
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'value="CC简(?)"' in review
     assert 'textvariable=self.cc_simplified_compare_var' in review
@@ -7299,7 +7300,7 @@ def test_v2140_review_left_pane_fits_complete_toolbar_and_right_gets_remaining_w
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
-    end = text.index("class CropSettingsDialog", start)
+    end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert "self.review_panes = panes" in review
     assert "self.review_control_row = row1" in review
