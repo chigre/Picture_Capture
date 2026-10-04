@@ -141,6 +141,9 @@ def test_native_titlebar_helper_is_safe_off_windows(monkeypatch) -> None:
 
 def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> None:
     app_source = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
+    settings_help_source = (
+        ROOT / "src/picture_capture/ui/settings/help.py"
+    ).read_text(encoding="utf-8")
     guide_source = (
         ROOT / "src/picture_capture/ui/dialogs/usage_guide.py"
     ).read_text(encoding="utf-8")
@@ -175,7 +178,7 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'palette["review_membership_fg"]' in app_source
     assert 'self._apply_current_appearance(dialog)' in app_source
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in app_source
-    assert 'themed_display_image(rendered, self.parent.appearance_mode)' in app_source
+    assert 'themed_display_image(rendered, dialog.parent.appearance_mode)' in settings_help_source
     assert "themed_display_image(" in profile_source
     assert 'preview, getattr(self.parent, "appearance_mode", "light")' in profile_source
     assert 'display, getattr(self.parent, "appearance_mode", "light")' in profile_source

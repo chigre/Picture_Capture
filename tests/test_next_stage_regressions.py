@@ -5648,6 +5648,10 @@ def test_paddle_temp_page_match_uses_stem_boundaries():
 def test_settings_center_avoids_full_hidden_tab_idle_layout_cascade():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
+    help_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "help.py"
+    ).read_text(encoding="utf-8")
     start = text.index('    def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:')
     end = text.index("    @staticmethod\n    def _crop_nonnegative_int", start)
     block = text[start:end]
@@ -5660,17 +5664,19 @@ def test_settings_center_avoids_full_hidden_tab_idle_layout_cascade():
     assert "content.bind(" in text
     assert 'cv.configure(scrollregion=cv.bbox("all"))' in text
     assert "每个参数下方已直接显示详细说明" in text
-    assert 'pending["job"] = self.after(80, refresh)' in text
-    assert 'pending["job"] = self.after_idle(refresh)' not in text
+    assert 'pending["job"] = dialog.after(80, refresh)' in help_source
+    assert 'pending["job"] = dialog.after_idle(refresh)' not in help_source
 
 
 
 def test_responsive_help_wrapping_does_not_self_trigger_on_label_configure():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "help.py"
+    )
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _bind_responsive_labels(")
-    end = text.index("    def _setting_var(", start)
-    block = text[start:end]
+    start = text.index("def bind_responsive_labels(")
+    block = text[start:]
     assert 'container.bind("<Configure>", schedule, add="+")' in block
     assert 'label.bind("<Configure>", schedule, add="+")' not in block
     assert "_pc_wrap_cache_key" in block
