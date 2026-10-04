@@ -3363,12 +3363,15 @@ def test_project_profile_wizard_is_the_normal_entry_path():
 
 
 def test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only():
-    app_source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    app_text = app_source.read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1]
+    app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    guide_text = (
+        root / "src" / "picture_capture" / "ui" / "dialogs" / "usage_guide.py"
+    ).read_text(encoding="utf-8")
     assert 'self.ocr_refresh_var = tk.StringVar(value="reuse")' in app_text
     assert "使用有效缓存（推荐）" in app_text
     assert "重新OCR（模型/图像改变时）" in app_text
-    assert "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启" in app_text
+    assert "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启" in guide_text
     assert 'LENS_MODE_LABELS["off"]' in app_text
 
     settings = AppSettings()
