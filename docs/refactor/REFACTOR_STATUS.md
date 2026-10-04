@@ -6,11 +6,11 @@ This file is the crash-recovery checkpoint for the modular architecture refactor
 Modular architecture refactor
 
 ## Current phase
-Phase 4 — controller decomposition. Phase 4I is complete.
+Phase 4 — controller decomposition. Phase 4J is complete.
 
 ## Architecture checkpoint
-- Last completed architecture PR: #198 — CropController current-page single-line crop action-entry seam
-- Last completed architecture merge commit: `b6cc2a9d6be2f0078b6d17ca07b71b097271d7e6`
+- Last completed architecture PR: #200 — CropController current-page whole-entry crop action-entry seam
+- Last completed architecture merge commit: `5a5d857980e8116195aff19ef0e59df43290b48f`
 - Recovery protocol bootstrap PRs: #194 and #195 — merged (administrative, not architecture phases)
 - Current architecture PR: none
 - Work in progress: false
@@ -18,15 +18,15 @@ Phase 4 — controller decomposition. Phase 4I is complete.
 ## Current structure
 Explicit controllers on `main`: Canvas, Crop, Detection, Export, Page, Project, Review, Session.
 
-`PictureCaptureApp.export_text()`, `PictureCaptureApp.import_text()`, and `PictureCaptureApp.split_lines_current()` remain compatibility wrappers. `.OCRed` serialization and crop algorithms stay in `processing`; project path policy stays in `project_storage`.
+`PictureCaptureApp.export_text()`, `PictureCaptureApp.import_text()`, `PictureCaptureApp.split_lines_current()`, and `PictureCaptureApp.split_whole_current()` remain compatibility wrappers. `.OCRed` serialization and crop algorithms stay in `processing`; project path policy stays in `project_storage`.
 
 ## Last verified tests
-- Phase 4I pre-PR targeted suite: 190 passed
-- Phase 4I pre-PR full suite: 1148 passed, 2 warnings
-- PR #198 CI: Ubuntu / Windows / macOS all passed, including GUI smoke, compatibility runner, compile, F821, and wheel build
-- `main` merge-push CI after #198: Ubuntu / Windows / macOS all passed
-- CodeQL after #198: Python and Actions analyses passed
-- `app.py` architecture size baseline after #198: 875,916 bytes
+- Phase 4J pre-PR targeted suite: 201 passed
+- Phase 4J pre-PR full suite: 1153 passed, 2 warnings
+- PR #200 CI: Ubuntu / Windows / macOS all passed, including GUI smoke, compatibility runner, compile, F821, and wheel build
+- `main` merge-push CI after #200: Ubuntu / Windows / macOS all passed
+- CodeQL after #200: Python and Actions analyses passed
+- `app.py` architecture size baseline after #200: 873,916 bytes
 
 ## Current issue
 No active architecture blocker.
@@ -36,16 +36,18 @@ No active architecture blocker.
 `postproduction_single_line_runtime` separately installs `split_single_lines_selected_scope` and its UI button at runtime. Do not fold that runtime-owned path into controller decomposition; it belongs with later runtime-patch cleanup.
 
 ## Next safe unit
-Phase 4J candidate: extract only `PictureCaptureApp.split_whole_current()` action-entry orchestration into the existing `CropController`, preserving the app compatibility wrapper, `_start_batch_task` routing, crop-settings lookup, current-page entry/settings/polygon snapshots, output semantics, status/error behavior, and all existing crop algorithms exactly.
+Phase 4K candidate: extract only `PictureCaptureApp.batch_split_whole()` action-entry orchestration into the existing `CropController`, preserving the historical app compatibility wrapper and all current behavior exactly.
 
-Do **not** include `batch_split_whole()`, crop-settings UI/configuration methods, any other batch crop/export path, or the runtime-installed `split_single_lines_selected_scope` path in the same safe unit.
+Preserve the silent no-op when no project exists or another batch is active; transformed-geometry guard; settings snapshot; all-page index selection; `PWW` output path; crop-settings parsing including per-page overrides; per-page PDIC/PPP reads; `split_whole_entries()` arguments and profile page index; crop-log append; `_start_batch_task` label/item labels; error/stopped/completed status semantics.
 
-Before acting, revalidate that `split_whole_current()` still exists on live `main`, is not replaced by a runtime installer, and can move without changing crop output, paths, worker/batch behavior, public API, or user-visible behavior. If any check fails, stop and record a blocker instead of choosing a broader task.
+Do **not** include crop-settings UI/configuration methods, selected-scope or parallel crop/export paths, illustration crop/detection paths, any other batch action, or the runtime-installed `split_single_lines_selected_scope` path in the same safe unit.
+
+Before acting, revalidate that `batch_split_whole()` still exists on live `main`, is not runtime-replaced, and can move without changing crop output, paths, worker/batch behavior, public API, or user-visible behavior. If any check fails, stop and record a blocker instead of choosing a broader task.
 
 ## Required validation for the next safe unit
-- characterization/regression tests for `split_whole_current()` batch-active, guard/geometry, crop-settings lookup, entry/settings/polygon snapshots, worker/logging, done/status, and compatibility-wrapper behavior
-- keep the existing `CropController.split_lines_current()` behavior tests green
-- explicit regression proving `batch_split_whole()` and runtime-owned `split_single_lines_selected_scope` remain untouched
+- characterization/regression tests for `batch_split_whole()` no-project/batch-active behavior, geometry guard, settings/config snapshots, all-page selection, worker PDIC/PPP reads and per-page overrides, logging/count return, done error/stopped/completed statuses, batch label/item labels, and app compatibility wrapper
+- keep current-page `CropController.split_lines_current()` and `split_whole_current()` behavior tests green
+- explicit regression proving crop-settings UI/configuration, other selected-scope/parallel crop paths, and runtime-owned `split_single_lines_selected_scope` remain untouched
 - reverse-dependency/boundary checks for `CropController`
 - targeted tests while iterating
 - full suite and normal PR CI before merge
