@@ -20,6 +20,7 @@ def test_ocr_conflict_dialog_has_no_reverse_dependency_on_app() -> None:
     ).read_text(encoding="utf-8")
     app_source = (ROOT / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
 
+    # The dialog owns its UI implementation; app.py only keeps the compatibility alias.
     assert "picture_capture.app" not in source
     assert "from ...app import" not in source
     assert "class OCRConflictReviewDialog" in source
