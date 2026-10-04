@@ -38,7 +38,7 @@ jobs:
                   path.write_text(text, encoding="utf-8", newline="\n")
                   changed += count
               assert old not in path.read_text(encoding="utf-8")
-          assert changed == 29, f"expected 29 migrated boundaries, got {changed}"
+          assert changed == 30, f"expected 30 migrated boundaries, got {changed}"
 
       - name: Remove one-shot workflow and commit
         shell: bash
