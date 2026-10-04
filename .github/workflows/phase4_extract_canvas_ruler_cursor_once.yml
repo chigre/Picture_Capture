@@ -1,0 +1,158 @@
+name: Phase 4 one-shot CanvasController ruler cursor wiring
+
+on:
+  push:
+    branches:
+      - refactor/phase4-canvas-controller-ruler-cursor
+    paths:
+      - .github/workflows/phase4_extract_canvas_ruler_cursor_once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase4-canvas-controller-ruler-cursor
+
+      - name: Wire ruler and cursor feedback through CanvasController
+        shell: python
+        run: |
+          import ast
+          from pathlib import Path
+          import py_compile
+
+          app_path = Path("src/picture_capture/app.py")
+          controller_path = Path("src/picture_capture/ui/controllers/canvas.py")
+          test_path = Path("tests/test_ui_canvas_controller.py")
+          guard_path = Path("scripts/architecture_guard.py")
+
+          app = app_path.read_text(encoding="utf-8")
+          tree = ast.parse(app)
+          cls = next(
+              node for node in tree.body
+              if isinstance(node, ast.ClassDef) and node.name == "PictureCaptureApp"
+          )
+          methods = {
+              node.name: node
+              for node in cls.body
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+          }
+          replacements = {
+              "_rulers_visible": (
+                  "    def _rulers_visible(self) -> bool:\n"
+                  "        return self._canvas_controller_for_call().rulers_visible()\n\n"
+              ),
+              "_draw_percentage_rulers": (
+                  "    def _draw_percentage_rulers(self, geometry=None) -> None:\n"
+                  "        self._canvas_controller_for_call().draw_percentage_rulers(geometry)\n\n"
+              ),
+              "_ruler_hit_id": (
+                  "    def _ruler_hit_id(self, source_x: float, source_y: float) -> str | None:\n"
+                  "        return self._canvas_controller_for_call().ruler_hit_id(source_x, source_y)\n\n"
+              ),
+              "_hide_ruler_hint": (
+                  "    def _hide_ruler_hint(self) -> None:\n"
+                  "        self._canvas_controller_for_call().hide_ruler_hint()\n\n"
+              ),
+              "_show_ruler_hint": (
+                  "    def _show_ruler_hint(self, event: tk.Event) -> None:\n"
+                  "        self._canvas_controller_for_call().show_ruler_hint(event)\n\n"
+              ),
+              "draw_cursor_guides": (
+                  "    def draw_cursor_guides(self, canvas_x: float, canvas_y: float) -> None:\n"
+                  "        self._canvas_controller_for_call().draw_cursor_guides(canvas_x, canvas_y)\n\n"
+              ),
+              "canvas_leave": (
+                  "    def canvas_leave(self, _event: tk.Event) -> None:\n"
+                  "        self._canvas_controller_for_call().canvas_leave(_event)\n\n"
+              ),
+              "_set_idle_cursor_status": (
+                  "    def _set_idle_cursor_status(self) -> None:\n"
+                  "        self._canvas_controller_for_call().set_idle_cursor_status()\n\n"
+              ),
+          }
+          assert set(replacements).issubset(methods)
+          lines = app.splitlines(keepends=True)
+          spans = []
+          for name, replacement in replacements.items():
+              node = methods[name]
+              start = min([node.lineno] + [d.lineno for d in node.decorator_list]) - 1
+              end = node.end_lineno
+              spans.append((start, end, name, replacement))
+          for start, end, name, replacement in sorted(spans, reverse=True):
+              lines[start:end] = replacement.splitlines(keepends=True)
+          app = "".join(lines)
+          app_path.write_text(app, encoding="utf-8", newline="\n")
+
+          updated = app_path.read_text(encoding="utf-8")
+          expected = {
+              "_rulers_visible": "rulers_visible",
+              "_draw_percentage_rulers": "draw_percentage_rulers",
+              "_ruler_hit_id": "ruler_hit_id",
+              "_hide_ruler_hint": "hide_ruler_hint",
+              "_show_ruler_hint": "show_ruler_hint",
+              "draw_cursor_guides": "draw_cursor_guides",
+              "canvas_leave": "canvas_leave",
+              "_set_idle_cursor_status": "set_idle_cursor_status",
+          }
+          for app_method, controller_method in expected.items():
+              assert f"def {app_method}(" in updated
+              assert f"self._canvas_controller_for_call().{controller_method}" in updated
+
+          controller = controller_path.read_text(encoding="utf-8")
+          controller_tree = ast.parse(controller)
+          for node in ast.walk(controller_tree):
+              if isinstance(node, ast.Import):
+                  assert all(alias.name != "picture_capture.app" for alias in node.names)
+              elif isinstance(node, ast.ImportFrom):
+                  assert node.module not in {"app", "picture_capture.app"}
+          assert "build_page_crop_plan" not in controller[
+              controller.index("    def draw_percentage_rulers"):
+              controller.index("    def ruler_hit_id", controller.index("    def draw_percentage_rulers"))
+          ]
+
+          py_compile.compile(str(app_path), doraise=True)
+          py_compile.compile(str(controller_path), doraise=True)
+          py_compile.compile(str(test_path), doraise=True)
+
+          size = len(app_path.read_bytes())
+          guard = guard_path.read_text(encoding="utf-8")
+          old_guard = '    "app.py": 888_021,'
+          assert guard.count(old_guard) == 1
+          rendered = f"{size:,}".replace(",", "_")
+          guard = guard.replace(old_guard, f'    "app.py": {rendered},', 1)
+          guard_path.write_text(guard, encoding="utf-8", newline="\n")
+          print(f"APP_BYTES={size}")
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install locked dev dependencies
+        run: uv sync --locked --group dev
+
+      - name: Run full pytest suite
+        run: uv run --locked pytest
+
+      - name: Remove one-shot workflow and commit ruler cursor wiring
+        shell: bash
+        run: |
+          rm .github/workflows/phase4_extract_canvas_ruler_cursor_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            scripts/architecture_guard.py \
+            src/picture_capture/app.py \
+            src/picture_capture/ui/controllers/canvas.py \
+            tests/test_ui_canvas_controller.py \
+            .github/workflows/phase4_extract_canvas_ruler_cursor_once.yml
+          git commit -m "refactor: route canvas ruler and cursor feedback through CanvasController"
+          git push origin HEAD:refactor/phase4-canvas-controller-ruler-cursor
