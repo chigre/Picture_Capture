@@ -32,6 +32,7 @@ jobs:
         run: |
           sed -i 's/)\\n",/)",/' scripts/phase4n_patch_worker.py
           python scripts/phase4n_patch_worker.py
+          python scripts/phase4n_fix_stale_core_test.py
 
       - name: Check diff and app size
         shell: bash
@@ -41,7 +42,7 @@ jobs:
           python -c "from pathlib import Path; print('app.py bytes:', Path('src/picture_capture/app.py').stat().st_size)"
 
       - name: Run focused Phase 4N tests
-        run: uv run --locked pytest tests/test_ui_illustration_controller.py tests/test_ui_illustration_crop_controller.py tests/test_ui_crop_controller_selected_scope.py tests/test_next_stage_regressions.py
+        run: uv run --locked pytest tests/test_ui_illustration_controller.py tests/test_ui_illustration_crop_controller.py tests/test_ui_crop_controller_selected_scope.py tests/test_next_stage_regressions.py tests/test_core.py::test_v295_illustration_crop_button_uses_shared_crop_settings_before_running_batch
 
       - name: Run full test suite
         run: uv run --locked pytest
@@ -55,7 +56,7 @@ jobs:
       - name: Commit validated Phase 4N change
         shell: bash
         run: |
-          rm .github/workflows/phase4n-patch.yml scripts/phase4n_patch_worker.py
+          rm .github/workflows/phase4n-patch.yml scripts/phase4n_patch_worker.py scripts/phase4n_fix_stale_core_test.py
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
