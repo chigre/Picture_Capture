@@ -28,7 +28,10 @@ jobs:
         run: uv sync --locked --group dev
 
       - name: Apply narrow Phase 4N refactor and tests
-        run: python scripts/phase4n_patch_worker.py
+        shell: bash
+        run: |
+          sed -i 's/)\\n",/)",/' scripts/phase4n_patch_worker.py
+          python scripts/phase4n_patch_worker.py
 
       - name: Check diff and app size
         shell: bash
