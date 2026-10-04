@@ -44,7 +44,7 @@ def test_crop_settings_schema_remains_ui_free_and_preserves_coordinate_contract(
     )
     payload = normalize_crop_settings_payload(None, settings)
     assert payload["version"] == 7
-    assert payload["coordinate_space"] == "source"
+    assert payload["coordinate_space"] == "source_image_pixels"
     assert payload["general_top_y"] == 31
     assert payload["general_bottom_y"] == 920
     assert payload["parallel_workers"] == 3
