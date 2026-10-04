@@ -58,6 +58,7 @@ from .ui.settings import schema as _settings_schema
 from .ui.settings import help as _settings_help_ui
 from .ui.settings import profile as _settings_profile_ui
 from .ui.settings import rules as _settings_rules_ui
+from .ui.settings import lifecycle as _settings_lifecycle_ui
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
     _wrap_mixed_ui_text,
@@ -2898,43 +2899,16 @@ class SettingsDialog(tk.Toplevel):
         _settings_rules_ui.export_rules(self)
 
     def _schedule_autosave(self) -> None:
-        if not getattr(self, "_autosave_ready", False):
-            return
-        if hasattr(self, "_settings_save_status_var"):
-            self._settings_save_status_var.set("● 有改动，正在自动保存…")
-        job = getattr(self, "_autosave_job", None)
-        if job is not None:
-            try:
-                self.after_cancel(job)
-            except tk.TclError:
-                pass
-        self._autosave_job = self.after(450, self._run_autosave)
+        _settings_lifecycle_ui.schedule_autosave(self)
 
     def _run_autosave(self) -> None:
-        self._autosave_job = None
-        ok = self.save(close=False, show_errors=False)
-        if hasattr(self, "_settings_save_status_var"):
-            self._settings_save_status_var.set(
-                "✓ 已自动保存" if ok else "⚠ 当前输入暂未保存；关闭时会提示需要修正的项目"
-            )
+        _settings_lifecycle_ui.run_autosave(self)
 
     def _validate_settings_now(self) -> bool:
-        ok = self.save(close=False, show_errors=True)
-        if hasattr(self, "_settings_save_status_var"):
-            self._settings_save_status_var.set(
-                "✓ 当前设置有效并已保存" if ok else "⚠ 请修正无效设置"
-            )
-        return ok
+        return _settings_lifecycle_ui.validate_settings_now(self)
 
     def _close_validated(self) -> None:
-        job = getattr(self, "_autosave_job", None)
-        if job is not None:
-            try:
-                self.after_cancel(job)
-            except tk.TclError:
-                pass
-            self._autosave_job = None
-        self.save(close=True, show_errors=True)
+        _settings_lifecycle_ui.close_validated(self)
 
     def save(self, *, close: bool = True, show_errors: bool = True) -> bool:
         try:
