@@ -1,0 +1,301 @@
+name: Phase 4H one-shot migration
+
+on:
+  push:
+    branches: [refactor/phase4h-export-controller-text]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: refactor/phase4h-export-controller-text
+
+      - name: Install uv and Python 3.13
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --group dev
+
+      - name: Complete Phase 4H wiring and tests
+        shell: bash
+        run: |
+          uv run --locked python - <<'PY'
+          from __future__ import annotations
+
+          import ast
+          from pathlib import Path
+
+          root = Path.cwd()
+          app_path = root / "src/picture_capture/app.py"
+          controllers_init = root / "src/picture_capture/ui/controllers/__init__.py"
+          guard_path = root / "scripts/architecture_guard.py"
+          test_path = root / "tests/test_ui_export_controller.py"
+
+          text = app_path.read_text(encoding="utf-8")
+
+          old_import = '''from .ui.controllers import (\n    CanvasController, DetectionController, PageController, ProjectController,\n    ReviewController, SESSION_STATE_FILENAME, SessionController,\n)'''
+          new_import = '''from .ui.controllers import (\n    CanvasController, DetectionController, ExportController, PageController,\n    ProjectController, ReviewController, SESSION_STATE_FILENAME, SessionController,\n)'''
+          assert old_import in text, "controller import block drifted"
+          text = text.replace(old_import, new_import, 1)
+
+          old_init = '''        self.canvas_controller = CanvasController(self)\n        self.detection_controller = DetectionController(self)\n        self.project_controller = ProjectController(self)'''
+          new_init = '''        self.canvas_controller = CanvasController(self)\n        self.detection_controller = DetectionController(self)\n        self.export_controller = ExportController(self)\n        self.project_controller = ProjectController(self)'''
+          assert old_init in text, "controller initialization block drifted"
+          text = text.replace(old_init, new_init, 1)
+
+          tree = ast.parse(text)
+          app_class = next(
+              node for node in tree.body
+              if isinstance(node, ast.ClassDef) and node.name == "PictureCaptureApp"
+          )
+          methods = {
+              node.name: node
+              for node in app_class.body
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+          }
+          export_node = methods["export_text"]
+          import_node = methods["import_text"]
+          assert export_node.end_lineno is not None and import_node.end_lineno is not None
+
+          lines = text.splitlines(keepends=True)
+          import_wrapper = '''    def import_text(self) -> None:\n        self._export_controller_for_call().import_text()\n'''
+          lines[import_node.lineno - 1:import_node.end_lineno] = import_wrapper.splitlines(keepends=True)
+
+          # Reparse because replacing import_text can shift later line numbers only; export_text is earlier.
+          text = "".join(lines)
+          tree = ast.parse(text)
+          app_class = next(
+              node for node in tree.body
+              if isinstance(node, ast.ClassDef) and node.name == "PictureCaptureApp"
+          )
+          export_node = next(
+              node for node in app_class.body
+              if isinstance(node, ast.FunctionDef) and node.name == "export_text"
+          )
+          assert export_node.end_lineno is not None
+          lines = text.splitlines(keepends=True)
+          export_block = '''    def _export_controller_for_call(self) -> ExportController:\n        controller = self.__dict__.get("export_controller")\n        if controller is None:\n            controller = ExportController(self)\n            self.__dict__["export_controller"] = controller\n        return controller\n\n    def export_text(self) -> None:\n        self._export_controller_for_call().export_text()\n'''
+          lines[export_node.lineno - 1:export_node.end_lineno] = export_block.splitlines(keepends=True)
+          text = "".join(lines)
+          ast.parse(text)
+          app_path.write_text(text, encoding="utf-8")
+
+          init_text = controllers_init.read_text(encoding="utf-8")
+          assert "from .detection import DetectionController\n" in init_text
+          init_text = init_text.replace(
+              "from .detection import DetectionController\n",
+              "from .detection import DetectionController\nfrom .export import ExportController\n",
+              1,
+          )
+          assert '"CanvasController", "DetectionController", "PageController", "ProjectController",' in init_text
+          init_text = init_text.replace(
+              '"CanvasController", "DetectionController", "PageController", "ProjectController",',
+              '"CanvasController", "DetectionController", "ExportController", "PageController", "ProjectController",',
+              1,
+          )
+          controllers_init.write_text(init_text, encoding="utf-8")
+
+          test_path.write_text(r'''from __future__ import annotations
+
+import ast
+from pathlib import Path
+from types import SimpleNamespace
+
+import picture_capture.ui.controllers.export as export_module
+from picture_capture.ui.controllers.export import ExportController
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class _StatusVar:
+    def __init__(self) -> None:
+        self.values: list[str] = []
+
+    def set(self, value: str) -> None:
+        self.values.append(value)
+
+
+class _App:
+    def __init__(self) -> None:
+        self.project = SimpleNamespace(root=Path("/project"))
+        self.current_page = SimpleNamespace(stem="page001")
+        self.entries = [object(), object()]
+        self.ordered = [SimpleNamespace(word="second"), SimpleNamespace(word="first")]
+        self.status_var = _StatusVar()
+        self.guard_result = True
+        self.calls: list[tuple] = []
+        self.errors: list[tuple[str, Exception]] = []
+
+    def guard(self) -> bool:
+        self.calls.append(("guard",))
+        return self.guard_result
+
+    def _ordered_entries_reading_order(self):
+        self.calls.append(("ordered",))
+        return self.ordered
+
+    def redraw(self) -> None:
+        self.calls.append(("redraw",))
+
+    def show_error(self, title: str, exc: Exception) -> None:
+        self.errors.append((title, exc))
+
+
+def test_export_text_preserves_guard_path_reading_order_and_status(monkeypatch) -> None:
+    app = _App()
+    captured: list[tuple[Path, list[str]]] = []
+    monkeypatch.setattr(export_module, "qt_root", lambda root: Path("/normalized/QT"))
+    monkeypatch.setattr(
+        export_module,
+        "export_ocred",
+        lambda path, texts: captured.append((path, list(texts))),
+    )
+
+    ExportController(app).export_text()
+
+    assert captured == [(Path("/normalized/QT/page001.OCRed"), ["second", "first"])]
+    assert app.calls == [("guard",), ("ordered",)]
+    assert app.status_var.values == ["当前文本已导出"]
+
+
+def test_export_text_guard_false_is_noop(monkeypatch) -> None:
+    app = _App()
+    app.guard_result = False
+    monkeypatch.setattr(
+        export_module,
+        "export_ocred",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not export")),
+    )
+
+    ExportController(app).export_text()
+
+    assert app.calls == [("guard",)]
+    assert app.status_var.values == []
+
+
+def test_import_text_preserves_path_order_assignment_redraw_and_status(monkeypatch) -> None:
+    app = _App()
+    paths: list[Path] = []
+    monkeypatch.setattr(export_module, "qt_root", lambda root: Path("/normalized/QT"))
+
+    def fake_import(path: Path) -> list[str]:
+        paths.append(path)
+        return ["uno", "dos"]
+
+    monkeypatch.setattr(export_module, "import_ocred", fake_import)
+
+    ExportController(app).import_text()
+
+    assert paths == [Path("/normalized/QT/page001.OCRed")]
+    assert [entry.word for entry in app.ordered] == ["uno", "dos"]
+    assert app.calls == [("guard",), ("ordered",), ("redraw",)]
+    assert app.status_var.values == ["当前文本已导入"]
+    assert app.errors == []
+
+
+def test_import_text_count_mismatch_uses_existing_error_contract(monkeypatch) -> None:
+    app = _App()
+    monkeypatch.setattr(export_module, "qt_root", lambda root: Path("/normalized/QT"))
+    monkeypatch.setattr(export_module, "import_ocred", lambda _path: ["only-one"])
+
+    ExportController(app).import_text()
+
+    assert app.calls == [("guard",)]
+    assert app.status_var.values == []
+    assert len(app.errors) == 1
+    title, exc = app.errors[0]
+    assert title == "导入失败"
+    assert isinstance(exc, ValueError)
+    assert str(exc) == "文本 1 行，画线 2 条，数量不一致"
+
+
+def test_import_text_reader_failure_is_forwarded_without_redraw(monkeypatch) -> None:
+    app = _App()
+    problem = OSError("cannot read")
+    monkeypatch.setattr(export_module, "qt_root", lambda root: Path("/normalized/QT"))
+    monkeypatch.setattr(export_module, "import_ocred", lambda _path: (_ for _ in ()).throw(problem))
+
+    ExportController(app).import_text()
+
+    assert app.calls == [("guard",)]
+    assert app.errors == [("导入失败", problem)]
+    assert app.status_var.values == []
+
+
+def test_export_controller_has_no_reverse_dependency_on_app_module() -> None:
+    path = ROOT / "src/picture_capture/ui/controllers/export.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(alias.name != "picture_capture.app" for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            assert node.module not in {"app", "picture_capture.app"}
+
+
+def test_export_controller_wiring_preserves_app_compatibility_methods() -> None:
+    app = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
+    controllers = (
+        ROOT / "src/picture_capture/ui/controllers/__init__.py"
+    ).read_text(encoding="utf-8")
+    controller = (
+        ROOT / "src/picture_capture/ui/controllers/export.py"
+    ).read_text(encoding="utf-8")
+
+    imports = app[: app.index("class PictureCaptureApp")]
+    assert "ExportController" in imports
+    assert "self.export_controller = ExportController(self)" in app
+    assert app.index("self.export_controller = ExportController(self)") < app.index("self._build_ui()")
+    assert "def _export_controller_for_call(" in app
+    assert 'self.__dict__.get("export_controller")' in app
+    assert "def export_text(self)" in app
+    assert "self._export_controller_for_call().export_text()" in app
+    assert "def import_text(self)" in app
+    assert "self._export_controller_for_call().import_text()" in app
+    assert "from .export import ExportController" in controllers
+    assert '"ExportController"' in controllers
+    assert "class ExportController" in controller
+''', encoding="utf-8")
+
+          new_size = len(app_path.read_bytes())
+          assert new_size < 877_124, f"app.py did not shrink: {new_size}"
+          guard = guard_path.read_text(encoding="utf-8")
+          assert '"app.py": 877_124,' in guard
+          guard = guard.replace('"app.py": 877_124,', f'"app.py": {new_size:_},', 1)
+          guard_path.write_text(guard, encoding="utf-8")
+          print(f"Phase 4H app.py baseline: 877124 -> {new_size} bytes")
+          PY
+
+      - name: Run targeted Phase 4H tests
+        run: uv run --locked pytest -q tests/test_ui_export_controller.py tests/test_architecture_baseline.py tests/test_next_stage_regressions.py
+
+      - name: Compile touched Python
+        run: uv run --locked python -m py_compile src/picture_capture/app.py src/picture_capture/ui/controllers/export.py src/picture_capture/ui/controllers/__init__.py tests/test_ui_export_controller.py
+
+      - name: Check diff whitespace
+        run: git diff --check
+
+      - name: Run complete pytest suite
+        run: uv run --locked pytest
+
+      - name: Check undefined names
+        run: uv run --locked ruff check --select F821 src tests scripts run.py run_tests.py
+
+      - name: Commit validated migration and remove one-shot workflow
+        shell: bash
+        run: |
+          rm .github/workflows/phase4h-one-shot.yml
+          git config user.name "Picture Capture Refactor Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: wire text import export through ExportController"
+          git push origin HEAD:refactor/phase4h-export-controller-text
