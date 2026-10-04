@@ -23,99 +23,72 @@ jobs:
           from pathlib import Path
           import py_compile
 
-          root = Path(__file__).resolve().parents[2] if False else Path.cwd()
           core_path = Path("tests/test_core.py")
           next_path = Path("tests/test_next_stage_regressions.py")
 
+          def get_block(text: str, function_name: str):
+              start = text.index(f"def {function_name}(")
+              end = text.find("\ndef ", start + 10)
+              if end < 0:
+                  end = len(text)
+              return start, end, text[start:end]
+
+          def replace_once(text: str, old: str, new: str) -> str:
+              count = text.count(old)
+              assert count == 1, (old, count)
+              return text.replace(old, new, 1)
+
+          # test_core.py: only metadata location moves; crop/dialog behavior stays where it is.
           core = core_path.read_text(encoding="utf-8")
+          start, end, block = get_block(core, "test_crop_settings_v7_declares_source_coordinate_space")
+          block = replace_once(
+              block,
+              '    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"\n'
+              '    text = source.read_text(encoding="utf-8")\n',
+              '    root = Path(__file__).resolve().parents[1]\n'
+              '    schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")\n',
+          )
+          block = replace_once(
+              block,
+              '    settings_class = text.split("class SettingsDialog", 1)[1].split("class ReviewWindow", 1)[0]\n',
+              '',
+          )
+          assert block.count(" in settings_class") == 4
+          block = block.replace(" in settings_class", " in schema")
+          core = core[:start] + block + core[end:]
 
-          old = '''def test_crop_settings_v7_declares_source_coordinate_space():
-              source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-              text = source.read_text(encoding="utf-8")
-              crop_class = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "dialogs" / "crop_settings.py").read_text(encoding="utf-8")
-              assert '"version": CROP_SETTINGS_VERSION' in crop_class
-              assert '"coordinate_space": SOURCE_COORDINATE_SPACE' in crop_class
-              assert '"general_top_y"' in crop_class
-              assert '"general_bottom_y"' in crop_class
-              assert '"entry_left_padding_x"' in crop_class
-              assert '"entry_right_padding_x"' in crop_class
-              assert "原图像素" in crop_class
-              settings_class = text.split("class SettingsDialog", 1)[1].split("class ReviewWindow", 1)[0]
-              assert '"start_y": "正文起始 Y"' in settings_class
-              assert '"manual_x": "第一栏左缘 X"' in settings_class
-              assert '"paddle_left_tolerance": "% 单栏宽"' in settings_class
-              assert '"paddle_separator_safety_px": "原图px"' in settings_class
-          '''
-          old = '\n'.join(line[12:] if line.startswith('            ') else line for line in old.splitlines()) + '\n'
-          new = '''def test_crop_settings_v7_declares_source_coordinate_space():
-              root = Path(__file__).resolve().parents[1]
-              crop_class = (root / "src" / "picture_capture" / "ui" / "dialogs" / "crop_settings.py").read_text(encoding="utf-8")
-              schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
-              assert '"version": CROP_SETTINGS_VERSION' in crop_class
-              assert '"coordinate_space": SOURCE_COORDINATE_SPACE' in crop_class
-              assert '"general_top_y"' in crop_class
-              assert '"general_bottom_y"' in crop_class
-              assert '"entry_left_padding_x"' in crop_class
-              assert '"entry_right_padding_x"' in crop_class
-              assert "原图像素" in crop_class
-              assert '"start_y": "正文起始 Y"' in schema
-              assert '"manual_x": "第一栏左缘 X"' in schema
-              assert '"paddle_left_tolerance": "% 单栏宽"' in schema
-              assert '"paddle_separator_safety_px": "原图px"' in schema
-          '''
-          new = '\n'.join(line[12:] if line.startswith('            ') else line for line in new.splitlines()) + '\n'
-          assert core.count(old) == 1, core.count(old)
-          core = core.replace(old, new, 1)
-
-          old = '''def test_ocr_strategy_order_and_defaults_are_single_engine_first():
-              source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-              text = source.read_text(encoding="utf-8")
-              start = text.index("    OCR_COMMON_CHECKS = (")
-              end = text.index("    OCR_ADVANCED_CHECKS = (", start)
-              block = text[start:end]
-              assert block.index('"PaddleOCR 主识别"') < block.index('"同时运行 Tesseract 对照"')
-              assert block.index('"同时运行 Tesseract 对照"') < block.index('"多 OCR 自动融合"')
-              models = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
-              assert "paddle_use_paddleocr: bool = True" in models
-              assert "paddle_compare_tesseract: bool = False" in models
-              assert "paddle_dual_ocr_arbitration: bool = False" in models
-          '''
-          old = '\n'.join(line[12:] if line.startswith('            ') else line for line in old.splitlines()) + '\n'
-          new = '''def test_ocr_strategy_order_and_defaults_are_single_engine_first():
-              root = Path(__file__).resolve().parents[1]
-              schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
-              start = schema.index("OCR_COMMON_CHECKS = (")
-              end = schema.index("OCR_ADVANCED_CHECKS = (", start)
-              block = schema[start:end]
-              assert block.index('"PaddleOCR 主识别"') < block.index('"同时运行 Tesseract 对照"')
-              assert block.index('"同时运行 Tesseract 对照"') < block.index('"多 OCR 自动融合"')
-              models = (root / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
-              assert "paddle_use_paddleocr: bool = True" in models
-              assert "paddle_compare_tesseract: bool = False" in models
-              assert "paddle_dual_ocr_arbitration: bool = False" in models
-          '''
-          new = '\n'.join(line[12:] if line.startswith('            ') else line for line in new.splitlines()) + '\n'
-          assert core.count(old) == 1, core.count(old)
-          core = core.replace(old, new, 1)
+          start, end, block = get_block(core, "test_ocr_strategy_order_and_defaults_are_single_engine_first")
+          block = replace_once(
+              block,
+              '    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"\n'
+              '    text = source.read_text(encoding="utf-8")\n',
+              '    root = Path(__file__).resolve().parents[1]\n'
+              '    schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")\n',
+          )
+          block = replace_once(block, '    start = text.index("    OCR_COMMON_CHECKS = (")\n', '    start = schema.index("OCR_COMMON_CHECKS = (")\n')
+          block = replace_once(block, '    end = text.index("    OCR_ADVANCED_CHECKS = (", start)\n', '    end = schema.index("OCR_ADVANCED_CHECKS = (", start)\n')
+          block = replace_once(block, '    block = text[start:end]\n', '    block = schema[start:end]\n')
+          block = replace_once(
+              block,
+              '    models = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")\n',
+              '    models = (root / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")\n',
+          )
+          core = core[:start] + block + core[end:]
           core_path.write_text(core, encoding="utf-8", newline="\n")
           py_compile.compile(str(core_path), doraise=True)
 
+          # test_next_stage_regressions.py: preserve app behavior assertions; move only metadata assertions.
           text = next_path.read_text(encoding="utf-8")
-
-          # Mixed Settings Center test: metadata comes from schema; methods stay in app.
-          anchor = '    settings = text[start:end]\n\n'
-          insertion = (
+          start, end, block = get_block(text, "test_settings_center_uses_context_help_units_and_user_facing_modes")
+          block = replace_once(
+              block,
+              '    settings = text[start:end]\n\n',
               '    settings = text[start:end]\n'
               '    schema = (\n'
               '        Path(__file__).resolve().parents[1]\n'
               '        / "src" / "picture_capture" / "ui" / "settings" / "schema.py"\n'
-              '    ).read_text(encoding="utf-8")\n\n'
+              '    ).read_text(encoding="utf-8")\n\n',
           )
-          func_start = text.index('def test_settings_center_uses_context_help_units_and_user_facing_modes():')
-          func_end = text.index('\ndef ', func_start + 10)
-          block = text[func_start:func_end]
-          assert block.count(anchor) == 1
-          block = block.replace(anchor, insertion, 1)
           metadata_replacements = {
               'assert \'"bottom_y", int\' in settings': 'assert \'"bottom_y", int\' in schema',
               'assert \'"bottom_y": "正文结束 Y"\' in settings': 'assert \'"bottom_y": "正文结束 Y"\' in schema',
@@ -144,52 +117,34 @@ jobs:
               'assert "可作为新词条起始证据" in settings': 'assert "可作为新词条起始证据" in schema',
               'assert "命中只增加一项结构证据，不会无条件把该行接受为词头" in settings': 'assert "命中只增加一项结构证据，不会无条件把该行接受为词头" in schema',
           }
-          for old_line, new_line in metadata_replacements.items():
-              assert block.count(old_line) == 1, old_line
-              block = block.replace(old_line, new_line, 1)
-          text = text[:func_start] + block + text[func_end:]
+          for old, new in metadata_replacements.items():
+              block = replace_once(block, old, new)
+          text = text[:start] + block + text[end:]
 
-          # Diagram metadata moves; render/help behavior remains in SettingsDialog.
-          func_start = text.index('def test_common_layout_settings_show_packaged_context_diagrams():')
-          func_end = text.index('\ndef ', func_start + 10)
-          block = text[func_start:func_end]
-          old_anchor = '    settings = app_text[start:end]\n\n'
-          new_anchor = (
+          start, end, block = get_block(text, "test_common_layout_settings_show_packaged_context_diagrams")
+          block = replace_once(
+              block,
+              '    settings = app_text[start:end]\n\n',
               '    settings = app_text[start:end]\n'
-              '    schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")\n\n'
+              '    schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")\n\n',
           )
-          assert block.count(old_anchor) == 1
-          block = block.replace(old_anchor, new_anchor, 1)
-          assert block.count('assert \'"columns": "layout_col_number.png"\' in settings') == 1
-          block = block.replace('assert \'"columns": "layout_col_number.png"\' in settings', 'assert \'"columns": "layout_col_number.png"\' in schema', 1)
-          assert block.count("assert f'\"{field}\": \"layout_settings.png\"' in settings") == 1
-          block = block.replace("assert f'\"{field}\": \"layout_settings.png\"' in settings", "assert f'\"{field}\": \"layout_settings.png\"' in schema", 1)
-          text = text[:func_start] + block + text[func_end:]
+          block = replace_once(block, 'assert \'"columns": "layout_col_number.png"\' in settings', 'assert \'"columns": "layout_col_number.png"\' in schema')
+          block = replace_once(block, "assert f'\"{field}\": \"layout_settings.png\"' in settings", "assert f'\"{field}\": \"layout_settings.png\"' in schema")
+          text = text[:start] + block + text[end:]
 
-          # Layout helper behavior remains in app; only unit metadata moves.
-          func_start = text.index('def test_layout_percentage_helpers_preserve_pixel_backend_contract():')
-          func_end = text.index('\ndef ', func_start + 10)
-          block = text[func_start:func_end]
-          source_anchor = '    text = source.read_text(encoding="utf-8")\n'
-          source_insert = (
+          start, end, block = get_block(text, "test_layout_percentage_helpers_preserve_pixel_backend_contract")
+          block = replace_once(
+              block,
+              '    text = source.read_text(encoding="utf-8")\n',
               '    text = source.read_text(encoding="utf-8")\n'
-              '    schema = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")\n'
+              '    schema = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")\n',
           )
-          assert block.count(source_anchor) == 1
-          block = block.replace(source_anchor, source_insert, 1)
-          for old_line, new_line in (
-              ('assert \'"start_y": "% 图高"\' in text', 'assert \'"start_y": "% 图高"\' in schema'),
-              ('assert \'"manual_x": "% 图宽"\' in text', 'assert \'"manual_x": "% 图宽"\' in schema'),
-          ):
-              assert block.count(old_line) == 1
-              block = block.replace(old_line, new_line, 1)
-          text = text[:func_start] + block + text[func_end:]
+          block = replace_once(block, 'assert \'"start_y": "% 图高"\' in text', 'assert \'"start_y": "% 图高"\' in schema')
+          block = replace_once(block, 'assert \'"manual_x": "% 图宽"\' in text', 'assert \'"manual_x": "% 图宽"\' in schema')
+          text = text[:start] + block + text[end:]
 
-          # NORMAL_CHECKS is metadata; quick-settings behavior remains app-local.
-          func_start = text.index('def test_ordinary_only_controls_stay_out_of_main_layout_section():')
-          func_end = text.index('\ndef ', func_start + 10)
-          block = text[func_start:func_end]
-          old_prefix = '''    source = (
+          start, end, block = get_block(text, "test_ordinary_only_controls_stay_out_of_main_layout_section")
+          old = '''    source = (
               Path(__file__).resolve().parents[1]
               / "src" / "picture_capture" / "app.py"
           ).read_text(encoding="utf-8")
@@ -202,8 +157,9 @@ jobs:
               normal_checks_end = settings_text.index("    OCR_COMMON_CHECKS = (", normal_checks_start)
               normal_checks = settings_text[normal_checks_start:normal_checks_end]
           '''
-          old_prefix = '\n'.join(line[12:] if line.startswith('            ') else line for line in old_prefix.splitlines()) + '\n'
-          new_prefix = '''    root = Path(__file__).resolve().parents[1]
+          # Triple-quoted workflow indentation leaves four extra spaces on continuation lines.
+          old = old.replace("\n              ", "\n        ").replace("\n          ).", "\n    ).").replace("\n          '''", "")
+          new = '''    root = Path(__file__).resolve().parents[1]
               source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
               schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
 
@@ -211,31 +167,28 @@ jobs:
               normal_checks_end = schema.index("OCR_COMMON_CHECKS = (", normal_checks_start)
               normal_checks = schema[normal_checks_start:normal_checks_end]
           '''
-          new_prefix = '\n'.join(line[12:] if line.startswith('            ') else line for line in new_prefix.splitlines()) + '\n'
-          assert block.count(old_prefix) == 1, block[:700]
-          block = block.replace(old_prefix, new_prefix, 1)
-          text = text[:func_start] + block + text[func_end:]
+          new = new.replace("\n              ", "\n    ").replace("\n          '''", "")
+          block = replace_once(block, old, new)
+          text = text[:start] + block + text[end:]
 
-          # Restored VB field declarations are schema metadata.
-          func_start = text.index('def test_restored_vb_controls_are_exposed_separately_from_modern_right_ratio():')
-          func_end = text.index('\ndef ', func_start + 10)
-          block = text[func_start:func_end]
-          old_prefix = '''    app_source = (
+          start, end, block = get_block(text, "test_restored_vb_controls_are_exposed_separately_from_modern_right_ratio")
+          old = '''    app_source = (
               Path(__file__).resolve().parents[1]
               / "src" / "picture_capture" / "app.py"
           ).read_text(encoding="utf-8")
           '''
-          old_prefix = '\n'.join(line[12:] if line.startswith('            ') else line for line in old_prefix.splitlines()) + '\n'
-          new_prefix = '''    schema_source = (
+          old = old.replace("\n              ", "\n        ").replace("\n          ).", "\n    ).").rstrip() + "\n"
+          new = '''    schema_source = (
               Path(__file__).resolve().parents[1]
               / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
           ).read_text(encoding="utf-8")
           '''
-          new_prefix = '\n'.join(line[12:] if line.startswith('            ') else line for line in new_prefix.splitlines()) + '\n'
-          assert block.count(old_prefix) == 1
-          block = block.replace(old_prefix, new_prefix, 1)
+          new = new.replace("\n              ", "\n        ").replace("\n          ).", "\n    ).").rstrip() + "\n"
+          block = replace_once(block, old, new)
+          count = block.count(" in app_source")
+          assert count >= 3, count
           block = block.replace(" in app_source", " in schema_source")
-          text = text[:func_start] + block + text[func_end:]
+          text = text[:start] + block + text[end:]
 
           next_path.write_text(text, encoding="utf-8", newline="\n")
           py_compile.compile(str(next_path), doraise=True)
