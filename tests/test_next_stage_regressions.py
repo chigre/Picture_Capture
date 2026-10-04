@@ -1141,6 +1141,10 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "lifecycle.py"
     ).read_text(encoding="utf-8")
+    window_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "window.py"
+    ).read_text(encoding="utf-8")
 
     assert '"bottom_y", int' in schema
     assert '"bottom_y": "正文结束 Y"' in schema
@@ -1198,8 +1202,8 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert 'justify="left"' in settings
     assert "self._settings_help_body_label = help_body" in settings
     assert 'style="PC.Settings.TNotebook"' in settings
-    assert '"PC.Settings.TNotebook.Tab"' in settings
-    assert 'padding=(13, 7)' in settings
+    assert '"PC.Settings.TNotebook.Tab"' in window_source
+    assert 'padding=(13, 7)' in window_source
     assert "self.transient(parent); self.grab_set()" not in settings
     assert "def select_tab(self, key: str | None)" in settings
     assert '(crop_tab, "切图")' in settings
