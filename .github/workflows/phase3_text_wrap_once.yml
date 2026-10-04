@@ -1,0 +1,88 @@
+name: Phase 3 one-shot UI text wrap extraction
+
+on:
+  push:
+    branches:
+      - refactor/phase3-ui-text-wrap
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refactor/phase3-ui-text-wrap
+
+      - name: Move shared text-wrap helpers out of app.py
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          import py_compile
+
+          app_path = Path("src/picture_capture/app.py")
+          text = app_path.read_text(encoding="utf-8")
+
+          start_token = '\n_UI_WRAP_CLOSING_PUNCTUATION = frozenset('
+          end_token = '\ndef _natural_text_key('
+          assert text.count(start_token) == 1, "UI wrap helper start boundary changed"
+          start = text.index(start_token)
+          end = text.index(end_token, start)
+          extracted = text[start:end]
+          for contract in (
+              'def _normalize_ui_paragraphs(value: object) -> str:',
+              'def _mixed_ui_wrap_tokens(paragraph: str) -> list[str]:',
+              'def _wrap_mixed_ui_text(value: object, measure, max_width: int) -> str:',
+              'def _label_measure(label: tk.Misc):',
+          ):
+              assert contract in extracted, f"missing helper contract: {contract}"
+
+          # Delete first so later insertion cannot invalidate character offsets.
+          text = text[:start] + '\n' + text[end:]
+
+          anchor = 'from .ui.widgets.vertical_word import VerticalWordText\n'
+          shared_import = '''from .ui.text_wrap import (\n    _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,\n    _wrap_mixed_ui_text,\n)\n'''
+          assert text.count(anchor) == 1, "VerticalWordText import anchor changed"
+          assert shared_import not in text, "shared text-wrap import already present"
+          text = text.replace(anchor, anchor + shared_import, 1)
+
+          for contract in (
+              'def _normalize_ui_paragraphs(value: object) -> str:',
+              'def _mixed_ui_wrap_tokens(paragraph: str) -> list[str]:',
+              'def _wrap_mixed_ui_text(value: object, measure, max_width: int) -> str:',
+              'def _label_measure(label: tk.Misc):',
+          ):
+              assert contract not in text, f"helper still defined in app.py: {contract}"
+          assert text.count(shared_import) == 1
+          app_path.write_text(text, encoding="utf-8", newline="\n")
+
+          normalized_size = len(app_path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n"))
+          guard_path = Path("scripts/architecture_guard.py")
+          guard = guard_path.read_text(encoding="utf-8")
+          match = re.search(r'("app\.py":\s*)([0-9_]+)(,)', guard)
+          assert match, "app.py architecture baseline not found"
+          old_size = int(match.group(2).replace("_", ""))
+          assert normalized_size < old_size, (normalized_size, old_size)
+          guard = guard[:match.start(2)] + f"{normalized_size:_}" + guard[match.end(2):]
+          guard_path.write_text(guard, encoding="utf-8", newline="\n")
+          print(f"app.py architecture baseline: {old_size} -> {normalized_size}")
+
+          py_compile.compile(str(app_path), doraise=True)
+          py_compile.compile("src/picture_capture/ui/text_wrap.py", doraise=True)
+
+      - name: Verify architecture guard
+        run: python scripts/architecture_guard.py
+
+      - name: Remove one-shot workflow and commit extraction
+        shell: bash
+        run: |
+          rm .github/workflows/phase3_text_wrap_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/picture_capture/app.py src/picture_capture/ui/text_wrap.py tests/test_ui_text_wrap.py scripts/architecture_guard.py .github/workflows/phase3_text_wrap_once.yml
+          git commit -m "refactor: share UI text wrapping helpers"
+          git push origin HEAD:refactor/phase3-ui-text-wrap
