@@ -23,6 +23,8 @@ def test_usage_guide_dialog_has_no_reverse_dependency_on_app() -> None:
     app_source = (ROOT / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
 
     assert "picture_capture.app" not in source
+    # Match the actual relative import form; ``...appearance`` shares the
+    # shorter ``from ...app`` prefix and must not be treated as a dependency.
     assert "from ...app import" not in source
     assert "class UsageGuideWindow" in source
     assert "class UsageGuideWindow" not in app_source
