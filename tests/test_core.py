@@ -5189,8 +5189,8 @@ def test_v2119_crop_controls_live_only_in_crop_settings_dialog():
 
 
 def test_crop_settings_v7_declares_source_coordinate_space():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1]
+    schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
     crop_class = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "dialogs" / "crop_settings.py").read_text(encoding="utf-8")
     assert '"version": CROP_SETTINGS_VERSION' in crop_class
     assert '"coordinate_space": SOURCE_COORDINATE_SPACE' in crop_class
@@ -5199,11 +5199,10 @@ def test_crop_settings_v7_declares_source_coordinate_space():
     assert '"entry_left_padding_x"' in crop_class
     assert '"entry_right_padding_x"' in crop_class
     assert "原图像素" in crop_class
-    settings_class = text.split("class SettingsDialog", 1)[1].split("class ReviewWindow", 1)[0]
-    assert '"start_y": "正文起始 Y"' in settings_class
-    assert '"manual_x": "第一栏左缘 X"' in settings_class
-    assert '"paddle_left_tolerance": "% 单栏宽"' in settings_class
-    assert '"paddle_separator_safety_px": "原图px"' in settings_class
+    assert '"start_y": "正文起始 Y"' in schema
+    assert '"manual_x": "第一栏左缘 X"' in schema
+    assert '"paddle_left_tolerance": "% 单栏宽"' in schema
+    assert '"paddle_separator_safety_px": "原图px"' in schema
 
 
 def test_v21110_backup_pdic_is_background_and_streaming():
@@ -8033,14 +8032,14 @@ def test_page_list_fills_width_adaptively_and_fill_status_is_opt_in_by_default()
 
 
 def test_ocr_strategy_order_and_defaults_are_single_engine_first():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    start = text.index("    OCR_COMMON_CHECKS = (")
-    end = text.index("    OCR_ADVANCED_CHECKS = (", start)
-    block = text[start:end]
+    root = Path(__file__).resolve().parents[1]
+    schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
+    start = schema.index("OCR_COMMON_CHECKS = (")
+    end = schema.index("OCR_ADVANCED_CHECKS = (", start)
+    block = schema[start:end]
     assert block.index('"PaddleOCR 主识别"') < block.index('"同时运行 Tesseract 对照"')
     assert block.index('"同时运行 Tesseract 对照"') < block.index('"多 OCR 自动融合"')
-    models = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
+    models = (root / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
     assert "paddle_use_paddleocr: bool = True" in models
     assert "paddle_compare_tesseract: bool = False" in models
     assert "paddle_dual_ocr_arbitration: bool = False" in models
