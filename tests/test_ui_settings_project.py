@@ -41,3 +41,22 @@ def test_settings_project_extraction_keeps_dialog_wrapper_and_shared_language_co
     assert 'text="内容语言："' in helper
     assert '"dictionary_body_page_range"' in helper
     assert "language_from_ocr(str(ocr_var.get()))" in helper
+
+
+def test_settings_wordslist_browser_stays_behind_dialog_wrapper() -> None:
+    app = (ROOT / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    helper = (
+        ROOT / "src" / "picture_capture" / "ui" / "settings" / "project.py"
+    ).read_text(encoding="utf-8")
+
+    settings_start = app.index("class SettingsDialog")
+    settings_end = app.index("class ReviewWindow", settings_start)
+    settings = app[settings_start:settings_end]
+
+    assert "def _browse_wordslist_setting(" in settings
+    assert "_settings_project_ui.browse_wordslist_setting(self, var)" in settings
+    assert "resolve_wordslist_path" in helper
+    assert 'title="选择 wordslist 参考词表"' in helper
+    assert ".relative_to(" in helper
+    assert ".as_posix()" in helper
+    assert "var.set(path_text)" in helper
