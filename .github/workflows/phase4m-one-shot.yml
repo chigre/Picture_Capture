@@ -93,11 +93,25 @@ jobs:
           print(f"Phase 4M app.py baseline: 869531 -> {new_size} bytes")
           PY
 
+      - name: Align legacy illustration source-shape regression
+        shell: bash
+        run: |
+          uv run --locked python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/test_core.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''def test_v2101_illustration_detection_button_uses_selected_scope_and_auto_ppp():\n    from pathlib import Path\n    text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")\n    assert '("插图识别", self.detect_illustrations_selected_scope)' in text\n    start = text.index("    def detect_illustrations_selected_scope(")\n    end = text.index("    def split_illustrations_selected_scope(", start)\n    block = text[start:end]\n    assert "selected_page_indices()" in block\n    assert "人工绘制的 PPP 多边形会保留" in block\n    assert "foreground_page_edit=True" in block\n'''
+          new = '''def test_v2101_illustration_detection_button_uses_selected_scope_and_auto_ppp():\n    from pathlib import Path\n    root = Path(__file__).parents[1]\n    app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")\n    controller = (root / "src" / "picture_capture" / "ui" / "controllers" / "illustration.py").read_text(encoding="utf-8")\n    assert '("插图识别", self.detect_illustrations_selected_scope)' in app\n    start = app.index("    def detect_illustrations_selected_scope(")\n    end = app.index("    def split_illustrations_selected_scope(", start)\n    wrapper = app[start:end]\n    assert "self._illustration_controller_for_call().detect_illustrations_selected_scope()" in wrapper\n    assert "selected_page_indices()" in controller\n    assert "人工绘制的 PPP 多边形会保留" in controller\n    assert "foreground_page_edit=True" in controller\n'''
+          assert text.count(old) == 1, "legacy illustration source-shape test drifted"
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Run targeted Phase 4M tests
-        run: uv run --locked pytest -q tests/test_ui_illustration_controller.py tests/test_architecture_baseline.py tests/test_next_stage_regressions.py tests/test_postproduction_single_line_runtime.py
+        run: uv run --locked pytest -q tests/test_ui_illustration_controller.py tests/test_architecture_baseline.py tests/test_next_stage_regressions.py tests/test_postproduction_single_line_runtime.py tests/test_core.py::test_v2101_illustration_detection_button_uses_selected_scope_and_auto_ppp
 
       - name: Compile touched Python
-        run: uv run --locked python -m py_compile src/picture_capture/app.py src/picture_capture/ui/controllers/illustration.py src/picture_capture/ui/controllers/__init__.py tests/test_ui_illustration_controller.py
+        run: uv run --locked python -m py_compile src/picture_capture/app.py src/picture_capture/ui/controllers/illustration.py src/picture_capture/ui/controllers/__init__.py tests/test_ui_illustration_controller.py tests/test_core.py
 
       - name: Check diff whitespace
         run: git diff --check
