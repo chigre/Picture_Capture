@@ -3,6 +3,8 @@ name: Phase 4V isolated migration
 on:
   push:
     branches: [refactor/phase-4v-review-order-report]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
