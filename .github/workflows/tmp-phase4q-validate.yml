@@ -27,7 +27,9 @@ jobs:
         run: uv sync --locked --group dev
 
       - name: Apply narrow Phase 4Q patch
-        run: uv run --locked python tools/tmp_phase4q_patch.py
+        run: |
+          uv run --locked python tools/tmp_phase4q_patch.py
+          uv run --locked python tools/tmp_phase4q_finalize.py
 
       - name: Check diff and focused regressions
         run: |
@@ -46,6 +48,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/picture_capture/app.py src/picture_capture/ui/controllers/export.py tests/test_ui_export_controller.py
-          git rm tools/tmp_phase4q_patch.py .github/workflows/tmp-phase4q-validate.yml
+          git rm tools/tmp_phase4q_patch.py tools/tmp_phase4q_finalize.py .github/workflows/tmp-phase4q-validate.yml
           git commit -m "Phase 4Q: route PicDic index export through ExportController"
           git push origin HEAD:refactor/phase4q-picdic-index-entry
