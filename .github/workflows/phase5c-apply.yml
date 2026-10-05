@@ -1,0 +1,70 @@
+name: Phase 5C apply and validate
+
+on:
+  push:
+    branches:
+      - refactor/phase-5c-single-line-ui-bootstrap
+    paths:
+      - .github/workflows/phase5c-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+      - name: Install locked dev dependencies
+        run: uv sync --locked --group dev
+      - name: Apply Phase 5C migration
+        run: uv run --locked python tools/phase5c_apply.py
+      - name: Check focused diff shape
+        run: |
+          git fetch origin main --depth=1
+          git diff --check origin/main
+          git diff --name-only origin/main
+      - name: Run focused single-line UI ownership regressions
+        run: >-
+          uv run --locked pytest
+          tests/test_postproduction_single_line_runtime.py
+          tests/test_unlined_line_export.py
+          tests/test_ui_crop_controller.py
+          tests/test_ui_crop_controller_selected_scope.py
+          tests/test_ui_illustration_controller.py
+          tests/test_ui_illustration_crop_controller.py
+          tests/test_bootstrap_entrypoint.py
+          tests/test_runtime_entry_path_guards.py
+          tests/test_next_stage_regressions.py
+      - name: Run full test suite
+        run: uv run --locked pytest
+      - name: Compile Python sources
+        run: uv run --locked python -m compileall -q src tests
+      - name: Check undefined names
+        run: uv run --locked ruff check src tests --select F821
+      - name: Remove temporary migration assets
+        run: rm tools/phase5c_apply.py .github/workflows/phase5c-apply.yml
+      - name: Recheck final diff and publish validated tree
+        run: |
+          git diff --check origin/main
+          files="$(git diff --name-only origin/main | sort)"
+          printf '%s\n' "$files"
+          expected="$(printf '%s\n' \
+            src/picture_capture/app.py \
+            src/picture_capture/bootstrap/gui.py \
+            src/picture_capture/postproduction_single_line_runtime.py \
+            tests/test_postproduction_single_line_runtime.py \
+            tests/test_ui_illustration_controller.py \
+            tests/test_ui_illustration_crop_controller.py \
+            tests/test_unlined_line_export.py | sort)"
+          test "$files" = "$expected"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: construct single-line action in normal UI"
+          git push origin HEAD:refactor/phase-5c-single-line-ui-bootstrap
