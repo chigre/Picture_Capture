@@ -5225,12 +5225,22 @@ def test_crop_settings_v7_declares_source_coordinate_space():
     assert '"paddle_separator_safety_px": "原图px"' in schema
 
 
-def test_v21110_backup_pdic_is_background_and_streaming():
-    app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+def _phase4r_backup_source_blocks():
+    root = Path(__file__).parents[1] / "src" / "picture_capture"
+    app_text = (root / "app.py").read_text(encoding="utf-8")
+    controller_text = (root / "ui" / "controllers" / "export.py").read_text(encoding="utf-8")
     start = app_text.index("    def backup_pdic(self) -> None:")
     end = app_text.index("    def restore_from_pdic_backup", start)
-    body = app_text[start:end]
-    assert 'self._start_batch_task(' in body
+    wrapper = app_text[start:end]
+    start = controller_text.index("    def backup_pdic(self) -> None:")
+    body = controller_text[start:]
+    return app_text, wrapper, body
+
+
+def test_v21110_backup_pdic_is_background_and_streaming():
+    _app_text, wrapper, body = _phase4r_backup_source_blocks()
+    assert "self._export_controller_for_call().backup_pdic()" in wrapper
+    assert 'app._start_batch_task(' in body
     assert 'temp.open("w", encoding="utf-8", newline="\\n")' in body
     assert 'source.read_text(encoding="utf-8-sig").splitlines()' in body
     assert 'stream.write("\\n".join(page_lines))' in body
@@ -5240,20 +5250,14 @@ def test_v21110_backup_pdic_is_background_and_streaming():
 
 
 def test_v21110_backup_pdic_does_not_touch_page_images():
-    app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    start = app_text.index("    def backup_pdic(self) -> None:")
-    end = app_text.index("    def restore_from_pdic_backup", start)
-    body = app_text[start:end]
+    _app_text, _wrapper, body = _phase4r_backup_source_blocks()
     assert "normalize_page_rgb" not in body
     assert "Image.open" not in body
     assert "derive_geometry" not in body
 
 
 def test_v21110_backup_skips_unrelated_full_page_metadata_refresh():
-    app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    start = app_text.index("    def backup_pdic(self) -> None:")
-    end = app_text.index("    def restore_from_pdic_backup", start)
-    body = app_text[start:end]
+    app_text, _wrapper, body = _phase4r_backup_source_blocks()
     assert "refresh_page_quality=False" in body
     finish_start = app_text.index("    def _finish_batch_task")
     finish_end = app_text.index("    def _hide_batch_bar_if_idle", finish_start)
