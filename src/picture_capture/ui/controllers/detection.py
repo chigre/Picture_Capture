@@ -62,6 +62,16 @@ class DetectionController:
             force_refresh=app.ocr_refresh_var.get() == "force",
         )
 
+    def batch_auto_detect(self, force_paddle_refresh: bool = False) -> None:
+        app = self.app
+        if not app.project:
+            return
+        app._detect_pages(
+            list(range(len(app.project.images))),
+            method=app.settings.detection_method,
+            force_refresh=force_paddle_refresh,
+        )
+
     def run_ocr_draw(self, scope: str, force_refresh: bool) -> None:
         app = self.app
         if not app.guard() or not app.apply_quick_settings(show_status=False):
