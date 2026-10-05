@@ -36,7 +36,7 @@ from .appearance import (
     themed_display_image,
     usage_guide_palette,
 )
-from .formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, write_text_atomic, read_picdic_index_records
+from .formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, write_text_atomic
 from .models import (
     AppSettings, Entry as WordEntry, PolygonRegion, ProjectState, project_page_images,
     natural_text_key, read_noncomment_lines, resolve_wordslist_path, resolved_tesseract_language,
@@ -17595,104 +17595,7 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def export_picdic_index(self) -> None:
-        """Export a project-wide four-column text index from saved PDIC records.
-
-        The output is intentionally simple for downstream PicDic conversion::
-
-            WORD<TAB>xx.xx<TAB>yy.yy<TAB>page
-
-        Percentages are taken from the persisted PDIC percentage fields rather
-        than recalculated from pixels.  This preserves the coordinate semantics
-        of the source PDIC, including legacy projects.  Large projects are
-        streamed in the background and never accumulated into one giant string.
-        """
-        if not self.project or not self.current_page or self.image is None:
-            messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=self)
-            return
-        if self._batch_active:
-            self.status_var.set("已有批量任务正在运行，请结束后再导出PicDic索引。")
-            return
-        try:
-            self._flush_deferred_page_save()
-            self._sync_entry_editor_texts()
-            self.save_pdic(silent=True, sync_editors=False)
-        except Exception as exc:
-            self.show_error("导出PicDic索引失败", exc)
-            return
-
-        project = self.project
-        pages = [page for page in project.images if pdic_path(page).exists()]
-        if not pages:
-            messagebox.showinfo("导出PicDic索引", "当前项目没有可导出的 PDIC 文件。", parent=self)
-            return
-
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        target = exports_root(project.root) / f"PicDic_index_{stamp}.txt"
-        temp = target.with_name(f".{target.name}.tmp")
-        state: dict[str, object] = {"stream": None, "page_count": 0, "record_count": 0}
-
-        def worker(page: Path, _position: int, _total: int):
-            stream = state.get("stream")
-            if stream is None:
-                try:
-                    temp.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                stream = temp.open("w", encoding="utf-8", newline="\n")
-                state["stream"] = stream
-            records = read_picdic_index_records(pdic_path(page), fallback_page=page.stem)
-            if records:
-                stream.write("\n".join(records))
-                stream.write("\n")
-                state["page_count"] = int(state.get("page_count", 0)) + 1
-                state["record_count"] = int(state.get("record_count", 0)) + len(records)
-            return len(records)
-
-        def done(completed: int, total: int, stopped: bool, _results, error) -> None:
-            stream = state.get("stream")
-            if stream is not None:
-                try:
-                    stream.flush()
-                    stream.close()
-                except OSError:
-                    pass
-                state["stream"] = None
-            if error is not None or stopped:
-                try:
-                    temp.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                if error is None:
-                    self.status_var.set(
-                        f"PicDic索引导出已停止：完成 {completed}/{total} 页，未生成不完整索引。"
-                    )
-                return
-            try:
-                if not temp.exists():
-                    temp.write_text("", encoding="utf-8")
-                os.replace(temp, target)
-                page_count = int(state.get("page_count", 0))
-                record_count = int(state.get("record_count", 0))
-                self.status_var.set(
-                    f"PicDic索引导出完成：{target.name}｜{page_count} 页｜{record_count} 条"
-                )
-                messagebox.showinfo(
-                    "导出PicDic索引",
-                    f"已生成：\n{target}\n\n共 {page_count} 个有记录页面，{record_count} 条索引。\n"
-                    "格式：WORD\\txx.xx%\\tyy.yy%\\tpage",
-                    parent=self,
-                )
-            except Exception as exc:
-                try:
-                    temp.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                self.show_error("导出PicDic索引失败", exc)
-
-        self._start_batch_task(
-            "导出PicDic索引", pages, worker, done, item_label=lambda page: page.name,
-            refresh_page_quality=False,
-        )
+        self._export_controller_for_call().export_picdic_index()
 
     def backup_pdic(self) -> None:
         """Stream every page PDIC into one timestamped backup without blocking Tk.

@@ -5269,14 +5269,20 @@ def test_v21111_illustration_button_is_renamed_to_edit_only():
 
 
 def test_v21111_picdic_index_export_is_background_streaming_and_exact_format():
-    app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    root = Path(__file__).parents[1] / "src" / "picture_capture"
+    app_text = (root / "app.py").read_text(encoding="utf-8")
+    controller_text = (root / "ui" / "controllers" / "export.py").read_text(encoding="utf-8")
     start = app_text.index("    def export_picdic_index(self) -> None:")
     end = app_text.index("    def backup_pdic", start)
-    body = app_text[start:end]
+    wrapper = app_text[start:end]
+    start = controller_text.index("    def export_picdic_index(self) -> None:")
+    body = controller_text[start:]
     assert '("导出PicDic索引", self.export_picdic_index)' in app_text
-    assert 'read_picdic_index_records(pdic_path(page), fallback_page=page.stem)' in body
+    assert "self._export_controller_for_call().export_picdic_index()" in wrapper
+    assert 'read_picdic_index_records(' in body
+    assert 'pdic_path(page), fallback_page=page.stem' in body
     assert 'stream.write("\\n".join(records))' in body
-    assert 'self._start_batch_task(' in body
+    assert 'app._start_batch_task(' in body
     assert 'refresh_page_quality=False' in body
     assert 'Image.open' not in body
     assert 'derive_geometry' not in body
