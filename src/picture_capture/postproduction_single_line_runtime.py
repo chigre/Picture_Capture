@@ -236,7 +236,7 @@ def _single_line_worker(
         events.put(("error", (exc, traceback.format_exc())))
 
 
-def _start_single_line_export(app: Any) -> None:
+def start_single_line_export(app: Any) -> None:
     if bool(getattr(app, "_pc_single_line_crop_active", False)):
         _status(app, "单行切图正在进行中。")
         return
@@ -323,11 +323,6 @@ def install_postproduction_single_line_runtime(app_module: Any) -> None:
     if bool(getattr(app_class, "_pc_postproduction_single_line_installed", False)):
         return
 
-    def split_single_lines_selected_scope(self) -> None:
-        _start_single_line_export(self)
-
-    app_class.split_single_lines_selected_scope = split_single_lines_selected_scope
-
     original_init = app_class.__init__
 
     @wraps(original_init)
@@ -341,4 +336,5 @@ def install_postproduction_single_line_runtime(app_module: Any) -> None:
 
 __all__ = [
     "install_postproduction_single_line_runtime",
+    "start_single_line_export",
 ]

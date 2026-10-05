@@ -16969,6 +16969,9 @@ class PictureCaptureApp(tk.Tk):
     def split_lines_current(self) -> None:
         self._crop_controller_for_call().split_lines_current()
 
+    def split_single_lines_selected_scope(self) -> None:
+        self._crop_controller_for_call().split_single_lines_selected_scope()
+
     def split_whole_current(self) -> None:
         self._crop_controller_for_call().split_whole_current()
 
