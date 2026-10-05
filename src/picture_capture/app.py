@@ -98,7 +98,6 @@ from .profile_setup import ProjectProfileWizard, _screen_work_area
 from .profile_semantics import (
     effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
 )
-from .picdic import PicDicBuildCancelled, build_picdic_package
 from .image_utils import normalize_page_rgb
 from .image_preprocessing import (
     PreprocessAnalysis,
@@ -17239,42 +17238,7 @@ class PictureCaptureApp(tk.Tk):
         self._illustration_controller_for_call()._start_illustration_crop(indices, config)
 
     def build_picdic(self) -> None:
-        if not self.guard():
-            return
-        if self._batch_active:
-            self.status_var.set("已有批量任务正在运行，请结束后再制作 PicDic。")
-            return
-        try:
-            self.save_pdic(silent=True)
-        except Exception as exc:
-            self.show_error("PicDic 制作准备失败", exc)
-            return
-        root = self.project.root
-        language = self.settings.ocr_language
-
-        def worker(_item, _position: int, _total: int):
-            try:
-                return build_picdic_package(
-                    root, language, should_stop=self._batch_stop_event.is_set,
-                )
-            except PicDicBuildCancelled:
-                return None
-
-        def done(_completed, _total, stopped, results, error):
-            if error is not None or stopped or not results:
-                return
-            dsl, archive, words, images = results[-1]
-            self.status_var.set(f"PicDic 制作完成：{words} 个词头，{images} 张图片")
-            messagebox.showinfo(
-                "PicDic 制作完成",
-                f"词头：{words}\n图片：{images}\n\nDSL：{dsl.name}\n图片包：{archive.name}\n目录：{dsl.parent}",
-                parent=self,
-            )
-
-        self._start_batch_task(
-            "PicDic 制作", [root], worker, done,
-            item_label=lambda _item: "生成 DSL 与图片包", refresh_page_quality=False,
-        )
+        self._export_controller_for_call().build_picdic()
 
     def _order_key(self, word: str) -> tuple:
         return collation_key(
