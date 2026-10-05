@@ -8,6 +8,15 @@ EXPORT_TEST = ROOT / "tests/test_ui_export_controller.py"
 export_text = EXPORT.read_text(encoding="utf-8")
 assert export_text.count("        app = app.app\n") == 1
 export_text = export_text.replace("        app = app.app\n", "        app = self.app\n", 1)
+repair_start = export_text.index("    def repair_pdic_order_selected_scope(self) -> None:\n")
+repair_end = export_text.index("    def export_picdic_index(self) -> None:\n", repair_start)
+repair_block = export_text[repair_start:repair_end]
+assert repair_block.count("parent=self") == 2
+repair_block = repair_block.replace("parent=self", "parent=app")
+assert "parent=self" not in repair_block
+assert "self.project" not in repair_block
+assert "self.settings" not in repair_block
+export_text = export_text[:repair_start] + repair_block + export_text[repair_end:]
 EXPORT.write_text(export_text, encoding="utf-8")
 
 export_test = EXPORT_TEST.read_text(encoding="utf-8")
