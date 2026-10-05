@@ -42,7 +42,6 @@ LEGACY_RUNTIME_FILES = {
     "ordinary_large_head_runtime.py",
     "overlay_line_anchor_runtime.py",
     "overlay_opacity_runtime.py",
-    "postproduction_single_line_runtime.py",
     "spawn_detection_runtime.py",
     "spawn_layout_runtime.py",
     "unicode_nonbmp_input_runtime.py",

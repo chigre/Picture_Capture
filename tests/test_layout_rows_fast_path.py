@@ -149,12 +149,14 @@ def test_gui_and_worker_composition_seed_layout_rows_for_future_qa():
     spawn = (
         root / "src" / "picture_capture" / "spawn_detection_runtime.py"
     ).read_text(encoding="utf-8")
+    crop = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "crop.py"
+    ).read_text(encoding="utf-8")
 
     assert "install_layout_rows_persistence_runtime()" in gui
     assert "install_unlined_fast_path()" in gui
-    assert gui.index("install_unlined_fast_path()") < gui.index(
-        "install_unlined_line_export_ui(app_module)"
-    )
+    assert "install_unlined_line_export_ui" not in gui
+    assert "unlined_export.export_unlined_page_job" in crop
     assert "install_layout_rows_persistence_runtime()" in worker
     assert "with services.capture_layout_rows(" in spawn
     assert "install_layout_rows_persistence_runtime()" not in spawn

@@ -4,18 +4,18 @@ from __future__ import annotations
 
 Crop geometry and file generation remain in ``processing`` and project path
 policy remains in ``project_storage``. Crop-settings UI and illustration actions
-remain outside this controller. The selected-scope single-line action is explicit
-here and uses the app-owned parallel batch runner; shared preflight helpers remain
-temporary until the separate unlined-export runtime is decomposed.
+remain outside this controller. Selected-scope single-line and unlined-row export
+actions are explicit here and use the app-owned parallel batch runner.
 """
 
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
+import tkinter as tk
 
+from ... import unlined_line_export as unlined_export
 from ...formats import pdic_path, read_pdic, read_ppp
-from ...postproduction_single_line_runtime import (
-    _set_job_button_state, _snapshot_scope, _status,
-)
+from ...ordinary_action_runtime import _apply_quick_settings_for_ordinary
 from ...processing import (
     append_crop_log,
     split_single_lines,
@@ -25,6 +25,67 @@ from ...processing import (
 from ...project_storage import ppp_read_path_for_image, qt_root
 from ...single_line_merge_settings import load_merge_by_page
 from ...single_line_parallel import configured_single_line_workers, single_line_page_job
+from ...unlined_export_filter_settings import load_unlined_filter_settings
+
+
+def _status(app: Any, text: str) -> None:
+    try:
+        app.status_var.set(text)
+    except Exception:
+        pass
+
+
+def _set_button_state(app: Any, names: tuple[str, ...], active: bool) -> None:
+    for name in names:
+        button = getattr(app, name, None)
+        if button is None:
+            continue
+        try:
+            button.configure(state="disabled" if active else "normal")
+        except tk.TclError:
+            pass
+
+
+def _set_job_button_state(app: Any, active: bool) -> None:
+    """Preserve the main single-line action's historical button-state contract."""
+    _set_button_state(app, ("_pc_single_line_crop_button",), active)
+
+
+def _set_unlined_job_button_state(app: Any, active: bool) -> None:
+    """Disable both related exporters while unlined-row export is active."""
+    _set_button_state(
+        app,
+        ("_pc_unlined_export_button", "_pc_single_line_crop_button"),
+        active,
+    )
+
+
+def _snapshot_scope(app: Any) -> tuple[Path, tuple[Path, ...], tuple[int, ...], Any] | None:
+    if not app.guard():
+        return None
+    # Both selected-scope exporters are OCR-independent. Reuse the ordinary
+    # action adapter so projects with all OCR engines disabled can still apply
+    # current quick geometry before cropping/export.
+    if not _apply_quick_settings_for_ordinary(app):
+        return None
+
+    save_current = getattr(app, "save_current_page", None)
+    if callable(save_current):
+        save_current()
+
+    project = getattr(app, "project", None)
+    if project is None:
+        return None
+    indices = tuple(int(index) for index in app.selected_page_indices())
+    if not indices:
+        _status(app, "单行切图：当前没有可处理的选定页面。")
+        return None
+    images = tuple(Path(path) for path in project.images)
+    valid = tuple(index for index in indices if 0 <= index < len(images))
+    if not valid:
+        _status(app, "单行切图：选定范围内没有有效页面。")
+        return None
+    return Path(project.root), images, valid, replace(app.settings)
 
 
 class CropController:
@@ -96,6 +157,97 @@ class CropController:
         )
         if not started:
             _set_job_button_state(app, False)
+
+
+    def export_unlined_rows_selected_scope(self) -> None:
+        """Export selected-page Layout rows without current PDIC markers."""
+        app = self.app
+        if bool(getattr(app, "_batch_active", False)):
+            _status(app, "已有批量任务正在运行，请结束后再导出未画线行。")
+            return
+
+        snapshot = _snapshot_scope(app)
+        if snapshot is None:
+            return
+        project_root, images, indices, settings = snapshot
+        output_dir = qt_root(project_root) / unlined_export.OUTPUT_DIRNAME
+        output_dir.mkdir(parents=True, exist_ok=True)
+        merge_by_page = load_merge_by_page(project_root)
+        filter_enabled, filter_blank, blank_threshold = load_unlined_filter_settings(
+            project_root
+        )
+        workers = max(1, min(configured_single_line_workers(project_root), len(indices)))
+        worker_text = "串行" if workers <= 1 else f"并行×{workers}"
+        filter_text = (
+            f"；仅近空白≤{blank_threshold:g}%墨迹"
+            if filter_enabled and filter_blank
+            else ""
+        )
+        _status(
+            app,
+            f"未画线行导出：准备分析 {len(indices)} 页（{worker_text}{filter_text}）…",
+        )
+        _set_unlined_job_button_state(app, True)
+
+        def job_builder(index: int, _position: int, _total: int):
+            return (
+                str(project_root),
+                str(images[index]),
+                int(index),
+                settings,
+                bool(merge_by_page),
+                bool(filter_enabled),
+                bool(filter_blank),
+                float(blank_threshold),
+            )
+
+        def done(completed, total_pages, stopped, results, error):
+            _set_unlined_job_button_state(app, False)
+            if error is not None:
+                return
+
+            total_unlined = sum(int(result.unlined_rows) for result in results)
+            total_exported = sum(int(result.exported_images) for result in results)
+            unreliable = sum(
+                1 for result in results if not bool(result.physical_reliable)
+            )
+            mode = "；按页合并" if merge_by_page else ""
+            filtered = (
+                f"；空白过滤≤{blank_threshold:g}%墨迹"
+                if filter_enabled and filter_blank
+                else ""
+            )
+            skipped = f"；Layout不可靠跳过 {unreliable} 页" if unreliable else ""
+            if stopped:
+                _status(
+                    app,
+                    f"未画线行导出已停止：完成 {completed}/{total_pages} 页，"
+                    f"发现 {total_unlined} 个未画线行，输出 {total_exported} 张"
+                    f"{filtered}{mode}{skipped}；{worker_text}",
+                )
+                return
+            _status(
+                app,
+                f"未画线行导出完成：{completed} 页，发现 {total_unlined} 个未画线行，"
+                f"输出 {total_exported} 张{filtered}{mode}{skipped}；"
+                f"{worker_text}；保存到 {output_dir}",
+            )
+
+        # Deliberately resolve the one-page worker through the module at action
+        # time. GUI composition installs the physical-row fast path after app.py
+        # (and therefore this controller) is imported; importing the function by
+        # value here would freeze the pre-fast-path worker and regress performance.
+        started = app._start_parallel_batch_task(
+            "未画线行导出",
+            indices,
+            unlined_export.export_unlined_page_job,
+            job_builder,
+            on_done=done,
+            item_label=lambda index: images[index].name,
+            max_workers=workers,
+        )
+        if not started:
+            _set_unlined_job_button_state(app, False)
 
     def split_lines_current(self) -> None:
         app = self.app

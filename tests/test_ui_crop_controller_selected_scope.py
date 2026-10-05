@@ -270,16 +270,14 @@ def test_phase4l_leaves_parallel_runner_illustration_and_runtime_paths_in_app() 
     controller_text = (
         ROOT / "src/picture_capture/ui/controllers/crop.py"
     ).read_text(encoding="utf-8")
-    runtime_text = (
-        ROOT / "src/picture_capture/postproduction_single_line_runtime.py"
-    ).read_text(encoding="utf-8")
+    runtime_path = ROOT / "src/picture_capture/postproduction_single_line_runtime.py"
 
     assert "def _start_parallel_batch_task(" in app_text
     assert "def detect_illustrations_selected_scope(self)" in app_text
     assert "def split_illustrations_selected_scope(self)" in app_text
     assert "detect_illustrations_selected_scope" not in controller_text
     assert "split_illustrations_selected_scope" not in controller_text
-    assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" not in runtime_text
+    assert not runtime_path.exists()
     assert "def split_single_lines_selected_scope(self)" in app_text
     assert "self._crop_controller_for_call().split_single_lines_selected_scope()" in app_text
     assert "def split_single_lines_selected_scope(self)" in controller_text
