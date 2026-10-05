@@ -3,18 +3,22 @@ from __future__ import annotations
 """User-action orchestration for illustration detection workflows.
 
 Phase 4M moved the stable selected-scope illustration detection entry seam.
-Phase 4N also moves the stable illustration-crop action entry while retaining
-the actual crop runner on ``PictureCaptureApp``. Detection/crop algorithms
-remain outside this controller, and project path policy stays exposed through
-the existing app compatibility boundary.
+Phase 4N moved the stable illustration-crop action entry. Phase 4O moves the
+bounded illustration-crop runner orchestration while retaining the parallel
+runner and path-policy boundaries on ``PictureCaptureApp``. Detection/crop
+algorithms remain outside this controller.
 """
 
 from dataclasses import replace
 from tkinter import messagebox
 from typing import Any
 
-from ...formats import read_ppp, write_ppp
-from ...processing import detect_illustrations_job
+from ...formats import pdic_path, read_ppp, write_ppp
+from ...processing import (
+    append_crop_log, append_illustration_crop_log, detect_illustrations_job,
+    split_illustrations_job,
+)
+from ...project_storage import qt_root
 
 
 class IllustrationController:
@@ -50,6 +54,58 @@ class IllustrationController:
             app.current_page.stem,
         )
         app._start_illustration_crop(indices, app._load_crop_settings())
+
+    def _start_illustration_crop(self, indices: list[int], config: dict) -> None:
+        """Start PPP illustration export from the shared crop-settings snapshot."""
+        app = self.app
+        if not app.project or app._batch_active:
+            if app._batch_active:
+                app.status_var.set("已有批量任务正在运行，未启动插图切图。")
+            return
+        project = app.project
+        settings = replace(app.settings)
+        out_dir = qt_root(project.root) / "PIC"
+        general_top = int(config.get("general_top_y", settings.start_y))
+        general_bottom = int(config.get("general_bottom_y", 0))
+        margin = int(config.get("polygon_margin", 0))
+        entry_left = int(config.get("entry_left_padding_x", 0))
+        entry_right = int(config.get("entry_right_padding_x", 0))
+        integrate_illustrations = bool(config.get("integrate_illustrations", True))
+        specials = config.get("special_pages", {}) if isinstance(config.get("special_pages", {}), dict) else {}
+        workers = int(config.get("parallel_workers", settings.crop_parallel_workers))
+
+        def job_builder(index: int, _position: int, _total: int):
+            page = project.images[index]
+            special = specials.get(page.stem, {}) if isinstance(specials.get(page.stem, {}), dict) else {}
+            top_y = int(special.get("top_y", general_top))
+            bottom_y = int(special.get("bottom_y", general_bottom))
+            return (
+                str(page), str(app._ppp_read_path(page)), str(out_dir), settings,
+                top_y, bottom_y, margin, str(pdic_path(page)), entry_left, entry_right, integrate_illustrations,
+                index,
+            )
+
+        def consume_result(_index: int, result):
+            records = list(getattr(result, "records", []) or [])
+            events = list(getattr(result, "events", []) or [])
+            append_crop_log(project.root, records)
+            append_illustration_crop_log(project.root, events)
+            return len(records)
+
+        def done(completed, total_pages, stopped, results, error):
+            if error is not None:
+                return
+            count = sum(int(v or 0) for v in results)
+            if stopped:
+                app.status_var.set(f"插图切图已停止：完成 {completed}/{total_pages} 页，共导出 {count} 张")
+            else:
+                app.status_var.set(f"插图切图完成：{completed} 页，共 {count} 张")
+
+        app._start_parallel_batch_task(
+            "插图切图", indices, split_illustrations_job, job_builder, consume_result, done,
+            item_label=lambda i: project.images[i].name,
+            max_workers=workers,
+        )
 
     def detect_illustrations_selected_scope(self) -> None:
         app = self.app

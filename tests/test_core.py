@@ -3895,7 +3895,7 @@ def test_v295_illustration_crop_button_uses_shared_crop_settings_before_running_
     assert "self._illustration_controller_for_call().split_illustrations_selected_scope()" in app_block
 
     controller_start = controller_text.index("    def split_illustrations_selected_scope(")
-    controller_end = controller_text.index("    def detect_illustrations_selected_scope(", controller_start)
+    controller_end = controller_text.index("    def _start_illustration_crop(", controller_start)
     controller_block = controller_text[controller_start:controller_end]
     assert "app._start_illustration_crop(indices, app._load_crop_settings())" in controller_block
     assert "_start_parallel_batch_task" not in controller_block
