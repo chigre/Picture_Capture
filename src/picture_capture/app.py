@@ -152,8 +152,6 @@ from .recent_projects import (
     load_recent_projects, recent_project_details, remove_recent_project, touch_recent_project,
 )
 from .processing import (
-    append_crop_log,
-    append_illustration_crop_log,
     build_page_crop_plan,
     column_index,
     column_index_for_click,
@@ -177,7 +175,6 @@ from .processing import (
     entry_crop_piece_filename,
     resolve_crop_worker_count,
     refine_existing_entries,
-    split_illustrations_job,
 )
 
 
@@ -17239,54 +17236,7 @@ class PictureCaptureApp(tk.Tk):
 
     def _start_illustration_crop(self, indices: list[int], config: dict) -> None:
         """Start PPP illustration export from the shared crop-settings snapshot."""
-        if not self.project or self._batch_active:
-            if self._batch_active:
-                self.status_var.set("已有批量任务正在运行，未启动插图切图。")
-            return
-        project = self.project
-        settings = replace(self.settings)
-        out_dir = qt_root(project.root) / "PIC"
-        general_top = int(config.get("general_top_y", settings.start_y))
-        general_bottom = int(config.get("general_bottom_y", 0))
-        margin = int(config.get("polygon_margin", 0))
-        entry_left = int(config.get("entry_left_padding_x", 0))
-        entry_right = int(config.get("entry_right_padding_x", 0))
-        integrate_illustrations = bool(config.get("integrate_illustrations", True))
-        specials = config.get("special_pages", {}) if isinstance(config.get("special_pages", {}), dict) else {}
-        workers = int(config.get("parallel_workers", settings.crop_parallel_workers))
-
-        def job_builder(index: int, _position: int, _total: int):
-            page = project.images[index]
-            special = specials.get(page.stem, {}) if isinstance(specials.get(page.stem, {}), dict) else {}
-            top_y = int(special.get("top_y", general_top))
-            bottom_y = int(special.get("bottom_y", general_bottom))
-            return (
-                str(page), str(self._ppp_read_path(page)), str(out_dir), settings,
-                top_y, bottom_y, margin, str(pdic_path(page)), entry_left, entry_right, integrate_illustrations,
-                index,
-            )
-
-        def consume_result(_index: int, result):
-            records = list(getattr(result, "records", []) or [])
-            events = list(getattr(result, "events", []) or [])
-            append_crop_log(project.root, records)
-            append_illustration_crop_log(project.root, events)
-            return len(records)
-
-        def done(completed, total_pages, stopped, results, error):
-            if error is not None:
-                return
-            count = sum(int(v or 0) for v in results)
-            if stopped:
-                self.status_var.set(f"插图切图已停止：完成 {completed}/{total_pages} 页，共导出 {count} 张")
-            else:
-                self.status_var.set(f"插图切图完成：{completed} 页，共 {count} 张")
-
-        self._start_parallel_batch_task(
-            "插图切图", indices, split_illustrations_job, job_builder, consume_result, done,
-            item_label=lambda i: project.images[i].name,
-            max_workers=workers,
-        )
+        self._illustration_controller_for_call()._start_illustration_crop(indices, config)
 
     def build_picdic(self) -> None:
         if not self.guard():

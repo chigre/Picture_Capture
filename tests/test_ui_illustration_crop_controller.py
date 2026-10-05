@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -149,7 +151,159 @@ def test_crop_entry_syncs_writes_loads_settings_then_delegates(monkeypatch) -> N
     assert app.started[1] is app.crop_config
 
 
-def test_phase4n_app_wrapper_ui_binding_and_crop_runner_boundary_are_preserved() -> None:
+@dataclass
+class _RunnerSettings:
+    start_y: int = 17
+    crop_parallel_workers: int = 6
+
+
+class _RunnerApp:
+    def __init__(self) -> None:
+        self._batch_active = False
+        self.project = SimpleNamespace(
+            root=Path("/project"),
+            images=[Path("/pages/page001.png"), Path("/pages/page002.png")],
+        )
+        self.settings = _RunnerSettings()
+        self.status_var = _StatusVar()
+        self.ppp_reads: list[Path] = []
+        self.parallel: dict[str, object] | None = None
+
+    def _ppp_read_path(self, page: Path) -> Path:
+        self.ppp_reads.append(page)
+        return Path("/custom-ppp-read") / f"{page.stem}.ppp"
+
+    def _start_parallel_batch_task(
+        self, title, items, worker, job_builder, consume_result, done, *, item_label, max_workers
+    ) -> bool:
+        self.parallel = {
+            "title": title,
+            "items": list(items),
+            "worker": worker,
+            "job_builder": job_builder,
+            "consume_result": consume_result,
+            "done": done,
+            "item_label": item_label,
+            "max_workers": max_workers,
+        }
+        return True
+
+
+def test_phase4o_runner_preserves_no_project_and_batch_active_guards() -> None:
+    app = _RunnerApp()
+    app.project = None
+    IllustrationController(app)._start_illustration_crop([0], {})
+    assert app.parallel is None
+    assert app.status_var.values == []
+
+    app = _RunnerApp()
+    app._batch_active = True
+    IllustrationController(app)._start_illustration_crop([0], {})
+    assert app.parallel is None
+    assert app.status_var.values == ["已有批量任务正在运行，未启动插图切图。"]
+
+
+def test_phase4o_runner_snapshots_settings_and_preserves_default_payload(monkeypatch) -> None:
+    app = _RunnerApp()
+    monkeypatch.setattr(illustration_module, "qt_root", lambda _root: Path("/qt-root"))
+    monkeypatch.setattr(illustration_module, "pdic_path", lambda page: Path("/pdic") / f"{page.stem}.pdic")
+
+    def fake_worker(*_args):
+        return None
+
+    monkeypatch.setattr(illustration_module, "split_illustrations_job", fake_worker)
+    IllustrationController(app)._start_illustration_crop([0, 1], {})
+
+    assert app.parallel is not None
+    assert app.parallel["title"] == "插图切图"
+    assert app.parallel["items"] == [0, 1]
+    assert app.parallel["worker"] is fake_worker
+    assert app.parallel["max_workers"] == 6
+    assert app.parallel["item_label"](1) == "page002.png"
+
+    app.settings.start_y = 99
+    app.settings.crop_parallel_workers = 99
+    payload = app.parallel["job_builder"](0, 1, 2)
+    assert payload == (
+        str(Path("/pages/page001.png")),
+        str(Path("/custom-ppp-read/page001.ppp")),
+        str(Path("/qt-root/PIC")),
+        _RunnerSettings(start_y=17, crop_parallel_workers=6),
+        17, 0, 0,
+        str(Path("/pdic/page001.pdic")),
+        0, 0, True, 0,
+    )
+    assert payload[3] is not app.settings
+    assert app.ppp_reads == [Path("/pages/page001.png")]
+
+
+def test_phase4o_runner_preserves_config_and_special_page_overrides(monkeypatch) -> None:
+    app = _RunnerApp()
+    monkeypatch.setattr(illustration_module, "qt_root", lambda _root: Path("/qt-root"))
+    monkeypatch.setattr(illustration_module, "pdic_path", lambda page: Path("/pdic") / f"{page.stem}.pdic")
+    config = {
+        "general_top_y": 11,
+        "general_bottom_y": 22,
+        "polygon_margin": 3,
+        "entry_left_padding_x": 4,
+        "entry_right_padding_x": 5,
+        "integrate_illustrations": False,
+        "special_pages": {"page002": {"top_y": 91, "bottom_y": 192}},
+        "parallel_workers": 7,
+    }
+    IllustrationController(app)._start_illustration_crop([0, 1], config)
+    assert app.parallel is not None
+    assert app.parallel["max_workers"] == 7
+
+    general = app.parallel["job_builder"](0, 1, 2)
+    special = app.parallel["job_builder"](1, 2, 2)
+    assert general[4:12] == (11, 22, 3, str(Path("/pdic/page001.pdic")), 4, 5, False, 0)
+    assert special[4:12] == (91, 192, 3, str(Path("/pdic/page002.pdic")), 4, 5, False, 1)
+
+
+def test_phase4o_runner_preserves_result_logging_and_counts(monkeypatch) -> None:
+    app = _RunnerApp()
+    crop_logs: list[tuple] = []
+    illustration_logs: list[tuple] = []
+    monkeypatch.setattr(
+        illustration_module, "append_crop_log",
+        lambda root, records: crop_logs.append((root, list(records))),
+    )
+    monkeypatch.setattr(
+        illustration_module, "append_illustration_crop_log",
+        lambda root, events: illustration_logs.append((root, list(events))),
+    )
+    IllustrationController(app)._start_illustration_crop([0], {})
+    assert app.parallel is not None
+    consume = app.parallel["consume_result"]
+
+    result = SimpleNamespace(records=("r1", "r2"), events=("e1",))
+    assert consume(0, result) == 2
+    assert crop_logs == [(Path("/project"), ["r1", "r2"])]
+    assert illustration_logs == [(Path("/project"), ["e1"])]
+
+    assert consume(0, SimpleNamespace()) == 0
+    assert crop_logs[-1] == (Path("/project"), [])
+    assert illustration_logs[-1] == (Path("/project"), [])
+
+
+def test_phase4o_runner_preserves_done_status_and_error_noop() -> None:
+    app = _RunnerApp()
+    IllustrationController(app)._start_illustration_crop([0], {})
+    assert app.parallel is not None
+    done = app.parallel["done"]
+
+    done(1, 2, False, [4], RuntimeError("failed"))
+    assert app.status_var.values == []
+
+    done(1, 2, True, [2, None, 3], None)
+    assert app.status_var.values[-1] == "插图切图已停止：完成 1/2 页，共导出 5 张"
+
+    done(2, 2, False, [1, 2], None)
+    assert app.status_var.values[-1] == "插图切图完成：2 页，共 3 张"
+
+
+def test_phase4o_app_wrapper_ui_binding_and_crop_runner_boundary_are_preserved() -> None:
     app = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
     controller = (
         ROOT / "src/picture_capture/ui/controllers/illustration.py"
@@ -163,11 +317,19 @@ def test_phase4n_app_wrapper_ui_binding_and_crop_runner_boundary_are_preserved()
         "        self._illustration_controller_for_call().split_illustrations_selected_scope()"
     ) in app
     assert '("插图切图", self.split_illustrations_selected_scope)' in app
-    assert "def _start_illustration_crop(self, indices: list[int], config: dict)" in app
+    app_runner_start = app.index("    def _start_illustration_crop(")
+    app_runner_end = app.index("    def build_picdic(", app_runner_start)
+    app_runner_block = app[app_runner_start:app_runner_end]
+    assert "self._illustration_controller_for_call()._start_illustration_crop(indices, config)" in app_runner_block
     assert "def split_illustrations_selected_scope(self) -> None:" in controller
     assert "app._ppp_write_path(app.current_page)" in controller
     assert "app._start_illustration_crop(indices, app._load_crop_settings())" in controller
-    assert "def _start_illustration_crop" not in controller
-    assert "split_illustrations_job" not in controller
+    assert "def _start_illustration_crop(self, indices: list[int], config: dict)" in controller
+    assert "app._start_parallel_batch_task(" in controller
+    assert "def _start_parallel_batch_task" not in controller
+    assert "split_illustrations_job" in controller
+    assert "append_illustration_crop_log" in controller
+    assert "split_illustrations_job," not in app[: app.index("class PictureCaptureApp")]
+    assert "append_illustration_crop_log," not in app[: app.index("class PictureCaptureApp")]
     assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" in runtime
     assert "split_illustrations_selected_scope" not in runtime
