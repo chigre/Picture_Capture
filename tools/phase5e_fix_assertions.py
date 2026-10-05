@@ -115,18 +115,18 @@ replace_once(
 
 replace_once(
     ROOT / "tests/test_core.py",
-    '''        first_row = (
-            '(("单行切图", self.split_single_lines_selected_scope), '
-            '("词条切图", self.split_entries_selected_scope), '
-            '("插图切图", self.split_illustrations_selected_scope))'
-        )
+    '''    first_row = (
+        '(("单行切图", self.split_single_lines_selected_scope), '
+        '("词条切图", self.split_entries_selected_scope), '
+        '("插图切图", self.split_illustrations_selected_scope))'
+    )
 ''',
-    '''        first_row = (
-            '(("单行切图", self.split_single_lines_selected_scope), '
-            '("未画线行导出", self.export_unlined_rows_selected_scope), '
-            '("词条切图", self.split_entries_selected_scope), '
-            '("插图切图", self.split_illustrations_selected_scope))'
-        )
+    '''    first_row = (
+        '(("单行切图", self.split_single_lines_selected_scope), '
+        '("未画线行导出", self.export_unlined_rows_selected_scope), '
+        '("词条切图", self.split_entries_selected_scope), '
+        '("插图切图", self.split_illustrations_selected_scope))'
+    )
 ''',
 )
 
