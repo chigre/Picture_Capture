@@ -6,11 +6,11 @@ This file is the crash-recovery checkpoint for the modular architecture refactor
 Modular architecture refactor
 
 ## Current phase
-Phase 4 — controller decomposition. Phase 4T is complete.
+Phase 4 — controller decomposition. Phase 4U is complete.
 
 ## Architecture checkpoint
-- Last completed architecture PR: #221 — `repair_pdic_order_selected_scope()` routed through the existing `ExportController`
-- Last completed architecture merge commit: `11a49cb90906c692f3597df3de4e52d9a43b7f32`
+- Last completed architecture PR: #223 — `batch_auto_detect(force_paddle_refresh=False)` routed through the existing `DetectionController`
+- Last completed architecture merge commit: `d30eae9e4a7290dce8038a84b9972b77b1e138ac`
 - Recovery protocol bootstrap PRs: #194 and #195 — merged (administrative, not architecture phases)
 - Current architecture PR: none
 - Work in progress: false
@@ -18,59 +18,52 @@ Phase 4 — controller decomposition. Phase 4T is complete.
 ## Current structure
 Explicit controllers on `main`: Canvas, Crop, Detection, Export, Illustration, Page, Project, Review, Session.
 
-The following historical `PictureCaptureApp` entry points remain compatibility wrappers: `export_text()`, `import_text()`, `split_lines_current()`, `split_whole_current()`, `batch_split_whole()`, `split_entries_selected_scope()`, `detect_illustrations_selected_scope()`, `split_illustrations_selected_scope()`, `_start_illustration_crop()`, `build_picdic()`, `export_picdic_index()`, `backup_pdic()`, `restore_from_pdic_backup()`, and `repair_pdic_order_selected_scope()`.
+Historical `PictureCaptureApp` compatibility wrappers now include: `export_text()`, `import_text()`, `split_lines_current()`, `split_whole_current()`, `batch_split_whole()`, `split_entries_selected_scope()`, `detect_illustrations_selected_scope()`, `split_illustrations_selected_scope()`, `_start_illustration_crop()`, `build_picdic()`, `export_picdic_index()`, `backup_pdic()`, `restore_from_pdic_backup()`, `repair_pdic_order_selected_scope()`, and `batch_auto_detect()`.
 
 `restore_from_merged_pdic()` remains the historical compatibility alias and calls `restore_from_pdic_backup()`.
 
 `ExportController` owns current-page `.OCRed` import/export orchestration, PicDic package build, PicDic index streaming export, PDIC backup streaming, selected-range PDIC restore, and selected-range PDIC order repair. The app still owns the generic batch runner and shared page/UI refresh helpers.
 
-`pdic_restore.py` remains the deterministic low-level boundary for page-token lookup/resolution, merged-PDIC parsing, and one-page temporary-file + `os.replace(...)` atomic publication. Phase 4T reuses `write_pdic_atomic()` from that module and does not change PDIC field semantics or path policy.
+`DetectionController` owns the stable OCR/combined action-entry seams: current Paddle detection setup, selected-scope combined/OCR draw actions, scoped OCR draw routing, and now full-project `batch_auto_detect()` routing. The app still owns `_detect_pages(...)`, `auto_detect_current(...)`, OCR/detection workers, batch execution, PDIC/`.OCRed` persistence, and the heavy detection pipeline.
+
+`pdic_restore.py` remains the deterministic low-level boundary for page-token lookup/resolution, merged-PDIC parsing, and one-page temporary-file + `os.replace(...)` atomic publication. PDIC field semantics and project path policy remain outside controllers.
 
 ## Last verified tests
-- Phase 4T pre-PR focused suite: 632 passed
-- Phase 4T pre-PR full suite: 1234 passed, 2 existing Pillow deprecation warnings
-- Phase 4T PR #221 fixed head: `14b88839296894f98b0dcc4059612503a99d85e9`
-- PR #221 fixed-head CI: Ubuntu / Windows / macOS all passed, including GUI smoke, compatibility runner, compile, F821, and wheel build
-- Phase 4T architecture merge commit: `11a49cb90906c692f3597df3de4e52d9a43b7f32`
-- `main` merge-push CI after #221: Ubuntu / Windows / macOS all passed
-- CodeQL after #221: Python and Actions analyses passed
-- `git diff --check`, compileall, and Ruff F821 passed before PR creation
-- `app.py` architecture size baseline after #221: 838,705 bytes
+- Phase 4U pre-PR focused suite: 592 passed
+- Phase 4U pre-PR full suite: 1236 passed, 2 existing Pillow deprecation warnings
+- `git diff --check`: passed
+- compileall: passed
+- Ruff F821: passed
+- Phase 4U PR #223 fixed head: `32dd47eb439758d2388de6a4b2c93132cfcb513e`
+- PR #223 fixed-head CI: Ubuntu / Windows / macOS all passed, including GUI smoke, compatibility runner, compile, F821, and wheel build
+- Phase 4U architecture merge commit: `d30eae9e4a7290dce8038a84b9972b77b1e138ac`
+- `main` merge-push CI after #223: Ubuntu / Windows / macOS all passed
+- CodeQL after #223: Python and Actions analyses passed
+- `app.py` architecture size baseline after #223: 838,567 bytes
 
-Phase 4T validation history worth preserving for recovery:
-- first focused run: 623 passed, 9 failed
-- six failures were caused by the temporary migration script transforming the newly inserted `app = self.app` into `app = app.app`; this was a validation-script bug, not a pre-existing production failure
-- the other three failures were stale source-shape checks: one hard-coded the previous `ExportController` formats import string and two still expected the repair implementation to be physically inside `app.py`
-- after correcting the script and source-test boundaries, the next focused run was 631 passed, 1 failed
-- that remaining test correctly exposed two bare `parent=self` references inside the moved repair action; unlike `self.` references they were not covered by the mechanical ownership transformation
-- those two dialog parents were changed to `parent=app`, preserving the historical main-window parent semantics
-- no repair algorithm, sort rule, PDIC format, settings-reference behavior, or batch-runner behavior was changed to resolve validation failures
-- temporary isolated-validation workflow/scripts were removed before PR creation
-- final net diff from the Phase 4S checkpoint contained exactly 5 expected files: `app.py`, `ui/controllers/export.py`, two existing test files, and new `test_ui_pdic_order_repair_controller.py`
+Phase 4U validation history worth preserving for recovery:
+- live revalidation started from the Phase 4T checkpoint `173b4f4f60d535255d1a0e353f4d26d76e9add36`
+- no competing open PR existed and the live `batch_auto_detect()` body matched the checkpoint description
+- no runtime replacement for `batch_auto_detect()` was found; the runtime-owned detection exclusion remains `run_normal_draw_action`
+- the first and only isolated validation run passed without stale source-shape or production failures
+- focused suite: 592 passed
+- full suite: 1236 passed, 2 existing Pillow deprecation warnings
+- temporary isolated-validation workflow/script were removed before PR creation
+- final net diff from the Phase 4T checkpoint contained exactly 3 expected files: `src/picture_capture/app.py`, `src/picture_capture/ui/controllers/detection.py`, and `tests/test_ui_detection_controller.py`
 
-## Completed Phase 4T seam
-`PictureCaptureApp.repair_pdic_order_selected_scope()` now remains as a compatibility wrapper and delegates to `ExportController.repair_pdic_order_selected_scope()`.
+## Completed Phase 4U seam
+`PictureCaptureApp.batch_auto_detect(force_paddle_refresh=False)` remains as a compatibility wrapper and delegates to `DetectionController.batch_auto_detect(...)`.
 
-The controller preserves:
-- exact missing-project/current-page/image dialog and main-window parent
-- exact batch-active status `已有批量任务正在运行，请结束后再修复排序。`
-- `selected_page_indices()` as the authoritative scope and exact `页面范围错误` error title
-- exact empty-selection status `没有选中需要修复的页面`
-- filtering to selected pages with existing PDIC files and exact no-PDIC status `所选范围没有已有 PDIC 文件`
-- foreground `_flush_deferred_page_save()`, `_sync_entry_editor_texts()`, and `save_pdic(silent=True, sync_editors=False)`
-- exact preparation error title `修复排序准备失败`
-- destructive confirmation text, including the requirement that word/X/Y tuples remain bound and the backup recommendation
-- historical live settings-reference semantics: `settings = app.settings`; Phase 4T deliberately did not introduce `replace(...)`
-- per-page `read_pdic(...)`, image-header-only width/height read, `derive_nominal_geometry(...)`, `read_page_sections(...)`, and `sort_entries_column_y(...)`
-- the existing “column → Y” ordering rule with X excluded from sorting and stable handling of equal column/Y rows
-- previous/current/following page metadata and atomic publication through `write_pdic_atomic(...)`
-- empty PDIC pages return `(index, 0, False)` without publication
-- worker result tuple `(index, record_count, changed_order)`
-- unchanged completion aggregation, current-page reload, and exact stopped/completed status text
-- app-owned `_start_batch_task("修复排序", ...)` boundary and page-name item labels
-- existing UI `修复排序` binding
+The controller preserves exactly:
+- missing-project behavior as a silent no-op
+- full-project scope through `list(range(len(app.project.images)))`
+- lookup of the current `app.settings.detection_method` at call time
+- direct forwarding of `force_paddle_refresh` into `_detect_pages(..., force_refresh=...)`
+- no additional settings mutation or `save_settings()` call
+- no selected-range parsing and no use of `selected_page_indices()`
+- app-owned `_detect_pages(...)` processing boundary
 
-Phase 4T did not touch existing-headword selection/fill, order-review/report workflows, OCR workers, generic batch execution, runtime-installed actions, or Phase 5.
+Phase 4U did not move `_detect_pages(...)`, `auto_detect_current(...)`, `batch_ocr()`, OCR/detection workers, `.OCRed`/PDIC persistence, runtime-installed methods, or Phase 5 work.
 
 ## Runtime-owned exclusions
 `run_normal_draw_action` remains intentionally outside `DetectionController` because `ordinary_action_runtime` replaces it at runtime. Runtime-patch removal belongs to a later milestone/phase.
@@ -79,29 +72,35 @@ Phase 4T did not touch existing-headword selection/fill, order-review/report wor
 
 Training package export is installed onto `PictureCaptureApp` during GUI bootstrap from `training_export_ui.export_training_package_selected_range`; do not treat that runtime-installed extension as an ordinary app-body controller seam during Phase 4.
 
-## Revalidation after Phase 4T
-After Phase 4T merge-push verification:
-- live `main` is `11a49cb90906c692f3597df3de4e52d9a43b7f32`
+## Revalidation after Phase 4U
+After Phase 4U merge-push verification:
+- live `main` is `d30eae9e4a7290dce8038a84b9972b77b1e138ac`
 - no open competing PR exists at revalidation time
-- `ExportController` now owns the contiguous PicDic/PDIC build, index-export, backup, restore, and repair action boundaries while the app retains compatibility wrappers and the generic batch runner
-- the next nearby app-owned actions are not equivalent in weight: existing-headword selection/fill owns source-file/cache and PDIC update state; `check_headword_order()` owns report/finalization UI work; `batch_ocr()` owns OCR processing plus `.OCRed`/PDIC persistence
-- `batch_auto_detect(force_paddle_refresh=False)` is materially narrower than those paths: it only validates project presence, derives the full-project index list, and forwards the current detection method plus force-refresh flag into app-owned `_detect_pages(...)`
-- `DetectionController` already owns the stable OCR/combined detection action-entry seams while intentionally leaving `_detect_pages(...)`, workers, persistence, and algorithms on the app
-- no Phase 5 runtime-patch cleanup has begun
+- the narrow detection action-entry seams are now routed through `DetectionController`
+- the remaining adjacent detection methods are materially heavier than Phase 4U:
+  - `auto_detect_current(...)` is the app-owned single-page worker/batch bridge and ends in app-owned `_start_batch_task(...)`
+  - `batch_ocr()` owns transformed-geometry guarding, project-wide PDIC filtering, destructive confirmation, OCR worker logic, `.OCRed` export, PDIC writes, done aggregation, and the app-owned batch runner
+- `check_headword_order()` is a different domain choice: it owns current/all-page order reporting plus background finalization/UI work and could plausibly extend `ReviewController` or justify a separate reporting boundary
+- `select_existing_headwords_file()` / `fill_existing_headwords()` form another domain: source-file selection, parsed-source caching/signature invalidation, repeated range fills, PDIC updates, and persisted fill-status state; choosing an existing controller versus a dedicated headword-fill controller is a material architecture decision
+- entering Phase 5 to remove runtime installers is a milestone transition and always requires explicit human confirmation
 
-## Recommended next safe unit
-The preferred Phase 4U candidate is a **single narrow migration of only `PictureCaptureApp.batch_auto_detect(force_paddle_refresh=False)` into the existing `DetectionController`**, retaining an app compatibility wrapper.
+## Next-step decision point
+Automatic controller decomposition is paused after Phase 4U because the live repository now exposes multiple materially different architecture choices rather than one uniquely narrow mechanical seam.
 
-Phase 4U should preserve the current no-project no-op, full-project page-index construction, `self.settings.detection_method` lookup timing, `force_paddle_refresh` forwarding, and the app-owned `_detect_pages(...)` boundary exactly.
+Reasonable next directions are:
+1. **Headword-fill domain** — decide controller ownership for `select_existing_headwords_file()` / `fill_existing_headwords()` before moving code. A dedicated controller is plausible, but adding one is an architecture choice.
+2. **Detection batch-processing boundary** — move `batch_ocr()` and/or later `auto_detect_current()` toward `DetectionController`. This would deliberately expand that controller beyond action-entry routing into worker/persistence orchestration, so it is not an ownership-only continuation.
+3. **Review/order-report domain** — move `check_headword_order()` toward `ReviewController` or a separate reporting controller; this carries report/finalization UI state.
+4. **Phase 5 runtime-patch cleanup** — remove runtime-installed ownership seams such as `ordinary_action_runtime`; this is a milestone transition, not Phase 4 auto-continuation.
 
-Do not move `_detect_pages(...)`, `batch_ocr()`, OCR processing/persistence, `check_headword_order()`, existing-headword select/fill workflows, runtime-installed methods, or Phase 5 work in the same unit.
+Do not select among these directions automatically. Human confirmation is required before the next production-code write.
 
-Before any Phase 4U write, revalidate live `main`, open PRs, the exact `batch_auto_detect()` body/callers/UI binding, runtime ownership, and current `DetectionController` dependencies.
+Before the next write, revalidate live `main`, open PRs, the selected method bodies/callers/UI bindings, runtime ownership, and dependency ownership.
 
 Do not rerun the full suite on a wake-up that makes no code change.
 
 ## Auto continuation
-Phase 4T is complete and recoverable. No Phase 4U production code has started. The recommended Phase 4U unit above is narrow enough to resume when continuation is requested.
+Phase 4U is complete and recoverable. Automatic production-code continuation is paused at the architecture decision point above.
 
 ## Must stop for human confirmation
 Stop without modifying production code if there is an unexplained test/CI failure, behavior/file-format/API change, merge conflict, concurrent work, checkpoint mismatch, multiple materially different architecture choices, large compatibility deletion, cross-core-module change, or a milestone transition (including Phase 5 runtime-patch cleanup).
