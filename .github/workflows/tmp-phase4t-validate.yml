@@ -27,7 +27,9 @@ jobs:
         run: uv sync --locked --group dev
 
       - name: Apply narrow Phase 4T patch
-        run: uv run --locked python tools/tmp_phase4t_patch.py
+        run: |
+          uv run --locked python tools/tmp_phase4t_patch.py
+          uv run --locked python tools/tmp_phase4t_testfix.py
 
       - name: Check diff and focused regressions
         run: |
@@ -45,7 +47,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm tools/tmp_phase4t_patch.py .github/workflows/tmp-phase4t-validate.yml
+          git rm tools/tmp_phase4t_patch.py tools/tmp_phase4t_testfix.py .github/workflows/tmp-phase4t-validate.yml
           git add -A
           git commit -m "Phase 4T: route PDIC order repair through ExportController"
           git push origin HEAD:refactor/phase4t-pdic-order-repair
