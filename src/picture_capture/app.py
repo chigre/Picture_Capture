@@ -17177,55 +17177,7 @@ class PictureCaptureApp(tk.Tk):
         self._detection_controller_for_call().batch_auto_detect(force_paddle_refresh)
 
     def batch_ocr(self) -> None:
-        if not self.project or self._batch_active: return
-        if not self._guard_transformed_geometry("批量 OCR"):
-            return
-        indices = [i for i, page in enumerate(self.project.images) if read_pdic(pdic_path(page))]
-        if not indices:
-            self.status_var.set("没有含 PDIC 词条的页面可执行批量 OCR")
-            return
-        if not messagebox.askyesno(
-            "批量 OCR",
-            f"将对 {len(indices)} 个已有 PDIC 的页面执行 OCR。\n\n"
-            "处理期间可暂停或停止；当前页会先完整处理并保存。继续？",
-            parent=self,
-        ):
-            return
-        project = self.project
-        settings = replace(self.settings)
-        rules = load_replace_rules(replace_rules_path(project.root))
-        pages_info = {i: self.pages_tuple(i) for i in indices}
-
-        def worker(index: int, _position: int, _total: int):
-            page = project.images[index]
-            entries = read_pdic(pdic_path(page))
-            with Image.open(page) as opened:
-                image = normalize_page_rgb(opened)
-            effective_settings = effective_page_settings(settings, image.size, index)
-            analysis_image = page_template_analysis_image(image, effective_settings, index)
-            sections = read_page_sections(page)
-            entries = sort_entries_reading_order(
-                entries, derive_geometry(analysis_image, effective_settings), sections,
-            )
-            texts = ocr_entries(
-                image, entries, settings, rules, profile_page_index=index,
-                page_sections=sections,
-            )
-            for entry, text in zip(entries, texts): entry.word = text
-            export_ocred(qt_root(project.root) / f"{page.stem}.OCRed", texts)
-            write_pdic(pdic_path(page), entries, image.width, pages_info[index])
-            return len(texts)
-
-        def done(completed, total_pages, stopped, results, error):
-            if error is not None: return
-            count = sum(int(v or 0) for v in results)
-            self.load_page(self.current_index)
-            if stopped:
-                self.status_var.set(f"批量 OCR 已停止：完成 {completed}/{total_pages} 页，共 {count} 个词条")
-            else:
-                self.status_var.set(f"批量 OCR 完成：{count} 个词条")
-
-        self._start_batch_task("批量 OCR", indices, worker, done, item_label=lambda i: project.images[i].name)
+        self._detection_controller_for_call().batch_ocr()
 
     def batch_split_whole(self) -> None:
         self._crop_controller_for_call().batch_split_whole()
