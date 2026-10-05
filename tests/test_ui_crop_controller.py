@@ -82,14 +82,23 @@ class _App:
         }
 
 
-def test_selected_scope_single_line_routes_to_retained_runtime_scheduler(monkeypatch) -> None:
-    app = _App()
-    calls: list[object] = []
-    monkeypatch.setattr(crop_module, "start_single_line_export", lambda value: calls.append(value))
+def test_selected_scope_single_line_routes_to_shared_parallel_batch_runner() -> None:
+    source = (ROOT / "src/picture_capture/ui/controllers/crop.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    crop_class = next(
+        node for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "CropController"
+    )
+    method = next(
+        node for node in crop_class.body
+        if isinstance(node, ast.FunctionDef) and node.name == "split_single_lines_selected_scope"
+    )
+    method_text = ast.get_source_segment(source, method) or ""
 
-    CropController(app).split_single_lines_selected_scope()
-
-    assert calls == [app]
+    assert "_snapshot_scope(app)" in method_text
+    assert "app._start_parallel_batch_task(" in method_text
+    assert "single_line_page_job" in method_text
+    assert "start_single_line_export" not in method_text
 
 
 def test_batch_active_short_circuits_before_guards() -> None:

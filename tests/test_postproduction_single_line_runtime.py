@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from picture_capture.models import Entry
 import picture_capture.postproduction_single_line_runtime as runtime
 import picture_capture.single_line_parallel as parallel
+import picture_capture.ui.controllers.crop as crop_module
+from picture_capture.ui.controllers.crop import CropController
 
 
 def test_single_line_worker_reuses_proofreading_crop_path(tmp_path, monkeypatch):
@@ -62,15 +65,155 @@ def test_single_line_worker_reuses_proofreading_crop_path(tmp_path, monkeypatch)
     assert result[4] == 1
 
 
-def test_runtime_contract_keeps_main_button_left_of_entry_crop_and_uses_selected_scope():
+class _StatusVar:
+    def __init__(self) -> None:
+        self.values: list[str] = []
+
+    def set(self, value: str) -> None:
+        self.values.append(value)
+
+
+class _App:
+    def __init__(self) -> None:
+        self._batch_active = False
+        self.status_var = _StatusVar()
+        self.parallel: dict[str, object] | None = None
+
+    def _start_parallel_batch_task(
+        self,
+        title,
+        items,
+        worker_func,
+        job_builder,
+        result_consumer=None,
+        on_done=None,
+        item_label=None,
+        max_workers=0,
+    ) -> bool:
+        self.parallel = {
+            "title": title,
+            "items": list(items),
+            "worker_func": worker_func,
+            "job_builder": job_builder,
+            "result_consumer": result_consumer,
+            "on_done": on_done,
+            "item_label": item_label,
+            "max_workers": max_workers,
+        }
+        return True
+
+
+def test_phase5d_selected_scope_uses_shared_parallel_batch_runner(tmp_path, monkeypatch):
+    app = _App()
+    project_root = tmp_path / "project"
+    images = (project_root / "p1.jpg", project_root / "p2.jpg")
+    settings = SimpleNamespace(marker=7)
+    button_states: list[bool] = []
+    logged: list[list[object]] = []
+
+    monkeypatch.setattr(
+        crop_module,
+        "_snapshot_scope",
+        lambda _app: (project_root, images, (1, 0), settings),
+    )
+    monkeypatch.setattr(crop_module, "configured_single_line_workers", lambda _root: 4)
+    monkeypatch.setattr(crop_module, "load_merge_by_page", lambda _root: True)
+    monkeypatch.setattr(
+        crop_module,
+        "_set_job_button_state",
+        lambda _app, active: button_states.append(bool(active)),
+    )
+    monkeypatch.setattr(
+        crop_module,
+        "append_crop_log",
+        lambda _root, records: logged.append(list(records)),
+    )
+
+    CropController(app).split_single_lines_selected_scope()
+
+    assert app.parallel is not None
+    assert app.parallel["title"] == "单行切图"
+    assert app.parallel["items"] == [1, 0]
+    assert app.parallel["worker_func"] is parallel.single_line_page_job
+    assert app.parallel["max_workers"] == 2
+    assert app.parallel["item_label"](1) == "p2.jpg"
+    assert button_states == [True]
+    assert app.status_var.values[-1] == "单行切图：准备处理 2 页（并行×2）…"
+
+    payload = app.parallel["job_builder"](1, 1, 2)
+    assert payload == (
+        str(project_root),
+        str(images[1]),
+        1,
+        settings,
+        str(project_root / "QT" / "PSW"),
+        True,
+    )
+
+    records = [object(), object(), object()]
+    consumed = app.parallel["result_consumer"](
+        1,
+        (1, "p2.jpg", records, True),
+    )
+    assert consumed == ("p2.jpg", 3, True)
+    assert logged == [records]
+
+    app.parallel["on_done"](2, 2, False, [("p2.jpg", 3, True), ("p1.jpg", 2, True)], None)
+    assert button_states == [True, False]
+    assert app.status_var.values[-1] == (
+        f"单行切图完成：2 页，共 5 行；每页已合并为 1 张图；并行×2；已保存到 {project_root / 'QT' / 'PSW'}"
+    )
+
+
+def test_phase5d_stopped_batch_restores_button_and_reports_partial_total(tmp_path, monkeypatch):
+    app = _App()
+    project_root = tmp_path / "project"
+    images = (project_root / "p1.jpg", project_root / "p2.jpg")
+    states: list[bool] = []
+    monkeypatch.setattr(
+        crop_module,
+        "_snapshot_scope",
+        lambda _app: (project_root, images, (0, 1), SimpleNamespace()),
+    )
+    monkeypatch.setattr(crop_module, "configured_single_line_workers", lambda _root: 1)
+    monkeypatch.setattr(crop_module, "load_merge_by_page", lambda _root: False)
+    monkeypatch.setattr(crop_module, "_set_job_button_state", lambda _app, active: states.append(active))
+
+    CropController(app).split_single_lines_selected_scope()
+    assert app.parallel is not None
+    app.parallel["on_done"](1, 2, True, [("p1.jpg", 4, False)], None)
+
+    assert states == [True, False]
+    assert app.status_var.values[-1] == "单行切图已停止：完成 1/2 页，共 4 行；串行"
+
+
+def test_runtime_is_preflight_only_after_phase5d():
     root = Path(__file__).resolve().parents[1]
-    runtime_source = (root / "src" / "picture_capture" / "postproduction_single_line_runtime.py").read_text(
+    runtime_source = (root / "src/picture_capture/postproduction_single_line_runtime.py").read_text(
         encoding="utf-8"
     )
-    worker_source = (root / "src" / "picture_capture" / "single_line_parallel.py").read_text(
-        encoding="utf-8"
-    )
-    app_source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    controller_source = (
+        root / "src/picture_capture/ui/controllers/crop.py"
+    ).read_text(encoding="utf-8")
+    app_source = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
+
+    assert "def _snapshot_scope(app: Any)" in runtime_source
+    assert "threading.Thread(" not in runtime_source
+    assert "queue.Queue" not in runtime_source
+    assert "def start_single_line_export(" not in runtime_source
+    assert "app.after(80, poll)" not in runtime_source
+    assert "_pc_single_line_crop_active" not in runtime_source
+    assert "_pc_single_line_crop_token" not in runtime_source
+    assert "_pc_single_line_crop_thread" not in runtime_source
+    assert "app._start_parallel_batch_task(" in controller_source
+    assert "single_line_page_job" in controller_source
+    assert "_snapshot_scope(app)" in controller_source
+    assert "def _start_parallel_batch_task(" in app_source
+
+
+def test_runtime_contract_keeps_main_button_left_of_entry_crop_and_selected_scope_wrapper():
+    root = Path(__file__).resolve().parents[1]
+    app_source = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
 
     assert (
         '(("单行切图", self.split_single_lines_selected_scope), '
@@ -79,20 +222,8 @@ def test_runtime_contract_keeps_main_button_left_of_entry_crop_and_uses_selected
     ) in app_source
     assert 'if text == "单行切图":' in app_source
     assert "self._pc_single_line_crop_button = button" in app_source
-    assert "app.selected_page_indices()" in runtime_source
-
-    # Page-level work owns the mature crop call; the Tk runtime only schedules it.
-    assert "split_single_lines(" in worker_source
-    assert 'qt_root(project_root) / "PSW"' in worker_source
-    assert "profile_page_index=int(page_index)" in worker_source
-    assert "page_sections=sections" in worker_source
-    page_job = worker_source[
-        worker_source.index("def single_line_page_job("):
-        worker_source.index("\ndef run_single_line_pages(")
-    ]
-    assert ".crop(" not in page_job
-    assert "character_height" not in page_job
-    assert "row_padding" not in page_job
+    assert "def split_single_lines_selected_scope(self)" in app_source
+    assert "self._crop_controller_for_call().split_single_lines_selected_scope()" in app_source
 
 
 def test_gui_composition_no_longer_installs_single_line_ui_runtime():
@@ -102,27 +233,3 @@ def test_gui_composition_no_longer_installs_single_line_ui_runtime():
     ).read_text(encoding="utf-8")
     assert "install_postproduction_single_line_runtime" not in source
     assert "install_unlined_line_export_ui(app_module)" in source
-
-def test_phase5c_runtime_keeps_worker_poll_but_no_ui_or_method_monkey_patch():
-    root = Path(__file__).resolve().parents[1]
-    runtime_source = (
-        root / "src" / "picture_capture" / "postproduction_single_line_runtime.py"
-    ).read_text(encoding="utf-8")
-    app_source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    crop_source = (
-        root / "src" / "picture_capture" / "ui" / "controllers" / "crop.py"
-    ).read_text(encoding="utf-8")
-
-    assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" not in runtime_source
-    assert "app_class.__init__ = wrapped_init" not in runtime_source
-    assert "_insert_single_line_button" not in runtime_source
-    assert "install_postproduction_single_line_runtime" not in runtime_source
-    assert "def start_single_line_export(app: Any)" in runtime_source
-    assert "threading.Thread(" in runtime_source
-    assert "app.after(80, poll)" in runtime_source
-    assert 'if text == "单行切图":' in app_source
-    assert "self._pc_single_line_crop_button = button" in app_source
-    assert "def split_single_lines_selected_scope(self)" in app_source
-    assert "self._crop_controller_for_call().split_single_lines_selected_scope()" in app_source
-    assert "def split_single_lines_selected_scope(self)" in crop_source
-    assert "start_single_line_export(self.app)" in crop_source
