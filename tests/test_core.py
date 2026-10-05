@@ -5056,12 +5056,15 @@ def test_v2115_pdic_repair_and_restore_use_header_only_geometry():
     repair = app_text[repair_start:repair_end]
     assert "derive_nominal_geometry(width, height, settings)" in repair
     assert "normalize_page_rgb(opened)" not in repair
-    restore_start = app_text.index("    def restore_from_pdic_backup")
-    restore_end = app_text.index("    def restore_from_merged_pdic", restore_start)
-    restore = app_text[restore_start:restore_end]
-    assert "settings_snapshot = replace(self.settings)" in restore
+    controller_text = (
+        Path(__file__).parents[1]
+        / "src" / "picture_capture" / "ui" / "controllers" / "export.py"
+    ).read_text(encoding="utf-8")
+    restore_start = controller_text.index("    def restore_from_pdic_backup")
+    restore = controller_text[restore_start:]
+    assert "settings_snapshot = replace(app.settings)" in restore
     assert "derive_nominal_geometry(width, height, settings_snapshot)" in restore
-    assert "derive_nominal_geometry(width, height, self.settings)" not in restore
+    assert "derive_nominal_geometry(width, height, app.settings)" not in restore
     assert "normalize_page_rgb(opened)" not in restore
 
 
@@ -5233,7 +5236,8 @@ def _phase4r_backup_source_blocks():
     end = app_text.index("    def restore_from_pdic_backup", start)
     wrapper = app_text[start:end]
     start = controller_text.index("    def backup_pdic(self) -> None:")
-    body = controller_text[start:]
+    end = controller_text.index("    def restore_from_pdic_backup(self) -> None:", start)
+    body = controller_text[start:end]
     return app_text, wrapper, body
 
 
@@ -5280,7 +5284,8 @@ def test_v21111_picdic_index_export_is_background_streaming_and_exact_format():
     end = app_text.index("    def backup_pdic", start)
     wrapper = app_text[start:end]
     start = controller_text.index("    def export_picdic_index(self) -> None:")
-    body = controller_text[start:]
+    end = controller_text.index("    def backup_pdic(self) -> None:", start)
+    body = controller_text[start:end]
     assert '("导出PicDic索引", self.export_picdic_index)' in app_text
     assert "self._export_controller_for_call().export_picdic_index()" in wrapper
     assert 'read_picdic_index_records(' in body

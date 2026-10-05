@@ -739,18 +739,24 @@ def test_backup_pdic_error_removes_temp_without_success_status(monkeypatch, tmp_
     assert app.status_var.values == []
 
 
-def test_backup_pdic_wiring_keeps_restore_outside_phase4r() -> None:
+def test_export_controller_wiring_owns_backup_and_restore_after_phase4s() -> None:
     app = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
     controller = (
         ROOT / "src/picture_capture/ui/controllers/export.py"
     ).read_text(encoding="utf-8")
 
-    start = app.index("    def backup_pdic(self) -> None:")
-    end = app.index("    def restore_from_pdic_backup(self) -> None:", start)
-    block = app[start:end]
-    assert "self._export_controller_for_call().backup_pdic()" in block
-    assert "_start_batch_task" not in block
+    backup_start = app.index("    def backup_pdic(self) -> None:")
+    restore_start = app.index("    def restore_from_pdic_backup(self) -> None:", backup_start)
+    alias_start = app.index("    def restore_from_merged_pdic(self) -> None:", restore_start)
+    backup_block = app[backup_start:restore_start]
+    restore_block = app[restore_start:alias_start]
+    assert "self._export_controller_for_call().backup_pdic()" in backup_block
+    assert "self._export_controller_for_call().restore_from_pdic_backup()" in restore_block
+    assert "_start_batch_task" not in backup_block
+    assert "_start_batch_task" not in restore_block
     assert "    def backup_pdic(self) -> None:" in controller
-    assert "    def restore_from_pdic_backup(self) -> None:" in app
-    assert "    def restore_from_pdic_backup(self) -> None:" not in controller
-    assert '"备份PDIC"' in app and "self.backup_pdic" in app
+    assert "    def restore_from_pdic_backup(self) -> None:" in controller
+    assert "    def restore_from_merged_pdic(self) -> None:" in app
+    assert 'self.restore_from_pdic_backup()' in app[alias_start:]
+    assert '("备份PDIC", self.backup_pdic)' in app
+    assert '("恢复PDIC", self.restore_from_pdic_backup)' in app
