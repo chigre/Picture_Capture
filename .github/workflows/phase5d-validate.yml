@@ -23,7 +23,9 @@ jobs:
           enable-cache: true
 
       - name: Apply Phase 5D patch
-        run: python tools/phase5d_apply.py
+        run: |
+          python tools/phase5d_apply.py
+          python tools/phase5d_fix_assertions.py
 
       - name: Check patch shape
         run: |
@@ -57,6 +59,7 @@ jobs:
       - name: Remove migration assets
         run: |
           rm tools/phase5d_apply.py
+          rm tools/phase5d_fix_assertions.py
           rm .github/workflows/phase5d-validate.yml
           git diff --check
 
