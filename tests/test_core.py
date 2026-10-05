@@ -3920,39 +3920,58 @@ def test_v296_large_words_page_resolution_uses_one_prebuilt_lookup():
 
 
 def test_v296_existing_word_fill_runs_txt_parse_and_page_commits_in_background_batch():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    start = text.index("    def fill_existing_headwords(self) -> None:")
-    end = text.index("    def import_legacy_words(self) -> bool:", start)
-    block = text[start:end]
+    root = Path(__file__).resolve().parents[1]
+    app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    app_start = app_text.index("    def fill_existing_headwords(self) -> None:")
+    app_end = app_text.index("    def import_legacy_words(self) -> bool:", app_start)
+    app_block = app_text[app_start:app_end]
+    assert "self._headword_controller_for_call().fill_existing_headwords()" in app_block
+
+    controller_text = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "headword.py"
+    ).read_text(encoding="utf-8")
+    start = controller_text.index("    def fill_existing_headwords(self) -> None:")
+    block = controller_text[start:]
     # v2.9.8 may reuse an already parsed source; a cache miss is still parsed
     # inside the batch worker call path rather than on Tk's event thread.
     ensure_pos = block.index("        def ensure_mapping(")
     worker_pos = block.index("        def worker(")
     assert block.index("read_text_detected(txt_path)", ensure_pos) < worker_pos
     assert block.index("mapping, present_pages = ensure_mapping()", worker_pos) > worker_pos
-    assert "self._start_batch_task(" in block
+    assert "app._start_batch_task(" in block
     assert '"填充词条"' in block
     assert "item_label=lambda i: pages[i].name" in block
     assert "foreground_page_edit=False" in block
     assert "进度按页面更新，可暂停或停止" in block
 
-
 def test_v298_existing_word_source_selection_is_separate_and_refill_reuses_cache():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    select_start = text.index("    def select_existing_headwords_file(self) -> None:")
-    fill_start = text.index("    def fill_existing_headwords(self) -> None:", select_start)
-    import_start = text.index("    def import_legacy_words(self) -> bool:", fill_start)
-    select_block = text[select_start:fill_start]
-    fill_block = text[fill_start:import_start]
+    root = Path(__file__).resolve().parents[1]
+    app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    select_start = app_text.index("    def select_existing_headwords_file(self) -> None:")
+    fill_start = app_text.index("    def fill_existing_headwords(self) -> None:", select_start)
+    import_start = app_text.index("    def import_legacy_words(self) -> bool:", fill_start)
+    assert (
+        "self._headword_controller_for_call().select_existing_headwords_file()"
+        in app_text[select_start:fill_start]
+    )
+    assert (
+        "self._headword_controller_for_call().fill_existing_headwords()"
+        in app_text[fill_start:import_start]
+    )
+
+    controller_text = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "headword.py"
+    ).read_text(encoding="utf-8")
+    select_start = controller_text.index("    def select_existing_headwords_file(self) -> None:")
+    fill_start = controller_text.index("    def fill_existing_headwords(self) -> None:", select_start)
+    select_block = controller_text[select_start:fill_start]
+    fill_block = controller_text[fill_start:]
     assert "filedialog.askopenfilename(" in select_block
     assert "filedialog.askopenfilename(" not in fill_block
-    assert "self._word_fill_source_mapping" in fill_block
-    assert '"value": self._word_fill_source_mapping' in fill_block
-    assert "self._word_fill_source_mapping = mapping" in fill_block
+    assert "app._word_fill_source_mapping" in fill_block
+    assert '"value": app._word_fill_source_mapping' in fill_block
+    assert "app._word_fill_source_mapping = mapping" in fill_block
     assert "请先点击[选择词条文件]" in fill_block
-
 
 def test_v298_action_row_exposes_select_then_fill_buttons():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
@@ -5044,16 +5063,22 @@ def test_v2115_nominal_geometry_matches_full_geometry_column_intervals():
 
 
 def test_v2115_large_existing_word_fill_avoids_full_image_decode_and_bulk_tree_updates():
-    app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    root = Path(__file__).parents[1]
+    app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     start = app_text.index("    def fill_existing_headwords(self) -> None:")
     end = app_text.index("    def import_legacy_words(self) -> bool:", start)
-    body = app_text[start:end]
-    assert "settings_snapshot = replace(self.settings)" in body
+    assert "self._headword_controller_for_call().fill_existing_headwords()" in app_text[start:end]
+
+    controller_text = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "headword.py"
+    ).read_text(encoding="utf-8")
+    start = controller_text.index("    def fill_existing_headwords(self) -> None:")
+    body = controller_text[start:]
+    assert "settings_snapshot = replace(app.settings)" in body
     assert "derive_nominal_geometry(width, height, settings_snapshot)" in body
-    assert "derive_nominal_geometry(width, height, self.settings)" not in body
+    assert "derive_nominal_geometry(width, height, app.settings)" not in body
     assert "page_image = normalize_page_rgb(opened)" not in body
     assert "refresh_row=False" in body
-
 
 def test_v2115_pdic_repair_and_restore_use_header_only_geometry():
     controller_text = (

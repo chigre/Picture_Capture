@@ -70,8 +70,8 @@ from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.controllers import (
     CanvasController, CropController, DetectionController, ExportController,
-    IllustrationController, PageController, ProjectController, ReviewController,
-    SESSION_STATE_FILENAME, SessionController,
+    HeadwordController, IllustrationController, PageController, ProjectController,
+    ReviewController, SESSION_STATE_FILENAME, SessionController,
 )
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
@@ -7407,6 +7407,11 @@ class PictureCaptureApp(tk.Tk):
         self.crop_controller = CropController(self)
         self.detection_controller = DetectionController(self)
         self.export_controller = ExportController(self)
+        self.headword_controller = HeadwordController(
+            self,
+            parse_words_of_pages_text=_parse_words_of_pages_text,
+            fill_page_entries=_fill_page_entries,
+        )
         self.illustration_controller = IllustrationController(self)
         self.project_controller = ProjectController(self)
         self.page_controller = PageController(self)
@@ -17241,226 +17246,22 @@ class PictureCaptureApp(tk.Tk):
         """Backward-compatible alias for old integrations."""
         self.restore_from_pdic_backup()
 
-    @staticmethod
-    def _word_fill_file_signature(path: Path) -> tuple[str, int, int]:
-        stat = path.stat()
-        return (str(path.resolve()), int(stat.st_mtime_ns), int(stat.st_size))
+    def _headword_controller_for_call(self) -> HeadwordController:
+        controller = self.__dict__.get("headword_controller")
+        if controller is None:
+            controller = HeadwordController(
+                self,
+                parse_words_of_pages_text=_parse_words_of_pages_text,
+                fill_page_entries=_fill_page_entries,
+            )
+            self.__dict__["headword_controller"] = controller
+        return controller
 
     def select_existing_headwords_file(self) -> None:
-        """Choose the page-aware TXT used by subsequent fill operations.
-
-        Selection is deliberately separate from filling: a large dictionary can
-        be parsed once, then the user may change the main page range and refill
-        mismatch pages repeatedly without reopening the file picker.
-        """
-        if not self.project:
-            messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=self)
-            return
-        if self._batch_active:
-            messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
-            return
-        initialdir = self.project.root
-        initialfile = "_WordsOfPages.txt"
-        if self._word_fill_source_path is not None:
-            initialdir = self._word_fill_source_path.parent
-            initialfile = self._word_fill_source_path.name
-        path_text = filedialog.askopenfilename(
-            title="选择包含既有词条的 TXT",
-            initialdir=str(initialdir),
-            initialfile=initialfile,
-            filetypes=[("文本", "*.txt"), ("全部", "*")],
-            parent=self,
-        )
-        if not path_text:
-            return
-        path = Path(path_text)
-        try:
-            signature = self._word_fill_file_signature(path)
-        except Exception as exc:
-            self.show_error("词条文件不可用", exc)
-            return
-
-        # Re-selecting an unchanged source keeps the already parsed mapping.
-        # Choosing another file, or choosing a changed version of the same file,
-        # invalidates only the parse cache; no PDIC is touched at this stage.
-        if signature != self._word_fill_source_signature:
-            self._word_fill_source_mapping = None
-            self._word_fill_source_present_pages = None
-        self._word_fill_source_path = path
-        self._word_fill_source_signature = signature
-        cached = "（已缓存解析结果）" if self._word_fill_source_mapping is not None else ""
-        self.status_var.set(f"已选择词条文件：{path.name}{cached}；调整页面范围后点击[填充词条]。")
+        self._headword_controller_for_call().select_existing_headwords_file()
 
     def fill_existing_headwords(self) -> None:
-        """Fill the selected range from the already chosen page-aware TXT.
-
-        The source file picker is intentionally *not* opened here.  Once a file
-        has been selected, the parsed mapping survives repeated fill batches in
-        this project. If the source changes on disk, its signature invalidates
-        the cache and the next batch reparses it in the worker thread.
-        """
-        if not self.project or not self.current_page or self.image is None:
-            messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=self)
-            return
-        if self._batch_active:
-            messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
-            return
-        if self._word_fill_source_path is None:
-            messagebox.showinfo("尚未选择词条文件", "请先点击[选择词条文件]，再执行填充。", parent=self)
-            return
-        try:
-            indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc)
-            return
-        if not indices:
-            return
-
-        txt_path = self._word_fill_source_path
-        try:
-            current_signature = self._word_fill_file_signature(txt_path)
-        except Exception as exc:
-            self.show_error("词条文件不可用", exc)
-            return
-        if current_signature != self._word_fill_source_signature:
-            self._word_fill_source_signature = current_signature
-            self._word_fill_source_mapping = None
-            self._word_fill_source_present_pages = None
-
-        try:
-            # Commit any live Entry edits before the worker starts reading PDIC.
-            # During this task foreground page edits/navigation are intentionally
-            # blocked, so a worker can never race a stale canvas copy.
-            self._flush_deferred_page_save()
-            self._sync_entry_editor_texts()
-            self.save_pdic(silent=True, sync_editors=False)
-        except Exception as exc:
-            self.show_error("填充词条失败", exc)
-            return
-
-        project = self.project
-        settings_snapshot = replace(self.settings)
-        pages = list(project.images)
-        page_stems = [page.stem for page in pages]
-        pages_meta = [
-            (page.stem, pages[i - 1].stem if i > 0 else "@", pages[i + 1].stem if i + 1 < len(pages) else "@")
-            for i, page in enumerate(pages)
-        ]
-        # A holder local to this batch avoids any race where the first worker
-        # resolves the app-level cache while subsequent page commits start.
-        mapping_holder = {
-            "value": self._word_fill_source_mapping,
-            "present": self._word_fill_source_present_pages,
-        }
-
-        def ensure_mapping() -> tuple[dict[str, list[str]], set[str]]:
-            mapping = mapping_holder["value"]
-            present = mapping_holder["present"]
-            if mapping is None or present is None:
-                text_data, _detected_encoding = read_text_detected(txt_path)
-                present = set()
-                mapping = _parse_words_of_pages_text(text_data, page_stems, present_pages=present)
-                mapping_holder["value"] = mapping
-                mapping_holder["present"] = present
-            return mapping, present
-
-        def worker(index: int, _position: int, _total: int):
-            mapping, present_pages = ensure_mapping()
-            page = pages[index]
-            entries = read_pdic(pdic_path(page))
-            with Image.open(page) as opened:
-                width, height = map(int, opened.size)
-            entries = sort_entries_reading_order(
-                entries, derive_nominal_geometry(width, height, settings_snapshot),
-                read_page_sections(page),
-            )
-            has_data = page.stem in present_pages
-            words = list(mapping.get(page.stem, [])) if has_data else []
-            filled, line_count, word_count = _fill_page_entries(entries, words)
-
-            # Empty pages stay empty; a page with TXT words but no lines must not
-            # get a fabricated PDIC. Each completed page is its own commit point.
-            if entries or pdic_path(page).exists():
-                write_pdic(pdic_path(page), entries, width, pages_meta[index])
-            return {
-                "index": index,
-                "filled": filled,
-                "line_count": line_count,
-                "word_count": word_count,
-                "has_data": has_data,
-                "mismatch": has_data and line_count != word_count,
-            }
-
-        def done(completed, total_pages, stopped, results, error):
-            if error is not None:
-                return
-            if (
-                self.project is project
-                and self._word_fill_source_path == txt_path
-                and self._word_fill_source_signature == current_signature
-            ):
-                mapping = mapping_holder.get("value")
-                present = mapping_holder.get("present")
-                if isinstance(mapping, dict) and isinstance(present, set):
-                    self._word_fill_source_mapping = mapping
-                    self._word_fill_source_present_pages = present
-            filled_total = 0
-            mismatch_count = 0
-            no_data_count = 0
-            completed_indices: set[int] = set()
-            for result in results:
-                if not isinstance(result, dict):
-                    continue
-                index = int(result.get("index", -1))
-                if index < 0:
-                    continue
-                completed_indices.add(index)
-                filled_total += int(result.get("filled", 0) or 0)
-                line_count = int(result.get("line_count", 0) or 0)
-                word_count = int(result.get("word_count", 0) or 0)
-                has_data = bool(result.get("has_data", True))
-                self._record_word_fill_check(
-                    index, line_count, word_count, source=txt_path.name, has_data=has_data,
-                    persist=False, refresh_overlay=False, refresh_row=False,
-                )
-                if not has_data:
-                    no_data_count += 1
-                elif line_count != word_count:
-                    mismatch_count += 1
-
-            if completed_indices:
-                self._persist_word_fill_status()
-            if self.current_index in completed_indices:
-                self.load_page(self.current_index)
-
-            source_name = txt_path.name
-            if stopped:
-                self.status_var.set(
-                    f"既有词条填充已停止：完成 {completed}/{total_pages} 页，填入 {filled_total} 个词条；"
-                    f"已完成页面中数量不一致 {mismatch_count} 页，无资料 {no_data_count} 页；来源：{source_name}"
-                )
-            else:
-                self.status_var.set(
-                    f"既有词条填充完成：{completed}/{total_pages} 页，填入 {filled_total} 个词条；"
-                    f"数量不一致 {mismatch_count} 页（填充状态格淡红提示），无资料 {no_data_count} 页；来源：{source_name}"
-                )
-
-        started = self._start_batch_task(
-            "填充词条",
-            indices,
-            worker,
-            done,
-            item_label=lambda i: pages[i].name,
-            foreground_page_edit=False,
-        )
-        if started:
-            cached = self._word_fill_source_mapping is not None
-            phase = "使用已缓存词条索引" if cached else "准备读取并解析词条文件"
-            self.batch_text_var.set(f"填充词条：{phase} 0/{len(indices)}")
-            self.status_var.set(
-                f"正在后台逐页填充：共 {len(indices)} 页；来源：{txt_path.name}；"
-                "进度按页面更新，可暂停或停止。"
-            )
+        self._headword_controller_for_call().fill_existing_headwords()
 
     def import_legacy_words(self) -> bool:
         """Import legacy words in a sequential background batch.

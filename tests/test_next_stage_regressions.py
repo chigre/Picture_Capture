@@ -4219,15 +4219,23 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
 
     fill_start = text.index("    def fill_existing_headwords(", app_start)
     fill_end = text.index("\n    def import_legacy_words", fill_start)
-    fill = text[fill_start:fill_end]
-    ensure_start = fill.index("        def ensure_mapping()")
-    worker_start = fill.index("        def worker(", ensure_start)
-    ensure = fill[ensure_start:worker_start]
-    assert "self._word_fill_source_mapping =" not in ensure
-    assert "settings_snapshot = replace(self.settings)" in fill
-    assert "derive_nominal_geometry(width, height, settings_snapshot)" in fill
-    done_start = fill.index("        def done(", worker_start)
-    assert "self._word_fill_source_mapping = mapping" in fill[done_start:]
+    fill_wrapper = text[fill_start:fill_end]
+    assert "self._headword_controller_for_call().fill_existing_headwords()" in fill_wrapper
+
+    headword_text = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "headword.py"
+    ).read_text(encoding="utf-8")
+    controller_fill_start = headword_text.index("    def fill_existing_headwords(")
+    controller_fill = headword_text[controller_fill_start:]
+    ensure_start = controller_fill.index("        def ensure_mapping()")
+    worker_start = controller_fill.index("        def worker(", ensure_start)
+    ensure = controller_fill[ensure_start:worker_start]
+    assert "app._word_fill_source_mapping =" not in ensure
+    assert "settings_snapshot = replace(app.settings)" in controller_fill
+    assert "derive_nominal_geometry(width, height, settings_snapshot)" in controller_fill
+    assert "app._start_batch_task(" in controller_fill
+    done_start = controller_fill.index("        def done(", worker_start)
+    assert "app._word_fill_source_mapping = mapping" in controller_fill[done_start:]
 
     prefetch_start = review.index("    def _schedule_adjacent_preload(")
     prefetch_end = review.index("\n    def change_page(", prefetch_start)
