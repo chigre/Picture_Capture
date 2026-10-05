@@ -23,7 +23,9 @@ jobs:
       - name: Install locked dev dependencies
         run: uv sync --locked --group dev
       - name: Apply Phase 5A migration
-        run: uv run --locked python tools/phase5a_apply.py
+        run: |
+          uv run --locked python tools/phase5a_apply.py
+          uv run --locked python tools/phase5a_fix_app_wrapper.py
       - name: Check focused diff shape
         run: |
           git fetch origin main --depth=1
@@ -42,7 +44,7 @@ jobs:
       - name: Check undefined names
         run: uv run --locked ruff check src tests --select F821
       - name: Remove temporary migration assets
-        run: rm tools/phase5a_apply.py .github/workflows/phase5a-apply.yml
+        run: rm tools/phase5a_apply.py tools/phase5a_fix_app_wrapper.py .github/workflows/phase5a-apply.yml
       - name: Recheck final diff and publish validated tree
         run: |
           git diff --check origin/main
