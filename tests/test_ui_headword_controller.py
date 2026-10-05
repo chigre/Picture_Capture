@@ -218,7 +218,9 @@ def test_fill_headwords_keeps_parse_cache_local_until_done(tmp_path, monkeypatch
         "has_data": True,
         "mismatch": False,
     }
-    assert parse_calls == [("001\talpha\n", ("001",))]
+    assert len(parse_calls) == 1
+    assert parse_calls[0][0].splitlines() == ["001\talpha"]
+    assert parse_calls[0][1] == ("001",)
     assert app._word_fill_source_mapping is None
     assert writes and writes[0][1] == ["alpha"]
 
