@@ -1,0 +1,78 @@
+name: Phase 5E isolated validation
+
+on:
+  push:
+    branches: [refactor/phase-5e-unlined-runtime-decomposition]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase5e-unlined-runtime-decomposition
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv and Python 3.13
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Apply Phase 5E patch
+        run: python tools/phase5e_apply.py
+
+      - name: Check patch shape
+        run: |
+          git diff --check
+          git status --short
+
+      - name: Install locked dependencies
+        run: uv sync --locked --group dev
+
+      - name: Run focused regressions
+        run: >-
+          uv run --locked pytest -q
+          tests/test_ui_unlined_export_controller.py
+          tests/test_unlined_line_export.py
+          tests/test_postproduction_single_line_runtime.py
+          tests/test_layout_rows_fast_path.py
+          tests/test_ui_crop_controller.py
+          tests/test_ui_crop_controller_selected_scope.py
+          tests/test_ui_illustration_controller.py
+          tests/test_ui_illustration_crop_controller.py
+          tests/test_next_stage_regressions.py
+          tests/test_core.py
+
+      - name: Run architecture guard
+        run: uv run --locked python scripts/architecture_guard.py
+
+      - name: Run full suite
+        run: uv run --locked pytest -q
+
+      - name: Compile Python sources
+        run: uv run --locked python -m compileall -q src scripts run.py run_tests.py
+
+      - name: Check undefined names
+        run: uv run --locked ruff check --select F821 src tests scripts run.py run_tests.py
+
+      - name: Remove migration assets
+        run: |
+          rm tools/phase5e_apply.py
+          rm .github/workflows/phase5e-validate.yml
+          git diff --check
+
+      - name: Publish validated production tree
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: retire unlined export runtime installer"
+          git push origin HEAD:refactor/phase-5e-unlined-runtime-decomposition
