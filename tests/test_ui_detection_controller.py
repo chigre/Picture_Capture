@@ -148,6 +148,30 @@ def test_run_ocr_draw_preserves_current_and_all_scope_routing_without_save_setti
     assert ("selected_page_indices",) not in app.calls
 
 
+def test_batch_auto_detect_preserves_all_project_pages_current_method_and_refresh() -> None:
+    app = _App()
+    app.settings.detection_method = "combined"
+    controller = DetectionController(app)
+
+    controller.batch_auto_detect(force_paddle_refresh=True)
+
+    assert app.calls == [
+        ("detect_pages", [0, 1, 2, 3], "combined", True),
+    ]
+    assert ("save_settings",) not in app.calls
+    assert ("selected_page_indices",) not in app.calls
+
+
+def test_batch_auto_detect_missing_project_is_exact_no_op() -> None:
+    app = _App()
+    app.project = None
+    controller = DetectionController(app)
+
+    controller.batch_auto_detect(force_paddle_refresh=True)
+
+    assert app.calls == []
+
+
 def test_detection_controller_has_no_reverse_dependency_on_app_module() -> None:
     path = ROOT / "src/picture_capture/ui/controllers/detection.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -181,6 +205,7 @@ def test_detection_controller_wiring_preserves_app_methods_and_runtime_guard_sea
         "paddle_detect_current": "paddle_detect_current",
         "run_combined_draw_action": "run_combined_draw_action",
         "run_ocr_draw_action": "run_ocr_draw_action",
+        "batch_auto_detect": "batch_auto_detect",
         "run_ocr_draw": "run_ocr_draw",
     }
     for app_method, controller_method in expected.items():

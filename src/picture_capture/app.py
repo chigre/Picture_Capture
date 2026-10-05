@@ -17347,12 +17347,7 @@ class PictureCaptureApp(tk.Tk):
         box.insert("1.0", text); box.configure(state="disabled")
 
     def batch_auto_detect(self, force_paddle_refresh: bool = False) -> None:
-        if not self.project: return
-        self._detect_pages(
-            list(range(len(self.project.images))),
-            method=self.settings.detection_method,
-            force_refresh=force_paddle_refresh,
-        )
+        self._detection_controller_for_call().batch_auto_detect(force_paddle_refresh)
 
     def batch_ocr(self) -> None:
         if not self.project or self._batch_active: return
