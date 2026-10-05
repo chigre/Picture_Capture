@@ -179,6 +179,150 @@ def test_batch_auto_detect_missing_project_is_exact_no_op() -> None:
     assert app.calls == []
 
 
+class _CurrentDetectApp:
+    def __init__(self, root: Path, page: Path) -> None:
+        self.project = SimpleNamespace(root=root, images=[page])
+        self.current_page = page
+        self.current_index = 0
+        self.settings = AppSettings(columns=1, detection_method="left_edge")
+        self.page_sections = []
+        self.entries = [Entry(word="old", x=5, y=10)]
+        self._batch_active = False
+        self.status_var = _Var("")
+        self.calls: list[tuple] = []
+        self.batch = None
+
+    def guard(self) -> bool:
+        self.calls.append(("guard",))
+        return True
+
+    def _guard_transformed_geometry(self, title: str) -> bool:
+        self.calls.append(("guard_transformed_geometry", title))
+        return True
+
+    def _start_batch_task(self, title, items, worker, done, **kwargs):
+        self.batch = (title, list(items), worker, done, kwargs)
+        return True
+
+    def _sort_entries_reading_order(self) -> None:
+        self.calls.append(("sort_entries",))
+
+    def _load_ocr_review_candidates(self) -> None:
+        self.calls.append(("load_ocr_review_candidates",))
+
+    def _refresh_page_quality_colors(self) -> None:
+        self.calls.append(("refresh_page_quality_colors",))
+
+    def _current_page_quality_text(self) -> str:
+        return "quality"
+
+    def redraw(self) -> None:
+        self.calls.append(("redraw",))
+
+
+def test_auto_detect_current_busy_guard_preserves_existing_status() -> None:
+    app = SimpleNamespace(_batch_active=True, status_var=_Var(""))
+
+    DetectionController(app).auto_detect_current()
+
+    assert app.status_var.value == "后台画线任务运行中，暂不启动前台自动识别；可进行人工校对。"
+
+
+def test_auto_detect_current_preserves_single_page_worker_and_done(tmp_path, monkeypatch) -> None:
+    page = tmp_path / "001.png"
+    Image.new("RGB", (80, 120), "white").save(page)
+    app = _CurrentDetectApp(tmp_path, page)
+    geometry = object()
+    detected = [Entry(word="new", x=7, y=20)]
+    calls: list[tuple] = []
+
+    def fake_detect(image, settings, **kwargs):
+        calls.append((image.size, settings.detection_method, kwargs))
+        return detected, geometry
+
+    monkeypatch.setattr(detection_module, "detect_entries", fake_detect)
+
+    DetectionController(app).auto_detect_current(force_paddle_refresh=True)
+
+    assert app.calls[:2] == [("guard",), ("guard_transformed_geometry", "自动画线")]
+    assert app.batch is not None
+    title, items, worker, done, kwargs = app.batch
+    assert title == "当前页自动画线"
+    assert items == [0]
+    assert kwargs["item_label"](0) == "001.png"
+    assert kwargs["refresh_page_quality"] is False
+
+    result = worker(0, 1, 1)
+    assert result == (detected, geometry, None)
+    assert calls[0][0] == (80, 120)
+    assert calls[0][1] == "left_edge"
+    assert calls[0][2]["force_paddle_refresh"] is True
+    assert calls[0][2]["profile_page_index"] == 0
+
+    done(1, 1, False, [result], None)
+
+    assert app.entries == detected
+    assert ("sort_entries",) in app.calls
+    assert ("redraw",) in app.calls
+    assert app.status_var.value == "智能画线完成：检测到 1 个词条；可手动增删后保存"
+
+
+def test_auto_detect_current_clicked_column_replaces_only_target_column(
+    tmp_path, monkeypatch,
+) -> None:
+    page = tmp_path / "001.png"
+    Image.new("RGB", (80, 120), "white").save(page)
+    app = _CurrentDetectApp(tmp_path, page)
+    app.entries = [
+        Entry(word="keep", x=10, y=10),
+        Entry(word="replace", x=60, y=20),
+    ]
+    geometry = object()
+    detected = [
+        Entry(word="ignored", x=12, y=30),
+        Entry(word="fresh", x=65, y=40),
+    ]
+    monkeypatch.setattr(
+        detection_module, "detect_entries", lambda *_args, **_kwargs: (detected, geometry),
+    )
+    monkeypatch.setattr(detection_module, "column_index_for_click", lambda _x, _g: 1)
+    monkeypatch.setattr(
+        detection_module, "column_index", lambda x, _g, _y: 0 if int(x) < 40 else 1,
+    )
+
+    DetectionController(app).auto_detect_current(clicked_x=70)
+    _, _, worker, done, _ = app.batch
+    result = worker(0, 1, 1)
+    done(1, 1, False, [result], None)
+
+    assert [(entry.word, entry.x) for entry in app.entries] == [
+        ("keep", 10),
+        ("fresh", 65),
+    ]
+
+
+def test_auto_detect_current_does_not_publish_to_different_page(tmp_path, monkeypatch) -> None:
+    page = tmp_path / "001.png"
+    other = tmp_path / "002.png"
+    Image.new("RGB", (80, 120), "white").save(page)
+    Image.new("RGB", (80, 120), "white").save(other)
+    app = _CurrentDetectApp(tmp_path, page)
+    original_entries = list(app.entries)
+    result = ([Entry(word="new", x=7, y=20)], object(), None)
+    monkeypatch.setattr(
+        detection_module, "detect_entries", lambda *_args, **_kwargs: (result[0], result[1]),
+    )
+
+    DetectionController(app).auto_detect_current()
+    _, _, _worker, done, _ = app.batch
+    app.current_page = other
+    done(1, 1, False, [result], None)
+
+    assert app.entries == original_entries
+    assert ("sort_entries",) not in app.calls
+    assert ("redraw",) not in app.calls
+
+
 def test_batch_ocr_preserves_filter_worker_persistence_and_done(tmp_path, monkeypatch) -> None:
     first = tmp_path / "001.png"
     second = tmp_path / "002.png"
@@ -333,6 +477,7 @@ def test_detection_controller_wiring_preserves_app_methods_and_runtime_guard_sea
     assert 'self.__dict__.get("detection_controller")' in app
 
     expected = {
+        "auto_detect_current": "auto_detect_current",
         "paddle_detect_current": "paddle_detect_current",
         "run_combined_draw_action": "run_combined_draw_action",
         "run_ocr_draw_action": "run_ocr_draw_action",

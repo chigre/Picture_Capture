@@ -407,9 +407,14 @@ def test_combined_drawing_automatically_runs_marker_text_ocr_for_blank_rescues()
     assert '"text_filled"' in batch
     assert "普通救漏自动补字" in batch
 
-    current_start = source.index("    def auto_detect_current(")
-    current_end = source.index("    def paddle_detect_current(", current_start)
-    current = source[current_start:current_end]
+    assert "self._detection_controller_for_call().auto_detect_current(" in source
+    controller_source = (
+        Path(inspect.getsourcefile(app_module)).parent
+        / "ui" / "controllers" / "detection.py"
+    ).read_text(encoding="utf-8")
+    current_start = controller_source.index("    def auto_detect_current(")
+    current_end = controller_source.index("    def paddle_detect_current(", current_start)
+    current = controller_source[current_start:current_end]
     assert 'if settings.detection_method == "combined":' in current
     assert "ocr_existing_entry_words_from_markers(" in current
     assert "only_blank=True" in current
@@ -4207,8 +4212,20 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
     finalize = all_pages_branch[finalize_start:finalized_start]
     assert "sorted(sequence" in finalize
 
+    auto_start = text.index("    def auto_detect_current(", app_start)
+    auto_end = text.index("\n    def _detection_controller_for_call", auto_start)
+    auto_wrapper = text[auto_start:auto_end]
+    assert "self._detection_controller_for_call().auto_detect_current(" in auto_wrapper
+
+    detection_text = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "detection.py"
+    ).read_text(encoding="utf-8")
+    current_start = detection_text.index("    def auto_detect_current(")
+    current_end = detection_text.index("\n    def paddle_detect_current", current_start)
+    current_block = detection_text[current_start:current_end]
+    assert "app._start_batch_task(" in current_block
+
     for name, next_name in (
-        ("auto_detect_current", "paddle_detect_current"),
         ("ocr_current", "export_text"),
         ("import_legacy_words", "_default_old_new_compare_source"),
     ):
