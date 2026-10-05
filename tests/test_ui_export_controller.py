@@ -581,3 +581,176 @@ def test_export_picdic_index_wiring_keeps_app_wrapper_and_format_boundaries() ->
     assert "    def export_picdic_index(self) -> None:" in controller
     assert "os.replace(temp, target)" in controller
     assert '("导出PicDic索引", self.export_picdic_index)' in app
+
+
+def _prepare_backup_files(tmp_path: Path, names=("001.jpg", "002.jpg")):
+    pages = [tmp_path / name for name in names]
+    for page in pages:
+        page.with_suffix(".pdic").write_text("placeholder", encoding="utf-8")
+    return pages
+
+
+def test_backup_pdic_missing_project_contract(monkeypatch, tmp_path) -> None:
+    app = _IndexApp(tmp_path, [])
+    app.project = None
+    dialogs: list[tuple] = []
+    monkeypatch.setattr(
+        export_module.messagebox, "showinfo",
+        lambda title, message, *, parent: dialogs.append((title, message, parent)),
+    )
+
+    ExportController(app).backup_pdic()
+
+    assert dialogs == [("尚未打开", "请先打开包含扫描图片的项目目录。", app)]
+    assert app.calls == []
+    assert app.batch is None
+
+
+def test_backup_pdic_batch_active_preserves_exact_status(tmp_path) -> None:
+    pages = _prepare_backup_files(tmp_path, ("001.jpg",))
+    app = _IndexApp(tmp_path, pages)
+    app._batch_active = True
+
+    ExportController(app).backup_pdic()
+
+    assert app.status_var.values == ["已有批量任务正在运行，请结束后再备份PDIC。"]
+    assert app.calls == []
+    assert app.batch is None
+
+
+def test_backup_pdic_prepare_failure_preserves_error_contract(tmp_path) -> None:
+    pages = _prepare_backup_files(tmp_path, ("001.jpg",))
+    app = _IndexApp(tmp_path, pages)
+    problem = OSError("save failed")
+    app.save_error = problem
+
+    ExportController(app).backup_pdic()
+
+    assert app.calls == [("flush",), ("sync",), ("save_pdic", True, False)]
+    assert app.errors == [("备份PDIC失败", problem)]
+    assert app.batch is None
+
+
+def test_backup_pdic_no_saved_pdic_shows_existing_info(monkeypatch, tmp_path) -> None:
+    pages = [tmp_path / "001.jpg"]
+    app = _IndexApp(tmp_path, pages)
+    dialogs: list[tuple] = []
+    monkeypatch.setattr(export_module, "pdic_path", lambda page: page.with_suffix(".pdic"))
+    monkeypatch.setattr(
+        export_module.messagebox, "showinfo",
+        lambda title, message, *, parent: dialogs.append((title, message, parent)),
+    )
+
+    ExportController(app).backup_pdic()
+
+    assert app.calls == [("flush",), ("sync",), ("save_pdic", True, False)]
+    assert dialogs == [("备份PDIC", "当前项目没有可备份的 PDIC 文件。", app)]
+    assert app.batch is None
+
+
+def test_backup_pdic_streams_filters_blank_lines_and_atomically_publishes(monkeypatch, tmp_path) -> None:
+    pages = _prepare_backup_files(tmp_path)
+    pages[0].with_suffix(".pdic").write_text("\ufeffuno\n\n due \n", encoding="utf-8")
+    pages[1].with_suffix(".pdic").write_text("\n\ntre\n", encoding="utf-8")
+    app = _IndexApp(tmp_path, pages)
+    output = tmp_path / "output"
+    output.mkdir()
+    dialogs: list[tuple] = []
+    monkeypatch.setattr(export_module, "pdic_path", lambda page: page.with_suffix(".pdic"))
+    monkeypatch.setattr(export_module, "exports_root", lambda _root: output)
+    monkeypatch.setattr(
+        export_module.messagebox, "showinfo",
+        lambda title, message, *, parent: dialogs.append((title, message, parent)),
+    )
+
+    ExportController(app).backup_pdic()
+
+    assert app.calls[:3] == [("flush",), ("sync",), ("save_pdic", True, False)]
+    assert app.batch is not None
+    title, items, worker, done, kwargs = app.batch
+    assert title == "备份PDIC"
+    assert items == pages
+    assert kwargs["item_label"](pages[0]) == "001.jpg"
+    assert kwargs["refresh_page_quality"] is False
+    assert list(output.iterdir()) == []
+
+    assert worker(pages[0], 1, 2) == 2
+    assert worker(pages[1], 2, 2) == 1
+    temps = list(output.glob(".all_pdic_backup_*.txt.tmp"))
+    assert len(temps) == 1
+    done(2, 2, False, [2, 1], None)
+
+    assert not list(output.glob(".*.tmp"))
+    targets = list(output.glob("all_pdic_backup_*.txt"))
+    assert len(targets) == 1
+    assert targets[0].read_text(encoding="utf-8") == "uno\n due \ntre\n"
+    assert app.status_var.values == [
+        f"PDIC备份完成：{targets[0].name}｜2 页｜3 条"
+    ]
+    assert dialogs == [(
+        "备份PDIC",
+        f"已生成：\n{targets[0]}\n\n包含 2 个有记录页面，共 3 条 PDIC。",
+        app,
+    )]
+
+
+def test_backup_pdic_stop_removes_temp_and_never_publishes_partial_output(monkeypatch, tmp_path) -> None:
+    pages = _prepare_backup_files(tmp_path, ("001.jpg",))
+    pages[0].with_suffix(".pdic").write_text("word\n", encoding="utf-8")
+    app = _IndexApp(tmp_path, pages)
+    output = tmp_path / "output"
+    output.mkdir()
+    monkeypatch.setattr(export_module, "pdic_path", lambda page: page.with_suffix(".pdic"))
+    monkeypatch.setattr(export_module, "exports_root", lambda _root: output)
+
+    ExportController(app).backup_pdic()
+    assert app.batch is not None
+    _, _, worker, done, _ = app.batch
+    assert worker(pages[0], 1, 1) == 1
+    assert list(output.glob(".all_pdic_backup_*.txt.tmp"))
+
+    done(1, 1, True, [1], None)
+
+    assert not list(output.glob(".*.tmp"))
+    assert not list(output.glob("all_pdic_backup_*.txt"))
+    assert app.status_var.values == [
+        "PDIC备份已停止：完成 1/1 页，未生成不完整备份。"
+    ]
+
+
+def test_backup_pdic_error_removes_temp_without_success_status(monkeypatch, tmp_path) -> None:
+    pages = _prepare_backup_files(tmp_path, ("001.jpg",))
+    pages[0].with_suffix(".pdic").write_text("word\n", encoding="utf-8")
+    app = _IndexApp(tmp_path, pages)
+    output = tmp_path / "output"
+    output.mkdir()
+    monkeypatch.setattr(export_module, "pdic_path", lambda page: page.with_suffix(".pdic"))
+    monkeypatch.setattr(export_module, "exports_root", lambda _root: output)
+
+    ExportController(app).backup_pdic()
+    assert app.batch is not None
+    _, _, worker, done, _ = app.batch
+    assert worker(pages[0], 1, 1) == 1
+
+    done(0, 1, False, [], RuntimeError("failed"))
+
+    assert not list(output.glob(".*.tmp"))
+    assert not list(output.glob("all_pdic_backup_*.txt"))
+    assert app.status_var.values == []
+
+
+def test_backup_pdic_wiring_keeps_restore_outside_phase4r() -> None:
+    app = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
+    controller = (
+        ROOT / "src/picture_capture/ui/controllers/export.py"
+    ).read_text(encoding="utf-8")
+
+    start = app.index("    def backup_pdic(self) -> None:")
+    end = app.index("    def restore_from_pdic_backup(self) -> None:", start)
+    block = app[start:end]
+    assert "self._export_controller_for_call().backup_pdic()" in block
+    assert "_start_batch_task" not in block
+    assert "    def backup_pdic(self) -> None:" in controller
+    assert "    def restore_from_pdic_backup(self) -> None:" in app
+    assert "    def restore_from_pdic_backup(self) -> None:" not in controller
+    assert '"备份PDIC"' in app and "self.backup_pdic" in app
