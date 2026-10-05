@@ -34,8 +34,9 @@ jobs:
           uv run --locked python tools/phase4v_apply.py
           uv run --locked python - <<'PY'
           from pathlib import Path
-          path = Path('src/picture_capture/ui/controllers/review.py')
-          text = path.read_text(encoding='utf-8')
+
+          review_path = Path('src/picture_capture/ui/controllers/review.py')
+          text = review_path.read_text(encoding='utf-8')
           old = '''    Durable candidate edits, PDIC/manual-override writes, and the detailed
               translucent proofreading highlight renderer remain owned by
               ``PictureCaptureApp``.  This controller only owns candidate lookup/matching
@@ -48,8 +49,23 @@ jobs:
           '''
           if text.count(old) != 1:
               raise RuntimeError('review controller docstring shape changed')
-          text = text.replace(old, new, 1).rstrip() + '\n'
-          path.write_text(text, encoding='utf-8')
+          review_path.write_text(text.replace(old, new, 1).rstrip() + '\n', encoding='utf-8')
+
+          test_path = Path('tests/test_next_stage_regressions.py')
+          text = test_path.read_text(encoding='utf-8')
+          replacements = {
+              "    assert 'self._start_batch_task(' in all_pages_branch\n":
+                  "    assert 'app._start_batch_task(' in all_pages_branch\n",
+              "    assert 'self._start_ui_worker(' in all_pages_branch\n":
+                  "    assert 'app._start_ui_worker(' in all_pages_branch\n",
+              '    assert "self.settings" not in worker\n':
+                  '    assert "app.settings" not in worker\n',
+          }
+          for old_assertion, new_assertion in replacements.items():
+              if text.count(old_assertion) != 1:
+                  raise RuntimeError(f'ownership assertion shape changed: {old_assertion!r}')
+              text = text.replace(old_assertion, new_assertion, 1)
+          test_path.write_text(text, encoding='utf-8')
           PY
 
       - name: Validate diff shape
