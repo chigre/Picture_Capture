@@ -549,19 +549,16 @@ def test_crop_controller_wiring_preserves_app_compatibility_methods() -> None:
 
 def test_phase4k_leaves_other_crop_and_runtime_paths_untouched() -> None:
     app = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
-    runtime = (
-        ROOT / "src/picture_capture/postproduction_single_line_runtime.py"
-    ).read_text(encoding="utf-8")
+    runtime_path = ROOT / "src/picture_capture/postproduction_single_line_runtime.py"
     controller = (
         ROOT / "src/picture_capture/ui/controllers/crop.py"
     ).read_text(encoding="utf-8")
 
     assert "def _crop_settings_defaults(self)" in app
     assert "def detect_illustrations_selected_scope(self)" in app
-    assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" not in runtime
+    assert not runtime_path.exists()
     assert "def split_single_lines_selected_scope(self)" in app
     assert "self._crop_controller_for_call().split_single_lines_selected_scope()" in app
-    assert "split_lines_current" not in runtime
     tree = ast.parse(controller)
     crop_class = next(
         node for node in tree.body

@@ -308,9 +308,7 @@ def test_phase4o_app_wrapper_ui_binding_and_crop_runner_boundary_are_preserved()
     controller = (
         ROOT / "src/picture_capture/ui/controllers/illustration.py"
     ).read_text(encoding="utf-8")
-    runtime = (
-        ROOT / "src/picture_capture/postproduction_single_line_runtime.py"
-    ).read_text(encoding="utf-8")
+    runtime_path = ROOT / "src/picture_capture/postproduction_single_line_runtime.py"
 
     assert (
         "def split_illustrations_selected_scope(self) -> None:\n"
@@ -331,9 +329,7 @@ def test_phase4o_app_wrapper_ui_binding_and_crop_runner_boundary_are_preserved()
     assert "append_illustration_crop_log" in controller
     assert "split_illustrations_job," not in app[: app.index("class PictureCaptureApp")]
     assert "append_illustration_crop_log," not in app[: app.index("class PictureCaptureApp")]
-    assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" not in runtime
-    assert "install_postproduction_single_line_runtime" not in runtime
-    assert "def _snapshot_scope(app: Any)" in runtime
-    assert "def start_single_line_export(app: Any)" not in runtime
-    assert "threading.Thread(" not in runtime
-    assert "split_illustrations_selected_scope" not in runtime
+    assert not runtime_path.exists()
+    assert "def _snapshot_scope(app: Any)" in (
+        ROOT / "src/picture_capture/ui/controllers/crop.py"
+    ).read_text(encoding="utf-8")

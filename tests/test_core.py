@@ -5426,6 +5426,7 @@ def test_sidebar_defaults_fold_sections_two_through_five_and_keep_project_detail
     assert 'self._section_frame(sidebar, "六、页面列表"' in app_text
     first_row = (
         '(("单行切图", self.split_single_lines_selected_scope), '
+        '("未画线行导出", self.export_unlined_rows_selected_scope), '
         '("词条切图", self.split_entries_selected_scope), '
         '("插图切图", self.split_illustrations_selected_scope))'
     )
