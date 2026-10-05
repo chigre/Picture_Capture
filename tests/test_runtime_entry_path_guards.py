@@ -173,10 +173,9 @@ def test_ordinary_quick_apply_uses_normal_validator_when_ocr_is_selected():
     assert calls == [{"show_status": False}]
 
 
-def test_gui_composition_installs_ordinary_action_runtime():
+def test_gui_composition_no_longer_installs_ordinary_action_runtime():
     source = _gui_composition_source()
-    assert "install_ordinary_action_runtime" in source
-    assert "install_ordinary_action_runtime(app_module)" in source
+    assert "install_ordinary_action_runtime" not in source
 
     ordinary_source = (
         Path(__file__).resolve().parents[1]
@@ -184,8 +183,19 @@ def test_gui_composition_installs_ordinary_action_runtime():
         / "picture_capture"
         / "ordinary_action_runtime.py"
     ).read_text(encoding="utf-8")
-    assert 'self.settings.detection_method = "left_edge"' in ordinary_source
-    assert 'self._detect_pages(indices, method="left_edge", force_refresh=False)' in ordinary_source
+    assert "def install_ordinary_action_runtime" not in ordinary_source
+    assert "def _apply_quick_settings_for_ordinary" in ordinary_source
+
+    controller_source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "ui"
+        / "controllers"
+        / "detection.py"
+    ).read_text(encoding="utf-8")
+    assert 'app.settings.detection_method = "left_edge"' in controller_source
+    assert 'app._detect_pages(indices, method="left_edge", force_refresh=False)' in controller_source
 
 
 def test_spawn_worker_is_top_level_pickleable_and_installed_before_app_import():

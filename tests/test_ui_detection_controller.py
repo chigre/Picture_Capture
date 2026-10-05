@@ -99,6 +99,22 @@ def test_combined_action_preserves_validation_scope_method_and_refresh_semantics
     ]
 
 
+def test_normal_action_preserves_ocr_independent_validation_scope_and_left_edge_routing() -> None:
+    app = _App()
+    controller = DetectionController(app)
+
+    controller.run_normal_draw_action()
+
+    assert app.settings.detection_method == "left_edge"
+    assert app.calls == [
+        ("guard",),
+        ("apply_quick_settings", False),
+        ("selected_page_indices",),
+        ("save_settings",),
+        ("detect_pages", [1, 3], "left_edge", False),
+    ]
+
+
 def test_ocr_action_preserves_reuse_refresh_semantics() -> None:
     app = _App()
     controller = DetectionController(app)
@@ -478,6 +494,7 @@ def test_detection_controller_wiring_preserves_app_methods_and_runtime_guard_sea
 
     expected = {
         "auto_detect_current": "auto_detect_current",
+        "run_normal_draw_action": "run_normal_draw_action",
         "paddle_detect_current": "paddle_detect_current",
         "run_combined_draw_action": "run_combined_draw_action",
         "run_ocr_draw_action": "run_ocr_draw_action",
@@ -494,10 +511,12 @@ def test_detection_controller_wiring_preserves_app_methods_and_runtime_guard_sea
     assert '"run_ocr_draw_action"' in ocr_guard
     assert '"run_combined_draw_action"' in ocr_guard
 
-    # Ordinary drawing remains with its runtime adapter until Phase 5 removes it.
-    assert "def run_normal_draw_action(self)" in ordinary_runtime
+    # Phase 5A retires only the method monkey patch; the shared ordinary
+    # quick-settings helper remains reusable by postproduction paths.
+    assert "def install_ordinary_action_runtime" not in ordinary_runtime
+    assert "def _apply_quick_settings_for_ordinary" in ordinary_runtime
     controller_tree = ast.parse(controller)
-    assert not any(
+    assert any(
         isinstance(node, ast.FunctionDef) and node.name == "run_normal_draw_action"
         for node in ast.walk(controller_tree)
     )

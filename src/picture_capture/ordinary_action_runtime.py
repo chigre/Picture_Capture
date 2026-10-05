@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Keep the OCR-free ordinary drawing entry path independent from OCR setup.
+"""OCR-independent quick-setting helper for ordinary drawing/cropping paths.
 
 The main window intentionally shares one compact parameter form across drawing
 modes.  Its historical ``apply_quick_settings`` validator therefore enforces
@@ -78,30 +78,4 @@ def _apply_quick_settings_for_ordinary(app: Any) -> bool:
     return accepted
 
 
-def install_ordinary_action_runtime(app_module: Any) -> None:
-    """Route 【普通画线】 through OCR-independent quick-setting validation."""
-
-    app_class = app_module.PictureCaptureApp
-    if bool(getattr(app_class, "_pc_ordinary_action_runtime_installed", False)):
-        return
-
-    def run_normal_draw_action(self) -> None:
-        if not self.guard() or not _apply_quick_settings_for_ordinary(self):
-            return
-        try:
-            indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc)
-            return
-        self.settings.detection_method = "left_edge"
-        self.save_settings()
-        self._detect_pages(indices, method="left_edge", force_refresh=False)
-
-    app_class.run_normal_draw_action = run_normal_draw_action
-    app_class._pc_ordinary_action_runtime_installed = True
-
-
-__all__ = [
-    "_apply_quick_settings_for_ordinary",
-    "install_ordinary_action_runtime",
-]
+__all__ = ["_apply_quick_settings_for_ordinary"]

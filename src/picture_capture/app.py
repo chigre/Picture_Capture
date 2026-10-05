@@ -16549,12 +16549,7 @@ class PictureCaptureApp(tk.Tk):
 
 
     def run_normal_draw_action(self) -> None:
-        if not self.guard() or not self.apply_quick_settings(show_status=False): return
-        try: indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc); return
-        self.settings.detection_method = "left_edge"; self.save_settings()
-        self._detect_pages(indices, method="left_edge", force_refresh=False)
+        self._detection_controller_for_call().run_normal_draw_action()
 
     def run_ocr_draw(self, scope: str, force_refresh: bool) -> None:
         self._detection_controller_for_call().run_ocr_draw(scope, force_refresh)

@@ -2,15 +2,11 @@ from __future__ import annotations
 
 """User-action orchestration for OCR-backed detection workflows.
 
-This controller owns the stable detection action-entry seams, batch OCR
-orchestration, and the current-page detection worker/batch bridge.  The heavy
-multi-page detection pipeline, generic batch runner, and broader app/UI
-persistence infrastructure remain on ``PictureCaptureApp``.
-
-``run_normal_draw_action`` is deliberately excluded for now because the legacy
-``ordinary_action_runtime`` installer replaces that app method at runtime.  It
-should move only when Phase 5 removes that installer so ownership matches the
-actual execution path.
+This controller owns the stable detection action-entry seams, including the
+ordinary OCR-independent drawing action, batch OCR orchestration, and the
+current-page detection worker/batch bridge.  The heavy multi-page detection
+pipeline, generic batch runner, and broader app/UI persistence infrastructure
+remain on ``PictureCaptureApp``.
 """
 
 from dataclasses import replace
@@ -21,6 +17,7 @@ from PIL import Image
 
 from ...formats import pdic_path, read_pdic, write_pdic
 from ...image_utils import normalize_page_rgb
+from ...ordinary_action_runtime import _apply_quick_settings_for_ordinary
 from ...page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
@@ -165,6 +162,20 @@ class DetectionController:
             item_label=lambda _item: page.name,
             refresh_page_quality=settings.detection_method in {"paddleocr", "combined"},
         )
+
+    def run_normal_draw_action(self) -> None:
+        """Run ordinary OCR-independent drawing for the selected page scope."""
+        app = self.app
+        if not app.guard() or not _apply_quick_settings_for_ordinary(app):
+            return
+        try:
+            indices = app.selected_page_indices()
+        except Exception as exc:
+            app.show_error("页面范围无效", exc)
+            return
+        app.settings.detection_method = "left_edge"
+        app.save_settings()
+        app._detect_pages(indices, method="left_edge", force_refresh=False)
 
     def paddle_detect_current(self, force_refresh: bool = False) -> None:
         app = self.app
