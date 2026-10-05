@@ -193,6 +193,7 @@ def test_review_controller_wiring_keeps_picture_capture_app_compatibility_method
         "clear_review_entry_highlight": "clear_review_entry_highlight",
         "highlight_review_entry": "highlight_review_entry",
         "jump_to_review_candidate": "jump_to_review_candidate",
+        "check_headword_order": "check_headword_order",
     }
     for app_method, controller_method in expected.items():
         assert f"def {app_method}(" in app
