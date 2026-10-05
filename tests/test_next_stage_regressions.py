@@ -4453,12 +4453,17 @@ def test_concurrency_review_workers_use_snapshots_not_live_app_state():
     assert "app._ppp_read_path" not in worker
     assert "ppp_read_path_for_image(page)" in worker
 
-    restore_start = app.index("    def restore_from_pdic_backup(")
-    restore_end = app.index("\n    def restore_from_merged_pdic", restore_start)
-    restore = app[restore_start:restore_end]
-    assert "settings_snapshot = replace(self.settings)" in restore
-    worker = restore[restore.index("        def worker("):restore.index("        def done(", restore.index("        def worker("))]
-    assert "self.settings" not in worker
+    export_controller = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "export.py"
+    ).read_text(encoding="utf-8")
+    restore_start = export_controller.index("    def restore_from_pdic_backup(")
+    restore = export_controller[restore_start:]
+    assert "settings_snapshot = replace(app.settings)" in restore
+    worker = restore[
+        restore.index("        def worker("):
+        restore.index("        def done(", restore.index("        def worker("))
+    ]
+    assert "app.settings" not in worker
     assert "derive_nominal_geometry(width, height, settings_snapshot)" in worker
 
     preview_start = profile.index("    def _refresh_template_preview(")
@@ -5732,4 +5737,3 @@ def test_responsive_help_wrapping_does_not_self_trigger_on_label_configure():
     assert 'label.bind("<Configure>", schedule, add="+")' not in block
     assert "_pc_wrap_cache_key" in block
     assert "_pc_wrap_width" in block
-

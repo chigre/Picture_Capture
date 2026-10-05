@@ -8,15 +8,25 @@ implementation remains in ``processing`` and project path policy remains in
 """
 
 import os
+import threading
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 from typing import Any
 
+from PIL import Image
+
 from ...formats import pdic_path, read_picdic_index_records
+from ...page_sections import read_page_sections
+from ...pdic_restore import parse_merged_pdic_text, write_pdic_atomic
 from ...picdic import PicDicBuildCancelled, build_picdic_package
-from ...processing import export_ocred, import_ocred
+from ...processing import (
+    derive_nominal_geometry, export_ocred, import_ocred,
+    sort_entries_reading_order,
+)
 from ...project_storage import exports_root, qt_root
+from ...text_encoding import read_text_detected
 
 
 class ExportController:
@@ -308,3 +318,168 @@ class ExportController:
             "备份PDIC", pages, worker, done, item_label=lambda page: page.name,
             refresh_page_quality=False,
         )
+
+    def restore_from_pdic_backup(self) -> None:
+        """Rebuild the selected page range from one PDIC backup text.
+
+        The selected range is authoritative: every selected page is overwritten.
+        If a selected page has no records in the merged source, its PDIC is
+        replaced by an empty file instead of borrowing records from adjacent
+        pages. Parsing and per-page commits run off the Tk thread.
+        """
+        app = self.app
+        if not app.project or not app.current_page or app.image is None:
+            messagebox.showinfo(
+                "尚未打开", "请先打开包含扫描图片的项目目录。", parent=app,
+            )
+            return
+        if app._batch_active:
+            messagebox.showinfo(
+                "批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=app,
+            )
+            return
+        try:
+            indices = app.selected_page_indices()
+        except Exception as exc:
+            app.show_error("页面范围无效", exc)
+            return
+        if not indices:
+            return
+
+        path_text = filedialog.askopenfilename(
+            title="选择备份的PDIC 备份 文本",
+            initialdir=str(app.project.root),
+            filetypes=[
+                ("PDIC/文本", "*.pdic *.txt"),
+                ("PDIC", "*.pdic"),
+                ("文本", "*.txt"),
+                ("全部", "*"),
+            ],
+            parent=app,
+        )
+        if not path_text:
+            return
+        source = Path(path_text)
+        if not messagebox.askyesno(
+            "恢复PDIC",
+            f"将从：\n{source.name}\n\n覆盖重建主界面所选范围内的 {len(indices)} 个页面 PDIC。\n"
+            "范围外页面不会修改。PDIC 备份 中若某个选定页面没有记录，该页会被重建为空 PDIC。\n\n"
+            "每页完成后立即原子覆盖，可暂停或停止；已完成页面不会回滚。继续？",
+            parent=app,
+        ):
+            return
+
+        try:
+            app._flush_deferred_page_save()
+            app._sync_entry_editor_texts()
+            app.save_pdic(silent=True, sync_editors=False)
+        except Exception as exc:
+            app.show_error("PDIC 备份 恢复准备失败", exc)
+            return
+
+        project = app.project
+        settings_snapshot = replace(app.settings)
+        pages = list(project.images)
+        page_stems = [page.stem for page in pages]
+        pages_meta = {i: app.pages_tuple(i) for i in indices}
+        parsed_holder: dict[str, object] = {"mapping": None, "stats": None}
+        parse_lock = threading.Lock()
+
+        def ensure_parsed():
+            mapping = parsed_holder.get("mapping")
+            stats = parsed_holder.get("stats")
+            if isinstance(mapping, dict) and isinstance(stats, dict):
+                return mapping, stats
+            with parse_lock:
+                mapping = parsed_holder.get("mapping")
+                stats = parsed_holder.get("stats")
+                if not isinstance(mapping, dict) or not isinstance(stats, dict):
+                    text_data, _encoding = read_text_detected(source)
+                    mapping, stats = parse_merged_pdic_text(text_data, page_stems)
+                    parsed_holder["mapping"] = mapping
+                    parsed_holder["stats"] = stats
+            return mapping, stats
+
+        def worker(index: int, _position: int, _total: int):
+            mapping, stats = ensure_parsed()
+            page = pages[index]
+            entries = [replace(entry) for entry in mapping.get(page.stem, [])]
+            with Image.open(page) as opened:
+                width, height = map(int, opened.size)
+            entries = sort_entries_reading_order(
+                entries,
+                derive_nominal_geometry(width, height, settings_snapshot),
+                read_page_sections(page),
+            )
+            write_pdic_atomic(pdic_path(page), entries, width, pages_meta[index])
+            return {
+                "index": index,
+                "records": len(entries),
+                "empty": not entries,
+                "source_records": int(stats.get("records", 0)),
+                "source_matched": int(stats.get("matched", 0)),
+                "source_unmatched": int(stats.get("unmatched", 0)),
+            }
+
+        def done(completed, total_pages, stopped, results, error):
+            if error is not None:
+                return
+            rebuilt = 0
+            records = 0
+            empty_pages = 0
+            completed_indices: set[int] = set()
+            stats = (
+                parsed_holder.get("stats")
+                if isinstance(parsed_holder.get("stats"), dict)
+                else {}
+            )
+            for result in results:
+                if not isinstance(result, dict):
+                    continue
+                index = int(result.get("index", -1))
+                if index >= 0:
+                    completed_indices.add(index)
+                rebuilt += 1
+                records += int(result.get("records", 0) or 0)
+                empty_pages += int(bool(result.get("empty")))
+
+            app._clear_word_fill_checks_for_indices(completed_indices, persist=True)
+            for index in completed_indices:
+                app._update_page_row(index)
+            app._schedule_page_cell_overlay_refresh()
+            if app.current_index in completed_indices:
+                app.load_page(app.current_index)
+
+            unmatched = int(stats.get("unmatched", 0) or 0)
+            if stopped:
+                app.status_var.set(
+                    f"PDIC 备份 恢复已停止：完成 {completed}/{total_pages} 页，重建 {records} 条；"
+                    f"空页 {empty_pages} 页"
+                )
+            else:
+                extra = (
+                    f"；源文件有 {unmatched} 条记录未对应当前项目页面"
+                    if unmatched
+                    else ""
+                )
+                app.status_var.set(
+                    f"PDIC 备份 恢复完成：{rebuilt}/{total_pages} 页，重建 {records} 条；"
+                    f"空页 {empty_pages} 页{extra}"
+                )
+
+        started = app._start_batch_task(
+            "恢复PDIC",
+            indices,
+            worker,
+            done,
+            item_label=lambda i: pages[i].name,
+            foreground_page_edit=False,
+        )
+        if started:
+            app.batch_text_var.set(
+                f"恢复PDIC：准备读取备份文件 0/{len(indices)}"
+            )
+            app.status_var.set(
+                f"正在后台解析PDIC 备份 并逐页覆盖重建：共 {len(indices)} 页；"
+                "进度按页面更新，可暂停或停止。"
+            )
