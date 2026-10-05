@@ -334,4 +334,250 @@ def test_build_picdic_wiring_moves_only_action_orchestration_to_export_controlle
     assert "    def build_picdic(self) -> None:" in controller
     assert '("PicDic制作", self.build_picdic)' in app
     assert "    def export_picdic_index(self) -> None:" in app
-    assert "    def export_picdic_index(self) -> None:" not in controller
+    assert "    def export_picdic_index(self) -> None:" in controller
+
+class _IndexApp:
+    def __init__(self, root: Path, pages: list[Path]) -> None:
+        self.project = SimpleNamespace(root=root, images=pages)
+        self.current_page = pages[0] if pages else Path("page001.jpg")
+        self.image = object()
+        self._batch_active = False
+        self.status_var = _StatusVar()
+        self.calls: list[tuple] = []
+        self.errors: list[tuple[str, Exception]] = []
+        self.save_error: Exception | None = None
+        self.batch = None
+
+    def _flush_deferred_page_save(self) -> None:
+        self.calls.append(("flush",))
+
+    def _sync_entry_editor_texts(self) -> None:
+        self.calls.append(("sync",))
+
+    def save_pdic(self, silent: bool = False, sync_editors: bool = True) -> None:
+        self.calls.append(("save_pdic", silent, sync_editors))
+        if self.save_error is not None:
+            raise self.save_error
+
+    def show_error(self, title: str, exc: Exception) -> None:
+        self.errors.append((title, exc))
+
+    def _start_batch_task(self, title, items, worker, done, **kwargs):
+        self.calls.append(("start_batch", title, list(items), kwargs))
+        self.batch = (title, list(items), worker, done, kwargs)
+        return True
+
+
+def _prepare_index_files(tmp_path: Path, names=("001.jpg", "002.jpg")):
+    pages = [tmp_path / name for name in names]
+    for page in pages:
+        page.with_suffix(".pdic").write_text("placeholder", encoding="utf-8")
+    return pages
+
+
+def test_export_picdic_index_missing_project_contract(monkeypatch, tmp_path) -> None:
+    app = _IndexApp(tmp_path, [])
+    app.project = None
+    dialogs: list[tuple] = []
+    monkeypatch.setattr(
+        export_module.messagebox, "showinfo",
+        lambda title, message, *, parent: dialogs.append((title, message, parent)),
+    )
+
+    ExportController(app).export_picdic_index()
+
+    assert dialogs == [("尚未打开", "请先打开包含扫描图片的项目目录。", app)]
+    assert app.calls == []
+    assert app.batch is None
+
+
+def test_export_picdic_index_batch_active_preserves_exact_status(tmp_path) -> None:
+    pages = _prepare_index_files(tmp_path, ("001.jpg",))
+    app = _IndexApp(tmp_path, pages)
+    app._batch_active = True
+
+    ExportController(app).export_picdic_index()
+
+    assert app.status_var.values == ["已有批量任务正在运行，请结束后再导出PicDic索引。"]
+    assert app.calls == []
+    assert app.batch is None
+
+
+def test_export_picdic_index_prepare_failure_preserves_error_contract(tmp_path) -> None:
+    pages = _prepare_index_files(tmp_path, ("001.jpg",))
+    app = _IndexApp(tmp_path, pages)
+    problem = OSError("save failed")
+    app.save_error = problem
+
+    ExportController(app).export_picdic_index()
+
+    assert app.calls == [("flush",), ("sync",), ("save_pdic", True, False)]
+    assert app.errors == [("导出PicDic索引失败", problem)]
+    assert app.batch is None
+
+
+def test_export_picdic_index_no_saved_pdic_shows_existing_info(monkeypatch, tmp_path) -> None:
+    pages = [tmp_path / "001.jpg"]
+    app = _IndexApp(tmp_path, pages)
+    dialogs: list[tuple] = []
+    monkeypatch.setattr(export_module, "pdic_path", lambda page: page.with_suffix(".pdic"))
+    monkeypatch.setattr(
+        export_module.messagebox, "showinfo",
+        lambda title, message, *, parent: dialogs.append((title, message, parent)),
+    )
+
+    ExportController(app).export_picdic_index()
+
+    assert app.calls == [("flush",), ("sync",), ("save_pdic", True, False)]
+    assert dialogs == [("导出PicDic索引", "当前项目没有可导出的 PDIC 文件。", app)]
+    assert app.batch is None
+
+
+def test_export_picdic_index_streams_and_atomically_publishes(monkeypatch, tmp_path) -> None:
+    pages = _prepare_index_files(tmp_path)
+    app = _IndexApp(tmp_path, pages)
+    output = tmp_path / "output"
+    output.mkdir()
+    dialogs: list[tuple] = []
+    records_by_stem = {
+        "001": ["uno\t10.00\t20.00\t001", "due\t11.00\t21.00\t001"],
+        "002": [],
+    }
+    monkeypatch.setattr(export_module, "pdic_path", lambda page: page.with_suffix(".pdic"))
+    monkeypatch.setattr(export_module, "exports_root", lambda _root: output)
+    monkeypatch.setattr(
+        export_module, "read_picdic_index_records",
+        lambda path, fallback_page="": list(records_by_stem[path.stem]),
+    )
+    monkeypatch.setattr(
+        export_module.messagebox, "showinfo",
+        lambda title, message, *, parent: dialogs.append((title, message, parent)),
+    )
+
+    ExportController(app).export_picdic_index()
+
+    assert app.calls[:3] == [("flush",), ("sync",), ("save_pdic", True, False)]
+    assert app.batch is not None
+    title, items, worker, done, kwargs = app.batch
+    assert title == "导出PicDic索引"
+    assert items == pages
+    assert kwargs["item_label"](pages[0]) == "001.jpg"
+    assert kwargs["refresh_page_quality"] is False
+    assert list(output.iterdir()) == []
+
+    assert worker(pages[0], 1, 2) == 2
+    assert worker(pages[1], 2, 2) == 0
+    temps = list(output.glob(".PicDic_index_*.txt.tmp"))
+    assert len(temps) == 1
+    done(2, 2, False, [2, 0], None)
+
+    assert not list(output.glob(".*.tmp"))
+    targets = list(output.glob("PicDic_index_*.txt"))
+    assert len(targets) == 1
+    assert targets[0].read_text(encoding="utf-8") == (
+        "uno\t10.00\t20.00\t001\n"
+        "due\t11.00\t21.00\t001\n"
+    )
+    assert app.status_var.values == [
+        f"PicDic索引导出完成：{targets[0].name}｜1 页｜2 条"
+    ]
+    assert dialogs == [(
+        "导出PicDic索引",
+        f"已生成：\n{targets[0]}\n\n共 1 个有记录页面，2 条索引。\n"
+        "格式：WORD\\txx.xx%\\tyy.yy%\\tpage",
+        app,
+    )]
+
+
+def test_export_picdic_index_stop_removes_temp_and_keeps_no_partial_output(monkeypatch, tmp_path) -> None:
+    pages = _prepare_index_files(tmp_path)
+    app = _IndexApp(tmp_path, pages)
+    output = tmp_path / "output"
+    output.mkdir()
+    monkeypatch.setattr(export_module, "pdic_path", lambda page: page.with_suffix(".pdic"))
+    monkeypatch.setattr(export_module, "exports_root", lambda _root: output)
+    monkeypatch.setattr(
+        export_module, "read_picdic_index_records",
+        lambda _path, fallback_page="": [f"word\t1.00\t2.00\t{fallback_page}"],
+    )
+
+    ExportController(app).export_picdic_index()
+    assert app.batch is not None
+    worker, done = app.batch[2], app.batch[3]
+    assert worker(pages[0], 1, 2) == 1
+    done(1, 2, True, [1], None)
+
+    assert list(output.iterdir()) == []
+    assert app.status_var.values == [
+        "PicDic索引导出已停止：完成 1/2 页，未生成不完整索引。"
+    ]
+    assert app.errors == []
+
+
+def test_export_picdic_index_error_removes_temp_without_completion_status(monkeypatch, tmp_path) -> None:
+    pages = _prepare_index_files(tmp_path, ("001.jpg",))
+    app = _IndexApp(tmp_path, pages)
+    output = tmp_path / "output"
+    output.mkdir()
+    monkeypatch.setattr(export_module, "pdic_path", lambda page: page.with_suffix(".pdic"))
+    monkeypatch.setattr(export_module, "exports_root", lambda _root: output)
+    monkeypatch.setattr(
+        export_module, "read_picdic_index_records",
+        lambda _path, fallback_page="": ["word\t1.00\t2.00\t001"],
+    )
+
+    ExportController(app).export_picdic_index()
+    assert app.batch is not None
+    worker, done = app.batch[2], app.batch[3]
+    worker(pages[0], 1, 1)
+    done(0, 1, False, [], RuntimeError("worker failed"))
+
+    assert list(output.iterdir()) == []
+    assert app.status_var.values == []
+    assert app.errors == []
+
+
+def test_export_picdic_index_publish_failure_cleans_temp_and_reports(monkeypatch, tmp_path) -> None:
+    pages = _prepare_index_files(tmp_path, ("001.jpg",))
+    app = _IndexApp(tmp_path, pages)
+    output = tmp_path / "output"
+    output.mkdir()
+    problem = OSError("replace failed")
+    monkeypatch.setattr(export_module, "pdic_path", lambda page: page.with_suffix(".pdic"))
+    monkeypatch.setattr(export_module, "exports_root", lambda _root: output)
+    monkeypatch.setattr(
+        export_module, "read_picdic_index_records",
+        lambda _path, fallback_page="": ["word\t1.00\t2.00\t001"],
+    )
+    monkeypatch.setattr(export_module.os, "replace", lambda *_args: (_ for _ in ()).throw(problem))
+
+    ExportController(app).export_picdic_index()
+    assert app.batch is not None
+    worker, done = app.batch[2], app.batch[3]
+    worker(pages[0], 1, 1)
+    done(1, 1, False, [1], None)
+
+    assert list(output.iterdir()) == []
+    assert app.status_var.values == []
+    assert app.errors == [("导出PicDic索引失败", problem)]
+
+
+def test_export_picdic_index_wiring_keeps_app_wrapper_and_format_boundaries() -> None:
+    app = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
+    controller = (
+        ROOT / "src/picture_capture/ui/controllers/export.py"
+    ).read_text(encoding="utf-8")
+    imports = app[: app.index("class PictureCaptureApp")]
+
+    start = app.index("    def export_picdic_index(self) -> None:")
+    end = app.index("    def backup_pdic(self) -> None:", start)
+    block = app[start:end]
+    assert "self._export_controller_for_call().export_picdic_index()" in block
+    assert "_start_batch_task" not in block
+    assert "read_picdic_index_records" not in block
+    assert "read_picdic_index_records" not in imports
+    assert "from ...formats import pdic_path, read_picdic_index_records" in controller
+    assert "from ...project_storage import exports_root, qt_root" in controller
+    assert "    def export_picdic_index(self) -> None:" in controller
+    assert "os.replace(temp, target)" in controller
+    assert '("导出PicDic索引", self.export_picdic_index)' in app
