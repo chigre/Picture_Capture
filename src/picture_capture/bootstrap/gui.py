@@ -159,7 +159,6 @@ def prepare_gui_application() -> Any:
     from ..layout_visualization_role_theme import install_layout_role_theme
     from ..layout_visualization_ui_v3 import install_layout_visualization
     from ..ocr_action_guard import install_ocr_action_guard
-    from ..ordinary_action_runtime import install_ordinary_action_runtime
     from ..overlay_opacity_runtime import install_overlay_opacity_runtime
     from ..illustration_fill_opacity_runtime import (
         configure_overlay_opacity_defaults,
@@ -190,7 +189,6 @@ def prepare_gui_application() -> Any:
     # Filter controls belong to the same integrated crop-settings surface and
     # are installed after the per-page merge switch so they appear beneath it.
     install_unlined_export_filter_settings_ui(app_module)
-    install_ordinary_action_runtime(app_module)
     install_ocr_action_guard(app_module)
     # Unlined QA now resolves physical rows from LayoutRows cache/Profile
     # projection before allowing any full Layout/Paddle fallback.
