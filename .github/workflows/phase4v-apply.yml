@@ -48,7 +48,8 @@ jobs:
           '''
           if text.count(old) != 1:
               raise RuntimeError('review controller docstring shape changed')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          text = text.replace(old, new, 1).rstrip() + '\n'
+          path.write_text(text, encoding='utf-8')
           PY
 
       - name: Validate diff shape
