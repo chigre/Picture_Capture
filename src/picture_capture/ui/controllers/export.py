@@ -17,13 +17,13 @@ from typing import Any
 
 from PIL import Image
 
-from ...formats import pdic_path, read_picdic_index_records
+from ...formats import pdic_path, read_pdic, read_picdic_index_records
 from ...page_sections import read_page_sections
 from ...pdic_restore import parse_merged_pdic_text, write_pdic_atomic
 from ...picdic import PicDicBuildCancelled, build_picdic_package
 from ...processing import (
     derive_nominal_geometry, export_ocred, import_ocred,
-    sort_entries_reading_order,
+    sort_entries_column_y, sort_entries_reading_order,
 )
 from ...project_storage import exports_root, qt_root
 from ...text_encoding import read_text_detected
@@ -102,6 +102,90 @@ class ExportController:
             "PicDic 制作", [root], worker, done,
             item_label=lambda _item: "生成 DSL 与图片包", refresh_page_quality=False,
         )
+
+    def repair_pdic_order_selected_scope(self) -> None:
+        """Rewrite selected-page PDIC files in stable column/Y order.
+
+        X deliberately does not participate in this repair sort.  Existing
+        word<->coordinate pairs remain intact; records sharing the same column
+        and Y retain their current relative order.
+        """
+        app = self.app
+        if not app.project or not app.current_page or app.image is None:
+            messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=app)
+            return
+        if app._batch_active:
+            app.status_var.set("已有批量任务正在运行，请结束后再修复排序。")
+            return
+        try:
+            indices = app.selected_page_indices()
+        except Exception as exc:
+            app.show_error("页面范围错误", exc)
+            return
+        if not indices:
+            app.status_var.set("没有选中需要修复的页面")
+            return
+
+        existing = [i for i in indices if pdic_path(app.project.images[i]).exists()]
+        if not existing:
+            app.status_var.set("所选范围没有已有 PDIC 文件")
+            return
+        try:
+            app._flush_deferred_page_save()
+            app._sync_entry_editor_texts()
+            app.save_pdic(silent=True, sync_editors=False)
+        except Exception as exc:
+            app.show_error("修复排序准备失败", exc)
+            return
+
+        if not messagebox.askyesno(
+            "修复排序",
+            f"将对所选范围中 {len(existing)} 个已有 PDIC 页面按“栏号 → Y”重新排序并原子写回（X 不参与排序）。\n\n"
+            "每条记录现有的词条文字与 X/Y 坐标会保持绑定，不会重新 OCR 或改词。\n"
+            "建议先点击【备份PDIC】保留当前状态。\n\n继续？",
+            parent=app,
+        ):
+            return
+
+        project = app.project
+        settings = app.settings
+
+        def worker(index: int, _position: int, _total: int):
+            page = project.images[index]
+            target = pdic_path(page)
+            entries = read_pdic(target)
+            if not entries:
+                return (index, 0, False)
+            before = [(e.word, int(e.x), int(e.y)) for e in entries]
+            with Image.open(page) as opened:
+                width, height = map(int, opened.size)
+            geometry = derive_nominal_geometry(width, height, settings)
+            ordered = sort_entries_column_y(
+                entries, geometry, read_page_sections(page),
+            )
+            after = [(e.word, int(e.x), int(e.y)) for e in ordered]
+            previous = project.images[index - 1].stem if index > 0 else "@"
+            following = project.images[index + 1].stem if index + 1 < len(project.images) else "@"
+            write_pdic_atomic(target, ordered, width, (page.stem, previous, following))
+            return (index, len(ordered), before != after)
+
+        def done(completed: int, total: int, stopped: bool, results, error) -> None:
+            if error is not None:
+                return
+            changed = sum(1 for result in results if result and result[2])
+            records = sum(int(result[1]) for result in results if result)
+            if app.current_index in existing:
+                app.load_page(app.current_index)
+            state = "已停止" if stopped else "完成"
+            app.status_var.set(
+                f"修复排序{state}：处理 {completed}/{total} 页；实际改序 {changed} 页；{records} 条记录"
+            )
+
+        app._start_batch_task(
+            "修复排序", existing, worker, done,
+            item_label=lambda i: project.images[i].name,
+        )
+
 
     def export_picdic_index(self) -> None:
         """Export a project-wide four-column text index from saved PDIC records.
