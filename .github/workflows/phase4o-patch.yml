@@ -28,7 +28,9 @@ jobs:
         run: uv sync --locked --group dev
 
       - name: Apply narrow Phase 4O refactor and tests
-        run: python scripts/phase4o_patch_worker.py
+        run: |
+          python scripts/phase4o_patch_worker.py
+          python scripts/phase4o_fix_validation.py
 
       - name: Check diff and app size
         shell: bash
@@ -60,7 +62,7 @@ jobs:
       - name: Commit validated Phase 4O change
         shell: bash
         run: |
-          rm .github/workflows/phase4o-patch.yml scripts/phase4o_patch_worker.py
+          rm .github/workflows/phase4o-patch.yml scripts/phase4o_patch_worker.py scripts/phase4o_fix_validation.py
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
