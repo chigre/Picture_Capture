@@ -279,7 +279,10 @@ def test_phase4l_leaves_parallel_runner_illustration_and_runtime_paths_in_app() 
     assert "def split_illustrations_selected_scope(self)" in app_text
     assert "detect_illustrations_selected_scope" not in controller_text
     assert "split_illustrations_selected_scope" not in controller_text
-    assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" in runtime_text
+    assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" not in runtime_text
+    assert "def split_single_lines_selected_scope(self)" in app_text
+    assert "self._crop_controller_for_call().split_single_lines_selected_scope()" in app_text
+    assert "def split_single_lines_selected_scope(self)" in controller_text
 
 
 def test_postproduction_button_still_targets_app_compatibility_method() -> None:

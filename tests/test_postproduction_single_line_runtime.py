@@ -98,3 +98,22 @@ def test_gui_composition_installs_single_line_postproduction_extension():
     ).read_text(encoding="utf-8")
     assert "install_postproduction_single_line_runtime" in source
     assert "install_postproduction_single_line_runtime(app_module)" in source
+
+def test_phase5b_runtime_keeps_ui_and_worker_but_not_method_monkey_patch():
+    root = Path(__file__).resolve().parents[1]
+    runtime_source = (
+        root / "src" / "picture_capture" / "postproduction_single_line_runtime.py"
+    ).read_text(encoding="utf-8")
+    app_source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    crop_source = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "crop.py"
+    ).read_text(encoding="utf-8")
+
+    assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" not in runtime_source
+    assert "app_class.__init__ = wrapped_init" in runtime_source
+    assert "_insert_single_line_button(self)" in runtime_source
+    assert "def start_single_line_export(app: Any)" in runtime_source
+    assert "def split_single_lines_selected_scope(self)" in app_source
+    assert "self._crop_controller_for_call().split_single_lines_selected_scope()" in app_source
+    assert "def split_single_lines_selected_scope(self)" in crop_source
+    assert "start_single_line_export(self.app)" in crop_source

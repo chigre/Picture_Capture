@@ -82,6 +82,16 @@ class _App:
         }
 
 
+def test_selected_scope_single_line_routes_to_retained_runtime_scheduler(monkeypatch) -> None:
+    app = _App()
+    calls: list[object] = []
+    monkeypatch.setattr(crop_module, "start_single_line_export", lambda value: calls.append(value))
+
+    CropController(app).split_single_lines_selected_scope()
+
+    assert calls == [app]
+
+
 def test_batch_active_short_circuits_before_guards() -> None:
     app = _App()
     app._batch_active = True
@@ -539,7 +549,9 @@ def test_phase4k_leaves_other_crop_and_runtime_paths_untouched() -> None:
 
     assert "def _crop_settings_defaults(self)" in app
     assert "def detect_illustrations_selected_scope(self)" in app
-    assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" in runtime
+    assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" not in runtime
+    assert "def split_single_lines_selected_scope(self)" in app
+    assert "self._crop_controller_for_call().split_single_lines_selected_scope()" in app
     assert "split_lines_current" not in runtime
     tree = ast.parse(controller)
     crop_class = next(
@@ -554,4 +566,4 @@ def test_phase4k_leaves_other_crop_and_runtime_paths_untouched() -> None:
     assert "batch_split_whole" in method_names
     assert "_crop_settings_defaults" not in method_names
     assert "detect_illustrations_selected_scope" not in method_names
-    assert "split_single_lines_selected_scope" not in method_names
+    assert "split_single_lines_selected_scope" in method_names

@@ -3,15 +3,16 @@ from __future__ import annotations
 """User-action orchestration for stable crop workflows.
 
 Crop geometry and file generation remain in ``processing`` and project path
-policy remains in ``project_storage``. Crop-settings UI, illustration actions,
-and the runtime-installed ``split_single_lines_selected_scope`` path remain
-outside this controller phase.
+policy remains in ``project_storage``. Crop-settings UI and illustration actions
+remain outside this controller. The selected-scope single-line action is explicit
+here, while its temporary Tk worker/poll scheduler remains runtime-owned.
 """
 
 from dataclasses import replace
 from typing import Any
 
 from ...formats import pdic_path, read_pdic, read_ppp
+from ...postproduction_single_line_runtime import start_single_line_export
 from ...processing import (
     append_crop_log,
     split_single_lines,
@@ -26,6 +27,10 @@ class CropController:
 
     def __init__(self, app: Any) -> None:
         self.app = app
+
+    def split_single_lines_selected_scope(self) -> None:
+        """Start selected-scope single-line export through the retained Tk scheduler."""
+        start_single_line_export(self.app)
 
     def split_lines_current(self) -> None:
         app = self.app
