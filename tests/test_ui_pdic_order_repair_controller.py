@@ -1,65 +1,4 @@
 from pathlib import Path
-import re
-
-ROOT = Path(__file__).resolve().parents[1]
-APP = ROOT / "src/picture_capture/app.py"
-EXPORT = ROOT / "src/picture_capture/ui/controllers/export.py"
-TEST = ROOT / "tests/test_ui_pdic_order_repair_controller.py"
-
-app_text = APP.read_text(encoding="utf-8")
-controller_text = EXPORT.read_text(encoding="utf-8")
-
-signature = "    def repair_pdic_order_selected_scope(self) -> None:\n"
-assert app_text.count(signature) == 1, "unexpected app repair method count"
-assert controller_text.count(signature) == 0, "repair method already exists in controller"
-
-start = app_text.index(signature)
-end = app_text.index("    def export_picdic_index(self) -> None:\n", start)
-old_block = app_text[start:end]
-for token in (
-    "settings = self.settings",
-    "sort_entries_column_y(",
-    "_write_pdic_atomic(",
-    'self._start_batch_task(\n            "修复排序"',
-):
-    assert token in old_block, f"live method mismatch: {token}"
-
-body = old_block[len(signature):]
-match = re.match(r'(\s*\"\"\"[\s\S]*?\"\"\"\n)', body)
-assert match is not None, "repair method docstring shape changed"
-controller_body = match.group(1) + "        app = self.app\n" + body[match.end():]
-controller_body = controller_body.replace("self.", "app.")
-controller_body = controller_body.replace("_write_pdic_atomic(", "write_pdic_atomic(")
-controller_method = signature + controller_body
-
-wrapper = (
-    signature
-    + "        self._export_controller_for_call().repair_pdic_order_selected_scope()\n\n"
-)
-app_text = app_text[:start] + wrapper + app_text[end:]
-
-insert_at = controller_text.index("    def export_picdic_index(self) -> None:\n")
-controller_text = controller_text[:insert_at] + controller_method + "\n" + controller_text[insert_at:]
-controller_text = controller_text.replace(
-    "from ...formats import pdic_path, read_picdic_index_records\n",
-    "from ...formats import pdic_path, read_pdic, read_picdic_index_records\n",
-    1,
-)
-controller_text = controller_text.replace(
-    "    derive_nominal_geometry, export_ocred, import_ocred,\n    sort_entries_reading_order,\n",
-    "    derive_nominal_geometry, export_ocred, import_ocred,\n    sort_entries_column_y, sort_entries_reading_order,\n",
-    1,
-)
-assert controller_text.count(signature) == 1
-assert "settings = app.settings" in controller_method
-assert "settings = replace(app.settings)" not in controller_method
-assert "write_pdic_atomic(" in controller_method
-assert "_write_pdic_atomic(" not in controller_method
-
-APP.write_text(app_text, encoding="utf-8")
-EXPORT.write_text(controller_text, encoding="utf-8")
-
-TEST.write_text(r'''from pathlib import Path
 from types import SimpleNamespace
 
 from PIL import Image
@@ -284,4 +223,3 @@ def test_repair_wiring_is_app_wrapper_with_existing_ui_binding() -> None:
     assert 'settings = replace(app.settings)' not in controller
     assert 'write_pdic_atomic(' in controller
     assert '("修复排序", self.repair_pdic_order_selected_scope)' in app
-''', encoding="utf-8")

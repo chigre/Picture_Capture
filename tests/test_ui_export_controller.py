@@ -576,7 +576,7 @@ def test_export_picdic_index_wiring_keeps_app_wrapper_and_format_boundaries() ->
     assert "_start_batch_task" not in block
     assert "read_picdic_index_records" not in block
     assert "read_picdic_index_records" not in imports
-    assert "from ...formats import pdic_path, read_picdic_index_records" in controller
+    assert "from ...formats import pdic_path, read_pdic, read_picdic_index_records" in controller
     assert "from ...project_storage import exports_root, qt_root" in controller
     assert "    def export_picdic_index(self) -> None:" in controller
     assert "os.replace(temp, target)" in controller
