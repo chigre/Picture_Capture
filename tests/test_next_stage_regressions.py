@@ -4046,8 +4046,16 @@ def test_round1_blocking_ui_paths_use_background_workers():
     picdic_start = text.index("    def build_picdic(", app_start)
     picdic_end = text.index("\n    def _order_key", picdic_start)
     picdic_block = text[picdic_start:picdic_end]
-    assert "self._start_batch_task(" in picdic_block
-    assert "should_stop=self._batch_stop_event.is_set" in picdic_block
+    assert "self._export_controller_for_call().build_picdic()" in picdic_block
+
+    export_controller = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "controllers" / "export.py"
+    ).read_text(encoding="utf-8")
+    controller_start = export_controller.index("    def build_picdic(")
+    controller_block = export_controller[controller_start:]
+    assert "app._start_batch_task(" in controller_block
+    assert "should_stop=app._batch_stop_event.is_set" in controller_block
 
 
 def test_round1_picdic_cancel_is_atomic(tmp_path):
