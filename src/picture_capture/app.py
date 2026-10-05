@@ -10020,6 +10020,10 @@ class PictureCaptureApp(tk.Tk):
         )
         postproduction.pack(fill="x", pady=(4, 0))
         production_tooltips = {
+            "单行切图": (
+                "将【选定范围】内各页按校对界面相同的单行裁切逻辑批量输出到 QT/PSW；"
+                "可在【设置中心 → 切图】选择是否按页合并，并复用切图并行进程数。"
+            ),
             "词条切图": "按所选页面范围和【设置中心 → 切图】生成完整词条切图。",
             "插图切图": "按所选范围导出需要独立输出的 PPP 插图。",
             "项目详情": "编辑词典名称、语言、正文页码范围等项目级元数据。",
@@ -10028,7 +10032,7 @@ class PictureCaptureApp(tk.Tk):
             "导出训练标记包": "导出已人工确认的 PDIC/PPP、OCR候选和坐标上下文，供模型或规则验证。",
         }
         production_rows = [
-            (("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope)),
+            (("单行切图", self.split_single_lines_selected_scope), ("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope)),
             (("项目详情", self.open_project_details), ("导出PicDic索引", self.export_picdic_index), ("PicDic制作", self.build_picdic)),
             (("导出训练标记包", self.export_training_package),),
         ]
@@ -10039,6 +10043,8 @@ class PictureCaptureApp(tk.Tk):
                 row.columnconfigure(bi, weight=1, uniform=f"postproduction-row-{ri}")
             for bi, (text, command) in enumerate(specs):
                 button = self._sidebar_action_button(row, text, command)
+                if text == "单行切图":
+                    self._pc_single_line_crop_button = button
                 tooltip = production_tooltips.get(text)
                 if tooltip:
                     self._attach_tooltip(button, tooltip)

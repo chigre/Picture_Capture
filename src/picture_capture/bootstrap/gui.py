@@ -166,9 +166,6 @@ def prepare_gui_application() -> Any:
     )
     from ..overlay_line_anchor_runtime import install_overlay_line_anchor_runtime
     from ..parameter_help_ui import install_settings_parameter_help
-    from ..postproduction_single_line_runtime import (
-        install_postproduction_single_line_runtime,
-    )
     from ..settings_help_restore import install_settings_help_restore
     from ..single_line_merge_settings import install_single_line_merge_settings_ui
     from ..training_export_ui import export_training_package_selected_range
@@ -193,9 +190,9 @@ def prepare_gui_application() -> Any:
     # Unlined QA now resolves physical rows from LayoutRows cache/Profile
     # projection before allowing any full Layout/Paddle fallback.
     install_unlined_fast_path()
-    # Install in this order: the unlined-row action locates the concrete
-    # 【单行切图】 button and inserts itself immediately to its right.
-    install_postproduction_single_line_runtime(app_module)
+    # The app now constructs 【单行切图】 in its normal postproduction row.
+    # The unlined-row installer can therefore resolve that concrete button
+    # after normal app construction and insert itself immediately to its right.
     install_unlined_line_export_ui(app_module)
     install_app_tooltip_terminology(app_module)
     install_layout_role_theme()

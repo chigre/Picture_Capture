@@ -252,15 +252,19 @@ def test_unlined_ui_is_installed_after_single_line_button_and_reuses_parallel_cr
         root / "src" / "picture_capture" / "bootstrap" / "gui.py"
     ).read_text(encoding="utf-8")
     ui = (root / "src" / "picture_capture" / "unlined_line_export_ui.py").read_text(encoding="utf-8")
+    app_source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     exporter = (root / "src" / "picture_capture" / "unlined_line_export.py").read_text(encoding="utf-8")
     filters = (root / "src" / "picture_capture" / "unlined_export_filter_settings.py").read_text(encoding="utf-8")
 
-    assert 'install_postproduction_single_line_runtime(app_module)' in composition
+    assert 'install_postproduction_single_line_runtime(app_module)' not in composition
     assert 'install_unlined_line_export_ui(app_module)' in composition
     assert 'install_unlined_export_filter_settings_ui(app_module)' in composition
-    assert composition.index('install_postproduction_single_line_runtime(app_module)') < composition.index(
-        'install_unlined_line_export_ui(app_module)'
-    )
+    assert (
+        '(("单行切图", self.split_single_lines_selected_scope), '
+        '("词条切图", self.split_entries_selected_scope), '
+        '("插图切图", self.split_illustrations_selected_scope))'
+    ) in app_source
+    assert "self._pc_single_line_crop_button = button" in app_source
     assert '_BUTTON_TEXT = "未画线行导出"' in ui
     assert '_LEFT_NEIGHBOR_TEXT = "单行切图"' in ui
     assert '"after": target' in ui

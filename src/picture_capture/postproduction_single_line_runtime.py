@@ -9,153 +9,19 @@ reimplement line boxes or proofreading geometry.
 """
 
 from dataclasses import replace
-from functools import wraps
 from pathlib import Path
 import queue
 import threading
 import traceback
-from typing import Any, Iterable
+from typing import Any
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox
 
 from .ordinary_action_runtime import _apply_quick_settings_for_ordinary
 from .single_line_parallel import (
     configured_single_line_workers,
     run_single_line_pages,
 )
-
-
-_BUTTON_TEXT = "单行切图"
-_TARGET_TEXT = "词条切图"
-
-
-def _walk_widgets(root: tk.Misc) -> Iterable[tk.Misc]:
-    for child in root.winfo_children():
-        yield child
-        yield from _walk_widgets(child)
-
-
-def _widget_text(widget: tk.Misc) -> str:
-    try:
-        return str(widget.cget("text") or "")
-    except (tk.TclError, AttributeError):
-        return ""
-
-
-def _find_postproduction_entry_crop_button(app: Any) -> tk.Misc | None:
-    candidates: list[tk.Misc] = []
-    for widget in _walk_widgets(app):
-        if not isinstance(widget, (ttk.Button, tk.Button)):
-            continue
-        if _widget_text(widget) == _TARGET_TEXT:
-            candidates.append(widget)
-    if not candidates:
-        return None
-    if len(candidates) == 1:
-        return candidates[0]
-
-    # Prefer a target whose ancestor explicitly names the post-production
-    # section.  The fallback remains deterministic for older compact layouts.
-    for candidate in candidates:
-        parent = candidate.master
-        while parent is not None and parent is not app:
-            if "后期词典制作" in _widget_text(parent):
-                return candidate
-            parent = getattr(parent, "master", None)
-    return candidates[0]
-
-
-def _copy_button_presentation(target: tk.Misc) -> dict[str, Any]:
-    options: dict[str, Any] = {}
-    for name in ("style", "width", "takefocus"):
-        try:
-            value = target.cget(name)
-        except (tk.TclError, AttributeError):
-            continue
-        if value not in (None, ""):
-            options[name] = value
-    return options
-
-
-def _pack_before(button: tk.Misc, target: tk.Misc) -> None:
-    info = target.pack_info()
-    options: dict[str, Any] = {"before": target}
-    for name in ("side", "fill", "expand", "anchor", "padx", "pady", "ipadx", "ipady"):
-        value = info.get(name)
-        if value not in (None, ""):
-            options[name] = value
-    button.pack(**options)
-
-
-def _grid_before(button: tk.Misc, target: tk.Misc) -> None:
-    parent = target.master
-    info = target.grid_info()
-    row = int(info.get("row", 0))
-    column = int(info.get("column", 0))
-    span = max(1, int(info.get("columnspan", 1)))
-
-    # Shift only widgets occupying the same action row.  Descending order avoids
-    # transient overlap while preserving the existing left-to-right ordering.
-    siblings: list[tuple[int, tk.Misc]] = []
-    for widget in parent.grid_slaves(row=row):
-        try:
-            widget_info = widget.grid_info()
-            widget_column = int(widget_info.get("column", 0))
-        except (tk.TclError, TypeError, ValueError):
-            continue
-        if widget_column >= column:
-            siblings.append((widget_column, widget))
-    for widget_column, widget in sorted(siblings, key=lambda item: item[0], reverse=True):
-        widget.grid_configure(column=widget_column + span)
-
-    options: dict[str, Any] = {
-        "row": row,
-        "column": column,
-        "columnspan": span,
-        "rowspan": max(1, int(info.get("rowspan", 1))),
-    }
-    for name in ("sticky", "padx", "pady", "ipadx", "ipady"):
-        value = info.get(name)
-        if value not in (None, ""):
-            options[name] = value
-    button.grid(**options)
-
-
-def _insert_single_line_button(app: Any) -> tk.Misc | None:
-    if getattr(app, "_pc_single_line_crop_button", None) is not None:
-        return app._pc_single_line_crop_button
-    target = _find_postproduction_entry_crop_button(app)
-    if target is None:
-        return None
-
-    button = ttk.Button(
-        target.master,
-        text=_BUTTON_TEXT,
-        command=app.split_single_lines_selected_scope,
-        **_copy_button_presentation(target),
-    )
-    manager = str(target.winfo_manager() or "")
-    try:
-        if manager == "pack":
-            _pack_before(button, target)
-        elif manager == "grid":
-            _grid_before(button, target)
-        else:
-            button.pack(side="left", before=target)
-    except tk.TclError:
-        button.destroy()
-        return None
-
-    app._pc_single_line_crop_button = button
-    try:
-        app._attach_tooltip(
-            button,
-            "将【选定范围】内各页按校对界面相同的单行裁切逻辑批量输出到 QT/PSW；"
-            "可在【设置中心 → 切图】选择是否按页合并，并复用切图并行进程数。",
-        )
-    except Exception:
-        pass
-    return button
 
 
 def _set_job_button_state(app: Any, active: bool) -> None:
@@ -317,24 +183,6 @@ def start_single_line_export(app: Any) -> None:
     app.after(80, poll)
 
 
-def install_postproduction_single_line_runtime(app_module: Any) -> None:
-    """Add 【单行切图】 immediately before main-window 【词条切图】."""
-    app_class = app_module.PictureCaptureApp
-    if bool(getattr(app_class, "_pc_postproduction_single_line_installed", False)):
-        return
-
-    original_init = app_class.__init__
-
-    @wraps(original_init)
-    def wrapped_init(self, *args, **kwargs):
-        original_init(self, *args, **kwargs)
-        _insert_single_line_button(self)
-
-    app_class.__init__ = wrapped_init
-    app_class._pc_postproduction_single_line_installed = True
-
-
 __all__ = [
-    "install_postproduction_single_line_runtime",
     "start_single_line_export",
 ]
