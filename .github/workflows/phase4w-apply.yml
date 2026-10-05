@@ -1,0 +1,63 @@
+name: Phase 4W isolated migration
+
+on:
+  push:
+    branches: [refactor/phase-4w-headword-fill]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: refactor/phase-4w-headword-fill
+          fetch-depth: 0
+
+      - name: Install uv and Python 3.13
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --group dev
+
+      - name: Apply narrow Phase 4W migration
+        run: uv run --locked python tools/phase4w_apply.py
+
+      - name: Validate diff shape
+        run: |
+          git diff --check
+          git status --short
+          git diff -- src/picture_capture/app.py src/picture_capture/ui/controllers/__init__.py src/picture_capture/ui/controllers/headword.py tests/test_ui_headword_controller.py tests/test_next_stage_regressions.py
+
+      - name: Run focused headword and regression tests
+        run: uv run --locked pytest -q tests/test_ui_headword_controller.py tests/test_next_stage_regressions.py
+
+      - name: Run full test suite
+        run: uv run --locked pytest -q
+
+      - name: Compile and check undefined names
+        run: |
+          uv run --locked python -m compileall -q src scripts run.py run_tests.py
+          uv run --locked ruff check --select F821 src tests scripts run.py run_tests.py
+
+      - name: Remove temporary migration assets
+        run: rm -f tools/phase4w_apply.py .github/workflows/phase4w-apply.yml
+
+      - name: Commit validated production changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git status --short
+          git commit -m "refactor: route headword fill through HeadwordController"
+          git push origin HEAD:refactor/phase-4w-headword-fill
