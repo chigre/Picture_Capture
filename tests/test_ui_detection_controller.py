@@ -4,6 +4,10 @@ import ast
 from pathlib import Path
 from types import SimpleNamespace
 
+from PIL import Image
+
+import picture_capture.ui.controllers.detection as detection_module
+from picture_capture.models import AppSettings, Entry
 from picture_capture.ui.controllers.detection import DetectionController
 
 
@@ -16,6 +20,9 @@ class _Var:
 
     def get(self):
         return self.value
+
+    def set(self, value) -> None:
+        self.value = value
 
 
 class _App:
@@ -172,6 +179,130 @@ def test_batch_auto_detect_missing_project_is_exact_no_op() -> None:
     assert app.calls == []
 
 
+def test_batch_ocr_preserves_filter_worker_persistence_and_done(tmp_path, monkeypatch) -> None:
+    first = tmp_path / "001.png"
+    second = tmp_path / "002.png"
+    Image.new("RGB", (80, 120), "white").save(first)
+    Image.new("RGB", (80, 120), "white").save(second)
+
+    class BatchApp:
+        def __init__(self) -> None:
+            self.project = SimpleNamespace(root=tmp_path, images=[first, second])
+            self.settings = AppSettings(columns=1)
+            self._batch_active = False
+            self.current_index = 1
+            self.status_var = _Var("")
+            self.calls: list[tuple] = []
+            self.batch = None
+
+        def _guard_transformed_geometry(self, title: str) -> bool:
+            self.calls.append(("guard_transformed_geometry", title))
+            return True
+
+        def pages_tuple(self, index: int):
+            return (str(index), "@", "@")
+
+        def _start_batch_task(self, title, items, worker, done, **kwargs):
+            self.batch = (title, list(items), worker, done, kwargs)
+            return True
+
+        def load_page(self, index: int) -> None:
+            self.calls.append(("load_page", index))
+
+    app = BatchApp()
+    writes: list[tuple] = []
+    exports: list[tuple] = []
+    prompts: list[tuple] = []
+
+    def fake_read_pdic(path):
+        return [Entry(word="", x=4, y=10)] if Path(path).stem == "001" else []
+
+    monkeypatch.setattr(detection_module, "read_pdic", fake_read_pdic)
+    monkeypatch.setattr(
+        detection_module.messagebox,
+        "askyesno",
+        lambda title, text, parent=None: prompts.append((title, text, parent)) or True,
+    )
+    monkeypatch.setattr(detection_module, "load_replace_rules", lambda _path: [])
+    monkeypatch.setattr(
+        detection_module,
+        "effective_page_settings",
+        lambda settings, _size, _index: settings,
+    )
+    monkeypatch.setattr(
+        detection_module,
+        "page_template_analysis_image",
+        lambda image, _settings, _index: image,
+    )
+    monkeypatch.setattr(detection_module, "read_page_sections", lambda _page: [])
+    monkeypatch.setattr(detection_module, "derive_geometry", lambda *_args: object())
+    monkeypatch.setattr(
+        detection_module,
+        "sort_entries_reading_order",
+        lambda entries, _geometry, _sections: entries,
+    )
+    monkeypatch.setattr(
+        detection_module,
+        "ocr_entries",
+        lambda _image, _entries, _settings, _rules, **_kwargs: ["alpha"],
+    )
+    monkeypatch.setattr(detection_module, "qt_root", lambda _root: tmp_path / "qt")
+    monkeypatch.setattr(
+        detection_module,
+        "export_ocred",
+        lambda path, texts: exports.append((path, list(texts))),
+    )
+    monkeypatch.setattr(
+        detection_module,
+        "write_pdic",
+        lambda path, entries, width, pages: writes.append(
+            (path, [entry.word for entry in entries], width, pages)
+        ),
+    )
+
+    DetectionController(app).batch_ocr()
+
+    assert app.calls == [("guard_transformed_geometry", "批量 OCR")]
+    assert len(prompts) == 1
+    assert prompts[0][0] == "批量 OCR"
+    assert prompts[0][2] is app
+    assert app.batch is not None
+    title, items, worker, done, kwargs = app.batch
+    assert title == "批量 OCR"
+    assert items == [0]
+    assert kwargs["item_label"](0) == "001.png"
+
+    assert worker(0, 1, 1) == 1
+    assert exports == [(tmp_path / "qt" / "001.OCRed", ["alpha"])]
+    assert writes and writes[0][1] == ["alpha"]
+    assert writes[0][2] == 80
+    assert writes[0][3] == ("0", "@", "@")
+
+    done(1, 1, False, [1], None)
+
+    assert ("load_page", 1) in app.calls
+    assert app.status_var.value == "批量 OCR 完成：1 个词条"
+
+
+def test_batch_ocr_no_eligible_pdic_sets_existing_status_without_starting_batch(
+    tmp_path, monkeypatch,
+) -> None:
+    page = tmp_path / "001.png"
+    Image.new("RGB", (40, 60), "white").save(page)
+    app = SimpleNamespace(
+        project=SimpleNamespace(root=tmp_path, images=[page]),
+        settings=AppSettings(),
+        _batch_active=False,
+        status_var=_Var(""),
+        _guard_transformed_geometry=lambda _title: True,
+    )
+    monkeypatch.setattr(detection_module, "read_pdic", lambda _path: [])
+
+    DetectionController(app).batch_ocr()
+
+    assert app.status_var.value == "没有含 PDIC 词条的页面可执行批量 OCR"
+
+
 def test_detection_controller_has_no_reverse_dependency_on_app_module() -> None:
     path = ROOT / "src/picture_capture/ui/controllers/detection.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -206,6 +337,7 @@ def test_detection_controller_wiring_preserves_app_methods_and_runtime_guard_sea
         "run_combined_draw_action": "run_combined_draw_action",
         "run_ocr_draw_action": "run_ocr_draw_action",
         "batch_auto_detect": "batch_auto_detect",
+        "batch_ocr": "batch_ocr",
         "run_ocr_draw": "run_ocr_draw",
     }
     for app_method, controller_method in expected.items():
