@@ -5,14 +5,17 @@ from __future__ import annotations
 Crop geometry and file generation remain in ``processing`` and project path
 policy remains in ``project_storage``. Crop-settings UI and illustration actions
 remain outside this controller. The selected-scope single-line action is explicit
-here, while its temporary Tk worker/poll scheduler remains runtime-owned.
+here and uses the app-owned parallel batch runner; shared preflight helpers remain
+temporary until the separate unlined-export runtime is decomposed.
 """
 
 from dataclasses import replace
 from typing import Any
 
 from ...formats import pdic_path, read_pdic, read_ppp
-from ...postproduction_single_line_runtime import start_single_line_export
+from ...postproduction_single_line_runtime import (
+    _set_job_button_state, _snapshot_scope, _status,
+)
 from ...processing import (
     append_crop_log,
     split_single_lines,
@@ -20,6 +23,8 @@ from ...processing import (
     split_whole_entries_job,
 )
 from ...project_storage import ppp_read_path_for_image, qt_root
+from ...single_line_merge_settings import load_merge_by_page
+from ...single_line_parallel import configured_single_line_workers, single_line_page_job
 
 
 class CropController:
@@ -29,8 +34,68 @@ class CropController:
         self.app = app
 
     def split_single_lines_selected_scope(self) -> None:
-        """Start selected-scope single-line export through the retained Tk scheduler."""
-        start_single_line_export(self.app)
+        """Export selected-page single lines through the shared app batch runner."""
+        app = self.app
+        if bool(getattr(app, "_batch_active", False)):
+            _status(app, "已有批量任务正在运行，请结束后再执行单行切图。")
+            return
+
+        snapshot = _snapshot_scope(app)
+        if snapshot is None:
+            return
+        project_root, images, indices, settings = snapshot
+        output_dir = qt_root(project_root) / "PSW"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        merge_by_page = load_merge_by_page(project_root)
+        workers = max(1, min(configured_single_line_workers(project_root), len(indices)))
+        worker_text = "串行" if workers <= 1 else f"并行×{workers}"
+        _status(app, f"单行切图：准备处理 {len(indices)} 页（{worker_text}）…")
+        _set_job_button_state(app, True)
+
+        def job_builder(index: int, _position: int, _total: int):
+            return (
+                str(project_root),
+                str(images[index]),
+                int(index),
+                settings,
+                str(output_dir),
+                bool(merge_by_page),
+            )
+
+        def consume_result(_index: int, result):
+            _page_index, filename, records, merged = result
+            append_crop_log(project_root, records)
+            return filename, len(records), bool(merged)
+
+        def done(completed, total_pages, stopped, results, error):
+            _set_job_button_state(app, False)
+            if error is not None:
+                return
+            record_count = sum(int(result[1]) for result in results)
+            if stopped:
+                _status(
+                    app,
+                    f"单行切图已停止：完成 {completed}/{total_pages} 页，共 {record_count} 行；{worker_text}",
+                )
+                return
+            mode = "；每页已合并为 1 张图" if merge_by_page else ""
+            _status(
+                app,
+                f"单行切图完成：{completed} 页，共 {record_count} 行{mode}；{worker_text}；已保存到 {output_dir}",
+            )
+
+        started = app._start_parallel_batch_task(
+            "单行切图",
+            indices,
+            single_line_page_job,
+            job_builder,
+            consume_result,
+            done,
+            item_label=lambda index: images[index].name,
+            max_workers=workers,
+        )
+        if not started:
+            _set_job_button_state(app, False)
 
     def split_lines_current(self) -> None:
         app = self.app

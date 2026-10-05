@@ -82,14 +82,14 @@ def test_single_line_parallel_source_keeps_page_files_independent_and_log_coordi
     assert "as_completed(futures)" in coordinator
 
 
-def test_main_single_line_runtime_reports_effective_parallelism():
+def test_main_single_line_controller_reports_effective_parallelism_through_shared_runner():
     source = (
         Path(__file__).resolve().parents[1]
-        / "src" / "picture_capture" / "postproduction_single_line_runtime.py"
+        / "src" / "picture_capture" / "ui" / "controllers" / "crop.py"
     ).read_text(encoding="utf-8")
 
-    assert "run_single_line_pages(" in source
     assert "configured_single_line_workers(project_root)" in source
     assert 'f"并行×{workers}"' in source
-    assert "split_single_lines(" not in source
-    assert "merge_page_line_images(" not in source
+    assert "single_line_page_job" in source
+    assert "app._start_parallel_batch_task(" in source
+    assert "run_single_line_pages(" not in source
