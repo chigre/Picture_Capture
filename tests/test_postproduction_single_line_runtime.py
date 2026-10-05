@@ -70,11 +70,15 @@ def test_runtime_contract_keeps_main_button_left_of_entry_crop_and_uses_selected
     worker_source = (root / "src" / "picture_capture" / "single_line_parallel.py").read_text(
         encoding="utf-8"
     )
+    app_source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
 
-    assert '_BUTTON_TEXT = "单行切图"' in runtime_source
-    assert '_TARGET_TEXT = "词条切图"' in runtime_source
-    assert "_pack_before(button, target)" in runtime_source
-    assert "_grid_before(button, target)" in runtime_source
+    assert (
+        '(("单行切图", self.split_single_lines_selected_scope), '
+        '("词条切图", self.split_entries_selected_scope), '
+        '("插图切图", self.split_illustrations_selected_scope))'
+    ) in app_source
+    assert 'if text == "单行切图":' in app_source
+    assert "self._pc_single_line_crop_button = button" in app_source
     assert "app.selected_page_indices()" in runtime_source
 
     # Page-level work owns the mature crop call; the Tk runtime only schedules it.
@@ -91,15 +95,15 @@ def test_runtime_contract_keeps_main_button_left_of_entry_crop_and_uses_selected
     assert "row_padding" not in page_job
 
 
-def test_gui_composition_installs_single_line_postproduction_extension():
+def test_gui_composition_no_longer_installs_single_line_ui_runtime():
     root = Path(__file__).resolve().parents[1]
     source = (
         root / "src" / "picture_capture" / "bootstrap" / "gui.py"
     ).read_text(encoding="utf-8")
-    assert "install_postproduction_single_line_runtime" in source
-    assert "install_postproduction_single_line_runtime(app_module)" in source
+    assert "install_postproduction_single_line_runtime" not in source
+    assert "install_unlined_line_export_ui(app_module)" in source
 
-def test_phase5b_runtime_keeps_ui_and_worker_but_not_method_monkey_patch():
+def test_phase5c_runtime_keeps_worker_poll_but_no_ui_or_method_monkey_patch():
     root = Path(__file__).resolve().parents[1]
     runtime_source = (
         root / "src" / "picture_capture" / "postproduction_single_line_runtime.py"
@@ -110,9 +114,14 @@ def test_phase5b_runtime_keeps_ui_and_worker_but_not_method_monkey_patch():
     ).read_text(encoding="utf-8")
 
     assert "app_class.split_single_lines_selected_scope = split_single_lines_selected_scope" not in runtime_source
-    assert "app_class.__init__ = wrapped_init" in runtime_source
-    assert "_insert_single_line_button(self)" in runtime_source
+    assert "app_class.__init__ = wrapped_init" not in runtime_source
+    assert "_insert_single_line_button" not in runtime_source
+    assert "install_postproduction_single_line_runtime" not in runtime_source
     assert "def start_single_line_export(app: Any)" in runtime_source
+    assert "threading.Thread(" in runtime_source
+    assert "app.after(80, poll)" in runtime_source
+    assert 'if text == "单行切图":' in app_source
+    assert "self._pc_single_line_crop_button = button" in app_source
     assert "def split_single_lines_selected_scope(self)" in app_source
     assert "self._crop_controller_for_call().split_single_lines_selected_scope()" in app_source
     assert "def split_single_lines_selected_scope(self)" in crop_source

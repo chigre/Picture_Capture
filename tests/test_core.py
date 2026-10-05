@@ -5424,7 +5424,11 @@ def test_sidebar_defaults_fold_sections_two_through_five_and_keep_project_detail
     assert 'parent, "五、后期词典制作", padding=5, section_key="postproduction"' in app_text
     assert '"四、画线 / OCR / 插图 / 校对"' in app_text
     assert 'self._section_frame(sidebar, "六、页面列表"' in app_text
-    first_row = '(("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope))'
+    first_row = (
+        '(("单行切图", self.split_single_lines_selected_scope), '
+        '("词条切图", self.split_entries_selected_scope), '
+        '("插图切图", self.split_illustrations_selected_scope))'
+    )
     second_row = '(("项目详情", self.open_project_details), ("导出PicDic索引", self.export_picdic_index), ("PicDic制作", self.build_picdic))'
     final_row = '(("导出训练标记包", self.export_training_package),)'
     assert first_row in app_text
