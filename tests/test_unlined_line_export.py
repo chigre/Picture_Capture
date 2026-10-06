@@ -261,7 +261,8 @@ def test_unlined_ui_is_explicit_and_reuses_parallel_crop_setting():
     assert "install_unlined_line_export_ui" not in composition
     assert "unlined_line_export_ui" not in composition
     assert "install_unlined_export_filter_settings_ui(app_module)" in composition
-    assert "install_unlined_fast_path()" in composition
+    assert "install_unlined_fast_path" not in composition
+    assert "unlined_fast_path_runtime" not in composition
     assert (
         '(("单行切图", self.split_single_lines_selected_scope), '
         '("未画线行导出", self.export_unlined_rows_selected_scope), '
@@ -275,6 +276,7 @@ def test_unlined_ui_is_explicit_and_reuses_parallel_crop_setting():
     assert "app._start_parallel_batch_task(" in controller
     assert "unlined_export.export_unlined_page_job" in controller
     assert 'OUTPUT_DIRNAME = "PSW_UNLINED"' in exporter
+    assert "resolve_unlined_physical_rows" in exporter
     # Critical semantic locks: export is Layout-minus-PDIC, and blankness is
     # measured on the original row crop before white-border trimming.
     assert 'role == "body"' not in exporter

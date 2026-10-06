@@ -30,7 +30,6 @@ OVERSIZED_MODULE_BASELINE = {
 LEGACY_RUNTIME_FILES = {
     "entry_classification_runtime.py",
     "layout_illustration_mask_runtime.py",
-    "unlined_fast_path_runtime.py",
 }
 
 # Dynamic module namespace/proxy behavior currently exists only in these

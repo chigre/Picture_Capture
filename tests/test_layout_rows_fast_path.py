@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 import inspect
+import pickle
 
 from PIL import Image, ImageDraw
 
@@ -113,19 +114,18 @@ def test_fast_recovery_source_cannot_call_full_layout_or_semantic_evidence():
     assert "detect_ordinary_large_head_entries" not in source
 
 
-def test_unlined_export_worker_is_replaced_by_physical_fast_path():
+def test_unlined_export_worker_is_static_physical_fast_path_and_pickleable():
     from picture_capture import unlined_line_export as exporter
-    from picture_capture.unlined_fast_path_runtime import (
-        export_unlined_page_job_fast,
-        install_unlined_fast_path,
-    )
     from picture_capture.unlined_physical_rows_resolver import (
         resolve_unlined_physical_rows,
     )
 
-    install_unlined_fast_path()
-    assert exporter.export_unlined_page_job is export_unlined_page_job_fast
-    source = inspect.getsource(export_unlined_page_job_fast)
+    job = exporter.export_unlined_page_job
+    assert job.__module__ == "picture_capture.unlined_line_export"
+    payload = pickle.dumps(job)
+    assert b"picture_capture.unlined_line_export" in payload
+
+    source = inspect.getsource(job)
     assert "resolve_unlined_physical_rows" in source
     assert "understand_layout_core" not in source
     assert "build_analysis_image" not in source
@@ -152,11 +152,16 @@ def test_gui_and_worker_composition_seed_layout_rows_for_future_qa():
     crop = (
         root / "src" / "picture_capture" / "ui" / "controllers" / "crop.py"
     ).read_text(encoding="utf-8")
+    exporter = (
+        root / "src" / "picture_capture" / "unlined_line_export.py"
+    ).read_text(encoding="utf-8")
 
     assert "install_layout_rows_persistence_runtime()" in gui
-    assert "install_unlined_fast_path()" in gui
+    assert "install_unlined_fast_path" not in gui
+    assert "unlined_fast_path_runtime" not in gui
     assert "install_unlined_line_export_ui" not in gui
     assert "unlined_export.export_unlined_page_job" in crop
+    assert "resolve_unlined_physical_rows" in exporter
     assert "install_layout_rows_persistence_runtime()" in worker
     assert "with services.capture_layout_rows(" in processing
     assert "install_layout_rows_persistence_runtime()" not in inspect.getsource(

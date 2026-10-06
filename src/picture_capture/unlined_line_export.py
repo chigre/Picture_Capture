@@ -37,6 +37,7 @@ from .unlined_export_filter_settings import (
     DEFAULT_BLANK_INK_PERCENT,
     load_unlined_filter_settings,
 )
+from .unlined_physical_rows_resolver import resolve_unlined_physical_rows
 
 
 OUTPUT_DIRNAME = "PSW_UNLINED"
@@ -369,7 +370,7 @@ def export_unlined_page_job(
     filter_blank: bool,
     blank_ink_percent: float,
 ) -> UnlinedPageResult:
-    """Spawn-safe one-page exporter."""
+    """Spawn-safe one-page exporter using physical-row-only recovery."""
     project_root = Path(project_root)
     image_path = Path(image_path)
     output_dir = qt_root(project_root) / OUTPUT_DIRNAME
@@ -379,23 +380,19 @@ def export_unlined_page_job(
     with Image.open(image_path) as opened:
         source = normalize_page_rgb(opened)
     try:
-        analysis = build_analysis_image(source, settings)
-        try:
-            understanding = understand_layout_core(
-                analysis,
-                settings,
-                page_index=int(page_index),
-            )
-        finally:
-            if analysis is not source:
-                analysis.close()
-
-        if not bool(getattr(understanding, "physical_reliable", False)):
+        layout, _resolved_source = resolve_unlined_physical_rows(
+            project_root,
+            image_path,
+            source,
+            settings,
+            page_index=int(page_index),
+        )
+        if layout is None:
             return UnlinedPageResult(
                 int(page_index), image_path.name, 0, 0, 0, 0, 0, 0, False, False
             )
         rows, layout_rows, lined_rows = unlined_rows_from_layout(
-            understanding.layout,
+            layout,
             entries,
             sections,
         )

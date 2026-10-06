@@ -132,7 +132,6 @@ def prepare_gui_application() -> Any:
     from ..unlined_export_filter_settings import (
         install_unlined_export_filter_settings_ui,
     )
-    from ..unlined_fast_path_runtime import install_unlined_fast_path
     from ..layout_illustration_mask_runtime import install_layout_illustration_mask_ui
 
     # Add the Layout analysis switch before generic Settings Center help scans
@@ -145,11 +144,9 @@ def prepare_gui_application() -> Any:
     # are installed after the per-page merge switch so they appear beneath it.
     install_unlined_export_filter_settings_ui(app_module)
     install_ocr_action_guard(app_module)
-    # Unlined QA resolves physical rows from LayoutRows cache/Profile
-    # projection before allowing any full Layout/Paddle fallback. CropController
-    # resolves the worker through the module at action time so this post-import
-    # replacement remains effective without a UI/action installer.
-    install_unlined_fast_path()
+    # Unlined QA now owns its physical-row fast path statically in
+    # unlined_line_export.export_unlined_page_job; no GUI-time worker mutation
+    # is required.
     install_app_tooltip_terminology(app_module)
     install_layout_role_theme()
     install_layout_visualization(app_module)

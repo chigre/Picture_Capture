@@ -177,4 +177,5 @@ def test_phase5e_normal_ui_and_app_wrappers_are_explicit():
     assert "self._crop_controller_for_call().export_unlined_rows_selected_scope()" in app_source
     assert "install_unlined_line_export_ui" not in gui_source
     assert "unlined_line_export_ui" not in gui_source
-    assert "install_unlined_fast_path()" in gui_source
+    assert "install_unlined_fast_path" not in gui_source
+    assert "unlined_fast_path_runtime" not in gui_source
