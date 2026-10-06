@@ -3,21 +3,22 @@
 This file is the crash-recovery checkpoint for the modular architecture refactor. GitHub live state is authoritative: always revalidate `main`, open PRs, relevant callers/import order, and tests before new production writes.
 
 ## Current phase
-**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5J are complete.**
+**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5K are complete.**
 
-Phase 4 controller decomposition is complete through Detection batch processing. Phase 5 has retired runtime ownership from ordinary drawing, selected-scope single-line crop, unlined export, training export, helper-only ordinary-action debt, LayoutRows visualization capture, local-indent visualization replacement, and Layout role-provenance decoration.
+Phase 4 controller decomposition is complete through Detection batch processing. Phase 5 has retired runtime ownership from ordinary drawing, selected-scope single-line crop, unlined export, training export, helper-only ordinary-action debt, LayoutRows visualization capture, local-indent visualization replacement, role-provenance decoration, and indent-visibility decoration.
 
 ## Latest architecture checkpoint
-- Phase 5J PR: **#250 — make role provenance explicit**
-- Phase 5J validated production commit: `734e91c378e3a5770bb21e935187383090b86d4d`
-- Phase 5J validated/merged production tree: `df73ed8823ba21804fcf1c2b1c6d62f928b2eb15`
-- Phase 5J architecture merge: `d56456047c51f97e2a2f929dfdab8c77df3db43c`
-- Previous Phase 5I PR #248 merge: `78c956177ebf9b580f66b3593494d286eed4c9ff`
+- Phase 5K PR: **#252 — make indent visibility explicit**
+- Phase 5K validated production commit: `88e7d969a7014e3890088da34a45f8ceedcc83f3`
+- Phase 5K validated/merged production tree: `19c32f34a2a8f4f6a47dbce20b0df8c3dae09a4b`
+- Phase 5K architecture merge: `2bfedcb17e9058d1b4fd2f8749a6db9690f95592`
+- Previous Phase 5J PR #250 merge: `d56456047c51f97e2a2f929dfdab8c77df3db43c`
+- Phase 5I PR #248 merge: `78c956177ebf9b580f66b3593494d286eed4c9ff`
 - Phase 5H PR #246 merge: `d00df0bff2b3da947607310ea331b09b678f688d`
 - Phase 5G PR #244 merge: `de04953752d0294e838b3ac45ae9a0f5ee9a3548`
 - Phase 5F PR #242 merge: `f62f056a51fddae4c05fbd7bc93261330dac2db6`
 - Phase 5E PR #240, 5D #238, 5C #236, 5B #234, 5A #232 are complete.
-- Current production architecture PR: none after Phase 5J merge.
+- Current production architecture PR: none after Phase 5K merge.
 
 ## Current explicit ownership
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
@@ -33,54 +34,55 @@ Selected-scope single-line and unlined actions are explicit app-wrapper → Crop
 ### Export / training package
 `PictureCaptureApp.export_training_package()` delegates to `ExportController.export_training_package()` and reuses app-owned batch/UI-worker infrastructure. GUI bootstrap no longer replaces the method dynamically.
 
-### Layout visualization after Phase 5H–5J
+### Layout visualization after Phase 5H–5K
 - LayoutRows capture is static in `layout_visualization_shared.shared_snapshot_for_app(...)`; `layout_visualization_rows_cache_runtime.py` is retired.
 - Drift-corrected indent geometry lives in non-runtime `layout_local_indent_visualization.py`; `layout_local_indent_visualization_runtime.py` is retired.
 - Entry-source provenance lives in non-runtime `layout_role_provenance.py`; `layout_role_provenance_runtime.py` is retired.
-- `layout_visualization_shared._indent_blocks_from_understanding` is statically provenance-aware while still using the same drift-corrected block producer.
-- Base `layout_visualization_summary._format_summary(...)` statically inserts the same `entry sources: ...` line before later summary decorators run.
+- Visible indent drawing and prepared-count diagnostics live in non-runtime `layout_indent_visibility.py`; `layout_indent_visibility_runtime.py` is retired.
+- `layout_visualization_summary._draw_indent_blocks` is statically bound to the visible renderer.
+- The physical-lane summary wrapper appends `add_prepared_indent_summary(...)` last, preserving the historical final text order: base/provenance/role theme → physical lanes → `indent blocks prepared:`.
 
-Current later summary/display ordering remains:
+Current bootstrap no longer installs local-indent, provenance, or indent-visibility runtime decorators. `install_physical_lane_summary()` remains the final summary composition point.
 
-`install_layout_role_theme()` → `install_layout_visualization(app_module)` → `install_physical_lane_summary()` → `install_layout_indent_visibility()`.
-
-## Completed Phase 5J — role-provenance runtime retirement
+## Completed Phase 5K — indent-visibility runtime retirement
 ### Production change
-Phase 5J removed only the diagnostic provenance installer:
-- created non-runtime `layout_role_provenance.py` with `indent_blocks_with_entry_sources(...)` and `add_entry_source_summary(...)`;
-- preserved exact `(column, absolute y0, absolute y1)` line/block matching;
-- preserved defaults: unmatched entry/headword → `indent`, non-entry → `body`;
-- preserved summary source ordering: `indent`, `large_head`, `symbol_sample`, `ocr`, `manual`, `unknown`, then custom sources alphabetically;
-- preserved insertion immediately after `line indents:` and no-count passthrough;
-- statically made shared indent blocks provenance-aware;
-- statically made the base summary provenance-aware;
-- removed the GUI bootstrap provenance installer import/call;
-- removed `layout_role_provenance_runtime.py` from `LEGACY_RUNTIME_FILES`;
-- did not change later role-theme, lane-summary, indent-visibility, worker, classification, persistence, or public-action behavior.
+Phase 5K removed only the display-only indent-visibility installer while preserving behavior:
+- renamed `layout_indent_visibility_runtime.py` to non-runtime `layout_indent_visibility.py`;
+- preserved `prepared_indent_counts(...)` and `_draw_indent_blocks_visible(...)`;
+- added pure `add_prepared_indent_summary(base_text, app)`;
+- statically bound the visible renderer into `layout_visualization_summary`;
+- removed the historical base renderer that lowered pale-yellow blocks beneath the base Layout tag;
+- changed the existing physical-lane summary wrapper to append prepared-count diagnostics after lane diagnostics, matching the previous outermost runtime wrapper order;
+- removed only the GUI bootstrap indent-visibility installer import/call;
+- removed `layout_indent_visibility_runtime.py` from `LEGACY_RUNTIME_FILES`;
+- migrated prior source-shape ordering assertions and added a direct integration regression proving `physical indent lanes:` precedes `indent blocks prepared:`.
+
+No corrected-indent geometry, role provenance, lane clustering, detection/crop semantics, persistence format, worker/thread behavior, or public app action changed.
 
 ### Validation
-Isolated fail-closed validation completed without production failure:
-- exact intended net diff: 9 production/test files;
+Final isolated fail-closed validation:
+- exact expected no-renames path set passed; GitHub rendered the runtime→non-runtime move as a rename, so the final PR displayed 8 changed files;
 - architecture guard: passed;
-- focused: **25 passed**;
-- full: **1267 passed, 2 existing Pillow deprecation warnings**;
+- focused: **24 passed**;
+- full: **1269 passed, 2 existing Pillow deprecation warnings**;
 - compileall: passed;
 - Ruff F821: passed;
-- temporary migration helper/workflow removed before publication.
+- temporary migration helper/workflow removed before publication;
+- validated production commit: `88e7d969a7014e3890088da34a45f8ceedcc83f3`;
+- validated production tree: `19c32f34a2a8f4f6a47dbce20b0df8c3dae09a4b`.
 
-PR #250 final-head verification on `734e91c378e3a5770bb21e935187383090b86d4d`:
+PR #252 final-head verification:
 - Ubuntu CI: passed, including Linux GUI smoke;
 - Windows CI: passed, including Windows GUI smoke;
 - macOS CI: passed, including macOS GUI smoke;
 - compatibility runner, compile, F821, and wheel passed on all applicable platforms;
 - CodeQL Actions: passed;
 - CodeQL Python: passed;
-- Advanced Security: passed;
+- GitHub Advanced Security aggregate CodeQL: passed with no new alerts;
+- Advanced Security AI findings: passed;
 - no review threads or review objections before merge.
 
-A separate GitHub Advanced Security aggregate `CodeQL` check was neutral because the PR comparison could not find one default-setup configuration; the actual `Analyze (actions)` and `Analyze (python)` jobs both passed and were used as the CodeQL merge gate.
-
-Architecture merge `d56456047c51f97e2a2f929dfdab8c77df3db43c` retained exactly the validated tree `df73ed8823ba21804fcf1c2b1c6d62f928b2eb15`.
+Architecture merge `2bfedcb17e9058d1b4fd2f8749a6db9690f95592` retained exactly the validated tree `19c32f34a2a8f4f6a47dbce20b0df8c3dae09a4b`.
 
 Post-merge verification on that merge:
 - Ubuntu CI: passed;
@@ -89,37 +91,40 @@ Post-merge verification on that merge:
 - CodeQL Actions: passed;
 - CodeQL Python: passed.
 
-## Recommended next slice — Phase 5K
-**Retire `layout_indent_visibility_runtime.py` without changing its current outermost summary semantics.**
+## Recommended next slice — Phase 5L
+**Retire helper-only `windows_gpu_runtime.py` naming debt without changing Paddle import timing.**
 
-Fresh read-only inspection after Phase 5J shows this runtime owns two display-only behaviors:
-1. replacement of `layout_visualization_summary._draw_indent_blocks` with `_draw_indent_blocks_visible(...)`, which draws the same prepared blank spans above the base scan and adds a solid first-ink edge;
-2. the current **outermost** summary wrapper, which appends `indent blocks prepared: ...` after all earlier summary content, including physical lane diagnostics.
+Fresh read-only inspection after Phase 5K shows `windows_gpu_runtime.py` contains no installer, monkey patch, UI mutation, worker replacement, persistence format, or dynamic app ownership. It is a call-time environment helper:
+- `_site_package_roots()` enumerates site-package roots;
+- `configure_windows_nvidia_dlls()` is a no-op off Windows;
+- on Windows it discovers `site-packages/nvidia/*/bin`, prepends discovered paths to `PATH`, and retains `os.add_dll_directory(...)` handles so NVIDIA wheel DLLs remain visible to native consumers.
 
-It owns no worker, persistence format, detection rule, crop geometry, or public app action. Dedicated behavior tests already cover per-column prepared counts, two-column rendering, first-ink edges, and the requirement not to lower indent blocks beneath the base layout.
+Current production callers explicitly invoke `configure_windows_nvidia_dlls()` immediately before Paddle/PaddleOCR import paths in:
+- `ocr_channel.py`;
+- `document_unwarping.py`;
+- `layout_detection_legacy.py`.
 
-### Critical ordering constraint for Phase 5K
-Do **not** simply move the prepared-count line into base `_format_summary()`: that would place it before the later physical-lane summary and change the current text ordering.
+`scripts/verify_ocr_environment.py` also imports/calls the helper, and OCR runner tests mock the current module path to assert configuration happens before OCR import.
 
-The safest narrow architecture is:
-- move `prepared_indent_counts(...)`, visible indent drawing, and a small `add_prepared_indent_summary(base_text, app)` helper to a non-runtime module;
-- statically bind `layout_visualization_summary._draw_indent_blocks` to the visible renderer;
-- preserve the final summary order by composing `add_prepared_indent_summary(...)` at the outside of the existing `install_physical_lane_summary()` wrapper, so the effective chain remains base/provenance → role theme → physical lanes → prepared-indent counts;
-- remove only `install_layout_indent_visibility()` and its GUI bootstrap import/call;
-- ratchet `layout_indent_visibility_runtime.py` out of `LEGACY_RUNTIME_FILES`;
-- migrate the dedicated runtime/source-shape tests and add a direct summary-order regression proving `physical indent lanes:` appears before `indent blocks prepared:`.
+The safest Phase 5L scope is therefore a behavior-neutral runtime→non-runtime module rename, e.g. `windows_gpu_runtime.py` → `windows_gpu.py`, with all callers/scripts/tests updated to the new path and the retired runtime filename removed from `LEGACY_RUNTIME_FILES`. Keep every `configure_windows_nvidia_dlls()` call at the exact same call site immediately before Paddle/PaddleOCR import; do not centralize or move it earlier/later.
 
-`layout_visualization_ui_v3` imports `draw_layout_visualization_detailed` by value, but that function resolves summary-module `_draw_indent_blocks` at call time; static binding in the summary module therefore preserves rendering behavior without changing the UI-v3 app-method installer.
+Phase 5L validation must include Windows-specific CI and focused OCR runner/import-order tests in addition to the normal full suite/compile/F821/architecture guard. Do not combine it with Paddle dependency changes, OCR profile changes, spawn worker changes, `ordinary_large_head_runtime`, or `unlined_fast_path_runtime`.
 
-Do not combine Phase 5K with `unlined_fast_path_runtime`, `ordinary_large_head_runtime`, spawn runtimes, overlay opacity/anchor runtimes, or other import-order/core work.
-
-## Remaining high-risk runtime seams
+## Remaining high-risk runtime seams after Phase 5K
 Treat these as real compatibility/performance seams rather than mechanical naming debt until individually proven:
-- `unlined_fast_path_runtime.py`;
+- `entry_classification_runtime.py`;
+- `illustration_fill_opacity_runtime.py`;
+- `layout_character_height_runtime.py`;
+- `layout_column_drift_runtime.py`;
+- `layout_illustration_mask_runtime.py`;
+- `layout_row_recovery_runtime.py`;
 - `ordinary_large_head_runtime.py`;
+- `overlay_line_anchor_runtime.py`;
+- `overlay_opacity_runtime.py`;
 - `spawn_detection_runtime.py` / `spawn_layout_runtime.py`;
-- Windows/GPU/runtime initialization paths;
-- entry-classification and overlay/UI runtimes with persistent/import-order effects.
+- `unicode_nonbmp_input_runtime.py`;
+- `unlined_fast_path_runtime.py`;
+- `windows_gpu_runtime.py` (helper-only candidate for Phase 5L).
 
 ## Standing continuation authorization
 The user explicitly authorized continued Phase 5 work along the recommended architecture path without pausing at normal ownership decision points. Continue automatically after each successful checkpoint after fresh live-state revalidation.
