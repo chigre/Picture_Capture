@@ -20,5 +20,21 @@ block_end = text.index('\nreplace_once(\n    "src/picture_capture/app.py",', tex
 polygon_replacement = '''replace_once(\n    "src/picture_capture/app.py",\n    \'\'\'                if show_shapes:\n                    polygon_item = self.canvas.create_polygon(\n                        coords, fill=self.settings.illustration_fill_color, stipple="gray50",\n                        outline=self.settings.illustration_outline_color,\n                        width=scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale),\n                        tags=("ppp-overlay", f"ppp-region-{region_index}"),\n                    )\n\'\'\',\n    \'\'\'                if show_shapes:\n                    polygon_item = create_alpha_canvas_polygon(\n                        self,\n                        tuple(coords),\n                        outline=self.settings.illustration_outline_color,\n                        fill=self.settings.illustration_fill_color,\n                        width=scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale),\n                        opacity=self.settings.illustration_fill_opacity,\n                        tags=("ppp-overlay", f"ppp-region-{region_index}"),\n                    )\n\'\'\',\n)\n'''
 text = text[:block_start] + polygon_replacement + text[block_end:]
 
+# The characterization test is itself emitted from a triple-quoted migration
+# string. Keep its inner gray50 literal syntactically valid after emission.
+stipple_assertions = [
+    line for line in text.splitlines()
+    if 'assert "stipple=' in line and "not in app" in line
+]
+if len(stipple_assertions) != 1:
+    raise SystemExit(
+        f"phase5p_apply.py: expected one generated stipple assertion, found {len(stipple_assertions)}"
+    )
+text = text.replace(
+    stipple_assertions[0],
+    "    assert 'stipple=\"gray50\"' not in app",
+    1,
+)
+
 path.write_text(text, encoding="utf-8")
-print("Phase 5P migration helper aligned to current schema and PPP draw site")
+print("Phase 5P migration helper aligned to current schema, PPP draw site, and generated test quoting")
