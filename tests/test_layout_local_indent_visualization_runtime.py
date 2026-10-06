@@ -61,5 +61,5 @@ def test_phase5i_static_owner_and_provenance_order():
     shared_pos = gui.index("install_shared_layout_visualization_source()")
     role_theme_pos = gui.index("install_layout_role_theme()")
     lane_pos = gui.index("install_physical_lane_summary()")
-    visibility_pos = gui.index("install_layout_indent_visibility()")
-    assert shared_pos < role_theme_pos < lane_pos < visibility_pos
+    assert "install_layout_indent_visibility" not in gui
+    assert shared_pos < role_theme_pos < lane_pos

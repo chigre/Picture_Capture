@@ -145,7 +145,6 @@ def prepare_gui_application() -> Any:
     install_review_entry_classification(app_module)
     install_ocr_crop_preview(app_module)
 
-    from ..layout_indent_visibility_runtime import install_layout_indent_visibility
     from ..layout_lane_summary_extension import install_physical_lane_summary
     from ..layout_visualization_role_theme import install_layout_role_theme
     from ..layout_visualization_ui_v3 import install_layout_visualization
@@ -184,10 +183,9 @@ def prepare_gui_application() -> Any:
     install_app_tooltip_terminology(app_module)
     install_layout_role_theme()
     install_layout_visualization(app_module)
+    # The lane-summary wrapper now appends the prepared-indent diagnostic as
+    # its final step; visible indent drawing is static in the summary module.
     install_physical_lane_summary()
-    # Install after the final Layout summary wrappers so both C1/C2 prepared
-    # indent spans stay visible and the per-column block counts are reported.
-    install_layout_indent_visibility()
     # Set all display-overlay defaults before the line opacity runtime creates
     # AppSettings properties. Existing settings.json values remain authoritative.
     configure_overlay_opacity_defaults()

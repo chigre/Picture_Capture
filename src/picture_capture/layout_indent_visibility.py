@@ -1,22 +1,9 @@
 from __future__ import annotations
 
-"""Make per-line physical indents unmistakably visible in Layout diagnostics.
-
-The shared Layout Core already records every line's local ``first_x`` value.  A
-Layout diagnostic must therefore show the actual blank span from the physical
-column-left boundary to that first ink position.  The previous renderer lowered
-those pale-yellow blocks beneath the whole base Layout tag.  On real pages that
-made prepared C1 indent evidence effectively disappear even while lane numbers
-were present in the text summary.
-
-This display-only adapter keeps the blocks above the scan/base geometry, adds a
-clear first-ink edge, and leaves role strips and the summary above them.  It does
-not change ``first_x``, lane clustering, roles, entry detection, PDIC, OCR, or
-crop geometry.
-"""
+"""Visible physical-indent rendering and prepared-count diagnostics."""
 
 from collections import Counter
-from typing import Any, Callable
+from typing import Any
 
 
 _FILL = "#fff59d"
@@ -102,8 +89,6 @@ def _draw_indent_blocks_visible(app: Any, snapshot: Any) -> None:
                 stipple="gray50",
                 tags=(indent_tag,),
             )
-            # The right edge is the measured first-ink X.  Keeping it solid makes
-            # even a narrow blank span auditable when the pale fill is subtle.
             canvas.create_line(
                 right,
                 top,
@@ -118,44 +103,25 @@ def _draw_indent_blocks_visible(app: Any, snapshot: Any) -> None:
             continue
 
     app._layout_visualization_indent_drawn_counts = dict(sorted(drawn.items()))
-
-    # Do not lower below the complete base Layout tag: that was the path that
-    # could hide prepared C1 blocks on the scan.  These items are created after
-    # the base overlay, so raising them makes the measured blank explicit.  Role
-    # strips are drawn/raised afterwards and the summary tag is raised last.
     try:
         canvas.tag_raise(indent_tag)
     except Exception:
         pass
 
 
-def install_layout_indent_visibility() -> None:
-    """Install the visible-indent renderer and per-column diagnostics once."""
-    from . import layout_visualization_summary as summary
-
-    if bool(getattr(summary, "_layout_indent_visibility_installed", False)):
-        return
-
-    summary._draw_indent_blocks = _draw_indent_blocks_visible
-
-    original_format: Callable[[Any, Any], str] = summary._format_summary
-
-    def format_summary(app: Any, snapshot: Any) -> str:
-        text = original_format(app, snapshot)
-        blocks = list(getattr(app, "_layout_visualization_indent_blocks", []) or [])
-        counts = prepared_indent_counts(blocks)
-        if counts:
-            detail = "   ".join(f"C{column}={count}" for column, count in counts.items())
-        else:
-            detail = "none"
-        return text + f"\nindent blocks prepared: {detail}"
-
-    summary._format_summary = format_summary
-    summary._layout_indent_visibility_installed = True
+def add_prepared_indent_summary(base_text: str, app: Any) -> str:
+    """Append the same outermost per-column prepared-indent diagnostic line."""
+    blocks = list(getattr(app, "_layout_visualization_indent_blocks", []) or [])
+    counts = prepared_indent_counts(blocks)
+    if counts:
+        detail = "   ".join(f"C{column}={count}" for column, count in counts.items())
+    else:
+        detail = "none"
+    return base_text + f"\nindent blocks prepared: {detail}"
 
 
 __all__ = [
     "_draw_indent_blocks_visible",
-    "install_layout_indent_visibility",
+    "add_prepared_indent_summary",
     "prepared_indent_counts",
 ]
