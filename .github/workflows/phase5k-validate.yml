@@ -1,0 +1,83 @@
+name: Phase 5K validation
+
+on:
+  push:
+    branches: [refactor/phase-5k-static-indent-visibility]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase5k-static-indent-visibility
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/phase-5k-static-indent-visibility
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --locked --group dev
+      - name: Apply Phase 5K migration
+        run: uv run --locked python tools/phase5k_apply.py
+      - name: Check diff shape
+        shell: bash
+        run: |
+          git add -N src/picture_capture/layout_indent_visibility.py
+          git diff --check
+          python - <<'PY'
+          import subprocess
+          expected = {
+              'scripts/architecture_guard.py',
+              'src/picture_capture/bootstrap/gui.py',
+              'src/picture_capture/layout_indent_visibility.py',
+              'src/picture_capture/layout_indent_visibility_runtime.py',
+              'src/picture_capture/layout_lane_summary_extension.py',
+              'src/picture_capture/layout_visualization_summary.py',
+              'tests/test_layout_indent_visibility_runtime.py',
+              'tests/test_layout_local_indent_visualization_runtime.py',
+              'tests/test_layout_role_provenance.py',
+          }
+          changed = set(subprocess.check_output(
+              ['git','diff','--no-renames','--name-only'], text=True
+          ).splitlines())
+          if changed != expected:
+              raise SystemExit(f'unexpected Phase 5K diff: {sorted(changed)}')
+          PY
+      - name: Architecture guard
+        run: uv run --locked python scripts/architecture_guard.py
+      - name: Focused regressions
+        run: >-
+          uv run --locked pytest -q
+          tests/test_layout_indent_visibility_runtime.py
+          tests/test_layout_role_provenance.py
+          tests/test_layout_local_indent_visualization_runtime.py
+          tests/test_layout_visualization_summary.py
+          tests/test_layout_visualization_indents.py
+          tests/test_processing_layout_roles.py
+      - name: Full suite
+        run: uv run --locked pytest -q
+      - name: Compile Python sources
+        run: uv run --locked python -m compileall -q src scripts run.py run_tests.py
+      - name: Check undefined names
+        run: uv run --locked ruff check --select F821 src tests scripts run.py run_tests.py
+      - name: Remove temporary migration assets
+        shell: bash
+        run: |
+          git rm tools/phase5k_apply.py .github/workflows/phase5k-validate.yml
+          git diff --check
+      - name: Publish validated production tree
+        shell: bash
+        run: |
+          git config user.name "chigre3"
+          git config user.email "guangdong.hu@gmail.com"
+          git add src tests scripts
+          git commit -m "Phase 5K: make indent visibility explicit"
+          git push origin HEAD:refactor/phase-5k-static-indent-visibility
