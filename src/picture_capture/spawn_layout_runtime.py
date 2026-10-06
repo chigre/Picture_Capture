@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-"""Keep Page/Layout runtime installation identical in GUI and spawn workers.
+"""Keep the remaining Page/Layout runtime installation identical in workers.
 
 ``processing._understand_page_current`` calls ``_ensure_layout_runtime`` inside
-ordinary-drawing workers.  The GUI composition root installs four physical
-Layout runtimes in this order, but historically the worker-local helper installed
-only the first two.  On pages whose second column drifts slightly, that difference
-can turn many body rows into false indentation entries even though the GUI Layout
-diagnostic is correct.
+ordinary-drawing workers. Long-band row recovery now lives statically in
+``layout_physical_indent``. The worker-local helper still needs the same
+column-drift runtime as GUI composition before Layout Core imports/calls the page
+policy; otherwise drifting columns can produce false indentation entries.
 
 This compatibility adapter extends the worker helper rather than duplicating the
 Page Understanding algorithm. The explicit shared ``bootstrap.core`` profile
@@ -32,12 +31,10 @@ def install_spawn_layout_runtime(processing_module: Any) -> None:
         #   robust_line_starts -> physical_indent
         original()
 
-        # GUI composition then installs these two. Spawn workers must do the
-        # same before Layout Core imports/calls the page policy.
-        from .layout_row_recovery_runtime import install_layout_row_recovery_runtime
+        # Long-band row recovery is static. Spawn workers still need the
+        # same column-drift runtime as GUI before Layout Core calls page policy.
         from .layout_column_drift_runtime import install_layout_column_drift_runtime
 
-        install_layout_row_recovery_runtime()
         install_layout_column_drift_runtime()
 
     processing_module._ensure_layout_runtime = ensure_layout_runtime

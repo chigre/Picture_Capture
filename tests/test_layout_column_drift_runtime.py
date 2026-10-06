@@ -107,24 +107,23 @@ def test_large_head_left_of_semantic_column_is_still_detected():
     assert all(entry.x == 50 for entry in entries)
 
 
-def test_runtime_order_is_preserved_across_core_gui_and_worker_composition():
+def test_static_row_recovery_keeps_column_drift_runtime_explicit():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
     core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
+    physical = (root / "src/picture_capture/layout_physical_indent.py").read_text(encoding="utf-8")
 
     # Shared process setup is complete before processing is imported.
     assert core.index("install_ordinary_large_head_role_guard()") < core.index(
         "from .. import processing as processing_module"
     )
 
-    # GUI and worker retain the same physical Layout order after shared core.
-    assert gui.index("install_layout_row_recovery_runtime()") < gui.index(
-        "install_layout_column_drift_runtime()"
-    )
-    assert worker.index("install_layout_row_recovery_runtime()") < worker.index(
-        "install_layout_column_drift_runtime()"
-    )
+    # Row recovery is static; the broader column-drift seam remains explicit.
+    assert "install_layout_row_recovery_runtime" not in gui
+    assert "install_layout_row_recovery_runtime" not in worker
+    assert "install_layout_column_drift_runtime()" in gui
     assert "install_layout_column_drift_runtime()" in worker
+    assert "count = min(256, count)" in physical

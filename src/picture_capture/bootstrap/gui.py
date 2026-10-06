@@ -55,7 +55,6 @@ def prepare_gui_application() -> Any:
     from ..dictionary_page_design_refined import detect_entries_from_page_design
     from ..layout_line_start_refinement import install_robust_line_starts
     from ..layout_physical_indent import install_physical_indent_inference
-    from ..layout_row_recovery_runtime import install_layout_row_recovery_runtime
     from ..layout_column_drift_runtime import install_layout_column_drift_runtime
 
     dictionary_page_design.detect_entries_from_page_design = (
@@ -63,9 +62,7 @@ def prepare_gui_application() -> Any:
     )
     install_robust_line_starts()
     install_physical_indent_inference()
-    # Dense dictionary columns can form long continuous projection bands. Keep
-    # those rows recoverable before any page-specific indent/drift measurement.
-    install_layout_row_recovery_runtime()
+    # Long-band logical row recovery is now static in layout_physical_indent.
     # Keep semantic column geometry fixed while allowing analysis pixels to
     # extend left of it on slanted/curved scans. This must be ready before the
     # shared Layout Core imports policy/large-head callables by value.

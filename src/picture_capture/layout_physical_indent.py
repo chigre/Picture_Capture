@@ -10,6 +10,7 @@ only; it is not used to cluster horizontal indentation or assign entry/body
 roles.
 """
 
+import math
 from typing import Any, Callable
 
 import numpy as np
@@ -98,25 +99,39 @@ def _logical_slots_for_oversized_run(
     y1: int,
     reference: float,
 ) -> list[tuple[int, int]]:
-    """Expand one continuous oversized text run into logical row spans."""
-    height = max(0, int(y1) - int(y0))
+    """Split one unresolved tall band without silently discarding long spans."""
+    start = int(y0)
+    stop = int(y1)
+    height = max(0, stop - start)
     ref = max(6.0, float(reference))
     if height < ref * 1.55:
-        return [(int(y0), int(y1))]
+        return [(start, stop)] if stop > start else []
 
-    count = int(round(height / ref))
-    count = max(2, min(4, count))
-    if height / float(count) < ref * 0.48:
-        return [(int(y0), int(y1))]
+    # The downstream acceptance window is <= 1.90 * ref. Ensure the fallback
+    # creates enough slots to satisfy that contract even for a very long band.
+    by_reference = max(2, int(round(height / ref)))
+    by_maximum_height = max(2, int(math.ceil(height / (ref * 1.90))))
+    count = max(by_reference, by_maximum_height)
 
-    edges = np.linspace(float(y0), float(y1), count + 1)
+    # A normal 4600px dictionary page with ~35-60px text height stays well below
+    # this. The cap prevents pathological/corrupt inputs from allocating an
+    # unbounded number of slots while still allowing whole-page dense bands.
+    count = min(256, count)
+
+    # If the hard cap was ever reached, make sure the produced slot height still
+    # honours the downstream maximum; otherwise retain the original band rather
+    # than manufacture slots that would immediately be discarded again.
+    if height / float(count) > ref * 1.90:
+        return [(start, stop)]
+
+    edges = np.linspace(float(start), float(stop), count + 1)
     slots: list[tuple[int, int]] = []
     for index in range(count):
         a = int(round(edges[index]))
         b = int(round(edges[index + 1]))
         if b > a:
             slots.append((a, b))
-    return slots or [(int(y0), int(y1))]
+    return slots or ([(start, stop)] if stop > start else [])
 
 
 def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]:
