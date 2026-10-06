@@ -5,8 +5,8 @@ from __future__ import annotations
 Bare ``import picture_capture`` is intentionally runtime-inert. GUI startup,
 spawn workers, CLI entrypoints and application-level test/diagnostic harnesses
 enter through this module when they need the composed project/detection runtime.
-The historical installer order remains explicit here until later phases replace
-runtime monkey patches with native service implementations.
+The remaining historical installer order stays explicit here until later phases
+replace those compatibility seams with native service implementations.
 """
 
 from dataclasses import dataclass
@@ -38,11 +38,9 @@ def build_core_services() -> CoreServices:
 
     install_live_layout_detector_binding()
 
-    from ..ordinary_large_head_role_guard import install_ordinary_large_head_role_guard
-    from ..ordinary_large_head_runtime import install_ordinary_large_head_runtime
-
-    install_ordinary_large_head_runtime()
-    install_ordinary_large_head_role_guard()
+    # Oversized-head detection and strong row/fusion authorization are static in
+    # their normal evidence/fusion modules; processing import order no longer
+    # selects or mutates those callables.
 
     # Shared settings/classification contracts must exist before formats and
     # processing are exposed to any process profile.

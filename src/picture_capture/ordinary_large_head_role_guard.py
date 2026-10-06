@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-"""Conservative authorization layer for OCR-independent large-head evidence.
+"""Conservative static authorization policy for oversized-head evidence.
 
-Recent Layout work deliberately made a *confirmed* oversized display head
-stronger than indentation: its first logical row is an entry and continuation
-rows inside the glyph are body.  That semantic rule is correct, but the physical
-detector also emits weaker 1.38x-size candidates.  Treating every such candidate
-as confirmed turns detector false positives into extra separator lines.
+A confirmed oversized display head is stronger than indentation: its first
+logical row is an entry and continuation rows inside the glyph are body.  The
+physical detector also finds weaker size candidates, though, so ordinary body
+rows may change role only when row-front geometry and a strong size ratio agree.
 
-This module separates *candidate detection* from *role override authorization*.
-A body row may be promoted only by strong, row-leading oversized evidence.  An
-already-indented entry can still be inspected by the underlying detector, but a
-weak candidate can never manufacture a new entry.
+This module is deliberately mutation-free. Detection and fusion import these
+helpers directly so bootstrap/import order cannot select a weaker policy.
 """
 
-from typing import Any, Callable
+from typing import Any
 
 
 # A true display head in the supported dictionaries normally spans clearly more
@@ -48,15 +45,7 @@ def strict_candidate_starts_at_row_front(
     box: tuple[int, int, int, int],
     line_height: float,
 ) -> bool:
-    """Authorize only true row-front display-head geometry.
-
-    The previous runtime allowed a candidate up to 2.5 ordinary line-heights to
-    the right of ``first_x``.  On dense dictionary text that reaches the second
-    or third full-size character, so a merged/tall body object could be promoted
-    to a headword.  Here the candidate must align with either the full-height
-    anchor (preferred when a small superscript/prefix precedes the glyph) or the
-    actual first ink.
-    """
+    """Authorize only true row-front display-head geometry."""
     x0, _y0, x1, y1 = box
     reference = max(8.0, float(line_height))
     nearest = _nearest_row(column, box, reference)
@@ -92,8 +81,8 @@ def strict_candidate_starts_at_row_front(
     role = str(getattr(nearest, "role", "body") or "body").lower()
 
     # Existing entry rows do not create overdraw, so they may retain the base
-    # detector's looser oversized classification.  A body row, however, needs
-    # strong evidence before it is even emitted as a role-changing candidate.
+    # detector's looser oversized classification. A body row, however, needs
+    # strong evidence before it is emitted as a role-changing candidate.
     if role not in {"entry", "headword"}:
         ratio = height / reference
         if ratio < HARD_ROLE_OVERRIDE_RATIO:
@@ -109,10 +98,19 @@ def strict_candidate_starts_at_row_front(
     return True
 
 
-def _strong_ordinary_large_head(evidence: Any, layout: Any) -> bool:
+def strong_ordinary_large_head(evidence: Any, layout: Any) -> bool:
+    """Return whether ordinary large-head evidence may change Layout roles.
+
+    Non-large-head evidence is outside this policy and passes through unchanged.
+    Weak ordinary-large-head evidence is consumed by fusion without generic
+    nearest-row fallback, matching the former runtime wrapper contract.
+    """
     source = str(getattr(evidence, "ocr_source", "") or "")
     issue = str(getattr(evidence, "issue_type", "") or "")
-    if "ordinary_large_head_evidence" not in source and "ORDINARY_OVERSIZED_DISPLAY_HEAD" not in issue:
+    if (
+        "ordinary_large_head_evidence" not in source
+        and "ORDINARY_OVERSIZED_DISPLAY_HEAD" not in issue
+    ):
         return True
 
     height = float(getattr(evidence, "ocr_visual_run_height", 0.0) or 0.0)
@@ -124,35 +122,8 @@ def _strong_ordinary_large_head(evidence: Any, layout: Any) -> bool:
     return bool(height / reference >= HARD_ROLE_OVERRIDE_RATIO)
 
 
-def install_ordinary_large_head_role_guard() -> None:
-    """Install conservative candidate and fusion gates before Layout Core import."""
-    from . import ordinary_large_head_runtime as detector_runtime
-    from . import ordinary_evidence_fusion as fusion
-
-    if bool(getattr(fusion, "_large_head_role_guard_installed", False)):
-        return
-
-    # detect_ordinary_large_head_entries_guarded resolves this module global at
-    # call time, so replacing it here immediately tightens the already-installed
-    # detector without duplicating its image/component logic.
-    detector_runtime.candidate_starts_at_row_front = strict_candidate_starts_at_row_front
-
-    original_force: Callable[..., tuple[bool, int]] = fusion._force_oversized_head_rows
-
-    def guarded_force(understanding: Any, evidence: Any) -> tuple[bool, int]:
-        # Consume weak ordinary-large-head evidence without falling through to
-        # generic nearest-row promotion.  That fallthrough would recreate the
-        # exact false-positive -> extra-entry amplification this guard prevents.
-        if not _strong_ordinary_large_head(evidence, understanding.layout):
-            return True, 0
-        return original_force(understanding, evidence)
-
-    fusion._force_oversized_head_rows = guarded_force
-    fusion._large_head_role_guard_installed = True
-
-
 __all__ = [
     "HARD_ROLE_OVERRIDE_RATIO",
-    "install_ordinary_large_head_role_guard",
     "strict_candidate_starts_at_row_front",
+    "strong_ordinary_large_head",
 ]
