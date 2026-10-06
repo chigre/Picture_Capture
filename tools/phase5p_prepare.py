@@ -33,7 +33,8 @@ text = text.replace(old_refresh, new_refresh, 1)
 
 # The generated replacement test body is stored as one physical source line
 # with escaped newlines. Replace only the assertion fragment, never that whole
-# source line.
+# source line. Target the retired PPP draw call specifically so unrelated
+# historical comments about gray50 elsewhere in app.py remain allowed.
 assertion_start_marker = 'assert "stipple='
 if text.count(assertion_start_marker) != 1:
     raise SystemExit(
@@ -42,7 +43,11 @@ if text.count(assertion_start_marker) != 1:
 assertion_start = text.index(assertion_start_marker)
 assertion_end_marker = " not in app"
 assertion_end = text.index(assertion_end_marker, assertion_start) + len(assertion_end_marker)
-text = text[:assertion_start] + 'assert "gray50" not in app' + text[assertion_end:]
+text = (
+    text[:assertion_start]
+    + 'assert "illustration_fill_color, stipple=" not in app'
+    + text[assertion_end:]
+)
 
 path.write_text(text, encoding="utf-8")
-print("Phase 5P migration helper aligned to current schema, PPP draw site, refresh timing, and assertion fragment")
+print("Phase 5P migration helper aligned to current schema, PPP draw site, refresh timing, and targeted stipple assertion")
