@@ -37,7 +37,7 @@ def _get_doc_preprocessor() -> Any:
     # Some Paddle 3.3 CPU environments can otherwise enter a PIR/oneDNN path
     # that is unstable for inference pipelines.
     os.environ["FLAGS_enable_pir_api"] = "0"
-    from .windows_gpu_runtime import configure_windows_nvidia_dlls
+    from .windows_gpu import configure_windows_nvidia_dlls
     configure_windows_nvidia_dlls()
 
     try:

@@ -13,7 +13,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from picture_capture.windows_gpu_runtime import configure_windows_nvidia_dlls
+from picture_capture.windows_gpu import configure_windows_nvidia_dlls
 
 
 def dist_version(name: str) -> str | None:

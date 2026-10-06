@@ -74,11 +74,11 @@ def test_channel_paddle_engine_preserves_legacy_runtime_bootstrap(monkeypatch):
     )
     monkeypatch.setitem(sys.modules, "picture_capture.layout_detection", layout_module)
 
-    windows_module = ModuleType("picture_capture.windows_gpu_runtime")
+    windows_module = ModuleType("picture_capture.windows_gpu")
     windows_module.configure_windows_nvidia_dlls = lambda: events.append(
         "configure_windows_nvidia_dlls"
     )
-    monkeypatch.setitem(sys.modules, "picture_capture.windows_gpu_runtime", windows_module)
+    monkeypatch.setitem(sys.modules, "picture_capture.windows_gpu", windows_module)
 
     paddle_module = ModuleType("paddleocr")
 
@@ -115,6 +115,34 @@ def test_channel_paddle_engine_preserves_legacy_runtime_bootstrap(monkeypatch):
     assert engine.kwargs["enable_mkldnn"] is False
     channel.clear_ocr_channel_paddle_engine_cache()
 
+
+
+def test_windows_gpu_helper_rename_preserves_paddle_import_timing():
+    root = Path(__file__).resolve().parents[1]
+    package = root / "src" / "picture_capture"
+    guard = (root / "scripts" / "architecture_guard.py").read_text(encoding="utf-8")
+    verify = (root / "scripts" / "verify_ocr_environment.py").read_text(encoding="utf-8")
+    install_doc = (root / "docs" / "ocr-install.md").read_text(encoding="utf-8")
+
+    assert not (package / "windows_gpu_runtime.py").exists()
+    assert (package / "windows_gpu.py").exists()
+    assert "windows_gpu_runtime.py" not in guard
+    assert "picture_capture.windows_gpu import configure_windows_nvidia_dlls" in verify
+    assert "src/picture_capture/windows_gpu.py" in install_doc
+
+    cases = (
+        ("ocr_channel.py", "from paddleocr import PaddleOCR"),
+        ("paddle_headwords_core.py", "from paddleocr import PaddleOCR"),
+        ("document_unwarping.py", "from paddleocr import DocPreprocessor"),
+        ("layout_detection_legacy.py", "from paddleocr import TextDetection"),
+    )
+    helper_import = "from .windows_gpu import configure_windows_nvidia_dlls"
+    helper_call = "configure_windows_nvidia_dlls()"
+    for filename, paddle_import in cases:
+        text = (package / filename).read_text(encoding="utf-8")
+        assert helper_import in text
+        assert paddle_import in text
+        assert text.index(helper_import) < text.index(helper_call) < text.index(paddle_import)
 
 def test_legacy_boundary_bridge_no_longer_uses_core_paddle_runner_helpers():
     import picture_capture.ocr_channel_legacy as legacy
