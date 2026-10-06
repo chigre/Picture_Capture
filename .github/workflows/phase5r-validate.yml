@@ -1,0 +1,96 @@
+name: Phase 5R validation
+
+on:
+  push:
+    branches:
+      - refactor/phase-5r-static-character-height
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: refactor/phase-5r-static-character-height
+          fetch-depth: 0
+
+      - name: Install uv and Python 3.13
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --group dev
+
+      - name: Apply Phase 5R migration
+        run: uv run --locked python tools/phase5r_apply.py
+
+      - name: Check diff shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat <<'EOF'
+          scripts/architecture_guard.py
+          src/picture_capture/bootstrap/core.py
+          src/picture_capture/bootstrap/gui.py
+          src/picture_capture/layout_character_height.py
+          src/picture_capture/layout_character_height_runtime.py
+          src/picture_capture/layout_detection.py
+          src/picture_capture/unlined_physical_rows_resolver.py
+          tests/test_core_bootstrap.py
+          tests/test_layout_character_height_fallback_runtime.py
+          EOF
+          )"
+          actual="$(git diff --no-renames --name-only | sort)"
+          expected_sorted="$(printf '%s\n' "$expected" | sed 's/^          //' | sed '/^$/d' | sort)"
+          if [ "$actual" != "$expected_sorted" ]; then
+            echo "Unexpected Phase 5R diff"
+            echo "--- expected"; printf '%s\n' "$expected_sorted"
+            echo "--- actual"; printf '%s\n' "$actual"
+            exit 1
+          fi
+          git diff --check
+
+      - name: Architecture guard
+        run: uv run --locked python scripts/architecture_guard.py
+
+      - name: Focused regressions
+        run: >-
+          uv run --locked pytest -q
+          tests/test_layout_character_height_fallback_runtime.py
+          tests/test_core_bootstrap.py
+          tests/test_layout_core_fast_path.py
+          tests/test_layout_rows_fast_path.py
+          tests/test_runtime_entry_path_guards.py
+          tests/test_shared_analysis_image.py
+
+      - name: Full suite
+        run: uv run --locked pytest -q
+
+      - name: Compile Python sources
+        run: uv run --locked python -m compileall -q src scripts run.py run_tests.py
+
+      - name: Check undefined names
+        run: uv run --locked ruff check --select F821 src tests scripts run.py run_tests.py
+
+      - name: Remove temporary migration assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm tools/phase5r_apply.py .github/workflows/phase5r-validate.yml
+          git diff --check
+
+      - name: Publish validated production tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "chigre3"
+          git config user.email "guangdong.hu@gmail.com"
+          git add scripts src tests
+          git commit -m "Phase 5R: make character-height fallback static"
+          git push origin HEAD:refactor/phase-5r-static-character-height
