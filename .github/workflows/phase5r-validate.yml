@@ -51,7 +51,7 @@ jobs:
           tests/test_layout_character_height_fallback_runtime.py
           EOF
           )"
-          actual="$(git diff --no-renames --name-only | sort)"
+          actual="$({ git diff --no-renames --name-only; git ls-files --others --exclude-standard; } | sort -u)"
           expected_sorted="$(printf '%s\n' "$expected" | sed 's/^          //' | sed '/^$/d' | sort)"
           if [ "$actual" != "$expected_sorted" ]; then
             echo "Unexpected Phase 5R diff"
