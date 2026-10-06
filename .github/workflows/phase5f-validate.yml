@@ -2,13 +2,13 @@ name: Phase 5F validation
 
 on:
   push:
-    branches: [refactor/phase-5f-training-export]
+    branches: [refactor/phase-5f-training-export-republish]
 
 permissions:
   contents: write
 
 concurrency:
-  group: phase5f-training-export
+  group: phase5f-training-export-republish
   cancel-in-progress: true
 
 jobs:
@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: refactor/phase-5f-training-export
+          ref: refactor/phase-5f-training-export-republish
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
         with:
@@ -75,6 +75,6 @@ jobs:
         run: |
           git config user.name "chigre3"
           git config user.email "guangdong.hu@gmail.com"
-          git add src tests tools .github/workflows || true
+          git add src tests
           git commit -m "Phase 5F: route training export through ExportController"
-          git push origin HEAD:refactor/phase-5f-training-export
+          git push origin HEAD:refactor/phase-5f-training-export-republish
