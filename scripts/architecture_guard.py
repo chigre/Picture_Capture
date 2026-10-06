@@ -28,7 +28,6 @@ OVERSIZED_MODULE_BASELINE = {
 
 # Existing runtime installers are legacy debt. Their count may only go down.
 LEGACY_RUNTIME_FILES = {
-    "entry_classification_runtime.py",
     "layout_illustration_mask_runtime.py",
 }
 

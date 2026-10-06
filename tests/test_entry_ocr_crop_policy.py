@@ -157,9 +157,9 @@ def test_transient_entry_ocr_right_ratio_migrates_to_visible_right_ratio(tmp_pat
 
 
 def test_marker_ocr_uses_shared_multi_engine_channel_and_shared_crop():
-    import picture_capture.entry_classification_runtime as runtime
+    import picture_capture.processing_core as processing_core
 
-    source = Path(runtime.__file__).read_text(encoding="utf-8")
+    source = Path(processing_core.__file__).read_text(encoding="utf-8")
     assert "resolve_entry_ocr_row_metrics(" in source
     assert "entry_ocr_crop_box(" in source
     assert "OcrChannelSession" in source
@@ -169,7 +169,7 @@ def test_marker_ocr_uses_shared_multi_engine_channel_and_shared_crop():
     assert "core.run_tesseract(" not in source
 
 
-def test_core_composition_installs_marker_ocr_runtime_for_non_gui_consumers():
+def test_core_composition_exposes_static_marker_ocr_for_non_gui_consumers():
     import picture_capture
     from picture_capture import processing
     from picture_capture.bootstrap.core import build_core_services
@@ -185,5 +185,9 @@ def test_core_composition_installs_marker_ocr_runtime_for_non_gui_consumers():
     ).read_text(encoding="utf-8")
 
     assert "install_processing_entry_classification(_processing)" not in package_source
-    assert "install_processing_entry_classification(processing_module)" in core_source
-    assert bool(getattr(processing, "_entry_classification_runtime_installed", False))
+    assert "install_processing_entry_classification" not in core_source
+    assert "entry_classification_runtime" not in core_source
+    assert (
+        processing.ocr_existing_entry_words_from_markers
+        is processing._core.ocr_existing_entry_words_from_markers
+    )

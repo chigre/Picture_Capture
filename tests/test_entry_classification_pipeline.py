@@ -140,17 +140,17 @@ def test_manual_override_survives_small_separator_y_move(tmp_path: Path):
 
 
 def test_review_and_marker_ocr_are_wired_to_canonical_classification():
-    import picture_capture.entry_classification_runtime as runtime
+    import picture_capture.processing_core as processing_core
     import picture_capture.review_entry_classification_ui as review
 
-    runtime_source = Path(runtime.__file__).read_text(encoding="utf-8")
+    marker_ocr_source = Path(processing_core.__file__).read_text(encoding="utf-8")
     review_source = Path(review.__file__).read_text(encoding="utf-8")
 
     # Marker OCR now delegates crop geometry to the shared entry_ocr_crop layer;
     # proofreading retains the same canonical regular/oversized classification.
-    assert "entry_ocr_crop_box(" in runtime_source
-    assert "resolve_entry_ocr_row_metrics(" in runtime_source
-    assert 'meta.entry_scale == "oversized"' in runtime_source
+    assert "entry_ocr_crop_box(" in marker_ocr_source
+    assert "resolve_entry_ocr_row_metrics(" in marker_ocr_source
+    assert 'meta.entry_scale == "oversized"' in marker_ocr_source
     assert "classified_entry_crop_height(" in review_source
     assert "entry_regular_crop_height" in review_source
     assert "entry_oversized_crop_height" in review_source
@@ -158,16 +158,14 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     assert '("自动", "普通词条", "大字头")' in review_source
 
 
-def test_gui_composition_installs_classification_before_app_and_review_ui_after_app():
+def test_gui_composition_uses_static_classification_and_installs_review_ui_after_app():
     import picture_capture.bootstrap.gui as gui_bootstrap
 
     source = Path(gui_bootstrap.__file__).read_text(encoding="utf-8")
     assert "install_pdic_classification(formats)" in source
-    assert "install_processing_entry_classification(processing_module)" in source
+    assert "install_processing_entry_classification" not in source
+    assert "entry_classification_runtime" not in source
     assert "install_review_entry_classification(app_module)" in source
-    assert source.index("install_processing_entry_classification(processing_module)") < source.index(
-        "from .. import app as app_module"
-    )
     assert source.index("from .. import app as app_module") < source.index(
         "install_review_entry_classification(app_module)"
     )
@@ -195,4 +193,10 @@ def test_core_composition_installs_classification_for_non_gui_consumers():
     assert "install_entry_classification_fields()" in core_source
     assert "install_pdic_classification(formats)" in core_source
     assert bool(getattr(formats, "_entry_classification_installed", False))
-    assert bool(getattr(processing, "_entry_classification_runtime_installed", False))
+    assert processing._ordinary_marker_local_crop is processing._core._ordinary_marker_local_crop
+    assert (
+        processing.ocr_existing_entry_words_from_markers
+        is processing._core.ocr_existing_entry_words_from_markers
+    )
+    assert "install_processing_entry_classification" not in core_source
+    assert "entry_classification_runtime" not in core_source

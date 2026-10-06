@@ -209,9 +209,9 @@ def test_spawn_worker_is_static_top_level_pickleable_without_gui_mutation():
 
     source = _gui_composition_source()
     assert "install_spawn_detection_runtime" not in source
-    classification_at = source.index("install_processing_entry_classification(processing_module)")
-    app_import_at = source.index("from .. import app as app_module")
-    assert classification_at < app_import_at
+    assert "install_processing_entry_classification" not in source
+    assert "entry_classification_runtime" not in source
+    assert "from .. import app as app_module" in source
 
 
 def test_static_spawn_worker_preserves_worker_services_contract(tmp_path, monkeypatch):
@@ -293,7 +293,8 @@ def test_spawn_worker_uses_explicit_worker_composition_and_sidecar_aware_pdic():
     job = inspect.getsource(processing_module.detect_entries_job)
 
     assert "install_pdic_classification(formats)" in worker
-    assert "install_processing_entry_classification(processing_module)" in worker
+    assert "install_processing_entry_classification" not in worker
+    assert "entry_classification_runtime" not in worker
     assert "install_layout_row_recovery_runtime" not in worker
     assert "install_layout_column_drift_runtime()" not in worker
     policy = (

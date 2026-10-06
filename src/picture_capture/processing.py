@@ -249,13 +249,16 @@ def _allowed_entries(
     ]
 
 
+
 def _ordinary_entries_from_layout_roles(
     understanding: PageUnderstanding,
     image: Image.Image | None = None,
     *,
     page_index: int = 0,
 ) -> list[Entry]:
-    """Materialize final Layout entry rows, refining only their separator Y."""
+    """Materialize final Layout entry rows with canonical classification."""
+    from .entry_classification import copy_layout_line_classification
+
     layout = understanding.layout
     refined_y_by_line = (
         refined_layout_entry_y_by_line(
@@ -280,14 +283,24 @@ def _ordinary_entries_from_layout_roles(
                 canonical_y,
                 layout.source_size,
             )
-            result.append(Entry(
+            entry = Entry(
                 word="",
                 x=int(source_x),
                 y=int(source_y),
                 confidence=None,
                 ocr_source="page_understanding:ordinary_layout_role",
                 issue_type="PAGE_UNDERSTANDING_ORDINARY_LAYOUT_ROLE",
-            ))
+            )
+            meta = copy_layout_line_classification(line, entry)
+            if meta.entry_scale == "oversized":
+                entry.ocr_oversized_cjk = True
+                entry.ocr_single_cjk = True
+                if meta.detected_head_height > 0:
+                    entry.ocr_visual_run_height = float(meta.detected_head_height)
+                    entry.ocr_line_height_reference = float(
+                        getattr(layout, "ordinary_line_height", 0.0) or 0.0
+                    )
+            result.append(entry)
     return result
 
 

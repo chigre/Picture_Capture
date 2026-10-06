@@ -24,4 +24,8 @@ def test_worker_bootstrap_is_idempotent_for_repeated_jobs() -> None:
     assert first.processing is second.processing is processing
     assert first.capture_layout_rows is second.capture_layout_rows
     assert first.save_automatic_baseline is second.save_automatic_baseline
-    assert bool(getattr(processing, "_entry_classification_runtime_installed", False))
+    assert processing._ordinary_marker_local_crop is processing._core._ordinary_marker_local_crop
+    assert (
+        processing.ocr_existing_entry_words_from_markers
+        is processing._core.ocr_existing_entry_words_from_markers
+    )

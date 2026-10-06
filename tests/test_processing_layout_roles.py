@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from PIL import Image
 
 from picture_capture import layout_physical_indent, layout_visualization_shared, processing
+from picture_capture.entry_classification import register_layout_line_classification
 from picture_capture.models import AppSettings, Entry
 
 
@@ -32,6 +33,7 @@ def _understanding(
         body_bottom=500,
         source_size=(800, 1000),
         transform=_IdentityTransform(),
+        ordinary_line_height=20.0,
     )
     return SimpleNamespace(
         layout=layout,
@@ -87,6 +89,34 @@ def test_ordinary_draws_only_entry_roles(monkeypatch) -> None:
         for entry in entries
     )
     assert vb_calls == []
+
+
+def test_static_materializer_uses_large_head_classification_for_ocr_hints() -> None:
+    understanding = _understanding(["entry"])
+    line = understanding.layout.columns[0].lines[0]
+    evidence = Entry(
+        word="",
+        x=10,
+        y=120,
+        ocr_source="ordinary_large_head_evidence",
+        issue_type="ORDINARY_OVERSIZED_DISPLAY_HEAD",
+        ocr_visual_run_height=64.0,
+        ocr_oversized_cjk=True,
+    )
+    registered = register_layout_line_classification(line, evidence)
+    assert registered.entry_source == "large_head"
+    assert registered.entry_scale == "oversized"
+    assert registered.detected_head_height == 64.0
+
+    entries = processing._ordinary_entries_from_layout_roles(understanding)
+
+    assert len(entries) == 1
+    entry = entries[0]
+    assert (entry.x, entry.y) == (10, 120)
+    assert entry.ocr_oversized_cjk is True
+    assert entry.ocr_single_cjk is True
+    assert entry.ocr_visual_run_height == 64.0
+    assert entry.ocr_line_height_reference == 20.0
 
 
 def test_zero_entry_layout_does_not_fall_back_to_vb(monkeypatch) -> None:
