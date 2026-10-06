@@ -1,18 +1,16 @@
 from pathlib import Path
 
 from picture_capture.models import AppSettings
-from picture_capture.illustration_fill_opacity_runtime import (
-    DEFAULT_DISPLAY_OPACITY,
-    configure_overlay_opacity_defaults,
-    render_alpha_polygon_overlay,
+from picture_capture.illustration_fill_opacity import (
+    DEFAULT_DISPLAY_OPACITY, render_alpha_polygon_overlay,
 )
 
 
 def test_shared_display_opacity_defaults_are_40_percent():
-    configure_overlay_opacity_defaults()
     assert DEFAULT_DISPLAY_OPACITY == 40.0
     assert AppSettings().guide_opacity == 40.0
     assert AppSettings().headword_marker_opacity == 40.0
+    assert AppSettings().illustration_fill_opacity == 40.0
 
 
 def test_illustration_polygon_uses_true_40_percent_alpha():
@@ -30,21 +28,20 @@ def test_illustration_polygon_uses_true_40_percent_alpha():
         overlay.close()
 
 
-def test_gui_composition_keeps_only_illustration_opacity_runtime():
+def test_gui_composition_has_no_opacity_runtime_installer():
     root = Path(__file__).resolve().parents[1]
-    source = (
-        root / "src/picture_capture/bootstrap/gui.py"
-    ).read_text(encoding="utf-8")
+    source = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     assert "install_overlay_opacity_runtime" not in source
-    assert "configure_overlay_opacity_defaults()" in source
-    assert "install_illustration_fill_opacity_runtime(app_module)" in source
+    assert "install_illustration_fill_opacity_runtime" not in source
+    assert "configure_overlay_opacity_defaults" not in source
 
 
-def test_illustration_runtime_replaces_gray50_with_rgba_fill_at_runtime():
+def test_illustration_fill_is_static_rgba_ownership():
     root = Path(__file__).resolve().parents[1]
-    source = (
-        root / "src/picture_capture/illustration_fill_opacity_runtime.py"
-    ).read_text(encoding="utf-8")
-    assert 'outline_options.pop("stipple", None)' in source
-    assert "ImageTk.PhotoImage" in source
-    assert "illustration_fill_opacity" in source
+    app = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
+    guard = (root / "scripts/architecture_guard.py").read_text(encoding="utf-8")
+    assert "create_alpha_canvas_polygon" in app
+    assert "refresh_alpha_polygon_fill(self, region_index)" in app
+    assert "illustration_fill_color, stipple=" not in app
+    assert not (root / "src/picture_capture/illustration_fill_opacity_runtime.py").exists()
+    assert '"illustration_fill_opacity_runtime.py"' not in guard
