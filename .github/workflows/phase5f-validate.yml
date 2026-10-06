@@ -30,6 +30,7 @@ jobs:
       - name: Check diff shape
         shell: bash
         run: |
+          git add -N tests/test_ui_training_export_controller.py
           git diff --check
           python - <<'PY'
           import subprocess
