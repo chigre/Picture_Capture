@@ -142,7 +142,6 @@ def prepare_gui_application() -> Any:
     from ..layout_visualization_role_theme import install_layout_role_theme
     from ..layout_visualization_ui_v3 import install_layout_visualization
     from ..ocr_action_guard import install_ocr_action_guard
-    from ..overlay_opacity_runtime import install_overlay_opacity_runtime
     from ..illustration_fill_opacity_runtime import (
         configure_overlay_opacity_defaults,
         install_illustration_fill_opacity_runtime,
@@ -181,7 +180,6 @@ def prepare_gui_application() -> Any:
     # Set all display-overlay defaults before the line opacity runtime creates
     # AppSettings properties. Existing settings.json values remain authoritative.
     configure_overlay_opacity_defaults()
-    install_overlay_opacity_runtime(app_module)
     # Illustration fill uses a real RGBA image under the editable Canvas polygon,
     # rather than Tk's historical gray50 stipple approximation.
     install_illustration_fill_opacity_runtime(app_module)
