@@ -28,13 +28,26 @@ def main() -> None:
         PACKAGE / "document_unwarping.py",
         PACKAGE / "ocr_channel.py",
         PACKAGE / "layout_detection_legacy.py",
+        PACKAGE / "paddle_headwords_core.py",
         ROOT / "scripts" / "verify_ocr_environment.py",
         ROOT / "tests" / "test_ocr_channel_runner_semantics.py",
+        ROOT / "tests" / "test_core.py",
         ROOT / "docs" / "ocr-install.md",
         ROOT / "scripts" / "architecture_guard.py",
     ]
     for path in references:
         replace_exact(path, "windows_gpu_runtime", "windows_gpu")
+
+    # Fail closed if any production/script caller still references the retired
+    # module path. Tests may intentionally mention the historical filename in
+    # assertions, so they are checked separately by pytest rather than here.
+    for tree in (PACKAGE, ROOT / "scripts"):
+        for path in tree.rglob("*.py"):
+            if "windows_gpu_runtime" in path.read_text(encoding="utf-8"):
+                raise SystemExit(f"stale Windows GPU module reference remains in {path}")
+    install_doc = (ROOT / "docs" / "ocr-install.md").read_text(encoding="utf-8")
+    if "windows_gpu_runtime" in install_doc:
+        raise SystemExit("stale Windows GPU module reference remains in docs/ocr-install.md")
 
     test_path = ROOT / "tests" / "test_ocr_channel_runner_semantics.py"
     source = test_path.read_text(encoding="utf-8")
@@ -58,6 +71,7 @@ def test_windows_gpu_helper_rename_preserves_paddle_import_timing():
 
     cases = (
         ("ocr_channel.py", "from paddleocr import PaddleOCR"),
+        ("paddle_headwords_core.py", "from paddleocr import PaddleOCR"),
         ("document_unwarping.py", "from paddleocr import DocPreprocessor"),
         ("layout_detection_legacy.py", "from paddleocr import TextDetection"),
     )
