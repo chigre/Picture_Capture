@@ -43,7 +43,7 @@ jobs:
               'tests/test_runtime_entry_path_guards.py',
               'tests/test_ui_detection_controller.py',
           }
-          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          changed = set(subprocess.check_output(['git','diff','--no-renames','--name-only'], text=True).splitlines())
           if changed != expected:
               raise SystemExit(f'unexpected Phase 5G diff: {sorted(changed)}')
           PY
