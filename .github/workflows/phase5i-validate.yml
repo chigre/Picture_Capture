@@ -26,7 +26,9 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --locked --group dev
       - name: Apply Phase 5I migration
-        run: uv run --locked python tools/phase5i_apply.py
+        run: |
+          uv run --locked python tools/phase5i_apply.py
+          uv run --locked python tools/phase5i_fix_assertions.py
       - name: Check diff shape
         shell: bash
         run: |
@@ -41,6 +43,7 @@ jobs:
               'src/picture_capture/layout_local_indent_visualization_runtime.py',
               'src/picture_capture/layout_visualization_shared.py',
               'tests/test_layout_local_indent_visualization_runtime.py',
+              'tests/test_layout_visualization_rows_capture.py',
           }
           changed = set(subprocess.check_output(
               ['git','diff','--no-renames','--name-only'], text=True
@@ -66,7 +69,7 @@ jobs:
       - name: Remove temporary migration assets
         shell: bash
         run: |
-          git rm tools/phase5i_apply.py .github/workflows/phase5i-validate.yml
+          git rm tools/phase5i_apply.py tools/phase5i_fix_assertions.py .github/workflows/phase5i-validate.yml
           git diff --check
       - name: Publish validated production tree
         shell: bash
