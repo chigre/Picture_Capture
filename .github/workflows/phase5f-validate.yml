@@ -53,7 +53,7 @@ jobs:
           tests/test_ui_training_export_controller.py
           tests/test_ui_terminology_and_training_scope.py
           tests/test_next_stage_regressions.py
-          tests/test_gui_bootstrap.py
+          tests/test_bootstrap_entrypoint.py
       - name: Full suite
         run: uv run --locked pytest -q
       - name: Compile Python sources
