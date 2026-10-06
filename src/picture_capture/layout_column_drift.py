@@ -8,7 +8,7 @@ boundary.  The historical Page Layout strip started exactly at ``column.left``;
 once a row crossed that edge its leading ink was clipped and ``first_x`` became
 0.  A later slant correction cannot recover pixels that were never observed.
 
-This runtime keeps the configured column geometry unchanged but re-measures each
+This helper keeps the configured column geometry unchanged but re-measures each
 recovered row in a wider analysis window that extends to the left.  The measured
 ``first_x`` remains expressed relative to the original semantic ``column.left``
 and is therefore allowed to be negative before common-drift normalization.
@@ -21,7 +21,7 @@ The helper ``_analysis_left_for_column`` remains public so the strict large-head
 detector can reuse exactly the same left safety band without changing ownership.
 """
 
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -106,8 +106,8 @@ def remeasure_layout_indents_from_ink(
             count += 1
 
         if count:
-            # Runtime installers already replace these with the physical-indent
-            # implementations. Rebuild modes and roles from the unclipped values.
+            # Composition already provides the physical-indent implementations.
+            # Rebuild modes and roles from the unclipped values.
             column.indent_modes = base._indent_modes(column.lines, reference)
             base._assign_indent_semantics(
                 column,
@@ -119,24 +119,20 @@ def remeasure_layout_indents_from_ink(
     return updated
 
 
-def _remeasure_policy_layout(
-    original: Callable[..., Any],
+def finalize_layout_column_drift(
     image: Image.Image,
     settings: Any,
+    layout: Any,
     *,
     page_index: int = 0,
-) -> tuple[Any, Any, dict[str, int]]:
+) -> Any:
+    """Apply the historical post-policy indent remeasurement without monkey patching."""
     from . import dictionary_page_design as base
     from .layout_detection import analysis_ink_mask
 
-    layout, page_settings, applied = original(
-        image,
-        settings,
-        page_index=page_index,
-    )
     source, canonical, _transform, effective = base._analysis_page(
         image,
-        page_settings,
+        settings,
         int(page_index),
     )
     try:
@@ -160,38 +156,12 @@ def _remeasure_policy_layout(
             f"C{index + 1}:{count}" for index, count in sorted(counts.items())
         )
         layout.reason += f"; unclipped_first_x={detail}"
-    return layout, page_settings, applied
-
-
-def install_layout_column_drift_runtime() -> None:
-    """Install unclipped indent measurement without touching evidence detectors."""
-    from . import dictionary_page_layout_policy as policy
-
-    if bool(getattr(policy, "_column_drift_runtime_installed", False)):
-        return
-
-    original = policy.infer_dictionary_page_layout
-
-    def wrapped(
-        image: Image.Image,
-        settings: Any,
-        *,
-        page_index: int = 0,
-    ) -> tuple[Any, Any, dict[str, int]]:
-        return _remeasure_policy_layout(
-            original,
-            image,
-            settings,
-            page_index=page_index,
-        )
-
-    policy.infer_dictionary_page_layout = wrapped
-    policy._column_drift_runtime_installed = True
+    return layout
 
 
 __all__ = [
     "_analysis_left_for_column",
     "_left_safety",
-    "install_layout_column_drift_runtime",
+    "finalize_layout_column_drift",
     "remeasure_layout_indents_from_ink",
 ]

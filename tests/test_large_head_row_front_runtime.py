@@ -74,17 +74,16 @@ def test_core_installs_large_head_guard_before_processing_import():
     assert "install_ordinary_large_head_role_guard()" not in package
 
 
-def test_column_drift_runtime_never_replaces_large_head_detector():
+def test_static_column_drift_helper_never_replaces_large_head_detector():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
-    drift = (root / "src/picture_capture/layout_column_drift_runtime.py").read_text(
+    drift = (root / "src/picture_capture/layout_column_drift.py").read_text(
         encoding="utf-8"
     )
 
-    # Column drift owns first-X remeasurement only. Reintroducing an assignment
-    # here would silently bypass row-front/strong-oversized guards because Layout
-    # Core imports the detector later in the real GUI/spawn path.
+    # Static column drift owns first-X remeasurement only. Reintroducing an
+    # assignment here would silently bypass row-front/strong-oversized guards.
     assert "large_head.detect_ordinary_large_head_entries =" not in drift
     assert "ordinary_large_head_evidence as large_head" not in drift
 
