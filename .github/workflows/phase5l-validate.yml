@@ -43,8 +43,10 @@ jobs:
               'src/picture_capture/document_unwarping.py',
               'src/picture_capture/layout_detection_legacy.py',
               'src/picture_capture/ocr_channel.py',
+              'src/picture_capture/paddle_headwords_core.py',
               'src/picture_capture/windows_gpu.py',
               'src/picture_capture/windows_gpu_runtime.py',
+              'tests/test_core.py',
               'tests/test_ocr_channel_runner_semantics.py',
           }
           changed = set(subprocess.check_output(
@@ -58,7 +60,11 @@ jobs:
         run: uv run --locked python scripts/architecture_guard.py
 
       - name: Focused regressions
-        run: uv run --locked pytest -q tests/test_ocr_channel_runner_semantics.py
+        run: >-
+          uv run --locked pytest -q
+          tests/test_ocr_channel_runner_semantics.py
+          tests/test_core.py::DictionaryProfileV2Tests::test_paddle_orientation_participates_in_cache_and_prediction
+          tests/test_core.py::test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles
 
       - name: Full suite
         run: uv run --locked pytest -q
