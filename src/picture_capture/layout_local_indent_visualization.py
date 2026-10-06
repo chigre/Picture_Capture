@@ -1,14 +1,6 @@
 from __future__ import annotations
 
-"""Show physical indent relative to each row's drift-corrected local baseline.
-
-A fixed Project/Profile column origin is useful semantic geometry, but it is not
-always the physical left edge at every Y on a skewed/curved scan.  Layout role
-clustering already consumes slant-normalized ``first_x`` values.  Diagnostics
-must visualize that same quantity rather than drawing raw first-X from a fixed
-vertical origin, otherwise a left-drifting row can misleadingly appear to have
-"no indent".
-"""
+"""Drift-corrected physical indent blocks used by Layout diagnostics."""
 
 from typing import Any
 
@@ -75,17 +67,4 @@ def drift_corrected_indent_blocks(understanding: Any) -> list[dict[str, Any]]:
     return blocks
 
 
-def install_local_indent_visualization() -> None:
-    """Make Layout diagnostics consume the same corrected indent as role logic."""
-    from . import layout_visualization_shared as shared
-
-    if bool(getattr(shared, "_local_indent_visualization_installed", False)):
-        return
-    shared._indent_blocks_from_understanding = drift_corrected_indent_blocks
-    shared._local_indent_visualization_installed = True
-
-
-__all__ = [
-    "drift_corrected_indent_blocks",
-    "install_local_indent_visualization",
-]
+__all__ = ["drift_corrected_indent_blocks"]

@@ -80,7 +80,7 @@ def test_phase5h_source_shape_keeps_later_visualization_decorators_and_removes_r
     assert not (package / "layout_visualization_rows_cache_runtime.py").exists()
     assert "install_layout_visualization_rows_cache" not in gui
     assert "layout_visualization_rows_cache_runtime.py" not in guard
+    assert "install_local_indent_visualization" not in gui
     shared_pos = gui.index("install_shared_layout_visualization_source()")
-    local_pos = gui.index("install_local_indent_visualization()")
     provenance_pos = gui.index("install_layout_role_provenance()")
-    assert shared_pos < local_pos < provenance_pos
+    assert shared_pos < provenance_pos

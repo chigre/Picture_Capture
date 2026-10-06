@@ -34,7 +34,6 @@ LEGACY_RUNTIME_FILES = {
     "layout_column_drift_runtime.py",
     "layout_illustration_mask_runtime.py",
     "layout_indent_visibility_runtime.py",
-    "layout_local_indent_visualization_runtime.py",
     "layout_role_provenance_runtime.py",
     "layout_row_recovery_runtime.py",
     "ordinary_large_head_runtime.py",
