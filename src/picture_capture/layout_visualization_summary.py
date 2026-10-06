@@ -12,6 +12,7 @@ a compact colour strip beside the physical column edge.
 
 from typing import Any, Callable
 
+from .layout_role_provenance import add_entry_source_summary
 from .layout_visualization_readability import draw_layout_visualization_readable
 from .layout_visualization_ui import _snapshot_for_app
 from .processing import ORDINARY_AUTO_LAYOUT_FIELDS
@@ -131,7 +132,7 @@ def _format_summary(app: Any, snapshot: Any) -> str:
                 f"  {field}: used={used}   raw={raw}   {state}   switch={switch}"
             )
 
-    return "\n".join(lines)
+    return add_entry_source_summary("\n".join(lines), app)
 
 
 def _summary_box(app: Any, snapshot: Any) -> tuple[float, float, float]:
