@@ -129,9 +129,6 @@ def prepare_gui_application() -> Any:
 
     from .. import app as app_module
     from ..layout_visualization_shared import install_shared_layout_visualization_source
-    from ..layout_visualization_rows_cache_runtime import (
-        install_layout_visualization_rows_cache,
-    )
     from ..layout_local_indent_visualization_runtime import install_local_indent_visualization
     from ..layout_role_provenance_runtime import install_layout_role_provenance
     from ..review_entry_classification_ui import install_review_entry_classification
@@ -144,10 +141,8 @@ def prepare_gui_application() -> Any:
     # created; Tk 9 and non-Windows platforms remain untouched.
     install_nonbmp_unicode_input(app_module)
 
-    # Wrap the shared Layout snapshot before it is published to the UI. When a
-    # user displays Layout, the exact physical rows are persisted for later QA;
-    # the cache identity uses project settings, matching post-production export.
-    install_layout_visualization_rows_cache()
+    # The shared Layout snapshot now owns its LayoutRows capture context
+    # statically before being published to the UI.
     install_shared_layout_visualization_source()
     install_local_indent_visualization()
     install_layout_role_provenance()

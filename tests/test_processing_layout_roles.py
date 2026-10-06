@@ -143,10 +143,13 @@ def test_spawn_job_uses_canonical_processing_detect_entries() -> None:
 
 
 def test_layout_visualization_shares_processing_understanding_entrypoint() -> None:
-    source = inspect.getsource(layout_visualization_shared.shared_snapshot_for_app)
+    impl = inspect.getsource(layout_visualization_shared._shared_snapshot_for_app_impl)
+    public = inspect.getsource(layout_visualization_shared.shared_snapshot_for_app)
 
-    assert "_understand_page_current(" in source
-    assert "remember_visualized_understanding" not in source
+    assert "_understand_page_current(" in impl
+    assert "remember_visualized_understanding" not in impl
+    assert "capture_layout_rows(" in public
+    assert "_shared_snapshot_for_app_impl(app)" in public
 
 
 def test_layout_runtime_does_not_replace_canonical_entry_materializer() -> None:

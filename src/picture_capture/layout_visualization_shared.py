@@ -8,9 +8,11 @@ launcher/worker differences, and duplicate physical page analysis from producing
 two role assignments for one page.
 """
 
+from pathlib import Path
 from typing import Any
 
 from .dictionary_page_layout_policy import resolve_page_layout_policy
+from .layout_rows_cache import capture_layout_rows
 from .image_utils import build_analysis_image
 from .layout_physical_indent import normalized_physical_indents
 from .processing import (
@@ -110,8 +112,8 @@ def _indent_lanes_from_understanding(understanding: Any) -> list[dict[str, Any]]
     return lanes
 
 
-def shared_snapshot_for_app(app: Any) -> Any:
-    """Return a LayoutVisualizationSnapshot from the ordinary shared geometry."""
+def _shared_snapshot_for_app_impl(app: Any) -> Any:
+    """Build the ordinary shared Layout snapshot without cache-capture routing."""
     from . import layout_visualization_ui as ui
 
     if getattr(app, "image", None) is None:
@@ -214,6 +216,34 @@ def shared_snapshot_for_app(app: Any) -> Any:
             analysis.close()
         except Exception:
             pass
+
+
+def shared_snapshot_for_app(app: Any) -> Any:
+    """Return the shared Layout snapshot while seeding the physical-row cache."""
+    project = getattr(app, "project", None)
+    if project is None:
+        return _shared_snapshot_for_app_impl(app)
+    try:
+        index = max(0, int(getattr(app, "current_index", 0)))
+        images = list(getattr(project, "images", []) or [])
+    except Exception:
+        return _shared_snapshot_for_app_impl(app)
+    if not (0 <= index < len(images)):
+        return _shared_snapshot_for_app_impl(app)
+
+    # Preserve the historical visualization-runtime contract: cache identity is
+    # based on persisted app settings, while the snapshot implementation remains
+    # free to derive page-effective settings internally.
+    settings = getattr(app, "settings", None)
+    if settings is None:
+        return _shared_snapshot_for_app_impl(app)
+    with capture_layout_rows(
+        Path(project.root),
+        Path(images[index]),
+        index,
+        settings,
+    ):
+        return _shared_snapshot_for_app_impl(app)
 
 
 def install_shared_layout_visualization_source() -> None:
