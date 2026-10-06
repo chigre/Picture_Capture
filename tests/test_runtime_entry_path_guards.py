@@ -220,7 +220,7 @@ def test_spawn_worker_uses_explicit_worker_composition_and_sidecar_aware_pdic():
 
     assert "install_pdic_classification(formats)" in worker
     assert "install_processing_entry_classification(processing_module)" in worker
-    assert "install_layout_row_recovery_runtime()" in worker
+    assert "install_layout_row_recovery_runtime" not in worker
     assert "install_layout_column_drift_runtime()" in worker
     assert "install_layout_rows_persistence_runtime()" in worker
 

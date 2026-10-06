@@ -32,7 +32,6 @@ LEGACY_RUNTIME_FILES = {
     "layout_character_height_runtime.py",
     "layout_column_drift_runtime.py",
     "layout_illustration_mask_runtime.py",
-    "layout_row_recovery_runtime.py",
     "ordinary_large_head_runtime.py",
     "spawn_detection_runtime.py",
     "spawn_layout_runtime.py",

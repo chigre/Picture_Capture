@@ -12,10 +12,15 @@ def test_core_composition_installs_full_layout_runtime_for_spawn_workers():
 
     assert bool(getattr(processing, "_pc_spawn_layout_runtime_installed", False))
 
+    # Row recovery is already static before the worker-local runtime entry.
+    static_helper = physical._logical_slots_for_oversized_run
+    slots = static_helper(0, 400, 40.0)
+
     # This is exactly the worker-local entry point used before Layout Core runs.
     processing._ensure_layout_runtime()
 
-    assert bool(getattr(physical, "_long_band_row_recovery_installed", False))
+    assert physical._logical_slots_for_oversized_run is static_helper
+    assert len(slots) == 10
     assert bool(getattr(policy, "_column_drift_runtime_installed", False))
 
 

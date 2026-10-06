@@ -390,10 +390,8 @@ def recover_physical_rows_fast(
     from . import dictionary_page_design as base
     from .layout_detection import analysis_ink_mask
     from .layout_physical_indent import _credible_first_ink_x, projection_line_runs
-    from .layout_row_recovery_runtime import install_layout_row_recovery_runtime
 
-    # Keep long dense projection bands from silently collapsing to four rows.
-    install_layout_row_recovery_runtime()
+    # projection_line_runs statically preserves long dense projection bands.
 
     source, canonical, transform, effective = base._analysis_page(
         image,

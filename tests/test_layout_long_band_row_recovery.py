@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import inspect
+from pathlib import Path
 
-from picture_capture.layout_row_recovery_runtime import (
-    install_layout_row_recovery_runtime,
-    logical_slots_without_loss,
+from picture_capture.layout_physical_indent import (
+    _logical_slots_for_oversized_run as logical_slots_without_loss,
 )
 
 
@@ -26,20 +25,22 @@ def test_long_page_band_stays_within_projection_acceptance_height():
     assert all(end - start <= 37.0 * 1.90 for start, end in slots)
 
 
-def test_runtime_replaces_physical_indent_fallback():
-    from picture_capture import layout_physical_indent as physical
+def test_physical_indent_statically_owns_long_band_fallback():
+    root = Path(__file__).resolve().parents[1]
 
-    install_layout_row_recovery_runtime()
+    assert logical_slots_without_loss.__module__ == "picture_capture.layout_physical_indent"
+    assert not (root / "src/picture_capture/layout_row_recovery_runtime.py").exists()
 
-    assert physical._logical_slots_for_oversized_run is logical_slots_without_loss
 
-
-def test_gui_and_worker_bootstraps_install_long_band_recovery():
-    from picture_capture.bootstrap import gui as gui_bootstrap
-    from picture_capture.bootstrap import worker as worker_bootstrap
-
-    gui_source = inspect.getsource(gui_bootstrap.prepare_gui_application)
-    worker_source = inspect.getsource(worker_bootstrap.build_worker_services)
-
-    assert "install_layout_row_recovery_runtime" in gui_source
-    assert "install_layout_row_recovery_runtime" in worker_source
+def test_entry_paths_no_longer_install_row_recovery_runtime():
+    root = Path(__file__).resolve().parents[1]
+    paths = (
+        "src/picture_capture/bootstrap/gui.py",
+        "src/picture_capture/bootstrap/worker.py",
+        "src/picture_capture/spawn_layout_runtime.py",
+        "src/picture_capture/unlined_physical_rows_resolver.py",
+        "src/picture_capture/layout_rows_cache.py",
+    )
+    for relative in paths:
+        source = (root / relative).read_text(encoding="utf-8")
+        assert "install_layout_row_recovery_runtime" not in source
