@@ -4090,20 +4090,28 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     root = Path(__file__).resolve().parents[1]
     app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     profile_text = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+    export_controller_text = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "export.py"
+    ).read_text(encoding="utf-8")
 
     app_start = app_text.index("class PictureCaptureApp")
-    training_start = app_text.index("    def export_training_package(", app_start)
-    training_end = app_text.index("\n    def show_help_dialog", training_start)
-    training = app_text[training_start:training_end]
+    wrapper_start = app_text.index("    def export_training_package(", app_start)
+    wrapper_end = app_text.index("\n    def show_help_dialog", wrapper_start)
+    wrapper = app_text[wrapper_start:wrapper_end]
+    assert "self._export_controller_for_call().export_training_package()" in wrapper
+
+    training_start = export_controller_text.index("    def export_training_package(")
+    training_end = export_controller_text.index("\n    def build_picdic", training_start)
+    training = export_controller_text[training_start:training_end]
     assert 'items: list[object] = ["__prepare__"]' in training
     assert "context_files[:] = copy_project_context(project.root, staging)" in training
     assert "make_training_zip(" in training
-    assert "should_stop=self._batch_stop_event.is_set" in training
+    assert "should_stop=app._batch_stop_event.is_set" in training
     assert "shutil.rmtree(staging, ignore_errors=True)" in training
     done_start = training.index("        def done(")
     done = training[done_start:]
     assert "shutil.rmtree(staging, ignore_errors=True)" not in done
-    assert 'self._start_ui_worker(' in done
+    assert 'app._start_ui_worker(' in done
 
     layout_start = app_text.index("    def detect_layout_consistency_selected(", app_start)
     layout_end = app_text.index("\n    @staticmethod\n    def _normalize_suffix", layout_start)
@@ -4518,6 +4526,9 @@ def test_concurrency_audit_p0_p1_guards_are_present():
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     profile = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
     training = (root / "src" / "picture_capture" / "training_export.py").read_text(encoding="utf-8")
+    export_controller = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "export.py"
+    ).read_text(encoding="utf-8")
 
     poll_start = app.index("    def _poll_ui_worker_queue(")
     poll_end = app.index("\n    def _configure_main_workspace_styles", poll_start)
@@ -4537,11 +4548,18 @@ def test_concurrency_audit_p0_p1_guards_are_present():
     validate_end = profile.index("\n    def _poll_validation_queue", validate_start)
     assert "if self.parent._batch_active:" in profile[validate_start:validate_end]
 
-    export_start = app.index("    def export_training_package(")
-    export_end = app.index("\n    def show_help_dialog", export_start)
-    export = app[export_start:export_end]
+    wrapper_start = app.index("    def export_training_package(")
+    wrapper_end = app.index("\n    def show_help_dialog", wrapper_start)
+    wrapper = app[wrapper_start:wrapper_end]
+    assert "self._export_controller_for_call().export_training_package()" in wrapper
+
+    export_start = export_controller.index("    def export_training_package(")
+    export_end = export_controller.index("\n    def build_picdic", export_start)
+    export = export_controller[export_start:export_end]
     assert 'startswith("training-cleanup-")' in export
     assert '%Y%m%d_%H%M%S_%f' in export
+    assert "app._start_ui_worker(" in export
+    assert "wait_on_close=True" in export
     assert "uuid.uuid4().hex" in training
 
 

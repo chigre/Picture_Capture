@@ -4,6 +4,7 @@ import inspect
 from types import SimpleNamespace
 
 from picture_capture import profile_indent_ui, training_export_ui
+from picture_capture.ui.controllers.export import ExportController
 from picture_capture.ui_terminology import (
     install_app_tooltip_terminology,
     normalize_ui_text,
@@ -46,7 +47,11 @@ def test_tooltip_terminology_preserves_staticmethod_binding():
 
 
 def test_training_export_reuses_main_window_page_scope_without_second_prompt():
-    source = inspect.getsource(training_export_ui.export_training_package_selected_range)
-    assert "self.selected_page_indices()" in source
+    source = inspect.getsource(ExportController.export_training_package)
+    assert "app.selected_page_indices()" in source
     assert "simpledialog.askstring" not in source
     assert "主界面页面范围" in source
+
+    shim = inspect.getsource(training_export_ui.export_training_package_selected_range)
+    assert "_export_controller_for_call().export_training_package()" in shim
+    assert "_start_batch_task" not in shim
