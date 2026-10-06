@@ -1,0 +1,108 @@
+name: Phase 5S validation
+
+on:
+  push:
+    branches:
+      - refactor/phase-5s-static-column-drift
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: refactor/phase-5s-static-column-drift
+          fetch-depth: 0
+
+      - name: Install uv and Python 3.13
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --group dev
+
+      - name: Apply Phase 5S migration
+        run: uv run --locked python tools/phase5s_apply.py
+
+      - name: Check exact production diff shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat <<'EOF'
+          scripts/architecture_guard.py
+          src/picture_capture/bootstrap/gui.py
+          src/picture_capture/bootstrap/worker.py
+          src/picture_capture/dictionary_page_layout_policy.py
+          src/picture_capture/layout_column_drift.py
+          src/picture_capture/layout_column_drift_runtime.py
+          src/picture_capture/ordinary_large_head_runtime.py
+          src/picture_capture/spawn_layout_runtime.py
+          src/picture_capture/unlined_physical_rows_resolver.py
+          tests/test_layout_column_drift_runtime.py
+          tests/test_runtime_entry_path_guards.py
+          tests/test_spawn_layout_runtime.py
+          EOF
+          )"
+          actual="$({ git diff --no-renames --name-only; git ls-files --others --exclude-standard; } | sort -u)"
+          expected_sorted="$(printf '%s\n' "$expected" | sed 's/^          //' | sed '/^$/d' | sort)"
+          if [ "$actual" != "$expected_sorted" ]; then
+            echo "Unexpected Phase 5S diff"
+            echo "--- expected"; printf '%s\n' "$expected_sorted"
+            echo "--- actual"; printf '%s\n' "$actual"
+            exit 1
+          fi
+          git diff --check
+
+      - name: Check retired installer references
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R "install_layout_column_drift_runtime" src/picture_capture --include='*.py'; then
+            echo "Column-drift runtime installer reference remains in production source"
+            exit 1
+          fi
+
+      - name: Architecture guard
+        run: uv run --locked python scripts/architecture_guard.py
+
+      - name: Focused regressions
+        run: >-
+          uv run --locked pytest -q
+          tests/test_layout_column_drift_runtime.py
+          tests/test_spawn_layout_runtime.py
+          tests/test_runtime_entry_path_guards.py
+          tests/test_large_head_role_authorization.py
+          tests/test_layout_core_fast_path.py
+          tests/test_layout_rows_fast_path.py
+
+      - name: Full suite
+        run: uv run --locked pytest -q
+
+      - name: Compile Python sources
+        run: uv run --locked python -m compileall -q src scripts run.py run_tests.py
+
+      - name: Check undefined names
+        run: uv run --locked ruff check --select F821 src tests scripts run.py run_tests.py
+
+      - name: Remove temporary migration assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm tools/phase5s_apply.py .github/workflows/phase5s-validate.yml
+          git diff --check
+
+      - name: Publish validated production tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "chigre3"
+          git config user.email "guangdong.hu@gmail.com"
+          git add scripts src tests
+          git commit -m "Phase 5S: make column-drift remeasurement static"
+          git push origin HEAD:refactor/phase-5s-static-column-drift
