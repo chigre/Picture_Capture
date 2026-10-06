@@ -15,7 +15,7 @@ import tkinter as tk
 
 from ... import unlined_line_export as unlined_export
 from ...formats import pdic_path, read_pdic, read_ppp
-from ...ordinary_action_runtime import _apply_quick_settings_for_ordinary
+from ...ordinary_quick_settings import _apply_quick_settings_for_ordinary
 from ...processing import (
     append_crop_log,
     split_single_lines,

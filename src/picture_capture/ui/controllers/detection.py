@@ -17,7 +17,7 @@ from PIL import Image
 
 from ...formats import pdic_path, read_pdic, write_pdic
 from ...image_utils import normalize_page_rgb
-from ...ordinary_action_runtime import _apply_quick_settings_for_ordinary
+from ...ordinary_quick_settings import _apply_quick_settings_for_ordinary
 from ...page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
