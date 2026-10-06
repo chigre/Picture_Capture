@@ -3,8 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from pathlib import Path
 
-from picture_capture.layout_indent_visibility_runtime import (
+from picture_capture.layout_indent_visibility import (
     _draw_indent_blocks_visible,
+    add_prepared_indent_summary,
     prepared_indent_counts,
 )
 
@@ -87,25 +88,59 @@ def test_visible_renderer_draws_left_and_right_column_indent_blocks():
     assert canvas.raised, "indent blocks must be raised above the scan/base overlay"
 
 
-def test_gui_composition_installs_indent_visibility_after_lane_summary():
+def test_static_visibility_preserves_lane_then_prepared_summary_order(monkeypatch):
+    from picture_capture import layout_lane_summary_extension as lane
+    from picture_capture import layout_visualization_summary as summary
+
+    app = SimpleNamespace(
+        _layout_visualization_indent_lanes=[
+            {
+                "column": 0,
+                "lane": 0,
+                "center": 12.0,
+                "min": 10.0,
+                "max": 14.0,
+                "raw_min": 11.0,
+                "raw_max": 15.0,
+                "support": 3,
+                "role": "entry",
+            }
+        ],
+        _layout_visualization_indent_blocks=[_block(0, 60, 120, 100, 130)],
+    )
+    monkeypatch.setattr(summary, "_format_summary", lambda _app, _snapshot: "base")
+    monkeypatch.setattr(summary, "_physical_lane_summary_installed", False, raising=False)
+
+    lane.install_physical_lane_summary()
+    output = summary._format_summary(app, SimpleNamespace())
+    assert output.index("physical indent lanes:") < output.index("indent blocks prepared: C1=1")
+
+
+def test_phase5k_static_visibility_ownership():
+    root = Path(__file__).resolve().parents[1]
+    package = root / "src" / "picture_capture"
+    gui = (package / "bootstrap" / "gui.py").read_text(encoding="utf-8")
+    summary = (package / "layout_visualization_summary.py").read_text(encoding="utf-8")
+    lane = (package / "layout_lane_summary_extension.py").read_text(encoding="utf-8")
+    guard = (root / "scripts" / "architecture_guard.py").read_text(encoding="utf-8")
+
+    assert not (package / "layout_indent_visibility_runtime.py").exists()
+    assert (package / "layout_indent_visibility.py").exists()
+    assert "_draw_indent_blocks_visible as _draw_indent_blocks" in summary
+    assert "add_prepared_indent_summary(text, app)" in lane
+    assert "install_layout_indent_visibility" not in gui
+    assert "layout_indent_visibility_runtime.py" not in guard
+def test_visible_renderer_does_not_lower_indent_below_base_layout():
     source = (
         Path(__file__).resolve().parents[1]
         / "src"
         / "picture_capture"
-        / "bootstrap"
-        / "gui.py"
-    ).read_text(encoding="utf-8")
-    lane = source.index("install_physical_lane_summary()")
-    visible = source.index("install_layout_indent_visibility()")
-    assert lane < visible
-
-
-def test_visibility_runtime_does_not_lower_indent_below_base_layout():
-    source = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "picture_capture"
-        / "layout_indent_visibility_runtime.py"
+        / "layout_indent_visibility.py"
     ).read_text(encoding="utf-8")
     assert "canvas.tag_raise(indent_tag)" in source
     assert "tag_lower" not in source
+
+
+def test_prepared_summary_none_fallback():
+    app = SimpleNamespace(_layout_visualization_indent_blocks=[])
+    assert add_prepared_indent_summary("base", app) == "base\nindent blocks prepared: none"

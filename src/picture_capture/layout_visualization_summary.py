@@ -12,6 +12,7 @@ a compact colour strip beside the physical column edge.
 
 from typing import Any, Callable
 
+from .layout_indent_visibility import _draw_indent_blocks_visible as _draw_indent_blocks
 from .layout_role_provenance import add_entry_source_summary
 from .layout_visualization_readability import draw_layout_visualization_readable
 from .layout_visualization_ui import _snapshot_for_app
@@ -169,67 +170,6 @@ def _summary_box(app: Any, snapshot: Any) -> tuple[float, float, float]:
         abs(float(source_right[0]) - float(source_left[0])) * scale,
     )
     return (float(source_centre[0]) * scale, float(sy) * scale, display_width)
-
-
-def _draw_indent_blocks(app: Any, snapshot: Any) -> None:
-    """Draw each inferred line's actual indent as a pale-yellow block."""
-    canvas = getattr(app, "canvas", None)
-    if canvas is None:
-        return
-    try:
-        canvas.delete(_INDENT_TAG)
-    except Exception:
-        return
-
-    var = getattr(app, "_layout_visualization_var", None)
-    if var is None or not bool(var.get()):
-        return
-
-    geometry = snapshot.geometry
-    scale = float(getattr(app, "view_scale", 1.0) or 1.0)
-    blocks = list(getattr(app, "_layout_visualization_indent_blocks", []) or [])
-    if not blocks:
-        return
-
-    for block in blocks:
-        try:
-            x0 = float(block["x0"])
-            x1 = float(block["x1"])
-            y0 = int(block["y0"])
-            y1 = int(block["y1"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        if abs(x1 - x0) < 1.0 or y1 <= y0:
-            continue
-
-        p0 = geometry.canonical_to_source(round(x0), y0)
-        p1 = geometry.canonical_to_source(round(x1), y1)
-        left = min(float(p0[0]), float(p1[0])) * scale
-        right = max(float(p0[0]), float(p1[0])) * scale
-        top = min(float(p0[1]), float(p1[1])) * scale
-        bottom = max(float(p0[1]), float(p1[1])) * scale
-        if right - left < 1.0 or bottom - top < 1.0:
-            continue
-
-        try:
-            canvas.create_rectangle(
-                left,
-                top,
-                right,
-                bottom,
-                fill="#fff59d",
-                outline="#f6d94a",
-                width=1,
-                stipple="gray50",
-                tags=(_INDENT_TAG,),
-            )
-        except Exception:
-            continue
-
-    try:
-        canvas.tag_lower(_INDENT_TAG, _BASE_LAYOUT_TAG)
-    except Exception:
-        pass
 
 
 def _draw_role_strips(app: Any, snapshot: Any) -> None:
