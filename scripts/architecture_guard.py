@@ -41,7 +41,6 @@ LEGACY_RUNTIME_FILES = {
     "spawn_layout_runtime.py",
     "unicode_nonbmp_input_runtime.py",
     "unlined_fast_path_runtime.py",
-    "windows_gpu.py",
 }
 
 # Dynamic module namespace/proxy behavior currently exists only in these
