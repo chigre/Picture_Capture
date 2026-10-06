@@ -18,14 +18,16 @@ def test_core_bootstrap_returns_shared_process_modules() -> None:
 
 
 def test_core_bootstrap_is_idempotent() -> None:
+    layout_runtime = processing._ensure_layout_runtime
     first = build_core_services()
     second = build_core_services()
 
     assert first.formats is second.formats is formats
     assert first.processing is second.processing is processing
+    assert processing._ensure_layout_runtime is layout_runtime
     assert bool(getattr(formats, "_entry_classification_installed", False))
     assert bool(getattr(processing, "_entry_classification_runtime_installed", False))
-    assert bool(getattr(processing, "_pc_spawn_layout_runtime_installed", False))
+    assert not hasattr(processing, "_pc_spawn_layout_runtime_installed")
 
 
 def test_core_composition_preserves_import_sensitive_install_order() -> None:
@@ -39,6 +41,7 @@ def test_core_composition_preserves_import_sensitive_install_order() -> None:
 
     assert live_binding < large_head < processing_import
     assert "install_character_height_fallback_runtime" not in source
+    assert "spawn_layout_runtime" not in source
     assert source.index("install_pdic_classification(formats)") < processing_import
     assert source.index("install_processing_entry_classification(processing_module)") > processing_import
 
@@ -61,12 +64,12 @@ def test_core_profile_owns_former_package_import_compatibility_chain() -> None:
         "install_entry_classification_fields",
         "install_pdic_classification",
         "install_processing_entry_classification",
-        "install_spawn_layout_runtime",
         "install_layout_illustration_mask_runtime",
     )
     for name in installers:
         assert f"{name}(" in core
         assert f"{name}(" not in package_init
 
+    assert "install_spawn_layout_runtime" not in core
     assert "__version__" in package_init
     assert "from ." not in package_init

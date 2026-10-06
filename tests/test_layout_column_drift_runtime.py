@@ -175,7 +175,6 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
     worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
     policy = (root / "src/picture_capture/dictionary_page_layout_policy.py").read_text(encoding="utf-8")
     unlined = (root / "src/picture_capture/unlined_physical_rows_resolver.py").read_text(encoding="utf-8")
-    spawn = (root / "src/picture_capture/spawn_layout_runtime.py").read_text(encoding="utf-8")
     large_head = (root / "src/picture_capture/ordinary_large_head_runtime.py").read_text(encoding="utf-8")
     physical = (root / "src/picture_capture/layout_physical_indent.py").read_text(encoding="utf-8")
 
@@ -188,8 +187,9 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
     return_at = policy.index("return layout, page_settings, applied", finalize_at)
     assert layout_at < finalize_at < return_at
 
-    for source in (gui, worker, unlined, spawn, policy):
+    for source in (gui, worker, unlined, policy):
         assert "install_layout_column_drift_runtime" not in source
+    assert not (root / "src/picture_capture/spawn_layout_runtime.py").exists()
     assert "from .layout_column_drift import _analysis_left_for_column" in large_head
     assert "layout_column_drift_runtime" not in large_head
     assert "count = min(256, count)" in physical
