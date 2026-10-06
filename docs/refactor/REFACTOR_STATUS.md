@@ -1,118 +1,79 @@
 # Picture Capture Refactor Status
 
-This file is the crash-recovery checkpoint for the modular architecture refactor. GitHub live state is authoritative: revalidate `main`, open PRs, and relevant source/runtime/test paths before new production writes. Historical SHAs below are checkpoints, not assumptions about a future live HEAD.
-
-## Current milestone
-Modular architecture refactor
+This file is the crash-recovery checkpoint for the modular architecture refactor. GitHub live state is authoritative: always revalidate `main`, open PRs, relevant callers/import order, and tests before new production writes.
 
 ## Current phase
-**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5H are complete.**
+**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5I are complete.**
 
-Phase 4 controller decomposition is complete through Detection batch processing. Phase 5 has progressively removed runtime method/UI/worker ownership from ordinary drawing, selected-scope single-line crop, unlined-line export, training-package export, helper-only ordinary-action debt, and LayoutRows visualization capture.
+Phase 4 controller decomposition is complete through Detection batch processing. Phase 5 has retired runtime ownership from ordinary drawing, selected-scope single-line crop, unlined export, training export, helper-only ordinary-action debt, LayoutRows visualization capture, and local-indent visualization replacement.
 
-## Architecture checkpoint
-- Current architecture merge: **Phase 5H PR #246**
-- Phase 5H merge commit: `d00df0bff2b3da947607310ea331b09b678f688d`
-- Phase 5H validated production commit: `5c7fcb97df5381583f61bd6ea0d52c1358378dfa`
-- Phase 5H validated/merged tree: `afd9a854090d91f62e25a70411979f38d981d823`
-- Phase 5G PR #244 — retired helper-only `ordinary_action_runtime.py`
-- Phase 5G merge: `de04953752d0294e838b3ac45ae9a0f5ee9a3548`
-- Phase 5F PR #242 — routed training export through `ExportController`
-- Phase 5F merge: `f62f056a51fddae4c05fbd7bc93261330dac2db6`
-- Phase 5E PR #240 — retired unlined export runtime installer
-- Phase 5D PR #238 — routed single-line export through shared parallel batch runner
-- Phase 5C PR #236 — normal UI ownership for single-line action
-- Phase 5B PR #234 — explicit selected-scope single-line method ownership
-- Phase 5A PR #232 — retired ordinary-action method monkey patch
-- Phase 4Y PR #230 — `auto_detect_current(...)` through `DetectionController`
-- Phase 4X PR #229 — `batch_ocr()` through `DetectionController`
-- Current production architecture PR: none after Phase 5H merge
+## Latest architecture checkpoint
+- Phase 5I PR: **#248 — make local-indent visualization explicit**
+- Phase 5I validated production commit: `251ec8b31c238029feeb9beaa4ef1e0fb7934fbc`
+- Phase 5I validated/merged tree: `bdb12ad9631b50e22d222138f29d4027907c3f0e`
+- Phase 5I merge commit / current architecture merge: `78c956177ebf9b580f66b3593494d286eed4c9ff`
+- Previous Phase 5H PR #246 merge: `d00df0bff2b3da947607310ea331b09b678f688d`
+- Phase 5G PR #244 merge: `de04953752d0294e838b3ac45ae9a0f5ee9a3548`
+- Phase 5F PR #242 merge: `f62f056a51fddae4c05fbd7bc93261330dac2db6`
+- Phase 5E PR #240, 5D #238, 5C #236, 5B #234, 5A #232 are complete.
+- Current production architecture PR: none after Phase 5I merge.
 
-## Current explicit ownership
-Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
+## Current ownership and preserved seams
+Explicit controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
 ### Detection / ordinary drawing
-`PictureCaptureApp.run_normal_draw_action()` is an explicit compatibility wrapper into `DetectionController.run_normal_draw_action()`.
+`PictureCaptureApp.run_normal_draw_action()` delegates to `DetectionController.run_normal_draw_action()`. OCR-independent quick validation lives in non-runtime `ordinary_quick_settings.py`; `ordinary_action_runtime.py` is retired.
 
-OCR-independent quick-setting validation now lives in non-runtime `ordinary_quick_settings.py`. `ordinary_action_runtime.py` no longer exists. DetectionController and CropController share `_apply_quick_settings_for_ordinary(...)` without changing the all-OCR-off behavior.
+### Crop / single-line and unlined export
+Selected-scope single-line and unlined actions are explicit app-wrapper → CropController → app-owned `_start_parallel_batch_task(...)` paths. The historical single-line/unlined UI/private-scheduler runtimes are retired.
 
-### Crop / selected-scope single-line
-Explicit path:
+`unlined_fast_path_runtime` remains intentionally because it is a real worker/performance import-order seam. CropController resolves `unlined_line_export.export_unlined_page_job` from the module at action time so the installed fast worker remains visible.
 
-`PictureCaptureApp.split_single_lines_selected_scope()` → `CropController.split_single_lines_selected_scope()` → app-owned `_start_parallel_batch_task(...)` → `single_line_parallel.single_line_page_job(...)`.
+### Export / training package
+`PictureCaptureApp.export_training_package()` delegates to `ExportController.export_training_package()` and reuses app-owned batch/UI-worker infrastructure. GUI bootstrap no longer replaces the method dynamically.
 
-The action no longer owns runtime method injection, runtime UI construction, or a private thread/queue/Tk-poll scheduler.
+### Layout visualization after Phase 5H/5I
+LayoutRows capture is static in `layout_visualization_shared.shared_snapshot_for_app(...)`, wrapping `_shared_snapshot_for_app_impl(...)` in `capture_layout_rows(...)` only for valid project/page/settings context. `layout_visualization_rows_cache_runtime.py` is retired.
 
-### Crop / unlined-line export
-Explicit path:
+The local-indent corrected-block algorithm now lives in non-runtime `layout_local_indent_visualization.py` as `drift_corrected_indent_blocks(...)`. `layout_visualization_shared._indent_blocks_from_understanding` is statically bound to that exact function object. `layout_local_indent_visualization_runtime.py` and its GUI installer are retired.
 
-`PictureCaptureApp.export_unlined_rows_selected_scope()` → `CropController.export_unlined_rows_selected_scope()` → app-owned `_start_parallel_batch_task(...)` → runtime-resolved `unlined_line_export.export_unlined_page_job(...)`.
+Role provenance is still installed afterward and therefore continues to wrap the corrected-indent function. Bootstrap currently preserves:
 
-`unlined_fast_path_runtime` remains intentionally separate because it is a real worker/performance import-order seam. Keep resolving `unlined_export.export_unlined_page_job` from the module at action time until that seam gets its own dedicated proof.
+`install_shared_layout_visualization_source()` → `install_layout_role_provenance()` → later role-theme / visualization-v3 / physical-lane-summary / indent-visibility decorators.
 
-### Export / training-package export
-Explicit path:
-
-`PictureCaptureApp.export_training_package()` → `ExportController.export_training_package()` → app-owned `_start_batch_task(...)`, with stopped-export cleanup through app-owned `_start_ui_worker(...)`.
-
-GUI bootstrap no longer replaces the app method dynamically. `training_export_ui.export_training_package_selected_range()` is only a compatibility shim. Archive/manifest semantics and training-v3/page-understanding wrappers are unchanged.
-
-### Layout visualization / LayoutRows capture after Phase 5H
-The LayoutRows capture wrapper is now explicit and static in `layout_visualization_shared.py`:
-
-`shared_snapshot_for_app(app)` → `capture_layout_rows(project_root, current image, current index, app.settings)` → `_shared_snapshot_for_app_impl(app)`.
-
-This preserves the former live runtime contract:
-- missing project → call the snapshot implementation directly;
-- malformed/current-page index lookup → direct fallback;
-- out-of-range page → direct fallback;
-- missing `app.settings` → direct fallback;
-- valid context → capture uses persisted/project `app.settings` as the cache identity while the internal snapshot implementation remains free to derive page-effective settings.
-
-`layout_visualization_rows_cache_runtime.py` has been removed. GUI bootstrap no longer imports or installs it. The later visualization decorator order remains:
-
-`install_shared_layout_visualization_source()` → `install_local_indent_visualization()` → `install_layout_role_provenance()`.
-
-A separate older compatibility function, `layout_rows_cache.install_layout_visualization_cache_context()`, remains untouched. It has no repository callers, is exported in `__all__`, and differs semantically by using effective settings plus broad exception fallback. Phase 5H deliberately did not bundle a compatibility API deletion.
-
-## Completed Phase 5H — static LayoutRows visualization capture
-### Live assessment
-The active `layout_visualization_rows_cache_runtime` was only a one-layer wrapper around `layout_visualization_shared.shared_snapshot_for_app(...)`; it owned no app method, worker, thread, widget, file format, or scheduler.
-
-Read-only inspection also found the older `layout_rows_cache.install_layout_visualization_cache_context()` compatibility function. Because it is exported and not exactly equivalent to the active runtime wrapper, it was left unchanged rather than silently deleted.
-
+## Completed Phase 5I — local-indent visualization runtime retirement
 ### Production change
-Phase 5H changed exactly six production/test paths:
-- `layout_visualization_shared.py` — current body split into `_shared_snapshot_for_app_impl(...)`; public `shared_snapshot_for_app(...)` statically owns the exact active capture routing;
-- `bootstrap/gui.py` — removed only the rows-cache visualization runtime import/install call;
-- `layout_visualization_rows_cache_runtime.py` — removed;
-- `scripts/architecture_guard.py` — ratcheted the retired runtime filename out of `LEGACY_RUNTIME_FILES`;
-- `tests/test_processing_layout_roles.py` — source-shape assertion migrated to inspect the implementation plus public capture wrapper;
-- `tests/test_layout_visualization_rows_capture.py` — added focused valid-context/fallback/order tests.
+Phase 5I kept the corrected-indent algorithm unchanged while making ownership explicit:
+- renamed `layout_local_indent_visualization_runtime.py` to non-runtime `layout_local_indent_visualization.py`;
+- removed the installer function and GUI bootstrap import/call;
+- statically bound shared `_indent_blocks_from_understanding` to `drift_corrected_indent_blocks`;
+- preserved role-provenance as the later wrapper;
+- removed the retired runtime filename from `LEGACY_RUNTIME_FILES`;
+- migrated dedicated behavior/source-shape tests.
 
-No worker, output/file format, unlined fast path, ordinary-large-head path, local-indent behavior, or role-provenance behavior changed.
+### Fail-closed validation
+The first effective focused run produced **14 passed / 1 failed**. The only failure was a stale Phase 5H source-shape assertion still requiring `install_local_indent_visualization()` in bootstrap. Corrected-indent behavior tests were already green and no production tree was published from the failed run. Only that historical ownership assertion was migrated.
 
-### Validation
-Isolated validation:
-- diff shape: exact six-file surface;
+Final isolated validation:
 - architecture guard: passed;
-- focused: **27 passed**;
-- full: **1262 passed, 2 existing Pillow deprecation warnings**;
+- focused: **15 passed**;
+- full: **1263 passed, 2 existing Pillow deprecation warnings**;
 - compileall: passed;
 - Ruff F821: passed;
-- temporary migration helper/workflow removed before publication.
+- temporary migration/assertion helpers and validation workflow removed before publication;
+- final net diff against the Phase 5H checkpoint: exactly 6 files, including a runtime→non-runtime rename.
 
-PR #246 final-head verification:
+PR #248 final-head verification:
 - Ubuntu CI: passed, including Linux GUI smoke;
 - Windows CI: passed, including Windows GUI smoke;
 - macOS CI: passed, including macOS GUI smoke;
-- compatibility runner / compile / F821 / wheel passed on all applicable platforms;
+- compatibility runner, compile, F821, and wheel passed on applicable platforms;
 - CodeQL Actions: passed;
 - CodeQL Python: passed;
 - Advanced Security: passed;
 - no review threads or review objections before merge.
 
-Architecture merge `d00df0bff2b3da947607310ea331b09b678f688d` retained exactly the validated tree `afd9a854090d91f62e25a70411979f38d981d823`.
+Architecture merge `78c956177ebf9b580f66b3593494d286eed4c9ff` retained exactly the validated tree `bdb12ad9631b50e22d222138f29d4027907c3f0e`.
 
 Post-merge verification:
 - Ubuntu CI: passed;
@@ -121,35 +82,29 @@ Post-merge verification:
 - CodeQL Actions: passed;
 - CodeQL Python: passed.
 
-## Previous Phase 5 validation summary
-- 5A: ordinary runtime method replacement retired; focused 206 / full 1248.
-- 5B: selected-scope single-line method ownership explicit; focused 234 / full 1250.
-- 5C: single-line UI/bootstrap monkey-patch retired; focused 259 / full 1250.
-- 5D: single-line private scheduler retired for `_start_parallel_batch_task(...)`; focused 248 / full 1252.
-- 5E: unlined UI/action/private scheduler retired; focused 658 / full 1256.
-- 5F: training export moved to ExportController; focused 228 / full 1259.
-- 5G: helper-only ordinary runtime renamed to non-runtime helper and debt ratcheted; focused 226 / full 1259.
+## Recommended next slice — Phase 5J
+**Retire `layout_role_provenance_runtime.py` as a pure diagnostic decorator installer.**
 
-## Recommended next slice — Phase 5I
-**Retire the local-indent visualization installer while preserving its pure corrected-indent function.**
+Fresh read-only inspection after Phase 5I shows the runtime owns only two diagnostic wrappers:
+1. `shared._indent_blocks_from_understanding` → annotate entry/headword blocks with `entry_source` from `get_layout_line_classification(...)`;
+2. `layout_visualization_summary._format_summary` → insert an `entry sources: ...` line based on those block annotations.
 
-Fresh read-only inspection after Phase 5H shows:
-- `layout_local_indent_visualization_runtime.py` contains one pure function, `drift_corrected_indent_blocks(...)`, plus one installer that replaces `layout_visualization_shared._indent_blocks_from_understanding`;
-- the installer is called only once from GUI bootstrap;
-- the pure function has dedicated behavior coverage in `tests/test_layout_local_indent_visualization_runtime.py`;
-- `layout_role_provenance_runtime` is installed afterward and deliberately captures/wraps whatever `_indent_blocks_from_understanding` exists at that point.
+It owns no worker, thread, widget, persistence format, or public app action.
 
-Recommended Phase 5I architecture:
-1. preserve `drift_corrected_indent_blocks(...)` in a non-runtime module (rename rather than rewrite where possible);
-2. make `layout_visualization_shared` statically use that corrected-indent function as `_indent_blocks_from_understanding`;
-3. remove only the local-indent installer/import/call from GUI bootstrap;
-4. ratchet `layout_local_indent_visualization_runtime.py` out of `LEGACY_RUNTIME_FILES`;
-5. update its dedicated behavior test to the non-runtime module and add source/order assertions proving role-provenance still wraps the corrected helper afterward;
-6. do not combine Phase 5I with role-provenance, unlined fast path, ordinary-large-head, or core detector import-order work.
+Important ordering constraint: provenance is currently the **innermost summary decorator**. Later GUI bootstrap installs `layout_visualization_role_theme`, `layout_lane_summary_extension`, and finally `layout_indent_visibility_runtime`, all of which may wrap `summary._format_summary`. Phase 5J must preserve this order exactly.
+
+Recommended implementation:
+- move provenance block/summary decorator functions to a non-runtime module or static module-level composition;
+- make shared corrected-indent blocks statically provenance-aware without changing block matching/defaults;
+- make the base summary statically include the exact provenance line before later summary wrappers run;
+- remove only `install_layout_role_provenance()` and its bootstrap import/call;
+- ratchet `layout_role_provenance_runtime.py` out of `LEGACY_RUNTIME_FILES`;
+- preserve later role-theme / lane-summary / indent-visibility wrappers unchanged;
+- add focused tests for entry-source annotation, ordering/insertion point, unknown/custom source ordering, no-count fallback, and later-wrapper compatibility.
+
+Do not combine Phase 5J with `layout_indent_visibility_runtime`, `unlined_fast_path_runtime`, `ordinary_large_head_runtime`, spawn/detection runtimes, or other core import-order work.
 
 ## Standing continuation authorization
-The user has explicitly authorized continued Phase 5 work along the recommended architecture path without pausing at each normal ownership decision point.
+The user explicitly authorized continued Phase 5 work along the recommended architecture path without pausing at normal ownership decision points. Continue automatically after each successful checkpoint after fresh live-state revalidation.
 
-Continue automatically after successful checkpoints after freshly revalidating live `main`, open PRs, callers/import order, and relevant tests.
-
-Stop production writes only for genuine anomalies: unexplained behavior/test/CI failure, file-format/archive/public-API change outside the approved slice, merge conflict/concurrent architecture work, checkpoint mismatch, materially large cross-core redesign, or an irreversible compatibility deletion whose impact cannot be established.
+Stop production writes only for genuine anomalies: unexplained behavior/test/CI failure, file-format/archive/public-API change outside the approved slice, merge conflict/concurrent architecture work, checkpoint mismatch, materially large cross-core redesign, or irreversible compatibility deletion whose impact cannot be established.
