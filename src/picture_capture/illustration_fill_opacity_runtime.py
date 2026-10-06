@@ -23,7 +23,7 @@ from tkinter import ttk
 
 from PIL import Image, ImageColor, ImageDraw, ImageTk
 
-from . import overlay_opacity_runtime as line_opacity
+from .overlay_opacity import find_checkbutton, flatten_coordinates
 
 
 DEFAULT_DISPLAY_OPACITY = 40.0
@@ -32,9 +32,8 @@ _ILLUSTRATION_VALUES: dict[int, float] = {}
 
 
 def configure_overlay_opacity_defaults() -> None:
-    """Set guide/marker defaults before their runtime properties are installed."""
-    line_opacity._DEFAULT_GUIDE_OPACITY = DEFAULT_DISPLAY_OPACITY
-    line_opacity._DEFAULT_MARKER_OPACITY = DEFAULT_DISPLAY_OPACITY
+    """Compatibility no-op: native AppSettings now owns the 40% line defaults."""
+    return None
 
 
 def _normalize(value: object, default: float = DEFAULT_DISPLAY_OPACITY) -> float:
@@ -176,7 +175,7 @@ def _alpha_canvas_polygon(
     options: dict[str, Any],
 ) -> int:
     """Create editable outline polygon plus an RGBA fill image underneath."""
-    values = line_opacity._flatten_coordinates(coordinates)
+    values = flatten_coordinates(coordinates)
     if len(values) < 6:
         return int(original_create_polygon(*coordinates, **options))
 
@@ -311,8 +310,7 @@ def _install_quick_control(app_class: type[Any]) -> None:
     @wraps(original_init)
     def wrapped_init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
-        finder = getattr(line_opacity, "_find_checkbutton")
-        check = finder(self, "插图形状：轮廓")
+        check = find_checkbutton(self, "插图形状：轮廓")
         if check is None or "illustration_fill_opacity" in getattr(self, "quick_vars", {}):
             return
         row = check.master

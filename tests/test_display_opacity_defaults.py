@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from picture_capture import overlay_opacity_runtime
+from picture_capture.models import AppSettings
 from picture_capture.illustration_fill_opacity_runtime import (
     DEFAULT_DISPLAY_OPACITY,
     configure_overlay_opacity_defaults,
@@ -11,8 +11,8 @@ from picture_capture.illustration_fill_opacity_runtime import (
 def test_shared_display_opacity_defaults_are_40_percent():
     configure_overlay_opacity_defaults()
     assert DEFAULT_DISPLAY_OPACITY == 40.0
-    assert overlay_opacity_runtime._DEFAULT_GUIDE_OPACITY == 40.0
-    assert overlay_opacity_runtime._DEFAULT_MARKER_OPACITY == 40.0
+    assert AppSettings().guide_opacity == 40.0
+    assert AppSettings().headword_marker_opacity == 40.0
 
 
 def test_illustration_polygon_uses_true_40_percent_alpha():
@@ -30,17 +30,14 @@ def test_illustration_polygon_uses_true_40_percent_alpha():
         overlay.close()
 
 
-def test_gui_composition_sets_defaults_before_installing_line_opacity():
+def test_gui_composition_keeps_only_illustration_opacity_runtime():
     root = Path(__file__).resolve().parents[1]
     source = (
         root / "src/picture_capture/bootstrap/gui.py"
     ).read_text(encoding="utf-8")
-    assert source.index("configure_overlay_opacity_defaults()") < source.index(
-        "install_overlay_opacity_runtime(app_module)"
-    )
-    assert source.index("install_overlay_opacity_runtime(app_module)") < source.index(
-        "install_illustration_fill_opacity_runtime(app_module)"
-    )
+    assert "install_overlay_opacity_runtime" not in source
+    assert "configure_overlay_opacity_defaults()" in source
+    assert "install_illustration_fill_opacity_runtime(app_module)" in source
 
 
 def test_illustration_runtime_replaces_gray50_with_rgba_fill_at_runtime():

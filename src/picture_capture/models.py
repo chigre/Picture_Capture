@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 import json
+import math
 import re
 
 from PIL import Image
@@ -14,6 +15,16 @@ from .runtime_environment import portable_project_file
 IMAGE_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp"}
 PROJECT_COVER_STEMS = ("_cover", "_project_cover")
 PROJECT_COVER_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def _normalize_display_opacity(value: object, default: float = 40.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = float(default)
+    if not math.isfinite(number):
+        number = float(default)
+    return max(0.0, min(100.0, number))
 
 
 def is_project_cover_image(path: Path) -> bool:
@@ -151,6 +162,8 @@ class AppSettings:
     horizontal_tolerance: int = 13
     marker_height: int = 2
     guide_width: int = 2
+    guide_opacity: float = 40.0
+    headword_marker_opacity: float = 40.0
     # Main overlay colours: headword markers stay red; other structural lines use blue.
     guide_color: str = "#1976d2"
     page_section_color: str = "#1976d2"
@@ -541,17 +554,30 @@ class AppSettings:
     )
     paddle_special_symbol_regex: str = r"^\s*[•◆◇►▶*†‡§¶]"
 
+    def __setattr__(self, name: str, value: object) -> None:
+        # Preserve the former runtime-property contract now that these values
+        # are native dataclass fields: construction and later assignments are
+        # both normalized immediately rather than only at render/save time.
+        if name in {"guide_opacity", "headword_marker_opacity"}:
+            value = _normalize_display_opacity(value)
+        object.__setattr__(self, name, value)
+
     @property
     def row_height(self) -> int:
         return max(1, self.character_height + self.row_padding)
 
     def to_json(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(asdict(self), ensure_ascii=False, indent=2), encoding="utf-8")
+        payload = asdict(self)
+        for name in ("guide_opacity", "headword_marker_opacity"):
+            payload[name] = _normalize_display_opacity(payload.get(name, 40.0))
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     @classmethod
     def from_json(cls, path: Path) -> "AppSettings":
         raw = json.loads(path.read_text(encoding="utf-8"))
+        for name in ("guide_opacity", "headword_marker_opacity"):
+            raw[name] = _normalize_display_opacity(raw.get(name, 40.0))
         if int(raw.get("right_ratio_percent_version", 0) or 0) < 1:
             old_divisor = max(0.01, float(raw.get("right_ratio", 1.0) or 1.0))
             # Preserve the original VB "向右比例 1/x" before migrating the

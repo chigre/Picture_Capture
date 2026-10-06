@@ -22,7 +22,9 @@ FIELDS = [
         ("行间空白", "row_padding", float), ("向右比例 %", "right_ratio", float),
         ("VB 向右比例 1/x", "ordinary_right_divisor", float),
         ("微调判距", "horizontal_tolerance", float), ("标记线高", "marker_height", int),
-        ("垂直线宽", "guide_width", int), ("黑色阈值 RGB 和", "darkness_threshold", int),
+        ("词头横线不透明度", "headword_marker_opacity", float),
+        ("垂直线宽", "guide_width", int), ("栏左垂线不透明度", "guide_opacity", float),
+        ("黑色阈值 RGB 和", "darkness_threshold", int),
         ("候选区域白度上限 %", "dark_area_percent", float),
         ("VB 全白阈值上限", "white_threshold_high", int),
         ("VB 白度阈值下限", "white_threshold_low", int),
@@ -121,7 +123,7 @@ FIELD_GROUPS = [
             "body_indent", "character_height", "row_padding", "right_ratio",
             "horizontal_tolerance", "darkness_threshold",
         ]),
-        ("词条线显示", ["marker_height", "guide_width"]),
+        ("词条线显示", ["marker_height", "headword_marker_opacity", "guide_width", "guide_opacity"]),
         ("主界面词条文本框", [
             "main_entry_font_family", "main_entry_font_size", "main_entry_width_chars", "main_entry_x_ratio",
         ]),
@@ -204,6 +206,8 @@ SETTING_LABELS = {
         "analysis_right": "普通分析右边界",
         "row_step_multiplier": "检测后跳步",
         "horizontal_tolerance": "微调判距",
+        "guide_opacity": "栏左垂线不透明度",
+        "headword_marker_opacity": "词头横线不透明度",
         "column_track_radius": "栏左跟随搜索范围",
         "column_track_block_height": "栏左跟随分块高度",
         "column_track_max_step": "栏左最大局部斜率",
@@ -299,8 +303,10 @@ SETTING_HELP = {
         "paddle_ocr_version": "作用：选择 PaddleOCR 使用的模型系列/版本。不同模型可能改变文字框、识别字符、速度和缓存签名，因此它属于后端级设置而不是单纯阈值。\n\n调整：项目一旦稳定不建议频繁切换。更换模型后应重新生成 OCR，而不是继续沿用旧缓存来比较候选规则。",
         "tesseract_language": "作用：Tesseract 使用的语言包代码，可与项目 OCR 语言不同但通常应对应词头语言。它用于普通文本 OCR和 Tesseract 对照/补漏路径。\n\n调整：若语言包未安装，Tesseract 会不可用或报错；多语言可按 Tesseract 语法组合。仅使用 PaddleOCR 时不会因为这个值改变 Paddle 结果。",
         "batch_interval": "作用：自动保存/批量相关状态写盘的节流间隔，用来避免每次微小编辑都立即写文件。它影响保存频率，不是 OCR 批量任务“每隔几秒处理一页”的间隔。\n\n调整：过短增加磁盘写入和界面抖动风险；过长则异常退出时可能丢失更多最近改动。通常保持数秒级即可。",
-        "marker_height": "作用：主界面词头横线的显示线宽/可视厚度，绘制时会按当前界面缩放和旧项目兼容比例调整。它影响视觉与点击辨识，不改变词头 Y 坐标或 OCR 判定。\n\n调整：高 DPI/高缩放下看不清可适当增大；过粗会遮挡文字。属于纯显示参数。",
-        "guide_width": "作用：主界面栏左参考线/列路径的显示宽度。只控制视觉叠加层，不改变列跟踪、栏位置或切图数据。\n\n调整：为了在高分辨率屏幕上更易观察可增大；如果参考线遮挡正文则减小。识别结果不应随它变化。",
+        "marker_height": "作用：主界面词头横线的显示线宽/可视厚度，绘制时会按当前界面缩放和旧项目兼容比例调整。它影响视觉与点击辨识，不改变词头 Y 坐标或 OCR 判定。\n\n调整：高 DPI/高缩放下看不清可适当增大；过粗会遮挡文字。属于纯显示参数。\n\n粗细方向：词头横线的原始 Y 为上边界锚点；宽度增加时只向下方扩展，不向上遮挡词头。",
+        "headword_marker_opacity": "作用：控制主画布词头/词条横线覆盖在扫描图片上的不透明度，只改变显示。100% 为完全不透明，0% 为完全透明；不会改变横线 Y 坐标、PDIC、OCR、校对或切图。\n\n调整：横线遮挡字形时降低；需要快速检查漏线、错线时提高。",
+        "guide_width": "作用：主界面栏左参考线/列路径的显示宽度。只控制视觉叠加层，不改变列跟踪、栏位置或切图数据。\n\n调整：为了在高分辨率屏幕上更易观察可增大；如果参考线遮挡正文则减小。识别结果不应随它变化。\n\n粗细方向：栏左路径为左边界锚点；宽度增加时只向右侧扩展，不向栏外扩展。",
+        "guide_opacity": "作用：控制主画布【栏左垂线】覆盖在扫描图片上的不透明度，只改变显示。100% 为完全不透明，0% 为完全透明；不会改变栏位检测、栏左路径、画线结果或切图。\n\n调整：扫描文字较密时可适当降低，使参考垂线不遮挡原文；需要强调栏路径时再提高。",
         "main_entry_font_family": "作用：主界面可编辑词条文本框与部分预览标签使用的字体族。只改变显示/编辑体验，不修改 PDIC 文本、OCR 结果或排序。\n\n选择：【自动（系统推荐）】会根据当前 OCR 语言和操作系统选择原生/常用无衬线字体；手动选择任一已安装字体后则固定使用该字体。若出现方框/缺字，应换字体而不是修改 OCR。",
         "main_entry_font_size": "作用：主界面词条编辑框在 100% 视图下的基础字号；实际显示会结合当前视图缩放。只影响界面文字大小，不改变图像坐标、词条线或切图。\n\n调整：增大便于校对但会占更多画布空间；过小影响阅读。它与图片缩放是两套独立概念。",
         "main_entry_width_chars": "作用：主界面词条编辑控件的目标宽度，以字符数估算；横排时主要控制 Entry 宽度，竖排模式则用于窄 Text 控件的可见长度/高度语义。\n\n调整：长词头经常看不全可增大；过大会遮挡原图。只影响编辑控件，不改变词条内容。",
@@ -371,7 +377,7 @@ OCR_ADVANCED_FIELDS = (
     )
 
 DISPLAY_FIELDS = (
-        "marker_height", "guide_width",
+        "marker_height", "headword_marker_opacity", "guide_width", "guide_opacity",
         "main_entry_font_family", "main_entry_font_size",
         "main_entry_width_chars", "main_entry_x_ratio",
         "review_entry_font_family", "review_entry_font_size",
@@ -395,6 +401,7 @@ EXPERT_FIELDS = (
 
 SETTING_UNITS = {
         "columns": "栏",
+        "guide_opacity": "%", "headword_marker_opacity": "%",
         "start_y": "% 图高", "bottom_y": "原图px", "manual_x": "% 图宽",
         "column_width": "% 图宽", "gutter": "% 图宽", "body_indent": "% 图宽",
         "character_height": "% 图高", "row_padding": "% 图高", "horizontal_tolerance": "% 图宽",
@@ -417,6 +424,8 @@ SETTING_UNITS = {
 
 SETTING_SPIN = {
         "columns": (1, 12, 1),
+        "guide_opacity": (0.0, 100.0, 5.0),
+        "headword_marker_opacity": (0.0, 100.0, 5.0),
         "start_y": (0.0, 100.0, 0.05), "bottom_y": (0, 50000, 1),
         "manual_x": (0.0, 100.0, 0.05), "column_width": (0.01, 100.0, 0.05),
         "gutter": (0.0, 100.0, 0.05), "body_indent": (0.0, 100.0, 0.05),

@@ -149,6 +149,10 @@ from .text_encoding import read_text_detected
 from .unicode_nonbmp_input import (
     attach_nonbmp_unicode_input, close_nonbmp_unicode_input,
 )
+from .overlay_opacity import (
+    add_quick_opacity_control, clear_alpha_line_photos,
+    create_alpha_canvas_line, release_alpha_line_photos,
+)
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
     headword_filter_rules_path, is_managed_project, migrate_legacy_project,
@@ -9771,6 +9775,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Entry(
             line_row, textvariable=guide_value, width=5, justify="left"
         ).pack(side="left", padx=(2, 10))
+        add_quick_opacity_control(self, line_row, name="guide_opacity")
         ttk.Checkbutton(line_row, text="插图形状：轮廓", variable=self.polygon_var, command=self.redraw).pack(side="left")
         color_button(line_row, "illustration_outline_color")
         ttk.Label(line_row, text="粗细").pack(side="left")
@@ -9789,6 +9794,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Entry(
             marker_row, textvariable=marker_value, width=5, justify="left"
         ).pack(side="left", padx=(2, 10))
+        add_quick_opacity_control(self, marker_row, name="headword_marker_opacity")
         label_visible_var = tk.BooleanVar(value=bool(self.settings.show_illustration_labels))
         self.quick_bool_vars["show_illustration_labels"] = label_visible_var
         ttk.Checkbutton(marker_row, text="插图标签：外框", variable=label_visible_var).pack(side="left")
@@ -14027,13 +14033,17 @@ class PictureCaptureApp(tk.Tk):
             else self.settings.show_headword_markers
         )
         if show_markers:
-            item = self.canvas.create_line(
-                marker_start[0] * self.view_scale,
-                marker_start[1] * self.view_scale,
-                marker_end[0] * self.view_scale,
-                marker_end[1] * self.view_scale,
+            item = create_alpha_canvas_line(
+                self,
+                (
+                    marker_start[0] * self.view_scale,
+                    marker_start[1] * self.view_scale,
+                    marker_end[0] * self.view_scale,
+                    marker_end[1] * self.view_scale,
+                ),
                 fill=self.settings.headword_marker_color,
                 width=marker_line_width,
+                opacity=self.settings.headword_marker_opacity,
             )
             record["canvas_items"].append(item)
 
@@ -14296,7 +14306,9 @@ class PictureCaptureApp(tk.Tk):
         if not record:
             return
         widgets = list(record.get("widgets") or [])
-        for item in list(record.get("canvas_items") or []):
+        canvas_items = list(record.get("canvas_items") or [])
+        release_alpha_line_photos(self, canvas_items)
+        for item in canvas_items:
             try:
                 self.canvas.delete(item)
             except tk.TclError:
@@ -14502,6 +14514,7 @@ class PictureCaptureApp(tk.Tk):
 
 
     def redraw(self) -> None:
+        clear_alpha_line_photos(self)
         self._sync_polygon_label_texts()
         self.canvas.delete("all")
         for widget in self.overlay_widgets:
@@ -14547,10 +14560,12 @@ class PictureCaptureApp(tk.Tk):
                     source_points = [geometry.canonical_to_source(x, y) for y, x in path.points]
                     coords = [coordinate * self.view_scale for point in source_points for coordinate in point]
                     if len(coords) >= 4:
-                        self.canvas.create_line(
-                            *coords,
+                        create_alpha_canvas_line(
+                            self,
+                            tuple(coords),
                             fill=self.settings.guide_color,
                             width=scaled_overlay_line_width(self.settings.guide_width, overlay_scale),
+                            opacity=self.settings.guide_opacity,
                             smooth=True,
                         )
             self._draw_page_sections(geometry)
