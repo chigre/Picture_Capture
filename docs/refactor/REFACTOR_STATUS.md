@@ -3,13 +3,75 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5W are complete.**
+**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5X are complete.**
 
 Phase 4 controller decomposition is complete. Phase 5 is progressively replacing dynamic installer/runtime ownership with explicit/static ownership while preserving behavior and keeping each slice independently reversible and reviewable.
 
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
-## Latest architecture checkpoint — Phase 5W
+## Latest architecture checkpoint — Phase 5X
+- production PR: **#280 — staticize entry classification and existing-marker OCR**
+- base before the production slice: `main@f7593781e2b4c28f2936a039fc3ef0856f4fd93b`
+- clean production head: `cdd19be392a2acd0355a636e9cdb30fc16ee2b39`
+- validated production tree: `16619800e220e88b31bf200a5640546a69513658`
+- merge commit / current architecture main: `541d871582a19778a955a4134ee2874cf5de842c`
+- merge tree: `16619800e220e88b31bf200a5640546a69513658`
+
+### Static entry-classification and marker-OCR ownership
+The former `entry_classification_runtime.py` callable-mutation seam is gone.
+
+Phase 5X promoted the runtime's three real behaviors into their normal static owners without changing PDIC format or the illustration-mask feature:
+1. `processing._ordinary_entries_from_layout_roles(...)` now copies each final Layout entry row's canonical classification during materialization and preserves the existing oversized-CJK OCR hints;
+2. `processing_core._ordinary_marker_local_crop(...)` now directly uses `entry_ocr_crop_box(...)` plus canonical entry classification;
+3. `processing_core.ocr_existing_entry_words_from_markers(...)` now directly owns the shared multi-engine `OcrChannelSession` implementation, including one session per page, Paddle-record parsing, arbitration, replacement rules, provenance, stats, and the invariant that marker OCR must not move coordinates.
+
+Core, GUI, and worker composition no longer import or call `install_processing_entry_classification(...)`. `entry_classification_runtime.py` was deleted, its three state markers are gone, and the architecture guard no longer permits that runtime file as legacy debt. The processing facade and core now expose the same static crop/OCR callables rather than relying on bootstrap order.
+
+Phase 5X deliberately preserved one pre-existing classification semantic discovered while strengthening characterization: a materialized `Entry` whose concrete `ocr_source` says `page_understanding:ordinary_layout_role` can later be re-inferred as `indent` by `get_entry_classification(...)` even when large-head line classification previously drove oversized OCR hints during materialization. The old runtime behaved the same way. Phase 5X therefore did not change this semantic merely to satisfy a new test; the characterization was corrected to verify the existing observable contract. Any future change to that registry/source-precedence behavior should be a separate behavior slice.
+
+### Phase 5X isolated validation
+Temporary fail-closed branch workflows were used for targeted large-file migration and validation, then removed before publication.
+
+Final isolated validation:
+- exact intended production/test diff shape: **16 paths, passed**;
+- `entry_classification_runtime.py` removed;
+- zero production references to `entry_classification_runtime`, `install_processing_entry_classification`, `_entry_classification_runtime_installed`, `_entry_classification_crop_installed`, or `_entry_marker_ocr_dispatch_installed`;
+- static facade/core callable identity: passed;
+- architecture guard: passed;
+- focused regressions: **243 passed**;
+- full pytest suite: **1290 passed, 1 existing Pillow deprecation warning**;
+- compileall: passed;
+- Ruff F821: passed.
+
+The first strengthened characterization exposed only a new-test expectation that exceeded the old runtime contract; production code was not changed. A subsequent full-suite run exposed two stale source contracts (`test_ocr_channel.py` and `test_worker_bootstrap.py`); those tests were migrated to the static owners. The final isolated run above was fully green.
+
+The exact validated tree `16619800e220e88b31bf200a5640546a69513658` was re-anchored to the live main base as one clean production commit `cdd19be392a2acd0355a636e9cdb30fc16ee2b39`.
+
+### Phase 5X PR gate
+Fixed-head PR #280 on `cdd19be392a2acd0355a636e9cdb30fc16ee2b39`:
+- CI run 2105 Ubuntu: passed;
+- CI run 2105 Windows: passed;
+- CI run 2105 macOS: passed;
+- CodeQL run 2086 Actions: passed;
+- CodeQL run 2086 Python: passed;
+- Advanced Security run 1845: passed;
+- PR remained mergeable with one commit and sixteen changed files;
+- no PR comments, review threads, review submissions, or objections.
+
+PR #280 was merged with fixed-head protection using `expected_head_sha=cdd19be392a2acd0355a636e9cdb30fc16ee2b39`.
+
+### Phase 5X post-merge verification
+On `main@541d871582a19778a955a4134ee2874cf5de842c`:
+- merge tree exactly matched validated production tree `16619800e220e88b31bf200a5640546a69513658`;
+- push CI run 2106 passed on Ubuntu, Windows, and macOS;
+- GUI smoke passed on all applicable platforms;
+- compatibility runner / compile / F821 / wheel passed on all three platforms;
+- CodeQL run 2087 Actions: passed;
+- CodeQL run 2087 Python: passed.
+
+No post-merge behavior, packaging, or security regression was observed.
+
+## Previous architecture checkpoint — Phase 5W
 - production PR: **#278 — make unlined physical-row fast path static**
 - base before the production slice: `main@73ad384329db8719f0636fb93b83254cf4596126`
 - clean production head: `757a45fdbb70c527155a74e6a2ba0fca73cc148e`
@@ -103,6 +165,7 @@ No post-merge behavior, packaging, or security regression was observed.
 - Phase 5U: the real spawn-safe ordinary worker became static `processing.detect_entries_job`; GUI-time worker replacement and `spawn_detection_runtime.py` were removed.
 - Phase 5V: guarded oversized-head detection plus strict row/fusion authorization became static; `ordinary_large_head_runtime.py` and both large-head bootstrap mutations were removed.
 - Phase 5W: the unlined physical-row fast worker became the normal static `unlined_line_export.export_unlined_page_job`; `unlined_fast_path_runtime.py` and GUI-time worker replacement were removed.
+- Phase 5X: Layout-entry classification attachment plus classification-aware existing-marker crop/OCR became static processing ownership; `entry_classification_runtime.py` and its bootstrap mutation chain were removed.
 
 ## Current explicit Phase 5 ownership
 - Ordinary drawing: app wrapper -> `DetectionController`; OCR-independent quick-setting helper is `ordinary_quick_settings.py`.
@@ -120,49 +183,47 @@ No post-merge behavior, packaging, or security regression was observed.
 - Spawn layout preparation: direct `processing._ensure_layout_runtime()` ownership; no compatibility wrapper remains.
 - Spawn ordinary detection: static top-level `processing.detect_entries_job(...)` -> lazy `build_worker_services()` consumption; no GUI-time replacement remains.
 - Oversized-head detection/authorization: static `ordinary_large_head_evidence` + pure `ordinary_large_head_role_guard` policy + direct `ordinary_evidence_fusion` strength gate.
+- Entry classification / existing-marker OCR: static `processing._ordinary_entries_from_layout_roles(...)` + static `processing_core._ordinary_marker_local_crop(...)` / `ocr_existing_entry_words_from_markers(...)`; no classification callable installer remains.
 
-## Recommended next slice — Phase 5X
-**Retire `entry_classification_runtime.py` by promoting its three real behaviors into their existing static processing owners as one cohesive classification/OCR slice.**
+## Recommended next slice — Phase 5Y
+**Staticize only the illustration-mask settings schema and shared illustration detector; keep the Page Understanding wrapper and GUI/cache mutation for later slices.**
 
-Fresh read-only inspection after Phase 5W shows this is safer than taking the remaining illustration-mask runtime next. `layout_illustration_mask_runtime.py` still combines dynamic `AppSettings` extension, shared illustration-detector redirection, a fail-open Page Understanding image-mask wrapper, diagnostics, and GUI settings/cache integration. Entry classification is also real behavior, but its mutation targets are already explicit and separately identifiable.
+Fresh read-only inspection after Phase 5X confirms that `layout_illustration_mask_runtime.py` is now the remaining file explicitly tracked as runtime debt, but it still combines four distinct responsibilities:
+1. dynamically subclasses/rebinds `models.AppSettings` to add `layout_mask_illustrations`;
+2. owns an in-memory illustration component detector and mutates `processing_core.detect_illustration_regions` plus the processing facade so PPP and Layout masking share it;
+3. wraps `processing._understand_page_current(...)` with fail-open white-fill preprocessing and diagnostics;
+4. mutates `SettingsDialog` metadata plus `layout_visualization_ui._layout_cache_key`.
 
-Current entry-classification runtime behavior spans three mutations:
-1. it wraps `processing._ordinary_entries_from_layout_roles(...)` so each final Layout entry row copies canonical line classification metadata to the materialized `Entry`, including oversized-CJK OCR hints and observed head/ordinary-row heights;
-2. it replaces `processing_core._ordinary_marker_local_crop(...)` (and the facade alias) with the canonical classification-aware `entry_ocr_crop_box(...)` path and derives the oversized flag from `get_entry_classification(entry)`;
-3. it replaces `processing_core.ocr_existing_entry_words_from_markers(...)` (and the facade alias) with the shared multi-engine `OcrChannelSession` implementation, preserving one session per page, Paddle candidate parsing, ordinary/oversized handling, replacement rules, provenance fields, stats, and the hard invariant that marker OCR cannot move line coordinates.
+Taking all four at once would mix settings serialization/pickle identity, detector semantics, Page Understanding image lifetime/error fallback, and GUI cache behavior in one slice. Phase 5Y should therefore remove only the first two import-order dependencies.
 
-Bootstrap currently installs this runtime from core composition and redundantly/idempotently from GUI/worker composition. CLI deliberately calls `build_core_services()` before importing processing callables by value, while `DetectionController` imports the processing facade callable by value during GUI app import. Static ownership can remove this import-order dependency rather than emulate it.
+### Safest Phase 5Y architecture
+- add `layout_mask_illustrations: bool = False` directly to the native `AppSettings` dataclass and preserve JSON/backward-default behavior, `dataclasses.replace`, and spawn pickle identity without dynamic subclassing;
+- remove `install_layout_illustration_mask_settings()` from core bootstrap once the native field is proven equivalent;
+- promote the current in-memory illustration detector into a static non-runtime owner, preferably the existing `processing_core` detector surface so the historical path API and the Layout mask consume one implementation without a new proxy;
+- make `processing_core.detect_illustration_regions(...)` statically delegate to/share that implementation rather than being replaced at composition time;
+- let `mask_large_illustrations_for_layout(...)` consume the static detector directly; remove only the detector-rebinding portion of `install_layout_illustration_mask_runtime(...)`;
+- keep the current fail-open `_understand_page_current(...)` wrapper, mask diagnostics, `SettingsDialog` integration, and Layout visualization cache-key mutation unchanged for this phase;
+- do **not** delete `layout_illustration_mask_runtime.py` in Phase 5Y unless the remaining wrapper/UI responsibilities have independently migrated too;
+- do not change PPP file format, illustration crop semantics, mask thresholds, headlike protection thresholds, or default-disabled behavior.
 
-### Safest Phase 5X architecture
-- fold classification metadata attachment directly into the normal `processing._ordinary_entries_from_layout_roles(...)` materializer after each entry is created, preserving refined separator Y and exact line-to-entry correspondence;
-- make the current classification-aware crop the normal `processing_core._ordinary_marker_local_crop(...)` implementation, backed by `entry_ocr_crop_box(...)` and `get_entry_classification(...)`;
-- promote the current multi-engine marker OCR implementation into the normal top-level `processing_core.ocr_existing_entry_words_from_markers(...)` function;
-- let the existing `processing` facade copy the final static core crop/OCR callables at import time; do not add a new proxy or second installer;
-- remove `install_processing_entry_classification(...)` from core, GUI, and worker bootstrap only after static behavior is equivalent;
-- delete `entry_classification_runtime.py` once no production consumer remains;
-- ratchet architecture/source-contract tests so classification/OCR behavior can no longer depend on bootstrap mutation order;
-- preserve the separate PDIC classification/persistence owner in `entry_classification.py`; do **not** combine this slice with PDIC-format changes, review UI changes, or illustration-mask runtime retirement.
-
-### Required Phase 5X focused characterization
+### Required Phase 5Y focused characterization
 Before publication, prove at minimum:
-- every final Layout entry row receives the same `EntryClassification` metadata as the current runtime path;
-- oversized rows still set `ocr_oversized_cjk`, `ocr_single_cjk`, `ocr_visual_run_height`, and `ocr_line_height_reference` under the same conditions;
-- refined separator Y/materialized coordinates remain unchanged by classification attachment;
-- existing-marker OCR uses the same `entry_ocr_crop_box(...)` geometry and returns the same oversized flag;
-- ordinary and oversized marker crops remain covered across transformed/Profile geometry cases;
-- one `OcrChannelSession` is reused per page, with the same engine-plan arbitration and Paddle record parsing;
-- OCR replacement/lowercase rules, confidence, `ocr_source`, `final_engine`, issue type, and fill/fail/skip stats remain equivalent;
-- marker OCR still raises if any entry coordinate changes;
-- CLI, GUI `DetectionController`, and worker/bootstrap paths all resolve the final static callable without installer order;
-- no `install_processing_entry_classification`, `_entry_classification_runtime_installed`, `_entry_classification_crop_installed`, or `_entry_marker_ocr_dispatch_installed` production dependency remains;
+- `AppSettings()` exposes `layout_mask_illustrations=False` without any bootstrap call;
+- JSON round-trip, old settings without the key, `dataclasses.replace`, and spawn/pickle identity preserve the field exactly;
+- bare package import remains runtime-inert;
+- the path-based PPP detector and in-memory Layout detector return equivalent regions for the same image/settings and still share one algorithm;
+- detector geometry/transform handling, component thresholds, padding, merging, and resource cleanup remain equivalent;
+- `mask_large_illustrations_for_layout(...)` still uses the shared static detector by default and retains the same size/headlike guards;
+- core/GUI/worker composition no longer needs the settings installer or detector callable rebinding;
+- the Page Understanding wrapper still fails open on masking errors, closes disposable masked images, and appends identical diagnostics when enabled;
+- GUI setting visibility/help/cache invalidation remains unchanged because UI mutation is explicitly outside Phase 5Y;
 - full cross-platform CI, GUI smoke, compatibility runner, compile, F821, wheel, CodeQL, and security gates remain green.
 
-Any behavior difference between the current installed classification/OCR path and the proposed static owners is a stop condition rather than a reason to weaken tests.
+Any detector-output, settings-persistence, Page Understanding, or GUI-cache behavior difference is a stop condition rather than a reason to broaden the slice.
 
-## Remaining runtime seams after Phase 5W
-Treat these as real compatibility/algorithm seams until individually proven:
-- `entry_classification_runtime.py` — recommended Phase 5X; three explicit classification/marker-OCR mutations with natural static owners already present;
-- `layout_illustration_mask_runtime.py` — keep for a later dedicated slice because it still couples settings schema, detector ownership, Page Understanding masking, diagnostics, and GUI integration.
+## Remaining runtime seams after Phase 5X
+Treat the remaining illustration-mask runtime as real behavior until its responsibilities are individually proven:
+- `layout_illustration_mask_runtime.py` — Phase 5Y should remove only dynamic settings schema + detector rebinding; Page Understanding wrapping/diagnostics and GUI/cache mutation remain later work.
 
 ## Standing continuation authorization
 The user explicitly authorized continued Phase 5 work along the recommended architecture path without pausing at normal ownership decision points. Continue automatically after each successful checkpoint and fresh live-state revalidation.
