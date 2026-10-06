@@ -28,7 +28,11 @@ jobs:
         run: uv sync --locked --group dev
 
       - name: Apply Phase 5S migration
-        run: uv run --locked python tools/phase5s_apply.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --locked python tools/phase5s_apply.py
+          uv run --locked python tools/phase5s_extra.py
 
       - name: Check exact production diff shape
         shell: bash
@@ -44,6 +48,7 @@ jobs:
           src/picture_capture/ordinary_large_head_runtime.py
           src/picture_capture/spawn_layout_runtime.py
           src/picture_capture/unlined_physical_rows_resolver.py
+          tests/test_large_head_row_front_runtime.py
           tests/test_layout_column_drift_runtime.py
           tests/test_runtime_entry_path_guards.py
           tests/test_spawn_layout_runtime.py
@@ -75,6 +80,7 @@ jobs:
         run: >-
           uv run --locked pytest -q
           tests/test_layout_column_drift_runtime.py
+          tests/test_large_head_row_front_runtime.py
           tests/test_spawn_layout_runtime.py
           tests/test_runtime_entry_path_guards.py
           tests/test_large_head_role_authorization.py
@@ -94,7 +100,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm tools/phase5s_apply.py .github/workflows/phase5s-validate.yml
+          git rm tools/phase5s_apply.py tools/phase5s_extra.py .github/workflows/phase5s-validate.yml
           git diff --check
 
       - name: Publish validated production tree
