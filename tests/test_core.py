@@ -7494,7 +7494,7 @@ def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
         "ocr-gpu-cu118", "ocr-gpu-cu126", "ocr-gpu-cu129",
     }
 
-    runtime_source = Path("src/picture_capture/windows_gpu_runtime.py").read_text(encoding="utf-8")
+    runtime_source = Path("src/picture_capture/windows_gpu.py").read_text(encoding="utf-8")
     paddle_source = Path("src/picture_capture/paddle_headwords.py").read_text(encoding="utf-8")
     layout_source = Path("src/picture_capture/layout_detection.py").read_text(encoding="utf-8")
     verify_source = Path("scripts/verify_ocr_environment.py").read_text(encoding="utf-8")

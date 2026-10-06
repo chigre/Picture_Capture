@@ -347,7 +347,7 @@ def _create_paddle_engine(settings: AppSettings) -> Any:
     # directories registered before importing PaddleOCR.
     import os
     os.environ["FLAGS_enable_pir_api"] = "0"
-    from .windows_gpu_runtime import configure_windows_nvidia_dlls
+    from .windows_gpu import configure_windows_nvidia_dlls
     configure_windows_nvidia_dlls()
 
     try:

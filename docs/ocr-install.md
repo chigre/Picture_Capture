@@ -83,7 +83,7 @@ Intel macOS 不会自动安装 PaddlePaddle 3.3.x；安装器推荐 Core only，
 Windows CUDA 12.6/12.9 profile 显式加入项目内 `nvidia-cudnn-cu12`。运行前：
 
 ```text
-src/picture_capture/windows_gpu_runtime.py
+src/picture_capture/windows_gpu.py
 ```
 
 会发现 `.venv\Lib\site-packages\nvidia\*\bin` 并加入当前进程 DLL 搜索路径。Linux/macOS 不执行该 Windows DLL 逻辑。
