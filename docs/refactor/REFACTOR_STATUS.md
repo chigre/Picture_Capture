@@ -3,65 +3,62 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before new production writes, revalidate `main`, open PRs, relevant callers/import order, and tests.
 
 ## Current phase
-**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5P are complete.**
+**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5Q are complete.**
 
 Phase 4 controller decomposition is complete. Phase 5 has progressively replaced dynamic installer/runtime ownership with explicit/static ownership while preserving current behavior.
 
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
-## Latest architecture checkpoint — Phase 5P
-- PR: **#262 — make illustration fill opacity explicit**
-- validated production commit: `489c701b98ce5d8d65d0d3c5a28c4cde8a855e23`
-- validated/merged production tree: `bdc971e75a65cbcf6df5746fb1a27edef4979b95`
-- architecture merge: `e3791afc88575ef3b5cd25731cff5aea0d6e6f9f`
-- previous Phase 5O PR #260 merge: `a5e10ff348696f4ae8d755837e5e2a33dad68b08`
-- previous Phase 5N PR #258 merge: `d1d63ea7d8d37efc78a7f90f1154cc10edab996d`
-- previous Phase 5M PR #256 merge: `95bdb9b9d93df17922da2d5fbc43d4e9b5f781e5`
-- previous Phase 5L PR #254 merge: `c78d1217fe8fa82ee85100a6409b58a09ee68d1a`
-- previous Phase 5K PR #252 merge: `2bfedcb17e9058d1b4fd2f8749a6db9690f95592`
-- Phase 5J #250, 5I #248, 5H #246, 5G #244, 5F #242, 5E #240, 5D #238, 5C #236, 5B #234, 5A #232 are complete.
+## Latest architecture checkpoint — Phase 5Q
+- PR: **#264 — make long-band row recovery static**
+- base before the production slice: `main@c5fef0574e1c937bb063afbfd444bb609c5ed7c6`
+- validated production commit: `2fd49c542ff53c004b9211db35395dba4860c845`
+- validated/merged production tree: `a5ca5b20e8b3f22b4115228314f39a7e2ef8d225`
+- architecture merge: `b08e19be906ce86a9f40a350f9e5f90d6b08277b`
+- previous Phase 5P PR #262 merge: `e3791afc88575ef3b5cd25731cff5aea0d6e6f9f`
+- Phase 5A through Phase 5P remain complete in repository history and their earlier checkpoint commits.
 
-### Explicit illustration-fill opacity ownership
-The former `illustration_fill_opacity_runtime.py` installer is gone.
+### Static long-band row recovery ownership
+The former `layout_row_recovery_runtime.py` installer is gone.
 
-Illustration fill opacity now has ordinary static ownership:
-- `illustration_fill_opacity` is a native `AppSettings` dataclass field;
-- it retains the established 40% default and immediate 0–100 assignment clamping used by the other display-opacity fields;
-- native settings JSON persistence carries the field, while older projects that omit it fall back to 40%;
-- Settings Center label/help/unit/spin metadata lives in `ui/settings/schema.py`;
-- the quick `区域不透明度` control is constructed directly in the existing illustration-control row after the fill-color control;
-- non-runtime `illustration_fill_opacity.py` owns true-alpha polygon rendering, static quick-control construction, alpha-image lifetime records, and geometry refresh;
-- the real PPP illustration draw site calls `create_alpha_canvas_polygon(...)` directly instead of temporarily replacing `canvas.create_polygon` during redraw;
-- redraw explicitly clears alpha-polygon records before rebuilding canvas overlays;
-- `_update_polygon_canvas_geometry(...)` calls `refresh_alpha_polygon_fill(...)` after its existing `try/except`, matching the former wrapper timing even when the original method internally swallows `tk.TclError`;
-- the editable Canvas polygon remains the authoritative outline/hit target while the RGBA fill image stays below it;
-- 100% native fill, 0% transparent fill, semi-transparent RGBA fill, tags, z-order, and PPP coordinates remain behaviorally unchanged.
+The established no-loss fallback now lives directly in `layout_physical_indent._logical_slots_for_oversized_run(...)`:
+- ordinary/non-oversized runs are unchanged;
+- when an unresolved projection band is tall enough to require logical splitting, slot count is no longer capped at four;
+- enough slots are produced to satisfy the downstream `<= 1.90 * reference` acceptance contract;
+- the existing 256-slot guard remains only as a pathological/corrupt-input bound;
+- projection detection, successful valley splitting, physical-indent measurement, role semantics, and column geometry are otherwise unchanged.
 
-GUI bootstrap no longer imports, configures, or installs illustration-fill opacity runtime code. `illustration_fill_opacity_runtime.py` is also removed from the architecture-guard legacy runtime set.
+Because that behavior is now always present statically, row-recovery installer imports/calls were removed from:
+- GUI bootstrap;
+- worker bootstrap;
+- `spawn_layout_runtime.py`;
+- `unlined_physical_rows_resolver.py`;
+- `layout_rows_cache.py`.
 
-## Phase 5P validation
+`layout_column_drift_runtime.py`, spawn-layout parity, character-height fallback, ordinary-large-head authorization, entry classification, and unlined fast-path ownership were deliberately left intact.
+
+The architecture guard no longer lists `layout_row_recovery_runtime.py` as allowed legacy runtime debt.
+
+## Phase 5Q validation
 Isolated fail-closed validation on the exact production tree:
-- exact intended no-renames production/test path set: **10 files, passed**;
+- exact intended no-renames production/test path set: **12 files, passed**;
 - architecture guard: passed;
-- focused: **25 passed, 1 Pillow deprecation warning**;
-- full: **1282 passed, 1 Pillow deprecation warning**;
+- focused regressions: **34 passed**;
+- full pytest suite: **1282 passed, 1 existing Pillow deprecation warning**;
 - compileall: passed;
 - Ruff F821: passed;
-- temporary migration helpers/workflow removed before publication.
+- temporary migration helper/workflow removed before publication.
 
-The isolated migration was intentionally fail-closed. Early runs stopped before production publication on source-shape/test-characterization mismatches, including the static schema formatting, actual PPP polygon call shape, and an over-broad generated `gray50` assertion. Those failures were confined to temporary migration validation; no failed intermediate production tree was published. The final run also preserved the former runtime wrapper's post-geometry-update fill-refresh timing rather than merely matching the normal path.
+The focused gate covered:
+- direct static long-band helper behavior;
+- continuous oversized projection bands and ordinary runs;
+- preservation of column-drift behavior;
+- GUI/worker composition ownership after row-recovery installer removal;
+- spawn worker parity while `spawn_layout_runtime.py` continues to own column-drift installation;
+- runtime-entry guards;
+- LayoutRows fast projection / physical-row resolution paths.
 
-Focused coverage proves:
-- native illustration opacity clamps at construction and later assignment;
-- JSON round-trip and old-project 40% fallback are preserved;
-- true 40% alpha rendering remains RGBA rather than Tk stipple approximation;
-- 100%, 0%, and semi-transparent polygon paths keep the editable outline/hit target contract;
-- redraw/geometry refresh retain alpha-image lifetime explicitly;
-- Settings Center and quick controls have static ownership;
-- GUI bootstrap no longer imports or installs `illustration_fill_opacity_runtime.py`;
-- the old PPP `illustration_fill_color, stipple=` draw path is absent.
-
-PR #262 fixed-head gate on `489c701b98ce5d8d65d0d3c5a28c4cde8a855e23`:
+PR #264 fixed-head gate on `2fd49c542ff53c004b9211db35395dba4860c845`:
 - Ubuntu CI: passed, including Linux GUI smoke;
 - Windows CI: passed, including Windows GUI smoke;
 - macOS CI: passed, including macOS GUI smoke;
@@ -71,26 +68,22 @@ PR #262 fixed-head gate on `489c701b98ce5d8d65d0d3c5a28c4cde8a855e23`:
 - Advanced Security dynamic PR check: passed;
 - no PR comments, review threads, review submissions, or objections.
 
-Architecture merge `e3791afc88575ef3b5cd25731cff5aea0d6e6f9f` retained exactly the validated production tree `bdc971e75a65cbcf6df5746fb1a27edef4979b95`.
+Architecture merge `b08e19be906ce86a9f40a350f9e5f90d6b08277b` retained exactly the validated production tree `a5ca5b20e8b3f22b4115228314f39a7e2ef8d225`.
 
-Post-merge verification on `main@e3791afc88575ef3b5cd25731cff5aea0d6e6f9f`:
+Post-merge verification on `main@b08e19be906ce86a9f40a350f9e5f90d6b08277b`:
 - Ubuntu CI: passed, including pytest, Linux GUI smoke, compatibility runner, compile, F821, and wheel build;
 - Windows CI: passed, including pytest, Windows GUI smoke, compatibility runner, compile, F821, and wheel build;
 - macOS CI: passed, including pytest, macOS GUI smoke, compatibility runner, compile, F821, and wheel build;
 - CodeQL Actions: passed;
 - CodeQL Python: passed.
 
-## Previous Phase 5O note
-Phase 5O retired `overlay_opacity_runtime.py`. Guide/headword opacity are native `AppSettings` fields with static Settings Center / quick-control ownership, and real guide/marker draw sites call non-runtime `overlay_opacity.py` true-alpha helpers directly.
-
-## Previous Phase 5N note
-Phase 5N retired `overlay_line_anchor_runtime.py`. One-sided marker-down / guide-right geometry now lives in non-runtime `overlay_line_anchor.py` and is consumed directly by the static opacity renderer.
-
-## Previous Phase 5M note
-Phase 5M moved Windows/Tk supplementary Unicode repair into explicit `PictureCaptureApp` lifecycle ownership backed by non-runtime `unicode_nonbmp_input.py`.
-
-## Previous Phase 5L note
-`windows_gpu.py` is an ordinary non-runtime helper. `configure_windows_nvidia_dlls()` remains deliberately call-time immediately before Paddle/PaddleOCR imports where required.
+## Previous completed Phase 5 ownership
+- Phase 5L: Windows NVIDIA/Paddle DLL preparation became ordinary call-time `windows_gpu.py` ownership.
+- Phase 5M: Windows/Tk supplementary Unicode repair moved into explicit `PictureCaptureApp` lifecycle ownership backed by `unicode_nonbmp_input.py`.
+- Phase 5N: one-sided overlay geometry moved to non-runtime `overlay_line_anchor.py`.
+- Phase 5O: guide/headword line opacity became native `AppSettings` + static settings/UI + direct non-runtime `overlay_opacity.py` rendering.
+- Phase 5P: illustration fill opacity became native `AppSettings` + static settings/UI + direct non-runtime `illustration_fill_opacity.py` true-alpha rendering and refresh ownership.
+- Phase 5Q: long-band row recovery is now static in `layout_physical_indent.py`.
 
 ## Current explicit Phase 5 ownership
 - Ordinary drawing: app wrapper → `DetectionController`; OCR-independent quick-setting helper is `ordinary_quick_settings.py`.
@@ -99,51 +92,56 @@ Phase 5M moved Windows/Tk supplementary Unicode repair into explicit `PictureCap
 - Layout visualization: LayoutRows capture, corrected indent geometry, provenance, visible indent drawing, and prepared-count diagnostics are non-runtime/static ownership.
 - Windows/Tk supplementary Unicode repair: explicit `PictureCaptureApp` lifecycle → non-runtime `unicode_nonbmp_input.py`.
 - Overlay anchoring: non-runtime `overlay_line_anchor.py`.
-- Guide/headword line opacity: native `AppSettings` + static settings schema + direct non-runtime `overlay_opacity.py` rendering/UI helpers.
-- Illustration fill opacity: native `AppSettings` + static settings schema + direct non-runtime `illustration_fill_opacity.py` rendering/UI helpers.
+- Guide/headword line opacity: native settings + direct non-runtime rendering/UI ownership.
+- Illustration fill opacity: native settings + direct non-runtime rendering/UI ownership.
+- Long-band logical row recovery: static `layout_physical_indent._logical_slots_for_oversized_run(...)`.
 - `unlined_fast_path_runtime.py` remains intentionally because CropController resolves the worker at action time and the fast worker remains an import-order/performance seam.
 
-## Recommended next slice — Phase 5Q
-**Retire `layout_row_recovery_runtime.py` as the next narrow runtime seam.**
+## Recommended next slice — Phase 5R
+**Retire `layout_character_height_runtime.py` by making the already-characterized fallback an explicit post-detection step in `layout_detection.detect_layout_parameters(...)`.**
 
-Fresh read-only inspection after Phase 5P shows this runtime is substantially smaller and more deterministic than the remaining Layout wrappers:
-1. it defines one pure fallback function, `logical_slots_without_loss(y0, y1, reference)`;
-2. it replaces only `layout_physical_indent._logical_slots_for_oversized_run`;
-3. the behavioral change is already narrowly specified: when valley splitting cannot separate a tall projection band, choose enough logical slots to keep each slot within the downstream `<= 1.90 * reference` acceptance window instead of capping at four slots;
-4. it retains a hard cap of 256 solely for corrupt/pathological geometry and otherwise leaves normal runs / successful valley splits untouched;
-5. existing focused tests already exercise both the pure helper and the installed physical-indent behavior.
+Fresh read-only inspection after Phase 5Q makes this the narrowest reasonable remaining algorithm/import-order seam:
+1. `observed_character_height(...)` is already a deterministic helper with direct focused tests;
+2. the runtime wrapper only changes estimates whose method already contains `fallback=character_height`;
+3. it measures physical foreground-run heights, requires at least eight well-supported samples and a compact height family, and otherwise returns the original estimate unchanged;
+4. it only replaces `character_height`; geometry, column starts/widths, OCR, and entry semantics are untouched;
+5. explicit installer references are concentrated in shared core, GUI ordering, the unlined physical-row escalation path, and their source-contract tests.
 
-The current static helper in `layout_physical_indent.py` still contains the pre-runtime four-slot cap, so Phase 5Q can remove dynamic ownership by making the already-established runtime implementation the ordinary static implementation at that exact helper site.
+### Critical cache contract for Phase 5R
+Current ownership is two-layered:
+- the original `layout_detection.detect_layout_parameters(...)` builds/looks up the existing `_LAYOUT_ESTIMATE_CACHE` and therefore caches the **raw reliable detector result**;
+- `install_character_height_fallback_runtime()` wraps that callable from the outside, so the observed-height correction is applied after every raw cache lookup and the corrected copy itself is **not** inserted into `_LAYOUT_ESTIMATE_CACHE`.
 
-Safest Phase 5Q architecture:
-- replace only the body of `layout_physical_indent._logical_slots_for_oversized_run(...)` with the already-characterized `logical_slots_without_loss(...)` behavior; do not redesign `projection_line_runs`, valley splitting, thresholds, row semantics, or physical-indent measurement;
-- keep the function name and call site stable so downstream code continues using the same private helper contract;
-- remove `install_layout_row_recovery_runtime()` imports/calls from GUI bootstrap, worker bootstrap, `spawn_layout_runtime.py`, `unlined_physical_rows_resolver.py`, and `layout_rows_cache.py` only because the behavior is now always present statically;
-- remove `layout_row_recovery_runtime.py` and its architecture-guard legacy entry after focused characterization proves static/runtime equivalence;
-- rewrite runtime-installation tests into direct static-behavior and entry-path tests rather than weakening them;
-- preserve GUI / worker / spawn parity by proving all relevant paths call the same static `layout_physical_indent` helper without installer order dependence.
+Phase 5R must preserve that contract. Do **not** simply move the correction before the cache write or cache the corrected estimate.
 
-Do **not** combine Phase 5Q with `layout_column_drift_runtime.py`, `layout_character_height_runtime.py`, `ordinary_large_head_runtime.py`, entry classification, spawn-runtime retirement, or unlined fast-path work. In particular, removing the row-recovery installer references from `spawn_layout_runtime.py` is cleanup only; Phase 5Q must not otherwise alter spawn parity logic.
+Safest Phase 5R architecture:
+- keep `observed_character_height(...)` as ordinary non-runtime helper ownership (move/rename the module only if doing so does not widen the slice; deleting the `_runtime` filename is the goal);
+- add a small explicit helper that receives `(image, settings, raw_estimate, backend)` and reproduces the current wrapper conditions exactly: require `fallback=character_height`, measure, preserve the estimate on no result or ratio 0.82–1.22, otherwise `dataclasses.replace(..., character_height=observed)` and append the existing method provenance text;
+- in `layout_detection.detect_layout_parameters(...)`, preserve the current raw cache key, raw cache lookup, raw detector call, raw cache insertion, LRU behavior, and cache-clear semantics exactly; only after obtaining the raw estimate should the function apply the explicit character-height fallback and return the corrected copy;
+- apply the fallback on both cache-hit and cache-miss paths so behavior matches the current outer wrapper;
+- pass the same original input image used by the current runtime wrapper to the observation helper rather than silently substituting a different analysis image;
+- remove `install_character_height_fallback_runtime()` from `bootstrap/core.py`, GUI bootstrap, and `unlined_physical_rows_resolver.py` only after direct static behavior/order tests prove equivalence;
+- remove `layout_character_height_runtime.py` and ratchet the architecture guard only after focused/full validation;
+- rewrite installer-order tests into explicit ownership/cache/entry-path assertions rather than weakening them.
 
-## Why Phase 5Q is next
-After Phase 5P, every remaining runtime seam affects algorithm/import-order/performance behavior, so the next slice should be the smallest already-characterized algorithmic seam rather than a broader wrapper.
+Do **not** combine Phase 5R with column-drift, ordinary-large-head, illustration-mask, entry-classification, spawn-runtime, or unlined-fast-path retirement.
 
-`layout_row_recovery_runtime.py` is the best next boundary because it is a pure deterministic helper replacement with one explicit fallback contract and existing focused coverage. The alternatives are broader:
-- `layout_character_height_runtime.py` wraps `detect_layout_parameters(...)` and performs image-based fallback measurement before Page Design imports the callable by value;
-- `layout_column_drift_runtime.py` wraps the whole page-layout policy, re-runs analysis, and is reused by oversized-head evidence;
-- `ordinary_large_head_runtime.py` changes detection authorization and explicitly depends on the column-drift runtime helper/import order;
-- `layout_illustration_mask_runtime.py` affects Page Understanding input, AppSettings class setup, PPP detector binding, and visualization cache invalidation;
-- `entry_classification_runtime.py` changes processing/OCR classification semantics;
-- `spawn_detection_runtime.py` / `spawn_layout_runtime.py` are multiprocessing parity seams;
-- `unlined_fast_path_runtime.py` is an import-order/performance seam.
+## Why not the other remaining seams yet
+- `layout_column_drift_runtime.py` wraps the page-layout policy, re-runs analysis, and provides analysis-left helpers consumed by oversized-head evidence.
+- `ordinary_large_head_runtime.py` changes detection authorization and explicitly depends on column-drift analysis helpers.
+- `layout_illustration_mask_runtime.py` is broad: it participates in AppSettings class setup, shared PPP illustration detection, Page Understanding input masking, and cache/visualization behavior.
+- `entry_classification_runtime.py` changes processing materialization plus marker OCR crop/engine dispatch.
+- `spawn_detection_runtime.py` / `spawn_layout_runtime.py` are multiprocessing parity seams.
+- `unlined_fast_path_runtime.py` is an action-time import-order/performance seam.
 
-## Remaining runtime seams after Phase 5P
+Character-height fallback is therefore the next best candidate, but it is materially broader than Phase 5Q and must be isolated with explicit cache-contract characterization before production publication.
+
+## Remaining runtime seams after Phase 5Q
 Treat these as real compatibility/algorithm/performance seams until individually proven:
 - `entry_classification_runtime.py`;
-- `layout_character_height_runtime.py`;
+- `layout_character_height_runtime.py` — recommended Phase 5R;
 - `layout_column_drift_runtime.py`;
 - `layout_illustration_mask_runtime.py`;
-- `layout_row_recovery_runtime.py` (recommended Phase 5Q);
 - `ordinary_large_head_runtime.py`;
 - `spawn_detection_runtime.py` / `spawn_layout_runtime.py`;
 - `unlined_fast_path_runtime.py`.
