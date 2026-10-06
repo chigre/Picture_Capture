@@ -42,6 +42,7 @@ jobs:
               'src/picture_capture/training_export_ui.py',
               'src/picture_capture/ui/controllers/export.py',
               'tests/test_next_stage_regressions.py',
+              'tests/test_ui_pdic_order_repair_controller.py',
               'tests/test_ui_terminology_and_training_scope.py',
               'tests/test_ui_training_export_controller.py',
           }
@@ -55,6 +56,7 @@ jobs:
           tests/test_ui_export_controller.py
           tests/test_ui_training_export_controller.py
           tests/test_ui_terminology_and_training_scope.py
+          tests/test_ui_pdic_order_repair_controller.py
           tests/test_next_stage_regressions.py
           tests/test_bootstrap_entrypoint.py
       - name: Full suite
