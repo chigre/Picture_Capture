@@ -37,7 +37,6 @@ LEGACY_RUNTIME_FILES = {
     "layout_local_indent_visualization_runtime.py",
     "layout_role_provenance_runtime.py",
     "layout_row_recovery_runtime.py",
-    "layout_visualization_rows_cache_runtime.py",
     "ordinary_large_head_runtime.py",
     "overlay_line_anchor_runtime.py",
     "overlay_opacity_runtime.py",
