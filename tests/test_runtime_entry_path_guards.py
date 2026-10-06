@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from picture_capture.ocr_action_guard import _ineffective_lens_only_selection
-from picture_capture.ordinary_action_runtime import _apply_quick_settings_for_ordinary
+from picture_capture.ordinary_quick_settings import _apply_quick_settings_for_ordinary
 from picture_capture.settings_help_restore import install_settings_help_restore
 from picture_capture.spawn_detection_runtime import (
     detect_entries_job_with_runtime,
@@ -177,14 +177,14 @@ def test_gui_composition_no_longer_installs_ordinary_action_runtime():
     source = _gui_composition_source()
     assert "install_ordinary_action_runtime" not in source
 
-    ordinary_source = (
+    ordinary_helper_source = (
         Path(__file__).resolve().parents[1]
         / "src"
         / "picture_capture"
-        / "ordinary_action_runtime.py"
+        / "ordinary_quick_settings.py"
     ).read_text(encoding="utf-8")
-    assert "def install_ordinary_action_runtime" not in ordinary_source
-    assert "def _apply_quick_settings_for_ordinary" in ordinary_source
+    assert "def install_ordinary_action_runtime" not in ordinary_helper_source
+    assert "def _apply_quick_settings_for_ordinary" in ordinary_helper_source
 
     controller_source = (
         Path(__file__).resolve().parents[1]
