@@ -1,0 +1,77 @@
+name: Phase 5G validation
+
+on:
+  push:
+    branches: [refactor/phase-5g-ordinary-helper]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase5g-ordinary-helper
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/phase-5g-ordinary-helper
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --locked --group dev
+      - name: Apply Phase 5G migration
+        run: uv run --locked python tools/phase5g_apply.py
+      - name: Check diff shape
+        shell: bash
+        run: |
+          git add -N src/picture_capture/ordinary_quick_settings.py
+          git diff --check
+          python - <<'PY'
+          import subprocess
+          expected = {
+              'scripts/architecture_guard.py',
+              'src/picture_capture/ordinary_action_runtime.py',
+              'src/picture_capture/ordinary_quick_settings.py',
+              'src/picture_capture/ui/controllers/crop.py',
+              'src/picture_capture/ui/controllers/detection.py',
+              'tests/test_runtime_entry_path_guards.py',
+              'tests/test_ui_detection_controller.py',
+          }
+          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          if changed != expected:
+              raise SystemExit(f'unexpected Phase 5G diff: {sorted(changed)}')
+          PY
+      - name: Architecture guard
+        run: uv run --locked python scripts/architecture_guard.py
+      - name: Focused regressions
+        run: >-
+          uv run --locked pytest -q
+          tests/test_runtime_entry_path_guards.py
+          tests/test_ui_detection_controller.py
+          tests/test_ui_crop_controller.py
+          tests/test_next_stage_regressions.py
+      - name: Full suite
+        run: uv run --locked pytest -q
+      - name: Compile Python sources
+        run: uv run --locked python -m compileall -q src scripts run.py run_tests.py
+      - name: Check undefined names
+        run: uv run --locked ruff check --select F821 src tests scripts run.py run_tests.py
+      - name: Remove temporary migration assets
+        shell: bash
+        run: |
+          git rm tools/phase5g_apply.py .github/workflows/phase5g-validate.yml
+          git diff --check
+      - name: Publish validated production tree
+        shell: bash
+        run: |
+          git config user.name "chigre3"
+          git config user.email "guangdong.hu@gmail.com"
+          git add src tests scripts
+          git commit -m "Phase 5G: retire ordinary action runtime helper module"
+          git push origin HEAD:refactor/phase-5g-ordinary-helper
