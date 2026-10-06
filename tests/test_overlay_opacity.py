@@ -190,14 +190,12 @@ def test_app_and_bootstrap_have_direct_static_line_opacity_ownership():
     app = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     guard = (root / "scripts/architecture_guard.py").read_text(encoding="utf-8")
-    illustration = (
-        root / "src/picture_capture/illustration_fill_opacity_runtime.py"
-    ).read_text(encoding="utf-8")
+    illustration = (root / "src/picture_capture/illustration_fill_opacity.py").read_text(encoding="utf-8")
     assert "create_alpha_canvas_line" in app
     assert 'add_quick_opacity_control(self, line_row, name="guide_opacity")' in app
     assert 'add_quick_opacity_control(self, marker_row, name="headword_marker_opacity")' in app
     assert "install_overlay_opacity_runtime" not in gui
     assert not (root / "src/picture_capture/overlay_opacity_runtime.py").exists()
     assert '"overlay_opacity_runtime.py"' not in guard
-    assert "from .overlay_opacity import find_checkbutton, flatten_coordinates" in illustration
+    assert "render_alpha_polygon_overlay" in illustration
     assert "overlay_opacity_runtime" not in illustration

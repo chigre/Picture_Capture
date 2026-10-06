@@ -142,10 +142,6 @@ def prepare_gui_application() -> Any:
     from ..layout_visualization_role_theme import install_layout_role_theme
     from ..layout_visualization_ui_v3 import install_layout_visualization
     from ..ocr_action_guard import install_ocr_action_guard
-    from ..illustration_fill_opacity_runtime import (
-        configure_overlay_opacity_defaults,
-        install_illustration_fill_opacity_runtime,
-    )
     from ..parameter_help_ui import install_settings_parameter_help
     from ..settings_help_restore import install_settings_help_restore
     from ..single_line_merge_settings import install_single_line_merge_settings_ui
@@ -177,12 +173,6 @@ def prepare_gui_application() -> Any:
     # The lane-summary wrapper now appends the prepared-indent diagnostic as
     # its final step; visible indent drawing is static in the summary module.
     install_physical_lane_summary()
-    # Set all display-overlay defaults before the line opacity runtime creates
-    # AppSettings properties. Existing settings.json values remain authoritative.
-    configure_overlay_opacity_defaults()
-    # Illustration fill uses a real RGBA image under the editable Canvas polygon,
-    # rather than Tk's historical gray50 stipple approximation.
-    install_illustration_fill_opacity_runtime(app_module)
 
     _PREPARED_APP_MODULE = app_module
     return app_module

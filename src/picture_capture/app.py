@@ -153,6 +153,10 @@ from .overlay_opacity import (
     add_quick_opacity_control, clear_alpha_line_photos,
     create_alpha_canvas_line, release_alpha_line_photos,
 )
+from .illustration_fill_opacity import (
+    add_quick_illustration_fill_opacity_control, clear_alpha_polygon_records,
+    create_alpha_canvas_polygon, refresh_alpha_polygon_fill,
+)
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
     headword_filter_rules_path, is_managed_project, migrate_legacy_project,
@@ -9785,6 +9789,7 @@ class PictureCaptureApp(tk.Tk):
         ).pack(side="left", padx=(2, 5))
         ttk.Label(line_row, text="背景").pack(side="left")
         color_button(line_row, "illustration_fill_color")
+        add_quick_illustration_fill_opacity_control(self, line_row)
 
         marker_row = ttk.Frame(aux); marker_row.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(2, 0))
         ttk.Checkbutton(marker_row, text="词头横线", variable=marker_var, command=self._quick_parameter_changed).pack(side="left")
@@ -14515,6 +14520,7 @@ class PictureCaptureApp(tk.Tk):
 
     def redraw(self) -> None:
         clear_alpha_line_photos(self)
+        clear_alpha_polygon_records(self)
         self._sync_polygon_label_texts()
         self.canvas.delete("all")
         for widget in self.overlay_widgets:
@@ -14634,10 +14640,13 @@ class PictureCaptureApp(tk.Tk):
                     continue
                 polygon_item = None
                 if show_shapes:
-                    polygon_item = self.canvas.create_polygon(
-                        coords, fill=self.settings.illustration_fill_color, stipple="gray50",
+                    polygon_item = create_alpha_canvas_polygon(
+                        self,
+                        tuple(coords),
                         outline=self.settings.illustration_outline_color,
+                        fill=self.settings.illustration_fill_color,
                         width=scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale),
+                        opacity=self.settings.illustration_fill_opacity,
                         tags=("ppp-overlay", f"ppp-region-{region_index}"),
                     )
                 handles: list[int] = []
@@ -15029,6 +15038,7 @@ class PictureCaptureApp(tk.Tk):
                     self.canvas.coords(record["label_window"], label_x, label_y)
         except tk.TclError:
             pass
+        refresh_alpha_polygon_fill(self, region_index)
 
     def _persist_current_page_sections(self) -> None:
         """Save explicit SECTION bounds without touching PDIC/PPP."""

@@ -175,6 +175,7 @@ class AppSettings:
     illustration_outline_color: str = "#1976d2"
     illustration_outline_width: int = 2
     illustration_fill_color: str = "#ffe66d"
+    illustration_fill_opacity: float = 40.0
     illustration_label_border_color: str = "#1976d2"
     illustration_label_border_width: int = 2
     illustration_label_fill_color: str = "#e6e6e6"
@@ -558,7 +559,7 @@ class AppSettings:
         # Preserve the former runtime-property contract now that these values
         # are native dataclass fields: construction and later assignments are
         # both normalized immediately rather than only at render/save time.
-        if name in {"guide_opacity", "headword_marker_opacity"}:
+        if name in {"guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"}:
             value = _normalize_display_opacity(value)
         object.__setattr__(self, name, value)
 
@@ -569,14 +570,14 @@ class AppSettings:
     def to_json(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = asdict(self)
-        for name in ("guide_opacity", "headword_marker_opacity"):
+        for name in ("guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"):
             payload[name] = _normalize_display_opacity(payload.get(name, 40.0))
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     @classmethod
     def from_json(cls, path: Path) -> "AppSettings":
         raw = json.loads(path.read_text(encoding="utf-8"))
-        for name in ("guide_opacity", "headword_marker_opacity"):
+        for name in ("guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"):
             raw[name] = _normalize_display_opacity(raw.get(name, 40.0))
         if int(raw.get("right_ratio_percent_version", 0) or 0) < 1:
             old_divisor = max(0.01, float(raw.get("right_ratio", 1.0) or 1.0))
