@@ -168,7 +168,6 @@ def prepare_gui_application() -> Any:
     from ..parameter_help_ui import install_settings_parameter_help
     from ..settings_help_restore import install_settings_help_restore
     from ..single_line_merge_settings import install_single_line_merge_settings_ui
-    from ..training_export_ui import export_training_package_selected_range
     from ..ui_terminology import install_app_tooltip_terminology
     from ..unlined_export_filter_settings import (
         install_unlined_export_filter_settings_ui,
@@ -207,9 +206,6 @@ def prepare_gui_application() -> Any:
     install_illustration_fill_opacity_runtime(app_module)
     # Line anchoring patches the shared line renderer after opacity is installed.
     install_overlay_line_anchor_runtime(app_module)
-    app_module.PictureCaptureApp.export_training_package = (
-        export_training_package_selected_range
-    )
 
     _PREPARED_APP_MODULE = app_module
     return app_module

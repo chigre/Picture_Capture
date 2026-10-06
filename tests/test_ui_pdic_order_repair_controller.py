@@ -218,8 +218,10 @@ def test_repair_wiring_is_app_wrapper_with_existing_ui_binding() -> None:
     wrapper = app[start:end]
     assert "self._export_controller_for_call().repair_pdic_order_selected_scope()" in wrapper
     assert "_start_batch_task" not in wrapper
-    assert "    def repair_pdic_order_selected_scope(self) -> None:" in controller
-    assert 'settings = app.settings' in controller
-    assert 'settings = replace(app.settings)' not in controller
-    assert 'write_pdic_atomic(' in controller
+    repair_start = controller.index("    def repair_pdic_order_selected_scope(self) -> None:")
+    repair_end = controller.index("\n    def export_picdic_index(self) -> None:", repair_start)
+    repair_method = controller[repair_start:repair_end]
+    assert 'settings = app.settings' in repair_method
+    assert 'settings = replace(app.settings)' not in repair_method
+    assert 'write_pdic_atomic(' in repair_method
     assert '("修复排序", self.repair_pdic_order_selected_scope)' in app

@@ -8,6 +8,7 @@ implementation remains in ``processing`` and project path policy remains in
 """
 
 import os
+import shutil
 import threading
 from dataclasses import replace
 from datetime import datetime
@@ -17,6 +18,7 @@ from typing import Any
 
 from PIL import Image
 
+from ... import __version__
 from ...formats import pdic_path, read_pdic, read_picdic_index_records
 from ...page_sections import read_page_sections
 from ...pdic_restore import parse_merged_pdic_text, write_pdic_atomic
@@ -25,8 +27,32 @@ from ...processing import (
     derive_nominal_geometry, export_ocred, import_ocred,
     sort_entries_column_y, sort_entries_reading_order,
 )
-from ...project_storage import exports_root, qt_root
+from ...project_storage import exports_root, qt_root, training_exports_root
+from ...training_export import (
+    TrainingExportCancelled, copy_project_context, export_training_page,
+    make_training_zip, write_training_manifest,
+)
 from ...text_encoding import read_text_detected
+
+
+def _training_scope_label(app: Any, indices: list[int]) -> str:
+    """Describe the already-selected main-window page scope."""
+    if not app.project or not indices:
+        return "无"
+    first_name = app.project.images[indices[0]].name
+    last_name = app.project.images[indices[-1]].name
+    mode = app.page_range_var.get() if hasattr(app, "page_range_var") else "current"
+    if len(indices) == 1:
+        return first_name
+    if mode == "to_end":
+        return f"当前至末页：{first_name} → {last_name}"
+    if mode == "specified":
+        spec = (
+            app.page_range_spec_var.get().strip()
+            if hasattr(app, "page_range_spec_var") else ""
+        )
+        return f"指定：{spec or (first_name + ' → ' + last_name)}"
+    return f"{first_name} → {last_name}"
 
 
 class ExportController:
@@ -63,6 +89,182 @@ class ExportController:
         except Exception as exc:
             app.show_error("导入失败", exc)
 
+
+    def export_training_package(self) -> None:
+        """Export supervised training pages for the main-window page scope."""
+        app = self.app
+        if not app.project or app._batch_active:
+            if app._batch_active:
+                app.status_var.set("已有批量任务正在运行，请结束后再导出训练标记包。")
+            return
+        if any(
+            str(token[0]).startswith("training-cleanup-")
+            for token in app._ui_worker_active
+        ):
+            app.status_var.set("上一轮训练导出仍在清理临时文件；清理完成后再重新导出。")
+            return
+        try:
+            if app.current_page is not None and app.image is not None:
+                app._save_current_page_by_mode()
+        except Exception as exc:
+            app.show_error("导出前保存当前页失败", exc)
+            return
+
+        project = app.project
+        try:
+            selected = list(app.selected_page_indices())
+        except Exception as exc:
+            app.show_error("读取主界面页面范围失败", exc)
+            return
+        selected = sorted(
+            {int(index) for index in selected if 0 <= int(index) < len(project.images)}
+        )
+        if not selected:
+            messagebox.showinfo(
+                "导出训练标记包",
+                "主界面当前页面范围没有有效页面。请先在页面列表上方选择范围。",
+                parent=app,
+            )
+            return
+
+        indices = [
+            index for index in selected if pdic_path(project.images[index]).exists()
+        ]
+        if not indices:
+            messagebox.showinfo(
+                "导出训练标记包",
+                "主界面当前页面范围内没有已保存的 .pdic 页面。请先人工确认并保存画线结果。",
+                parent=app,
+            )
+            return
+
+        scope_label = _training_scope_label(app, selected)
+        skipped = len(selected) - len(indices)
+        skipped_text = f"\n其中 {skipped} 页没有 PDIC，将自动跳过。" if skipped else ""
+        if not messagebox.askyesno(
+            "导出训练标记包",
+            f"使用主界面页面范围：{scope_label}\n"
+            f"将导出 {len(indices)} 个已有 .pdic 的页面。{skipped_text}\n\n"
+            "每页会同时保存：\n"
+            "1. 程序普通画线的自动 baseline（优先使用当时捕获的原始快照）；\n"
+            "2. 当前人工增删后的最终 PDIC；\n"
+            "3. added / deleted / moved / unchanged 逐条差异；\n"
+            "4. 页面排版/indent family 诊断与 OCR/PPP 上下文。\n\n"
+            "如果旧页面没有历史 baseline，导出时会非破坏性重跑一次，并明确标记为 recomputed。\n\n"
+            "请确认最终 PDIC 已人工校对。继续？",
+            parent=app,
+        ):
+            return
+
+        export_root = training_exports_root(project.root)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        base_name = f"{project.root.name}_training_{stamp}"
+        staging = export_root / f".{base_name}_building"
+        zip_path = export_root / f"{base_name}.zip"
+        settings = replace(app.settings)
+        page_records: list[dict] = []
+        context_files: list[str] = []
+        items: list[object] = ["__prepare__"] + list(indices) + ["__finalize__"]
+        page_order = {
+            project.images[index].name: pos for pos, index in enumerate(indices)
+        }
+
+        def cleanup_partial() -> None:
+            shutil.rmtree(staging, ignore_errors=True)
+            zip_path.with_name(f".{zip_path.name}.tmp").unlink(missing_ok=True)
+
+        def worker(item, _position: int, _total: int):
+            try:
+                if item == "__prepare__":
+                    export_root.mkdir(parents=True, exist_ok=True)
+                    cleanup_partial()
+                    staging.mkdir(parents=True, exist_ok=True)
+                    context_files[:] = copy_project_context(project.root, staging)
+                    return {"prepared": True}
+                if item == "__finalize__":
+                    if app._batch_stop_event.is_set():
+                        raise TrainingExportCancelled("训练标记包导出已停止")
+                    page_records.sort(
+                        key=lambda row: page_order.get(
+                            str(row.get("page") or ""), 10**9
+                        )
+                    )
+                    write_training_manifest(
+                        staging,
+                        project_name=project.root.name,
+                        settings=settings,
+                        pages=page_records,
+                        context_files=context_files,
+                        software_version=__version__,
+                    )
+                    make_training_zip(
+                        staging, zip_path,
+                        should_stop=app._batch_stop_event.is_set,
+                    )
+                    shutil.rmtree(staging, ignore_errors=True)
+                    return {"final_zip": str(zip_path)}
+                index = int(item)
+                record = export_training_page(
+                    project.images[index], project.root, settings, staging, index,
+                )
+                page_records.append(record)
+                return record
+            except TrainingExportCancelled:
+                cleanup_partial()
+                return {"cancelled": True}
+            except Exception:
+                cleanup_partial()
+                raise
+
+        def labeler(item) -> str:
+            if item == "__prepare__":
+                return "准备 staging 并复制项目上下文"
+            if item == "__finalize__":
+                return "生成 supervised dataset_manifest.json 和 ZIP"
+            return project.images[int(item)].name
+
+        def done(_completed, _total, stopped, results, error):
+            if error is not None:
+                return
+            produced = next(
+                (
+                    str(row.get("final_zip"))
+                    for row in reversed(results)
+                    if isinstance(row, dict) and row.get("final_zip")
+                ),
+                "",
+            )
+            if produced:
+                app.status_var.set(f"训练标记包已导出：{Path(produced).name}")
+                messagebox.showinfo(
+                    "导出训练标记包完成",
+                    f"已导出 {len(page_records)} 页。\n\n{produced}",
+                    parent=app,
+                )
+                return
+            if stopped:
+                app.status_var.set("训练标记包已停止；正在后台清理 staging…")
+
+                def cleanup_worker():
+                    cleanup_partial()
+                    return True
+
+                def cleanup_done(_result) -> None:
+                    if app.project is project:
+                        app.status_var.set(
+                            "训练标记包导出已停止；未生成不完整数据包。"
+                        )
+
+                app._start_ui_worker(
+                    f"training-cleanup-{base_name}",
+                    cleanup_worker, cleanup_done,
+                    lambda exc, detail: print(detail or str(exc)),
+                    wait_on_close=True,
+                )
+
+        app._start_batch_task(
+            "导出训练标记包", items, worker, done, item_label=labeler,
+        )
 
     def build_picdic(self) -> None:
         app = self.app
