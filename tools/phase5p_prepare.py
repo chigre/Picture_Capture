@@ -20,6 +20,17 @@ block_end = text.index('\nreplace_once(\n    "src/picture_capture/app.py",', tex
 polygon_replacement = '''replace_once(\n    "src/picture_capture/app.py",\n    \'\'\'                if show_shapes:\n                    polygon_item = self.canvas.create_polygon(\n                        coords, fill=self.settings.illustration_fill_color, stipple="gray50",\n                        outline=self.settings.illustration_outline_color,\n                        width=scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale),\n                        tags=("ppp-overlay", f"ppp-region-{region_index}"),\n                    )\n\'\'\',\n    \'\'\'                if show_shapes:\n                    polygon_item = create_alpha_canvas_polygon(\n                        self,\n                        tuple(coords),\n                        outline=self.settings.illustration_outline_color,\n                        fill=self.settings.illustration_fill_color,\n                        width=scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale),\n                        opacity=self.settings.illustration_fill_opacity,\n                        tags=("ppp-overlay", f"ppp-region-{region_index}"),\n                    )\n\'\'\',\n)\n'''
 text = text[:block_start] + polygon_replacement + text[block_end:]
 
+# Preserve the old wrapper timing exactly: the legacy runtime called fill
+# refresh after the original geometry method returned, including when that
+# method internally swallowed a tk.TclError.
+old_refresh = '''                    self.canvas.coords(record["label_window"], label_x, label_y)\\n            refresh_alpha_polygon_fill(self, region_index)\\n        except tk.TclError:\\n            pass\\n\\n    def _persist_current_page_sections'''
+new_refresh = '''                    self.canvas.coords(record["label_window"], label_x, label_y)\\n        except tk.TclError:\\n            pass\\n        refresh_alpha_polygon_fill(self, region_index)\\n\\n    def _persist_current_page_sections'''
+if text.count(old_refresh) != 1:
+    raise SystemExit(
+        f"phase5p_apply.py: expected one geometry refresh insertion, found {text.count(old_refresh)}"
+    )
+text = text.replace(old_refresh, new_refresh, 1)
+
 # This assertion is emitted from a triple-quoted migration template. Avoid
 # nested quote escaping entirely while still proving the old gray50 path is gone.
 stipple_assertions = [
@@ -37,4 +48,4 @@ text = text.replace(
 )
 
 path.write_text(text, encoding="utf-8")
-print("Phase 5P migration helper aligned to current schema, PPP draw site, and generated test assertion")
+print("Phase 5P migration helper aligned to current schema, PPP draw site, refresh timing, and generated test assertion")
