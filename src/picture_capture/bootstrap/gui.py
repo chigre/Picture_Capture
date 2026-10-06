@@ -103,10 +103,6 @@ def prepare_gui_application() -> Any:
     )
     training_export.TRAINING_EXPORT_FORMAT = "picture-capture-training-v3"
 
-    processing_module = core_services.processing
-    from ..entry_classification_runtime import install_processing_entry_classification
-
-    install_processing_entry_classification(processing_module)
     # processing.detect_entries_job is now the static top-level spawn target.
     # app.py imports that stable function by value without bootstrap mutation.
 

@@ -37,18 +37,15 @@ def build_worker_services() -> WorkerServices:
     processing_module = core_services.processing
 
     from ..entry_classification import install_pdic_classification
-    from ..entry_classification_runtime import install_processing_entry_classification
     from ..layout_rows_cache import (
         capture_layout_rows,
         install_layout_rows_persistence_runtime,
     )
     from ..training_baseline import save_automatic_baseline
 
-    # These calls remain local ordering guards during migration. Core composition
-    # already installed the shared classification chain, so they are no-ops in a
-    # normally prepared process and preserve historical direct-worker behavior.
+    # PDIC sidecar persistence remains an idempotent worker-local guard. Entry
+    # materialization/cropping/OCR classification is now static processing code.
     install_pdic_classification(formats)
-    install_processing_entry_classification(processing_module)
     # Long-band row recovery and column-drift remeasurement are static.
     install_layout_rows_persistence_runtime()
 

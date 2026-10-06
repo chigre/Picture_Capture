@@ -30,10 +30,8 @@ def test_existing_pdic_refinement_reaches_shared_api() -> None:
 
 
 def test_layout_materialization_uses_shared_y_adapter() -> None:
-    # Runtime installation wraps processing._ordinary_entries_from_layout_roles
-    # to attach Entry classification. Inspect the defining source file rather
-    # than the currently wrapped callable so this test verifies the real base
-    # materializer contract without depending on installer order.
+    # Entry classification is now attached inside the canonical materializer,
+    # so its separator-Y contract no longer depends on installer order.
     source = Path(processing.__file__).read_text(encoding="utf-8")
     assert "refined_layout_entry_y_by_line(" in source
     assert 'getattr(line, "role"' in source

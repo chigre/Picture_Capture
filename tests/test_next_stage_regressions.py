@@ -293,7 +293,7 @@ def test_ordinary_marker_local_crop_uses_taller_box_for_visual_large_cjk():
 
 def test_ordinary_marker_text_ocr_fills_only_blank_without_moving_lines(monkeypatch):
     import picture_capture.paddle_headwords as ph
-    import picture_capture.entry_classification_runtime as ecr
+    import picture_capture.ocr_channel as ocr_channel
 
     image = Image.new("RGB", (360, 260), "white")
     draw = ImageDraw.Draw(image)
@@ -361,9 +361,9 @@ def test_ordinary_marker_text_ocr_fills_only_blank_without_moving_lines(monkeypa
                 )],
             )
 
-    monkeypatch.setattr(ecr, "OcrChannelSession", FakeChannel)
+    monkeypatch.setattr(ocr_channel, "OcrChannelSession", FakeChannel)
     monkeypatch.setattr(
-        ecr, "choose_ocr_text",
+        ocr_channel, "choose_ocr_text",
         lambda _plan, resolved: (resolved[0] if resolved else None, False),
     )
 
