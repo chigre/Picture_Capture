@@ -3,94 +3,91 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5U are complete.**
+**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5V are complete.**
 
 Phase 4 controller decomposition is complete. Phase 5 is progressively replacing dynamic installer/runtime ownership with explicit/static ownership while preserving behavior and keeping each slice independently reversible and reviewable.
 
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
-## Latest architecture checkpoint — Phase 5U
-- production PR: **#274 — make spawn detection worker static**
-- base before the production slice: `main@7b6305136d4826bfcb3106b87b13874a74cdd95f`
-- fixed production head: `2419240395e9648da9d0ff3da65d78b3d4923a5b`
-- validated production tree: `a7577dec0768dd900f66498f761c050b705dc54d`
-- merge commit / current architecture main: `c6af81df63f02eeac7906701468e0fb8f6d018d3`
-- merge tree: `a7577dec0768dd900f66498f761c050b705dc54d`
+## Latest architecture checkpoint — Phase 5V
+- production PR: **#276 — make large-head detection and authorization static**
+- base before the production slice: `main@e5e4ab588bd37893bb5eaa2af683c771614d44f7`
+- clean production head: `6e10e631a39a75f898378f7257e72e2f5df24926`
+- validated production tree: `1b643a5fb1c41402a0e36cb9e048bbea0394dd50`
+- merge commit / current architecture main: `9ae55e6d368a8e57b3dfd627b00aa90d227e4ded`
+- merge tree: `1b643a5fb1c41402a0e36cb9e048bbea0394dd50`
 
-### Static spawn-detection ownership
-The former `spawn_detection_runtime.py` installer seam is gone.
+### Static oversized-head ownership
+The former `ordinary_large_head_runtime.py` installer seam is gone.
 
-Before Phase 5U, two ordinary-detection workers coexisted:
-- `processing.detect_entries_job(...)`, an older static worker;
-- `spawn_detection_runtime.detect_entries_job_with_runtime(...)`, the spawn-safe worker dynamically installed into `processing` before `app.py` imported `detect_entries_job` by value.
+Before Phase 5V, large-head behavior was split across two dynamic mutations:
+1. `ordinary_large_head_runtime.py` replaced `ordinary_large_head_evidence.detect_ordinary_large_head_entries` before Layout Core imported the detector by value. The installed detector added page-observed row scale, the shared column-drift left analysis band, semantic-column coordinate correction, and row-front authorization.
+2. `ordinary_large_head_role_guard.py` then replaced the runtime module's row-front helper with the stricter policy and wrapped `ordinary_evidence_fusion._force_oversized_head_rows` so weak large-head evidence was consumed instead of falling through to generic nearest-row promotion.
 
-The runtime worker contained real behavior and therefore was not deleted directly. Phase 5U promoted its semantics into the normal top-level `processing.detect_entries_job(...)` function while preserving the same pickleable module identity expected by Windows/macOS spawn.
+Phase 5V moved both responsibilities into ordinary static owners rather than deleting only one installer.
 
-The static worker now directly preserves the former runtime contract:
-1. lazily imports and calls `bootstrap.worker.build_worker_services()` inside the spawned process;
-2. consumes the composed `processing` and `formats` services rather than recreating installer ownership inside the job;
-3. opens and normalizes the page through the worker-composed processing facade;
-4. copies `AppSettings` with `replace(settings)` before applying the worker-only `detection_method="left_edge"` override, so caller settings are not mutated;
-5. wraps ordinary detection in `services.capture_layout_rows(...)` exactly once;
-6. reads page sections through the worker processing core;
-7. writes the automatic baseline through `services.save_automatic_baseline(...)`;
-8. writes final PDIC through the classification-aware `formats.write_pdic(...)`;
-9. returns the same entry count and closes the image in `finally`.
+Current ownership:
+- `ordinary_large_head_evidence.py` is the final detector imported by Layout Core. It statically owns:
+  - existing component/group/split candidate logic;
+  - `observed_body_line_reference(...)` for page-observed ordinary-row scale;
+  - `layout_column_drift._analysis_left_for_column(...)` widened analysis safety for later columns;
+  - conversion from widened-band local X back to semantic-column-local coordinates before authorization;
+  - strict row-front authorization;
+  - the same source-coordinate emission, metadata, sorting, deduplication, and image lifetime.
+- `ordinary_large_head_role_guard.py` is now a pure mutation-free policy/helper module. It retains `HARD_ROLE_OVERRIDE_RATIO = 1.65`, strict first-ink/full-height-anchor row-front geometry, and body-row width/aspect guards. Its `strong_ordinary_large_head(...)` helper is called directly by fusion.
+- `ordinary_evidence_fusion.py` now consumes weak ordinary-large-head evidence directly. Weak observations cannot fall through to generic nearest-row promotion; strong observations retain the existing `_force_oversized_head_rows(...)` behavior.
+- `bootstrap/core.py` no longer imports or calls either large-head installer.
+- the architecture guard no longer permits `ordinary_large_head_runtime.py` as runtime debt.
 
-GUI composition still installs processing entry classification before importing `app`, but no longer replaces `processing.detect_entries_job`. `app.py` now imports the stable static processing worker directly. Worker composition remains the owner of PDIC classification, processing entry classification, LayoutRows persistence, and the `WorkerServices` bundle.
+Phase 5V deliberately did **not** change entry-classification runtime ownership, illustration-mask runtime ownership, unlined export output/filter semantics, or the remaining GUI/runtime contracts.
 
-The architecture guard no longer permits `spawn_detection_runtime.py` as legacy runtime debt.
+### Phase 5V isolated validation
+A temporary fail-closed branch workflow was used and removed before publication.
 
-### Phase 5U anomaly caught before validation
-One intermediate branch edit reconstructed `processing.py` from a segmented source read that stopped at line 560 and accidentally omitted the existing compatibility-facade tail below that point. The compare immediately exposed an implausibly large `processing.py` deletion (`36 additions / 93 deletions`).
-
-Production work stopped before validation. The untouched tail was fetched from the fixed main base and restored exactly. A patch-level compare then confirmed the final `processing.py` change was limited to `detect_entries_job` (`36 additions / 18 deletions`). No validation result from the malformed intermediate tree was reused.
-
-This is an explicit recovery lesson: segmented source reads must never be treated as EOF unless file completeness is independently established; compare/diff-shape review remains mandatory before expensive validation.
-
-### Phase 5U isolated validation
-The migration used a fail-closed temporary branch workflow and removed that workflow before production publication.
-
-Final isolated validation on the corrected tree:
-- exact intended production/test path set: **8 paths, passed**;
-- no production `spawn_detection_runtime.py` file remained;
-- no production `install_spawn_detection_runtime`, `_spawn_detection_runtime_installed`, or `spawn_detection_runtime` references remained;
+Final isolated validation:
+- exact intended production/test diff shape: **9 paths, passed**;
+- `ordinary_large_head_runtime.py` removed;
+- zero production references to `ordinary_large_head_runtime`, `install_ordinary_large_head_runtime`, `install_ordinary_large_head_role_guard`, `_row_front_runtime_installed`, `_large_head_role_guard_installed`, or `detect_ordinary_large_head_entries_guarded`;
 - architecture guard: passed;
-- focused regressions: **36 passed**;
+- focused regressions: **35 passed**;
 - full pytest suite: **1289 passed, 1 existing Pillow deprecation warning**;
 - compileall: passed;
 - Ruff F821: passed.
 
-Focused characterization included an actual fake-`WorkerServices` invocation of the static job, proving:
-- original settings remain unchanged;
-- the copied worker settings receive only the `left_edge` override;
-- LayoutRows capture enters before detection and exits before persistence;
-- baseline write occurs before final PDIC write;
-- page index, page sections, image width, pages tuple, and returned entry count are preserved.
+Focused characterization retained the behavioral cases that matter for the migration:
+- an underestimated Layout scale is corrected by observed body-row height;
+- a tall object in the middle of definition text cannot become a headword;
+- a true oversized head after a small prefix remains eligible through the full-height anchor;
+- later-column large-head analysis still uses the shared left safety band without changing semantic column bounds;
+- semantic-local X correction remains in place after widened-band analysis;
+- weak large-head evidence cannot manufacture a new entry through fallback;
+- the strong `1.65` role-override threshold and width/aspect authorization remain intact;
+- stacked oversized heads remain supported by the existing split/dedup logic;
+- static column drift cannot replace the large-head detector.
 
-The temporary validation workflow was removed, and the exact validated tree `a7577dec0768dd900f66498f761c050b705dc54d` was re-anchored to the live main base as one clean production commit `2419240395e9648da9d0ff3da65d78b3d4923a5b`.
+The temporary validation workflow was deleted before publication. The exact validated tree `1b643a5fb1c41402a0e36cb9e048bbea0394dd50` was then re-anchored to the live main base as one clean production commit `6e10e631a39a75f898378f7257e72e2f5df24926`.
 
-### Phase 5U PR gate
-Fixed-head PR #274 on `2419240395e9648da9d0ff3da65d78b3d4923a5b`:
-- Ubuntu CI run 2093: passed, including pytest, Linux GUI smoke, compatibility runner, compile, F821, and wheel build;
-- Windows CI run 2093: passed, including pytest, Windows GUI smoke, compatibility runner, compile, F821, and wheel build;
-- macOS CI run 2093: passed, including pytest, macOS GUI smoke, compatibility runner, compile, F821, and wheel build;
-- CodeQL run 2074 Actions: passed;
-- CodeQL run 2074 Python: passed;
-- Advanced Security run 1839: passed;
-- PR remained mergeable with one commit and eight changed files;
+### Phase 5V PR gate
+Fixed-head PR #276 on `6e10e631a39a75f898378f7257e72e2f5df24926`:
+- CI run 2097 Ubuntu: passed, including pytest, Linux GUI smoke, compatibility runner, compile, F821, and wheel build;
+- CI run 2097 Windows: passed, including pytest, Windows GUI smoke, compatibility runner, compile, F821, and wheel build;
+- CI run 2097 macOS: passed, including pytest, macOS GUI smoke, compatibility runner, compile, F821, and wheel build;
+- CodeQL run 2078 Actions: passed;
+- CodeQL run 2078 Python: passed;
+- Advanced Security run 1841: passed;
+- PR remained mergeable with one commit and nine changed files;
 - no PR comments, review threads, review submissions, or objections.
 
-PR #274 was merged with fixed-head protection using `expected_head_sha=2419240395e9648da9d0ff3da65d78b3d4923a5b`.
+PR #276 was merged with fixed-head protection using `expected_head_sha=6e10e631a39a75f898378f7257e72e2f5df24926`.
 
-### Phase 5U post-merge verification
-On `main@c6af81df63f02eeac7906701468e0fb8f6d018d3`:
-- merge tree exactly matched validated production tree `a7577dec0768dd900f66498f761c050b705dc54d`;
-- push CI run 2094 passed on Ubuntu, Windows, and macOS;
+### Phase 5V post-merge verification
+On `main@9ae55e6d368a8e57b3dfd627b00aa90d227e4ded`:
+- merge tree exactly matched validated production tree `1b643a5fb1c41402a0e36cb9e048bbea0394dd50`;
+- push CI run 2098 passed on Ubuntu, Windows, and macOS;
 - GUI smoke passed on all applicable platforms;
 - compatibility runner / compile / F821 / wheel passed on all three platforms;
-- CodeQL run 2075 Actions: passed;
-- CodeQL run 2075 Python: passed.
+- CodeQL run 2079 Actions: passed;
+- CodeQL run 2079 Python: passed.
 
 No post-merge behavior, packaging, or security regression was observed.
 
@@ -103,8 +100,9 @@ No post-merge behavior, packaging, or security regression was observed.
 - Phase 5Q: long-band logical row recovery became static in `layout_physical_indent.py`.
 - Phase 5R: character-height fallback became an explicit post-raw-cache step in `layout_detection.py`, backed by non-runtime `layout_character_height.py`.
 - Phase 5S: column-drift first-X remeasurement became an explicit finalization step in `dictionary_page_layout_policy.py`, backed by non-runtime `layout_column_drift.py`.
-- Phase 5T: the identity-only spawn-layout wrapper was deleted; `processing._ensure_layout_runtime` is directly authoritative without core-composition wrapping.
+- Phase 5T: the identity-only spawn-layout wrapper was deleted; `processing._ensure_layout_runtime` became directly authoritative.
 - Phase 5U: the real spawn-safe ordinary worker became static `processing.detect_entries_job`; GUI-time worker replacement and `spawn_detection_runtime.py` were removed.
+- Phase 5V: guarded oversized-head detection plus strict row/fusion authorization became static; `ordinary_large_head_runtime.py` and both large-head bootstrap mutations were removed.
 
 ## Current explicit Phase 5 ownership
 - Ordinary drawing: app wrapper -> `DetectionController`; OCR-independent quick-setting helper is `ordinary_quick_settings.py`.
@@ -120,56 +118,52 @@ No post-merge behavior, packaging, or security regression was observed.
 - Column-drift remeasurement: static `dictionary_page_layout_policy.infer_dictionary_page_layout(...)` -> non-runtime `layout_column_drift` helpers.
 - Spawn layout preparation: direct `processing._ensure_layout_runtime()` ownership; no compatibility wrapper remains.
 - Spawn ordinary detection: static top-level `processing.detect_entries_job(...)` -> lazy `build_worker_services()` consumption; no GUI-time replacement remains.
-- `unlined_fast_path_runtime.py` remains intentionally because CropController resolves the worker at action time and the fast worker remains an import-order/performance seam.
+- Oversized-head detection/authorization: static `ordinary_large_head_evidence` + pure `ordinary_large_head_role_guard` policy + direct `ordinary_evidence_fusion` strength gate.
 
-## Recommended next slice — Phase 5V
-**Staticize oversized-head detection and its strong row-front/fusion authorization as one cohesive ownership slice.**
+## Recommended next slice — Phase 5W
+**Retire `unlined_fast_path_runtime.py` by making its existing spawn-safe physical-row worker the normal static `unlined_line_export.export_unlined_page_job`.**
 
-Fresh read-only inspection after Phase 5U shows that `ordinary_large_head_runtime.py` is the smallest remaining runtime file, but it is **not independently removable**.
+Fresh read-only inspection after Phase 5V shows this is the narrowest remaining runtime seam.
 
-Current behavior spans two dynamic seams:
-- `ordinary_large_head_runtime.py` replaces `ordinary_large_head_evidence.detect_ordinary_large_head_entries` before `layout_core_understanding.py` imports that detector by value. The guarded detector adds page-observed ordinary-row height, the shared column-drift analysis-left safety band, semantic-column coordinate correction, and row-front authorization.
-- `ordinary_large_head_role_guard.py` then mutates `ordinary_large_head_runtime.candidate_starts_at_row_front` to the stricter row-front/strong-oversized rule and also wraps `ordinary_evidence_fusion._force_oversized_head_rows` so weak large-head evidence is consumed without manufacturing a new entry row.
+Current state:
+- `unlined_line_export.export_unlined_page_job(...)` is an older top-level spawn-safe worker that builds an analysis image and runs the complete `understand_layout_core(...)` path for every selected page.
+- `unlined_fast_path_runtime.export_unlined_page_job_fast(...)` is the worker installed by GUI bootstrap. It preserves the same PDIC matching, page sections, filtering, saving, result shape, and image lifetime, but resolves only the physical rows required by this QA export through `resolve_unlined_physical_rows(...)`.
+- `resolve_unlined_physical_rows(...)` already owns the intended recovery order: persisted LayoutRows cache -> Profile-geometry physical projection -> reliable physical layout detection fallback. It stops before symbol/large-head semantic evidence.
+- `CropController` intentionally imports `unlined_line_export` as a module and resolves `unlined_export.export_unlined_page_job` at action time. The legacy `run_unlined_export(...)` helper also calls the module-global top-level worker. Therefore no import-by-value compatibility layer is required once the normal worker itself becomes the fast implementation.
 
-Therefore deleting only `ordinary_large_head_runtime.py` would change behavior and/or import-order semantics. Phase 5V must remove both dynamic mutations together while preserving the exact detector/fusion policy.
+### Safest Phase 5W architecture
+- replace the body of the existing top-level `unlined_line_export.export_unlined_page_job(...)` with the exact current fast-worker semantics;
+- import/use `resolve_unlined_physical_rows(...)` directly from the ordinary module;
+- keep the existing function name, module identity, signature, return type, and spawn-pickleable top-level identity;
+- preserve PDIC reads, page-section reads, `unlined_rows_from_layout(...)`, `_save_unlined_rows(...)`, blank-filter ordering, merge-by-page behavior, result counters, and image lifetime exactly;
+- preserve `physical_reliable=False` result behavior when no physical layout can be resolved;
+- remove `install_unlined_fast_path()` from GUI composition only after the static worker is behaviorally equivalent;
+- delete `unlined_fast_path_runtime.py` once no production consumer remains;
+- remove now-unused full-Layout-only imports from `unlined_line_export.py` if source contracts permit;
+- ratchet architecture/source-contract tests to assert direct static physical-row ownership;
+- do **not** combine this slice with entry-classification runtime retirement or illustration-mask ownership.
 
-### Safest Phase 5V architecture
-- make the guarded detector the ordinary static implementation in `ordinary_large_head_evidence.py`, including:
-  - `observed_body_line_reference(...)`;
-  - the shared `layout_column_drift._analysis_left_for_column(...)` widened analysis band;
-  - semantic-column-local coordinate correction before row-front checks;
-  - stacked-head splitting and current deduplication semantics;
-  - strict row-front authorization with the existing `HARD_ROLE_OVERRIDE_RATIO = 1.65` behavior for body-row role changes;
-- make strong/weak large-head fusion handling explicit/static in `ordinary_evidence_fusion.py` rather than wrapping `_force_oversized_head_rows` at bootstrap time;
-- remove `install_ordinary_large_head_runtime()` and `install_ordinary_large_head_role_guard()` from `bootstrap/core.py` only after static behavior is equivalent;
-- delete `ordinary_large_head_runtime.py` once no production consumer remains;
-- either retain `ordinary_large_head_role_guard.py` as a pure non-mutating policy/helper module or fold its small static policy into the normal evidence/fusion owners; do not leave an installer behind;
-- ratchet architecture/source-contract tests so import order can no longer select a weaker detector;
-- do **not** combine Phase 5V with entry-classification retirement, illustration-mask ownership, or unlined-fast-path work.
-
-### Required Phase 5V focused characterization
+### Required Phase 5W focused characterization
 Before publication, prove at minimum:
-- `layout_core_understanding` receives the final guarded detector without bootstrap mutation;
-- page-observed line-height reference remains identical on noisy/underestimated-layout cases;
-- later-column analysis still uses the shared column-drift left safety band without altering semantic column bounds;
-- semantic-local candidate coordinates are unchanged after widened-band analysis;
-- weak oversized candidates on body rows are rejected/consumed and cannot fall through to generic nearest-row promotion;
-- existing entry/headword rows retain the intended looser candidate allowance;
-- body-row role override still requires the current strong ratio and width/aspect guards;
-- consecutive stacked oversized heads remain separable and deduplicated correctly;
-- static column drift cannot replace or weaken the guarded detector;
-- `bootstrap/core.py` no longer mutates detector or fusion callables for this feature;
-- no `install_ordinary_large_head_runtime` or installer-state dependency remains;
+- `unlined_line_export.export_unlined_page_job` remains top-level and spawn-pickleable;
+- no GUI/bootstrap mutation is needed to obtain the fast worker;
+- CropController continues to resolve the ordinary module worker at action time;
+- cache/Profile/reliable-physical fallback order remains owned by `resolve_unlined_physical_rows(...)`;
+- full Layout Core semantic enrichment is not called by the static worker;
+- PDIC-to-Layout row matching and page-section filtering remain unchanged;
+- blankness is still measured before white-border trimming;
+- merge-by-page and per-row output naming/manifests remain unchanged;
+- all `UnlinedPageResult` counters and the `physical_reliable` flag are equivalent to the current installed fast path;
+- no `install_unlined_fast_path` / `_physical_rows_fast_path_installed` production dependency remains;
 - full cross-platform CI, GUI smoke, compatibility runner, compile, F821, wheel, CodeQL, and security gates remain green.
 
-Any behavior difference between the current two-stage runtime/role-guard chain and the proposed static ownership is a stop condition rather than a reason to weaken tests.
+Any behavioral difference between the currently installed fast worker and the proposed static worker is a stop condition; do not fall back to the older full-Layout worker merely to satisfy tests.
 
-## Remaining runtime seams after Phase 5U
+## Remaining runtime seams after Phase 5V
 Treat these as real compatibility/algorithm/performance seams until individually proven:
-- `entry_classification_runtime.py`;
-- `layout_illustration_mask_runtime.py`;
-- `ordinary_large_head_runtime.py` — recommended Phase 5V, but only together with removal of the related dynamic role/fusion guard mutations;
-- `unlined_fast_path_runtime.py`.
+- `entry_classification_runtime.py` — multiple real behaviors: final Layout classification materialization, canonical marker OCR crop, and multi-engine marker OCR dispatch;
+- `layout_illustration_mask_runtime.py` — multiple real behaviors: native setting extension, shared PPP detector redirection, Page Understanding pre-mask wrapper, and GUI settings/cache integration;
+- `unlined_fast_path_runtime.py` — recommended Phase 5W; a narrow worker-replacement/performance seam whose behavior can be promoted directly to the existing top-level exporter worker.
 
 ## Standing continuation authorization
 The user explicitly authorized continued Phase 5 work along the recommended architecture path without pausing at normal ownership decision points. Continue automatically after each successful checkpoint and fresh live-state revalidation.
