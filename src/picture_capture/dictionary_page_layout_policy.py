@@ -29,6 +29,7 @@ from PIL import Image, ImageOps
 from . import dictionary_page_design as base
 from . import dictionary_page_design_refined as refined
 from .layout_detection import analysis_ink_mask, detect_layout_parameters, LayoutEstimate
+from .layout_column_drift import finalize_layout_column_drift
 from .models import AppSettings
 from .page_x_registration import register_page_manual_x
 
@@ -351,6 +352,12 @@ def infer_dictionary_page_layout(
         display_head_height=display_height,
         reliable=reliable,
         reason=reason,
+    )
+    layout = finalize_layout_column_drift(
+        image,
+        page_settings,
+        layout,
+        page_index=int(page_index),
     )
     return layout, page_settings, applied
 

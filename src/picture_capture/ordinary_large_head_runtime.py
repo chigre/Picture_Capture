@@ -11,7 +11,7 @@ otherwise-correct physical-indent role:
   large/merged object in the middle of definition text is not a headword merely
   because its bounding box is tall.
 
-The detector also reuses the Layout column-drift runtime's analysis-only left
+The detector also reuses the Layout column-drift helper's analysis-only left
 safety band.  This is intentionally done *inside* the guarded detector: the
 column-drift installer must never replace this callable, otherwise import order
 can silently disable row-front/strong-oversized authorization.
@@ -116,7 +116,7 @@ def detect_ordinary_large_head_entries_guarded(
 ) -> list[Entry]:
     """Detect only row-leading oversized CJK heads with a page-observed scale."""
     from . import ordinary_large_head_evidence as base
-    from .layout_column_drift_runtime import _analysis_left_for_column
+    from .layout_column_drift import _analysis_left_for_column
 
     if not base._uses_cjk_large_heads(settings):
         return []

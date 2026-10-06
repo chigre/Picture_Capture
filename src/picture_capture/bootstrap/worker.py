@@ -38,7 +38,6 @@ def build_worker_services() -> WorkerServices:
 
     from ..entry_classification import install_pdic_classification
     from ..entry_classification_runtime import install_processing_entry_classification
-    from ..layout_column_drift_runtime import install_layout_column_drift_runtime
     from ..layout_rows_cache import (
         capture_layout_rows,
         install_layout_rows_persistence_runtime,
@@ -50,9 +49,7 @@ def build_worker_services() -> WorkerServices:
     # normally prepared process and preserve historical direct-worker behavior.
     install_pdic_classification(formats)
     install_processing_entry_classification(processing_module)
-    # Long-band row recovery is static in layout_physical_indent. Column drift
-    # remains an explicit process-local runtime until its own slice is proven.
-    install_layout_column_drift_runtime()
+    # Long-band row recovery and column-drift remeasurement are static.
     install_layout_rows_persistence_runtime()
 
     return WorkerServices(
