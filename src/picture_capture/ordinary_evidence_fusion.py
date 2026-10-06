@@ -23,6 +23,7 @@ from typing import Any, Iterable
 
 from .entry_classification import register_layout_line_classification
 from .models import Entry
+from .ordinary_large_head_role_guard import strong_ordinary_large_head
 
 
 def _is_oversized_head_evidence(evidence: Entry) -> bool:
@@ -146,6 +147,13 @@ def promote_evidence_to_layout_roles(
 
     for evidence in evidence_entries:
         if _is_oversized_head_evidence(evidence):
+            # Weak ordinary-large-head observations are deliberately consumed
+            # here. Letting them fall through to generic nearest-row promotion
+            # would recreate the false-positive -> extra-entry amplification
+            # that the former runtime wrapper blocked.
+            if not strong_ordinary_large_head(evidence, layout):
+                continue
+
             handled, added = _force_oversized_head_rows(understanding, evidence)
             if handled:
                 promoted += added

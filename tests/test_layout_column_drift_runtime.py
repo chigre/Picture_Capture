@@ -16,8 +16,8 @@ from picture_capture.layout_column_drift import (
     remeasure_layout_indents_from_ink,
 )
 from picture_capture.layout_transform import LayoutTransform
-from picture_capture.ordinary_large_head_runtime import (
-    detect_ordinary_large_head_entries_guarded,
+from picture_capture.ordinary_large_head_evidence import (
+    detect_ordinary_large_head_entries,
 )
 
 
@@ -158,7 +158,7 @@ def test_large_head_left_of_semantic_column_is_still_detected():
         paddle_language="ch",
     )
 
-    entries = detect_ordinary_large_head_entries_guarded(
+    entries = detect_ordinary_large_head_entries(
         image, understanding, settings,
     )
 
@@ -175,12 +175,13 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
     worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
     policy = (root / "src/picture_capture/dictionary_page_layout_policy.py").read_text(encoding="utf-8")
     unlined = (root / "src/picture_capture/unlined_physical_rows_resolver.py").read_text(encoding="utf-8")
-    large_head = (root / "src/picture_capture/ordinary_large_head_runtime.py").read_text(encoding="utf-8")
+    large_head = (
+        root / "src/picture_capture/ordinary_large_head_evidence.py"
+    ).read_text(encoding="utf-8")
     physical = (root / "src/picture_capture/layout_physical_indent.py").read_text(encoding="utf-8")
 
-    assert core.index("install_ordinary_large_head_role_guard()") < core.index(
-        "from .. import processing as processing_module"
-    )
+    assert "install_ordinary_large_head_runtime" not in core
+    assert "install_ordinary_large_head_role_guard" not in core
     assert "from .layout_column_drift import finalize_layout_column_drift" in policy
     layout_at = policy.index("layout = base.DictionaryPageLayout(")
     finalize_at = policy.index("layout = finalize_layout_column_drift(")
@@ -190,6 +191,8 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
     for source in (gui, worker, unlined, policy):
         assert "install_layout_column_drift_runtime" not in source
     assert not (root / "src/picture_capture/spawn_layout_runtime.py").exists()
+    assert not (root / "src/picture_capture/ordinary_large_head_runtime.py").exists()
     assert "from .layout_column_drift import _analysis_left_for_column" in large_head
+    assert "strict_candidate_starts_at_row_front" in large_head
     assert "layout_column_drift_runtime" not in large_head
     assert "count = min(256, count)" in physical

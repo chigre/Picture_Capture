@@ -11,6 +11,11 @@ consecutive oversized heads can be joined by scan noise or fragment grouping;
 when a reliable vertical ink valley separates two individually valid oversized
 glyph regions, the detector emits two evidence events so Layout role fusion can
 assign ``entry/body`` semantics to each head independently.
+
+The final detector also owns the former runtime hardening statically: page-
+observed ordinary-row scale, the shared column-drift left analysis band, and
+strict row-front authorization. Bootstrap/import order therefore cannot select
+a weaker large-head detector.
 """
 
 from typing import Any
@@ -19,6 +24,7 @@ import numpy as np
 from PIL import Image
 
 from .models import AppSettings, Entry
+from .ordinary_large_head_role_guard import strict_candidate_starts_at_row_front
 from .ordinary_visual import _components, _otsu
 
 
@@ -280,59 +286,130 @@ def _candidate_boxes(
     return result
 
 
+def observed_body_line_reference(layout: Any) -> float:
+    """Return a conservative ordinary-row height for large-head comparison."""
+    baseline = max(
+        8.0,
+        float(getattr(layout, "ordinary_line_height", 1.0) or 1.0),
+    )
+    body_heights: list[float] = []
+    all_heights: list[float] = []
+    for column in list(getattr(layout, "columns", []) or []):
+        for line in list(getattr(column, "lines", []) or []):
+            try:
+                height = float(getattr(line, "y1")) - float(getattr(line, "y0"))
+            except (AttributeError, TypeError, ValueError):
+                continue
+            if height <= 0:
+                continue
+            if baseline * 0.42 <= height <= baseline * 2.20:
+                all_heights.append(height)
+                if str(getattr(line, "role", "body") or "body") == "body":
+                    body_heights.append(height)
+
+    samples = body_heights if len(body_heights) >= 8 else all_heights
+    if len(samples) < 8:
+        return baseline
+
+    values = np.asarray(samples, dtype=float)
+    center = float(np.median(values))
+    deviation = np.abs(values - center)
+    mad = float(np.median(deviation)) if deviation.size else 0.0
+    if mad > 0:
+        kept = values[deviation <= max(2.0, 3.5 * mad)]
+        if kept.size >= 6:
+            center = float(np.median(kept))
+
+    return float(max(baseline, min(center, baseline * 1.80)))
+
+
 def detect_ordinary_large_head_entries(
     image: Image.Image,
     understanding: Any,
     settings: AppSettings,
 ) -> list[Entry]:
-    """Detect oversized CJK display heads without using indent polarity."""
+    """Detect only row-leading oversized CJK heads with a page-observed scale."""
+    from .layout_column_drift import _analysis_left_for_column
+
     if not _uses_cjk_large_heads(settings):
         return []
 
     layout = understanding.layout
     canonical = layout.transform.canonical_image_for_analysis(image.convert("RGB"))
-    gray_page = np.asarray(canonical.convert("L"), dtype=np.uint8)
-    line_height = max(8.0, float(getattr(layout, "ordinary_line_height", 1.0) or 1.0))
-    found: list[Entry] = []
+    try:
+        gray_page = np.asarray(canonical.convert("L"), dtype=np.uint8)
+        line_height = observed_body_line_reference(layout)
+        found: list[Entry] = []
+        columns = list(getattr(layout, "columns", []) or [])
+        top = max(0, int(getattr(layout, "body_top", 0) or 0))
+        bottom = min(
+            gray_page.shape[0],
+            int(getattr(layout, "body_bottom", gray_page.shape[0]) or gray_page.shape[0]),
+        )
 
-    for column in list(getattr(layout, "columns", []) or []):
-        left = max(0, int(column.left))
-        right = min(gray_page.shape[1], int(column.right))
-        top = max(0, int(layout.body_top))
-        bottom = min(gray_page.shape[0], int(layout.body_bottom))
-        if right <= left or bottom <= top:
-            continue
-
-        gray = gray_page[top:bottom, left:right]
-        if gray.size == 0:
-            continue
-        ink = gray <= _otsu(gray)
-        for x0, y0, x1, y1 in _candidate_boxes(ink, line_height):
-            height = float(y1 - y0)
-            canonical_y = top + int(y0)
-            source_x, source_y = layout.transform.canonical_to_source_point(
-                int(column.left),
-                canonical_y,
-                layout.source_size,
+        for position, column in enumerate(columns):
+            semantic_left = max(0, int(getattr(column, "left", 0) or 0))
+            semantic_right = min(
+                gray_page.shape[1],
+                int(getattr(column, "right", semantic_left + 1) or semantic_left + 1),
             )
-            found.append(Entry(
-                word="",
-                x=int(source_x),
-                y=int(source_y),
-                confidence=min(0.995, max(0.90, height / max(1.0, line_height * 2.5))),
-                ocr_source="ordinary_large_head_evidence",
-                issue_type="ORDINARY_OVERSIZED_DISPLAY_HEAD",
-                ocr_visual_run_height=height,
-                ocr_line_height_reference=line_height,
-                ocr_leading_height_ratio=height / max(1.0, line_height),
-                ocr_single_cjk=True,
-                ocr_oversized_cjk=True,
-            ))
+            analysis_left = _analysis_left_for_column(columns, position, line_height)
+            if semantic_right <= analysis_left or bottom <= top:
+                continue
 
-    # One oversized object may overlap several recovered logical rows. Keep a
-    # single evidence event per physical display head. Consecutive physical heads
-    # survive because their top coordinates are separated by more than this
-    # within-head tolerance after stacked-region splitting.
+            gray = gray_page[top:bottom, analysis_left:semantic_right]
+            if gray.size == 0:
+                continue
+            ink = gray <= _otsu(gray)
+            local_shift = int(analysis_left - semantic_left)
+
+            for raw_box in _candidate_boxes(ink, line_height):
+                x0, y0, x1, y1 = raw_box
+                # Candidate X is local to the widened analysis band. Convert it
+                # back to semantic-column-local coordinates before comparing it
+                # with LayoutLine.first_x / anchor_x.
+                semantic_box = (
+                    int(x0 + local_shift),
+                    int(y0),
+                    int(x1 + local_shift),
+                    int(y1),
+                )
+                if not strict_candidate_starts_at_row_front(
+                    column,
+                    semantic_box,
+                    line_height,
+                ):
+                    continue
+
+                height = float(y1 - y0)
+                canonical_y = top + int(y0)
+                source_x, source_y = layout.transform.canonical_to_source_point(
+                    semantic_left,
+                    canonical_y,
+                    layout.source_size,
+                )
+                found.append(Entry(
+                    word="",
+                    x=int(source_x),
+                    y=int(source_y),
+                    confidence=min(
+                        0.995,
+                        max(0.90, height / max(1.0, line_height * 2.5)),
+                    ),
+                    ocr_source="ordinary_large_head_evidence",
+                    issue_type="ORDINARY_OVERSIZED_DISPLAY_HEAD",
+                    ocr_visual_run_height=height,
+                    ocr_line_height_reference=line_height,
+                    ocr_leading_height_ratio=height / max(1.0, line_height),
+                    ocr_single_cjk=True,
+                    ocr_oversized_cjk=True,
+                ))
+    finally:
+        try:
+            canonical.close()
+        except Exception:
+            pass
+
     found.sort(key=lambda item: (item.x, item.y))
     deduped: list[Entry] = []
     tolerance = max(4, round(line_height * 0.80))
@@ -345,3 +422,9 @@ def detect_ordinary_large_head_entries(
             continue
         deduped.append(entry)
     return deduped
+
+
+__all__ = [
+    "detect_ordinary_large_head_entries",
+    "observed_body_line_reference",
+]
