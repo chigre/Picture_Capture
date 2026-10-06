@@ -31,12 +31,8 @@ def build_core_services() -> CoreServices:
 
     install_layout_illustration_mask_settings()
 
-    # Must precede consumers that capture the detector callable by value.
-    from ..layout_character_height_runtime import (
-        install_character_height_fallback_runtime,
-    )
-
-    install_character_height_fallback_runtime()
+    # Character-height fallback is static inside layout_detection, so consumers
+    # that import the detector by value no longer depend on installer ordering.
 
     from ..layout_detector_live_binding import install_live_layout_detector_binding
 

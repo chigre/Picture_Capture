@@ -33,12 +33,12 @@ def test_core_composition_preserves_import_sensitive_install_order() -> None:
         ROOT / "src" / "picture_capture" / "bootstrap" / "core.py"
     ).read_text(encoding="utf-8")
 
-    character_height = source.index("install_character_height_fallback_runtime()")
     live_binding = source.index("install_live_layout_detector_binding()")
     large_head = source.index("install_ordinary_large_head_runtime()")
     processing_import = source.index("from .. import processing as processing_module")
 
-    assert character_height < live_binding < large_head < processing_import
+    assert live_binding < large_head < processing_import
+    assert "install_character_height_fallback_runtime" not in source
     assert source.index("install_pdic_classification(formats)") < processing_import
     assert source.index("install_processing_entry_classification(processing_module)") > processing_import
 
@@ -53,7 +53,6 @@ def test_core_profile_owns_former_package_import_compatibility_chain() -> None:
 
     installers = (
         "install_layout_illustration_mask_settings",
-        "install_character_height_fallback_runtime",
         "install_live_layout_detector_binding",
         "install_ordinary_large_head_runtime",
         "install_ordinary_large_head_role_guard",

@@ -38,15 +38,8 @@ def prepare_gui_application() -> Any:
     formats.write_pdic = build_write_pdic_capture(formats.write_pdic)
     install_pdic_classification(formats)
 
-    # Character-height recovery must be installed before Page Design/policy
-    # modules import detect_layout_parameters by value.  Core composition has
-    # already established it; this local call remains as an idempotent ordering
-    # guard while the legacy runtime chain is being retired.
-    from ..layout_character_height_runtime import (
-        install_character_height_fallback_runtime,
-    )
-
-    install_character_height_fallback_runtime()
+    # Character-height fallback is now static in layout_detection; Page Design
+    # and policy imports no longer depend on a local installer ordering guard.
 
     # The GUI Layout overlay also needs the same physical-indent runtime before
     # app import. Ordinary detection itself prepares this runtime again
