@@ -35,7 +35,6 @@ LEGACY_RUNTIME_FILES = {
     "layout_illustration_mask_runtime.py",
     "layout_row_recovery_runtime.py",
     "ordinary_large_head_runtime.py",
-    "overlay_line_anchor_runtime.py",
     "overlay_opacity_runtime.py",
     "spawn_detection_runtime.py",
     "spawn_layout_runtime.py",
