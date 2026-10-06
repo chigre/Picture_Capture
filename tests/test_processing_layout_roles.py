@@ -137,7 +137,7 @@ def test_vb_is_only_used_when_layout_has_no_columns(monkeypatch) -> None:
 def test_spawn_job_uses_canonical_processing_detect_entries() -> None:
     source = inspect.getsource(processing.detect_entries_job)
 
-    assert "entries, _geometry = detect_entries(" in source
+    assert "entries, _geometry = processing_module.detect_entries(" in source
     assert "ordinary_layout_worker" not in source
     assert "build_ordinary_layout_primary" not in source
 

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+import inspect
 from pathlib import Path
+import pickle
 from types import SimpleNamespace
 
+from PIL import Image
+
+from picture_capture import processing as processing_module
+from picture_capture.models import AppSettings
 from picture_capture.ocr_action_guard import _ineffective_lens_only_selection
 from picture_capture.ordinary_quick_settings import _apply_quick_settings_for_ordinary
 from picture_capture.settings_help_restore import install_settings_help_restore
-from picture_capture.spawn_detection_runtime import (
-    detect_entries_job_with_runtime,
-    install_spawn_detection_runtime,
-)
 from picture_capture.ui_terminology import normalize_ui_text
 
 
@@ -198,25 +201,96 @@ def test_gui_composition_no_longer_installs_ordinary_action_runtime():
     assert 'app._detect_pages(indices, method="left_edge", force_refresh=False)' in controller_source
 
 
-def test_spawn_worker_is_top_level_pickleable_and_installed_before_app_import():
-    assert detect_entries_job_with_runtime.__module__ == "picture_capture.spawn_detection_runtime"
-
-    processing = SimpleNamespace()
-    install_spawn_detection_runtime(processing)
-    assert processing.detect_entries_job is detect_entries_job_with_runtime
+def test_spawn_worker_is_static_top_level_pickleable_without_gui_mutation():
+    job = processing_module.detect_entries_job
+    assert job.__module__ == "picture_capture.processing"
+    payload = pickle.dumps(job)
+    assert b"picture_capture.processing" in payload
 
     source = _gui_composition_source()
-    install_at = source.index("install_spawn_detection_runtime(processing_module)")
+    assert "install_spawn_detection_runtime" not in source
+    classification_at = source.index("install_processing_entry_classification(processing_module)")
     app_import_at = source.index("from .. import app as app_module")
-    assert install_at < app_import_at
+    assert classification_at < app_import_at
+
+
+def test_static_spawn_worker_preserves_worker_services_contract(tmp_path, monkeypatch):
+    from picture_capture.bootstrap import worker as worker_bootstrap
+
+    page = tmp_path / "000001.png"
+    Image.new("RGB", (40, 50), "white").save(page)
+    pdic = tmp_path / "000001.pdic"
+    settings = AppSettings(detection_method="combined")
+    events: list[tuple] = []
+
+    @contextmanager
+    def capture_layout_rows(root, page_path, page_index, original_settings):
+        events.append(("capture_enter", root, page_path, page_index, original_settings))
+        yield
+        events.append(("capture_exit",))
+
+    fake_core = SimpleNamespace(
+        normalize_page_rgb=lambda opened: opened.convert("RGB"),
+        read_page_sections=lambda page_path: ["section"],
+        pdic_path_for_image=lambda page_path: pdic,
+    )
+
+    def detect_entries(image, current, *, profile_page_index, page_sections):
+        events.append(
+            (
+                "detect",
+                current,
+                current.detection_method,
+                profile_page_index,
+                page_sections,
+                image.size,
+            )
+        )
+        return [SimpleNamespace(word="entry")], SimpleNamespace()
+
+    fake_processing = SimpleNamespace(_core=fake_core, detect_entries=detect_entries)
+    fake_formats = SimpleNamespace(
+        write_pdic=lambda path, entries, width, pages: events.append(
+            ("write", path, len(entries), width, pages)
+        )
+    )
+    fake_services = SimpleNamespace(
+        processing=fake_processing,
+        formats=fake_formats,
+        capture_layout_rows=capture_layout_rows,
+        save_automatic_baseline=lambda path, entries, width, pages: events.append(
+            ("baseline", path, len(entries), width, pages)
+        ),
+    )
+    monkeypatch.setattr(
+        worker_bootstrap,
+        "build_worker_services",
+        lambda: fake_services,
+    )
+
+    count = processing_module.detect_entries_job(
+        str(page),
+        settings,
+        ("p1", "p2", "p3"),
+        7,
+    )
+
+    assert count == 1
+    assert settings.detection_method == "combined"
+    assert events[0][:4] == ("capture_enter", tmp_path, page, 7)
+    assert events[0][4] is settings
+    assert events[1][0] == "detect"
+    assert events[1][1] is not settings
+    assert events[1][2:] == ("left_edge", 7, ["section"], (40, 50))
+    assert events[2] == ("capture_exit",)
+    assert events[3] == ("baseline", pdic, 1, 40, ("p1", "p2", "p3"))
+    assert events[4] == ("write", pdic, 1, 40, ("p1", "p2", "p3"))
 
 
 def test_spawn_worker_uses_explicit_worker_composition_and_sidecar_aware_pdic():
     root = Path(__file__).resolve().parents[1]
     worker = _worker_composition_source()
-    job = (
-        root / "src" / "picture_capture" / "spawn_detection_runtime.py"
-    ).read_text(encoding="utf-8")
+    job = inspect.getsource(processing_module.detect_entries_job)
 
     assert "install_pdic_classification(formats)" in worker
     assert "install_processing_entry_classification(processing_module)" in worker
@@ -228,9 +302,13 @@ def test_spawn_worker_uses_explicit_worker_composition_and_sidecar_aware_pdic():
     assert "finalize_layout_column_drift(" in policy
     assert "install_layout_rows_persistence_runtime()" in worker
 
+    assert "from .bootstrap.worker import build_worker_services" in job
     assert "services = build_worker_services()" in job
+    assert "with services.capture_layout_rows(" in job
     assert "formats.write_pdic(" in job
+    assert "services.save_automatic_baseline(" in job
     assert "current = replace(settings)" in job
+    assert 'current.detection_method = "left_edge"' in job
     # Composition ownership must not drift back into the pickleable job target.
     assert "install_pdic_classification(formats)" not in job
     assert "install_processing_entry_classification(processing_module)" not in job

@@ -62,11 +62,11 @@ def test_gui_composition_is_owned_by_bootstrap_and_launcher_is_only_a_facade() -
     assert "return prepare_gui_application()" in application
     assert "def prepare_gui_application()" in gui
     assert "install_ui_terminology()" in gui
-    assert "install_spawn_detection_runtime(processing_module)" in gui
+    assert "install_spawn_detection_runtime" not in gui
     assert "from .bootstrap.application import build_application" in launcher
     assert "from .bootstrap.application import main as bootstrap_main" in launcher
     assert "install_ui_terminology()" not in launcher
-    assert "install_spawn_detection_runtime(processing_module)" not in launcher
+    assert "install_spawn_detection_runtime" not in launcher
 
 
 def test_gui_and_worker_profiles_share_one_core_composition_root() -> None:
@@ -94,11 +94,12 @@ def test_spawn_detection_routes_through_worker_composition_root() -> None:
     worker = (
         ROOT / "src" / "picture_capture" / "bootstrap" / "worker.py"
     ).read_text(encoding="utf-8")
-    spawn = (
-        ROOT / "src" / "picture_capture" / "spawn_detection_runtime.py"
+    processing = (
+        ROOT / "src" / "picture_capture" / "processing.py"
     ).read_text(encoding="utf-8")
 
     assert "from .worker import WorkerServices, build_worker_services" in bootstrap_init
     assert "def build_worker_services()" in worker
-    assert "from .bootstrap.worker import build_worker_services" in spawn
-    assert "services = build_worker_services()" in spawn
+    assert "from .bootstrap.worker import build_worker_services" in processing
+    assert "services = build_worker_services()" in processing
+    assert "install_spawn_detection_runtime" not in processing
