@@ -32,7 +32,6 @@ LEGACY_RUNTIME_FILES = {
     "layout_illustration_mask_runtime.py",
     "ordinary_large_head_runtime.py",
     "spawn_detection_runtime.py",
-    "spawn_layout_runtime.py",
     "unlined_fast_path_runtime.py",
 }
 

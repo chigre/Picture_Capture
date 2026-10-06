@@ -37,10 +37,11 @@ def test_entry_paths_no_longer_install_row_recovery_runtime():
     paths = (
         "src/picture_capture/bootstrap/gui.py",
         "src/picture_capture/bootstrap/worker.py",
-        "src/picture_capture/spawn_layout_runtime.py",
         "src/picture_capture/unlined_physical_rows_resolver.py",
         "src/picture_capture/layout_rows_cache.py",
     )
     for relative in paths:
         source = (root / relative).read_text(encoding="utf-8")
         assert "install_layout_row_recovery_runtime" not in source
+
+    assert not (root / "src/picture_capture/spawn_layout_runtime.py").exists()
