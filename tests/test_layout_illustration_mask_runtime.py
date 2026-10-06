@@ -1,4 +1,5 @@
 from dataclasses import fields, replace
+import json
 from pathlib import Path
 import pickle
 
@@ -27,8 +28,8 @@ def test_layout_illustration_mask_is_native_persistable_setting(tmp_path: Path):
     copied = replace(enabled)
     assert copied.layout_mask_illustrations is True
 
-    # ProcessPool spawn serializes AppSettings.  The runtime-extended native
-    # dataclass must resolve back through picture_capture.models.AppSettings.
+    # ProcessPool spawn serializes AppSettings. The native dataclass field
+    # resolves without any bootstrap subclass/rebinding.
     spawned = pickle.loads(pickle.dumps(enabled))
     assert type(spawned) is AppSettings
     assert spawned.layout_mask_illustrations is True
@@ -37,6 +38,12 @@ def test_layout_illustration_mask_is_native_persistable_setting(tmp_path: Path):
     enabled.to_json(path)
     reopened = AppSettings.from_json(path)
     assert reopened.layout_mask_illustrations is True
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("layout_mask_illustrations", None)
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    reopened_legacy = AppSettings.from_json(path)
+    assert reopened_legacy.layout_mask_illustrations is False
 
 
 def test_layout_mask_rejects_display_head_sized_square_candidate():
@@ -117,13 +124,55 @@ def test_disabled_switch_is_zero_cost_identity_path():
         image.close()
 
 
-def test_processing_uses_shared_in_memory_illustration_detector_and_wrapper():
-    from picture_capture import processing
+def test_static_path_and_in_memory_detectors_share_one_processing_core_owner(tmp_path: Path):
+    from picture_capture import processing_core
 
-    assert processing.detect_illustration_regions.__module__.endswith(
-        "layout_illustration_mask_runtime"
+    image = Image.new("RGB", (320, 280), "white")
+    path = tmp_path / "page.png"
+    image.save(path)
+    settings = AppSettings(columns=1, manual_x=20, column_width=260, start_y=0)
+    try:
+        from_image = processing_core.detect_illustration_regions_from_image(
+            image, settings
+        )
+        from_path = processing_core.detect_illustration_regions(path, settings)
+    finally:
+        image.close()
+
+    assert from_path == from_image
+    assert processing_core.detect_illustration_regions.__module__.endswith(
+        "processing_core"
     )
+    assert processing_core.detect_illustration_regions_from_image.__module__.endswith(
+        "processing_core"
+    )
+
+
+def test_core_composition_keeps_static_detector_and_installs_only_layout_wrapper():
+    from picture_capture import processing, processing_core
+    from picture_capture.bootstrap.core import build_core_services
+
+    before = processing.detect_illustration_regions
+    assert before is processing_core.detect_illustration_regions
+
+    build_core_services()
+
+    assert processing.detect_illustration_regions is before
+    assert processing.detect_illustration_regions is processing_core.detect_illustration_regions
     assert bool(getattr(processing, "_pc_layout_illustration_mask_installed", False))
+
+    root = Path(__file__).resolve().parents[1]
+    runtime_source = (
+        root / "src" / "picture_capture" / "layout_illustration_mask_runtime.py"
+    ).read_text(encoding="utf-8")
+    core_source = (
+        root / "src" / "picture_capture" / "bootstrap" / "core.py"
+    ).read_text(encoding="utf-8")
+    assert "def install_layout_illustration_mask_settings(" not in runtime_source
+    assert "def detect_illustration_regions_from_image(" not in runtime_source
+    assert "detect_illustration_regions = detect_illustration_regions_from_path" not in runtime_source
+    assert "install_layout_illustration_mask_settings" not in core_source
+    assert "install_layout_illustration_mask_runtime(processing_module)" in core_source
 
 
 def test_gui_composition_exposes_switch_before_generic_settings_help_scan():

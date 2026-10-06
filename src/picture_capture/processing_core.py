@@ -3547,112 +3547,148 @@ def is_auto_illustration_region(region: PolygonRegion) -> bool:
     return AUTO_ILLUSTRATION_LABEL_TOKEN in str(region.label or "").upper()
 
 
-def detect_illustration_regions(
-    image_path: Path, settings: AppSettings, *, analysis_column_width: int = 520,
+
+def detect_illustration_regions_from_image(
+    image: Image.Image,
+    settings: AppSettings,
+    *,
+    analysis_column_width: int = 520,
     profile_page_index: int = 0,
 ) -> list[PolygonRegion]:
-    """Detect large non-text illustration-like ink components on a dictionary page.
+    """Detect automatic PPP illustration candidates from an in-memory page.
 
-    The detector deliberately uses only Pillow/NumPy so the feature works in the
-    normal installation.  Detection is performed column-by-column on a reduced
-    image.  A slight 3x3 dilation joins strokes within drawings while the minimum
-    height/area tests reject ordinary text lines and page rules.  Results are
-    rectangular four-point polygons in original-image coordinates, compatible
-    with the existing PPP editor/cropper.
+    This is the single component detector shared by historical path-based
+    PPP auto-detection and optional Layout illustration masking.
     """
-    with Image.open(image_path) as opened:
-        image = normalize_page_rgb(opened)
+    source, effective, analysis_source, geometry = _page_geometry_context(
+        image,
+        settings,
+        int(profile_page_index),
+    )
+    work_image: Image.Image | None = None
     try:
-        source, effective, analysis_source, geometry = _page_geometry_context(
-            image, settings, profile_page_index,
-        )
         work_image = geometry.transform.canonical_image_for_analysis(analysis_source)
-        canonical_width = geometry.transform.canonical_size(source.size)[0]
         source_margin = max(
             2,
-            _source_px(max(0, int(getattr(effective, "illustration_detect_padding", 8)))),
+            _source_px(
+                max(0, int(getattr(effective, "illustration_detect_padding", 8)))
+            ),
         )
         source_margin_right = max(
             source_margin,
-            _source_px(max(0, int(getattr(effective, "illustration_detect_right_padding", 16)))),
+            _source_px(
+                max(
+                    0,
+                    int(getattr(effective, "illustration_detect_right_padding", 16)),
+                )
+            ),
         )
         results: list[PolygonRegion] = []
         for column, start in enumerate(geometry.column_starts):
             width = geometry.column_widths[column]
             base_x0 = max(0, int(start))
             base_x1 = min(work_image.width, int(start + width))
-            # Illustrations frequently extend a little into the inter-column
-            # gutter. The old detector clipped analysis exactly at column_width,
-            # which systematically shortened the right edge. Borrow only the
-            # near half of the gutter so the next text column cannot be swallowed.
             if column + 1 < len(geometry.column_starts):
                 next_start = int(geometry.column_starts[column + 1])
                 free_right = max(0, next_start - base_x1)
-                right_room = min(max(source_margin_right, free_right // 2), max(source_margin_right, round(width * 0.10)))
+                right_room = min(
+                    max(source_margin_right, free_right // 2),
+                    max(source_margin_right, round(width * 0.10)),
+                )
             else:
                 free_right = max(0, work_image.width - base_x1)
-                right_room = min(free_right, max(source_margin_right, round(width * 0.08)))
+                right_room = min(
+                    free_right,
+                    max(source_margin_right, round(width * 0.08)),
+                )
             x0 = base_x0
             x1 = min(work_image.width, base_x1 + max(0, right_room))
-            y0 = max(0, int(geometry.top)); y1 = min(work_image.height, int(geometry.bottom))
+            y0 = max(0, int(geometry.top))
+            y1 = min(work_image.height, int(geometry.bottom))
             if x1 - x0 < 40 or y1 - y0 < 80:
                 continue
+
             crop = work_image.crop((x0, y0, x1, y1)).convert("L")
             try:
                 a_scale = min(1.0, analysis_column_width / max(1, crop.width))
-                aw = max(1, round(crop.width * a_scale)); ah = max(1, round(crop.height * a_scale))
-                small = crop if a_scale == 1.0 else crop.resize((aw, ah), Image.Resampling.BILINEAR)
+                aw = max(1, round(crop.width * a_scale))
+                ah = max(1, round(crop.height * a_scale))
+                small = (
+                    crop
+                    if a_scale == 1.0
+                    else crop.resize((aw, ah), Image.Resampling.BILINEAR)
+                )
                 try:
-                    # Mix adaptive and absolute-dark masks: adaptive catches light
-                    # halftones/line art, absolute-dark keeps strong contours.
                     adaptive = _adaptive_dark_mask(small, 19, 16)
                     arr = np.asarray(small, dtype=np.uint8)
                     dark = np.logical_or(adaptive, arr < 170)
-                    mask_img = Image.fromarray((dark.astype(np.uint8) * 255), mode="L")
+                    mask_img = Image.fromarray(
+                        dark.astype(np.uint8) * 255,
+                        mode="L",
+                    )
                     try:
-                        joined = np.asarray(mask_img.filter(ImageFilter.MaxFilter(3)), dtype=np.uint8) > 0
+                        joined = (
+                            np.asarray(
+                                mask_img.filter(ImageFilter.MaxFilter(3)),
+                                dtype=np.uint8,
+                            )
+                            > 0
+                        )
                     finally:
                         mask_img.close()
+
                     comps = _rle_components(joined)
                     min_h = max(18, round(0.028 * ah))
                     min_w = max(18, round(0.055 * aw))
                     min_bbox_area = max(500, round(0.0022 * aw * ah))
                     candidates: list[tuple[int, int, int, int]] = []
                     for cx0, cy0, cx1, cy1, area in comps:
-                        bw, bh = cx1 - cx0, cy1 - cy0
+                        bw = cx1 - cx0
+                        bh = cy1 - cy0
                         bbox_area = bw * bh
                         if bw < min_w or bh < min_h or bbox_area < min_bbox_area:
                             continue
-                        # Connected occupancy rejects large whitespace boxes, while
-                        # the height threshold rejects normal dictionary text lines.
                         occupancy = area / max(1, bbox_area)
                         if occupancy < 0.035:
                             continue
                         if bw / max(1, bh) > 7.0 and bh < 0.08 * ah:
                             continue
                         candidates.append((cx0, cy0, cx1, cy1))
+
                     gap = max(5, round(0.018 * aw))
                     candidates = _merge_nearby_boxes(candidates, gap)
                     for cx0, cy0, cx1, cy1 in candidates:
-                        bw, bh = cx1 - cx0, cy1 - cy0
+                        bw = cx1 - cx0
+                        bh = cy1 - cy0
                         if bh < min_h or bw < min_w:
                             continue
                         sx0 = x0 + round(cx0 / a_scale) - source_margin
                         sy0 = y0 + round(cy0 / a_scale) - source_margin
                         sx1 = x0 + round(cx1 / a_scale) + source_margin_right
                         sy1 = y0 + round(cy1 / a_scale) + source_margin
-                        sx0 = max(x0, sx0); sy0 = max(y0, sy0)
-                        sx1 = min(x1, sx1); sy1 = min(y1, sy1)
+                        sx0 = max(x0, sx0)
+                        sy0 = max(y0, sy0)
+                        sx1 = min(x1, sx1)
+                        sy1 = min(y1, sy1)
                         if sx1 - sx0 < 8 or sy1 - sy0 < 8:
                             continue
-                        results.append(PolygonRegion("", [(sx0, sy0), (sx1, sy0), (sx1, sy1), (sx0, sy1)]))
+                        results.append(
+                            PolygonRegion(
+                                "",
+                                [
+                                    (sx0, sy0),
+                                    (sx1, sy0),
+                                    (sx1, sy1),
+                                    (sx0, sy1),
+                                ],
+                            )
+                        )
                 finally:
                     if small is not crop:
                         small.close()
             finally:
                 crop.close()
-        # Merge any boxes touching a column boundary only if they truly overlap;
-        # most dictionary illustrations stay within one column, so this is rare.
+
         if geometry.transform.kind == "identity":
             return results
         return [
@@ -3663,10 +3699,42 @@ def detect_illustration_regions(
             for region in results
         ]
     finally:
-        if "work_image" in locals():
-            work_image.close()
-        image.close()
+        if work_image is not None:
+            try:
+                work_image.close()
+            except Exception:
+                pass
+        try:
+            if analysis_source is not source:
+                analysis_source.close()
+        except Exception:
+            pass
+        try:
+            if source is not image:
+                source.close()
+        except Exception:
+            pass
 
+
+def detect_illustration_regions(
+    image_path: Path,
+    settings: AppSettings,
+    *,
+    analysis_column_width: int = 520,
+    profile_page_index: int = 0,
+) -> list[PolygonRegion]:
+    """Historical path API backed by the shared in-memory detector."""
+    with Image.open(Path(image_path)) as opened:
+        image = normalize_page_rgb(opened)
+    try:
+        return detect_illustration_regions_from_image(
+            image,
+            settings,
+            analysis_column_width=int(analysis_column_width),
+            profile_page_index=int(profile_page_index),
+        )
+    finally:
+        image.close()
 
 def detect_illustrations_to_ppp(
     image_path: Path, settings: AppSettings, *, profile_page_index: int = 0,
