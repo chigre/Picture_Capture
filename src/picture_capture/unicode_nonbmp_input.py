@@ -454,43 +454,42 @@ def _needs_windows_tk8_bridge(app: Any) -> bool:
     return major < 9
 
 
-def install_nonbmp_unicode_input(app_module: Any) -> None:
-    """Install one app-level Windows/Tk 8.6 supplementary-Unicode bridge."""
-    app_cls = app_module.PictureCaptureApp
-    if bool(getattr(app_cls, "_pc_nonbmp_unicode_runtime_installed", False)):
+def attach_nonbmp_unicode_input(app: Any) -> Any | None:
+    """Attach the Windows/Tk 8 compatibility bridge after app initialization."""
+    existing = getattr(app, "_pc_nonbmp_unicode_bridge", None)
+    if existing is not None:
+        return existing
+
+    app._pc_nonbmp_unicode_bridge = None
+    if not _needs_windows_tk8_bridge(app):
+        return None
+    try:
+        bridge = _WindowsNonBmpBridge(app)
+    except Exception:
+        return None
+    app._pc_nonbmp_unicode_bridge = bridge
+    return bridge
+
+
+def close_nonbmp_unicode_input(app: Any) -> None:
+    """Close and detach the app-level compatibility bridge if one is active."""
+    bridge = getattr(app, "_pc_nonbmp_unicode_bridge", None)
+    if bridge is None:
         return
-
-    original_init = app_cls.__init__
-    original_destroy = app_cls.destroy
-
-    def wrapped_init(self, *args, **kwargs):
-        original_init(self, *args, **kwargs)
-        self._pc_nonbmp_unicode_bridge = None
-        if _needs_windows_tk8_bridge(self):
-            try:
-                self._pc_nonbmp_unicode_bridge = _WindowsNonBmpBridge(self)
-            except Exception:
-                self._pc_nonbmp_unicode_bridge = None
-
-    def wrapped_destroy(self, *args, **kwargs):
-        bridge = getattr(self, "_pc_nonbmp_unicode_bridge", None)
-        if bridge is not None:
-            try:
-                bridge.close()
-            except Exception:
-                pass
-        return original_destroy(self, *args, **kwargs)
-
-    app_cls.__init__ = wrapped_init
-    app_cls.destroy = wrapped_destroy
-    app_cls._pc_nonbmp_unicode_runtime_installed = True
+    try:
+        bridge.close()
+    except Exception:
+        pass
+    finally:
+        app._pc_nonbmp_unicode_bridge = None
 
 
 __all__ = [
     "NativeCommit",
     "TextSnapshot",
+    "attach_nonbmp_unicode_input",
+    "close_nonbmp_unicode_input",
     "contains_non_bmp",
-    "install_nonbmp_unicode_input",
     "legacy_tk_renderings",
     "plan_non_bmp_repair",
 ]

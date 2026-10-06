@@ -39,7 +39,6 @@ LEGACY_RUNTIME_FILES = {
     "overlay_opacity_runtime.py",
     "spawn_detection_runtime.py",
     "spawn_layout_runtime.py",
-    "unicode_nonbmp_input_runtime.py",
     "unlined_fast_path_runtime.py",
 }
 

@@ -131,13 +131,6 @@ def prepare_gui_application() -> Any:
     from ..layout_visualization_shared import install_shared_layout_visualization_source
     from ..review_entry_classification_ui import install_review_entry_classification
     from ..ocr_crop_preview_ui import install_ocr_crop_preview
-    from ..unicode_nonbmp_input_runtime import install_nonbmp_unicode_input
-
-    # Windows/Tk 8.6 can corrupt supplementary-plane characters (CJK Ext-B,
-    # emoji, etc.) during direct IME/key input even though Python/UTF-8 storage is
-    # sound. Install one app-level native Unicode bridge before GUI instances are
-    # created; Tk 9 and non-Windows platforms remain untouched.
-    install_nonbmp_unicode_input(app_module)
 
     # The shared Layout snapshot now owns its LayoutRows capture context
     # statically before being published to the UI.

@@ -146,6 +146,9 @@ from .training_export import (
     make_training_zip, write_training_manifest,
 )
 from .text_encoding import read_text_detected
+from .unicode_nonbmp_input import (
+    attach_nonbmp_unicode_input, close_nonbmp_unicode_input,
+)
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
     headword_filter_rules_path, is_managed_project, migrate_legacy_project,
@@ -7424,6 +7427,12 @@ class PictureCaptureApp(tk.Tk):
         self.after_idle(self._maximize_main_window)
         self.after_idle(self._ensure_sidebar_navigation_width)
         self.after_idle(self.restore_last_session)
+        attach_nonbmp_unicode_input(self)
+
+    def destroy(self) -> None:
+        close_nonbmp_unicode_input(self)
+        super().destroy()
+
 
     def _app_icon_toplevel_mapped(self, event: tk.Event) -> None:
         widget = getattr(event, "widget", None)
