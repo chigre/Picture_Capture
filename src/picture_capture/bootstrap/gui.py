@@ -105,13 +105,10 @@ def prepare_gui_application() -> Any:
 
     processing_module = core_services.processing
     from ..entry_classification_runtime import install_processing_entry_classification
-    from ..spawn_detection_runtime import install_spawn_detection_runtime
 
     install_processing_entry_classification(processing_module)
-    # app.py imports detect_entries_job by value. Replace it with the top-level,
-    # spawn-pickleable worker before importing app so child processes receive the
-    # same Entry classification/sidecar semantics as the GUI process.
-    install_spawn_detection_runtime(processing_module)
+    # processing.detect_entries_job is now the static top-level spawn target.
+    # app.py imports that stable function by value without bootstrap mutation.
 
     from .. import app as app_module
     from ..layout_visualization_shared import install_shared_layout_visualization_source

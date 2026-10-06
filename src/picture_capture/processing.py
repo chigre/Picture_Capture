@@ -533,26 +533,44 @@ def detect_entries_job(
     pages: tuple[str, str, str],
     profile_page_index: int = 0,
 ) -> int:
-    """Spawn-safe worker using the same canonical ``detect_entries`` path."""
+    """Run one ordinary-drawing job through the explicit worker bootstrap."""
+    from .bootstrap.worker import build_worker_services
+
+    services = build_worker_services()
+    formats = services.formats
+    processing_module = services.processing
+
     page = Path(image_path)
     with Image.open(page) as opened:
-        image = _core.normalize_page_rgb(opened)
-    settings.detection_method = "left_edge"
-    entries, _geometry = detect_entries(
-        image,
-        settings,
-        profile_page_index=profile_page_index,
-        page_sections=_core.read_page_sections(page),
-    )
-    pdic = _core.pdic_path_for_image(page)
-    save_automatic_baseline(pdic, entries, image.width, pages)
-    _core.write_pdic(
-        pdic,
-        entries,
-        image.width,
-        pages,
-    )
-    return len(entries)
+        image = processing_module._core.normalize_page_rgb(opened)
+
+    try:
+        current = replace(settings)
+        current.detection_method = "left_edge"
+        with services.capture_layout_rows(
+            page.parent,
+            page,
+            int(profile_page_index),
+            settings,
+        ):
+            entries, _geometry = processing_module.detect_entries(
+                image,
+                current,
+                profile_page_index=profile_page_index,
+                page_sections=processing_module._core.read_page_sections(page),
+            )
+
+        pdic = processing_module._core.pdic_path_for_image(page)
+        services.save_automatic_baseline(pdic, entries, image.width, pages)
+        formats.write_pdic(
+            pdic,
+            entries,
+            image.width,
+            pages,
+        )
+        return len(entries)
+    finally:
+        image.close()
 
 
 def _publish_file_transaction(*args, **kwargs):

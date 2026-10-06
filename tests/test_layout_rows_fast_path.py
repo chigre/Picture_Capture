@@ -146,8 +146,8 @@ def test_gui_and_worker_composition_seed_layout_rows_for_future_qa():
     worker = (
         root / "src" / "picture_capture" / "bootstrap" / "worker.py"
     ).read_text(encoding="utf-8")
-    spawn = (
-        root / "src" / "picture_capture" / "spawn_detection_runtime.py"
+    processing = (
+        root / "src" / "picture_capture" / "processing.py"
     ).read_text(encoding="utf-8")
     crop = (
         root / "src" / "picture_capture" / "ui" / "controllers" / "crop.py"
@@ -158,5 +158,7 @@ def test_gui_and_worker_composition_seed_layout_rows_for_future_qa():
     assert "install_unlined_line_export_ui" not in gui
     assert "unlined_export.export_unlined_page_job" in crop
     assert "install_layout_rows_persistence_runtime()" in worker
-    assert "with services.capture_layout_rows(" in spawn
-    assert "install_layout_rows_persistence_runtime()" not in spawn
+    assert "with services.capture_layout_rows(" in processing
+    assert "install_layout_rows_persistence_runtime()" not in inspect.getsource(
+        __import__("picture_capture.processing", fromlist=["detect_entries_job"]).detect_entries_job
+    )
