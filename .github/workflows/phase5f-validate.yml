@@ -26,7 +26,9 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --locked --group dev
       - name: Apply Phase 5F migration
-        run: uv run --locked python tools/phase5f_apply.py
+        run: |
+          uv run --locked python tools/phase5f_apply.py
+          uv run --locked python tools/phase5f_fix_assertions.py
       - name: Check diff shape
         shell: bash
         run: |
@@ -39,6 +41,7 @@ jobs:
               'src/picture_capture/bootstrap/gui.py',
               'src/picture_capture/training_export_ui.py',
               'src/picture_capture/ui/controllers/export.py',
+              'tests/test_next_stage_regressions.py',
               'tests/test_ui_terminology_and_training_scope.py',
               'tests/test_ui_training_export_controller.py',
           }
@@ -63,7 +66,7 @@ jobs:
       - name: Remove temporary migration assets
         shell: bash
         run: |
-          git rm tools/phase5f_apply.py .github/workflows/phase5f-validate.yml
+          git rm tools/phase5f_apply.py tools/phase5f_fix_assertions.py .github/workflows/phase5f-validate.yml
           git diff --check
       - name: Publish validated production tree
         shell: bash
