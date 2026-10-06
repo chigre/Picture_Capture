@@ -1,4 +1,3 @@
-\
 from __future__ import annotations
 
 """Observed character-height recovery for fallback Layout estimates.
