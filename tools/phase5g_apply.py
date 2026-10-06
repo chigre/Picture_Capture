@@ -24,11 +24,6 @@ def replace_all(path: str, old: str, new: str, *, min_count: int = 1) -> None:
 old_path = ROOT / "src/picture_capture/ordinary_action_runtime.py"
 new_path = ROOT / "src/picture_capture/ordinary_quick_settings.py"
 source = old_path.read_text(encoding="utf-8")
-source = source.replace(
-    '"""OCR-independent quick-setting helper for ordinary drawing/cropping paths.',
-    '"""OCR-independent quick-setting helper for ordinary drawing/cropping paths.',
-    1,
-)
 new_path.write_text(source, encoding="utf-8")
 old_path.unlink()
 
@@ -42,6 +37,22 @@ for path in (
         "ordinary_action_runtime import _apply_quick_settings_for_ordinary",
         "ordinary_quick_settings import _apply_quick_settings_for_ordinary",
     )
+
+replace_all(
+    "tests/test_runtime_entry_path_guards.py",
+    '        / "ordinary_action_runtime.py"\n',
+    '        / "ordinary_quick_settings.py"\n',
+)
+replace_all(
+    "tests/test_runtime_entry_path_guards.py",
+    '    ordinary_source = (\n',
+    '    ordinary_helper_source = (\n',
+)
+replace_all(
+    "tests/test_runtime_entry_path_guards.py",
+    '    assert "def install_ordinary_action_runtime" not in ordinary_source\n    assert "def _apply_quick_settings_for_ordinary" in ordinary_source\n',
+    '    assert "def install_ordinary_action_runtime" not in ordinary_helper_source\n    assert "def _apply_quick_settings_for_ordinary" in ordinary_helper_source\n',
+)
 
 replace_all(
     "tests/test_ui_detection_controller.py",
