@@ -147,7 +147,6 @@ def prepare_gui_application() -> Any:
         configure_overlay_opacity_defaults,
         install_illustration_fill_opacity_runtime,
     )
-    from ..overlay_line_anchor_runtime import install_overlay_line_anchor_runtime
     from ..parameter_help_ui import install_settings_parameter_help
     from ..settings_help_restore import install_settings_help_restore
     from ..single_line_merge_settings import install_single_line_merge_settings_ui
@@ -186,8 +185,6 @@ def prepare_gui_application() -> Any:
     # Illustration fill uses a real RGBA image under the editable Canvas polygon,
     # rather than Tk's historical gray50 stipple approximation.
     install_illustration_fill_opacity_runtime(app_module)
-    # Line anchoring patches the shared line renderer after opacity is installed.
-    install_overlay_line_anchor_runtime(app_module)
 
     _PREPARED_APP_MODULE = app_module
     return app_module

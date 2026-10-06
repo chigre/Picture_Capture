@@ -1,4 +1,4 @@
-from picture_capture.overlay_line_anchor_runtime import one_sided_line_coordinates
+from picture_capture.overlay_line_anchor import one_sided_line_coordinates
 
 
 def test_column_guide_width_grows_to_right_only():

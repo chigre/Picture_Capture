@@ -23,6 +23,8 @@ from typing import Any, Iterable
 
 from PIL import Image, ImageColor, ImageDraw, ImageTk
 
+from .overlay_line_anchor import add_line_anchor_help, one_sided_line_coordinates
+
 
 _DEFAULT_GUIDE_OPACITY = 100.0
 _DEFAULT_MARKER_OPACITY = 100.0
@@ -226,6 +228,12 @@ def _alpha_canvas_line(
     *,
     opacity: float,
 ) -> int:
+    growth = "right" if bool(options.get("smooth", False)) else "down"
+    coordinates = one_sided_line_coordinates(
+        coordinates,
+        width=float(options.get("width") or 1.0),
+        growth=growth,
+    )
     normalized = _normalize_opacity(opacity)
     if normalized >= 100.0:
         return int(original_create_line(*coordinates, **options))
@@ -309,6 +317,7 @@ def _install_settings_dialog_fields(app_module: Any) -> None:
             "调整：横线遮挡字形时降低；需要快速检查漏线、错线时提高。"
         ),
     })
+    add_line_anchor_help(dialog)
 
 
 def _descendants(root: tk.Misc):
@@ -392,10 +401,13 @@ def _install_quick_controls(app_class: type[Any]) -> None:
             )
         marker_check = _find_checkbutton(self, "词头横线")
         if marker_check is not None:
+            row = marker_check.master
+            before = _find_checkbutton(row, "插图标签：外框")
             _add_quick_opacity_control(
                 self,
-                marker_check.master,
+                row,
                 name="headword_marker_opacity",
+                before=before,
             )
 
     wrapped_init._pc_overlay_opacity = True  # type: ignore[attr-defined]
