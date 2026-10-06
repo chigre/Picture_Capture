@@ -14,7 +14,7 @@ from typing import Any
 from .dictionary_page_layout_policy import resolve_page_layout_policy
 from .layout_rows_cache import capture_layout_rows
 from .image_utils import build_analysis_image
-from .layout_local_indent_visualization import drift_corrected_indent_blocks
+from .layout_role_provenance import indent_blocks_with_entry_sources
 from .layout_physical_indent import normalized_physical_indents
 from .processing import (
     ORDINARY_AUTO_LAYOUT_FIELDS,
@@ -23,9 +23,9 @@ from .processing import (
 )
 
 
-# The historical GUI installer assigned this exact function object before
-# role-provenance decorated it. Keep that ordering explicit at module load.
-_indent_blocks_from_understanding = drift_corrected_indent_blocks
+# Provenance now statically wraps the same drift-corrected block producer
+# that the historical GUI installer captured after Phase 5I.
+_indent_blocks_from_understanding = indent_blocks_with_entry_sources
 
 
 def _indent_lanes_from_understanding(understanding: Any) -> list[dict[str, Any]]:

@@ -81,6 +81,7 @@ def test_phase5h_source_shape_keeps_later_visualization_decorators_and_removes_r
     assert "install_layout_visualization_rows_cache" not in gui
     assert "layout_visualization_rows_cache_runtime.py" not in guard
     assert "install_local_indent_visualization" not in gui
+    assert "install_layout_role_provenance" not in gui
     shared_pos = gui.index("install_shared_layout_visualization_source()")
-    provenance_pos = gui.index("install_layout_role_provenance()")
-    assert shared_pos < provenance_pos
+    role_theme_pos = gui.index("install_layout_role_theme()")
+    assert shared_pos < role_theme_pos

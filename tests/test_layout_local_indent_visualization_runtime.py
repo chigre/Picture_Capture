@@ -54,9 +54,12 @@ def test_phase5i_static_owner_and_provenance_order():
 
     assert not (package / "layout_local_indent_visualization_runtime.py").exists()
     assert (package / "layout_local_indent_visualization.py").exists()
-    assert "_indent_blocks_from_understanding = drift_corrected_indent_blocks" in shared
+    assert "_indent_blocks_from_understanding = indent_blocks_with_entry_sources" in shared
     assert "install_local_indent_visualization" not in gui
     assert "layout_local_indent_visualization_runtime.py" not in guard
+    assert "install_layout_role_provenance" not in gui
     shared_pos = gui.index("install_shared_layout_visualization_source()")
-    provenance_pos = gui.index("install_layout_role_provenance()")
-    assert shared_pos < provenance_pos
+    role_theme_pos = gui.index("install_layout_role_theme()")
+    lane_pos = gui.index("install_physical_lane_summary()")
+    visibility_pos = gui.index("install_layout_indent_visibility()")
+    assert shared_pos < role_theme_pos < lane_pos < visibility_pos

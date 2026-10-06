@@ -129,7 +129,6 @@ def prepare_gui_application() -> Any:
 
     from .. import app as app_module
     from ..layout_visualization_shared import install_shared_layout_visualization_source
-    from ..layout_role_provenance_runtime import install_layout_role_provenance
     from ..review_entry_classification_ui import install_review_entry_classification
     from ..ocr_crop_preview_ui import install_ocr_crop_preview
     from ..unicode_nonbmp_input_runtime import install_nonbmp_unicode_input
@@ -143,7 +142,6 @@ def prepare_gui_application() -> Any:
     # The shared Layout snapshot now owns its LayoutRows capture context
     # statically before being published to the UI.
     install_shared_layout_visualization_source()
-    install_layout_role_provenance()
     install_review_entry_classification(app_module)
     install_ocr_crop_preview(app_module)
 
