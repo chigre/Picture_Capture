@@ -63,7 +63,6 @@ new_concurrency = '''    app = (root / "src" / "picture_capture" / "app.py").rea
         root / "src" / "picture_capture" / "ui" / "controllers" / "export.py"
     ).read_text(encoding="utf-8")
 '''
-# This prelude occurs only in the concurrency-audit test in the relevant shape.
 if text.count(old_concurrency) != 1:
     raise SystemExit(f"concurrency prelude match count: {text.count(old_concurrency)}")
 text = text.replace(old_concurrency, new_concurrency, 1)
@@ -94,4 +93,24 @@ if text.count(old_export) != 1:
 text = text.replace(old_export, new_export, 1)
 
 PATH.write_text(text, encoding="utf-8")
+
+repair_path = ROOT / "tests/test_ui_pdic_order_repair_controller.py"
+repair = repair_path.read_text(encoding="utf-8")
+old_repair = '''    assert "    def repair_pdic_order_selected_scope(self) -> None:" in controller
+    assert 'settings = app.settings' in controller
+    assert 'settings = replace(app.settings)' not in controller
+    assert 'write_pdic_atomic(' in controller
+'''
+new_repair = '''    repair_start = controller.index("    def repair_pdic_order_selected_scope(self) -> None:")
+    repair_end = controller.index("\\n    def export_picdic_index(self) -> None:", repair_start)
+    repair_method = controller[repair_start:repair_end]
+    assert 'settings = app.settings' in repair_method
+    assert 'settings = replace(app.settings)' not in repair_method
+    assert 'write_pdic_atomic(' in repair_method
+'''
+if repair.count(old_repair) != 1:
+    raise SystemExit(f"repair assertion block match count: {repair.count(old_repair)}")
+repair = repair.replace(old_repair, new_repair, 1)
+repair_path.write_text(repair, encoding="utf-8")
+
 print("Phase 5F stale ownership assertions migrated")
