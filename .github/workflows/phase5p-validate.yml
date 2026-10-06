@@ -33,6 +33,7 @@ jobs:
         run: |
           uv run --locked python tools/phase5p_prepare.py
           uv run --locked python tools/phase5p_apply.py
+          git checkout -- tools/phase5p_apply.py
 
       - name: Check diff shape
         shell: bash
