@@ -48,18 +48,14 @@ def prepare_gui_application() -> Any:
     from ..dictionary_page_design_refined import detect_entries_from_page_design
     from ..layout_line_start_refinement import install_robust_line_starts
     from ..layout_physical_indent import install_physical_indent_inference
-    from ..layout_column_drift_runtime import install_layout_column_drift_runtime
 
     dictionary_page_design.detect_entries_from_page_design = (
         detect_entries_from_page_design
     )
     install_robust_line_starts()
     install_physical_indent_inference()
-    # Long-band logical row recovery is now static in layout_physical_indent.
-    # Keep semantic column geometry fixed while allowing analysis pixels to
-    # extend left of it on slanted/curved scans. This must be ready before the
-    # shared Layout Core imports policy/large-head callables by value.
-    install_layout_column_drift_runtime()
+    # Long-band row recovery and column-drift indent remeasurement are now
+    # static; only the remaining physical-indent installer needs ordering.
 
     # Physical LayoutRows are a persistent, semantic-free cache used by
     # post-production QA. Install after the final physical Layout runtimes so a

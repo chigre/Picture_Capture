@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 from PIL import Image, ImageDraw
 
+from picture_capture import dictionary_page_design as base
+from picture_capture import layout_detection
 from picture_capture.dictionary_page_design import LayoutLine
-from picture_capture.layout_column_drift_runtime import (
+from picture_capture.layout_column_drift import (
+    _analysis_left_for_column,
     _left_safety,
+    finalize_layout_column_drift,
     remeasure_layout_indents_from_ink,
 )
 from picture_capture.layout_transform import LayoutTransform
@@ -32,8 +37,6 @@ def _line(y0: int, y1: int, *, first_x: int = 0) -> LayoutLine:
 
 def test_remeasurement_keeps_negative_first_x_instead_of_clipping_to_zero():
     ink = np.zeros((100, 180), dtype=bool)
-    # Semantic/Profile column starts at x=50, but this scanned page drifts left.
-    # Both rows still contain real leading glyphs and must remain measurable.
     ink[10:25, 45:51] = True
     ink[45:60, 39:45] = True
 
@@ -59,7 +62,6 @@ def test_remeasurement_keeps_negative_first_x_instead_of_clipping_to_zero():
     assert counts == {0: 2}
     assert lines[0].first_x == -5
     assert lines[1].first_x == -11
-    # Analysis safety must never redefine the semantic/Profile column edge.
     assert column.left == 50
     assert column.right == 150
 
@@ -70,12 +72,72 @@ def test_left_safety_is_large_enough_for_scan_drift_but_bounded():
     assert _left_safety(80.0, 1000) <= 96
 
 
+def test_later_column_analysis_never_crosses_previous_text_column():
+    columns = [
+        SimpleNamespace(left=50, right=150),
+        SimpleNamespace(left=170, right=270),
+    ]
+    analysis_left = _analysis_left_for_column(columns, 1, 40.0)
+    assert 151 <= analysis_left < 170
+    assert columns[1].left == 170
+
+
+def test_static_finalizer_replays_analysis_and_preserves_reason_provenance(monkeypatch):
+    image = Image.new("RGB", (180, 100), "white")
+    ink = np.zeros((100, 180), dtype=bool)
+    ink[10:25, 45:51] = True
+    ink[45:60, 39:45] = True
+
+    lines = [_line(10, 25), _line(45, 60)]
+    column = SimpleNamespace(
+        index=0,
+        left=50,
+        right=150,
+        lines=lines,
+        indent_modes=[],
+        body_mode=None,
+        entry_modes=[],
+    )
+    layout = SimpleNamespace(
+        body_top=0,
+        ordinary_line_height=20.0,
+        indent_type="body",
+        columns=[column],
+        reason="base",
+    )
+    settings = SimpleNamespace()
+    calls: list[int] = []
+
+    def fake_analysis_page(source_image, page_settings, page_index):
+        calls.append(int(page_index))
+        return source_image.copy(), source_image.copy(), None, page_settings
+
+    monkeypatch.setattr(base, "_analysis_page", fake_analysis_page)
+    monkeypatch.setattr(
+        layout_detection,
+        "analysis_ink_mask",
+        lambda _gray, _settings: ink,
+    )
+
+    result = finalize_layout_column_drift(
+        image,
+        settings,
+        layout,
+        page_index=3,
+    )
+
+    assert result is layout
+    assert calls == [3]
+    assert lines[0].first_x == -5
+    assert lines[1].first_x == -11
+    assert layout.reason == "base; unclipped_first_x=C1:2"
+    assert column.left == 50
+    assert column.right == 150
+
+
 def test_large_head_left_of_semantic_column_is_still_detected():
     image = Image.new("RGB", (220, 180), "white")
     draw = ImageDraw.Draw(image)
-    # Large display glyph begins 12 px left of the semantic column edge. The
-    # guarded detector must use the shared safety band without moving the
-    # semantic column edge or bypassing row-front authorization.
     draw.rectangle((38, 24, 68, 74), fill="black")
 
     row = _line(24, 75, first_x=-12)
@@ -103,27 +165,31 @@ def test_large_head_left_of_semantic_column_is_still_detected():
     assert entries
     assert any(entry.ocr_oversized_cjk for entry in entries)
     assert min(entry.y for entry in entries) <= 30
-    # Evidence X remains the semantic column edge, not the padded analysis edge.
     assert all(entry.x == 50 for entry in entries)
 
 
-def test_static_row_recovery_keeps_column_drift_runtime_explicit():
-    from pathlib import Path
-
+def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
     root = Path(__file__).resolve().parents[1]
     core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
+    policy = (root / "src/picture_capture/dictionary_page_layout_policy.py").read_text(encoding="utf-8")
+    unlined = (root / "src/picture_capture/unlined_physical_rows_resolver.py").read_text(encoding="utf-8")
+    spawn = (root / "src/picture_capture/spawn_layout_runtime.py").read_text(encoding="utf-8")
+    large_head = (root / "src/picture_capture/ordinary_large_head_runtime.py").read_text(encoding="utf-8")
     physical = (root / "src/picture_capture/layout_physical_indent.py").read_text(encoding="utf-8")
 
-    # Shared process setup is complete before processing is imported.
     assert core.index("install_ordinary_large_head_role_guard()") < core.index(
         "from .. import processing as processing_module"
     )
+    assert "from .layout_column_drift import finalize_layout_column_drift" in policy
+    layout_at = policy.index("layout = base.DictionaryPageLayout(")
+    finalize_at = policy.index("layout = finalize_layout_column_drift(")
+    return_at = policy.index("return layout, page_settings, applied", finalize_at)
+    assert layout_at < finalize_at < return_at
 
-    # Row recovery is static; the broader column-drift seam remains explicit.
-    assert "install_layout_row_recovery_runtime" not in gui
-    assert "install_layout_row_recovery_runtime" not in worker
-    assert "install_layout_column_drift_runtime()" in gui
-    assert "install_layout_column_drift_runtime()" in worker
+    for source in (gui, worker, unlined, spawn, policy):
+        assert "install_layout_column_drift_runtime" not in source
+    assert "from .layout_column_drift import _analysis_left_for_column" in large_head
+    assert "layout_column_drift_runtime" not in large_head
     assert "count = min(256, count)" in physical
