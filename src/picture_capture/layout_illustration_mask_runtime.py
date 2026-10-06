@@ -16,12 +16,10 @@ because it forms one large connected component.
 
 from dataclasses import dataclass
 from functools import wraps
-from pathlib import Path
 from typing import Any, Callable
 import math
 
-import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
 
 SETTING_NAME = "layout_mask_illustrations"
@@ -44,245 +42,6 @@ class IllustrationMaskStats:
     masked: int = 0
     rejected_small: int = 0
     rejected_headlike: int = 0
-
-
-def install_layout_illustration_mask_settings() -> type[Any]:
-    """Extend AppSettings with one native dataclass field before consumers import it.
-
-    A real dataclass field is required here: ``dataclasses.replace`` is used
-    throughout Profile/page resolution, and a dynamic property would silently
-    fall back to its default on every replace().
-    """
-    from . import models
-
-    current = models.AppSettings
-    fields = set(getattr(current, "__dataclass_fields__", {}))
-    if SETTING_NAME in fields:
-        return current
-
-    @dataclass(slots=True)
-    class ExtendedAppSettings(current):
-        layout_mask_illustrations: bool = DEFAULT_ENABLED
-
-    # Keep pickle/spawn identity stable.  Windows/macOS workers import
-    # picture_capture.models.AppSettings in a fresh interpreter.
-    ExtendedAppSettings.__name__ = "AppSettings"
-    ExtendedAppSettings.__qualname__ = "AppSettings"
-    ExtendedAppSettings.__module__ = models.__name__
-    models.AppSettings = ExtendedAppSettings
-    return ExtendedAppSettings
-
-
-def _detect_illustration_regions_in_image(
-    image: Image.Image,
-    settings: Any,
-    *,
-    analysis_column_width: int = 520,
-    profile_page_index: int = 0,
-) -> list[Any]:
-    """In-memory form of the existing automatic PPP illustration detector.
-
-    The algorithm intentionally mirrors ``processing_core.detect_illustration_regions``
-    and calls its shared geometry/mask/component helpers.  The runtime installer
-    also redirects the historical path-based detector through this function, so
-    PPP detection and Layout masking cannot drift into two independent detector
-    implementations.
-    """
-    from . import processing_core as core
-    from .models import PolygonRegion
-
-    source, effective, analysis_source, geometry = core._page_geometry_context(
-        image,
-        settings,
-        int(profile_page_index),
-    )
-    work_image: Image.Image | None = None
-    try:
-        work_image = geometry.transform.canonical_image_for_analysis(analysis_source)
-        source_margin = max(
-            2,
-            core._source_px(
-                max(0, int(getattr(effective, "illustration_detect_padding", 8)))
-            ),
-        )
-        source_margin_right = max(
-            source_margin,
-            core._source_px(
-                max(
-                    0,
-                    int(getattr(effective, "illustration_detect_right_padding", 16)),
-                )
-            ),
-        )
-        results: list[Any] = []
-        for column, start in enumerate(geometry.column_starts):
-            width = geometry.column_widths[column]
-            base_x0 = max(0, int(start))
-            base_x1 = min(work_image.width, int(start + width))
-            if column + 1 < len(geometry.column_starts):
-                next_start = int(geometry.column_starts[column + 1])
-                free_right = max(0, next_start - base_x1)
-                right_room = min(
-                    max(source_margin_right, free_right // 2),
-                    max(source_margin_right, round(width * 0.10)),
-                )
-            else:
-                free_right = max(0, work_image.width - base_x1)
-                right_room = min(
-                    free_right,
-                    max(source_margin_right, round(width * 0.08)),
-                )
-            x0 = base_x0
-            x1 = min(work_image.width, base_x1 + max(0, right_room))
-            y0 = max(0, int(geometry.top))
-            y1 = min(work_image.height, int(geometry.bottom))
-            if x1 - x0 < 40 or y1 - y0 < 80:
-                continue
-
-            crop = work_image.crop((x0, y0, x1, y1)).convert("L")
-            try:
-                a_scale = min(1.0, analysis_column_width / max(1, crop.width))
-                aw = max(1, round(crop.width * a_scale))
-                ah = max(1, round(crop.height * a_scale))
-                small = (
-                    crop
-                    if a_scale == 1.0
-                    else crop.resize((aw, ah), Image.Resampling.BILINEAR)
-                )
-                try:
-                    adaptive = core._adaptive_dark_mask(small, 19, 16)
-                    arr = np.asarray(small, dtype=np.uint8)
-                    dark = np.logical_or(adaptive, arr < 170)
-                    mask_img = Image.fromarray(
-                        dark.astype(np.uint8) * 255,
-                        mode="L",
-                    )
-                    try:
-                        joined = (
-                            np.asarray(
-                                mask_img.filter(ImageFilter.MaxFilter(3)),
-                                dtype=np.uint8,
-                            )
-                            > 0
-                        )
-                    finally:
-                        mask_img.close()
-
-                    comps = core._rle_components(joined)
-                    min_h = max(18, round(0.028 * ah))
-                    min_w = max(18, round(0.055 * aw))
-                    min_bbox_area = max(500, round(0.0022 * aw * ah))
-                    candidates: list[tuple[int, int, int, int]] = []
-                    for cx0, cy0, cx1, cy1, area in comps:
-                        bw = cx1 - cx0
-                        bh = cy1 - cy0
-                        bbox_area = bw * bh
-                        if bw < min_w or bh < min_h or bbox_area < min_bbox_area:
-                            continue
-                        occupancy = area / max(1, bbox_area)
-                        if occupancy < 0.035:
-                            continue
-                        if bw / max(1, bh) > 7.0 and bh < 0.08 * ah:
-                            continue
-                        candidates.append((cx0, cy0, cx1, cy1))
-
-                    gap = max(5, round(0.018 * aw))
-                    candidates = core._merge_nearby_boxes(candidates, gap)
-                    for cx0, cy0, cx1, cy1 in candidates:
-                        bw = cx1 - cx0
-                        bh = cy1 - cy0
-                        if bh < min_h or bw < min_w:
-                            continue
-                        sx0 = x0 + round(cx0 / a_scale) - source_margin
-                        sy0 = y0 + round(cy0 / a_scale) - source_margin
-                        sx1 = x0 + round(cx1 / a_scale) + source_margin_right
-                        sy1 = y0 + round(cy1 / a_scale) + source_margin
-                        sx0 = max(x0, sx0)
-                        sy0 = max(y0, sy0)
-                        sx1 = min(x1, sx1)
-                        sy1 = min(y1, sy1)
-                        if sx1 - sx0 < 8 or sy1 - sy0 < 8:
-                            continue
-                        results.append(
-                            PolygonRegion(
-                                "",
-                                [
-                                    (sx0, sy0),
-                                    (sx1, sy0),
-                                    (sx1, sy1),
-                                    (sx0, sy1),
-                                ],
-                            )
-                        )
-                finally:
-                    if small is not crop:
-                        small.close()
-            finally:
-                crop.close()
-
-        if geometry.transform.kind == "identity":
-            return results
-        return [
-            PolygonRegion(
-                region.label,
-                [geometry.canonical_to_source(x, y) for x, y in region.points],
-            )
-            for region in results
-        ]
-    finally:
-        if work_image is not None:
-            try:
-                work_image.close()
-            except Exception:
-                pass
-        try:
-            if analysis_source is not source:
-                analysis_source.close()
-        except Exception:
-            pass
-        try:
-            if source is not image:
-                source.close()
-        except Exception:
-            pass
-
-
-def detect_illustration_regions_from_image(
-    image: Image.Image,
-    settings: Any,
-    *,
-    analysis_column_width: int = 520,
-    profile_page_index: int = 0,
-) -> list[Any]:
-    return _detect_illustration_regions_in_image(
-        image,
-        settings,
-        analysis_column_width=int(analysis_column_width),
-        profile_page_index=int(profile_page_index),
-    )
-
-
-def detect_illustration_regions_from_path(
-    image_path: str | Path,
-    settings: Any,
-    *,
-    analysis_column_width: int = 520,
-    profile_page_index: int = 0,
-) -> list[Any]:
-    """Historical path API forwarded through the shared in-memory detector."""
-    from .image_utils import normalize_page_rgb
-
-    with Image.open(Path(image_path)) as opened:
-        image = normalize_page_rgb(opened)
-    try:
-        return detect_illustration_regions_from_image(
-            image,
-            settings,
-            analysis_column_width=int(analysis_column_width),
-            profile_page_index=int(profile_page_index),
-        )
-    finally:
-        image.close()
 
 
 def _region_box(region: Any) -> tuple[int, int, int, int] | None:
@@ -368,7 +127,12 @@ def mask_large_illustrations_for_layout(
         character_height * 6.0,
         float(getattr(effective, "column_width", image.width) or image.width),
     )
-    detect = detector or detect_illustration_regions_from_image
+    if detector is None:
+        from .processing_core import detect_illustration_regions_from_image
+
+        detect = detect_illustration_regions_from_image
+    else:
+        detect = detector
     regions = list(
         detect(
             image,
@@ -440,16 +204,9 @@ def _append_mask_reason(understanding: Any, stats: IllustrationMaskStats) -> Non
 
 
 def install_layout_illustration_mask_runtime(processing_module: Any) -> None:
-    """Share the detector and wrap the single Page Understanding entry point."""
+    """Wrap the single Page Understanding entry point for optional masking."""
     if bool(getattr(processing_module, "_pc_layout_illustration_mask_installed", False)):
         return
-
-    from . import processing_core as core
-
-    # Existing PPP auto-detection now goes through exactly the same in-memory
-    # component detector used by Layout masking.
-    core.detect_illustration_regions = detect_illustration_regions_from_path
-    processing_module.detect_illustration_regions = detect_illustration_regions_from_path
 
     original = processing_module._understand_page_current
 

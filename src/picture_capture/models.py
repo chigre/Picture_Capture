@@ -198,6 +198,9 @@ class AppSettings:
     # Page-level multiprocessing is used only for entry/illustration cropping.
     # 0 = automatic conservative worker count; 1 = serial crop processing.
     crop_parallel_workers: int = 0
+    # Optional Layout-only preprocessing. Source scans, PPP annotations, OCR
+    # input and crop outputs remain untouched; default preserves legacy behavior.
+    layout_mask_illustrations: bool = False
     # Automatic PPP illustration detection intentionally adds a little context
     # around dark connected components. The right side gets a larger default
     # because classic dictionary illustrations often extend into the gutter.

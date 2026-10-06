@@ -61,7 +61,6 @@ def test_core_profile_owns_only_remaining_compatibility_chain() -> None:
     ).read_text(encoding="utf-8")
 
     installers = (
-        "install_layout_illustration_mask_settings",
         "install_live_layout_detector_binding",
         "install_separator_y_settings",
         "install_entry_crop_settings",
@@ -79,6 +78,7 @@ def test_core_profile_owns_only_remaining_compatibility_chain() -> None:
         "install_ordinary_large_head_role_guard",
         "install_processing_entry_classification",
         "entry_classification_runtime",
+        "install_layout_illustration_mask_settings",
     ):
         assert retired not in core
         assert retired not in package_init

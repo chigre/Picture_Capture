@@ -23,13 +23,8 @@ class CoreServices:
 
 def build_core_services() -> CoreServices:
     """Install the shared runtime contract in its compatibility-safe order."""
-    # AppSettings must have the real dataclass field before consumers use
-    # dataclasses.replace() or pickle settings into spawn workers.
-    from ..layout_illustration_mask_runtime import (
-        install_layout_illustration_mask_settings,
-    )
-
-    install_layout_illustration_mask_settings()
+    # Layout illustration masking is a native AppSettings field; bootstrap no
+    # longer subclasses/rebinds the settings class.
 
     # Character-height fallback is static inside layout_detection, so consumers
     # that import the detector by value no longer depend on installer ordering.
