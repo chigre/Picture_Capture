@@ -31,21 +31,18 @@ if text.count(old_refresh) != 1:
     )
 text = text.replace(old_refresh, new_refresh, 1)
 
-# This assertion is emitted from a triple-quoted migration template. Avoid
-# nested quote escaping entirely while still proving the old gray50 path is gone.
-stipple_assertions = [
-    line for line in text.splitlines()
-    if 'assert "stipple=' in line and "not in app" in line
-]
-if len(stipple_assertions) != 1:
+# The generated replacement test body is stored as one physical source line
+# with escaped newlines. Replace only the assertion fragment, never that whole
+# source line.
+assertion_start_marker = 'assert "stipple='
+if text.count(assertion_start_marker) != 1:
     raise SystemExit(
-        f"phase5p_apply.py: expected one generated stipple assertion, found {len(stipple_assertions)}"
+        f"phase5p_apply.py: expected one generated stipple assertion marker, found {text.count(assertion_start_marker)}"
     )
-text = text.replace(
-    stipple_assertions[0],
-    '    assert "gray50" not in app',
-    1,
-)
+assertion_start = text.index(assertion_start_marker)
+assertion_end_marker = " not in app"
+assertion_end = text.index(assertion_end_marker, assertion_start) + len(assertion_end_marker)
+text = text[:assertion_start] + 'assert "gray50" not in app' + text[assertion_end:]
 
 path.write_text(text, encoding="utf-8")
-print("Phase 5P migration helper aligned to current schema, PPP draw site, refresh timing, and generated test assertion")
+print("Phase 5P migration helper aligned to current schema, PPP draw site, refresh timing, and assertion fragment")
