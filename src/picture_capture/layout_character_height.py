@@ -1,24 +1,18 @@
+\
 from __future__ import annotations
 
-"""Recover literal source-pixel character height on fallback Layout pages.
+"""Observed character-height recovery for fallback Layout estimates.
 
-Some dense CJK dictionary pages make Paddle's layout text boxes merge vertically
-(underlines, oversized display heads and tight typography are common causes).
-The reliability layer then marks ``fallback=character_height`` and falls back to
-the projection detector.  Historically that projection fallback used the page
-height heuristic ``height * 0.008``; on 3240x4600 pages this is about 37 px even
-when ordinary body glyph ink is about 58-60 px tall.  Downstream row recovery
-then treats ordinary lines as oversized and drops much of the page.
-
-This adapter is deliberately narrow: only an estimate already marked with
-``fallback=character_height`` is eligible.  It measures foreground-run heights
-from the resolved body columns, requires a well-supported tight cluster, and
-replaces only ``character_height``.  Geometry, column origins, OCR and entry
-semantics are untouched.
+Dense dictionary pages can make layout text boxes merge vertically, leaving the
+reliable detector on its ``fallback=character_height`` projection path with an
+underestimated page-height heuristic.  This module keeps the established
+physical-row measurement as ordinary static logic: only an estimate already
+marked for that fallback is eligible, and only ``character_height`` plus method
+provenance may change.
 """
 
 from dataclasses import replace
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -52,12 +46,7 @@ def observed_character_height(
     estimate: Any,
     backend: Any,
 ) -> tuple[int | None, dict[str, float | int]]:
-    """Estimate ordinary glyph-ink height from physical row-projection bands.
-
-    The current fallback value is used only as a loose scale prior.  Tiny marks
-    and multi-line merged bands are excluded; a replacement is returned only
-    when at least eight bands form a compact dominant height cluster.
-    """
+    """Estimate ordinary glyph-ink height from physical row-projection bands."""
     source = image.convert("RGB")
     gray = np.asarray(ImageOps.grayscale(source), dtype=np.uint8)
     ink = backend.analysis_ink_mask(gray, settings)
@@ -115,8 +104,6 @@ def observed_character_height(
     center = float(np.median(kept))
     q10, q90 = (float(v) for v in np.percentile(kept, [10, 90]))
     spread = q90 - q10
-    # Reject ambiguous pages where retained bands do not describe one ordinary
-    # text-height family.  18% still tolerates scan/antialiasing variability.
     if center <= 0 or spread > max(4.0, center * 0.18):
         return None, {
             "samples": int(kept.size),
@@ -131,48 +118,38 @@ def observed_character_height(
     }
 
 
-def install_character_height_fallback_runtime() -> None:
-    """Patch layout detection before Page Design imports it by value."""
-    from . import layout_detection
+def apply_character_height_fallback(
+    image: Image.Image,
+    settings: Any,
+    estimate: Any,
+    backend: Any,
+) -> Any:
+    """Apply the established fallback correction without mutating raw estimates."""
+    method = str(getattr(estimate, "method", "") or "")
+    if "fallback=character_height" not in method:
+        return estimate
 
-    if bool(getattr(layout_detection, "_character_height_fallback_runtime_installed", False)):
-        return
+    observed, stats = observed_character_height(
+        image,
+        settings,
+        estimate,
+        backend,
+    )
+    if observed is None:
+        return estimate
 
-    original: Callable[..., Any] = layout_detection.detect_layout_parameters
+    current = max(1, int(getattr(estimate, "character_height", 1) or 1))
+    ratio = float(observed) / float(current)
+    # Small differences are harmless and should not churn page parameters.
+    if 0.82 <= ratio <= 1.22:
+        return estimate
 
-    def wrapped(image: Image.Image, settings: Any) -> Any:
-        estimate = original(image, settings)
-        method = str(getattr(estimate, "method", "") or "")
-        if "fallback=character_height" not in method:
-            return estimate
-
-        observed, stats = observed_character_height(
-            image,
-            settings,
-            estimate,
-            layout_detection,
-        )
-        if observed is None:
-            return estimate
-
-        current = max(1, int(getattr(estimate, "character_height", 1) or 1))
-        ratio = float(observed) / float(current)
-        # Small differences are harmless and should not churn page parameters.
-        if 0.82 <= ratio <= 1.22:
-            return estimate
-
-        updated = replace(estimate, character_height=int(observed))
-        updated.method = (
-            f"{method}+observed_character_height={int(observed)}"
-            f"(n={int(stats.get('samples', 0))})"
-        )
-        return updated
-
-    layout_detection.detect_layout_parameters = wrapped
-    layout_detection._character_height_fallback_runtime_installed = True
+    updated = replace(estimate, character_height=int(observed))
+    updated.method = (
+        f"{method}+observed_character_height={int(observed)}"
+        f"(n={int(stats.get('samples', 0))})"
+    )
+    return updated
 
 
-__all__ = [
-    "install_character_height_fallback_runtime",
-    "observed_character_height",
-]
+__all__ = ["apply_character_height_fallback", "observed_character_height"]

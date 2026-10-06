@@ -89,23 +89,32 @@ def detect_text_polygons(image, settings, *, limit_side_len: int = 2400):
 
 
 def detect_layout_parameters(image, settings):
+    from .layout_character_height import apply_character_height_fallback
     from .layout_reliability import detect_layout_parameters_reliable
 
     analysis_image = build_analysis_image(image, settings)
     key = _layout_estimate_cache_key(analysis_image, settings)
-    cached = _LAYOUT_ESTIMATE_CACHE.get(key)
-    if cached is not None:
+    raw = _LAYOUT_ESTIMATE_CACHE.get(key)
+    if raw is not None:
         _LAYOUT_ESTIMATE_CACHE.move_to_end(key)
-        return cached
+    else:
+        raw = detect_layout_parameters_reliable(
+            analysis_image, settings, sys.modules[__name__]
+        )
+        _LAYOUT_ESTIMATE_CACHE[key] = raw
+        _LAYOUT_ESTIMATE_CACHE.move_to_end(key)
+        while len(_LAYOUT_ESTIMATE_CACHE) > _LAYOUT_ESTIMATE_CACHE_LIMIT:
+            _LAYOUT_ESTIMATE_CACHE.popitem(last=False)
 
-    result = detect_layout_parameters_reliable(
-        analysis_image, settings, sys.modules[__name__]
+    # Preserve the historical two-layer cache contract: the reliable/raw
+    # estimate is cached, while observed character-height correction is replayed
+    # after every cache lookup and is never written back into the raw cache.
+    return apply_character_height_fallback(
+        image,
+        settings,
+        raw,
+        sys.modules[__name__],
     )
-    _LAYOUT_ESTIMATE_CACHE[key] = result
-    _LAYOUT_ESTIMATE_CACHE.move_to_end(key)
-    while len(_LAYOUT_ESTIMATE_CACHE) > _LAYOUT_ESTIMATE_CACHE_LIMIT:
-        _LAYOUT_ESTIMATE_CACHE.popitem(last=False)
-    return result
 
 
 # Historical source-contract markers retained for compatibility tests/tools.
