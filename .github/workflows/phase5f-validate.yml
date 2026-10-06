@@ -1,0 +1,74 @@
+name: Phase 5F validation
+
+on:
+  push:
+    branches: [refactor/phase-5f-training-export]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase5f-training-export
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/phase-5f-training-export
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --locked --group dev
+      - name: Apply Phase 5F migration
+        run: uv run --locked python tools/phase5f_apply.py
+      - name: Check diff shape
+        shell: bash
+        run: |
+          git diff --check
+          python - <<'PY'
+          import subprocess
+          expected = {
+              'src/picture_capture/app.py',
+              'src/picture_capture/bootstrap/gui.py',
+              'src/picture_capture/training_export_ui.py',
+              'src/picture_capture/ui/controllers/export.py',
+              'tests/test_ui_terminology_and_training_scope.py',
+              'tests/test_ui_training_export_controller.py',
+          }
+          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          if changed != expected:
+              raise SystemExit(f'unexpected Phase 5F diff: {sorted(changed)}')
+          PY
+      - name: Focused regressions
+        run: >-
+          uv run --locked pytest -q
+          tests/test_ui_export_controller.py
+          tests/test_ui_training_export_controller.py
+          tests/test_ui_terminology_and_training_scope.py
+          tests/test_next_stage_regressions.py
+          tests/test_gui_bootstrap.py
+      - name: Full suite
+        run: uv run --locked pytest -q
+      - name: Compile Python sources
+        run: uv run --locked python -m compileall -q src scripts run.py run_tests.py
+      - name: Check undefined names
+        run: uv run --locked ruff check --select F821 src tests scripts run.py run_tests.py
+      - name: Remove temporary migration assets
+        shell: bash
+        run: |
+          git rm tools/phase5f_apply.py .github/workflows/phase5f-validate.yml
+          git diff --check
+      - name: Publish validated production tree
+        shell: bash
+        run: |
+          git config user.name "chigre3"
+          git config user.email "guangdong.hu@gmail.com"
+          git add src tests tools .github/workflows || true
+          git commit -m "Phase 5F: route training export through ExportController"
+          git push origin HEAD:refactor/phase-5f-training-export
