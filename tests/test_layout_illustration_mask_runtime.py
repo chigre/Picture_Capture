@@ -183,3 +183,13 @@ def test_gui_composition_exposes_switch_before_generic_settings_help_scan():
     ui_install = source.index("install_layout_illustration_mask_ui(app_module)")
     help_install = source.index("install_settings_parameter_help(app_module)")
     assert ui_install < help_install
+
+
+def test_runtime_all_exports_resolve_after_static_detector_split():
+    import picture_capture.layout_illustration_mask_runtime as runtime
+
+    assert all(hasattr(runtime, name) for name in runtime.__all__)
+    namespace = {}
+    exec("from picture_capture.layout_illustration_mask_runtime import *", namespace)
+    assert "install_layout_illustration_mask_runtime" in namespace
+    assert "install_layout_illustration_mask_ui" in namespace
