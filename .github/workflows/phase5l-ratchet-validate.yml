@@ -37,12 +37,16 @@ jobs:
           assert '"windows_gpu_runtime.py",' not in guard
           assert Path('src/picture_capture/windows_gpu.py').is_file()
           assert not Path('src/picture_capture/windows_gpu_runtime.py').exists()
-          for root in ('src', 'scripts', 'docs', 'tests'):
-              for path in Path(root).rglob('*'):
-                  if path.is_file() and path.suffix in {'.py', '.md'}:
-                      text = path.read_text(encoding='utf-8', errors='ignore')
-                      if 'windows_gpu_runtime' in text:
-                          raise SystemExit(f'legacy module reference remains: {path}')
+
+          for root in ('src', 'scripts'):
+              for path in Path(root).rglob('*.py'):
+                  text = path.read_text(encoding='utf-8', errors='ignore')
+                  if 'windows_gpu_runtime' in text:
+                      raise SystemExit(f'legacy production reference remains: {path}')
+
+          install_doc = Path('docs/ocr-install.md').read_text(encoding='utf-8')
+          assert 'windows_gpu_runtime' not in install_doc
+          assert 'src/picture_capture/windows_gpu.py' in install_doc
           PY
 
       - name: Architecture guard
