@@ -57,6 +57,12 @@ FORBIDDEN_PROCESSING_CORE_ASSIGNMENTS = (
     "_core._detect_entries_left_edge =",
 )
 
+# Phase 6E removes the final default facade-to-core write. Shared separator-Y
+# behavior is now selected through explicit filter/adaptive-refiner hooks.
+FORBIDDEN_PADDLE_CORE_ASSIGNMENTS = (
+    "_core.refine_separator_y =",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -128,6 +134,13 @@ def collect_violations() -> list[str]:
         if marker in processing_source:
             violations.append(
                 f"processing import-time core mutation returned: {marker}"
+            )
+
+    paddle_source = (PACKAGE_ROOT / "paddle_headwords.py").read_text(encoding="utf-8")
+    for marker in FORBIDDEN_PADDLE_CORE_ASSIGNMENTS:
+        if marker in paddle_source:
+            violations.append(
+                f"paddle_headwords import-time core mutation returned: {marker}"
             )
 
     init_path = PACKAGE_ROOT / "__init__.py"
