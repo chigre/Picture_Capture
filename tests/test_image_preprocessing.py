@@ -7,7 +7,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture import image_preprocessing, image_preprocessing_reporting
+from picture_capture import (
+    image_preprocessing,
+    image_preprocessing_reporting,
+    image_preprocessing_storage,
+)
 from picture_capture.image_preprocessing import (
     PreprocessAnalysis,
     analysis_is_current,
@@ -2066,3 +2070,17 @@ def test_phase7a_reporting_helpers_are_reexported_from_stable_module() -> None:
     assert image_preprocessing.export_summary_csv.__module__.endswith(
         "image_preprocessing_reporting"
     )
+
+
+def test_phase7b_storage_helpers_are_reexported_from_stable_module() -> None:
+    for name in (
+        "preview_output_root",
+        "processed_output_root",
+        "promote_processed_pages",
+    ):
+        assert getattr(image_preprocessing, name) is getattr(
+            image_preprocessing_storage, name
+        )
+        assert getattr(image_preprocessing, name).__module__.endswith(
+            "image_preprocessing_storage"
+        )
