@@ -19,7 +19,7 @@ PACKAGE_ROOT = ROOT / "src" / "picture_capture"
 # but may not grow past its baseline and no new exception may appear.
 MAX_NORMAL_MODULE_BYTES = 100_000
 OVERSIZED_MODULE_BASELINE = {
-    "app.py": 789_609,
+    "app.py": 787_094,
     "paddle_headwords_core.py": 378_513,
     "image_preprocessing.py": 204_153,
     "profile_setup.py": 174_009,
