@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 6 — dynamic facade/proxy compatibility cleanup is underway. Phase 6B replaces supervised import-time core mutation with explicit call hooks.**
+**Phase 6 — dynamic facade/proxy compatibility cleanup is underway. Phase 6C localizes broad core namespace compatibility to the historical public facade.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -152,8 +152,22 @@ This is a behavior-preserving ownership change:
 
 Because `paddle_headwords_core.py` had only eight bytes of growth headroom under the oversized-module ratchet, the hook change also trims redundant detector documentation so the core shrinks rather than grows. The architecture guard now forbids the two retired evidence-fusion assignment forms from returning.
 
-## Recommended next slice — Phase 6C
-Characterize the remaining `evidence_fusion` namespace copy (`vars(_core).items()`) and replace it only if an explicit export surface can preserve all historical private/public imports. Keep `processing.py` out of scope until the narrower Paddle/evidence facade debt is exhausted.
+## Phase 6C public namespace ownership
+Read-only inventory showed that production code consumes `evidence_fusion` directly only for the supervised detector path, while the broad public/private symbol surface is consumed through the historical `paddle_headwords` module. The namespace-copy compatibility debt therefore belongs to the public facade, not the supervised implementation module.
+
+Phase 6C preserves the historical symbol surface while relocating ownership:
+- `evidence_fusion` no longer copies `vars(paddle_headwords_core)` into its own namespace;
+- it explicitly imports only the model/types needed by its supervised implementation;
+- `paddle_headwords` now owns the complete non-dunder core namespace copy;
+- evidence-fusion overrides are applied after that copy, so supervised filter/typography behavior still replaces the corresponding public symbols;
+- `paddle_headwords.__all__` contains the complete core namespace plus evidence-fusion additions and shared public adapters;
+- assignment mirroring remains owned by `paddle_headwords`;
+- the architecture ratchet moves the allowed namespace-copy owner from `evidence_fusion.py` to `paddle_headwords.py`, so the implementation module cannot silently regain broad mirroring.
+
+This is an ownership relocation, not a compatibility-surface reduction: existing imports from `picture_capture.paddle_headwords` remain available, including private diagnostic/test helpers.
+
+## Recommended next slice — Phase 6D
+Inventory which names on the historical `paddle_headwords` facade are actually required by production, tests, plugins/tooling contracts, and source guards before attempting any reduction of the broad namespace copy. Do not shrink the public surface merely from in-repository usage; external compatibility must be treated separately. `processing.py` remains deferred.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe Phase 6 slices without stopping for a checkpoint after every small change. Phase 6A compatibility inventory established the first bounded production slice.

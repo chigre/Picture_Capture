@@ -19,13 +19,20 @@ plugins, tests and user tooling keep working unchanged.
 import sys
 import types
 
+from . import paddle_headwords_core as _core
+
+# This historical public path owns the broad core namespace contract. Copy core
+# symbols first, then let evidence-fusion overrides replace selected decisions.
+for _name, _value in vars(_core).items():
+    if not _name.startswith("__"):
+        globals()[_name] = _value
+
 from . import evidence_fusion as _fusion
 from .evidence_fusion import *  # noqa: F401,F403
 from .ocr_boundary_detection import detect_ocr_headword_boundaries
 from .separator_y_refinement import refine_separator_y as _shared_refine_separator_y
 
 # Keep the shared core visible for diagnostic/tests that intentionally inspect it.
-_core = _fusion._core
 
 # ``processing_core.refine_existing_entries`` and older callers still import the
 # refiner from ``paddle_headwords``.  Preserve that API while making the neutral
@@ -67,7 +74,13 @@ class _CoreProxyModule(types.ModuleType):
 
 sys.modules[__name__].__class__ = _CoreProxyModule
 
-__all__ = list(_fusion.__all__)
-for _name in ("refine_separator_y", "detect_ocr_headword_boundaries"):
+__all__ = [
+    name for name in vars(_core)
+    if not name.startswith("__")
+]
+for _name in list(_fusion.__all__) + [
+    "refine_separator_y",
+    "detect_ocr_headword_boundaries",
+]:
     if _name not in __all__:
         __all__.append(_name)
