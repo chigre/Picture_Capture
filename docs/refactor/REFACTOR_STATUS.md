@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7E extracts pure review text/range/OCR-candidate helpers from `app.py` while leaving runtime-patched crop behavior in place.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7F extracts pure overlay/preview/editor-layout helpers from `app.py` while preserving all historical app imports.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -317,8 +317,36 @@ The production sizes move from:
 
 The architecture guard ratchets `app.py` to 796,866 bytes.
 
-## Recommended next slice — Phase 7F
-After Phase 7E validation, continue with another cohesive app helper/controller seam only if runtime patching and module-path compatibility are explicit. Prefer pure layout/formatting helpers over moving worker/result classes or mutable GUI state. Keep `_review_line_box` and other extension-owned slots in `app.py`.
+Phase 7E publication:
+- first CI run 2147 exposed one stale source-inspection assertion that still expected a candidate helper implementation in `app.py`; the UI/source contract was split so UI text remains asserted in `app.py` while helper ownership is asserted in `review_text_helpers.py`;
+- fixed head `69f636529c5b1f62eb6f82d8e3c3a61bf9f7a57c` passed CI 2148 on Ubuntu/Windows/macOS and CodeQL 2129 Actions/Python;
+- PR #299 merged as `df2b1042bb8dbce21548456983b6511465d46d93`;
+- post-merge CI 2149 and CodeQL 2130 both passed.
+
+## Phase 7F overlay/editor-layout ownership
+Phase 7F extracts the contiguous GUI-independent helper block used to compute overlay typography, binary preview display, and editor/menu/index placement:
+- `effective_main_overlay_font_size(...)`;
+- `scaled_overlay_line_width(...)`;
+- `review_auto_fit_zoom(...)`;
+- `binary_preview_image(...)`;
+- vertical marker/editor/menu helpers;
+- transformed/horizontal editor anchors;
+- `entry_index_label_layout(...)`.
+
+These functions move to `overlay_layout_helpers.py`, which depends only on PIL image conversion and `AppSettings`. It does not import Tk or `app.py`.
+
+`app.py` continues to re-export all 11 historical names, so existing tests and internal/external imports remain stable. Existing behavior tests in `test_next_stage_regressions.py` continue to exercise those app imports. A focused ownership test additionally requires direct object identity between app aliases and the new owner.
+
+Moving `binary_preview_image` also removes the last `ImageOps` dependency from `app.py`.
+
+The production sizes move from:
+- `app.py`: 796,866 bytes -> 789,609 bytes;
+- new `overlay_layout_helpers.py`: 7,798 bytes.
+
+The architecture guard ratchets `app.py` to 789,609 bytes.
+
+## Recommended next slice — Phase 7G
+After Phase 7F validation, reassess the remaining small top-level app helpers before any class/state extraction. Favor another cohesive, GUI-independent formatting/layout seam; do not move runtime-patched review slots, worker/result types, or mutable GUI state merely to reduce line count.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
