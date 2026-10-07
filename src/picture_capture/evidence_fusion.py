@@ -448,6 +448,9 @@ def filter_headword_records(
     peer_annotator = _core._annotate_peer_typography_matches
     if peer_annotator is _original_annotate_peer_typography_matches:
         peer_annotator = _annotate_peer_typography_matches
+    separator_refiner = _core.refine_separator_y
+    if separator_refiner is _original_refine_separator_y:
+        separator_refiner = _shared_separator_y_refiner
 
     entries, diagnostics = _original_filter_headword_records(
         records,
@@ -461,6 +464,7 @@ def filter_headword_records(
         profile=profile,
         pixel_scale=pixel_scale,
         peer_typography_annotator=peer_annotator,
+        separator_y_refiner=separator_refiner,
     )
 
     cjk_count = _rescue_cjk_parser_failed_rows(
