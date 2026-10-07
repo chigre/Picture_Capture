@@ -53,10 +53,6 @@ def build_core_services() -> CoreServices:
     install_pdic_classification(formats)
 
     from .. import processing as processing_module
-    from ..layout_illustration_mask_runtime import install_layout_illustration_mask_runtime
-
-    install_layout_illustration_mask_runtime(processing_module)
-
     return CoreServices(formats=formats, processing=processing_module)
 
 

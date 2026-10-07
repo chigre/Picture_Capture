@@ -73,31 +73,60 @@ def _understand_page_current(
     page_sections: list[PageSection] | None,
     layout_only: bool = False,
 ) -> PageUnderstanding | None:
-    """Resolve the live Page Understanding implementation after runtime setup.
+    """Resolve Page Understanding with optional static illustration masking."""
+    analysis_image = image
+    mask_stats = None
+    append_reason = None
+    if bool(getattr(settings, "layout_mask_illustrations", False)):
+        from .layout_illustration_mask import (
+            IllustrationMaskStats,
+            append_mask_reason,
+            mask_large_illustrations_for_layout,
+        )
 
-    ``layout_only`` skips semantic enrichment, symbol evidence and OCR-adjacent
-    work.  It is the authoritative fast path for 【显示Layout】 and 【普通画线】.
-    """
+        mask_stats = IllustrationMaskStats()
+        append_reason = append_mask_reason
+        try:
+            analysis_image, mask_stats = mask_large_illustrations_for_layout(
+                image,
+                settings,
+                profile_page_index=int(page_index),
+            )
+        except Exception:
+            analysis_image = image
+            mask_stats = IllustrationMaskStats()
+
     try:
         _ensure_layout_runtime()
         if layout_only:
             from .layout_core_understanding import understand_layout_core
 
-            return understand_layout_core(
-                image,
+            understanding = understand_layout_core(
+                analysis_image,
                 settings,
                 page_index=page_index,
             )
+        else:
+            from . import page_understanding as page_understanding_module
 
-        from . import page_understanding as page_understanding_module
-        return page_understanding_module.understand_page(
-            image,
-            settings,
-            page_index=page_index,
-            page_sections=page_sections,
-        )
+            understanding = page_understanding_module.understand_page(
+                analysis_image,
+                settings,
+                page_index=page_index,
+                page_sections=page_sections,
+            )
+        if append_reason is not None and mask_stats is not None:
+            append_reason(understanding, mask_stats)
+        return understanding
     except Exception:
         return None
+    finally:
+        if analysis_image is not image:
+            try:
+                analysis_image.close()
+            except Exception:
+                pass
+
 
 
 def _uses_cjk_indent_topology(settings: AppSettings) -> bool:

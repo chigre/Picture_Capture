@@ -66,7 +66,6 @@ def test_core_profile_owns_only_remaining_compatibility_chain() -> None:
         "install_entry_crop_settings",
         "install_entry_classification_fields",
         "install_pdic_classification",
-        "install_layout_illustration_mask_runtime",
     )
     for name in installers:
         assert f"{name}(" in core
@@ -79,6 +78,7 @@ def test_core_profile_owns_only_remaining_compatibility_chain() -> None:
         "install_processing_entry_classification",
         "entry_classification_runtime",
         "install_layout_illustration_mask_settings",
+        "install_layout_illustration_mask_runtime",
     ):
         assert retired not in core
         assert retired not in package_init
