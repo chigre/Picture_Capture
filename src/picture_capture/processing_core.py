@@ -13,7 +13,7 @@ import unicodedata
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
-from .models import AppSettings, Entry, PolygonRegion, read_noncomment_lines, resolved_tesseract_language
+from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
 from .coordinate_space import SOURCE_COORDINATE_SPACE
 from .image_utils import normalize_page_rgb
 from .layout_transform import LayoutTransform
@@ -34,6 +34,7 @@ from .crop_plan_formatting import (
     page_crop_plan_dict,
     polygon_display_name,
 )
+from .ocr_text_io import export_ocred, import_ocred, load_replace_rules, process_ocr_text
 
 
 _COLUMN_TRACK_ADAPTIVE_BLOCK = 19
@@ -2213,26 +2214,6 @@ def detect_entries_job(
     return len(entries)
 
 
-def load_replace_rules(path: Path) -> list[tuple[str, str, str]]:
-    if not path.exists():
-        return []
-    rules: list[tuple[str, str, str]] = []
-    for line in read_noncomment_lines(path):
-        parts = line.split("\t")
-        if len(parts) >= 2 and parts[0] in {"N", "R"}:
-            rules.append((parts[0], parts[1], parts[2] if len(parts) >= 3 else ""))
-    return rules
-
-
-def process_ocr_text(text: str, rules: list[tuple[str, str, str]], lowercase: bool) -> str:
-    text = text.replace("'", "").strip()
-    nonempty = [line.strip() for line in text.splitlines() if line.strip()]
-    if nonempty:
-        multiword = [line for line in nonempty if len(line.split()) > 1]
-        text = multiword[0] if multiword else nonempty[0]
-    for kind, search, replacement in rules:
-        text = text.replace(search, replacement) if kind == "N" else re.sub(search, replacement, text)
-    return text.lower() if lowercase else text
 
 
 def run_tesseract(image: Image.Image, language: str, executable: str = "tesseract", psm: int = 7) -> str:
@@ -2652,15 +2633,6 @@ def ocr_entries(
     return results
 
 
-def export_ocred(path: Path, texts: list[str]) -> None:
-    path.write_text("".join(f"{i:03d}|`{text}\n" for i, text in enumerate(texts)), encoding="utf-8")
-
-
-def import_ocred(path: Path) -> list[str]:
-    texts: list[str] = []
-    for line in path.read_text(encoding="utf-8-sig").splitlines():
-        texts.append(line.split("`", 1)[1] if "`" in line else line)
-    return texts
 
 
 def _save_crop(image: Image.Image, output: Path, box: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
