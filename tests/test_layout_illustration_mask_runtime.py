@@ -18,6 +18,19 @@ def _rect(x0: int, y0: int, x1: int, y1: int) -> PolygonRegion:
     return PolygonRegion("", [(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
 
 
+def test_layout_mask_checkbox_has_dedicated_check_help_contract():
+    from picture_capture.ui.settings.schema import CHECK_HELP
+
+    expected = (
+        "作用：开启后，【普通画线】和【显示 Layout】在 Page Understanding 之前先复用自动插图检测，"
+        "把足够大的插图区域仅在分析副本上填成白色，再恢复文字行、缩进和 entry/body 角色。"
+        "原始扫描图、PPP、OCR、PDIC 与切图文件都不会被修改。\n\n"
+        "保护：Layout 白化比 PPP 自动插图更保守。小尺寸候选直接忽略；接近大字头尺寸且近方形的候选也不会白化，"
+        "避免把大号单字/大字头误当成插图。关闭时完全保持原有 Layout 流程。"
+    )
+    assert CHECK_HELP[SETTING_NAME] == expected
+
+
 def test_layout_illustration_mask_is_native_persistable_setting(tmp_path: Path):
     names = {item.name for item in fields(AppSettings)}
     assert SETTING_NAME in names
