@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7A extracts the image-preprocessing reporting seam without changing preprocessing behavior or public imports.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7B extracts preprocessing output-root and transactional-promotion ownership without changing analysis behavior or public imports.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -220,8 +220,32 @@ The production sizes move from:
 
 The architecture guard ratchets the oversized `image_preprocessing.py` allowance down to 212,874 bytes so the extracted reporting code cannot silently return.
 
-## Recommended next slice — Phase 7B
-Continue the `image_preprocessing` decomposition only if the next candidate is similarly cohesive and behavior-neutral. Prefer output/export persistence or review-preview ownership over extracting any portion of the 2,500+ line `analyze_preprocess_page()` state machine. Keep the Phase 6 public facades stable.
+Phase 7A publication note:
+- PR #295 fixed head `2ec9c3835c4508858459c569dc72621b34dabf8a` passed CI 2138 on Ubuntu/Windows/macOS and CodeQL 2119 Actions/Python;
+- GitHub's PR merge endpoint repeatedly returned an internal control-plane error despite the PR remaining mergeable;
+- the already-validated PR tree was integrated as a standard two-parent merge commit `304bfd01a85116b7d608bd7165b87a84d66d10fd`, with parents `c45bd16ef9e1ca5f6b1537fd609f97bba2d0e492` and the fixed PR head;
+- the subsequent push CI 2139 failed before job creation with `startup_failure` and could not be retried. This is recorded as infrastructure failure; no post-merge test job failed.
+
+## Phase 7B preprocessing storage/promotion ownership
+The next bounded seam is the filesystem-only output/promotion responsibility:
+- `preview_output_root(...)`;
+- `processed_output_root(...)`;
+- `promote_processed_pages(...)`.
+
+These functions do not participate in geometry analysis. They own output directories and the transactional promotion of selected processed pages into project working images, including decode verification, staging, rollback, and preservation of first-generation originals.
+
+Phase 7B moves them into `image_preprocessing_storage.py` and re-exports all three names from the historical `image_preprocessing` module. Existing callers and tests therefore retain the same import path.
+
+The production sizes move from:
+- `image_preprocessing.py`: 212,874 bytes -> 206,934 bytes;
+- new `image_preprocessing_storage.py`: 6,316 bytes.
+
+The architecture guard ratchets `image_preprocessing.py` to 206,934 bytes.
+
+A larger data-model extraction remains a strong later candidate: `OutputCanvasInfo` + `PreprocessAnalysis` form a cohesive ~43 KB pure dataclass/serialization seam. The current GitHub connector rejects that single large generated file payload. Do not split the model unnaturally merely to satisfy connector limits; retry it when a reliable large-file write path is available.
+
+## Recommended next slice — Phase 7C
+After Phase 7B is validated, continue read-only decomposition around `image_preprocessing` or `processing_core`. Prefer another self-contained ownership region with one-way dependencies. Keep `analyze_preprocess_page()` and the Phase 6 public facades stable.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
