@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7D extracts page-aware headword mapping/comparison helpers from `app.py` without changing controller or GUI behavior.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7E extracts pure review text/range/OCR-candidate helpers from `app.py` while leaving runtime-patched crop behavior in place.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -294,8 +294,31 @@ The production sizes move from:
 
 The previous app oversized guard was still a loose 867,212-byte historical ceiling. Phase 7D ratchets it directly to the current 802,903-byte tree size, capturing both this extraction and already-completed earlier app decomposition.
 
-## Recommended next slice — Phase 7E
-After Phase 7D validation, continue app decomposition only along GUI-independent helper/controller ownership seams. Do not move top-level dataclasses or worker/result types whose module path may participate in pickling/spawn compatibility without an explicit compatibility plan. Keep the Phase 6 facades stable and keep `analyze_preprocess_page()` untouched.
+Phase 7D publication:
+- first CI run 2144 exposed one stale source-inspection regression that still expected the parser implementation in `app.py`; the test was updated to assert the same one-lookup contract in the new owner;
+- fixed head `139154d7307cf4f9b66ca67b225d3a84f1260f32` passed CI 2145 on Ubuntu/Windows/macOS and CodeQL 2126 Actions/Python;
+- PR #298 merged as `6af34809520e60ce1024a3e6d07f04f9f0b2a745`.
+- post-merge CI 2146 and CodeQL 2127 both passed.
+
+## Phase 7E pure review-text ownership
+Phase 7E deliberately excludes every helper whose behavior is runtime-patched or performs review/PDIC mutation. In particular, `_review_line_box`, review crop context, height resolvers, and focused-review page updates remain in `app.py`.
+
+The extracted helpers are two GUI-independent groups:
+- review text/font/range utilities: `_review_editor_font_size`, `_entry_font_spec`, similarity normalization/scoring, focused-review character parsing, page-range parsing, and single-character detection;
+- OCR candidate presentation utilities: nearest candidate matching, explicit source-word lookup, semantic similarity color, and deterministic candidate-choice rows.
+
+They move to `review_text_helpers.py`, which depends only on Python text utilities plus `AppSettings`/`Entry`. It has no Tk, PIL, processing, controller, or app dependency.
+
+`app.py` re-exports every historical underscore helper name. This is important because review runtime extensions still consult selected app-module slots, while the one actively replaced slot (`_review_line_box`) remains app-owned and unchanged.
+
+The production sizes move from:
+- `app.py`: 802,903 bytes -> 796,866 bytes;
+- new `review_text_helpers.py`: 6,617 bytes.
+
+The architecture guard ratchets `app.py` to 796,866 bytes.
+
+## Recommended next slice — Phase 7F
+After Phase 7E validation, continue with another cohesive app helper/controller seam only if runtime patching and module-path compatibility are explicit. Prefer pure layout/formatting helpers over moving worker/result classes or mutable GUI state. Keep `_review_line_box` and other extension-owned slots in `app.py`.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
