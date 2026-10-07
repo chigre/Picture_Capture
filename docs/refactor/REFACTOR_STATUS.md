@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 6 — default facade-to-core mutation cleanup reaches its safe completion boundary in Phase 6E. Historical public namespace/proxy compatibility remains intentionally preserved.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7A extracts the image-preprocessing reporting seam without changing preprocessing behavior or public imports.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -205,11 +205,26 @@ Two compatibility mechanisms intentionally remain on the historical public facad
 
 These are retained public compatibility surfaces, not silent runtime installers. Repository-local usage is insufficient evidence to delete them because plugins, debugging scripts, pickled/spawned callables, and external tooling may depend on the historical module paths/private names. Any future removal should be treated as an explicit compatibility/deprecation project rather than routine debt cleanup.
 
-## Recommended next phase — Phase 7 planning
-Keep the Phase 6 public compatibility facades stable and inventory the remaining oversized production modules (`app.py`, `paddle_headwords_core.py`, `image_preprocessing.py`, `profile_setup.py`, `processing_core.py`). Select the next slice by cohesive ownership/call-graph boundaries, not by line count alone. Begin with read-only inventory and characterization before any production extraction.
+## Phase 7A image-preprocessing reporting ownership
+Phase 7 inventory compared the five oversized production modules by size, top-level ownership, and call graph. The first bounded extraction is deliberately not a geometry or GUI state-machine move.
+
+`image_preprocessing.py` contained two large reporting-only functions that consume completed analysis state but do not participate in page analysis or geometry mutation:
+- `export_summary_csv(...)` (~456 lines);
+- `result_summary(...)` (~175 lines).
+
+Phase 7A moves them to `image_preprocessing_reporting.py` and re-exports them from the historical `image_preprocessing` module. Existing imports in `app.py`, tests, and external callers therefore remain unchanged. The new reporting module has no runtime dependency back on `image_preprocessing`; type-only references are guarded by `TYPE_CHECKING`.
+
+The production sizes move from:
+- `image_preprocessing.py`: 242,626 bytes -> 212,874 bytes;
+- new `image_preprocessing_reporting.py`: 30,243 bytes.
+
+The architecture guard ratchets the oversized `image_preprocessing.py` allowance down to 212,874 bytes so the extracted reporting code cannot silently return.
+
+## Recommended next slice — Phase 7B
+Continue the `image_preprocessing` decomposition only if the next candidate is similarly cohesive and behavior-neutral. Prefer output/export persistence or review-preview ownership over extracting any portion of the 2,500+ line `analyze_preprocess_page()` state machine. Keep the Phase 6 public facades stable.
 
 ## Standing continuation authorization
-The user has authorized faster continuous progression through confirmed-safe Phase 6 slices without stopping for a checkpoint after every small change. Phase 6A compatibility inventory established the first bounded production slice.
+The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
 
 Continue across related low-risk changes once contracts and focused tests are clear. Use checkpoints at phase milestones, material compatibility-boundary changes, plan changes, merge/finalization boundaries, or when recovery state would otherwise become ambiguous.
 
