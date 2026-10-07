@@ -298,6 +298,7 @@ Phase 7D publication:
 - first CI run 2144 exposed one stale source-inspection regression that still expected the parser implementation in `app.py`; the test was updated to assert the same one-lookup contract in the new owner;
 - fixed head `139154d7307cf4f9b66ca67b225d3a84f1260f32` passed CI 2145 on Ubuntu/Windows/macOS and CodeQL 2126 Actions/Python;
 - PR #298 merged as `6af34809520e60ce1024a3e6d07f04f9f0b2a745`.
+- post-merge CI 2146 and CodeQL 2127 both passed.
 
 ## Phase 7E pure review-text ownership
 Phase 7E deliberately excludes every helper whose behavior is runtime-patched or performs review/PDIC mutation. In particular, `_review_line_box`, review crop context, height resolvers, and focused-review page updates remain in `app.py`.
