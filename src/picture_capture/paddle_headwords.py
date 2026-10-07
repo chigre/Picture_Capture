@@ -35,11 +35,38 @@ from .separator_y_refinement import refine_separator_y as _shared_refine_separat
 # Keep the shared core visible for diagnostic/tests that intentionally inspect it.
 
 # ``processing_core.refine_existing_entries`` and older callers still import the
-# refiner from ``paddle_headwords``.  Preserve that API while making the neutral
-# shared module authoritative.  Internal OCR-core calls resolve the same shared
-# function through their module globals as well.
+# refiner from ``paddle_headwords``. Preserve that API without rewriting the
+# core module at import time.
+_native_refine_separator_y = _core.refine_separator_y
 refine_separator_y = _shared_refine_separator_y
-_core.refine_separator_y = _shared_refine_separator_y
+
+
+def refine_separator_y_adaptive(
+    gray,
+    coarse_y,
+    reference_line_height,
+    settings,
+    pixel_scale=1.0,
+    lower_bound=0,
+    content_top=None,
+    preceding_gap_hint=None,
+):
+    """Run the mature adaptive refiner with the public/shared fallback."""
+    fallback_refiner = _core.refine_separator_y
+    if fallback_refiner is _native_refine_separator_y:
+        fallback_refiner = refine_separator_y
+    return _core.refine_separator_y_adaptive(
+        gray,
+        coarse_y,
+        reference_line_height,
+        settings,
+        pixel_scale=pixel_scale,
+        lower_bound=lower_bound,
+        content_top=content_top,
+        preceding_gap_hint=preceding_gap_hint,
+        fallback_refiner=fallback_refiner,
+    )
+
 
 # Backward-compatible public name. New code should use the neutral consumer name
 # so "run OCR" and "use OCR to draw separators" are no longer synonymous.
