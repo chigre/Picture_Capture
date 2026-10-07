@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw
 
 from picture_capture import (
     image_preprocessing,
+    image_preprocessing_persistence,
     image_preprocessing_reporting,
     image_preprocessing_storage,
 )
@@ -2084,3 +2085,29 @@ def test_phase7b_storage_helpers_are_reexported_from_stable_module() -> None:
         assert getattr(image_preprocessing, name).__module__.endswith(
             "image_preprocessing_storage"
         )
+
+
+def test_phase7c_persistence_helpers_are_reexported_from_stable_module() -> None:
+    for name in (
+        "result_path",
+        "save_analysis",
+        "load_analysis",
+        "manual_geometry_path",
+        "load_manual_perspective_quad",
+        "save_manual_perspective_quad",
+        "clear_manual_perspective_quad",
+    ):
+        assert getattr(image_preprocessing, name) is getattr(
+            image_preprocessing_persistence, name
+        )
+        assert getattr(image_preprocessing, name).__module__.endswith(
+            "image_preprocessing_persistence"
+        )
+    assert (
+        image_preprocessing.MANUAL_GEOMETRY_FORMAT
+        == image_preprocessing_persistence.MANUAL_GEOMETRY_FORMAT
+    )
+    assert (
+        image_preprocessing.MANUAL_GEOMETRY_VERSION
+        == image_preprocessing_persistence.MANUAL_GEOMETRY_VERSION
+    )
