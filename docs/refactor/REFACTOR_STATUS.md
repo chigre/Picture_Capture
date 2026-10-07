@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 5 — runtime-patch cleanup is complete. Phase 5A through Phase 5AA are closed.**
+**Phase 6 — dynamic facade/proxy compatibility cleanup is underway. Phase 6A narrows assignment mirroring while preserving the historical public facade contract.**
 
-Phase 4 controller decomposition is complete. Phase 5 has removed all production `*_runtime.py` compatibility modules and moved their behavior into explicit/static owners while preserving tested behavior.
+Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
@@ -113,25 +113,31 @@ Current approximate facade sizes on final Phase 5 main:
 - `evidence_fusion.py`: ~18.2 KB and also patches supervised decision functions into `paddle_headwords_core`;
 - `processing.py`: ~23.3 KB and mirrors many historical `processing_core` symbols while owning current detection behavior.
 
-## Recommended next phase — Phase 6 planning
-**Do not begin proxy deletion as an implicit continuation of Phase 5. First define the compatibility contract for dynamic facades.**
+## Phase 6A bounded contract
+Read-only inventory separated two previously conflated behaviors: import-time core mutation and public assignment mirroring.
 
-Safest Phase 6 planning questions:
-1. Which facade/private names are intentionally public or used by external plugins/tooling versus tests only?
-2. Which monkeypatch assignments must continue to propagate into the historical core module?
-3. Can those seams be replaced by explicit dependency injection / test hooks / public adapters without changing external behavior?
-4. Which facade is the smallest independently removable proxy after characterization?
+Observed compatibility contract on the Phase 5 completion baseline:
+- direct monkeypatch/integration usage targets the historical public `paddle_headwords` path, including `get_paddle_engine`, `run_paddle_band`, and `refine_separator_y`;
+- no direct assignment-mirroring dependency was found for the implementation module `evidence_fusion`;
+- existing supervised-fusion regression explicitly requires `filter_headword_records` and `_annotate_peer_typography_matches` to remain patched into `paddle_headwords_core` at import time;
+- `processing.py` still has the broadest namespace/proxy surface and remains out of scope for the first Phase 6 write.
 
-Initial read-only assessment:
-- `paddle_headwords.py` is the smallest file but not necessarily the safest first write because its historical public module path is exactly where monkeypatch compatibility is expected.
-- `evidence_fusion.py` has a more bounded core-mutation surface (supervised OCR decision refinements) but contains substantial behavior and shares the proxy class with `paddle_headwords`.
-- `processing.py` has the broadest compatibility surface and should not be first.
+Phase 6A therefore narrows, rather than deletes, compatibility behavior:
+- `evidence_fusion` returns to ordinary module assignment semantics;
+- the module-class proxy is owned directly by the historical public `paddle_headwords` facade;
+- assignments on `paddle_headwords` still mirror to an existing same-named core attribute;
+- the supervised import-time core patches remain unchanged;
+- namespace copying from `paddle_headwords_core` remains unchanged;
+- architecture guard now ratchets namespace copying and module-class proxying as separate debt categories.
 
-Therefore the next step should be a **read-only Phase 6A compatibility inventory**, not immediate production deletion. A production Phase 6A slice should be chosen only after that inventory proves a bounded contract.
+This removes one dynamic module-class proxy instance without changing OCR decision behavior, supervised rescue behavior, public import paths, or the established public monkeypatch contract.
+
+## Recommended next slice — Phase 6B
+Characterize and then reduce the remaining `evidence_fusion -> paddle_headwords_core` import-time supervised mutation. Prefer an explicit core-owned hook/adapter or direct call boundary only if focused tests prove equivalent runtime lookup semantics. Do not begin with `processing.py`.
 
 ## Standing continuation authorization
-The user's standing authorization covered continuation of Phase 5 runtime-patch cleanup without stopping at normal ownership decision points. Phase 5 is now complete.
+The user has authorized faster continuous progression through confirmed-safe Phase 6 slices without stopping for a checkpoint after every small change. Phase 6A compatibility inventory established the first bounded production slice.
 
-Crossing into Phase 6 changes the debt class from runtime installers to historical module-proxy/public monkeypatch compatibility. Production writes should begin only after the Phase 6 compatibility inventory establishes a bounded slice. Read-only assessment may continue immediately.
+Continue across related low-risk changes once contracts and focused tests are clear. Use checkpoints at phase milestones, material compatibility-boundary changes, plan changes, merge/finalization boundaries, or when recovery state would otherwise become ambiguous.
 
 Stop production writes for unexplained behavior/test/CI failure, public/file-format compatibility uncertainty, concurrent architecture work, checkpoint mismatch, materially large cross-core redesign, or irreversible compatibility deletion whose impact cannot be established.
