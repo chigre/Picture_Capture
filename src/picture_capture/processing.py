@@ -624,7 +624,7 @@ def _stage_page_crop_plan(*args, **kwargs):
     return _core._stage_page_crop_plan(*args, **kwargs)
 
 
-# Historical publish implementation uses uuid.uuid4().hex in processing_core.
+# Publish transaction ownership uses uuid.uuid4().hex in processing_publish.
 
 
 def split_single_lines(*args, **kwargs):
