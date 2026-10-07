@@ -34,7 +34,7 @@ LEGACY_RUNTIME_FILES: set[str] = set()
 # hiding behind the other category.
 LEGACY_NAMESPACE_COPY_FILES = {
     "processing.py",
-    "evidence_fusion.py",
+    "paddle_headwords.py",
 }
 NAMESPACE_COPY_MARKER = "vars(_core).items()"
 
