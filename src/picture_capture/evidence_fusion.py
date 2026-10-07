@@ -11,8 +11,6 @@ rescue decisions without duplicating the full OCR engine.
 
 from typing import Any
 import re
-import sys
-import types
 
 from . import paddle_headwords_core as _core
 
@@ -491,22 +489,10 @@ globals()["_annotate_peer_typography_matches"] = _annotate_peer_typography_match
 globals()["filter_headword_records"] = filter_headword_records
 
 
-class _CoreProxyModule(types.ModuleType):
-    """Mirror monkeypatch/debug assignments from compatibility module to core.
-
-    Existing tests and external tooling have long patched private names directly
-    on ``picture_capture.paddle_headwords``. Core functions resolve their globals
-    in ``paddle_headwords_core`` after the split, so assignments must be mirrored
-    transparently to preserve that contract.
-    """
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        types.ModuleType.__setattr__(self, name, value)
-        if name not in {"_core"} and hasattr(_core, name):
-            setattr(_core, name, value)
-
-
-sys.modules[__name__].__class__ = _CoreProxyModule
+# Assignment mirroring intentionally belongs only to the historical public
+# ``paddle_headwords`` facade. This implementation module keeps ordinary module
+# assignment semantics; its only core mutations are the explicit supervised
+# callable patches above.
 
 
 __all__ = [
