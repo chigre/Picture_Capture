@@ -56,7 +56,7 @@ def test_crop_plan_dict_keeps_source_coordinate_schema() -> None:
     payload = formatting.page_crop_plan_dict(plan)
 
     assert payload["version"] == 3
-    assert payload["coordinate_space"] == "source"
+    assert payload["coordinate_space"] == "source_image_pixels"
     assert payload["box_format"] == "source_xyxy"
     assert payload["entry_pieces"][0]["box"] == [1, 2, 30, 40]
     assert payload["illustrations"][0]["box"] == [5, 6, 20, 25]
