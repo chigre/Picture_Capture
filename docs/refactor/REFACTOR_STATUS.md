@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7C extracts preprocessing analysis/manual-geometry persistence without changing analysis behavior or public imports.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7D extracts page-aware headword mapping/comparison helpers from `app.py` without changing controller or GUI behavior.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -266,8 +266,36 @@ The production sizes move from:
 
 The architecture guard ratchets `image_preprocessing.py` to 204,153 bytes.
 
-## Recommended next slice — Phase 7D
-After Phase 7C validation, reassess the remaining `image_preprocessing` rendering/canvas helpers and `processing_core` crop/illustration domains. Prefer a seam that can move without importing the oversized owner back at module import time. Continue to leave the 2,500+ line `analyze_preprocess_page()` state machine untouched.
+Phase 7C publication:
+- PR #297 fixed head `7a6d8b2a9a34eca16fb8bbc7e039a7450184a3eb` passed CI 2142 on Ubuntu/Windows/macOS and CodeQL 2123 Actions/Python;
+- PR #297 merged as `d5fd425396cf92fdc0acd104044949b2c03838b7`;
+- post-merge CI 2143 and CodeQL 2124 both passed.
+
+## Phase 7D page-aware word-mapping ownership
+Read-only inventory of `app.py` found a cohesive, GUI-independent helper block that owns page-aware headword text parsing and comparison:
+- `_parse_words_of_pages_text(...)`;
+- `_fill_page_entries(...)`;
+- `_page_word_mapping_text(...)`;
+- `_compare_page_word_sequences(...)`;
+- `_compare_page_word_mappings(...)`.
+
+These helpers do not depend on Tk widgets or mutable app state. They parse page-bounded legacy/PDIC text, fill one page without cross-page spillover, render page-aware mappings, and compute deterministic per-page sequence diffs.
+
+Phase 7D moves them into `page_word_mapping.py`. `app.py` imports and re-exports the same underscore names, so:
+- `HeadwordController` constructor injection remains unchanged;
+- old/new comparison code continues to call the same names;
+- private compatibility imports from `picture_capture.app` remain available.
+
+Focused tests cover stable app re-export identity, page-boundary parsing, no-cross-page filling, and page-local diff semantics.
+
+The production sizes move from:
+- `app.py`: 809,833 bytes -> 802,903 bytes;
+- new `page_word_mapping.py`: 7,416 bytes.
+
+The previous app oversized guard was still a loose 867,212-byte historical ceiling. Phase 7D ratchets it directly to the current 802,903-byte tree size, capturing both this extraction and already-completed earlier app decomposition.
+
+## Recommended next slice — Phase 7E
+After Phase 7D validation, continue app decomposition only along GUI-independent helper/controller ownership seams. Do not move top-level dataclasses or worker/result types whose module path may participate in pickling/spawn compatibility without an explicit compatibility plan. Keep the Phase 6 facades stable and keep `analyze_preprocess_page()` untouched.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.

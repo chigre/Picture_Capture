@@ -3910,7 +3910,12 @@ def test_v296_large_words_page_resolution_uses_one_prebuilt_lookup():
     # Preserve v2.9.5 ambiguity semantics: two suffix matches must not guess.
     assert _resolve_words_page_token("2", stems, lookup) is None
 
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "page_word_mapping.py"
+    )
     text = source.read_text(encoding="utf-8")
     start = text.index("def _parse_words_of_pages_text(")
     end = text.index("\n\ndef _fill_page_entries", start)
