@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7I extracts atomic publish transaction ownership from `processing_core.py` while preserving the historical processing facade and monkeypatch contract.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7J extracts crop-plan naming/serialization leaf helpers from `processing_core.py` while preserving core-global monkeypatch lookup semantics.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -419,8 +419,36 @@ The production sizes move from:
 
 The previous processing-core oversized guard was a loose 169,599-byte historical ceiling. Phase 7I ratchets it directly to 162,794 bytes.
 
-## Recommended next slice — Phase 7J
-After Phase 7I validation, reassess `processing_core.py` for another leaf/separable responsibility that does not change facade monkeypatch lookup semantics. Avoid moving helper clusters whose internal calls would bypass core globals after extraction. Crop-plan serialization or other one-way formatting/file helpers are preferable to detection/fusion algorithms.
+Phase 7I publication:
+- PR #303 fixed head `d13e23678cf911d7341cae1ed287d1d41e788d17` passed CI 2156 on Ubuntu/Windows/macOS and CodeQL 2137 Actions/Python;
+- PR #303 merged as `7c122a1e7f6338f8115620ead4ec45ed52040b01`;
+- post-merge CI 2157 and CodeQL 2138 both passed.
+
+## Phase 7J crop-plan formatting ownership
+Phase 7J extracts four leaf helpers used by the crop/illustration plan domain:
+- `entry_crop_piece_filename(...)`;
+- `_normalized_crop_name(...)`;
+- `polygon_display_name(...)`;
+- `page_crop_plan_dict(...)`.
+
+They move to `crop_plan_formatting.py`. The new module depends only on text normalization, `SOURCE_COORDINATE_SPACE`, and `PolygonRegion`; `EntryCropPiecePlan`/`PageCropPlan` are type-only imports guarded by `TYPE_CHECKING`, so there is no runtime cycle.
+
+`processing_core.py` imports and re-exports all four names. The actual crop planner, polygon geometry, `_stage_page_crop_plan(...)`, and file publishing remain core-owned. Because each extracted helper is a leaf and core callers continue to resolve the imported name from core globals, the historical `processing` module-class assignment proxy can still override the core alias without being bypassed by nested calls in the new module.
+
+Focused tests cover:
+- core/new-owner object identity;
+- crop filename, NFKC/P-suffix normalization, and polygon display-name contracts;
+- persisted crop-plan schema including canonical `source_image_pixels` coordinates;
+- public-facade assignment mirroring for `page_crop_plan_dict`.
+
+The production sizes move from:
+- `processing_core.py`: 162,794 bytes -> 160,934 bytes;
+- new `crop_plan_formatting.py`: 2,335 bytes.
+
+The architecture guard ratchets `processing_core.py` to 160,934 bytes.
+
+## Recommended next slice — Phase 7K
+After Phase 7J validation, continue only with another processing-core leaf or one-way formatting/file helper. Do not extract polygon/crop helper clusters whose internal cross-calls would shift lookup from core globals into a new module and silently weaken the retained facade monkeypatch contract. If no similarly clean seam remains, switch oversized-owner inventory rather than forcing the processing core apart.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
