@@ -27,9 +27,7 @@ OVERSIZED_MODULE_BASELINE = {
 }
 
 # Existing runtime installers are legacy debt. Their count may only go down.
-LEGACY_RUNTIME_FILES = {
-    "layout_illustration_mask_runtime.py",
-}
+LEGACY_RUNTIME_FILES: set[str] = set()
 
 # Dynamic module namespace/proxy behavior currently exists only in these
 # compatibility facades.  No additional production module may adopt it.
