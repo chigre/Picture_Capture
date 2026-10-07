@@ -3,85 +3,84 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5Z are complete.**
+**Phase 5 — runtime-patch cleanup is complete. Phase 5A through Phase 5AA are closed.**
 
-Phase 4 controller decomposition is complete. Phase 5 is progressively replacing dynamic installer/runtime ownership with explicit/static ownership while preserving behavior and keeping each slice independently reversible and reviewable.
+Phase 4 controller decomposition is complete. Phase 5 has removed all production `*_runtime.py` compatibility modules and moved their behavior into explicit/static owners while preserving tested behavior.
 
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
-## Latest architecture checkpoint — Phase 5Z
-- production PR: **#285 — make Page Understanding illustration masking static**
-- production base: `66bd321800120f5b7fb01009fc0dfe365d54115a`
-- clean production head: `7b53054148517bf6651cefa53c026e8732149a77`
-- validated production tree: `5b6951b4ef3946ef6761957c21d9fd3b40d40c6d`
-- merge commit / current architecture main: `805e5c9814cbfa5d4a53f171d9c3b1c3dea67ae1`
-- merge tree: `5b6951b4ef3946ef6761957c21d9fd3b40d40c6d`
+## Final Phase 5 checkpoint — Phase 5AA
+- precondition/help-contract repair PR: **#287 — repair illustration-mask checkbox help contract**
+- Phase 5AA production PR: **#288 — remove final illustration-mask runtime seam**
+- Phase 5AA production base: `72bd7d22fd84c7e8f30c1a57616aaace681ed8d2`
+- production head: `a5ab7206840bfc01fde66863adf5b3a8cba5bf15`
+- validated/merged production tree: `def12146459e5a82d924b58fed56add116ce356f`
+- production merge / current architecture main: `9ec52afe99647e74ffd5d2d62f1bbe8d3dc7d7e6`
 
-### Static Page Understanding illustration masking
-Phase 5Z removed the Page Understanding callable-replacement responsibility from `layout_illustration_mask_runtime.py`.
+### Pre-Phase-5AA help-contract repair
+Read-only preparation for the final runtime deletion found that the native/static Settings schema had the illustration-mask label/help text needed for the final move, but the dedicated checkbox help contract needed an explicit regression before deleting the runtime source.
 
-The pure masking policy and diagnostics now live in ordinary non-runtime `layout_illustration_mask.py`:
-- `IllustrationMaskStats`;
-- size/headlike guard policy;
-- `mask_large_illustrations_for_layout(...)`;
-- historical `layout.reason` diagnostic formatting.
+PR #287 was deliberately narrow:
+- add the dedicated `CHECK_HELP["layout_mask_illustrations"]` contract using the same wording already owned by the runtime seam;
+- add focused regression coverage;
+- do not change checkbox order, cache key, masking behavior, settings persistence, or runtime ownership.
 
-`processing._understand_page_current(...)` now statically owns optional illustration-mask preprocessing. The preserved contract is:
-1. disabled masking passes the original image object through unchanged;
-2. enabled masking uses the shared static detector/policy;
-3. any mask/filter exception fails open to the original image;
-4. both `layout_only=True` and full Page Understanding routes preserve their existing page index/section arguments;
-5. mask diagnostics remain appended to `layout.reason` with the same fields/format;
-6. a disposable masked image is closed only when it is a separate object, including when downstream understanding raises;
-7. the historical outer failure contract still returns `None`.
+PR #287 gates:
+- CI run **2119**: passed;
+- CodeQL run **2100** Actions/Python: passed;
+- Advanced Security run **1852**: passed.
 
-Core composition no longer imports/calls `install_layout_illustration_mask_runtime(...)`, and `_pc_layout_illustration_mask_installed` no longer exists. Training-export Page Understanding now imports the same static masking helper directly.
+PR #287 merged as `72bd7d22fd84c7e8f30c1a57616aaace681ed8d2`.
 
-The runtime file is intentionally **not yet deleted**. After Phase 5Z it owns only the final GUI compatibility seam:
-- insertion of the `layout_mask_illustrations` checkbox/label/help into Settings Center;
-- inclusion of that setting in `layout_visualization_ui._layout_cache_key`.
+Post-repair main verification:
+- CI run **2120**: passed;
+- CodeQL run **2101** Actions/Python: passed.
 
-### Phase 5Z isolated validation
-Temporary migration/validation assets were removed before publication.
+### Final static illustration-mask Settings/cache ownership
+Phase 5AA removed the last production runtime module, `layout_illustration_mask_runtime.py`.
 
-Two early validation failures were tooling-only and did not publish production code:
-- the first temporary workflow embedded large source text directly in YAML and failed before jobs were created;
-- the next fail-closed diff check did not initially account for the newly created untracked module;
-- after the diff gate was corrected, focused validation exposed an escaping bug in the temporary migration script's generated Chinese help string. This was corrected in the migration tool; it was not an application-design failure.
+The final static ownership is:
+- `AppSettings.layout_mask_illustrations`: native dataclass setting/default/persistence;
+- Settings Center checkbox ordering: static `ui/settings/schema.py`, immediately after `ordinary_auto_layout`;
+- Settings Center label/help: static settings schema/help metadata;
+- illustration detector: static `processing_core.detect_illustration_regions_from_image(...)`;
+- mask policy/diagnostics: non-runtime `layout_illustration_mask.py`;
+- Page Understanding masking/fail-open/lifetime: static `processing._understand_page_current(...)`;
+- training-export masking: static `layout_illustration_mask.mask_large_illustrations_for_layout(...)`;
+- Layout visualization invalidation: static `layout_visualization_ui._layout_cache_key(app)`, preserving the historical setting-name + boolean tuple contribution;
+- GUI bootstrap no longer imports/calls an illustration-mask runtime installer.
 
-Final isolated validation:
-- exact intended production/test diff: **7 paths, passed**;
-- no production reference to `install_layout_illustration_mask_runtime` or `_pc_layout_illustration_mask_installed`;
-- architecture guard: passed;
-- focused regressions: **39 passed**;
-- full pytest suite: **1296 passed, 1 existing warning**;
-- compileall: passed;
-- Ruff F821: passed.
+Phase 5AA intentionally did not change masking thresholds, detector behavior, PPP/crop formats, settings persistence, Page Understanding routing, training export, or GUI wording.
 
-The temporary workflow and migration script were deleted. The exact validated production tree `5b6951b4ef3946ef6761957c21d9fd3b40d40c6d` was then re-anchored to the live main base as one clean production commit `7b53054148517bf6651cefa53c026e8732149a77`.
+### Phase 5AA production gate
+PR #288 publication shape:
+- **1 commit / 6 changed paths**;
+- runtime file deleted;
+- architecture guard ratcheted runtime debt to zero;
+- review submissions: none;
+- review threads: none;
+- PR comments: none.
 
-### Phase 5Z PR gate
-Fixed-head PR #285:
-- CI run **2115** Ubuntu/Windows/macOS: passed, including platform GUI smoke, compatibility runner, compile, F821, and wheel build;
-- CodeQL run **2096** Actions/Python: passed;
-- Advanced Security run **1850**: passed;
-- PR remained mergeable with one commit and seven changed files;
-- no comments, review threads, review submissions, or objections.
+Fixed-head PR #288 gates:
+- CI run **2121** Ubuntu/Windows/macOS: passed, including pytest, platform GUI smoke, compatibility runner, compile, F821, and wheel build;
+- CodeQL run **2102** Actions/Python: passed;
+- Advanced Security run **1853**: passed.
 
-PR #285 was merged with fixed-head protection on `7b53054148517bf6651cefa53c026e8732149a77`.
+PR #288 merged as `9ec52afe99647e74ffd5d2d62f1bbe8d3dc7d7e6`, retaining production tree `def12146459e5a82d924b58fed56add116ce356f`.
 
-### Phase 5Z post-merge verification
-On `main@805e5c9814cbfa5d4a53f171d9c3b1c3dea67ae1`:
-- merge tree exactly matched validated production tree `5b6951b4ef3946ef6761957c21d9fd3b40d40c6d`;
-- push CI run **2116** passed on Ubuntu, Windows, and macOS;
-- GUI smoke passed on all applicable platforms;
-- compatibility runner / compile / F821 / wheel passed on all three platforms;
-- CodeQL run **2097** Actions: passed;
-- CodeQL run **2097** Python: passed.
+### Phase 5AA post-merge verification
+On `main@9ec52afe99647e74ffd5d2d62f1bbe8d3dc7d7e6`:
+- push CI run **2122**: passed;
+- CodeQL run **2103** Actions/Python: passed;
+- merge tree exactly matches `def12146459e5a82d924b58fed56add116ce356f`.
 
-No post-merge behavior, packaging, or security regression was observed.
+Structural Phase 5 completion proof:
+- recursive `main` tree contains **zero** `src/picture_capture/**/*_runtime.py` files;
+- `scripts/architecture_guard.py` now has `LEGACY_RUNTIME_FILES: set[str] = set()`;
+- future production `*_runtime.py` additions therefore fail the architecture ratchet.
 
 ## Completed Phase 5 ownership milestones
+- Phase 5A–5K: earlier runtime/controller compatibility slices completed; details remain in checkpoint history.
 - Phase 5L: Windows NVIDIA/Paddle DLL preparation became ordinary call-time `windows_gpu.py` ownership.
 - Phase 5M: Windows/Tk supplementary Unicode repair moved into explicit `PictureCaptureApp` lifecycle ownership.
 - Phase 5N: one-sided overlay geometry moved to non-runtime `overlay_line_anchor.py`.
@@ -95,53 +94,44 @@ No post-merge behavior, packaging, or security regression was observed.
 - Phase 5V: guarded oversized-head detection and row/fusion authorization became static.
 - Phase 5W: unlined physical-row fast worker became static.
 - Phase 5X: Layout-entry classification and existing-marker crop/OCR became static processing ownership.
-- Phase 5Y: illustration-mask setting became native and the shared PPP/Layout detector became static `processing_core` ownership.
-- Phase 5Z: illustration masking policy/diagnostics and Page Understanding preprocessing became static; core callable replacement was removed.
+- Phase 5Y: illustration-mask setting became native and shared detector ownership became static.
+- Phase 5Z: illustration masking policy/diagnostics and Page Understanding preprocessing became static.
+- Phase 5AA: Settings Center metadata and Layout cache invalidation became static; the final runtime module was deleted.
 
-Earlier Phase 5A–5K details remain available in checkpoint history; they are complete and are not reopened by this checkpoint.
+## Current architecture ratchets
+Runtime-installer/module debt is now zero.
 
-## Current explicit illustration-mask ownership
-- setting schema/default/persistence: native `AppSettings.layout_mask_illustrations`;
-- detector: static `processing_core.detect_illustration_regions_from_image(...)`;
-- mask policy and diagnostics: non-runtime `layout_illustration_mask.py`;
-- Page Understanding preprocessing/lifetime/fail-open behavior: static `processing._understand_page_current(...)`;
-- training-export masking: static `layout_illustration_mask.mask_large_illustrations_for_layout(...)`;
-- remaining compatibility debt: `layout_illustration_mask_runtime.py` only mutates Settings Center metadata and the Layout visualization cache key.
+The next explicit compatibility debt category in `architecture_guard.py` is dynamic module proxy/namespace mirroring:
+- `processing.py`;
+- `evidence_fusion.py`;
+- `paddle_headwords.py`.
 
-## Recommended next slice — Phase 5AA
-**Staticize the final SettingsDialog/cache-key illustration-mask seam and delete `layout_illustration_mask_runtime.py`.**
+These facades are not equivalent to the retired runtime seams. They preserve a long-standing monkeypatch/debug compatibility contract where assignments to facade/private names are mirrored into historical core modules. Removing the proxy class or namespace copying without first defining that compatibility contract could break tests, plugins, debugging workflows, or external tooling even if normal application execution remains green.
 
-Fresh read-only inspection after Phase 5Z shows that the final runtime file has no processing/detector ownership left. Its remaining behavior is small and separable.
+Current approximate facade sizes on final Phase 5 main:
+- `paddle_headwords.py`: ~2.9 KB, but its module-class proxy is inherited from `evidence_fusion` and protects the public historical import path;
+- `evidence_fusion.py`: ~18.2 KB and also patches supervised decision functions into `paddle_headwords_core`;
+- `processing.py`: ~23.3 KB and mirrors many historical `processing_core` symbols while owning current detection behavior.
 
-### Safest Phase 5AA architecture
-- add the `layout_mask_illustrations` checkbox directly to static Settings Center metadata in `ui/settings/schema.py`, preserving its current position immediately after `ordinary_auto_layout`;
-- preserve the exact current Chinese label and dedicated help text;
-- add the setting directly to `layout_visualization_ui._layout_cache_key(app)`, preserving the historical wrapper's tuple contribution: the literal setting name followed by its boolean value;
-- remove `install_layout_illustration_mask_ui(app_module)` from GUI bootstrap; generic settings-help composition must still see the checkbox without installer ordering;
-- delete `layout_illustration_mask_runtime.py` only after all production/test consumers are migrated;
-- ratchet the architecture guard so the deleted runtime file is no longer permitted debt;
-- keep `layout_illustration_mask.py`, detector logic, masking thresholds, settings persistence, Page Understanding behavior, training export, PPP format, and GUI appearance/wording otherwise unchanged.
+## Recommended next phase — Phase 6 planning
+**Do not begin proxy deletion as an implicit continuation of Phase 5. First define the compatibility contract for dynamic facades.**
 
-### Required Phase 5AA characterization
-Before publication, prove at minimum:
-- bare/static `SettingsDialog` metadata already contains the checkbox in the same relative position without GUI bootstrap mutation;
-- `SETTING_LABELS` and `SETTING_HELP` contain the same dedicated content;
-- generic Settings Center help sees the control with no ordering dependency on an illustration installer;
-- `_layout_cache_key` changes when only `layout_mask_illustrations` changes and preserves the previous tuple shape contribution;
-- GUI composition no longer imports/calls the illustration runtime installer;
-- zero production references to `layout_illustration_mask_runtime` remain and the file is deleted;
-- architecture guard ratchets the removed runtime debt;
-- full cross-platform CI, GUI smoke, compatibility runner, compile, F821, wheel, CodeQL, and security gates remain green.
+Safest Phase 6 planning questions:
+1. Which facade/private names are intentionally public or used by external plugins/tooling versus tests only?
+2. Which monkeypatch assignments must continue to propagate into the historical core module?
+3. Can those seams be replaced by explicit dependency injection / test hooks / public adapters without changing external behavior?
+4. Which facade is the smallest independently removable proxy after characterization?
 
-Any checkbox-order/help-text/cache-key semantic change is a stop condition rather than a reason to broaden the slice.
+Initial read-only assessment:
+- `paddle_headwords.py` is the smallest file but not necessarily the safest first write because its historical public module path is exactly where monkeypatch compatibility is expected.
+- `evidence_fusion.py` has a more bounded core-mutation surface (supervised OCR decision refinements) but contains substantial behavior and shares the proxy class with `paddle_headwords`.
+- `processing.py` has the broadest compatibility surface and should not be first.
 
-## Remaining runtime seams after Phase 5Z
-For the illustration-mask feature, exactly one compatibility seam remains:
-- `layout_illustration_mask_runtime.py` — SettingsDialog metadata + Layout visualization cache-key mutation only.
-
-Phase 5AA should remove this final illustration-mask runtime file. Do not mix unrelated remaining Phase 5 compatibility installers into that deletion.
+Therefore the next step should be a **read-only Phase 6A compatibility inventory**, not immediate production deletion. A production Phase 6A slice should be chosen only after that inventory proves a bounded contract.
 
 ## Standing continuation authorization
-The user explicitly authorized continued Phase 5 work along the recommended architecture path without pausing at normal ownership decision points. Continue automatically after each successful checkpoint and fresh live-state revalidation.
+The user's standing authorization covered continuation of Phase 5 runtime-patch cleanup without stopping at normal ownership decision points. Phase 5 is now complete.
 
-Stop production writes only for genuine anomalies: unexplained behavior/test/CI failure, file-format/archive/public-API change outside the approved slice, merge conflict/concurrent architecture work, checkpoint mismatch, materially large cross-core redesign, or irreversible compatibility deletion whose impact cannot be established.
+Crossing into Phase 6 changes the debt class from runtime installers to historical module-proxy/public monkeypatch compatibility. Production writes should begin only after the Phase 6 compatibility inventory establishes a bounded slice. Read-only assessment may continue immediately.
+
+Stop production writes for unexplained behavior/test/CI failure, public/file-format compatibility uncertainty, concurrent architecture work, checkpoint mismatch, materially large cross-core redesign, or irreversible compatibility deletion whose impact cannot be established.
