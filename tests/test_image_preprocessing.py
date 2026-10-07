@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture import image_preprocessing
+from picture_capture import image_preprocessing, image_preprocessing_reporting
 from picture_capture.image_preprocessing import (
     PreprocessAnalysis,
     analysis_is_current,
@@ -2052,3 +2052,17 @@ def test_bottom_tail_review_triggers_second_residual_pass(
     assert analysis.orthogonal_before_bottom_tail_p90_px == 6.0
     assert analysis.orthogonal_after_bottom_tail_p90_px == 1.0
     assert "orthogonal_residual_pass" in analysis.method
+
+
+def test_phase7a_reporting_helpers_are_reexported_from_stable_module() -> None:
+    assert (
+        image_preprocessing.export_summary_csv
+        is image_preprocessing_reporting.export_summary_csv
+    )
+    assert (
+        image_preprocessing.result_summary
+        is image_preprocessing_reporting.result_summary
+    )
+    assert image_preprocessing.export_summary_csv.__module__.endswith(
+        "image_preprocessing_reporting"
+    )
