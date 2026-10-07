@@ -4,9 +4,9 @@ from __future__ import annotations
 
 The implementation is split deliberately: ``paddle_headwords_core`` keeps the
 large, battle-tested OCR/parsing engine unchanged, while this thin module adds
-supervised corrections learned from user-reviewed training exports. Internal
-core calls look up patched functions at runtime, so the wrapper can tighten or
-rescue decisions without duplicating the full OCR engine.
+supervised corrections learned from user-reviewed training exports. The wrapper
+passes those corrections through explicit core hooks, avoiding import-time core
+mutation while retaining the mature OCR engine unchanged.
 """
 
 from typing import Any
@@ -33,6 +33,7 @@ for _name, _value in vars(_core).items():
 
 _original_filter_headword_records = _core.filter_headword_records
 _original_annotate_peer_typography_matches = _core._annotate_peer_typography_matches
+_original_detect_paddle_headwords = _core.detect_paddle_headwords
 
 
 def _drop_peer_typography_match(row: dict[str, Any]) -> None:
@@ -439,6 +440,10 @@ def filter_headword_records(
     profile: DictionaryProfile | None = None,
     pixel_scale: float | None = None,
 ) -> tuple[list[Entry], list[dict[str, Any]]]:
+    peer_annotator = _core._annotate_peer_typography_matches
+    if peer_annotator is _original_annotate_peer_typography_matches:
+        peer_annotator = _annotate_peer_typography_matches
+
     entries, diagnostics = _original_filter_headword_records(
         records,
         band,
@@ -450,6 +455,7 @@ def filter_headword_records(
         engine_name=engine_name,
         profile=profile,
         pixel_scale=pixel_scale,
+        peer_typography_annotator=peer_annotator,
     )
 
     cjk_count = _rescue_cjk_parser_failed_rows(
@@ -480,19 +486,35 @@ def filter_headword_records(
     return entries, diagnostics
 
 
-# Patch the core module itself because functions defined there resolve globals in
-# ``paddle_headwords_core`` at call time. Re-export the patched callables from
-# this compatibility module as well.
-_core._annotate_peer_typography_matches = _annotate_peer_typography_matches
-_core.filter_headword_records = filter_headword_records
-globals()["_annotate_peer_typography_matches"] = _annotate_peer_typography_matches
-globals()["filter_headword_records"] = filter_headword_records
+def detect_paddle_headwords(
+    image: Image.Image,
+    geometry: Any,
+    settings: AppSettings,
+    cache_path: Path | None = None,
+    force_refresh: bool = False,
+    engine: Any | None = None,
+    filter_rules_path: Path | None = None,
+    page_sections: list[PageSection] | None = None,
+) -> list[Entry]:
+    """Run the mature detector with supervised record filtering explicitly injected."""
+    record_filter = _core.filter_headword_records
+    if record_filter is _original_filter_headword_records:
+        record_filter = filter_headword_records
+    return _original_detect_paddle_headwords(
+        image,
+        geometry,
+        settings,
+        cache_path=cache_path,
+        force_refresh=force_refresh,
+        engine=engine,
+        filter_rules_path=filter_rules_path,
+        page_sections=page_sections,
+        record_filter=record_filter,
+    )
 
 
-# Assignment mirroring intentionally belongs only to the historical public
-# ``paddle_headwords`` facade. This implementation module keeps ordinary module
-# assignment semantics; its only core mutations are the explicit supervised
-# callable patches above.
+# This implementation module keeps ordinary assignment semantics. The historical
+# public ``paddle_headwords`` facade remains the sole assignment-mirroring owner.
 
 
 __all__ = [

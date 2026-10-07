@@ -4936,6 +4936,7 @@ def filter_headword_records(
     engine_name: str = "paddle",
     profile: DictionaryProfile | None = None,
     pixel_scale: float | None = None,
+    peer_typography_annotator: Any | None = None,
 ) -> tuple[list[Entry], list[dict[str, Any]]]:
     """Select dictionary headwords using structure, geometry and visual cues.
 
@@ -6034,7 +6035,8 @@ def filter_headword_records(
                 deduplicated[-1] = item
         else:
             deduplicated.append(item)
-    peer_typography_match_count = _annotate_peer_typography_matches(diagnostics)
+    annotate_peer = peer_typography_annotator or _annotate_peer_typography_matches
+    peer_typography_match_count = annotate_peer(diagnostics)
     diagnostics.insert(0, {
         "meta": {
             "header_cutoff_band_y": header_cutoff,
@@ -8351,19 +8353,10 @@ def detect_paddle_headwords(
     engine: Any | None = None,
     filter_rules_path: Path | None = None,
     page_sections: list[PageSection] | None = None,
+    record_filter: Any | None = None,
 ) -> list[Entry]:
-    """v2.1 multi-OCR dictionary headword pipeline.
-
-    Pipeline:
-      Paddle/Tesseract/Google Lens -> normalized OCR lines -> dictionary profile ->
-      structured grammar parser -> sequence+Y alignment -> arbitration ->
-      alphabetical sanity warning ->
-      manual selection overrides -> final entries / issues / quality report.
-
-    Raw Paddle boxes remain cacheable independently of parser settings. Tesseract
-    failures never abort the primary Paddle pass; arbitration falls back to the
-    Paddle candidate sequence when the secondary engine is unavailable.
-    """
+    """Run the mature multi-OCR dictionary headword pipeline."""
+    filter_records = record_filter or filter_headword_records
     signature = _cache_signature(image, geometry, settings)
     runtime_width = geometry.transform.canonical_size(image.size)[0]
     pixel_scale = 1.0
@@ -8476,7 +8469,7 @@ def detect_paddle_headwords(
 
         paddle_lines = _records_as_merged_lines(records, settings)
         paddle_full_text = "\n".join(line.text for line in paddle_lines)
-        paddle_entries, diagnostics = filter_headword_records(
+        paddle_entries, diagnostics = filter_records(
             records, analysis_band, source_top, canonical_u, settings,
             separator_band=analysis_separator_band, user_rules=user_rules, engine_name="paddle", profile=profile,
             pixel_scale=pixel_scale,
@@ -8521,7 +8514,7 @@ def detect_paddle_headwords(
                     candidate_records = _records_to_canonical_band(
                         source_candidate_records, band.size, transform_kind
                     )
-                    candidate_entries, candidate_diagnostics = filter_headword_records(
+                    candidate_entries, candidate_diagnostics = filter_records(
                         candidate_records, analysis_band, source_top, canonical_u, settings,
                         separator_band=analysis_separator_band, user_rules=user_rules,
                         engine_name="tesseract", profile=profile,
@@ -8605,7 +8598,7 @@ def detect_paddle_headwords(
                 lens_records = _records_to_canonical_band(
                     source_lens_records, band.size, transform_kind
                 )
-                lens_entries, lens_diagnostics = filter_headword_records(
+                lens_entries, lens_diagnostics = filter_records(
                     lens_records, analysis_band, source_top, canonical_u, settings,
                     separator_band=analysis_separator_band, user_rules=user_rules,
                     engine_name="lens", profile=profile,
