@@ -26,7 +26,7 @@ from .profile_semantics import (
 )
 from .ocr_engines import find_tesseract
 from .formats import read_pdic, read_ppp, write_pdic, write_ppp
-from .project_storage import crop_log_path, pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
+from .project_storage import pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
 from .processing_publish import _publish_file_transaction, _publish_temp_path
 from .crop_plan_formatting import (
     _normalized_crop_name,
@@ -35,6 +35,7 @@ from .crop_plan_formatting import (
     polygon_display_name,
 )
 from .ocr_text_io import export_ocred, import_ocred, load_replace_rules, process_ocr_text
+from .crop_logging import append_crop_log, append_illustration_crop_log
 
 
 _COLUMN_TRACK_ADAPTIVE_BLOCK = 19
@@ -3261,28 +3262,6 @@ def split_whole_entries(
     finally:
         image.close()
 
-def append_crop_log(root: Path, records: list[CropRecord]) -> None:
-    """Append crop boxes in original-image pixels with a self-describing header."""
-    if not records:
-        return
-    log = crop_log_path(root)
-    needs_header = not log.exists() or log.stat().st_size == 0
-    with log.open("a", encoding="utf-8") as handle:
-        if needs_header:
-            handle.write(
-                "# coordinate_space=source_image_pixels; "
-                "columns=page,file,source_x,source_y,width,height\n"
-            )
-        for record in records:
-            left, top, right, bottom = record.box
-            handle.write(
-                f"{record.page}\t{record.filename}\t{left}\t{top}\t{right-left}\t{bottom-top}\n"
-            )
-
-
-
-AUTO_ILLUSTRATION_LABEL_TOKEN = "|AUTO_"
-
 
 def _rle_components(mask: np.ndarray) -> list[tuple[int, int, int, int, int]]:
     """Connected components for a small binary mask using row runs.
@@ -3852,13 +3831,6 @@ def split_illustrations(
     finally:
         image.close()
     return IllustrationSplitResult(records, events)
-
-def append_illustration_crop_log(root: Path, events: list[IllustrationCropEvent]) -> None:
-    if not events: return
-    path=qt_root(root)/"_illustration_crop_log.txt"; path.parent.mkdir(parents=True,exist_ok=True)
-    with path.open("a",encoding="utf-8") as handle:
-        for e in events:
-            handle.write(f"{e.page}\tPPP{e.polygon_index:03d}\t{e.name}\t{e.associated_word}\t{e.relation}\t{e.action}\t{e.filename}\n")
 
 
 def resolve_crop_worker_count(configured: int = 0, cpu_count: int | None = None) -> int:
