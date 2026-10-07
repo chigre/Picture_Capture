@@ -44,6 +44,13 @@ LEGACY_MODULE_CLASS_PROXY_FILES = {
 }
 MODULE_CLASS_PROXY_MARKER = "sys.modules[__name__].__class__"
 
+# Phase 6B pays off the evidence-fusion import-time supervised core mutations.
+# They must not reappear; supervised behavior is passed through explicit hooks.
+FORBIDDEN_EVIDENCE_CORE_ASSIGNMENTS = (
+    "_core._annotate_peer_typography_matches =",
+    "_core.filter_headword_records =",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -102,6 +109,13 @@ def collect_violations() -> list[str]:
         violations.append(f"new dynamic core namespace copy: {rel}")
     for rel in sorted(module_class_proxy_files - LEGACY_MODULE_CLASS_PROXY_FILES):
         violations.append(f"new dynamic module-class proxy: {rel}")
+
+    evidence_source = (PACKAGE_ROOT / "evidence_fusion.py").read_text(encoding="utf-8")
+    for marker in FORBIDDEN_EVIDENCE_CORE_ASSIGNMENTS:
+        if marker in evidence_source:
+            violations.append(
+                f"evidence_fusion import-time core mutation returned: {marker}"
+            )
 
     init_path = PACKAGE_ROOT / "__init__.py"
     init_text = init_path.read_text(encoding="utf-8")
