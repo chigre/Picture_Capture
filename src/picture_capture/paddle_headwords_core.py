@@ -4360,23 +4360,13 @@ def refine_separator_y_adaptive(
     lower_bound: int = 0,
     content_top: int | None = None,
     preceding_gap_hint: int | None = None,
+    fallback_refiner: Any | None = None,
 ) -> tuple[int, dict[str, Any]]:
-    """Refine a CJK separator by tracing the nearest blank band above the entry.
+    """Trace the nearest blank band above a CJK entry.
 
-    v2.8.16 deliberately stops classifying a whole page as loose/normal/dense.
-    The separator is a *local* boundary problem: starting from the OCR/visual
-    headword top, first locate the real onset of sustained ink (the OCR box may
-    begin a few pixels too high or already inside the glyph), then walk upward
-    and find the nearest run of consecutive near-blank rows.  The marker is
-    placed just above the ink onset with a small safety clearance, i.e. at the
-    lower edge of that blank band.  This keeps the rule visually attached to
-    the following headword for both oversized single Han heads and bracketed
-    compounds.
-
-    ``preceding_gap_hint`` is retained in the signature for cache/API
-    compatibility and diagnostics, but it no longer selects different geometry
-    modes.  If no stable local blank band exists, the legacy local valley
-    refiner remains the safe fallback for extremely dense print.
+    ``preceding_gap_hint`` remains for compatibility/diagnostics. When dense
+    print has no stable blank run, ``fallback_refiner`` selects the local-valley
+    fallback without changing the adaptive geometry policy.
     """
     if not settings.paddle_refine_separator_y or gray.size == 0:
         return int(coarse_y), {"enabled": False, "reason": "disabled", "adaptive_mode": "off"}
@@ -4578,9 +4568,10 @@ def refine_separator_y_adaptive(
         }
 
     # Extremely dense dictionaries can genuinely have no stable run of blank
-    # rows. Preserve the old local valley method as a fallback, but if it offers
-    # a bounded valley, use its lower edge so the marker still hugs the entry.
-    refined, legacy = refine_separator_y(
+    # rows. Preserve the local-valley fallback while allowing an explicit
+    # compatibility refiner to own the final geometry adapter.
+    refine_dense = fallback_refiner or refine_separator_y
+    refined, legacy = refine_dense(
         gray, coarse_y, line_h, settings,
         pixel_scale=pixel_scale,
         lower_bound=lower_bound,
@@ -4937,6 +4928,7 @@ def filter_headword_records(
     profile: DictionaryProfile | None = None,
     pixel_scale: float | None = None,
     peer_typography_annotator: Any | None = None,
+    separator_y_refiner: Any | None = None,
 ) -> tuple[list[Entry], list[dict[str, Any]]]:
     """Select dictionary headwords using structure, geometry and visual cues.
 
@@ -4944,6 +4936,7 @@ def filter_headword_records(
     part-of-speech label. Size, ink density/boldness, special symbols and the
     gap before a line remain fallback evidence for entries without a POS label.
     """
+    refine_y = separator_y_refiner or refine_separator_y
     if profile is None and _is_chinese_ocr(settings):
         # Backward-compatible direct API behavior: before v2.10 Chinese parsing
         # was selected from OCR language alone. The full application pipeline
@@ -5583,9 +5576,10 @@ def filter_headword_records(
                 lower_bound=header_cutoff,
                 content_top=(int(image_boundary.get("ink_onset_y", y0)) if image_boundary else y0),
                 preceding_gap_hint=preceding_gap,
+                fallback_refiner=refine_y,
             )
         elif refine_candidate_geometry:
-            refined_band_y, separator_refinement = refine_separator_y(
+            refined_band_y, separator_refinement = refine_y(
                 separator_gray,
                 coarse_band_y,
                 max(2, y1 - y0),
@@ -5868,6 +5862,7 @@ def filter_headword_records(
                 lower_bound=header_cutoff,
                 content_top=run_start,
                 preceding_gap_hint=visual_gap_hint,
+                fallback_refiner=refine_y,
             )
             source_y = source_top + refined_band_y
             visual_anchor_band_y = int((visual_separator_refinement or {}).get("anchor_y", coarse_band_y))
