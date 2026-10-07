@@ -17,9 +17,38 @@ class _IdentityTransform:
         return int(x), int(y)
 
 
-def test_paddle_public_and_core_refiners_use_shared_module() -> None:
+def test_paddle_public_refiner_uses_shared_module_without_core_rewrite() -> None:
     assert paddle_headwords.refine_separator_y is shared_y.refine_separator_y
-    assert paddle_headwords._core.refine_separator_y is shared_y.refine_separator_y
+    assert (
+        paddle_headwords._core.refine_separator_y
+        is paddle_headwords._native_refine_separator_y
+    )
+    assert paddle_headwords._core.refine_separator_y is not shared_y.refine_separator_y
+
+
+def test_public_adaptive_refiner_injects_shared_fallback(monkeypatch) -> None:
+    seen = {}
+
+    def fake_adaptive(*_args, **kwargs):
+        seen.update(kwargs)
+        return 7, {"reason": "test"}
+
+    monkeypatch.setattr(
+        paddle_headwords._core,
+        "refine_separator_y_adaptive",
+        fake_adaptive,
+    )
+
+    refined, details = paddle_headwords.refine_separator_y_adaptive(
+        np.zeros((12, 12), dtype=np.uint8),
+        5,
+        4,
+        AppSettings(),
+    )
+
+    assert refined == 7
+    assert details == {"reason": "test"}
+    assert seen["fallback_refiner"] is shared_y.refine_separator_y
 
 
 def test_existing_pdic_refinement_reaches_shared_api() -> None:
