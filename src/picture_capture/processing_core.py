@@ -28,6 +28,12 @@ from .ocr_engines import find_tesseract
 from .formats import read_pdic, read_ppp, write_pdic, write_ppp
 from .project_storage import crop_log_path, pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
 from .processing_publish import _publish_file_transaction, _publish_temp_path
+from .crop_plan_formatting import (
+    _normalized_crop_name,
+    entry_crop_piece_filename,
+    page_crop_plan_dict,
+    polygon_display_name,
+)
 
 
 _COLUMN_TRACK_ADAPTIVE_BLOCK = 19
@@ -178,11 +184,6 @@ class PageCropPlan:
     entry_pieces: list[EntryCropPiecePlan]
     illustrations: list[IllustrationCropPlan]
     integrate_illustrations: bool = True
-
-
-def entry_crop_piece_filename(page_stem: str, piece: EntryCropPiecePlan) -> str:
-    """Return the exact output filename used for an entry crop-plan piece."""
-    return f"{page_stem}_WW_{piece.output_index:03d}{piece.suffix}.png"
 
 
 @dataclass(slots=True)
@@ -2862,23 +2863,6 @@ def entry_crop_column_boxes(
         for col in range(len(geometry.column_starts))
     ]
 
-def _normalized_crop_name(text: str) -> str:
-    value = unicodedata.normalize("NFKC", str(text or "")).strip().casefold()
-    value = re.sub(r"\s+", " ", value)
-    # A PPP may already carry a display suffix such as (P1); it still belongs
-    # to the headword before that suffix.
-    value = re.sub(r"\s*\(p\d+\)\s*$", "", value, flags=re.I)
-    return value
-
-
-def polygon_display_name(region: PolygonRegion, index: int) -> str:
-    label = str(region.label or "").strip()
-    fields = label.split("|")
-    if len(fields) >= 3 and fields[1].strip():
-        return fields[1].strip()
-    return label or f"P_{index + 1:02d}"
-
-
 def _point_in_rect(point: tuple[int, int], box: tuple[int, int, int, int]) -> bool:
     x, y = point
     return box[0] <= x <= box[2] and box[1] <= y <= box[3]
@@ -3135,39 +3119,6 @@ def build_page_crop_plan(
         if pos in partial_merge:
             piece.merge_polygon_indices=tuple(partial_merge[pos])
     return PageCropPlan(pieces,illustrations,bool(integrate_illustrations))
-
-
-def page_crop_plan_dict(plan: PageCropPlan) -> dict:
-    return {
-        "version": 3,
-        "coordinate_space": SOURCE_COORDINATE_SPACE,
-        "box_format": "source_xyxy",
-        "integrate_illustrations": bool(plan.integrate_illustrations),
-        "entry_pieces": [
-            {
-                "output_index": p.output_index,
-                "entry_ref_index": p.entry_ref_index,
-                "word": p.word,
-                "box": list(p.box),
-                "suffix": p.suffix,
-                "source_mode": p.source_mode,
-                "merge_polygon_indices": list(p.merge_polygon_indices),
-            }
-            for p in plan.entry_pieces
-        ],
-        "illustrations": [
-            {
-                "polygon_index": d.polygon_index,
-                "name": d.name,
-                "associated_entry_index": d.associated_entry_index,
-                "associated_word": d.associated_word,
-                "relation": d.relation,
-                "standalone": d.standalone,
-                "box": list(d.box) if d.box is not None else None,
-            }
-            for d in plan.illustrations
-        ],
-    }
 
 
 def _stage_page_crop_plan(
