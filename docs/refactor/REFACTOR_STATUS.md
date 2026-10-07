@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 6 — dynamic facade/proxy compatibility cleanup is underway. Phase 6A narrows assignment mirroring while preserving the historical public facade contract.**
+**Phase 6 — dynamic facade/proxy compatibility cleanup is underway. Phase 6B replaces supervised import-time core mutation with explicit call hooks.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -132,8 +132,28 @@ Phase 6A therefore narrows, rather than deletes, compatibility behavior:
 
 This removes one dynamic module-class proxy instance without changing OCR decision behavior, supervised rescue behavior, public import paths, or the established public monkeypatch contract.
 
-## Recommended next slice — Phase 6B
-Characterize and then reduce the remaining `evidence_fusion -> paddle_headwords_core` import-time supervised mutation. Prefer an explicit core-owned hook/adapter or direct call boundary only if focused tests prove equivalent runtime lookup semantics. Do not begin with `processing.py`.
+## Phase 6B explicit supervised-hook contract
+Phase 6B removes the two default import-time assignments from `evidence_fusion` into `paddle_headwords_core`:
+- `_core.filter_headword_records = filter_headword_records`;
+- `_core._annotate_peer_typography_matches = _annotate_peer_typography_matches`.
+
+The mature core now exposes two optional call hooks without changing existing callers:
+- `filter_headword_records(..., peer_typography_annotator=None)` defaults to the native core annotator;
+- `detect_paddle_headwords(..., record_filter=None)` defaults to the native core filter and uses the selected filter consistently for Paddle, Tesseract, and Lens.
+
+`evidence_fusion` explicitly injects the supervised annotator into its filter wrapper and explicitly injects the supervised filter into its detector wrapper. Historical public monkeypatch behavior remains authoritative: if the public facade has mirrored a different same-named core callable, the wrapper preserves that override instead of replacing it.
+
+This is a behavior-preserving ownership change:
+- importing `evidence_fusion` no longer mutates either supervised core symbol;
+- direct core callers retain native behavior by default;
+- the public OCR boundary path still receives the supervised behavior;
+- the `paddle_headwords` assignment-mirroring contract remains unchanged;
+- `processing.py` remains untouched.
+
+Because `paddle_headwords_core.py` had only eight bytes of growth headroom under the oversized-module ratchet, the hook change also trims redundant detector documentation so the core shrinks rather than grows. The architecture guard now forbids the two retired evidence-fusion assignment forms from returning.
+
+## Recommended next slice — Phase 6C
+Characterize the remaining `evidence_fusion` namespace copy (`vars(_core).items()`) and replace it only if an explicit export surface can preserve all historical private/public imports. Keep `processing.py` out of scope until the narrower Paddle/evidence facade debt is exhausted.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe Phase 6 slices without stopping for a checkpoint after every small change. Phase 6A compatibility inventory established the first bounded production slice.
