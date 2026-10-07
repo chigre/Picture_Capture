@@ -194,3 +194,42 @@ def test_layout_runtime_does_not_replace_canonical_entry_materializer() -> None:
     assert "image" in signature.parameters
     assert "page_index" in signature.parameters
     assert signature.parameters["page_index"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_phase6d_processing_import_keeps_core_left_edge_native() -> None:
+    assert (
+        processing._core._detect_entries_left_edge
+        is processing._original_detect_entries_left_edge
+    )
+
+
+def test_phase6d_processing_fallback_injects_enhanced_left_edge(monkeypatch) -> None:
+    seen = {}
+    geometry = SimpleNamespace()
+
+    monkeypatch.setattr(
+        processing,
+        "_understand_page_current",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def fake_core_detect(*_args, **kwargs):
+        seen.update(kwargs)
+        return [], geometry
+
+    monkeypatch.setattr(processing._core, "detect_entries", fake_core_detect)
+
+    entries, returned_geometry = processing.detect_entries(
+        Image.new("RGB", (120, 160), "white"),
+        AppSettings(detection_method="combined"),
+    )
+
+    assert entries == []
+    assert returned_geometry is geometry
+    assert seen["left_edge_detector"] is processing._detect_entries_left_edge
+
+
+def test_phase6d_core_detect_entries_exposes_optional_left_edge_hook() -> None:
+    signature = inspect.signature(processing._core.detect_entries)
+    assert "left_edge_detector" in signature.parameters
+    assert signature.parameters["left_edge_detector"].default is None
