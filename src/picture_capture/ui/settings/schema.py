@@ -183,6 +183,7 @@ CHECK_GROUPS = [
 OCR_LANGUAGES = ("eng", "spa", "fra", "ita", "por", "deu", "chi_sim", "chi_tra", "jpn", "ara")
 
 SETTING_LABELS = {
+        "layout_mask_illustrations": "Layout前白化插图",
         "columns": "正文栏数",
         "start_y": "正文起始 Y",
         "bottom_y": "正文结束 Y",
@@ -244,6 +245,13 @@ SETTING_LABELS = {
     }
 
 SETTING_HELP = {
+        "layout_mask_illustrations": (
+            "作用：开启后，【普通画线】和【显示 Layout】在 Page Understanding 之前先复用自动插图检测，"
+            "把足够大的插图区域仅在分析副本上填成白色，再恢复文字行、缩进和 entry/body 角色。"
+            "原始扫描图、PPP、OCR、PDIC 与切图文件都不会被修改。\n\n"
+            "保护：Layout 白化比 PPP 自动插图更保守。小尺寸候选直接忽略；接近大字头尺寸且近方形的候选也不会白化，"
+            "避免把大号单字/大字头误当成插图。关闭时完全保持原有 Layout 流程。"
+        ),
         "columns": "作用：正文栏数，是版面几何、阅读顺序、OCR 候选带和后续切图共同使用的基础参数。若【栏数策略】为自动检测，程序会在版面分析时估计栏数；若为固定，则这里的值是权威值。\n\n调整：栏数设错会让栏左缘、词条归栏、阅读顺序和切图边界整体错位。优先用【检测版面参数】和【项目Profile】的代表页结果确认，不建议为修一个局部页面临时改全项目栏数。",
         "gutter": "作用：相邻正文栏之间的典型空白宽度。界面按原图宽度百分比显示和输入，保存/运行时自动换算为当前原图像素。\n\n调整：过小会让相邻栏靠得过近，过大则可能把正文有效区域压窄。通常应由版面检测或 Profile 代表页确定。",
         "column_width": "作用：单栏正文的典型宽度。界面按原图宽度百分比显示和输入，后台在运行前换算为原图像素；它决定栏几何的水平范围，并间接影响 OCR 候选带、词条矩形和相邻栏边界。\n\n调整：过小可能截掉长词头/释义并让切图偏窄；过大可能侵入栏间空白甚至邻栏。",
@@ -528,6 +536,7 @@ NORMAL_CHECKS = (
         ("自动精修横线 Y", "paddle_refine_separator_y"),
         ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
         ("使用自动版面参数", "ordinary_auto_layout"),
+        ("Layout前白化插图", "layout_mask_illustrations"),
         ("分栏数", "ordinary_auto_columns"),
         ("正文起始Y", "ordinary_auto_start_y"),
         ("首栏X", "ordinary_auto_manual_x"),

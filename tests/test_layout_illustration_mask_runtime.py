@@ -177,35 +177,75 @@ def test_core_composition_keeps_static_detector_without_page_wrapper_mutation():
     assert not hasattr(processing, "_pc_layout_illustration_mask_installed")
 
     root = Path(__file__).resolve().parents[1]
-    runtime_source = (
+    runtime_path = (
         root / "src" / "picture_capture" / "layout_illustration_mask_runtime.py"
-    ).read_text(encoding="utf-8")
+    )
     core_source = (
         root / "src" / "picture_capture" / "bootstrap" / "core.py"
     ).read_text(encoding="utf-8")
-    assert "def install_layout_illustration_mask_runtime(" not in runtime_source
+    assert not runtime_path.exists()
     assert "install_layout_illustration_mask_runtime" not in core_source
 
 
 
-def test_gui_composition_exposes_switch_before_generic_settings_help_scan():
+def test_static_settings_schema_owns_mask_checkbox_before_gui_composition():
+    from picture_capture.app import SettingsDialog
+    from picture_capture.ui.settings import schema
+
+    names = [name for _label, name in schema.NORMAL_CHECKS]
+    assert names.index(SETTING_NAME) == names.index("ordinary_auto_layout") + 1
+    assert SettingsDialog.NORMAL_CHECKS is schema.NORMAL_CHECKS
+    assert SettingsDialog.SETTING_LABELS[SETTING_NAME] == "Layout前白化插图"
+    assert SettingsDialog.SETTING_HELP[SETTING_NAME] == schema.CHECK_HELP[SETTING_NAME]
+
     root = Path(__file__).resolve().parents[1]
-    source = (
+    gui_source = (
         root / "src" / "picture_capture" / "bootstrap" / "gui.py"
     ).read_text(encoding="utf-8")
-    ui_install = source.index("install_layout_illustration_mask_ui(app_module)")
-    help_install = source.index("install_settings_parameter_help(app_module)")
-    assert ui_install < help_install
+    assert "layout_illustration_mask_runtime" not in gui_source
+    assert "install_layout_illustration_mask_ui" not in gui_source
 
 
-def test_runtime_all_exports_resolve_after_static_detector_split():
-    import picture_capture.layout_illustration_mask_runtime as runtime
+def test_static_layout_cache_key_tracks_mask_setting_without_runtime_wrapper():
+    from types import SimpleNamespace
+    from picture_capture.layout_visualization_ui import _layout_cache_key
 
-    assert all(hasattr(runtime, name) for name in runtime.__all__)
-    namespace = {}
-    exec("from picture_capture.layout_illustration_mask_runtime import *", namespace)
-    assert "install_layout_illustration_mask_runtime" not in namespace
-    assert "install_layout_illustration_mask_ui" in namespace
+    class FakeApp:
+        image = object()
+        current_index = 4
+
+        def _display_geometry_key(self):
+            return ("display", 1)
+
+    app = FakeApp()
+    app.settings = SimpleNamespace(
+        ordinary_auto_layout=False,
+        layout_columns_policy="fixed",
+        layout_column_separator_mode="auto",
+        layout_mask_illustrations=False,
+        ordinary_auto_columns=True,
+        ordinary_auto_start_y=True,
+        ordinary_auto_manual_x=True,
+        ordinary_auto_column_width=True,
+        ordinary_auto_gutter=True,
+        ordinary_auto_character_height=True,
+        ordinary_auto_row_padding=True,
+    )
+    disabled = _layout_cache_key(app)
+    app.settings.layout_mask_illustrations = True
+    enabled = _layout_cache_key(app)
+
+    assert disabled[:-1] == enabled[:-1]
+    assert disabled[-2:] == ("layout_mask_illustrations", False)
+    assert enabled[-2:] == ("layout_mask_illustrations", True)
+
+
+def test_final_illustration_runtime_module_is_deleted():
+    root = Path(__file__).resolve().parents[1]
+    runtime_path = (
+        root / "src" / "picture_capture" / "layout_illustration_mask_runtime.py"
+    )
+    assert not runtime_path.exists()
 
 
 class _ClosableAnalysisImage:
