@@ -20,6 +20,7 @@ from .dictionary_profile import DictionaryProfile
 from .models import AppSettings, Entry
 from .page_sections import PageSection
 from .paddle_headwords_core import HeadwordFilterRule, OCRRecord
+from .separator_y_refinement import refine_separator_y as _shared_separator_y_refiner
 
 # Source-guard compatibility markers. The executable implementations live in
 # paddle_headwords_core.py; these exact markers remain here because established
@@ -37,6 +38,7 @@ from .paddle_headwords_core import HeadwordFilterRule, OCRRecord
 _original_filter_headword_records = _core.filter_headword_records
 _original_annotate_peer_typography_matches = _core._annotate_peer_typography_matches
 _original_detect_paddle_headwords = _core.detect_paddle_headwords
+_original_refine_separator_y = _core.refine_separator_y
 
 
 def _drop_peer_typography_match(row: dict[str, Any]) -> None:
