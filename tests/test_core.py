@@ -8200,8 +8200,11 @@ def test_visual_marker_crop_trims_white_margin_to_dominant_ink():
 
 
 def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    source = root / "app.py"
+    helper_source = root / "review_text_helpers.py"
     text = source.read_text(encoding="utf-8")
+    helper_text = helper_source.read_text(encoding="utf-8")
 
     assert '"一、版面参数"' in text
     assert "页眉Y(原图)" not in text
@@ -8230,7 +8233,7 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert 'key: tk.BooleanVar(value=(key not in {"digit", "accent"}))' in text
     assert 'accent_button.bind(' in text and '"<Button-3>"' in text
     assert "def copy_char(self, char: str)" in text
-    assert "def _candidate_word_for_ocr_source(" in text
+    assert "def _candidate_word_for_ocr_source(" in helper_text
     assert 'self.focused_page_range_var = parent.page_range_spec_var' in text
     assert 'indices = self.parent._parse_page_spec(' in text
     assert 'ocr_compare_key = self.OCR_COMPARE_LABEL_TO_KEY.get(' in text
