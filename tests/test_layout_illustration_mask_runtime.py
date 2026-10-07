@@ -6,7 +6,8 @@ import pickle
 from PIL import Image
 
 from picture_capture.models import AppSettings, PolygonRegion
-from picture_capture.layout_illustration_mask_runtime import (
+from picture_capture.layout_illustration_mask import (
+    IllustrationMaskStats,
     SETTING_NAME,
     layout_mask_region_is_large_enough,
     mask_large_illustrations_for_layout,
@@ -148,18 +149,19 @@ def test_static_path_and_in_memory_detectors_share_one_processing_core_owner(tmp
     )
 
 
-def test_core_composition_keeps_static_detector_and_installs_only_layout_wrapper():
+def test_core_composition_keeps_static_detector_without_page_wrapper_mutation():
     from picture_capture import processing, processing_core
     from picture_capture.bootstrap.core import build_core_services
 
-    before = processing.detect_illustration_regions
-    assert before is processing_core.detect_illustration_regions
+    before_detector = processing.detect_illustration_regions
+    before_understanding = processing._understand_page_current
+    assert before_detector is processing_core.detect_illustration_regions
 
     build_core_services()
 
-    assert processing.detect_illustration_regions is before
-    assert processing.detect_illustration_regions is processing_core.detect_illustration_regions
-    assert bool(getattr(processing, "_pc_layout_illustration_mask_installed", False))
+    assert processing.detect_illustration_regions is before_detector
+    assert processing._understand_page_current is before_understanding
+    assert not hasattr(processing, "_pc_layout_illustration_mask_installed")
 
     root = Path(__file__).resolve().parents[1]
     runtime_source = (
@@ -168,11 +170,9 @@ def test_core_composition_keeps_static_detector_and_installs_only_layout_wrapper
     core_source = (
         root / "src" / "picture_capture" / "bootstrap" / "core.py"
     ).read_text(encoding="utf-8")
-    assert "def install_layout_illustration_mask_settings(" not in runtime_source
-    assert "def detect_illustration_regions_from_image(" not in runtime_source
-    assert "detect_illustration_regions = detect_illustration_regions_from_path" not in runtime_source
-    assert "install_layout_illustration_mask_settings" not in core_source
-    assert "install_layout_illustration_mask_runtime(processing_module)" in core_source
+    assert "def install_layout_illustration_mask_runtime(" not in runtime_source
+    assert "install_layout_illustration_mask_runtime" not in core_source
+
 
 
 def test_gui_composition_exposes_switch_before_generic_settings_help_scan():
@@ -191,5 +191,145 @@ def test_runtime_all_exports_resolve_after_static_detector_split():
     assert all(hasattr(runtime, name) for name in runtime.__all__)
     namespace = {}
     exec("from picture_capture.layout_illustration_mask_runtime import *", namespace)
-    assert "install_layout_illustration_mask_runtime" in namespace
+    assert "install_layout_illustration_mask_runtime" not in namespace
     assert "install_layout_illustration_mask_ui" in namespace
+
+
+class _ClosableAnalysisImage:
+    def __init__(self):
+        self.close_calls = 0
+
+    def close(self):
+        self.close_calls += 1
+
+
+def _understanding(reason="base"):
+    from types import SimpleNamespace
+    return SimpleNamespace(layout=SimpleNamespace(reason=reason))
+
+
+def test_static_page_mask_disabled_preserves_original_image_identity(monkeypatch):
+    from picture_capture import processing
+    from picture_capture import layout_core_understanding
+    from picture_capture import layout_illustration_mask as masking
+
+    original = object()
+    seen = []
+    monkeypatch.setattr(processing, "_ensure_layout_runtime", lambda: None)
+    monkeypatch.setattr(
+        masking,
+        "mask_large_illustrations_for_layout",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("mask should not run")),
+    )
+    monkeypatch.setattr(
+        layout_core_understanding,
+        "understand_layout_core",
+        lambda image, settings, *, page_index: seen.append(image) or _understanding(),
+    )
+
+    result = processing._understand_page_current(
+        original,
+        AppSettings(layout_mask_illustrations=False),
+        page_index=3,
+        page_sections=None,
+        layout_only=True,
+    )
+    assert seen == [original]
+    assert result.layout.reason == "base"
+
+
+def test_static_page_mask_enabled_passes_copy_appends_reason_and_closes(monkeypatch):
+    from picture_capture import processing
+    from picture_capture import layout_core_understanding
+    from picture_capture import layout_illustration_mask as masking
+
+    original = object()
+    masked = _ClosableAnalysisImage()
+    stats = IllustrationMaskStats(detected=4, masked=2, rejected_small=1, rejected_headlike=1)
+    seen = []
+    monkeypatch.setattr(processing, "_ensure_layout_runtime", lambda: None)
+    monkeypatch.setattr(
+        masking,
+        "mask_large_illustrations_for_layout",
+        lambda image, settings, *, profile_page_index: (masked, stats),
+    )
+    monkeypatch.setattr(
+        layout_core_understanding,
+        "understand_layout_core",
+        lambda image, settings, *, page_index: seen.append(image) or _understanding(),
+    )
+
+    result = processing._understand_page_current(
+        original,
+        AppSettings(layout_mask_illustrations=True),
+        page_index=5,
+        page_sections=None,
+        layout_only=True,
+    )
+    assert seen == [masked]
+    assert masked.close_calls == 1
+    assert result.layout.reason == (
+        "base; illustration_mask=1 detected=4 masked=2 "
+        "small_rejected=1 headlike_rejected=1"
+    )
+
+
+def test_static_page_mask_failure_fails_open_in_full_understanding(monkeypatch):
+    from picture_capture import processing, page_understanding
+    from picture_capture import layout_illustration_mask as masking
+
+    original = object()
+    seen = []
+    monkeypatch.setattr(processing, "_ensure_layout_runtime", lambda: None)
+    monkeypatch.setattr(
+        masking,
+        "mask_large_illustrations_for_layout",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("mask failed")),
+    )
+    monkeypatch.setattr(
+        page_understanding,
+        "understand_page",
+        lambda image, settings, *, page_index, page_sections: seen.append((image, page_sections)) or _understanding(),
+    )
+
+    sections = [object()]
+    result = processing._understand_page_current(
+        original,
+        AppSettings(layout_mask_illustrations=True),
+        page_index=7,
+        page_sections=sections,
+        layout_only=False,
+    )
+    assert seen == [(original, sections)]
+    assert result.layout.reason == (
+        "base; illustration_mask=1 detected=0 masked=0 "
+        "small_rejected=0 headlike_rejected=0"
+    )
+
+
+def test_static_page_mask_closes_copy_when_understanding_raises(monkeypatch):
+    from picture_capture import processing, page_understanding
+    from picture_capture import layout_illustration_mask as masking
+
+    masked = _ClosableAnalysisImage()
+    monkeypatch.setattr(processing, "_ensure_layout_runtime", lambda: None)
+    monkeypatch.setattr(
+        masking,
+        "mask_large_illustrations_for_layout",
+        lambda image, settings, *, profile_page_index: (masked, IllustrationMaskStats(masked=1)),
+    )
+    monkeypatch.setattr(
+        page_understanding,
+        "understand_page",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("understanding failed")),
+    )
+
+    result = processing._understand_page_current(
+        object(),
+        AppSettings(layout_mask_illustrations=True),
+        page_index=1,
+        page_sections=None,
+        layout_only=False,
+    )
+    assert result is None
+    assert masked.close_calls == 1
