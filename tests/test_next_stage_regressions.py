@@ -1269,8 +1269,12 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
 
 
 def test_settings_center_restores_inline_detailed_parameter_help():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    root = Path(__file__).resolve().parents[1]
+    source = root / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
+    helper_source = (
+        root / "src" / "picture_capture" / "layout_percent_helpers.py"
+    ).read_text(encoding="utf-8")
     settings_start = text.index("class SettingsDialog")
     settings_end = text.index("class ", settings_start + len("class SettingsDialog"))
     settings = text[settings_start:settings_end]
@@ -1278,11 +1282,11 @@ def test_settings_center_restores_inline_detailed_parameter_help():
     assert "text=self.SETTING_HELP.get(" in settings
     assert "check_help = ttk.Label" in settings
     assert "text=self.CHECK_HELP.get(" in settings
-    assert '"analysis_left": "width"' in text
-    assert '"analysis_right": "width"' in text
-    assert '"paddle_header_search_height": "height"' in text
-    assert "def _column_pixels_to_percent(" in text
-    assert "def _column_percent_to_pixels(" in text
+    assert '"analysis_left": "width"' in helper_source
+    assert '"analysis_right": "width"' in helper_source
+    assert '"paddle_header_search_height": "height"' in helper_source
+    assert "def _column_pixels_to_percent(" in helper_source
+    assert "def _column_percent_to_pixels(" in helper_source
 
 def test_settings_center_is_reused_without_blocking_main_workspace():
     source = (
@@ -2431,13 +2435,17 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     assert _layout_percent_to_pixels(image, "column_width", 25.0) == 250
     assert _layout_percent_to_pixels(image, "character_height", 1.5) == 30
 
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    root = Path(__file__).resolve().parents[1]
+    source = root / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    schema = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
-    assert '"start_y": "height"' in text
-    assert '"manual_x": "width"' in text
-    assert '"body_indent": "width"' in text
-    assert '"horizontal_tolerance": "width"' in text
+    helper_source = (
+        root / "src" / "picture_capture" / "layout_percent_helpers.py"
+    ).read_text(encoding="utf-8")
+    schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
+    assert '"start_y": "height"' in helper_source
+    assert '"manual_x": "width"' in helper_source
+    assert '"body_indent": "width"' in helper_source
+    assert '"horizontal_tolerance": "width"' in helper_source
     quick_start = text.index("    def _build_quick_settings(")
     quick_end = text.index("\n    def ", quick_start + 10)
     quick = text[quick_start:quick_end]

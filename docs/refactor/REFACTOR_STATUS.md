@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7F extracts pure overlay/preview/editor-layout helpers from `app.py` while preserving all historical app imports.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7G extracts layout percent/pixel conversion helpers from `app.py` while preserving all historical app imports.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -345,8 +345,35 @@ The production sizes move from:
 
 The architecture guard ratchets `app.py` to 789,609 bytes.
 
-## Recommended next slice — Phase 7G
-After Phase 7F validation, reassess the remaining small top-level app helpers before any class/state extraction. Favor another cohesive, GUI-independent formatting/layout seam; do not move runtime-patched review slots, worker/result types, or mutable GUI state merely to reduce line count.
+Phase 7F publication:
+- PR #300 fixed head `a154978b9203f953a899e9c07d835b84aea5a840` passed its PR validation;
+- PR #300 merged as `02a2c0a2c4f9c8dda69f031b7299e5d3c4360239`;
+- post-merge CI 2151 and CodeQL 2132 both passed.
+
+## Phase 7G layout-percent ownership
+Phase 7G extracts the GUI-independent source-pixel/percentage conversion contract used by Settings Center, quick settings, and proofreading-height display:
+- `LAYOUT_PERCENT_AXES`;
+- `_layout_percent_denominator(...)`;
+- source-image pixel/% conversion and formatting helpers;
+- configured-column-width pixel/% conversion helpers;
+- proofreading-height pixel/% wrappers.
+
+These helpers move to `layout_percent_helpers.py`, which depends only on PIL's `Image` type and `AppSettings`. It has no Tk, app-state, controller, processing, persistence, or runtime-extension dependency.
+
+`app.py` re-exports the complete historical helper surface, so existing functional tests and external/private imports remain stable. Two source-inspection regressions are updated deliberately:
+- Settings Center UI/content continues to be inspected in `app.py`;
+- axis mapping and conversion implementation ownership are inspected in `layout_percent_helpers.py`.
+
+Focused ownership tests additionally require direct app/new-owner identity and preserve width-vs-height axis semantics.
+
+The production sizes move from:
+- `app.py`: 789,609 bytes -> 787,094 bytes;
+- new `layout_percent_helpers.py`: 3,044 bytes.
+
+The architecture guard ratchets `app.py` to 787,094 bytes.
+
+## Recommended next slice — Phase 7H
+After Phase 7G validation, reassess the remaining top-level app helpers. The next candidate should remain GUI-independent and avoid runtime-patched review slots. Page-list sorting/status-format helpers are a likely bounded seam; review crop/context/update functions should remain app-owned unless their extension contract is characterized first.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
