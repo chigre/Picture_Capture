@@ -368,3 +368,29 @@ def test_phase6b_custom_core_filter_remains_authoritative(monkeypatch):
     fusion.detect_paddle_headwords(object(), object(), AppSettings())
 
     assert seen["record_filter"] is custom_filter
+
+
+def test_phase6c_public_facade_owns_complete_core_namespace():
+    import picture_capture.evidence_fusion as fusion
+
+    core_names = {
+        name for name in vars(ph._core)
+        if not name.startswith("__")
+    }
+
+    assert core_names <= set(vars(ph))
+    assert core_names <= set(ph.__all__)
+    assert ph.filter_headword_records is fusion.filter_headword_records
+    assert (
+        ph._annotate_peer_typography_matches
+        is fusion._annotate_peer_typography_matches
+    )
+
+
+def test_phase6c_evidence_fusion_no_longer_copies_unrelated_core_namespace():
+    import picture_capture.evidence_fusion as fusion
+
+    assert not hasattr(fusion, "OCRLine")
+    assert "OCRLine" not in fusion.__all__
+    assert hasattr(ph, "OCRLine")
+    assert "OCRLine" in ph.__all__
