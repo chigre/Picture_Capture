@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7G extracts layout percent/pixel conversion helpers from `app.py` while preserving all historical app imports.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7H extracts page-list sorting/status helpers from `app.py` while preserving all historical app imports.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -372,8 +372,31 @@ The production sizes move from:
 
 The architecture guard ratchets `app.py` to 787,094 bytes.
 
-## Recommended next slice — Phase 7H
-After Phase 7G validation, reassess the remaining top-level app helpers. The next candidate should remain GUI-independent and avoid runtime-patched review slots. Page-list sorting/status-format helpers are a likely bounded seam; review crop/context/update functions should remain app-owned unless their extension contract is characterized first.
+Phase 7G publication:
+- PR #301 fixed head `5a6331e6cb7a844d202e3da55cc0b4eb2f31c135` passed CI 2152 on Ubuntu/Windows/macOS and CodeQL 2133 Actions/Python;
+- PR #301 merged as `6b99da85d984112f5d8d90ea0904b2d8aba22f4b`;
+- post-merge CI 2153 and CodeQL 2134 both passed.
+
+## Phase 7H page-list helper ownership
+Phase 7H extracts the three GUI-independent helpers that support the project page Treeview without depending on Tk objects:
+- `_natural_text_key(...)`;
+- `_sorted_page_list_rows(...)`;
+- `_fill_status_cell_style(...)`.
+
+They move to `page_list_helpers.py`, which depends only on the shared `models.natural_text_key` implementation. The sorting helper preserves stable page iids, natural numeric ordering, empty cells at the bottom in both directions, and legacy four/five-column row compatibility. The status helper preserves the semantic background/foreground mapping used by the overlay labels.
+
+`app.py` re-exports all three historical private names. Bookmark sorting, page-list header sorting, and fill-status overlay rendering therefore keep the same call sites. Because the extracted block was the only direct `natural_text_key` usage in `app.py`, that import is also removed from the oversized owner.
+
+Focused tests cover app/new-owner identity, natural ordering with empty rows last, legacy bookmark-row compatibility, and each semantic fill-status color.
+
+The production sizes move from:
+- `app.py`: 787,094 bytes -> 784,737 bytes;
+- new `page_list_helpers.py`: 2,595 bytes.
+
+The architecture guard ratchets `app.py` to 784,737 bytes.
+
+## Recommended next slice — Phase 7I
+After Phase 7H validation, the remaining top-level app helpers are increasingly tied to runtime review/crop behavior. Prefer another clearly pure seam only if found; otherwise switch Phase 7 inventory to a different oversized owner rather than forcing `app.py` decomposition across extension or mutable-state boundaries.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
