@@ -242,6 +242,11 @@ The production sizes move from:
 
 The architecture guard ratchets `image_preprocessing.py` to 206,934 bytes.
 
+Phase 7B publication:
+- PR #296 fixed head `c471ae973bd8e0ac1a929e80c7159a81d4cd9fbf` passed CI 2140 on Ubuntu/Windows/macOS and CodeQL 2121 Actions/Python;
+- PR #296 merged as `43b6e55a5bd45f58dfa901b67953cfb9fb976d95`;
+- post-merge CI 2141 and CodeQL 2122 both passed.
+
 A larger data-model extraction remains a strong later candidate: `OutputCanvasInfo` + `PreprocessAnalysis` form a cohesive ~43 KB pure dataclass/serialization seam. The current GitHub connector rejects that single large generated file payload. Do not split the model unnaturally merely to satisfy connector limits; retry it when a reliable large-file write path is available.
 
 ## Phase 7C preprocessing persistence ownership
