@@ -43,7 +43,7 @@ def test_ocred_roundtrip_preserves_legacy_backtick_format(tmp_path: Path) -> Non
 
     ocr_text_io.export_ocred(path, texts)
 
-    assert path.read_text(encoding="utf-8") == "000|`Alpha\n001|`Beta\n".replace("\\`", "`")
+    assert path.read_text(encoding="utf-8") == "000|`Alpha\n001|`Beta\n"
     assert ocr_text_io.import_ocred(path) == texts
 
 
