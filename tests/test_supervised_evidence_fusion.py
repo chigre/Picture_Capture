@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import picture_capture.paddle_headwords as ph
 from picture_capture.models import AppSettings
+from picture_capture import separator_y_refinement as shared_y
 
 
 def _accepted_anchor(boldness: float, height: float = 1.0, gap: float = 18.0):
@@ -317,7 +318,32 @@ def test_phase6b_filter_injects_supervised_peer_annotator(monkeypatch):
         seen["peer_typography_annotator"]
         is fusion._annotate_peer_typography_matches
     )
+    assert seen["separator_y_refiner"] is shared_y.refine_separator_y
 
+
+
+def test_phase6e_custom_core_separator_refiner_remains_authoritative(monkeypatch):
+    import picture_capture.evidence_fusion as fusion
+
+    custom_refiner = object()
+    seen = {}
+
+    def fake_original(*_args, **kwargs):
+        seen.update(kwargs)
+        return [], []
+
+    monkeypatch.setattr(fusion._core, "refine_separator_y", custom_refiner)
+    monkeypatch.setattr(fusion, "_original_filter_headword_records", fake_original)
+
+    fusion.filter_headword_records(
+        [],
+        object(),
+        0,
+        0,
+        AppSettings(ocr_language="eng"),
+    )
+
+    assert seen["separator_y_refiner"] is custom_refiner
 
 def test_phase6b_detector_injects_supervised_filter(monkeypatch):
     import picture_capture.evidence_fusion as fusion
