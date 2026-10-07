@@ -339,12 +339,12 @@ def test_phase6a_assignment_mirroring_is_public_facade_only(monkeypatch):
     import picture_capture.evidence_fusion as fusion
 
     core = ph._core
-    original_core_runner = core.run_paddle_band
+    original_core_filter = core.filter_headword_records
 
-    fusion_runner = object()
-    monkeypatch.setattr(fusion, "run_paddle_band", fusion_runner)
-    assert fusion.run_paddle_band is fusion_runner
-    assert core.run_paddle_band is original_core_runner
+    fusion_filter = object()
+    monkeypatch.setattr(fusion, "filter_headword_records", fusion_filter)
+    assert fusion.filter_headword_records is fusion_filter
+    assert core.filter_headword_records is original_core_filter
 
     public_runner = object()
     monkeypatch.setattr(ph, "run_paddle_band", public_runner)
