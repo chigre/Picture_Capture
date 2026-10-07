@@ -3,166 +3,143 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5Y are complete.**
+**Phase 5 — runtime-patch cleanup. Phase 5A through Phase 5Z are complete.**
 
 Phase 4 controller decomposition is complete. Phase 5 is progressively replacing dynamic installer/runtime ownership with explicit/static ownership while preserving behavior and keeping each slice independently reversible and reviewable.
 
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
-## Latest architecture checkpoint — Phase 5Y
-- production PR: **#282 — make illustration settings and detector static**
-- production base: `d3c9128f62e759c45f388f0f08af1dfb558274e8`
-- clean production head: `1d3c03fa02c54c7d49372fd2ca68172fc10ceb33`
-- validated production tree: `0c622b968ee4fc176ede6b36cf5ff56f6bb7f18d`
-- production merge: `159ba4d30873797ac7d80c53b56146b6a07fd5e7`
-- post-merge export-repair PR: **#283 — repair Phase 5Y runtime exports**
-- repair head: `8c1d7efcdb60061e86151efeb47cea00055ccc62`
-- final Phase 5Y main: `5d0a2ccfeb2a26e66246de5077342c5033097164`
-- final tree: `7ab402eee95cc305bec2b9d5882f7c3d88489819`
+## Latest architecture checkpoint — Phase 5Z
+- production PR: **#285 — make Page Understanding illustration masking static**
+- production base: `66bd321800120f5b7fb01009fc0dfe365d54115a`
+- clean production head: `7b53054148517bf6651cefa53c026e8732149a77`
+- validated production tree: `5b6951b4ef3946ef6761957c21d9fd3b40d40c6d`
+- merge commit / current architecture main: `805e5c9814cbfa5d4a53f171d9c3b1c3dea67ae1`
+- merge tree: `5b6951b4ef3946ef6761957c21d9fd3b40d40c6d`
 
-### Native illustration-mask setting and static detector
-Phase 5Y removed the first two import-order responsibilities from `layout_illustration_mask_runtime.py` while deliberately retaining the Page Understanding masking wrapper and GUI/cache mutation for later slices.
+### Static Page Understanding illustration masking
+Phase 5Z removed the Page Understanding callable-replacement responsibility from `layout_illustration_mask_runtime.py`.
 
-`AppSettings` now natively owns `layout_mask_illustrations: bool = False`. The dynamic AppSettings subclass/rebind path is gone, so backward defaults, JSON persistence, `dataclasses.replace`, and spawn/pickle identity all use the ordinary dataclass contract.
+The pure masking policy and diagnostics now live in ordinary non-runtime `layout_illustration_mask.py`:
+- `IllustrationMaskStats`;
+- size/headlike guard policy;
+- `mask_large_illustrations_for_layout(...)`;
+- historical `layout.reason` diagnostic formatting.
 
-`processing_core` now statically owns the shared in-memory illustration detector. The historical path-based PPP detector and Layout masking consume the same implementation without bootstrap callable replacement. Core composition no longer installs an illustration setting or rebinds detector callables.
+`processing._understand_page_current(...)` now statically owns optional illustration-mask preprocessing. The preserved contract is:
+1. disabled masking passes the original image object through unchanged;
+2. enabled masking uses the shared static detector/policy;
+3. any mask/filter exception fails open to the original image;
+4. both `layout_only=True` and full Page Understanding routes preserve their existing page index/section arguments;
+5. mask diagnostics remain appended to `layout.reason` with the same fields/format;
+6. a disposable masked image is closed only when it is a separate object, including when downstream understanding raises;
+7. the historical outer failure contract still returns `None`.
 
-The remaining runtime file intentionally owns only:
-1. fail-open preprocessing around `processing._understand_page_current(...)`, including disposable masked-image lifetime and `layout.reason` diagnostics;
-2. `SettingsDialog` checkbox/help/label metadata;
-3. Layout visualization cache-key invalidation when the switch changes.
+Core composition no longer imports/calls `install_layout_illustration_mask_runtime(...)`, and `_pc_layout_illustration_mask_installed` no longer exists. Training-export Page Understanding now imports the same static masking helper directly.
 
-Phase 5Y did **not** alter PPP format, illustration crop semantics, component thresholds, Layout mask thresholds, oversized-head protection, or the default-disabled behavior.
+The runtime file is intentionally **not yet deleted**. After Phase 5Z it owns only the final GUI compatibility seam:
+- insertion of the `layout_mask_illustrations` checkbox/label/help into Settings Center;
+- inclusion of that setting in `layout_visualization_ui._layout_cache_key`.
 
-### Phase 5Y isolated validation
-A temporary fail-closed branch workflow was removed before publication.
+### Phase 5Z isolated validation
+Temporary migration/validation assets were removed before publication.
+
+Two early validation failures were tooling-only and did not publish production code:
+- the first temporary workflow embedded large source text directly in YAML and failed before jobs were created;
+- the next fail-closed diff check did not initially account for the newly created untracked module;
+- after the diff gate was corrected, focused validation exposed an escaping bug in the temporary migration script's generated Chinese help string. This was corrected in the migration tool; it was not an application-design failure.
 
 Final isolated validation:
-- exact intended production/test diff shape: **6 paths, passed**;
-- native `layout_mask_illustrations` setting without bootstrap: passed;
-- `dataclasses.replace` and pickle identity/value: passed;
-- static processing/core detector ownership before and after core composition: passed;
-- retained Page Understanding wrapper state: passed;
+- exact intended production/test diff: **7 paths, passed**;
+- no production reference to `install_layout_illustration_mask_runtime` or `_pc_layout_illustration_mask_installed`;
 - architecture guard: passed;
-- focused regressions: **194 passed**;
-- full pytest suite: **1291 passed, 1 existing Pillow deprecation warning**;
+- focused regressions: **39 passed**;
+- full pytest suite: **1296 passed, 1 existing warning**;
 - compileall: passed;
 - Ruff F821: passed.
 
-The exact validated production tree `0c622b968ee4fc176ede6b36cf5ff56f6bb7f18d` was published as one clean commit `1d3c03fa02c54c7d49372fd2ca68172fc10ceb33`.
+The temporary workflow and migration script were deleted. The exact validated production tree `5b6951b4ef3946ef6761957c21d9fd3b40d40c6d` was then re-anchored to the live main base as one clean production commit `7b53054148517bf6651cefa53c026e8732149a77`.
 
-### Phase 5Y PR and post-merge gate
-Fixed-head PR #282:
-- CI run 2109 Ubuntu/Windows/macOS: passed, including platform GUI smoke, compatibility runner, compile, F821, and wheel build;
-- CodeQL run 2090 Actions/Python: passed;
-- Advanced Security run 1847: passed;
+### Phase 5Z PR gate
+Fixed-head PR #285:
+- CI run **2115** Ubuntu/Windows/macOS: passed, including platform GUI smoke, compatibility runner, compile, F821, and wheel build;
+- CodeQL run **2096** Actions/Python: passed;
+- Advanced Security run **1850**: passed;
+- PR remained mergeable with one commit and seven changed files;
 - no comments, review threads, review submissions, or objections.
 
-PR #282 merged as `159ba4d30873797ac7d80c53b56146b6a07fd5e7`, retaining validated tree `0c622b968ee4fc176ede6b36cf5ff56f6bb7f18d`.
+PR #285 was merged with fixed-head protection on `7b53054148517bf6651cefa53c026e8732149a77`.
 
-Post-merge production verification:
-- push CI run 2110 Ubuntu/Windows/macOS: passed;
-- CodeQL run 2091 Actions/Python: passed.
+### Phase 5Z post-merge verification
+On `main@805e5c9814cbfa5d4a53f171d9c3b1c3dea67ae1`:
+- merge tree exactly matched validated production tree `5b6951b4ef3946ef6761957c21d9fd3b40d40c6d`;
+- push CI run **2116** passed on Ubuntu, Windows, and macOS;
+- GUI smoke passed on all applicable platforms;
+- compatibility runner / compile / F821 / wheel passed on all three platforms;
+- CodeQL run **2097** Actions: passed;
+- CodeQL run **2097** Python: passed.
 
-### Post-merge export-contract repair
-Read-only post-merge review caught one narrow source-contract defect before checkpoint: `layout_illustration_mask_runtime.__all__` still advertised three symbols moved out by Phase 5Y:
-- `detect_illustration_regions_from_image`;
-- `detect_illustration_regions_from_path`;
-- `install_layout_illustration_mask_settings`.
-
-No current production consumer used star-import, but the advertised module export surface was internally invalid. This was treated as a real anomaly and repaired before checkpoint rather than deferred.
-
-Repair PR #283 changed only two files:
-- removed the three stale `__all__` names;
-- added a regression proving every advertised runtime export resolves and `from ... import *` succeeds.
-
-Repair validation/gates:
-- exact repair diff: **2 files**;
-- runtime export-contract test: passed;
-- compileall/F821: passed;
-- CI run 2111 Ubuntu/Windows/macOS: passed;
-- CodeQL run 2092 Actions/Python: passed;
-- Advanced Security run 1848: passed;
-- no review/comment/thread objections.
-
-PR #283 merged as `5d0a2ccfeb2a26e66246de5077342c5033097164` with final tree `7ab402eee95cc305bec2b9d5882f7c3d88489819`.
-
-Post-repair main verification:
-- push CI run 2112 Ubuntu/Windows/macOS: passed;
-- CodeQL run 2093 Actions/Python: passed.
-
-Phase 5Y is therefore closed only at `main@5d0a2ccfeb2a26e66246de5077342c5033097164`, not at the earlier production merge.
+No post-merge behavior, packaging, or security regression was observed.
 
 ## Completed Phase 5 ownership milestones
 - Phase 5L: Windows NVIDIA/Paddle DLL preparation became ordinary call-time `windows_gpu.py` ownership.
-- Phase 5M: Windows/Tk supplementary Unicode repair moved into explicit `PictureCaptureApp` lifecycle ownership backed by `unicode_nonbmp_input.py`.
+- Phase 5M: Windows/Tk supplementary Unicode repair moved into explicit `PictureCaptureApp` lifecycle ownership.
 - Phase 5N: one-sided overlay geometry moved to non-runtime `overlay_line_anchor.py`.
 - Phase 5O: guide/headword line opacity became native settings + static UI/rendering ownership.
 - Phase 5P: illustration fill opacity became native settings + static UI/rendering ownership.
-- Phase 5Q: long-band logical row recovery became static in `layout_physical_indent.py`.
-- Phase 5R: character-height fallback became a static post-raw-cache step.
-- Phase 5S: column-drift first-X remeasurement became explicit static policy finalization.
+- Phase 5Q: long-band logical row recovery became static.
+- Phase 5R: character-height fallback became static.
+- Phase 5S: column-drift remeasurement became static.
 - Phase 5T: identity-only spawn-layout wrapper was removed.
 - Phase 5U: spawn-safe ordinary worker became static `processing.detect_entries_job`.
 - Phase 5V: guarded oversized-head detection and row/fusion authorization became static.
-- Phase 5W: unlined physical-row fast worker became static `unlined_line_export.export_unlined_page_job`.
+- Phase 5W: unlined physical-row fast worker became static.
 - Phase 5X: Layout-entry classification and existing-marker crop/OCR became static processing ownership.
 - Phase 5Y: illustration-mask setting became native and the shared PPP/Layout detector became static `processing_core` ownership.
+- Phase 5Z: illustration masking policy/diagnostics and Page Understanding preprocessing became static; core callable replacement was removed.
 
-Earlier Phase 5A–5K details remain available in the repository's checkpoint history; they are complete and are not reopened by this checkpoint.
+Earlier Phase 5A–5K details remain available in checkpoint history; they are complete and are not reopened by this checkpoint.
 
-## Current explicit Phase 5 ownership
-- Ordinary drawing: app wrapper -> `DetectionController`; quick-setting helper is `ordinary_quick_settings.py`.
-- Selected-scope single-line / unlined export: app wrapper -> `CropController` -> app-owned shared parallel batch runner.
-- Unlined page worker: static `unlined_line_export.export_unlined_page_job(...)` -> `resolve_unlined_physical_rows(...)`.
-- Training package: app wrapper -> `ExportController`.
-- Layout visualization: LayoutRows capture, indent geometry, provenance, visible indent drawing, and prepared-count diagnostics are static/non-runtime ownership.
-- Windows/Tk supplementary Unicode repair: explicit `PictureCaptureApp` lifecycle -> `unicode_nonbmp_input.py`.
-- Overlay anchoring: `overlay_line_anchor.py`.
-- Guide/headword line opacity: native settings + direct non-runtime rendering/UI ownership.
-- Illustration fill opacity: native settings + direct non-runtime rendering/UI ownership.
-- Long-band row recovery: static `layout_physical_indent._logical_slots_for_oversized_run(...)`.
-- Character-height fallback: static `layout_detection.detect_layout_parameters(...)` -> `layout_character_height.apply_character_height_fallback(...)` after raw-cache retrieval.
-- Column-drift remeasurement: static layout policy -> `layout_column_drift` helpers.
-- Spawn layout preparation: direct `processing._ensure_layout_runtime()` ownership; no wrapper remains.
-- Spawn ordinary detection: static top-level `processing.detect_entries_job(...)` consuming `build_worker_services()`.
-- Oversized-head detection/authorization: static `ordinary_large_head_evidence` + pure policy + direct evidence-fusion strength gate.
-- Entry classification / existing-marker OCR: static `processing._ordinary_entries_from_layout_roles(...)` + static `processing_core._ordinary_marker_local_crop(...)` / `ocr_existing_entry_words_from_markers(...)`.
-- Illustration-mask setting/detector: native `AppSettings.layout_mask_illustrations` + static `processing_core.detect_illustration_regions_from_image(...)`.
-- Illustration-mask compatibility wrapper: `layout_illustration_mask_runtime.py` remains only for Page Understanding masking/diagnostics and SettingsDialog/Layout-cache integration.
+## Current explicit illustration-mask ownership
+- setting schema/default/persistence: native `AppSettings.layout_mask_illustrations`;
+- detector: static `processing_core.detect_illustration_regions_from_image(...)`;
+- mask policy and diagnostics: non-runtime `layout_illustration_mask.py`;
+- Page Understanding preprocessing/lifetime/fail-open behavior: static `processing._understand_page_current(...)`;
+- training-export masking: static `layout_illustration_mask.mask_large_illustrations_for_layout(...)`;
+- remaining compatibility debt: `layout_illustration_mask_runtime.py` only mutates Settings Center metadata and the Layout visualization cache key.
 
-## Recommended next slice — Phase 5Z
-**Staticize only the Page Understanding illustration-masking wrapper; keep SettingsDialog/cache-key mutation for the following slice.**
+## Recommended next slice — Phase 5AA
+**Staticize the final SettingsDialog/cache-key illustration-mask seam and delete `layout_illustration_mask_runtime.py`.**
 
-After Phase 5Y, the remaining runtime file no longer owns settings schema or detector selection. Its next separable responsibility is the wrapper around `processing._understand_page_current(...)`.
+Fresh read-only inspection after Phase 5Z shows that the final runtime file has no processing/detector ownership left. Its remaining behavior is small and separable.
 
-### Safest Phase 5Z architecture
-- move the current optional preprocessing directly into static `processing._understand_page_current(...)` or a normal helper called by it;
-- preserve disabled-mode passthrough exactly;
-- when enabled, preserve `mask_large_illustrations_for_layout(...)` fail-open behavior: any masking/filter error falls back to the original analysis image rather than making Layout unavailable;
-- preserve identical `IllustrationMaskStats` diagnostics appended to `layout.reason`;
-- preserve disposable masked-image lifetime and close it only when a separate image copy was created;
-- preserve both `layout_only=True` and full Page Understanding routes, page index, and page sections;
-- remove `install_layout_illustration_mask_runtime(processing_module)` and `_pc_layout_illustration_mask_installed` only after static behavior is proven equivalent;
-- keep `install_layout_illustration_mask_ui(app_module)` and the cache-key mutation unchanged for this phase;
-- do **not** delete `layout_illustration_mask_runtime.py` until the UI/cache responsibility has independently migrated.
+### Safest Phase 5AA architecture
+- add the `layout_mask_illustrations` checkbox directly to static Settings Center metadata in `ui/settings/schema.py`, preserving its current position immediately after `ordinary_auto_layout`;
+- preserve the exact current Chinese label and dedicated help text;
+- add the setting directly to `layout_visualization_ui._layout_cache_key(app)`, preserving the historical wrapper's tuple contribution: the literal setting name followed by its boolean value;
+- remove `install_layout_illustration_mask_ui(app_module)` from GUI bootstrap; generic settings-help composition must still see the checkbox without installer ordering;
+- delete `layout_illustration_mask_runtime.py` only after all production/test consumers are migrated;
+- ratchet the architecture guard so the deleted runtime file is no longer permitted debt;
+- keep `layout_illustration_mask.py`, detector logic, masking thresholds, settings persistence, Page Understanding behavior, training export, PPP format, and GUI appearance/wording otherwise unchanged.
 
-### Required Phase 5Z focused characterization
+### Required Phase 5AA characterization
 Before publication, prove at minimum:
-- disabled masking calls the same underlying Layout/Page Understanding path with the original image object;
-- enabled masking passes the disposable masked image into both layout-only and full Page Understanding routes;
-- masking detector/filter exceptions fail open to the original image;
-- the temporary image is closed exactly when it is a separate object, including underlying-understanding exceptions;
-- mask diagnostics remain equivalent in `layout.reason`;
-- no bootstrap callable replacement or `_pc_layout_illustration_mask_installed` dependency remains;
-- GUI checkbox/help/cache invalidation remains unchanged because it is outside Phase 5Z;
+- bare/static `SettingsDialog` metadata already contains the checkbox in the same relative position without GUI bootstrap mutation;
+- `SETTING_LABELS` and `SETTING_HELP` contain the same dedicated content;
+- generic Settings Center help sees the control with no ordering dependency on an illustration installer;
+- `_layout_cache_key` changes when only `layout_mask_illustrations` changes and preserves the previous tuple shape contribution;
+- GUI composition no longer imports/calls the illustration runtime installer;
+- zero production references to `layout_illustration_mask_runtime` remain and the file is deleted;
+- architecture guard ratchets the removed runtime debt;
 - full cross-platform CI, GUI smoke, compatibility runner, compile, F821, wheel, CodeQL, and security gates remain green.
 
-Any difference in fail-open behavior, image lifetime, diagnostics, or layout-only/full routing is a stop condition rather than a reason to broaden the slice.
+Any checkbox-order/help-text/cache-key semantic change is a stop condition rather than a reason to broaden the slice.
 
-## Remaining runtime seams after Phase 5Y
-Treat the final illustration-mask runtime as real behavior until its two remaining responsibilities are independently proven:
-- `layout_illustration_mask_runtime.py` — Phase 5Z should remove only Page Understanding wrapping/diagnostics; SettingsDialog/cache-key mutation remains the final later slice.
+## Remaining runtime seams after Phase 5Z
+For the illustration-mask feature, exactly one compatibility seam remains:
+- `layout_illustration_mask_runtime.py` — SettingsDialog metadata + Layout visualization cache-key mutation only.
+
+Phase 5AA should remove this final illustration-mask runtime file. Do not mix unrelated remaining Phase 5 compatibility installers into that deletion.
 
 ## Standing continuation authorization
 The user explicitly authorized continued Phase 5 work along the recommended architecture path without pausing at normal ownership decision points. Continue automatically after each successful checkpoint and fresh live-state revalidation.
