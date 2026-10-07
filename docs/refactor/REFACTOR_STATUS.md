@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7B extracts preprocessing output-root and transactional-promotion ownership without changing analysis behavior or public imports.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7C extracts preprocessing analysis/manual-geometry persistence without changing analysis behavior or public imports.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -242,10 +242,32 @@ The production sizes move from:
 
 The architecture guard ratchets `image_preprocessing.py` to 206,934 bytes.
 
+Phase 7B publication:
+- PR #296 fixed head `c471ae973bd8e0ac1a929e80c7159a81d4cd9fbf` passed CI 2140 on Ubuntu/Windows/macOS and CodeQL 2121 Actions/Python;
+- PR #296 merged as `43b6e55a5bd45f58dfa901b67953cfb9fb976d95`;
+- post-merge CI 2141 and CodeQL 2122 both passed.
+
 A larger data-model extraction remains a strong later candidate: `OutputCanvasInfo` + `PreprocessAnalysis` form a cohesive ~43 KB pure dataclass/serialization seam. The current GitHub connector rejects that single large generated file payload. Do not split the model unnaturally merely to satisfy connector limits; retry it when a reliable large-file write path is available.
 
-## Recommended next slice — Phase 7C
-After Phase 7B is validated, continue read-only decomposition around `image_preprocessing` or `processing_core`. Prefer another self-contained ownership region with one-way dependencies. Keep `analyze_preprocess_page()` and the Phase 6 public facades stable.
+## Phase 7C preprocessing persistence ownership
+Phase 7C extracts the small JSON persistence layer:
+- `result_path(...)`, `save_analysis(...)`, and `load_analysis(...)`;
+- `manual_geometry_path(...)`;
+- manual perspective geometry load/save/clear;
+- `MANUAL_GEOMETRY_FORMAT` and `MANUAL_GEOMETRY_VERSION`.
+
+The new `image_preprocessing_persistence.py` owns filesystem JSON serialization and manual-geometry validation. It does not import the oversized implementation module at import time. Only `load_analysis()` performs a local call-time import of `PreprocessAnalysis` when deserialization actually needs to construct the model, avoiding an import cycle.
+
+All historical names remain re-exported from `image_preprocessing.py`, so app/test/external imports do not change. Existing roundtrip and manual-quad tests continue to exercise those stable imports.
+
+The production sizes move from:
+- `image_preprocessing.py`: 206,934 bytes -> 204,153 bytes;
+- new `image_preprocessing_persistence.py`: 3,441 bytes.
+
+The architecture guard ratchets `image_preprocessing.py` to 204,153 bytes.
+
+## Recommended next slice — Phase 7D
+After Phase 7C validation, reassess the remaining `image_preprocessing` rendering/canvas helpers and `processing_core` crop/illustration domains. Prefer a seam that can move without importing the oversized owner back at module import time. Continue to leave the 2,500+ line `analyze_preprocess_page()` state machine untouched.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
