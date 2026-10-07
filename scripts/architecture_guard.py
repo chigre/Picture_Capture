@@ -29,17 +29,20 @@ OVERSIZED_MODULE_BASELINE = {
 # Existing runtime installers are legacy debt. Their count may only go down.
 LEGACY_RUNTIME_FILES: set[str] = set()
 
-# Dynamic module namespace/proxy behavior currently exists only in these
-# compatibility facades.  No additional production module may adopt it.
-LEGACY_MODULE_PROXY_FILES = {
+# Dynamic namespace copying and module-class assignment mirroring are separate
+# compatibility debts. Ratchet them independently so one can be retired without
+# hiding behind the other category.
+LEGACY_NAMESPACE_COPY_FILES = {
     "processing.py",
     "evidence_fusion.py",
+}
+NAMESPACE_COPY_MARKER = "vars(_core).items()"
+
+LEGACY_MODULE_CLASS_PROXY_FILES = {
+    "processing.py",
     "paddle_headwords.py",
 }
-MODULE_PROXY_MARKERS = (
-    "vars(_core).items()",
-    "sys.modules[__name__].__class__",
-)
+MODULE_CLASS_PROXY_MARKER = "sys.modules[__name__].__class__"
 
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
@@ -85,13 +88,20 @@ def collect_violations() -> list[str]:
     for name in sorted(runtime_now - LEGACY_RUNTIME_FILES):
         violations.append(f"new runtime installer module: {name}")
 
-    proxy_files: set[str] = set()
+    namespace_copy_files: set[str] = set()
+    module_class_proxy_files: set[str] = set()
     for path in _python_files():
         text = path.read_text(encoding="utf-8")
-        if any(marker in text for marker in MODULE_PROXY_MARKERS):
-            proxy_files.add(path.relative_to(PACKAGE_ROOT).as_posix())
-    for rel in sorted(proxy_files - LEGACY_MODULE_PROXY_FILES):
-        violations.append(f"new dynamic module proxy/namespace copy: {rel}")
+        rel = path.relative_to(PACKAGE_ROOT).as_posix()
+        if NAMESPACE_COPY_MARKER in text:
+            namespace_copy_files.add(rel)
+        if MODULE_CLASS_PROXY_MARKER in text:
+            module_class_proxy_files.add(rel)
+
+    for rel in sorted(namespace_copy_files - LEGACY_NAMESPACE_COPY_FILES):
+        violations.append(f"new dynamic core namespace copy: {rel}")
+    for rel in sorted(module_class_proxy_files - LEGACY_MODULE_CLASS_PROXY_FILES):
+        violations.append(f"new dynamic module-class proxy: {rel}")
 
     init_path = PACKAGE_ROOT / "__init__.py"
     init_text = init_path.read_text(encoding="utf-8")

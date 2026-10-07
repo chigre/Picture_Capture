@@ -17,6 +17,7 @@ plugins, tests and user tooling keep working unchanged.
 """
 
 import sys
+import types
 
 from . import evidence_fusion as _fusion
 from .evidence_fusion import *  # noqa: F401,F403
@@ -54,10 +55,17 @@ detect_paddle_headwords = detect_ocr_headword_boundaries
 # timeout=120
 # except subprocess.TimeoutExpired
 
-# Preserve the long-standing monkeypatch contract: assigning a private helper on
-# picture_capture.paddle_headwords transparently mirrors it into the core module
-# where legacy function globals are resolved.
-sys.modules[__name__].__class__ = _fusion._CoreProxyModule
+# Preserve the long-standing monkeypatch contract only on this historical public
+# module path: assigning a helper here transparently mirrors it into the core
+# module where legacy function globals are resolved.
+class _CoreProxyModule(types.ModuleType):
+    def __setattr__(self, name: str, value: object) -> None:
+        types.ModuleType.__setattr__(self, name, value)
+        if name not in {"_core"} and hasattr(_core, name):
+            setattr(_core, name, value)
+
+
+sys.modules[__name__].__class__ = _CoreProxyModule
 
 __all__ = list(_fusion.__all__)
 for _name in ("refine_separator_y", "detect_ocr_headword_boundaries"):

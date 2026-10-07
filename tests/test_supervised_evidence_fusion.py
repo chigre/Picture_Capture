@@ -284,3 +284,30 @@ def test_wrapper_patches_core_runtime_lookup():
         is ph._annotate_peer_typography_matches
     )
     assert callable(ph.detect_paddle_headwords)
+
+
+def test_phase6a_assignment_mirroring_is_public_facade_only(monkeypatch):
+    import picture_capture.evidence_fusion as fusion
+
+    core = ph._core
+    original_core_runner = core.run_paddle_band
+
+    fusion_runner = object()
+    monkeypatch.setattr(fusion, "run_paddle_band", fusion_runner)
+    assert fusion.run_paddle_band is fusion_runner
+    assert core.run_paddle_band is original_core_runner
+
+    public_runner = object()
+    monkeypatch.setattr(ph, "run_paddle_band", public_runner)
+    assert ph.run_paddle_band is public_runner
+    assert core.run_paddle_band is public_runner
+
+
+def test_phase6a_evidence_fusion_keeps_explicit_supervised_core_patches():
+    import picture_capture.evidence_fusion as fusion
+
+    assert fusion._core.filter_headword_records is fusion.filter_headword_records
+    assert (
+        fusion._core._annotate_peer_typography_matches
+        is fusion._annotate_peer_typography_matches
+    )
