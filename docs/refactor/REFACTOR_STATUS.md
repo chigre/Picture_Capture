@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7K extracts OCR text cleanup and legacy `.OCRed` I/O helpers from `processing_core.py` while preserving all historical processing imports.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7L extracts crop/illustration logging leaf helpers from `processing_core.py` while preserving all historical processing forwarders.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -477,8 +477,36 @@ The production sizes move from:
 
 The architecture guard ratchets `processing_core.py` to 159,680 bytes.
 
-## Recommended next slice — Phase 7L
-After Phase 7K validation, reassess whether another processing-core leaf can be extracted without changing core-global lookup semantics. Prefer standalone formatting/serialization/I/O helpers. If the remaining candidates require moving mutually calling geometry/detection clusters, switch Phase 7 inventory to another oversized owner instead of weakening the preserved processing facade contract.
+Phase 7K publication:
+- PR #305 fixed head `24b563a69420867a8c536791b5fc038b651076e4` passed CI 2160 on Ubuntu/Windows/macOS and CodeQL 2141 Actions/Python;
+- PR #305 merged as `ad777f84738d71acff8e3af4775d89c2649ac97d`;
+- post-merge CI 2161 and CodeQL 2142 both passed.
+
+## Phase 7L crop logging ownership
+Phase 7L extracts the two leaf logging helpers used by crop and illustration workflows:
+- `append_crop_log(...)`;
+- `append_illustration_crop_log(...)`.
+
+They move to `crop_logging.py`, which depends only on `Path`, the project-storage log/QT path helpers, and type-only `CropRecord`/`IllustrationCropEvent` annotations. There is no runtime import back into `processing_core.py`.
+
+`processing_core.py` imports and re-exports both names. The historical `processing.py` explicit forwarders remain unchanged, so CLI, parallel crop coordination, and UI controllers keep their established imports and call sites. Public assignment mirroring still reaches the core aliases.
+
+The ordinary crop log keeps its self-describing `source_image_pixels` header and writes source X/Y/width/height. The illustration crop log keeps the legacy tab-separated `PPPnnn` event line format.
+
+Focused tests cover:
+- core/new-owner identity;
+- single-header append behavior and source-pixel row formatting;
+- illustration-event line formatting;
+- public-facade assignment mirroring for `append_crop_log`.
+
+The production sizes move from:
+- `processing_core.py`: 159,680 bytes -> 158,518 bytes;
+- new `crop_logging.py`: 1,602 bytes.
+
+The architecture guard ratchets `processing_core.py` to 158,518 bytes.
+
+## Recommended next slice — Phase 7M
+After Phase 7L validation, stop shaving isolated processing-core helpers unless another meaningful leaf responsibility appears. Revisit the previously characterized `image_preprocessing` data-model seam (`OutputCanvasInfo` + `PreprocessAnalysis`) as the preferred next high-value extraction. Preserve the cohesive model boundary; if the GitHub connector still rejects a single large-file write, do not split the model artificially just to satisfy tooling.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
