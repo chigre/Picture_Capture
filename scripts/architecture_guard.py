@@ -23,7 +23,7 @@ OVERSIZED_MODULE_BASELINE = {
     "paddle_headwords_core.py": 378_513,
     "image_preprocessing.py": 204_153,
     "profile_setup.py": 174_009,
-    "processing_core.py": 169_599,
+    "processing_core.py": 162_794,
 }
 
 # Existing runtime installers are legacy debt. Their count may only go down.

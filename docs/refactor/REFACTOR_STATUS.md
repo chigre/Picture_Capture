@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7H extracts page-list sorting/status helpers from `app.py` while preserving all historical app imports.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7I extracts atomic publish transaction ownership from `processing_core.py` while preserving the historical processing facade and monkeypatch contract.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -395,8 +395,32 @@ The production sizes move from:
 
 The architecture guard ratchets `app.py` to 784,737 bytes.
 
-## Recommended next slice — Phase 7I
-After Phase 7H validation, the remaining top-level app helpers are increasingly tied to runtime review/crop behavior. Prefer another clearly pure seam only if found; otherwise switch Phase 7 inventory to a different oversized owner rather than forcing `app.py` decomposition across extension or mutable-state boundaries.
+Phase 7H publication:
+- PR #302 fixed head `abe6f3ab2bc5e4d23a19f748f4014afb7ece3fbd` passed CI 2154 on Ubuntu/Windows/macOS and CodeQL 2135 Actions/Python;
+- PR #302 merged as `d6392b7dc153ce1bccfca064343c3cbdd56319b3`;
+- post-merge CI 2155 and CodeQL 2136 both passed.
+
+## Phase 7I processing publish-transaction ownership
+Phase 7I switches oversized-owner focus from `app.py` to `processing_core.py` rather than crossing the remaining app runtime-review boundary.
+
+The extracted seam is deliberately limited to two leaf filesystem transaction helpers:
+- `_publish_temp_path(...)`;
+- `_publish_file_transaction(...)`.
+
+They move to `processing_publish.py`, which depends only on `os`, `uuid`, and `Path`. `processing_core.py` imports and re-exports both names, so existing split/export call sites remain unchanged.
+
+`_stage_text_file(...)` and `_stage_crop(...)` intentionally remain in `processing_core.py`. This preserves the Phase 6 historical assignment-mirroring contract: a debug/test assignment such as `processing._publish_temp_path = fake` still mirrors into the core global that staged text/crop code resolves at runtime. Focused tests explicitly characterize that behavior.
+
+The public `processing._publish_file_transaction(...)` compatibility forwarder remains unchanged. Existing rollback/failure-injection tests continue to exercise the public facade path; the source-contract marker is updated only to identify `processing_publish` as the implementation owner.
+
+The production sizes move from:
+- `processing_core.py`: 165,070 bytes -> 162,794 bytes;
+- new `processing_publish.py`: 2,493 bytes.
+
+The previous processing-core oversized guard was a loose 169,599-byte historical ceiling. Phase 7I ratchets it directly to 162,794 bytes.
+
+## Recommended next slice — Phase 7J
+After Phase 7I validation, reassess `processing_core.py` for another leaf/separable responsibility that does not change facade monkeypatch lookup semantics. Avoid moving helper clusters whose internal calls would bypass core globals after extraction. Crop-plan serialization or other one-way formatting/file helpers are preferable to detection/fusion algorithms.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
