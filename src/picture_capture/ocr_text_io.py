@@ -38,7 +38,7 @@ def process_ocr_text(
 
 def export_ocred(path: Path, texts: list[str]) -> None:
     path.write_text(
-        "".join(f"{i:03d}|\`{text}\n" for i, text in enumerate(texts)),
+        "".join(f"{i:03d}|`{text}\n" for i, text in enumerate(texts)),
         encoding="utf-8",
     )
 
@@ -46,5 +46,5 @@ def export_ocred(path: Path, texts: list[str]) -> None:
 def import_ocred(path: Path) -> list[str]:
     texts: list[str] = []
     for line in path.read_text(encoding="utf-8-sig").splitlines():
-        texts.append(line.split("\`", 1)[1] if "\`" in line else line)
+        texts.append(line.split("`", 1)[1] if "`" in line else line)
     return texts
