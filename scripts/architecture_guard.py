@@ -51,6 +51,12 @@ FORBIDDEN_EVIDENCE_CORE_ASSIGNMENTS = (
     "_core.filter_headword_records =",
 )
 
+# Phase 6D removes the default processing-facade rewrite of the core left-edge
+# detector. The enhanced detector is now passed explicitly on the fallback path.
+FORBIDDEN_PROCESSING_CORE_ASSIGNMENTS = (
+    "_core._detect_entries_left_edge =",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -115,6 +121,13 @@ def collect_violations() -> list[str]:
         if marker in evidence_source:
             violations.append(
                 f"evidence_fusion import-time core mutation returned: {marker}"
+            )
+
+    processing_source = (PACKAGE_ROOT / "processing.py").read_text(encoding="utf-8")
+    for marker in FORBIDDEN_PROCESSING_CORE_ASSIGNMENTS:
+        if marker in processing_source:
+            violations.append(
+                f"processing import-time core mutation returned: {marker}"
             )
 
     init_path = PACKAGE_ROOT / "__init__.py"

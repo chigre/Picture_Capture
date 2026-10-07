@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 import os
 import re
 import json
@@ -2045,8 +2046,10 @@ def detect_entries(
     paddle_filter_rules_path: Path | None = None,
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
+    left_edge_detector: Any | None = None,
 ) -> tuple[list[Entry], Geometry]:
     """Detect markers with the active Project Profile page template applied."""
+    detect_left_edge = left_edge_detector or _detect_entries_left_edge
     source = normalize_page_rgb(image)
     effective = effective_page_settings(settings, source.size, profile_page_index)
     analysis_source = page_template_analysis_image(source, effective, profile_page_index)
@@ -2069,7 +2072,7 @@ def detect_entries(
             ordinary_effective, _applied_layout = ordinary_page_layout_settings(
                 analysis_source, effective
             )
-            ordinary_entries, _ordinary_geometry = _detect_entries_left_edge(
+            ordinary_entries, _ordinary_geometry = detect_left_edge(
                 analysis_source, ordinary_effective, page_sections=page_sections
             )
             review_candidates: list[dict] = []
@@ -2098,7 +2101,7 @@ def detect_entries(
         ordinary_effective, _applied_layout = ordinary_page_layout_settings(
             analysis_source, effective
         )
-        entries, geometry = _detect_entries_left_edge(
+        entries, geometry = detect_left_edge(
             analysis_source, ordinary_effective, page_sections=page_sections
         )
 

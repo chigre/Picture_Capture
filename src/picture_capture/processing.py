@@ -534,6 +534,7 @@ def detect_entries(
             paddle_filter_rules_path=paddle_filter_rules_path,
             profile_page_index=profile_page_index,
             page_sections=page_sections,
+            left_edge_detector=_detect_entries_left_edge,
         )
 
     entries, shared_geometry, review_candidates = _shared_detector_observations(
@@ -665,7 +666,6 @@ def append_illustration_crop_log(*args, **kwargs):
     return _core.append_illustration_crop_log(*args, **kwargs)
 
 
-_core._detect_entries_left_edge = _detect_entries_left_edge
 globals()["_detect_entries_left_edge"] = _detect_entries_left_edge
 globals()["detect_entries"] = detect_entries
 globals()["detect_entries_job"] = detect_entries_job

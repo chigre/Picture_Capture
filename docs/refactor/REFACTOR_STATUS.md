@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 6 — dynamic facade/proxy compatibility cleanup is underway. Phase 6C localizes broad core namespace compatibility to the historical public facade.**
+**Phase 6 — dynamic facade/proxy compatibility cleanup is underway. Phase 6D removes the processing facade's default left-edge core rewrite through an explicit call hook.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -166,8 +166,23 @@ Phase 6C preserves the historical symbol surface while relocating ownership:
 
 This is an ownership relocation, not a compatibility-surface reduction: existing imports from `picture_capture.paddle_headwords` remain available, including private diagnostic/test helpers.
 
-## Recommended next slice — Phase 6D
-Inventory which names on the historical `paddle_headwords` facade are actually required by production, tests, plugins/tooling contracts, and source guards before attempting any reduction of the broad namespace copy. Do not shrink the public surface merely from in-repository usage; external compatibility must be treated separately. `processing.py` remains deferred.
+## Phase 6D explicit processing left-edge hook
+After Phase 6C, the historical `paddle_headwords` broad namespace is intentionally preserved as an external compatibility surface rather than reduced from repository-local evidence alone. The next narrower debt was the only explicit default import-time mutation remaining in `processing.py`:
+
+- `_core._detect_entries_left_edge = _detect_entries_left_edge`.
+
+Read-only call-graph inspection showed that `processing_core.detect_entries()` resolves that helper only in its two ordinary/combined left-edge branches. Phase 6D therefore replaces the module rewrite with one optional call hook:
+
+- `processing_core.detect_entries(..., left_edge_detector=None)` defaults to the native core implementation;
+- the enriched facade passes `processing._detect_entries_left_edge` explicitly only when it delegates to the core fallback path;
+- ordinary Layout-role materialization and the existing facade-owned combined observation path remain unchanged;
+- the public `processing` assignment proxy remains unchanged, so explicit facade monkeypatch/debug assignments still mirror to same-named core attributes;
+- importing `processing` no longer changes the core's default left-edge detector.
+
+The architecture guard now forbids the retired `_core._detect_entries_left_edge =` assignment from returning. Broad namespace copying and module-class proxying remain separate compatibility debts and are not changed in this slice.
+
+## Recommended next slice — Phase 6E
+Characterize whether the remaining `processing.py` broad namespace copy and module-class proxy are truly external public compatibility contracts or can be localized behind a thinner public facade without changing imports, pickling paths, spawn-worker behavior, or monkeypatch/debug semantics. Do not remove either mechanism until those contracts are explicit.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe Phase 6 slices without stopping for a checkpoint after every small change. Phase 6A compatibility inventory established the first bounded production slice.
