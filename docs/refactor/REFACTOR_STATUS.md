@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 6 — dynamic facade/proxy compatibility cleanup is underway. Phase 6D removes the processing facade's default left-edge core rewrite through an explicit call hook.**
+**Phase 6 — default facade-to-core mutation cleanup reaches its safe completion boundary in Phase 6E. Historical public namespace/proxy compatibility remains intentionally preserved.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -181,8 +181,32 @@ Read-only call-graph inspection showed that `processing_core.detect_entries()` r
 
 The architecture guard now forbids the retired `_core._detect_entries_left_edge =` assignment from returning. Broad namespace copying and module-class proxying remain separate compatibility debts and are not changed in this slice.
 
-## Recommended next slice — Phase 6E
-Characterize whether the remaining `processing.py` broad namespace copy and module-class proxy are truly external public compatibility contracts or can be localized behind a thinner public facade without changing imports, pickling paths, spawn-worker behavior, or monkeypatch/debug semantics. Do not remove either mechanism until those contracts are explicit.
+## Phase 6E explicit separator-refiner ownership
+Read-only inventory after Phase 6D found exactly one remaining default top-level facade-to-core write across `processing.py`, `paddle_headwords.py`, and `evidence_fusion.py`:
+
+- `_core.refine_separator_y = _shared_refine_separator_y` in `paddle_headwords.py`.
+
+That assignment could not simply be deleted because the mature CJK adaptive refiner falls back to `refine_separator_y` on extremely dense pages. Phase 6E therefore makes both levels explicit:
+- `paddle_headwords_core.refine_separator_y_adaptive(..., fallback_refiner=None)` defaults to the native core local-valley engine;
+- `paddle_headwords_core.filter_headword_records(..., separator_y_refiner=None)` defaults to the native core refiner and forwards the selected refiner into both direct Latin refinement and CJK adaptive fallback;
+- `evidence_fusion.filter_headword_records()` injects the neutral shared separator-Y refiner by default, but preserves a same-named core override when the historical public monkeypatch proxy has installed one;
+- the historical public `paddle_headwords.refine_separator_y` remains the shared neutral refiner;
+- `paddle_headwords.refine_separator_y_adaptive` is now a thin public adapter that passes the shared/public refiner explicitly into the mature adaptive core;
+- importing `paddle_headwords` no longer rewrites `paddle_headwords_core.refine_separator_y`.
+
+The oversized `paddle_headwords_core.py` ratchet remains strict: the hook work is paired with a shorter adaptive-refiner docstring, so the core shrinks rather than grows.
+
+### Phase 6 safe completion boundary
+After Phase 6E, the three Phase 6 facades perform no default top-level writes into their historical core modules. Architecture guard ratchets prevent the retired evidence-fusion, processing left-edge, and Paddle separator-refiner assignments from returning.
+
+Two compatibility mechanisms intentionally remain on the historical public facades:
+- broad non-dunder core namespace re-export on `processing.py` and `paddle_headwords.py`;
+- module-class assignment mirroring on `processing.py` and `paddle_headwords.py`.
+
+These are retained public compatibility surfaces, not silent runtime installers. Repository-local usage is insufficient evidence to delete them because plugins, debugging scripts, pickled/spawned callables, and external tooling may depend on the historical module paths/private names. Any future removal should be treated as an explicit compatibility/deprecation project rather than routine debt cleanup.
+
+## Recommended next phase — Phase 7 planning
+Keep the Phase 6 public compatibility facades stable and inventory the remaining oversized production modules (`app.py`, `paddle_headwords_core.py`, `image_preprocessing.py`, `profile_setup.py`, `processing_core.py`). Select the next slice by cohesive ownership/call-graph boundaries, not by line count alone. Begin with read-only inventory and characterization before any production extraction.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe Phase 6 slices without stopping for a checkpoint after every small change. Phase 6A compatibility inventory established the first bounded production slice.

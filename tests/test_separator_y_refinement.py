@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,9 +19,51 @@ class _IdentityTransform:
         return int(x), int(y)
 
 
-def test_paddle_public_and_core_refiners_use_shared_module() -> None:
+def test_paddle_fresh_import_keeps_core_native_while_public_refiner_is_shared() -> None:
+    code = (
+        "from picture_capture import paddle_headwords as ph; "
+        "from picture_capture import separator_y_refinement as shared; "
+        "assert ph.refine_separator_y is shared.refine_separator_y; "
+        "assert ph._core.refine_separator_y is ph._native_refine_separator_y; "
+        "assert ph._core.refine_separator_y is not shared.refine_separator_y"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+    # The current pytest process may have mirrored a public monkeypatch and its
+    # teardown back into core earlier in the suite. Public ownership itself is
+    # still stable regardless of that deliberate compatibility side effect.
     assert paddle_headwords.refine_separator_y is shared_y.refine_separator_y
-    assert paddle_headwords._core.refine_separator_y is shared_y.refine_separator_y
+
+
+def test_public_adaptive_refiner_injects_shared_fallback(monkeypatch) -> None:
+    seen = {}
+
+    def fake_adaptive(*_args, **kwargs):
+        seen.update(kwargs)
+        return 7, {"reason": "test"}
+
+    monkeypatch.setattr(
+        paddle_headwords._core,
+        "refine_separator_y_adaptive",
+        fake_adaptive,
+    )
+
+    refined, details = paddle_headwords.refine_separator_y_adaptive(
+        np.zeros((12, 12), dtype=np.uint8),
+        5,
+        4,
+        AppSettings(),
+    )
+
+    assert refined == 7
+    assert details == {"reason": "test"}
+    assert seen["fallback_refiner"] is shared_y.refine_separator_y
 
 
 def test_existing_pdic_refinement_reaches_shared_api() -> None:
