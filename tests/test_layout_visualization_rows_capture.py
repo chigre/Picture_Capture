@@ -5,6 +5,15 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import picture_capture.layout_visualization_shared as shared
+import picture_capture.layout_visualization_ui as ui
+
+
+def test_layout_visualization_snapshot_binding_is_static(monkeypatch):
+    marker = object()
+    monkeypatch.setattr(shared, "shared_snapshot_for_app", lambda app: (marker, app))
+    app = object()
+    assert ui._snapshot_for_app(app) == (marker, app)
+
 
 
 def test_shared_snapshot_seeds_layoutrows_with_persisted_app_settings(monkeypatch, tmp_path):
@@ -82,6 +91,9 @@ def test_phase5h_source_shape_keeps_later_visualization_decorators_and_removes_r
     assert "layout_visualization_rows_cache_runtime.py" not in guard
     assert "install_local_indent_visualization" not in gui
     assert "install_layout_role_provenance" not in gui
-    shared_pos = gui.index("install_shared_layout_visualization_source()")
-    role_theme_pos = gui.index("install_layout_role_theme()")
-    assert shared_pos < role_theme_pos
+    assert "install_shared_layout_visualization_source" not in gui
+    ui_source = (package / "layout_visualization_ui.py").read_text(encoding="utf-8")
+    shared_source = (package / "layout_visualization_shared.py").read_text(encoding="utf-8")
+    assert "from .layout_visualization_shared import shared_snapshot_for_app" in ui_source
+    assert "return shared_snapshot_for_app(app)" in ui_source
+    assert "Compatibility no-op; the shared snapshot binding is now static." in shared_source
