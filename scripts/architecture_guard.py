@@ -32,17 +32,17 @@ LEGACY_RUNTIME_FILES: set[str] = set()
 # Dynamic namespace copying and module-class assignment mirroring are separate
 # compatibility debts. Ratchet them independently so one can be retired without
 # hiding behind the other category.
-LEGACY_NAMESPACE_COPY_FILES = {
-    "processing.py",
-    "paddle_headwords.py",
-}
+LEGACY_NAMESPACE_COPY_FILES: set[str] = set()
 NAMESPACE_COPY_MARKER = "vars(_core).items()"
 
-LEGACY_MODULE_CLASS_PROXY_FILES = {
-    "processing.py",
-    "paddle_headwords.py",
-}
+LEGACY_MODULE_CLASS_PROXY_FILES: set[str] = set()
 MODULE_CLASS_PROXY_MARKER = "sys.modules[__name__].__class__"
+
+# Phase 9A centralizes the retained public compatibility mechanism instead of
+# duplicating dynamic namespace/proxy implementations in each facade.
+FACADE_COMPAT_USERS = ("processing.py", "paddle_headwords.py")
+FACADE_NAMESPACE_CALL = "publish_core_namespace(globals(), _core)"
+FACADE_MIRROR_CALL = "install_core_assignment_mirror(__name__, _core)"
 
 # Phase 6B pays off the evidence-fusion import-time supervised core mutations.
 # They must not reappear; supervised behavior is passed through explicit hooks.
@@ -121,6 +121,17 @@ def collect_violations() -> list[str]:
         violations.append(f"new dynamic core namespace copy: {rel}")
     for rel in sorted(module_class_proxy_files - LEGACY_MODULE_CLASS_PROXY_FILES):
         violations.append(f"new dynamic module-class proxy: {rel}")
+
+    for rel in FACADE_COMPAT_USERS:
+        source = (PACKAGE_ROOT / rel).read_text(encoding="utf-8")
+        if FACADE_NAMESPACE_CALL not in source:
+            violations.append(
+                f"historical facade bypasses shared namespace compatibility owner: {rel}"
+            )
+        if FACADE_MIRROR_CALL not in source:
+            violations.append(
+                f"historical facade bypasses shared assignment compatibility owner: {rel}"
+            )
 
     evidence_source = (PACKAGE_ROOT / "evidence_fusion.py").read_text(encoding="utf-8")
     for marker in FORBIDDEN_EVIDENCE_CORE_ASSIGNMENTS:
