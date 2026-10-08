@@ -799,22 +799,15 @@ def _legacy_find_separator_y(
             "extra_white_rows": int(extra_white),
         }
 
-    # VB method 2: relax the row-white requirement 999 -> 700 (defaults).
-    score_top = max(int(top), int(candidate_y) - upward)
     row_scores = legacy_row_brightness_scores_1000(
-        rgb_sum, xs, score_top, min(height, int(candidate_y)), span,
+        rgb_sum, xs, int(top), int(candidate_y), upward, span,
     )
-
-    def cached_row_score(line_y: int) -> int | None:
-        index = int(line_y) - score_top
-        return row_scores[index] if 0 <= index < len(row_scores) else None
-
     for threshold in range(high, low - 1, -2):
         for ysu in range(1, upward + 1):
             line_y = int(candidate_y) - ysu
             if line_y < int(top):
                 break
-            score = cached_row_score(line_y)
+            score = row_scores.get(line_y)
             if score is None or score <= threshold:
                 continue
 
@@ -824,7 +817,7 @@ def _legacy_find_separator_y(
                     probe_y = int(candidate_y) - ygiu
                     if probe_y < int(top):
                         break
-                    probe = cached_row_score(probe_y)
+                    probe = row_scores.get(probe_y)
                     if probe is None:
                         break
                     if probe < low or probe + 50 < threshold:
