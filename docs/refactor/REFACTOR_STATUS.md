@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7O extracts final output-canvas geometry helpers from `image_preprocessing.py` while preserving historical callable paths and stable imports.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7P extracts Paddle OCR cache storage/compaction implementation behind historical core wrappers that preserve facade monkeypatch semantics.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -599,8 +599,47 @@ The production sizes move from:
 
 The architecture guard ratchets `image_preprocessing.py` to 157,244 bytes.
 
-## Recommended next slice — Phase 7P
-After Phase 7O validation, keep `analyze_preprocess_page()` untouched. Reassess the remaining output/render/diagnostic helpers only if they can move without pulling algorithm constants or the analysis state machine across module boundaries. Otherwise switch owner again rather than forcing a coupled extraction.
+Phase 7O publication:
+- PR #309 fixed head `489b35cbb88ae82c3f7f4dda9f5ec9c6403661f4` passed CI 2172 on Ubuntu/Windows/macOS and CodeQL 2153 Actions/Python;
+- PR #309 merged as `7e1d673c686d9357db56ea1d5a71143945660953`;
+- post-merge CI 2173 and CodeQL 2154 both passed.
+
+## Phase 7P Paddle cache-storage implementation ownership
+Phase 7P switches back to `paddle_headwords_core.py`, but deliberately avoids direct re-export of a mutually-calling cache helper cluster.
+
+The implementation moves into `paddle_cache_storage.py`:
+- atomic text/JSON publishing;
+- candidate compaction;
+- compact OCR cache payload construction;
+- regenerable sidecar path generation;
+- one-file cache compaction/sidecar cleanup.
+
+Historical names remain defined as wrappers in `paddle_headwords_core.py`:
+- `_atomic_write_text(...)`;
+- `_atomic_write_json(...)`;
+- `_compact_cached_candidate(...)`;
+- `compact_ocr_cache_payload(...)`;
+- `_regenerable_sidecars(...)`;
+- `compact_ocr_cache_file(...)`.
+
+Each wrapper passes the **current core global dependencies** into the implementation at call time. For example, `_atomic_write_json` passes the current `_atomic_write_text`, and `compact_ocr_cache_file` passes the current `compact_ocr_cache_payload` and `_atomic_write_json`. This preserves the Phase 6 public facade assignment-mirroring contract: monkeypatching a historical helper on `paddle_headwords` still affects nested cache operations.
+
+The implementation module has no import back into `paddle_headwords_core`, so the ownership direction is one-way. Existing concurrency/source-contract markers in the public facade remain untouched.
+
+Focused tests require:
+- historical wrapper `__module__` paths remain `picture_capture.paddle_headwords_core`;
+- monkeypatched public `_atomic_write_text` is used by core `_atomic_write_json`;
+- monkeypatched public `_compact_cached_candidate` is used by `compact_ocr_cache_payload`;
+- monkeypatched public payload/json hooks are used by `compact_ocr_cache_file`.
+
+The production sizes move from:
+- `paddle_headwords_core.py`: 375,114 bytes -> 372,228 bytes;
+- new `paddle_cache_storage.py`: 4,617 bytes.
+
+The architecture guard ratchets `paddle_headwords_core.py` to 372,228 bytes.
+
+## Recommended next slice — Phase 7Q
+After Phase 7P validation, reassess whether the remaining Paddle diagnostic TSV formatting can be extracted with the same wrapper/callback pattern without weakening public facade assignment semantics. If the required hook surface becomes broad or opaque, switch owner rather than turning diagnostics into a hidden dependency graph.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
