@@ -63,11 +63,31 @@ def _box_sum(mask: np.ndarray, radius_y: int, radius_x: int) -> np.ndarray:
     )
 
 
-def _generic_analysis_ink(gray_image: Image.Image) -> np.ndarray:
+def _generic_analysis_ink(
+    gray_image: Image.Image,
+    gray: np.ndarray | None = None,
+) -> np.ndarray:
     """Return a conservative local-contrast ink mask for shared preprocessing."""
-    gray = np.asarray(gray_image, dtype=np.int16)
-    local = np.asarray(gray_image.filter(ImageFilter.BoxBlur(5)), dtype=np.int16)
-    return (gray <= 150) | ((gray <= 205) & (gray + 20 <= local))
+    gray_u8 = (
+        np.asarray(gray_image, dtype=np.uint8)
+        if gray is None
+        else np.asarray(gray, dtype=np.uint8)
+    )
+    local_u8 = np.asarray(
+        gray_image.filter(ImageFilter.BoxBlur(5)),
+        dtype=np.uint8,
+    )
+    # Historical condition:
+    #   gray <= 150 or (gray <= 205 and gray + 20 <= local)
+    # For uint8, guard local >= 20 before subtracting to avoid underflow.
+    return (
+        (gray_u8 <= 150)
+        | (
+            (gray_u8 <= 205)
+            & (local_u8 >= 20)
+            & (gray_u8 <= (local_u8 - 20))
+        )
+    )
 
 
 def build_analysis_image(
@@ -93,7 +113,7 @@ def build_analysis_image(
     try:
         gray = np.asarray(gray_image, dtype=np.uint8)
         if ink_mask is None:
-            ink = _generic_analysis_ink(gray_image)
+            ink = _generic_analysis_ink(gray_image, gray)
         else:
             ink = np.asarray(ink_mask, dtype=bool)
             if ink.shape != gray.shape:
