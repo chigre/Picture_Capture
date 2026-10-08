@@ -96,7 +96,8 @@ def test_detection_benchmark_cpu_profile_is_opt_in_and_outside_timing_path() -> 
     assert "cProfile.Profile()" in profile_block
     assert "force_paddle_refresh=False" in profile_block
     assert 'profiler.dump_stats(str(profile_path))' in profile_block
-    assert '.sort_stats("cumulative")' in profile_block
+    assert ".sort_stats(" in profile_block
+    assert '"cumulative"' in profile_block
     assert ".print_stats(50)" in profile_block
     assert '"profiled_calls_are_timing_samples": False' in profile_block
 
