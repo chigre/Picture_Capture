@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7Q extracts Paddle diagnostic TSV formatting implementation behind historical core wrappers while preserving strict output schemas and facade monkeypatch semantics.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7R consolidates image-preprocessing algorithm constants and diagnostic JSON reporting behind stable historical wrappers.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -689,8 +689,35 @@ The production sizes move from:
 
 The architecture guard ratchets `paddle_headwords_core.py` to 364,070 bytes.
 
-## Recommended next slice — Phase 7R
-After Phase 7Q validation, stop extracting Paddle internals unless another broad responsibility can be isolated with a similarly explicit dependency contract. Re-run oversized-owner inventory across `image_preprocessing.py`, `processing_core.py`, `app.py`, and `profile_setup.py`; prefer a larger cohesive owner over further micro-extractions.
+Phase 7Q publication:
+- PR #311 fixed head `7da800fc94872cc2e12034afc1ed1bbc7a4f1feb` passed CI 2176 on Ubuntu/Windows/macOS and CodeQL 2157 Actions/Python;
+- PR #311 merged as `1e3cb5fcf4b2f43da72bad14c69f5adb96ba33e6`;
+- post-merge CI 2177 and CodeQL 2158 both passed.
+
+## Phase 7R preprocessing diagnostics/reporting ownership
+Cross-owner inventory showed that the remaining oversized files are now dominated by genuine GUI classes or algorithm state machines. Rather than continue micro-extracting Paddle or splitting Tk state, Phase 7R selects a larger cohesive preprocessing reporting boundary.
+
+Phase 7R introduces `image_preprocessing_constants.py` for the locally owned preprocessing thresholds/gains previously defined inside `image_preprocessing.py`. The historical module imports and re-exports every constant, so existing imports remain valid.
+
+The 165-line diagnostic JSON implementation moves into the existing `image_preprocessing_reporting.py` owner as `_export_diagnostic_json_impl(...)`. `image_preprocessing.py` keeps the historical public `export_diagnostic_json(...)` callable as a thin wrapper. The wrapper passes the **current module-global** `output_canvas_info` callback into the reporting implementation, preserving any test/debug monkeypatch on that historical hook.
+
+The reporting owner imports diagnostic constants from their authoritative modules and has no runtime import back into `image_preprocessing.py`. Existing JSON schema, effective-settings payload, algorithm-constant payload, source/canvas geometry fields, UTF-8 formatting, and atomic temp-file replacement remain unchanged.
+
+Focused tests require:
+- old-module/new-constants object identity for all locally owned preprocessing constants;
+- `export_diagnostic_json.__module__ == "picture_capture.image_preprocessing"`;
+- monkeypatching `image_preprocessing.output_canvas_info` still affects diagnostic export;
+- the reporting owner has no runtime back-import into the oversized implementation module.
+
+The production sizes move from:
+- `image_preprocessing.py`: 157,244 bytes -> 150,818 bytes;
+- `image_preprocessing_reporting.py`: 30,243 bytes after Phase 7A -> 38,968 bytes;
+- new `image_preprocessing_constants.py`: 1,028 bytes.
+
+The architecture guard ratchets `image_preprocessing.py` to 150,818 bytes.
+
+## Recommended next slice — Phase 7S
+After Phase 7R validation, treat Phase 7 decomposition as near its safe structural boundary. Re-run oversized-owner inventory once more; if no larger one-way owner remains, close Phase 7 and switch to runtime-efficiency profiling rather than continuing to optimize line count.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
