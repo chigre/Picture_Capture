@@ -76,27 +76,9 @@ def prepare_gui_application() -> Any:
         )
     )
 
-    from .. import training_export
-    from ..training_export_v3 import (
-        build_export_training_page,
-        build_write_training_manifest,
-    )
-    from ..training_export_page_understanding import (
-        build_export_training_page_with_understanding,
-    )
-
-    training_export.export_training_page = build_export_training_page(
-        training_export.export_training_page
-    )
-    training_export.export_training_page = (
-        build_export_training_page_with_understanding(
-            training_export.export_training_page
-        )
-    )
-    training_export.write_training_manifest = build_write_training_manifest(
-        training_export.write_training_manifest
-    )
-    training_export.TRAINING_EXPORT_FORMAT = "picture-capture-training-v3"
+    # Current training export is composed statically in training_export_composed:
+    # v2 base -> v3 corrections -> shared Page Understanding. GUI startup no
+    # longer mutates training_export globals or controls exporter import order.
 
     # processing.detect_entries_job is now the static top-level spawn target.
     # app.py imports that stable function by value without bootstrap mutation.
