@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
 if TYPE_CHECKING:
-    from .image_preprocessing import OutputCanvasInfo, PreprocessAnalysis
+    from .image_preprocessing_models import OutputCanvasInfo, PreprocessAnalysis
 
 
 def export_summary_csv(

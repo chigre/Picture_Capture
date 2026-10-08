@@ -5,12 +5,10 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable
+from typing import Iterable
 
 from .project_storage import image_preprocess_data_root
-
-if TYPE_CHECKING:
-    from .image_preprocessing import PreprocessAnalysis
+from .image_preprocessing_models import PreprocessAnalysis
 
 
 def result_path(project_root: Path, page: Path) -> Path:
@@ -33,8 +31,6 @@ def save_analysis(project_root: Path, page: Path, analysis: PreprocessAnalysis) 
 
 
 def load_analysis(project_root: Path, page: Path) -> PreprocessAnalysis | None:
-    from .image_preprocessing import PreprocessAnalysis
-
     path = result_path(project_root, page)
     if not path.is_file():
         return None

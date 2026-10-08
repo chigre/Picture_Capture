@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7L extracts crop/illustration logging leaf helpers from `processing_core.py` while preserving all historical processing forwarders.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7M extracts the cohesive image-preprocessing data model while preserving historical imports and class module paths.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -507,8 +507,42 @@ The architecture guard ratchets `processing_core.py` to 158,561 bytes.
 
 First PR CI caught one extraction-boundary regression: `AUTO_ILLUSTRATION_LABEL_TOKEN` sat immediately after the moved ordinary crop-log function and was accidentally removed with that block. It is detector state, not logging state, so Phase 7L restores it in `processing_core.py` and adds a focused ownership regression to keep it core-owned.
 
-## Recommended next slice — Phase 7M
-After Phase 7L validation, stop shaving isolated processing-core helpers unless another meaningful leaf responsibility appears. Revisit the previously characterized `image_preprocessing` data-model seam (`OutputCanvasInfo` + `PreprocessAnalysis`) as the preferred next high-value extraction. Preserve the cohesive model boundary; if the GitHub connector still rejects a single large-file write, do not split the model artificially just to satisfy tooling.
+Phase 7L publication:
+- first CI run 2162 failed only because that adjacent detector constant had been removed; 1342 tests otherwise passed;
+- repaired fixed head `01a4ac7ac165edd3f3b3bd790288d2ae16b6fb5d` passed CI 2166 on Ubuntu/Windows/macOS and CodeQL 2147 Actions/Python;
+- PR #306 merged as `e77f878231a62e24b82e0414b168790a620ca96e`;
+- post-merge CI 2167 and CodeQL 2148 both passed.
+
+## Phase 7M image-preprocessing data-model ownership
+The previously deferred cohesive model extraction is now feasible as one intact file. Phase 7M moves:
+- `OutputCanvasInfo`;
+- `PreprocessAnalysis`;
+- `PREPROCESS_FORMAT`;
+- `PREPROCESS_FORMAT_VERSION`;
+- `DEFAULT_SAFETY_MARGIN_PX`
+
+into `image_preprocessing_models.py`.
+
+The complete model block is ~979 lines / 43 KB and depends only on `dataclass/asdict` plus the three preprocessing format/default constants. It does not depend on NumPy, PIL, geometry detection, filesystem paths, or the 2,500+ line analysis state machine.
+
+`image_preprocessing.py` imports and re-exports the classes/constants, preserving the historical public import surface. Phase 7M additionally pins both class objects' `__module__` to `picture_capture.image_preprocessing`, so external pickle/debug tooling keeps the historical class module path even though implementation ownership moves.
+
+`image_preprocessing_persistence.py` now imports `PreprocessAnalysis` directly from the model owner for runtime JSON deserialization, eliminating its previous call-time dependency back on the oversized implementation module. `image_preprocessing_reporting.py` points its type-only model imports at the same owner.
+
+Focused tests cover:
+- old-module/new-owner object identity;
+- persistence/new-owner identity;
+- historical class `__module__` values and pickle class roundtrip;
+- re-exported format/version/safety constants.
+
+The production sizes move from:
+- `image_preprocessing.py`: 204,153 bytes -> 160,734 bytes;
+- new `image_preprocessing_models.py`: 43,931 bytes.
+
+The architecture guard ratchets `image_preprocessing.py` directly to 160,734 bytes.
+
+## Recommended next slice — Phase 7N
+After Phase 7M validation, do not immediately split the remaining `analyze_preprocess_page()` state machine. Re-run oversized-owner inventory across `paddle_headwords_core.py`, `profile_setup.py`, `image_preprocessing.py`, and `processing_core.py`. Prefer another cohesive one-way data/formatting/controller seam with an explicit compatibility plan over further micro-extractions.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
