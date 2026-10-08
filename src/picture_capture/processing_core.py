@@ -1452,6 +1452,7 @@ def _separator_whitespace_score(
     entry: Entry,
     geometry: Geometry,
     settings: AppSettings,
+    gray: np.ndarray | None = None,
 ) -> float | None:
     """Return 0..1 local blank-boundary evidence at one marker Y.
 
@@ -1462,8 +1463,10 @@ def _separator_whitespace_score(
     """
     if geometry.transform.kind not in {"identity", "mirror_x"}:
         return None
-    source = normalize_page_rgb(image)
-    gray = np.asarray(ImageOps.grayscale(source), dtype=np.uint8)
+    if gray is None:
+        gray = np.asarray(
+            ImageOps.grayscale(normalize_page_rgb(image)), dtype=np.uint8
+        )
     if gray.size == 0:
         return None
     y = max(0, min(gray.shape[0] - 1, int(entry.y)))
@@ -1515,15 +1518,16 @@ def _prefer_ocr_separator_position(
     ocr: Entry,
     geometry: Geometry,
     settings: AppSettings,
+    gray: np.ndarray | None = None,
 ) -> tuple[bool, float | None, float | None]:
     """Choose OCR Y only when its local blank boundary is materially stronger."""
     if image is None:
         return _is_single_cjk_headword(ocr.word), None, None
     ordinary_score = _separator_whitespace_score(
-        image, ordinary, geometry, settings,
+        image, ordinary, geometry, settings, gray,
     )
     ocr_score = _separator_whitespace_score(
-        image, ocr, geometry, settings,
+        image, ocr, geometry, settings, gray,
     )
     if ordinary_score is None or ocr_score is None:
         return _is_single_cjk_headword(ocr.word), ordinary_score, ocr_score
@@ -1916,6 +1920,10 @@ def _fuse_detection_entries(
         if count:
             suppressed_by_ocr[ocr_index] = count
 
+    separator_gray = (
+        np.asarray(ImageOps.grayscale(normalize_page_rgb(image)), dtype=np.uint8)
+        if image is not None and ordinary_to_ocr else None
+    )
     fused: list[Entry] = []
     for ordinary_index, (ordinary, _ordinary_col, _ordinary_u, _ordinary_v) in enumerate(ordinary_rows):
         ocr_index = ordinary_to_ocr.get(ordinary_index)
@@ -1970,7 +1978,7 @@ def _fuse_detection_entries(
             continue
         ocr = ocr_rows[ocr_index][0]
         use_semantic_position, ordinary_ws, ocr_ws = _prefer_ocr_separator_position(
-            image, ordinary, ocr, geometry, settings,
+            image, ordinary, ocr, geometry, settings, separator_gray,
         )
         merged_entry = _entry_with_fused_metadata(
             ordinary,
