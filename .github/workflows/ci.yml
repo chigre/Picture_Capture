@@ -80,12 +80,77 @@ jobs:
             fi
           done
           du -sh phase8d_ocr_runtime
+          tar -cf - phase8d_ocr_runtime | gzip -1 | split -b 75m - phase8d-ocr-runtime.tar.gz.part-
+          ls -lh phase8d-ocr-runtime.tar.gz.part-*
 
-      - name: Upload Phase 8D OCR runtime
+      - name: Upload Phase 8D OCR runtime part aa
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: phase8d-ocr-runtime-py313-linux
-          path: phase8d_ocr_runtime/
+          name: phase8d-ocr-runtime-aa
+          path: phase8d-ocr-runtime.tar.gz.part-aa
           if-no-files-found: error
-          compression-level: 1
+          compression-level: 0
+
+      - name: Upload Phase 8D OCR runtime part ab
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8d-ocr-runtime-ab
+          path: phase8d-ocr-runtime.tar.gz.part-ab
+          if-no-files-found: ignore
+          compression-level: 0
+
+      - name: Upload Phase 8D OCR runtime part ac
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8d-ocr-runtime-ac
+          path: phase8d-ocr-runtime.tar.gz.part-ac
+          if-no-files-found: ignore
+          compression-level: 0
+
+      - name: Upload Phase 8D OCR runtime part ad
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8d-ocr-runtime-ad
+          path: phase8d-ocr-runtime.tar.gz.part-ad
+          if-no-files-found: ignore
+          compression-level: 0
+
+      - name: Upload Phase 8D OCR runtime part ae
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8d-ocr-runtime-ae
+          path: phase8d-ocr-runtime.tar.gz.part-ae
+          if-no-files-found: ignore
+          compression-level: 0
+
+      - name: Upload Phase 8D OCR runtime part af
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8d-ocr-runtime-af
+          path: phase8d-ocr-runtime.tar.gz.part-af
+          if-no-files-found: ignore
+          compression-level: 0
+
+      - name: Upload Phase 8D OCR runtime part ag
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8d-ocr-runtime-ag
+          path: phase8d-ocr-runtime.tar.gz.part-ag
+          if-no-files-found: ignore
+          compression-level: 0
+
+      - name: Upload Phase 8D OCR runtime part ah
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8d-ocr-runtime-ah
+          path: phase8d-ocr-runtime.tar.gz.part-ah
+          if-no-files-found: ignore
+          compression-level: 0
