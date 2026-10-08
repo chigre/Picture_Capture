@@ -1445,38 +1445,63 @@ Phase 11A publication:
 - post-merge CI 2252 passed on Ubuntu/Windows/macOS;
 - post-merge CodeQL 2234 passed Actions/Python.
 
-### Current Phase 11 boundary
+### Phase 11B characterize compatibility install order
 
-Phase 11A establishes a clean native migration owner but does not by itself make
-the compatibility installer chain safe to flatten. A Phase 11B is justified
-only if a read-only analysis can show a bounded way to reduce wrapper-order
-coupling while preserving all of the following:
-- import-inert package behavior;
-- explicit process-profile composition through `build_core_services()`;
-- canonical and legacy constructor arguments;
-- canonical JSON output plus legacy JSON input;
-- existing monkeypatch/testing seams;
-- separator-Y-before-Entry-crop precedence where behavior currently depends on
-  captured predecessor methods.
+The read-only call-chain audit confirmed that the remaining settings installer
+order is semantic rather than accidental:
+- separator-Y replaces the native AppSettings JSON adapter with its canonical
+  separator-key adapter;
+- Entry-crop then captures the **current** constructor/to_json/from_json methods
+  and wraps them to add canonical crop-height keys and the transient crop-width
+  compatibility rule;
+- reversing those two installers would allow separator-Y's serializer replacement
+  to overwrite the Entry-crop serializer layer instead of being wrapped by it.
 
-Do not move compatibility installation into package import side effects, and do
-not make canonical compatibility fields native dataclass fields merely to remove
-wrappers unless a separate compatibility analysis proves that safe.
+Removing that dependency cleanly would therefore require a new shared
+dispatcher/registry or equivalent compatibility framework. That would be a
+cross-cutting redesign, not a bounded migration cleanup, and would add more
+infrastructure than the current explicit composition contract warrants.
 
-## Recommended next slice — characterize compatibility wrapper order before changing it
+Phase 11B deliberately changed no production behavior. It added one focused
+characterization guard to `tests/test_core_bootstrap.py` asserting:
 
-Perform a read-only call-chain/behavior audit of
-`separator_y_settings.install_separator_y_settings()` and
-`entry_crop_settings.install_entry_crop_settings()`. Determine whether their
-constructor and JSON adapters can share a lower-level compatibility transform
-without changing bare-import or composition-root semantics.
+`install_separator_y_settings() < install_entry_crop_settings()`
 
-If there is no clearly bounded, order-independent design, stop the migration
-refactor after Phase 11A rather than forcing a Phase 11B. A characterization
-test/guard is preferable to speculative production churn.
+inside the explicit core composition profile.
 
-Performance optimization remains subject to the Phase 8 measurement gate, and
-the Phase 9 facade compatibility boundary remains intentional.
+Phase 11B publication:
+- PR #347 fixed head `decd9ea7fde14aeff07f178cc582505da1ecb313`;
+- PR CI 2255 passed on Ubuntu/Windows/macOS;
+- PR CodeQL 2237 passed Actions/Python;
+- PR #347 merged as `fa73e7e541b58f3298a6904c0701f200cb399b74`;
+- post-merge CI 2256 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2238 passed Actions/Python.
+
+### Phase 11 closure — migration ownership cleanup complete
+
+Phase 11 is complete:
+- native historical AppSettings payload migrations have a focused one-way owner;
+- the existing separator-Y and Entry-crop compatibility wrappers remain explicit
+  at the process composition root;
+- their intentional order dependency is now characterized by test;
+- package import remains inert;
+- no settings key, constructor alias, JSON format, or bootstrap profile changed.
+
+Do **not** introduce a generic compatibility dispatcher merely to eliminate the
+remaining installer order unless a future feature independently requires such a
+framework. The current explicit chain is smaller and better understood than that
+speculative abstraction.
+
+## Recommended next slice — fresh debt inventory outside settings migration
+
+Leave Phase 11. Perform a new read-only repository debt inventory and select a
+different bounded category with a clear correctness or maintainability payoff.
+
+Do not reopen Phase 7 oversized-module decomposition solely for line count, do
+not resume Phase 10 installer removal by name, and do not resume performance
+micro-optimization without the Phase 8 measurement gate.
+
+Phase 9 facade compatibility remains an intentional public boundary.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
