@@ -79,3 +79,24 @@ def test_detection_benchmark_repeat_mode_keeps_first_run_as_formal_result() -> N
     assert "detected[mode]" not in repeat_block
     assert "metrics = match_markers" not in repeat_block
 
+def test_detection_benchmark_cpu_profile_is_opt_in_and_outside_timing_path() -> None:
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "scripts" / "detection_benchmark.py").read_text(encoding="utf-8")
+
+    benchmark_start = text.index("def benchmark(")
+    profile_start = text.index("def warm_cpu_profiles(")
+    main_start = text.index("def main() -> int:")
+    benchmark_block = text[benchmark_start:profile_start]
+    profile_block = text[profile_start:main_start]
+    main_block = text[main_start:]
+
+    assert '"--warm-cpu-profile-dir"' in main_block
+    assert "warm_cpu_profiles(" not in benchmark_block
+    assert "warm_cpu_profiles(" in main_block
+    assert "cProfile.Profile()" in profile_block
+    assert "force_paddle_refresh=False" in profile_block
+    assert 'profiler.dump_stats(str(profile_path))' in profile_block
+    assert '.sort_stats("cumulative")' in profile_block
+    assert ".print_stats(50)" in profile_block
+    assert '"profiled_calls_are_timing_samples": False' in profile_block
+
