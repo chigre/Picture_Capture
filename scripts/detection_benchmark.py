@@ -3,10 +3,13 @@ from __future__ import annotations
 """Compare ordinary, OCR and combined entry detection without changing project data."""
 
 import argparse
+import cProfile
 from dataclasses import replace
 from datetime import datetime
+from io import StringIO
 import json
 from pathlib import Path
+import pstats
 import tempfile
 from time import perf_counter
 
@@ -336,6 +339,99 @@ def benchmark(
     }
 
 
+
+def warm_cpu_profiles(
+    project_root: Path,
+    modes: tuple[str, ...],
+    pages: str,
+    output_dir: Path,
+) -> dict[str, object]:
+    """Profile one warmed detection call per selected page/mode outside timing runs."""
+    project = ProjectState.open(project_root)
+    indices = _indices(project, pages)
+    filter_path = headword_filter_rules_path(
+        project.root, HEADWORD_FILTER_RULES_FILENAME
+    )
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    profiles: list[dict[str, object]] = []
+
+    with tempfile.TemporaryDirectory(prefix="picture-capture-profile-") as raw:
+        temp_root = Path(raw)
+        for index in indices:
+            page = project.images[index]
+            with Image.open(page) as opened:
+                image = opened.convert("RGB")
+            sections = read_page_sections(page)
+
+            for mode in modes:
+                settings = replace(project.settings)
+                settings.detection_method = mode
+                cache = (
+                    temp_root / mode / f"{page.stem}.json"
+                    if mode in {"paddleocr", "combined"} else None
+                )
+                if cache is not None:
+                    cache.parent.mkdir(parents=True, exist_ok=True)
+
+                stem = f"{index + 1:04d}_{page.stem}__{mode}"
+                profile_path = output_dir / f"{stem}.prof"
+                summary_path = output_dir / f"{stem}.txt"
+                item: dict[str, object] = {
+                    "page_index": index + 1,
+                    "page": page.name,
+                    "mode": mode,
+                    "cache_enabled": cache is not None,
+                    "profile": str(profile_path),
+                    "summary": str(summary_path),
+                    "error": "",
+                }
+
+                try:
+                    # Warm process/model state and, for OCR modes, populate the
+                    # same temporary cache used by the profiled call.
+                    detect_entries(
+                        image,
+                        settings,
+                        paddle_cache_path=cache,
+                        force_paddle_refresh=False,
+                        paddle_filter_rules_path=filter_path,
+                        profile_page_index=index,
+                        page_sections=sections,
+                    )
+
+                    profiler = cProfile.Profile()
+                    profiler.enable()
+                    try:
+                        detect_entries(
+                            image,
+                            settings,
+                            paddle_cache_path=cache,
+                            force_paddle_refresh=False,
+                            paddle_filter_rules_path=filter_path,
+                            profile_page_index=index,
+                            page_sections=sections,
+                        )
+                    finally:
+                        profiler.disable()
+
+                    profiler.dump_stats(str(profile_path))
+                    stream = StringIO()
+                    pstats.Stats(profiler, stream=stream).strip_dirs().sort_stats(
+                        "cumulative"
+                    ).print_stats(50)
+                    summary_path.write_text(stream.getvalue(), encoding="utf-8")
+                except Exception as exc:
+                    item["error"] = str(exc)
+
+                profiles.append(item)
+
+    return {
+        "mode": "warm",
+        "profiled_calls_are_timing_samples": False,
+        "profiles": profiles,
+    }
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("project", type=Path)
@@ -349,6 +445,14 @@ def main() -> int:
         help=(
             "run successful detection modes repeatedly for timing; "
             "repeat runs reuse the same cache with force-refresh disabled"
+        ),
+    )
+    parser.add_argument(
+        "--warm-cpu-profile-dir",
+        type=Path,
+        help=(
+            "after benchmark timing, run one extra warmed cProfile call per "
+            "page/mode and write .prof plus cumulative .txt summaries"
         ),
     )
     parser.add_argument("--output", type=Path)
@@ -367,6 +471,13 @@ def main() -> int:
         args.force_ocr,
         timing_repeats=args.timing_repeats,
     )
+    if args.warm_cpu_profile_dir is not None:
+        result["warm_cpu_profiles"] = warm_cpu_profiles(
+            args.project,
+            modes or MODES,
+            args.pages,
+            args.warm_cpu_profile_dir,
+        )
     output = args.output or Path.cwd() / (
         "detection_benchmark_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".json"
     )

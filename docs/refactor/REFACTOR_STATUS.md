@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 8 — measured runtime-efficiency work is underway. Phase 8B adds opt-in cold-vs-warm detection timing without changing default benchmark behavior or production algorithms.**
+**Phase 8 — measured runtime-efficiency work is underway. Phase 8C adds opt-in warm CPU profiling after the wall-clock benchmark, without changing production algorithms or timing samples.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -805,10 +805,40 @@ Focused regressions require:
 - warm repeats use `force_paddle_refresh=False`;
 - the formal `detected[mode]`/ground-truth result is established from the first call before the repeat loop and is never overwritten by repeats.
 
-## Recommended next slice — Phase 8C
-After Phase 8B validation, use the benchmark output to identify the first measured bottleneck. If no representative project data is available in CI, add benchmark-side cache-state/phase reporting only where it improves interpretation; do not guess at production optimizations from source structure alone.
+Phase 8B publication:
+- PR #315 fixed head `3beb76f5b3e3491edd95f30d31f90db3d370f19f` passed CI 2184 on Ubuntu/Windows/macOS and PR security analysis 2165;
+- PR #315 merged as `8e47a1330682af0e387ffae399e346480b9a4518`;
+- post-merge CI 2185 and security analysis 2166 both passed.
 
-The first production optimization should be chosen only after real cold/warm timing shows whether OCR inference, cache reprocessing/writes, image decode/I/O, or orchestration overhead dominates.
+## Phase 8C warm CPU profiling
+Phase 8C adds an **opt-in benchmark-only** `--warm-cpu-profile-dir PATH` mode.
+
+The existing `benchmark(...)` timing function remains untouched by profiler execution. `main()` first completes the full Phase 8A/8B wall-clock benchmark and only then, when explicitly requested, invokes a separate `warm_cpu_profiles(...)` pass.
+
+For each selected page/mode, the profile pass:
+- opens the page and loads page sections outside the profiler;
+- executes one unprofiled warm-up call;
+- reuses the same temporary cache path;
+- profiles one additional detection call with `force_paddle_refresh=False`;
+- writes a binary `.prof` file and a human-readable cumulative top-50 `.txt` summary;
+- records profile/summary paths and any profiling error in the benchmark JSON manifest.
+
+The profile run is **not** a formal accuracy result and is **not** included in `timing_ms`, `timing_runs_ms`, or repeat timing summaries. This keeps cProfile overhead from contaminating the wall-clock baseline.
+
+No production module imports cProfile or pstats; profiling remains isolated to `scripts/detection_benchmark.py`.
+
+Focused regression requires:
+- `warm_cpu_profiles(...)` is defined outside and after `benchmark(...)`;
+- `benchmark(...)` never calls the profiler;
+- the CLI invokes it only when `--warm-cpu-profile-dir` is supplied;
+- profiled calls use `force_paddle_refresh=False`;
+- profile output includes both `.prof` and cumulative top-50 text output;
+- the manifest explicitly records that profiled calls are not timing samples.
+
+## Recommended next slice — Phase 8D
+After Phase 8C validation, stop adding instrumentation unless it answers a concrete measurement question. Run the benchmark on a representative project with at least one cold OCR pass and multiple warm repeats, optionally with warm CPU profiles.
+
+Use those outputs to choose the first production optimization. If warm-cache CPU profiles show repeated cache compaction/write or quality-summary work dominating, target that path; if OCR inference dominates cold runs, avoid micro-optimizing orchestration; if image decode or metadata I/O is material, optimize that separately. Do not choose the production change from source inspection alone.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
