@@ -259,14 +259,16 @@ def _allowed_entries(
     profile_page_index: int,
     page_sections: list[PageSection] | None,
 ) -> list[Entry]:
-    source = _core.normalize_page_rgb(image)
+    # All private call sites pass detect_entries()' already-normalized source.
+    # This filter only needs page size, so a second full-page RGB copy is waste.
+    source_size = tuple(image.size)
     effective = _core.effective_page_settings(
-        settings, source.size, profile_page_index,
+        settings, source_size, profile_page_index,
     )
     return [
         entry for entry in entries
         if _core.entry_allowed_by_page_template(
-            entry.x, entry.y, source.size, effective, profile_page_index,
+            entry.x, entry.y, source_size, effective, profile_page_index,
         )
         and (
             not page_sections
