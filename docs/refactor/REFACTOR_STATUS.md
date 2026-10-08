@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — fresh architecture-debt cleanup is underway. Phase 12A is complete: PDIC classification persistence now has one explicit process-composition owner in `build_core_services()`; GUI and worker profiles reuse that composed writer instead of repeating idempotent no-op classification installation.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12B is complete: current supervised training export is now statically composed as v2 base → v3 corrections → Page Understanding, and GUI startup no longer mutates training-export module globals or controls exporter import order.**
 
-Phase 12A is merged on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`. Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
+Phase 12B is merged on `main@037922b0dc874730f14cb3eaefca7672776596f4`. Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -1563,11 +1563,57 @@ Phase 12A publication:
   `test_entry_classification_pipeline.py`, and
   `test_runtime_entry_path_guards.py`.
 
-## Recommended next slice — Phase 12B read-only debt selection
+## Phase 12B — static current training-export composition
 
-Continue the fresh debt inventory from the Phase 12A main. Prefer another
-bounded ownership/correctness cleanup that does not require speculative
-frameworks or a large mature-core rewrite.
+Read-only Phase 12B inventory found that current supervised training export was
+still selected by GUI import order rather than by an explicit static owner.
+Before Phase 12B, `bootstrap/gui.py` imported the v2
+`training_export` module, replaced `export_training_page` twice (v3 then
+Page Understanding), replaced `write_training_manifest`, and rewrote
+`TRAINING_EXPORT_FORMAT` to v3 before importing the application/controller.
+The ExportController imported those functions by value, so correct current
+behavior depended on GUI bootstrap running first.
+
+Phase 12B preserves the exact wrapper order while removing that process-global
+mutation:
+- new `training_export_composed.py` statically owns the current pipeline:
+  v2 base → v3 correction/baseline layer → Page Understanding;
+- `ui/controllers/export.py` imports the current exporter/manifest writer from
+  that composed module directly;
+- `training_export.py` remains the unchanged v2 base/compatibility
+  implementation rather than being mutated at GUI startup;
+- `bootstrap/gui.py` no longer rewrites any training-export function or format
+  global;
+- the legacy `training_export_ui.py` range/shim module no longer imports the
+  obsolete exporter stack it stopped using after controller ownership moved;
+- regression coverage proves the composed v3/Page Understanding functions are
+  available before GUI bootstrap and that the v2 base remains distinct.
+
+Behavior intentionally unchanged:
+- current GUI training packages remain v3;
+- wrapper order remains v2 → v3 → Page Understanding;
+- annotation/manifest/ZIP implementations and schemas are unchanged;
+- v2 base helpers remain available for compatibility/benchmark callers;
+- no package-level bootstrap side effect was added.
+
+Phase 12B publication:
+- PR #352 fixed head `fe1833e370c982c640d0d6740e243340db491c0d`;
+- PR CI 2266 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #352 merged as `037922b0dc874730f14cb3eaefca7672776596f4`;
+- the production slice added `training_export_composed.py` and changed only
+  `bootstrap/gui.py`, `training_export_ui.py`,
+  `ui/controllers/export.py`, and
+  `test_ui_training_export_controller.py`.
+
+## Recommended next slice — Phase 12C read-only debt selection
+
+Continue from the Phase 12B main with a fresh read-only scan of remaining
+process-global function/class rebinding and composition-order dependencies.
+Prefer a small statically-owned seam over the OCR-boundary runner bridge if one
+has equivalent correctness/maintainability payoff.
 
 The OCR-boundary runner bridge remains a valid candidate because it temporarily
 mutates four `paddle_headwords_core` globals under a process-local lock, but do
