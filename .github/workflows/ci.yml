@@ -54,3 +54,38 @@ jobs:
 
       - name: Build wheel
         run: uv build --wheel
+
+      - name: Prepare Phase 8D OCR runtime artifact
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          uv sync --locked --no-dev --extra ocr-cpu
+          .venv/bin/python - <<'PY'
+          from picture_capture.models import AppSettings
+          from picture_capture.ocr_channel import _create_paddle_engine
+          settings = AppSettings(
+              ocr_language="eng",
+              paddle_language="en",
+              paddle_ocr_version="PP-OCRv6",
+              paddle_use_textline_orientation=False,
+          )
+          engine = _create_paddle_engine(settings)
+          print(type(engine).__name__)
+          PY
+          mkdir -p phase8d_ocr_runtime
+          cp -a .venv/lib/python3.13/site-packages phase8d_ocr_runtime/
+          for cache in "$HOME/.paddlex" "$HOME/.paddleocr"; do
+            if [ -d "$cache" ]; then
+              cp -a "$cache" "phase8d_ocr_runtime/$(basename "$cache")"
+            fi
+          done
+          du -sh phase8d_ocr_runtime
+
+      - name: Upload Phase 8D OCR runtime
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8d-ocr-runtime-py313-linux
+          path: phase8d_ocr_runtime/
+          if-no-files-found: error
+          compression-level: 1
