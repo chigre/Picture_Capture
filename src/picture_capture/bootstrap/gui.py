@@ -65,15 +65,12 @@ def prepare_gui_application() -> Any:
     install_layout_rows_persistence_runtime()
 
     from .. import profile_setup
-    from ..profile_layout_bootstrap import install_profile_layout_bootstrap
     from ..parameter_help_ui import build_profile_parameter_help_wizard
     from ..profile_indent_ui import build_project_profile_wizard
     from ..profile_ordinary_evidence_ui import build_ordinary_evidence_profile_wizard
 
-    # Profile creation establishes the stable geometry itself, so its
-    # representative-page analysis must be anchor-free and OCR-free.  The main
-    # application continues to use the reliable Profile-anchored Layout Core.
-    install_profile_layout_bootstrap()
+    # Profile creation owns its anchor-free/OCR-free detector statically in
+    # profile_setup; GUI bootstrap no longer rewrites that module-global seam.
 
     profile_setup.ProjectProfileWizard = build_profile_parameter_help_wizard(
         build_ordinary_evidence_profile_wizard(

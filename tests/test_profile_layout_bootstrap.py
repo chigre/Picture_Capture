@@ -76,10 +76,20 @@ def test_profile_bootstrap_reuses_identical_page_result(monkeypatch) -> None:
     assert second is first
 
 
-def test_profile_setup_is_routed_to_bootstrap_detector() -> None:
-    original = profile_setup.detect_layout_parameters
-    try:
-        install_profile_layout_bootstrap()
-        assert profile_setup.detect_layout_parameters is detect_profile_layout_parameters
-    finally:
-        profile_setup.detect_layout_parameters = original
+def test_profile_setup_owns_bootstrap_detector_statically() -> None:
+    assert profile_setup.detect_layout_parameters is detect_profile_layout_parameters
+
+    before = profile_setup.detect_layout_parameters
+    assert install_profile_layout_bootstrap() is None
+    assert profile_setup.detect_layout_parameters is before
+
+
+def test_gui_bootstrap_no_longer_installs_profile_detector() -> None:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
+    profile = (root / "src/picture_capture/profile_setup.py").read_text(encoding="utf-8")
+
+    assert "install_profile_layout_bootstrap" not in gui
+    assert "detect_profile_layout_parameters as detect_layout_parameters" in profile
