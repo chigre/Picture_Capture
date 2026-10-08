@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable
+from typing import Iterable
 
 from .project_storage import image_preprocess_data_root
 from .image_preprocessing_models import PreprocessAnalysis
