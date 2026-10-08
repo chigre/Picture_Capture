@@ -1171,6 +1171,76 @@ For OCR/Combined performance work, resume only when either the prior project-lev
 
 For non-OCR CPU work, do not continue shaving the remaining mature numerical kernels merely because they appear near the top of cProfile. Re-open performance work only when a fresh representative profile exposes a materially larger redundant-work hotspot, a user-visible latency target is missed, or a new implementation can prove exact semantic equivalence plus meaningful end-to-end benefit.
 
+## Phase 9 compatibility containment — centralized, stabilized, and ratcheted
+Phase 8 performance work is intentionally paused at the current measurement boundary. The next architecture slice therefore returned to a different residual debt category: the historical public facades `processing.py` and `paddle_headwords.py` still preserve a broad core namespace plus same-named assignment mirroring for plugins, tests, debug tooling, and monkeypatch-based workflows.
+
+A repository-wide compatibility audit confirmed that this behavior is still actively characterized:
+- tests patch names on `picture_capture.processing` and expect the same-named core helper to change;
+- tests patch `paddle_headwords.refine_separator_y` and rely on the historical public path;
+- several regression suites intentionally compare facade/core re-export identity;
+- external plugin usage is not observable from this repository.
+
+For that reason Phase 9 does **not** shrink the historical public surface or replace broad mirroring with an allowlist. The safe goal is containment: give the compatibility mechanism one owner, make it explicit and reentrant, and prevent the debt from spreading to new modules.
+
+### Phase 9A centralize facade compatibility
+Phase 9A introduced `facade_compat.py` as the single owner of historical namespace publication and assignment mirroring:
+- `processing.py` and `paddle_headwords.py` call `publish_core_namespace(globals(), _core)` instead of duplicating local namespace-copy loops;
+- both facades call `install_core_assignment_mirror(__name__, _core)` instead of owning local `_CoreProxyModule` implementations;
+- the architecture guard ratchets the retired local `vars(_core).items()` namespace-copy form and direct `sys.modules[__name__].__class__` proxy form to zero;
+- the broad same-name assignment behavior itself remains unchanged.
+
+Phase 9A publication:
+- PR #336 fixed head `e12101cb8be3d3566c948bb0bdada38dbc670201`;
+- PR CI 2229 and full PR CodeQL 2211 passed;
+- PR #336 merged as `83890ba199d38704b91f4d5fd80bbd5db192f592`;
+- post-merge CI 2230 passed;
+- the push-level dynamic CodeQL run 2212 reported failure only because the Actions analyzer remained queued and never executed; the Python analyzer completed successfully. The same fixed tree had already passed complete PR CodeQL, so this was treated as runner infrastructure rather than a code finding.
+
+### Phase 9B stabilize the shared mirror registry
+Phase 9B removed another implicit part of the compatibility mechanism without narrowing behavior:
+- one stable `CoreAssignmentMirrorModule` now serves all retained historical facades;
+- `facade_compat.py` owns an explicit module-name-to-core registry;
+- reinstall/reload refreshes the selected facade's registered core instead of creating a new closure-generated module subclass;
+- focused tests prove two facades remain independent and reinstalling one mapping does not redirect the other;
+- existing facade-only names remain facade-only, while same-named core assignments still mirror exactly as before.
+
+Phase 9B publication:
+- PR #337 fixed head `258a5d7c686455bbeac285614de9d843ad1fe746`;
+- PR CI 2231 ultimately passed on Ubuntu/Windows/macOS;
+- PR dynamic CodeQL 2213 completed the Actions analyzer successfully while the Python analyzer remained indefinitely queued and GitHub rejected a job rerun with HTTP 403; this was treated as an infrastructure scheduling failure rather than a scan finding;
+- PR #337 merged as `5c843daed0d765ae56f5e6546428320596404720`;
+- post-merge CI 2232 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2214 passed with both Actions and Python analyzers actually executed, closing the PR-time validation gap.
+
+### Phase 9C ratchet facade-compatibility users
+Phase 9C is guard-only and changes no production runtime behavior. It converts compatibility containment into a monotonic architecture rule:
+- the shared facade-compatibility mechanism is allowed only in the two historical facades, `processing.py` and `paddle_headwords.py`;
+- the architecture guard scans production modules and rejects any third module that starts calling the shared namespace/mirroring owner;
+- the guard still requires both retained historical facades to use the centralized owner;
+- a focused regression creates a temporary forbidden production module and proves the guard rejects it.
+
+Phase 9C publication:
+- PR #338 fixed head `8bec525143aae2b91951d107433e9706b786dacc`;
+- PR CodeQL 2215 passed both analyzers;
+- PR Ubuntu and Windows CI completed all substantive checks successfully; the macOS runner was still infrastructure-queued when the guard-only PR was merged after the already-validated runtime tree from Phase 9B;
+- PR #338 merged as `4a51f56890e821bef38b89f88f7d9a32173e503a`;
+- post-merge CI 2234 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2216 passed both Actions and Python analyzers.
+
+### Current Phase 9 boundary
+Compatibility containment is now complete:
+- one explicit compatibility owner;
+- one stable data-driven assignment-mirroring class/registry;
+- exactly two authorized historical facade users;
+- architecture ratchets prevent the retired duplicate mechanisms or a third compatibility facade from reappearing.
+
+The remaining broad namespace publication and same-name assignment mirroring are now an intentional **public compatibility boundary**, not unowned architecture drift. Do **not** remove or narrow them solely as a refactor cleanup. Any future reduction requires concrete usage/deprecation evidence, characterization of external/plugin impact, and a migration path that preserves the public contract.
+
+## Recommended next slice — leave facade behavior stable
+Do not proceed directly to a Phase 9D that removes broad mirroring or replaces it with an allowlist. The repository contains concrete tests that depend on this behavior and external consumers are not observable.
+
+The next safe architecture slice should target a separate debt category with a clearer internal contract, or add non-invasive characterization/observability that can establish whether a future facade deprecation is safe. Performance micro-optimization also remains paused until the Phase 8 measurement gate reopens.
+
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
 
