@@ -16,16 +16,12 @@ This historical module path remains the public/runtime import surface so older
 plugins, tests and user tooling keep working unchanged.
 """
 
-import sys
-import types
-
 from . import paddle_headwords_core as _core
+from .facade_compat import install_core_assignment_mirror, publish_core_namespace
 
 # This historical public path owns the broad core namespace contract. Copy core
 # symbols first, then let evidence-fusion overrides replace selected decisions.
-for _name, _value in vars(_core).items():
-    if not _name.startswith("__"):
-        globals()[_name] = _value
+publish_core_namespace(globals(), _core)
 
 from . import evidence_fusion as _fusion
 from .evidence_fusion import *  # noqa: F401,F403
@@ -92,14 +88,7 @@ detect_paddle_headwords = detect_ocr_headword_boundaries
 # Preserve the long-standing monkeypatch contract only on this historical public
 # module path: assigning a helper here transparently mirrors it into the core
 # module where legacy function globals are resolved.
-class _CoreProxyModule(types.ModuleType):
-    def __setattr__(self, name: str, value: object) -> None:
-        types.ModuleType.__setattr__(self, name, value)
-        if name not in {"_core"} and hasattr(_core, name):
-            setattr(_core, name, value)
-
-
-sys.modules[__name__].__class__ = _CoreProxyModule
+install_core_assignment_mirror(__name__, _core)
 
 __all__ = [
     name for name in vars(_core)
