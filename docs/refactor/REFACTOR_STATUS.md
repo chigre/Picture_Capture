@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 8 — measured runtime-efficiency work is underway. Phase 8A establishes a reproducible detection benchmark timing baseline without changing production algorithms.**
+**Phase 8 — measured runtime-efficiency work is underway. Phase 8B adds opt-in cold-vs-warm detection timing without changing default benchmark behavior or production algorithms.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -776,10 +776,39 @@ The existing benchmark format identifier remains `picture-capture-detection-benc
 
 A small `performance_metrics.py` owner provides deterministic timing aggregation and is not imported by production execution paths. Focused tests cover empty/non-finite timing samples, deterministic median/p95 behavior, and the presence of every benchmark stage timer.
 
-## Recommended next slice — Phase 8B
-After Phase 8A validation, extend the benchmark to distinguish cold OCR/cache work from warm cached work without changing the default one-pass behavior. Prefer an opt-in repeat/warm-cache mode and explicit cache-state metadata. Use those measurements to decide whether the first production optimization should target repeated image I/O, OCR/cache reuse, or orchestration overhead.
+Phase 8A publication:
+- PR #314 fixed head `ae45ce60ad9201e31d9ada66b9a83a082f09b743` passed CI 2182 on Ubuntu/Windows/macOS and PR security analysis 2163;
+- PR #314 merged as `c166f8890173be03297d4b3e6277597a4e19110e`;
+- post-merge CI 2183 and security analysis 2164 both passed.
 
-Do not optimize production code before the benchmark can demonstrate a repeatable bottleneck.
+## Phase 8B cold-vs-warm cache timing
+Phase 8B extends only the benchmark CLI with `--timing-repeats N`. The default remains `1`, so existing benchmark behavior is unchanged.
+
+For each page/mode:
+- the first detection call is exactly the formal benchmark result used for marker counts, ground-truth comparison, and pairwise comparison;
+- only after that first call succeeds are optional timing repeats executed;
+- repeated calls reuse the same temporary cache path;
+- repeated calls always use `force_paddle_refresh=False`, even when the first run used `--force-ocr`, so they measure the actual warm-cache path;
+- repeat failures are recorded but do not replace or alter the formal first-run result.
+
+The existing per-mode `timing_ms` field continues to mean **first-run wall time**. New fields add:
+- `timing_runs_ms` for first + repeat attempts;
+- `repeat_timing_ms` summary for repeat attempts only;
+- `repeat_errors`;
+- cache metadata: enabled, existed-before-first, exists-after-first, first-run force-refresh, repeat force-refresh.
+
+Top-level `timing_repeats` records the requested repeat count. Mode summaries also report aggregated `repeat_timing_ms`, while all existing accuracy/count fields and the v1 format identifier remain unchanged.
+
+Focused regressions require:
+- default repeat count remains one;
+- repeat mode validates `N >= 1`;
+- warm repeats use `force_paddle_refresh=False`;
+- the formal `detected[mode]`/ground-truth result is established from the first call before the repeat loop and is never overwritten by repeats.
+
+## Recommended next slice — Phase 8C
+After Phase 8B validation, use the benchmark output to identify the first measured bottleneck. If no representative project data is available in CI, add benchmark-side cache-state/phase reporting only where it improves interpretation; do not guess at production optimizations from source structure alone.
+
+The first production optimization should be chosen only after real cold/warm timing shows whether OCR inference, cache reprocessing/writes, image decode/I/O, or orchestration overhead dominates.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
