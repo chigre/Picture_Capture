@@ -21,7 +21,7 @@ MAX_NORMAL_MODULE_BYTES = 100_000
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
-    "image_preprocessing.py": 157_244,
+    "image_preprocessing.py": 150_818,
     "profile_setup.py": 174_009,
     "processing_core.py": 158_561,
 }
