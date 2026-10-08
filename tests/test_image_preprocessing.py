@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import pickle
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,7 @@ from PIL import Image, ImageDraw
 
 from picture_capture import (
     image_preprocessing,
+    image_preprocessing_models,
     image_preprocessing_persistence,
     image_preprocessing_reporting,
     image_preprocessing_storage,
@@ -2110,4 +2112,44 @@ def test_phase7c_persistence_helpers_are_reexported_from_stable_module() -> None
     assert (
         image_preprocessing.MANUAL_GEOMETRY_VERSION
         == image_preprocessing_persistence.MANUAL_GEOMETRY_VERSION
+    )
+
+
+def test_phase7m_preprocess_models_keep_historical_public_class_path() -> None:
+    assert (
+        image_preprocessing.PreprocessAnalysis
+        is image_preprocessing_models.PreprocessAnalysis
+    )
+    assert (
+        image_preprocessing.OutputCanvasInfo
+        is image_preprocessing_models.OutputCanvasInfo
+    )
+    assert (
+        image_preprocessing_persistence.PreprocessAnalysis
+        is image_preprocessing_models.PreprocessAnalysis
+    )
+
+    for cls in (
+        image_preprocessing.PreprocessAnalysis,
+        image_preprocessing.OutputCanvasInfo,
+    ):
+        assert cls.__module__ == "picture_capture.image_preprocessing"
+        assert pickle.loads(pickle.dumps(cls)) is cls
+
+
+def test_phase7m_preprocess_model_constants_remain_reexported() -> None:
+    assert (
+        image_preprocessing.PREPROCESS_FORMAT
+        == image_preprocessing_models.PREPROCESS_FORMAT
+        == "picture-capture-image-preprocess"
+    )
+    assert (
+        image_preprocessing.PREPROCESS_FORMAT_VERSION
+        == image_preprocessing_models.PREPROCESS_FORMAT_VERSION
+        == 24
+    )
+    assert (
+        image_preprocessing.DEFAULT_SAFETY_MARGIN_PX
+        == image_preprocessing_models.DEFAULT_SAFETY_MARGIN_PX
+        == 20
     )
