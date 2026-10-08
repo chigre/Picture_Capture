@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7P extracts Paddle OCR cache storage/compaction implementation behind historical core wrappers that preserve facade monkeypatch semantics.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7Q extracts Paddle diagnostic TSV formatting implementation behind historical core wrappers while preserving strict output schemas and facade monkeypatch semantics.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -638,8 +638,59 @@ The production sizes move from:
 
 The architecture guard ratchets `paddle_headwords_core.py` to 372,228 bytes.
 
-## Recommended next slice — Phase 7Q
-After Phase 7P validation, reassess whether the remaining Paddle diagnostic TSV formatting can be extracted with the same wrapper/callback pattern without weakening public facade assignment semantics. If the required hook surface becomes broad or opaque, switch owner rather than turning diagnostics into a hidden dependency graph.
+Phase 7P publication:
+- PR #310 fixed head `ccf014a28cc3e61acfed76b0978d1a110e7f5ae4` passed CI 2174 on Ubuntu/Windows/macOS and CodeQL 2155 Actions/Python;
+- PR #310 merged as `7cfa16c6e0a37737009d5182aca49c28302462b1`;
+- post-merge CI 2175 and CodeQL 2156 both passed.
+
+## Phase 7Q Paddle diagnostic formatting ownership
+Phase 7Q applies the same core-wrapper pattern to the strict OCR diagnostic/report formatting layer.
+
+The implementation moves into `paddle_diagnostic_formatting.py`:
+- TSV cell sanitization;
+- candidate reason construction;
+- strict 12-column candidate rows;
+- strict 12-column page diagnostics;
+- strict 27-column Paddle/Tesseract comparison;
+- strict 13-column engine-long table;
+- strict 12-column fusion table;
+- strict 16-column issue table.
+
+Historical formatter names remain wrappers in `paddle_headwords_core.py`:
+- `_tsv_clean(...)`;
+- `_candidate_reason(...)`;
+- `_candidate_tsv_row(...)`;
+- `_diagnostic_text(...)`;
+- `_comparison_text(...)`;
+- `_engines_long_text(...)`;
+- `_fusion_text(...)`;
+- `_issues_text(...)`.
+
+The schema header constants remain core-owned:
+- `_DIAGNOSTIC_HEADER`;
+- `_COMPARISON_HEADER`;
+- `_ENGINES_LONG_HEADER`;
+- `_FUSION_HEADER`;
+- `_ISSUES_HEADER`.
+
+Each wrapper passes current core globals into the implementation at call time. `_candidate_tsv_row` receives the current cleaner/reason-builder; `_diagnostic_text` receives the current header, `_candidate_rows`, candidate-row formatter, and cleaner; the other report wrappers receive their current header and cleaner. Public facade assignments therefore continue to affect nested formatting rather than being bypassed by module-local bindings.
+
+The new implementation module has no runtime import back into the core. Existing docs/file-format contracts remain unchanged: 12/27/13/12/16 columns respectively.
+
+Focused tests require:
+- historical wrapper `__module__` paths remain `picture_capture.paddle_headwords_core`;
+- monkeypatched core candidate-row/candidate-list hooks are used by diagnostics;
+- monkeypatched comparison header and TSV cleaner are used dynamically;
+- exact column counts for diagnostic, comparison, engine-long, fusion, and issue tables.
+
+The production sizes move from:
+- `paddle_headwords_core.py`: 372,228 bytes -> 364,070 bytes;
+- new `paddle_diagnostic_formatting.py`: 10,685 bytes.
+
+The architecture guard ratchets `paddle_headwords_core.py` to 364,070 bytes.
+
+## Recommended next slice — Phase 7R
+After Phase 7Q validation, stop extracting Paddle internals unless another broad responsibility can be isolated with a similarly explicit dependency contract. Re-run oversized-owner inventory across `image_preprocessing.py`, `processing_core.py`, `app.py`, and `profile_setup.py`; prefer a larger cohesive owner over further micro-extractions.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
