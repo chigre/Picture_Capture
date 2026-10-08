@@ -7,23 +7,8 @@ chooses Current / Current-to-end / Specified once in the normal page-range bar;
 export must not maintain a second, potentially divergent range state.
 """
 
-from dataclasses import replace
-from datetime import datetime
 from pathlib import Path
 import re
-import shutil
-from tkinter import messagebox
-
-from . import __version__
-from .formats import pdic_path
-from .project_storage import training_exports_root
-from .training_export import (
-    TrainingExportCancelled,
-    copy_project_context,
-    export_training_page,
-    make_training_zip,
-    write_training_manifest,
-)
 
 
 def _page_number(text: str) -> int | None:
