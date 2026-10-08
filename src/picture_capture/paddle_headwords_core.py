@@ -35,6 +35,17 @@ from .paddle_cache_storage import (
     compact_ocr_cache_payload_impl as _cache_compact_ocr_cache_payload_impl,
     regenerable_sidecars_impl as _cache_regenerable_sidecars_impl,
 )
+
+from .paddle_diagnostic_formatting import (
+    candidate_reason_impl as _diag_candidate_reason_impl,
+    candidate_tsv_row_impl as _diag_candidate_tsv_row_impl,
+    comparison_text_impl as _diag_comparison_text_impl,
+    diagnostic_text_impl as _diag_diagnostic_text_impl,
+    engines_long_text_impl as _diag_engines_long_text_impl,
+    fusion_text_impl as _diag_fusion_text_impl,
+    issues_text_impl as _diag_issues_text_impl,
+    tsv_clean_impl as _diag_tsv_clean_impl,
+)
 from .runtime_environment import resolve_paddle_device
 from .image_utils import normalize_page_rgb
 from .page_sections import PageSection, normalize_page_sections, section_index_for_v
@@ -7369,28 +7380,11 @@ def compact_ocr_cache_file(cache_path: Path) -> tuple[int, int, int]:
     )
 
 def _tsv_clean(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, (list, tuple)):
-        value = ",".join(str(x) for x in value)
-    return str(value).replace("\t", " ").replace("\r", " ").replace("\n", " ")
+    return _diag_tsv_clean_impl(value)
 
 
 def _candidate_reason(cand: dict[str, Any]) -> str:
-    reasons = []
-    if cand.get("reject_reason"):
-        reasons.append(str(cand.get("reject_reason")))
-    if cand.get("parser_stage"):
-        reasons.append("stage=" + str(cand.get("parser_stage")))
-    bugs = list(cand.get("bug_types", []) or [])
-    if bugs:
-        reasons.append("bug=" + ",".join(str(x) for x in bugs))
-    trace = list(cand.get("parser_trace", []) or [])
-    if trace:
-        reasons.append("trace=" + ">".join(str(x) for x in trace[:8]))
-    if cand.get("alphabetical_warning"):
-        reasons.append("WARN:" + str(cand.get("alphabetical_warning")))
-    return ";".join(reasons)
+    return _diag_candidate_reason_impl(cand)
 
 
 def _candidate_tsv_row(
@@ -7400,45 +7394,15 @@ def _candidate_tsv_row(
     engine: str = "",
     extra_reason: str = "",
 ) -> str:
-    """Return one strict 12-column TSV row.
-
-    ``*_ocr_diagnostics.txt`` is deliberately rectangular: it has exactly one
-    header and every following physical line has exactly the same 12 fields.
-    Engine/record provenance is kept in the final ``reason`` field so the
-    user-requested column order remains unchanged.
-    """
-    status = raw_status if raw_status is not None else ("accept" if cand.get("accepted") else "reject")
-    reason_parts: list[str] = []
-    if engine:
-        reason_parts.append(f"engine={engine}")
-    if raw_status == "raw":
-        reason_parts.append("record=raw")
-    elif raw_status == "rescued":
-        reason_parts.append("record=rescued")
-    elif raw_status == "error":
-        reason_parts.append("record=error")
-    else:
-        reason_parts.append("record=candidate")
-    candidate_reason = _candidate_reason(cand)
-    if candidate_reason:
-        reason_parts.append(candidate_reason)
-    if extra_reason:
-        reason_parts.append(extra_reason)
-    values = [
+    return _diag_candidate_tsv_row_impl(
         column,
-        cand.get("box", ""),
-        f"{float(cand.get('confidence', 0.0)):.4f}" if cand.get("confidence") is not None else "",
-        cand.get("text", ""),
-        status,
-        cand.get("score", ""),
-        cand.get("normalized_headword", ""),
-        cand.get("raw_headword", ""),
-        cand.get("corrected_headword", ""),
-        cand.get("pos_cue", ""),
-        ";".join(str(x) for x in cand.get("ocr_repairs", []) or []),
-        ";".join(reason_parts),
-    ]
-    return "\t".join(_tsv_clean(v) for v in values)
+        cand,
+        raw_status=raw_status,
+        engine=engine,
+        extra_reason=extra_reason,
+        clean=_tsv_clean,
+        reason_builder=_candidate_reason,
+    )
 
 
 _DIAGNOSTIC_HEADER = "column\tbox_band_xyxy\tconf\ttext\taccept/reject\tscore\tlemma\traw\tcorrected\tPOS\trepairs\treason"
@@ -7452,100 +7416,21 @@ _COMPARISON_HEADER = (
 
 
 def _diagnostic_text(report_columns: list[dict[str, Any]]) -> str:
-    """Return a strict rectangular 12-column TSV diagnostics table.
-
-    There are no section-title lines, repeated headers, or blank separator
-    lines. This lets strict TSV editors/importers open the file directly.
-    Paddle/Tesseract provenance is stored in ``reason`` as ``engine=...``.
-    The wider Y-paired table is written separately by ``_comparison_text``.
-    """
-    rows: list[str] = [_DIAGNOSTIC_HEADER]
-    for col in report_columns:
-        n = int(col.get("column", 0)) + 1
-
-        for rec in col.get("ocr_records", []):
-            raw = {
-                "box": rec.get("box"),
-                "confidence": rec.get("confidence"),
-                "text": rec.get("text", ""),
-            }
-            rows.append(_candidate_tsv_row(n, raw, raw_status="raw", engine="PADDLE"))
-        for cand in _candidate_rows(col.get("candidates", [])):
-            rows.append(_candidate_tsv_row(n, cand, engine="PADDLE"))
-
-        tess = col.get("tesseract", {}) or {}
-        if tess.get("error"):
-            rows.append(_candidate_tsv_row(
-                n,
-                {"text": ""},
-                raw_status="error",
-                engine="TESSERACT",
-                extra_reason="error=" + _tsv_clean(tess.get("error")),
-            ))
-        else:
-            for rec in tess.get("records", []):
-                raw = {
-                    "box": rec.get("box"),
-                    "confidence": rec.get("confidence"),
-                    "text": rec.get("text", ""),
-                }
-                rows.append(_candidate_tsv_row(n, raw, raw_status="raw", engine="TESSERACT"))
-        for cand in _candidate_rows(tess.get("candidates", [])):
-            rows.append(_candidate_tsv_row(n, cand, engine="TESSERACT"))
-
-        lens = col.get("lens", {}) or {}
-        if lens.get("error"):
-            rows.append(_candidate_tsv_row(
-                n, {"text": ""}, raw_status="error", engine="GOOGLE_LENS",
-                extra_reason="error=" + _tsv_clean(lens.get("error")),
-            ))
-        else:
-            for rec in lens.get("records", []):
-                raw = {"box": rec.get("box"), "confidence": rec.get("confidence"), "text": rec.get("text", "")}
-                rows.append(_candidate_tsv_row(n, raw, raw_status="raw", engine="GOOGLE_LENS"))
-        for cand in _candidate_rows(lens.get("candidates", [])):
-            rows.append(_candidate_tsv_row(n, cand, engine="GOOGLE_LENS"))
-
-        for item in col.get("tesseract_rescued", []) or []:
-            if isinstance(item, dict):
-                rescue = {
-                    "box": item.get("box", ""),
-                    "confidence": item.get("confidence"),
-                    "text": item.get("word", ""),
-                    "score": item.get("score", ""),
-                    "normalized_headword": item.get("word", ""),
-                    "raw_headword": item.get("raw_headword", ""),
-                    "corrected_headword": item.get("corrected_headword", ""),
-                    "pos_cue": item.get("pos_cue", ""),
-                    "ocr_repairs": item.get("ocr_repairs", []),
-                }
-            else:
-                rescue = {"text": str(item)}
-            rows.append(_candidate_tsv_row(n, rescue, raw_status="rescued", engine="TESSERACT"))
-
-    return "\n".join(rows) + "\n"
+    return _diag_diagnostic_text_impl(
+        report_columns,
+        header=_DIAGNOSTIC_HEADER,
+        candidate_rows=_candidate_rows,
+        candidate_row=_candidate_tsv_row,
+        clean=_tsv_clean,
+    )
 
 
 def _comparison_text(report_columns: list[dict[str, Any]]) -> str:
-    """Return a strict rectangular 27-column Y-paired OCR comparison TSV."""
-    rows: list[str] = [_COMPARISON_HEADER]
-    for col in report_columns:
-        n = int(col.get("column", 0)) + 1
-        for pair in col.get("ocr_y_comparison", []) or []:
-            values = [
-                n,
-                pair.get("paddle_source_y"), pair.get("paddle_box"), pair.get("paddle_conf"),
-                "accept" if pair.get("paddle_accepted") is True else ("reject" if pair.get("paddle_accepted") is False else ""),
-                pair.get("paddle_score"), pair.get("paddle_lemma"), pair.get("paddle_raw"),
-                pair.get("paddle_corrected"), pair.get("paddle_pos"), pair.get("paddle_repairs"), pair.get("paddle_text"),
-                pair.get("tesseract_source_y"), pair.get("tesseract_box"), pair.get("tesseract_conf"),
-                "accept" if pair.get("tesseract_accepted") is True else ("reject" if pair.get("tesseract_accepted") is False else ""),
-                pair.get("tesseract_score"), pair.get("tesseract_lemma"), pair.get("tesseract_raw"),
-                pair.get("tesseract_corrected"), pair.get("tesseract_pos"), pair.get("tesseract_repairs"), pair.get("tesseract_text"),
-                pair.get("delta_y"), pair.get("lemma_compare"), pair.get("status_compare"), pair.get("reason"),
-            ]
-            rows.append("\t".join(_tsv_clean(v) for v in values))
-    return "\n".join(rows) + "\n"
+    return _diag_comparison_text_impl(
+        report_columns,
+        header=_COMPARISON_HEADER,
+        clean=_tsv_clean,
+    )
 
 
 _ENGINES_LONG_HEADER = (
@@ -7554,24 +7439,11 @@ _ENGINES_LONG_HEADER = (
 
 
 def _engines_long_text(report_columns: list[dict[str, Any]]) -> str:
-    """Engine-normalized long table; adding another OCR never changes its schema."""
-    rows = [_ENGINES_LONG_HEADER]
-    for col in report_columns:
-        column = int(col.get("column", 0)) + 1
-        for candidate in col.get("review_candidates", []) or []:
-            pair_id = candidate.get("candidate_id", "")
-            for engine in ("paddle", "tesseract", "lens"):
-                side = candidate.get(engine, {}) or {}
-                if side.get("y") is None:
-                    continue
-                values = [
-                    pair_id, column, side.get("source_y"), engine, side.get("confidence"),
-                    side.get("text", ""), side.get("lemma", ""), side.get("POS", ""),
-                    side.get("score", ""), side.get("repairs", []), side.get("parser_trace", []),
-                    "1" if side.get("accepted") else "0", side.get("reason", ""),
-                ]
-                rows.append("\t".join(_tsv_clean(value) for value in values))
-    return "\n".join(rows) + "\n"
+    return _diag_engines_long_text_impl(
+        report_columns,
+        header=_ENGINES_LONG_HEADER,
+        clean=_tsv_clean,
+    )
 
 
 _FUSION_HEADER = (
@@ -7581,19 +7453,11 @@ _FUSION_HEADER = (
 
 
 def _fusion_text(review_candidates: list[dict[str, Any]]) -> str:
-    rows = [_FUSION_HEADER]
-    for item in review_candidates:
-        engines = [engine for engine in ("paddle", "tesseract", "lens") if (item.get(engine, {}) or {}).get("y") is not None]
-        values = [
-            item.get("candidate_id", ""), int(item.get("column", 0)) + 1, item.get("source_y", ""),
-            ",".join(engines), "1" if item.get("selected") else "0", item.get("word", ""),
-            item.get("final_engine", ""), item.get("confidence", ""), item.get("score", ""),
-            "1" if item.get("needs_review") else "0", item.get("issue_types", []),
-            item.get("decision_reason", ""),
-        ]
-        rows.append("\t".join(_tsv_clean(value) for value in values))
-    return "\n".join(rows) + "\n"
-
+    return _diag_fusion_text_impl(
+        review_candidates,
+        header=_FUSION_HEADER,
+        clean=_tsv_clean,
+    )
 
 
 _ISSUES_HEADER = (
@@ -7609,22 +7473,11 @@ _QUALITY_HEADER = (
 
 
 def _issues_text(review_candidates: list[dict[str, Any]]) -> str:
-    rows = [_ISSUES_HEADER]
-    for item in review_candidates:
-        issues = list(item.get("issue_types", []) or [])
-        if not issues:
-            continue
-        p = item.get("paddle", {}) or {}; t = item.get("tesseract", {}) or {}; lens = item.get("lens", {}) or {}
-        values = [
-            item.get("candidate_id"), int(item.get("column", 0)) + 1, item.get("source_y"),
-            "1" if item.get("selected") else "0", item.get("word"), item.get("final_engine"),
-            item.get("confidence"), item.get("score"), ",".join(issues),
-            p.get("lemma"), t.get("lemma"), lens.get("lemma"),
-            p.get("text"), t.get("text"), lens.get("text"), item.get("decision_reason"),
-        ]
-        rows.append("\t".join(_tsv_clean(v) for v in values))
-    return "\n".join(rows) + "\n"
-
+    return _diag_issues_text_impl(
+        review_candidates,
+        header=_ISSUES_HEADER,
+        clean=_tsv_clean,
+    )
 
 def _manual_selection_path(cache_path: Path) -> Path:
     return cache_path.with_name(f"{cache_path.stem}_manual_selection.json")
