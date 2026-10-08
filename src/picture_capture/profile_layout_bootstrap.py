@@ -82,7 +82,5 @@ def detect_profile_layout_parameters(image: Image.Image, settings: Any) -> Any:
 
 
 def install_profile_layout_bootstrap() -> None:
-    """Route Profile representative-page analysis to the bootstrap detector."""
-    from . import profile_setup
-
-    profile_setup.detect_layout_parameters = detect_profile_layout_parameters
+    """Compatibility no-op; Profile detector ownership is now static."""
+    return None
