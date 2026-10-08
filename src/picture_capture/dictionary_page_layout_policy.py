@@ -358,6 +358,7 @@ def infer_dictionary_page_layout(
         page_settings,
         layout,
         page_index=int(page_index),
+        page_ink=page_ink,
     )
     return layout, page_settings, applied
 

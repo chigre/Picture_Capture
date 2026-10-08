@@ -125,31 +125,35 @@ def finalize_layout_column_drift(
     layout: Any,
     *,
     page_index: int = 0,
+    page_ink: np.ndarray | None = None,
 ) -> Any:
-    """Apply the historical post-policy indent remeasurement without monkey patching."""
-    from . import dictionary_page_design as base
-    from .layout_detection import analysis_ink_mask
+    """Apply post-policy indent remeasurement, reusing an existing page mask when supplied."""
+    if page_ink is None:
+        from . import dictionary_page_design as base
+        from .layout_detection import analysis_ink_mask
 
-    source, canonical, _transform, effective = base._analysis_page(
-        image,
-        settings,
-        int(page_index),
-    )
-    try:
-        page_ink = analysis_ink_mask(
-            np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8),
-            effective,
+        source, canonical, _transform, effective = base._analysis_page(
+            image,
+            settings,
+            int(page_index),
         )
+        try:
+            page_ink = analysis_ink_mask(
+                np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8),
+                effective,
+            )
+            counts = remeasure_layout_indents_from_ink(layout, page_ink)
+        finally:
+            try:
+                canonical.close()
+            except Exception:
+                pass
+            try:
+                source.close()
+            except Exception:
+                pass
+    else:
         counts = remeasure_layout_indents_from_ink(layout, page_ink)
-    finally:
-        try:
-            canonical.close()
-        except Exception:
-            pass
-        try:
-            source.close()
-        except Exception:
-            pass
 
     if counts:
         detail = ",".join(
