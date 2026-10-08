@@ -1378,6 +1378,106 @@ through the Phase 8 measurement gate; do not resume speculative micro-optimizati
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
+## Phase 11 settings-migration ownership
+
+Phase 11 was selected after a fresh debt inventory rather than reopening Phase 7
+large-module decomposition. Phase 7 already established that the remaining
+historical oversized modules contain stateful GUI/state-machine or algorithm
+cores, so line-count reduction alone is not a valid reason to split them again.
+
+The new debt category is settings migration ownership. `AppSettings.from_json()`
+still contained roughly 13 KB of historical version-to-version payload migration
+logic, while separate compatibility installers for separator-Y and Entry crop
+settings intentionally wrap `AppSettings.__init__`, `to_json`, and
+`from_json` at the process composition root.
+
+The compatibility wrapper chain is order-sensitive but intentional:
+`build_core_services()` installs separator-Y compatibility before Entry-crop
+compatibility, and tests/CLI/GUI/worker entry points all use that composition
+root. Phase 11A therefore did **not** rewrite or flatten those wrappers.
+
+### Phase 11A extract native AppSettings migration ownership
+
+The historical decoded-payload migration block was moved from
+`models.AppSettings.from_json()` into
+`app_settings_migrations.migrate_app_settings_payload()`.
+
+Behavioral boundaries preserved:
+- `AppSettings.from_json()` remains the public classmethod and still owns JSON
+  decoding, opacity normalization, known-dataclass-field filtering, and final
+  `AppSettings` construction;
+- separator-Y and Entry-crop compatibility installers, bootstrap order, canonical
+  keys, legacy aliases, and JSON format remain unchanged;
+- the new migration module has no reverse import from `models`;
+- former repeated `cls().field` default lookups remain repeated through the
+  supplied `defaults_factory`, rather than silently caching one default object;
+- the migration helper mutates and returns the same decoded payload object, as
+  the former inline code did.
+
+Architecture effect:
+- `models.py` shrank from about 47 KB to 34,818 bytes;
+- the new focused migration owner is 12,773 bytes;
+- no architecture baseline or size guard was changed.
+
+Focused regressions cover:
+- one-way dependency ownership (`models -> app_settings_migrations`);
+- the native historical right-ratio migration;
+- a composed roundtrip crossing separator-Y compatibility, Entry-crop
+  compatibility, and the extracted native migration owner.
+
+The first PR head
+`4575c36d9d48cc1ee3f62cccfcd9f69a88686369` produced one failure with 1394
+tests passing. The failure was in the newly added combined migration test, not
+production behavior. The fixture serialized a modern payload first, which
+already contained `ordinary_right_divisor=1.0`, then artificially marked only
+the right-ratio version as legacy. The historical migration correctly uses
+`setdefault` and therefore preserved the existing divisor. The test was fixed
+to model an authentic legacy payload by removing `ordinary_right_divisor`
+before triggering the old migration. Production code was unchanged by this fix.
+
+Phase 11A publication:
+- PR #345 final fixed head
+  `e238b9a1d157a6d4ca91105761342c1a1e766f47`;
+- final PR CI 2251 passed on Ubuntu/Windows/macOS;
+- final PR CodeQL 2233 passed Actions/Python;
+- PR #345 merged as
+  `50700ac6b094b135c6dc35e349fb45ab6e6d2443`;
+- post-merge CI 2252 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2234 passed Actions/Python.
+
+### Current Phase 11 boundary
+
+Phase 11A establishes a clean native migration owner but does not by itself make
+the compatibility installer chain safe to flatten. A Phase 11B is justified
+only if a read-only analysis can show a bounded way to reduce wrapper-order
+coupling while preserving all of the following:
+- import-inert package behavior;
+- explicit process-profile composition through `build_core_services()`;
+- canonical and legacy constructor arguments;
+- canonical JSON output plus legacy JSON input;
+- existing monkeypatch/testing seams;
+- separator-Y-before-Entry-crop precedence where behavior currently depends on
+  captured predecessor methods.
+
+Do not move compatibility installation into package import side effects, and do
+not make canonical compatibility fields native dataclass fields merely to remove
+wrappers unless a separate compatibility analysis proves that safe.
+
+## Recommended next slice — characterize compatibility wrapper order before changing it
+
+Perform a read-only call-chain/behavior audit of
+`separator_y_settings.install_separator_y_settings()` and
+`entry_crop_settings.install_entry_crop_settings()`. Determine whether their
+constructor and JSON adapters can share a lower-level compatibility transform
+without changing bare-import or composition-root semantics.
+
+If there is no clearly bounded, order-independent design, stop the migration
+refactor after Phase 11A rather than forcing a Phase 11B. A characterization
+test/guard is preferable to speculative production churn.
+
+Performance optimization remains subject to the Phase 8 measurement gate, and
+the Phase 9 facade compatibility boundary remains intentional.
+
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
 
