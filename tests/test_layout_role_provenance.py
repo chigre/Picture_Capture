@@ -78,8 +78,8 @@ def test_phase5j_static_provenance_and_later_wrapper_order():
     assert "install_layout_role_provenance" not in gui
     assert "layout_role_provenance_runtime.py" not in guard
 
-    shared_pos = gui.index("install_shared_layout_visualization_source()")
     role_theme_pos = gui.index("install_layout_role_theme()")
     lane_pos = gui.index("install_physical_lane_summary()")
     assert "install_layout_indent_visibility" not in gui
-    assert shared_pos < role_theme_pos < lane_pos
+    assert "install_shared_layout_visualization_source" not in gui
+    assert role_theme_pos < lane_pos
