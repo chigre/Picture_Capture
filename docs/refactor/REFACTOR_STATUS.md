@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7N extracts the pure Paddle headword data-model layer while preserving core/public class paths and facade assignment mirroring.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7O extracts final output-canvas geometry helpers from `image_preprocessing.py` while preserving historical callable paths and stable imports.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -569,8 +569,38 @@ Each class explicitly keeps `__module__ = "picture_capture.paddle_headwords_core
 
 The actual core file moves from 377,684 bytes -> 375,114 bytes; new `paddle_headword_models.py` is 3,080 bytes. The previous architecture guard was a slightly looser 378,513-byte ceiling, so Phase 7N ratchets it directly to 375,114 bytes.
 
-## Recommended next slice — Phase 7O
-After Phase 7N validation, avoid extracting mutually-calling Paddle parser/filter/OCR clusters unless their facade monkeypatch semantics are explicitly characterized. Re-run inventory for a larger one-way formatting/cache/diagnostic seam or switch to another oversized owner rather than converting retained core-global lookup into hidden module-local lookup.
+Phase 7N publication:
+- PR #308 fixed head `fe55f2bafdf80ba715181eee3c43593fedf726f5` passed CI 2170 on Ubuntu/Windows/macOS and CodeQL 2151 Actions/Python;
+- PR #308 merged as `4a1a8d98ceaa46b4690271aac803fa7dab9b6d67`;
+- post-merge CI 2171 and CodeQL 2152 both passed.
+
+## Phase 7O output-canvas geometry ownership
+Phase 7O follows the Phase 7N recommendation to avoid forcing Paddle cache/diagnostic internals across their retained core-global compatibility boundary. Cross-owner inventory instead selected the final-canvas geometry builder in `image_preprocessing.py`.
+
+Phase 7O moves:
+- `_normalize_canvas_alignment(...)`;
+- `output_canvas_info(...)`
+
+into `image_preprocessing_canvas.py`.
+
+The new module depends only on the Phase 7M data models `PreprocessAnalysis` and `OutputCanvasInfo`. It has no NumPy/PIL image processing, project-storage, analysis-state-machine, or filesystem dependency.
+
+`image_preprocessing.py` imports and re-exports both helpers. `processed_image_with_canvas(...)` and `export_diagnostic_json(...)` intentionally remain in the historical module and continue to resolve `output_canvas_info` through that module global. This keeps the larger rendering/export behavior in place and avoids moving algorithm constants into the new owner.
+
+Both extracted callables explicitly keep `__module__ = "picture_capture.image_preprocessing"`, preserving historical pickle/debug paths in addition to the stable import aliases. Focused tests require:
+- old-module/new-owner object identity;
+- historical callable module path and pickle roundtrip;
+- custom-canvas margin/right-bottom alignment geometry;
+- invalid alignment normalization to center/top.
+
+The production sizes move from:
+- `image_preprocessing.py`: 160,734 bytes -> 157,244 bytes;
+- new `image_preprocessing_canvas.py`: 3,986 bytes.
+
+The architecture guard ratchets `image_preprocessing.py` to 157,244 bytes.
+
+## Recommended next slice — Phase 7P
+After Phase 7O validation, keep `analyze_preprocess_page()` untouched. Reassess the remaining output/render/diagnostic helpers only if they can move without pulling algorithm constants or the analysis state machine across module boundaries. Otherwise switch owner again rather than forcing a coupled extraction.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
