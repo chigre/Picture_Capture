@@ -15,6 +15,19 @@ from types import ModuleType
 from typing import Any
 
 
+_CORE_BY_MODULE: dict[str, ModuleType] = {}
+
+
+class CoreAssignmentMirrorModule(types.ModuleType):
+    """Stable module class that mirrors assignments into a registered core."""
+
+    def __setattr__(self, name: str, value: object) -> None:
+        core = _CORE_BY_MODULE.get(self.__name__)
+        types.ModuleType.__setattr__(self, name, value)
+        if core is not None and name != "_core" and hasattr(core, name):
+            setattr(core, name, value)
+
+
 def publish_core_namespace(
     namespace: MutableMapping[str, Any],
     core: ModuleType,
@@ -28,19 +41,13 @@ def publish_core_namespace(
 def install_core_assignment_mirror(module_name: str, core: ModuleType) -> None:
     """Mirror facade assignments into same-named attributes on *core*.
 
-    The generated module subclass closes over the selected core so the two
-    historical facades remain independent.  Installing the subclass through
-    ModuleType.__setattr__ deliberately bypasses any previously installed
-    facade proxy, which keeps module reloads safe.
+    Registration is data-driven: every historical facade uses the same stable
+    module class while this module owns the explicit facade-to-core mapping.
+    Reinstalling a facade simply refreshes its mapping and is therefore safe
+    across reloads and repeated bootstrap calls.
     """
     module = sys.modules[module_name]
-
-    class CoreAssignmentMirrorModule(types.ModuleType):
-        def __setattr__(self, name: str, value: object) -> None:
-            types.ModuleType.__setattr__(self, name, value)
-            if name != "_core" and hasattr(core, name):
-                setattr(core, name, value)
-
+    _CORE_BY_MODULE[module_name] = core
     types.ModuleType.__setattr__(module, "__class__", CoreAssignmentMirrorModule)
 
 
