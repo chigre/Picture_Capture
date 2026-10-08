@@ -135,6 +135,60 @@ def test_static_finalizer_replays_analysis_and_preserves_reason_provenance(monke
     assert column.right == 150
 
 
+def test_static_finalizer_reuses_existing_page_ink_without_reanalysis(monkeypatch):
+    image = Image.new("RGB", (180, 100), "white")
+    ink = np.zeros((100, 180), dtype=bool)
+    ink[10:25, 45:51] = True
+    ink[45:60, 39:45] = True
+
+    lines = [_line(10, 25), _line(45, 60)]
+    column = SimpleNamespace(
+        index=0,
+        left=50,
+        right=150,
+        lines=lines,
+        indent_modes=[],
+        body_mode=None,
+        entry_modes=[],
+    )
+    layout = SimpleNamespace(
+        body_top=0,
+        ordinary_line_height=20.0,
+        indent_type="body",
+        columns=[column],
+        reason="base",
+    )
+
+    monkeypatch.setattr(
+        base,
+        "_analysis_page",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("existing page_ink must avoid _analysis_page")
+        ),
+    )
+    monkeypatch.setattr(
+        layout_detection,
+        "analysis_ink_mask",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("existing page_ink must avoid analysis_ink_mask")
+        ),
+    )
+
+    result = finalize_layout_column_drift(
+        image,
+        SimpleNamespace(),
+        layout,
+        page_index=3,
+        page_ink=ink,
+    )
+
+    assert result is layout
+    assert lines[0].first_x == -5
+    assert lines[1].first_x == -11
+    assert layout.reason == "base; unclipped_first_x=C1:2"
+
+
+
 def test_large_head_left_of_semantic_column_is_still_detected():
     image = Image.new("RGB", (220, 180), "white")
     draw = ImageDraw.Draw(image)
@@ -187,6 +241,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
     finalize_at = policy.index("layout = finalize_layout_column_drift(")
     return_at = policy.index("return layout, page_settings, applied", finalize_at)
     assert layout_at < finalize_at < return_at
+    assert "page_ink=page_ink" in policy
 
     for source in (gui, worker, unlined, policy):
         assert "install_layout_column_drift_runtime" not in source
