@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is complete at its safe structural boundary. Phase 7S closes structural extraction and hands the project to runtime-efficiency profiling.**
+**Phase 8 — measured runtime-efficiency work is underway. Phase 8A establishes a reproducible detection benchmark timing baseline without changing production algorithms.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -747,10 +747,39 @@ Phase 7S therefore finds **no remaining larger one-way ownership seam** that can
 
 Phase 7 is consequently **closed**. Further line-count reduction is no longer an optimization target by itself. Existing oversized-module ratchets remain in force and must not be loosened.
 
-## Recommended next phase — Phase 8 runtime-efficiency profiling
-Switch from structural decomposition to measured runtime efficiency. Begin with read-only inventory of existing timing/caching/concurrency instrumentation and identify hot paths that can be measured without changing behavior. Prefer evidence from wall-clock timing, repeated I/O/decode, duplicate OCR/model work, cache hit/miss behavior, and thread/process scheduling over speculative micro-optimization.
+Phase 7S publication:
+- PR #313 fixed head `c80d05122f752ecef89f99417d875f2897905db6` passed CI 2180 on Ubuntu/Windows/macOS and PR security analysis 2161;
+- PR #313 merged as `a3d9e86a637a37da7e0dc97fffaa863d1178f524`;
+- post-merge CI 2181 and security analysis 2162 both passed.
 
-Do not change algorithm thresholds, OCR decisions, crop geometry, file formats, public compatibility facades, or worker semantics merely for speed. Establish a reproducible baseline first, then optimize one measured bottleneck at a time with focused regression/performance evidence.
+## Phase 8A detection runtime baseline
+Initial runtime inventory found no existing `perf_counter()`-based wall-clock profiling in production or benchmark code. Existing performance mechanisms are primarily:
+- OCR/cache paths in detection and review workflows;
+- process pools for single-line/unlined export;
+- a thread pool for network lexical lookup;
+- limited `lru_cache` use for reference sorting and runtime Paddle-device resolution.
+
+The existing `scripts/detection_benchmark.py` is therefore the safest baseline harness: it already opens project pages, runs selected detection modes, compares against PDIC ground truth, supports OCR cache paths/force-refresh, and does not mutate project data.
+
+Phase 8A adds timing **only to the benchmark path**:
+- project-open wall time;
+- per-page image decode/convert wall time;
+- per-page page-section/ground-truth I/O wall time;
+- per-mode `detect_entries(...)` wall time, including failed attempts;
+- per-page pairwise-comparison wall time;
+- per-page total wall time;
+- benchmark total wall time.
+
+Per-mode timing summaries report sample count, total, mean, median, p95, min, and max. Page-total timing receives the same summary. All values are milliseconds and use `time.perf_counter()`.
+
+The existing benchmark format identifier remains `picture-capture-detection-benchmark-v1`; every existing accuracy/count field is preserved. Timing is added only as new nested `timing_ms` fields, so current consumers remain compatible.
+
+A small `performance_metrics.py` owner provides deterministic timing aggregation and is not imported by production execution paths. Focused tests cover empty/non-finite timing samples, deterministic median/p95 behavior, and the presence of every benchmark stage timer.
+
+## Recommended next slice — Phase 8B
+After Phase 8A validation, extend the benchmark to distinguish cold OCR/cache work from warm cached work without changing the default one-pass behavior. Prefer an opt-in repeat/warm-cache mode and explicit cache-state metadata. Use those measurements to decide whether the first production optimization should target repeated image I/O, OCR/cache reuse, or orchestration overhead.
+
+Do not optimize production code before the benchmark can demonstrate a repeatable bottleneck.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
