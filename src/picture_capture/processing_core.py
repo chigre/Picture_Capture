@@ -800,14 +800,34 @@ def _legacy_find_separator_y(
 
     # VB method 2: relax the row-white requirement 999 -> 700 (defaults), in
     # steps of two for narrow gaps, skewed rows, and protruding glyphs.
+    #
+    # The historical search revisits the same (candidate_x, span) row hundreds
+    # of times while threshold decreases. Compute each possible row score once
+    # after method 1 has failed; this preserves the exact 0..1000 score and
+    # leaves the fast full-white path above unchanged.
+    score_top = max(int(top), int(candidate_y) - upward)
+    score_bottom = min(height, int(candidate_y))
+    row_scores: list[int] = []
+    if score_bottom > score_top:
+        score_region = rgb_sum[score_top:score_bottom, xs].astype(np.float64)
+        denominator = float(765 * span)
+        row_scores = [
+            int(round(float(total) / denominator * 1000.0))
+            for total in score_region.sum(axis=1)
+        ]
+
+    def cached_row_score(line_y: int) -> int | None:
+        index = int(line_y) - score_top
+        if 0 <= index < len(row_scores):
+            return row_scores[index]
+        return None
+
     for threshold in range(high, low - 1, -2):
         for ysu in range(1, upward + 1):
             line_y = int(candidate_y) - ysu
             if line_y < int(top):
                 break
-            score = _legacy_row_brightness_1000(
-                rgb_sum, line_y, candidate_x, span, direction=direction
-            )
+            score = cached_row_score(line_y)
             if score is None or score <= threshold:
                 continue
 
@@ -817,9 +837,7 @@ def _legacy_find_separator_y(
                     probe_y = int(candidate_y) - ygiu
                     if probe_y < int(top):
                         break
-                    probe = _legacy_row_brightness_1000(
-                        rgb_sum, probe_y, candidate_x, span, direction=direction
-                    )
+                    probe = cached_row_score(probe_y)
                     if probe is None:
                         break
                     if probe < low or probe + 50 < threshold:
