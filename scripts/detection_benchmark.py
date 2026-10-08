@@ -109,8 +109,15 @@ def _indices(project: ProjectState, spec: str) -> list[int]:
 
 
 def benchmark(
-    project_root: Path, modes: tuple[str, ...], pages: str = "", force_ocr: bool = False,
+    project_root: Path,
+    modes: tuple[str, ...],
+    pages: str = "",
+    force_ocr: bool = False,
+    timing_repeats: int = 1,
 ) -> dict[str, object]:
+    if timing_repeats < 1:
+        raise ValueError("timing_repeats must be >= 1")
+
     benchmark_started = perf_counter()
     project_open_started = perf_counter()
     project = ProjectState.open(project_root)
@@ -127,6 +134,7 @@ def benchmark(
             "fp": 0,
             "fn": 0,
             "timing_ms": [],
+            "repeat_timing_ms": [],
         }
         for mode in modes
     }
@@ -172,6 +180,7 @@ def benchmark(
                 )
                 if cache is not None:
                     cache.parent.mkdir(parents=True, exist_ok=True)
+                cache_exists_before_first = bool(cache is not None and cache.exists())
                 detect_started = perf_counter()
                 try:
                     entries, geometry = detect_entries(
@@ -185,10 +194,52 @@ def benchmark(
                     detect_ms = round((perf_counter() - detect_started) * 1000.0, 3)
                     totals[mode]["timing_ms"].append(detect_ms)
                     detected[mode] = (entries, geometry)
+
+                    timing_runs_ms = [detect_ms]
+                    repeat_errors: list[str] = []
+                    for _repeat_index in range(1, timing_repeats):
+                        repeat_started = perf_counter()
+                        try:
+                            detect_entries(
+                                image, settings,
+                                paddle_cache_path=cache,
+                                force_paddle_refresh=False,
+                                paddle_filter_rules_path=filter_path,
+                                profile_page_index=index,
+                                page_sections=sections,
+                            )
+                            repeat_ms = round(
+                                (perf_counter() - repeat_started) * 1000.0, 3
+                            )
+                            timing_runs_ms.append(repeat_ms)
+                            totals[mode]["repeat_timing_ms"].append(repeat_ms)
+                        except Exception as exc:
+                            repeat_ms = round(
+                                (perf_counter() - repeat_started) * 1000.0, 3
+                            )
+                            timing_runs_ms.append(repeat_ms)
+                            totals[mode]["repeat_timing_ms"].append(repeat_ms)
+                            repeat_errors.append(str(exc))
+                            break
+
                     data: dict[str, object] = {
                         "count": len(entries),
                         "error": "",
                         "timing_ms": detect_ms,
+                        "timing_runs_ms": timing_runs_ms,
+                        "repeat_timing_ms": timing_summary_ms(timing_runs_ms[1:]),
+                        "repeat_errors": repeat_errors,
+                        "cache": {
+                            "enabled": cache is not None,
+                            "exists_before_first": cache_exists_before_first,
+                            "exists_after_first": bool(
+                                cache is not None and cache.exists()
+                            ),
+                            "first_run_force_refresh": bool(
+                                cache is not None and force_ocr
+                            ),
+                            "repeat_force_refresh": False,
+                        },
                     }
                     if gt:
                         tolerance = max(4, round(float(settings.character_height) * .45))
@@ -209,6 +260,20 @@ def benchmark(
                         "count": None,
                         "error": str(exc),
                         "timing_ms": detect_ms,
+                        "timing_runs_ms": [detect_ms],
+                        "repeat_timing_ms": timing_summary_ms([]),
+                        "repeat_errors": [],
+                        "cache": {
+                            "enabled": cache is not None,
+                            "exists_before_first": cache_exists_before_first,
+                            "exists_after_first": bool(
+                                cache is not None and cache.exists()
+                            ),
+                            "first_run_force_refresh": bool(
+                                cache is not None and force_ocr
+                            ),
+                            "repeat_force_refresh": False,
+                        },
                     }
 
             pairwise_started = perf_counter()
@@ -252,6 +317,7 @@ def benchmark(
             "false_positive": fp,
             "false_negative": fn,
             "timing_ms": timing_summary_ms(total["timing_ms"]),
+            "repeat_timing_ms": timing_summary_ms(total["repeat_timing_ms"]),
         }
 
     return {
@@ -259,6 +325,7 @@ def benchmark(
         "project": str(project.root),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "modes": list(modes),
+        "timing_repeats": timing_repeats,
         "summary": summary,
         "timing_ms": {
             "project_open": project_open_ms,
@@ -275,6 +342,15 @@ def main() -> int:
     parser.add_argument("--modes", default=",".join(MODES))
     parser.add_argument("--pages", default="")
     parser.add_argument("--force-ocr", action="store_true")
+    parser.add_argument(
+        "--timing-repeats",
+        type=int,
+        default=1,
+        help=(
+            "run successful detection modes repeatedly for timing; "
+            "repeat runs reuse the same cache with force-refresh disabled"
+        ),
+    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
@@ -282,7 +358,15 @@ def main() -> int:
     invalid = [value for value in modes if value not in MODES]
     if invalid:
         parser.error("invalid mode(s): " + ", ".join(invalid))
-    result = benchmark(args.project, modes or MODES, args.pages, args.force_ocr)
+    if args.timing_repeats < 1:
+        parser.error("--timing-repeats must be >= 1")
+    result = benchmark(
+        args.project,
+        modes or MODES,
+        args.pages,
+        args.force_ocr,
+        timing_repeats=args.timing_repeats,
+    )
     output = args.output or Path.cwd() / (
         "detection_benchmark_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".json"
     )
