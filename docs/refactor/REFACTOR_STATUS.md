@@ -1079,10 +1079,38 @@ Phase 8J publication:
 - PR #329 merged as `71a9b9ee4b45074685ded5c74d58674a465618fa`;
 - post-merge CI 2215 and CodeQL 2197 passed.
 
-## Recommended next slice — post-Phase-8J warm re-profile
-Do **not** rerun the expensive cold Paddle benchmark unless the OCR model/runtime/device configuration changes; the ~164 s/page CPU cold path is model-inference dominated.
+## Phase 8K reuse fusion grayscale for separator scoring
+The post-Phase-8J warm path exposed another exact duplicate full-page conversion in Combined fusion. During one fusion call, `_prefer_ocr_separator_position(...)` may evaluate many ordinary/OCR marker pairs. Each `_separator_whitespace_score(...)` call historically re-normalized the same source image to RGB and then rebuilt the same full-page grayscale array even though only small local ROIs differ between marker candidates.
 
-The next safe unit is a new warm-cache cProfile on pages 0055-0060 against post-Phase-8J `main`. Select another production optimization only if the new profile exposes a materially large and stable hotspot and an exact-equivalent candidate also improves the end-to-end warm path. Do not reuse post-Phase-8I hotspot rankings: Phase 8J specifically removed a major legacy fallback cost.
+The safe optimization boundary was one fusion call: build the grayscale image once, pass that exact ndarray to every separator score, and retain the historical self-contained path when no precomputed grayscale image is supplied.
+
+Representative validation on real page 0055:
+- **40 actual separator-score calls** captured from the warmed Combined path;
+- historical and precomputed-gray scores matched exactly for **40/40** calls;
+- historical 40-call median aggregate: about **137.8 ms**;
+- reused-gray aggregate: about **2.81 ms**;
+- measured score-path work: about **49x faster**, eliminating roughly **135 ms** of repeated full-page RGB/grayscale conversion on that page;
+- paired end-to-end warmed Combined output remained exact and improved from roughly **1056 ms** to **1010 ms** median despite runtime noise.
+
+Phase 8K therefore:
+- builds the separator-arbitration grayscale image once per fusion call;
+- reuses that exact ndarray for all ordinary/OCR whitespace-score comparisons;
+- preserves the historical score implementation as the fallback when no precomputed gray is supplied;
+- changes no Otsu rule, whitespace-score threshold, ROI geometry, fusion decision, OCR behavior, cache/file format, or compatibility surface.
+
+The protected oversized legacy-core constraint remained active during implementation. The final branch was compacted so `processing_core.py` stayed within the architecture baseline rather than weakening or updating the guard.
+
+Phase 8K publication:
+- PR #331 fixed head `b6a463b086e317a2ac289cb3023f2e1d355fe7bf`;
+- PR CI 2219 passed on Ubuntu/Windows/macOS;
+- PR CodeQL 2201 passed;
+- PR #331 merged as `0836eb3e772b44381c05e5ed0a8414f5968594fd`;
+- post-merge CI 2220 and CodeQL 2202 passed.
+
+## Recommended next slice — post-Phase-8K warm re-profile
+Do **not** rerun the expensive cold Paddle benchmark unless the OCR model/runtime/device configuration changes; the ~164 s/page CPU cold path remains model-inference dominated.
+
+The next safe unit is a fresh warm-cache cProfile on pages 0055-0060 against post-Phase-8K `main`. Select another production optimization only if the new profile exposes a materially large, stable hotspot and an exact-equivalent candidate also improves the complete warm path. Do not reuse post-Phase-8J rankings: Phase 8K removed repeated full-page grayscale conversion from Combined separator arbitration.
 
 Ground-truth accuracy validation remains a separate open item that requires matching `.pdic` references; Paddle-vs-Combined pairwise differences are descriptive only.
 
