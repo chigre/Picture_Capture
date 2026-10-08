@@ -238,7 +238,6 @@ def _ocr_language_code(value: str) -> str:
 
 
 def _screen_work_area(widget: tk.Misc) -> tuple[int, int, int, int]:
-    """Backward-compatible wrapper around the shared cross-platform work area."""
     return screen_work_area(widget)
 
 
