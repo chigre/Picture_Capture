@@ -36,6 +36,7 @@ from .crop_plan_formatting import (
 )
 from .ocr_text_io import export_ocred, import_ocred, load_replace_rules, process_ocr_text
 from .crop_logging import append_crop_log, append_illustration_crop_log
+from .ordinary_vb_brightness import legacy_row_brightness_scores_1000
 
 
 _COLUMN_TRACK_ADAPTIVE_BLOCK = 19
@@ -798,16 +799,15 @@ def _legacy_find_separator_y(
             "extra_white_rows": int(extra_white),
         }
 
-    # VB method 2: relax the row-white requirement 999 -> 700 (defaults), in
-    # steps of two for narrow gaps, skewed rows, and protruding glyphs.
+    row_scores = legacy_row_brightness_scores_1000(
+        rgb_sum, xs, int(top), int(candidate_y), upward, span,
+    )
     for threshold in range(high, low - 1, -2):
         for ysu in range(1, upward + 1):
             line_y = int(candidate_y) - ysu
             if line_y < int(top):
                 break
-            score = _legacy_row_brightness_1000(
-                rgb_sum, line_y, candidate_x, span, direction=direction
-            )
+            score = row_scores.get(line_y)
             if score is None or score <= threshold:
                 continue
 
@@ -817,9 +817,7 @@ def _legacy_find_separator_y(
                     probe_y = int(candidate_y) - ygiu
                     if probe_y < int(top):
                         break
-                    probe = _legacy_row_brightness_1000(
-                        rgb_sum, probe_y, candidate_x, span, direction=direction
-                    )
+                    probe = row_scores.get(probe_y)
                     if probe is None:
                         break
                     if probe < low or probe + 50 < threshold:
