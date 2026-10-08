@@ -415,7 +415,7 @@ def warm_cpu_profiles(
                     finally:
                         profiler.disable()
 
-                    profiler.dump_stats(profile_path)
+                    profiler.dump_stats(str(profile_path))
                     stream = StringIO()
                     pstats.Stats(profiler, stream=stream).strip_dirs().sort_stats(
                         "cumulative"
