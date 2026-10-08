@@ -500,10 +500,12 @@ Focused tests cover:
 - public-facade assignment mirroring for `append_crop_log`.
 
 The production sizes move from:
-- `processing_core.py`: 159,680 bytes -> 158,518 bytes;
+- `processing_core.py`: 159,680 bytes -> 158,561 bytes;
 - new `crop_logging.py`: 1,602 bytes.
 
-The architecture guard ratchets `processing_core.py` to 158,518 bytes.
+The architecture guard ratchets `processing_core.py` to 158,561 bytes.
+
+First PR CI caught one extraction-boundary regression: `AUTO_ILLUSTRATION_LABEL_TOKEN` sat immediately after the moved ordinary crop-log function and was accidentally removed with that block. It is detector state, not logging state, so Phase 7L restores it in `processing_core.py` and adds a focused ownership regression to keep it core-owned.
 
 ## Recommended next slice — Phase 7M
 After Phase 7L validation, stop shaving isolated processing-core helpers unless another meaningful leaf responsibility appears. Revisit the previously characterized `image_preprocessing` data-model seam (`OutputCanvasInfo` + `PreprocessAnalysis`) as the preferred next high-value extraction. Preserve the cohesive model boundary; if the GitHub connector still rejects a single large-file write, do not split the model artificially just to satisfy tooling.
