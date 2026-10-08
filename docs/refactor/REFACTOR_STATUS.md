@@ -1146,12 +1146,30 @@ Phase 8L publication:
 - PR #334 merged as `1dd4d62cfb84653e65b6dfd9692346c54fffa261`;
 - post-merge CI 2225 and CodeQL 2207 passed.
 
-## Recommended next slice — post-Phase-8L measurement gate
+## Phase 8M measurement closure — no production rewrite selected
+A fresh post-Phase-8L warmed `left_edge` cProfile was then run on the same real pages 0055-0060. The six-page median fell to about **78.2 ms/page**, consistent with the Phase 8L preprocessing improvement.
+
+The new aggregate profile no longer shows a clear duplicate-work hotspot comparable with Phases 8F-8L:
+- `build_analysis_image(...)`: about **0.311 s / 6 pages**;
+- adaptive speck removal: about **0.207 s / 6 pages**;
+- the now in-place shared `_box_sums(...)`: about **0.177 s / 6 pages**;
+- Layout-entry Y refinement: about **0.099 s / 6 pages**;
+- generic analysis-ink construction: about **0.079 s / 6 pages**, dominated by one necessary Pillow BoxBlur;
+- Layout image fingerprinting: about **0.065 s / 6 pages**.
+
+Three follow-up candidates were audited and rejected:
+- reversing cumulative-sum axis order was pixel-exact but produced inconsistent/noisy real-page speed changes rather than a stable win;
+- Layout image fingerprinting remains intentionally content-based because it protects cross-object cache reuse and stale-cache safety;
+- Y refinement and generic analysis ink now spend their time in genuine local Otsu/ROI and blur computations, not repeated full-page preparation. Changing them would alter mature numerical algorithms for low-double-digit milliseconds per page rather than remove redundant work.
+
+No Phase 8M production rewrite is therefore selected. This is an intentional measurement result, not an unfinished optimization.
+
+## Recommended next slice — pause micro-optimization until a new measurement gate opens
 Do **not** rebuild the six-page Paddle cold cache in the current execution container merely to obtain warm timing; the current full-page CPU runtime is not comparable with the earlier validated Phase 8D environment.
 
-For OCR/Combined work, resume only when either the prior project-level OCR cache is available again or a runtime reproduces the earlier cold-page order of magnitude. Ground-truth accuracy remains separately gated on matching `.pdic` references.
+For OCR/Combined performance work, resume only when either the prior project-level OCR cache is available again or a runtime reproduces the earlier cold-page order of magnitude. Ground-truth accuracy remains separately gated on matching `.pdic` references.
 
-For non-OCR CPU work, first generate a fresh post-Phase-8L profile. Continue only for a materially large hotspot with exact semantic equivalence at its complete downstream boundary. Remaining sub-millisecond or low-single-digit-ms candidates should be rejected rather than accumulated as maintenance-heavy micro-optimizations.
+For non-OCR CPU work, do not continue shaving the remaining mature numerical kernels merely because they appear near the top of cProfile. Re-open performance work only when a fresh representative profile exposes a materially larger redundant-work hotspot, a user-visible latency target is missed, or a new implementation can prove exact semantic equivalence plus meaningful end-to-end benefit.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
