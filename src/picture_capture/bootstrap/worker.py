@@ -36,16 +36,14 @@ def build_worker_services() -> WorkerServices:
     formats = core_services.formats
     processing_module = core_services.processing
 
-    from ..entry_classification import install_pdic_classification
     from ..layout_rows_cache import (
         capture_layout_rows,
         install_layout_rows_persistence_runtime,
     )
     from ..training_baseline import save_automatic_baseline
 
-    # PDIC sidecar persistence remains an idempotent worker-local guard. Entry
-    # materialization/cropping/OCR classification is now static processing code.
-    install_pdic_classification(formats)
+    # PDIC sidecar persistence is already owned by build_core_services(). Entry
+    # materialization/cropping/OCR classification is static processing code.
     # Long-band row recovery and column-drift remeasurement are static.
     install_layout_rows_persistence_runtime()
 

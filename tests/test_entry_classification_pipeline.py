@@ -6,13 +6,19 @@ from types import SimpleNamespace
 
 from picture_capture.entry_classification import (
     apply_classification_sidecar,
+    classification_sidecar_path,
     classified_entry_crop_height,
     get_entry_classification,
+    install_pdic_classification,
     register_layout_line_classification,
     set_entry_scale_manual,
     write_classification_sidecar,
 )
 from picture_capture.models import AppSettings, Entry
+from picture_capture.training_baseline import (
+    baseline_path_for_pdic,
+    build_write_pdic_capture,
+)
 
 
 def test_entry_exposes_canonical_classification_fields():
@@ -158,17 +164,71 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     assert '("自动", "普通词条", "大字头")' in review_source
 
 
-def test_gui_composition_uses_static_classification_and_installs_review_ui_after_app():
+def test_gui_composition_reuses_core_classification_and_installs_review_ui_after_app():
     import picture_capture.bootstrap.gui as gui_bootstrap
 
     source = Path(gui_bootstrap.__file__).read_text(encoding="utf-8")
-    assert "install_pdic_classification(formats)" in source
+    assert "install_pdic_classification(formats)" not in source
+    assert "build_write_pdic_capture(formats.write_pdic)" in source
     assert "install_processing_entry_classification" not in source
     assert "entry_classification_runtime" not in source
     assert "install_review_entry_classification(app_module)" in source
     assert source.index("from .. import app as app_module") < source.index(
         "install_review_entry_classification(app_module)"
     )
+
+
+def test_gui_baseline_capture_wraps_core_classification_without_reinstall(tmp_path: Path):
+    writes: list[list[Entry]] = []
+
+    def read_pdic(_path: Path) -> list[Entry]:
+        return []
+
+    def write_pdic(
+        path: Path,
+        entries: list[Entry],
+        _image_width: int,
+        _pages: tuple[str, str, str],
+    ) -> None:
+        writes.append(list(entries))
+        path.write_text("pdic\n", encoding="utf-8")
+
+    formats_module = SimpleNamespace(read_pdic=read_pdic, write_pdic=write_pdic)
+    install_pdic_classification(formats_module)
+    classification_writer = formats_module.write_pdic
+
+    formats_module.write_pdic = build_write_pdic_capture(formats_module.write_pdic)
+    composed_writer = formats_module.write_pdic
+    assert composed_writer._original_write_pdic is classification_writer
+
+    # A second classification install is intentionally a no-op. GUI therefore
+    # does not need to repeat the core-owned installation after adding baseline
+    # capture.
+    install_pdic_classification(formats_module)
+    assert formats_module.write_pdic is composed_writer
+
+    pdic = tmp_path / "page.pdic"
+    automatic = [
+        Entry(
+            word="",
+            x=42,
+            y=84,
+            confidence=0.97,
+            ocr_source="ordinary_page_design",
+            issue_type="ORDINARY_PAGE_DESIGN_ENTRY",
+        )
+    ]
+    formats_module.write_pdic(
+        pdic,
+        automatic,
+        1200,
+        ("page.png", "@", "@"),
+    )
+
+    assert baseline_path_for_pdic(pdic).exists()
+    assert classification_sidecar_path(pdic).exists()
+    assert pdic.exists()
+    assert len(writes) == 1
 
 
 def test_core_composition_installs_classification_for_non_gui_consumers():
