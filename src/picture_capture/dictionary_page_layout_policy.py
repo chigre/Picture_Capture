@@ -28,10 +28,21 @@ from PIL import Image, ImageOps
 
 from . import dictionary_page_design as base
 from . import dictionary_page_design_refined as refined
-from .layout_detection import analysis_ink_mask, detect_layout_parameters, LayoutEstimate
+from .layout_detection import analysis_ink_mask, LayoutEstimate
 from .layout_column_drift import finalize_layout_column_drift
 from .models import AppSettings
 from .page_x_registration import register_page_manual_x
+
+
+def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> LayoutEstimate:
+    """Resolve the authoritative detector at call time.
+
+    This keeps Page Layout synchronized with any deliberate test/debug replacement
+    on `layout_detection.detect_layout_parameters` without bootstrap mutation.
+    """
+    from . import layout_detection
+
+    return layout_detection.detect_layout_parameters(image, settings)
 
 
 AUTO_LAYOUT_FIELDS: tuple[tuple[str, str], ...] = (

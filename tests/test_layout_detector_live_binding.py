@@ -27,14 +27,28 @@ def test_policy_detector_binding_tracks_runtime_replacement(monkeypatch):
     assert policy.detect_layout_parameters is not layout_detection.detect_layout_parameters
 
 
-def test_live_binding_is_installed_before_processing_import():
+def test_retired_installer_is_a_compatibility_noop():
+    import picture_capture.dictionary_page_layout_policy as policy
+    from picture_capture.layout_detector_live_binding import (
+        install_live_layout_detector_binding,
+    )
+
+    before = policy.detect_layout_parameters
+    assert install_live_layout_detector_binding() is None
+    assert policy.detect_layout_parameters is before
+
+
+def test_live_binding_is_static_and_needs_no_bootstrap_installer():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
+    policy = (
+        root / "src/picture_capture/dictionary_page_layout_policy.py"
+    ).read_text(encoding="utf-8")
     core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     package = (root / "src/picture_capture/__init__.py").read_text(encoding="utf-8")
 
-    live_install = core.index("install_live_layout_detector_binding()")
-    processing_import = core.index("from .. import processing as processing_module")
-    assert live_install < processing_import
-    assert "install_live_layout_detector_binding()" not in package
+    assert "from . import layout_detection" in policy
+    assert "return layout_detection.detect_layout_parameters(image, settings)" in policy
+    assert "install_live_layout_detector_binding" not in core
+    assert "install_live_layout_detector_binding" not in package

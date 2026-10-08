@@ -26,12 +26,8 @@ def build_core_services() -> CoreServices:
     # Layout illustration masking is a native AppSettings field; bootstrap no
     # longer subclasses/rebinds the settings class.
 
-    # Character-height fallback is static inside layout_detection, so consumers
-    # that import the detector by value no longer depend on installer ordering.
-
-    from ..layout_detector_live_binding import install_live_layout_detector_binding
-
-    install_live_layout_detector_binding()
+    # Character-height fallback and Page Layout's detector forwarding are static,
+    # so consumers no longer depend on installer ordering for that detector seam.
 
     # Oversized-head detection and strong row/fusion authorization are static in
     # their normal evidence/fusion modules; processing import order no longer

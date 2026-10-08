@@ -39,10 +39,9 @@ def test_core_composition_preserves_remaining_import_sensitive_install_order() -
         ROOT / "src" / "picture_capture" / "bootstrap" / "core.py"
     ).read_text(encoding="utf-8")
 
-    live_binding = source.index("install_live_layout_detector_binding()")
     processing_import = source.index("from .. import processing as processing_module")
 
-    assert live_binding < processing_import
+    assert "install_live_layout_detector_binding" not in source
     assert "install_character_height_fallback_runtime" not in source
     assert "spawn_layout_runtime" not in source
     assert "install_ordinary_large_head_runtime" not in source
@@ -61,7 +60,6 @@ def test_core_profile_owns_only_remaining_compatibility_chain() -> None:
     ).read_text(encoding="utf-8")
 
     installers = (
-        "install_live_layout_detector_binding",
         "install_separator_y_settings",
         "install_entry_crop_settings",
         "install_entry_classification_fields",
