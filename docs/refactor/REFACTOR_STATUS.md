@@ -993,10 +993,60 @@ The prototype matched the existing output exactly on randomized masks and all si
 
 This result, together with the distributed post-8G profile, is the stopping point for opportunistic non-OCR micro-optimization. Further changes in this path require a new representative-page candidate with a materially larger and stable end-to-end gain, not merely source-level plausibility.
 
-## Recommended next slice — complete Paddle/combined measurement
-The highest-value unresolved Phase 8 work is still the complete Paddle/combined cold-vs-warm benchmark. Run the existing documented benchmark when Paddle/PaddleOCR and the real project settings/sidecars can be co-located with pages 0055-0060. Ground truth is preferable for accuracy validation but is not required for timing-only profiling.
+## Phase 8D representative Paddle/combined cold-warm benchmark completed
+The previously blocked OCR measurement gate is now complete on the real scan pages `0055.png` through `0060.png`.
 
-Until that environment exists, do not claim the OCR benchmark complete and do not continue shaving low-single-digit milliseconds from the non-OCR path without new representative evidence.
+The isolated benchmark environment was reconstructed without uploading any scan page to GitHub:
+- temporary PR #325 installed the repository-locked Linux Python 3.13 `ocr-cpu` profile, initialized PaddleOCR 3.7.0 / PaddlePaddle 3.3.0 with cached PP-OCRv6 medium detection and recognition models, split the runtime into transport-sized artifacts, and was closed without merge;
+- temporary PR #326 exported the then-current `main` wheel for the isolated container and was closed without merge;
+- the real pages remained only in the authorized private execution environment;
+- matching `.pdic` ground truth was still unavailable, so this run is a timing/cache/pairwise measurement and **not** an accuracy-validation result.
+
+A one-page Paddle smoke on page 0055 completed successfully in about **167.1 s**, produced 21 OCR headword markers, and wrote a valid cache.
+
+The full six-page benchmark then completed for both `paddleocr` and `combined`, using a forced-refresh first call per page/mode and two cache-reusing repeat calls:
+- PaddleOCR cold: n=6, median **163.815 s/page**, mean 163.938 s/page, range 162.342-165.795 s;
+- PaddleOCR warm cache: n=12, median **1.442 s/page**, mean 1.465 s/page, range 1.328-1.745 s;
+- Combined cold: n=6, median **162.659 s/page**, mean 161.638 s/page, range 158.103-163.987 s;
+- Combined warm cache: n=12, median **1.905 s/page**, mean 1.914 s/page, range 1.699-2.190 s.
+
+The cold result shows that CPU PP-OCRv6 inference dominates the forced-refresh path by roughly two orders of magnitude over warm cache execution. Source-level orchestration micro-optimization must therefore be evaluated primarily against the warm-cache path; it should not be presented as materially reducing the ~164 s/page cold CPU model cost.
+
+Pairwise marker comparison showed that Paddle markers were mostly a subset of the much denser Combined result on these pages, with median matched-marker vertical delta of about 1 px. Because no `.pdic` files were available, these pairwise differences are descriptive only and do not establish which mode is more accurate.
+
+Warm cProfile runs on all six pages/modes identified page-understanding shape consensus as a major warm-path hotspot. The historical `_shape_consensus(...)` called `_patch_similarity(...)` for O(N^2) patch pairs, and every pair redundantly repeated PIL resize, float32 centering, and norm computation on patches already processed many times.
+
+## Phase 8I shape-consensus signature precomputation
+A candidate implementation preserved the historical 12x24 nearest-neighbor float32 signature, mean centering, L2 norm, pairwise cosine formula, and **0.52** threshold, but prepared each patch exactly once per cluster.
+
+Validation proceeded in progressively stricter layers:
+- randomized clusters matched the historical implementation exactly;
+- six-page end-to-end experiments produced identical complete `(word, x, y)` marker lists, although page-level timing comparisons were recognized as cache-order confounded and were **not** used to claim the speedup;
+- a cache-independent function benchmark captured **85 actual shape-consensus clusters** from real pages 0055-0060, with cluster sizes from 1 to 66 patches;
+- the new and historical functions matched exactly on all 85/85 real clusters;
+- sum of per-cluster median timings fell from about **5301.9 ms** to **135.6 ms**, about **39.1x** for the measured function work;
+- the largest measured 66-patch cluster fell from about **209.9 ms** to about **4.2 ms**.
+
+Phase 8I therefore:
+- adds a private historical-equivalent shape signature helper;
+- prepares every patch once per cluster;
+- preserves the historical pairwise cosine comparison rather than introducing matrix/vector approximation;
+- changes no threshold, layout semantics, OCR behavior, file/cache format, or compatibility surface;
+- adds exact regression tests against the historical `_patch_similarity(...)` implementation, including randomized and degenerate patches.
+
+Phase 8I publication:
+- PR #327 fixed head `70a4d11537a32b1f338ff43738e29407e46a8273`;
+- production/test diff: 2 files;
+- PR CI 2207 and CodeQL 2188 passed;
+- PR #327 merged as `7d4ea8af6f7e6ac35095d1546b6c14c05d544fe2`;
+- post-merge CI 2208 and CodeQL 2189 passed.
+
+## Recommended next slice — post-Phase-8I warm re-profile
+Do **not** rerun the expensive cold Paddle benchmark merely to look for Python micro-optimizations unless model/runtime/device settings change; the cold path is dominated by PP-OCRv6 inference.
+
+The next safe unit is a fresh warm-cache cProfile on pages 0055-0060 against post-Phase-8I `main`. Select a further production optimization only if the new profile exposes a materially large, stable, exact-equivalent hotspot. Do not optimize from the pre-8I profile because shape-consensus cost has now been structurally removed.
+
+Ground-truth accuracy validation remains a separate open item that requires matching `.pdic` references; do not infer accuracy from Paddle-vs-Combined pairwise differences alone.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
