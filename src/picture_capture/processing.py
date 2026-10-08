@@ -15,12 +15,11 @@ fusion behavior.
 from dataclasses import replace
 from pathlib import Path
 import json
-import sys
-import types
 from typing import Any
 
 from PIL import Image
 
+from .facade_compat import install_core_assignment_mirror, publish_core_namespace
 from .image_utils import build_analysis_image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
@@ -36,9 +35,7 @@ from .separator_y_refinement import refined_layout_entry_y_by_line
 from .training_baseline import save_automatic_baseline
 
 
-for _name, _value in vars(_core).items():
-    if not _name.startswith("__"):
-        globals()[_name] = _value
+publish_core_namespace(globals(), _core)
 
 
 _original_detect_entries_left_edge = _core._detect_entries_left_edge
@@ -673,16 +670,7 @@ globals()["detect_entries"] = detect_entries
 globals()["detect_entries_job"] = detect_entries_job
 
 
-class _CoreProxyModule(types.ModuleType):
-    """Mirror monkeypatch/debug assignments from facade to historical core."""
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        types.ModuleType.__setattr__(self, name, value)
-        if name not in {"_core"} and hasattr(_core, name):
-            setattr(_core, name, value)
-
-
-sys.modules[__name__].__class__ = _CoreProxyModule
+install_core_assignment_mirror(__name__, _core)
 
 
 # Source-guard compatibility markers for long-standing regression checks.
