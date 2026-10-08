@@ -36,6 +36,7 @@ from .crop_plan_formatting import (
 )
 from .ocr_text_io import export_ocred, import_ocred, load_replace_rules, process_ocr_text
 from .crop_logging import append_crop_log, append_illustration_crop_log
+from .ordinary_vb_brightness import legacy_row_brightness_scores_1000
 
 
 _COLUMN_TRACK_ADAPTIVE_BLOCK = 19
@@ -798,29 +799,15 @@ def _legacy_find_separator_y(
             "extra_white_rows": int(extra_white),
         }
 
-    # VB method 2: relax the row-white requirement 999 -> 700 (defaults), in
-    # steps of two for narrow gaps, skewed rows, and protruding glyphs.
-    #
-    # The historical search revisits the same (candidate_x, span) row hundreds
-    # of times while threshold decreases. Compute each possible row score once
-    # after method 1 has failed; this preserves the exact 0..1000 score and
-    # leaves the fast full-white path above unchanged.
+    # VB method 2: relax the row-white requirement 999 -> 700 (defaults).
     score_top = max(int(top), int(candidate_y) - upward)
-    score_bottom = min(height, int(candidate_y))
-    row_scores: list[int] = []
-    if score_bottom > score_top:
-        score_region = rgb_sum[score_top:score_bottom, xs].astype(np.float64)
-        denominator = float(765 * span)
-        row_scores = [
-            int(round(float(total) / denominator * 1000.0))
-            for total in score_region.sum(axis=1)
-        ]
+    row_scores = legacy_row_brightness_scores_1000(
+        rgb_sum, xs, score_top, min(height, int(candidate_y)), span,
+    )
 
     def cached_row_score(line_y: int) -> int | None:
         index = int(line_y) - score_top
-        if 0 <= index < len(row_scores):
-            return row_scores[index]
-        return None
+        return row_scores[index] if 0 <= index < len(row_scores) else None
 
     for threshold in range(high, low - 1, -2):
         for ysu in range(1, upward + 1):
