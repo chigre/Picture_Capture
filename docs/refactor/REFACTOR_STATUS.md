@@ -1241,6 +1241,95 @@ Do not proceed directly to a Phase 9D that removes broad mirroring or replaces i
 
 The next safe architecture slice should target a separate debt category with a clearer internal contract, or add non-invasive characterization/observability that can establish whether a future facade deprecation is safe. Performance micro-optimization also remains paused until the Phase 8 measurement gate reopens.
 
+## Phase 10 static bootstrap bindings — two runtime mutations retired
+Phase 9 intentionally left the historical public facades stable. The next architecture slice therefore targeted a separate debt category: process/bootstrap code that still rewrote another module's callable solely to compensate for import-order-sensitive by-value imports.
+
+Phase 10 keeps every historical callable/import path that may still be used by tests, diagnostics, or plugins, but moves the actual relationship into the consuming module as a static dependency. Retired installer names remain compatibility no-ops rather than disappearing.
+
+### Phase 10A static Page Layout detector binding
+The previous `layout_detector_live_binding.py` installer rewrote
+`dictionary_page_layout_policy.detect_layout_parameters` during
+`build_core_services()` so Page Layout would follow the current
+`layout_detection.detect_layout_parameters` implementation.
+
+Phase 10A makes that behavior native to the policy module:
+- `dictionary_page_layout_policy.detect_layout_parameters(...)` is now a small call-time forwarder to `layout_detection.detect_layout_parameters(...)`;
+- patching the authoritative `layout_detection` detector remains immediately visible to Page Layout;
+- the historical `policy.detect_layout_parameters` symbol still exists and can itself be monkeypatched by tests/debug tooling;
+- `build_core_services()` no longer imports or calls the live-binding installer;
+- `layout_detector_live_binding.install_live_layout_detector_binding()` remains importable as an inert compatibility shim and no longer mutates another module.
+
+Phase 10A publication:
+- PR #340 fixed head `7081fa81ab7068166b26ec00c2a8085cc5f46b2f`;
+- PR CI 2237 passed on Ubuntu/Windows/macOS;
+- PR CodeQL 2219 passed Actions/Python;
+- PR #340 merged as `1f9576c6264c72fe544208cb51eb4db1e4c1d88e`;
+- post-merge CI 2238 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2220 passed Actions/Python.
+
+### Phase 10B static Project Profile layout detector
+Project Profile creation must use the dedicated anchor-free/OCR-free projection
+detector in `profile_layout_bootstrap.py`. Previously GUI bootstrap achieved
+that by rewriting `profile_setup.detect_layout_parameters` before constructing
+the Profile wizard.
+
+Phase 10B declares that dependency directly:
+- `profile_setup.detect_layout_parameters` is now a static alias of
+  `detect_profile_layout_parameters`;
+- the historical `profile_setup.detect_layout_parameters` name remains intact,
+  so direct test/debug monkeypatching still has the same seam;
+- `bootstrap/gui.py` no longer imports or calls
+  `install_profile_layout_bootstrap()`;
+- `install_profile_layout_bootstrap()` remains importable as a compatibility
+  no-op;
+- Profile schema, detector thresholds, OCR/cache/file formats, and GUI behavior
+  are unchanged.
+
+The first PR fixed head `1268fc5f9fcb065de756db9214b8f686ec927e0e`
+passed all functional tests except the architecture size ratchet:
+`profile_setup.py` had grown from the 174,009-byte ceiling to 174,091 bytes.
+CI 2239 therefore failed on all platforms at the same guard test while
+CodeQL 2221 passed. The guard was **not** loosened. The static import was
+compacted and a non-runtime wrapper docstring removed, producing a final
+`profile_setup.py` blob size of 174,000 bytes.
+
+Phase 10B final publication:
+- PR #341 final fixed head `f154317484efffea15578af9202af437bf04ee57`;
+- final PR CI 2241 passed the executed Ubuntu/Windows jobs; macOS remained queued
+  as a hosted-runner scheduling issue;
+- final PR CodeQL 2223 passed Actions/Python;
+- PR #341 merged as `6f73b2b098447c7f27fa11df35520ed518c30eed`;
+- post-merge CI 2242 passed on Ubuntu/Windows/macOS, closing the PR-time macOS
+  scheduling gap;
+- post-merge CodeQL 2224 passed Actions/Python.
+
+### Current Phase 10 boundary
+Two bootstrap-only mutation seams are now static:
+- Page Layout owns its live detector forwarding relationship;
+- Project Profile owns its dedicated bootstrap detector relationship.
+
+The retired installer modules/functions remain compatibility shims and should
+not regain cross-module assignment behavior. Future Phase 10 work should only
+target another installer when all of the following are true:
+- the installer is demonstrably just wiring/rebinding rather than feature logic;
+- the consuming module can express the dependency directly without a circular
+  import or startup-order regression;
+- historical import/callable paths can remain compatible;
+- focused tests can preserve any intentional monkeypatch seam.
+
+Do **not** mass-remove GUI installers merely because they are named
+`install_*`. Many remaining GUI installers compose real Tk behavior and are
+not equivalent to the two retired binding mutations.
+
+## Recommended next slice — audit remaining bootstrap assignments, do not assume
+Perform a read-only inventory of the remaining `bootstrap/core.py`,
+`bootstrap/gui.py`, and `bootstrap/worker.py` installer calls. Select another
+slice only if it matches the narrow static-binding pattern above. Otherwise stop
+Phase 10 rather than converting genuine composition logic into hidden imports.
+
+Performance micro-optimization remains measurement-gated by Phase 8, and Phase 9
+facade compatibility remains an intentional public boundary.
+
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
 
