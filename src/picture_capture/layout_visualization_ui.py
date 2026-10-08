@@ -13,15 +13,12 @@ both the raw layout estimate and the geometry that is actually consumed after
 per-field automatic/manual choices are applied.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 import tkinter as tk
 from tkinter import ttk
 
-from .image_utils import build_analysis_image
-from .layout_detection import detect_layout_parameters
-from .processing import ORDINARY_AUTO_LAYOUT_FIELDS, derive_geometry
-from .profile_semantics import page_template_analysis_image
+from .processing import ORDINARY_AUTO_LAYOUT_FIELDS
 
 
 _LAYOUT_TAG = "layout-visualization"
@@ -66,6 +63,7 @@ def _snapshot_for_app(app: Any) -> LayoutVisualizationSnapshot:
     from .layout_visualization_shared import shared_snapshot_for_app
 
     return shared_snapshot_for_app(app)
+
 
 def _source_polyline(geometry: Any, points: list[tuple[int, int]]) -> list[float]:
     values: list[float] = []
