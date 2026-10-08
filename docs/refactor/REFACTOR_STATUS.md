@@ -942,10 +942,61 @@ Phase 8F publication:
 - PR #321 merged as `156547615dac92234c438eedc9029860e866696f`;
 - post-merge CI 2197 and CodeQL 2178 passed.
 
-## Recommended next slice — measurement-gated Phase 8G
-The full Paddle/combined cold-vs-warm benchmark remains open. Run it when the same execution environment has Paddle/PaddleOCR plus the real project sidecars/settings; ground truth remains preferable but is not required for timing-only work.
+## Phase 8G full-page memory conversion cleanup
+Post-Phase-8F profiling showed that the remaining non-OCR cost was already much more distributed. Several candidate optimizations were therefore measured and rejected before production writes:
+- separator-Y refinement was about 18 ms/page, but its adapter re-analysis path did not repeat the Phase 8F denoise and changing its image/transform lifecycle would have widened architectural risk;
+- Layout Core's content fingerprint was about 11-12 ms/page, but weakening the BLAKE2 content key would reduce stale-cache protection and was rejected;
+- removing only the redundant `_allowed_entries(...)` normalization saved only about **1.8 ms/page** in robust paired testing and was too small to ship alone.
 
-If continuing the non-OCR CPU path before that environment is available, choose exactly one hotspot from the **post-Phase-8F** profile and first prove an equivalent implementation with a representative-page microbenchmark. Do not optimize from pre-8F profiles, because the hotspot distribution has materially changed.
+A second exact-equivalence candidate was found in `_generic_analysis_ink(...)`. The historical expression widened two full-page grayscale arrays to signed int16 only to evaluate:
+`gray <= 150 or (gray <= 205 and gray + 20 <= local)`.
+The equivalent uint8 predicate adds an explicit `local >= 20` guard and compares `gray <= local - 20`, avoiding underflow while preserving the historical result.
+
+Equivalence and component measurements:
+- randomized full-range uint8 grayscale arrays matched the historical int16 predicate pixel-for-pixel;
+- all real pages 0055-0060 matched pixel-for-pixel;
+- generic-ink helper median fell from about **14.75 ms** to **12.14 ms**;
+- the already-normalized-source reuse in `_allowed_entries(...)` was combined with this change because both remove redundant full-page memory conversions.
+
+Paired representative-page end-to-end validation on warmed `left_edge` calls:
+- baseline median: **91.63 ms/page**;
+- Phase 8G candidate median: **87.80 ms/page**;
+- improvement: about **3.83 ms/page (4.2%)**;
+- every one of pages 0055-0060 improved in the paired test;
+- complete `(word, x, y)` marker output matched exactly on every page.
+
+Phase 8G therefore:
+- stops `_allowed_entries(...)` from making a second RGB page copy when all private callers already pass the normalized source and the filter only needs page size;
+- keeps generic local-contrast evaluation in uint8 and reuses the grayscale ndarray already owned by `build_analysis_image(...)`;
+- changes no threshold, geometry, OCR behavior, Layout cache key, file format, cache format, or compatibility behavior;
+- adds regression coverage against the historical int16 formula and a no-renormalization contract test.
+
+Phase 8G publication:
+- PR #323 fixed head `0ef9877599b587e31b71cdfb3809abe1ec705086`;
+- production/test diff: 3 files;
+- PR CI 2200 passed on Ubuntu/Windows/macOS;
+- PR CodeQL 2181 and Advanced Security 1898 passed;
+- PR #323 merged as `d0d8413c51dd8395304c0102904d166e804fc113`;
+- post-merge CI 2201 and CodeQL 2182 passed.
+
+Post-Phase-8G warmed profiling across the six real pages measured about **0.587 s** total. The largest remaining items were approximately:
+- shared adaptive-denoise `_box_sums`: 0.235 s total (~39 ms/page);
+- separator-Y refinement: 0.109 s total (~18 ms/page);
+- Layout Core image fingerprint: 0.073 s total (~12 ms/page);
+- generic analysis ink: 0.078 s total (~13 ms/page);
+- BoxBlur: 0.068 s total (~11 ms/page).
+
+## Phase 8H candidate rejection
+The remaining largest non-OCR hotspot, `_box_sums`, was tested with a mathematically equivalent preallocated/in-place arithmetic implementation intended to reduce temporary int32 arrays.
+
+The prototype matched the existing output exactly on randomized masks and all six real pages, but the component median improved only from about **31.42 ms** to **31.12 ms** (~0.9%), with several real pages becoming slightly slower. The candidate was rejected and no production code was written.
+
+This result, together with the distributed post-8G profile, is the stopping point for opportunistic non-OCR micro-optimization. Further changes in this path require a new representative-page candidate with a materially larger and stable end-to-end gain, not merely source-level plausibility.
+
+## Recommended next slice — complete Paddle/combined measurement
+The highest-value unresolved Phase 8 work is still the complete Paddle/combined cold-vs-warm benchmark. Run the existing documented benchmark when Paddle/PaddleOCR and the real project settings/sidecars can be co-located with pages 0055-0060. Ground truth is preferable for accuracy validation but is not required for timing-only profiling.
+
+Until that environment exists, do not claim the OCR benchmark complete and do not continue shaving low-single-digit milliseconds from the non-OCR path without new representative evidence.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
