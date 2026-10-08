@@ -39,7 +39,8 @@ LEGACY_MODULE_CLASS_PROXY_FILES: set[str] = set()
 MODULE_CLASS_PROXY_MARKER = "sys.modules[__name__].__class__"
 
 # Phase 9A centralizes the retained public compatibility mechanism instead of
-# duplicating dynamic namespace/proxy implementations in each facade.
+# duplicating dynamic namespace/proxy implementations in each facade. Phase 9C
+# ratchets that boundary so no third production module can adopt the mechanism.
 FACADE_COMPAT_USERS = ("processing.py", "paddle_headwords.py")
 FACADE_NAMESPACE_CALL = "publish_core_namespace(globals(), _core)"
 FACADE_MIRROR_CALL = "install_core_assignment_mirror(__name__, _core)"
@@ -121,6 +122,18 @@ def collect_violations() -> list[str]:
         violations.append(f"new dynamic core namespace copy: {rel}")
     for rel in sorted(module_class_proxy_files - LEGACY_MODULE_CLASS_PROXY_FILES):
         violations.append(f"new dynamic module-class proxy: {rel}")
+
+    facade_compat_users_now: set[str] = set()
+    for path in _python_files():
+        rel = path.relative_to(PACKAGE_ROOT).as_posix()
+        if rel == "facade_compat.py":
+            continue
+        source = path.read_text(encoding="utf-8")
+        if FACADE_NAMESPACE_CALL in source or FACADE_MIRROR_CALL in source:
+            facade_compat_users_now.add(rel)
+
+    for rel in sorted(facade_compat_users_now - set(FACADE_COMPAT_USERS)):
+        violations.append(f"new facade compatibility user: {rel}")
 
     for rel in FACADE_COMPAT_USERS:
         source = (PACKAGE_ROOT / rel).read_text(encoding="utf-8")
