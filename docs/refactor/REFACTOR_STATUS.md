@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7M extracts the cohesive image-preprocessing data model while preserving historical imports and class module paths.**
+**Phase 7 — oversized-module decomposition is underway. Phase 7N extracts the pure Paddle headword data-model layer while preserving core/public class paths and facade assignment mirroring.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -541,8 +541,36 @@ The production sizes move from:
 
 The architecture guard ratchets `image_preprocessing.py` directly to 160,734 bytes.
 
-## Recommended next slice — Phase 7N
-After Phase 7M validation, do not immediately split the remaining `analyze_preprocess_page()` state machine. Re-run oversized-owner inventory across `paddle_headwords_core.py`, `profile_setup.py`, `image_preprocessing.py`, and `processing_core.py`. Prefer another cohesive one-way data/formatting/controller seam with an explicit compatibility plan over further micro-extractions.
+Phase 7M publication:
+- PR #307 fixed head `180359bdf561849a0a5eac53f77efec9ecfe7e67` passed CI 2168 on Ubuntu/Windows/macOS and CodeQL 2149 Actions/Python;
+- PR #307 merged as `41cd19e5ba6c71b1c3760c775366a0c7cafb8207`;
+- post-merge CI 2169 and CodeQL 2150 both passed.
+
+## Phase 7N Paddle headword data-model ownership
+Cross-owner inventory selected the pure data-model layer at the top of `paddle_headwords_core.py` rather than any OCR/filter/parser algorithm cluster.
+
+Phase 7N moves five dataclasses into `paddle_headword_models.py`:
+- `OCRRecord`;
+- `OCRLine`;
+- `GrammarTailParse`;
+- `HeadwordParse`;
+- `HeadwordFilterRule`.
+
+The new module depends only on `dataclass` and `re`; it has no Paddle engine, PIL/NumPy, project profile, parser, evidence-fusion, or runtime-hook dependency.
+
+`paddle_headwords_core.py` imports and re-exports all five classes. The historical public `paddle_headwords` facade therefore continues to expose the same objects through its broad namespace compatibility surface. Direct imports from `paddle_headwords_core` (including evidence fusion) remain valid.
+
+Each class explicitly keeps `__module__ = "picture_capture.paddle_headwords_core"`, preserving the historical pickle/debug module path even though implementation ownership moves. Focused tests require:
+- core/new-owner identity;
+- public-facade/new-owner identity;
+- evidence-fusion direct model identity;
+- pickle class roundtrip via the historical core path;
+- public-facade assignment mirroring into the core alias.
+
+The actual core file moves from 377,684 bytes -> 375,114 bytes; new `paddle_headword_models.py` is 3,080 bytes. The previous architecture guard was a slightly looser 378,513-byte ceiling, so Phase 7N ratchets it directly to 375,114 bytes.
+
+## Recommended next slice — Phase 7O
+After Phase 7N validation, avoid extracting mutually-calling Paddle parser/filter/OCR clusters unless their facade monkeypatch semantics are explicitly characterized. Re-run inventory for a larger one-way formatting/cache/diagnostic seam or switch to another oversized owner rather than converting retained core-global lookup into hidden module-local lookup.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
