@@ -4,6 +4,7 @@ import sys
 import types
 from pathlib import Path
 
+from picture_capture import facade_compat
 from picture_capture.facade_compat import (
     install_core_assignment_mirror,
     publish_core_namespace,
@@ -56,6 +57,55 @@ def test_assignment_mirror_matches_historical_same_named_core_contract() -> None
         assert not hasattr(core, "_core")
     finally:
         sys.modules.pop(module_name, None)
+
+
+def test_assignment_mirror_registry_keeps_facades_independent() -> None:
+    names = ("_phase9b_facade_a", "_phase9b_facade_b")
+    cores = (types.ModuleType("_phase9b_core_a"), types.ModuleType("_phase9b_core_b"))
+    facades = (types.ModuleType(names[0]), types.ModuleType(names[1]))
+    for core, value in zip(cores, ("a", "b")):
+        core.existing = value
+    for name, facade in zip(names, facades):
+        sys.modules[name] = facade
+    try:
+        install_core_assignment_mirror(names[0], cores[0])
+        install_core_assignment_mirror(names[1], cores[1])
+
+        facades[0].existing = "patched-a"
+        assert cores[0].existing == "patched-a"
+        assert cores[1].existing == "b"
+
+        facades[1].existing = "patched-b"
+        assert cores[0].existing == "patched-a"
+        assert cores[1].existing == "patched-b"
+        assert facades[0].__class__ is facades[1].__class__
+    finally:
+        for name in names:
+            sys.modules.pop(name, None)
+            facade_compat._CORE_BY_MODULE.pop(name, None)
+
+
+def test_assignment_mirror_reinstall_refreshes_registered_core() -> None:
+    module_name = "_phase9b_reload_facade"
+    facade = types.ModuleType(module_name)
+    first = types.ModuleType("_phase9b_first_core")
+    second = types.ModuleType("_phase9b_second_core")
+    first.existing = "first"
+    second.existing = "second"
+    sys.modules[module_name] = facade
+    try:
+        install_core_assignment_mirror(module_name, first)
+        facade.existing = "patched-first"
+        assert first.existing == "patched-first"
+
+        install_core_assignment_mirror(module_name, second)
+        facade.existing = "patched-second"
+        assert first.existing == "patched-first"
+        assert second.existing == "patched-second"
+        assert facade.__class__ is facade_compat.CoreAssignmentMirrorModule
+    finally:
+        sys.modules.pop(module_name, None)
+        facade_compat._CORE_BY_MODULE.pop(module_name, None)
 
 
 def test_phase9a_facades_use_one_explicit_compatibility_owner() -> None:
