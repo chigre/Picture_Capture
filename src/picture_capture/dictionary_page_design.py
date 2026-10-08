@@ -24,7 +24,7 @@ from .image_utils import normalize_page_rgb
 from .layout_detection import _projection_layout_estimate, analysis_ink_mask
 from .layout_transform import LayoutTransform
 from .models import AppSettings, Entry
-from .ordinary_visual import _components, _fill_short_gaps, _patch_similarity, _runs
+from .ordinary_visual import _components, _fill_short_gaps, _runs
 from .profile_indent_ui import indent_type_label
 from .profile_semantics import (
     effective_page_settings,
@@ -377,17 +377,45 @@ def _line_feature(
     )
 
 
+def _shape_signature(patch: np.ndarray) -> tuple[np.ndarray, float]:
+    """Return the historical normalized 12x24 patch vector and its norm."""
+    image = Image.fromarray((patch.astype(np.uint8) * 255), mode="L")
+    try:
+        values = np.asarray(
+            image.resize((12, 24), Image.Resampling.NEAREST),
+            dtype=np.float32,
+        ).ravel().copy()
+    finally:
+        image.close()
+    values -= float(values.mean())
+    return values, float(np.linalg.norm(values))
+
+
 def _shape_consensus(lines: list[LayoutLine]) -> float:
     usable = [line for line in lines if line.patch.size]
     if len(usable) < 2:
         return 0.0
-    return max(
-        sum(
-            _patch_similarity(prototype.patch, line.patch) >= 0.52
-            for line in usable
-        ) / float(len(usable))
-        for prototype in usable
-    )
+
+    # The historical implementation called _patch_similarity for every pair,
+    # repeatedly resizing, centering and normalizing the same patches O(N^2)
+    # times. Preserve the same pairwise cosine comparison and threshold while
+    # preparing each patch only once per cluster.
+    prepared = [_shape_signature(line.patch) for line in usable]
+    count = float(len(prepared))
+    best = 0.0
+    for prototype_values, prototype_norm in prepared:
+        matched = 0
+        if prototype_norm > 1e-6:
+            for line_values, line_norm in prepared:
+                if line_norm <= 1e-6:
+                    continue
+                similarity = float(
+                    np.dot(prototype_values, line_values)
+                    / (prototype_norm * line_norm)
+                )
+                matched += int(similarity >= 0.52)
+        best = max(best, matched / count)
+    return best
 
 
 def _indent_modes(lines: list[LayoutLine], reference: float) -> list[IndentMode]:
