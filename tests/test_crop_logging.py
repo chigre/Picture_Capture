@@ -67,3 +67,8 @@ def test_phase7l_public_log_assignment_still_mirrors_into_core(monkeypatch) -> N
     monkeypatch.setattr(processing, "append_crop_log", fake_log)
 
     assert processing._core.append_crop_log is fake_log
+
+def test_phase7l_keeps_auto_illustration_label_token_core_owned() -> None:
+    assert processing._core.AUTO_ILLUSTRATION_LABEL_TOKEN == "|AUTO_"
+    assert not hasattr(crop_logging, "AUTO_ILLUSTRATION_LABEL_TOKEN")
+
