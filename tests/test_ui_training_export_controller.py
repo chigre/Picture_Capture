@@ -143,6 +143,20 @@ def test_training_export_stopped_path_keeps_async_cleanup(monkeypatch, tmp_path)
     assert kwargs["wait_on_close"] is True
 
 
+def test_current_training_export_composition_is_static_before_gui_bootstrap():
+    import picture_capture.training_export as base
+    import picture_capture.training_export_composed as composed
+
+    assert base.TRAINING_EXPORT_FORMAT == "picture-capture-training-v2"
+    assert composed.TRAINING_EXPORT_FORMAT == "picture-capture-training-v3"
+    assert composed.export_training_page is not base.export_training_page
+    assert composed.write_training_manifest is not base.write_training_manifest
+    assert composed.export_training_page.__name__ == "export_training_page_with_understanding"
+    assert composed.write_training_manifest.__name__ == "write_training_manifest_v3"
+    assert export_module.export_training_page is composed.export_training_page
+    assert export_module.write_training_manifest is composed.write_training_manifest
+
+
 def test_phase5f_training_export_ownership_is_explicit():
     root = Path(__file__).resolve().parents[1]
     app = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
@@ -158,6 +172,11 @@ def test_phase5f_training_export_ownership_is_explicit():
     assert "make_training_zip" not in wrapper
     assert "PictureCaptureApp.export_training_package =" not in bootstrap
     assert "export_training_package_selected_range" not in bootstrap
+    assert "training_export.export_training_page =" not in bootstrap
+    assert "training_export.write_training_manifest =" not in bootstrap
+    assert "training_export.TRAINING_EXPORT_FORMAT =" not in bootstrap
+    assert "from ...training_export_composed import" in controller
+    assert "from .training_export import (" not in compat
     assert "    def export_training_package(self) -> None:" in controller
     assert "app._start_batch_task(" in controller
     assert "app._start_ui_worker(" in controller
