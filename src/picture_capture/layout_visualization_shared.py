@@ -212,7 +212,5 @@ def shared_snapshot_for_app(app: Any) -> Any:
 
 
 def install_shared_layout_visualization_source() -> None:
-    """Patch the existing overlay before the v3 summary wrapper imports it."""
-    from . import layout_visualization_ui as ui
-
-    ui._snapshot_for_app = shared_snapshot_for_app
+    """Compatibility no-op; the shared snapshot binding is now static."""
+    return None

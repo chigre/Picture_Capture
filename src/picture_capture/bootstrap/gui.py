@@ -104,13 +104,11 @@ def prepare_gui_application() -> Any:
     # app.py imports that stable function by value without bootstrap mutation.
 
     from .. import app as app_module
-    from ..layout_visualization_shared import install_shared_layout_visualization_source
     from ..review_entry_classification_ui import install_review_entry_classification
     from ..ocr_crop_preview_ui import install_ocr_crop_preview
 
-    # The shared Layout snapshot now owns its LayoutRows capture context
-    # statically before being published to the UI.
-    install_shared_layout_visualization_source()
+    # The shared Layout snapshot is owned statically by layout_visualization_ui;
+    # GUI bootstrap no longer rewrites that module-global seam.
     install_review_entry_classification(app_module)
     install_ocr_crop_preview(app_module)
 
