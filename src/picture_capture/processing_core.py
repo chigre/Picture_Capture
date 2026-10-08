@@ -1454,19 +1454,11 @@ def _separator_whitespace_score(
     settings: AppSettings,
     gray: np.ndarray | None = None,
 ) -> float | None:
-    """Return 0..1 local blank-boundary evidence at one marker Y.
-
-    The score is deliberately local to the reading edge.  Across the real
-    benchmark dictionaries, corrected PDIC boundaries are almost always placed
-    on a near-white separator row even when headword typography differs greatly.
-    Using a local Otsu threshold makes the cue robust to yellow/gray scan paper.
-    """
+    """Return 0..1 local blank-boundary evidence at one marker Y."""
     if geometry.transform.kind not in {"identity", "mirror_x"}:
         return None
     if gray is None:
-        gray = np.asarray(
-            ImageOps.grayscale(normalize_page_rgb(image)), dtype=np.uint8
-        )
+        gray = np.asarray(ImageOps.grayscale(normalize_page_rgb(image)), dtype=np.uint8)
     if gray.size == 0:
         return None
     y = max(0, min(gray.shape[0] - 1, int(entry.y)))
