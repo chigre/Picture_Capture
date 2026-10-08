@@ -63,6 +63,7 @@ def test_composed_compatibility_wrappers_still_cross_native_migration(
     # before the extracted native migration owner runs.
     raw["right_ratio_percent_version"] = 0
     raw["right_ratio"] = 2.0
+    raw.pop("ordinary_right_divisor", None)
     path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
 
     restored = AppSettings.from_json(path)
