@@ -54,3 +54,11 @@ jobs:
 
       - name: Build wheel
         run: uv build --wheel
+
+      - name: Upload post-8K current-main wheel
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: post8k-current-main-wheel
+          path: dist/*.whl
+          if-no-files-found: error
