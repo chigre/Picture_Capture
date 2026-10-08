@@ -1303,32 +1303,80 @@ Phase 10B final publication:
   scheduling gap;
 - post-merge CodeQL 2224 passed Actions/Python.
 
-### Current Phase 10 boundary
-Two bootstrap-only mutation seams are now static:
+### Phase 10C static shared Layout snapshot ownership
+The remaining bootstrap inventory identified one more narrow pure-rebinding seam:
+`install_shared_layout_visualization_source()` only assigned
+`layout_visualization_ui._snapshot_for_app = shared_snapshot_for_app`.
+
+Phase 10C makes the UI module own that relationship directly:
+- `layout_visualization_ui._snapshot_for_app(...)` now forwards at call time to
+  `layout_visualization_shared.shared_snapshot_for_app(...)`;
+- GUI bootstrap no longer imports or calls
+  `install_shared_layout_visualization_source()`;
+- the historical `layout_visualization_ui._snapshot_for_app` symbol remains
+  directly monkeypatchable;
+- `install_shared_layout_visualization_source()` remains importable as an inert
+  compatibility shim and does not overwrite a caller's monkeypatch;
+- imports used only by the retired duplicate local snapshot implementation were
+  removed;
+- role-theme, lane-summary, LayoutRows capture, and other real GUI composition
+  installers were intentionally left unchanged.
+
+The first PR run on head
+`8677699ed41d39c611e87eda06e2ba1dd2b9fa92` exposed one stale historical
+source-shape assertion in
+`tests/test_layout_local_indent_visualization_runtime.py`: 1 test failed while
+1391 passed, because the test still expected the retired installer call to
+precede role-theme/lane-summary setup. Production behavior tests and CodeQL did
+not fail. A repository-wide search confirmed this was the last stale test-side
+reference; the assertion was updated without changing production code.
+
+Phase 10C publication:
+- PR #343 final fixed head `94bc7416b2c577137efa52fc0f73639c3ab40446`;
+- final PR CI 2246 passed on Ubuntu/Windows/macOS;
+- final PR CodeQL 2228 passed Actions/Python;
+- PR #343 merged as `0c0cf783dac0e9a78efd2216e9d375acc04e665e`;
+- post-merge CI 2247 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2229 passed Actions/Python.
+
+### Phase 10 closure — static bootstrap-binding cleanup complete
+Three bootstrap-only mutation seams are now static:
 - Page Layout owns its live detector forwarding relationship;
-- Project Profile owns its dedicated bootstrap detector relationship.
+- Project Profile owns its dedicated bootstrap detector relationship;
+- Layout visualization owns its shared snapshot forwarding relationship.
 
-The retired installer modules/functions remain compatibility shims and should
-not regain cross-module assignment behavior. Future Phase 10 work should only
-target another installer when all of the following are true:
-- the installer is demonstrably just wiring/rebinding rather than feature logic;
-- the consuming module can express the dependency directly without a circular
-  import or startup-order regression;
-- historical import/callable paths can remain compatible;
-- focused tests can preserve any intentional monkeypatch seam.
+A final read-only audit of the remaining core/worker/GUI installers found no
+additional candidate with the same narrow semantics. The remaining installers
+perform real runtime composition rather than mere alias wiring, including:
+- separator-Y settings migration wraps `AppSettings.__init__`,
+  `to_json`, and `from_json` and exposes canonical compatibility properties;
+- entry-crop settings performs constructor/JSON migration and compatibility
+  property installation;
+- entry-classification fields install registry-backed structural properties on
+  the slotted `Entry` model;
+- PDIC classification wraps PDIC I/O so classification metadata persists in a
+  sidecar without changing the PDIC format;
+- LayoutRows persistence wraps Layout Core inside an explicit capture context so
+  reliable physical-row sidecars can be seeded;
+- the remaining visualization/profile/UI installers wrap genuine algorithms,
+  formatting, or Tk composition whose order is part of behavior.
 
-Do **not** mass-remove GUI installers merely because they are named
-`install_*`. Many remaining GUI installers compose real Tk behavior and are
-not equivalent to the two retired binding mutations.
+These are **not** Phase 10D candidates. Converting them merely to reduce the
+number of `install_*` calls would hide meaningful composition, risk import
+cycles/startup-order changes, and weaken the explicit process-profile boundary.
 
-## Recommended next slice — audit remaining bootstrap assignments, do not assume
-Perform a read-only inventory of the remaining `bootstrap/core.py`,
-`bootstrap/gui.py`, and `bootstrap/worker.py` installer calls. Select another
-slice only if it matches the narrow static-binding pattern above. Otherwise stop
-Phase 10 rather than converting genuine composition logic into hidden imports.
+Retired Phase 10 installer names remain compatibility shims and must not regain
+cross-module assignment behavior.
 
-Performance micro-optimization remains measurement-gated by Phase 8, and Phase 9
-facade compatibility remains an intentional public boundary.
+## Recommended next slice — leave Phase 10 and reselect by evidence
+Phase 10 is complete. Do not continue removing bootstrap installers by name.
+
+For the next architecture/refactor phase, first perform a fresh read-only debt
+inventory and choose a different bounded category with a clear correctness or
+maintainability payoff. Alternatively, reopen performance optimization only
+through the Phase 8 measurement gate; do not resume speculative micro-optimization.
+
+Phase 9 facade compatibility remains an intentional public boundary.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
