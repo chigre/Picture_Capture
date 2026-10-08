@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 7 — oversized-module decomposition is underway. Phase 7R consolidates image-preprocessing algorithm constants and diagnostic JSON reporting behind stable historical wrappers.**
+**Phase 7 — oversized-module decomposition is complete at its safe structural boundary. Phase 7S closes structural extraction and hands the project to runtime-efficiency profiling.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -716,8 +716,41 @@ The production sizes move from:
 
 The architecture guard ratchets `image_preprocessing.py` to 150,818 bytes.
 
-## Recommended next slice — Phase 7S
-After Phase 7R validation, treat Phase 7 decomposition as near its safe structural boundary. Re-run oversized-owner inventory once more; if no larger one-way owner remains, close Phase 7 and switch to runtime-efficiency profiling rather than continuing to optimize line count.
+Phase 7R publication:
+- PR #312 fixed head `5423f687b1ba2abaefe19836831f37e3fb35340c` passed CI 2178 on Ubuntu/Windows/macOS and CodeQL 2159 Actions/Python;
+- PR #312 merged as `47fcfbd539b1498abb26f32be3f885a3e33acd42`;
+- post-merge CI 2179 and CodeQL 2160 both passed.
+
+## Phase 7S final oversized-owner inventory and completion boundary
+A final read-only inventory re-evaluated every remaining oversized production owner after Phase 7R.
+
+Current production sizes:
+- `app.py`: 784,737 bytes;
+- `paddle_headwords_core.py`: 364,070 bytes;
+- `profile_setup.py`: 174,009 bytes;
+- `processing_core.py`: 158,561 bytes;
+- `image_preprocessing.py`: 150,818 bytes.
+
+The remaining size is now dominated by genuine stateful/algorithmic owners rather than detachable support responsibilities:
+- `profile_setup.py`: 3,847 lines, of which ~3,604 lines belong to the single stateful `ProjectProfileWizard` GUI class;
+- `image_preprocessing.py`: `analyze_preprocess_page(...)` alone occupies ~2,565 lines; the remaining larger helpers are the same geometry/orthogonal-correction algorithm chain;
+- `processing_core.py`: the remaining large functions are marker detection/recovery/fusion, crop planning/splitting, OCR recovery, and illustration detection algorithms with substantial cross-calls;
+- `paddle_headwords_core.py`: the remaining large functions are parser/filter/arbitration/separator/CJK recovery and engine-pipeline algorithms; `filter_headword_records(...)` alone remains >1,100 lines;
+- `app.py`: the safe GUI-independent helper seams have been extracted; the remaining body is dominated by Tk classes, mutable application state, worker/result boundaries, and runtime extension slots.
+
+Phase 7S therefore finds **no remaining larger one-way ownership seam** that can be extracted without crossing at least one of these boundaries:
+- mutable GUI/class state;
+- algorithm state-machine cohesion;
+- mutually calling geometry/detection/parser clusters;
+- historical core-global monkeypatch lookup semantics;
+- worker/pickle/module-path compatibility.
+
+Phase 7 is consequently **closed**. Further line-count reduction is no longer an optimization target by itself. Existing oversized-module ratchets remain in force and must not be loosened.
+
+## Recommended next phase — Phase 8 runtime-efficiency profiling
+Switch from structural decomposition to measured runtime efficiency. Begin with read-only inventory of existing timing/caching/concurrency instrumentation and identify hot paths that can be measured without changing behavior. Prefer evidence from wall-clock timing, repeated I/O/decode, duplicate OCR/model work, cache hit/miss behavior, and thread/process scheduling over speculative micro-optimization.
+
+Do not change algorithm thresholds, OCR decisions, crop geometry, file formats, public compatibility facades, or worker semantics merely for speed. Establish a reproducible baseline first, then optimize one measured bottleneck at a time with focused regression/performance evidence.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
