@@ -287,12 +287,13 @@ def test_static_spawn_worker_preserves_worker_services_contract(tmp_path, monkey
     assert events[4] == ("write", pdic, 1, 40, ("p1", "p2", "p3"))
 
 
-def test_spawn_worker_uses_explicit_worker_composition_and_sidecar_aware_pdic():
+def test_spawn_worker_uses_core_owned_sidecar_pdic_composition():
     root = Path(__file__).resolve().parents[1]
     worker = _worker_composition_source()
     job = inspect.getsource(processing_module.detect_entries_job)
 
-    assert "install_pdic_classification(formats)" in worker
+    assert "core_services = build_core_services()" in worker
+    assert "install_pdic_classification(formats)" not in worker
     assert "install_processing_entry_classification" not in worker
     assert "entry_classification_runtime" not in worker
     assert "install_layout_row_recovery_runtime" not in worker
