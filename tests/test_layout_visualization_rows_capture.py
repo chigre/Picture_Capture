@@ -15,6 +15,13 @@ def test_layout_visualization_snapshot_binding_is_static(monkeypatch):
     assert ui._snapshot_for_app(app) == (marker, app)
 
 
+def test_old_shared_snapshot_installer_is_inert(monkeypatch):
+    sentinel = lambda app: ("patched", app)
+    monkeypatch.setattr(ui, "_snapshot_for_app", sentinel)
+    shared.install_shared_layout_visualization_source()
+    assert ui._snapshot_for_app is sentinel
+
+
 
 def test_shared_snapshot_seeds_layoutrows_with_persisted_app_settings(monkeypatch, tmp_path):
     page = tmp_path / "000003.png"
