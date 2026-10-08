@@ -54,3 +54,11 @@ jobs:
 
       - name: Build wheel
         run: uv build --wheel
+
+      - name: Upload benchmark wheel
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8d-benchmark-wheel
+          path: dist/*.whl
+          if-no-files-found: error
