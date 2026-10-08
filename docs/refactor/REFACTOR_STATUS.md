@@ -3,9 +3,11 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 8 — measured runtime-efficiency work is underway. Phase 8E completed one bounded duplicate-analysis optimization from representative-page measurements; the full OCR cold/warm benchmark gate remains open until the real project sidecars/settings and Paddle runtime are available together.**
+**Phase 12 — fresh architecture-debt inventory is underway after Phase 11 closed the settings-migration cleanup. The leading bounded candidate is the OCR-boundary compatibility seam: replace scoped process-global legacy runner rebinding with explicit call-time runner injection, but only if call-chain characterization proves the change can preserve the mature parser and public monkeypatch seams.**
 
-Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
+Phase 11 is closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
+
+The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary.
 
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
@@ -1487,6 +1489,17 @@ Phase 11 is complete:
 - package import remains inert;
 - no settings key, constructor alias, JSON format, or bootstrap profile changed.
 
+Phase 11 closure checkpoint publication:
+- PR #348 fixed head `2c0f3ba87965355bde3f2f32a329b79d569d6173`;
+- PR CI 2257 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #348 merged as `0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`;
+- comparing the Phase 11B merge `fa73e7e541b58f3298a6904c0701f200cb399b74`
+  to the closure merge changes only `docs/refactor/REFACTOR_STATUS.md`, so the
+  Phase 11 production tree is unchanged by the closure publication.
+
 Do **not** introduce a generic compatibility dispatcher merely to eliminate the
 remaining installer order unless a future feature independently requires such a
 framework. The current explicit chain is smaller and better understood than that
@@ -1504,7 +1517,7 @@ micro-optimization without the Phase 8 measurement gate.
 Phase 9 facade compatibility remains an intentional public boundary.
 
 ## Standing continuation authorization
-The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
+The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 11 is complete; Phase 12 follows the same bounded-slice rule.
 
 Continue across related low-risk changes once contracts and focused tests are clear. Use checkpoints at phase milestones, material compatibility-boundary changes, plan changes, merge/finalization boundaries, or when recovery state would otherwise become ambiguous.
 
