@@ -1041,12 +1041,50 @@ Phase 8I publication:
 - PR #327 merged as `7d4ea8af6f7e6ac35095d1546b6c14c05d544fe2`;
 - post-merge CI 2208 and CodeQL 2189 passed.
 
-## Recommended next slice — post-Phase-8I warm re-profile
-Do **not** rerun the expensive cold Paddle benchmark merely to look for Python micro-optimizations unless model/runtime/device settings change; the cold path is dominated by PP-OCRv6 inference.
+## Phase 8J VB fallback brightness caching
+A fresh post-Phase-8I warm-cache profile was run on real pages 0055-0060 for both `paddleocr` and `combined`. The profile confirmed that shape-consensus cost had moved out of the dominant position and exposed several smaller hotspots.
 
-The next safe unit is a fresh warm-cache cProfile on pages 0055-0060 against post-Phase-8I `main`. Select a further production optimization only if the new profile exposes a materially large, stable, exact-equivalent hotspot. Do not optimize from the pre-8I profile because shape-consensus cost has now been structurally removed.
+One candidate, `ordinary_visual._components(...)`, looked promising in isolation:
+- exact component output matched on all 12 representative real masks;
+- function-level aggregate time improved from about **642 ms** to **431 ms** (~1.49x).
 
-Ground-truth accuracy validation remains a separate open item that requires matching `.pdic` references; do not infer accuracy from Paddle-vs-Combined pairwise differences alone.
+However, a paired end-to-end warm-cache check did **not** show a production benefit; the first stable Paddle sample on page 0055 became slower (about **542 ms -> 647 ms**) while output remained exact. The candidate was rejected. Function-level speedup alone is not sufficient when the complete detection path regresses.
+
+The next measured hotspot was legacy VB separator fallback. Historical `_legacy_find_separator_y(...)` repeatedly called `_legacy_row_brightness_1000(...)` for the same fixed horizontal span while the threshold descended from 999 toward 700. The same rows could be summed hundreds of times per candidate.
+
+A lazy cache prototype was validated directly against the legacy ordinary detector on the six real pages:
+- **737 actual separator calls** captured;
+- old and cached implementations returned identical separator values and metadata for **737/737** calls;
+- 428 calls exited through the historical `vb_full_white` fast path;
+- 309 calls used `vb_brightness_fallback`;
+- historical total separator time was about **585 ms**;
+- lazy cached-row total was about **79 ms** (~**7.4x** less function work);
+- median individual call was about **0.080 ms -> 0.074 ms**;
+- an earlier eager-precompute version was rejected because it penalized the cheap full-white path.
+
+Phase 8J therefore:
+- leaves the historical method-1 full-white search unchanged;
+- computes fallback row brightness only after method 1 fails;
+- computes each possible row's historical 0..1000 score once for the fixed candidate span;
+- reuses those exact scores while threshold descends;
+- changes no threshold, geometry, row-step behavior, OCR logic, cache/file format, or compatibility surface.
+
+The first implementation placed the new batching logic inline in the protected oversized `processing_core.py`. Functional tests passed, but the architecture guard correctly rejected growth of the legacy module. The implementation was consequently extracted into the new focused module `ordinary_vb_brightness.py`, and the integration in `processing_core.py` was compacted until the legacy core was smaller than the pre-Phase-8J main version. This is an architecture constraint, not a waived baseline.
+
+Phase 8J publication:
+- PR #329 final fixed head `aaf27bf887bfaf49f2471c7d9b2df4b70a2097d3`;
+- final production/test diff: one new helper module, a compact legacy-core integration, and focused regression coverage;
+- PR CI 2214 passed on Ubuntu/Windows/macOS;
+- PR CodeQL 2196 passed;
+- PR #329 merged as `71a9b9ee4b45074685ded5c74d58674a465618fa`;
+- post-merge CI 2215 and CodeQL 2197 passed.
+
+## Recommended next slice — post-Phase-8J warm re-profile
+Do **not** rerun the expensive cold Paddle benchmark unless the OCR model/runtime/device configuration changes; the ~164 s/page CPU cold path is model-inference dominated.
+
+The next safe unit is a new warm-cache cProfile on pages 0055-0060 against post-Phase-8J `main`. Select another production optimization only if the new profile exposes a materially large and stable hotspot and an exact-equivalent candidate also improves the end-to-end warm path. Do not reuse post-Phase-8I hotspot rankings: Phase 8J specifically removed a major legacy fallback cost.
+
+Ground-truth accuracy validation remains a separate open item that requires matching `.pdic` references; Paddle-vs-Combined pairwise differences are descriptive only.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
