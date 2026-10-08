@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 8 — measured runtime-efficiency work is underway. Phase 8C adds opt-in warm CPU profiling after the wall-clock benchmark, without changing production algorithms or timing samples.**
+**Phase 8 — measured runtime-efficiency work is underway. Phase 8D is a representative-project measurement gate; no production optimization is selected until real cold/warm benchmark data are available.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -835,10 +835,36 @@ Focused regression requires:
 - profile output includes both `.prof` and cumulative top-50 text output;
 - the manifest explicitly records that profiled calls are not timing samples.
 
-## Recommended next slice — Phase 8D
-After Phase 8C validation, stop adding instrumentation unless it answers a concrete measurement question. Run the benchmark on a representative project with at least one cold OCR pass and multiple warm repeats, optionally with warm CPU profiles.
+Phase 8C publication:
+- PR #316 fixed head `6dd27b49d3064ca9aa86d8e78c8149641839c542` passed CI 2187;
+- PR security analysis run 2168 passed;
+- PR #316 merged as `404c13b61b78af75dce974e4b7854dd983052b82`;
+- post-merge CI 2188 and main security analysis 2169 both passed.
+- the separate code-scanning AI findings workflow failed for the same external quota reason seen in earlier phases; it did not represent a code/test/security-scan failure.
 
-Use those outputs to choose the first production optimization. If warm-cache CPU profiles show repeated cache compaction/write or quality-summary work dominating, target that path; if OCR inference dominates cold runs, avoid micro-optimizing orchestration; if image decode or metadata I/O is material, optimize that separately. Do not choose the production change from source inspection alone.
+## Phase 8D representative-project measurement gate
+Repository, Library, and GitHub issue/PR attachment inventory found no accessible representative Picture Capture project containing the real scan pages, project settings, `.pdic` ground truth, and OCR diagnostics needed for a trustworthy runtime decision.
+
+The repository does contain:
+- four small headword example crops;
+- layout screenshots;
+- documentation recording real OCR work on pages 0055-0070, including repeated investigation of pages 55-60.
+
+Those example images are not a representative full-page workload and must not be used to choose a production optimization.
+
+The standard Phase 8D protocol is now documented in `docs/refactor/PHASE8D_BENCHMARK_RUNBOOK.md`. The preferred minimum run is:
+- pages 55-60;
+- modes `left_edge,paddleocr,combined`;
+- first OCR pass forced cold with `--force-ocr`;
+- `--timing-repeats 4`, yielding three warm repeats per page/mode;
+- separate warm cProfile output via `--warm-cpu-profile-dir`.
+
+No production optimization is authorized from source inspection alone. The first production change must be selected from the benchmark JSON plus warm-profile outputs and must preserve formal first-run correctness/ground-truth fields.
+
+## Recommended next slice — Phase 8D execution
+Run the documented Phase 8D command as soon as a representative project directory is available to the execution environment. Use the measured cold-vs-warm timing and cumulative warm profiles to select exactly one production bottleneck.
+
+If OCR inference dominates cold runs, avoid micro-optimizing orchestration. If warm cache/reporting work dominates repeated calls, target that measured path. If image decode or metadata I/O is material, treat it as a separate I/O optimization. Do not add further instrumentation before the representative run unless the current benchmark cannot answer the observed measurement question.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
