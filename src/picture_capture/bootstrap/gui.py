@@ -30,13 +30,11 @@ def prepare_gui_application() -> Any:
 
     formats = core_services.formats
     from ..training_baseline import build_write_pdic_capture
-    from ..entry_classification import install_pdic_classification
 
-    # Baseline capture remains the inner compatibility writer; classification is
-    # the outer persistence layer so every GUI save also updates the metadata
-    # sidecar without changing the historical PDIC format.
+    # Core composition already owns classification persistence for every process
+    # profile. GUI adds only the conservative automatic-baseline capture around
+    # that composed writer; there is no second classification installation here.
     formats.write_pdic = build_write_pdic_capture(formats.write_pdic)
-    install_pdic_classification(formats)
 
     # Character-height fallback is now static in layout_detection; Page Design
     # and policy imports no longer depend on a local installer ordering guard.
