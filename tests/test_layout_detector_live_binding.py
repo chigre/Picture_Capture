@@ -27,6 +27,17 @@ def test_policy_detector_binding_tracks_runtime_replacement(monkeypatch):
     assert policy.detect_layout_parameters is not layout_detection.detect_layout_parameters
 
 
+def test_retired_installer_is_a_compatibility_noop():
+    import picture_capture.dictionary_page_layout_policy as policy
+    from picture_capture.layout_detector_live_binding import (
+        install_live_layout_detector_binding,
+    )
+
+    before = policy.detect_layout_parameters
+    assert install_live_layout_detector_binding() is None
+    assert policy.detect_layout_parameters is before
+
+
 def test_live_binding_is_static_and_needs_no_bootstrap_installer():
     from pathlib import Path
 
