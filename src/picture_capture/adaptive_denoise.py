@@ -105,15 +105,21 @@ def _box_sums(
     max_rx = max(radius_x for _radius_y, radius_x in normalized)
     source = np.asarray(mask, dtype=np.uint8)
     height, width = source.shape
-    padded = np.pad(
-        source,
-        ((max_ry, max_ry), (max_rx, max_rx)),
-        mode="constant",
+
+    # Build the padded integral image in one int32 allocation. The historical
+    # version allocated one full-page array per cumulative-sum pass and copied
+    # again to add the leading zero border. In-place accumulation preserves the
+    # exact integer integral while reducing full-page memory churn.
+    integral = np.zeros(
+        (height + 2 * max_ry + 1, width + 2 * max_rx + 1),
+        dtype=np.int32,
     )
-    integral = np.pad(
-        padded.cumsum(axis=0, dtype=np.int32).cumsum(axis=1, dtype=np.int32),
-        ((1, 0), (1, 0)),
-    )
+    integral[
+        1 + max_ry:1 + max_ry + height,
+        1 + max_rx:1 + max_rx + width,
+    ] = source
+    np.cumsum(integral, axis=0, dtype=np.int32, out=integral)
+    np.cumsum(integral, axis=1, dtype=np.int32, out=integral)
 
     result: list[np.ndarray] = []
     for radius_y, radius_x in normalized:
