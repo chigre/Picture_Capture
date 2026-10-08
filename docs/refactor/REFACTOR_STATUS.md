@@ -1107,12 +1107,51 @@ Phase 8K publication:
 - PR #331 merged as `0836eb3e772b44381c05e5ed0a8414f5968594fd`;
 - post-merge CI 2220 and CodeQL 2202 passed.
 
-## Recommended next slice — post-Phase-8K warm re-profile
-Do **not** rerun the expensive cold Paddle benchmark unless the OCR model/runtime/device configuration changes; the ~164 s/page CPU cold path remains model-inference dominated.
+## Phase 8L build the denoise integral in place
+The planned post-Phase-8K OCR warm re-profile could not be reproduced faithfully in the current execution container because the project-level PaddleOCR result cache from the earlier successful Phase 8D run was no longer present after environment reset.
 
-The next safe unit is a fresh warm-cache cProfile on pages 0055-0060 against post-Phase-8K `main`. Select another production optimization only if the new profile exposes a materially large, stable hotspot and an exact-equivalent candidate also improves the complete warm path. Do not reuse post-Phase-8J rankings: Phase 8K removed repeated full-page grayscale conversion from Combined separator arbitration.
+The exported Paddle runtime itself was validated:
+- Python 3.13, Paddle 3.3.0 and PaddleOCR 3.7.0 load successfully;
+- cached PP-OCRv6 detection/recognition models are present locally;
+- a real 600x512 crop from page 0055 completed OCR normally (4-thread inference about 18.7 s);
+- however, a full-page 0055 cache rebuild in this container remained active for more than 15 minutes without producing a cache, far outside the earlier validated ~164 s/page CPU baseline.
 
-Ground-truth accuracy validation remains a separate open item that requires matching `.pdic` references; Paddle-vs-Combined pairwise differences are descriptive only.
+That full-page discrepancy is treated as an **execution-environment/runtime scheduling anomaly**, not as a production performance regression. No new OCR warm-path production optimization is authorized from this distorted environment until a valid project OCR cache or comparable runtime is available again.
+
+A fresh non-OCR real-page profile on pages 0055-0060 still identified one safe pure-CPU hotspot shared by analysis preprocessing:
+- warmed `left_edge` median was about **91.6 ms/page** in the post-Phase-8K package;
+- `_box_sums(...)` remained the largest pure NumPy denoise cost;
+- Phase 8F had already reduced five separate integral images to one, so Phase 8L targeted only the remaining full-page allocation/copy churn.
+
+The historical multi-window implementation created a padded uint8 image, then one full int32 array for the first cumulative sum, another for the second cumulative sum, and another copy to add the leading zero border. The Phase 8L candidate allocates the final padded int32 integral once, writes the source mask into its centered slice, and runs both NumPy cumulative sums in place with `out=integral`.
+
+Exact-equivalence validation on real pages 0055-0060:
+- every one of the five denoise window sums matched the historical implementation pixel-for-pixel;
+- randomized mixed-shape/radius masks remained covered by the existing exact regression against `_box_sum(...)`;
+- the complete final `build_analysis_image(...)` RGB output matched pixel-for-pixel on all six pages;
+- `analysis_denoise_profile` metadata matched exactly on all six pages.
+
+Representative component performance:
+- `_box_sums(...)` was roughly **1.25x-1.40x** faster across the real masks;
+- full `build_analysis_image(...)` six-page median improved from about **73.8 ms** to **65.0 ms** (~**11.9%**);
+- 5/6 pages improved in the paired component run.
+
+Because the complete analysis image and its denoise metadata are exactly identical before downstream Layout/OCR logic consumes them, this component boundary provides a stronger semantic equivalence check than timing a distorted Paddle environment.
+
+Phase 8L publication:
+- PR #334 fixed head `33dbaf86091ef70055c56170afb89f7a00f791bd`;
+- production diff: one file (`adaptive_denoise.py`);
+- PR CI 2224 passed on Ubuntu/Windows/macOS;
+- PR CodeQL 2206 passed;
+- PR #334 merged as `1dd4d62cfb84653e65b6dfd9692346c54fffa261`;
+- post-merge CI 2225 and CodeQL 2207 passed.
+
+## Recommended next slice — post-Phase-8L measurement gate
+Do **not** rebuild the six-page Paddle cold cache in the current execution container merely to obtain warm timing; the current full-page CPU runtime is not comparable with the earlier validated Phase 8D environment.
+
+For OCR/Combined work, resume only when either the prior project-level OCR cache is available again or a runtime reproduces the earlier cold-page order of magnitude. Ground-truth accuracy remains separately gated on matching `.pdic` references.
+
+For non-OCR CPU work, first generate a fresh post-Phase-8L profile. Continue only for a materially large hotspot with exact semantic equivalence at its complete downstream boundary. Remaining sub-millisecond or low-single-digit-ms candidates should be rejected rather than accumulated as maintenance-heavy micro-optimizations.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
