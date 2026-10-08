@@ -11,7 +11,6 @@ import math
 import os
 import re
 import subprocess
-import tempfile
 import threading
 import unicodedata
 from io import BytesIO
@@ -26,6 +25,15 @@ from .paddle_headword_models import (
     HeadwordParse,
     OCRLine,
     OCRRecord,
+)
+
+from .paddle_cache_storage import (
+    atomic_write_json_impl as _cache_atomic_write_json_impl,
+    atomic_write_text_impl as _cache_atomic_write_text_impl,
+    compact_cached_candidate_impl as _cache_compact_cached_candidate_impl,
+    compact_ocr_cache_file_impl as _cache_compact_ocr_cache_file_impl,
+    compact_ocr_cache_payload_impl as _cache_compact_ocr_cache_payload_impl,
+    regenerable_sidecars_impl as _cache_regenerable_sidecars_impl,
 )
 from .runtime_environment import resolve_paddle_device
 from .image_utils import normalize_page_rgb
@@ -7306,35 +7314,15 @@ _QUALITY_SUMMARY_LOCK = threading.Lock()
 
 def _atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
     """Publish OCR/cache text atomically and remove failed temporary files."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w", encoding=encoding, dir=path.parent,
-            prefix=f".{path.name}.", suffix=".tmp", delete=False,
-        ) as handle:
-            temp_path = Path(handle.name)
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp_path, path)
-    except Exception:
-        if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
-        raise
+    _cache_atomic_write_text_impl(path, text, encoding=encoding)
 
 
 def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
-    """Write machine-owned OCR JSON compactly.
-
-    These files can contain thousands of OCR candidates. Pretty-printing them
-    adds substantial project size without helping normal users, so keep them
-    UTF-8/readable but remove structural whitespace.
-    """
-    _atomic_write_text(
+    """Write machine-owned OCR JSON compactly while honoring core overrides."""
+    _cache_atomic_write_json_impl(
         path,
-        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
-        encoding="utf-8",
+        payload,
+        write_text=_atomic_write_text,
     )
 
 
@@ -7348,108 +7336,37 @@ _OCR_REGENERABLE_SIDECAR_SUFFIXES = (
 
 
 def _compact_cached_candidate(row: Any) -> Any:
-    """Keep only candidate fields required by Project Profile coverage diagnostics."""
-    if not isinstance(row, dict):
-        return row
-    if "meta" in row:
-        return {"meta": _source_only_persistence(row.get("meta") or {})}
-    compact: dict[str, Any] = {}
-    for key in ("box", "accepted", "reject_reason"):
-        if key in row:
-            compact[key] = _source_only_persistence(row[key])
-    features = row.get("features")
-    if isinstance(features, dict):
-        kept_features = {
-            key: features[key]
-            for key in (
-                "visual_marker_template_score",
-                "ordinary_strong_edge_visual_rescue",
-            )
-            if key in features
-        }
-        if kept_features:
-            compact["features"] = kept_features
-    return compact
+    """Keep only candidate fields required by Profile coverage diagnostics."""
+    return _cache_compact_cached_candidate_impl(
+        row,
+        source_only=_source_only_persistence,
+    )
 
 
 def compact_ocr_cache_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Return the reusable OCR cache in its compact persisted representation.
-
-    Runtime arbitration keeps rich per-engine diagnostics in memory. Persisted
-    cache only needs raw Paddle records for reuse, lightweight candidate facts
-    for Profile coverage, top-level review candidates for GUI review/manual
-    overrides, and final entries/quality metadata.
-    """
-    result = dict(payload)
-    compact_columns: list[dict[str, Any]] = []
-    for raw in list(payload.get("columns") or []):
-        if not isinstance(raw, dict):
-            continue
-        column: dict[str, Any] = {}
-        for key in ("column", "band_size", "ocr_records", "paddle_accepted_count"):
-            if key in raw:
-                column[key] = _source_only_persistence(raw[key])
-        candidates = [
-            _compact_cached_candidate(item)
-            for item in list(raw.get("candidates") or [])
-        ]
-        if candidates:
-            column["candidates"] = candidates
-        compact_columns.append(column)
-    result["columns"] = compact_columns
-    result["cache_storage"] = "compact-v1"
-    return _source_only_persistence(result)
+    """Return the reusable OCR cache in compact persisted representation."""
+    return _cache_compact_ocr_cache_payload_impl(
+        payload,
+        source_only=_source_only_persistence,
+        compact_candidate=_compact_cached_candidate,
+    )
 
 
 def _regenerable_sidecars(cache_path: Path) -> list[Path]:
-    return [
-        cache_path.with_name(f"{cache_path.stem}{suffix}")
-        for suffix in _OCR_REGENERABLE_SIDECAR_SUFFIXES
-    ]
+    return _cache_regenerable_sidecars_impl(
+        cache_path,
+        suffixes=_OCR_REGENERABLE_SIDECAR_SUFFIXES,
+    )
 
 
 def compact_ocr_cache_file(cache_path: Path) -> tuple[int, int, int]:
-    """Compact one existing page cache and delete only regenerable diagnostics.
-
-    Returns (before_bytes, after_bytes, removed_sidecars). The main cache
-    remains reusable and *_manual_selection.json is intentionally preserved
-    because it contains user decisions rather than disposable diagnostics.
-    """
-    cache_path = Path(cache_path)
-    before_bytes = 0
-    if cache_path.exists():
-        try:
-            before_bytes += int(cache_path.stat().st_size)
-        except OSError:
-            pass
-    sidecars = _regenerable_sidecars(cache_path)
-    for path in sidecars:
-        if path.exists():
-            try:
-                before_bytes += int(path.stat().st_size)
-            except OSError:
-                pass
-
-    if cache_path.exists():
-        payload = json.loads(cache_path.read_text(encoding="utf-8"))
-        if not isinstance(payload, dict):
-            raise ValueError(f"OCR cache is not a JSON object: {cache_path.name}")
-        _atomic_write_json(cache_path, compact_ocr_cache_payload(payload))
-
-    removed = 0
-    for path in sidecars:
-        if not path.exists():
-            continue
-        path.unlink()
-        removed += 1
-
-    after_bytes = 0
-    if cache_path.exists():
-        try:
-            after_bytes += int(cache_path.stat().st_size)
-        except OSError:
-            pass
-    return before_bytes, after_bytes, removed
+    """Compact one page cache while preserving core monkeypatch semantics."""
+    return _cache_compact_ocr_cache_file_impl(
+        cache_path,
+        sidecar_paths=_regenerable_sidecars,
+        compact_payload=compact_ocr_cache_payload,
+        write_json=_atomic_write_json,
+    )
 
 def _tsv_clean(value: Any) -> str:
     if value is None:
