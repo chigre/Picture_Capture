@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 from typing import Iterable
@@ -80,6 +79,25 @@ from .image_preprocessing_models import (
     OutputCanvasInfo,
     PreprocessAnalysis,
 )
+from .image_preprocessing_constants import (
+    AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX,
+    AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX,
+    AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX,
+    AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX,
+    DEFAULT_DESKEW_DEAD_ZONE_DEG,
+    DEFAULT_MAX_AUTO_DESKEW_DEG,
+    ORTHOGONAL_AUTO_GAINS,
+    ORTHOGONAL_AUTO_MIN_CONFIDENCE,
+    ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT,
+    ORTHOGONAL_MAX_AUTO_PASSES,
+    ORTHOGONAL_MIN_SAFE_GAIN,
+    ORTHOGONAL_SCALE_SAFETY_FRACTION,
+    ORTHOGONAL_TAIL_MAX_REGRESSION_PX,
+    ORTHOGONAL_TAIL_PROGRESS_RATIO,
+    ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX,
+    ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO,
+    POST_PERSPECTIVE_REDETECT_MIN_BOXES,
+)
 from .image_preprocessing_canvas import (
     _normalize_canvas_alignment,
     output_canvas_info,
@@ -100,29 +118,13 @@ from .image_preprocessing_storage import (
     processed_output_root,
     promote_processed_pages,
 )
-from .image_preprocessing_reporting import export_summary_csv, result_summary
+from .image_preprocessing_reporting import (
+    _export_diagnostic_json_impl,
+    export_summary_csv,
+    result_summary,
+)
 
 
-DEFAULT_MAX_AUTO_DESKEW_DEG = 5.0
-DEFAULT_DESKEW_DEAD_ZONE_DEG = 0.12
-# Automatic perspective is now guarded by the transform's analytic Jacobian
-# and before/after text-scale stability. Physical separators remain optional
-# structural evidence and no longer change the distortion budget.
-AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX = 0.040
-AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX = 0.070
-AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX = 0.055
-AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX = 0.035
-ORTHOGONAL_AUTO_MIN_CONFIDENCE = 0.45
-ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT = 0.25
-ORTHOGONAL_AUTO_GAINS = (0.55, 0.70, 0.85, 1.0, 1.10, 1.15)
-ORTHOGONAL_MIN_SAFE_GAIN = 0.45
-ORTHOGONAL_SCALE_SAFETY_FRACTION = 0.95
-ORTHOGONAL_TAIL_PROGRESS_RATIO = 0.90
-ORTHOGONAL_TAIL_MAX_REGRESSION_PX = 0.50
-ORTHOGONAL_MAX_AUTO_PASSES = 3
-POST_PERSPECTIVE_REDETECT_MIN_BOXES = 8
-ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX = 3.5
-ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO = 0.0015
 PREVIEW_YELLOW = (255, 225, 110, 94)
 PREVIEW_OUTLINE = (218, 164, 24, 255)
 
@@ -3551,161 +3553,20 @@ def export_diagnostic_json(
     canvas: OutputCanvasInfo | None = None,
     settings: AppSettings | None = None,
 ) -> Path:
-    payload = analysis.to_dict()
-    payload["page"] = Path(page).name
-    payload["source_path_name"] = Path(page).name
-    payload["effective_settings"] = (
-        {
-            "layout_writing_mode": str(settings.layout_writing_mode),
-            "layout_text_direction": str(settings.layout_text_direction),
-            "layout_transform": str(settings.layout_transform),
-            "layout_columns_policy": str(settings.layout_columns_policy),
-            "fixed_columns": int(settings.columns),
-            "layout_column_separator_mode": str(
-                settings.layout_column_separator_mode
-            ),
-            "analysis_threshold_mode": str(settings.analysis_threshold_mode),
-            "preprocess_auto_deskew": bool(
-                settings.preprocess_auto_deskew
-            ),
-            "preprocess_safety_margin_px": int(
-                settings.preprocess_safety_margin_px
-            ),
-            "preprocess_geometry_mode": str(
-                settings.preprocess_geometry_mode
-            ),
-            "preprocess_export_canvas_enabled": bool(
-                settings.preprocess_export_canvas_enabled
-            ),
-            "preprocess_export_canvas_mode": str(
-                settings.preprocess_export_canvas_mode
-            ),
-            "preprocess_export_canvas_width": int(
-                settings.preprocess_export_canvas_width
-            ),
-            "preprocess_export_canvas_height": int(
-                settings.preprocess_export_canvas_height
-            ),
-            "preprocess_export_margin_top": int(
-                settings.preprocess_export_margin_top
-            ),
-            "preprocess_export_margin_bottom": int(
-                settings.preprocess_export_margin_bottom
-            ),
-            "preprocess_export_margin_left": int(
-                settings.preprocess_export_margin_left
-            ),
-            "preprocess_export_margin_right": int(
-                settings.preprocess_export_margin_right
-            ),
-            "preprocess_export_align_x": str(
-                settings.preprocess_export_align_x
-            ),
-            "preprocess_export_align_y": str(
-                settings.preprocess_export_align_y
-            ),
-        }
-        if settings is not None else None
-    )
-    payload["algorithm_constants"] = {
-        "max_auto_deskew_deg": DEFAULT_MAX_AUTO_DESKEW_DEG,
-        "deskew_dead_zone_deg": DEFAULT_DESKEW_DEAD_ZONE_DEG,
-        "auto_homography_horizontal_scale_span_max": (
-            AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX
-        ),
-        "auto_homography_vertical_scale_span_max": (
-            AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX
-        ),
-        "auto_homography_area_scale_span_max": (
-            AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX
-        ),
-        "auto_homography_anisotropy_p95_max": (
-            AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
-        ),
-        "orthogonal_auto_min_confidence": ORTHOGONAL_AUTO_MIN_CONFIDENCE,
-        "orthogonal_auto_min_score_improvement": (
-            ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT
-        ),
-        "orthogonal_auto_gains": list(ORTHOGONAL_AUTO_GAINS),
-        "orthogonal_min_safe_gain": ORTHOGONAL_MIN_SAFE_GAIN,
-        "orthogonal_scale_safety_fraction": ORTHOGONAL_SCALE_SAFETY_FRACTION,
-        "orthogonal_tail_progress_ratio": ORTHOGONAL_TAIL_PROGRESS_RATIO,
-        "orthogonal_tail_max_regression_px": (
-            ORTHOGONAL_TAIL_MAX_REGRESSION_PX
-        ),
-        "pixel_row_bottom_tail_p90_max_px": (
-            PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX
-        ),
-        "pixel_row_bottom_tail_worst_max_px": (
-            PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX
-        ),
-        "orthogonal_max_auto_passes": ORTHOGONAL_MAX_AUTO_PASSES,
-        "post_perspective_redetect_min_boxes": (
-            POST_PERSPECTIVE_REDETECT_MIN_BOXES
-        ),
-        "orthogonal_warp_max_scale_deviation": (
-            ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
-        ),
-        "orthogonal_vertical_max_span_min_px": (
-            ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX
-        ),
-        "orthogonal_vertical_max_span_width_ratio": (
-            ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO
-        ),
-        "horizontal_alignment_max_edge_pair_delta_deg": (
-            HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG
-        ),
-        "text_scale_inline_span_max": TEXT_SCALE_INLINE_SPAN_MAX,
-        "text_scale_cross_span_max": TEXT_SCALE_CROSS_SPAN_MAX,
-        "text_scale_inline_gradient_max": TEXT_SCALE_INLINE_GRADIENT_MAX,
-        "text_scale_cross_gradient_max": TEXT_SCALE_CROSS_GRADIENT_MAX,
-        "text_scale_anisotropy_p95_max": TEXT_SCALE_ANISOTROPY_P95_MAX,
-        "horizontal_vp_min_rows": HORIZONTAL_VP_MIN_ROWS,
-        "horizontal_vp_min_trend_deg": HORIZONTAL_VP_MIN_TREND_DEG,
-        "horizontal_alignment_min_improvement": (
-            HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT
-        ),
-        "horizontal_alignment_max_after_trend_deg": (
-            HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG
-        ),
-        "horizontal_alignment_max_after_edge_deg": (
-            HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
-        ),
-        "horizontal_vp_column_spread_max_deg": (
-            HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG
-        ),
-        "horizontal_strength_min": HORIZONTAL_STRENGTH_MIN,
-        "horizontal_strength_coarse_step": HORIZONTAL_STRENGTH_COARSE_STEP,
-        "horizontal_strength_fine_step": HORIZONTAL_STRENGTH_FINE_STEP,
-        "separator_curve_span_min": SEPARATOR_CURVE_SPAN_MIN,
-        "separator_track_quality_min": SEPARATOR_TRACK_QUALITY_MIN,
-        "separator_curvature_score_min": SEPARATOR_CURVATURE_SCORE_MIN,
-        "separator_curve_width_ratio_threshold": (
-            SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD
-        ),
-        "separator_jump_min_px": SEPARATOR_JUMP_MIN_PX,
-        "separator_jump_width_ratio_max": SEPARATOR_JUMP_WIDTH_RATIO_MAX,
-    }
-    payload["export"] = {
-        "output_filename": Path(output_path).name if output_path is not None else None,
-        "content_width": max(1, analysis.crop_box[2] - analysis.crop_box[0]),
-        "content_height": max(1, analysis.crop_box[3] - analysis.crop_box[1]),
-        "canvas": (
-            canvas.to_dict()
-            if canvas is not None
-            else output_canvas_info(analysis, enabled=False).to_dict()
-        ),
-    }
-    destination = Path(destination)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(destination.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(destination)
-    return destination
+    """Write diagnostic JSON through the reporting owner.
 
+    The wrapper remains here so the historical callable path and the current
+    `output_canvas_info` module-global hook stay observable to existing callers.
+    """
+    return _export_diagnostic_json_impl(
+        page,
+        analysis,
+        destination,
+        output_path=output_path,
+        canvas=canvas,
+        settings=settings,
+        canvas_info_factory=output_canvas_info,
+    )
 
 def save_review_preview(
     page: Path,
