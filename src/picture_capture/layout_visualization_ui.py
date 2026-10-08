@@ -62,81 +62,10 @@ def _layout_cache_key(app: Any) -> tuple[Any, ...]:
 
 
 def _snapshot_for_app(app: Any) -> LayoutVisualizationSnapshot:
-    if getattr(app, "image", None) is None:
-        raise RuntimeError("没有可显示的页面图像")
+    """Return the shared ordinary-layout snapshot without bootstrap rebinding."""
+    from .layout_visualization_shared import shared_snapshot_for_app
 
-    key = _layout_cache_key(app)
-    if (
-        getattr(app, "_layout_visualization_snapshot_key", None) == key
-        and getattr(app, "_layout_visualization_snapshot", None) is not None
-    ):
-        return app._layout_visualization_snapshot
-
-    effective = app._current_effective_profile_settings()
-    page_index = max(0, int(getattr(app, "current_index", 0)))
-    masked = page_template_analysis_image(app.image, effective, page_index)
-    analysis = build_analysis_image(masked, effective)
-    try:
-        used = replace(effective)
-        auto_enabled = bool(getattr(used, "ordinary_auto_layout", False))
-        estimate = None
-        applied: dict[str, int] = {}
-        raw: dict[str, int] = {}
-
-        if auto_enabled:
-            detector_settings = replace(used)
-            if bool(getattr(used, "ordinary_auto_columns", True)):
-                detector_settings.layout_columns_policy = "detect"
-            estimate = detect_layout_parameters(analysis, detector_settings)
-            for field, switch in ORDINARY_AUTO_LAYOUT_FIELDS:
-                value = int(getattr(estimate, field))
-                raw[field] = value
-                if bool(getattr(used, switch, True)):
-                    setattr(used, field, value)
-                    applied[field] = value
-            used.manual_columns = False
-
-        geometry = derive_geometry(analysis, used)
-        used_values = {
-            "columns": int(getattr(used, "columns", len(geometry.column_starts))),
-            "start_y": int(getattr(used, "start_y", geometry.top)),
-            "manual_x": int(getattr(used, "manual_x", geometry.column_starts[0] if geometry.column_starts else 0)),
-            "column_width": int(getattr(used, "column_width", geometry.column_widths[0] if geometry.column_widths else 0)),
-            "gutter": int(getattr(used, "gutter", 0)),
-            "character_height": int(getattr(used, "character_height", 0)),
-            "row_padding": int(getattr(used, "row_padding", 0)),
-            "bottom_y": int(getattr(geometry, "bottom", 0)),
-        }
-        snapshot = LayoutVisualizationSnapshot(
-            geometry=geometry,
-            method=(
-                str(getattr(estimate, "method", "auto_layout"))
-                if estimate is not None else "project/profile geometry"
-            ),
-            confidence=(
-                float(getattr(estimate, "confidence"))
-                if estimate is not None and getattr(estimate, "confidence", None) is not None
-                else None
-            ),
-            auto_enabled=auto_enabled,
-            applied_fields=applied,
-            raw_estimate=raw,
-            used_values=used_values,
-        )
-        app._layout_visualization_snapshot_key = key
-        app._layout_visualization_snapshot = snapshot
-        return snapshot
-    finally:
-        try:
-            analysis.close()
-        except Exception:
-            pass
-        try:
-            if masked is not app.image:
-                masked.close()
-        except Exception:
-            pass
-
+    return shared_snapshot_for_app(app)
 
 def _source_polyline(geometry: Any, points: list[tuple[int, int]]) -> list[float]:
     values: list[float] = []
