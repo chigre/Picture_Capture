@@ -888,14 +888,64 @@ Phase 8E publication:
 - PR #318 merged as `d629b714440c3e63c985ba46e18aae40aaadbcfc`;
 - post-merge CI 2192 passed; post-merge CodeQL 2173 passed.
 
-## Recommended next slice — complete Phase 8D OCR measurement
-The next production optimization is again measurement-gated. Run the documented Phase 8D command when the **same execution environment** has:
-- the real pages 55-60;
-- matching project settings and headword rules;
-- `.pdic` ground truth when available;
-- Paddle/PaddleOCR runtime and the repository source/package.
+## Phase 8F real-page left-edge profiling and shared denoise integral reuse
+The representative-page gate was partially unblocked without weakening the earlier OCR boundary.
 
-Use the resulting cold/warm JSON and warm cProfile artifacts to choose exactly one further bottleneck. Do not treat the Phase 8E component measurements as a substitute for the full OCR benchmark and do not perform another source-only production performance rewrite.
+The Library still contains only the real scan images `0055.png` through `0060.png`; matching project settings, headword rules, `.pdic` files, PaddleOCR caches/diagnostics, and a Paddle/PaddleOCR runtime are still unavailable. However, inspection of `scripts/detection_benchmark.py` and `ProjectState.open(...)` confirmed that:
+- `.pdic` ground truth is optional for timing/profile execution;
+- an image-only project can open with default `AppSettings()`;
+- `left_edge` does not require PaddleOCR when selected explicitly.
+
+To move the already-CI-validated package into the network-isolated execution container, temporary draft PR #320 added only a CI wheel upload step. Its Ubuntu job produced the current package artifact; PR #320 was then closed **without merge**. The six real scan pages were never uploaded to GitHub.
+
+A four-call-per-page `left_edge` run plus one extra warmed cProfile call per page found:
+- image decode median: about **29 ms/page**;
+- initial baseline first-call median: about **1.73 s/page**;
+- baseline same-machine warm median: **145.9 ms/page**;
+- six warmed profile calls: about **1.02 s** total;
+- `build_analysis_image`: about **0.764 s** total;
+- `adaptive_speck_remove_mask`: about **0.659 s** total;
+- five separate local-window integral calculations: about **0.625 s** total, with 60 NumPy `cumsum` calls taking about **0.436 s**.
+
+The adaptive cleaner needed five local-support windows (5x5, 11x11, 13x1, 1x13, and 17x17), but the historical implementation rebuilt a separate padded integral image for every window. A prototype reused one max-padded integral image for all five windows.
+
+Equivalence validation before production change:
+- all five window sums matched the historical `_box_sum(...)` pixel-for-pixel on randomized masks;
+- the same five windows matched pixel-for-pixel on every real page 0055-0060;
+- the five-window component median fell from about **88.2 ms** to **30.1 ms** (~2.93x).
+
+Phase 8F therefore:
+- keeps the historical single-window `_box_sum(...)` helper unchanged;
+- adds a private multi-window helper that builds one integral image and derives all five sums by slicing;
+- changes no denoise threshold, strength rule, geometry, OCR behavior, setting, cache format, file format, or compatibility surface;
+- adds focused exact-equivalence regression coverage.
+
+End-to-end representative-page validation:
+- baseline same-machine warm median: **145.9 ms/page**;
+- Phase 8F warm median: **88.9 ms/page**, about **39% lower**;
+- every page's complete `(word, x, y)` marker list matched the baseline exactly.
+
+Post-change warmed profiling moved the bottleneck:
+- six warmed calls: about **0.623 s** total;
+- shared integral calculation: about **0.253 s** total;
+- separator-Y refinement: about **0.107 s** total;
+- generic analysis ink construction: about **0.088 s** total;
+- image fingerprinting: about **0.068 s** total.
+
+No single remaining non-OCR hotspot is large enough to justify an immediate follow-on rewrite without a new equivalence microbenchmark.
+
+Phase 8F publication:
+- PR #321 fixed head `1aa7a2068e24b5bb15a320a994e1d18ec7572495`;
+- production/test diff: 2 files;
+- PR CI 2196 passed on Ubuntu/Windows/macOS;
+- PR CodeQL 2177 and Advanced Security 1896 passed;
+- PR #321 merged as `156547615dac92234c438eedc9029860e866696f`;
+- post-merge CI 2197 and CodeQL 2178 passed.
+
+## Recommended next slice — measurement-gated Phase 8G
+The full Paddle/combined cold-vs-warm benchmark remains open. Run it when the same execution environment has Paddle/PaddleOCR plus the real project sidecars/settings; ground truth remains preferable but is not required for timing-only work.
+
+If continuing the non-OCR CPU path before that environment is available, choose exactly one hotspot from the **post-Phase-8F** profile and first prove an equivalent implementation with a representative-page microbenchmark. Do not optimize from pre-8F profiles, because the hotspot distribution has materially changed.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
