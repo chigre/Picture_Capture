@@ -21,7 +21,10 @@ from .dictionary_profile import (
 )
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from .image_utils import normalize_page_rgb
-from .layout_detection import aggregate_layout_estimates, detect_layout_parameters
+from .layout_detection import aggregate_layout_estimates
+from .profile_layout_bootstrap import (
+    detect_profile_layout_parameters as detect_layout_parameters,
+)
 from .models import AppSettings
 from .processing import derive_geometry, detect_entries
 from .profile_semantics import (
