@@ -3263,6 +3263,9 @@ def split_whole_entries(
         image.close()
 
 
+AUTO_ILLUSTRATION_LABEL_TOKEN = "|AUTO_"
+
+
 def _rle_components(mask: np.ndarray) -> list[tuple[int, int, int, int, int]]:
     """Connected components for a small binary mask using row runs.
 
