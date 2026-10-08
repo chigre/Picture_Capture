@@ -3,7 +3,7 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 8 — measured runtime-efficiency work is underway. Phase 8D is a representative-project measurement gate; no production optimization is selected until real cold/warm benchmark data are available.**
+**Phase 8 — measured runtime-efficiency work is underway. Phase 8E completed one bounded duplicate-analysis optimization from representative-page measurements; the full OCR cold/warm benchmark gate remains open until the real project sidecars/settings and Paddle runtime are available together.**
 
 Phase 4 controller decomposition and Phase 5 runtime-patch cleanup are complete. Phase 5 remains closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
@@ -861,10 +861,41 @@ The standard Phase 8D protocol is now documented in `docs/refactor/PHASE8D_BENCH
 
 No production optimization is authorized from source inspection alone. The first production change must be selected from the benchmark JSON plus warm-profile outputs and must preserve formal first-run correctness/ground-truth fields.
 
-## Recommended next slice — Phase 8D execution
-Run the documented Phase 8D command as soon as a representative project directory is available to the execution environment. Use the measured cold-vs-warm timing and cumulative warm profiles to select exactly one production bottleneck.
+## Phase 8E representative-page execution and duplicate analysis reuse
+A recovery pass found the real scanned pages `0055.png` through `0060.png` in the authorized Library and materialized them only into the private execution environment. They were **not** uploaded to the public repository.
 
-If OCR inference dominates cold runs, avoid micro-optimizing orchestration. If warm cache/reporting work dominates repeated calls, target that measured path. If image decode or metadata I/O is material, treat it as a separate I/O optimization. Do not add further instrumentation before the representative run unless the current benchmark cannot answer the observed measurement question.
+The environment did not contain the matching project settings, `.pdic` ground truth, headword-rule sidecars, OCR cache, installed Picture Capture package, or Paddle/PaddleOCR runtime. Network-isolated container execution also could not clone/install the repository from GitHub. Therefore the standard Phase 8D `detection_benchmark.py` cold/warm OCR command was **not** represented as completed.
+
+Available representative-page component measurements were still used to reject or authorize only narrowly matching work:
+- Pillow decode + RGB conversion across pages 55-60: median about **30.6 ms/page**;
+- grayscale + ndarray + threshold-mask surrogate across the same pages: median about **3.0 ms/page**;
+- an identical-cache-write avoidance microbenchmark did not show stable benefit and was rejected rather than shipped.
+
+Source verification then found one exact duplicate computation in the policy-aware layout path. `infer_dictionary_page_layout(...)` already owned the canonical `page_ink`, but `finalize_layout_column_drift(...)` immediately repeated `_analysis_page -> grayscale -> analysis_ink_mask` solely to remeasure the same layout rows. Historical Phase 5S notes had explicitly deferred this duplicate pass rather than changing it during ownership migration.
+
+Phase 8E therefore:
+- adds an optional existing `page_ink` argument to `finalize_layout_column_drift(...)`;
+- passes the already-computed mask from `dictionary_page_layout_policy.py`;
+- preserves the complete historical fallback when callers do not supply a mask;
+- adds regression coverage proving the reuse path does not call `_analysis_page` or `analysis_ink_mask`, while the existing fallback test still exercises the old path;
+- changes no OCR threshold, layout decision, geometry, file format, cache format, compatibility facade, or worker semantics.
+
+Phase 8E publication:
+- PR #318 fixed head `fe12e87f9dd10fd0e7aba399d4db0f6d2d9253e6`;
+- exact production/test diff: 3 files;
+- PR CI 2191 passed on Ubuntu/Windows/macOS, including pytest, GUI smoke, compatibility runner, compile, F821, and wheel build;
+- PR CodeQL 2172 passed; Advanced Security 1893 passed;
+- PR #318 merged as `d629b714440c3e63c985ba46e18aae40aaadbcfc`;
+- post-merge CI 2192 passed; post-merge CodeQL 2173 passed.
+
+## Recommended next slice — complete Phase 8D OCR measurement
+The next production optimization is again measurement-gated. Run the documented Phase 8D command when the **same execution environment** has:
+- the real pages 55-60;
+- matching project settings and headword rules;
+- `.pdic` ground truth when available;
+- Paddle/PaddleOCR runtime and the repository source/package.
+
+Use the resulting cold/warm JSON and warm cProfile artifacts to choose exactly one further bottleneck. Do not treat the Phase 8E component measurements as a substitute for the full OCR benchmark and do not perform another source-only production performance rewrite.
 
 ## Standing continuation authorization
 The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 6 is complete; Phase 7 follows the same bounded-slice rule.
