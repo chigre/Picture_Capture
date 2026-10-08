@@ -89,6 +89,47 @@ def _box_sum(mask: np.ndarray, radius_y: int, radius_x: int) -> np.ndarray:
     )
 
 
+def _box_sums(
+    mask: np.ndarray,
+    radii: tuple[tuple[int, int], ...],
+) -> tuple[np.ndarray, ...]:
+    """Return several zero-padded local sums from one shared integral image."""
+    if not radii:
+        return ()
+
+    normalized = tuple(
+        (max(0, int(radius_y)), max(0, int(radius_x)))
+        for radius_y, radius_x in radii
+    )
+    max_ry = max(radius_y for radius_y, _radius_x in normalized)
+    max_rx = max(radius_x for _radius_y, radius_x in normalized)
+    source = np.asarray(mask, dtype=np.uint8)
+    height, width = source.shape
+    padded = np.pad(
+        source,
+        ((max_ry, max_ry), (max_rx, max_rx)),
+        mode="constant",
+    )
+    integral = np.pad(
+        padded.cumsum(axis=0, dtype=np.int32).cumsum(axis=1, dtype=np.int32),
+        ((1, 0), (1, 0)),
+    )
+
+    result: list[np.ndarray] = []
+    for radius_y, radius_x in normalized:
+        top = max_ry - radius_y
+        bottom = max_ry + radius_y + 1
+        left = max_rx - radius_x
+        right = max_rx + radius_x + 1
+        result.append(
+            integral[bottom:bottom + height, right:right + width]
+            - integral[top:top + height, right:right + width]
+            - integral[bottom:bottom + height, left:left + width]
+            + integral[top:top + height, left:left + width]
+        )
+    return tuple(result)
+
+
 def _auto_scale(ink: np.ndarray, local5: np.ndarray, local11: np.ndarray) -> tuple[float, float]:
     total = int(np.count_nonzero(ink))
     if total <= 0:
@@ -137,8 +178,10 @@ def adaptive_speck_remove_mask(
         )
         return empty, profile
 
-    local5 = _box_sum(ink, 2, 2)
-    local11 = _box_sum(ink, 5, 5)
+    local5, local11, vertical13, horizontal13, local17 = _box_sums(
+        ink,
+        ((2, 2), (5, 5), (6, 0), (0, 6), (8, 8)),
+    )
     auto_scale, sparse_ratio = _auto_scale(ink, local5, local11)
 
     if requested == "weak":
@@ -154,10 +197,6 @@ def adaptive_speck_remove_mask(
     local5_limit = max(2, min(8, int(round(3.0 * scale))))
     local11_limit = max(3, min(15, int(round(5.0 * scale))))
     directional_limit = max(2, min(6, int(round(2.2 * scale))))
-
-    vertical13 = _box_sum(ink, 6, 0)
-    horizontal13 = _box_sum(ink, 0, 6)
-    local17 = _box_sum(ink, 8, 8)
 
     candidate = (
         ink
