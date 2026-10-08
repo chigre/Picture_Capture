@@ -3,11 +3,11 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — fresh architecture-debt inventory is underway after Phase 11 closed the settings-migration cleanup. The leading bounded candidate is the OCR-boundary compatibility seam: replace scoped process-global legacy runner rebinding with explicit call-time runner injection, but only if call-chain characterization proves the change can preserve the mature parser and public monkeypatch seams.**
+**Phase 12 — fresh architecture-debt cleanup is underway. Phase 12A is complete: PDIC classification persistence now has one explicit process-composition owner in `build_core_services()`; GUI and worker profiles reuse that composed writer instead of repeating idempotent no-op classification installation.**
 
-Phase 11 is closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
+Phase 12A is merged on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`. Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
-The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary.
+The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
@@ -1505,10 +1505,75 @@ remaining installer order unless a future feature independently requires such a
 framework. The current explicit chain is smaller and better understood than that
 speculative abstraction.
 
-## Recommended next slice — fresh debt inventory outside settings migration
+## Phase 12A — core-owned PDIC classification composition
 
-Leave Phase 11. Perform a new read-only repository debt inventory and select a
-different bounded category with a clear correctness or maintainability payoff.
+The post-Phase-11 debt inventory initially surfaced the OCR-boundary compatibility
+bridge, which temporarily rebinds four mature parser runner globals during one
+boundary call. Read-only call-chain analysis showed that removing that bridge
+cleanly would require explicit runner plumbing through
+`paddle_headwords_core.py`, including the two oversized-CJK recovery helpers.
+That remains a meaningful correctness target, but it is a cross-cutting change
+inside the ~364 KB mature parser core rather than the safest first Phase 12 write.
+
+A smaller, independently bounded ownership defect was found in process
+composition instead. `build_core_services()` already installs
+`install_pdic_classification(formats)` before exposing formats/processing to
+any GUI, worker, CLI, test, or diagnostic profile. Despite that shared ownership:
+- GUI composition wrapped the already-classification-aware writer with automatic
+  baseline capture, then called `install_pdic_classification(formats)` again;
+- worker composition called the same classification installer again immediately
+  after `build_core_services()`;
+- both repeated calls were guaranteed no-ops because the shared installer marks
+  the formats module as already composed;
+- the GUI comment also described the wrapper nesting in the opposite direction
+  from the actual composed object graph.
+
+Phase 12A makes the existing ownership explicit without changing persistence:
+- `build_core_services()` remains the sole PDIC classification installer;
+- GUI composition adds only
+  `build_write_pdic_capture(formats.write_pdic)` around the shared composed
+  writer;
+- worker composition directly reuses `core_services.formats`;
+- the GUI comment now describes the real ownership rather than a fictitious
+  second classification layer;
+- a focused regression composes classification plus automatic-baseline capture,
+  proves a repeated classification install is a no-op, and verifies that the
+  baseline JSON, PDIC, and EntryClassification sidecar are all still produced;
+- worker entry-path guards now require core composition and forbid the duplicate
+  worker classification call.
+
+Behavior intentionally unchanged:
+- historical PDIC format and coordinates;
+- EntryClassification sidecar format/location/semantics;
+- automatic-baseline format and first-capture policy;
+- GUI/worker output ordering and detection behavior;
+- inert bare-package import contract.
+
+Phase 12A publication:
+- PR #350 final fixed head `f08736aa61be9550e7ab11509f64a6736b0b227c`;
+- an earlier two-file head passed CI 2261 before the same ownership cleanup was
+  extended to the worker profile;
+- final PR CI 2262 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #350 merged as `0f37f14f2c428dd5d28a903cb2a72dd63b291a06`;
+- the production slice changed only
+  `bootstrap/gui.py`, `bootstrap/worker.py`,
+  `test_entry_classification_pipeline.py`, and
+  `test_runtime_entry_path_guards.py`.
+
+## Recommended next slice — Phase 12B read-only debt selection
+
+Continue the fresh debt inventory from the Phase 12A main. Prefer another
+bounded ownership/correctness cleanup that does not require speculative
+frameworks or a large mature-core rewrite.
+
+The OCR-boundary runner bridge remains a valid candidate because it temporarily
+mutates four `paddle_headwords_core` globals under a process-local lock, but do
+not edit the oversized core until a read-only design proves that the engine
+runner hooks can be injected without disturbing CJK recovery, cache semantics,
+supervised filtering, or historical public monkeypatch seams.
 
 Do not reopen Phase 7 oversized-module decomposition solely for line count, do
 not resume Phase 10 installer removal by name, and do not resume performance
