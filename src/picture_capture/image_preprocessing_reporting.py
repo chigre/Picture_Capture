@@ -9,10 +9,61 @@ They intentionally do not participate in page analysis or geometry mutation.
 import csv
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Callable, Iterable
+
+from .image_preprocessing_constants import (
+    AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX,
+    AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX,
+    AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX,
+    AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX,
+    DEFAULT_DESKEW_DEAD_ZONE_DEG,
+    DEFAULT_MAX_AUTO_DESKEW_DEG,
+    ORTHOGONAL_AUTO_GAINS,
+    ORTHOGONAL_AUTO_MIN_CONFIDENCE,
+    ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT,
+    ORTHOGONAL_MAX_AUTO_PASSES,
+    ORTHOGONAL_MIN_SAFE_GAIN,
+    ORTHOGONAL_SCALE_SAFETY_FRACTION,
+    ORTHOGONAL_TAIL_MAX_REGRESSION_PX,
+    ORTHOGONAL_TAIL_PROGRESS_RATIO,
+    ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX,
+    ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO,
+    POST_PERSPECTIVE_REDETECT_MIN_BOXES,
+)
+from .orthogonal_dewarp import (
+    ORTHOGONAL_WARP_MAX_SCALE_DEVIATION,
+    PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX,
+    PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX,
+)
+from .preprocess_geometry import (
+    HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG,
+    HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG,
+    HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG,
+    HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT,
+    HORIZONTAL_STRENGTH_COARSE_STEP,
+    HORIZONTAL_STRENGTH_FINE_STEP,
+    HORIZONTAL_STRENGTH_MIN,
+    HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG,
+    HORIZONTAL_VP_MIN_ROWS,
+    HORIZONTAL_VP_MIN_TREND_DEG,
+    TEXT_SCALE_ANISOTROPY_P95_MAX,
+    TEXT_SCALE_CROSS_GRADIENT_MAX,
+    TEXT_SCALE_CROSS_SPAN_MAX,
+    TEXT_SCALE_INLINE_GRADIENT_MAX,
+    TEXT_SCALE_INLINE_SPAN_MAX,
+)
+from .text_line_geometry import (
+    SEPARATOR_CURVATURE_SCORE_MIN,
+    SEPARATOR_CURVE_SPAN_MIN,
+    SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD,
+    SEPARATOR_JUMP_MIN_PX,
+    SEPARATOR_JUMP_WIDTH_RATIO_MAX,
+    SEPARATOR_TRACK_QUALITY_MIN,
+)
 
 if TYPE_CHECKING:
     from .image_preprocessing_models import OutputCanvasInfo, PreprocessAnalysis
+    from .models import AppSettings
 
 
 def export_summary_csv(
@@ -645,3 +696,169 @@ def result_summary(analysis: PreprocessAnalysis) -> str:
         f"保留 {analysis.retained_ratio * 100:.1f}%｜"
         f"裁剪 L{x0} T{y0} R{x1} B{y1}"
     )
+
+def _export_diagnostic_json_impl(
+    page: Path,
+    analysis: PreprocessAnalysis,
+    destination: Path,
+    *,
+    output_path: Path | None = None,
+    canvas: OutputCanvasInfo | None = None,
+    settings: AppSettings | None = None,
+    canvas_info_factory: Callable[..., OutputCanvasInfo],
+) -> Path:
+    payload = analysis.to_dict()
+    payload["page"] = Path(page).name
+    payload["source_path_name"] = Path(page).name
+    payload["effective_settings"] = (
+        {
+            "layout_writing_mode": str(settings.layout_writing_mode),
+            "layout_text_direction": str(settings.layout_text_direction),
+            "layout_transform": str(settings.layout_transform),
+            "layout_columns_policy": str(settings.layout_columns_policy),
+            "fixed_columns": int(settings.columns),
+            "layout_column_separator_mode": str(
+                settings.layout_column_separator_mode
+            ),
+            "analysis_threshold_mode": str(settings.analysis_threshold_mode),
+            "preprocess_auto_deskew": bool(
+                settings.preprocess_auto_deskew
+            ),
+            "preprocess_safety_margin_px": int(
+                settings.preprocess_safety_margin_px
+            ),
+            "preprocess_geometry_mode": str(
+                settings.preprocess_geometry_mode
+            ),
+            "preprocess_export_canvas_enabled": bool(
+                settings.preprocess_export_canvas_enabled
+            ),
+            "preprocess_export_canvas_mode": str(
+                settings.preprocess_export_canvas_mode
+            ),
+            "preprocess_export_canvas_width": int(
+                settings.preprocess_export_canvas_width
+            ),
+            "preprocess_export_canvas_height": int(
+                settings.preprocess_export_canvas_height
+            ),
+            "preprocess_export_margin_top": int(
+                settings.preprocess_export_margin_top
+            ),
+            "preprocess_export_margin_bottom": int(
+                settings.preprocess_export_margin_bottom
+            ),
+            "preprocess_export_margin_left": int(
+                settings.preprocess_export_margin_left
+            ),
+            "preprocess_export_margin_right": int(
+                settings.preprocess_export_margin_right
+            ),
+            "preprocess_export_align_x": str(
+                settings.preprocess_export_align_x
+            ),
+            "preprocess_export_align_y": str(
+                settings.preprocess_export_align_y
+            ),
+        }
+        if settings is not None else None
+    )
+    payload["algorithm_constants"] = {
+        "max_auto_deskew_deg": DEFAULT_MAX_AUTO_DESKEW_DEG,
+        "deskew_dead_zone_deg": DEFAULT_DESKEW_DEAD_ZONE_DEG,
+        "auto_homography_horizontal_scale_span_max": (
+            AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX
+        ),
+        "auto_homography_vertical_scale_span_max": (
+            AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX
+        ),
+        "auto_homography_area_scale_span_max": (
+            AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX
+        ),
+        "auto_homography_anisotropy_p95_max": (
+            AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
+        ),
+        "orthogonal_auto_min_confidence": ORTHOGONAL_AUTO_MIN_CONFIDENCE,
+        "orthogonal_auto_min_score_improvement": (
+            ORTHOGONAL_AUTO_MIN_SCORE_IMPROVEMENT
+        ),
+        "orthogonal_auto_gains": list(ORTHOGONAL_AUTO_GAINS),
+        "orthogonal_min_safe_gain": ORTHOGONAL_MIN_SAFE_GAIN,
+        "orthogonal_scale_safety_fraction": ORTHOGONAL_SCALE_SAFETY_FRACTION,
+        "orthogonal_tail_progress_ratio": ORTHOGONAL_TAIL_PROGRESS_RATIO,
+        "orthogonal_tail_max_regression_px": (
+            ORTHOGONAL_TAIL_MAX_REGRESSION_PX
+        ),
+        "pixel_row_bottom_tail_p90_max_px": (
+            PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX
+        ),
+        "pixel_row_bottom_tail_worst_max_px": (
+            PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX
+        ),
+        "orthogonal_max_auto_passes": ORTHOGONAL_MAX_AUTO_PASSES,
+        "post_perspective_redetect_min_boxes": (
+            POST_PERSPECTIVE_REDETECT_MIN_BOXES
+        ),
+        "orthogonal_warp_max_scale_deviation": (
+            ORTHOGONAL_WARP_MAX_SCALE_DEVIATION
+        ),
+        "orthogonal_vertical_max_span_min_px": (
+            ORTHOGONAL_VERTICAL_MAX_SPAN_MIN_PX
+        ),
+        "orthogonal_vertical_max_span_width_ratio": (
+            ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO
+        ),
+        "horizontal_alignment_max_edge_pair_delta_deg": (
+            HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG
+        ),
+        "text_scale_inline_span_max": TEXT_SCALE_INLINE_SPAN_MAX,
+        "text_scale_cross_span_max": TEXT_SCALE_CROSS_SPAN_MAX,
+        "text_scale_inline_gradient_max": TEXT_SCALE_INLINE_GRADIENT_MAX,
+        "text_scale_cross_gradient_max": TEXT_SCALE_CROSS_GRADIENT_MAX,
+        "text_scale_anisotropy_p95_max": TEXT_SCALE_ANISOTROPY_P95_MAX,
+        "horizontal_vp_min_rows": HORIZONTAL_VP_MIN_ROWS,
+        "horizontal_vp_min_trend_deg": HORIZONTAL_VP_MIN_TREND_DEG,
+        "horizontal_alignment_min_improvement": (
+            HORIZONTAL_ALIGNMENT_MIN_IMPROVEMENT
+        ),
+        "horizontal_alignment_max_after_trend_deg": (
+            HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG
+        ),
+        "horizontal_alignment_max_after_edge_deg": (
+            HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG
+        ),
+        "horizontal_vp_column_spread_max_deg": (
+            HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG
+        ),
+        "horizontal_strength_min": HORIZONTAL_STRENGTH_MIN,
+        "horizontal_strength_coarse_step": HORIZONTAL_STRENGTH_COARSE_STEP,
+        "horizontal_strength_fine_step": HORIZONTAL_STRENGTH_FINE_STEP,
+        "separator_curve_span_min": SEPARATOR_CURVE_SPAN_MIN,
+        "separator_track_quality_min": SEPARATOR_TRACK_QUALITY_MIN,
+        "separator_curvature_score_min": SEPARATOR_CURVATURE_SCORE_MIN,
+        "separator_curve_width_ratio_threshold": (
+            SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD
+        ),
+        "separator_jump_min_px": SEPARATOR_JUMP_MIN_PX,
+        "separator_jump_width_ratio_max": SEPARATOR_JUMP_WIDTH_RATIO_MAX,
+    }
+    payload["export"] = {
+        "output_filename": Path(output_path).name if output_path is not None else None,
+        "content_width": max(1, analysis.crop_box[2] - analysis.crop_box[0]),
+        "content_height": max(1, analysis.crop_box[3] - analysis.crop_box[1]),
+        "canvas": (
+            canvas.to_dict()
+            if canvas is not None
+            else canvas_info_factory(analysis, enabled=False).to_dict()
+        ),
+    }
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(destination)
+    return destination
+
