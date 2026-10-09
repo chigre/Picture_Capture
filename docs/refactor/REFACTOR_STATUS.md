@@ -2666,3 +2666,24 @@ The user has authorized faster continuous progression through confirmed-safe ref
 Continue across related low-risk changes once contracts and focused tests are clear. Use checkpoints at phase milestones, material compatibility-boundary changes, plan changes, merge/finalization boundaries, or when recovery state would otherwise become ambiguous.
 
 Stop production writes for unexplained behavior/test/CI failure, public/file-format compatibility uncertainty, concurrent architecture work, checkpoint mismatch, materially large cross-core redesign, or irreversible compatibility deletion whose impact cannot be established.
+
+
+## Phase 13B2 — explicit Layout ops propagation (draft; not gated)
+
+- Work in progress: **true** — PR #394 is open as a draft.
+- Current branch: `phase13b2-layout-ops-propagation`, based on main
+  `1cb913953b84d2c0882f81fb56267c678c9fab8a`.
+- Modified `page_x_registration.py` to accept optional ops at page-X
+  registration and line-family candidate boundaries; four primitive calls use
+  the resolved ops object.
+- Modified `layout_column_drift.py` to accept optional ops through the
+  finalizer and remeasurement path; indent mode/role operations use those ops.
+- Kept default downstream invocations keyword-free for legacy patched
+  stubs; explicit `ops=` calls are forwarded unchanged.
+- Added `tests/test_phase13b2_layout_ops.py` for custom-callback propagation.
+- Verification: local pytest **not run** (execution container could not resolve
+  github.com for clone); PR CI has not been established as passing at the time
+  of this checkpoint. Do not merge based on this record.
+- Next safe action: inspect PR #394 CI, fix any failing regressions in this
+  same narrow scope, then perform normal review/merge and post-merge CI checks.
+  After closing 13B2, proceed to 13B3. Do not start 13C yet.
