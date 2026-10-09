@@ -183,6 +183,54 @@ def test_manual_override_survives_small_separator_y_move(tmp_path: Path):
     assert get_entry_classification(moved).entry_scale == "regular"
 
 
+class _ReviewVar:
+    def __init__(self, value=""):
+        self.value = value
+
+    def get(self):
+        return self.value
+
+    def set(self, value):
+        self.value = value
+
+
+def test_static_review_classification_helpers_sync_and_persist_change(monkeypatch):
+    import picture_capture.review_entry_classification_ui as review
+
+    entry = Entry(
+        word="",
+        x=40,
+        y=100,
+        ocr_source="ordinary_large_head_evidence",
+        ocr_visual_run_height=84.0,
+        ocr_oversized_cjk=True,
+    )
+    events = []
+    window = SimpleNamespace(
+        active_index=0,
+        entry_scale_classification_var=_ReviewVar(),
+        entry_source_classification_var=_ReviewVar(),
+        _bound_row_entries=lambda: [entry],
+        _request_render_rows=lambda **kwargs: events.append(("render", kwargs)),
+        parent=SimpleNamespace(redraw=lambda: events.append(("redraw",))),
+    )
+
+    review.sync_review_entry_classification(window)
+    assert window.entry_scale_classification_var.get() == "自动"
+    assert "当前：大字头" in window.entry_source_classification_var.get()
+
+    monkeypatch.setattr(review, "_persist", lambda current: events.append(("persist", current)))
+    window.entry_scale_classification_var.set("普通词条")
+    review.change_review_entry_classification(window)
+
+    meta = get_entry_classification(entry)
+    assert meta.entry_scale == "regular"
+    assert meta.manual_override is True
+    assert events[0][0] == "persist"
+    assert events[1] == ("render", {"focus_index": 0})
+    assert events[2] == ("redraw",)
+
+
 def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     import picture_capture.app as app_module
     import picture_capture.processing_core as processing_core
