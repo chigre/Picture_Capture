@@ -2,10 +2,9 @@ from __future__ import annotations
 
 """GUI composition root.
 
-This module owns the historical GUI-specific installer chain. Shared non-GUI
-runtime preparation is resolved first through ``build_core_services`` so GUI and
-spawn workers converge on one explicit process foundation before their
-profile-specific extensions are installed.
+GUI dependencies are composed without mutating Page Design primitive hooks.
+Shared core services are built first so GUI and spawn workers start from the
+same explicit process foundation.
 """
 
 from typing import Any
@@ -34,17 +33,11 @@ def prepare_gui_application() -> Any:
     # Character-height fallback is now static in layout_detection; Page Design
     # and policy imports no longer depend on a local installer ordering guard.
 
-    # The GUI Layout overlay also needs the same physical-indent runtime before
-    # app import. Ordinary detection itself prepares this runtime again
-    # idempotently in every process, including spawn workers. The public Page
-    # Design detector forwards to the refined implementation statically.
-    from ..layout_line_start_refinement import install_robust_line_starts
-    from ..layout_physical_indent import install_physical_indent_inference
-
-    install_robust_line_starts()
-    install_physical_indent_inference()
-    # Long-band row recovery and column-drift indent remeasurement are now
-    # static; only the remaining physical-indent installer needs ordering.
+    # All GUI Layout consumers now select explicit Physical Layout composition:
+    # Layout Core, full Page Understanding, Profile validation and training
+    # diagnostics. Do not rebind process-global Page Design hook names here.
+    # The legacy processing/spawn installer remains for compatibility until its
+    # independent exit gate is proven.
 
     # Physical LayoutRows capture is now published statically by Layout Core
     # whenever an explicit capture_layout_rows(...) context is active. GUI
