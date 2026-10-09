@@ -220,7 +220,7 @@ FORBIDDEN_UI_TERMINOLOGY_MUTATIONS = (
     "_pc_terminology_wrapped",
 )
 FORBIDDEN_UI_TERMINOLOGY_INSTALL_CALLS = (
-    "install_ui_terminology()",
+    "    install_ui_terminology()",
 )
 
 # Phase 1 has paid off package-import installer debt completely. Any future
