@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Callable
 import os
 import re
@@ -26,6 +26,27 @@ _LANGUAGE_NAMES = {
 def _safe_name(value: str) -> str:
     cleaned = re.sub(r"[^0-9A-Za-z._-]+", "_", value.strip())
     return cleaned.strip("._-") or "PictureDictionary"
+
+
+def _manifest_crop_path(pww_dir: Path, filename: str) -> Path | None:
+    """Resolve only a direct PWW image; reject traversal and escaping links."""
+    if (
+        not filename
+        or filename in {".", ".."}
+        or "/" in filename
+        or chr(92) in filename
+        or PureWindowsPath(filename).name != filename
+    ):
+        return None
+    candidate = case_insensitive_child(pww_dir, filename) or (pww_dir / filename)
+    if not candidate.is_file():
+        return None
+    try:
+        if candidate.resolve().parent != pww_dir.resolve():
+            return None
+    except OSError:
+        return None
+    return candidate
 
 
 def _language_name(ocr_language: str) -> str:
@@ -80,8 +101,8 @@ def build_picdic_package(
             if not word:
                 continue
             last_word = word
-            image_path = case_insensitive_child(pww_dir, filename) or (pww_dir / filename)
-            if not image_path.is_file():
+            image_path = _manifest_crop_path(pww_dir, filename)
+            if image_path is None:
                 missing.append(filename)
                 continue
             entries.setdefault(word, []).append(filename)
