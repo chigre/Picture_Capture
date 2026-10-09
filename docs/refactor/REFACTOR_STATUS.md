@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12C is complete: Project Profile wizard extensions are now statically composed, and GUI bootstrap no longer mutates `profile_setup.ProjectProfileWizard` or controls the application's wizard import order.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12D is complete: GUI-facing PDIC read/write composition is now static and call-time delegated, so GUI bootstrap no longer mutates `formats.write_pdic` while core composition remains the sole owner of classification persistence.**
 
-Phase 12C is merged on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`. Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
+Phase 12D is merged on `main@762e2bc22eb2780549fad097b778f2bc303105e0`. Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -1660,21 +1660,82 @@ Phase 12C publication:
 - production diff is limited to `app.py`, `bootstrap/gui.py`,
   new `profile_wizard.py`, and the focused regression test.
 
-## Recommended next slice — Phase 12D fresh read-only debt selection
+## Phase 12D — static GUI PDIC I/O composition
 
-Continue from the Phase 12C main with a new read-only inventory of remaining
-process-global rebinding/composition dependencies. Do not infer that every
-remaining installer should be removed: first distinguish semantic runtime
-wrappers from import-order compensation and compatibility shims.
+Fresh read-only inventory first separated several remaining rebinding seams. The
+Page Design refined-detector chain was rejected for this slice because it is tied
+to call-time physical-indent/line-start preparation, and the OCR-boundary runner
+bridge remains too deep in the mature Paddle parser core. The smaller ownership
+problem was GUI PDIC I/O.
 
-The OCR-boundary runner bridge remains a valid candidate because it temporarily
-mutates four `paddle_headwords_core` globals under a process-local lock, but do
-not edit the oversized core until a read-only design proves that runner hooks
-can be injected without disturbing oversized-CJK recovery, cache semantics,
-supervised filtering, or historical public monkeypatch seams.
+Before Phase 12D:
+- `build_core_services()` composed `formats.read_pdic` / `formats.write_pdic`
+  with classification sidecar behavior;
+- GUI bootstrap then wrapped the already-composed `formats.write_pdic` again
+  with automatic-baseline capture;
+- `app.py` imported those callables by value, so application behavior silently
+  depended on bootstrap mutating `formats` before importing the app module.
 
-Prefer another bounded ownership seam if the inventory finds one with a smaller
-call graph and equivalent correctness/maintainability payoff.
+Phase 12D adds `gui_io.py` as the static application-facing boundary:
+- `app.py` imports PDIC I/O from `gui_io` rather than directly from
+  `formats`;
+- `gui_io.read_pdic()` resolves the current core-composed
+  `formats.read_pdic` at call time;
+- the GUI writer keeps the existing automatic-baseline wrapper, but its inner
+  delegate resolves the current core-composed `formats.write_pdic` at call
+  time;
+- GUI bootstrap no longer assigns `formats.write_pdic = ...`;
+- non-GUI consumers continue to use the core-composed `formats` boundary
+  without GUI baseline capture.
+
+This call-time delegation is the key compatibility property: importing
+`app.py` no longer freezes whichever `formats` callable happened to exist at
+that moment, while classification remains owned exclusively by core composition.
+
+Behavior intentionally unchanged:
+- PDIC text format is unchanged;
+- classification sidecar format/ownership is unchanged;
+- automatic-baseline format and first-capture semantics are unchanged;
+- GUI writes still pass through classification persistence before returning;
+- non-GUI writers do not gain GUI-only baseline capture;
+- no Layout, OCR, crop, worker, or public facade behavior changed.
+
+Phase 12D publication:
+- PR #356 fixed head `5bea4fc1a32808ee509438d84046bb2822f4eb12`;
+- PR CI 2281 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #356 merged as `762e2bc22eb2780549fad097b778f2bc303105e0`;
+- post-merge CI 2282 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2265 passed;
+- the production diff is limited to `app.py`, `bootstrap/gui.py`, new
+  `gui_io.py`, and focused PDIC composition regression coverage;
+- no architecture ratchet was relaxed.
+
+## Recommended next slice — Phase 12E static Layout-summary characterization
+
+The next smaller candidate is the GUI-only Layout diagnostic summary chain.
+Today GUI bootstrap installs the red entry-role theme and then wraps the same
+`layout_visualization_summary._format_summary` with physical-lane/prepared-indent
+diagnostics. This is a presentation-only import-order dependency, not a Layout
+inference dependency.
+
+Before any write, preserve the effective product order:
+- base summary + entry-source provenance;
+- red entry/headword role theme;
+- physical-indent lane summary;
+- prepared-indent summary.
+
+Prefer static ownership in the Layout visualization layer while keeping the
+historical installer functions importable as compatibility no-ops if the
+characterization confirms no external/public mutation contract. Do not change
+Layout geometry, role inference, colors beyond the already-effective GUI theme,
+or diagnostic text ordering.
+
+The OCR-boundary runner bridge remains deferred until explicit hook injection can
+be proven safe across oversized-CJK recovery, cache semantics, supervised
+filtering, and historical public monkeypatch seams.
 
 Do not reopen Phase 7 oversized-module decomposition solely for line count, do
 not resume Phase 10 installer removal by name, and do not resume performance
