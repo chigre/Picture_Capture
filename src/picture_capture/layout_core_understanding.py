@@ -296,6 +296,17 @@ def _apply_universal_ordinary_evidence(
     return symbol_promoted, large_promoted
 
 
+def _publish_captured_result(
+    result: PageUnderstanding,
+    page_index: int,
+) -> PageUnderstanding:
+    """Publish LayoutRows for the current explicit capture scope, if any."""
+    from .layout_rows_cache import publish_captured_layout
+
+    publish_captured_layout(result.layout, int(page_index))
+    return result
+
+
 def understand_layout_core(
     image: Image.Image,
     settings: AppSettings,
@@ -311,7 +322,7 @@ def understand_layout_core(
     cached = _LAYOUT_CACHE.get(key)
     if cached is not None:
         _LAYOUT_CACHE.move_to_end(key)
-        return cached
+        return _publish_captured_result(cached, page_index)
 
     layout, page_settings, applied = infer_dictionary_page_layout(
         image,
@@ -363,4 +374,4 @@ def understand_layout_core(
     _LAYOUT_CACHE.move_to_end(key)
     while len(_LAYOUT_CACHE) > _CACHE_LIMIT:
         _LAYOUT_CACHE.popitem(last=False)
-    return result
+    return _publish_captured_result(result, page_index)
