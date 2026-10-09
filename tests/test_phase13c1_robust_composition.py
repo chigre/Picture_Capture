@@ -1,4 +1,5 @@
 """Phase 13C1: explicit robust wrapper and legacy installer share one implementation."""
+from dataclasses import dataclass
 from types import SimpleNamespace
 
 import numpy as np
@@ -8,7 +9,12 @@ from picture_capture import layout_line_start_refinement as robust
 
 def test_explicit_robust_composition_uses_supplied_inner_callable(monkeypatch):
     calls = []
-    line = SimpleNamespace(first_x=12, anchor_x=18)
+    @dataclass
+    class StubLine:
+        first_x: int
+        anchor_x: int | None
+
+    line = StubLine(first_x=12, anchor_x=18)
     def inner(column, ink, y0, y1, reference, previous_end):
         calls.append((column, y0, y1, reference, previous_end))
         return line
