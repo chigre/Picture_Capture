@@ -41,15 +41,14 @@ def test_clear_words_validates_before_overwriting(tmp_path):
 
 
 def test_clear_text_button_uses_page_range_confirmation_and_batch():
-    source = (
-        Path(__file__).resolve().parents[1]
-        / "src" / "picture_capture" / "app.py"
-    ).read_text(encoding="utf-8")
-    begin = source.index("    def clear_text(self)")
-    end = source.index("\n    def ", begin + 10)
-    block = source[begin:end]
-    assert "self.selected_page_indices()" in block
-    assert 'messagebox.askyesno(' in block
-    assert 'self.save_pdic(silent=True)' in block
-    assert 'clear_pdic_words(pdic_path(pages[index]))' in block
-    assert 'self._start_batch_task(' in block
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    app_source = (root / "app.py").read_text(encoding="utf-8")
+    helper = (root / "pdic_text_cleanup.py").read_text(encoding="utf-8")
+    start = app_source.index("    def clear_text(self)")
+    end = app_source.index("\n    def ", start + 10)
+    assert "clear_selected_scope(self)" in app_source[start:end]
+    assert "self.selected_page_indices()" in helper
+    assert 'messagebox.askyesno(' in helper
+    assert 'self.save_pdic(silent=True)' in helper
+    assert 'clear_pdic_words(pdic_path(pages[index]))' in helper
+    assert 'self._start_batch_task(' in helper
