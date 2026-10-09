@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12J is complete: the public Page Design detector now forwards to the refined implementation statically at call time, and GUI/processing no longer rebind `dictionary_page_design.detect_entries_from_page_design`.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12K characterization is complete with no production write: the remaining Layout runtime is an ordered multi-boundary composition chain whose raw policy semantics differ from the composed product runtime.**
 
-Phase 12J is merged on `main@0d0431bdcc8a1f227c8d5984a8e544c368ad7083`. Phase 12I remains a characterization-only deferral: the existing core-owned PDIC classification installer stays in place because a raw/composed PDIC migration is broader than one bounded slice. Phase 12H remains complete on `main@6d6e85945b2d7981fcedec250dc064fda819359b`, Phase 12G remains complete on `main@93e66f3ea1d0e662a5c833d1e223f95ea1cb96ac`, Phase 12F remains complete on `main@2afea236e21acb336aba94c27e0d3889159b8f1e`, Phase 12E remains complete on `main@a1016a8aa8ef3fd50ff3c50b1e8433db9cd5122b`, Phase 12D remains complete on `main@762e2bc22eb2780549fad097b778f2bc303105e0`, Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`.
+Phase 12J remains complete on `main@0d0431bdcc8a1f227c8d5984a8e544c368ad7083`, with its checkpoint merged on `main@1e5c7da42da2ddce936a0254e91e7f09c5b973bb` and post-checkpoint CI 2306 / CodeQL 2289 passing. Phase 12I remains a characterization-only PDIC deferral. Earlier Phase 12A–12H and Phase 11 remain closed.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -1995,50 +1995,70 @@ Phase 12J publication:
 - post-merge CodeQL 2287 passed;
 - no architecture threshold was relaxed.
 
-## Recommended next slice — Phase 12K Layout runtime dependency characterization
+## Phase 12K — Layout runtime dependency characterization only
 
-Do not immediately staticize the remaining Layout installers. Read-only
-inventory shows that they form one ordered multi-boundary chain rather than two
-independent wrappers.
+Read-only characterization confirms that the remaining Layout installers are one
+ordered composed runtime rather than independent wrappers.
 
-Current ordering/ownership:
-- GUI startup, ordinary-detection preparation, and the independent unlined-row
-  resolver all call `install_robust_line_starts()` before
-  `install_physical_indent_inference()`;
-- robust-line-start captures the then-current
-  `dictionary_page_design._line_feature` and wraps it with
-  `credible_first_text_x(...)`;
-- physical-indent subsequently captures that already-refined line feature into
-  `_BASE_LINE_FEATURE`, replaces `_line_runs`, `_line_feature`,
-  `_indent_modes` and `_assign_indent_semantics`, and its
-  `physical_line_feature(...)` delegates back through the captured robust
-  feature;
-- physical-indent also installs Project Profile anchoring by wrapping
-  `dictionary_page_layout_policy.resolve_page_layout_policy`;
-- it additionally wraps
-  `dictionary_page_layout_policy.infer_dictionary_page_layout` and
-  `page_understanding.understand_page` to normalize final roles.
+Observed dependency graph:
+- GUI bootstrap, `processing._ensure_layout_runtime()`, and the independent
+  unlined-row resolver all install robust line-starts before physical-indent;
+- robust line-start captures the current base `_line_feature`;
+- physical-indent then captures that robust feature into `_BASE_LINE_FEATURE`
+  and replaces base row-run, line-feature, indent-mode, and role-assignment
+  hooks;
+- physical-indent also installs Project Profile anchoring at
+  `resolve_page_layout_policy`, then wraps policy layout inference and
+  `page_understanding.understand_page` for final role normalization;
+- `layout_core_understanding` already calls `normalize_layout_roles`
+  explicitly, while the unlined physical-row path intentionally stops at the
+  policy/layout layer;
+- raw `resolve_page_layout_policy()` has tests that intentionally expose the
+  unanchored page-level estimate for selected fields. Moving Profile anchoring
+  into that raw function would therefore change its established API semantics,
+  even though the composed product runtime currently anchors those values.
 
-Phase 12K should therefore be **characterization first**. Build an explicit
-dependency graph and identify whether static ownership can be introduced in
-separate behavior-preserving layers (row-run/line-feature composition, profile
-anchoring, policy finalization, Page Understanding finalization) without
-changing cache timing or consumer-visible monkeypatch seams.
+No internal result cache in raw policy or Page Understanding justifies moving
+the finalizers solely for cache-hit behavior. The problem is ownership and
+composition semantics, not a missing cache callback.
 
-Required checks before any production write:
-- enumerate every caller of both installers, including spawn/unlined worker
-  paths;
-- verify which tests or external compatibility paths depend on the mutable base
-  helper names themselves;
-- characterize cache-hit behavior in policy/Page Understanding before deciding
-  where final role normalization belongs;
-- preserve the exact robust-line-start → physical-line-feature delegation order;
-- preserve Project Profile anchoring before physical finalization;
-- do not mix the work with PDIC composition, OCR-boundary runner changes, or GUI
-  Settings/App class wrappers.
+Phase 12K therefore makes **no production code change**. Staticizing this chain
+would require a broader explicit composed-Layout API that preserves:
+1. robust-line-start -> physical-line-feature delegation order;
+2. raw policy vs Profile-anchored composed policy semantics;
+3. physical-only unlined-worker behavior;
+4. final role normalization timing for full Page Understanding.
 
-If no genuinely bounded sub-slice emerges, record 12K as characterization-only
-and select another debt category rather than forcing a cross-core redesign.
+Do not split this chain opportunistically inside unrelated refactors.
+
+## Recommended next slice — Phase 12L static OCR action preflight
+
+The OCR action guard is a smaller independent GUI seam. Today GUI bootstrap
+monkeypatches three `PictureCaptureApp` methods solely to reject the ambiguous
+state “Google Lens checked while Lens mode is off and no runnable local OCR is
+selected.”
+
+A safe 12L should:
+- turn that decision into a normal reusable preflight function;
+- call it statically at the real action boundaries:
+  `DetectionController.run_combined_draw_action`,
+  `DetectionController.run_ocr_draw_action`, and
+  `PictureCaptureApp.ocr_ordinary_lines_text_selected_scope`;
+- preserve guard ordering: invalid Lens-only selection must stop before the
+  existing generic app guard / quick-settings validation;
+- remove `install_ocr_action_guard(app_module)` from GUI bootstrap and retire
+  the class-method monkeypatch implementation;
+- preserve the historical helper surface where inexpensive, but it must no
+  longer mutate `PictureCaptureApp`;
+- keep the existing visible Lens-mode mapping semantics;
+- respect the strict `app.py` size ratchet. Prefer moving the Lens mode mapping
+  into the guard module and importing it, so the monolith shrinks rather than
+  grows;
+- add focused controller and existing-marker OCR action tests, plus a ratchet
+  that rejects reintroduction of the installer/method mutation.
+
+Do not combine 12L with OCR-boundary runner work, SettingsDialog installers,
+PDIC composition, or Layout runtime changes.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
