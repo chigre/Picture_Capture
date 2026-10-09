@@ -2726,7 +2726,7 @@ historically installed robust -> physical runtime, without removing installers.
 - CI #2378, #2380 and #2382 passed on Ubuntu, Windows and macOS.
 - Historical installers deliberately remain; no product cutover in Phase 13C.
 
-## Phase 13D — explicit composed physical-policy boundary (final gate pending)
+## Phase 13D — explicit composed physical-policy boundary (complete)
 
 - PR #401, merge `e67fb01d2c86fe19aa0191fe6b8766061fa737e5`: captured
   stable raw resolver/inference references and added
@@ -2736,9 +2736,48 @@ historically installed robust -> physical runtime, without removing installers.
   physical-only unlined escalation to the explicit composed policy, retaining
   cache -> fast projection -> physical detector order and existing labels.
 - CI #2384 and #2386 passed on Ubuntu, Windows and macOS.
-- Phase 13D final gate: PR #403 (this branch), to compare composed output
-  with the legacy wrapped physical policy and prevent unlined installer
-  reintroduction. Gate remains **open** until passing three-platform CI and
-  merge. Preserve GUI/full and processing/spawn installers until Phase 13E.
+- Phase 13D final gate: PR #403, merged as
+  `d58cc61e94cea0e7312eaf7aa5b2b03f20743697`. CI #2388 passed on
+  Ubuntu, Windows and macOS. Full composed policy parity and unlined scope
+  guards are now merged. Preserve remaining GUI/spawn installers until Phase 13E.
 - Next: Phase 13E full Page Understanding composition, routed one consumer at
   a time with explicit parity tests and independent GUI/worker validation.
+
+
+## Phase 13E — full Page Understanding transition (in progress)
+
+- PR #404, merged as `b7d78266b0eb71c4b7de5771e290c8dfc3bf147a`,
+  added optional `layout_infer` and explicit `ops` plumbing to full Page
+  Understanding, with the raw entry captured before installer wrapping.
+  Introduced `understand_composed_page()` and finalization-once tests.
+  CI #2390 passed across Ubuntu, Windows and macOS.
+- PR #405, merged as `26b1e0f62330f815dcf30c84d5603a56481513be`,
+  compared full semantic/sampled-evidence Page Understanding against an
+  isolated historically installed composition. CI #2392 passed on all platforms.
+- PR #406, merged as `0a07f749c270c901acf82c0a10a4e9e2f97abc48`,
+  routed Layout Core's physical policy inference to explicit composition while
+  retaining cache keys, hit publication, evidence fusion and caller seam.
+  CI #2394 passed on all platforms.
+- PR #407, merged as `494ac3391af537d50c00936e98a917b20c01b7af`,
+  routed processing's enriched Page Understanding through the explicit service,
+  leaving its layout-only branch unchanged. Initial CI #2396 failed on two
+  tests still injecting the historical mutable entry points. The regressions
+  were updated to target composed full understanding and the stable raw policy
+  contract; rerun CI #2397 passed on all three platforms.
+
+Remaining/explicit stop boundary:
+- Direct legacy callers outside the migrated processing/Layout Core path
+  (including training export and Profile validation) require separate audit
+  and parity tests before rerouting.
+- GUI/bootstrap and processing/spawn `install_robust_line_starts()` and
+  `install_physical_indent_inference()` remain active. Do not delete their
+  calls or wrappers merely because two consumers have migrated.
+- Final gate must prove GUI, spawn/ordinary, unlined, cache publication,
+  page masking and compatibility on Windows/Linux/macOS with no hidden hook
+  reads or differences in symbol and large-head evidence timing.
+- No OCR, PDIC, storage schema or public settings changes are authorized by
+  this phase.
+
+Next safe work: independently characterize remaining direct full Page
+Understanding consumers, migrate them one at a time, and only then consider
+normal product installer retirement after explicit cross-platform parity.
