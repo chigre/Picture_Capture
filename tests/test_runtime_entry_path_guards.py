@@ -302,7 +302,7 @@ def test_spawn_worker_uses_core_owned_sidecar_pdic_composition():
         root / "src" / "picture_capture" / "dictionary_page_layout_policy.py"
     ).read_text(encoding="utf-8")
     assert "finalize_layout_column_drift(" in policy
-    assert "install_layout_rows_persistence_runtime()" in worker
+    assert "install_layout_rows_persistence_runtime()" not in worker
 
     assert "from .bootstrap.worker import build_worker_services" in job
     assert "services = build_worker_services()" in job
