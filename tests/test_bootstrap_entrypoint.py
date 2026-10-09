@@ -61,7 +61,7 @@ def test_gui_composition_is_owned_by_bootstrap_and_launcher_is_only_a_facade() -
     assert "from .gui import prepare_gui_application" in application
     assert "return prepare_gui_application()" in application
     assert "def prepare_gui_application()" in gui
-    assert "install_ui_terminology()" in gui
+    assert "install_ui_terminology()" not in gui
     assert "install_spawn_detection_runtime" not in gui
     assert "from .bootstrap.application import build_application" in launcher
     assert "from .bootstrap.application import main as bootstrap_main" in launcher
