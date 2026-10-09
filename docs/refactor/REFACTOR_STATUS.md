@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12B is complete: current supervised training export is now statically composed as v2 base → v3 corrections → Page Understanding, and GUI startup no longer mutates training-export module globals or controls exporter import order.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12C is complete: Project Profile wizard extensions are now statically composed, and GUI bootstrap no longer mutates `profile_setup.ProjectProfileWizard` or controls the application's wizard import order.**
 
-Phase 12B is merged on `main@037922b0dc874730f14cb3eaefca7672776596f4`. Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
+Phase 12C is merged on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`. Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -1608,18 +1608,73 @@ Phase 12B publication:
   `ui/controllers/export.py`, and
   `test_ui_training_export_controller.py`.
 
-## Recommended next slice — Phase 12C read-only debt selection
+## Phase 12C — static Project Profile wizard composition
 
-Continue from the Phase 12B main with a fresh read-only scan of remaining
-process-global function/class rebinding and composition-order dependencies.
-Prefer a small statically-owned seam over the OCR-boundary runner bridge if one
-has equivalent correctness/maintainability payoff.
+Read-only inventory found a smaller import-order dependency than the deferred
+OCR-boundary runner bridge. Before Phase 12C, GUI startup built the effective
+Project Profile class by assigning a nested extension chain back onto
+`profile_setup.ProjectProfileWizard`, and only then imported `app.py`.
+Because `app.py` imported `ProjectProfileWizard` by value, the application
+silently depended on that bootstrap ordering.
+
+The effective historical chain was characterized before editing:
+- `profile_setup.ProjectProfileWizard` base;
+- `build_project_profile_wizard(...)`, which also applies the validation-mode
+  wrapper internally;
+- `build_ordinary_evidence_profile_wizard(...)`;
+- `build_profile_parameter_help_wizard(...)`.
+
+Phase 12C makes that chain explicit and static:
+- new `profile_wizard.py` owns the composed GUI wizard;
+- `app.py` imports the finished wizard from that module directly;
+- `bootstrap/gui.py` no longer imports the builder chain or assigns to
+  `profile_setup.ProjectProfileWizard`;
+- the historical `profile_setup` base class remains unchanged and independently
+  importable;
+- regression coverage locks the MRO/extension order and proves the application
+  uses the statically composed class without GUI-bootstrap mutation.
+
+Behavior intentionally unchanged:
+- no edits to the ~3,600-line base wizard body;
+- no Profile schema, JSON/persistence, detector, OCR, or Layout behavior changes;
+- no UI wording/control-order changes;
+- validation remains nested after indentation/layout and before ordinary evidence
+  and parameter-help wrappers.
+
+The architecture-size ratchet caught two harmless wiring-size regressions during
+publication:
+- initial CI 2270 ran all 1,396 non-guard tests successfully but rejected
+  `app.py` at 784,773 bytes versus the 784,737-byte baseline;
+- a compact boundary reduced the delta to one byte; CI 2275 again ran the
+  non-guard suite successfully but correctly rejected 784,738 bytes;
+- the final head retained the existing ratchet without raising its allowance.
+
+Phase 12C publication:
+- PR #354 final fixed head `cac6ae139945d714ee3f58cf13ec3490815c0940`;
+- final PR CI 2276 passed on Ubuntu/Windows/macOS, including pytest,
+  platform GUI smoke, compatibility runner, compile, F821, and wheel build;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #354 merged as `3632ff4bce26eafec28cf3eebd2e57b7f36c7870`;
+- production diff is limited to `app.py`, `bootstrap/gui.py`,
+  new `profile_wizard.py`, and the focused regression test.
+
+## Recommended next slice — Phase 12D fresh read-only debt selection
+
+Continue from the Phase 12C main with a new read-only inventory of remaining
+process-global rebinding/composition dependencies. Do not infer that every
+remaining installer should be removed: first distinguish semantic runtime
+wrappers from import-order compensation and compatibility shims.
 
 The OCR-boundary runner bridge remains a valid candidate because it temporarily
 mutates four `paddle_headwords_core` globals under a process-local lock, but do
-not edit the oversized core until a read-only design proves that the engine
-runner hooks can be injected without disturbing CJK recovery, cache semantics,
+not edit the oversized core until a read-only design proves that runner hooks
+can be injected without disturbing oversized-CJK recovery, cache semantics,
 supervised filtering, or historical public monkeypatch seams.
+
+Prefer another bounded ownership seam if the inventory finds one with a smaller
+call graph and equivalent correctness/maintainability payoff.
 
 Do not reopen Phase 7 oversized-module decomposition solely for line count, do
 not resume Phase 10 installer removal by name, and do not resume performance
