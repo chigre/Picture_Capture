@@ -12,6 +12,12 @@ from ..models import AppSettings
 
 CROP_SETTINGS_VERSION = 7
 SINGLE_LINE_MERGE_KEY = "single_line_crop_merge_by_page"
+UNLINED_FILTER_ENABLED_KEY = "unlined_export_filter_enabled"
+UNLINED_FILTER_BLANK_KEY = "unlined_export_filter_blank"
+UNLINED_BLANK_INK_PERCENT_KEY = "unlined_export_blank_ink_percent"
+DEFAULT_UNLINED_BLANK_INK_PERCENT = 0.8
+MIN_UNLINED_BLANK_INK_PERCENT = 0.0
+MAX_UNLINED_BLANK_INK_PERCENT = 10.0
 
 
 def normalize_crop_settings_payload(
@@ -31,6 +37,9 @@ def normalize_crop_settings_payload(
         "polygon_margin": 0,
         "parallel_workers": int(settings.crop_parallel_workers),
         SINGLE_LINE_MERGE_KEY: False,
+        UNLINED_FILTER_ENABLED_KEY: False,
+        UNLINED_FILTER_BLANK_KEY: False,
+        UNLINED_BLANK_INK_PERCENT_KEY: DEFAULT_UNLINED_BLANK_INK_PERCENT,
         "special_pages": {},
     }
     if not isinstance(raw, dict):
@@ -52,6 +61,25 @@ def normalize_crop_settings_payload(
             pass
     result["integrate_illustrations"] = bool(raw.get("integrate_illustrations", True))
     result[SINGLE_LINE_MERGE_KEY] = bool(raw.get(SINGLE_LINE_MERGE_KEY, False))
+    result[UNLINED_FILTER_ENABLED_KEY] = bool(
+        raw.get(UNLINED_FILTER_ENABLED_KEY, False)
+    )
+    result[UNLINED_FILTER_BLANK_KEY] = bool(
+        raw.get(UNLINED_FILTER_BLANK_KEY, False)
+    )
+    try:
+        blank_ink_percent = float(
+            raw.get(
+                UNLINED_BLANK_INK_PERCENT_KEY,
+                DEFAULT_UNLINED_BLANK_INK_PERCENT,
+            )
+        )
+    except (TypeError, ValueError):
+        blank_ink_percent = DEFAULT_UNLINED_BLANK_INK_PERCENT
+    result[UNLINED_BLANK_INK_PERCENT_KEY] = max(
+        MIN_UNLINED_BLANK_INK_PERCENT,
+        min(MAX_UNLINED_BLANK_INK_PERCENT, blank_ink_percent),
+    )
     specials = raw.get("special_pages")
     if isinstance(specials, dict):
         cleaned: dict[str, dict[str, int]] = {}
@@ -71,5 +99,11 @@ def normalize_crop_settings_payload(
 __all__ = [
     "CROP_SETTINGS_VERSION",
     "SINGLE_LINE_MERGE_KEY",
+    "UNLINED_FILTER_ENABLED_KEY",
+    "UNLINED_FILTER_BLANK_KEY",
+    "UNLINED_BLANK_INK_PERCENT_KEY",
+    "DEFAULT_UNLINED_BLANK_INK_PERCENT",
+    "MIN_UNLINED_BLANK_INK_PERCENT",
+    "MAX_UNLINED_BLANK_INK_PERCENT",
     "normalize_crop_settings_payload",
 ]
