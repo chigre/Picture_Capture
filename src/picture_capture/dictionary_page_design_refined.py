@@ -519,9 +519,13 @@ def detect_entries_from_page_design(
     *,
     page_index: int = 0,
     page_sections: list[Any] | None = None,
+    ops: base.LayoutPrimitiveOps | None = None,
 ) -> base.LayoutDetectionResult:
     """Infer page design, refine indent families, then derive boundaries."""
-    layout = base.infer_dictionary_page_layout(image, settings, page_index=page_index)
+    layout = base.infer_dictionary_page_layout(
+        image, settings, page_index=page_index,
+        **({"ops": ops} if ops is not None else {}),
+    )
     family = refine_indent_semantics(layout)
     if not layout.reliable:
         return base.LayoutDetectionResult(entries=[], layout=layout)
@@ -529,6 +533,7 @@ def detect_entries_from_page_design(
     entries = base.infer_entry_boundaries(layout, page_sections=page_sections)
     entries.extend(_guard_band_entries(
         image, settings, layout, family, entries, page_index=page_index,
+        **({"ops": ops} if ops is not None else {}),
     ))
     entries = _deduplicate_reading_order(layout, entries)
     if family is None:
