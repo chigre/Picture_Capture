@@ -147,31 +147,30 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
         foreground="#666666",
     ).grid(row=6, column=0, columnspan=4, sticky="w", pady=(0, 4))
 
-    def persist_merge_by_page() -> None:
-        if project_root is None:
-            return
-        try:
-            enabled = bool(dialog.crop_vars[SINGLE_LINE_MERGE_KEY].get())
-        except Exception:
-            return
-        save_merge_by_page(project_root, enabled)
+    if project_root is not None:
+        def persist_merge_by_page() -> None:
+            try:
+                enabled = bool(dialog.crop_vars[SINGLE_LINE_MERGE_KEY].get())
+            except Exception:
+                return
+            save_merge_by_page(project_root, enabled)
 
-    merge_check = ttk.Checkbutton(
-        general,
-        text=MERGE_LABEL,
-        variable=dialog.crop_vars[SINGLE_LINE_MERGE_KEY],
-        command=persist_merge_by_page,
-    )
-    merge_check.grid(row=7, column=0, columnspan=2, sticky="w", pady=4)
-    merge_info = ttk.Label(general, text="ⓘ", foreground="#6b7280", cursor="hand2")
-    merge_info.grid(row=7, column=2, sticky="w", padx=(8, 0))
+        merge_check = ttk.Checkbutton(
+            general,
+            text=MERGE_LABEL,
+            variable=dialog.crop_vars[SINGLE_LINE_MERGE_KEY],
+            command=persist_merge_by_page,
+        )
+        merge_check.grid(row=7, column=0, columnspan=2, sticky="w", pady=4)
+        merge_info = ttk.Label(general, text="ⓘ", foreground="#6b7280", cursor="hand2")
+        merge_info.grid(row=7, column=2, sticky="w", padx=(8, 0))
 
-    def show_merge_help() -> None:
-        dialog._show_settings_help(MERGE_LABEL, MERGE_HELP)
+        def show_merge_help() -> None:
+            dialog._show_settings_help(MERGE_LABEL, MERGE_HELP)
 
-    dialog._bind_help_widget(merge_check, show_merge_help)
-    dialog._bind_help_widget(merge_info, show_merge_help)
-    merge_info.bind("<Button-1>", lambda _event: show_merge_help(), add="+")
+        dialog._bind_help_widget(merge_check, show_merge_help)
+        dialog._bind_help_widget(merge_info, show_merge_help)
+        merge_info.bind("<Button-1>", lambda _event: show_merge_help(), add="+")
 
     section_info = ttk.LabelFrame(page, text="特殊页面范围", padding=(12, 10))
     section_info.pack(fill="x", pady=(0, 10))
