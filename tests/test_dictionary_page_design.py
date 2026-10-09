@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
+
+import pytest
 from PIL import Image, ImageDraw
 
+from picture_capture import dictionary_page_design as base
 from picture_capture.dictionary_page_design import (
     detect_entries_from_page_design,
     infer_dictionary_page_layout,
@@ -147,3 +151,36 @@ def test_vertical_rule_inside_gutter_does_not_become_column_edge():
     assert first.gutter_after > 10
     # The rule at x≈398 is not allowed to become the second text-column start.
     assert second.left > 420
+
+
+def test_layout_primitive_ops_preserve_legacy_snapshot_and_explicit_raw(monkeypatch):
+    """13B default observes rebindings, while the raw ops stay native."""
+    image, _body, _entry = _single_column_page()
+    settings = _settings()
+    original = base._line_runs
+    called = []
+
+    def traced_line_runs(ink, scale):
+        called.append(True)
+        return original(ink, scale)
+
+    assert base.RAW_LAYOUT_OPS.line_runs is not traced_line_runs
+    monkeypatch.setattr(base, "_line_runs", traced_line_runs)
+
+    snapshot = base.current_layout_ops()
+    assert snapshot.line_runs is traced_line_runs
+    assert base.RAW_LAYOUT_OPS.line_runs is not traced_line_runs
+
+    legacy_result = base.infer_dictionary_page_layout(image, settings)
+    assert legacy_result.columns
+    assert called
+
+    called.clear()
+    explicit_result = base.infer_dictionary_page_layout(
+        image, settings, ops=base.RAW_LAYOUT_OPS
+    )
+    assert explicit_result.columns
+    assert not called
+
+    with pytest.raises(FrozenInstanceError):
+        snapshot.line_runs = original
