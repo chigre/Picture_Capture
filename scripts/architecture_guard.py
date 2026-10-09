@@ -157,6 +157,18 @@ FORBIDDEN_UNLINED_FILTER_INSTALL_CALLS = (
     "install_unlined_export_filter_settings_ui(app_module)",
 )
 
+# Phase 12Q makes compact/right-pane Settings help native. The compatibility
+# installer must not resume replacing SettingsDialog methods at runtime.
+FORBIDDEN_SETTINGS_PARAMETER_HELP_MUTATIONS = (
+    "dialog._add_setting_group =",
+    "dialog._add_check_group =",
+    "dialog._scrollable_settings_page =",
+    "dialog._pc_compact_parameter_help_installed",
+)
+FORBIDDEN_SETTINGS_PARAMETER_HELP_INSTALL_CALLS = (
+    "install_settings_parameter_help(app_module)",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -331,6 +343,11 @@ def collect_violations() -> list[str]:
                 violations.append(
                     f"unlined-filter Settings installer call returned in {rel}: {marker}"
                 )
+        for marker in FORBIDDEN_SETTINGS_PARAMETER_HELP_INSTALL_CALLS:
+            if marker in source:
+                violations.append(
+                    f"Settings parameter-help installer call returned in {rel}: {marker}"
+                )
 
     single_line_merge_source = (
         PACKAGE_ROOT / "single_line_merge_settings.py"
@@ -348,6 +365,15 @@ def collect_violations() -> list[str]:
         if marker in unlined_filter_source:
             violations.append(
                 f"unlined-filter Settings mutation returned: {marker}"
+            )
+
+    parameter_help_source = (
+        PACKAGE_ROOT / "parameter_help_ui.py"
+    ).read_text(encoding="utf-8")
+    for marker in FORBIDDEN_SETTINGS_PARAMETER_HELP_MUTATIONS:
+        if marker in parameter_help_source:
+            violations.append(
+                f"Settings parameter-help mutation returned: {marker}"
             )
 
     init_path = PACKAGE_ROOT / "__init__.py"
