@@ -3,15 +3,11 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 13 — explicit Layout composition API redesign has started. Phase 13A design/characterization is complete with no production behavior change.**
+**Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
 
-Phase 12 is fully closed on `main@388eb6965f267f3e34e14744b9563b2ff93e160b`. Closure PR #390 fixed head `00456dd40a32556cf70d773ddc698e4521a5b6f2` passed CI 2354 on Ubuntu/Windows/macOS, merged as `388eb6965f267f3e34e14744b9563b2ff93e160b`, and post-merge CI 2355 plus CodeQL 2338 passed. The production baseline remains zero `*_runtime.py` files and all Phase 12 architecture ratchets remain active.
+Phase 12 is fully closed on `main@388eb6965f267f3e34e14744b9563b2ff93e160b`. Phase 13A design PR #391 merged as `e1f0642835cd6050a711668886ce0d7cb54b4752`; post-merge CI 2361 passed on Ubuntu/Windows/macOS and CodeQL 2344 passed. Phase 13B1 PR #392 merged as `ed3ebdac16b2d9f980f248fa2e1a2d18d29296ee`; post-merge CI 2363 passed on Ubuntu/Windows/macOS and CodeQL 2346 passed.
 
-Phase 13A establishes a two-layer target:
-- immutable `LayoutPrimitiveOps` for row runs, line features, indent modes and indent-role assignment;
-- an explicit higher-level Layout composition service for Profile anchoring, composed policy behavior and Page Understanding finalization.
-
-Raw Page Design and raw policy defaults remain compatibility contracts. Product physical/composed behavior must be selected explicitly rather than becoming the new raw default.
+The two-layer target remains unchanged: immutable `LayoutPrimitiveOps` for primitive hooks, followed by a higher-level composed Layout service for Profile anchoring and Page Understanding. Phase 13B1 does **not** constitute full Phase 13B completion. Do not remove either historical Layout installer or reroute product consumers before the later parity gates.
 
 The detailed design and staged migration plan are recorded in `docs/refactor/PHASE13_LAYOUT_COMPOSITION_DESIGN.md`.
 
@@ -2559,6 +2555,54 @@ The target architecture is two-layer:
 
 The migration is intentionally staged in 13B–13E; see
 `PHASE13_LAYOUT_COMPOSITION_DESIGN.md`.
+
+## Phase 13B1 — primitive-ops foundation (closed)
+
+This is the first independently gated dependency-plumbing sub-slice of Phase
+13B, not an installer retirement and not the full Layout migration.
+
+Changes:
+- `dictionary_page_design.LayoutPrimitiveOps` is a frozen/slots dataclass with
+  `line_runs`, `line_feature`, `indent_modes` and
+  `assign_indent_semantics` callbacks;
+- `RAW_LAYOUT_OPS` captures the four native implementations before any
+  historical runtime installation;
+- `current_layout_ops()` temporarily snapshots the four **currently bound**
+  module hook names, preserving legacy prepared/unprepared behavior;
+- `infer_dictionary_page_layout(..., ops=None)` resolves that current snapshot;
+  explicit `ops=RAW_LAYOUT_OPS` is insulated from later module rebinding;
+- focused tests prove legacy default calls observe a temporary hook rebind,
+  explicit raw calls do not, and the ops value is immutable.
+
+Publication evidence:
+- PR #392 fixed head `d7d7e72acc6d42b007ac45d84b656db33aaeca2b`;
+- PR CI 2362 passed on Ubuntu/Windows/macOS;
+- review submissions: none; review threads: none; PR comments: none;
+- PR #392 merged as `ed3ebdac16b2d9f980f248fa2e1a2d18d29296ee`;
+- post-merge CI 2363 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2346 passed;
+- production scope: base Page Design primitive plumbing only;
+- no architecture/size ratchet relaxed.
+
+## Next bounded continuation — Phase 13B2/B3
+
+Continue 13B without changing installed runtime behavior. Prefer splitting the
+remaining propagation into reviewable sub-slices:
+
+1. **13B2:** optional primitive-ops propagation through page-X registration
+   and column-drift remeasurement/finalization. Keep no-ops/default-call
+   compatibility for test stubs that do not accept a new `ops` keyword;
+   demonstrate explicit callback use through focused tests.
+2. **13B3:** propagate through policy layout, refined guard-band recovery and
+   the Profile-anchor wrapper. The wrapper must forward explicit `ops`
+   unchanged, without changing its existing anchoring point.
+3. **13B final gate:** characterize raw and installer-prepared behavior for all
+   consumers; add architecture guards against new direct mutable-hook readers,
+   and only then mark full 13B complete.
+
+No 13B sub-slice may remove `install_robust_line_starts()` or
+`install_physical_indent_inference()`, construct product physical ops or alter
+Profile/policy finalization timing. These remain explicitly deferred to 13C–13E.
 
 ## Recommended next slice — Phase 13B primitive-ops plumbing only
 
