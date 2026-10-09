@@ -559,64 +559,36 @@ def capture_layout_rows(
         _CAPTURE_TARGET.reset(token)
 
 
-def install_layout_rows_persistence_runtime() -> None:
-    """Wrap Layout Core once so normal drawing/visualization can seed sidecars."""
-    from . import layout_core_understanding as core
-
-    if bool(getattr(core, "_layout_rows_persistence_installed", False)):
+def publish_captured_layout(layout: Any, page_index: int) -> None:
+    """Persist *layout* when the caller is inside an explicit capture context."""
+    target = _CAPTURE_TARGET.get()
+    if target is None:
         return
-    original = core.understand_layout_core
+    project_root, image_path, target_index, target_settings = target
+    if int(target_index) != int(page_index):
+        return
+    try:
+        write_layout_rows_cache(
+            project_root,
+            image_path,
+            target_index,
+            target_settings,
+            layout,
+        )
+    except Exception:
+        # LayoutRows are a best-effort QA sidecar and must never make the
+        # authoritative Layout calculation fail.
+        pass
 
-    def wrapped(image: Image.Image, settings: Any, *, page_index: int = 0):
-        result = original(image, settings, page_index=page_index)
-        target = _CAPTURE_TARGET.get()
-        if target is not None:
-            project_root, image_path, target_index, target_settings = target
-            if int(target_index) == int(page_index):
-                try:
-                    write_layout_rows_cache(
-                        project_root,
-                        image_path,
-                        target_index,
-                        target_settings,
-                        result.layout,
-                    )
-                except Exception:
-                    pass
-        return result
 
-    core.understand_layout_core = wrapped
-    core._layout_rows_persistence_installed = True
+def install_layout_rows_persistence_runtime() -> None:
+    """Compatibility no-op; Layout Core now publishes capture results statically."""
+    return None
 
 
 def install_layout_visualization_cache_context() -> None:
-    """Seed LayoutRows whenever the user explicitly displays Layout."""
-    from . import layout_visualization_shared as shared
-
-    if bool(getattr(shared, "_layout_rows_cache_context_installed", False)):
-        return
-    original = shared.shared_snapshot_for_app
-
-    def wrapped(app: Any):
-        try:
-            project = getattr(app, "project", None)
-            index = max(0, int(getattr(app, "current_index", 0)))
-            images = list(getattr(project, "images", []) or []) if project is not None else []
-            if project is None or not (0 <= index < len(images)):
-                return original(app)
-            effective = app._current_effective_profile_settings()
-            with capture_layout_rows(
-                Path(project.root),
-                Path(images[index]),
-                index,
-                effective,
-            ):
-                return original(app)
-        except Exception:
-            return original(app)
-
-    shared.shared_snapshot_for_app = wrapped
-    shared._layout_rows_cache_context_installed = True
+    """Compatibility no-op; visualization enters capture_layout_rows statically."""
+    return None
 
 
 __all__ = [
@@ -628,6 +600,7 @@ __all__ = [
     "install_layout_visualization_cache_context",
     "layout_rows_cache_path",
     "load_layout_rows_cache",
+    "publish_captured_layout",
     "recover_physical_rows_fast",
     "resolve_physical_rows_layout",
     "write_layout_rows_cache",

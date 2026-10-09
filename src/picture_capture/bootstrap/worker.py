@@ -3,10 +3,11 @@ from __future__ import annotations
 """Explicit composition root for multiprocessing detection workers.
 
 Shared process-wide runtime preparation is resolved through
-``build_core_services`` before worker-specific LayoutRows extensions are added.
-The pickleable spawn job therefore consumes one worker profile rather than
-reconstructing import-order-sensitive dependencies itself. Bare package import
-performs no runtime installation.
+``build_core_services``. LayoutRows capture is an explicit worker service;
+Layout Core publishes into that context statically instead of requiring a
+worker-local wrapper. The pickleable spawn job therefore consumes one worker
+profile without reconstructing import-order-sensitive dependencies. Bare package
+import performs no runtime installation.
 """
 
 from dataclasses import dataclass
@@ -36,16 +37,13 @@ def build_worker_services() -> WorkerServices:
     formats = core_services.formats
     processing_module = core_services.processing
 
-    from ..layout_rows_cache import (
-        capture_layout_rows,
-        install_layout_rows_persistence_runtime,
-    )
+    from ..layout_rows_cache import capture_layout_rows
     from ..training_baseline import save_automatic_baseline
 
     # PDIC sidecar persistence is already owned by build_core_services(). Entry
     # materialization/cropping/OCR classification is static processing code.
-    # Long-band row recovery and column-drift remeasurement are static.
-    install_layout_rows_persistence_runtime()
+    # LayoutRows publication is static in Layout Core; the worker supplies only
+    # the explicit capture context used by the pickleable job.
 
     return WorkerServices(
         formats=formats,
