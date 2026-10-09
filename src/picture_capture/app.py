@@ -4713,10 +4713,7 @@ class ReviewWindow(tk.Toplevel):
         if not stem or not getattr(self, "simplified_vars", []):
             return
         records = self._simplified_page_records(stem)
-        # The simplified editors belong to the rendered review rows, not to a
-        # fresh geometry sort. With multiple page sections the reading order
-        # may be recomputed after edits or navigation: pairing by current index
-        # would associate a word with another marker's x/y sidecar key.
+        # Preserve rendered row identities across section-order changes.
         rendered_entries = self._bound_row_entries()
         # Only capture against the currently rendered page.  During navigation
         # parent.current_page may already refer to the next page while the old
