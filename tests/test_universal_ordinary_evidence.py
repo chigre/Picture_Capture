@@ -178,7 +178,7 @@ def test_project_profile_ui_uses_static_composition():
     import picture_capture.app as app_module
     import picture_capture.bootstrap.gui as gui_bootstrap
     from picture_capture.profile_setup import ProjectProfileWizard as BaseWizard
-    from picture_capture.profile_wizard_composed import ProjectProfileWizard
+    from picture_capture.profile_wizard import ProjectProfileWizard
 
     assert issubclass(ProjectProfileWizard, BaseWizard)
     modules = [cls.__module__ for cls in ProjectProfileWizard.__mro__]
