@@ -4742,7 +4742,7 @@ def test_display_mode_and_color_mode_live_at_bottom_of_auxiliary_options():
     assert 'text="显示模式："' not in page_toolbar
 
     aux_start = text.index('self._section_frame(parent, "二、显示设置"')
-    aux_end = text.index('ocr = self._section_frame(parent, "三、融合 / OCR画线参数"', aux_start)
+    aux_end = text.index('ocr = self._section_frame(parent, "三、共享 OCR 通道 / OCR画线"', aux_start)
     aux = text[aux_start:aux_end]
     assert 'display_mode_combo = ttk.Combobox(\n            option_row,' in aux
     assert 'text="颜色模式："' in aux
@@ -6329,9 +6329,9 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert '"单行高："' in review
+    assert '"普通字/行高："' in review
     assert '"大字头切图高："' in review
-    assert '"单行高：", self.review_line_height_var, self.review_line_height_px_var' in review
+    assert '"普通字/行高：", self.review_line_height_var, self.review_line_height_px_var' in review
     assert '"行间空：",' in review
     assert 'self.review_row_padding_var,' in review
     assert 'self.review_row_padding_px_var,' in review
@@ -8060,7 +8060,7 @@ def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order()
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     aux_start = text.index('self._section_frame(parent, "二、显示设置"')
-    aux_end = text.index('ocr = self._section_frame(parent, "三、融合 / OCR画线参数"', aux_start)
+    aux_end = text.index('ocr = self._section_frame(parent, "三、共享 OCR 通道 / OCR画线"', aux_start)
     aux = text[aux_start:aux_end]
 
     assert 'text="显示标尺"' in aux
