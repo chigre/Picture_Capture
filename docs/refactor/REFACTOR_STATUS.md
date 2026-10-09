@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12G is complete: the four canonical Entry classification descriptors are now native static properties on `models.Entry`, with registry/recycled-id semantics preserved behind lazy helper delegation. Core bootstrap no longer mutates the Entry class.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12H is complete: separator-Y and entry-crop compatibility are now native AppSettings construction/serialization behavior. Core bootstrap and separator refinement no longer install or rebind AppSettings methods/properties.**
 
-Phase 12G is merged on `main@93e66f3ea1d0e662a5c833d1e223f95ea1cb96ac`. Phase 12F remains complete on `main@2afea236e21acb336aba94c27e0d3889159b8f1e`, Phase 12E remains complete on `main@a1016a8aa8ef3fd50ff3c50b1e8433db9cd5122b`, Phase 12D remains complete on `main@762e2bc22eb2780549fad097b778f2bc303105e0`, Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
+Phase 12H is merged on `main@6d6e85945b2d7981fcedec250dc064fda819359b`. Phase 12G remains complete on `main@93e66f3ea1d0e662a5c833d1e223f95ea1cb96ac`, Phase 12F remains complete on `main@2afea236e21acb336aba94c27e0d3889159b8f1e`, Phase 12E remains complete on `main@a1016a8aa8ef3fd50ff3c50b1e8433db9cd5122b`, Phase 12D remains complete on `main@762e2bc22eb2780549fad097b778f2bc303105e0`, Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -1852,39 +1852,97 @@ Phase 12G publication:
 - post-merge CodeQL 2277 passed;
 - no architecture threshold was relaxed.
 
-## Recommended next slice — Phase 12H AppSettings compatibility-chain characterization
+## Phase 12H — static AppSettings compatibility boundary
 
-The remaining `separator_y_settings` and `entry_crop_settings` installers are
-not independent class-property shims. Together they form an ordered compatibility
-chain around `AppSettings.__init__`, `to_json`, and `from_json`:
-- separator-Y translates six canonical names onto legacy dataclass slots and
-  canonicalizes JSON output;
-- entry-crop wraps that already-installed serializer/constructor, translates two
-  canonical crop-height names, and also accepts the short-lived
+Characterization confirmed that separator-Y and entry-crop compatibility had to
+move together: both wrapped the generated `AppSettings.__init__` and JSON
+methods, and entry-crop depended on the already-installed separator-Y layer.
+
+Phase 12H replaces that ordered runtime chain with one native model boundary:
+- `app_settings_migrations.py` owns the separator-Y, entry-crop, and transient
+  right-ratio key maps without importing `models`;
+- a small `_AppSettingsMeta.__call__` normalizes only compatibility kwargs
+  before the unchanged generated dataclass initializer runs;
+- canonical public aliases are static properties backed by the historical
+  dataclass storage slots;
+- `AppSettings.to_json()` canonicalizes the decoded dataclass payload directly;
+- `AppSettings.from_json()` sends compatibility-key normalization through the
+  same one-way migration module before all existing historical migrations;
+- the former separator-Y and entry-crop installers remain importable
+  compatibility no-ops;
+- core bootstrap and `separator_y_refinement` no longer call either installer.
+
+The native constructor route deliberately avoids hand-writing the very large
+dataclass initializer. Regression coverage proves, in a fresh Python process
+without core bootstrap, that canonical constructor keywords, static aliases,
+`dataclasses.replace()`, pickle round-trip, canonical JSON output, and JSON
+reload all retain the former behavior.
+
+Behavior intentionally unchanged:
+- AppSettings dataclass field order, defaults and legacy storage slots are
+  unchanged;
+- canonical separator-Y / entry-crop keys win when canonical and legacy names
+  are both supplied;
+- established `right_ratio` wins over the transient
   `entry_ocr_right_ratio` key;
-- core bootstrap currently requires separator-Y first, then entry-crop.
+- persisted JSON still exposes canonical separator-Y and entry-crop names rather
+  than legacy storage names;
+- historical settings migrations, PDIC, Layout, OCR and crop semantics are
+  unchanged.
 
-Do not delete either installer independently. First characterize every constructor
-and JSON compatibility case and design one native AppSettings boundary that can
-perform the full translation without temporary files or method rebinding.
+Architecture ratchets now reject:
+- runtime assignment to `AppSettings.__init__`, `to_json`, or `from_json`;
+- production `setattr(AppSettings, ...)` compatibility installation;
+- separator-Y / entry-crop installer calls outside their inert compatibility
+  shim modules.
 
-A safe 12H design should prefer:
-- canonical public properties native on `AppSettings` while retaining legacy
-  storage slots for dataclass/file compatibility where necessary;
-- constructor keyword normalization before the generated dataclass initializer
-  is invoked, or an equivalent native construction path with identical defaults;
-- one payload migration layer for old/new separator-Y, entry-crop and transient
-  right-ratio keys before existing historical migrations run;
-- one canonical serialization path with the same currently persisted key names;
-- isolated-process tests proving canonical constructor and JSON behavior without
-  `build_core_services()`.
+Phase 12H publication:
+- PR #364 fixed head `4323df1bcbabe9528127d111d2ed1817c4045cfb`;
+- PR CI 2297 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #364 merged as `6d6e85945b2d7981fcedec250dc064fda819359b`;
+- post-merge CI 2298 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2281 passed;
+- no architecture threshold was relaxed.
 
-Do not combine this with PDIC classification composition, Page Design
-physical-indent/line-start installers, or the OCR-boundary runner bridge.
+## Recommended next slice — Phase 12I PDIC classification composition characterization
 
-If characterization shows that replacing the generated dataclass constructor
-would materially expand risk, stop at characterization and select another
-bounded seam rather than forcing 12H into production.
+The remaining shared-core composition mutation is
+`install_pdic_classification(formats)`, which currently replaces
+`formats.read_pdic` / `formats.write_pdic` so ordinary application reads and
+writes automatically load/save the classification sidecar.
+
+Do not simply move that behavior into raw `formats.py`. The repository has
+three distinct PDIC I/O contracts that must be characterized first:
+- raw PDIC text serialization/deserialization, whose format must remain usable
+  without sidecar semantics;
+- normal application/core PDIC I/O, which must include classification sidecars;
+- GUI automatic writes, which add first-baseline capture outside the
+  classification-aware writer.
+
+Training export is a fourth compatibility edge: it currently inspects
+`_original_write_pdic` specifically to bypass the GUI baseline wrapper while
+retaining the intended lower-level write semantics. Determine exactly which
+wrapper it is meant to bypass before changing ownership.
+
+A safe 12I should inventory every by-value and module-qualified
+`read_pdic`/`write_pdic` consumer, especially:
+- `processing_core.py`, UI controllers and CLI imports by value;
+- spawn-worker writes through `WorkerServices.formats`;
+- `single_line_parallel.py` and `unlined_line_export.py`;
+- `gui_io.py` call-time delegation introduced in Phase 12D;
+- `training_export.py` / `training_export_v3.py`;
+- `pdic_restore.py` atomic replacement behavior.
+
+Prefer an explicit static raw/composed boundary if characterization can preserve
+all call sites without broad churn. If the distinction cannot be made explicit
+without changing public/raw `formats` semantics or training-export behavior,
+stop at characterization and choose another bounded seam.
+
+Do not combine 12I with Page Design physical-indent/line-start installers or the
+OCR-boundary runner bridge.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
