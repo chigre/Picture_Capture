@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12E is complete: the effective Layout diagnostic role theme and summary-extension order are now statically owned by the visualization layer, and GUI bootstrap no longer mutates the summary formatter.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12F is complete: LayoutRows capture publication is now static at the Layout Core return boundary, while explicit capture contexts remain the only opt-in side-effect scope. GUI and worker bootstrap no longer wrap `understand_layout_core`.**
 
-Phase 12E is merged on `main@a1016a8aa8ef3fd50ff3c50b1e8433db9cd5122b`. Phase 12D remains complete on `main@762e2bc22eb2780549fad097b778f2bc303105e0`, Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
+Phase 12F is merged on `main@2afea236e21acb336aba94c27e0d3889159b8f1e`. Phase 12E remains complete on `main@a1016a8aa8ef3fd50ff3c50b1e8433db9cd5122b`, Phase 12D remains complete on `main@762e2bc22eb2780549fad097b778f2bc303105e0`, Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -1755,42 +1755,88 @@ Phase 12E publication:
   composition, GUI bootstrap removal, and focused regression updates;
 - no architecture ratchet was relaxed.
 
-## Recommended next slice — Phase 12F static LayoutRows capture publication
+## Phase 12F — static LayoutRows capture publication
 
-The next bounded candidate is the LayoutRows persistence seam. The explicit
-`capture_layout_rows(...)` context is already static at both production callers:
-ordinary-detection worker execution and Layout visualization. The remaining
-dynamic debt is only `install_layout_rows_persistence_runtime()`, which wraps
-`layout_core_understanding.understand_layout_core` so results produced inside
-that explicit context are written to the physical-row sidecar.
+Read-only characterization showed that LayoutRows already had an explicit,
+well-bounded side-effect scope: both ordinary-detection worker execution and
+Layout visualization enter `capture_layout_rows(...)`. The remaining dynamic
+piece was a process-global wrapper around
+`layout_core_understanding.understand_layout_core`.
 
-A safe static design must preserve both return paths:
-- cache hit in `understand_layout_core`;
-- newly computed Layout Core result.
+Phase 12F removes that wrapper:
+- `layout_rows_cache.publish_captured_layout(...)` reads the existing context
+  target and writes only when page index matches;
+- `understand_layout_core(...)` publishes through one static return helper on
+  both the in-memory cache-hit path and the newly computed-result path;
+- the existing `write_layout_rows_cache(...)` reliability gate and
+  semantic-free sidecar format remain authoritative;
+- GUI bootstrap and worker bootstrap no longer install a Layout Core wrapper;
+- worker services still expose `capture_layout_rows` explicitly;
+- Layout visualization still enters `capture_layout_rows` explicitly;
+- historical persistence/cache-context installer functions remain importable
+  compatibility no-ops.
 
-Prefer a small publication helper owned by `layout_rows_cache.py` that reads the
-existing context target and persists the reliable physical layout. Call that
-helper from the Layout Core return boundary for both cached and new results.
-Then GUI/worker bootstrap can stop installing the wrapper while
-`capture_layout_rows(...)` remains the explicit opt-in side-effect scope.
+Regression coverage explicitly proves:
+- the static publisher uses the caller-supplied capture settings and produces a
+  readable LayoutRows sidecar;
+- an `understand_layout_core` memory-cache hit still publishes into the active
+  capture scope;
+- GUI/worker bootstrap no longer owns the installer;
+- process-global assignments to `core.understand_layout_core` or
+  `shared.shared_snapshot_for_app` cannot return without tripping the
+  architecture guard.
 
-Preserve:
-- semantic-free LayoutRows format and reliability gate;
-- original settings fingerprint supplied by the capture context;
-- GUI visualization and spawn-worker capture behavior;
-- explicit worker-service exposure of `capture_layout_rows`;
-- cache-hit persistence behavior.
+Behavior intentionally unchanged:
+- LayoutRows JSON format, path, fingerprinting, reliability criteria and
+  semantic-free row payload are unchanged;
+- Layout calculation, cache identity, role inference, OCR, PDIC and crop
+  behavior are unchanged;
+- capture remains best-effort and can never make authoritative Layout fail.
 
-Keep `install_layout_rows_persistence_runtime()` and the obsolete visualization
-cache-context installer importable as compatibility no-ops if characterization
-continues to show no required external mutation contract.
+Phase 12F publication:
+- PR #360 fixed head `cc7c7b10685dcb393f78222e30a4da7c53598a49`;
+- PR CI 2289 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #360 merged as `2afea236e21acb336aba94c27e0d3889159b8f1e`;
+- post-merge CI 2290 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2273 passed;
+- no architecture threshold was relaxed.
 
-Do not combine this with the Page Design physical-indent installer chain. That
-chain still changes algorithmic owners and remains a separate, deeper slice.
+## Recommended next slice — Phase 12G static Entry classification properties
 
-The OCR-boundary runner bridge remains deferred until explicit hook injection can
-be proven safe across oversized-CJK recovery, cache semantics, supervised
-filtering, and historical public monkeypatch seams.
+The next bounded candidate is `entry_classification_fields.py`. Unlike the
+remaining separator-Y and entry-crop settings installers, this module does not
+rewrite AppSettings construction or JSON migration. It only adds four
+registry-backed properties to the slotted `Entry` model:
+- `entry_source`;
+- `entry_scale`;
+- `detected_head_height`;
+- `entry_scale_manual`.
+
+Characterization found no production or test contract requiring these properties
+to be absent before `build_core_services()`. Prefer moving property ownership
+onto `Entry` itself, with local/lazy delegation to the existing classification
+registry so `models.py` does not create an import cycle. Keep
+`install_entry_classification_fields()` importable as a compatibility no-op.
+
+A safe 12G must preserve the current recycled-object-id protection implemented by
+the classification-field helper: when concrete Entry evidence proves a registry
+record belongs to another object, automatic metadata is refreshed, while manual
+scale overrides for the same structural source remain intact.
+
+Add an isolated-process or otherwise order-independent regression proving the
+properties work without core bootstrap. Then remove
+`install_entry_classification_fields()` from `bootstrap/core.py` and ratchet
+against reintroducing Entry class mutation.
+
+Do not combine 12G with `separator_y_settings` or `entry_crop_settings`; those
+two still form an ordered constructor/JSON compatibility chain and need separate
+design work.
+
+Do not combine it with the Page Design physical-indent chain or the OCR-boundary
+runner bridge.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
