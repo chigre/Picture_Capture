@@ -26,7 +26,8 @@ def load_recent_projects(path: Path | None = None) -> list[dict[str, object]]:
         try:
             value = json.loads(candidate.read_text(encoding="utf-8"))
             if isinstance(value, list):
-                return [row for row in value if isinstance(row, dict) and row.get("path")]
+                rows = [row for row in value if isinstance(row, dict) and row.get("path")]
+                return sorted(rows, key=lambda row: not bool(row.get("pinned", False)))
         except (OSError, ValueError, TypeError):
             continue
     return []
@@ -87,6 +88,20 @@ def touch_recent_project(
     if last_page_index is not None:
         row["last_page_index"] = int(last_page_index)
     rows = [row, *remaining][:30]
+    save_recent_projects(rows, path)
+    return rows
+
+
+def set_recent_project_pinned(
+    root: Path, pinned: bool, path: Path | None = None,
+) -> list[dict[str, object]]:
+    """Keep pinned projects above other recent entries without deleting data."""
+    resolved = Path(root).expanduser().resolve()
+    rows = load_recent_projects(path)
+    for row in rows:
+        if Path(str(row.get("path", ""))).expanduser() == resolved:
+            row["pinned"] = bool(pinned)
+    rows.sort(key=lambda row: not bool(row.get("pinned", False)))
     save_recent_projects(rows, path)
     return rows
 
@@ -161,9 +176,33 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
     }
     if not details["exists"]:
         return details
+    # Match the same selected image format used by ProjectState on opening.
+    # Counting every supported image in mixed TIFF/PNG/JPG directories gives
+    # misleading page totals and incorrect resume-page denominators.
+    project_settings = settings_path(root)
+    raw: dict[str, object] = {}
+    if project_settings.is_file():
+        try:
+            loaded = json.loads(project_settings.read_text(encoding="utf-8-sig"))
+            if isinstance(loaded, dict):
+                raw = loaded
+        except (OSError, ValueError, TypeError):
+            pass
+    details["full_name"] = str(raw.get("dictionary_full_name") or details["full_name"])
+    details["abbreviation"] = str(raw.get("dictionary_abbreviation") or "")
+    preferred_suffix = str(raw.get("image_suffix") or "").lower().strip()
+    if preferred_suffix and not preferred_suffix.startswith("."):
+        preferred_suffix = "." + preferred_suffix
     try:
         inventory = tuple(root.iterdir())
-        pages = project_page_images(root, candidates=inventory)
+        all_pages = project_page_images(root, candidates=inventory)
+        if all_pages:
+            chosen_suffix = preferred_suffix if any(
+                page.suffix.lower() == preferred_suffix for page in all_pages
+            ) else all_pages[0].suffix.lower()
+            pages = [page for page in all_pages if page.suffix.lower() == chosen_suffix]
+        else:
+            pages = []
         details["image_count"] = len(pages)
         cover = project_cover_path(root, candidates=inventory)
         if cover is not None:
@@ -173,7 +212,7 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         elif pages:
             details["preview_path"] = str(pages[0])
             details["cover_source"] = "first_page"
-        image_count = int(details["image_count"])
+        image_count = len(pages)
         if last_page_index >= 0 and image_count > 0:
             page_number = min(image_count, last_page_index + 1)
             details["position_text"] = f"第 {page_number:,} / {image_count:,} 页"
@@ -182,15 +221,6 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
     except OSError:
         details["exists"] = False
         return details
-    project_settings = settings_path(root)
-    if project_settings.is_file():
-        try:
-            raw = json.loads(project_settings.read_text(encoding="utf-8-sig"))
-            if isinstance(raw, dict):
-                details["full_name"] = str(raw.get("dictionary_full_name") or details["full_name"])
-                details["abbreviation"] = str(raw.get("dictionary_abbreviation") or "")
-        except (OSError, ValueError, TypeError):
-            pass
     try:
         candidates = [root.stat().st_mtime]
     except OSError:
