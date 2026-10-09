@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-"""Per-page merge option for main-window single-line crop export.
+"""Per-page merge behavior for main-window single-line crop export.
 
-The existing crop-settings surface persists to ``QT/_CropSettings.json`` rather
-than the general project settings.  This module keeps the new option in that
-same store and injects one checkbox into Settings Center -> crop settings without
-changing the proofreading window's line-by-line crop behavior.
+Persistence/output helpers remain here because workers consume them directly.
+Settings Center presentation and integrated crop-payload ownership are static in
+``ui.settings.crop``; the historical installer is retained only as a no-op
+compatibility entry point.
 """
 
 from pathlib import Path
