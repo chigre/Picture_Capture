@@ -201,6 +201,49 @@ def _credible_first_ink_x(line: np.ndarray, reference: float) -> int | None:
     return None
 
 
+def compose_physical_line_feature(inner: Callable[..., Any]):
+    """Compose physical first-ink recovery around an explicitly supplied feature."""
+
+    def composed(
+        column: int,
+        ink: np.ndarray,
+        y0: int,
+        y1: int,
+        reference: float,
+        previous_end: int,
+    ) -> Any | None:
+        from . import dictionary_page_design as page_design
+
+        line_ink = ink[y0:y1]
+        first_x = _credible_first_ink_x(line_ink, reference)
+        result = inner(column, ink, y0, y1, reference, previous_end)
+        if result is None:
+            if first_x is None:
+                return None
+            return page_design.LayoutLine(
+                column=column,
+                y0=int(y0),
+                y1=int(y1),
+                first_x=int(first_x),
+                anchor_x=None,
+                anchor_width=0,
+                anchor_height=0,
+                gap_before=max(0, int(y0) - int(previous_end)),
+                patch=np.zeros((0, 0), dtype=bool),
+                has_small_prefix=False,
+            )
+
+        if first_x is not None and int(first_x) < int(result.first_x):
+            result.first_x = int(first_x)
+            result.has_small_prefix = bool(
+                result.anchor_x is not None
+                and int(first_x) < float(result.anchor_x) - float(reference) * 0.12
+            )
+        return result
+
+    return composed
+
+
 def physical_line_feature(
     column: int,
     ink: np.ndarray,
@@ -209,40 +252,29 @@ def physical_line_feature(
     reference: float,
     previous_end: int,
 ) -> Any | None:
-    """Measure one row with raw-leading-ink and robust-anchor semantics."""
-    from . import dictionary_page_design as page_design
-
-    line_ink = ink[y0:y1]
-    first_x = _credible_first_ink_x(line_ink, reference)
-
-    result = (
-        _BASE_LINE_FEATURE(column, ink, y0, y1, reference, previous_end)
-        if _BASE_LINE_FEATURE is not None
-        else None
+    """Legacy installed entry point; keep its captured base semantics intact."""
+    if _BASE_LINE_FEATURE is None:
+        return compose_physical_line_feature(lambda *args: None)(
+            column, ink, y0, y1, reference, previous_end
+        )
+    return compose_physical_line_feature(_BASE_LINE_FEATURE)(
+        column, ink, y0, y1, reference, previous_end
     )
-    if result is None:
-        if first_x is None:
-            return None
-        return page_design.LayoutLine(
-            column=column,
-            y0=int(y0),
-            y1=int(y1),
-            first_x=int(first_x),
-            anchor_x=None,
-            anchor_width=0,
-            anchor_height=0,
-            gap_before=max(0, int(y0) - int(previous_end)),
-            patch=np.zeros((0, 0), dtype=bool),
-            has_small_prefix=False,
-        )
 
-    if first_x is not None and int(first_x) < int(result.first_x):
-        result.first_x = int(first_x)
-        result.has_small_prefix = bool(
-            result.anchor_x is not None
-            and int(first_x) < float(result.anchor_x) - float(reference) * 0.12
-        )
-    return result
+
+def explicit_physical_layout_ops():
+    """Construct ordered robust -> physical primitives without global rebinding."""
+    from . import dictionary_page_design as page_design
+    from .layout_line_start_refinement import compose_robust_line_feature
+
+    return page_design.LayoutPrimitiveOps(
+        line_runs=projection_line_runs,
+        line_feature=compose_physical_line_feature(
+            compose_robust_line_feature(page_design.RAW_LAYOUT_OPS.line_feature)
+        ),
+        indent_modes=physical_indent_modes,
+        assign_indent_semantics=assign_binary_roles,
+    )
 
 
 def _indent_gap_threshold(values: np.ndarray) -> float:
