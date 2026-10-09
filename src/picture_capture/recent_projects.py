@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import tempfile
 
 from .models import project_cover_path, project_page_images
 from .project_storage import settings_path
@@ -33,9 +34,20 @@ def load_recent_projects(path: Path | None = None) -> list[dict[str, object]]:
 def save_recent_projects(rows: list[dict[str, object]], path: Path | None = None) -> None:
     target = path or default_recent_projects_path()
     target.parent.mkdir(parents=True, exist_ok=True)
-    temp = target.with_suffix(".tmp")
-    temp.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(temp, target)
+    temp: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=target.parent,
+            prefix=f".{target.name}.", suffix=".tmp", delete=False,
+        ) as handle:
+            temp = Path(handle.name)
+            json.dump(rows, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp, target)
+    finally:
+        if temp is not None:
+            temp.unlink(missing_ok=True)
 
 
 def touch_recent_project(
