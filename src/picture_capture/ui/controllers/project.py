@@ -81,10 +81,30 @@ class ProjectController:
                 requested_suffix = self.choose_new_project_image_suffix(root)
                 if requested_suffix is None:
                     return
+            template_root = None
+            if not existing_project and messagebox.askyesno(
+                "复用现有项目参数",
+                "是否从另一个现有词典项目复制布局、OCR、切图等参数？\\n"
+                "选择“否”将使用你保存的新项目默认参数（若无则使用内置默认）。",
+                parent=app,
+            ):
+                source = filedialog.askdirectory(
+                    title="选择要复制参数的已有项目目录",
+                    parent=app,
+                )
+                if not source:
+                    return
+                template_root = Path(source)
+                if template_root.expanduser().resolve() == root.expanduser().resolve():
+                    messagebox.showerror(
+                        "参数来源无效", "不能把新项目本身作为参数来源。", parent=app,
+                    )
+                    return
             app._load_project(
                 root,
                 requested_suffix=requested_suffix,
                 launch_profile_setup=not existing_project,
+                parameter_template_root=template_root,
             )
         except Exception as exc:
             app.show_error("无法打开项目", exc)
