@@ -36,6 +36,7 @@ from .appearance import (
     usage_guide_palette,
 )
 from .gui_io import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, write_text_atomic
+from .ocr_action_guard import LENS_MODE_LABELS, LENS_MODE_VALUES, guard_ocr_action_selection
 from .models import (
     AppSettings, Entry as WordEntry, PolygonRegion, ProjectState, project_page_images,
     read_noncomment_lines, resolve_wordslist_path, resolved_tesseract_language,
@@ -256,13 +257,6 @@ DETECTION_LABELS = {
 DETECTION_VALUES = {label: value for value, label in DETECTION_LABELS.items()}
 OCR_ENGINE_LABELS = {"tesseract": "Tesseract", "paddleocr": "PaddleOCR"}
 OCR_ENGINE_VALUES = {label: value for value, label in OCR_ENGINE_LABELS.items()}
-LENS_MODE_LABELS = {
-    "off": "① 关闭",
-    "diagnostic": "② 仅诊断对照",
-    "conflict": "③ 冲突/低可信时调用（推荐）",
-    "full": "④ 全页参与三OCR融合",
-}
-LENS_MODE_VALUES = {label: value for value, label in LENS_MODE_LABELS.items()}
 APPEARANCE_MODE_LABELS = {"light": "浅色", "dark": "深色", "system": "跟随系统"}
 APPEARANCE_MODE_VALUES = {label: value for value, label in APPEARANCE_MODE_LABELS.items()}
 
@@ -15706,6 +15700,8 @@ class PictureCaptureApp(tk.Tk):
 
     def ocr_ordinary_lines_text_selected_scope(self) -> None:
         """OCR text for existing ordinary markers without changing geometry."""
+        if not guard_ocr_action_selection(self):
+            return
         if not self.guard() or not self.apply_quick_settings(show_status=False):
             return
         if self._batch_active:

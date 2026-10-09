@@ -156,6 +156,24 @@ def test_action_validation_short_circuits_in_original_order() -> None:
     assert app.calls == [("guard",), ("apply_quick_settings", False)]
 
 
+def test_lens_checked_off_stops_ocr_actions_before_generic_guard() -> None:
+    for method_name in ("run_ocr_draw_action", "run_combined_draw_action"):
+        app = _App()
+        app.quick_bool_vars = {
+            "paddle_use_paddleocr": _Var(False),
+            "paddle_compare_tesseract": _Var(False),
+            "paddle_enable_lens": _Var(True),
+        }
+        app.lens_mode_var = _Var("① 关闭")
+        controller = DetectionController(app)
+
+        getattr(controller, method_name)()
+
+        assert app.calls == []
+        assert app.settings.detection_method == "left_edge"
+        assert app.errors and app.errors[0][0] == "OCR 引擎配置无效"
+
+
 def test_run_ocr_draw_preserves_current_and_all_scope_routing_without_save_settings() -> None:
     app = _App()
     controller = DetectionController(app)
@@ -473,7 +491,7 @@ def test_detection_controller_has_no_reverse_dependency_on_app_module() -> None:
             assert node.module not in {"app", "picture_capture.app"}
 
 
-def test_detection_controller_wiring_preserves_app_methods_and_runtime_guard_seam() -> None:
+def test_detection_controller_wiring_preserves_app_methods_and_static_guard_seam() -> None:
     app = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
     controller = (
         ROOT / "src/picture_capture/ui/controllers/detection.py"
@@ -507,9 +525,10 @@ def test_detection_controller_wiring_preserves_app_methods_and_runtime_guard_sea
         assert f"self._detection_controller_for_call().{controller_method}" in app
         assert f"def {controller_method}(" in controller
 
-    # Phase 4G keeps the compatibility method names that the legacy guard wraps.
-    assert '"run_ocr_draw_action"' in ocr_guard
-    assert '"run_combined_draw_action"' in ocr_guard
+    # Phase 12L keeps the guard as a normal action-boundary preflight.
+    assert "def guard_ocr_action_selection(" in ocr_guard
+    assert "setattr(app_class, method_name, guarded)" not in ocr_guard
+    assert controller.count("guard_ocr_action_selection(app)") >= 2
 
     # Phase 5A retires only the method monkey patch; the shared ordinary
     # quick-settings helper remains reusable by postproduction paths.

@@ -104,6 +104,16 @@ FORBIDDEN_PAGE_DESIGN_ASSIGNMENTS = (
     "dictionary_page_design.detect_entries_from_page_design =",
 )
 
+# Phase 12L moves OCR action validation to explicit action-boundary calls.
+# GUI bootstrap and helper modules must not resume patching PictureCaptureApp.
+FORBIDDEN_OCR_ACTION_GUARD_MUTATIONS = (
+    "setattr(app_class, method_name, guarded)",
+    "app_class._pc_ocr_action_guard_installed",
+)
+FORBIDDEN_OCR_ACTION_GUARD_INSTALL_CALLS = (
+    "install_ocr_action_guard(app_module)",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -237,6 +247,16 @@ def collect_violations() -> list[str]:
             if marker in source:
                 violations.append(
                     f"Page Design detector process-global mutation returned in {rel}: {marker}"
+                )
+        for marker in FORBIDDEN_OCR_ACTION_GUARD_MUTATIONS:
+            if marker in source:
+                violations.append(
+                    f"OCR action guard class mutation returned in {rel}: {marker}"
+                )
+        for marker in FORBIDDEN_OCR_ACTION_GUARD_INSTALL_CALLS:
+            if marker in source:
+                violations.append(
+                    f"OCR action guard installer call returned in {rel}: {marker}"
                 )
 
     init_path = PACKAGE_ROOT / "__init__.py"

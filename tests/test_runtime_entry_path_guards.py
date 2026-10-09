@@ -10,7 +10,10 @@ from PIL import Image
 
 from picture_capture import processing as processing_module
 from picture_capture.models import AppSettings
-from picture_capture.ocr_action_guard import _ineffective_lens_only_selection
+from picture_capture.ocr_action_guard import (
+    _ineffective_lens_only_selection,
+    guard_ocr_action_selection,
+)
 from picture_capture.ordinary_quick_settings import _apply_quick_settings_for_ordinary
 from picture_capture.settings_help_restore import install_settings_help_restore
 from picture_capture.ui_terminology import normalize_ui_text
@@ -119,10 +122,34 @@ def test_lens_checkbox_with_mode_off_is_not_a_runnable_lens_only_selection():
     assert _ineffective_lens_only_selection(tesseract_rescue_present, app_module) is False
 
 
-def test_gui_composition_installs_ocr_guard_before_user_actions_run():
+def test_static_ocr_preflight_reports_invalid_selection_before_action_runs():
+    app_module = SimpleNamespace(LENS_MODE_VALUES={"关闭": "off"})
+    invalid = _app_for_ocr_selection(lens=True, lens_mode="关闭")
+    errors = []
+    invalid.show_error = lambda title, exc: errors.append((title, exc))
+
+    assert guard_ocr_action_selection(invalid, app_module) is False
+    assert errors and errors[0][0] == "OCR 引擎配置无效"
+
+
+def test_gui_composition_no_longer_installs_ocr_guard_and_actions_call_it_statically():
     source = _gui_composition_source()
-    assert "install_ocr_action_guard" in source
-    assert "install_ocr_action_guard(app_module)" in source
+    assert "install_ocr_action_guard" not in source
+
+    root = Path(__file__).resolve().parents[1]
+    controller = (
+        root / "src" / "picture_capture" / "ui" / "controllers" / "detection.py"
+    ).read_text(encoding="utf-8")
+    app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+
+    assert controller.count("guard_ocr_action_selection(app)") >= 2
+    start = app.index("    def ocr_ordinary_lines_text_selected_scope")
+    end = app.index("\n    def ", start + 8)
+    existing_marker_action = app[start:end]
+    assert "guard_ocr_action_selection(self)" in existing_marker_action
+    assert existing_marker_action.index("guard_ocr_action_selection(self)") < (
+        existing_marker_action.index("self.guard()")
+    )
 
 
 def test_shared_ocr_action_wording_no_longer_claims_marker_text_is_paddle_only():

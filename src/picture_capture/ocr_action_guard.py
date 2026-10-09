@@ -1,19 +1,26 @@
 from __future__ import annotations
 
-"""GUI preflight for OCR actions whose visible engine selection is ineffective.
+"""Static GUI preflight for ambiguous OCR engine selections.
 
-The shared OCR channel correctly treats ``Lens mode = off`` as disabled.  The
-legacy quick-settings validator, however, counted the Lens checkbox alone as an
-active OCR engine.  With Paddle/Tesseract unchecked this allowed an OCR action to
-start even though Lens itself was disabled, after which the channel could enter
-its old-project fallback policy and execute a different engine than the user had
-selected.
+The shared OCR channel correctly treats ``Lens mode = off`` as disabled. The
+legacy quick-settings validator counts the Lens checkbox itself as an enabled
+engine, so the specific state "Lens checked + mode off + no runnable local OCR"
+must be rejected before the generic validator runs.
 
-Keep the compatibility fallback for old/non-GUI callers, but stop this ambiguous
-state at the GUI action boundary.
+The guard is now called directly by the three user action boundaries. No
+PictureCaptureApp method is patched at GUI startup.
 """
 
-from typing import Any, Callable
+from typing import Any
+
+
+LENS_MODE_LABELS = {
+    "off": "① 关闭",
+    "diagnostic": "② 仅诊断对照",
+    "conflict": "③ 冲突/低可信时调用（推荐）",
+    "full": "④ 全页参与三OCR融合",
+}
+LENS_MODE_VALUES = {label: value for value, label in LENS_MODE_LABELS.items()}
 
 
 def _quick_bool(app: Any, name: str, fallback: bool = False) -> bool:
@@ -26,8 +33,10 @@ def _quick_bool(app: Any, name: str, fallback: bool = False) -> bool:
     return bool(getattr(getattr(app, "settings", None), name, fallback))
 
 
-def _quick_lens_mode(app: Any, app_module: Any) -> str:
-    current = str(getattr(getattr(app, "settings", None), "paddle_lens_mode", "off") or "off")
+def _quick_lens_mode(app: Any, app_module: Any | None = None) -> str:
+    current = str(
+        getattr(getattr(app, "settings", None), "paddle_lens_mode", "off") or "off"
+    )
     variable = getattr(app, "lens_mode_var", None)
     if variable is None:
         return current.strip().lower()
@@ -35,11 +44,17 @@ def _quick_lens_mode(app: Any, app_module: Any) -> str:
         visible = str(variable.get())
     except Exception:
         return current.strip().lower()
-    mapping = dict(getattr(app_module, "LENS_MODE_VALUES", {}))
+
+    mapping = LENS_MODE_VALUES
+    if app_module is not None:
+        mapping = dict(getattr(app_module, "LENS_MODE_VALUES", mapping))
     return str(mapping.get(visible, visible) or "off").strip().lower()
 
 
-def _ineffective_lens_only_selection(app: Any, app_module: Any) -> bool:
+def _ineffective_lens_only_selection(
+    app: Any,
+    app_module: Any | None = None,
+) -> bool:
     paddle = _quick_bool(app, "paddle_use_paddleocr", True)
     tesseract = _quick_bool(app, "paddle_compare_tesseract", False) or bool(
         getattr(getattr(app, "settings", None), "paddle_tesseract_rescue", False)
@@ -64,35 +79,26 @@ def _show_invalid_lens_selection(app: Any) -> None:
             pass
 
 
+def guard_ocr_action_selection(
+    app: Any,
+    app_module: Any | None = None,
+) -> bool:
+    """Return whether a user-facing OCR action may proceed."""
+    if not _ineffective_lens_only_selection(app, app_module):
+        return True
+    _show_invalid_lens_selection(app)
+    return False
+
+
 def install_ocr_action_guard(app_module: Any) -> None:
-    """Guard all user-facing OCR actions against Lens-checked/off ambiguity."""
-
-    app_class = app_module.PictureCaptureApp
-    if bool(getattr(app_class, "_pc_ocr_action_guard_installed", False)):
-        return
-
-    for method_name in (
-        "run_ocr_draw_action",
-        "run_combined_draw_action",
-        "ocr_ordinary_lines_text_selected_scope",
-    ):
-        original = getattr(app_class, method_name, None)
-        if original is None or bool(getattr(original, "_pc_ocr_action_guard", False)):
-            continue
-
-        def guarded(self, *args, __original: Callable = original, **kwargs):
-            if _ineffective_lens_only_selection(self, app_module):
-                _show_invalid_lens_selection(self)
-                return None
-            return __original(self, *args, **kwargs)
-
-        guarded._pc_ocr_action_guard = True  # type: ignore[attr-defined]
-        setattr(app_class, method_name, guarded)
-
-    app_class._pc_ocr_action_guard_installed = True
+    """Compatibility shim; action boundaries now invoke the guard statically."""
+    _ = app_module
 
 
 __all__ = [
+    "LENS_MODE_LABELS",
+    "LENS_MODE_VALUES",
     "_ineffective_lens_only_selection",
+    "guard_ocr_action_selection",
     "install_ocr_action_guard",
 ]

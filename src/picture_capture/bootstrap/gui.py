@@ -73,7 +73,6 @@ def prepare_gui_application() -> Any:
     install_ocr_crop_preview(app_module)
 
     from ..layout_visualization_ui_v3 import install_layout_visualization
-    from ..ocr_action_guard import install_ocr_action_guard
     from ..parameter_help_ui import install_settings_parameter_help
     from ..settings_help_restore import install_settings_help_restore
     from ..single_line_merge_settings import install_single_line_merge_settings_ui
@@ -88,7 +87,6 @@ def prepare_gui_application() -> Any:
     # Filter controls belong to the same integrated crop-settings surface and
     # are installed after the per-page merge switch so they appear beneath it.
     install_unlined_export_filter_settings_ui(app_module)
-    install_ocr_action_guard(app_module)
     # Unlined QA now owns its physical-row fast path statically in
     # unlined_line_export.export_unlined_page_job; no GUI-time worker mutation
     # is required.

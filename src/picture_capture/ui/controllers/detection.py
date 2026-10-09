@@ -18,6 +18,7 @@ from PIL import Image
 from ...formats import pdic_path, read_pdic, write_pdic
 from ...image_utils import normalize_page_rgb
 from ...ordinary_quick_settings import _apply_quick_settings_for_ordinary
+from ...ocr_action_guard import guard_ocr_action_selection
 from ...page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
@@ -186,6 +187,8 @@ class DetectionController:
 
     def run_combined_draw_action(self) -> None:
         app = self.app
+        if not guard_ocr_action_selection(app):
+            return
         if not app.guard() or not app.apply_quick_settings(show_status=False):
             return
         try:
@@ -203,6 +206,8 @@ class DetectionController:
 
     def run_ocr_draw_action(self) -> None:
         app = self.app
+        if not guard_ocr_action_selection(app):
+            return
         if not app.guard() or not app.apply_quick_settings(show_status=False):
             return
         try:
