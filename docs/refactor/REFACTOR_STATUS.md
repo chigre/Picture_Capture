@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12L is complete: OCR action validation is now an explicit static preflight at the three user action boundaries; GUI bootstrap no longer monkeypatches PictureCaptureApp for Lens-only validation.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12M is complete: the redundant PictureCaptureApp tooltip terminology descriptor patch is retired; the earlier global Tk/ttk terminology layer remains the sole product owner.**
 
-Phase 12L is merged on `main@29fd90712b5e232d45586c549a576fbb697b3018`. Phase 12K remains characterization-only: the ordered Layout runtime chain is intentionally deferred rather than split unsafely. Phase 12J and earlier bounded slices remain complete; Phase 12I remains the characterization-only PDIC deferral.
+Phase 12M is merged on `main@68524cc3fd4668b93906253edb91dfd8753cac88`. Phase 12L remains complete on `main@29fd90712b5e232d45586c549a576fbb697b3018`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -2074,34 +2074,78 @@ Phase 12K checkpoint publication also closed cleanly before 12L:
 - post-checkpoint CI 2308 passed;
 - post-checkpoint CodeQL 2291 passed.
 
-## Recommended next slice — Phase 12M retire the redundant app-tooltip terminology patch
+## Phase 12M — retire redundant app-tooltip terminology patch
 
-GUI composition already calls `install_ui_terminology()` before importing
-`app.py`. That global presentation layer wraps `ttk.Label` text construction,
-and `PictureCaptureApp._attach_tooltip` renders its message through exactly
-such a `ttk.Label`.
+GUI composition already installs `install_ui_terminology()` before importing
+`app.py`. That shared presentation layer normalizes `ttk.Label` construction,
+and `PictureCaptureApp._attach_tooltip` renders tooltip messages through
+`ttk.Label`.
 
-The later `install_app_tooltip_terminology(app_module)` therefore adds a second
-normalization layer by replacing the app's `@staticmethod`; it is redundant in
-the product path and exists mainly as historical compatibility.
+Phase 12M removes the later duplicate app-class patch:
+- GUI bootstrap no longer imports or calls
+  `install_app_tooltip_terminology(app_module)`;
+- the historical installer name remains as a no-op compatibility shim;
+- no `PictureCaptureApp._attach_tooltip` descriptor replacement remains;
+- the replacement dictionary and the global Tk/ttk/StringVar terminology layer
+  are unchanged;
+- regression coverage proves the compatibility shim leaves the original
+  `@staticmethod` descriptor untouched and that global terminology installation
+  still precedes app import;
+- the architecture guard rejects a return of the dedicated installer call or
+  app tooltip class mutation.
 
-A safe 12M should:
-- leave the broad `install_ui_terminology()` Tk/ttk/StringVar layer unchanged;
-- remove the app-tooltip installer import/call from GUI bootstrap;
-- retire its descriptor mutation, preferably keeping the historical function
-  name as a no-op compatibility shim;
-- prove GUI composition still installs global terminology before importing
-  `app.py`;
-- prove `PictureCaptureApp._attach_tooltip` remains an unmodified
-  `@staticmethod`;
-- update the existing terminology test from "wrapper preserves staticmethod" to
-  "no dedicated wrapper is required";
-- add an architecture ratchet against restoring
-  `install_app_tooltip_terminology(app_module)` or
-  `app_class._attach_tooltip = ...`.
+Phase 12M publication:
+- PR #372 fixed head `1f8601e82a45bf8160a1a8dc24ba7fcbff752313`;
+- PR CI 2313 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #372 merged as `68524cc3fd4668b93906253edb91dfd8753cac88`;
+- post-merge CI 2314 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2297 passed;
+- no architecture or size threshold was relaxed.
 
-Do not change the replacement dictionary, Tk widget normalization behavior,
-tooltip wording, or other GUI installers in this slice.
+Phase 12L checkpoint publication also closed cleanly:
+- checkpoint PR #371 merged as `610af5eb81ec66e56829a1c7ec11e061d55aed34`;
+- post-checkpoint CI 2312 passed;
+- post-checkpoint CodeQL 2295 passed.
+
+## Recommended next slice — Phase 12N static Settings help ownership
+
+Read-only characterization shows that the historical
+`settings_help_restore` post-build wrapper has become redundant after later
+Settings help refactors.
+
+Current facts:
+- `ui.settings.help.bind_help_widget(...)` binds the supplied widget **and
+  recursively all descendants**, so binding a standard setting's `control`
+  frame reaches its Entry/Combobox/Spinbox children;
+- the seven Settings variables built manually outside ordinary setting/check
+  groups are already explicitly bound to their actual controls, except
+  `paddle_lens_mode`, whose `lens_row` parent is bound and therefore
+  recursively binds the contained Combobox;
+- detection-mode radio buttons, Lens enable, ordinary text OCR engine, headword
+  sort mode, custom sort entry and custom-fold checkbox already have explicit
+  help bindings;
+- the remaining material responsibility of `settings_help_restore` is updating
+  two `SETTING_HELP` strings and four `CHECK_HELP` strings at runtime.
+
+A safe 12N should:
+- move those six current override texts into the canonical
+  `ui/settings/schema.py` dictionaries;
+- preserve their wording exactly;
+- remove `install_settings_help_restore(app_module)` from GUI bootstrap;
+- retire its `SettingsDialog.__init__` wrapper and post-build widget walker,
+  preferably leaving the public installer name as a no-op compatibility shim;
+- add regression coverage proving the canonical schema owns the shared-OCR /
+  Layout-Core wording and proving `bind_help_widget` recursively binds child
+  inputs;
+- ratchet against reintroducing the restore installer or SettingsDialog init
+  mutation.
+
+Do not alter Settings layout, help-pane behavior, field order, autosave,
+persistence, or the broader `install_settings_parameter_help` builder in this
+slice.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
