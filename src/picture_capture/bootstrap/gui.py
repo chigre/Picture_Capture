@@ -37,15 +37,11 @@ def prepare_gui_application() -> Any:
 
     # The GUI Layout overlay also needs the same physical-indent runtime before
     # app import. Ordinary detection itself prepares this runtime again
-    # idempotently in every process, including spawn workers.
-    from .. import dictionary_page_design
-    from ..dictionary_page_design_refined import detect_entries_from_page_design
+    # idempotently in every process, including spawn workers. The public Page
+    # Design detector forwards to the refined implementation statically.
     from ..layout_line_start_refinement import install_robust_line_starts
     from ..layout_physical_indent import install_physical_indent_inference
 
-    dictionary_page_design.detect_entries_from_page_design = (
-        detect_entries_from_page_design
-    )
     install_robust_line_starts()
     install_physical_indent_inference()
     # Long-band row recovery and column-drift indent remeasurement are now
