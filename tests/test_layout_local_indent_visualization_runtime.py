@@ -49,6 +49,7 @@ def test_phase5i_static_owner_and_provenance_order():
     root = Path(__file__).resolve().parents[1]
     package = root / "src" / "picture_capture"
     shared = (package / "layout_visualization_shared.py").read_text(encoding="utf-8")
+    summary = (package / "layout_visualization_summary.py").read_text(encoding="utf-8")
     gui = (package / "bootstrap" / "gui.py").read_text(encoding="utf-8")
     guard = (root / "scripts" / "architecture_guard.py").read_text(encoding="utf-8")
 
@@ -58,8 +59,10 @@ def test_phase5i_static_owner_and_provenance_order():
     assert "install_local_indent_visualization" not in gui
     assert "layout_local_indent_visualization_runtime.py" not in guard
     assert "install_layout_role_provenance" not in gui
-    role_theme_pos = gui.index("install_layout_role_theme()")
-    lane_pos = gui.index("install_physical_lane_summary()")
+    assert "install_layout_role_theme()" not in gui
+    assert "install_physical_lane_summary()" not in gui
     assert "install_layout_indent_visibility" not in gui
     assert "install_shared_layout_visualization_source" not in gui
-    assert role_theme_pos < lane_pos
+    assert 'ENTRY_ROLE_COLOR = "#d32f2f"' in summary
+    assert "append_physical_lane_summary(text, app)" in summary
+    assert "add_prepared_indent_summary(text, app)" in summary
