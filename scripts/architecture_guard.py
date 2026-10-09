@@ -123,6 +123,16 @@ FORBIDDEN_APP_TOOLTIP_TERMINOLOGY_INSTALL_CALLS = (
     "install_app_tooltip_terminology(app_module)",
 )
 
+# Phase 12N moves Settings help wording/binding ownership into the static schema
+# and recursive shared help binder. The post-build SettingsDialog wrapper stays retired.
+FORBIDDEN_SETTINGS_HELP_RESTORE_MUTATIONS = (
+    "dialog_class.__init__ = wrapped_init",
+    "dialog_class._pc_settings_help_restore_installed",
+)
+FORBIDDEN_SETTINGS_HELP_RESTORE_INSTALL_CALLS = (
+    "install_settings_help_restore(app_module)",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -276,6 +286,16 @@ def collect_violations() -> list[str]:
             if marker in source:
                 violations.append(
                     f"app tooltip terminology installer call returned in {rel}: {marker}"
+                )
+        for marker in FORBIDDEN_SETTINGS_HELP_RESTORE_MUTATIONS:
+            if marker in source:
+                violations.append(
+                    f"Settings help restore class mutation returned in {rel}: {marker}"
+                )
+        for marker in FORBIDDEN_SETTINGS_HELP_RESTORE_INSTALL_CALLS:
+            if marker in source:
+                violations.append(
+                    f"Settings help restore installer call returned in {rel}: {marker}"
                 )
 
     init_path = PACKAGE_ROOT / "__init__.py"
