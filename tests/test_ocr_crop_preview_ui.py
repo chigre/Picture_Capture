@@ -66,5 +66,14 @@ def test_crop_preview_early_return_keeps_ocr_preview_overlay():
     crop_branch = redraw[crop_start:crop_end]
 
     assert "draw_ocr_crop_preview(self)" in crop_branch
-    assert crop_branch.index("draw_ocr_crop_preview(self)") < crop_branch.rindex("return")
-    assert redraw.rstrip().endswith("draw_ocr_crop_preview(self)")
+    assert "draw_layout_visualization_if_enabled(self)" in crop_branch
+    assert crop_branch.index("draw_ocr_crop_preview(self)") < crop_branch.index(
+        "draw_layout_visualization_if_enabled(self)"
+    )
+    assert crop_branch.index("draw_layout_visualization_if_enabled(self)") < crop_branch.rindex(
+        "return"
+    )
+    assert redraw.rstrip().endswith("draw_layout_visualization_if_enabled(self)")
+    assert redraw.rfind("draw_ocr_crop_preview(self)") < redraw.rfind(
+        "draw_layout_visualization_if_enabled(self)"
+    )

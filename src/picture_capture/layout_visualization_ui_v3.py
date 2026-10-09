@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Direct main-panel installer for Layout diagnostics and analysis display controls."""
+"""Static main-panel helpers for Layout diagnostics and analysis display controls."""
 
 import os
 from typing import Any
@@ -155,69 +155,44 @@ def _add_denoise_control(app: Any, section: Any) -> None:
             pass
 
 
-def install_layout_visualization(app_module: Any) -> None:
-    """Install Layout/denoise controls into the main display-settings block."""
-    cls = app_module.PictureCaptureApp
-    if getattr(cls, "_layout_visualization_v3_installed", False):
+def add_layout_visualization_controls(app: Any, section: Any) -> None:
+    """Add the current Layout toggle and denoise control to the display section."""
+    _add_layout_toggle(app, section)
+    _add_denoise_control(app, section)
+
+
+def draw_layout_visualization_if_enabled(app: Any) -> None:
+    """Draw the diagnostic Layout overlay with the historical hide semantics."""
+    layout_var = getattr(app, "_layout_visualization_var", None)
+    layout_enabled = bool(layout_var.get()) if layout_var is not None else False
+    if not layout_enabled:
         return
 
-    original_section_frame = cls._section_frame
-    original_build = cls._build_quick_settings
-    original_redraw = cls.redraw
-
-    def section_frame(
-        self: Any,
-        parent: Any,
-        title: str,
-        padding: int = 5,
-        *,
-        section_key: str | None = None,
-    ) -> Any:
-        frame = original_section_frame(
-            self,
-            parent,
-            title,
-            padding,
-            section_key=section_key,
-        )
-        if str(title) == "二、显示设置" or str(section_key or "") == "aux":
-            self._layout_visualization_display_section = frame
-        return frame
-
-    def build_quick_settings(self: Any, parent: Any) -> Any:
-        result = original_build(self, parent)
-        section = getattr(self, "_layout_visualization_display_section", None)
-        if section is not None:
-            _add_layout_toggle(self, section)
-            _add_denoise_control(self, section)
-        return result
-
-    def redraw(self: Any, *args: Any, **kwargs: Any) -> Any:
-        result = original_redraw(self, *args, **kwargs)
-        layout_var = getattr(self, "_layout_visualization_var", None)
-        layout_enabled = bool(layout_var.get()) if layout_var is not None else False
-        if not layout_enabled:
-            return result
-
-        hide = _hide_var(self)
-        previous = None
-        if hide is not None:
-            try:
-                previous = bool(hide.get())
-                hide.set(False)
-            except Exception:
-                previous = None
+    hide = _hide_var(app)
+    previous = None
+    if hide is not None:
         try:
-            draw_layout_visualization_detailed(self)
-        finally:
-            if hide is not None and previous is not None:
-                try:
-                    hide.set(previous)
-                except Exception:
-                    pass
-        return result
+            previous = bool(hide.get())
+            hide.set(False)
+        except Exception:
+            previous = None
+    try:
+        draw_layout_visualization_detailed(app)
+    finally:
+        if hide is not None and previous is not None:
+            try:
+                hide.set(previous)
+            except Exception:
+                pass
 
-    cls._section_frame = section_frame
-    cls._build_quick_settings = build_quick_settings
-    cls.redraw = redraw
-    cls._layout_visualization_v3_installed = True
+
+def install_layout_visualization(app_module: Any) -> None:
+    """Compatibility no-op; Layout visualization wiring is static."""
+    _ = app_module
+
+
+__all__ = [
+    "add_layout_visualization_controls",
+    "draw_layout_visualization_if_enabled",
+    "install_layout_visualization",
+]
