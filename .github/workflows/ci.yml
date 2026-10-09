@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install uv and Python 3.13
         uses: astral-sh/setup-uv@v6
@@ -31,6 +33,17 @@ jobs:
 
       - name: Check platform and OCR profile resolution
         run: uv run --locked python scripts/ci_platform_check.py
+
+      - name: Enforce architecture change policy
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          uv run --locked python scripts/architecture_guard.py
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            uv run --locked python scripts/change_architecture_guard.py --base "origin/${{ github.base_ref }}"
+          else
+            uv run --locked python scripts/change_architecture_guard.py
+          fi
 
       - name: Run pytest
         run: uv run --locked pytest
