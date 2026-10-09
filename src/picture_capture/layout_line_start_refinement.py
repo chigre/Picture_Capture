@@ -216,14 +216,8 @@ def credible_first_text_x(
     )
 
 
-def install_robust_line_starts() -> None:
-    """Patch Page Design's line-feature builder exactly once."""
-    from . import dictionary_page_design as page_design
-
-    if getattr(page_design, "_robust_line_starts_installed", False):
-        return
-
-    original = page_design._line_feature
+def compose_robust_line_feature(original):
+    """Compose robust visual line starts without rebinding Page Design hooks."""
 
     def refined_line_feature(
         column: int,
@@ -247,5 +241,15 @@ def install_robust_line_starts() -> None:
             return result
         return replace(result, first_x=int(visual_start))
 
-    page_design._line_feature = refined_line_feature
+    return refined_line_feature
+
+
+def install_robust_line_starts() -> None:
+    """Patch Page Design's line-feature builder exactly once."""
+    from . import dictionary_page_design as page_design
+
+    if getattr(page_design, "_robust_line_starts_installed", False):
+        return
+
+    page_design._line_feature = compose_robust_line_feature(page_design._line_feature)
     page_design._robust_line_starts_installed = True
