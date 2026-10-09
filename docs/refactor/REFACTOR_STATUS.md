@@ -2688,3 +2688,26 @@ Stop production writes for unexplained behavior/test/CI failure, public/file-for
 - Next safe action: finish PR #394 merge gate, verify post-merge CI and then
   record the merge SHA in a separate checkpoint.
   After closing 13B2, proceed to 13B3. Do not start 13C yet.
+
+
+## Phase 13B final gate — pending CI and merge
+
+Primitive-ops dependency plumbing is complete through the planned internal paths:
+- 13B1: immutable `LayoutPrimitiveOps`, `RAW_LAYOUT_OPS`, and temporary
+  `current_layout_ops()` compatibility snapshot (PR #392);
+- 13B2: page-X registration and column-drift propagation (PR #394);
+- 13B3a: refined guard-band line/feature extraction (PR #395);
+- 13B3b: policy inference, Profile-anchor wrapper forwarding, and downstream
+  explicit-ops propagation (PR #396).
+
+All four implementation PRs were merged after their three-platform CI passed.
+Historical installers and raw policy/Profile behavior remain intentionally
+unchanged. The final-gate PR adds AST-based architecture regression tests
+rejecting direct `base._line_runs`, `base._line_feature`, `base._indent_modes`,
+and `base._assign_indent_semantics` reads in migrated consumer modules.
+It also verifies optional `ops` coverage and the raw-vs-current snapshot.
+
+**Work in progress: true** until the final-gate PR passes full CI and merges.
+Do not start Phase 13C until this gate is green and the merge is recorded.
+Phase 13C must characterize explicitly composed physical primitives against the
+historically installed robust -> physical runtime, without removing installers.
