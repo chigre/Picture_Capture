@@ -337,7 +337,7 @@ def test_core_composition_installs_classification_for_non_gui_consumers():
     assert "install_entry_crop_settings()" not in package_source
     assert "install_entry_classification_fields()" not in package_source
     assert "install_pdic_classification(_formats)" not in package_source
-    assert "install_entry_crop_settings()" in core_source
+    assert "install_entry_crop_settings()" not in core_source
     assert "install_entry_classification_fields()" not in core_source
     assert "install_pdic_classification(formats)" in core_source
     assert bool(getattr(formats, "_entry_classification_installed", False))
