@@ -12655,30 +12655,17 @@ class PictureCaptureApp(tk.Tk):
                 return rows, [recent_project_details(row) for row in rows]
 
             def previews_worker(details):
+                from .project_center_preview_cache import load_project_center_preview
+
                 covers: dict[str, Image.Image] = {}
                 for detail in details:
                     root = Path(str(detail.get("path") or ""))
                     preview_text = str(detail.get("preview_path") or "")
-                    preview_path = Path(preview_text) if preview_text else None
-                    if not bool(detail.get("exists")) or preview_path is None or not preview_path.is_file():
+                    if not bool(detail.get("exists")) or not preview_text:
                         continue
-                    try:
-                        with Image.open(preview_path) as opened:
-                            # JPEG decoders can discard high-resolution pixels
-                            # before conversion. For other formats thumbnailing
-                            # still precedes the full RGB/alpha conversion.
-                            opened.draft("RGB", (92, 92))
-                            opened.thumbnail((92, 92), Image.Resampling.LANCZOS)
-                            cover_image = normalize_page_rgb(opened)
-                        cover_image.thumbnail((72, 92), Image.Resampling.LANCZOS)
-                        backdrop = Image.new("RGB", (76, 96), "#f4f6f8")
-                        px = (backdrop.width - cover_image.width) // 2
-                        py = (backdrop.height - cover_image.height) // 2
-                        backdrop.paste(cover_image, (px, py))
-                        covers[str(root)] = backdrop
-                        cover_image.close()
-                    except Exception:
-                        continue
+                    cover = load_project_center_preview(root, Path(preview_text))
+                    if cover is not None:
+                        covers[str(root)] = cover
                 return covers
 
             def alive() -> bool:
