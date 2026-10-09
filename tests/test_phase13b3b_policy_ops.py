@@ -14,6 +14,9 @@ def test_policy_registration_receives_explicit_ops_without_changing_defaults(mon
     settings = AppSettings()
     settings.ordinary_auto_layout = True
     settings.ordinary_auto_manual_x = True
+    for field, switch in policy.AUTO_LAYOUT_FIELDS:
+        if field != "manual_x":
+            setattr(settings, switch, False)
     image = Image.new("RGB", (100, 80), "white")
     monkeypatch.setattr(policy, "detect_layout_parameters", lambda *_: SimpleNamespace())
     monkeypatch.setattr(base, "_analysis_page", lambda im, opts, idx: (im, im, None, opts))
