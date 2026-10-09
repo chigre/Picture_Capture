@@ -98,6 +98,12 @@ APP_SETTINGS_COMPAT_SHIMS = {
     "entry_crop_settings.py",
 }
 
+# Phase 12J makes the public Page Design detector a static call-time forwarder.
+# GUI/processing must not regain process-global ownership of that binding.
+FORBIDDEN_PAGE_DESIGN_ASSIGNMENTS = (
+    "dictionary_page_design.detect_entries_from_page_design =",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -227,6 +233,11 @@ def collect_violations() -> list[str]:
                     violations.append(
                         f"AppSettings compatibility installer call returned in {rel}: {marker}"
                     )
+        for marker in FORBIDDEN_PAGE_DESIGN_ASSIGNMENTS:
+            if marker in source:
+                violations.append(
+                    f"Page Design detector process-global mutation returned in {rel}: {marker}"
+                )
 
     init_path = PACKAGE_ROOT / "__init__.py"
     init_text = init_path.read_text(encoding="utf-8")
