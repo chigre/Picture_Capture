@@ -72,6 +72,14 @@ FORBIDDEN_LAYOUT_ROWS_ASSIGNMENTS = (
     "shared.shared_snapshot_for_app =",
 )
 
+# Phase 12G makes Entry classification descriptors native model properties.
+FORBIDDEN_ENTRY_CLASSIFICATION_ASSIGNMENTS = (
+    "Entry.entry_source =",
+    "Entry.entry_scale =",
+    "Entry.detected_head_height =",
+    "Entry.entry_scale_manual =",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -181,6 +189,15 @@ def collect_violations() -> list[str]:
             violations.append(
                 f"LayoutRows process-global mutation returned: {marker}"
             )
+
+    for path in _python_files():
+        source = path.read_text(encoding="utf-8")
+        rel = path.relative_to(PACKAGE_ROOT).as_posix()
+        for marker in FORBIDDEN_ENTRY_CLASSIFICATION_ASSIGNMENTS:
+            if marker in source:
+                violations.append(
+                    f"Entry classification class mutation returned in {rel}: {marker}"
+                )
 
     init_path = PACKAGE_ROOT / "__init__.py"
     init_text = init_path.read_text(encoding="utf-8")

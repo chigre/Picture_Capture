@@ -37,11 +37,11 @@ def build_core_services() -> CoreServices:
     # processing are exposed to any process profile.
     from ..separator_y_settings import install_separator_y_settings
     from ..entry_crop_settings import install_entry_crop_settings
-    from ..entry_classification_fields import install_entry_classification_fields
 
     install_separator_y_settings()
     install_entry_crop_settings()
-    install_entry_classification_fields()
+    # Entry structural-classification descriptors are static on models.Entry;
+    # core composition no longer mutates the Entry class.
 
     from .. import formats
     from ..entry_classification import install_pdic_classification
