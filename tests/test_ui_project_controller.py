@@ -125,7 +125,7 @@ def test_open_project_preserves_existing_and_new_project_loader_requests(monkeyp
     monkeypatch.setattr(
         project_controller_module.messagebox,
         "askyesno",
-        lambda *args, **kwargs: True,
+        lambda title, *args, **kwargs: title != "复用现有项目参数",
     )
     monkeypatch.setattr(
         project_controller_module,
@@ -157,6 +157,39 @@ def test_open_project_preserves_existing_and_new_project_loader_requests(monkeyp
     assert app.loads[-1] == (
         Path("/new"),
         {"requested_suffix": ".png", "launch_profile_setup": True},
+    )
+
+
+def test_new_project_accepts_existing_volume_as_parameter_source(monkeypatch) -> None:
+    app = _App()
+    controller = ProjectController(app)
+    choices = iter(("/new", "/source-volume"))
+    monkeypatch.setattr(
+        project_controller_module.filedialog,
+        "askdirectory",
+        lambda **_kwargs: next(choices),
+    )
+    monkeypatch.setattr(
+        project_controller_module, "is_managed_project", lambda root: False,
+    )
+    monkeypatch.setattr(
+        project_controller_module, "has_legacy_project_data", lambda root: False,
+    )
+    monkeypatch.setattr(
+        project_controller_module.messagebox, "askyesno",
+        lambda *args, **kwargs: True,
+    )
+    monkeypatch.setattr(
+        controller, "choose_new_project_image_suffix", lambda root: ".png",
+    )
+    controller.open_project()
+    assert app.loads[-1] == (
+        Path("/new"),
+        {
+            "requested_suffix": ".png",
+            "launch_profile_setup": True,
+            "parameter_template_root": Path("/source-volume"),
+        },
     )
 
 
