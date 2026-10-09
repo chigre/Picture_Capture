@@ -156,7 +156,7 @@ class DetectionController:
 
         label = {
             "combined": "融合画线 当前页识别",
-            "paddleocr": "PaddleOCR 当前页识别",
+            "paddleocr": "OCR画线 当前页识别",
         }.get(settings.detection_method, "当前页自动画线")
         app._start_batch_task(
             label, [page_index], worker, done,

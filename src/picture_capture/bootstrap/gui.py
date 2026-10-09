@@ -24,9 +24,8 @@ def prepare_gui_application() -> Any:
 
     core_services = build_core_services()
 
-    from ..ui_terminology import install_ui_terminology
-
-    install_ui_terminology()
+    # Product UI terminology is source-native; GUI bootstrap no longer mutates
+    # Tk/ttk widget constructors or StringVar methods.
 
     # GUI PDIC I/O is statically composed in gui_io. Its call-time forwarding
     # preserves the core-owned classification wrappers while adding automatic

@@ -1578,8 +1578,8 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert 'add_field(normal, 0, 0, "正文栏数：", "columns", int)' in text
     assert 'add_field(normal, 0, 0, "分栏数：", "columns", int)' not in text
     assert '"二、显示设置"' in text
-    assert '"三、融合 / OCR画线参数"' in text
-    assert text.index('"二、显示设置"') < text.index('"三、融合 / OCR画线参数"')
+    assert '"三、共享 OCR 通道 / OCR画线"' in text
+    assert text.index('"二、显示设置"') < text.index('"三、共享 OCR 通道 / OCR画线"')
     assert 'text="普通画线设置…"' in text
     assert 'text="显示标尺"' in text
     assert '"ruler_color": tk.StringVar(value=self.settings.ruler_color)' in text
@@ -2453,7 +2453,7 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     quick = text[quick_start:quick_end]
     for label in ("正文起始Y：", "首栏X：", "单栏宽：", "栏间空："):
         assert label in quick
-    for label in ("单行高：", "行间空：", "正文缩进：", "微调判距："):
+    for label in ("普通字/行高：", "行间空：", "正文缩进：", "微调判距："):
         assert label not in quick
     assert quick.index('"单栏宽："') > quick.index('"首栏X："')
     assert quick.index('"栏间空："') > quick.index('"单栏宽："')
@@ -3434,7 +3434,8 @@ def test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only():
     assert 'self.ocr_refresh_var = tk.StringVar(value="reuse")' in app_text
     assert "使用有效缓存（推荐）" in app_text
     assert "重新OCR（模型/图像改变时）" in app_text
-    assert "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启" in guide_text
+    assert "共享 OCR 通道默认只启用 PaddleOCR；Tesseract 与 Google Lens 可同时启用" in guide_text
+    assert "【仅OCR】与【OCR画线】共用这些选择" in guide_text
     assert 'LENS_MODE_LABELS["off"]' in app_text
 
     settings = AppSettings()
