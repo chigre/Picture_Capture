@@ -2565,7 +2565,11 @@ The migration is intentionally staged in 13B–13E; see
 Phase 13B must be behavior-neutral dependency plumbing.
 
 Allowed production changes:
-- define an immutable `LayoutPrimitiveOps` type plus a raw/default instance;
+- define an immutable `LayoutPrimitiveOps` type plus explicit
+  `RAW_LAYOUT_OPS`;
+- add a temporary `current_layout_ops()` snapshot that captures the four
+  currently-bound Page Design hooks so 13B preserves both raw/unprepared and
+  installer-prepared behavior;
 - add optional/defaulted ops parameters through the minimum internal propagation
   set:
   - `dictionary_page_design.infer_dictionary_page_layout(...)`;
@@ -2576,19 +2580,25 @@ Allowed production changes:
     helper;
   - `layout_column_drift.finalize_layout_column_drift(...)` /
     `remeasure_layout_indents_from_ink(...)`;
-- replace internal reads of the four Page Design primitive global names with the
-  supplied ops object.
+- replace downstream internal reads of the four Page Design primitive global
+  names with the resolved ops object;
+- during 13B only, `ops=None` must resolve through `current_layout_ops()`.
+  Explicit `ops=RAW_LAYOUT_OPS` must remain immune to later installer
+  rebinding.
 
 Not allowed in 13B:
 - do not build or route product consumers through physical ops yet;
 - do not remove or alter `install_robust_line_starts()`;
 - do not remove or alter `install_physical_indent_inference()`;
 - do not change Profile anchoring or role-finalization ownership;
-- do not change raw Page Design/policy defaults;
+- do not change observable raw Page Design/policy defaults or installed product
+  behavior;
 - do not combine PDIC, OCR-boundary, GUI or performance work.
 
 Required gates:
 - direct raw Page Design tests unchanged;
+- focused transition coverage proves `ops=None` observes a temporary legacy
+  rebind while `RAW_LAYOUT_OPS` remains raw;
 - raw policy tests unchanged;
 - all existing installed/composed product tests unchanged;
 - add focused tests proving explicit custom ops are honored through policy,
