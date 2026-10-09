@@ -51,12 +51,9 @@ def prepare_gui_application() -> Any:
     # Long-band row recovery and column-drift indent remeasurement are now
     # static; only the remaining physical-indent installer needs ordering.
 
-    # Physical LayoutRows are a persistent, semantic-free cache used by
-    # post-production QA. Install after the final physical Layout runtimes so a
-    # normal drawing/display pass can seed exactly the rows it actually used.
-    from ..layout_rows_cache import install_layout_rows_persistence_runtime
-
-    install_layout_rows_persistence_runtime()
+    # Physical LayoutRows capture is now published statically by Layout Core
+    # whenever an explicit capture_layout_rows(...) context is active. GUI
+    # bootstrap no longer wraps understand_layout_core for this side effect.
 
     # Project Profile UI extensions are composed statically in
     # profile_wizard. app.py imports that finished class directly, so
