@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 from picture_capture.entry_classification import (
@@ -14,11 +16,47 @@ from picture_capture.entry_classification import (
     set_entry_scale_manual,
     write_classification_sidecar,
 )
+from picture_capture.entry_classification_fields import install_entry_classification_fields
 from picture_capture.models import AppSettings, Entry
 from picture_capture.training_baseline import (
     baseline_path_for_pdic,
     build_write_pdic_capture,
 )
+
+
+def test_entry_classification_descriptors_are_static_and_installer_is_inert():
+    names = (
+        "entry_source",
+        "entry_scale",
+        "detected_head_height",
+        "entry_scale_manual",
+    )
+    before = {name: Entry.__dict__[name] for name in names}
+    assert all(isinstance(value, property) for value in before.values())
+
+    install_entry_classification_fields()
+
+    assert {name: Entry.__dict__[name] for name in names} == before
+
+
+def test_entry_classification_fields_work_without_core_bootstrap():
+    script = """
+from picture_capture.models import Entry
+entry = Entry(word="", x=10, y=20, ocr_source="ordinary_symbol_evidence")
+assert entry.entry_source == "symbol_sample"
+assert entry.entry_scale == "regular"
+entry.entry_scale = "oversized"
+assert entry.entry_scale == "oversized"
+entry.entry_scale_manual = True
+assert entry.entry_scale_manual is True
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_entry_exposes_canonical_classification_fields():
@@ -300,7 +338,7 @@ def test_core_composition_installs_classification_for_non_gui_consumers():
     assert "install_entry_classification_fields()" not in package_source
     assert "install_pdic_classification(_formats)" not in package_source
     assert "install_entry_crop_settings()" in core_source
-    assert "install_entry_classification_fields()" in core_source
+    assert "install_entry_classification_fields()" not in core_source
     assert "install_pdic_classification(formats)" in core_source
     assert bool(getattr(formats, "_entry_classification_installed", False))
     assert processing._ordinary_marker_local_crop is processing._core._ordinary_marker_local_crop
