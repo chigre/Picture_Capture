@@ -19,6 +19,9 @@ from .models import AppSettings
 from .profile_indent_ui import indent_type_label
 
 
+# Preserve the legacy installed/uninstalled runtime when no explicit ops are passed.
+
+
 @dataclass(frozen=True, slots=True)
 class XRegistrationResult:
     value: int
@@ -61,7 +64,9 @@ def _line_family_candidate(
     seed: float,
     semantics: str,
     search_left_floor: int = 0,
+    ops: base.LayoutPrimitiveOps | None = None,
 ) -> tuple[int, int] | None:
+    ops = base.current_layout_ops() if ops is None else ops
     height, width = ink.shape
     if bottom <= top or width <= 1:
         return None
@@ -80,20 +85,20 @@ def _line_family_candidate(
     if strip.size == 0:
         return None
 
-    runs = base._line_runs(strip, seed)
+    runs = ops.line_runs(strip, seed)
     reference = base._normal_height([runs], seed)
-    runs = base._line_runs(strip, reference)
+    runs = ops.line_runs(strip, reference)
     lines: list[base.LayoutLine] = []
     previous_end = 0
     for y0, y1 in runs:
-        line = base._line_feature(0, strip, y0, y1, reference, previous_end)
+        line = ops.line_feature(0, strip, y0, y1, reference, previous_end)
         previous_end = max(previous_end, y1)
         if line is not None and reference * 0.45 <= line.height <= reference * 1.55:
             lines.append(line)
     if len(lines) < 4:
         return None
 
-    modes = base._indent_modes(lines, reference)
+    modes = ops.indent_modes(lines, reference)
     if not modes:
         return None
 
@@ -102,7 +107,7 @@ def _line_family_candidate(
         column = base.ColumnDesign(0, left, right, 0)
         column.lines = list(lines)
         column.indent_modes = list(modes)
-        base._assign_indent_semantics(column, "body", reference)
+        ops.assign_indent_semantics(column, "body", reference)
         eligible = [mode for mode in column.entry_modes if mode.support >= 2]
         if eligible:
             chosen = max(
@@ -116,7 +121,7 @@ def _line_family_candidate(
         column = base.ColumnDesign(0, left, right, 0)
         column.lines = list(lines)
         column.indent_modes = list(modes)
-        base._assign_indent_semantics(column, "headword", reference)
+        ops.assign_indent_semantics(column, "headword", reference)
         chosen = column.body_mode
     else:
         total = max(1, sum(mode.support for mode in modes))
@@ -221,8 +226,11 @@ def register_page_manual_x(
     canonical: Image.Image,
     settings: AppSettings,
     estimate: LayoutEstimate,
+    *,
+    ops: base.LayoutPrimitiveOps | None = None,
 ) -> XRegistrationResult:
     """Register current-page X as one shared translation of Profile columns."""
+    ops = base.current_layout_ops() if ops is None else ops
     project_x = max(0, int(getattr(settings, "manual_x", 0) or 0))
     nominal = _nominal_starts(settings)
     if not nominal:
@@ -258,6 +266,7 @@ def register_page_manual_x(
             seed=seed,
             semantics=semantics,
             search_left_floor=search_left_floor,
+            ops=ops,
         )
         if observed is not None:
             candidate_x, support = observed
