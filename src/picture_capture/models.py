@@ -10,7 +10,11 @@ from PIL import Image
 
 from .layout_transform import LayoutTransform
 from .runtime_environment import portable_project_file
-from .app_settings_migrations import migrate_app_settings_payload
+from .app_settings_migrations import (
+    canonicalize_app_settings_payload,
+    migrate_app_settings_payload,
+    normalize_app_settings_compat_keys,
+)
 
 
 IMAGE_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp"}
@@ -166,8 +170,27 @@ class PolygonRegion:
     points: list[tuple[int, int]] = field(default_factory=list)
 
 
+def _app_settings_storage_alias(storage_name: str) -> property:
+    """Return one static public alias backed by an existing dataclass slot."""
+    def getter(settings):
+        return getattr(settings, storage_name)
+
+    def setter(settings, value):
+        setattr(settings, storage_name, value)
+
+    return property(getter, setter)
+
+
+class _AppSettingsMeta(type):
+    """Normalize compatibility keyword aliases before the dataclass initializer."""
+
+    def __call__(cls, *args, **kwargs):
+        translated = normalize_app_settings_compat_keys(dict(kwargs))
+        return super().__call__(*args, **translated)
+
+
 @dataclass(slots=True)
-class AppSettings:
+class AppSettings(metaclass=_AppSettingsMeta):
     # Project-level dictionary metadata. It is stored with the project but does
     # not participate in OCR, line detection, cropping, or PDIC serialization.
     dictionary_full_name: str = ""
@@ -603,6 +626,19 @@ class AppSettings:
     )
     paddle_special_symbol_regex: str = r"^\s*[•◆◇►▶*†‡§¶]"
 
+    # Native public aliases backed by historical storage slots. Keeping the
+    # storage fields avoids changing dataclass order, pickle shape or old project
+    # compatibility while removing bootstrap-time class mutation.
+    separator_y_refine_enabled = _app_settings_storage_alias("paddle_refine_separator_y")
+    separator_y_search_ratio = _app_settings_storage_alias("paddle_separator_search_ratio")
+    separator_y_band_radius = _app_settings_storage_alias("paddle_separator_band_radius")
+    separator_y_safety_px = _app_settings_storage_alias("paddle_separator_safety_px")
+    separator_y_roi_width_ratio = _app_settings_storage_alias("paddle_separator_roi_width_ratio")
+    separator_y_column_margin = _app_settings_storage_alias("paddle_separator_column_margin")
+    entry_regular_crop_height = _app_settings_storage_alias("review_regular_crop_height")
+    entry_oversized_crop_height = _app_settings_storage_alias("review_single_cjk_line_height")
+    entry_ocr_right_ratio = _app_settings_storage_alias("right_ratio")
+
     def __setattr__(self, name: str, value: object) -> None:
         # Preserve the former runtime-property contract now that these values
         # are native dataclass fields: construction and later assignments are
@@ -617,7 +653,7 @@ class AppSettings:
 
     def to_json(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = asdict(self)
+        payload = canonicalize_app_settings_payload(asdict(self))
         for name in ("guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"):
             payload[name] = _normalize_display_opacity(payload.get(name, 40.0))
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
