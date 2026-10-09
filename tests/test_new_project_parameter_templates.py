@@ -72,7 +72,7 @@ def test_new_project_ui_exposes_defaults_and_existing_volume_source():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     gui = (root / "app.py").read_text(encoding="utf-8")
     controller = (root / "ui/controllers/project.py").read_text(encoding="utf-8")
-    assert 'text="设为新项目默认"' in gui
-    assert "apply_parameters_to_project(project, parameter_template_root)" in gui
+    assert "_project_templates.add_default_button(footer, self)" in gui
+    assert "_project_templates.apply_parameters_to_project(project, parameter_template_root)" in gui
     assert 'title="选择要复制参数的已有项目目录"' in controller
-    assert "parameter_template_root=template_root" in controller
+    assert '"parameter_template_root": template_root' in controller
