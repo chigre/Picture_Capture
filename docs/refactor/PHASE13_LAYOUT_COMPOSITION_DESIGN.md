@@ -98,9 +98,17 @@ operations consumed by Page Design internals:
 - `indent_modes`;
 - `assign_indent_semantics`.
 
-The raw/default object must point to the current native
-`dictionary_page_design` implementations and remain the default for direct raw
-calls.
+The target raw/default object must point to the native
+`dictionary_page_design` implementations and remain the long-term default for
+direct raw calls.
+
+During the **13B transition only**, however, `ops=None` must preserve today's
+installer semantics by snapshotting the four *currently bound* Page Design hook
+callables at call time. That means an unprepared/raw process still sees raw
+behavior, while a process already prepared by the historical installers still
+sees the installed physical behavior. This temporary compatibility bridge is
+required so 13B can be plumbing-only. It must disappear only after all product
+entry paths pass explicit physical ops.
 
 A physical/composed object must encode the historical order explicitly:
 - `line_runs = projection_line_runs`;
@@ -155,19 +163,31 @@ physical ops explicitly.
 
 Goal: dependency plumbing only.
 
-- define the immutable ops type and raw/default instance;
+- define the immutable ops type and an explicit `RAW_LAYOUT_OPS` instance;
+- add a temporary `current_layout_ops()` compatibility snapshot that captures
+  the four currently-bound Page Design hook callables;
 - add optional ops parameters through the minimum propagation set;
-- replace internal reads of the four global hook names with the supplied ops;
-- preserve current raw/default outputs exactly;
+- while 13B is active, resolve `ops=None` through
+  `current_layout_ops()`, not directly through `RAW_LAYOUT_OPS`;
+- replace downstream internal reads of the four global hook names with the
+  resolved ops object;
+- preserve both raw/unprepared and installer-prepared behavior exactly;
 - keep both historical installers active;
-- do not route product consumers to the new physical ops yet.
+- do not route product consumers to the new explicit physical ops yet.
 
 Gate:
-- direct raw Page Design tests remain byte-for-behavior equivalent;
+- direct raw Page Design tests remain behavior-equivalent;
+- a focused transition test proves `ops=None` observes a temporarily rebound
+  legacy hook while `ops=RAW_LAYOUT_OPS` remains raw;
 - policy/raw tests remain unchanged;
 - full existing suite passes;
 - architecture guard forbids new consumers of the mutable hook names outside the
   known compatibility modules.
+
+The temporary `current_layout_ops()` bridge is migration scaffolding, not the
+target architecture. Phase 13E must delete it (or reduce it to an explicitly
+named compatibility-only path) after normal product consumers pass explicit
+physical ops.
 
 ### Phase 13C — explicit physical primitive composition
 
