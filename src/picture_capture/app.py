@@ -13813,9 +13813,8 @@ class PictureCaptureApp(tk.Tk):
             return
         if plan is None:
             return
+        from .crop_preview_labels import draw_crop_preview_label
         scale = self.view_scale
-        # Entry pieces: cyan = ordinary crop; green = entry carrying a linked
-        # illustration. Orange is used when the rectangle is unioned with a PPP.
         illustrated_entries = {p.entry_ref_index for p in plan.entry_pieces if p.source_mode == "linked_original" and p.entry_ref_index is not None}
         preview_family = resolve_content_font_family(
             self.canvas,
@@ -13840,10 +13839,10 @@ class PictureCaptureApp(tk.Tk):
             self.canvas.create_rectangle(x0*scale,y0*scale,x1*scale,y1*scale,outline=color,width=2,dash=dash,tags=("crop-plan",))
             filename = entry_crop_piece_filename(self.current_page.stem, piece)
             label = f"{piece.word}\n{filename}" if piece.word else filename
-            self.canvas.create_text(
-                ((x0+x1)/2)*scale, (y0+3)*scale,
-                text=label, fill=color, anchor="n", justify="center",
-                font=preview_font, tags=("crop-plan",),
+            draw_crop_preview_label(
+                self.canvas, ((x0+x1)/2)*scale, (y0+3)*scale,
+                text=label, outline=color, anchor="n", justify="center",
+                font=preview_font,
             )
             if piece.merge_polygon_indices:
                 for pi in piece.merge_polygon_indices:
@@ -13873,7 +13872,11 @@ class PictureCaptureApp(tk.Tk):
             self.canvas.create_polygon(*coords,fill="",outline=color,width=3,tags=("crop-plan",))
             minx=min(p[0] for p in region.points); miny=min(p[1] for p in region.points)
             label=f"{dec.name}  {text}" + (f"  [{dec.associated_word}]" if dec.associated_word else "")
-            self.canvas.create_text((minx+4)*scale,(miny+4)*scale,text=label,fill=color,anchor="nw",font=("Microsoft YaHei",max(7,round(9*scale)),"bold"),tags=("crop-plan",))
+            draw_crop_preview_label(
+                self.canvas, (minx+4)*scale, (miny+4)*scale, text=label,
+                outline=color, anchor="nw",
+                font=("Microsoft YaHei", max(7, round(9*scale)), "bold"),
+            )
         mode = "综合插图" if plan.integrate_illustrations else "仅词条矩形"
         self.status_var.set(
             f"切图预览｜{mode}｜词条切图片段 {len(plan.entry_pieces)}｜随词条PPP {linked_count}｜部分相交 {partial_count}｜独立PPP {standalone_count}"
