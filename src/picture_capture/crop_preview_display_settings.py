@@ -29,3 +29,14 @@ def add_crop_preview_font_controls(
         var = tk.BooleanVar(value=bool(getattr(app.settings, name)))
         app.quick_bool_vars[name] = var
         ttk.Checkbutton(row, text=label, variable=var).pack(side="left", padx=(7, 0))
+
+
+def crop_preview_font_spec(app: Any, scale: float, resolve_family: Any, entry_font_spec: Any) -> Any:
+    """Render preview labels independently from main editing widget typography."""
+    family = resolve_family(
+        app.canvas, app.settings.crop_preview_font_family, app.settings.ocr_language,
+    )
+    return entry_font_spec(
+        family, max(5, round(app.settings.crop_preview_font_size * scale)),
+        app.settings.crop_preview_font_bold, app.settings.crop_preview_font_italic,
+    )
