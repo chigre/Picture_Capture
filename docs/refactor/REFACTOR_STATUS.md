@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12I characterization is complete with no production write: the remaining PDIC classification installer is intentionally deferred because preserving distinct raw, classification-aware, GUI-baseline, training-export, and atomic-restore contracts would require broad consumer migration rather than one bounded ownership slice.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12J is complete: the public Page Design detector now forwards to the refined implementation statically at call time, and GUI/processing no longer rebind `dictionary_page_design.detect_entries_from_page_design`.**
 
-Phase 12H remains complete on `main@6d6e85945b2d7981fcedec250dc064fda819359b`, and its checkpoint is merged on `main@366af0b7298039b5b6ea12eb7df4216e8a32a873` with post-checkpoint CI 2300 and CodeQL 2283 passing. Phase 12G remains complete on `main@93e66f3ea1d0e662a5c833d1e223f95ea1cb96ac`, Phase 12F remains complete on `main@2afea236e21acb336aba94c27e0d3889159b8f1e`, Phase 12E remains complete on `main@a1016a8aa8ef3fd50ff3c50b1e8433db9cd5122b`, Phase 12D remains complete on `main@762e2bc22eb2780549fad097b778f2bc303105e0`, Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`.
+Phase 12J is merged on `main@0d0431bdcc8a1f227c8d5984a8e544c368ad7083`. Phase 12I remains a characterization-only deferral: the existing core-owned PDIC classification installer stays in place because a raw/composed PDIC migration is broader than one bounded slice. Phase 12H remains complete on `main@6d6e85945b2d7981fcedec250dc064fda819359b`, Phase 12G remains complete on `main@93e66f3ea1d0e662a5c833d1e223f95ea1cb96ac`, Phase 12F remains complete on `main@2afea236e21acb336aba94c27e0d3889159b8f1e`, Phase 12E remains complete on `main@a1016a8aa8ef3fd50ff3c50b1e8433db9cd5122b`, Phase 12D remains complete on `main@762e2bc22eb2780549fad097b778f2bc303105e0`, Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -1945,35 +1945,100 @@ Do not reinterpret this deferral as permission to add more wrappers around
 and the current core classification owner remain the only accepted composition
 layers.
 
-## Recommended next slice — Phase 12J static refined Page Design forwarding
+## Phase 12J — static refined Page Design forwarding
 
-A smaller remaining process-global mutation is duplicated in both GUI bootstrap
-and `processing._ensure_layout_runtime()`:
+Before Phase 12J, both GUI bootstrap and
+`processing._ensure_layout_runtime()` reassigned the same public base-module
+callable:
 
 `dictionary_page_design.detect_entries_from_page_design =`
 `dictionary_page_design_refined.detect_entries_from_page_design`.
 
-This binding can be removed without touching the deeper physical-indent or
-robust-line-start installers. Prefer making the base module's public
-`detect_entries_from_page_design(...)` a call-time forwarding boundary to the
-refined implementation. A local import inside that function avoids the
-`dictionary_page_design <-> dictionary_page_design_refined` import cycle,
-while the refined implementation continues to consume base geometry helpers
-directly.
+That assignment was only selecting the already-established refined detector; it
+did not own the deeper physical-indent or robust-line-start algorithms.
 
-A safe 12J must:
-- preserve the effective refined detector used after current GUI/processing
-  runtime preparation;
-- remove the duplicate module-global detector assignments from both GUI and
-  processing;
-- leave `install_robust_line_starts()` and
-  `install_physical_indent_inference()` unchanged and in their current order;
-- add regression coverage proving direct base-module calls use the refined
-  implementation before any GUI/core runtime preparation;
-- ratchet against reintroducing the detector assignment.
+Phase 12J removes that process-global binding:
+- the original unrefined materialization remains available privately as
+  `_detect_entries_from_page_design_base(...)` for focused diagnostics;
+- the public base-module `detect_entries_from_page_design(...)` now performs a
+  local, call-time import and forwards to the refined implementation;
+- the local import avoids the
+  `dictionary_page_design <-> dictionary_page_design_refined` import cycle;
+- the refined implementation continues to consume base geometry/boundary helpers
+  and does not call the public forwarder, so delegation cannot recurse;
+- GUI bootstrap and processing runtime preparation no longer assign the detector;
+- `install_robust_line_starts()` and
+  `install_physical_indent_inference()` remain unchanged and in the same
+  order;
+- the architecture guard now rejects any return of the process-global detector
+  assignment anywhere in production code.
 
-Do not combine this with physical-indent staticization, OCR runner changes, or
-PDIC I/O composition.
+Focused regression coverage proves that a direct call through the base module,
+before any GUI/runtime preparation, reaches the refined detector with the exact
+page index and page-section arguments.
+
+Behavior intentionally unchanged:
+- the effective product Page Design detector remains the refined implementation;
+- Page Design geometry, refined indent-family semantics and guard-band recovery
+  are unchanged;
+- physical-indent, robust-line-start, Layout policy, Page Understanding, OCR,
+  PDIC, worker and AppSettings behavior are unchanged.
+
+Phase 12J publication:
+- PR #367 fixed head `bc74a1a8dbbe8ae0aa9d578fe7818d377ec90a4a`;
+- PR CI 2303 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #367 merged as `0d0431bdcc8a1f227c8d5984a8e544c368ad7083`;
+- post-merge CI 2304 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2287 passed;
+- no architecture threshold was relaxed.
+
+## Recommended next slice — Phase 12K Layout runtime dependency characterization
+
+Do not immediately staticize the remaining Layout installers. Read-only
+inventory shows that they form one ordered multi-boundary chain rather than two
+independent wrappers.
+
+Current ordering/ownership:
+- GUI startup, ordinary-detection preparation, and the independent unlined-row
+  resolver all call `install_robust_line_starts()` before
+  `install_physical_indent_inference()`;
+- robust-line-start captures the then-current
+  `dictionary_page_design._line_feature` and wraps it with
+  `credible_first_text_x(...)`;
+- physical-indent subsequently captures that already-refined line feature into
+  `_BASE_LINE_FEATURE`, replaces `_line_runs`, `_line_feature`,
+  `_indent_modes` and `_assign_indent_semantics`, and its
+  `physical_line_feature(...)` delegates back through the captured robust
+  feature;
+- physical-indent also installs Project Profile anchoring by wrapping
+  `dictionary_page_layout_policy.resolve_page_layout_policy`;
+- it additionally wraps
+  `dictionary_page_layout_policy.infer_dictionary_page_layout` and
+  `page_understanding.understand_page` to normalize final roles.
+
+Phase 12K should therefore be **characterization first**. Build an explicit
+dependency graph and identify whether static ownership can be introduced in
+separate behavior-preserving layers (row-run/line-feature composition, profile
+anchoring, policy finalization, Page Understanding finalization) without
+changing cache timing or consumer-visible monkeypatch seams.
+
+Required checks before any production write:
+- enumerate every caller of both installers, including spawn/unlined worker
+  paths;
+- verify which tests or external compatibility paths depend on the mutable base
+  helper names themselves;
+- characterize cache-hit behavior in policy/Page Understanding before deciding
+  where final role normalization belongs;
+- preserve the exact robust-line-start → physical-line-feature delegation order;
+- preserve Project Profile anchoring before physical finalization;
+- do not mix the work with PDIC composition, OCR-boundary runner changes, or GUI
+  Settings/App class wrappers.
+
+If no genuinely bounded sub-slice emerges, record 12K as characterization-only
+and select another debt category rather than forcing a cross-core redesign.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
