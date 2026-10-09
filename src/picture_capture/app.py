@@ -12647,10 +12647,14 @@ class PictureCaptureApp(tk.Tk):
             count_var.set("正在后台读取最近项目…")
             cleanup_button.configure(state="disabled")
             key = f"recent-projects-{id(dialog)}"
+            # A previous refresh may still be decoding preview images.
+            self._invalidate_ui_worker(f"{key}-previews")
 
             def worker():
                 rows = load_recent_projects()
-                details = [recent_project_details(row) for row in rows]
+                return rows, [recent_project_details(row) for row in rows]
+
+            def previews_worker(details):
                 covers: dict[str, Image.Image] = {}
                 for detail in details:
                     root = Path(str(detail.get("path") or ""))
@@ -12660,6 +12664,11 @@ class PictureCaptureApp(tk.Tk):
                         continue
                     try:
                         with Image.open(preview_path) as opened:
+                            # JPEG decoders can discard high-resolution pixels
+                            # before conversion. For other formats thumbnailing
+                            # still precedes the full RGB/alpha conversion.
+                            opened.draft("RGB", (92, 92))
+                            opened.thumbnail((92, 92), Image.Resampling.LANCZOS)
                             cover_image = normalize_page_rgb(opened)
                         cover_image.thumbnail((72, 92), Image.Resampling.LANCZOS)
                         backdrop = Image.new("RGB", (76, 96), "#f4f6f8")
@@ -12667,30 +12676,43 @@ class PictureCaptureApp(tk.Tk):
                         py = (backdrop.height - cover_image.height) // 2
                         backdrop.paste(cover_image, (px, py))
                         covers[str(root)] = backdrop
+                        cover_image.close()
                     except Exception:
                         continue
-                return rows, details, covers
+                return covers
 
-            def done(payload) -> None:
+            def alive() -> bool:
                 try:
-                    if not dialog.winfo_exists():
-                        return
+                    return bool(dialog.winfo_exists())
                 except tk.TclError:
+                    return False
+
+            def previews_done(covers) -> None:
+                if not alive():
                     return
-                rows, details, covers = payload
-                state["rows"] = rows
-                state["details"] = details
                 state["cover_images"] = covers
                 rebuild()
+
+            def done(payload) -> None:
+                if not alive():
+                    return
+                rows, details = payload
+                state["rows"] = rows
+                state["details"] = details
+                state["cover_images"] = {}
+                # Show cards as soon as metadata arrives; previews load later.
+                rebuild()
+                self._start_ui_worker(
+                    f"{key}-previews",
+                    lambda: previews_worker(details),
+                    previews_done,
+                )
 
             def failed(exc, detail) -> None:
                 if detail:
                     print(detail)
-                try:
-                    if dialog.winfo_exists():
-                        count_var.set(f"读取最近项目失败：{exc}")
-                except tk.TclError:
-                    pass
+                if alive():
+                    count_var.set(f"读取最近项目失败：{exc}")
             self._start_ui_worker(key, worker, done, failed)
 
         self._recent_projects_rebuild = rebuild

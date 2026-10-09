@@ -133,12 +133,13 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         "preview_path": "",
         "cover_source": "none",
     }
-    if not root.is_dir():
+    if not details["exists"]:
         return details
     try:
-        pages = project_page_images(root)
+        inventory = tuple(root.iterdir())
+        pages = project_page_images(root, candidates=inventory)
         details["image_count"] = len(pages)
-        cover = project_cover_path(root)
+        cover = project_cover_path(root, candidates=inventory)
         if cover is not None:
             details["cover_path"] = str(cover)
             details["preview_path"] = str(cover)
@@ -169,7 +170,15 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
     except OSError:
         return details
     metadata = project_settings.parent
-    if metadata.is_dir():
+    if metadata == root:
+        # Legacy projects store scans beside settings. Iterating/stat-ing every
+        # high-volume scan to compute a card timestamp is unnecessarily slow.
+        try:
+            if project_settings.is_file():
+                candidates.append(project_settings.stat().st_mtime)
+        except OSError:
+            pass
+    elif metadata.is_dir():
         try:
             candidates.extend(item.stat().st_mtime for item in metadata.iterdir() if item.is_file())
         except OSError:
