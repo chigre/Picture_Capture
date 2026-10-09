@@ -46,11 +46,13 @@ def is_managed_project(project_root: Path) -> bool:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return False
-    return (
-        isinstance(payload, dict)
-        and payload.get("format") == PROJECT_FORMAT
-        and int(payload.get("format_version", 0) or 0) >= PROJECT_FORMAT_VERSION
-    )
+    if not isinstance(payload, dict) or payload.get("format") != PROJECT_FORMAT:
+        return False
+    try:
+        version = int(payload.get("format_version", 0) or 0)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return version >= PROJECT_FORMAT_VERSION
 
 
 def settings_path(project_root: Path) -> Path:
