@@ -2585,7 +2585,7 @@ class ReviewWindow(tk.Toplevel):
             return percent_spin
 
         self.review_line_height_spin = add_review_height_control(
-            "单行高：", self.review_line_height_var, self.review_line_height_px_var
+            "普通字/行高：", self.review_line_height_var, self.review_line_height_px_var
         )
         add_review_height_control(
             "行间空：",
@@ -9257,7 +9257,7 @@ class PictureCaptureApp(tk.Tk):
         aux.columnconfigure(1, weight=1); aux.columnconfigure(3, weight=1)
         add_layout_visualization_controls(self, aux)
 
-        ocr = self._section_frame(parent, "三、融合 / OCR画线参数", padding=5, section_key="ocr")
+        ocr = self._section_frame(parent, "三、共享 OCR 通道 / OCR画线", padding=5, section_key="ocr")
         ocr.pack(fill="x", pady=(4, 0))
         self.ocr_refresh_var = tk.StringVar(value="reuse")
         ttk.Label(ocr, text="识别策略：").grid(row=0, column=0, sticky="w")
@@ -9324,7 +9324,7 @@ class PictureCaptureApp(tk.Tk):
         actions.pack(fill="x", pady=(4, 0))
         action_tooltips = {
             "普通画线": "只运行高速左缘几何画线；适合正文缩进稳定的词典，不调用 OCR 来决定词条位置。",
-            "仅OCR": "只对已有画线做局部 PaddleOCR 文字识别；普通行与大字行使用不同高度框，不新增、删除或移动画线，默认仅填空白词条。",
+            "仅OCR": "只对已有画线调用共享 OCR 通道做局部文字识别；普通行与大字行使用不同高度框，不新增、删除或移动画线，默认仅填空白词条。",
             "融合画线+OCR": "普通几何与 OCR 候选先融合、救漏和去重，再对仍为空白的普通救漏线自动做局部 OCR 补字。",
             "OCR画线(默认)": "默认画线方式：由 OCR / parser / 视觉候选链识别词头并确定画线，同时得到 OCR 文字。",
             "清除画线": "清除当前页全部词条画线；不会删除扫描图片。",
@@ -15712,7 +15712,7 @@ class PictureCaptureApp(tk.Tk):
 
         if len(existing) > 1 and not messagebox.askyesno(
             "普通画线后OCR文字",
-            f"将对 {len(existing)} 个已有画线的页面逐条做局部 PaddleOCR。\n\n"
+            f"将对 {len(existing)} 个已有画线的页面逐条调用共享 OCR 通道。\n\n"
             "只填充空白词条；已有文字和人工校对内容保持不变；"
             "不会新增、删除或移动任何画线。继续？",
             parent=self,
