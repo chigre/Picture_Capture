@@ -104,7 +104,7 @@ class ProjectController:
                 root,
                 requested_suffix=requested_suffix,
                 launch_profile_setup=not existing_project,
-                parameter_template_root=template_root,
+                **({"parameter_template_root": template_root} if template_root is not None else {}),
             )
         except Exception as exc:
             app.show_error("无法打开项目", exc)
