@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12M is complete: the redundant PictureCaptureApp tooltip terminology descriptor patch is retired; the earlier global Tk/ttk terminology layer remains the sole product owner.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12N is complete: Settings help wording and recursive control binding are now statically owned by the shared Settings schema/help layer; the post-build SettingsDialog help wrapper is retired.**
 
-Phase 12M is merged on `main@68524cc3fd4668b93906253edb91dfd8753cac88`. Phase 12L remains complete on `main@29fd90712b5e232d45586c549a576fbb697b3018`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
+Phase 12N is merged on `main@fb57c3e50a2d3c49148a918358c880ceddc308ec`. Phase 12M remains complete on `main@68524cc3fd4668b93906253edb91dfd8753cac88`; Phase 12L remains complete on `main@29fd90712b5e232d45586c549a576fbb697b3018`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -2110,42 +2110,75 @@ Phase 12L checkpoint publication also closed cleanly:
 - post-checkpoint CI 2312 passed;
 - post-checkpoint CodeQL 2295 passed.
 
-## Recommended next slice — Phase 12N static Settings help ownership
+## Phase 12N — static Settings help ownership
 
-Read-only characterization shows that the historical
-`settings_help_restore` post-build wrapper has become redundant after later
-Settings help refactors.
+Phase 12N retires the historical post-build `SettingsDialog` help repair.
 
-Current facts:
-- `ui.settings.help.bind_help_widget(...)` binds the supplied widget **and
-  recursively all descendants**, so binding a standard setting's `control`
-  frame reaches its Entry/Combobox/Spinbox children;
-- the seven Settings variables built manually outside ordinary setting/check
-  groups are already explicitly bound to their actual controls, except
-  `paddle_lens_mode`, whose `lens_row` parent is bound and therefore
-  recursively binds the contained Combobox;
-- detection-mode radio buttons, Lens enable, ordinary text OCR engine, headword
-  sort mode, custom sort entry and custom-fold checkbox already have explicit
-  help bindings;
-- the remaining material responsibility of `settings_help_restore` is updating
-  two `SETTING_HELP` strings and four `CHECK_HELP` strings at runtime.
+The effective six wording overrides are now canonical:
+- `SETTING_HELP["paddle_lens_mode"]`;
+- `SETTING_HELP["ocr_engine"]`;
+- `CHECK_HELP["paddle_use_paddleocr"]`;
+- `CHECK_HELP["paddle_compare_tesseract"]`;
+- `CHECK_HELP["paddle_enable_lens"]`;
+- `CHECK_HELP["ordinary_auto_layout"]`.
 
-A safe 12N should:
-- move those six current override texts into the canonical
-  `ui/settings/schema.py` dictionaries;
-- preserve their wording exactly;
-- remove `install_settings_help_restore(app_module)` from GUI bootstrap;
-- retire its `SettingsDialog.__init__` wrapper and post-build widget walker,
-  preferably leaving the public installer name as a no-op compatibility shim;
-- add regression coverage proving the canonical schema owns the shared-OCR /
-  Layout-Core wording and proving `bind_help_widget` recursively binds child
-  inputs;
-- ratchet against reintroducing the restore installer or SettingsDialog init
-  mutation.
+`ui.settings.help.bind_help_widget(...)` already recursively binds child
+controls, so the old post-build descendant walker and `SettingsDialog.__init__`
+wrapper were redundant. Phase 12N therefore:
+- moves the effective wording into `ui/settings/schema.py`;
+- removes `install_settings_help_restore(app_module)` from GUI composition;
+- keeps `install_settings_help_restore(...)` as an importable no-op
+  compatibility shim;
+- adds regression coverage for canonical shared-OCR/Layout-Core wording and
+  recursive child-control binding;
+- ratchets against restoring either the SettingsDialog init mutation or the
+  installer call.
 
-Do not alter Settings layout, help-pane behavior, field order, autosave,
-persistence, or the broader `install_settings_parameter_help` builder in this
-slice.
+Behavior intentionally unchanged:
+- Settings layout, field/check order, help-pane behavior and autosave are
+  unchanged;
+- the broader `install_settings_parameter_help` builder remains in place;
+- `app.py` is untouched;
+- no OCR, PDIC, Layout, worker or persistence behavior changed.
+
+Phase 12N publication:
+- PR #374 fixed head `d929d06569766ce665bab4449ff13c492973aae6`;
+- PR CI 2318 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #374 merged as `fb57c3e50a2d3c49148a918358c880ceddc308ec`;
+- post-merge CI 2319 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2302 passed;
+- no architecture or size threshold was relaxed.
+
+## Recommended next slice — Phase 12O static single-line merge crop setting
+
+The smaller remaining Settings wrapper is
+`install_single_line_merge_settings_ui(app_module)`.
+
+The merge behavior itself is already ordinary non-runtime ownership in
+`single_line_merge_settings.py`; only Settings Center presentation/persistence
+still monkeypatches `SettingsDialog.__init__` and save methods.
+
+A safe 12O should:
+- add `single_line_crop_merge_by_page` to the existing static
+  `ui/settings/crop.py` `defaults -> crop_vars -> payload` flow;
+- build the checkbox directly in the existing crop tab, preserving the current
+  label/help and click-to-save behavior;
+- keep using the same `QT/_CropSettings.json` key and
+  `save_merge_by_page(...)` compatibility helper;
+- ensure the integrated crop writer now preserves the merge key itself, so no
+  post-save re-append wrapper is required;
+- remove `install_single_line_merge_settings_ui(app_module)` from GUI
+  composition and leave its public installer name as a no-op compatibility
+  shim;
+- leave the still-separate unlined-export filter wrapper unchanged;
+- ratchet against restoring the SettingsDialog init/save mutation for this
+  feature.
+
+Do not change line-crop geometry, white-border trimming, blank-slice behavior,
+manifest naming, page merge order, or worker/output semantics.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
