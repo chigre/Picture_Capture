@@ -2711,3 +2711,34 @@ It also verifies optional `ops` coverage and the raw-vs-current snapshot.
 Do not start Phase 13C until this gate is green and the merge is recorded.
 Phase 13C must characterize explicitly composed physical primitives against the
 historically installed robust -> physical runtime, without removing installers.
+
+
+## Phase 13C — explicit Physical Layout primitive composition (complete)
+
+- PR #398, merge `c0e7367512ff7aa8fb0b86c03ceb229b9954a996`: extracted
+  `compose_robust_line_feature(original)` while preserving installer behavior.
+- PR #399, merge `7cd38cacebd5c33c0fb47b1df691271cee6aa982`: introduced
+  `compose_physical_line_feature(inner)` and
+  `explicit_physical_layout_ops()` without global mutation.
+- PR #400, merge `688199c6c46d41359b34d32cd703ad0635933ae6`: matched
+  explicit and simulated historically installed primitive composition across
+  projection rows, first-X/anchor, indent modes, and body/headword roles.
+- CI #2378, #2380 and #2382 passed on Ubuntu, Windows and macOS.
+- Historical installers deliberately remain; no product cutover in Phase 13C.
+
+## Phase 13D — explicit composed physical-policy boundary (final gate pending)
+
+- PR #401, merge `e67fb01d2c86fe19aa0191fe6b8766061fa737e5`: captured
+  stable raw resolver/inference references and added
+  `infer_composed_physical_page_layout()`, applying Profile anchoring and
+  physical normalization once without global policy wrappers.
+- PR #402, merge `880a05e55302cd04ebda0960448c3f418ea11171`: routed
+  physical-only unlined escalation to the explicit composed policy, retaining
+  cache -> fast projection -> physical detector order and existing labels.
+- CI #2384 and #2386 passed on Ubuntu, Windows and macOS.
+- Phase 13D final gate: PR #403 (this branch), to compare composed output
+  with the legacy wrapped physical policy and prevent unlined installer
+  reintroduction. Gate remains **open** until passing three-platform CI and
+  merge. Preserve GUI/full and processing/spawn installers until Phase 13E.
+- Next: Phase 13E full Page Understanding composition, routed one consumer at
+  a time with explicit parity tests and independent GUI/worker validation.
