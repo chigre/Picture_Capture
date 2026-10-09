@@ -6248,6 +6248,11 @@ class ReviewWindow(tk.Toplevel):
             if not self.parent._claim_page_for_manual_edit():
                 return
         self._commit_edits()
+        # Review rows are bound to Entry identities. Reconcile the independent
+        # main-canvas widget buffers before save/redraw so FocusOut or a later
+        # main-window autosave cannot restore their stale, pre-review words.
+        from .review_main_editor_sync import reconcile_main_editors_after_review
+        reconcile_main_editors_after_review(self.parent, self._bound_row_entries())
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         self.parent.save_pdic(sync_editors=False)
         if self.parent.current_page:
