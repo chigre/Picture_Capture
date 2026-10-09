@@ -237,19 +237,8 @@ SETTING_LABELS = {
         "wordslist_path": "参考词表文件",
         "dictionary_custom_profile_name": "自定义 Profile 显示名称",
         "detection_method": "默认画线方式",
-        "paddle_lens_mode": (
-            "作用：控制 Google Lens 在共享 OCR 通道中的调用方式。off 表示 Lens 完全不运行；"
-            "diagnostic 会采集 Lens 结果但不让它参与最终文字投票；conflict 只在本地 OCR 冲突或缺失时调用；"
-            "full 允许 Lens 全量参与。\n\n"
-            "注意：仅勾选“Google Lens”但把这里设为 off，并不构成一个可运行的 Lens OCR 配置。"
-            "通常建议使用 conflict。"
-        ),
-        "ocr_engine": (
-            "兼容字段：这是旧版单 OCR 选择。当前主流程的【仅OCR】和【OCR画线】都使用同一套共享 OCR 通道，"
-            "以 PaddleOCR / Tesseract / Google Lens 三个开关及 Lens 运行模式为准。\n\n"
-            "旧项目或非 GUI 调用在三个共享开关都未提供有效选择时，才可能读取此字段作为兼容回退；"
-            "日常项目不应通过它切换共享 OCR 通道。"
-        ),
+        "paddle_lens_mode": "Google Lens 运行模式",
+        "ocr_engine": "普通文本 OCR 引擎",
         "headword_sort_mode": "词头排序预设",
         "headword_custom_order": "自定义排序单元",
         "headword_custom_fold_accents": "自定义排序重音折叠",
@@ -355,8 +344,19 @@ SETTING_HELP = {
         "layout_column_separator_mode": "作用：告诉版面检测中央/栏间是否存在明显分隔线：auto 自动判断，present 明确存在，absent 明确没有。该信息会改变栏边搜索区域和分隔线检测策略。\n\n选择：有稳定印刷竖线时 present 可减少歧义；明确无竖线时 absent 避免程序为不存在的线留搜索空间；不确定保持 auto。",
         "paddle_language": "作用：PaddleOCR 后端使用的语言/模型代码。通常由上层【OCR 语言】映射得到，属于后端专家覆盖项。\n\n修改：只有默认映射不适合当前模型或在调试 PaddleOCR 后端时才手动指定。与项目主语言不一致可能显著降低识别率，并可能改变 OCR 缓存签名。",
         "detection_method": "作用：设置主界面默认使用哪条“画线”路径。融合画线（推荐）让普通几何检测与 OCR 语义检测独立产生候选，再按同栏 Y 位置一对一配对、继承 OCR 文字并严格去重；OCR 或普通模式仍可单独运行用于诊断。\n\n选择：日常优先融合画线；需要判断问题究竟来自几何规则还是 OCR/parser 时，再分别运行单独模式。",
-        "paddle_lens_mode": "作用：控制 Lens 在启用后的调用范围和是否参与融合。off 不调用；diagnostic 可全量获取但 Lens 不投票；conflict 只在 Paddle/Tesseract 冲突或缺失时调用；full 可对更多候选调用并影响非冲突决策。\n\n选择：推荐 conflict，能把网络调用集中在真正有价值的疑难项。full 最耗网络且会让 Lens 对更多最终结果产生影响。",
-        "ocr_engine": "作用：这是“已有词条线后再识别整行文本”的普通 OCR 引擎设置，与 OCR画线的多引擎词头检测不是同一件事。\n\n选择：Tesseract/PaddleOCR 只影响普通文本填充路径；不要因为这里选了 Tesseract 就以为 OCR画线也只使用 Tesseract，后者由 OCR画线页的独立开关控制。",
+        "paddle_lens_mode": (
+            "作用：控制 Google Lens 在共享 OCR 通道中的调用方式。off 表示 Lens 完全不运行；"
+            "diagnostic 会采集 Lens 结果但不让它参与最终文字投票；conflict 只在本地 OCR 冲突或缺失时调用；"
+            "full 允许 Lens 全量参与。\n\n"
+            "注意：仅勾选“Google Lens”但把这里设为 off，并不构成一个可运行的 Lens OCR 配置。"
+            "通常建议使用 conflict。"
+        ),
+        "ocr_engine": (
+            "兼容字段：这是旧版单 OCR 选择。当前主流程的【仅OCR】和【OCR画线】都使用同一套共享 OCR 通道，"
+            "以 PaddleOCR / Tesseract / Google Lens 三个开关及 Lens 运行模式为准。\n\n"
+            "旧项目或非 GUI 调用在三个共享开关都未提供有效选择时，才可能读取此字段作为兼容回退；"
+            "日常项目不应通过它切换共享 OCR 通道。"
+        ),
         "headword_sort_mode": "作用：决定校对/索引检查采用的词头排序规则。可随 OCR 语言提供语言专用预设，也可使用通用 Unicode 或自定义字母表。\n\n注意：排序只改变比较/显示顺序和索引语义，不会改变扫描页面物理顺序、PDIC 坐标或 OCR 文字。",
         "headword_custom_order": "作用：当排序预设选择“自定义”时，这里定义词典自己的排序单元，空格分隔；允许 ch、ll、dz 等多字符单元。\n\n填写：顺序就是排序优先级。遗漏的字符会按后备规则处理，因此应覆盖该词典真正需要特殊排序的字母/多字符单元，而不是照抄无关语言字母表。",
         "headword_custom_fold_accents": "作用：仅在自定义排序中使用。开启后，没有在自定义顺序里单独列出的重音字母会按其基础字母折叠排序；关闭则保留它们的独立字符差异。\n\n选择：如果词典把 á/é/ñ 等视作独立排序单位，应显式列入自定义顺序或关闭折叠；若只把重音视作基本字母变体则可开启。",
