@@ -12,7 +12,11 @@ a compact colour strip beside the physical column edge.
 
 from typing import Any, Callable
 
-from .layout_indent_visibility import _draw_indent_blocks_visible as _draw_indent_blocks
+from .layout_indent_visibility import (
+    _draw_indent_blocks_visible as _draw_indent_blocks,
+    add_prepared_indent_summary,
+)
+from .layout_lane_summary_extension import append_physical_lane_summary
 from .layout_role_provenance import add_entry_source_summary
 from .layout_visualization_readability import draw_layout_visualization_readable
 from .layout_visualization_ui import _snapshot_for_app
@@ -24,10 +28,13 @@ _INDENT_TAG = "layout-visualization-indent"
 _ROLE_TAG = "layout-visualization-line-role"
 _BASE_LAYOUT_TAG = "layout-visualization"
 
+ENTRY_ROLE_COLOR = "#d32f2f"
+BODY_ROLE_COLOR = "#1976d2"
+
 _ROLE_STYLE: dict[str, tuple[str, str]] = {
-    "entry": ("#2e7d32", "词条行"),
-    "headword": ("#2e7d32", "词条行"),
-    "body": ("#1976d2", "正文行"),
+    "entry": (ENTRY_ROLE_COLOR, "词条行"),
+    "headword": (ENTRY_ROLE_COLOR, "词条行"),
+    "body": (BODY_ROLE_COLOR, "正文行"),
 }
 _UNKNOWN_ROLE_STYLE = ("#757575", "不确定")
 
@@ -46,6 +53,13 @@ def _append_tag(tags: object, tag: str) -> tuple[str, ...]:
 def _role_style(role: object) -> tuple[str, str]:
     key = str(role or "unknown").strip().lower()
     return _ROLE_STYLE.get(key, _UNKNOWN_ROLE_STYLE)
+
+
+def _finalize_summary_text(text: str, app: Any) -> str:
+    """Apply the final static GUI diagnostic summary extensions in order."""
+    text = add_entry_source_summary(text, app)
+    text = append_physical_lane_summary(text, app)
+    return add_prepared_indent_summary(text, app)
 
 
 def _format_summary(app: Any, snapshot: Any) -> str:
@@ -91,7 +105,7 @@ def _format_summary(app: Any, snapshot: Any) -> str:
             f"row_padding={values['row_padding']}"
         ),
         f"line indents: {len(indent_blocks)}   roles: {role_text}",
-        "role strips: 绿色=词条行   蓝色=正文行   灰色=不确定",
+        "role strips: 红色=词条行   蓝色=正文行   灰色=不确定",
     ]
 
     top = int(geometry.top)
@@ -133,7 +147,7 @@ def _format_summary(app: Any, snapshot: Any) -> str:
                 f"  {field}: used={used}   raw={raw}   {state}   switch={switch}"
             )
 
-    return add_entry_source_summary("\n".join(lines), app)
+    return _finalize_summary_text("\n".join(lines), app)
 
 
 def _summary_box(app: Any, snapshot: Any) -> tuple[float, float, float]:
