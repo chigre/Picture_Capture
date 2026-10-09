@@ -1529,6 +1529,10 @@ class SettingsDialog(tk.Toplevel):
             footer, text="校验当前设置",
             command=lambda: self._validate_settings_now(),
         ).pack(side="right", padx=(0, 8))
+        ttk.Button(
+            footer, text="设为新项目默认",
+            command=lambda: self._save_as_new_project_default(),
+        ).pack(side="right", padx=(0, 8))
         self.bind("<Control-s>", lambda _event: self._validate_settings_now())
         self.bind("<Escape>", lambda _event: self._close_validated())
         self.protocol("WM_DELETE_WINDOW", self._close_validated)
@@ -1669,6 +1673,10 @@ class SettingsDialog(tk.Toplevel):
 
     def _run_autosave(self) -> None:
         _settings_lifecycle_ui.run_autosave(self)
+
+    def _save_as_new_project_default(self) -> None:
+        from .project_parameter_templates import save_dialog_parameters_as_default
+        save_dialog_parameters_as_default(self)
 
     def _validate_settings_now(self) -> bool:
         return _settings_lifecycle_ui.validate_settings_now(self)
@@ -12795,6 +12803,7 @@ class PictureCaptureApp(tk.Tk):
         target_page: str | None = None, target_index: object = None,
         target_view_scale: float | None = None,
         launch_profile_setup: bool = False,
+        parameter_template_root: Path | None = None,
     ) -> None:
         """Prepare project files off-thread and commit the prepared state on Tk."""
         if self._batch_active:
@@ -12859,6 +12868,9 @@ class PictureCaptureApp(tk.Tk):
                 if report.warnings:
                     migration_detail += f"；{len(report.warnings)} 项旧文件未能清理，可稍后手工检查"
             project = ProjectState.open(root)
+            if launch_profile_setup:
+                from .project_parameter_templates import apply_parameters_to_project
+                apply_parameters_to_project(project, parameter_template_root)
             if not project.images:
                 raise ValueError("目录中没有 tif/tiff/png/jpg/jpeg/bmp 图片")
             suffix = PictureCaptureApp._normalize_suffix(requested_suffix) if requested_suffix else PictureCaptureApp._normalize_suffix(project.settings.image_suffix)
