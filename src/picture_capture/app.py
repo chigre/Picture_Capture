@@ -212,6 +212,10 @@ from .illustration_fill_opacity import (
     add_quick_illustration_fill_opacity_control, clear_alpha_polygon_records,
     create_alpha_canvas_polygon, refresh_alpha_polygon_fill,
 )
+from .ocr_crop_preview_ui import (
+    add_ocr_crop_preview_control,
+    draw_ocr_crop_preview,
+)
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
     headword_filter_rules_path, is_managed_project, migrate_legacy_project,
@@ -9110,6 +9114,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Entry(
             section_row, textvariable=section_width_var, width=4, justify="left"
         ).pack(side="left", padx=(2, 10))
+        add_ocr_crop_preview_control(self, section_row)
 
         line_row = ttk.Frame(aux); line_row.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(2, 0))
         ttk.Checkbutton(line_row, text="栏左垂线", variable=guide_var, command=self._quick_parameter_changed).pack(side="left")
@@ -13890,6 +13895,7 @@ class PictureCaptureApp(tk.Tk):
             )
             if self.cursor_canvas_xy is not None:
                 self.draw_cursor_guides(*self.cursor_canvas_xy)
+            draw_ocr_crop_preview(self)
             return
         hidden = self.hide_var.get()
         if not hidden:
@@ -14079,6 +14085,7 @@ class PictureCaptureApp(tk.Tk):
             self.draw_cursor_guides(*self.cursor_canvas_xy)
 
         self._apply_current_appearance(self.canvas)
+        draw_ocr_crop_preview(self)
 
     def _update_view_zoom_label(self) -> None:
         self._canvas_controller_for_call().update_view_zoom_label()

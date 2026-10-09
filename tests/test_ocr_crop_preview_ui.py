@@ -33,9 +33,38 @@ def test_ocr_crop_preview_highlights_proofreading_active_entry():
     assert "engine_label" in source
 
 
-def test_gui_composition_installs_ocr_crop_preview():
+def test_ocr_crop_preview_is_wired_statically():
     import picture_capture.bootstrap.gui as gui_bootstrap
+    import picture_capture.ocr_crop_preview_ui as preview
 
-    source = Path(gui_bootstrap.__file__).read_text(encoding="utf-8")
-    assert "install_ocr_crop_preview" in source
-    assert "install_ocr_crop_preview(app_module)" in source
+    root = Path(gui_bootstrap.__file__).resolve().parents[2]
+    composition = Path(gui_bootstrap.__file__).read_text(encoding="utf-8")
+    app_source = (root / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    preview_source = Path(preview.__file__).read_text(encoding="utf-8")
+
+    assert "install_ocr_crop_preview(app_module)" not in composition
+    assert "add_ocr_crop_preview_control(self, section_row)" in app_source
+    assert app_source.count("draw_ocr_crop_preview(self)") == 2
+    assert "def add_ocr_crop_preview_control(" in preview_source
+    assert "def draw_ocr_crop_preview(" in preview_source
+    assert "App.__init__ = init" not in preview_source
+    assert "App.redraw = redraw" not in preview_source
+    assert "App._draw_ocr_crop_preview =" not in preview_source
+
+
+
+def test_crop_preview_early_return_keeps_ocr_preview_overlay():
+    import picture_capture.app as app_module
+
+    source = Path(app_module.__file__).read_text(encoding="utf-8")
+    start = source.index("    def redraw(self) -> None:")
+    end = source.index("\n    def ", start + 10)
+    redraw = source[start:end]
+
+    crop_start = redraw.index("        if self.crop_preview_var.get():")
+    crop_end = redraw.index("        hidden = self.hide_var.get()", crop_start)
+    crop_branch = redraw[crop_start:crop_end]
+
+    assert "draw_ocr_crop_preview(self)" in crop_branch
+    assert crop_branch.index("draw_ocr_crop_preview(self)") < crop_branch.rindex("return")
+    assert redraw.rstrip().endswith("draw_ocr_crop_preview(self)")
