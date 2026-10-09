@@ -9199,6 +9199,23 @@ class PictureCaptureApp(tk.Tk):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(label_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
 
+        crop_font_row = ttk.Frame(aux)
+        crop_font_row.grid(row=8, column=0, columnspan=4, sticky="ew", pady=(3, 0))
+        ttk.Label(crop_font_row, text="切图预览标签字体").pack(side="left")
+        crop_family_var = tk.StringVar(value=normalize_content_font_setting(self.settings.crop_preview_font_family))
+        self.quick_vars["crop_preview_font_family"] = crop_family_var
+        self.quick_field_casts["crop_preview_font_family"] = str
+        ttk.Combobox(crop_font_row, textvariable=crop_family_var, values=content_font_values, width=18).pack(side="left")
+        ttk.Label(crop_font_row, text="字号").pack(side="left", padx=(8, 2))
+        crop_size_var = tk.StringVar(value=str(self.settings.crop_preview_font_size))
+        self.quick_vars["crop_preview_font_size"] = crop_size_var
+        self.quick_field_casts["crop_preview_font_size"] = int
+        ttk.Entry(crop_font_row, textvariable=crop_size_var, width=5, justify="left").pack(side="left")
+        for label, name in (("粗体", "crop_preview_font_bold"), ("斜体", "crop_preview_font_italic")):
+            var = tk.BooleanVar(value=bool(getattr(self.settings, name)))
+            self.quick_bool_vars[name] = var
+            ttk.Checkbutton(crop_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
+
         ocr_display_row = ttk.Frame(aux); ocr_display_row.grid(row=6, column=0, columnspan=4, sticky="ew")
         for label, name in (("显示OCR内容选择", "review_main_show_ocr_choices"), ("显示OCR对比底色结果", "review_main_show_ocr_background")):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
@@ -11056,10 +11073,13 @@ class PictureCaptureApp(tk.Tk):
                     raise ValueError("线条/外框粗细必须在 1–20 之间。")
                 if name == "illustration_label_font_size" and not 5 <= int(value) <= 200:
                     raise ValueError("插图标签字号必须在 5–200 之间。")
+                if name == "crop_preview_font_size" and not 5 <= int(value) <= 200:
+                    raise ValueError("切图预览标签字号必须在 5–200 之间。")
                 setattr(self.settings, name, value)
             for font_setting_name in (
                 "main_entry_font_family",
                 "illustration_label_font_family",
+                "crop_preview_font_family",
                 "review_entry_font_family",
                 "review_simplified_font_family",
             ):
@@ -13816,15 +13836,14 @@ class PictureCaptureApp(tk.Tk):
         illustrated_entries = {p.entry_ref_index for p in plan.entry_pieces if p.source_mode == "linked_original" and p.entry_ref_index is not None}
         preview_family = resolve_content_font_family(
             self.canvas,
-            self.settings.main_entry_font_family,
+            self.settings.crop_preview_font_family,
             self.settings.ocr_language,
         )
         preview_font = _entry_font_spec(
             preview_family,
-            effective_main_overlay_font_size(self.image.width, scale, self.settings),
-            # helper reads self.settings.main_entry_font_size consistently with editors
-            self.settings.main_entry_font_bold,
-            self.settings.main_entry_font_italic,
+            max(5, round(self.settings.crop_preview_font_size * scale)),
+            self.settings.crop_preview_font_bold,
+            self.settings.crop_preview_font_italic,
         )
         for piece in plan.entry_pieces:
             x0,y0,x1,y1=piece.box
@@ -13836,7 +13855,7 @@ class PictureCaptureApp(tk.Tk):
                 dash = (6, 4)
             self.canvas.create_rectangle(x0*scale,y0*scale,x1*scale,y1*scale,outline=color,width=2,dash=dash,tags=("crop-plan",))
             filename = entry_crop_piece_filename(self.current_page.stem, piece)
-            label = f"{piece.word}\n{filename}" if piece.word else filename
+            label = f"{piece.word}  |  {filename}" if piece.word else filename
             draw_crop_preview_label(
                 self.canvas, ((x0+x1)/2)*scale, (y0+3)*scale,
                 text=label, outline=color, anchor="n", justify="center",
