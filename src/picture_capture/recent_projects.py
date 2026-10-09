@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import time
 
 from .models import project_cover_path, project_page_images
 from .project_storage import settings_path
@@ -44,7 +45,16 @@ def save_recent_projects(rows: list[dict[str, object]], path: Path | None = None
             json.dump(rows, handle, ensure_ascii=False, indent=2)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temp, target)
+        for attempt in range(5):
+            try:
+                os.replace(temp, target)
+                break
+            except PermissionError:
+                # On Windows, competing writers can briefly lock the destination
+                # during replacement. Never retry other I/O errors indefinitely.
+                if attempt == 4:
+                    raise
+                time.sleep(0.025 * (attempt + 1))
     finally:
         if temp is not None:
             temp.unlink(missing_ok=True)
