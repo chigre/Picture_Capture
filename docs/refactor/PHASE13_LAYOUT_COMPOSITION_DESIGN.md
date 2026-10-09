@@ -173,6 +173,10 @@ Goal: dependency plumbing only.
   resolved ops object;
 - preserve both raw/unprepared and installer-prepared behavior exactly;
 - keep both historical installers active;
+- extend any existing compatibility wrapper signatures only as needed to pass
+  `ops` through unchanged (notably the Profile-anchor wrapper around
+  `resolve_page_layout_policy`); this is dependency plumbing, not a change in
+  anchoring/finalization behavior;
 - do not route product consumers to the new explicit physical ops yet.
 
 Gate:
