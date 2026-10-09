@@ -2582,6 +2582,9 @@ Allowed production changes:
     `remeasure_layout_indents_from_ink(...)`;
 - replace downstream internal reads of the four Page Design primitive global
   names with the resolved ops object;
+- extend existing composition-wrapper signatures only as needed to forward the
+  new dependency unchanged (especially the Profile-anchor wrapper around
+  `resolve_page_layout_policy`);
 - during 13B only, `ops=None` must resolve through `current_layout_ops()`.
   Explicit `ops=RAW_LAYOUT_OPS` must remain immune to later installer
   rebinding.
