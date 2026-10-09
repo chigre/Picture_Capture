@@ -47,12 +47,8 @@ def test_core_composition_preserves_remaining_import_sensitive_install_order() -
     assert "install_ordinary_large_head_runtime" not in source
     assert "install_ordinary_large_head_role_guard" not in source
     assert "install_entry_classification_fields" not in source
-    # Entry-crop wraps the current AppSettings JSON adapters, so separator-Y
-    # must be installed first. Reversing these two would let separator-Y replace
-    # the crop serializer instead of being wrapped by it.
-    assert source.index("install_separator_y_settings()") < source.index(
-        "install_entry_crop_settings()"
-    )
+    assert "install_separator_y_settings" not in source
+    assert "install_entry_crop_settings" not in source
     assert source.index("install_pdic_classification(formats)") < processing_import
     assert "install_processing_entry_classification" not in source
     assert "entry_classification_runtime" not in source
@@ -67,8 +63,6 @@ def test_core_profile_owns_only_remaining_compatibility_chain() -> None:
     ).read_text(encoding="utf-8")
 
     installers = (
-        "install_separator_y_settings",
-        "install_entry_crop_settings",
         "install_pdic_classification",
     )
     for name in installers:
@@ -76,6 +70,8 @@ def test_core_profile_owns_only_remaining_compatibility_chain() -> None:
         assert f"{name}(" not in package_init
 
     for retired in (
+        "install_separator_y_settings",
+        "install_entry_crop_settings",
         "install_entry_classification_fields",
         "install_spawn_layout_runtime",
         "install_ordinary_large_head_runtime",
