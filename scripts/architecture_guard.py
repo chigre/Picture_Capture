@@ -169,6 +169,18 @@ FORBIDDEN_SETTINGS_PARAMETER_HELP_INSTALL_CALLS = (
     "install_settings_parameter_help(app_module)",
 )
 
+# Phase 12R wires OCR crop preview through explicit app call sites. The
+# compatibility helper must not resume patching PictureCaptureApp.
+FORBIDDEN_OCR_CROP_PREVIEW_MUTATIONS = (
+    "App.__init__ = init",
+    "App.redraw = redraw",
+    "App._draw_ocr_crop_preview =",
+    "app_module._ocr_crop_preview_installed",
+)
+FORBIDDEN_OCR_CROP_PREVIEW_INSTALL_CALLS = (
+    "install_ocr_crop_preview(app_module)",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -348,6 +360,11 @@ def collect_violations() -> list[str]:
                 violations.append(
                     f"Settings parameter-help installer call returned in {rel}: {marker}"
                 )
+        for marker in FORBIDDEN_OCR_CROP_PREVIEW_INSTALL_CALLS:
+            if marker in source:
+                violations.append(
+                    f"OCR crop-preview installer call returned in {rel}: {marker}"
+                )
 
     single_line_merge_source = (
         PACKAGE_ROOT / "single_line_merge_settings.py"
@@ -374,6 +391,15 @@ def collect_violations() -> list[str]:
         if marker in parameter_help_source:
             violations.append(
                 f"Settings parameter-help mutation returned: {marker}"
+            )
+
+    ocr_crop_preview_source = (
+        PACKAGE_ROOT / "ocr_crop_preview_ui.py"
+    ).read_text(encoding="utf-8")
+    for marker in FORBIDDEN_OCR_CROP_PREVIEW_MUTATIONS:
+        if marker in ocr_crop_preview_source:
+            violations.append(
+                f"OCR crop-preview class mutation returned: {marker}"
             )
 
     init_path = PACKAGE_ROOT / "__init__.py"
