@@ -16010,9 +16010,9 @@ class PictureCaptureApp(tk.Tk):
             self.entries.clear(); self.redraw()
 
     def clear_text(self) -> None:
-        if not self.guard(): return
-        for entry in self.entries: entry.word = ""
-        self.redraw()
+        from .pdic_text_cleanup import clear_selected_scope
+        clear_selected_scope(self)
+
 
     def _ordered_entries_reading_order(self) -> list[WordEntry]:
         """Return current entries in canonical visual reading order without mutating them."""
