@@ -60,9 +60,9 @@ def test_settings_help_schema_owns_current_shared_ocr_and_layout_wording():
     assert "Layout Core" in settings_schema.CHECK_HELP["ordinary_auto_layout"]
 
 
-def test_gui_composition_no_longer_installs_settings_help_restore():
+def test_gui_composition_uses_static_settings_help_ownership():
     source = _gui_composition_source()
-    assert "install_settings_parameter_help(app_module)" in source
+    assert "install_settings_parameter_help(app_module)" not in source
     assert "install_settings_help_restore" not in source
 
 
