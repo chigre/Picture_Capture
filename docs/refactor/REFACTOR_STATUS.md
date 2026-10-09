@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12S is complete: Layout visualization controls and redraw behavior are wired statically by PictureCaptureApp; the former _section_frame/_build_quick_settings/redraw monkeypatch installer is retired.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12T is complete: Review crop classification and manual ReviewWindow classification controls are wired statically; the former app/global ReviewWindow monkeypatch installer is retired.**
 
-Phase 12S is merged on `main@ffb19bc604ee4ea22d911a5ce6516e671504940b`. Phase 12R remains complete on `main@d24157ad56ff4161e6198d7dada96f9ffa2f8e93`, with its checkpoint merged on `main@55b05f8742c9ad315e9ce98353c2a8eb7740315c`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
+Phase 12T is merged on `main@5b0f07af2acc056318c80d422193d7e947d38886`. Phase 12S remains complete on `main@ffb19bc604ee4ea22d911a5ce6516e671504940b`, with its checkpoint merged on `main@50e56a1d4ed5055a3061b2d9513defb380cc80f7`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -2369,41 +2369,79 @@ Phase 12S publication:
   784,737);
 - no architecture or size threshold was relaxed.
 
-## Recommended next slice — Phase 12T static Review classification wiring
+## Phase 12T — static Review classification wiring
 
-The remaining `install_review_entry_classification(app_module)` wrapper is
-broader than 12R/12S but now has explicit native landing points.
+Phase 12T retires the Review classification app/ReviewWindow mutation layer.
 
-Current effective behavior has five parts:
-- replace app-level `_review_line_box(...)` single-CJK text heuristics with the
-  structural `classified_entry_crop_height(...)` policy already used by
-  marker OCR;
-- add the manual 【自动 / 普通词条 / 大字头】 selector and source/effective label
-  after ReviewWindow construction;
-- synchronize that control before review-row rendering and after
-  `set_active(...)`;
-- persist manual overrides through the existing PDIC classification sidecar and
-  request row/main-canvas redraw;
-- expose the current wording 【大字头切图高：】 instead of the historical
-  【单字行高：】 label.
+The native app-level `_review_line_box(...)` now uses
+`classified_entry_crop_height(...)` directly. The historical
+“single CJK character => oversized” text heuristic is gone; regular/oversized
+proofreading crops use the same structural Entry classification consumed by
+marker OCR and preserve the former identity/transformed geometry behavior.
 
-A safe 12T should:
-- make the app-level `_review_line_box(...)` structurally classification-aware
-  directly, without replacing the global callable at runtime;
-- expose normal helper functions for ReviewWindow classification control
-  creation/synchronization/change/shortcut behavior;
-- call those helpers explicitly from the existing ReviewWindow
-  `__init__`, `_request_render_rows`, and `set_active` lifecycle points;
-- make the visible height wording native at its existing build site instead of
-  walking widgets after construction;
-- preserve exact sidecar persistence, recycled-entry classification semantics,
-  keyboard shortcuts, active-row render refresh and parent redraw behavior;
-- remove `install_review_entry_classification(app_module)` from GUI bootstrap,
-  retain its public name as a no-op compatibility shim, and ratchet against
-  restoring app/ReviewWindow mutation.
+`review_entry_classification_ui.py` now exposes ordinary helpers for:
+- control initialization;
+- active-entry synchronization;
+- manual classification changes and persistence;
+- Ctrl-Alt-0/1/2 shortcuts.
 
-Do not combine 12T with ReviewWindow decomposition, OCR runner work, Layout
-runtime installers or PDIC composition.
+`ReviewWindow` calls those helpers explicitly from its existing lifecycle:
+- initialize after native construction;
+- sync before row rendering;
+- sync after `set_active(...)`.
+
+The visible height control now says 【大字头切图高：】 natively. Classification
+sidecar persistence, manual override semantics, active-row rerender and parent
+canvas redraw remain unchanged. The historical installer remains importable as
+a no-op compatibility shim, and architecture ratchets reject restoration of
+app-level or ReviewWindow mutation.
+
+Phase 12T publication:
+- PR #386 fixed head `f0d7c06070f4002e1d52b4630178d339daaaaea3`;
+- PR CI 2345 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #386 merged as `5b0f07af2acc056318c80d422193d7e947d38886`;
+- post-merge CI 2346 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2329 passed;
+- `app.py` remained below the historical size baseline (783,380 bytes vs
+  784,737);
+- no architecture or size threshold was relaxed.
+
+## Recommended next slice — Phase 12U static UI terminology ownership
+
+The remaining GUI bootstrap presentation installer is
+`install_ui_terminology()`, which currently monkeypatches Tk/ttk widget
+constructors plus `tk.StringVar.__init__/set` to rewrite a narrow list of
+legacy labels at runtime.
+
+Read-only inventory shows the legacy production strings are now bounded:
+- `app.py` still contains one old OCR section title, one old existing-marker
+  OCR tooltip phrase, one old per-row OCR confirmation phrase, and one
+  `单行高` display label;
+- `ui/dialogs/usage_guide.py` contains the old shared-OCR explanatory sentence;
+- `ui/controllers/detection.py` still emits `PaddleOCR 当前页识别`;
+- `ui/settings/schema.py` retains `单行高` wording in one field label/help;
+- the other historical replacement inputs are now present only in
+  `ui_terminology.py` and tests.
+
+A safe 12U should:
+- replace every remaining production legacy phrase with its current canonical
+  text at the source site;
+- keep `normalize_ui_text(...)` and replacement data available as a pure
+  compatibility/test utility;
+- make `install_ui_terminology()` a no-op compatibility shim and remove its
+  GUI bootstrap call;
+- add a repository-wide production-source regression proving the known legacy
+  phrases no longer appear outside the compatibility module;
+- ratchet against reintroducing Tk/ttk/StringVar constructor mutation or the
+  installer call;
+- update bootstrap/terminology tests from “installer runs before app import” to
+  “canonical terms are native and bootstrap is presentation-mutation free”.
+
+Do not combine 12U with Layout runtime installers, PDIC composition, OCR runner
+work, or public facade compatibility.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
