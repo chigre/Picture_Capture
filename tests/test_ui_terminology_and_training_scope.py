@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 from types import SimpleNamespace
 
 from picture_capture import profile_indent_ui, training_export_ui
@@ -26,24 +27,34 @@ def test_legacy_ui_terms_normalize_everywhere():
     assert normalize_ui_text("行间空") == "行间空"
 
 
-def test_tooltip_terminology_preserves_staticmethod_binding():
+def test_dedicated_app_tooltip_terminology_installer_is_retired():
     class DummyApp:
         @staticmethod
         def _attach_tooltip(widget, text):
             return widget, text
 
+    original_descriptor = DummyApp.__dict__["_attach_tooltip"]
     module = SimpleNamespace(PictureCaptureApp=DummyApp)
     install_app_tooltip_terminology(module)
 
-    assert isinstance(DummyApp.__dict__["_attach_tooltip"], staticmethod)
-    assert DummyApp._attach_tooltip("widget", "单行高") == (
-        "widget", "普通字/行高"
+    # Compatibility calls are now no-ops: no descriptor replacement remains.
+    assert DummyApp.__dict__["_attach_tooltip"] is original_descriptor
+    assert isinstance(original_descriptor, staticmethod)
+    assert DummyApp._attach_tooltip("widget", "单行高") == ("widget", "单行高")
+
+    root = Path(__file__).resolve().parents[1]
+    gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
+    terminology = (
+        root / "src/picture_capture/ui_terminology.py"
+    ).read_text(encoding="utf-8")
+
+    # Product GUI still installs the global widget normalizer before app import,
+    # and tooltip text is rendered by ttk.Label under that shared owner.
+    assert gui.index("install_ui_terminology()") < gui.index(
+        "from .. import app as app_module"
     )
-    # Instance access must remain unbound exactly like the original
-    # @staticmethod; otherwise startup gets an extra implicit ``self``.
-    assert DummyApp()._attach_tooltip("widget", "行间参数") == (
-        "widget", "行间空"
-    )
+    assert "install_app_tooltip_terminology" not in gui
+    assert "ttk.Label," in terminology
 
 
 def test_training_export_reuses_main_window_page_scope_without_second_prompt():
