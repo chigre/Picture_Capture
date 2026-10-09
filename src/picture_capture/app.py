@@ -9200,7 +9200,7 @@ class PictureCaptureApp(tk.Tk):
             ttk.Checkbutton(label_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
 
         crop_font_row = ttk.Frame(aux)
-        crop_font_row.grid(row=8, column=0, columnspan=4, sticky="ew", pady=(3, 0))
+        crop_font_row.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(3, 0))
         ttk.Label(crop_font_row, text="切图预览标签字体").pack(side="left")
         crop_family_var = tk.StringVar(value=normalize_content_font_setting(self.settings.crop_preview_font_family))
         self.quick_vars["crop_preview_font_family"] = crop_family_var
@@ -13831,7 +13831,7 @@ class PictureCaptureApp(tk.Tk):
             return
         if plan is None:
             return
-        from .crop_preview_labels import draw_crop_preview_label
+        from .crop_preview_labels import draw_crop_preview_label, format_crop_preview_entry_label
         scale = self.view_scale
         illustrated_entries = {p.entry_ref_index for p in plan.entry_pieces if p.source_mode == "linked_original" and p.entry_ref_index is not None}
         preview_family = resolve_content_font_family(
@@ -13855,7 +13855,7 @@ class PictureCaptureApp(tk.Tk):
                 dash = (6, 4)
             self.canvas.create_rectangle(x0*scale,y0*scale,x1*scale,y1*scale,outline=color,width=2,dash=dash,tags=("crop-plan",))
             filename = entry_crop_piece_filename(self.current_page.stem, piece)
-            label = f"{piece.word}  |  {filename}" if piece.word else filename
+            label = format_crop_preview_entry_label(piece.word, filename)
             draw_crop_preview_label(
                 self.canvas, ((x0+x1)/2)*scale, (y0+3)*scale,
                 text=label, outline=color, anchor="n", justify="center",
