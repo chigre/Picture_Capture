@@ -65,12 +65,11 @@ def prepare_gui_application() -> Any:
 
     from .. import app as app_module
     from ..review_entry_classification_ui import install_review_entry_classification
-    from ..ocr_crop_preview_ui import install_ocr_crop_preview
 
     # The shared Layout snapshot is owned statically by layout_visualization_ui;
     # GUI bootstrap no longer rewrites that module-global seam.
     install_review_entry_classification(app_module)
-    install_ocr_crop_preview(app_module)
+    # OCR crop-preview controls/drawing are wired statically by app.py.
 
     from ..layout_visualization_ui_v3 import install_layout_visualization
     # Settings parameter groups/right-pane help are now native static
