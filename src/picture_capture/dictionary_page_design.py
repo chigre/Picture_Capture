@@ -15,7 +15,7 @@ typography size level; they are not a rescue heuristic layered on normal lines.
 """
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -486,6 +486,40 @@ def _assign_indent_semantics(
     column.entry_modes = entries
 
 
+@dataclass(frozen=True, slots=True)
+class LayoutPrimitiveOps:
+    """Immutable callbacks for the four Page Design primitive hook points.
+
+    This is dependency plumbing only. Existing installer behavior is retained
+    through current_layout_ops() until product consumers use explicit ops.
+    """
+
+    line_runs: Callable[..., Any]
+    line_feature: Callable[..., Any]
+    indent_modes: Callable[..., Any]
+    assign_indent_semantics: Callable[..., Any]
+
+
+# Capture the native helpers before any historical runtime installer can rebind
+# their module-level names. Explicit raw callers remain immune to later patches.
+RAW_LAYOUT_OPS = LayoutPrimitiveOps(
+    line_runs=_line_runs,
+    line_feature=_line_feature,
+    indent_modes=_indent_modes,
+    assign_indent_semantics=_assign_indent_semantics,
+)
+
+
+def current_layout_ops() -> LayoutPrimitiveOps:
+    """Snapshot currently installed hooks during the Phase 13B transition."""
+    return LayoutPrimitiveOps(
+        line_runs=_line_runs,
+        line_feature=_line_feature,
+        indent_modes=_indent_modes,
+        assign_indent_semantics=_assign_indent_semantics,
+    )
+
+
 def _line_pitch(columns: list[ColumnDesign], reference: float) -> float:
     gaps: list[float] = []
     for column in columns:
@@ -663,7 +697,9 @@ def infer_dictionary_page_layout(
     settings: AppSettings,
     *,
     page_index: int = 0,
+    ops: LayoutPrimitiveOps | None = None,
 ) -> DictionaryPageLayout:
+    resolved_ops = current_layout_ops() if ops is None else ops
     source, canonical, transform, effective = _analysis_page(image, settings, page_index)
     top, bottom, starts, rights = _initial_geometry(canonical, effective)
     page_ink = analysis_ink_mask(
@@ -681,7 +717,7 @@ def infer_dictionary_page_layout(
             width = max(1, right - left)
             strip = page_ink[top:bottom, left:left + _leading_width(width, scale)]
             strips.append(strip)
-            runs.append(_line_runs(strip, scale))
+            runs.append(resolved_ops.line_runs(strip, scale))
         return strips, runs
 
     strips, raw_runs = column_strips(seed)
@@ -699,12 +735,12 @@ def infer_dictionary_page_layout(
         column = ColumnDesign(index, left, right, gutter)
         previous_end = 0
         for y0, y1 in runs:
-            line = _line_feature(index, strip, y0, y1, reference, previous_end)
+            line = resolved_ops.line_feature(index, strip, y0, y1, reference, previous_end)
             previous_end = max(previous_end, y1)
             if line is not None and reference * 0.45 <= line.height <= reference * 1.55:
                 column.lines.append(line)
-        column.indent_modes = _indent_modes(column.lines, reference)
-        _assign_indent_semantics(column, indent_type, reference)
+        column.indent_modes = resolved_ops.indent_modes(column.lines, reference)
+        resolved_ops.assign_indent_semantics(column, indent_type, reference)
         columns.append(column)
 
     # Transfer the page's proven entry offset into sparse columns.
