@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12D is complete: GUI-facing PDIC read/write composition is now static and call-time delegated, so GUI bootstrap no longer mutates `formats.write_pdic` while core composition remains the sole owner of classification persistence.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12E is complete: the effective Layout diagnostic role theme and summary-extension order are now statically owned by the visualization layer, and GUI bootstrap no longer mutates the summary formatter.**
 
-Phase 12D is merged on `main@762e2bc22eb2780549fad097b778f2bc303105e0`. Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
+Phase 12E is merged on `main@a1016a8aa8ef3fd50ff3c50b1e8433db9cd5122b`. Phase 12D remains complete on `main@762e2bc22eb2780549fad097b778f2bc303105e0`, Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -1713,33 +1713,84 @@ Phase 12D publication:
   `gui_io.py`, and focused PDIC composition regression coverage;
 - no architecture ratchet was relaxed.
 
-## Recommended next slice — Phase 12E static Layout-summary characterization
+## Phase 12E — static Layout diagnostic summary composition
 
-The next smaller candidate is the GUI-only Layout diagnostic summary chain.
-Today GUI bootstrap installs the red entry-role theme and then wraps the same
-`layout_visualization_summary._format_summary` with physical-lane/prepared-indent
-diagnostics. This is a presentation-only import-order dependency, not a Layout
-inference dependency.
+Read-only characterization confirmed that the remaining role-theme and
+physical-lane summary installers were GUI diagnostic presentation wrappers, not
+Layout inference owners. Their only production ordering dependency was in
+`bootstrap/gui.py`.
 
-Before any write, preserve the effective product order:
-- base summary + entry-source provenance;
-- red entry/headword role theme;
-- physical-indent lane summary;
-- prepared-indent summary.
+The historical effective GUI order was preserved exactly:
+- base Layout summary with entry-source provenance;
+- red entry/headword role theme, blue body theme;
+- physical-indent lane diagnostics;
+- prepared-indent diagnostics.
 
-Prefer static ownership in the Layout visualization layer while keeping the
-historical installer functions importable as compatibility no-ops if the
-characterization confirms no external/public mutation contract. Do not change
-Layout geometry, role inference, colors beyond the already-effective GUI theme,
-or diagnostic text ordering.
+Phase 12E makes that final state static:
+- `layout_visualization_summary.py` owns the effective red/blue role palette;
+- summary finalization is explicit and ordered as entry-source provenance,
+  physical lanes, then prepared-indent diagnostics;
+- GUI bootstrap no longer imports or calls either summary-mutating installer;
+- `install_layout_role_theme()` and `install_physical_lane_summary()` remain
+  importable compatibility no-ops;
+- focused tests now assert the static final state and preserved summary order.
+
+Behavior intentionally unchanged:
+- no Layout geometry, row recovery, indentation, role inference, OCR, worker,
+  persistence, or file-format behavior changed;
+- entry/headword rows remain red and body rows remain blue in the product GUI;
+- physical-lane diagnostics still precede prepared-indent diagnostics;
+- entry-source provenance remains part of the summary.
+
+Phase 12E publication:
+- PR #358 fixed head `8707014ab0e7abf7e5e1f265dd4de7172c66e035`;
+- PR CI 2285 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #358 merged as `a1016a8aa8ef3fd50ff3c50b1e8433db9cd5122b`;
+- post-merge CI 2286 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2269 passed;
+- production changes were limited to the Layout diagnostic summary/theme/lane
+  composition, GUI bootstrap removal, and focused regression updates;
+- no architecture ratchet was relaxed.
+
+## Recommended next slice — Phase 12F static LayoutRows capture publication
+
+The next bounded candidate is the LayoutRows persistence seam. The explicit
+`capture_layout_rows(...)` context is already static at both production callers:
+ordinary-detection worker execution and Layout visualization. The remaining
+dynamic debt is only `install_layout_rows_persistence_runtime()`, which wraps
+`layout_core_understanding.understand_layout_core` so results produced inside
+that explicit context are written to the physical-row sidecar.
+
+A safe static design must preserve both return paths:
+- cache hit in `understand_layout_core`;
+- newly computed Layout Core result.
+
+Prefer a small publication helper owned by `layout_rows_cache.py` that reads the
+existing context target and persists the reliable physical layout. Call that
+helper from the Layout Core return boundary for both cached and new results.
+Then GUI/worker bootstrap can stop installing the wrapper while
+`capture_layout_rows(...)` remains the explicit opt-in side-effect scope.
+
+Preserve:
+- semantic-free LayoutRows format and reliability gate;
+- original settings fingerprint supplied by the capture context;
+- GUI visualization and spawn-worker capture behavior;
+- explicit worker-service exposure of `capture_layout_rows`;
+- cache-hit persistence behavior.
+
+Keep `install_layout_rows_persistence_runtime()` and the obsolete visualization
+cache-context installer importable as compatibility no-ops if characterization
+continues to show no required external mutation contract.
+
+Do not combine this with the Page Design physical-indent installer chain. That
+chain still changes algorithmic owners and remains a separate, deeper slice.
 
 The OCR-boundary runner bridge remains deferred until explicit hook injection can
 be proven safe across oversized-CJK recovery, cache semantics, supervised
 filtering, and historical public monkeypatch seams.
-
-Do not reopen Phase 7 oversized-module decomposition solely for line count, do
-not resume Phase 10 installer removal by name, and do not resume performance
-micro-optimization without the Phase 8 measurement gate.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
