@@ -237,8 +237,19 @@ SETTING_LABELS = {
         "wordslist_path": "参考词表文件",
         "dictionary_custom_profile_name": "自定义 Profile 显示名称",
         "detection_method": "默认画线方式",
-        "paddle_lens_mode": "Google Lens 运行模式",
-        "ocr_engine": "普通文本 OCR 引擎",
+        "paddle_lens_mode": (
+            "作用：控制 Google Lens 在共享 OCR 通道中的调用方式。off 表示 Lens 完全不运行；"
+            "diagnostic 会采集 Lens 结果但不让它参与最终文字投票；conflict 只在本地 OCR 冲突或缺失时调用；"
+            "full 允许 Lens 全量参与。\n\n"
+            "注意：仅勾选“Google Lens”但把这里设为 off，并不构成一个可运行的 Lens OCR 配置。"
+            "通常建议使用 conflict。"
+        ),
+        "ocr_engine": (
+            "兼容字段：这是旧版单 OCR 选择。当前主流程的【仅OCR】和【OCR画线】都使用同一套共享 OCR 通道，"
+            "以 PaddleOCR / Tesseract / Google Lens 三个开关及 Lens 运行模式为准。\n\n"
+            "旧项目或非 GUI 调用在三个共享开关都未提供有效选择时，才可能读取此字段作为兼容回退；"
+            "日常项目不应通过它切换共享 OCR 通道。"
+        ),
         "headword_sort_mode": "词头排序预设",
         "headword_custom_order": "自定义排序单元",
         "headword_custom_fold_accents": "自定义排序重音折叠",
@@ -500,7 +511,12 @@ CHECK_HELP = {
         "保护：Layout 白化比 PPP 自动插图更保守。小尺寸候选直接忽略；接近大字头尺寸且近方形的候选也不会白化，"
         "避免把大号单字/大字头误当成插图。关闭时完全保持原有 Layout 流程。"
     ),
-        "ordinary_auto_layout": "开启：每一页执行【普通画线】前先自动检测该页版面，再只用下方勾选的版面字段覆盖项目基准值，形成这一页专属的临时参数后再运行 VB 普通画线。页面之间互不污染。\n\n关闭：普通画线直接使用项目当前版面参数。",
+        "ordinary_auto_layout": (
+            "开启：每页【普通画线】先由当前 Layout Core 解析页面几何和最终行角色，再把所选的逐页版面字段"
+            "作为本页临时值使用；结果不会写回下一页。\n\n"
+            "当前普通画线的主路径直接消费 Layout Core 的最终 entry 行；只有 Layout 无法形成可用栏结构时，"
+            "才进入历史几何 fallback。"
+        ),
         "ordinary_auto_columns": "自动版面检测后，用当前页检测出的【分栏数】临时替换项目基准值；只影响本页普通画线，不写回下一页。",
         "ordinary_auto_start_y": "自动版面检测后，用当前页检测出的【正文起始Y】临时替换项目基准值；适合页眉位置存在逐页漂移的扫描。",
         "ordinary_auto_manual_x": "自动版面检测后，用当前页检测出的【首栏X】临时替换项目基准值；适合整页左右轻微漂移。",
@@ -509,15 +525,26 @@ CHECK_HELP = {
         "ordinary_auto_character_height": "自动版面检测后，用当前页检测出的【单行高】临时替换项目基准值；会影响普通画线的行尺度和跳步。",
         "ordinary_auto_row_padding": "自动版面检测后，用当前页检测出的【行间空】临时替换项目基准值；与单行高共同决定普通画线行尺度。",
         "follow_column_deformation": "开启：沿页面分块重新跟踪栏左缘，让栏路径可随书脊弯曲、斜拍或局部形变变化。三个相关参数现在都是相对量：搜索范围按单栏宽百分比、分块高度按正文高度百分比、最大局部斜率按分块高度百分比计算。\n\n关闭：栏左缘按较直的几何路径处理，平直扫描更稳定也更简单。",
-        "paddle_use_paddleocr": "开启：PaddleOCR 作为 OCR画线的主文字识别来源。默认推荐，因为后续 grammar/parser、候选评分和多 OCR 融合都围绕结构化文字结果工作。\n\n关闭：仅用于专门测试其他引擎或故障排查；若同时没有可用 Tesseract/Lens，OCR画线将缺少主要文字来源。",
+        "paddle_use_paddleocr": (
+            "开启：把 PaddleOCR 加入共享 OCR 通道。【仅OCR】与【OCR画线】都会复用这一选择；"
+            "它可以与 Tesseract、Google Lens 同时开启。\n\n"
+            "关闭：只是不让共享通道执行 PaddleOCR，不会自动关闭其他已启用 OCR。"
+        ),
         "paddle_use_textline_orientation": "开启：让 PaddleOCR 额外处理文字行方向/旋转信息，适合文字行方向不稳定、局部旋转或特殊扫描。\n\n代价：通常增加计算并可能改变模型路径。普通已经规范化的横排/竖排页面不需要为了“更准”而默认开启，优先让 Project Profile 的页面变换处理整体方向。",
         "paddle_remove_syllable_separators": "开启：最终 lemma 归一化时去掉音节分隔点（如 ·、•、∙、‧），并对部分 OCR 分隔符误识别做保守清理；真正的单个词内连字符原则上保留。\n\n关闭：保留词头中的这些分隔符，适合词典索引本身就要求保留音节标记的项目。它改变输出 lemma 文本，不改变词头 Y。",
         "paddle_auto_header_rule": "开启：在页面顶部指定范围内寻找高横向墨迹占比的页眉横线，并把其上方内容排除出候选区。可减少 running header、页码等误词头。\n\n关闭：不做这套自动横线截断。若 Project Profile 已明确提供页眉模板，优先相信模板；第一条正文被误裁时检查搜索高度、墨迹比例和页眉后余量。",
-        "paddle_enable_lens": "开启：允许 Google Lens 作为网络第三意见；实际何时调用、是否投票由【Lens 运行模式】决定。\n\n注意：会产生网络等待且依赖外部服务可用性。默认不应把 Lens 当成本地 OCR 的必需依赖，推荐仅在冲突模式下使用。",
+        "paddle_enable_lens": (
+            "开启：允许 Google Lens 进入共享 OCR 通道；是否真的调用以及是否参与结果，由【Lens 运行模式】决定。\n\n"
+            "若运行模式仍为 off，Lens 实际不会执行。Lens 是网络 OCR，不建议作为唯一的默认本地识别来源。"
+        ),
         "paddle_require_visual_cue": "名称是历史遗留。当前实现并不是“必须有纯视觉证据”，而是要求候选至少有一个结构或视觉 fallback cue：POS/变形/描述符/特殊符号，或字高/粗体/行前空白之一。\n\n开启可抑制只有合法字母形态、却没有任何词条特征的正文行；关闭会放宽候选门槛，除非 diagnostics 明确显示真实词头因此被拒，否则不建议关闭。",
         "paddle_require_pos_or_symbol": "开启：普通词头候选必须具有至少一个强结构提示：POS、变形、结构描述符或可作为新词条证据的特殊符号。能显著抑制栏左正文误检。\n\n关闭：允许仅靠位置/视觉分数通过，召回更高但假阳性更多。对结构化拉丁词典通常建议开启；CJK/特殊 Profile 还会有自己的专用接受逻辑。",
         "paddle_refine_separator_y": "开启：OCR画线仍按原流程精修；普通画线则先完整执行 VB.NET 的向上白带定位，已经得到一个 VB 分隔 Y 后，才把现有局部墨迹谷算法作为最后的小范围二次修正，并限制最大移动量。它不再负责替代 VB 的初始 Y 定位。\n\n关闭：普通画线直接使用 VB 分隔 Y；OCR画线保留其未精修的粗定位。",
-        "paddle_compare_tesseract": "开启：对同一候选带额外运行 Tesseract，作为 PaddleOCR 的第二意见并进入比较/诊断；需要 Tesseract 程序和相应语言包。\n\n影响：运行时间增加，但可暴露系统性字符差异。它本身不等于“允许 Tesseract 独有结果补线”，后者由【Tesseract 可补漏 Paddle】控制。",
+        "paddle_compare_tesseract": (
+            "开启：把 Tesseract 加入共享 OCR 通道，与 PaddleOCR 在同一图像/候选带上运行。"
+            "【仅OCR】可据此比较或选择文字；【OCR画线】则把相同 OCR 证据交给成熟 parser/边界判定。\n\n"
+            "需要本机可用的 Tesseract 与相应语言包。"
+        ),
         "paddle_tesseract_rescue": "开启：允许满足结构/位置条件的 Tesseract 独有候选补回 Paddle 漏掉的词头，而不只是做诊断对照。\n\n风险：可提高召回，也会引入 Tesseract 特有误检。建议先开启对照看 comparison/issues，再决定是否让其参与补漏。",
         "paddle_tesseract_auto_psm": "开启：程序自动比较 Tesseract PSM 4 与 PSM 6，选择更适合当前候选带的结果；减少手动猜 Page Segmentation Mode。\n\n关闭：固定使用【Tesseract 对照 PSM】。只有已验证某本词典某个 PSM 明显更稳定、且自动选择反复选错时才关闭。",
         "paddle_dual_ocr_arbitration": "开启：对 Paddle/Tesseract（以及可投票的 Lens）候选按 原图位置、lemma 相似度、结构与质量做融合/仲裁，而不是让某个引擎简单覆盖另一个。\n\n关闭：更接近单引擎/诊断式工作流。正常多 OCR 项目建议开启；需要复现实验性的单引擎结果时再关闭。",
