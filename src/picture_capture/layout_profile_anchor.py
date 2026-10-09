@@ -108,8 +108,17 @@ def install_profile_layout_anchor() -> None:
 
     original: Callable[..., Any] = policy.resolve_page_layout_policy
 
-    def wrapped(image: Any, settings: Any, *, page_index: int = 0):
-        resolved, estimate, applied = original(image, settings, page_index=page_index)
+    def wrapped(
+        image: Any,
+        settings: Any,
+        *,
+        page_index: int = 0,
+        ops: Any = None,
+    ):
+        resolved, estimate, applied = original(
+            image, settings, page_index=page_index,
+            **({"ops": ops} if ops is not None else {}),
+        )
         resolved, applied = anchor_resolved_layout_to_profile(
             settings,
             resolved,
