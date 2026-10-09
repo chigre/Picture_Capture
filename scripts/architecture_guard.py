@@ -64,6 +64,14 @@ FORBIDDEN_PADDLE_CORE_ASSIGNMENTS = (
     "_core.refine_separator_y =",
 )
 
+# Phase 12F makes LayoutRows capture publication static in Layout Core. The
+# compatibility entry points may remain, but they must never resume mutating
+# Layout Core or the shared visualization callable.
+FORBIDDEN_LAYOUT_ROWS_ASSIGNMENTS = (
+    "core.understand_layout_core =",
+    "shared.shared_snapshot_for_app =",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -165,6 +173,13 @@ def collect_violations() -> list[str]:
         if marker in paddle_source:
             violations.append(
                 f"paddle_headwords import-time core mutation returned: {marker}"
+            )
+
+    layout_rows_source = (PACKAGE_ROOT / "layout_rows_cache.py").read_text(encoding="utf-8")
+    for marker in FORBIDDEN_LAYOUT_ROWS_ASSIGNMENTS:
+        if marker in layout_rows_source:
+            violations.append(
+                f"LayoutRows process-global mutation returned: {marker}"
             )
 
     init_path = PACKAGE_ROOT / "__init__.py"
