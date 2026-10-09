@@ -71,15 +71,13 @@ def prepare_gui_application() -> Any:
     install_review_entry_classification(app_module)
     # OCR crop-preview controls/drawing are wired statically by app.py.
 
-    from ..layout_visualization_ui_v3 import install_layout_visualization
     # Settings parameter groups/right-pane help are now native static
     # SettingsDialog behavior. Single-line merge and unlined-export filters
     # likewise belong to the static crop Settings schema/UI.
-    # crop Settings schema/UI; GUI bootstrap no longer wraps SettingsDialog.
     # Unlined QA now owns its physical-row fast path statically in
     # unlined_line_export.export_unlined_page_job; no GUI-time worker mutation
     # is required.
-    install_layout_visualization(app_module)
+    # Layout visualization controls/drawing are wired statically by app.py.
     # Layout role colors plus physical-lane/prepared-indent diagnostics are
     # statically composed by layout_visualization_summary; GUI bootstrap no
     # longer rewrites the summary formatter.
