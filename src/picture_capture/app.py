@@ -4669,11 +4669,8 @@ class ReviewWindow(tk.Toplevel):
         )
 
     def _commit_edits(self) -> None:
-        for entry, var in zip(self._bound_row_entries(), self.vars):
-            if entry not in self.parent.entries:
-                continue
-            entry.word = var.get().strip()
-        self._capture_simplified_edits(getattr(self, "_rendered_page_stem", ""))
+        from .review_main_editor_sync import commit_proofread_entries
+        commit_proofread_entries(self)
 
     def _bound_row_entries(self) -> list[WordEntry]:
         """Return stable rendered-row bindings, with compatibility fallback."""
@@ -4716,13 +4713,14 @@ class ReviewWindow(tk.Toplevel):
         if not stem or not getattr(self, "simplified_vars", []):
             return
         records = self._simplified_page_records(stem)
-        ordered = self.parent._ordered_entries_reading_order()
+        # Preserve rendered row identities across section-order changes.
+        rendered_entries = self._bound_row_entries()
         # Only capture against the currently rendered page.  During navigation
         # parent.current_page may already refer to the next page while the old
         # widgets are still being destroyed.
         if self.parent.current_page and self.parent.current_page.stem != stem:
             return
-        for i, entry in enumerate(ordered[:len(self.simplified_vars)]):
+        for i, entry in enumerate(rendered_entries[:len(self.simplified_vars)]):
             key = simplified_entry_key(entry.x, entry.y)
             manual = bool(self.simplified_manual_flags[i]) if i < len(self.simplified_manual_flags) else False
             actual = self.simplified_actual_values[i] if i < len(self.simplified_actual_values) else None
