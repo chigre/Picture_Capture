@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw
 from picture_capture.models import Entry
 from picture_capture.unlined_export_filter_settings import (
     BLANK_INK_PERCENT_KEY,
+    DEFAULT_BLANK_INK_PERCENT,
     FILTER_BLANK_KEY,
     FILTER_ENABLED_KEY,
     load_unlined_filter_settings,
@@ -257,10 +258,16 @@ def test_unlined_ui_is_explicit_and_reuses_parallel_crop_setting():
     app_source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     exporter = (root / "src" / "picture_capture" / "unlined_line_export.py").read_text(encoding="utf-8")
     filters = (root / "src" / "picture_capture" / "unlined_export_filter_settings.py").read_text(encoding="utf-8")
+    crop_ui = (
+        root / "src" / "picture_capture" / "ui" / "settings" / "crop.py"
+    ).read_text(encoding="utf-8")
+    crop_schema = (
+        root / "src" / "picture_capture" / "crop" / "settings.py"
+    ).read_text(encoding="utf-8")
 
     assert "install_unlined_line_export_ui" not in composition
     assert "unlined_line_export_ui" not in composition
-    assert "install_unlined_export_filter_settings_ui(app_module)" in composition
+    assert "install_unlined_export_filter_settings_ui(app_module)" not in composition
     assert "install_unlined_fast_path" not in composition
     assert "unlined_fast_path_runtime" not in composition
     assert (
@@ -286,4 +293,11 @@ def test_unlined_ui_is_explicit_and_reuses_parallel_crop_setting():
     )
     assert 'FILTER_LABEL = "未画线行导出过滤"' in filters
     assert 'BLANK_LABEL = "空白"' in filters
-    assert 'DEFAULT_BLANK_INK_PERCENT = 0.8' in filters
+    assert DEFAULT_BLANK_INK_PERCENT == 0.8
+    assert "dialog.__init__ =" not in filters
+    assert "setattr(dialog" not in filters
+    assert "UNLINED_FILTER_ENABLED_KEY" in crop_schema
+    assert "UNLINED_FILTER_BLANK_KEY" in crop_schema
+    assert "UNLINED_BLANK_INK_PERCENT_KEY" in crop_schema
+    assert "save_unlined_filter_settings(" in crop_ui
+    assert "filter_threshold_spin" in crop_ui

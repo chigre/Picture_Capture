@@ -9,7 +9,11 @@ from picture_capture.app import (
 )
 from picture_capture.crop.settings import (
     CROP_SETTINGS_VERSION,
+    DEFAULT_UNLINED_BLANK_INK_PERCENT,
     SINGLE_LINE_MERGE_KEY,
+    UNLINED_BLANK_INK_PERCENT_KEY,
+    UNLINED_FILTER_BLANK_KEY,
+    UNLINED_FILTER_ENABLED_KEY,
     normalize_crop_settings_payload,
 )
 from picture_capture.models import AppSettings
@@ -50,11 +54,20 @@ def test_crop_settings_schema_remains_ui_free_and_preserves_coordinate_contract(
     assert payload["general_bottom_y"] == 920
     assert payload["parallel_workers"] == 3
     assert payload[SINGLE_LINE_MERGE_KEY] is False
+    assert payload[UNLINED_FILTER_ENABLED_KEY] is False
+    assert payload[UNLINED_FILTER_BLANK_KEY] is False
+    assert payload[UNLINED_BLANK_INK_PERCENT_KEY] == DEFAULT_UNLINED_BLANK_INK_PERCENT
 
     raw = dict(payload)
     raw[SINGLE_LINE_MERGE_KEY] = True
+    raw[UNLINED_FILTER_ENABLED_KEY] = True
+    raw[UNLINED_FILTER_BLANK_KEY] = True
+    raw[UNLINED_BLANK_INK_PERCENT_KEY] = 12.5
     normalized = normalize_crop_settings_payload(raw, settings)
     assert normalized[SINGLE_LINE_MERGE_KEY] is True
+    assert normalized[UNLINED_FILTER_ENABLED_KEY] is True
+    assert normalized[UNLINED_FILTER_BLANK_KEY] is True
+    assert normalized[UNLINED_BLANK_INK_PERCENT_KEY] == 10.0
 
 
 def test_crop_settings_dialog_module_does_not_import_app() -> None:
