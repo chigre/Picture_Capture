@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12O is complete: the single-line merge crop setting is now part of the canonical crop schema and static Settings UI/payload; its SettingsDialog init/save wrapper is retired.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12P is complete: unlined-export filter settings are now part of the canonical crop schema and static Settings UI/payload; their SettingsDialog init/save wrapper is retired.**
 
-Phase 12O is merged on `main@aea54e801a332be6c8682a51970beef9292c13f4`. Phase 12N remains complete on `main@fb57c3e50a2d3c49148a918358c880ceddc308ec`, with its checkpoint merged on `main@a3215a35016faa8c564e69a964f5a577f0f030b0` and post-checkpoint CI 2321 / CodeQL 2304 passing. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
+Phase 12P is merged on `main@aca47b56a3292220f9d808ec408adefaddc21659`. Phase 12O remains complete on `main@aea54e801a332be6c8682a51970beef9292c13f4`, with its checkpoint merged on `main@da7bcbc17b19cff4f8f534e22de424aff68d40a4`. Phase 12N remains complete; Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -2197,35 +2197,85 @@ Phase 12O publication:
 - post-merge CodeQL 2306 passed;
 - no architecture or size threshold was relaxed.
 
-## Recommended next slice — Phase 12P static unlined-export filter crop settings
+## Phase 12P — static unlined-export filter crop settings
 
-The remaining crop-settings wrapper,
-`install_unlined_export_filter_settings_ui(app_module)`, has the same
-historical shape as the retired Phase 12O wrapper:
-- it injects three values into the same `QT/_CropSettings.json` store;
-- it installs master/blank/threshold controls after SettingsDialog construction;
-- it wraps crop/save/apply methods only so the fixed integrated writer cannot
-  drop those optional keys.
+Phase 12P retires the final crop-settings compatibility wrapper.
 
-A safe 12P should:
-- add the enabled, blank-only and blank-ink-percent keys to the canonical crop
-  normalization contract, preserving defaults `False / False / 0.8` and the
-  current 0–10% clamp;
-- read legacy/raw filter values directly when building Settings Center so an
-  older crop-schema version does not silently erase the user's filter choice;
-- build the existing master checkbox, blank checkbox and threshold Spinbox
-  directly in `ui/settings/crop.py`, immediately after the static single-line
-  merge control and with the same enable/disable behavior and help wording;
-- include all three values in the integrated crop payload while preserving
-  click/focus/Return persistence behavior through the existing
-  `save_unlined_filter_settings(...)` helper;
-- retire the SettingsDialog init/save wrappers and remove the GUI installer,
-  leaving its public installer name as a no-op compatibility shim;
-- ratchet against reintroducing that wrapper.
+The three unlined-export filter values now belong to the canonical crop
+settings contract:
+- `unlined_export_filter_enabled`;
+- `unlined_export_filter_blank`;
+- `unlined_export_blank_ink_percent`.
 
-Do not change `row_ink_percent`, blankness thresholds/meaning, filtering order,
-white-border trimming, Layout-minus-PDIC row selection, export filenames, merge
-behavior, or worker/controller semantics.
+The static crop schema preserves defaults `False / False / 0.8` and the
+historical 0–10% threshold clamp. Settings Center reads raw legacy values from
+the same `QT/_CropSettings.json` when a project is open, builds the master
+filter checkbox / blank-only checkbox / threshold Spinbox directly in
+`ui/settings/crop.py`, and includes all three values in the integrated crop
+payload.
+
+Historical persistence helpers remain available to workers/controllers:
+`load_unlined_filter_settings(...)` and
+`save_unlined_filter_settings(...)` still read/write the same keys and file.
+The former UI installer remains only as a no-op compatibility entry point.
+
+Behavior intentionally unchanged:
+- Layout-minus-PDIC row selection is unchanged;
+- `row_ink_percent` and near-blank semantics are unchanged;
+- filtering still occurs before white-border trimming;
+- filter enable/blank dependency and threshold UI state are unchanged;
+- click/focus/Return persistence remains on the same raw file;
+- export filenames, merge behavior, controller/worker paths and parallelism are
+  unchanged.
+
+Phase 12P publication:
+- PR #378 fixed head `810b264a9d335f5f7c2cb64970adc2975d9d30dd`;
+- PR CI 2326 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #378 merged as `aca47b56a3292220f9d808ec408adefaddc21659`;
+- post-merge CI 2327 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2310 passed;
+- no architecture or size threshold was relaxed.
+
+## Recommended next slice — Phase 12Q static Settings parameter-group ownership
+
+The remaining `install_settings_parameter_help(app_module)` mutation is a
+better bounded candidate than the ReviewWindow or main-canvas wrappers.
+
+Current facts:
+- `SettingsDialog` already declares native
+  `_add_setting_group`, `_add_check_group`, and
+  `_scrollable_settings_page` methods in `app.py`;
+- the installer replaces exactly those three methods with the currently
+  effective compact/right-help implementations;
+- the installed versions remove duplicated inline help and preserve the same
+  right-side help callbacks, child-option grouping and 60/40 pane behavior;
+- `parameter_help_ui.py` also owns
+  `build_profile_parameter_help_wizard(...)`, which is already statically
+  composed by `profile_wizard.py` and must remain untouched.
+
+A safe 12Q should:
+- extract the currently effective Settings-only group/page implementations into
+  a normal `ui/settings` helper module, or otherwise give them an explicit
+  static owner;
+- make the three existing `SettingsDialog` methods delegate to that helper,
+  replacing the obsolete inline-help implementations rather than adding new app
+  methods;
+- remove `install_settings_parameter_help(app_module)` from GUI bootstrap and
+  leave its public name as a no-op compatibility shim;
+- preserve exact effective UI behavior: no duplicate inline help, recursive
+  control help binding, ordinary-auto child grid, right-side help pane wording,
+  help images and 60/40 split;
+- preserve `build_profile_parameter_help_wizard(...)` and its existing static
+  profile composition;
+- use the extraction to shrink `app.py`; do not relax its size ratchet;
+- ratchet against reintroducing SettingsDialog method assignment from the
+  installer.
+
+Do not combine this with ReviewWindow classification, OCR crop preview, Layout
+visualization, Layout runtime, PDIC composition or OCR runner work.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
