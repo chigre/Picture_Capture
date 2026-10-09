@@ -190,14 +190,14 @@ def collect_violations() -> list[str]:
                 f"LayoutRows process-global mutation returned: {marker}"
             )
 
-    entry_fields_source = (PACKAGE_ROOT / "entry_classification_fields.py").read_text(
-        encoding="utf-8"
-    )
-    for marker in FORBIDDEN_ENTRY_CLASSIFICATION_ASSIGNMENTS:
-        if marker in entry_fields_source:
-            violations.append(
-                f"Entry classification class mutation returned: {marker}"
-            )
+    for path in _python_files():
+        source = path.read_text(encoding="utf-8")
+        rel = path.relative_to(PACKAGE_ROOT).as_posix()
+        for marker in FORBIDDEN_ENTRY_CLASSIFICATION_ASSIGNMENTS:
+            if marker in source:
+                violations.append(
+                    f"Entry classification class mutation returned in {rel}: {marker}"
+                )
 
     init_path = PACKAGE_ROOT / "__init__.py"
     init_text = init_path.read_text(encoding="utf-8")
