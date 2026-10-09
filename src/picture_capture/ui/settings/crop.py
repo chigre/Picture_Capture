@@ -6,13 +6,31 @@ import tkinter as tk
 from tkinter import ttk
 
 from ...coordinate_space import SOURCE_COORDINATE_SPACE
-from ...crop.settings import CROP_SETTINGS_VERSION, SINGLE_LINE_MERGE_KEY
+from ...crop.settings import (
+    CROP_SETTINGS_VERSION,
+    DEFAULT_UNLINED_BLANK_INK_PERCENT,
+    MAX_UNLINED_BLANK_INK_PERCENT,
+    MIN_UNLINED_BLANK_INK_PERCENT,
+    SINGLE_LINE_MERGE_KEY,
+    UNLINED_BLANK_INK_PERCENT_KEY,
+    UNLINED_FILTER_BLANK_KEY,
+    UNLINED_FILTER_ENABLED_KEY,
+)
 from ...project_storage import qt_root
 from ...single_line_merge_settings import (
     MERGE_HELP,
     MERGE_LABEL,
     load_merge_by_page,
     save_merge_by_page,
+)
+from ...unlined_export_filter_settings import (
+    BLANK_HELP,
+    BLANK_LABEL,
+    FILTER_HELP,
+    FILTER_LABEL,
+    THRESHOLD_HELP,
+    load_unlined_filter_settings,
+    save_unlined_filter_settings,
 )
 from ..dialogs.crop_settings import CropSettingsDialog
 
@@ -49,6 +67,26 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
         if project_root is not None
         else bool(saved.get(SINGLE_LINE_MERGE_KEY, False))
     )
+    if project_root is not None:
+        filter_enabled, filter_blank, blank_ink_percent = (
+            load_unlined_filter_settings(project_root)
+        )
+    else:
+        filter_enabled = bool(saved.get(UNLINED_FILTER_ENABLED_KEY, False))
+        filter_blank = bool(saved.get(UNLINED_FILTER_BLANK_KEY, False))
+        try:
+            blank_ink_percent = float(
+                saved.get(
+                    UNLINED_BLANK_INK_PERCENT_KEY,
+                    DEFAULT_UNLINED_BLANK_INK_PERCENT,
+                )
+            )
+        except (TypeError, ValueError):
+            blank_ink_percent = DEFAULT_UNLINED_BLANK_INK_PERCENT
+        blank_ink_percent = max(
+            MIN_UNLINED_BLANK_INK_PERCENT,
+            min(MAX_UNLINED_BLANK_INK_PERCENT, blank_ink_percent),
+        )
     defaults = {
         "general_top_y": int(saved.get("general_top_y", dialog.parent.settings.start_y)),
         "general_bottom_y": int(saved.get("general_bottom_y", 0)),
@@ -60,6 +98,9 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
             saved.get("parallel_workers", dialog.parent.settings.crop_parallel_workers)
         ),
         SINGLE_LINE_MERGE_KEY: bool(merge_by_page),
+        UNLINED_FILTER_ENABLED_KEY: bool(filter_enabled),
+        UNLINED_FILTER_BLANK_KEY: bool(filter_blank),
+        UNLINED_BLANK_INK_PERCENT_KEY: float(blank_ink_percent),
     }
     dialog._crop_specials = (
         dict(saved.get("special_pages", {}))
@@ -67,11 +108,14 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
         else {}
     )
     for name, value in defaults.items():
-        dialog.crop_vars[name] = (
-            tk.BooleanVar(value=value)
-            if isinstance(value, bool)
-            else tk.StringVar(value=str(value))
-        )
+        if name == UNLINED_BLANK_INK_PERCENT_KEY:
+            dialog.crop_vars[name] = tk.DoubleVar(value=float(value))
+        else:
+            dialog.crop_vars[name] = (
+                tk.BooleanVar(value=value)
+                if isinstance(value, bool)
+                else tk.StringVar(value=str(value))
+            )
 
     general = ttk.LabelFrame(page, text="通用切图规则", padding=(12, 10))
     general.pack(fill="x", pady=(0, 10))
@@ -172,6 +216,114 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
         dialog._bind_help_widget(merge_info, show_merge_help)
         merge_info.bind("<Button-1>", lambda _event: show_merge_help(), add="+")
 
+    if project_root is not None:
+        def persist_unlined_filter() -> None:
+            try:
+                enabled = bool(dialog.crop_vars[UNLINED_FILTER_ENABLED_KEY].get())
+                blank = bool(dialog.crop_vars[UNLINED_FILTER_BLANK_KEY].get())
+                threshold = float(
+                    dialog.crop_vars[UNLINED_BLANK_INK_PERCENT_KEY].get()
+                )
+            except Exception:
+                return
+            save_unlined_filter_settings(
+                project_root,
+                enabled=enabled,
+                blank=blank,
+                blank_ink_percent=threshold,
+            )
+
+        filter_master = ttk.Checkbutton(
+            general,
+            text=FILTER_LABEL,
+            variable=dialog.crop_vars[UNLINED_FILTER_ENABLED_KEY],
+        )
+        filter_info = ttk.Label(
+            general, text="ⓘ", foreground="#6b7280", cursor="hand2"
+        )
+        filter_blank_check = ttk.Checkbutton(
+            general,
+            text=BLANK_LABEL,
+            variable=dialog.crop_vars[UNLINED_FILTER_BLANK_KEY],
+        )
+        filter_threshold_label = ttk.Label(general, text="空白墨迹占比≤")
+        filter_threshold_spin = ttk.Spinbox(
+            general,
+            from_=MIN_UNLINED_BLANK_INK_PERCENT,
+            to=MAX_UNLINED_BLANK_INK_PERCENT,
+            increment=0.1,
+            textvariable=dialog.crop_vars[UNLINED_BLANK_INK_PERCENT_KEY],
+            width=6,
+        )
+        filter_percent_label = ttk.Label(general, text="%")
+
+        def sync_unlined_filter_state() -> None:
+            master_on = bool(
+                dialog.crop_vars[UNLINED_FILTER_ENABLED_KEY].get()
+            )
+            blank_on = bool(dialog.crop_vars[UNLINED_FILTER_BLANK_KEY].get())
+            try:
+                filter_blank_check.configure(
+                    state="normal" if master_on else "disabled"
+                )
+                state = "normal" if (master_on and blank_on) else "disabled"
+                filter_threshold_spin.configure(state=state)
+                filter_threshold_label.configure(state=state)
+                filter_percent_label.configure(state=state)
+            except tk.TclError:
+                pass
+
+        filter_master.configure(
+            command=lambda: (sync_unlined_filter_state(), persist_unlined_filter())
+        )
+        filter_blank_check.configure(
+            command=lambda: (sync_unlined_filter_state(), persist_unlined_filter())
+        )
+        filter_threshold_spin.configure(command=persist_unlined_filter)
+
+        filter_master.grid(
+            row=8, column=0, columnspan=2, sticky="w", pady=(5, 2)
+        )
+        filter_info.grid(row=8, column=2, sticky="w", padx=(8, 0))
+        filter_blank_check.grid(
+            row=9, column=0, sticky="w", padx=(22, 6), pady=2
+        )
+        filter_threshold_label.grid(
+            row=9, column=1, sticky="e", padx=(4, 2)
+        )
+        filter_threshold_spin.grid(row=9, column=2, sticky="w")
+        filter_percent_label.grid(row=9, column=3, sticky="w", padx=(2, 0))
+
+        def show_filter_help() -> None:
+            dialog._show_settings_help(FILTER_LABEL, FILTER_HELP)
+
+        def show_blank_help() -> None:
+            dialog._show_settings_help(BLANK_LABEL, BLANK_HELP)
+
+        def show_threshold_help() -> None:
+            dialog._show_settings_help("空白墨迹占比阈值", THRESHOLD_HELP)
+
+        dialog._bind_help_widget(filter_master, show_filter_help)
+        dialog._bind_help_widget(filter_info, show_filter_help)
+        dialog._bind_help_widget(filter_blank_check, show_blank_help)
+        for widget in (
+            filter_threshold_label,
+            filter_threshold_spin,
+            filter_percent_label,
+        ):
+            dialog._bind_help_widget(widget, show_threshold_help)
+        filter_info.bind("<Button-1>", lambda _event: show_filter_help(), add="+")
+        filter_blank_check.bind(
+            "<Button-1>", lambda _event: show_blank_help(), add="+"
+        )
+        filter_threshold_spin.bind(
+            "<FocusOut>", lambda _event: persist_unlined_filter(), add="+"
+        )
+        filter_threshold_spin.bind(
+            "<Return>", lambda _event: persist_unlined_filter(), add="+"
+        )
+        sync_unlined_filter_state()
+
     section_info = ttk.LabelFrame(page, text="特殊页面范围", padding=(12, 10))
     section_info.pack(fill="x", pady=(0, 10))
     section_label = ttk.Label(
@@ -217,6 +369,16 @@ def crop_settings_payload(dialog) -> dict:
         raise ValueError("切图并行进程数必须为 0–8")
     if bottom and bottom <= top:
         raise ValueError("一般页切图下边界必须大于上边界，或填0表示页面底部")
+    try:
+        blank_ink_percent = float(
+            dialog.crop_vars[UNLINED_BLANK_INK_PERCENT_KEY].get()
+        )
+    except (TypeError, ValueError, tk.TclError):
+        blank_ink_percent = DEFAULT_UNLINED_BLANK_INK_PERCENT
+    blank_ink_percent = max(
+        MIN_UNLINED_BLANK_INK_PERCENT,
+        min(MAX_UNLINED_BLANK_INK_PERCENT, blank_ink_percent),
+    )
     return {
         "version": CROP_SETTINGS_VERSION,
         "coordinate_space": SOURCE_COORDINATE_SPACE,
@@ -232,6 +394,13 @@ def crop_settings_payload(dialog) -> dict:
         SINGLE_LINE_MERGE_KEY: bool(
             dialog.crop_vars[SINGLE_LINE_MERGE_KEY].get()
         ),
+        UNLINED_FILTER_ENABLED_KEY: bool(
+            dialog.crop_vars[UNLINED_FILTER_ENABLED_KEY].get()
+        ),
+        UNLINED_FILTER_BLANK_KEY: bool(
+            dialog.crop_vars[UNLINED_FILTER_BLANK_KEY].get()
+        ),
+        UNLINED_BLANK_INK_PERCENT_KEY: blank_ink_percent,
         "special_pages": dict(dialog._crop_specials),
     }
 
