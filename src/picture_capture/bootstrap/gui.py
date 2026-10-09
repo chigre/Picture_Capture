@@ -76,7 +76,6 @@ def prepare_gui_application() -> Any:
     from ..parameter_help_ui import install_settings_parameter_help
     from ..settings_help_restore import install_settings_help_restore
     from ..single_line_merge_settings import install_single_line_merge_settings_ui
-    from ..ui_terminology import install_app_tooltip_terminology
     from ..unlined_export_filter_settings import (
         install_unlined_export_filter_settings_ui,
     )
@@ -90,7 +89,6 @@ def prepare_gui_application() -> Any:
     # Unlined QA now owns its physical-row fast path statically in
     # unlined_line_export.export_unlined_page_job; no GUI-time worker mutation
     # is required.
-    install_app_tooltip_terminology(app_module)
     install_layout_visualization(app_module)
     # Layout role colors plus physical-lane/prepared-indent diagnostics are
     # statically composed by layout_visualization_summary; GUI bootstrap no

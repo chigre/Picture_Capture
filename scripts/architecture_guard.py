@@ -114,6 +114,15 @@ FORBIDDEN_OCR_ACTION_GUARD_INSTALL_CALLS = (
     "install_ocr_action_guard(app_module)",
 )
 
+# Phase 12M retires the redundant PictureCaptureApp tooltip terminology patch.
+# Global Tk/ttk terminology normalization remains the sole product owner.
+FORBIDDEN_APP_TOOLTIP_TERMINOLOGY_MUTATIONS = (
+    "app_class._attach_tooltip =",
+)
+FORBIDDEN_APP_TOOLTIP_TERMINOLOGY_INSTALL_CALLS = (
+    "install_app_tooltip_terminology(app_module)",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -257,6 +266,16 @@ def collect_violations() -> list[str]:
             if marker in source:
                 violations.append(
                     f"OCR action guard installer call returned in {rel}: {marker}"
+                )
+        for marker in FORBIDDEN_APP_TOOLTIP_TERMINOLOGY_MUTATIONS:
+            if marker in source:
+                violations.append(
+                    f"app tooltip terminology class mutation returned in {rel}: {marker}"
+                )
+        for marker in FORBIDDEN_APP_TOOLTIP_TERMINOLOGY_INSTALL_CALLS:
+            if marker in source:
+                violations.append(
+                    f"app tooltip terminology installer call returned in {rel}: {marker}"
                 )
 
     init_path = PACKAGE_ROOT / "__init__.py"
