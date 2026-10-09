@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Direct main-panel installer for Layout diagnostics and analysis display controls."""
+"""Static main-panel helpers for Layout diagnostics and analysis display controls."""
 
 import os
 from typing import Any
