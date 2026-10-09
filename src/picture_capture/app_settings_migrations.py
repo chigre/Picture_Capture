@@ -11,11 +11,57 @@ from collections.abc import Callable
 from typing import Any
 
 
+SEPARATOR_Y_LEGACY_TO_CANONICAL: dict[str, str] = {
+    "paddle_refine_separator_y": "separator_y_refine_enabled",
+    "paddle_separator_search_ratio": "separator_y_search_ratio",
+    "paddle_separator_band_radius": "separator_y_band_radius",
+    "paddle_separator_safety_px": "separator_y_safety_px",
+    "paddle_separator_roi_width_ratio": "separator_y_roi_width_ratio",
+    "paddle_separator_column_margin": "separator_y_column_margin",
+}
+ENTRY_CROP_LEGACY_TO_CANONICAL: dict[str, str] = {
+    "review_regular_crop_height": "entry_regular_crop_height",
+    "review_single_cjk_line_height": "entry_oversized_crop_height",
+}
+TRANSIENT_ENTRY_OCR_RIGHT_RATIO = "entry_ocr_right_ratio"
+
+
+def normalize_app_settings_compat_keys(values: dict[str, Any]) -> dict[str, Any]:
+    """Translate canonical/transient compatibility keys to dataclass storage keys."""
+    transient_ratio = values.pop(TRANSIENT_ENTRY_OCR_RIGHT_RATIO, None)
+    if transient_ratio is not None and "right_ratio" not in values:
+        values["right_ratio"] = transient_ratio
+
+    for mapping in (
+        SEPARATOR_Y_LEGACY_TO_CANONICAL,
+        ENTRY_CROP_LEGACY_TO_CANONICAL,
+    ):
+        for legacy, canonical in mapping.items():
+            if canonical in values:
+                # Canonical public keys win when a payload/caller supplies both.
+                values[legacy] = values.pop(canonical)
+    return values
+
+
+def canonicalize_app_settings_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Expose canonical public keys while retaining legacy dataclass storage."""
+    for mapping in (
+        SEPARATOR_Y_LEGACY_TO_CANONICAL,
+        ENTRY_CROP_LEGACY_TO_CANONICAL,
+    ):
+        for legacy, canonical in mapping.items():
+            if legacy in payload:
+                payload[canonical] = payload.pop(legacy)
+    payload.pop(TRANSIENT_ENTRY_OCR_RIGHT_RATIO, None)
+    return payload
+
+
 def migrate_app_settings_payload(
     raw: dict[str, Any],
     defaults_factory: Callable[[], Any],
 ) -> dict[str, Any]:
     """Upgrade one decoded settings payload while preserving user overrides."""
+    normalize_app_settings_compat_keys(raw)
     if int(raw.get("right_ratio_percent_version", 0) or 0) < 1:
         old_divisor = max(0.01, float(raw.get("right_ratio", 1.0) or 1.0))
         # Preserve the original VB "向右比例 1/x" before migrating the
@@ -235,4 +281,11 @@ def migrate_app_settings_payload(
     return raw
 
 
-__all__ = ["migrate_app_settings_payload"]
+__all__ = [
+    "ENTRY_CROP_LEGACY_TO_CANONICAL",
+    "SEPARATOR_Y_LEGACY_TO_CANONICAL",
+    "TRANSIENT_ENTRY_OCR_RIGHT_RATIO",
+    "canonicalize_app_settings_payload",
+    "migrate_app_settings_payload",
+    "normalize_app_settings_compat_keys",
+]
