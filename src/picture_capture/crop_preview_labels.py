@@ -4,6 +4,13 @@ from __future__ import annotations
 from typing import Any
 
 
+def format_crop_preview_entry_label(word: str, filename: str) -> str:
+    """Show the headword and its output image name on the same preview line."""
+    word = str(word or "").replace("\\r", " ").replace("\\n", " ").strip()
+    filename = str(filename or "").replace("\\r", " ").replace("\\n", " ").strip()
+    return f"{word}  |  {filename}" if word else filename
+
+
 def draw_crop_preview_label(
     canvas: Any, x: float, y: float, *, text: str,
     outline: str, font: Any, anchor: str = "n", justify: str = "center",
