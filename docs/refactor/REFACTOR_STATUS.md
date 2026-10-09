@@ -3,11 +3,11 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12T is complete: Review crop classification and manual ReviewWindow classification controls are wired statically; the former app/global ReviewWindow monkeypatch installer is retired.**
+**Phase 12 — bounded ownership cleanup is at closure. Phase 12U is complete: canonical UI terminology is now source-native and GUI bootstrap no longer monkeypatches Tk/ttk widget constructors or StringVar methods.**
 
-Phase 12T is merged on `main@5b0f07af2acc056318c80d422193d7e947d38886`. Phase 12S remains complete on `main@ffb19bc604ee4ea22d911a5ce6516e671504940b`, with its checkpoint merged on `main@50e56a1d4ed5055a3061b2d9513defb380cc80f7`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
+Phase 12U is merged on `main@e6e358f9db97325c6070dc3584351034b148c05a`. Phase 12T remains complete on `main@5b0f07af2acc056318c80d422193d7e947d38886`, with its checkpoint merged on `main@f9d83b77a8941ea454fd38ac6ddf3cc84f40e15d`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
 
-The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
+The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary scoped runner bridge remains a real debt candidate, but its call chain reaches the mature parser core and is not a bounded Phase 12 write.
 
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
@@ -2409,39 +2409,102 @@ Phase 12T publication:
   784,737);
 - no architecture or size threshold was relaxed.
 
-## Recommended next slice — Phase 12U static UI terminology ownership
+## Phase 12U — source-native UI terminology
 
-The remaining GUI bootstrap presentation installer is
-`install_ui_terminology()`, which currently monkeypatches Tk/ttk widget
-constructors plus `tk.StringVar.__init__/set` to rewrite a narrow list of
-legacy labels at runtime.
+Phase 12U retires the last presentation-only GUI bootstrap monkeypatch.
 
-Read-only inventory shows the legacy production strings are now bounded:
-- `app.py` still contains one old OCR section title, one old existing-marker
-  OCR tooltip phrase, one old per-row OCR confirmation phrase, and one
-  `单行高` display label;
-- `ui/dialogs/usage_guide.py` contains the old shared-OCR explanatory sentence;
-- `ui/controllers/detection.py` still emits `PaddleOCR 当前页识别`;
-- `ui/settings/schema.py` retains `单行高` wording in one field label/help;
-- the other historical replacement inputs are now present only in
-  `ui_terminology.py` and tests.
+Canonical UI wording now lives directly at its production source sites:
+- the main shared-OCR section title, existing-marker OCR tooltip and confirmation
+  copy in `app.py`;
+- shared-OCR guidance in `ui/dialogs/usage_guide.py`;
+- the OCR drawing batch label in `ui/controllers/detection.py`;
+- ordinary auto-layout line-height labels/help in `ui/settings/schema.py`;
+- the proofreading line-height label in `app.py`.
 
-A safe 12U should:
-- replace every remaining production legacy phrase with its current canonical
-  text at the source site;
-- keep `normalize_ui_text(...)` and replacement data available as a pure
-  compatibility/test utility;
-- make `install_ui_terminology()` a no-op compatibility shim and remove its
-  GUI bootstrap call;
-- add a repository-wide production-source regression proving the known legacy
-  phrases no longer appear outside the compatibility module;
-- ratchet against reintroducing Tk/ttk/StringVar constructor mutation or the
-  installer call;
-- update bootstrap/terminology tests from “installer runs before app import” to
-  “canonical terms are native and bootstrap is presentation-mutation free”.
+`normalize_ui_text(...)` and the historical replacement table remain available
+as a pure compatibility/test utility. `install_ui_terminology()` and
+`install_app_tooltip_terminology(...)` are no-op compatibility shims. GUI
+bootstrap no longer mutates Tk/ttk constructors or `tk.StringVar` methods.
 
-Do not combine 12U with Layout runtime installers, PDIC composition, OCR runner
-work, or public facade compatibility.
+A production-source regression scans all Python modules except the compatibility
+module and rejects any return of the known legacy terminology. Architecture
+ratchets separately reject Tk/ttk/StringVar mutation and any GUI bootstrap call
+to the retired installer.
+
+Behavior intentionally unchanged:
+- persisted setting keys/field names;
+- OCR engine selection and boundary/text-recognition behavior;
+- tooltip/help meaning;
+- compatibility normalization for callers that explicitly invoke
+  `normalize_ui_text(...)`.
+
+Phase 12U publication:
+- PR #388 final fixed head `da96ac47f6796d5276384fbd59dc3eb736e138b7`;
+- initial PR CI 2349 failed only because one structural usage-guide test still
+  required the old source wording;
+- production code was unchanged for that failure; the stale test was updated to
+  assert the canonical shared-OCR wording;
+- corrected PR CI 2350 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #388 merged as `e6e358f9db97325c6070dc3584351034b148c05a`;
+- post-merge CI 2351 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2334 passed;
+- `app.py` remained below the historical size baseline (783,408 bytes vs
+  784,737);
+- no architecture or size threshold was relaxed.
+
+## Recommended next slice — Phase 12V closure inventory (docs only)
+
+Do not start another production ownership rewrite inside Phase 12. Read-only
+inventory after 12U shows that the small/bounded seams have been exhausted.
+
+The remaining real process-global composition boundaries are:
+
+1. **Layout composition chain — deferred in Phase 12K.**
+   - `install_robust_line_starts()` and
+     `install_physical_indent_inference()` are still entered by GUI startup,
+     ordinary detection and the independent unlined-row resolver.
+   - the chain intentionally captures robust line-start behavior before physical
+     line-feature composition, then layers Profile anchoring, policy
+     finalization and Page Understanding finalization.
+   - raw policy behavior differs from the composed product runtime, so deleting
+     these installers requires a broader explicit Layout composition API rather
+     than another local substitution.
+
+2. **PDIC classification composition — deferred in Phase 12I.**
+   - `build_core_services()` still calls
+     `install_pdic_classification(formats)`.
+   - raw PDIC I/O, classification-aware I/O, GUI automatic baseline capture,
+     training export and atomic restore have distinct compatibility contracts.
+   - removing this wrapper requires a deliberate raw/composed PDIC API migration
+     across many consumers.
+
+3. **Historical facade assignment mirror — intentional Phase 9 boundary.**
+   - only `processing.py` and `paddle_headwords.py` use
+     `install_core_assignment_mirror(...)`.
+   - the architecture guard already rejects any third user.
+   - do not remove this without an explicit public monkeypatch-compatibility
+     decision.
+
+4. **OCR-boundary scoped runner bridge — larger future debt.**
+   - `ocr_channel_legacy.py` temporarily routes mature parser-core engine
+     globals through the shared OCR channel and restores them afterwards.
+   - tests protect native restoration and pre-existing external monkeypatches.
+   - replacing it means changing the mature parser/core dependency boundary, not
+     merely deleting a bootstrap installer.
+
+Phase 12V should record these four boundaries, confirm the zero
+`*_runtime.py` baseline and all existing architecture ratchets, and mark
+**Phase 12 complete with no further production write**.
+
+After Phase 12 closure, choose the next major effort explicitly rather than
+smuggling it into bounded cleanup. The strongest architecture candidate is an
+explicit Layout composition API (the Phase 12K dependency graph is already the
+design input); the still-open Phase 8 full OCR cold/warm benchmark remains the
+performance gate and should also be scheduled before unmeasured OCR
+micro-optimization.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
