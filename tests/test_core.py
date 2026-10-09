@@ -4928,9 +4928,11 @@ def test_crop_preview_uses_export_filename_and_centered_entry_typography():
     start = text.index("    def _draw_crop_plan_preview")
     end = text.index("    def redraw", start)
     preview = text[start:end]
-    assert "self.settings.main_entry_font_family" in preview
-    assert "self.settings.main_entry_font_size" in preview
-    assert 'label = f"{piece.word}\\n{filename}"' in preview
+    assert "crop_preview_font_spec(" in preview
+    helper = (source.parent / "crop_preview_display_settings.py").read_text(encoding="utf-8")
+    assert "app.settings.crop_preview_font_family" in helper
+    assert "app.settings.crop_preview_font_size" in helper
+    assert "format_crop_preview_entry_label(piece.word, filename)" in preview
     assert 'anchor="n", justify="center"' in preview
 
 

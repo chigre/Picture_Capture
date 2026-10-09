@@ -331,6 +331,11 @@ class AppSettings(metaclass=_AppSettingsMeta):
     main_entry_font_size: int = 16
     main_entry_font_bold: bool = False
     main_entry_font_italic: bool = False
+    # Independent presentation for inline word / image-name labels in crop preview.
+    crop_preview_font_family: str = "自动（系统推荐）"
+    crop_preview_font_size: int = 12
+    crop_preview_font_bold: bool = False
+    crop_preview_font_italic: bool = False
     main_entry_width_chars: int = 18
     main_entry_x_ratio: float = 0.66
     main_entry_follow_zoom: bool = True

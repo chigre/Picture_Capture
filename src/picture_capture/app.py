@@ -9199,6 +9199,9 @@ class PictureCaptureApp(tk.Tk):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(label_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
 
+        from .crop_preview_display_settings import add_crop_preview_font_controls
+        add_crop_preview_font_controls(self, aux, content_font_values, normalize_content_font_setting)
+
         ocr_display_row = ttk.Frame(aux); ocr_display_row.grid(row=6, column=0, columnspan=4, sticky="ew")
         for label, name in (("显示OCR内容选择", "review_main_show_ocr_choices"), ("显示OCR对比底色结果", "review_main_show_ocr_background")):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
@@ -11056,10 +11059,13 @@ class PictureCaptureApp(tk.Tk):
                     raise ValueError("线条/外框粗细必须在 1–20 之间。")
                 if name == "illustration_label_font_size" and not 5 <= int(value) <= 200:
                     raise ValueError("插图标签字号必须在 5–200 之间。")
+                if name == "crop_preview_font_size" and not 5 <= int(value) <= 200:
+                    raise ValueError("切图预览标签字号必须在 5–200 之间。")
                 setattr(self.settings, name, value)
             for font_setting_name in (
                 "main_entry_font_family",
                 "illustration_label_font_family",
+                "crop_preview_font_family",
                 "review_entry_font_family",
                 "review_simplified_font_family",
             ):
@@ -13811,20 +13817,12 @@ class PictureCaptureApp(tk.Tk):
             return
         if plan is None:
             return
-        from .crop_preview_labels import draw_crop_preview_label
+        from .crop_preview_labels import draw_crop_preview_label, format_crop_preview_entry_label
         scale = self.view_scale
         illustrated_entries = {p.entry_ref_index for p in plan.entry_pieces if p.source_mode == "linked_original" and p.entry_ref_index is not None}
-        preview_family = resolve_content_font_family(
-            self.canvas,
-            self.settings.main_entry_font_family,
-            self.settings.ocr_language,
-        )
-        preview_font = _entry_font_spec(
-            preview_family,
-            effective_main_overlay_font_size(self.image.width, scale, self.settings),
-            # helper reads self.settings.main_entry_font_size consistently with editors
-            self.settings.main_entry_font_bold,
-            self.settings.main_entry_font_italic,
+        from .crop_preview_display_settings import crop_preview_font_spec
+        preview_font = crop_preview_font_spec(
+            self, scale, resolve_content_font_family, _entry_font_spec,
         )
         for piece in plan.entry_pieces:
             x0,y0,x1,y1=piece.box
@@ -13836,7 +13834,7 @@ class PictureCaptureApp(tk.Tk):
                 dash = (6, 4)
             self.canvas.create_rectangle(x0*scale,y0*scale,x1*scale,y1*scale,outline=color,width=2,dash=dash,tags=("crop-plan",))
             filename = entry_crop_piece_filename(self.current_page.stem, piece)
-            label = f"{piece.word}\n{filename}" if piece.word else filename
+            label = format_crop_preview_entry_label(piece.word, filename)
             draw_crop_preview_label(
                 self.canvas, ((x0+x1)/2)*scale, (y0+3)*scale,
                 text=label, outline=color, anchor="n", justify="center",
