@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12R is complete: OCR crop-preview controls and drawing are wired statically by PictureCaptureApp; the former __init__/redraw monkeypatch installer is retired.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12S is complete: Layout visualization controls and redraw behavior are wired statically by PictureCaptureApp; the former _section_frame/_build_quick_settings/redraw monkeypatch installer is retired.**
 
-Phase 12R is merged on `main@d24157ad56ff4161e6198d7dada96f9ffa2f8e93`. Phase 12Q remains complete on `main@228e59497e23791fb7e56e6829e2d1c3b1d4820d`, with its checkpoint merged on `main@a415a8abcaeaee64c0d88c6687a0e87eee9ef7b5`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
+Phase 12S is merged on `main@ffb19bc604ee4ea22d911a5ce6516e671504940b`. Phase 12R remains complete on `main@d24157ad56ff4161e6198d7dada96f9ffa2f8e93`, with its checkpoint merged on `main@55b05f8742c9ad315e9ce98353c2a8eb7740315c`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -2322,32 +2322,88 @@ Phase 12R publication:
   784,737);
 - no architecture or size threshold was relaxed.
 
-## Recommended next slice — Phase 12S static Layout visualization wiring
+## Phase 12S — static Layout visualization wiring
 
-The remaining `install_layout_visualization(app_module)` wrapper is now the
-smallest main-app redraw seam. It currently wraps `_section_frame`,
-`_build_quick_settings`, and `redraw` only to capture the known display
-section, add Layout/denoise controls, and render the diagnostic overlay.
+Phase 12S retires the final Layout-visualization main-app method wrapper.
 
-A safe 12S should:
-- expose a normal helper that adds the current Layout toggle and denoise control
-  directly to the already-known `aux` display section;
-- call that helper explicitly after the existing display rows are built,
-  preserving the current next-grid-row placement;
-- move the redraw wrapper body to a normal
-  `draw_layout_visualization_if_enabled(app)` helper;
-- preserve the current outer-wrapper timing by invoking that helper after the
-  preprocess early path, after the crop-preview path, and at normal redraw end;
-- preserve OCR crop-preview-before-Layout ordering on paths where both can draw;
-- retain the current hide-variable temporary override, exclusive-visibility
-  restore behavior, snapshot invalidation and denoise environment semantics;
-- remove `install_layout_visualization(app_module)` from GUI bootstrap and
-  leave the public installer as a no-op compatibility shim;
-- ratchet against reintroducing `_section_frame`, `_build_quick_settings`,
-  or `redraw` class mutation.
+`layout_visualization_ui_v3.py` now exposes ordinary helpers:
+- `add_layout_visualization_controls(app, section)`, which adds the current
+  Layout toggle and shared-analysis denoise control to the already-known display
+  section;
+- `draw_layout_visualization_if_enabled(app)`, which preserves the historical
+  temporary hide-variable override and restoration around the detailed overlay.
 
-Do not combine this with ReviewWindow classification, Layout runtime installers,
-PDIC composition or OCR runner work.
+`PictureCaptureApp` calls those helpers explicitly:
+- controls are added after the existing display rows are built, preserving
+  next-grid-row placement;
+- image-none, preprocess, crop-preview and normal redraw paths preserve the
+  former outer-wrapper timing;
+- crop-preview and normal paths call OCR crop preview first and Layout second,
+  preserving the old wrapper order.
+
+The compatibility installer remains importable as a no-op. Architecture
+ratchets reject any return of `_section_frame`, `_build_quick_settings`, or
+`redraw` mutation and reject GUI bootstrap installation.
+
+Behavior intentionally unchanged:
+- Layout toggle default/tooltip and exclusive visibility;
+- snapshot invalidation and denoise environment semantics;
+- detailed Layout summary/role/indent rendering;
+- OCR-preview-before-Layout ordering;
+- physical-indent/Page Understanding algorithms and caches.
+
+Phase 12S publication:
+- PR #384 final fixed head `8c64784ef86d3f4093b815e3e19790f7528a0201`;
+- initial PR CI 2338 failed only because a Phase 12R structural test still
+  required OCR crop preview to be the final redraw call;
+- production code was unchanged for that failure; the stale test was updated to
+  assert the intended OCR-preview -> Layout ordering;
+- corrected PR CI 2339 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #384 merged as `ffb19bc604ee4ea22d911a5ce6516e671504940b`;
+- post-merge CI 2340 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2323 passed;
+- `app.py` remained below the historical size baseline (784,037 bytes vs
+  784,737);
+- no architecture or size threshold was relaxed.
+
+## Recommended next slice — Phase 12T static Review classification wiring
+
+The remaining `install_review_entry_classification(app_module)` wrapper is
+broader than 12R/12S but now has explicit native landing points.
+
+Current effective behavior has five parts:
+- replace app-level `_review_line_box(...)` single-CJK text heuristics with the
+  structural `classified_entry_crop_height(...)` policy already used by
+  marker OCR;
+- add the manual 【自动 / 普通词条 / 大字头】 selector and source/effective label
+  after ReviewWindow construction;
+- synchronize that control before review-row rendering and after
+  `set_active(...)`;
+- persist manual overrides through the existing PDIC classification sidecar and
+  request row/main-canvas redraw;
+- expose the current wording 【大字头切图高：】 instead of the historical
+  【单字行高：】 label.
+
+A safe 12T should:
+- make the app-level `_review_line_box(...)` structurally classification-aware
+  directly, without replacing the global callable at runtime;
+- expose normal helper functions for ReviewWindow classification control
+  creation/synchronization/change/shortcut behavior;
+- call those helpers explicitly from the existing ReviewWindow
+  `__init__`, `_request_render_rows`, and `set_active` lifecycle points;
+- make the visible height wording native at its existing build site instead of
+  walking widgets after construction;
+- preserve exact sidecar persistence, recycled-entry classification semantics,
+  keyboard shortcuts, active-row render refresh and parent redraw behavior;
+- remove `install_review_entry_classification(app_module)` from GUI bootstrap,
+  retain its public name as a no-op compatibility shim, and ratchet against
+  restoring app/ReviewWindow mutation.
+
+Do not combine 12T with ReviewWindow decomposition, OCR runner work, Layout
+runtime installers or PDIC composition.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
