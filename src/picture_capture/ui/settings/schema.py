@@ -160,7 +160,7 @@ CHECK_GROUPS = [
             ("首栏X", "ordinary_auto_manual_x"),
             ("单栏宽", "ordinary_auto_column_width"),
             ("栏间空", "ordinary_auto_gutter"),
-            ("单行高", "ordinary_auto_character_height"),
+            ("普通字/行高", "ordinary_auto_character_height"),
             ("行间空", "ordinary_auto_row_padding"),
             ("跟随词头列倾斜和局部变形", "follow_column_deformation"),
         ]),
@@ -522,8 +522,8 @@ CHECK_HELP = {
         "ordinary_auto_manual_x": "自动版面检测后，用当前页检测出的【首栏X】临时替换项目基准值；适合整页左右轻微漂移。",
         "ordinary_auto_column_width": "自动版面检测后，用当前页检测出的【单栏宽】临时替换项目基准值；栏左跟随搜索范围也会按该页实际栏宽百分比计算。",
         "ordinary_auto_gutter": "自动版面检测后，用当前页检测出的【栏间空】临时替换项目基准值；只影响当前页几何。",
-        "ordinary_auto_character_height": "自动版面检测后，用当前页检测出的【单行高】临时替换项目基准值；会影响普通画线的行尺度和跳步。",
-        "ordinary_auto_row_padding": "自动版面检测后，用当前页检测出的【行间空】临时替换项目基准值；与单行高共同决定普通画线行尺度。",
+        "ordinary_auto_character_height": "自动版面检测后，用当前页检测出的【普通字/行高】临时替换项目基准值；会影响普通画线的行尺度和跳步。",
+        "ordinary_auto_row_padding": "自动版面检测后，用当前页检测出的【行间空】临时替换项目基准值；与普通字/行高共同决定普通画线行尺度。",
         "follow_column_deformation": "开启：沿页面分块重新跟踪栏左缘，让栏路径可随书脊弯曲、斜拍或局部形变变化。三个相关参数现在都是相对量：搜索范围按单栏宽百分比、分块高度按正文高度百分比、最大局部斜率按分块高度百分比计算。\n\n关闭：栏左缘按较直的几何路径处理，平直扫描更稳定也更简单。",
         "paddle_use_paddleocr": (
             "开启：把 PaddleOCR 加入共享 OCR 通道。【仅OCR】与【OCR画线】都会复用这一选择；"
@@ -569,7 +569,7 @@ NORMAL_CHECKS = (
         ("首栏X", "ordinary_auto_manual_x"),
         ("单栏宽", "ordinary_auto_column_width"),
         ("栏间空", "ordinary_auto_gutter"),
-        ("单行高", "ordinary_auto_character_height"),
+        ("普通字/行高", "ordinary_auto_character_height"),
         ("行间空", "ordinary_auto_row_padding"),
     )
 
