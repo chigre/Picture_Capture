@@ -125,7 +125,7 @@ class Entry:
         return entry_source_get(self)
 
     @entry_source.setter
-    def entry_source(self, value: Any) -> None:
+    def entry_source(self, value: object) -> None:
         from .entry_classification_fields import entry_source_set
         entry_source_set(self, value)
 
@@ -135,7 +135,7 @@ class Entry:
         return entry_scale_get(self)
 
     @entry_scale.setter
-    def entry_scale(self, value: Any) -> None:
+    def entry_scale(self, value: object) -> None:
         from .entry_classification_fields import entry_scale_set
         entry_scale_set(self, value)
 
@@ -145,7 +145,7 @@ class Entry:
         return detected_head_height_get(self)
 
     @detected_head_height.setter
-    def detected_head_height(self, value: Any) -> None:
+    def detected_head_height(self, value: object) -> None:
         from .entry_classification_fields import detected_head_height_set
         detected_head_height_set(self, value)
 
@@ -155,7 +155,7 @@ class Entry:
         return entry_scale_manual_get(self)
 
     @entry_scale_manual.setter
-    def entry_scale_manual(self, value: Any) -> None:
+    def entry_scale_manual(self, value: object) -> None:
         from .entry_classification_fields import entry_scale_manual_set
         entry_scale_manual_set(self, value)
 
