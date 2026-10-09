@@ -79,8 +79,6 @@ def prepare_gui_application() -> Any:
     install_review_entry_classification(app_module)
     install_ocr_crop_preview(app_module)
 
-    from ..layout_lane_summary_extension import install_physical_lane_summary
-    from ..layout_visualization_role_theme import install_layout_role_theme
     from ..layout_visualization_ui_v3 import install_layout_visualization
     from ..ocr_action_guard import install_ocr_action_guard
     from ..parameter_help_ui import install_settings_parameter_help
@@ -102,11 +100,10 @@ def prepare_gui_application() -> Any:
     # unlined_line_export.export_unlined_page_job; no GUI-time worker mutation
     # is required.
     install_app_tooltip_terminology(app_module)
-    install_layout_role_theme()
     install_layout_visualization(app_module)
-    # The lane-summary wrapper now appends the prepared-indent diagnostic as
-    # its final step; visible indent drawing is static in the summary module.
-    install_physical_lane_summary()
+    # Layout role colors plus physical-lane/prepared-indent diagnostics are
+    # statically composed by layout_visualization_summary; GUI bootstrap no
+    # longer rewrites the summary formatter.
 
     _PREPARED_APP_MODULE = app_module
     return app_module
