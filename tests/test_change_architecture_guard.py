@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from scripts.change_architecture_guard import violations_in_source
+import importlib.util
+from pathlib import Path
+
+GUARD_PATH = Path(__file__).resolve().parents[1] / "scripts" / "change_architecture_guard.py"
+spec = importlib.util.spec_from_file_location("change_architecture_guard", GUARD_PATH)
+assert spec is not None and spec.loader is not None
+guard = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(guard)
+violations_in_source = guard.violations_in_source
 
 
 def check(source: str) -> list[str]:
