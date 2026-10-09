@@ -1,7 +1,6 @@
 """Phase 13D gate: explicit composed policy agrees with the installed chain."""
 from pathlib import Path
 
-import numpy as np
 from PIL import Image, ImageDraw
 
 from picture_capture import dictionary_page_design as base
