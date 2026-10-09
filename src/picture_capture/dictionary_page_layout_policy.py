@@ -123,6 +123,10 @@ def resolve_page_layout_policy(
     return current, estimate, applied
 
 
+# Stable raw entry point: the legacy installer may wrap the public policy name.
+_RAW_RESOLVE_PAGE_LAYOUT_POLICY = resolve_page_layout_policy
+
+
 def _column_offsets(settings: AppSettings, count: int) -> list[int]:
     raw = list(getattr(settings, "column_start_offsets", []) or [])
     result: list[int] = []
@@ -178,9 +182,11 @@ def infer_dictionary_page_layout(
     *,
     page_index: int = 0,
     ops: base.LayoutPrimitiveOps | None = None,
+    policy_resolver: Any = None,
 ) -> tuple[base.DictionaryPageLayout, AppSettings, dict[str, int]]:
     """Infer one page instance while respecting project fixed/auto field policy."""
-    page_settings, estimate, applied = resolve_page_layout_policy(
+    resolver = resolve_page_layout_policy if policy_resolver is None else policy_resolver
+    page_settings, estimate, applied = resolver(
         image, settings, page_index=page_index,
         **({"ops": ops} if ops is not None else {}),
     )
@@ -379,6 +385,10 @@ def infer_dictionary_page_layout(
         **({"ops": ops} if ops is not None else {}),
     )
     return layout, page_settings, applied
+
+
+# Stable raw inference entry point for explicit composed policy consumers.
+_RAW_INFER_DICTIONARY_PAGE_LAYOUT = infer_dictionary_page_layout
 
 
 def detect_entries_from_page_design(
