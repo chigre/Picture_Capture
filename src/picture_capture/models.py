@@ -115,6 +115,50 @@ class Entry:
     ocr_single_cjk: bool = False
     ocr_oversized_cjk: bool = False
 
+    # Canonical structural-classification metadata is registry-backed so the
+    # legacy PDIC dataclass layout remains unchanged. Local imports avoid a
+    # models <-> entry_classification import cycle while making the descriptors
+    # available on every Entry without bootstrap-time class mutation.
+    @property
+    def entry_source(self) -> str:
+        from .entry_classification_fields import entry_source_get
+        return entry_source_get(self)
+
+    @entry_source.setter
+    def entry_source(self, value: Any) -> None:
+        from .entry_classification_fields import entry_source_set
+        entry_source_set(self, value)
+
+    @property
+    def entry_scale(self) -> str:
+        from .entry_classification_fields import entry_scale_get
+        return entry_scale_get(self)
+
+    @entry_scale.setter
+    def entry_scale(self, value: Any) -> None:
+        from .entry_classification_fields import entry_scale_set
+        entry_scale_set(self, value)
+
+    @property
+    def detected_head_height(self) -> float:
+        from .entry_classification_fields import detected_head_height_get
+        return detected_head_height_get(self)
+
+    @detected_head_height.setter
+    def detected_head_height(self, value: Any) -> None:
+        from .entry_classification_fields import detected_head_height_set
+        detected_head_height_set(self, value)
+
+    @property
+    def entry_scale_manual(self) -> bool:
+        from .entry_classification_fields import entry_scale_manual_get
+        return entry_scale_manual_get(self)
+
+    @entry_scale_manual.setter
+    def entry_scale_manual(self, value: Any) -> None:
+        from .entry_classification_fields import entry_scale_manual_set
+        entry_scale_manual_set(self, value)
+
 
 @dataclass(slots=True)
 class PolygonRegion:
