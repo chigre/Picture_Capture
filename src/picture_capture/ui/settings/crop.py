@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 
 from ...coordinate_space import SOURCE_COORDINATE_SPACE
-from ...crop.settings import CROP_SETTINGS_VERSION
+from ...crop.settings import CROP_SETTINGS_VERSION, SINGLE_LINE_MERGE_KEY
 from ...project_storage import qt_root
+from ...single_line_merge_settings import (
+    MERGE_HELP,
+    MERGE_LABEL,
+    load_merge_by_page,
+    save_merge_by_page,
+)
 from ..dialogs.crop_settings import CropSettingsDialog
 
 
@@ -31,6 +38,17 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
     )
 
     saved = dialog.parent._load_crop_settings()
+    project = getattr(dialog.parent, "project", None)
+    project_root = (
+        Path(project.root)
+        if project is not None and getattr(project, "root", None) is not None
+        else None
+    )
+    merge_by_page = (
+        load_merge_by_page(project_root)
+        if project_root is not None
+        else bool(saved.get(SINGLE_LINE_MERGE_KEY, False))
+    )
     defaults = {
         "general_top_y": int(saved.get("general_top_y", dialog.parent.settings.start_y)),
         "general_bottom_y": int(saved.get("general_bottom_y", 0)),
@@ -41,6 +59,7 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
         "parallel_workers": int(
             saved.get("parallel_workers", dialog.parent.settings.crop_parallel_workers)
         ),
+        SINGLE_LINE_MERGE_KEY: bool(merge_by_page),
     }
     dialog._crop_specials = (
         dict(saved.get("special_pages", {}))
@@ -128,6 +147,32 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
         foreground="#666666",
     ).grid(row=6, column=0, columnspan=4, sticky="w", pady=(0, 4))
 
+    def persist_merge_by_page() -> None:
+        if project_root is None:
+            return
+        try:
+            enabled = bool(dialog.crop_vars[SINGLE_LINE_MERGE_KEY].get())
+        except Exception:
+            return
+        save_merge_by_page(project_root, enabled)
+
+    merge_check = ttk.Checkbutton(
+        general,
+        text=MERGE_LABEL,
+        variable=dialog.crop_vars[SINGLE_LINE_MERGE_KEY],
+        command=persist_merge_by_page,
+    )
+    merge_check.grid(row=7, column=0, columnspan=2, sticky="w", pady=4)
+    merge_info = ttk.Label(general, text="ⓘ", foreground="#6b7280", cursor="hand2")
+    merge_info.grid(row=7, column=2, sticky="w", padx=(8, 0))
+
+    def show_merge_help() -> None:
+        dialog._show_settings_help(MERGE_LABEL, MERGE_HELP)
+
+    dialog._bind_help_widget(merge_check, show_merge_help)
+    dialog._bind_help_widget(merge_info, show_merge_help)
+    merge_info.bind("<Button-1>", lambda _event: show_merge_help(), add="+")
+
     section_info = ttk.LabelFrame(page, text="特殊页面范围", padding=(12, 10))
     section_info.pack(fill="x", pady=(0, 10))
     section_label = ttk.Label(
@@ -185,6 +230,9 @@ def crop_settings_payload(dialog) -> dict:
         ),
         "polygon_margin": margin,
         "parallel_workers": workers,
+        SINGLE_LINE_MERGE_KEY: bool(
+            dialog.crop_vars[SINGLE_LINE_MERGE_KEY].get()
+        ),
         "special_pages": dict(dialog._crop_specials),
     }
 
