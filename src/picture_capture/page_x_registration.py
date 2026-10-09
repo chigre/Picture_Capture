@@ -230,6 +230,7 @@ def register_page_manual_x(
     ops: base.LayoutPrimitiveOps | None = None,
 ) -> XRegistrationResult:
     """Register current-page X as one shared translation of Profile columns."""
+    explicit_ops = ops is not None
     ops = base.current_layout_ops() if ops is None else ops
     project_x = max(0, int(getattr(settings, "manual_x", 0) or 0))
     nominal = _nominal_starts(settings)
@@ -266,7 +267,7 @@ def register_page_manual_x(
             seed=seed,
             semantics=semantics,
             search_left_floor=search_left_floor,
-            ops=ops,
+            **({"ops": ops} if explicit_ops else {}),
         )
         if observed is not None:
             candidate_x, support = observed
