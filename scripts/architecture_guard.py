@@ -145,6 +145,18 @@ FORBIDDEN_SINGLE_LINE_MERGE_INSTALL_CALLS = (
     "install_single_line_merge_settings_ui(app_module)",
 )
 
+# Phase 12P moves unlined-export filter Settings ownership into the same static
+# crop schema/UI. The compatibility helper must not resume mutating SettingsDialog.
+FORBIDDEN_UNLINED_FILTER_MUTATIONS = (
+    "dialog.__init__ =",
+    "setattr(dialog, method_name, wrapped)",
+    "_pc_unlined_filter_settings_installed",
+    "_pc_unlined_filter_wrapped",
+)
+FORBIDDEN_UNLINED_FILTER_INSTALL_CALLS = (
+    "install_unlined_export_filter_settings_ui(app_module)",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -314,6 +326,11 @@ def collect_violations() -> list[str]:
                 violations.append(
                     f"single-line merge Settings installer call returned in {rel}: {marker}"
                 )
+        for marker in FORBIDDEN_UNLINED_FILTER_INSTALL_CALLS:
+            if marker in source:
+                violations.append(
+                    f"unlined-filter Settings installer call returned in {rel}: {marker}"
+                )
 
     single_line_merge_source = (
         PACKAGE_ROOT / "single_line_merge_settings.py"
@@ -322,6 +339,15 @@ def collect_violations() -> list[str]:
         if marker in single_line_merge_source:
             violations.append(
                 f"single-line merge Settings mutation returned: {marker}"
+            )
+
+    unlined_filter_source = (
+        PACKAGE_ROOT / "unlined_export_filter_settings.py"
+    ).read_text(encoding="utf-8")
+    for marker in FORBIDDEN_UNLINED_FILTER_MUTATIONS:
+        if marker in unlined_filter_source:
+            violations.append(
+                f"unlined-filter Settings mutation returned: {marker}"
             )
 
     init_path = PACKAGE_ROOT / "__init__.py"
