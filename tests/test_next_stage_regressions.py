@@ -4057,7 +4057,7 @@ def test_round1_blocking_ui_paths_use_background_workers():
     assert "recent_project_details(" not in rebuild_block
     assert "Image.open(" not in rebuild_block
     assert "recent_project_details(row)" in recent_block[refresh_start:]
-    assert "with Image.open(preview_path) as opened:" in recent_block[refresh_start:]
+    assert "load_project_center_preview(root, Path(preview_text))" in recent_block[refresh_start:]
 
     picdic_start = text.index("    def build_picdic(", app_start)
     picdic_end = text.index("\n    def _order_key", picdic_start)
