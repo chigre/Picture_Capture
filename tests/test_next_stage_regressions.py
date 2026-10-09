@@ -1268,7 +1268,7 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
 
 
 
-def test_settings_center_restores_inline_detailed_parameter_help():
+def test_settings_center_uses_native_compact_right_pane_help():
     root = Path(__file__).resolve().parents[1]
     source = root / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
@@ -1278,10 +1278,12 @@ def test_settings_center_restores_inline_detailed_parameter_help():
     settings_start = text.index("class SettingsDialog")
     settings_end = text.index("class ", settings_start + len("class SettingsDialog"))
     settings = text[settings_start:settings_end]
-    assert "inline_help = ttk.Label" in settings
-    assert "text=self.SETTING_HELP.get(" in settings
-    assert "check_help = ttk.Label" in settings
-    assert "text=self.CHECK_HELP.get(" in settings
+
+    assert "inline_help = ttk.Label" not in settings
+    assert "check_help = ttk.Label" not in settings
+    assert "左侧只保留参数、单位和必要状态" in settings
+    assert "每个参数下方已直接显示详细说明" not in settings
+    assert "show_layout_image=hi" in settings
     assert '"analysis_left": "width"' in helper_source
     assert '"analysis_right": "width"' in helper_source
     assert '"paddle_header_search_height": "height"' in helper_source
@@ -5775,7 +5777,8 @@ def test_settings_center_avoids_full_hidden_tab_idle_layout_cascade():
     assert "for _canvas in self._settings_canvases.values():" not in tail
     assert "content.bind(" in text
     assert 'cv.configure(scrollregion=cv.bbox("all"))' in text
-    assert "每个参数下方已直接显示详细说明" in text
+    assert "左侧只保留参数、单位和必要状态" in text
+    assert "每个参数下方已直接显示详细说明" not in text
     assert 'pending["job"] = dialog.after(80, refresh)' in help_source
     assert 'pending["job"] = dialog.after_idle(refresh)' not in help_source
 

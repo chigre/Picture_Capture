@@ -73,10 +73,9 @@ def prepare_gui_application() -> Any:
     install_ocr_crop_preview(app_module)
 
     from ..layout_visualization_ui_v3 import install_layout_visualization
-    from ..parameter_help_ui import install_settings_parameter_help
-    # Illustration-mask Settings metadata is static in the shared schema.
-    install_settings_parameter_help(app_module)
-    # Single-line merge and unlined-export filters now belong to the static
+    # Settings parameter groups/right-pane help are now native static
+    # SettingsDialog behavior. Single-line merge and unlined-export filters
+    # likewise belong to the static crop Settings schema/UI.
     # crop Settings schema/UI; GUI bootstrap no longer wraps SettingsDialog.
     # Unlined QA now owns its physical-row fast path statically in
     # unlined_line_export.export_unlined_page_job; no GUI-time worker mutation
