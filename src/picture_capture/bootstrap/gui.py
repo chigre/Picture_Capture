@@ -22,7 +22,7 @@ def prepare_gui_application() -> Any:
 
     from .core import build_core_services
 
-    build_core_services()
+    core_services = build_core_services()
 
     from ..ui_terminology import install_ui_terminology
 
