@@ -26,6 +26,8 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageOps
 
+from . import dictionary_page_design as base
+
 
 def _left_safety(reference: float, column_width: int) -> int:
     """Return a conservative analysis-only margin left of the semantic column."""
@@ -54,6 +56,8 @@ def _analysis_left_for_column(
 def remeasure_layout_indents_from_ink(
     layout: Any,
     page_ink: np.ndarray,
+    *,
+    ops: base.LayoutPrimitiveOps | None = None,
 ) -> dict[int, int]:
     """Re-measure recovered rows without clipping ink left of ``column.left``.
 
@@ -62,8 +66,9 @@ def remeasure_layout_indents_from_ink(
     coordinates, so values may be negative when the physical scan drifts left of
     the project/Profile origin.
     """
-    from . import dictionary_page_design as base
     from .layout_physical_indent import _credible_first_ink_x
+
+    ops = base.current_layout_ops() if ops is None else ops
 
     if page_ink.ndim != 2 or page_ink.size == 0:
         return {}
@@ -108,8 +113,8 @@ def remeasure_layout_indents_from_ink(
         if count:
             # Composition already provides the physical-indent implementations.
             # Rebuild modes and roles from the unclipped values.
-            column.indent_modes = base._indent_modes(column.lines, reference)
-            base._assign_indent_semantics(
+            column.indent_modes = ops.indent_modes(column.lines, reference)
+            ops.assign_indent_semantics(
                 column,
                 str(getattr(layout, "indent_type", "body") or "body"),
                 reference,
@@ -126,10 +131,12 @@ def finalize_layout_column_drift(
     *,
     page_index: int = 0,
     page_ink: np.ndarray | None = None,
+    ops: base.LayoutPrimitiveOps | None = None,
 ) -> Any:
     """Apply post-policy indent remeasurement, reusing an existing page mask when supplied."""
+    explicit_ops = ops is not None
+    ops = base.current_layout_ops() if ops is None else ops
     if page_ink is None:
-        from . import dictionary_page_design as base
         from .layout_detection import analysis_ink_mask
 
         source, canonical, _transform, effective = base._analysis_page(
@@ -142,7 +149,7 @@ def finalize_layout_column_drift(
                 np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8),
                 effective,
             )
-            counts = remeasure_layout_indents_from_ink(layout, page_ink)
+            counts = remeasure_layout_indents_from_ink(layout, page_ink, **({"ops": ops} if explicit_ops else {}))
         finally:
             try:
                 canonical.close()
@@ -153,7 +160,7 @@ def finalize_layout_column_drift(
             except Exception:
                 pass
     else:
-        counts = remeasure_layout_indents_from_ink(layout, page_ink)
+        counts = remeasure_layout_indents_from_ink(layout, page_ink, **({"ops": ops} if explicit_ops else {}))
 
     if counts:
         detail = ",".join(
