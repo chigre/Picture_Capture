@@ -15,7 +15,7 @@ from picture_capture.ocr_action_guard import (
     guard_ocr_action_selection,
 )
 from picture_capture.ordinary_quick_settings import _apply_quick_settings_for_ordinary
-from picture_capture.settings_help_restore import install_settings_help_restore
+from picture_capture.ui.settings import schema as settings_schema
 from picture_capture.ui_terminology import normalize_ui_text
 
 
@@ -28,18 +28,6 @@ class _Var:
 
     def set(self, value):
         self.value = value
-
-
-class _FakeSettingsDialog:
-    SETTING_HELP = {"ocr_engine": "old"}
-    CHECK_HELP = {"paddle_use_paddleocr": "old"}
-
-    def __init__(self):
-        self.vars = {}
-
-
-class _FakeAppModule:
-    SettingsDialog = _FakeSettingsDialog
 
 
 def _gui_composition_source() -> str:
@@ -62,31 +50,20 @@ def _worker_composition_source() -> str:
     ).read_text(encoding="utf-8")
 
 
-def test_settings_help_restore_installs_current_shared_ocr_wording_without_tk_root():
-    install_settings_help_restore(_FakeAppModule)
-    dialog = _FakeAppModule.SettingsDialog()
-    assert dialog.vars == {}
-    assert "共享 OCR 通道" in _FakeAppModule.SettingsDialog.SETTING_HELP["ocr_engine"]
-    assert "共享 OCR 通道" in _FakeAppModule.SettingsDialog.CHECK_HELP["paddle_use_paddleocr"]
+def test_settings_help_schema_owns_current_shared_ocr_and_layout_wording():
+    assert "共享 OCR 通道" in settings_schema.SETTING_HELP["paddle_lens_mode"]
+    assert "兼容字段" in settings_schema.SETTING_HELP["ocr_engine"]
+    assert "共享 OCR 通道" in settings_schema.SETTING_HELP["ocr_engine"]
+    assert "【仅OCR】与【OCR画线】" in settings_schema.CHECK_HELP["paddle_use_paddleocr"]
+    assert "共享 OCR 通道" in settings_schema.CHECK_HELP["paddle_compare_tesseract"]
+    assert "运行模式仍为 off" in settings_schema.CHECK_HELP["paddle_enable_lens"]
+    assert "Layout Core" in settings_schema.CHECK_HELP["ordinary_auto_layout"]
 
 
-def test_gui_composition_installs_help_restore_after_compact_right_pane_builder():
+def test_gui_composition_no_longer_installs_settings_help_restore():
     source = _gui_composition_source()
-    compact = source.index("install_settings_parameter_help(app_module)")
-    restore = source.index("install_settings_help_restore(app_module)")
-    assert compact < restore
-
-
-def test_settings_help_restore_binds_actual_textvariable_and_check_variable_widgets():
-    source = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "picture_capture"
-        / "settings_help_restore.py"
-    ).read_text(encoding="utf-8")
-    assert '_widget_variable(widget, "textvariable")' in source
-    assert '_widget_variable(widget, "variable")' in source
-    assert 'dialog._bind_help_widget(widget, callback)' in source
+    assert "install_settings_parameter_help(app_module)" in source
+    assert "install_settings_help_restore" not in source
 
 
 def _app_for_ocr_selection(*, paddle=False, tesseract=False, lens=False, lens_mode="off", rescue=False):

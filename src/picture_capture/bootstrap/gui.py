@@ -74,14 +74,12 @@ def prepare_gui_application() -> Any:
 
     from ..layout_visualization_ui_v3 import install_layout_visualization
     from ..parameter_help_ui import install_settings_parameter_help
-    from ..settings_help_restore import install_settings_help_restore
     from ..single_line_merge_settings import install_single_line_merge_settings_ui
     from ..unlined_export_filter_settings import (
         install_unlined_export_filter_settings_ui,
     )
     # Illustration-mask Settings metadata is static in the shared schema.
     install_settings_parameter_help(app_module)
-    install_settings_help_restore(app_module)
     install_single_line_merge_settings_ui(app_module)
     # Filter controls belong to the same integrated crop-settings surface and
     # are installed after the per-page merge switch so they appear beneath it.
