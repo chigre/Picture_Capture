@@ -306,6 +306,9 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
         dialog._bind_help_widget(filter_master, show_filter_help)
         dialog._bind_help_widget(filter_info, show_filter_help)
         dialog._bind_help_widget(filter_blank_check, show_blank_help)
+        filter_master.bind(
+            "<Button-1>", lambda _event: show_filter_help(), add="+"
+        )
         for widget in (
             filter_threshold_label,
             filter_threshold_spin,
