@@ -29,14 +29,29 @@ def add_crop_preview_font_controls(
         var = tk.BooleanVar(value=bool(getattr(app.settings, name)))
         app.quick_bool_vars[name] = var
         ttk.Checkbutton(row, text=label, variable=var).pack(side="left", padx=(7, 0))
+    follow_zoom = tk.BooleanVar(value=bool(app.settings.crop_preview_follow_zoom))
+    app.quick_bool_vars["crop_preview_follow_zoom"] = follow_zoom
+    ttk.Checkbutton(row, text="跟随缩放", variable=follow_zoom).pack(side="left", padx=(8, 0))
+
+
+def effective_crop_preview_font_size(
+    image_width: int, view_scale: float, settings: Any,
+) -> int:
+    """Match main text editor's 1400-pixel displayed-page reference scale."""
+    base_size = max(5, int(settings.crop_preview_font_size))
+    if settings.crop_preview_follow_zoom:
+        font_size = round(base_size * max(1.0, image_width * view_scale) / 1400.0)
+    else:
+        font_size = base_size
+    return max(5, min(72, font_size))
 
 
 def crop_preview_font_spec(app: Any, scale: float, resolve_family: Any, entry_font_spec: Any) -> Any:
-    """Render preview labels independently from main editing widget typography."""
+    """Resolve preview typography using the same size semantics as main editors."""
     family = resolve_family(
         app.canvas, app.settings.crop_preview_font_family, app.settings.ocr_language,
     )
     return entry_font_spec(
-        family, max(5, round(app.settings.crop_preview_font_size * scale)),
+        family, effective_crop_preview_font_size(app.image.width, scale, app.settings),
         app.settings.crop_preview_font_bold, app.settings.crop_preview_font_italic,
     )
