@@ -3,17 +3,19 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 is complete. Bounded ownership cleanup is closed with no further production write: the remaining process-global seams are deliberately retained because each now represents a broader compatibility/composition boundary rather than a small installer-shaped debt.**
+**Phase 13 — explicit Layout composition API redesign has started. Phase 13A design/characterization is complete with no production behavior change.**
 
-Phase 12U remains complete on `main@e6e358f9db97325c6070dc3584351034b148c05a`, with its checkpoint merged on `main@809cdafa7457aafbf75b5d941d7e6add4f4b7a5f`. Post-checkpoint CI 2353 passed on Ubuntu/Windows/macOS and CodeQL 2336 passed. Phase 12T and all earlier bounded Phase 12 slices remain complete; Phase 12K and Phase 12I remain characterization-only deferrals by design.
+Phase 12 is fully closed on `main@388eb6965f267f3e34e14744b9563b2ff93e160b`. Closure PR #390 fixed head `00456dd40a32556cf70d773ddc698e4521a5b6f2` passed CI 2354 on Ubuntu/Windows/macOS, merged as `388eb6965f267f3e34e14744b9563b2ff93e160b`, and post-merge CI 2355 plus CodeQL 2338 passed. The production baseline remains zero `*_runtime.py` files and all Phase 12 architecture ratchets remain active.
 
-Structural closure invariants:
-- recursive production baseline remains **zero** `src/picture_capture/**/*_runtime.py` files;
-- `LEGACY_RUNTIME_FILES` remains an empty set, so any new production `*_runtime.py` file fails the architecture guard;
-- historical assignment mirroring remains limited to the two Phase 9 facade users;
-- the retained Layout, PDIC, facade and OCR-boundary seams are explicit compatibility/composition boundaries, not candidates for further local wrapper deletion.
+Phase 13A establishes a two-layer target:
+- immutable `LayoutPrimitiveOps` for row runs, line features, indent modes and indent-role assignment;
+- an explicit higher-level Layout composition service for Profile anchoring, composed policy behavior and Page Understanding finalization.
 
-The Phase 8 full OCR cold/warm benchmark gate remains open and must be completed before any new OCR performance micro-optimization. Phase 9 facade compatibility remains an intentional public boundary.
+Raw Page Design and raw policy defaults remain compatibility contracts. Product physical/composed behavior must be selected explicitly rather than becoming the new raw default.
+
+The detailed design and staged migration plan are recorded in `docs/refactor/PHASE13_LAYOUT_COMPOSITION_DESIGN.md`.
+
+The Phase 8 full OCR cold/warm benchmark gate remains open and must be completed before any OCR performance micro-optimization. Phase 9 facade compatibility remains an intentional public boundary.
 
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
@@ -2532,35 +2534,77 @@ Phase 12 closes with:
 Phase 12V therefore marks **Phase 12 complete**. Do not open another Phase 12
 production PR.
 
-## Next major effort — Phase 13 explicit Layout composition API
+## Phase 13A — explicit Layout composition API design
 
-Start Phase 13 with **read-only design/characterization**, using the Phase 12K
-dependency graph as input.
+Phase 13A is documentation/characterization only. It does not alter production
+execution.
 
-The first deliverable should define an explicit composed Layout service/API that
-can preserve all three current consumers without changing behavior:
-1. full GUI/Page Understanding;
-2. ordinary/spawn detection;
-3. physical-only unlined-row escalation.
+Key findings:
+- the current physical runtime mutates four Page Design primitive hooks;
+- robust line-start must wrap the raw line feature **before** physical line
+  feature composition;
+- the same primitive hook names are read by base Page Design, refined guard-band
+  recovery, policy, page-X registration and column-drift finalization;
+- raw direct Page Design tests remain a real lower-level compatibility contract;
+- raw policy tests intentionally observe unanchored page-level auto estimates;
+- no repository test currently monkeypatches the four private primitive hook
+  names, so explicit ops injection is feasible without preserving those private
+  globals as a test extension API.
 
-Before any production write, specify:
-- the exact robust-line-start -> physical-line-feature composition order;
-- where Profile anchoring belongs without changing raw policy semantics;
-- where policy/Page Understanding final role normalization belongs;
-- which service surface each consumer receives;
-- cache and capture timing;
-- compatibility behavior for tests/external monkeypatch seams.
+The target architecture is two-layer:
+1. `LayoutPrimitiveOps` carries the four primitive callbacks and defaults to
+   the current raw implementations.
+2. A composed Layout service selects physical ops and owns Profile anchoring /
+   higher-level finalization without changing raw APIs.
 
-Only after that design demonstrates a genuinely separable migration should
-Phase 13 production work begin.
+The migration is intentionally staged in 13B–13E; see
+`PHASE13_LAYOUT_COMPOSITION_DESIGN.md`.
 
-Separately, the still-open **Phase 8 full OCR cold/warm benchmark** remains the
-required performance gate before any OCR speed optimization.
+## Recommended next slice — Phase 13B primitive-ops plumbing only
+
+Phase 13B must be behavior-neutral dependency plumbing.
+
+Allowed production changes:
+- define an immutable `LayoutPrimitiveOps` type plus a raw/default instance;
+- add optional/defaulted ops parameters through the minimum internal propagation
+  set:
+  - `dictionary_page_design.infer_dictionary_page_layout(...)`;
+  - refined guard-band row/feature recovery;
+  - `dictionary_page_layout_policy.resolve_page_layout_policy(...)`;
+  - `dictionary_page_layout_policy.infer_dictionary_page_layout(...)`;
+  - `page_x_registration.register_page_manual_x(...)` and its line-family
+    helper;
+  - `layout_column_drift.finalize_layout_column_drift(...)` /
+    `remeasure_layout_indents_from_ink(...)`;
+- replace internal reads of the four Page Design primitive global names with the
+  supplied ops object.
+
+Not allowed in 13B:
+- do not build or route product consumers through physical ops yet;
+- do not remove or alter `install_robust_line_starts()`;
+- do not remove or alter `install_physical_indent_inference()`;
+- do not change Profile anchoring or role-finalization ownership;
+- do not change raw Page Design/policy defaults;
+- do not combine PDIC, OCR-boundary, GUI or performance work.
+
+Required gates:
+- direct raw Page Design tests unchanged;
+- raw policy tests unchanged;
+- all existing installed/composed product tests unchanged;
+- add focused tests proving explicit custom ops are honored through policy,
+  page-X registration/refined guard-band and drift paths;
+- architecture guard should prevent new direct consumers of the mutable primitive
+  hook globals outside the known compatibility implementation during migration.
+
+Only after 13B is green should Phase 13C construct explicit physical ops and
+compare them against the currently installed runtime.
+
+Separately, Phase 8 remains the required OCR performance gate.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
 ## Standing continuation authorization
-The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 11 is complete; Phase 12 follows the same bounded-slice rule.
+The user has authorized faster continuous progression through confirmed-safe refactor slices without stopping for a checkpoint after every small change. Phase 12 is complete; Phase 13 follows the same evidence-first staged-migration rule.
 
 Continue across related low-risk changes once contracts and focused tests are clear. Use checkpoints at phase milestones, material compatibility-boundary changes, plan changes, merge/finalization boundaries, or when recovery state would otherwise become ambiguous.
 
