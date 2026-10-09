@@ -135,52 +135,5 @@ def install_ui_terminology() -> None:
 
 
 def install_app_tooltip_terminology(app_module: Any) -> None:
-    """Normalize tooltip/help text while preserving the original descriptor.
-
-    ``PictureCaptureApp._attach_tooltip`` is a ``@staticmethod`` in the legacy
-    monolithic UI. Replacing it with a normal function would make Python bind
-    ``self`` on instance access and therefore add one positional argument. The
-    wrapper deliberately inspects ``__dict__`` and re-installs the same
-    descriptor kind so runtime calling semantics cannot change.
-    """
-    app_class = getattr(app_module, "PictureCaptureApp", None)
-    if app_class is None:
-        return
-
-    descriptor = app_class.__dict__.get("_attach_tooltip")
-    if descriptor is None:
-        return
-
-    if isinstance(descriptor, staticmethod):
-        original = descriptor.__func__
-        if getattr(original, "_pc_terminology_wrapped", False):
-            return
-
-        def wrapped(widget, text, *args, **kwargs):
-            return original(widget, normalize_ui_text(text), *args, **kwargs)
-
-        wrapped._pc_terminology_wrapped = True  # type: ignore[attr-defined]
-        app_class._attach_tooltip = staticmethod(wrapped)
-        return
-
-    if isinstance(descriptor, classmethod):
-        original = descriptor.__func__
-        if getattr(original, "_pc_terminology_wrapped", False):
-            return
-
-        def wrapped(cls, widget, text, *args, **kwargs):
-            return original(cls, widget, normalize_ui_text(text), *args, **kwargs)
-
-        wrapped._pc_terminology_wrapped = True  # type: ignore[attr-defined]
-        app_class._attach_tooltip = classmethod(wrapped)
-        return
-
-    original = descriptor
-    if getattr(original, "_pc_terminology_wrapped", False):
-        return
-
-    def wrapped(self, widget, text, *args, **kwargs):
-        return original(self, widget, normalize_ui_text(text), *args, **kwargs)
-
-    wrapped._pc_terminology_wrapped = True  # type: ignore[attr-defined]
-    app_class._attach_tooltip = wrapped
+    """Compatibility shim; global widget terminology already covers tooltips."""
+    _ = app_module
