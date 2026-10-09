@@ -82,13 +82,17 @@ def _same_image_fingerprint(
     if not isinstance(image, dict):
         return False
     path = Path(image_path)
+    # Different images may share a stem (e.g. page.png and page.jpg), hence
+    # the same sidecar path. Never reuse geometry for another source name.
+    if image.get("name") != path.name:
+        return False
     try:
         stat = path.stat()
         if int(image.get("size_bytes", -2)) != int(stat.st_size):
             return False
         if int(image.get("mtime_ns", -2)) != int(stat.st_mtime_ns):
             return False
-    except OSError:
+    except (OSError, TypeError, ValueError, OverflowError):
         return False
     if source_size is not None:
         raw = image.get("source_size")
@@ -297,9 +301,14 @@ def load_layout_rows_cache(
         return None
     if payload.get("format") != CACHE_FORMAT:
         return None
-    if int(payload.get("algorithm_version", 0) or 0) != CACHE_ALGORITHM_VERSION:
+    try:
+        version = int(payload.get("algorithm_version", 0) or 0)
+        cached_page = int(payload.get("page_index", -1))
+    except (TypeError, ValueError, OverflowError):
         return None
-    if int(payload.get("page_index", -1)) != int(page_index):
+    if version != CACHE_ALGORITHM_VERSION:
+        return None
+    if cached_page != int(page_index):
         return None
     if str(payload.get("settings_fingerprint") or "") != _settings_fingerprint(settings):
         return None
