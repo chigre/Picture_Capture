@@ -199,8 +199,9 @@ def test_static_review_classification_helpers_sync_and_persist_change(monkeypatc
 
     entry = Entry(
         word="",
-        x=40,
-        y=100,
+        x=4041,
+        y=9107,
+        current_page="phase12t-static-helper",
         ocr_source="ordinary_large_head_evidence",
         ocr_visual_run_height=84.0,
         ocr_oversized_cjk=True,
