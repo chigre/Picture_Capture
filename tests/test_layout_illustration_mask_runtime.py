@@ -328,7 +328,7 @@ def test_static_page_mask_enabled_passes_copy_appends_reason_and_closes(monkeypa
 
 
 def test_static_page_mask_failure_fails_open_in_full_understanding(monkeypatch):
-    from picture_capture import processing, page_understanding
+    from picture_capture import processing, layout_composition
     from picture_capture import layout_illustration_mask as masking
 
     original = object()
@@ -340,8 +340,8 @@ def test_static_page_mask_failure_fails_open_in_full_understanding(monkeypatch):
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("mask failed")),
     )
     monkeypatch.setattr(
-        page_understanding,
-        "understand_page",
+        layout_composition,
+        "understand_composed_page",
         lambda image, settings, *, page_index, page_sections: seen.append((image, page_sections)) or _understanding(),
     )
 
@@ -361,7 +361,7 @@ def test_static_page_mask_failure_fails_open_in_full_understanding(monkeypatch):
 
 
 def test_static_page_mask_closes_copy_when_understanding_raises(monkeypatch):
-    from picture_capture import processing, page_understanding
+    from picture_capture import processing, layout_composition
     from picture_capture import layout_illustration_mask as masking
 
     masked = _ClosableAnalysisImage()
@@ -372,8 +372,8 @@ def test_static_page_mask_closes_copy_when_understanding_raises(monkeypatch):
         lambda image, settings, *, profile_page_index: (masked, IllustrationMaskStats(masked=1)),
     )
     monkeypatch.setattr(
-        page_understanding,
-        "understand_page",
+        layout_composition,
+        "understand_composed_page",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("understanding failed")),
     )
 
