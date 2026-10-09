@@ -41,13 +41,13 @@ def is_project_cover_image(path: Path) -> bool:
     )
 
 
-def project_cover_path(root: Path) -> Path | None:
+def project_cover_path(root: Path, *, candidates: tuple[Path, ...] | None = None) -> Path | None:
     """Find the preferred project cover without treating it as a scanned page."""
     root = Path(root)
     # _cover.* is the simple current convention. _project_cover.* remains a
     # compatibility fallback for projects that used the earlier name.
     try:
-        items = tuple(root.iterdir())
+        items = candidates if candidates is not None else tuple(root.iterdir())
     except OSError:
         return None
     for stem in PROJECT_COVER_STEMS:
@@ -65,12 +65,12 @@ def project_cover_path(root: Path) -> Path | None:
     return None
 
 
-def project_page_images(root: Path) -> list[Path]:
+def project_page_images(root: Path, *, candidates: tuple[Path, ...] | None = None) -> list[Path]:
     """Return actual scanned pages, excluding the reserved project cover."""
     root = Path(root)
     try:
         pages = [
-            path for path in root.iterdir()
+            path for path in (candidates if candidates is not None else root.iterdir())
             if (
                 path.is_file()
                 and path.suffix.lower() in IMAGE_EXTENSIONS
