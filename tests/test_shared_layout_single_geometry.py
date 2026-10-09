@@ -39,11 +39,13 @@ def test_page_policy_uses_reliable_layout_estimate(monkeypatch) -> None:
         method="reliable_fusion",
         confidence=0.93,
     )
+    # Exercise the explicit raw-policy contract, independently of installed
+    # Product/Profile anchoring wrappers.
     # Policy intentionally resolves the detector through the live module binding;
     # patch that authoritative seam rather than the policy module's old by-value import.
     monkeypatch.setattr(layout_detection, "detect_layout_parameters", lambda image, s: estimate)
 
-    page_settings, returned_estimate, applied = policy.resolve_page_layout_policy(
+    page_settings, returned_estimate, applied = policy._RAW_RESOLVE_PAGE_LAYOUT_POLICY(
         Image.new("RGB", (2536, 3765), "white"),
         settings,
     )
