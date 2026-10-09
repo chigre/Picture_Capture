@@ -74,14 +74,10 @@ def prepare_gui_application() -> Any:
 
     from ..layout_visualization_ui_v3 import install_layout_visualization
     from ..parameter_help_ui import install_settings_parameter_help
-    from ..unlined_export_filter_settings import (
-        install_unlined_export_filter_settings_ui,
-    )
     # Illustration-mask Settings metadata is static in the shared schema.
     install_settings_parameter_help(app_module)
-    # Single-line merge now belongs to the static crop Settings schema/UI.
-    # Filter controls still use their compatibility wrapper below.
-    install_unlined_export_filter_settings_ui(app_module)
+    # Single-line merge and unlined-export filters now belong to the static
+    # crop Settings schema/UI; GUI bootstrap no longer wraps SettingsDialog.
     # Unlined QA now owns its physical-row fast path statically in
     # unlined_line_export.export_unlined_page_job; no GUI-time worker mutation
     # is required.
