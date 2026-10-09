@@ -134,6 +134,7 @@ def finalize_layout_column_drift(
     ops: base.LayoutPrimitiveOps | None = None,
 ) -> Any:
     """Apply post-policy indent remeasurement, reusing an existing page mask when supplied."""
+    explicit_ops = ops is not None
     ops = base.current_layout_ops() if ops is None else ops
     if page_ink is None:
         from .layout_detection import analysis_ink_mask
@@ -148,7 +149,7 @@ def finalize_layout_column_drift(
                 np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8),
                 effective,
             )
-            counts = remeasure_layout_indents_from_ink(layout, page_ink, ops=ops)
+            counts = remeasure_layout_indents_from_ink(layout, page_ink, **({"ops": ops} if explicit_ops else {}))
         finally:
             try:
                 canonical.close()
@@ -159,7 +160,7 @@ def finalize_layout_column_drift(
             except Exception:
                 pass
     else:
-        counts = remeasure_layout_indents_from_ink(layout, page_ink, ops=ops)
+        counts = remeasure_layout_indents_from_ink(layout, page_ink, **({"ops": ops} if explicit_ops else {}))
 
     if counts:
         detail = ",".join(
