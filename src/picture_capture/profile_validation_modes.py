@@ -371,7 +371,7 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
 
             from .image_utils import normalize_page_rgb
             from .page_sections import read_page_sections
-            from .page_understanding import understand_page
+            from .layout_composition import understand_composed_page
             from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
             from .processing import detect_entries
             from .project_storage import (
@@ -451,7 +451,7 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
                         preview = base_class._marker_preview(
                             image, entries, geometry, settings, index, preview_width,
                         )
-                        understanding = understand_page(
+                        understanding = understand_composed_page(
                             image,
                             settings,
                             page_index=index,
