@@ -211,6 +211,8 @@ def understand_page(
     *,
     page_index: int = 0,
     page_sections: list[Any] | None = None,
+    layout_infer: Any = None,
+    ops: base.LayoutPrimitiveOps | None = None,
 ) -> PageUnderstanding:
     """Recover one page once for ordinary/OCR/combined drawing.
 
@@ -218,7 +220,8 @@ def understand_page(
     remains authoritative for physical fields.  Sampled marker detection is also
     performed here because it is a page fact shared by all three drawing modes.
     """
-    layout, page_settings, applied = infer_dictionary_page_layout(
+    infer = infer_dictionary_page_layout if layout_infer is None else layout_infer
+    layout, page_settings, applied = infer(
         image, settings, page_index=page_index,
     )
     indent_label = _apply_explicit_indent_semantics(layout, page_settings)
@@ -254,6 +257,7 @@ def understand_page(
                 family,
                 semantic_entries,
                 page_index=page_index,
+                **({"ops": ops} if ops is not None else {}),
             ))
             semantic_entries = refined._deduplicate_reading_order(
                 layout, semantic_entries,
@@ -315,6 +319,10 @@ def understand_page(
         family_offset_ratio=family_ratio,
         symbol_evidence=symbol_evidence,
     )
+
+
+# The legacy physical installer may wrap the public Page Understanding function.
+_RAW_UNDERSTAND_PAGE = understand_page
 
 
 def _column_for_source_point(

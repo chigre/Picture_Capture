@@ -61,3 +61,38 @@ def infer_composed_physical_page_layout(
     )
     normalize_layout_roles(layout)
     return layout, page_settings, applied
+
+
+def understand_composed_page(
+    image: Image.Image,
+    settings: Any,
+    *,
+    page_index: int = 0,
+    page_sections: list[Any] | None = None,
+):
+    """Full Page Understanding with explicit physical and policy composition.
+
+    This is an opt-in service in Phase 13E1. GUI and worker routing stays
+    unchanged until the full parity and cache/persistence gates are green.
+    """
+    from . import page_understanding
+
+    ops = explicit_physical_layout_ops()
+
+    def infer_layout(page_image: Image.Image, page_settings: Any, *, page_index: int = 0):
+        return infer_composed_physical_page_layout(
+            page_image, page_settings, page_index=page_index, ops=ops,
+        )
+
+    understanding = page_understanding._RAW_UNDERSTAND_PAGE(
+        image,
+        settings,
+        page_index=page_index,
+        page_sections=page_sections,
+        layout_infer=infer_layout,
+        ops=ops,
+    )
+    # Match the historical page-understanding finalizer, not the earlier
+    # policy-level normalization performed by infer_composed_physical_page_layout.
+    normalize_layout_roles(understanding.layout)
+    return understanding
