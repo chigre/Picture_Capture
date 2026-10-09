@@ -937,6 +937,19 @@ def infer_entry_boundaries(
     return entries
 
 
+def _detect_entries_from_page_design_base(
+    image: Image.Image,
+    settings: AppSettings,
+    *,
+    page_index: int = 0,
+    page_sections: list[Any] | None = None,
+) -> LayoutDetectionResult:
+    """Retain the original unrefined materialization for focused diagnostics."""
+    layout = infer_dictionary_page_layout(image, settings, page_index=page_index)
+    entries = infer_entry_boundaries(layout, page_sections=page_sections) if layout.reliable else []
+    return LayoutDetectionResult(entries=entries, layout=layout)
+
+
 def detect_entries_from_page_design(
     image: Image.Image,
     settings: AppSettings,
@@ -944,6 +957,17 @@ def detect_entries_from_page_design(
     page_index: int = 0,
     page_sections: list[Any] | None = None,
 ) -> LayoutDetectionResult:
-    layout = infer_dictionary_page_layout(image, settings, page_index=page_index)
-    entries = infer_entry_boundaries(layout, page_sections=page_sections) if layout.reliable else []
-    return LayoutDetectionResult(entries=entries, layout=layout)
+    """Use the refined detector without requiring process-global rebinding."""
+    # Local import avoids the base <-> refined module cycle. The refined
+    # implementation consumes base geometry helpers but never calls this public
+    # forwarding function, so call-time delegation cannot recurse.
+    from .dictionary_page_design_refined import (
+        detect_entries_from_page_design as refined_detect_entries,
+    )
+
+    return refined_detect_entries(
+        image,
+        settings,
+        page_index=page_index,
+        page_sections=page_sections,
+    )
