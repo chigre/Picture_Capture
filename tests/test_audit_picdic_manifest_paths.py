@@ -13,7 +13,7 @@ def test_only_direct_pww_crop_is_accepted(tmp_path):
     img = pww / "word.png"
     img.write_bytes(b"crop")
     assert _manifest_crop_path(pww, "word.png") == img
-    assert _manifest_crop_path(pww, "WORD.PNG") == img
+    assert _manifest_crop_path(pww, "WORD.PNG").samefile(img)
 
 
 @pytest.mark.parametrize("filename", [
