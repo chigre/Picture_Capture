@@ -16,7 +16,9 @@ from typing import Any, Iterable
 
 from PIL import Image
 
-from .dictionary_page_layout_policy import infer_dictionary_page_layout
+# Keep the old local name for downstream monkeypatch and cache tests, but
+# obtain physical policy/layout through the explicit composition boundary.
+from .layout_composition import infer_composed_physical_page_layout as infer_dictionary_page_layout
 from .layout_physical_indent import (
     _suppress_display_head_duplicate_entries,
     normalize_layout_roles,
