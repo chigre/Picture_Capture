@@ -9199,22 +9199,8 @@ class PictureCaptureApp(tk.Tk):
             var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
             ttk.Checkbutton(label_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
 
-        crop_font_row = ttk.Frame(aux)
-        crop_font_row.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(3, 0))
-        ttk.Label(crop_font_row, text="切图预览标签字体").pack(side="left")
-        crop_family_var = tk.StringVar(value=normalize_content_font_setting(self.settings.crop_preview_font_family))
-        self.quick_vars["crop_preview_font_family"] = crop_family_var
-        self.quick_field_casts["crop_preview_font_family"] = str
-        ttk.Combobox(crop_font_row, textvariable=crop_family_var, values=content_font_values, width=18).pack(side="left")
-        ttk.Label(crop_font_row, text="字号").pack(side="left", padx=(8, 2))
-        crop_size_var = tk.StringVar(value=str(self.settings.crop_preview_font_size))
-        self.quick_vars["crop_preview_font_size"] = crop_size_var
-        self.quick_field_casts["crop_preview_font_size"] = int
-        ttk.Entry(crop_font_row, textvariable=crop_size_var, width=5, justify="left").pack(side="left")
-        for label, name in (("粗体", "crop_preview_font_bold"), ("斜体", "crop_preview_font_italic")):
-            var = tk.BooleanVar(value=bool(getattr(self.settings, name)))
-            self.quick_bool_vars[name] = var
-            ttk.Checkbutton(crop_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
+        from .crop_preview_display_settings import add_crop_preview_font_controls
+        add_crop_preview_font_controls(self, aux, content_font_values, normalize_content_font_setting)
 
         ocr_display_row = ttk.Frame(aux); ocr_display_row.grid(row=6, column=0, columnspan=4, sticky="ew")
         for label, name in (("显示OCR内容选择", "review_main_show_ocr_choices"), ("显示OCR对比底色结果", "review_main_show_ocr_background")):
