@@ -80,5 +80,5 @@ def test_remaining_installers_are_explicit_compatibility_boundary():
     assert "def _ensure_layout_runtime()" in processing
     assert "install_physical_indent_inference()" in processing
     assert "install_robust_line_starts()" in processing
-    assert "install_physical_indent_inference()" in bootstrap
-    assert "install_robust_line_starts()" in bootstrap
+    assert "install_physical_indent_inference()" not in bootstrap
+    assert "install_robust_line_starts()" not in bootstrap
