@@ -187,7 +187,9 @@ def test_unlined_export_worker_is_static_physical_fast_path_and_pickleable():
     assert "detect_ordinary_symbol_entries" not in resolver_source
     assert "detect_ordinary_large_head_entries" not in resolver_source
     # Reliable detector escalation is permitted only through physical policy.
-    assert "infer_dictionary_page_layout" in resolver_source
+    assert "infer_composed_physical_page_layout" in resolver_source
+    assert "install_robust_line_starts()" not in resolver_source
+    assert "install_physical_indent_inference()" not in resolver_source
 
 
 def test_gui_and_worker_composition_seed_layout_rows_for_future_qa():
