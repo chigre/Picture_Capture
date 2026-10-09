@@ -78,8 +78,10 @@ def test_phase5j_static_provenance_and_later_wrapper_order():
     assert "install_layout_role_provenance" not in gui
     assert "layout_role_provenance_runtime.py" not in guard
 
-    role_theme_pos = gui.index("install_layout_role_theme()")
-    lane_pos = gui.index("install_physical_lane_summary()")
+    assert "install_layout_role_theme()" not in gui
+    assert "install_physical_lane_summary()" not in gui
     assert "install_layout_indent_visibility" not in gui
     assert "install_shared_layout_visualization_source" not in gui
-    assert role_theme_pos < lane_pos
+    assert 'ENTRY_ROLE_COLOR = "#d32f2f"' in summary
+    assert "append_physical_lane_summary(text, app)" in summary
+    assert "add_prepared_indent_summary(text, app)" in summary
