@@ -28,13 +28,9 @@ def prepare_gui_application() -> Any:
 
     install_ui_terminology()
 
-    formats = core_services.formats
-    from ..training_baseline import build_write_pdic_capture
-
-    # Core composition already owns classification persistence for every process
-    # profile. GUI adds only the conservative automatic-baseline capture around
-    # that composed writer; there is no second classification installation here.
-    formats.write_pdic = build_write_pdic_capture(formats.write_pdic)
+    # GUI PDIC I/O is statically composed in gui_io. Its call-time forwarding
+    # preserves the core-owned classification wrappers while adding automatic
+    # baseline capture without mutating formats during GUI bootstrap.
 
     # Character-height fallback is now static in layout_detection; Page Design
     # and policy imports no longer depend on a local installer ordering guard.
