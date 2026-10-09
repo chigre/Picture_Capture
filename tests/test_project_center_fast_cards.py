@@ -41,7 +41,7 @@ def test_project_cover_inventory_preserves_case_insensitive_fallback(tmp_path):
     cover = root / "_PROJECT_COVER.PNG"
     cover.touch()
     inventory = tuple(root.iterdir())
-    assert models.project_cover_path(root, candidates=inventory) == cover
+    assert models.project_cover_path(root, candidates=inventory).samefile(cover)
     assert models.project_page_images(root, candidates=inventory) == [first]
 
 
