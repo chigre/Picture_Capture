@@ -15,6 +15,33 @@ def test_settings_help_module_has_no_reverse_app_dependency_and_keeps_resource_p
     assert path.parent.parent.name == "data"
 
 
+def test_bind_help_widget_recurses_into_child_controls():
+    class Widget:
+        def __init__(self, children=()):
+            self.children = list(children)
+            self.bindings = []
+
+        def bind(self, event, _callback, add=None):
+            self.bindings.append((event, add))
+
+        def winfo_children(self):
+            return list(self.children)
+
+    class Dialog:
+        def _bind_help_widget(self, widget, callback):
+            settings_help.bind_help_widget(self, widget, callback)
+
+    grandchild = Widget()
+    child = Widget([grandchild])
+    root = Widget([child])
+
+    settings_help.bind_help_widget(Dialog(), root, lambda: None)
+
+    for widget in (root, child, grandchild):
+        assert ("<Enter>", "+") in widget.bindings
+        assert ("<FocusIn>", "+") in widget.bindings
+
+
 def test_settings_help_extraction_keeps_dialog_wrappers_and_behavior_boundary():
     root = Path(__file__).resolve().parents[1]
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
