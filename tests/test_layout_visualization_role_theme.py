@@ -6,7 +6,8 @@ from picture_capture.layout_visualization_role_theme import (
 )
 
 
-def test_layout_entry_role_theme_is_red() -> None:
+def test_layout_entry_role_theme_is_static_and_red() -> None:
+    formatter = summary._format_summary
     install_layout_role_theme()
 
     assert ENTRY_ROLE_COLOR == "#d32f2f"
@@ -14,3 +15,4 @@ def test_layout_entry_role_theme_is_red() -> None:
     assert summary._ROLE_STYLE["entry"] == ("#d32f2f", "词条行")
     assert summary._ROLE_STYLE["headword"] == ("#d32f2f", "词条行")
     assert summary._ROLE_STYLE["body"] == ("#1976d2", "正文行")
+    assert summary._format_summary is formatter
