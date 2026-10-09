@@ -233,7 +233,7 @@ from .project_storage import (
     training_exports_root, word_fill_status_path, words_of_pages_default_path,
 )
 from .recent_projects import (
-    load_recent_projects, recent_project_details, remove_recent_project, touch_recent_project,
+    load_recent_projects, recent_project_details, recent_project_stub_details, remove_recent_project, touch_recent_project,
 )
 from .processing import (
     build_page_crop_plan,
@@ -12604,7 +12604,7 @@ class PictureCaptureApp(tk.Tk):
                 if abbreviation:
                     ttk.Label(title_row, text=f"  ·  {abbreviation}", foreground="#666666").pack(side="left")
                 status = tk.Label(
-                    title_row, text="可用" if exists else "路径失效", padx=8, pady=2,
+                    title_row, text="检查中" if detail.get("checking") else ("可用" if exists else "路径失效"), padx=8, pady=2,
                     bg="#e9f6ee" if exists else "#fff0ee", fg="#247245" if exists else "#b42318",
                     font=meta_font,
                 )
@@ -12649,10 +12649,10 @@ class PictureCaptureApp(tk.Tk):
             key = f"recent-projects-{id(dialog)}"
             # A previous refresh may still be decoding preview images.
             self._invalidate_ui_worker(f"{key}-previews")
+            self._invalidate_ui_worker(f"{key}-details")
 
             def worker():
-                rows = load_recent_projects()
-                return rows, [recent_project_details(row) for row in rows]
+                return load_recent_projects()
 
             def previews_worker(details):
                 from .project_center_preview_cache import load_project_center_preview
@@ -12680,19 +12680,30 @@ class PictureCaptureApp(tk.Tk):
                 state["cover_images"] = covers
                 rebuild()
 
-            def done(payload) -> None:
+            def details_done(details) -> None:
                 if not alive():
                     return
-                rows, details = payload
-                state["rows"] = rows
                 state["details"] = details
-                state["cover_images"] = {}
-                # Show cards as soon as metadata arrives; previews load later.
                 rebuild()
                 self._start_ui_worker(
                     f"{key}-previews",
                     lambda: previews_worker(details),
                     previews_done,
+                )
+
+            def done(rows) -> None:
+                if not alive():
+                    return
+                state["rows"] = rows
+                state["details"] = [recent_project_stub_details(row) for row in rows]
+                state["cover_images"] = {}
+                # First paint is independent of per-project directory scanning.
+                rebuild()
+                self._start_ui_worker(
+                    f"{key}-details",
+                    lambda: [recent_project_details(row) for row in rows],
+                    details_done,
+                    failed,
                 )
 
             def failed(exc, detail) -> None:
