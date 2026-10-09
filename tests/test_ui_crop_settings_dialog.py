@@ -9,6 +9,7 @@ from picture_capture.app import (
 )
 from picture_capture.crop.settings import (
     CROP_SETTINGS_VERSION,
+    SINGLE_LINE_MERGE_KEY,
     normalize_crop_settings_payload,
 )
 from picture_capture.models import AppSettings
@@ -48,6 +49,12 @@ def test_crop_settings_schema_remains_ui_free_and_preserves_coordinate_contract(
     assert payload["general_top_y"] == 31
     assert payload["general_bottom_y"] == 920
     assert payload["parallel_workers"] == 3
+    assert payload[SINGLE_LINE_MERGE_KEY] is False
+
+    raw = dict(payload)
+    raw[SINGLE_LINE_MERGE_KEY] = True
+    normalized = normalize_crop_settings_payload(raw, settings)
+    assert normalized[SINGLE_LINE_MERGE_KEY] is True
 
 
 def test_crop_settings_dialog_module_does_not_import_app() -> None:
