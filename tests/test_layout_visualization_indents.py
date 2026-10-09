@@ -48,8 +48,8 @@ def test_indent_blocks_show_column_edge_to_first_real_ink() -> None:
 
 
 def test_line_role_styles_keep_indent_distinct_from_entry_semantics() -> None:
-    assert _role_style("entry") == ("#2e7d32", "词条行")
-    assert _role_style("headword") == ("#2e7d32", "词条行")
+    assert _role_style("entry") == ("#d32f2f", "词条行")
+    assert _role_style("headword") == ("#d32f2f", "词条行")
     assert _role_style("body") == ("#1976d2", "正文行")
     assert _role_style("other_indent") == ("#757575", "不确定")
     assert _role_style("unknown") == ("#757575", "不确定")
@@ -101,6 +101,6 @@ def test_summary_reports_semantic_role_counts_and_legend() -> None:
     assert "词条行=1" in text
     assert "正文行=2" in text
     assert "不确定=1" in text
-    assert "绿色=词条行" in text
+    assert "红色=词条行" in text
     assert "蓝色=正文行" in text
     assert "灰色=不确定" in text

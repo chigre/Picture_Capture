@@ -88,9 +88,8 @@ def test_visible_renderer_draws_left_and_right_column_indent_blocks():
     assert canvas.raised, "indent blocks must be raised above the scan/base overlay"
 
 
-def test_static_visibility_preserves_lane_then_prepared_summary_order(monkeypatch):
-    from picture_capture import layout_lane_summary_extension as lane
-    from picture_capture import layout_visualization_summary as summary
+def test_static_visibility_preserves_lane_then_prepared_summary_order():
+    from picture_capture.layout_visualization_summary import _finalize_summary_text
 
     app = SimpleNamespace(
         _layout_visualization_indent_lanes=[
@@ -108,11 +107,8 @@ def test_static_visibility_preserves_lane_then_prepared_summary_order(monkeypatc
         ],
         _layout_visualization_indent_blocks=[_block(0, 60, 120, 100, 130)],
     )
-    monkeypatch.setattr(summary, "_format_summary", lambda _app, _snapshot: "base")
-    monkeypatch.setattr(summary, "_physical_lane_summary_installed", False, raising=False)
 
-    lane.install_physical_lane_summary()
-    output = summary._format_summary(app, SimpleNamespace())
+    output = _finalize_summary_text("base", app)
     assert output.index("physical indent lanes:") < output.index("indent blocks prepared: C1=1")
 
 
@@ -127,8 +123,9 @@ def test_phase5k_static_visibility_ownership():
     assert not (package / "layout_indent_visibility_runtime.py").exists()
     assert (package / "layout_indent_visibility.py").exists()
     assert "_draw_indent_blocks_visible as _draw_indent_blocks" in summary
-    assert "add_prepared_indent_summary(text, app)" in lane
+    assert "add_prepared_indent_summary(text, app)" in summary
     assert "install_layout_indent_visibility" not in gui
+    assert "install_physical_lane_summary()" not in gui
     assert "layout_indent_visibility_runtime.py" not in guard
 def test_visible_renderer_does_not_lower_indent_below_base_layout():
     source = (

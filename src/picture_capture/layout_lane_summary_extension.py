@@ -2,9 +2,8 @@ from __future__ import annotations
 
 """Append physical-indent lane diagnostics to the Layout summary."""
 
-from typing import Any, Callable
+from typing import Any
 
-from .layout_indent_visibility import add_prepared_indent_summary
 
 
 def _role_label(role: object) -> str:
@@ -43,17 +42,5 @@ def append_physical_lane_summary(base_text: str, app: Any) -> str:
 
 
 def install_physical_lane_summary() -> None:
-    """Wrap the current Layout summary formatter exactly once."""
-    from . import layout_visualization_summary as summary
-
-    if getattr(summary, "_physical_lane_summary_installed", False):
-        return
-
-    original: Callable[[Any, Any], str] = summary._format_summary
-
-    def wrapped(app: Any, snapshot: Any) -> str:
-        text = append_physical_lane_summary(original(app, snapshot), app)
-        return add_prepared_indent_summary(text, app)
-
-    summary._format_summary = wrapped
-    summary._physical_lane_summary_installed = True
+    """Compatibility no-op; lane/prepared summaries are statically composed."""
+    return None
