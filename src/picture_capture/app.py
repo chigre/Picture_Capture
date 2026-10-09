@@ -35,7 +35,7 @@ from .appearance import (
     themed_display_image,
     usage_guide_palette,
 )
-from .formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, write_text_atomic
+from .gui_io import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, write_text_atomic
 from .models import (
     AppSettings, Entry as WordEntry, PolygonRegion, ProjectState, project_page_images,
     read_noncomment_lines, resolve_wordslist_path, resolved_tesseract_language,
