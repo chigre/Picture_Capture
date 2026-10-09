@@ -46,18 +46,16 @@ _page_template_image = _core.page_template_analysis_image
 
 
 def _ensure_layout_runtime() -> None:
-    """Install the single physical-indent Layout runtime in this process.
+    """Install the remaining physical-indent Layout runtime in this process.
 
-    GUI and Windows/macOS spawn workers import modules independently.  Runtime
-    preparation therefore belongs in the detection facade itself rather than in
-    launcher-only monkey patches.  All installers are idempotent.
+    GUI and Windows/macOS spawn workers import modules independently. Runtime
+    preparation therefore belongs in the detection facade itself. The public
+    Page Design detector now forwards to the refined implementation statically;
+    only the two lower-level idempotent installers remain here.
     """
-    from . import dictionary_page_design
-    from .dictionary_page_design_refined import detect_entries_from_page_design
     from .layout_line_start_refinement import install_robust_line_starts
     from .layout_physical_indent import install_physical_indent_inference
 
-    dictionary_page_design.detect_entries_from_page_design = detect_entries_from_page_design
     install_robust_line_starts()
     install_physical_indent_inference()
 
