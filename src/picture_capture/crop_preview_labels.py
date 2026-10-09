@@ -6,8 +6,8 @@ from typing import Any
 
 def format_crop_preview_entry_label(word: str, filename: str) -> str:
     """Show the headword and its output image name on the same preview line."""
-    word = str(word or "").replace("\\r", " ").replace("\\n", " ").strip()
-    filename = str(filename or "").replace("\\r", " ").replace("\\n", " ").strip()
+    word = str(word or "").replace(chr(13), " ").replace(chr(10), " ").strip()
+    filename = str(filename or "").replace(chr(13), " ").replace(chr(10), " ").strip()
     return f"{word}  |  {filename}" if word else filename
 
 
