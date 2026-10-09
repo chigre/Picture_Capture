@@ -13820,16 +13820,9 @@ class PictureCaptureApp(tk.Tk):
         from .crop_preview_labels import draw_crop_preview_label, format_crop_preview_entry_label
         scale = self.view_scale
         illustrated_entries = {p.entry_ref_index for p in plan.entry_pieces if p.source_mode == "linked_original" and p.entry_ref_index is not None}
-        preview_family = resolve_content_font_family(
-            self.canvas,
-            self.settings.crop_preview_font_family,
-            self.settings.ocr_language,
-        )
-        preview_font = _entry_font_spec(
-            preview_family,
-            max(5, round(self.settings.crop_preview_font_size * scale)),
-            self.settings.crop_preview_font_bold,
-            self.settings.crop_preview_font_italic,
+        from .crop_preview_display_settings import crop_preview_font_spec
+        preview_font = crop_preview_font_spec(
+            self, scale, resolve_content_font_family, _entry_font_spec,
         )
         for piece in plan.entry_pieces:
             x0,y0,x1,y1=piece.box
