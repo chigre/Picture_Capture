@@ -710,26 +710,15 @@ class SettingsDialog(tk.Toplevel):
             self._bind_help_widget(label_widget, callback)
             self._bind_help_widget(control, callback)
             self._bind_help_widget(info, callback)
-            info.bind("<Button-1>", lambda _e, n=name: self._show_setting_help(n), add="+")
-
-            inline_help = ttk.Label(
-                group,
-                text=self.SETTING_HELP.get(
-                    name,
-                    "作用：高级参数。当前主流程没有更具体的用户说明时，建议保持默认值。",
+            info.bind(
+                "<Button-1>",
+                lambda _event, n=name, hi=help_images: self._show_setting_help(
+                    n, show_layout_image=hi
                 ),
-                foreground="#666b73",
-                justify="left",
+                add="+",
             )
-            inline_help.grid(
-                row=row + 1, column=0, columnspan=3,
-                sticky="ew", padx=(12, 8), pady=(0, 8),
-            )
-            self._bind_responsive_labels(
-                group, inline_help, horizontal_padding=34, min_wrap=180
-            )
-            self._bind_help_widget(inline_help, callback)
-            row += 2
+
+            row += 1
         return group
 
     def _add_check_group(
@@ -789,24 +778,7 @@ class SettingsDialog(tk.Toplevel):
                 lambda _e, l=label, n=name: self._show_check_help(l, n),
                 add="+",
             )
-            check_help = ttk.Label(
-                group,
-                text=self.CHECK_HELP.get(
-                    name,
-                    "作用：高级行为开关；不确定时建议保持默认。",
-                ),
-                foreground="#666b73",
-                justify="left",
-            )
-            check_help.grid(
-                row=row + 1, column=0, columnspan=2,
-                sticky="ew", padx=(22, 8), pady=(0, 7),
-            )
-            self._bind_responsive_labels(
-                group, check_help, horizontal_padding=34, min_wrap=180
-            )
-            self._bind_help_widget(check_help, callback)
-            row += 2
+            row += 1
 
             if name == "ordinary_auto_layout" and auto_children:
                 child_grid = ttk.Frame(group)
@@ -945,8 +917,8 @@ class SettingsDialog(tk.Toplevel):
         )
         help_hint = ttk.Label(
             help_box,
-            text="每个参数下方已直接显示详细说明；把鼠标停在设置项上、点击 ⓘ，"
-                 "或用 Tab/鼠标进入输入框时，右侧会同步显示完整说明与版面图解。",
+            text="把鼠标停在设置项上、点击 ⓘ，或用 Tab/鼠标进入输入框时，"
+                 "右侧会显示完整说明与版面图解；左侧只保留参数、单位和必要状态。",
             foreground="#7a8088",
             justify="left",
         )
