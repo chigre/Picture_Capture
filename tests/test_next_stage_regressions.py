@@ -1578,8 +1578,8 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert 'add_field(normal, 0, 0, "正文栏数：", "columns", int)' in text
     assert 'add_field(normal, 0, 0, "分栏数：", "columns", int)' not in text
     assert '"二、显示设置"' in text
-    assert '"三、融合 / OCR画线参数"' in text
-    assert text.index('"二、显示设置"') < text.index('"三、融合 / OCR画线参数"')
+    assert '"三、共享 OCR 通道 / OCR画线"' in text
+    assert text.index('"二、显示设置"') < text.index('"三、共享 OCR 通道 / OCR画线"')
     assert 'text="普通画线设置…"' in text
     assert 'text="显示标尺"' in text
     assert '"ruler_color": tk.StringVar(value=self.settings.ruler_color)' in text
@@ -2453,7 +2453,7 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     quick = text[quick_start:quick_end]
     for label in ("正文起始Y：", "首栏X：", "单栏宽：", "栏间空："):
         assert label in quick
-    for label in ("单行高：", "行间空：", "正文缩进：", "微调判距："):
+    for label in ("普通字/行高：", "行间空：", "正文缩进：", "微调判距："):
         assert label not in quick
     assert quick.index('"单栏宽："') > quick.index('"首栏X："')
     assert quick.index('"栏间空："') > quick.index('"单栏宽："')
