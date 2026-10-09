@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12H is complete: separator-Y and entry-crop compatibility are now native AppSettings construction/serialization behavior. Core bootstrap and separator refinement no longer install or rebind AppSettings methods/properties.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12I characterization is complete with no production write: the remaining PDIC classification installer is intentionally deferred because preserving distinct raw, classification-aware, GUI-baseline, training-export, and atomic-restore contracts would require broad consumer migration rather than one bounded ownership slice.**
 
-Phase 12H is merged on `main@6d6e85945b2d7981fcedec250dc064fda819359b`. Phase 12G remains complete on `main@93e66f3ea1d0e662a5c833d1e223f95ea1cb96ac`, Phase 12F remains complete on `main@2afea236e21acb336aba94c27e0d3889159b8f1e`, Phase 12E remains complete on `main@a1016a8aa8ef3fd50ff3c50b1e8433db9cd5122b`, Phase 12D remains complete on `main@762e2bc22eb2780549fad097b778f2bc303105e0`, Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`. Phase 4 controller decomposition and Phase 5 runtime-patch cleanup also remain closed: all production `*_runtime.py` modules are gone and the zero-runtime-debt architecture ratchet remains active.
+Phase 12H remains complete on `main@6d6e85945b2d7981fcedec250dc064fda819359b`, and its checkpoint is merged on `main@366af0b7298039b5b6ea12eb7df4216e8a32a873` with post-checkpoint CI 2300 and CodeQL 2283 passing. Phase 12G remains complete on `main@93e66f3ea1d0e662a5c833d1e223f95ea1cb96ac`, Phase 12F remains complete on `main@2afea236e21acb336aba94c27e0d3889159b8f1e`, Phase 12E remains complete on `main@a1016a8aa8ef3fd50ff3c50b1e8433db9cd5122b`, Phase 12D remains complete on `main@762e2bc22eb2780549fad097b778f2bc303105e0`, Phase 12C remains complete on `main@3632ff4bce26eafec28cf3eebd2e57b7f36c7870`, Phase 12B remains complete on `main@037922b0dc874730f14cb3eaefca7672776596f4`, Phase 12A remains complete on `main@0f37f14f2c428dd5d28a903cb2a72dd63b291a06`, and Phase 11 remains closed on `main@0d73836c6ecb64bab54a653ac0f6ca8a54d7c79f`.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -1907,42 +1907,73 @@ Phase 12H publication:
 - post-merge CodeQL 2281 passed;
 - no architecture threshold was relaxed.
 
-## Recommended next slice — Phase 12I PDIC classification composition characterization
+## Phase 12I — PDIC classification composition characterization only
 
-The remaining shared-core composition mutation is
-`install_pdic_classification(formats)`, which currently replaces
-`formats.read_pdic` / `formats.write_pdic` so ordinary application reads and
-writes automatically load/save the classification sidecar.
+The remaining shared-core mutation is still
+`install_pdic_classification(formats)`, but repository-wide characterization
+showed that deleting it is not a one-owner substitution.
 
-Do not simply move that behavior into raw `formats.py`. The repository has
-three distinct PDIC I/O contracts that must be characterized first:
-- raw PDIC text serialization/deserialization, whose format must remain usable
-  without sidecar semantics;
-- normal application/core PDIC I/O, which must include classification sidecars;
-- GUI automatic writes, which add first-baseline capture outside the
-  classification-aware writer.
+The current contracts are distinct:
+- raw PDIC text parsing/serialization lives in `formats.py`;
+- normal GUI/CLI/worker application paths rely on classification sidecar
+  load/save being composed around those callables before by-value imports occur;
+- `gui_io.py` adds automatic-baseline capture outside the core classification
+  writer and resolves the current formats callables at call time;
+- `training_export_v3.py` still inspects `_original_write_pdic`, but after
+  Phase 12D that attribute belongs only to the GUI baseline wrapper. Its normal
+  `formats.write_pdic` path therefore still retains classification sidecar
+  semantics;
+- `pdic_restore.write_pdic_atomic()` writes through a temporary PDIC path
+  before `os.replace`, so its existing sidecar-path behavior is another
+  compatibility edge that must not be silently changed inside an ownership
+  refactor;
+- application consumers import PDIC I/O both by value and module-qualified
+  across CLI, processing core, controllers, post-production workers and
+  training/export code.
 
-Training export is a fourth compatibility edge: it currently inspects
-`_original_write_pdic` specifically to bypass the GUI baseline wrapper while
-retaining the intended lower-level write semantics. Determine exactly which
-wrapper it is meant to bypass before changing ownership.
+A fully explicit static raw/composed split is possible in principle, but making
+it compatibility-safe would require migrating a broad set of consumers at once.
+That is larger than the current bounded-slice rule allows and would mix
+ownership cleanup with observable public/raw I/O semantics.
 
-A safe 12I should inventory every by-value and module-qualified
-`read_pdic`/`write_pdic` consumer, especially:
-- `processing_core.py`, UI controllers and CLI imports by value;
-- spawn-worker writes through `WorkerServices.formats`;
-- `single_line_parallel.py` and `unlined_line_export.py`;
-- `gui_io.py` call-time delegation introduced in Phase 12D;
-- `training_export.py` / `training_export_v3.py`;
-- `pdic_restore.py` atomic replacement behavior.
+Phase 12I therefore makes **no production code change**. The existing core-owned
+classification installer remains the deliberate compatibility boundary until a
+dedicated PDIC-I/O migration can be treated as its own broader project.
 
-Prefer an explicit static raw/composed boundary if characterization can preserve
-all call sites without broad churn. If the distinction cannot be made explicit
-without changing public/raw `formats` semantics or training-export behavior,
-stop at characterization and choose another bounded seam.
+Do not reinterpret this deferral as permission to add more wrappers around
+`formats.read_pdic` / `formats.write_pdic`. Phase 12D's call-time GUI boundary
+and the current core classification owner remain the only accepted composition
+layers.
 
-Do not combine 12I with Page Design physical-indent/line-start installers or the
-OCR-boundary runner bridge.
+## Recommended next slice — Phase 12J static refined Page Design forwarding
+
+A smaller remaining process-global mutation is duplicated in both GUI bootstrap
+and `processing._ensure_layout_runtime()`:
+
+`dictionary_page_design.detect_entries_from_page_design =`
+`dictionary_page_design_refined.detect_entries_from_page_design`.
+
+This binding can be removed without touching the deeper physical-indent or
+robust-line-start installers. Prefer making the base module's public
+`detect_entries_from_page_design(...)` a call-time forwarding boundary to the
+refined implementation. A local import inside that function avoids the
+`dictionary_page_design <-> dictionary_page_design_refined` import cycle,
+while the refined implementation continues to consume base geometry helpers
+directly.
+
+A safe 12J must:
+- preserve the effective refined detector used after current GUI/processing
+  runtime preparation;
+- remove the duplicate module-global detector assignments from both GUI and
+  processing;
+- leave `install_robust_line_starts()` and
+  `install_physical_indent_inference()` unchanged and in their current order;
+- add regression coverage proving direct base-module calls use the refined
+  implementation before any GUI/core runtime preparation;
+- ratchet against reintroducing the detector assignment.
+
+Do not combine this with physical-indent staticization, OCR runner changes, or
+PDIC I/O composition.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
