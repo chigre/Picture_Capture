@@ -233,7 +233,7 @@ from .project_storage import (
     training_exports_root, word_fill_status_path, words_of_pages_default_path,
 )
 from .recent_projects import (
-    load_recent_projects, recent_project_details, recent_project_stub_details, remove_recent_project, touch_recent_project,
+    load_recent_projects, recent_project_details, recent_project_stub_details, remove_recent_project, set_recent_project_pinned, touch_recent_project,
 )
 from .processing import (
     build_page_crop_plan,
@@ -12502,9 +12502,17 @@ class PictureCaptureApp(tk.Tk):
             )
 
         def card_menu(button: ttk.Button, root: Path) -> None:
+            pinned = any(
+                str(row.get("path")) == str(root) and bool(row.get("pinned"))
+                for row in state["rows"]
+            )
             menu = tk.Menu(dialog, tearoff=False)
             self._apply_current_appearance(menu)
             menu.add_command(label="复制项目路径", command=lambda: copy_path(root))
+            menu.add_command(
+                label="取消置顶" if pinned else "置顶项目",
+                command=lambda: (set_recent_project_pinned(root, not pinned), refresh_recent_data()),
+            )
             menu.add_separator()
             menu.add_command(
                 label="从最近项目移除（不删除文件）",
@@ -12599,7 +12607,7 @@ class PictureCaptureApp(tk.Tk):
                 content.columnconfigure(0, weight=1)
                 title_row = ttk.Frame(content)
                 title_row.grid(row=0, column=0, sticky="ew")
-                name_label = ttk.Label(title_row, text=full_name, font=card_title_font)
+                name_label = ttk.Label(title_row, text=("📌 " if row.get("pinned") else "") + full_name, font=card_title_font)
                 name_label.pack(side="left")
                 if abbreviation:
                     ttk.Label(title_row, text=f"  ·  {abbreviation}", foreground="#666666").pack(side="left")
