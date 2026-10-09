@@ -3,11 +3,17 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is at closure. Phase 12U is complete: canonical UI terminology is now source-native and GUI bootstrap no longer monkeypatches Tk/ttk widget constructors or StringVar methods.**
+**Phase 12 is complete. Bounded ownership cleanup is closed with no further production write: the remaining process-global seams are deliberately retained because each now represents a broader compatibility/composition boundary rather than a small installer-shaped debt.**
 
-Phase 12U is merged on `main@e6e358f9db97325c6070dc3584351034b148c05a`. Phase 12T remains complete on `main@5b0f07af2acc056318c80d422193d7e947d38886`, with its checkpoint merged on `main@f9d83b77a8941ea454fd38ac6ddf3cc84f40e15d`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
+Phase 12U remains complete on `main@e6e358f9db97325c6070dc3584351034b148c05a`, with its checkpoint merged on `main@809cdafa7457aafbf75b5d941d7e6add4f4b7a5f`. Post-checkpoint CI 2353 passed on Ubuntu/Windows/macOS and CodeQL 2336 passed. Phase 12T and all earlier bounded Phase 12 slices remain complete; Phase 12K and Phase 12I remain characterization-only deferrals by design.
 
-The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary scoped runner bridge remains a real debt candidate, but its call chain reaches the mature parser core and is not a bounded Phase 12 write.
+Structural closure invariants:
+- recursive production baseline remains **zero** `src/picture_capture/**/*_runtime.py` files;
+- `LEGACY_RUNTIME_FILES` remains an empty set, so any new production `*_runtime.py` file fails the architecture guard;
+- historical assignment mirroring remains limited to the two Phase 9 facade users;
+- the retained Layout, PDIC, facade and OCR-boundary seams are explicit compatibility/composition boundaries, not candidates for further local wrapper deletion.
+
+The Phase 8 full OCR cold/warm benchmark gate remains open and must be completed before any new OCR performance micro-optimization. Phase 9 facade compatibility remains an intentional public boundary.
 
 Controllers on `main`: Canvas, Crop, Detection, Export, Headword, Illustration, Page, Project, Review, Session.
 
@@ -2455,56 +2461,101 @@ Phase 12U publication:
   784,737);
 - no architecture or size threshold was relaxed.
 
-## Recommended next slice — Phase 12V closure inventory (docs only)
+## Phase 12V — Phase 12 closure inventory
 
-Do not start another production ownership rewrite inside Phase 12. Read-only
-inventory after 12U shows that the small/bounded seams have been exhausted.
+Phase 12V is documentation-only. No production source is changed.
 
-The remaining real process-global composition boundaries are:
+Read-only closure inventory confirms exactly four retained boundaries.
 
-1. **Layout composition chain — deferred in Phase 12K.**
-   - `install_robust_line_starts()` and
-     `install_physical_indent_inference()` are still entered by GUI startup,
-     ordinary detection and the independent unlined-row resolver.
-   - the chain intentionally captures robust line-start behavior before physical
-     line-feature composition, then layers Profile anchoring, policy
-     finalization and Page Understanding finalization.
-   - raw policy behavior differs from the composed product runtime, so deleting
-     these installers requires a broader explicit Layout composition API rather
-     than another local substitution.
+### 1. Layout composition chain — retained for the next major architecture effort
 
-2. **PDIC classification composition — deferred in Phase 12I.**
-   - `build_core_services()` still calls
-     `install_pdic_classification(formats)`.
-   - raw PDIC I/O, classification-aware I/O, GUI automatic baseline capture,
-     training export and atomic restore have distinct compatibility contracts.
-   - removing this wrapper requires a deliberate raw/composed PDIC API migration
-     across many consumers.
+The remaining Layout runtime order is explicit and multi-consumer:
+- GUI startup calls `install_robust_line_starts()` then
+  `install_physical_indent_inference()`;
+- ordinary detection repeats the same idempotent order inside
+  `processing._ensure_layout_runtime()` so spawned/non-GUI processes are
+  prepared independently;
+- the unlined physical-row resolver repeats the same order before its final
+  detector escalation.
 
-3. **Historical facade assignment mirror — intentional Phase 9 boundary.**
-   - only `processing.py` and `paddle_headwords.py` use
-     `install_core_assignment_mirror(...)`.
-   - the architecture guard already rejects any third user.
-   - do not remove this without an explicit public monkeypatch-compatibility
-     decision.
+Phase 12K established why this cannot be deleted as another bounded wrapper:
+robust line-start behavior is captured before physical line-feature composition,
+then Profile anchoring, policy finalization and Page Understanding finalization
+are layered on top. Raw policy semantics intentionally differ from the composed
+product runtime.
 
-4. **OCR-boundary scoped runner bridge — larger future debt.**
-   - `ocr_channel_legacy.py` temporarily routes mature parser-core engine
-     globals through the shared OCR channel and restores them afterwards.
-   - tests protect native restoration and pre-existing external monkeypatches.
-   - replacing it means changing the mature parser/core dependency boundary, not
-     merely deleting a bootstrap installer.
+The next architecture effort must therefore design an explicit **Layout
+composition API** rather than continue installer-by-installer mutation removal.
 
-Phase 12V should record these four boundaries, confirm the zero
-`*_runtime.py` baseline and all existing architecture ratchets, and mark
-**Phase 12 complete with no further production write**.
+### 2. PDIC classification composition — retained
 
-After Phase 12 closure, choose the next major effort explicitly rather than
-smuggling it into bounded cleanup. The strongest architecture candidate is an
-explicit Layout composition API (the Phase 12K dependency graph is already the
-design input); the still-open Phase 8 full OCR cold/warm benchmark remains the
-performance gate and should also be scheduled before unmeasured OCR
-micro-optimization.
+`build_core_services()` remains the sole shared owner that calls
+`install_pdic_classification(formats)`.
+
+Phase 12I established that raw PDIC text I/O, classification-aware I/O, GUI
+automatic-baseline capture, training export and atomic restore are distinct
+compatibility contracts. Removing the remaining wrapper requires a deliberate
+raw/composed PDIC API migration across consumers and is outside bounded cleanup.
+
+### 3. Historical facade assignment mirror — intentional public boundary
+
+Only `processing.py` and `paddle_headwords.py` use
+`install_core_assignment_mirror(...)`.
+
+The architecture guard records those two exact users and rejects any third
+production adopter. This remains the intentional Phase 9 monkeypatch/facade
+compatibility contract; it is not runtime-installer debt.
+
+### 4. OCR-boundary scoped runner bridge — retained for a larger parser-boundary redesign
+
+`ocr_channel_legacy.py` remains the narrow scoped compatibility seam that
+routes mature parser-core OCR runner call sites through the shared OCR channel
+and restores the original/native or externally monkeypatched call sites after
+the boundary call.
+
+Tests already protect restoration and external monkeypatch preservation.
+Replacing this bridge requires changing the mature parser/core dependency
+boundary and must not be mixed with bounded cleanup.
+
+### Closure ratchets
+
+Phase 12 closes with:
+- zero production `*_runtime.py` files;
+- `LEGACY_RUNTIME_FILES: set[str] = set()`;
+- no new dynamic namespace-copy or module-class proxy users;
+- facade compatibility restricted to the two recorded historical modules;
+- accumulated Phase 12 guards rejecting reintroduction of retired model,
+  AppSettings, Page Design, OCR action, Settings, crop, Review, visualization,
+  terminology and other process-global mutations;
+- historical oversized-module size ceilings still active and never relaxed.
+
+Phase 12V therefore marks **Phase 12 complete**. Do not open another Phase 12
+production PR.
+
+## Next major effort — Phase 13 explicit Layout composition API
+
+Start Phase 13 with **read-only design/characterization**, using the Phase 12K
+dependency graph as input.
+
+The first deliverable should define an explicit composed Layout service/API that
+can preserve all three current consumers without changing behavior:
+1. full GUI/Page Understanding;
+2. ordinary/spawn detection;
+3. physical-only unlined-row escalation.
+
+Before any production write, specify:
+- the exact robust-line-start -> physical-line-feature composition order;
+- where Profile anchoring belongs without changing raw policy semantics;
+- where policy/Page Understanding final role normalization belongs;
+- which service surface each consumer receives;
+- cache and capture timing;
+- compatibility behavior for tests/external monkeypatch seams.
+
+Only after that design demonstrates a genuinely separable migration should
+Phase 13 production work begin.
+
+Separately, the still-open **Phase 8 full OCR cold/warm benchmark** remains the
+required performance gate before any OCR speed optimization.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
