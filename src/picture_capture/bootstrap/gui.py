@@ -62,19 +62,10 @@ def prepare_gui_application() -> Any:
 
     install_layout_rows_persistence_runtime()
 
-    from .. import profile_setup
-    from ..parameter_help_ui import build_profile_parameter_help_wizard
-    from ..profile_indent_ui import build_project_profile_wizard
-    from ..profile_ordinary_evidence_ui import build_ordinary_evidence_profile_wizard
-
-    # Profile creation owns its anchor-free/OCR-free detector statically in
-    # profile_setup; GUI bootstrap no longer rewrites that module-global seam.
-
-    profile_setup.ProjectProfileWizard = build_profile_parameter_help_wizard(
-        build_ordinary_evidence_profile_wizard(
-            build_project_profile_wizard(profile_setup.ProjectProfileWizard)
-        )
-    )
+    # Project Profile UI extensions are composed statically in
+    # profile_wizard_composed. app.py imports that finished class directly, so
+    # GUI bootstrap no longer mutates profile_setup.ProjectProfileWizard or
+    # controls the wizard's import order.
 
     # Current training export is composed statically in training_export_composed:
     # v2 base -> v3 corrections -> shared Page Understanding. GUI startup no
