@@ -5918,7 +5918,7 @@ def test_review_screenshot_polish_prevents_right_pane_clipping():
     build = review[build_start:build_end]
     assert "def add_review_height_control(" in build
     assert '"普通词条行切图高："' in build
-    assert '"单字行高："' in build
+    assert '"大字头切图高："' in build
     height_controls = build[
         build.index("        def add_review_height_control("):
         build.index("        zoom_row = ttk.Frame(")
@@ -6092,7 +6092,7 @@ def test_v21119_review_ui_exposes_text_left_padding_and_live_ocr_similarity():
     assert 'editor.pack_configure(padx=(padding, 0))' in review
 
 
-def test_v21120_review_single_cjk_crop_expands_but_normal_word_does_not():
+def test_review_oversized_classification_crop_expands_but_regular_does_not():
     from picture_capture.app import _review_line_box
 
     image = Image.new("RGB", (1000, 1400), "white")
@@ -6102,16 +6102,24 @@ def test_v21120_review_single_cjk_crop_expands_but_normal_word_does_not():
     )
     geometry = Geometry([100], [600], 50, 1300, [ColumnPath([(50, 100), (1300, 100)])])
 
-    single = Entry("字", 110, 100)
-    normal = Entry("字典", 110, 100)
-    single_box = _review_line_box(single, geometry, image, settings)
-    normal_box = _review_line_box(normal, geometry, image, settings)
+    oversized = Entry(
+        "字", 110, 100,
+        ocr_source="ordinary_large_head_evidence",
+        ocr_visual_run_height=100.0,
+        ocr_oversized_cjk=True,
+    )
+    regular = Entry(
+        "字典", 110, 100,
+        ocr_source="ordinary_symbol_evidence",
+    )
+    oversized_box = _review_line_box(oversized, geometry, image, settings)
+    regular_box = _review_line_box(regular, geometry, image, settings)
 
-    assert normal_box[1] == normal.y - round(0.5 * settings.row_padding)
-    assert single_box[3] > normal_box[3]
-    assert single_box[0] == normal_box[0]
-    assert single_box[2] == normal_box[2]
-    assert single_box[3] - single_box[1] == 100 + 2 * settings.row_padding
+    assert regular_box[1] == regular.y - round(0.5 * settings.row_padding)
+    assert oversized_box[3] > regular_box[3]
+    assert oversized_box[0] == regular_box[0]
+    assert oversized_box[2] == regular_box[2]
+    assert oversized_box[3] - oversized_box[1] == 100 + 2 * settings.row_padding
 
 
 def test_review_regular_crop_uses_half_spacing_top_and_full_spacing_height():
@@ -6154,7 +6162,7 @@ def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wir
     assert "detect_entries_job" in detect_block
 
 
-def test_v21120_review_single_cjk_crop_no_longer_caps_at_next_marker():
+def test_review_oversized_classification_crop_no_longer_caps_at_next_marker():
     from picture_capture.app import _review_line_box
 
     image = Image.new("RGB", (1000, 1400), "white")
@@ -6164,12 +6172,17 @@ def test_v21120_review_single_cjk_crop_no_longer_caps_at_next_marker():
     )
     geometry = Geometry([100], [600], 50, 1300, [ColumnPath([(50, 100), (1300, 100)])])
 
-    current = Entry("字", 110, 100)
+    current = Entry(
+        "字", 110, 100,
+        ocr_source="ordinary_large_head_evidence",
+        ocr_visual_run_height=100.0,
+        ocr_oversized_cjk=True,
+    )
     next_entry = Entry("下一", 110, 160)
     box = _review_line_box(current, geometry, image, settings, next_entry)
 
-    # Explicit/fixed review height wins even when the next hand-drawn marker is
-    # closer than that height; this prevents inconsistent marker Y from clipping.
+    # Structural oversized crop height wins even when the next hand-drawn marker
+    # is closer; inconsistent marker Y must not clip the display head.
     assert box[3] > next_entry.y
     assert box[3] - box[1] == 100 + 2 * settings.row_padding
 
@@ -6317,7 +6330,7 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert '"单行高："' in review
-    assert '"单字行高："' in review
+    assert '"大字头切图高："' in review
     assert '"单行高：", self.review_line_height_var, self.review_line_height_px_var' in review
     assert '"行间空：",' in review
     assert 'self.review_row_padding_var,' in review
@@ -6325,7 +6338,7 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     assert '"普通词条行切图高：",' in review
     assert 'self.review_regular_crop_height_var,' in review
     assert 'self.review_regular_crop_height_px_var,' in review
-    assert '"单字行高：",' in review
+    assert '"大字头切图高：",' in review
     assert 'self.review_single_cjk_line_height_var,' in review
     assert 'self.review_single_cjk_line_height_px_var,' in review
     height_controls = review[
