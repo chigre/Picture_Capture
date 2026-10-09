@@ -133,12 +133,13 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         "preview_path": "",
         "cover_source": "none",
     }
-    if not root.is_dir():
+    if not details["exists"]:
         return details
     try:
-        pages = project_page_images(root)
+        inventory = tuple(root.iterdir())
+        pages = project_page_images(root, candidates=inventory)
         details["image_count"] = len(pages)
-        cover = project_cover_path(root)
+        cover = project_cover_path(root, candidates=inventory)
         if cover is not None:
             details["cover_path"] = str(cover)
             details["preview_path"] = str(cover)
