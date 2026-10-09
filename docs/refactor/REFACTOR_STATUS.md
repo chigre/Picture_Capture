@@ -2668,7 +2668,7 @@ Continue across related low-risk changes once contracts and focused tests are cl
 Stop production writes for unexplained behavior/test/CI failure, public/file-format compatibility uncertainty, concurrent architecture work, checkpoint mismatch, materially large cross-core redesign, or irreversible compatibility deletion whose impact cannot be established.
 
 
-## Phase 13B2 — explicit Layout ops propagation (draft; not gated)
+## Phase 13B2 — explicit Layout ops propagation (CI green; merge gate)
 
 - Work in progress: **true** — PR #394 is open as a draft.
 - Current branch: `phase13b2-layout-ops-propagation`, based on main
@@ -2682,8 +2682,9 @@ Stop production writes for unexplained behavior/test/CI failure, public/file-for
   stubs; explicit `ops=` calls are forwarded unchanged.
 - Added `tests/test_phase13b2_layout_ops.py` for custom-callback propagation.
 - Verification: local pytest **not run** (execution container could not resolve
-  github.com for clone); PR CI has not been established as passing at the time
-  of this checkpoint. Do not merge based on this record.
-- Next safe action: inspect PR #394 CI, fix any failing regressions in this
-  same narrow scope, then perform normal review/merge and post-merge CI checks.
+  github.com for clone). PR CI #2367 passed on Ubuntu, Windows and macOS,
+  including pytest, GUI smoke, compatibility runner, compile and wheel build.
+  PR review submissions/threads were empty and diff inspected.
+- Next safe action: finish PR #394 merge gate, verify post-merge CI and then
+  record the merge SHA in a separate checkpoint.
   After closing 13B2, proceed to 13B3. Do not start 13C yet.
