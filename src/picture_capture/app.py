@@ -216,6 +216,10 @@ from .ocr_crop_preview_ui import (
     add_ocr_crop_preview_control,
     draw_ocr_crop_preview,
 )
+from .layout_visualization_ui_v3 import (
+    add_layout_visualization_controls,
+    draw_layout_visualization_if_enabled,
+)
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
     headword_filter_rules_path, is_managed_project, migrate_legacy_project,
@@ -9254,6 +9258,7 @@ class PictureCaptureApp(tk.Tk):
         ).pack(side="left")
 
         aux.columnconfigure(1, weight=1); aux.columnconfigure(3, weight=1)
+        add_layout_visualization_controls(self, aux)
 
         ocr = self._section_frame(parent, "三、融合 / OCR画线参数", padding=5, section_key="ocr")
         ocr.pack(fill="x", pady=(4, 0))
@@ -13769,6 +13774,7 @@ class PictureCaptureApp(tk.Tk):
     def _draw_crop_plan_preview(self) -> None:
         """Overlay the exact entry/PPP crop plan on the main page image."""
         if self.image is None:
+            draw_layout_visualization_if_enabled(self)
             return
         try:
             plan = self._current_page_crop_plan()
@@ -13881,6 +13887,7 @@ class PictureCaptureApp(tk.Tk):
         size = (max(1, round(self.image.width * self.view_scale)), max(1, round(self.image.height * self.view_scale)))
         if self._preprocess_mode_active():
             self._redraw_preprocess_preview(size)
+            draw_layout_visualization_if_enabled(self)
             return
         photo = self._get_cached_display_photo(size)
         self.canvas.create_image(0, 0, image=photo, anchor="nw", tags="page")
@@ -13896,6 +13903,7 @@ class PictureCaptureApp(tk.Tk):
             if self.cursor_canvas_xy is not None:
                 self.draw_cursor_guides(*self.cursor_canvas_xy)
             draw_ocr_crop_preview(self)
+            draw_layout_visualization_if_enabled(self)
             return
         hidden = self.hide_var.get()
         if not hidden:
@@ -14086,6 +14094,7 @@ class PictureCaptureApp(tk.Tk):
 
         self._apply_current_appearance(self.canvas)
         draw_ocr_crop_preview(self)
+        draw_layout_visualization_if_enabled(self)
 
     def _update_view_zoom_label(self) -> None:
         self._canvas_controller_for_call().update_view_zoom_label()
