@@ -2781,3 +2781,51 @@ Remaining/explicit stop boundary:
 Next safe work: independently characterize remaining direct full Page
 Understanding consumers, migrate them one at a time, and only then consider
 normal product installer retirement after explicit cross-platform parity.
+
+
+## Phase 13E — normal product cutover completed, final gate pending
+
+This is the latest recovery checkpoint. Earlier sections labelled "gate pending"
+describe historical in-progress states and are superseded by the actual merged
+PRs listed below. No ordinary product call path should now install the four
+global Layout primitive callbacks.
+
+- PR #409, merge `eb7c64422fbac0d005d13ce5ca5fa409811037d6`:
+  Training Page Understanding diagnostics and Project Profile validation
+  now call explicit full composition. CI #2402 succeeded on all platforms
+  after updating a stale Profile architecture assertion.
+- PR #410, merge `d92297f5eb0e4f9ed79c8beb78e0ab5c5d6a3dd5`:
+  Proved explicit full and layout-only composition runs under hostile legacy
+  installer/global-hook bindings. CI #2404 passed on all platforms.
+- PR #411, merge `ef16517d8cf8af7fdc66e37b2f5176cf4436b405`:
+  Updated refined Page Design diagnostics to accept optional explicit physical
+  ops and training-export v3 to pass them while preserving its original raw
+  geometry (not replacing it with policy-anchored geometry). CI #2406 passed.
+- PR #412, merge `96d064fa710a2e4e1ff78c21253866d4761dfa5c`:
+  Removed the GUI bootstrap's global Layout installer calls, leaving processing
+  compatibility intact. CI #2409 passed after updating the transition guard.
+- PR #413, merge `5c442861fd4601d6ddc6fcfad4f01ada712869d2`:
+  Removed normal processing's call to `_ensure_layout_runtime()`, while keeping
+  that function and both historical installer APIs available as compatibility
+  shims. CI #2411 passed on all platforms.
+
+Final acceptance gate PR #414 is **in progress** on this branch. It adds a
+source-level guard against future installer calls outside the known
+`processing._ensure_layout_runtime` compatibility shim and checks all migrated
+entry points. Mark Phase 13E formally complete only after CI passes and this PR
+merges. Do not delete legacy installer definitions or the legacy processing
+shim as part of this final gate; legacy raw/direct callers may still opt in.
+
+Behavioral invariants maintained:
+- Explicit Raw/Robust/Physical composition and Profile anchor timing;
+- Page Understanding sampled symbol, generic roles, and display-head evidence;
+- Layout Core cache keys, publication, and visualization result identity;
+- unlined QA cache-first/fast-projection/physical-detector precedence;
+- training export v3 raw page design diagnostics and format;
+- PDIC, OCR runner contracts and user settings;
+- full Ubuntu, Windows and macOS pytest, GUI smoke, compatibility and builds.
+
+After this gate, the remaining optional work is compatibility-shim retirement
+and broader real-scan/performance auditing, NOT a prerequisite to declare
+normal product entry-point composition complete. Any shim deletion is a separate
+high-risk decision requiring proof of no external/direct callers.
