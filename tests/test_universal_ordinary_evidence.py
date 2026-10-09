@@ -174,9 +174,29 @@ def test_profile_ui_explains_visual_samples_are_ordinary_evidence():
     assert 'child.cget("text") == "大字单字可以作为词头"' in source
 
 
-def test_gui_composition_installs_universal_ordinary_profile_ui():
+def test_project_profile_ui_uses_static_composition():
+    import picture_capture.app as app_module
     import picture_capture.bootstrap.gui as gui_bootstrap
+    from picture_capture.profile_setup import ProjectProfileWizard as BaseWizard
+    from picture_capture.profile_wizard import ProjectProfileWizard
+
+    assert issubclass(ProjectProfileWizard, BaseWizard)
+    modules = [cls.__module__ for cls in ProjectProfileWizard.__mro__]
+    assert modules.index("picture_capture.parameter_help_ui") < modules.index(
+        "picture_capture.profile_ordinary_evidence_ui"
+    )
+    assert modules.index("picture_capture.profile_ordinary_evidence_ui") < modules.index(
+        "picture_capture.profile_validation_modes"
+    )
+    assert modules.index("picture_capture.profile_validation_modes") < modules.index(
+        "picture_capture.profile_indent_ui"
+    )
+    assert modules.index("picture_capture.profile_indent_ui") < modules.index(
+        "picture_capture.profile_setup"
+    )
+    assert app_module.ProjectProfileWizard is ProjectProfileWizard
 
     source = open(gui_bootstrap.__file__, "r", encoding="utf-8").read()
-    assert "build_ordinary_evidence_profile_wizard" in source
-    assert "build_project_profile_wizard(profile_setup.ProjectProfileWizard)" in source
+    assert "profile_setup.ProjectProfileWizard =" not in source
+    assert "build_project_profile_wizard" not in source
+    assert "build_ordinary_evidence_profile_wizard" not in source
