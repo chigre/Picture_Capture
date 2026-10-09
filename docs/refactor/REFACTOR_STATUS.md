@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12Q is complete: compact/right-pane Settings help is now native SettingsDialog behavior; the runtime method-replacement installer is retired while Project Profile help composition remains static and unchanged.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12R is complete: OCR crop-preview controls and drawing are wired statically by PictureCaptureApp; the former __init__/redraw monkeypatch installer is retired.**
 
-Phase 12Q is merged on `main@228e59497e23791fb7e56e6829e2d1c3b1d4820d`. Phase 12P remains complete on `main@aca47b56a3292220f9d808ec408adefaddc21659`, with its checkpoint merged on `main@50f4a0c170ba37d17ccf7bb5eeb18000ad8cbaf2`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
+Phase 12R is merged on `main@d24157ad56ff4161e6198d7dada96f9ffa2f8e93`. Phase 12Q remains complete on `main@228e59497e23791fb7e56e6829e2d1c3b1d4820d`, with its checkpoint merged on `main@a415a8abcaeaee64c0d88c6687a0e87eee9ef7b5`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -2279,32 +2279,75 @@ Phase 12Q publication:
 - post-merge CodeQL 2314 passed;
 - no architecture or size threshold was relaxed.
 
-## Recommended next slice — Phase 12R static OCR crop preview wiring
+## Phase 12R — static OCR crop preview wiring
 
-The remaining OCR crop preview installer only patches
-`PictureCaptureApp.__init__` and `PictureCaptureApp.redraw` to add a display
-checkbox and draw the same canonical OCR crop rectangles.
+Phase 12R retires the main-app OCR crop-preview class patch.
 
-A safe 12R should:
-- move the preview drawing function to a normal top-level helper in
-  `ocr_crop_preview_ui.py`;
-- expose a normal helper that adds the existing 【OCR区域预览】 checkbox to the
-  already-known display settings row, eliminating widget-tree discovery;
-- call that control helper directly while building the display row in
-  `PictureCaptureApp._build_quick_settings`;
-- call the draw helper from the static redraw path while preserving the current
-  wrapper semantics: normal redraw end plus the crop-preview early-return path;
-- leave image-none and preprocess early returns unchanged because the preview
-  helper is already a no-op there after the canvas has been cleared;
-- remove `install_ocr_crop_preview(app_module)` from GUI bootstrap and leave
-  the public installer name as a no-op compatibility shim;
-- preserve exact canonical crop calculation, source-coordinate mapping,
-  regular/oversized/active styling, tooltip wording and row-metric diagnostics;
-- ratchet against reintroducing `PictureCaptureApp.__init__` / `redraw`
-  mutation.
+`ocr_crop_preview_ui.py` now owns two ordinary helpers:
+- `add_ocr_crop_preview_control(app, row)`, which creates the existing
+  【OCR区域预览】 checkbox on the known display-settings row;
+- `draw_ocr_crop_preview(app)`, which draws the same exact marker-OCR crop
+  rectangles using the canonical crop helper and source-coordinate mapping.
 
-Do not combine this with ReviewWindow classification, Layout visualization,
-Layout runtime, PDIC composition or OCR runner work.
+`PictureCaptureApp` calls those helpers explicitly:
+- the control is added while building the ruler/Section display row;
+- the draw helper runs at normal redraw completion;
+- it also runs immediately before the crop-preview early return, preserving the
+  old wrapper's overlay behavior.
+
+Image-none and preprocess early returns remain unchanged because the preview
+helper was already a no-op in those states after the canvas was cleared.
+
+The compatibility installer remains importable as a no-op. Architecture
+ratchets reject any return of `PictureCaptureApp.__init__`, `redraw`, or
+`_draw_ocr_crop_preview` mutation.
+
+Behavior intentionally unchanged:
+- checkbox label/default/tooltip;
+- `entry_ocr_crop_box(...)` and row-metric calculations;
+- canonical-to-source conversion and view-scale mapping;
+- regular/oversized colors/dashes and active-entry diagnostics;
+- crop-preview overlay ordering.
+
+Phase 12R publication:
+- PR #382 fixed head `cf6d1f6b23d8d7bdce65ce963498584cb35a82c7`;
+- PR CI 2334 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #382 merged as `d24157ad56ff4161e6198d7dada96f9ffa2f8e93`;
+- post-merge CI 2335 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2318 passed;
+- `app.py` remained under the historical size baseline (783,643 bytes vs
+  784,737);
+- no architecture or size threshold was relaxed.
+
+## Recommended next slice — Phase 12S static Layout visualization wiring
+
+The remaining `install_layout_visualization(app_module)` wrapper is now the
+smallest main-app redraw seam. It currently wraps `_section_frame`,
+`_build_quick_settings`, and `redraw` only to capture the known display
+section, add Layout/denoise controls, and render the diagnostic overlay.
+
+A safe 12S should:
+- expose a normal helper that adds the current Layout toggle and denoise control
+  directly to the already-known `aux` display section;
+- call that helper explicitly after the existing display rows are built,
+  preserving the current next-grid-row placement;
+- move the redraw wrapper body to a normal
+  `draw_layout_visualization_if_enabled(app)` helper;
+- preserve the current outer-wrapper timing by invoking that helper after the
+  preprocess early path, after the crop-preview path, and at normal redraw end;
+- preserve OCR crop-preview-before-Layout ordering on paths where both can draw;
+- retain the current hide-variable temporary override, exclusive-visibility
+  restore behavior, snapshot invalidation and denoise environment semantics;
+- remove `install_layout_visualization(app_module)` from GUI bootstrap and
+  leave the public installer as a no-op compatibility shim;
+- ratchet against reintroducing `_section_frame`, `_build_quick_settings`,
+  or `redraw` class mutation.
+
+Do not combine this with ReviewWindow classification, Layout runtime installers,
+PDIC composition or OCR runner work.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
