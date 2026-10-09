@@ -27,3 +27,14 @@ def reconcile_main_editors_after_review(app: Any, rendered_entries: list[Any]) -
         except (tk.TclError, RuntimeError):
             # Already destroyed during navigation, or a transient Tk update.
             continue
+
+
+def commit_proofread_entries(review: Any) -> None:
+    """Persist editor words by rendered Entry identity, then reconcile canvas."""
+    live_ids = {id(entry) for entry in review.parent.entries}
+    for entry, var in zip(review._bound_row_entries(), review.vars):
+        if id(entry) not in live_ids:
+            continue
+        entry.word = var.get().strip()
+    review._capture_simplified_edits(getattr(review, "_rendered_page_stem", ""))
+    reconcile_main_editors_after_review(review.parent, review._bound_row_entries())
