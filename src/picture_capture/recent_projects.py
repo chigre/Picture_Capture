@@ -110,6 +110,32 @@ def _display_recent_timestamp(value: object) -> str:
         return text[:16] if len(text) >= 16 else text
 
 
+def recent_project_stub_details(row: dict[str, object]) -> dict[str, str | int | bool]:
+    """Render an immediate card from the user registry, without touching disk."""
+    root = Path(str(row.get("path") or "")).expanduser()
+    last_page = str(row.get("last_page") or "").strip()
+    try:
+        index = int(row.get("last_page_index")) if row.get("last_page_index") is not None else -1
+    except (TypeError, ValueError, OverflowError):
+        index = -1
+    return {
+        "full_name": str(row.get("name") or root.name),
+        "abbreviation": "",
+        "image_count": 0,
+        "last_edited": _display_recent_timestamp(row.get("opened_at")),
+        "path": str(root),
+        "exists": True,  # Unknown until filesystem metadata is loaded.
+        "checking": True,
+        "last_page": last_page,
+        "last_page_index": index,
+        "resume_text": last_page or "—",
+        "position_text": last_page or "—",
+        "cover_path": "",
+        "preview_path": "",
+        "cover_source": "none",
+    }
+
+
 def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool]:
     """Read display metadata without initializing or modifying the project."""
     root = Path(str(row.get("path") or "")).expanduser()
