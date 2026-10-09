@@ -133,6 +133,18 @@ FORBIDDEN_SETTINGS_HELP_RESTORE_INSTALL_CALLS = (
     "install_settings_help_restore(app_module)",
 )
 
+# Phase 12O moves single-line merge Settings ownership into the static crop
+# schema/UI. The compatibility module must not resume mutating SettingsDialog.
+FORBIDDEN_SINGLE_LINE_MERGE_MUTATIONS = (
+    "dialog.__init__ =",
+    "setattr(dialog, method_name, wrapped)",
+    "_pc_single_line_merge_settings_installed",
+    "_pc_merge_wrapped",
+)
+FORBIDDEN_SINGLE_LINE_MERGE_INSTALL_CALLS = (
+    "install_single_line_merge_settings_ui(app_module)",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -297,6 +309,20 @@ def collect_violations() -> list[str]:
                 violations.append(
                     f"Settings help restore installer call returned in {rel}: {marker}"
                 )
+        for marker in FORBIDDEN_SINGLE_LINE_MERGE_INSTALL_CALLS:
+            if marker in source:
+                violations.append(
+                    f"single-line merge Settings installer call returned in {rel}: {marker}"
+                )
+
+    single_line_merge_source = (
+        PACKAGE_ROOT / "single_line_merge_settings.py"
+    ).read_text(encoding="utf-8")
+    for marker in FORBIDDEN_SINGLE_LINE_MERGE_MUTATIONS:
+        if marker in single_line_merge_source:
+            violations.append(
+                f"single-line merge Settings mutation returned: {marker}"
+            )
 
     init_path = PACKAGE_ROOT / "__init__.py"
     init_text = init_path.read_text(encoding="utf-8")

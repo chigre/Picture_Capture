@@ -11,6 +11,7 @@ from ..models import AppSettings
 
 
 CROP_SETTINGS_VERSION = 7
+SINGLE_LINE_MERGE_KEY = "single_line_crop_merge_by_page"
 
 
 def normalize_crop_settings_payload(
@@ -29,6 +30,7 @@ def normalize_crop_settings_payload(
         "integrate_illustrations": True,
         "polygon_margin": 0,
         "parallel_workers": int(settings.crop_parallel_workers),
+        SINGLE_LINE_MERGE_KEY: False,
         "special_pages": {},
     }
     if not isinstance(raw, dict):
@@ -49,6 +51,7 @@ def normalize_crop_settings_payload(
         except (TypeError, ValueError):
             pass
     result["integrate_illustrations"] = bool(raw.get("integrate_illustrations", True))
+    result[SINGLE_LINE_MERGE_KEY] = bool(raw.get(SINGLE_LINE_MERGE_KEY, False))
     specials = raw.get("special_pages")
     if isinstance(specials, dict):
         cleaned: dict[str, dict[str, int]] = {}
@@ -65,4 +68,8 @@ def normalize_crop_settings_payload(
     return result
 
 
-__all__ = ["CROP_SETTINGS_VERSION", "normalize_crop_settings_payload"]
+__all__ = [
+    "CROP_SETTINGS_VERSION",
+    "SINGLE_LINE_MERGE_KEY",
+    "normalize_crop_settings_payload",
+]

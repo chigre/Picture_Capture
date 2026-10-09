@@ -74,15 +74,13 @@ def prepare_gui_application() -> Any:
 
     from ..layout_visualization_ui_v3 import install_layout_visualization
     from ..parameter_help_ui import install_settings_parameter_help
-    from ..single_line_merge_settings import install_single_line_merge_settings_ui
     from ..unlined_export_filter_settings import (
         install_unlined_export_filter_settings_ui,
     )
     # Illustration-mask Settings metadata is static in the shared schema.
     install_settings_parameter_help(app_module)
-    install_single_line_merge_settings_ui(app_module)
-    # Filter controls belong to the same integrated crop-settings surface and
-    # are installed after the per-page merge switch so they appear beneath it.
+    # Single-line merge now belongs to the static crop Settings schema/UI.
+    # Filter controls still use their compatibility wrapper below.
     install_unlined_export_filter_settings_ui(app_module)
     # Unlined QA now owns its physical-row fast path statically in
     # unlined_line_export.export_unlined_page_job; no GUI-time worker mutation

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from types import SimpleNamespace
 
+from picture_capture.crop.settings import SINGLE_LINE_MERGE_KEY
 from picture_capture.ui.settings import crop as settings_crop
 
 
@@ -48,6 +50,8 @@ def test_settings_crop_extraction_keeps_dialog_wrappers_and_save_boundary() -> N
         "parallel_workers",
     ):
         assert f'"{field}"' in helper
+    assert "SINGLE_LINE_MERGE_KEY" in helper
+    assert "save_merge_by_page(project_root, enabled)" in helper
 
     assert '(crop_tab, "切图")' in settings
     assert '"crop": crop_tab' in settings
@@ -55,3 +59,33 @@ def test_settings_crop_extraction_keeps_dialog_wrappers_and_save_boundary() -> N
     assert "CropSettingsDialog.CONFIG_NAME" in helper
     assert "CROP_SETTINGS_VERSION" in helper
     assert "SOURCE_COORDINATE_SPACE" in helper
+
+
+
+class _Var:
+    def __init__(self, value):
+        self.value = value
+
+    def get(self):
+        return self.value
+
+
+def test_integrated_crop_payload_owns_single_line_merge_flag() -> None:
+    dialog = SimpleNamespace(
+        crop_vars={
+            "general_top_y": _Var("10"),
+            "general_bottom_y": _Var("100"),
+            "entry_left_padding_x": _Var("0"),
+            "entry_right_padding_x": _Var("0"),
+            "integrate_illustrations": _Var(True),
+            "polygon_margin": _Var("0"),
+            "parallel_workers": _Var("2"),
+            SINGLE_LINE_MERGE_KEY: _Var(True),
+        },
+        _crop_specials={},
+    )
+
+    payload = settings_crop.crop_settings_payload(dialog)
+
+    assert payload[SINGLE_LINE_MERGE_KEY] is True
+    assert payload["parallel_workers"] == 2
