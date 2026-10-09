@@ -154,3 +154,12 @@ def save_dialog_parameters_as_default(dialog: Any) -> None:
         "词典名称、图片格式、当前页书签和旧卷逐页数据不会复制。",
         parent=dialog,
     )
+
+
+def add_default_button(footer: Any, dialog: Any) -> None:
+    """Present the current project as a reusable parameter template."""
+    from tkinter import ttk
+    ttk.Button(
+        footer, text="设为新项目默认",
+        command=lambda: save_dialog_parameters_as_default(dialog),
+    ).pack(side="right", padx=(0, 8))
