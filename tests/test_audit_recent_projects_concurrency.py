@@ -13,12 +13,17 @@ def test_simultaneous_recent_project_writes_have_private_temps(monkeypatch, tmp_
     replacement_barrier = threading.Barrier(2)
     real_replace = os.replace
     sources = []
+    first_attempts = 0
     lock = threading.Lock()
 
     def synchronized_replace(source, destination):
+        nonlocal first_attempts
         with lock:
             sources.append(Path(source))
-        replacement_barrier.wait(timeout=10)
+            first_attempts += 1
+            first = first_attempts <= 2
+        if first:
+            replacement_barrier.wait(timeout=10)
         real_replace(source, destination)
 
     monkeypatch.setattr(recent_projects.os, "replace", synchronized_replace)
