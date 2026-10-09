@@ -164,14 +164,19 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     assert '("自动", "普通词条", "大字头")' in review_source
 
 
-def test_gui_composition_reuses_core_classification_and_installs_review_ui_after_app():
+def test_gui_composition_uses_static_pdic_io_and_installs_review_ui_after_app():
+    import picture_capture.app as app_module
     import picture_capture.bootstrap.gui as gui_bootstrap
+    import picture_capture.gui_io as gui_io
 
     source = Path(gui_bootstrap.__file__).read_text(encoding="utf-8")
     assert "install_pdic_classification(formats)" not in source
-    assert "build_write_pdic_capture(formats.write_pdic)" in source
+    assert "formats.write_pdic =" not in source
+    assert "build_write_pdic_capture" not in source
     assert "install_processing_entry_classification" not in source
     assert "entry_classification_runtime" not in source
+    assert app_module.write_pdic is gui_io.write_pdic
+    assert app_module.read_pdic is gui_io.read_pdic
     assert "install_review_entry_classification(app_module)" in source
     assert source.index("from .. import app as app_module") < source.index(
         "install_review_entry_classification(app_module)"
@@ -229,6 +234,51 @@ def test_gui_baseline_capture_wraps_core_classification_without_reinstall(tmp_pa
     assert classification_sidecar_path(pdic).exists()
     assert pdic.exists()
     assert len(writes) == 1
+
+
+def test_gui_pdic_io_resolves_current_formats_callables_at_call_time(
+    tmp_path: Path, monkeypatch,
+):
+    import picture_capture.gui_io as gui_io
+    from picture_capture import formats
+
+    reads: list[Path] = []
+    writes: list[tuple[Path, list[Entry]]] = []
+
+    def current_read(path: Path) -> list[Entry]:
+        reads.append(path)
+        return [Entry(word="read", x=1, y=2)]
+
+    def current_write(
+        path: Path,
+        entries: list[Entry],
+        _image_width: int,
+        _pages: tuple[str, str, str],
+    ) -> None:
+        writes.append((path, list(entries)))
+        path.write_text("pdic\n", encoding="utf-8")
+
+    monkeypatch.setattr(formats, "read_pdic", current_read)
+    monkeypatch.setattr(formats, "write_pdic", current_write)
+
+    pdic = tmp_path / "page.pdic"
+    assert gui_io.read_pdic(pdic)[0].word == "read"
+    assert reads == [pdic]
+
+    automatic = [
+        Entry(
+            word="",
+            x=42,
+            y=84,
+            confidence=0.97,
+            ocr_source="ordinary_page_design",
+            issue_type="ORDINARY_PAGE_DESIGN_ENTRY",
+        )
+    ]
+    gui_io.write_pdic(pdic, automatic, 1200, ("page.png", "@", "@"))
+
+    assert baseline_path_for_pdic(pdic).exists()
+    assert writes == [(pdic, automatic)]
 
 
 def test_core_composition_installs_classification_for_non_gui_consumers():
