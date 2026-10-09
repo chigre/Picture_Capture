@@ -33,15 +33,9 @@ def build_core_services() -> CoreServices:
     # their normal evidence/fusion modules; processing import order no longer
     # selects or mutates those callables.
 
-    # Shared settings/classification contracts must exist before formats and
-    # processing are exposed to any process profile.
-    from ..separator_y_settings import install_separator_y_settings
-    from ..entry_crop_settings import install_entry_crop_settings
-
-    install_separator_y_settings()
-    install_entry_crop_settings()
-    # Entry structural-classification descriptors are static on models.Entry;
-    # core composition no longer mutates the Entry class.
+    # AppSettings compatibility aliases/migrations and Entry structural
+    # classification descriptors are static model boundaries. Core composition
+    # no longer mutates either model class before exposing process services.
 
     from .. import formats
     from ..entry_classification import install_pdic_classification

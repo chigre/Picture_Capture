@@ -12,9 +12,9 @@ The public settings contract is now neutral and shared:
 ``separator_y_refine_enabled``, ``separator_y_search_ratio``,
 ``separator_y_band_radius``, ``separator_y_safety_px``,
 ``separator_y_roi_width_ratio`` and ``separator_y_column_margin``.
-Historical ``paddle_*`` names are isolated behind the compatibility bridge in
-``separator_y_settings`` so old projects and the mature numerical engine keep
-working without leaking OCR-specific naming into new code.
+Historical ``paddle_*`` storage slots are exposed through static AppSettings
+aliases, so old projects and the mature numerical engine keep working without
+leaking OCR-specific naming into new code.
 """
 
 from typing import Any
@@ -23,9 +23,6 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from .models import AppSettings
-from .separator_y_settings import install_separator_y_settings
-
-install_separator_y_settings()
 
 # Capture the mature engine before compatibility facades redirect their public
 # ``refine_separator_y`` symbol back to this module. This prevents recursion.

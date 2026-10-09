@@ -80,6 +80,24 @@ FORBIDDEN_ENTRY_CLASSIFICATION_ASSIGNMENTS = (
     "Entry.entry_scale_manual =",
 )
 
+# Phase 12H moves separator-Y and entry-crop compatibility into native
+# AppSettings construction/serialization. Dynamic method/property installation
+# and installer calls must not spread back into production modules.
+FORBIDDEN_APP_SETTINGS_COMPAT_ASSIGNMENTS = (
+    "AppSettings.__init__ =",
+    "AppSettings.to_json =",
+    "AppSettings.from_json =",
+    "setattr(AppSettings",
+)
+FORBIDDEN_APP_SETTINGS_INSTALL_CALLS = (
+    "install_separator_y_settings()",
+    "install_entry_crop_settings()",
+)
+APP_SETTINGS_COMPAT_SHIMS = {
+    "separator_y_settings.py",
+    "entry_crop_settings.py",
+}
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -198,6 +216,17 @@ def collect_violations() -> list[str]:
                 violations.append(
                     f"Entry classification class mutation returned in {rel}: {marker}"
                 )
+        for marker in FORBIDDEN_APP_SETTINGS_COMPAT_ASSIGNMENTS:
+            if marker in source:
+                violations.append(
+                    f"AppSettings compatibility mutation returned in {rel}: {marker}"
+                )
+        if rel not in APP_SETTINGS_COMPAT_SHIMS:
+            for marker in FORBIDDEN_APP_SETTINGS_INSTALL_CALLS:
+                if marker in source:
+                    violations.append(
+                        f"AppSettings compatibility installer call returned in {rel}: {marker}"
+                    )
 
     init_path = PACKAGE_ROOT / "__init__.py"
     init_text = init_path.read_text(encoding="utf-8")
