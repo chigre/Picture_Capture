@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12K characterization is complete with no production write: the remaining Layout runtime is an ordered multi-boundary composition chain whose raw policy semantics differ from the composed product runtime.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12L is complete: OCR action validation is now an explicit static preflight at the three user action boundaries; GUI bootstrap no longer monkeypatches PictureCaptureApp for Lens-only validation.**
 
-Phase 12J remains complete on `main@0d0431bdcc8a1f227c8d5984a8e544c368ad7083`, with its checkpoint merged on `main@1e5c7da42da2ddce936a0254e91e7f09c5b973bb` and post-checkpoint CI 2306 / CodeQL 2289 passing. Phase 12I remains a characterization-only PDIC deferral. Earlier Phase 12A–12H and Phase 11 remain closed.
+Phase 12L is merged on `main@29fd90712b5e232d45586c549a576fbb697b3018`. Phase 12K remains characterization-only: the ordered Layout runtime chain is intentionally deferred rather than split unsafely. Phase 12J and earlier bounded slices remain complete; Phase 12I remains the characterization-only PDIC deferral.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -2031,34 +2031,77 @@ would require a broader explicit composed-Layout API that preserves:
 
 Do not split this chain opportunistically inside unrelated refactors.
 
-## Recommended next slice — Phase 12L static OCR action preflight
+## Phase 12L — static OCR action preflight
 
-The OCR action guard is a smaller independent GUI seam. Today GUI bootstrap
-monkeypatches three `PictureCaptureApp` methods solely to reject the ambiguous
-state “Google Lens checked while Lens mode is off and no runnable local OCR is
-selected.”
+The former OCR action guard wrapped three `PictureCaptureApp` methods at GUI
+startup only to reject one ambiguous visible configuration: Google Lens checked,
+Lens mode off, and no runnable Paddle/Tesseract source.
 
-A safe 12L should:
-- turn that decision into a normal reusable preflight function;
-- call it statically at the real action boundaries:
-  `DetectionController.run_combined_draw_action`,
-  `DetectionController.run_ocr_draw_action`, and
-  `PictureCaptureApp.ocr_ordinary_lines_text_selected_scope`;
-- preserve guard ordering: invalid Lens-only selection must stop before the
-  existing generic app guard / quick-settings validation;
-- remove `install_ocr_action_guard(app_module)` from GUI bootstrap and retire
-  the class-method monkeypatch implementation;
-- preserve the historical helper surface where inexpensive, but it must no
-  longer mutate `PictureCaptureApp`;
-- keep the existing visible Lens-mode mapping semantics;
-- respect the strict `app.py` size ratchet. Prefer moving the Lens mode mapping
-  into the guard module and importing it, so the monolith shrinks rather than
-  grows;
-- add focused controller and existing-marker OCR action tests, plus a ratchet
-  that rejects reintroduction of the installer/method mutation.
+Phase 12L makes this ordinary action-boundary logic:
+- `ocr_action_guard.guard_ocr_action_selection(...)` owns the reusable
+  preflight and preserves the old missing-field fallbacks;
+- `DetectionController.run_combined_draw_action` and
+  `DetectionController.run_ocr_draw_action` call it before the generic app
+  guard / quick-settings validator;
+- `PictureCaptureApp.ocr_ordinary_lines_text_selected_scope` does the same;
+- Lens mode labels/values moved into the guard module and are imported by
+  `app.py`, preserving the exact visible mapping;
+- `install_ocr_action_guard(...)` remains only as a no-op compatibility shim;
+- GUI bootstrap no longer imports or calls that installer;
+- the architecture guard rejects a return of either the installer call or the
+  old class-method mutation markers.
 
-Do not combine 12L with OCR-boundary runner work, SettingsDialog installers,
-PDIC composition, or Layout runtime changes.
+The strict monolith ratchet was improved rather than relaxed:
+`app.py` shrank from 784,736 to 784,624 normalized bytes.
+
+Focused regressions prove that invalid Lens-only selection stops both controller
+actions before the generic guard, that the existing-marker OCR action calls the
+same preflight first, and that the runtime helper no longer mutates app methods.
+
+Phase 12L publication:
+- PR #370 fixed head `080c7720e9f110bfe74adfea8ac256e4d9e2fc2d`;
+- PR CI 2309 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #370 merged as `29fd90712b5e232d45586c549a576fbb697b3018`;
+- post-merge CI 2310 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2293 passed;
+- no architecture or size threshold was relaxed.
+
+Phase 12K checkpoint publication also closed cleanly before 12L:
+- checkpoint PR #369 merged as `e4da39edb1ceba4b07f32f63ba92eae91ce57d43`;
+- post-checkpoint CI 2308 passed;
+- post-checkpoint CodeQL 2291 passed.
+
+## Recommended next slice — Phase 12M retire the redundant app-tooltip terminology patch
+
+GUI composition already calls `install_ui_terminology()` before importing
+`app.py`. That global presentation layer wraps `ttk.Label` text construction,
+and `PictureCaptureApp._attach_tooltip` renders its message through exactly
+such a `ttk.Label`.
+
+The later `install_app_tooltip_terminology(app_module)` therefore adds a second
+normalization layer by replacing the app's `@staticmethod`; it is redundant in
+the product path and exists mainly as historical compatibility.
+
+A safe 12M should:
+- leave the broad `install_ui_terminology()` Tk/ttk/StringVar layer unchanged;
+- remove the app-tooltip installer import/call from GUI bootstrap;
+- retire its descriptor mutation, preferably keeping the historical function
+  name as a no-op compatibility shim;
+- prove GUI composition still installs global terminology before importing
+  `app.py`;
+- prove `PictureCaptureApp._attach_tooltip` remains an unmodified
+  `@staticmethod`;
+- update the existing terminology test from "wrapper preserves staticmethod" to
+  "no dedicated wrapper is required";
+- add an architecture ratchet against restoring
+  `install_app_tooltip_terminology(app_module)` or
+  `app_class._attach_tooltip = ...`.
+
+Do not change the replacement dictionary, Tk widget normalization behavior,
+tooltip wording, or other GUI installers in this slice.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
