@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12P is complete: unlined-export filter settings are now part of the canonical crop schema and static Settings UI/payload; their SettingsDialog init/save wrapper is retired.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12Q is complete: compact/right-pane Settings help is now native SettingsDialog behavior; the runtime method-replacement installer is retired while Project Profile help composition remains static and unchanged.**
 
-Phase 12P is merged on `main@aca47b56a3292220f9d808ec408adefaddc21659`. Phase 12O remains complete on `main@aea54e801a332be6c8682a51970beef9292c13f4`, with its checkpoint merged on `main@da7bcbc17b19cff4f8f534e22de424aff68d40a4`. Phase 12N remains complete; Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
+Phase 12Q is merged on `main@228e59497e23791fb7e56e6829e2d1c3b1d4820d`. Phase 12P remains complete on `main@aca47b56a3292220f9d808ec408adefaddc21659`, with its checkpoint merged on `main@50f4a0c170ba37d17ccf7bb5eeb18000ad8cbaf2`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -2239,43 +2239,72 @@ Phase 12P publication:
 - post-merge CodeQL 2310 passed;
 - no architecture or size threshold was relaxed.
 
-## Recommended next slice — Phase 12Q static Settings parameter-group ownership
+## Phase 12Q — static Settings parameter-help ownership
 
-The remaining `install_settings_parameter_help(app_module)` mutation is a
-better bounded candidate than the ReviewWindow or main-canvas wrappers.
+Phase 12Q removes the final runtime replacement of SettingsDialog help/group
+methods.
 
-Current facts:
-- `SettingsDialog` already declares native
-  `_add_setting_group`, `_add_check_group`, and
-  `_scrollable_settings_page` methods in `app.py`;
-- the installer replaces exactly those three methods with the currently
-  effective compact/right-help implementations;
-- the installed versions remove duplicated inline help and preserve the same
-  right-side help callbacks, child-option grouping and 60/40 pane behavior;
-- `parameter_help_ui.py` also owns
-  `build_profile_parameter_help_wizard(...)`, which is already statically
-  composed by `profile_wizard.py` and must remain untouched.
+The effective compact/right-pane behavior is now native in `app.py`:
+- `_add_setting_group(...)` no longer creates duplicated inline long-help
+  labels; the right pane is the sole long explanation owner;
+- explicit ⓘ clicks preserve `help_images` when requesting layout diagrams;
+- `_add_check_group(...)` likewise removes duplicated inline check help while
+  preserving recursive binding and the ordinary-auto child grid;
+- `_scrollable_settings_page(...)` owns the current hint text directly instead
+  of relying on a post-build descendant walker.
 
-A safe 12Q should:
-- extract the currently effective Settings-only group/page implementations into
-  a normal `ui/settings` helper module, or otherwise give them an explicit
-  static owner;
-- make the three existing `SettingsDialog` methods delegate to that helper,
-  replacing the obsolete inline-help implementations rather than adding new app
-  methods;
-- remove `install_settings_parameter_help(app_module)` from GUI bootstrap and
-  leave its public name as a no-op compatibility shim;
-- preserve exact effective UI behavior: no duplicate inline help, recursive
-  control help binding, ordinary-auto child grid, right-side help pane wording,
-  help images and 60/40 split;
-- preserve `build_profile_parameter_help_wizard(...)` and its existing static
-  profile composition;
-- use the extraction to shrink `app.py`; do not relax its size ratchet;
-- ratchet against reintroducing SettingsDialog method assignment from the
-  installer.
+`install_settings_parameter_help(...)` remains importable as a no-op
+compatibility shim. The same module's
+`build_profile_parameter_help_wizard(...)` remains fully active and continues
+to be statically composed by `profile_wizard.py`.
 
-Do not combine this with ReviewWindow classification, OCR crop preview, Layout
-visualization, Layout runtime, PDIC composition or OCR runner work.
+Phase 12Q also reduced `app.py` from 784,624 to 783,413 bytes, increasing
+headroom under the historical size ratchet without changing the baseline.
+
+Behavior intentionally unchanged:
+- right-side help pane and 60/40 split;
+- recursive help binding and help-image rendering;
+- ordinary-auto child option placement;
+- Settings persistence/autosave and field/check order;
+- Project Profile help composition.
+
+Phase 12Q publication:
+- PR #380 fixed head `342774ffe2caf8dc4b6e2a56eb9e30924261de30`;
+- PR CI 2330 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #380 merged as `228e59497e23791fb7e56e6829e2d1c3b1d4820d`;
+- post-merge CI 2331 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2314 passed;
+- no architecture or size threshold was relaxed.
+
+## Recommended next slice — Phase 12R static OCR crop preview wiring
+
+The remaining OCR crop preview installer only patches
+`PictureCaptureApp.__init__` and `PictureCaptureApp.redraw` to add a display
+checkbox and draw the same canonical OCR crop rectangles.
+
+A safe 12R should:
+- move the preview drawing function to a normal top-level helper in
+  `ocr_crop_preview_ui.py`;
+- expose a normal helper that adds the existing 【OCR区域预览】 checkbox to the
+  already-known display settings row, eliminating widget-tree discovery;
+- call that control helper directly while building the display row in
+  `PictureCaptureApp._build_quick_settings`;
+- call the draw helper from the static redraw path while preserving the current
+  wrapper semantics: normal redraw end plus the crop-preview early-return path;
+- leave image-none and preprocess early returns unchanged because the preview
+  helper is already a no-op there after the canvas has been cleared;
+- remove `install_ocr_crop_preview(app_module)` from GUI bootstrap and leave
+  the public installer name as a no-op compatibility shim;
+- preserve exact canonical crop calculation, source-coordinate mapping,
+  regular/oversized/active styling, tooltip wording and row-metric diagnostics;
+- ratchet against reintroducing `PictureCaptureApp.__init__` / `redraw`
+  mutation.
+
+Do not combine this with ReviewWindow classification, Layout visualization,
+Layout runtime, PDIC composition or OCR runner work.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
