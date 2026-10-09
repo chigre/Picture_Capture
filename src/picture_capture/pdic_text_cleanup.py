@@ -21,9 +21,9 @@ def clear_pdic_words(path: Path) -> int:
     changed = sum(bool(entry.word) for entry in entries)
     if not changed:
         return 0
-    # Windows text mode converts LF to CRLF on output. Normalize decoded
-    # source newlines first; otherwise original CRLF becomes CRCRLF.
-    lines = text.replace("\\r\\n", "\\n").replace("\\r", "\\n").splitlines(keepends=True)
+    # splitlines removes CR/LF before write_text_atomic normalizes LF to the
+    # host platform's native newline. No CRCRLF duplication on Windows.
+    lines = text.splitlines()
     output = []
     for line in lines:
         if not line.strip():
@@ -33,7 +33,7 @@ def clear_pdic_words(path: Path) -> int:
         if not separator:
             raise ValueError(f"{path.name}: PDIC record has no separator")
         output.append(separator + suffix)
-    write_text_atomic(path, "".join(output))
+    write_text_atomic(path, chr(10).join(output) + (chr(10) if text.endswith((chr(10), chr(13))) else ""))
     return changed
 
 
