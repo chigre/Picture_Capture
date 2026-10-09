@@ -356,8 +356,10 @@ def _guard_band_entries(
     existing: list[Entry],
     *,
     page_index: int,
+    ops: base.LayoutPrimitiveOps | None = None,
 ) -> list[Entry]:
     """Recover first/last entry blocks whose ink crosses the logical body edge."""
+    ops = base.current_layout_ops() if ops is None else ops
     reference = max(1.0, float(layout.ordinary_line_height))
     guard = max(4, round(reference * 1.15))
     source = base.normalize_page_rgb(image)
@@ -395,11 +397,11 @@ def _guard_band_entries(
             if family is not None
             else None
         )
-        runs = base._line_runs(strip, reference)
+        runs = ops.line_runs(strip, reference)
         previous_end = 0
         features: list[tuple[base.LayoutLine, int, int]] = []
         for y0, y1 in runs:
-            line = base._line_feature(
+            line = ops.line_feature(
                 column.index, strip, y0, y1, reference, previous_end,
             )
             previous_end = max(previous_end, y1)
