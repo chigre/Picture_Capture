@@ -211,6 +211,18 @@ FORBIDDEN_REVIEW_CLASSIFICATION_INSTALL_CALLS = (
     "install_review_entry_classification(app_module)",
 )
 
+# Phase 12U makes UI terminology source-native. The compatibility module must
+# not resume mutating global Tk/ttk/StringVar constructors or GUI bootstrap.
+FORBIDDEN_UI_TERMINOLOGY_MUTATIONS = (
+    "cls.__init__ = wrapped_init",
+    "tk.StringVar.__init__ = stringvar_init",
+    "tk.StringVar.set = stringvar_set",
+    "_pc_terminology_wrapped",
+)
+FORBIDDEN_UI_TERMINOLOGY_INSTALL_CALLS = (
+    "install_ui_terminology()",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -405,6 +417,11 @@ def collect_violations() -> list[str]:
                 violations.append(
                     f"Review classification installer call returned in {rel}: {marker}"
                 )
+        for marker in FORBIDDEN_UI_TERMINOLOGY_INSTALL_CALLS:
+            if marker in source:
+                violations.append(
+                    f"UI terminology installer call returned in {rel}: {marker}"
+                )
 
     single_line_merge_source = (
         PACKAGE_ROOT / "single_line_merge_settings.py"
@@ -458,6 +475,15 @@ def collect_violations() -> list[str]:
         if marker in review_classification_source:
             violations.append(
                 f"Review classification mutation returned: {marker}"
+            )
+
+    ui_terminology_source = (
+        PACKAGE_ROOT / "ui_terminology.py"
+    ).read_text(encoding="utf-8")
+    for marker in FORBIDDEN_UI_TERMINOLOGY_MUTATIONS:
+        if marker in ui_terminology_source:
+            violations.append(
+                f"UI terminology global mutation returned: {marker}"
             )
 
     init_path = PACKAGE_ROOT / "__init__.py"
