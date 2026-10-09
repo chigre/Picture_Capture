@@ -25,7 +25,7 @@ class FakeEditor:
 def test_saved_review_words_follow_section_order_not_raw_column_order(tmp_path):
     image = Image.new("RGB", (220, 150), "white")
     settings = AppSettings(
-        columns=2, manual_x=8, column_width=90, column_gap=18,
+        columns=2, manual_x=8, column_width=90,
         start_y=0, bottom_y=150, ordinary_auto_layout=False,
     )
     geometry = derive_geometry(image, settings)
