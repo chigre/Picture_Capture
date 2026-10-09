@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from .layout_indent_visibility import add_prepared_indent_summary
 
 
 def _role_label(role: object) -> str:
