@@ -92,7 +92,9 @@ def _understand_page_current(
             mask_stats = IllustrationMaskStats()
 
     try:
-        _ensure_layout_runtime()
+        # Both the layout-only and enriched Page Understanding branches use
+        # explicit Physical Layout composition. Legacy installer preparation is
+        # no longer part of the normal detection path.
         if layout_only:
             from .layout_core_understanding import understand_layout_core
 
