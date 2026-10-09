@@ -34,7 +34,7 @@ def _manifest_crop_path(pww_dir: Path, filename: str) -> Path | None:
         not filename
         or filename in {".", ".."}
         or "/" in filename
-        or "\\\\" in filename
+        or chr(92) in filename
         or PureWindowsPath(filename).name != filename
     ):
         return None
