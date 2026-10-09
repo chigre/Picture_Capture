@@ -55,5 +55,4 @@ def test_project_center_displays_cards_before_decoding_previews():
     preview_dispatch = section.index('f"{key}-previews",', metadata_rebuild)
     assert metadata_done < metadata_rebuild < preview_dispatch
     worker = section[section.index("def previews_worker("):section.index("def alive()")]
-    assert worker.index('opened.thumbnail((92, 92)') < worker.index("normalize_page_rgb(opened)")
-    assert "opened.draft(" in worker
+    assert "load_project_center_preview(root, Path(preview_text))" in worker
