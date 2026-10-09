@@ -63,7 +63,7 @@ def prepare_gui_application() -> Any:
     install_layout_rows_persistence_runtime()
 
     # Project Profile UI extensions are composed statically in
-    # profile_wizard_composed. app.py imports that finished class directly, so
+    # profile_wizard. app.py imports that finished class directly, so
     # GUI bootstrap no longer mutates profile_setup.ProjectProfileWizard or
     # controls the wizard's import order.
 
