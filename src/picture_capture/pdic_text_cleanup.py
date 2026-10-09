@@ -21,7 +21,9 @@ def clear_pdic_words(path: Path) -> int:
     changed = sum(bool(entry.word) for entry in entries)
     if not changed:
         return 0
-    lines = text.splitlines(keepends=True)
+    # Windows text mode converts LF to CRLF on output. Normalize decoded
+    # source newlines first; otherwise original CRLF becomes CRCRLF.
+    lines = text.replace("\\r\\n", "\\n").replace("\\r", "\\n").splitlines(keepends=True)
     output = []
     for line in lines:
         if not line.strip():
