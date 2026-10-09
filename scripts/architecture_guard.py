@@ -193,6 +193,24 @@ FORBIDDEN_LAYOUT_VISUALIZATION_INSTALL_CALLS = (
     "install_layout_visualization(app_module)",
 )
 
+# Phase 12T wires Review classification through native app/ReviewWindow
+# lifecycle points. The compatibility helper must not resume class/global
+# mutation.
+FORBIDDEN_REVIEW_CLASSIFICATION_MUTATIONS = (
+    "app_module._review_line_box =",
+    "ReviewWindow.__init__ =",
+    "ReviewWindow._request_render_rows =",
+    "ReviewWindow.set_active =",
+    "ReviewWindow._build =",
+    "ReviewWindow._sync_entry_classification_control =",
+    "ReviewWindow._change_entry_classification =",
+    "ReviewWindow._set_entry_classification_shortcut =",
+    "app_module._review_entry_classification_installed",
+)
+FORBIDDEN_REVIEW_CLASSIFICATION_INSTALL_CALLS = (
+    "install_review_entry_classification(app_module)",
+)
+
 # Phase 1 has paid off package-import installer debt completely. Any future
 # install_* call in picture_capture.__init__ is therefore a regression.
 INIT_INSTALLER_BASELINE: set[str] = set()
@@ -382,6 +400,11 @@ def collect_violations() -> list[str]:
                 violations.append(
                     f"Layout visualization installer call returned in {rel}: {marker}"
                 )
+        for marker in FORBIDDEN_REVIEW_CLASSIFICATION_INSTALL_CALLS:
+            if marker in source:
+                violations.append(
+                    f"Review classification installer call returned in {rel}: {marker}"
+                )
 
     single_line_merge_source = (
         PACKAGE_ROOT / "single_line_merge_settings.py"
@@ -426,6 +449,15 @@ def collect_violations() -> list[str]:
         if marker in layout_visualization_source:
             violations.append(
                 f"Layout visualization class mutation returned: {marker}"
+            )
+
+    review_classification_source = (
+        PACKAGE_ROOT / "review_entry_classification_ui.py"
+    ).read_text(encoding="utf-8")
+    for marker in FORBIDDEN_REVIEW_CLASSIFICATION_MUTATIONS:
+        if marker in review_classification_source:
+            violations.append(
+                f"Review classification mutation returned: {marker}"
             )
 
     init_path = PACKAGE_ROOT / "__init__.py"

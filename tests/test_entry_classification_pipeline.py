@@ -183,26 +183,80 @@ def test_manual_override_survives_small_separator_y_move(tmp_path: Path):
     assert get_entry_classification(moved).entry_scale == "regular"
 
 
+class _ReviewVar:
+    def __init__(self, value=""):
+        self.value = value
+
+    def get(self):
+        return self.value
+
+    def set(self, value):
+        self.value = value
+
+
+def test_static_review_classification_helpers_sync_and_persist_change(monkeypatch):
+    import picture_capture.review_entry_classification_ui as review
+
+    entry = Entry(
+        word="",
+        x=4041,
+        y=9107,
+        current_page="phase12t-static-helper",
+        ocr_source="ordinary_large_head_evidence",
+        ocr_visual_run_height=84.0,
+        ocr_oversized_cjk=True,
+    )
+    events = []
+    window = SimpleNamespace(
+        active_index=0,
+        entry_scale_classification_var=_ReviewVar(),
+        entry_source_classification_var=_ReviewVar(),
+        _bound_row_entries=lambda: [entry],
+        _request_render_rows=lambda **kwargs: events.append(("render", kwargs)),
+        parent=SimpleNamespace(redraw=lambda: events.append(("redraw",))),
+    )
+
+    review.sync_review_entry_classification(window)
+    assert window.entry_scale_classification_var.get() == "自动"
+    assert "当前：大字头" in window.entry_source_classification_var.get()
+
+    monkeypatch.setattr(review, "_persist", lambda current: events.append(("persist", current)))
+    window.entry_scale_classification_var.set("普通词条")
+    review.change_review_entry_classification(window)
+
+    meta = get_entry_classification(entry)
+    assert meta.entry_scale == "regular"
+    assert meta.manual_override is True
+    assert events[0][0] == "persist"
+    assert events[1] == ("render", {"focus_index": 0})
+    assert events[2] == ("redraw",)
+
+
 def test_review_and_marker_ocr_are_wired_to_canonical_classification():
+    import picture_capture.app as app_module
     import picture_capture.processing_core as processing_core
     import picture_capture.review_entry_classification_ui as review
 
     marker_ocr_source = Path(processing_core.__file__).read_text(encoding="utf-8")
+    app_source = Path(app_module.__file__).read_text(encoding="utf-8")
     review_source = Path(review.__file__).read_text(encoding="utf-8")
 
-    # Marker OCR now delegates crop geometry to the shared entry_ocr_crop layer;
-    # proofreading retains the same canonical regular/oversized classification.
+    # Marker OCR and proofreading use the same canonical regular/oversized
+    # classification without a runtime replacement of _review_line_box.
     assert "entry_ocr_crop_box(" in marker_ocr_source
     assert "resolve_entry_ocr_row_metrics(" in marker_ocr_source
     assert 'meta.entry_scale == "oversized"' in marker_ocr_source
-    assert "classified_entry_crop_height(" in review_source
-    assert "entry_regular_crop_height" in review_source
-    assert "entry_oversized_crop_height" in review_source
-    assert "_is_single_cjk_review_headword" not in review_source
+    review_start = app_source.index("def _review_line_box(")
+    review_end = app_source.index("\ndef _apply_focused_review_page_updates", review_start)
+    review_line_box = app_source[review_start:review_end]
+    assert "classified_entry_crop_height(" in review_line_box
+    assert "entry_regular_crop_height" in review_line_box
+    assert "entry_oversized_crop_height" in review_line_box
+    assert "_is_single_cjk_review_headword" not in app_source
     assert '("自动", "普通词条", "大字头")' in review_source
 
 
-def test_gui_composition_uses_static_pdic_io_and_installs_review_ui_after_app():
+def test_gui_composition_uses_static_pdic_io_and_review_classification():
     import picture_capture.app as app_module
     import picture_capture.bootstrap.gui as gui_bootstrap
     import picture_capture.gui_io as gui_io
@@ -215,10 +269,12 @@ def test_gui_composition_uses_static_pdic_io_and_installs_review_ui_after_app():
     assert "entry_classification_runtime" not in source
     assert app_module.write_pdic is gui_io.write_pdic
     assert app_module.read_pdic is gui_io.read_pdic
-    assert "install_review_entry_classification(app_module)" in source
-    assert source.index("from .. import app as app_module") < source.index(
-        "install_review_entry_classification(app_module)"
-    )
+    assert "install_review_entry_classification(app_module)" not in source
+
+    app_source = Path(app_module.__file__).read_text(encoding="utf-8")
+    assert "initialize_review_entry_classification(self)" in app_source
+    assert app_source.count("sync_review_entry_classification(self)") >= 2
+    assert '"大字头切图高："' in app_source
 
 
 def test_gui_baseline_capture_wraps_core_classification_without_reinstall(tmp_path: Path):

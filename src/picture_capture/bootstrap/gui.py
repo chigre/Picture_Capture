@@ -64,11 +64,10 @@ def prepare_gui_application() -> Any:
     # app.py imports that stable function by value without bootstrap mutation.
 
     from .. import app as app_module
-    from ..review_entry_classification_ui import install_review_entry_classification
 
     # The shared Layout snapshot is owned statically by layout_visualization_ui;
     # GUI bootstrap no longer rewrites that module-global seam.
-    install_review_entry_classification(app_module)
+    # Review classification controls/crop semantics are wired statically by app.py.
     # OCR crop-preview controls/drawing are wired statically by app.py.
 
     # Settings parameter groups/right-pane help are now native static

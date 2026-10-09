@@ -220,6 +220,11 @@ from .layout_visualization_ui_v3 import (
     add_layout_visualization_controls,
     draw_layout_visualization_if_enabled,
 )
+from .entry_classification import classified_entry_crop_height
+from .review_entry_classification_ui import (
+    initialize_review_entry_classification,
+    sync_review_entry_classification,
+)
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
     headword_filter_rules_path, is_managed_project, migrate_legacy_project,
@@ -330,27 +335,6 @@ def _review_crop_context(
     )
 
 
-def _is_single_cjk_review_headword(value: object) -> bool:
-    """Return True for a single CJK ideograph used as a review headword.
-
-    Single-character display headwords in classical CJK dictionaries are often
-    typeset substantially taller than ordinary multi-character entries.  They
-    therefore need a review-only vertical allowance without changing the
-    project's global character-height setting.
-    """
-    text = unicodedata.normalize("NFKC", str(value or "")).strip()
-    chars = [ch for ch in text if not ch.isspace() and not unicodedata.category(ch).startswith("P")]
-    if len(chars) != 1:
-        return False
-    code = ord(chars[0])
-    return (
-        0x3400 <= code <= 0x4DBF
-        or 0x4E00 <= code <= 0x9FFF
-        or 0xF900 <= code <= 0xFAFF
-        or 0x20000 <= code <= 0x3134F
-    )
-
-
 def _is_cjk_review_index(settings: AppSettings) -> bool:
     """Return whether the active index/profile is Chinese-oriented."""
     language = str(getattr(settings, "ocr_language", "") or "").strip().lower()
@@ -396,30 +380,40 @@ def _review_line_box(
     settings: AppSettings,
     next_entry: WordEntry | None = None,
 ) -> tuple[int, int, int, int]:
-    """Return a proofreading crop box with an explicit single-CJK height.
+    """Return a proofreading crop box using canonical Entry classification."""
+    configured_regular = max(
+        0, int(getattr(settings, "entry_regular_crop_height", 0) or 0)
+    )
+    configured_oversized = max(
+        0, int(getattr(settings, "entry_oversized_crop_height", 0) or 0)
+    )
+    regular_height = (
+        configured_regular or _effective_review_regular_crop_height(settings)
+    )
+    oversized_height = (
+        configured_oversized or _effective_review_single_cjk_line_height(settings)
+    )
+    height = classified_entry_crop_height(
+        entry,
+        settings,
+        regular_height=regular_height,
+        oversized_height=oversized_height,
+    )
+    if geometry.transform.kind != "identity":
+        classified_settings = replace(settings)
+        classified_settings.character_height = int(height)
+        return line_box(entry, geometry, image, classified_settings)
 
-    Normal rows use the shared ``character_height`` exactly as the main window
-    does. A one-character CJK headword uses the independent review-only height.
-    We intentionally do not cap it at the next marker: hand-drawn separator Y
-    positions are not perfectly uniform, and that old cap could re-clip a tall
-    display character even after increasing its requested row height.
-    """
-    if not _is_single_cjk_review_headword(entry.word):
-        if geometry.transform.kind != "identity":
-            regular_settings = replace(settings)
-            regular_settings.character_height = _effective_review_regular_crop_height(settings)
-            return line_box(entry, geometry, image, regular_settings)
-        left, _old_top, right, _bottom = line_box(entry, geometry, image, settings)
-        row_padding = max(0, int(settings.row_padding))
-        regular_height = _effective_review_regular_crop_height(settings)
-        half_spacing = round(0.5 * row_padding)
-        # Identity layout: source Y and 原图位置 are the same coordinate.
-        top = max(geometry.top, int(entry.y) - half_spacing)
-        return left, top, right, min(image.height, top + max(1, regular_height))
-
-    single_settings = replace(settings)
-    single_settings.character_height = _effective_review_single_cjk_line_height(settings)
-    return line_box(entry, geometry, image, single_settings)
+    left, _old_top, right, _bottom = line_box(
+        entry, geometry, image, settings
+    )
+    row_padding = max(0, int(getattr(settings, "row_padding", 0) or 0))
+    half_spacing = round(0.5 * row_padding)
+    top = max(int(geometry.top), int(entry.y) - half_spacing)
+    return left, top, right, min(
+        int(image.height),
+        top + max(1, int(height)),
+    )
 
 def _apply_focused_review_page_updates(
     page: Path, pages: list[Path], page_index: int, changes: list[dict],
@@ -2155,6 +2149,7 @@ class ReviewWindow(tk.Toplevel):
         )
         for _var in self.digit_map_vars:
             _var.trace_add("write", lambda *_args: self._save_digit_map())
+        initialize_review_entry_classification(self)
 
     def _configure_review_styles(self) -> None:
         """Configure dense, opt-in styles for the proofreading workspace only."""
@@ -2604,7 +2599,7 @@ class ReviewWindow(tk.Toplevel):
             self.review_regular_crop_height_px_var,
         )
         self.review_single_cjk_line_height_spin = add_review_height_control(
-            "单字行高：",
+            "大字头切图高：",
             self.review_single_cjk_line_height_var,
             self.review_single_cjk_line_height_px_var,
         )
@@ -5456,6 +5451,7 @@ class ReviewWindow(tk.Toplevel):
         self, *, focus_index: int | None = None, reset_scroll: bool = False,
     ) -> None:
         """Prepare proofreading crops off-thread; materialize Tk widgets only on Tk."""
+        sync_review_entry_classification(self)
         if getattr(self, "_filter_rows_active", False):
             return
         project = getattr(self.parent, "project", None)
@@ -6005,6 +6001,7 @@ class ReviewWindow(tk.Toplevel):
             self.locate_reference_word(self.vars[index].get(), index)
             self._refresh_cc_simplified_comparison(index)
             self._schedule_network_lookup(self.vars[index].get())
+        sync_review_entry_classification(self)
 
     def _scroll_editor_into_view(self, index: int) -> None:
         if not (0 <= index < len(self.editors)):
