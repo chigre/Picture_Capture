@@ -58,23 +58,13 @@ def resolve_unlined_physical_rows(
             pass
         return fast, "fast_projection"
 
-    # Escalate geometry only. Character-height fallback and column-drift
-    # remeasurement are static; the remaining installers are still required
-    # because an unlined worker is spawned independently of the GUI launcher.
-    from .layout_line_start_refinement import install_robust_line_starts
-    from .layout_physical_indent import install_physical_indent_inference
-
-    install_robust_line_starts()
-    install_physical_indent_inference()
-    # Long-band row recovery is already static in layout_physical_indent.
-
-    # Import only after the runtime order above.  This path may use the reliable
-    # page detector to correct a translated/abnormal page, but it stops before
-    # Layout Core's symbol/large-head evidence fusion.
-    from . import dictionary_page_layout_policy as policy
+    # Escalate geometry only through the explicit physical-only policy
+    # composition. This independent spawn worker no longer needs to install
+    # process-global Layout hooks before the detector can run.
+    from .layout_composition import infer_composed_physical_page_layout
 
     try:
-        layout, _page_settings, _applied = policy.infer_dictionary_page_layout(
+        layout, _page_settings, _applied = infer_composed_physical_page_layout(
             image,
             settings,
             page_index=int(page_index),
