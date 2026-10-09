@@ -300,7 +300,6 @@ def transformed_geometry_pending(settings: AppSettings) -> bool:
 
 
 
-
 OCR_SCOPE_LABELS = {"current": "当前页", "all": "全部页面"}
 OCR_SCOPE_VALUES = {label: value for value, label in OCR_SCOPE_LABELS.items()}
 OCR_REFRESH_LABELS = {
