@@ -102,9 +102,9 @@ def _understand_page_current(
                 page_index=page_index,
             )
         else:
-            from . import page_understanding as page_understanding_module
+            from .layout_composition import understand_composed_page
 
-            understanding = page_understanding_module.understand_page(
+            understanding = understand_composed_page(
                 analysis_image,
                 settings,
                 page_index=page_index,
