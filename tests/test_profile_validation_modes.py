@@ -45,7 +45,7 @@ def test_validation_runs_same_representative_pages_for_each_mode():
 def test_validation_surfaces_page_understanding_and_requires_default_mode_test():
     source = inspect.getsource(build_validation_mode_wizard)
     assert "页面理解（Page Understanding）" in source
-    assert "understand_page(" in source
+    assert "understand_composed_page(" in source
     assert "_understanding_summary(" in source
     assert "_validation_mode_revision" in source
     assert "profile_last_validated_pages = []" in source

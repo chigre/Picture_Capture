@@ -12,10 +12,8 @@ from .generic_block_roles import generic_entry_candidates
 from .image_utils import normalize_page_rgb
 from .layout_illustration_mask import mask_large_illustrations_for_layout
 from .page_sections import read_page_sections
-from .page_understanding import (
-    page_understanding_diagnostics,
-    understand_page,
-)
+from .page_understanding import page_understanding_diagnostics
+from .layout_composition import understand_composed_page
 
 
 def build_export_training_page_with_understanding(
@@ -47,7 +45,7 @@ def build_export_training_page_with_understanding(
                 settings,
                 profile_page_index=int(page_index),
             )
-            understanding = understand_page(
+            understanding = understand_composed_page(
                 analysis_image,
                 settings,
                 page_index=page_index,
