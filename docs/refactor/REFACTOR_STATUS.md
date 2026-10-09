@@ -3,9 +3,9 @@
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
 ## Current phase
-**Phase 12 — bounded ownership cleanup is underway. Phase 12N is complete: Settings help wording and recursive control binding are now statically owned by the shared Settings schema/help layer; the post-build SettingsDialog help wrapper is retired.**
+**Phase 12 — bounded ownership cleanup is underway. Phase 12O is complete: the single-line merge crop setting is now part of the canonical crop schema and static Settings UI/payload; its SettingsDialog init/save wrapper is retired.**
 
-Phase 12N is merged on `main@fb57c3e50a2d3c49148a918358c880ceddc308ec`. Phase 12M remains complete on `main@68524cc3fd4668b93906253edb91dfd8753cac88`; Phase 12L remains complete on `main@29fd90712b5e232d45586c549a576fbb697b3018`. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
+Phase 12O is merged on `main@aea54e801a332be6c8682a51970beef9292c13f4`. Phase 12N remains complete on `main@fb57c3e50a2d3c49148a918358c880ceddc308ec`, with its checkpoint merged on `main@a3215a35016faa8c564e69a964f5a577f0f030b0` and post-checkpoint CI 2321 / CodeQL 2304 passing. Phase 12K and Phase 12I remain characterization-only deferrals for the Layout runtime chain and PDIC composition respectively. Earlier bounded slices remain complete.
 
 The Phase 8 full OCR cold/warm benchmark gate remains open and must not be replaced by unmeasured micro-optimization. Phase 9 facade compatibility remains an intentional public boundary. The OCR-boundary process-global runner bridge remains a real debt candidate, but its current call chain reaches the oversized mature parser core and is not yet approved as a bounded production write.
 
@@ -2152,33 +2152,80 @@ Phase 12N publication:
 - post-merge CodeQL 2302 passed;
 - no architecture or size threshold was relaxed.
 
-## Recommended next slice — Phase 12O static single-line merge crop setting
+## Phase 12O — static single-line merge crop setting
 
-The smaller remaining Settings wrapper is
-`install_single_line_merge_settings_ui(app_module)`.
+Before Phase 12O, single-line page merge already had ordinary non-runtime
+output ownership, but Settings Center still installed one checkbox by wrapping
+`SettingsDialog.__init__` and a family of save/apply methods. The wrapper was
+also required because the integrated crop schema did not know the optional key
+and would otherwise drop it on save.
 
-The merge behavior itself is already ordinary non-runtime ownership in
-`single_line_merge_settings.py`; only Settings Center presentation/persistence
-still monkeypatches `SettingsDialog.__init__` and save methods.
+Phase 12O makes the setting native to the crop settings boundary:
+- `crop.settings` canonically defines and normalizes
+  `single_line_crop_merge_by_page`, without changing
+  `CROP_SETTINGS_VERSION == 7`;
+- `ui/settings/crop.py` owns the checkbox, help presentation and integrated
+  payload value statically;
+- opening Settings Center still reads the raw merge flag through
+  `load_merge_by_page(...)`, preserving the historical choice even when an
+  older/invalid crop-schema version causes the other integrated fields to reset;
+- clicking the checkbox still writes immediately through
+  `save_merge_by_page(...)`;
+- later integrated crop saves now preserve the merge flag themselves, removing
+  the need for post-save re-append wrappers;
+- no-project Settings Center still omits the merge checkbox;
+- `install_single_line_merge_settings_ui(...)` remains importable as a no-op;
+- GUI composition no longer calls the installer;
+- the architecture guard rejects a return of the installer call or the former
+  SettingsDialog init/save mutation in the compatibility module.
 
-A safe 12O should:
-- add `single_line_crop_merge_by_page` to the existing static
-  `ui/settings/crop.py` `defaults -> crop_vars -> payload` flow;
-- build the checkbox directly in the existing crop tab, preserving the current
-  label/help and click-to-save behavior;
-- keep using the same `QT/_CropSettings.json` key and
-  `save_merge_by_page(...)` compatibility helper;
-- ensure the integrated crop writer now preserves the merge key itself, so no
-  post-save re-append wrapper is required;
-- remove `install_single_line_merge_settings_ui(app_module)` from GUI
-  composition and leave its public installer name as a no-op compatibility
-  shim;
-- leave the still-separate unlined-export filter wrapper unchanged;
-- ratchet against restoring the SettingsDialog init/save mutation for this
-  feature.
+Behavior intentionally unchanged:
+- line crop geometry and per-line source images are unchanged;
+- near-white trimming threshold and blank-slice removal are unchanged;
+- page merge reading order, output filename and manifest semantics are
+  unchanged;
+- the unlined-export filter wrapper remains untouched in this slice.
 
-Do not change line-crop geometry, white-border trimming, blank-slice behavior,
-manifest naming, page merge order, or worker/output semantics.
+Phase 12O publication:
+- PR #376 fixed head `cfc5c5b0a75387d7f416b74e3cbe5f8443d1993e`;
+- PR CI 2322 passed on Ubuntu/Windows/macOS;
+- review submissions: none;
+- review threads: none;
+- PR comments: none;
+- PR #376 merged as `aea54e801a332be6c8682a51970beef9292c13f4`;
+- post-merge CI 2323 passed on Ubuntu/Windows/macOS;
+- post-merge CodeQL 2306 passed;
+- no architecture or size threshold was relaxed.
+
+## Recommended next slice — Phase 12P static unlined-export filter crop settings
+
+The remaining crop-settings wrapper,
+`install_unlined_export_filter_settings_ui(app_module)`, has the same
+historical shape as the retired Phase 12O wrapper:
+- it injects three values into the same `QT/_CropSettings.json` store;
+- it installs master/blank/threshold controls after SettingsDialog construction;
+- it wraps crop/save/apply methods only so the fixed integrated writer cannot
+  drop those optional keys.
+
+A safe 12P should:
+- add the enabled, blank-only and blank-ink-percent keys to the canonical crop
+  normalization contract, preserving defaults `False / False / 0.8` and the
+  current 0–10% clamp;
+- read legacy/raw filter values directly when building Settings Center so an
+  older crop-schema version does not silently erase the user's filter choice;
+- build the existing master checkbox, blank checkbox and threshold Spinbox
+  directly in `ui/settings/crop.py`, immediately after the static single-line
+  merge control and with the same enable/disable behavior and help wording;
+- include all three values in the integrated crop payload while preserving
+  click/focus/Return persistence behavior through the existing
+  `save_unlined_filter_settings(...)` helper;
+- retire the SettingsDialog init/save wrappers and remove the GUI installer,
+  leaving its public installer name as a no-op compatibility shim;
+- ratchet against reintroducing that wrapper.
+
+Do not change `row_ink_percent`, blankness thresholds/meaning, filtering order,
+white-border trimming, Layout-minus-PDIC row selection, export filenames, merge
+behavior, or worker/controller semantics.
 
 Phase 9 facade compatibility remains an intentional public boundary.
 
