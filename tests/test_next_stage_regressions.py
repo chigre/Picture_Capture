@@ -3434,7 +3434,8 @@ def test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only():
     assert 'self.ocr_refresh_var = tk.StringVar(value="reuse")' in app_text
     assert "使用有效缓存（推荐）" in app_text
     assert "重新OCR（模型/图像改变时）" in app_text
-    assert "默认只启用 PaddleOCR；Tesseract 与 Google Lens 按需手动开启" in guide_text
+    assert "共享 OCR 通道默认只启用 PaddleOCR；Tesseract 与 Google Lens 可同时启用" in guide_text
+    assert "【仅OCR】与【OCR画线】共用这些选择" in guide_text
     assert 'LENS_MODE_LABELS["off"]' in app_text
 
     settings = AppSettings()
