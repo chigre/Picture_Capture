@@ -82,3 +82,18 @@ def test_sidecar_recovers_marker_and_page_merge(tmp_path, monkeypatch):
     assert result.exported == 1 and result.merged
     out = tmp_path / "QT" / module.OUTPUT_DIRNAME / "a_MH_PAGE.png"
     assert out.is_file()
+
+
+def test_missing_markers_remove_old_page_images(tmp_path):
+    from picture_capture.major_headword_export import OUTPUT_DIRNAME
+    page = tmp_path / "a.png"
+    Image.new("RGB", (300, 300), "white").save(page)
+    folder = tmp_path / "QT" / OUTPUT_DIRNAME
+    folder.mkdir(parents=True)
+    stale = folder / "a_MH_PAGE.png"
+    stale.write_bytes(b"stale")
+    unrelated = folder / "b_MH_PAGE.png"
+    unrelated.write_bytes(b"keep")
+    result = export_major_headword_page_job(tmp_path, page, 0, AppSettings(), True)
+    assert result.marked == 0 and result.exported == 0
+    assert not stale.exists() and unrelated.exists()
