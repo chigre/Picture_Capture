@@ -12520,6 +12520,11 @@ class PictureCaptureApp(tk.Tk):
                 command=lambda: (set_recent_project_pinned(root, not pinned), refresh_recent_data()),
             )
             menu.add_separator()
+            from .project_center_metadata_cache import clear_cached_details
+            menu.add_command(
+                label="重新扫描项目元数据",
+                command=lambda p=root: (clear_cached_details(p), refresh_recent_data()),
+            )
             menu.add_command(
                 label="从最近项目移除（不删除文件）",
                 command=lambda: remove_one(root),
@@ -12668,19 +12673,7 @@ class PictureCaptureApp(tk.Tk):
             def worker():
                 return load_recent_projects()
 
-            def previews_worker(details):
-                from .project_center_preview_cache import load_project_center_preview
-
-                covers: dict[str, Image.Image] = {}
-                for detail in details:
-                    root = Path(str(detail.get("path") or ""))
-                    preview_text = str(detail.get("preview_path") or "")
-                    if not bool(detail.get("exists")) or not preview_text:
-                        continue
-                    cover = load_project_center_preview(root, Path(preview_text))
-                    if cover is not None:
-                        covers[str(root)] = cover
-                return covers
+            from .project_center_preview_cache import load_project_center_previews
 
             def alive() -> bool:
                 try:
@@ -12694,6 +12687,8 @@ class PictureCaptureApp(tk.Tk):
                 state["cover_images"] = covers
                 rebuild()
 
+            from .project_center_metadata_cache import details_with_cache
+
             def details_done(details) -> None:
                 if not alive():
                     return
@@ -12701,7 +12696,7 @@ class PictureCaptureApp(tk.Tk):
                 rebuild()
                 self._start_ui_worker(
                     f"{key}-previews",
-                    lambda: previews_worker(details),
+                    lambda: load_project_center_previews(details),
                     previews_done,
                 )
 
@@ -12715,7 +12710,7 @@ class PictureCaptureApp(tk.Tk):
                 rebuild()
                 self._start_ui_worker(
                     f"{key}-details",
-                    lambda: [recent_project_details(row) for row in rows],
+                    lambda: details_with_cache(rows),
                     details_done,
                     failed,
                 )

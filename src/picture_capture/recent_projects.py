@@ -26,7 +26,14 @@ def load_recent_projects(path: Path | None = None) -> list[dict[str, object]]:
         try:
             value = json.loads(candidate.read_text(encoding="utf-8"))
             if isinstance(value, list):
-                rows = [row for row in value if isinstance(row, dict) and row.get("path")]
+                rows = [dict(row) for row in value if isinstance(row, dict) and row.get("path")]
+                # One tiny index read; no scan-directory inventory before first paint.
+                from .project_center_metadata_cache import cached_details, read_index
+                index = read_index()
+                for row in rows:
+                    cached = cached_details(Path(str(row["path"])).expanduser(), index)
+                    if cached is not None:
+                        row["card_cache"] = {"version": 1, **cached}
                 return sorted(rows, key=lambda row: not bool(row.get("pinned", False)))
         except (OSError, ValueError, TypeError):
             continue
@@ -43,7 +50,7 @@ def save_recent_projects(rows: list[dict[str, object]], path: Path | None = None
             prefix=f".{target.name}.", suffix=".tmp", delete=False,
         ) as handle:
             temp = Path(handle.name)
-            json.dump(rows, handle, ensure_ascii=False, indent=2)
+            json.dump([{k: v for k, v in row.items() if k != "card_cache"} for row in rows], handle, ensure_ascii=False, indent=2)
             handle.flush()
             os.fsync(handle.fileno())
         for attempt in range(5):
@@ -77,6 +84,7 @@ def touch_recent_project(
             existing = dict(row)
         else:
             remaining.append(row)
+    existing.pop("card_cache", None)  # transient view data belongs in the separate metadata index
     row: dict[str, object] = {
         **existing,
         "name": resolved.name,
@@ -102,6 +110,8 @@ def set_recent_project_pinned(
         if Path(str(row.get("path", ""))).expanduser() == resolved:
             row["pinned"] = bool(pinned)
     rows.sort(key=lambda row: not bool(row.get("pinned", False)))
+    for row in rows:
+        row.pop("card_cache", None)
     save_recent_projects(rows, path)
     return rows
 
@@ -110,6 +120,8 @@ def remove_recent_project(root: Path, path: Path | None = None) -> list[dict[str
     """Remove only the registry row. No project path is ever unlinked."""
     resolved = root.expanduser().resolve()
     rows = [row for row in load_recent_projects(path) if Path(str(row["path"])).expanduser() != resolved]
+    for row in rows:
+        row.pop("card_cache", None)
     save_recent_projects(rows, path)
     return rows
 
@@ -133,11 +145,22 @@ def recent_project_stub_details(row: dict[str, object]) -> dict[str, str | int |
         index = int(row.get("last_page_index")) if row.get("last_page_index") is not None else -1
     except (TypeError, ValueError, OverflowError):
         index = -1
-    return {
-        "full_name": str(row.get("name") or root.name),
-        "abbreviation": "",
-        "image_count": 0,
-        "last_edited": _display_recent_timestamp(row.get("opened_at")),
+    cached = row.get("card_cache")
+    if isinstance(cached, dict) and cached.get("version") == 1:
+        detail = {
+            key: cached[key] for key in (
+                "full_name", "abbreviation", "image_count", "last_edited",
+                "cover_path", "preview_path", "cover_source",
+            ) if key in cached
+        }
+    else:
+        detail = {}
+    result = {
+        **detail,
+        "full_name": str(detail.get("full_name") or row.get("name") or root.name),
+        "abbreviation": str(detail.get("abbreviation") or ""),
+        "image_count": int(detail.get("image_count") or 0),
+        "last_edited": str(detail.get("last_edited") or _display_recent_timestamp(row.get("opened_at"))),
         "path": str(root),
         "exists": True,  # Unknown until filesystem metadata is loaded.
         "checking": True,
@@ -145,10 +168,15 @@ def recent_project_stub_details(row: dict[str, object]) -> dict[str, str | int |
         "last_page_index": index,
         "resume_text": last_page or "—",
         "position_text": last_page or "—",
-        "cover_path": "",
-        "preview_path": "",
-        "cover_source": "none",
+        "cover_path": str(detail.get("cover_path") or ""),
+        "preview_path": str(detail.get("preview_path") or ""),
+        "cover_source": str(detail.get("cover_source") or "none"),
     }
+    count = int(result["image_count"])
+    if count and index >= 0:
+        result["position_text"] = f"第 {min(count, index + 1):,} / {count:,} 页"
+    result["checking"] = not bool(detail)
+    return result
 
 
 def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool]:
@@ -159,6 +187,19 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         last_page_index = int(row.get("last_page_index")) if row.get("last_page_index") is not None else -1
     except (TypeError, ValueError):
         last_page_index = -1
+    from .project_center_metadata_cache import cached_details
+    cached = cached_details(root)
+    if cached is not None:
+        count = int(cached.get("image_count") or 0)
+        position = (
+            f"第 {min(count, last_page_index + 1):,} / {count:,} 页"
+            if count and last_page_index >= 0 else (last_page or "—")
+        )
+        return {
+            **cached, "path": str(root), "exists": True,
+            "last_page": last_page, "last_page_index": last_page_index,
+            "resume_text": last_page or "—", "position_text": position,
+        }
     details: dict[str, str | int | bool] = {
         "full_name": str(row.get("name") or root.name),
         "abbreviation": "",

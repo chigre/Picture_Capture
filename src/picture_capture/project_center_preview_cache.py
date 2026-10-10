@@ -112,3 +112,17 @@ def load_project_center_preview(root: Path, source: Path) -> Image.Image | None:
         # Read-only or inaccessible project folders still show a live thumbnail.
         pass
     return card
+
+
+def load_project_center_previews(details: list[dict[str, object]]) -> dict[str, Image.Image]:
+    """Load all visible cover cards in a background worker, never on the UI thread."""
+    covers: dict[str, Image.Image] = {}
+    for detail in details:
+        root = Path(str(detail.get("path") or ""))
+        preview_text = str(detail.get("preview_path") or "")
+        if not bool(detail.get("exists")) or not preview_text:
+            continue
+        cover = load_project_center_preview(root, Path(preview_text))
+        if cover is not None:
+            covers[str(root)] = cover
+    return covers
