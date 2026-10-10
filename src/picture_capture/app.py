@@ -1888,6 +1888,14 @@ class ReviewWindow(tk.Toplevel):
         width, height = _review_window_dimensions(screen_w, screen_h)
         x = max(0, (screen_w - width) // 2)
         y = max(0, (screen_h - height) // 2)
+        # Only the compact index preset places proofreading beside the image.
+        mini = getattr(parent, "workspace_mini_page_host", None)
+        if mini is not None and mini.winfo_manager() == "grid":
+            parent.update_idletasks()
+            x = max(0, parent.winfo_rootx() + parent.winfo_width())
+            y = max(0, parent.winfo_rooty())
+            width = max(1, screen_w - x)
+            height = max(1, screen_h - y)
         self.geometry(f"{width}x{height}+{x}+{y}")
         self.minsize(min(560, width), min(420, height))
         self.active_index = 0
