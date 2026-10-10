@@ -76,6 +76,15 @@ def test_index_width_and_treeview_columns_fit_available_space():
     assert 'choices.winfo_reqwidth() + 38' in tools
     assert 'font.nametofont("TkHeadingFont")' in app
     assert 'orient="horizontal", command=self.page_list.xview' in app
-    assert 'widths = minimum[:]' in app
+    assert 'body_font.measure(name) for name in page_names' in app
+    assert '"page": min(240, max(74, page_width))' in app
+    assert 'self.page_list.column(column, width=width, stretch=False)' in app
     assert '("上页", lambda: self.change_page(-1)' in app
     assert '("下页", lambda: self.change_page(1)' in app
+
+
+def test_page_name_column_does_not_absorb_all_spare_sidebar_width():
+    app, _ = sources()
+    assert 'weights = {' not in app[app.index('    def _fit_page_list_columns'):app.index('    def _hide_page_list_section_heading_hint')]
+    assert 'page.stem for page in getattr(self.project, "images", ())' in app
+    assert 'header_font.measure(label) + 16' in app
