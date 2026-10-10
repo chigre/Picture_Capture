@@ -192,8 +192,9 @@ def test_static_settings_schema_owns_mask_checkbox_before_gui_composition():
     from picture_capture.app import SettingsDialog
     from picture_capture.ui.settings import schema
 
-    names = [name for _label, name in schema.NORMAL_CHECKS]
-    assert names.index(SETTING_NAME) == names.index("ordinary_auto_layout") + 1
+    names = [name for _label, name in schema.ILLUSTRATION_CHECKS]
+    assert names[0] == SETTING_NAME
+    assert SETTING_NAME not in [name for _label, name in schema.NORMAL_CHECKS]
     assert SettingsDialog.NORMAL_CHECKS is schema.NORMAL_CHECKS
     assert SettingsDialog.SETTING_LABELS[SETTING_NAME] == "Layout前白化插图"
     assert SettingsDialog.SETTING_HELP[SETTING_NAME] == schema.CHECK_HELP[SETTING_NAME]
