@@ -9155,7 +9155,7 @@ class PictureCaptureApp(tk.Tk):
         add_quick_opacity_control(self, marker_row, name="headword_marker_opacity")
         label_visible_var = tk.BooleanVar(value=bool(self.settings.show_illustration_labels))
         self.quick_bool_vars["show_illustration_labels"] = label_visible_var
-        ttk.Checkbutton(marker_row, text="插图标签：外框", variable=label_visible_var).pack(side="left")
+        ttk.Checkbutton(marker_row, text="显示插图标签", variable=label_visible_var, command=lambda: self._apply_overlay_visibility_toggle("show_illustration_labels", label_visible_var)).pack(side="left")
         color_button(marker_row, "illustration_label_border_color")
         ttk.Label(marker_row, text="粗细").pack(side="left")
         label_width_var = tk.StringVar(value=str(self.settings.illustration_label_border_width)); self.quick_vars["illustration_label_border_width"] = label_width_var; self.quick_field_casts["illustration_label_border_width"] = int
@@ -14013,7 +14013,7 @@ class PictureCaptureApp(tk.Tk):
                 self.overlay_widgets.append(check)
                 self.canvas.create_window(cx, cy, window=check, anchor="nw")
         show_shapes = bool(self.polygon_var.get() or self.polygon_draw_var.get())
-        show_labels = bool(self.settings.show_illustration_labels or self.polygon_draw_var.get())
+        show_labels = bool(self.settings.show_illustration_labels)
         if show_shapes or show_labels:
             for region_index, region in enumerate(self.polygons):
                 coords = [value * self.view_scale for point in region.points for value in point]
@@ -14321,49 +14321,19 @@ class PictureCaptureApp(tk.Tk):
             self.show_error("删除PPP插图失败", exc)
 
     @staticmethod
+    @staticmethod
     def _external_polygon_label_position(
         min_x: float, min_y: float, max_x: float, max_y: float,
         label_width: int, label_height: int, canvas_width: float, canvas_height: float,
         gap: int = 6,
     ) -> tuple[float, float]:
-        """Place a PPP label outside the polygon at its upper-right corner.
-
-        Prefer the space immediately to the right of the polygon.  If the
-        label would run past the page/canvas right edge, place it just above
-        the polygon and right-align it to the polygon's right edge.  Remaining
-        edge cases are clamped to the visible page while keeping the label as
-        far outside the PPP region as the available space permits.
-        """
-        label_width = max(1, int(label_width))
-        label_height = max(1, int(label_height))
-        canvas_width = max(float(canvas_width), 1.0)
-        canvas_height = max(float(canvas_height), 1.0)
+        """Position label above the figure, aligned to its left edge."""
         margin = 2.0
-
-        # First choice: directly outside the right edge, aligned to the top.
-        x = max_x + gap
-        y = min_y
-        if x + label_width <= canvas_width - margin:
-            y = min(max(margin, y), max(margin, canvas_height - label_height - margin))
-            return x, y
-
-        # Right edge is tight: stay at the upper-right, but move above the PPP.
-        x = max(margin, min(max_x, canvas_width - margin) - label_width)
+        x = max(margin, min(min_x, max(margin, canvas_width - label_width - margin)))
         y = min_y - gap - label_height
-        if y >= margin:
-            return x, y
-
-        # Last resort for a PPP touching both the top and right page edges.
-        # Prefer the space to its left rather than covering the illustration.
-        x = min_x - gap - label_width
-        if x >= margin:
-            y = min(max(margin, min_y), max(margin, canvas_height - label_height - margin))
-            return x, y
-
-        return (
-            max(margin, min(canvas_width - label_width - margin, max_x - label_width)),
-            max(margin, min(canvas_height - label_height - margin, min_y)),
-        )
+        if y < margin:
+            y = min(max(margin, min_y + gap), max(margin, canvas_height - label_height - margin))
+        return x, y
 
     def _polygon_label_canvas_position(self, region: PolygonRegion, widget: tk.Widget) -> tuple[float, float]:
         if not region.points:
