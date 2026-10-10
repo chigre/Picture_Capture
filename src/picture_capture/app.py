@@ -2561,7 +2561,7 @@ class ReviewWindow(tk.Toplevel):
         self.active_crop_photo = None
         self._active_crop_fixed_size: tuple[int, int] | None = None
         self._review_display_crops: list[Image.Image] = []
-        self._review_row_pictures: list[ttk.Label | None] = []
+        self._review_row_pictures: list[ttk.Label] = []
 
         self.canvas = tk.Canvas(
             editor_area,
@@ -5634,14 +5634,11 @@ class ReviewWindow(tk.Toplevel):
             self.editor_crop_widths.append(crop.width)
             # The inline editor uses one normal-height slice, never the
             # oversized/two-line source crop used by the fixed preview.
-            # Materialize an ordinary slice only for inactive rows.
-            # The active row has its text editor, but no duplicate picture.
-            picture = None
-            photo = None
-            if index != 0:
-                photo = self._ordinary_review_photo(index)
-                picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
-                picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
+            # Every editor row, including the active one, has its ordinary
+            # single-line crop; the fixed bordered preview is additional.
+            photo = self._ordinary_review_photo(index)
+            picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
+            picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
             self.thumbnails.append(photo)
             self._review_row_pictures.append(picture)
             var = tk.StringVar(value=entry.word)
@@ -5782,7 +5779,7 @@ class ReviewWindow(tk.Toplevel):
             simplified_editor.bind("<<Cut>>", lambda _e, i=index: self._claim_simplified_clipboard_edit(i))
             simplified_editor.bind("<KeyRelease>", lambda e, i=index: self.on_simplified_key(e, i))
             simplified_editor.bind("<Return>", lambda _e, i=index: self.focus_index(i + 1))
-            for widget in (delete_button, editor_frame, editor, simplified_editor, simplified_search_button):
+            for widget in (picture, delete_button, editor_frame, editor, simplified_editor, simplified_search_button):
                 widget.bind("<MouseWheel>", self.scroll_rows)
                 widget.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
                 widget.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))
@@ -6075,7 +6072,7 @@ class ReviewWindow(tk.Toplevel):
             return
 
     def _ordinary_review_photo(self, index: int) -> ImageTk.PhotoImage:
-        """Build a single-line crop only when its row is not active."""
+        """Build the ordinary single-line crop for each review editor row."""
         crop = self._review_display_crops[index]
         regular_px = max(1, round(
             _effective_review_regular_crop_height(self.parent.settings)
@@ -6088,23 +6085,7 @@ class ReviewWindow(tk.Toplevel):
 
     def set_active(self, index: int) -> None:
         self.active_index = index
-        # Never create/show the active row's ordinary crop. Restore the
-        # previously active row's single-line crop when selection moves.
-        for row_index, picture in enumerate(self._review_row_pictures):
-            if row_index == index:
-                if picture is not None:
-                    picture.destroy()
-                    self._review_row_pictures[row_index] = None
-                    self.thumbnails[row_index] = None
-            elif picture is None:
-                photo = self._ordinary_review_photo(row_index)
-                picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
-                picture.grid(row=row_index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
-                picture.bind("<MouseWheel>", self.scroll_rows)
-                picture.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
-                picture.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))
-                self._review_row_pictures[row_index] = picture
-                self.thumbnails[row_index] = photo
+        # Keep all inline single-line crops visible when focus changes.
         self._update_active_crop_preview(index)
         self._update_title()
         ordered = self.parent._ordered_entries_reading_order()
