@@ -7967,48 +7967,25 @@ class PictureCaptureApp(tk.Tk):
         except (tk.TclError, ValueError):
             return
 
-        base = {
-            "bookmark": 44, "page": 120, "section": 62,
-            "lined": 58, "illustrations": 58, "fill_status": 88,
-        }
-        weights = {
-            "bookmark": 0.4, "page": 4.0, "section": 0.8,
-            "lined": 0.8, "illustrations": 0.8, "fill_status": 1.4,
-        }
         header_font = font.nametofont("TkHeadingFont")
-        minimum = [
-            max(base.get(column, 60), header_font.measure(
-                self._page_list_heading_labels.get(column, column)
-            ) + 16)
-            for column in visible
-        ]
-        base_total = sum(minimum)
-        widths: list[int]
-        if available <= base_total:
-            # Keep headings legible: horizontal scrolling handles narrow indices.
-            widths = minimum[:]
-        else:
-            extra = available - base_total
-            total_weight = sum(weights.get(column, 1.0) for column in visible) or 1.0
-            widths = [
-                minimum[index] + int(round(extra * weights.get(column, 1.0) / total_weight))
-                for index, column in enumerate(visible)
-            ]
-        # Correct rounding so the visible headings span the full Treeview width.
-        if available > base_total:
-            widths[-1] += available - sum(widths)
-        if widths[-1] < 24:
-            deficit = 24 - widths[-1]
-            widths[-1] = 24
-            for index in range(len(widths) - 2, -1, -1):
-                spare = max(0, widths[index] - 24)
-                take = min(spare, deficit)
-                widths[index] -= take
-                deficit -= take
-                if deficit <= 0:
-                    break
-        for column, width in zip(visible, widths):
-            self.page_list.column(column, width=max(24, int(width)), stretch=False)
+        body_font = font.nametofont("TkDefaultFont")
+        # Size to content instead of giving "page" a disproportionate share
+        # of the entire sidebar width. Keep long filenames scrollable.
+        page_names = (
+            page.stem for page in getattr(self.project, "images", ())
+        ) if self.project else ()
+        page_width = max(
+            (body_font.measure(name) for name in page_names), default=0
+        ) + 22
+        base = {
+            "bookmark": 44, "page": min(240, max(74, page_width)),
+            "section": 62, "lined": 58,
+            "illustrations": 58, "fill_status": 88,
+        }
+        for column in visible:
+            label = self._page_list_heading_labels.get(column, column)
+            width = max(base.get(column, 60), header_font.measure(label) + 16)
+            self.page_list.column(column, width=width, stretch=False)
 
     def _hide_page_list_section_heading_hint(self, _event=None) -> None:
         popup = getattr(self, "_page_list_section_heading_hint", None)
