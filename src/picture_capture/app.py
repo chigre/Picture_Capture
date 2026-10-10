@@ -7752,7 +7752,7 @@ class PictureCaptureApp(tk.Tk):
                             value=mode).pack(side="left", padx=(0, 3))
         spec_row = ttk.Frame(nav_area)
         spec_row.pack(fill="x", pady=(0, 4))
-        ttk.Radiobutton(spec_row, text="指定：", variable=self.page_range_var,
+        ttk.Radiobutton(spec_row, text="指定范围：", variable=self.page_range_var,
                         value="specified").pack(side="left")
         page_range_entry = ttk.Entry(spec_row, textvariable=self.page_range_spec_var, width=12)
         page_range_entry.pack(side="left", fill="x", expand=True, padx=(3, 4))
@@ -15366,7 +15366,7 @@ class PictureCaptureApp(tk.Tk):
         page = self.project.images[index]
         page_stem = str(getattr(page, "stem", Path(str(page.name)).stem))
         bookmark = "●" if page_stem in self._bookmark_stems() else ""
-        new_values = (bookmark, page.name, section, lined, fill_status, illustrations)
+        new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)
         self.page_list.item(iid, values=new_values)
         active_column = self._page_list_sort_column
         if active_column:
