@@ -7744,6 +7744,7 @@ class PictureCaptureApp(tk.Tk):
         nav_area = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
         nav_area.grid(row=0, column=0, sticky="ew", pady=(0, 5))
         range_row = ttk.Frame(nav_area)
+        self.page_range_controls_row = range_row
         range_row.pack(fill="x", pady=(0, 3))
         for label, mode in (("当前页", "current"), ("当前页至末页", "to_end"),
                             ("当前页至指定页", "to_specified")):
@@ -7830,8 +7831,11 @@ class PictureCaptureApp(tk.Tk):
         self.page_list.column("fill_status", width=110, anchor="w", stretch=False)
         self.page_list.column("illustrations", width=58, anchor="w", stretch=False)
         self.page_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self._page_list_scroll)
-        self.page_list.configure(yscrollcommand=self._page_list_yscroll)
+        page_hscroll = ttk.Scrollbar(list_frame, orient="horizontal", command=self.page_list.xview)
+        self.page_list.configure(yscrollcommand=self._page_list_yscroll,
+                                 xscrollcommand=page_hscroll.set)
         self.page_list.grid(row=0, column=0, sticky="nsew")
+        page_hscroll.grid(row=1, column=0, sticky="ew")
         self.page_scroll.grid(row=0, column=1, sticky="ns")
         self.page_list.bind("<<TreeviewSelect>>", self.on_page_select)
         self.page_list.bind("<Button-1>", self._page_list_bookmark_click, add="+")
@@ -7981,9 +7985,8 @@ class PictureCaptureApp(tk.Tk):
         base_total = sum(minimum)
         widths: list[int]
         if available <= base_total:
-            # Extremely narrow panes still fill exactly; preserve relative widths.
-            scale = available / max(1, base_total)
-            widths = [max(24, int(round(value * scale))) for value in minimum]
+            # Keep headings legible: horizontal scrolling handles narrow indices.
+            widths = minimum[:]
         else:
             extra = available - base_total
             total_weight = sum(weights.get(column, 1.0) for column in visible) or 1.0
@@ -7992,7 +7995,8 @@ class PictureCaptureApp(tk.Tk):
                 for index, column in enumerate(visible)
             ]
         # Correct rounding so the visible headings span the full Treeview width.
-        widths[-1] += available - sum(widths)
+        if available > base_total:
+            widths[-1] += available - sum(widths)
         if widths[-1] < 24:
             deficit = 24 - widths[-1]
             widths[-1] = 24
