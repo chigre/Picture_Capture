@@ -100,3 +100,9 @@ def test_borderless_index_and_vector_rail_icon_art():
     assert 'len(TASK_GROUPS) + 3, "≡", "全部"' in tools
     for column in ('bookmark', 'page', 'section', 'lined', 'fill_status', 'illustrations'):
         assert f'self.page_list.column("{column}",' in app
+
+
+def test_main_window_has_no_minimum_width_constraint():
+    app, _ = sources()
+    assert 'fit_window_to_work_area(self, 1440, 900, min_width=1, min_height=680)' in app
+    assert 'fit_window_to_work_area(self, 1440, 900, min_width=1080' not in app
