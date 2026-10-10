@@ -2540,12 +2540,19 @@ class ReviewWindow(tk.Toplevel):
         self.next_page_button.pack(side="right", fill="y", padx=(4, 0))
 
         # Fixed current-word preview: independent of window resizing.
-        self.active_crop_frame = tk.Frame(editor_area, bd=2, relief="solid",
+        self.active_crop_host = ttk.Frame(editor_area, style="PCR.Surface.TFrame")
+        self.active_crop_host.pack(side="top", fill="x")
+        self.active_crop_host.pack_propagate(False)
+        self.active_crop_host.configure(height=1)
+        self.active_crop_frame = tk.Frame(self.active_crop_host, bd=2, relief="solid",
                                           highlightthickness=1, highlightbackground="#4F7CAC")
-        self.active_crop_frame.pack(side="top", anchor="w", padx=6, pady=(4, 6))
+        # Absolute coordinates inside a fixed-height slot, never pack-centered
+        # or stretched by horizontal window resize.
+        self.active_crop_frame.place(x=6, y=4, anchor="nw")
         self.active_crop_label = tk.Label(self.active_crop_frame, bd=0, padx=0, pady=0)
         self.active_crop_label.pack()
         self.active_crop_photo = None
+        self._active_crop_fixed_size: tuple[int, int] | None = None
         self._review_display_crops: list[Image.Image] = []
         self._review_row_pictures: list[ttk.Label] = []
 
@@ -5598,6 +5605,9 @@ class ReviewWindow(tk.Toplevel):
         for child in self.rows.winfo_children():
             child.destroy()
         self.vars.clear(); self.row_entries.clear(); self.editors.clear(); self.editor_frames.clear(); self.simplified_vars.clear(); self.simplified_editors.clear(); self.simplified_search_buttons.clear(); self.simplified_actual_values.clear(); self.simplified_manual_flags.clear(); self.simplified_auto_refresh_flags.clear(); self.editor_crop_widths.clear(); self.thumbnails.clear()
+        if getattr(self, "_active_crop_page_stem", None) != current_stem:
+            self._active_crop_fixed_size = None
+            self._active_crop_page_stem = current_stem
         self._rendered_page_stem = current_stem
         simplified_records = self._simplified_page_records(current_stem) if current_stem else {}
         if not self.parent.image:
@@ -6039,11 +6049,14 @@ class ReviewWindow(tk.Toplevel):
                 int(round(left)), int(round(center_y - source_height)),
                 int(round(right)), int(round(center_y + source_height))
             )).convert("RGB")
-            preview = extended.resize((crop.width, 2 * crop.height), Image.Resampling.LANCZOS)
+            if self._active_crop_fixed_size is None:
+                self._active_crop_fixed_size = (crop.width, 2 * crop.height)
+            preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)
             self.active_crop_photo = ImageTk.PhotoImage(
                 themed_display_image(preview, self.parent.appearance_mode)
             )
             self.active_crop_label.configure(image=self.active_crop_photo)
+            self.active_crop_host.configure(height=self._active_crop_fixed_size[1] + 14)
         except (ValueError, tk.TclError, AttributeError):
             return
 
