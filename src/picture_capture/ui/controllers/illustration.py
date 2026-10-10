@@ -148,9 +148,10 @@ class IllustrationController:
         project = app.project
         settings = replace(app.settings)
 
-        def worker(index: int, _position: int, _total: int):
-            page = project.images[index]
-            return detect_illustrations_job(str(page), settings, index)
+        def job_builder(index: int, _position: int, _total: int):
+            # Passing immutable per-page arguments to the spawn-safe worker
+            # prevents child processes from touching Tk widgets or app state.
+            return (str(project.images[index]), settings, index)
 
         def done(completed, total_pages, stopped, results, error):
             if error is not None:
@@ -170,12 +171,9 @@ class IllustrationController:
                 app.polygon_var.set(True)
                 app.redraw()
 
-        app._start_batch_task(
-            "插图识别",
-            indices,
-            worker,
-            done,
+        app._start_parallel_batch_task(
+            "插图识别", indices, detect_illustrations_job, job_builder,
+            on_done=done,
             item_label=lambda index: project.images[index].name,
-            foreground_page_edit=True,
-            page_indexer=lambda index: int(index),
+            max_workers=max(0, min(8, int(getattr(settings, "illustration_detect_parallel_workers", 0)))),
         )
