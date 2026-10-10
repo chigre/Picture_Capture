@@ -97,3 +97,32 @@ def test_preview_and_real_export_use_same_crop_planner():
     assert "pieces = partition_entry_pieces(pieces, auxiliary_lines, geometry)" in core
     assert core.count('read_auxiliary_lines(image_path)') >= 2
     assert '"auxiliary-overlay"' in (root / "auxiliary_line_controller.py").read_text(encoding="utf-8")
+
+
+def test_actual_whole_entry_export_matches_same_preview_plan(tmp_path):
+    from PIL import Image
+    from picture_capture.models import AppSettings, Entry
+    from picture_capture.processing import build_page_crop_plan, split_whole_entries
+
+    page = tmp_path / "001.png"
+    image = Image.new("RGB", (400, 600), "white")
+    image.save(page)
+    settings = AppSettings(
+        columns=1, manual_x=20, column_width=300, gutter=20,
+        start_y=20, bottom_y=580, follow_column_deformation=False,
+    )
+    entries = [Entry("first", 20, 100), Entry("second", 20, 350)]
+    aux = [AuxiliaryLine(20, 220)]
+    write_auxiliary_lines(page, aux)
+    preview = build_page_crop_plan(
+        image, entries, [], settings,
+        top_y=20, bottom_y=580, auxiliary_lines=aux,
+    )
+    result = split_whole_entries(
+        page, entries, settings, tmp_path / "whole",
+        top_y=20, bottom_y=580,
+    )
+    assert len(result) == len(preview.entry_pieces)
+    assert [r.box for r in result] == [p.box for p in preview.entry_pieces]
+    assert all(r.index in (0, 1) for r in result)
+    assert any(p.word == "first" and p.box[3] == 220 for p in preview.entry_pieces)
