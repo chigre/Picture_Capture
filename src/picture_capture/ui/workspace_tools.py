@@ -20,10 +20,10 @@ TASK_GROUPS = (
 )
 
 
-def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
+def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Frame) -> None:
     """Place the icon rail beside the initially visible page index."""
-    rail = ttk.Frame(sidebar, style="PC.Sidebar.TFrame")
-    rail.grid(row=0, column=0, rowspan=2, sticky="ns", padx=(0, 5))
+    rail = ttk.Frame(sidebar_host, style="PC.Sidebar.TFrame")
+    rail.pack(side="left", fill="y", before=app.sidebar_canvas, padx=(3, 5))
     app.workspace_tools_toggle = rail
     app.workspace_tools_rail = rail
     app.workspace_tools_visible = False
