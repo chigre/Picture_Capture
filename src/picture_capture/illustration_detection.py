@@ -213,10 +213,33 @@ def _extend_cross_column_caption(box, image, margin):
         crop.close()
     absolute = [(a + x0, b + anchor, c + x0, d + anchor, area)
                 for a, b, c, d, area in components]
-    proposed = _extend_box_to_caption(
-        (x0, y0, x1, anchor), absolute, image.height,
+    width = x1 - x0
+    # Collect short components into up to two lines, tolerating the slightly
+    # larger white gap typically found below a cross-column figure.
+    glyphs = sorted(
+        ((a, b, c, d) for a, b, c, d, _ in absolute
+         if d - b <= max(8, round(image.height * .055))),
+        key=lambda item: (item[1], item[0]),
     )
-    return (x0, y0, x1, max(y1, proposed[3] + margin))
+    lines = []
+    for glyph in glyphs:
+        if lines and glyph[1] <= max(part[3] for part in lines[-1]) + 3:
+            lines[-1].append(glyph)
+        else:
+            lines.append([glyph])
+    bottom, previous = y1, anchor
+    allowed_gap = max(12, min(32, round(image.height * .06)))
+    for line in lines[:2]:
+        left, top = min(g[0] for g in line), min(g[1] for g in line)
+        right, end = max(g[2] for g in line), max(g[3] for g in line)
+        span = right - left
+        offset = abs((left + right - x0 - x1) / 2)
+        if (top - previous > allowed_gap
+                or span < width * .025 or span > width * .85
+                or offset > width * .15):
+            break
+        bottom, previous = end, end
+    return (x0, y0, x1, max(y1, bottom + margin))
 
 
 def _polygon_bbox(region: PolygonRegion) -> tuple[int, int, int, int] | None:
