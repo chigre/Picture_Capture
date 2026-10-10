@@ -7861,14 +7861,6 @@ class PictureCaptureApp(tk.Tk):
         self.canvas.grid(row=0, column=0, sticky="nsew")
         vbar.grid(row=0, column=1, sticky="ns"); hbar.grid(row=1, column=0, sticky="ew")
         viewer.rowconfigure(0, weight=1); viewer.columnconfigure(0, weight=1)
-        from .ui.workspace_tools import toggle_sidebar
-        sidebar_toggle = ttk.Button(
-            viewer, text="☰", width=3, style="PC.Compact.TButton",
-            command=lambda: toggle_sidebar(self),
-        )
-        sidebar_toggle.place(x=7, y=7)
-        self._attach_tooltip(sidebar_toggle, "显示/隐藏侧边栏（Ctrl+Shift+B）")
-        self.workspace_sidebar_toggle = sidebar_toggle
         self.canvas.bind("<Button-1>", self.canvas_left_click)
         self.canvas.bind("<Control-z>", self._auxiliary_controller.undo)
         self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)
