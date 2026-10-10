@@ -7,7 +7,8 @@ from picture_capture.ui.settings import schema
 
 def test_illustration_tab_owns_existing_visual_and_detection_settings():
     assert schema.ILLUSTRATION_DETECTION_FIELDS == (
-        "illustration_detect_gray_threshold", "illustration_detect_min_area_percent",
+        "illustration_detect_gray_threshold", "illustration_detect_min_width",
+        "illustration_detect_min_height", "illustration_detect_size_unit",
         "illustration_detect_min_occupancy_percent",
         "illustration_detect_padding", "illustration_detect_right_padding",
     )
@@ -22,7 +23,9 @@ def test_illustration_tab_owns_existing_visual_and_detection_settings():
 def test_illustration_detection_thresholds_preserve_previous_defaults():
     settings = AppSettings()
     assert settings.illustration_detect_gray_threshold == 170
-    assert settings.illustration_detect_min_area_percent == 0.22
+    assert settings.illustration_detect_min_width == 5.5
+    assert settings.illustration_detect_min_height == 2.8
+    assert settings.illustration_detect_size_unit == "%"
     assert settings.illustration_detect_min_occupancy_percent == 3.5
 
 

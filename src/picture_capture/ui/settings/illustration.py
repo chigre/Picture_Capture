@@ -25,7 +25,8 @@ def build_illustration_settings_tab(dialog: object, tab: ttk.Frame) -> None:
     dialog._add_setting_group(
         page, "自动识别阈值与边界",
         ILLUSTRATION_DETECTION_FIELDS,
-        intro="灰度阈值越高，允许较浅的墨迹；最小面积和墨迹占比越高，识别越保守。"
+        intro="灰度阈值越高，允许较浅的墨迹；候选宽、高必须同时达到设定下限。"
+              "尺寸单位可填 % 或 px（切换单位不自动换算数值）；墨迹占比越高筛选越保守。"
               "阈值修改后需重新运行“插图识别”才能改变已有自动区域。",
     )
     dialog._add_check_group(page, "插图与 Layout", ILLUSTRATION_CHECKS[:1])

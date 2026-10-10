@@ -275,7 +275,11 @@ class AppSettings(metaclass=_AppSettingsMeta):
     illustration_detect_padding: int = 8
     illustration_detect_right_padding: int = 16
     illustration_detect_gray_threshold: int = 170
+    # Retained only for loading older project settings; size filtering now uses dimensions.
     illustration_detect_min_area_percent: float = 0.22
+    illustration_detect_min_width: float = 5.5
+    illustration_detect_min_height: float = 2.8
+    illustration_detect_size_unit: str = "%"
     illustration_detect_min_occupancy_percent: float = 3.5
     white_threshold_high: int = 999
     row_step_multiplier: float = 1.2
