@@ -4056,8 +4056,13 @@ def test_round1_blocking_ui_paths_use_background_workers():
     rebuild_block = recent_block[rebuild_start:refresh_start]
     assert "recent_project_details(" not in rebuild_block
     assert "Image.open(" not in rebuild_block
-    assert "recent_project_details(row)" in recent_block[refresh_start:]
-    assert "load_project_center_preview(root, Path(preview_text))" in recent_block[refresh_start:]
+    assert "details_with_cache(rows)" in recent_block[refresh_start:]
+    assert "load_project_center_previews(details)" in recent_block[refresh_start:]
+    package = source.parent
+    metadata_source = (package / "project_center_metadata_cache.py").read_text(encoding="utf-8")
+    preview_source = (package / "project_center_preview_cache.py").read_text(encoding="utf-8")
+    assert "recent_project_details(row)" in metadata_source
+    assert "load_project_center_preview(root, Path(preview_text))" in preview_source
 
     picdic_start = text.index("    def build_picdic(", app_start)
     picdic_end = text.index("\n    def _order_key", picdic_start)
