@@ -251,8 +251,9 @@ def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
     review = (ROOT / "ui" / "controllers" / "review.py").read_text(encoding="utf-8")
     assert 'mini.winfo_manager() == "grid"' in app
     assert 'x = max(0, parent.winfo_rootx() + parent.winfo_width())' in app
-    assert 'width = max(1, screen_w - x)' in app
-    assert 'height = max(1, screen_h - y)' in app
+    assert 'work_x, work_y, work_w, work_h = _screen_work_area(self)' in app
+    assert 'width = max(1, work_right - x)' in app
+    assert 'height = max(1, work_bottom - y)' in app
     assert 'def _scroll_review_entry_into_view(self, entry: WordEntry)' in app
     assert '_review_line_box(' in app
     assert 'canvas.xview_moveto(' in app
@@ -287,3 +288,11 @@ def test_review_preview_is_position_and_size_invariant_on_window_resize():
     assert 'self._active_crop_fixed_size: tuple[int, int] | None = None' in app
     assert 'if self._active_crop_fixed_size is None:' in app
     assert 'self.active_crop_host.configure(height=self._active_crop_fixed_size[1] + 14)' in app
+
+
+def test_next_page_button_is_packed_before_expandable_editor_area():
+    app, _ = sources()
+    left = app.index('self.prev_page_button.pack(side="left", fill="y"')
+    right = app.index('self.next_page_button.pack(side="right", fill="y"')
+    editor = app.index('editor_area.pack(side="left", fill="both", expand=True)', left)
+    assert left < right < editor
