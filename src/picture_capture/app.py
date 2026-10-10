@@ -7734,7 +7734,6 @@ class PictureCaptureApp(tk.Tk):
         viewer = ttk.Frame(body)
         body.add(sidebar_host, weight=0)
         body.add(viewer, weight=1)
-        sidebar.columnconfigure(0, weight=0)
         sidebar.columnconfigure(1, weight=1)
         sidebar.rowconfigure(1, weight=1)
 
