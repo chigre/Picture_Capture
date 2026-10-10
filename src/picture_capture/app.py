@@ -6823,6 +6823,9 @@ class PictureCaptureApp(tk.Tk):
         self.session_controller = SessionController(self)
         self._session_path = self._default_session_state_path()
         self._last_session = self._read_session_state()
+        stored_mode = self._last_session.get("workspace_mode", "最大")
+        self.workspace_mode = stored_mode if stored_mode in {"最简", "正常", "最大"} else "最大"
+        self._restore_workspace_mode_pending = True
         requested_appearance = normalize_appearance_preference(
             self._last_session.get("appearance_mode")
         )
@@ -7678,6 +7681,15 @@ class PictureCaptureApp(tk.Tk):
 
     def restore_last_session(self) -> None:
         self.session_controller.restore_last_session()
+
+    def _restore_workspace_layout(self) -> None:
+        """Apply the saved preset once the initial project image is ready."""
+        if not getattr(self, "_restore_workspace_mode_pending", False):
+            return
+        self._restore_workspace_mode_pending = False
+        from .ui.workspace_tools import set_sidebar_mode
+        set_sidebar_mode(self, self.workspace_mode)
+
 
     def on_close(self) -> None:
         if getattr(self, "_batch_active", False):
@@ -13350,6 +13362,7 @@ class PictureCaptureApp(tk.Tk):
             )
         except (OSError, ValueError, TypeError):
             pass
+        self._restore_workspace_layout()
         self._save_session_state()
 
     def change_page(
