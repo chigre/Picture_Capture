@@ -138,14 +138,20 @@ def test_page_headers_and_preferred_sidebar_width():
     assert 'min(300, max(minimum, panes.winfo_width() - 320))' in tools
 
 
-def test_zoom_toolbar_overlays_image_viewport():
+def test_zoom_toolbar_hover_expands_at_canvas_lower_left():
     app, _ = sources()
     assert 'size_row = ttk.Frame(self.canvas, padding=(5, 4)' in app
-    assert 'size_row.place(x=8, y=8, anchor="nw")' in app
-    assert 'self.page_size_row = size_row' in app
-    assert 'size_row = ttk.Frame(nav_area)' not in app
+    assert 'size_row.place(relx=0, rely=1, x=8, y=-8, anchor="sw")' in app
+    assert 'zoom_handle = ttk.Label(size_row, text="≣"' in app
+    assert 'self.page_zoom_tools = zoom_tools' in app
+    assert 'zoom_tools.pack(side="left", padx=(4, 0))' in app
+    assert 'zoom_tools.pack_forget()' in app
+    assert 'size_row.after_idle(collapse_zoom_tools)' in app
+    assert 'widget.bind("<Enter>", expand_zoom_tools, add="+")' in app
+    assert 'widget.bind("<Leave>", schedule_zoom_collapse, add="+")' in app
     assert 'view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)' in app
     assert 'view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)' in app
+    assert 'size_row = ttk.Frame(nav_area)' not in app
 
 
 def test_page_columns_order_and_mandatory_visibility():
