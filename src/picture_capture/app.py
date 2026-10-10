@@ -7745,8 +7745,8 @@ class PictureCaptureApp(tk.Tk):
         nav_area.grid(row=0, column=0, sticky="ew", pady=(0, 5))
         range_row = ttk.Frame(nav_area)
         range_row.pack(fill="x", pady=(0, 3))
-        for label, mode in (("当前页", "current"), ("当前至末页", "to_end"),
-                            ("当前至指定页", "to_specified")):
+        for label, mode in (("当前页", "current"), ("当前页至末页", "to_end"),
+                            ("当前页至指定页", "to_specified")):
             ttk.Radiobutton(range_row, text=label, variable=self.page_range_var,
                             value=mode).pack(side="left", padx=(0, 3))
         spec_row = ttk.Frame(nav_area)
@@ -7971,7 +7971,13 @@ class PictureCaptureApp(tk.Tk):
             "bookmark": 0.4, "page": 4.0, "section": 0.8,
             "lined": 0.8, "illustrations": 0.8, "fill_status": 1.4,
         }
-        minimum = [base.get(column, 60) for column in visible]
+        header_font = font.nametofont("TkHeadingFont")
+        minimum = [
+            max(base.get(column, 60), header_font.measure(
+                self._page_list_heading_labels.get(column, column)
+            ) + 16)
+            for column in visible
+        ]
         base_total = sum(minimum)
         widths: list[int]
         if available <= base_total:
