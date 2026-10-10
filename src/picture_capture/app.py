@@ -7331,6 +7331,14 @@ class PictureCaptureApp(tk.Tk):
             foreground=colors["text"],
         )
 
+        # Keep rail controls the same font and compact geometry in both themes.
+        style.configure("PC.Rail.TButton", font="TkDefaultFont",
+                        padding=(4, 3), relief="flat", borderwidth=0)
+        style.configure("PC.CompactPage.Treeview", rowheight=26,
+                        font="TkDefaultFont", background=base["surface"],
+                        fieldbackground=base["surface"], foreground=colors["text"])
+        style.configure("PC.CompactPage.Treeview.Heading",
+                        font="TkHeadingFont", padding=(3, 4))
         style.configure("PC.Compact.TButton", padding=(7, 3))
         style.configure(
             "PC.EditActive.TButton",
@@ -15373,6 +15381,9 @@ class PictureCaptureApp(tk.Tk):
         bookmark = "●" if page_stem in self._bookmark_stems() else ""
         new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)
         self.page_list.item(iid, values=new_values)
+        mini = getattr(self, "workspace_mini_page_list", None)
+        if mini is not None and mini.exists(iid):
+            mini.item(iid, values=(page_stem,))
         active_column = self._page_list_sort_column
         if active_column:
             new_index = {
