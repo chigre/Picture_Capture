@@ -210,6 +210,7 @@ from .overlay_opacity import (
     add_quick_opacity_control, clear_alpha_line_photos,
     create_alpha_canvas_line, release_alpha_line_photos,
 )
+from .illustration_polygon_edit import nearest_polygon_segment
 from .illustration_fill_opacity import (
     add_quick_illustration_fill_opacity_control, clear_alpha_polygon_records,
     create_alpha_canvas_polygon, refresh_alpha_polygon_fill,
@@ -14629,7 +14630,7 @@ class PictureCaptureApp(tk.Tk):
                 self.polygon_draw_button.configure(
                     text="结束编辑插图", style="PC.EditActive.TButton"
                 )
-            self.status_var.set("插图多边形绘制：左键逐点添加，右键闭合并保存该多边形。")
+            self.status_var.set("插图编辑：Shift+单击边线加顶点；拖动调整，右键闭合新图形。")
         else:
             self.new_polygon.clear()
             if self.polygon_draw_button is not None:
@@ -14675,6 +14676,16 @@ class PictureCaptureApp(tk.Tk):
                 ri, pi = existing
                 self.status_var.set(f"正在编辑PPP：拖动插图 {ri + 1} 的顶点 {pi + 1}")
                 return
+            if event.state & 1:
+                segment = nearest_polygon_segment(self.polygons, x, y, view_scale=self.view_scale)
+                if segment:
+                    ri, index, point = segment
+                    self.polygons[ri].points.insert(index, point)
+                    self._drag_polygon_vertex = (ri, index)
+                    self._drag_polygon_edge = None
+                    self.redraw()
+                    self.status_var.set("PPP顶点已增加；拖动并松开保存")
+                    return
             edge = self._nearest_polygon_edge(x, y)
             if edge is not None:
                 self._drag_polygon_edge = edge
