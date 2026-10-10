@@ -36,3 +36,18 @@ def test_minimal_task_buttons_and_pin_behavior():
     assert 'popup.bind("<Escape>"' in source
     assert 'app.bind("<Control-Shift-t>"' in source
     assert 'orient="horizontal", command=canvas.xview' in source
+
+
+def test_page_index_is_visible_by_default_and_toggled_from_icon_rail():
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    app = (root / "app.py").read_text(encoding="utf-8")
+    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert 'page_panel.grid(row=0, column=1, rowspan=2' in app
+    assert 'command=lambda: toggle_page_index(app)' in source
+    assert 'panel.grid_remove()' in source
+    assert 'panel.grid()' in source
+    assert 'enumerate(TASK_GROUPS, start=1)' in source
+    assert 'text="上页"' in app
+    assert 'text="下页"' in app
+    assert 'text="上一页"' not in app
+    assert 'text="下一页"' not in app
