@@ -39,6 +39,24 @@ def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None
         raise
 
 
+def write_text_if_changed(path: Path, text: str, *, encoding: str = "utf-8") -> bool:
+    """Skip atomic replacement when the serialized content is already identical.
+
+    Compare file bytes, not timestamps: existing files retain their mtime when
+    nothing changed, while changed files still use the existing atomic writer.
+    """
+    target = Path(path)
+    # write_text_atomic uses text mode; Windows stores its LF lines as CRLF.
+    payload = text.replace("\n", os.linesep).encode(encoding)
+    try:
+        if target.read_bytes() == payload:
+            return False
+    except FileNotFoundError:
+        pass
+    write_text_atomic(target, text, encoding=encoding)
+    return True
+
+
 def read_pdic(path: Path) -> list[Entry]:
     entries: list[Entry] = []
     if not path.exists():
@@ -66,7 +84,7 @@ def read_pdic(path: Path) -> list[Entry]:
     return entries
 
 
-def write_pdic(path: Path, entries: list[Entry], image_width: int, pages: tuple[str, str, str]) -> None:
+def write_pdic(path: Path, entries: list[Entry], image_width: int, pages: tuple[str, str, str]) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     current, previous, following = pages
     records: list[str] = []
@@ -78,7 +96,7 @@ def write_pdic(path: Path, entries: list[Entry], image_width: int, pages: tuple[
             f"{word}#{entry.x}#{entry.y}#{x_percent:g}#{y_percent:g}#"
             f"{current}#{previous}#{following}"
         )
-    write_text_atomic(
+    return write_text_if_changed(
         path, "\n".join(records) + ("\n" if records else ""), encoding="utf-8",
     )
 
@@ -137,13 +155,13 @@ def read_ppp(path: Path) -> list[PolygonRegion]:
     return regions
 
 
-def write_ppp(path: Path, regions: list[PolygonRegion], page_stem: str) -> None:
+def write_ppp(path: Path, regions: list[PolygonRegion], page_stem: str) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
     for index, region in enumerate(regions, 1):
         label = region.label or f"{page_stem}|P_{index:02d}|1|{page_stem}|"
         coords = "".join(f"|{x},{y}" for x, y in region.points)
         lines.append(f"{index}\t{label}\t{coords}")
-    write_text_atomic(
+    return write_text_if_changed(
         path, "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8",
     )

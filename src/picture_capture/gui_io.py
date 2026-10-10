@@ -32,8 +32,8 @@ def _write_current_pdic(
     entries: list[Entry],
     image_width: int,
     pages: tuple[str, str, str],
-) -> None:
-    _formats.write_pdic(path, entries, image_width, pages)
+) -> bool:
+    return _formats.write_pdic(path, entries, image_width, pages)
 
 
 write_pdic = build_write_pdic_capture(_write_current_pdic)
