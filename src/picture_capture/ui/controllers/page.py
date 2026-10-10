@@ -34,8 +34,10 @@ class PageController:
             and not app._batch_foreground_pages
             and not getattr(app, "_batch_allow_page_navigation", False)
         ):
-            if app.current_index >= 0:
-                app._set_page_list_selection(app.current_index, ensure_visible=True)
+            if app.current_index >= 0 and tuple(app.page_list.selection()) != (str(app.current_index),):
+                # Revert a rejected click only once. The correction itself
+                # emits TreeviewSelect; subsequent callbacks must be no-ops.
+                app._set_page_list_selection(app.current_index, ensure_visible=False)
             app.status_var.set("当前批量任务运行中，暂不允许切换页面；可先暂停/停止。")
             return
         selection = tuple(app.page_list.selection())
