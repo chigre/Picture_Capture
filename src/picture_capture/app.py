@@ -7731,7 +7731,7 @@ class PictureCaptureApp(tk.Tk):
         from .ui.workspace_tools import install_workspace_tools
         install_workspace_tools(self, sidebar, sidebar_host)
 
-        page_panel = self._section_frame(sidebar, "六、页面列表", padding=6, section_key="pages")
+        page_panel = ttk.Frame(sidebar, padding=(2, 2, 2, 0), style="PC.Sidebar.TFrame")
         self.page_panel = page_panel
         page_panel.grid(row=0, column=0, rowspan=2, sticky="nsew", pady=(5, 0))
         page_panel.columnconfigure(0, weight=1)
@@ -7812,24 +7812,24 @@ class PictureCaptureApp(tk.Tk):
             "bookmark": "书签", "page": "页面", "section": "Section",
             "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
         }
-        self.page_list.heading("bookmark", text="书签", anchor="w")
-        self.page_list.heading("page", text="页面", anchor="w")
-        self.page_list.heading("section", text="Section", anchor="w")
-        self.page_list.heading("lined", text="画线", anchor="w")
-        self.page_list.heading("fill_status", text="填充状态", anchor="w")
-        self.page_list.heading("illustrations", text="插图", anchor="w")
+        self.page_list.heading("bookmark", text="书签", anchor="center")
+        self.page_list.heading("page", text="页面", anchor="center")
+        self.page_list.heading("section", text="Section", anchor="center")
+        self.page_list.heading("lined", text="画线", anchor="center")
+        self.page_list.heading("fill_status", text="填充状态", anchor="center")
+        self.page_list.heading("illustrations", text="插图", anchor="center")
         self.page_list.heading("bookmark", command=lambda: self._sort_page_list("bookmark"))
         self.page_list.heading("page", command=lambda: self._sort_page_list("page"))
         self.page_list.heading("section", command=lambda: self._sort_page_list("section"))
         self.page_list.heading("lined", command=lambda: self._sort_page_list("lined"))
         self.page_list.heading("fill_status", command=lambda: self._sort_page_list("fill_status"))
         self.page_list.heading("illustrations", command=lambda: self._sort_page_list("illustrations"))
-        self.page_list.column("bookmark", width=44, anchor="w", stretch=False)
-        self.page_list.column("page", width=180, anchor="w", stretch=False)
+        self.page_list.column("bookmark", width=44, anchor="center", stretch=False)
+        self.page_list.column("page", width=180, anchor="center", stretch=False)
         self.page_list.column("section", width=64, anchor="center", stretch=False)
-        self.page_list.column("lined", width=68, anchor="w", stretch=False)
-        self.page_list.column("fill_status", width=110, anchor="w", stretch=False)
-        self.page_list.column("illustrations", width=58, anchor="w", stretch=False)
+        self.page_list.column("lined", width=68, anchor="center", stretch=False)
+        self.page_list.column("fill_status", width=110, anchor="center", stretch=False)
+        self.page_list.column("illustrations", width=58, anchor="center", stretch=False)
         self.page_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self._page_list_scroll)
         page_hscroll = ttk.Scrollbar(list_frame, orient="horizontal", command=self.page_list.xview)
         self.page_list.configure(yscrollcommand=self._page_list_yscroll,
@@ -7976,16 +7976,16 @@ class PictureCaptureApp(tk.Tk):
         ) if self.project else ()
         page_width = max(
             (body_font.measure(name) for name in page_names), default=0
-        ) + 22
+        ) + 10
         base = {
-            "bookmark": 44, "page": min(240, max(74, page_width)),
+            "bookmark": 44, "page": max(52, page_width),
             "section": 62, "lined": 58,
             "illustrations": 58, "fill_status": 88,
         }
         for column in visible:
             label = self._page_list_heading_labels.get(column, column)
-            width = max(base.get(column, 60), header_font.measure(label) + 16)
-            self.page_list.column(column, width=width, stretch=False)
+            width = max(base.get(column, 60), header_font.measure(label) + 10)
+            self.page_list.column(column, width=width, anchor="center", stretch=False)
 
     def _hide_page_list_section_heading_hint(self, _event=None) -> None:
         popup = getattr(self, "_page_list_section_heading_hint", None)
