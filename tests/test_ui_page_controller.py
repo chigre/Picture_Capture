@@ -79,8 +79,42 @@ def test_page_selection_batch_guard_keeps_current_page_selected() -> None:
 
     controller.on_page_select(None)
 
-    assert selected == [(3, True)]
+    assert selected == [(3, False)]
     assert "暂不允许切换页面" in app.status_var.value
+
+
+def test_rejected_selection_followup_event_does_not_restore_again() -> None:
+    page_list = _PageList(selection=("8",), focus="8")
+    restored = []
+    app = SimpleNamespace(
+        _batch_active=True,
+        _batch_foreground_pages=False,
+        _batch_allow_page_navigation=False,
+        current_index=3,
+        _pending_page_index=None,
+        page_list=page_list,
+        status_var=_Status(),
+    )
+
+    def restore(index: int, *, ensure_visible: bool = True) -> None:
+        restored.append((index, ensure_visible))
+        page_list._selection = (str(index),)
+
+    app._set_page_list_selection = restore
+    controller = PageController(app)
+    controller.on_page_select(None)
+    controller.on_page_select(None)  # Tk emits another event for restoration.
+    assert restored == [(3, False)]
+
+
+def test_selection_restore_avoids_empty_selection_and_duplicate_events() -> None:
+    source = (ROOT / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    start = source.index("    def _set_page_list_selection(")
+    end = source.index("    def _select_page_from_lined_overlay(", start)
+    block = source[start:end]
+    assert "if tuple(self.page_list.selection()) != (iid,):" in block
+    assert "selection_remove(" not in block
+    assert "self.page_list.selection_set(iid)" in block
 
 
 def test_change_page_uses_controller_async_request_before_core_load() -> None:
