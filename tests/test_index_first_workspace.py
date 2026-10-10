@@ -106,3 +106,10 @@ def test_main_window_has_no_minimum_width_constraint():
     app, _ = sources()
     assert 'fit_window_to_work_area(self, 1440, 900, min_width=1, min_height=680)' in app
     assert 'fit_window_to_work_area(self, 1440, 900, min_width=1080' not in app
+
+
+def test_canvas_background_is_theme_specific_and_reapplied_on_switch():
+    app, _ = sources()
+    assert '"canvas": "#e9edf2"' in app
+    assert '"canvas": base["canvas"]' in app
+    assert 'self._main_ui_colors["canvas"] if name == "canvas" else palette[color_key]' in app
