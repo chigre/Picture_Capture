@@ -91,6 +91,13 @@ def _write_png_atomically(image: Image.Image, target: Path) -> None:
         Path(temp).unlink(missing_ok=True)
 
 
+def _remove_stale_page_outputs(output: Path, stem: str, keep: set[str]) -> None:
+    if output.is_dir():
+        for path in output.glob(f"{stem}_MH_*.png"):
+            if path.name not in keep:
+                path.unlink(missing_ok=True)
+
+
 def export_major_headword_page_job(
     project_root: str | Path,
     image_path: str | Path,
@@ -106,6 +113,7 @@ def export_major_headword_page_job(
     apply_classification_sidecar(entries, pdic_path(page))
     marked = sum(get_entry_classification(entry).entry_scale == "oversized" for entry in entries)
     if not marked:
+        _remove_stale_page_outputs(output, page.stem, set())
         return MajorHeadwordPageResult(int(page_index), page.name, 0, 0, False, True)
     with Image.open(page) as raw:
         source = normalize_page_rgb(raw)
@@ -127,6 +135,7 @@ def export_major_headword_page_job(
                 if trimmed is not None:
                     pieces.append(trimmed)
             if not pieces:
+                _remove_stale_page_outputs(output, page.stem, set())
                 return MajorHeadwordPageResult(int(page_index), page.name, marked, 0, False, True)
             if merge_by_page:
                 width = max(piece.width for piece in pieces)
@@ -140,9 +149,14 @@ def export_major_headword_page_job(
                     _write_png_atomically(merged, output / f"{page.stem}_MH_PAGE.png")
                 finally:
                     merged.close()
+                _remove_stale_page_outputs(output, page.stem, {f"{page.stem}_MH_PAGE.png"})
                 return MajorHeadwordPageResult(int(page_index), page.name, marked, 1, True, True)
             for n, piece in enumerate(pieces, 1):
                 _write_png_atomically(piece, output / f"{page.stem}_MH_{n:04d}.png")
+            _remove_stale_page_outputs(
+                output, page.stem,
+                {f"{page.stem}_MH_{n:04d}.png" for n in range(1, len(pieces) + 1)},
+            )
             return MajorHeadwordPageResult(int(page_index), page.name, marked, len(pieces), False, True)
         finally:
             for piece in pieces:
