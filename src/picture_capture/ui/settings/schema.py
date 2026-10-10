@@ -536,6 +536,10 @@ SETTING_CHOICES = {
     }
 
 CHECK_HELP = {
+    "show_illustration_labels": "开启后在主画布展示插图区域编号或标签，方便核对自动识别及手工标注的 PPP 区域。关闭仅隐藏标签，不隐藏多边形本身，也不删除 PPP 数据。",
+    "illustration_label_font_bold": "插图标签使用粗体显示，适合扫描背景较复杂、细体不易看清的页面。只改变显示效果。",
+    "illustration_label_font_italic": "插图标签使用斜体显示，便于与原始扫描文字作视觉区分。只改变显示效果，不影响识别和导出。",
+
     "layout_mask_illustrations": (
         "作用：开启后，【普通画线】和【显示 Layout】在 Page Understanding 之前先复用自动插图检测，"
         "把足够大的插图区域仅在分析副本上填成白色，再恢复文字行、缩进和 entry/body 角色。"
