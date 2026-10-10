@@ -37,6 +37,7 @@ from .crop_plan_formatting import (
 from .ocr_text_io import export_ocred, import_ocred, load_replace_rules, process_ocr_text
 from .crop_logging import append_crop_log, append_illustration_crop_log
 from .ordinary_vb_brightness import legacy_row_brightness_scores_1000
+from .illustration_candidate_size import illustration_candidate_min_dimensions
 
 
 _COLUMN_TRACK_ADAPTIVE_BLOCK = 19
@@ -3481,13 +3482,7 @@ def detect_illustration_regions_from_image(
                         mask_img.close()
 
                     comps = _rle_components(joined)
-                    size_unit = str(effective.illustration_detect_size_unit).strip().lower()
-                    if size_unit == "px":
-                        min_w = max(0, round(effective.illustration_detect_min_width))
-                        min_h = max(0, round(effective.illustration_detect_min_height))
-                    else:  # % of the current analysis crop; also handles older/invalid units.
-                        min_w = max(0, round(effective.illustration_detect_min_width / 100.0 * aw))
-                        min_h = max(0, round(effective.illustration_detect_min_height / 100.0 * ah))
+                    min_w, min_h = illustration_candidate_min_dimensions(effective, aw, ah)
                     candidates: list[tuple[int, int, int, int]] = []
                     for cx0, cy0, cx1, cy1, area in comps:
                         bw = cx1 - cx0
