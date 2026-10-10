@@ -42,6 +42,10 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
     jump = ttk.Combobox(navigation, textvariable=jump_var, state="readonly", width=30)
     jump.pack(side="left", fill="x", expand=True)
     ttk.Button(
+        navigation, text="全部展开",
+        command=lambda: show_all_sections(app), style="PC.Compact.TButton",
+    ).pack(side="left", padx=(6, 0))
+    ttk.Button(
         navigation, text="收起", command=palette.withdraw,
         style="PC.Compact.TButton",
     ).pack(side="right", padx=(6, 0))
@@ -78,14 +82,52 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
         section = by_title.get(jump_var.get())
         if section is None:
             return
-        if str(section._collapse_title_var.get()).startswith("▸"):
-            app._set_section_expanded(section, True)
-        palette.update_idletasks()
-        total = max(1, content.winfo_reqheight() - canvas.winfo_height())
-        canvas.yview_moveto(max(0.0, min(1.0, section.winfo_y() / total)))
+        choose_workspace_section(app, jump_var.get())
 
     jump.bind("<<ComboboxSelected>>", jump_to_section)
     app.workspace_tools_section_selector = jump
+    app.workspace_tools_sections = by_title
+    app.workspace_tools_canvas = canvas
+    app.workspace_tools_content = content
+    app.workspace_tools_jump = jump_to_section
+    app.workspace_tools_jump_var = jump_var
+
+    # Focus the task selector without opening or closing the palette.
+    palette.bind("<Control-k>", lambda _event: focus_workspace_section(app))
+    palette.bind("<Control-K>", lambda _event: focus_workspace_section(app))
+    app.bind("<Control-Shift-t>", lambda _event: toggle_workspace_tools(app), add="+")
+    app.bind("<Control-Shift-T>", lambda _event: toggle_workspace_tools(app), add="+")
+
+    
+def focus_workspace_section(app: Any) -> str:
+    """Keyboard access to task groups without moving the page index."""
+    selector = getattr(app, "workspace_tools_section_selector", None)
+    if selector is not None:
+        selector.focus_set()
+        selector.event_generate("<Down>")
+    return "break"
+
+
+def show_all_sections(app: Any) -> None:
+    """Restore the full controls list after using compact task mode."""
+    for section in getattr(app, "workspace_tools_sections", {}).values():
+        app._set_section_expanded(section, True)
+
+
+def choose_workspace_section(app: Any, title: str) -> None:
+    """Keep only one task group expanded to reduce needless scrolling."""
+    sections = getattr(app, "workspace_tools_sections", {})
+    section = sections.get(title)
+    if section is None:
+        return
+    for candidate in sections.values():
+        app._set_section_expanded(candidate, candidate is section)
+    selector = getattr(app, "workspace_tools_section_selector", None)
+    if selector is not None:
+        selector.set(title)
+    canvas = getattr(app, "workspace_tools_canvas", None)
+    if canvas is not None:
+        canvas.yview_moveto(0)
 
 
 def toggle_workspace_tools(app: Any) -> None:
