@@ -304,3 +304,12 @@ def test_compact_review_anchors_to_work_area_top():
     app, _ = sources()
     assert 'y = work_y  # Align compact proofreading to the top of the usable desktop.' in app
     assert 'height = max(1, work_bottom - y)' in app
+
+
+def test_inline_review_slice_is_regular_height_not_double():
+    app, _ = sources()
+    assert 'regular_px = max(1, round(' in app
+    assert '_effective_review_regular_crop_height(self.parent.settings)' in app
+    assert 'inline_crop = crop.crop((0, 0, crop.width, min(crop.height, regular_px)))' in app
+    assert 'themed_display_image(inline_crop, self.parent.appearance_mode)' in app
+    assert 'self._update_active_crop_preview(index)' in app
