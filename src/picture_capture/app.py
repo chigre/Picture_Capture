@@ -7809,10 +7809,10 @@ class PictureCaptureApp(tk.Tk):
             style="PC.Treeview",
         )
         self._page_list_heading_labels = {
-            "bookmark": "🔖", "page": "页面", "section": "区块",
+            "bookmark": "●", "page": "页面", "section": "区块",
             "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
         }
-        self.page_list.heading("bookmark", text="🔖", anchor="center")
+        self.page_list.heading("bookmark", text="●", anchor="center")
         self.page_list.heading("page", text="页面", anchor="center")
         self.page_list.heading("section", text="区块", anchor="center")
         self.page_list.heading("lined", text="画线", anchor="center")
@@ -7928,17 +7928,17 @@ class PictureCaptureApp(tk.Tk):
         """Apply optional Treeview columns while keeping 页面 permanently visible."""
         if not hasattr(self, "page_list"):
             return
-        columns = ["bookmark", "page", "section"]
-        if getattr(self, "_page_column_vars", {}).get("lined") is None or self._page_column_vars["lined"].get():
-            columns.append("lined")
+        columns = ["bookmark", "page", "lined"]
+
         if getattr(self, "_page_column_vars", {}).get("illustrations") is None or self._page_column_vars["illustrations"].get():
             columns.append("illustrations")
+        columns.append("section")
         if getattr(self, "_page_column_vars", {}).get("fill_status") is None or self._page_column_vars["fill_status"].get():
             columns.append("fill_status")
         self.page_list.configure(displaycolumns=tuple(columns))
         self.after_idle(self._fit_page_list_columns)
         if hasattr(self, "settings"):
-            self.settings.page_list_show_lined = "lined" in columns
+            self.settings.page_list_show_lined = True
             self.settings.page_list_show_fill_status = "fill_status" in columns
             self.settings.page_list_show_illustrations = "illustrations" in columns
             if save and self.project is not None:
@@ -7978,13 +7978,13 @@ class PictureCaptureApp(tk.Tk):
             (body_font.measure(name) for name in page_names), default=0
         ) + 10
         base = {
-            "bookmark": 44, "page": max(52, page_width),
-            "section": 62, "lined": 58,
-            "illustrations": 58, "fill_status": 88,
+            "bookmark": 25, "page": max(52, page_width),
+            "section": 36, "lined": 36,
+            "illustrations": 36, "fill_status": 68,
         }
         for column in visible:
             label = self._page_list_heading_labels.get(column, column)
-            width = max(base.get(column, 60), header_font.measure(label) + 10)
+            width = max(base.get(column, 60), header_font.measure(label) + 6)
             self.page_list.column(column, width=width, anchor="center", stretch=False)
 
     def _hide_page_list_section_heading_hint(self, _event=None) -> None:
