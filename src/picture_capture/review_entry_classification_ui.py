@@ -60,7 +60,9 @@ def _persist(window: Any) -> None:
 
 
 def sync_review_entry_classification(window: Any) -> None:
-    """Synchronize the manual selector with the active Entry classification."""
+    """Keep the fixed active-entry image current; legacy selector is optional."""
+    from .review_pinned_entry_preview import refresh_pinned_entry_preview
+    refresh_pinned_entry_preview(window)
     entry = _entry_for_active(window)
     var = getattr(window, "entry_scale_classification_var", None)
     source_var = getattr(window, "entry_source_classification_var", None)
@@ -110,51 +112,9 @@ def set_review_entry_classification_shortcut(window: Any, label: str) -> str:
 
 
 def initialize_review_entry_classification(window: Any) -> None:
-    """Add the manual Entry classification control to one ReviewWindow."""
-    if getattr(window, "entry_classification_frame", None) is not None:
-        return
-
-    window.entry_scale_classification_var = tk.StringVar(value="自动")
-    window.entry_source_classification_var = tk.StringVar(value="来源：—")
-    frame = ttk.Frame(window, padding=(6, 3))
-    frame.place(relx=1.0, x=-14, y=36, anchor="ne")
-    ttk.Label(frame, text="词条类型：").pack(side="left")
-    combo = ttk.Combobox(
-        frame,
-        textvariable=window.entry_scale_classification_var,
-        values=("自动", "普通词条", "大字头"),
-        state="readonly",
-        width=9,
-    )
-    combo.pack(side="left", padx=(0, 8))
-    combo.bind(
-        "<<ComboboxSelected>>",
-        lambda event: change_review_entry_classification(window, event),
-    )
-    ttk.Label(
-        frame,
-        textvariable=window.entry_source_classification_var,
-    ).pack(side="left")
-    window.entry_scale_classification_combo = combo
-    window.entry_classification_frame = frame
-
-    # Fast manual corrections while proofreading.
-    window.bind(
-        "<Control-Alt-Key-0>",
-        lambda _event: set_review_entry_classification_shortcut(window, "自动"),
-        add="+",
-    )
-    window.bind(
-        "<Control-Alt-Key-1>",
-        lambda _event: set_review_entry_classification_shortcut(window, "普通词条"),
-        add="+",
-    )
-    window.bind(
-        "<Control-Alt-Key-2>",
-        lambda _event: set_review_entry_classification_shortcut(window, "大字头"),
-        add="+",
-    )
-    sync_review_entry_classification(window)
+    """Replace the manual ordinary/oversized selector with an image-only preview."""
+    from .review_pinned_entry_preview import initialize_pinned_entry_preview
+    initialize_pinned_entry_preview(window)
 
 
 def install_review_entry_classification(app_module: Any) -> None:
