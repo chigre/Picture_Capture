@@ -7741,81 +7741,60 @@ class PictureCaptureApp(tk.Tk):
         self.page_range_spec_var = tk.StringVar()
         self.view_zoom_var = tk.StringVar(value="100%")
 
-        range_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
-        range_row.grid(row=0, column=0, sticky="ew", pady=(0, 3))
-        ttk.Radiobutton(range_row,text="当前页",variable=self.page_range_var,value="current").pack(side="left")
-        ttk.Radiobutton(range_row,text="当前至末页",variable=self.page_range_var,value="to_end").pack(side="left",padx=(4,0))
-        ttk.Radiobutton(range_row,text="指定：",variable=self.page_range_var,value="specified").pack(side="left",padx=(4,0))
-        page_range_entry = ttk.Entry(range_row, textvariable=self.page_range_spec_var, width=14)
-        page_range_entry.pack(side="left",fill="x",expand=True)
+        nav_area = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
+        nav_area.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+        range_row = ttk.Frame(nav_area)
+        range_row.pack(fill="x", pady=(0, 3))
+        for label, mode in (("当前页", "current"), ("当前至末页", "to_end"),
+                            ("当前至指定页", "to_specified")):
+            ttk.Radiobutton(range_row, text=label, variable=self.page_range_var,
+                            value=mode).pack(side="left", padx=(0, 3))
+        spec_row = ttk.Frame(nav_area)
+        spec_row.pack(fill="x", pady=(0, 4))
+        ttk.Radiobutton(spec_row, text="指定：", variable=self.page_range_var,
+                        value="specified").pack(side="left")
+        page_range_entry = ttk.Entry(spec_row, textvariable=self.page_range_spec_var, width=12)
+        page_range_entry.pack(side="left", fill="x", expand=True, padx=(3, 4))
         page_range_entry.bind("<Return>", lambda _event: self.jump_to_page_spec())
-        size_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
-        self.page_size_row = size_row
-        size_row.grid(row=1, column=0, sticky="ew", pady=(0, 5))
-
-        zoom_out_button = ttk.Button(
-            size_row, text="−", width=3, command=lambda: self.zoom(0.87), style="PC.Tool.TButton"
-        )
-        zoom_out_button.pack(side="left")
-        self._attach_tooltip(zoom_out_button, "缩小显示")
-        view_zoom_entry = ttk.Entry(
-            size_row, textvariable=self.view_zoom_var, width=6, justify="center",
-            style="PC.Compact.TEntry",
-        )
-        view_zoom_entry.pack(side="left", padx=2)
-        view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)
-        view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)
-        zoom_in_button = ttk.Button(
-            size_row, text="+", width=3, command=lambda: self.zoom(1.15), style="PC.Tool.TButton"
-        )
-        zoom_in_button.pack(side="left")
-        self._attach_tooltip(zoom_in_button, "放大显示")
-        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
-
-        fit_width_button = ttk.Button(
-            size_row, text="⇔", width=3, command=self.fit_page_width, style="PC.Tool.TButton"
-        )
-        fit_width_button.pack(side="left", padx=(0, 2))
-        self._attach_tooltip(fit_width_button, "适合宽度显示")
-        fit_height_button = ttk.Button(
-            size_row, text="⇕", width=3, command=self.fit_page_height, style="PC.Tool.TButton"
-        )
-        fit_height_button.pack(side="left")
-        self._attach_tooltip(fit_height_button, "适合高度显示")
-        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
-
-        previous_bookmark_button = ttk.Button(
-            size_row, text="⨇", width=3, command=lambda: self.jump_to_bookmark(-1),
-            style="PC.Tool.TButton",
-        )
-        previous_bookmark_button.pack(side="left", padx=(0, 2))
-        self._attach_tooltip(previous_bookmark_button, "跳转到上一书签")
-        next_bookmark_button = ttk.Button(
-            size_row, text="⨈", width=3, command=lambda: self.jump_to_bookmark(1),
-            style="PC.Tool.TButton",
-        )
-        next_bookmark_button.pack(side="left")
-        self._attach_tooltip(next_bookmark_button, "跳转到下一书签")
-        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
-
-        jump_button = ttk.Button(
-            size_row, text="跳转", width=6,
-            command=self.jump_to_page_spec, style="PC.PageNav.TButton",
-        )
-        jump_button.pack(side="left", padx=(0, 3))
+        jump_button = ttk.Button(spec_row, text="跳转", width=5,
+                                 command=self.jump_to_page_spec, style="PC.PageNav.TButton")
+        jump_button.pack(side="left")
         self._attach_tooltip(jump_button, "跳转到指定页面的第一个有效页面")
-        previous_page_button = ttk.Button(
-            size_row, text="上页", width=6,
-            command=lambda: self.change_page(-1), style="PC.PageNav.TButton",
-        )
-        previous_page_button.pack(side="left", padx=(0, 3))
-        self._attach_tooltip(previous_page_button, "保存必要的当前页状态后切换到上一页")
-        next_page_button = ttk.Button(
-            size_row, text="下页", width=6,
-            command=lambda: self.change_page(1), style="PC.PageNav.TButton",
-        )
-        next_page_button.pack(side="left")
-        self._attach_tooltip(next_page_button, "保存必要的当前页状态后切换到下一页")
+
+        size_row = ttk.Frame(nav_area)
+        self.page_size_row = size_row
+        size_row.pack(fill="x", pady=(0, 4))
+        for symbol, command, tip in (
+            ("−", lambda: self.zoom(0.87), "缩小显示"),
+            ("+", lambda: self.zoom(1.15), "放大显示"),
+            ("⇔", self.fit_page_width, "占满宽度"),
+            ("⇕", self.fit_page_height, "占满高度"),
+        ):
+            if symbol == "+":
+                view_zoom_entry = ttk.Entry(
+                    size_row, textvariable=self.view_zoom_var, width=6, justify="center",
+                    style="PC.Compact.TEntry",
+                )
+                view_zoom_entry.pack(side="left", padx=2)
+                view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)
+                view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)
+            button = ttk.Button(size_row, text=symbol, width=3, command=command,
+                                style="PC.Tool.TButton")
+            button.pack(side="left", padx=(0, 3))
+            self._attach_tooltip(button, tip)
+
+        nav_row = ttk.Frame(nav_area)
+        nav_row.pack(fill="x")
+        for symbol, command, tip in (
+            ("⨇", lambda: self.jump_to_bookmark(-1), "跳转到上一书签"),
+            ("⨈", lambda: self.jump_to_bookmark(1), "跳转到下一书签"),
+            ("上页", lambda: self.change_page(-1), "切换到上页"),
+            ("下页", lambda: self.change_page(1), "切换到下页"),
+        ):
+            button = ttk.Button(nav_row, text=symbol, width=4 if len(symbol) == 1 else 5,
+                                command=command, style="PC.PageNav.TButton")
+            button.pack(side="left", padx=(0, 4))
+            self._attach_tooltip(button, tip)
         list_frame = ttk.Frame(page_panel)
         list_frame.grid(row=2, column=0, sticky="nsew")
         list_frame.columnconfigure(0, weight=1); list_frame.rowconfigure(0, weight=1)
@@ -11565,6 +11544,12 @@ class PictureCaptureApp(tk.Tk):
         mode = self.page_range_var.get() if hasattr(self, "page_range_var") else "current"
         if mode == "current": return [self.current_index] if self.current_index >= 0 else []
         if mode == "to_end": return list(range(max(0, self.current_index), len(self.project.images)))
+        if mode == "to_specified":
+            indices = self._parse_page_spec(self.page_range_spec_var.get())
+            if len(indices) != 1:
+                raise ValueError("当前至指定页需要输入一个结束页码")
+            end = indices[0]
+            return list(range(min(self.current_index, end), max(self.current_index, end) + 1))
         return self._parse_page_spec(self.page_range_spec_var.get())
 
 
