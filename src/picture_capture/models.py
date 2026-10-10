@@ -336,6 +336,7 @@ class AppSettings(metaclass=_AppSettingsMeta):
     crop_preview_font_size: int = 12
     crop_preview_font_bold: bool = False
     crop_preview_font_italic: bool = False
+    crop_preview_follow_zoom: bool = True
     main_entry_width_chars: int = 18
     main_entry_x_ratio: float = 0.66
     main_entry_follow_zoom: bool = True
