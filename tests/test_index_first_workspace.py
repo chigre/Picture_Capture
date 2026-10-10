@@ -14,9 +14,9 @@ def test_index_page_controls_and_extension_free_display():
     app, tools = sources()
     assert "install_workspace_tools(self, sidebar, sidebar_host)" in app
     assert 'page_panel.grid(row=0, column=0, rowspan=2' in app
-    assert '("当前页至指定页", "to_specified")' in app
-    assert '("当前页至末页", "to_end")' in app
-    assert 'text="指定范围："' in app
+    assert '("当前至指定页", "to_specified")' in app
+    assert '("当前至末页", "to_end")' in app
+    assert 'text="指定:"' in app
     assert 'page.stem, self._page_section_count_text(index)' in app
     assert 'new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)' in app
     assert 'if mode == "to_specified":' in app
@@ -127,17 +127,31 @@ def test_batch_progress_is_inline_with_status_bar_and_hidden_when_idle():
 
 def test_page_headers_and_preferred_sidebar_width():
     app, tools = sources()
-    assert '"bookmark": "🔖"' in app
-    assert '"section": "区块"' in app
-    assert 'self.page_list.heading("bookmark", text="🔖"' in app
-    assert 'self.page_list.heading("section", text="区块"' in app
+    assert '"bookmark": "●"' in app
+    assert '"section": "域"' in app
+    assert '"lined": "线"' in app
+    assert '"illustrations": "图"' in app
+    assert 'self.page_list.heading("bookmark", text="●"' in app
+    assert 'self.page_list.heading("section", text="域"' in app
+    assert 'self.page_list.heading("lined", text="线"' in app
+    assert 'self.page_list.heading("illustrations", text="图"' in app
     assert 'min(300, max(minimum, panes.winfo_width() - 320))' in tools
+
+
+def test_zoom_toolbar_overlays_image_viewport():
+    app, _ = sources()
+    assert 'size_row = ttk.Frame(self.canvas, padding=(5, 4)' in app
+    assert 'size_row.place(x=8, y=8, anchor="nw")' in app
+    assert 'self.page_size_row = size_row' in app
+    assert 'size_row = ttk.Frame(nav_area)' not in app
+    assert 'view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)' in app
+    assert 'view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)' in app
 
 
 def test_page_columns_order_and_mandatory_visibility():
     app, _ = sources()
     assert '"bookmark": "●"' in app
-    assert '"section": "区块"' in app
+    assert '"section": "域"' in app
     assert 'columns = ["bookmark", "page", "lined"]' in app
     assert 'columns.append("illustrations")' in app
     assert 'columns.append("section")' in app
