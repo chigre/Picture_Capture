@@ -514,6 +514,18 @@ def detect_entries(
                     [int(column.right - column.left) for column in columns],
                     float(understanding.layout.ordinary_line_height),
                 )
+            if (
+                uses_cjk_role_model(effective)
+                and bool(getattr(effective, "profile_cjk_allow_bracketed_headword", True))
+                and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity"
+            ):
+                from .ordinary_bracket_pair import recover_bracketed_ordinary_entries
+                layout = understanding.layout
+                entries = recover_bracketed_ordinary_entries(
+                    entries, analysis_image, layout.columns,
+                    int(layout.body_top), int(layout.body_bottom),
+                    float(layout.ordinary_line_height),
+                )
             entries = _allowed_entries(
                 entries,
                 source,
