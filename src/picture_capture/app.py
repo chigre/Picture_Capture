@@ -12507,11 +12507,6 @@ class PictureCaptureApp(tk.Tk):
                 lambda _event, p=root, r=dict(row): open_selected(p, r),
             )
 
-        def refresh_one_metadata(root: Path) -> None:
-            from .project_center_metadata_cache import clear_cached_details
-            clear_cached_details(root)
-            refresh_recent_data()
-
         def card_menu(button: ttk.Button, root: Path) -> None:
             pinned = any(
                 str(row.get("path")) == str(root) and bool(row.get("pinned"))
@@ -12525,9 +12520,10 @@ class PictureCaptureApp(tk.Tk):
                 command=lambda: (set_recent_project_pinned(root, not pinned), refresh_recent_data()),
             )
             menu.add_separator()
+            from .project_center_metadata_cache import clear_cached_details
             menu.add_command(
                 label="重新扫描项目元数据",
-                command=lambda p=root: refresh_one_metadata(p),
+                command=lambda p=root: (clear_cached_details(p), refresh_recent_data()),
             )
             menu.add_command(
                 label="从最近项目移除（不删除文件）",
@@ -12666,12 +12662,6 @@ class PictureCaptureApp(tk.Tk):
             canvas.yview_moveto(0.0)
             self._apply_current_appearance(dialog)
 
-        def _project_center_details_with_cache(rows):
-            from .project_center_metadata_cache import store_details
-            details = [recent_project_details(row) for row in rows]
-            store_details(details)
-            return details
-
         def refresh_recent_data() -> None:
             count_var.set("正在后台读取最近项目…")
             cleanup_button.configure(state="disabled")
@@ -12709,6 +12699,8 @@ class PictureCaptureApp(tk.Tk):
                 state["cover_images"] = covers
                 rebuild()
 
+            from .project_center_metadata_cache import details_with_cache
+
             def details_done(details) -> None:
                 if not alive():
                     return
@@ -12730,7 +12722,7 @@ class PictureCaptureApp(tk.Tk):
                 rebuild()
                 self._start_ui_worker(
                     f"{key}-details",
-                    lambda: _project_center_details_with_cache(rows),
+                    lambda: details_with_cache(rows),
                     details_done,
                     failed,
                 )
