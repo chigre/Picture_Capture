@@ -26,6 +26,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     rail.pack(side="left", fill="y", before=app.sidebar_canvas, padx=(3, 5))
     app.workspace_tools_toggle = rail
     app.workspace_tools_rail = rail
+    app.workspace_sidebar_host = sidebar_host
     app.workspace_tools_visible = False
     app.workspace_tools_pinned = False
     app.workspace_tools_active = None
@@ -79,12 +80,17 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.workspace_tools_heading = heading
     app.workspace_tools_pin_var = pin_var
 
-    ttk.Style(app).configure("PC.Rail.TButton", anchor="w")
+    rail_style = ttk.Style(app)
+    rail_style.configure(
+        "PC.Rail.TButton", anchor="w", padding=(10, 9),
+        relief="flat", borderwidth=0,
+    )
+    rail_style.map("PC.Rail.TButton", relief=[("active", "flat")])
     index_button = ttk.Button(
         rail, text="▦ 页面", width=8, style="PC.Rail.TButton",
         command=lambda: toggle_page_index(app),
     )
-    index_button.grid(row=0, column=0, padx=2, pady=(0, 6), sticky="ew")
+    index_button.grid(row=0, column=0, padx=1, pady=(0, 2), sticky="ew")
     app.workspace_page_index_button = index_button
     app._attach_tooltip(index_button, "页面列表（默认显示，点击收起或展开）")
     for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1):
@@ -100,7 +106,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     ttk.Button(
         rail, text="☰ 全部", width=8, style="PC.Rail.TButton",
         command=lambda: show_workspace_task(app, None),
-    ).grid(row=len(TASK_GROUPS) + 2, column=0, pady=4)
+    ).grid(row=len(TASK_GROUPS) + 2, column=0, sticky="ew", pady=3)
 
     # Four persistent project actions live at the bottom of the icon rail.
     # They are independent of the page-index visibility.
@@ -122,10 +128,13 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
             footer, text=f"{symbol} {label}", width=8, command=command,
             style="PC.Rail.TButton",
         )
-        button.pack(fill="x", pady=(0, 5))
+        button.pack(fill="x", pady=(0, 2))
         app.project_footer_buttons.append(button)
         app._attach_tooltip(button, f"{label}：{tip}")
 
+    app.workspace_sidebar_visible = True
+    app.bind("<Control-Shift-b>", lambda _e: toggle_sidebar(app), add="+")
+    app.bind("<Control-Shift-B>", lambda _e: toggle_sidebar(app), add="+")
     app.bind("<Control-Shift-t>", lambda _e: toggle_workspace_tools(app), add="+")
     app.bind("<Control-Shift-T>", lambda _e: toggle_workspace_tools(app), add="+")
     popup.bind("<Escape>", lambda _e: hide_workspace_tools(app), add="+")
@@ -281,4 +290,19 @@ def toggle_page_index(app: Any) -> str:
             except tk.TclError:
                 pass
         app.after_idle(expand)
+    return "break"
+
+
+def toggle_sidebar(app: Any) -> str:
+    """Hide the whole navigation pane while keeping a restore control."""
+    host = app.workspace_sidebar_host
+    panes = app.main_paned
+    if app.workspace_sidebar_visible:
+        hide_workspace_tools(app)
+        panes.forget(host)
+        app.workspace_sidebar_visible = False
+    else:
+        panes.insert(0, host, weight=0)
+        app.workspace_sidebar_visible = True
+        app.after_idle(lambda: size_page_index_to_controls(app))
     return "break"
