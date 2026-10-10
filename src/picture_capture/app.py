@@ -5632,7 +5632,14 @@ class ReviewWindow(tk.Toplevel):
             # UI-only materialization step. ImageTk creation stays on Tk.
             crop = preloaded_crops[index]
             self.editor_crop_widths.append(crop.width)
-            photo = ImageTk.PhotoImage(themed_display_image(crop, self.parent.appearance_mode))
+            # The inline editor uses one normal-height slice, never the
+            # oversized/two-line source crop used by the fixed preview.
+            regular_px = max(1, round(
+                _effective_review_regular_crop_height(self.parent.settings)
+                * self.review_zoom
+            ))
+            inline_crop = crop.crop((0, 0, crop.width, min(crop.height, regular_px)))
+            photo = ImageTk.PhotoImage(themed_display_image(inline_crop, self.parent.appearance_mode))
             self.thumbnails.append(photo)
             picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
             picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
