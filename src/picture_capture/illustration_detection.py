@@ -141,9 +141,17 @@ def _extend_box_to_caption(box, components, analysis_height):
     for line in lines[:2]:
         left, right = min(a for a, _, _, _ in line), max(c for _, _, c, _ in line)
         top, end = min(b for _, b, _, _ in line), max(d for _, _, _, d in line)
+        text_width = right - left
+        offset = abs((left + right) / 2 - (x0 + x1) / 2)
+        # Dictionary figure captions may consist of just one Chinese character.
+        # Require tighter centering for those short labels, rather than the
+        # previous minimum 10%-of-figure-width text span.
+        short_caption = (width * .025 <= text_width < width * .10
+                         and offset <= width * .08)
+        regular_caption = (width * .10 <= text_width <= width * .92
+                           and offset <= width * .15)
         if (top < previous or top - previous > max_gap
-                or not width * .10 <= right - left <= width * .92
-                or abs((left + right) / 2 - (x0 + x1) / 2) > width * .15):
+                or not (short_caption or regular_caption)):
             break
         bottom = previous = end
     return (x0, y0, x1, bottom)
