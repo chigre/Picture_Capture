@@ -14061,12 +14061,11 @@ class PictureCaptureApp(tk.Tk):
                 label_item = None
                 label_frame = None
                 if show_labels:
-                    label_border_width = scaled_overlay_line_width(
-                        self.settings.illustration_label_border_width, overlay_scale
-                    )
                     label_frame = tk.Frame(
-                        self.canvas, bg=self.settings.illustration_label_border_color,
-                        bd=0, padx=label_border_width, pady=label_border_width,
+                        self.canvas, bg=self.settings.illustration_label_fill_color,
+                        bd=0, highlightthickness=max(0, int(self.settings.illustration_label_border_width)),
+                        highlightbackground=self.settings.illustration_label_border_color,
+                        highlightcolor=self.settings.illustration_label_border_color,
                     )
                     label_entry = tk.Entry(
                         label_frame, width=18, relief="flat", bd=0, highlightthickness=0,
@@ -14088,6 +14087,9 @@ class PictureCaptureApp(tk.Tk):
                     label_entry.pack(side="left")
                     delete_button = tk.Button(
                         label_frame, text="×", width=2, height=1, padx=0, pady=0, relief="flat",
+                        bg=self.settings.illustration_label_fill_color,
+                        activebackground=self.settings.illustration_label_fill_color,
+                        highlightthickness=0, bd=0,
                         command=lambda r=region: self._delete_polygon_region(r),
                     )
                     delete_button.pack(side="left", padx=(2, 0))
