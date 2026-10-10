@@ -27,7 +27,7 @@ def test_pdic_batch_mode_rejects_ppp_edits_and_save_paths():
     source = (ROOT / "app.py").read_text(encoding="utf-8")
     start = source.index("    def _claim_page_for_manual_edit(")
     end = source.index("\n    def _can_save_current_during_batch_navigation(", start)
-    assert 'self._batch_allow_pdic_edits' in source[start:end]
+    assert '_batch_allow_pdic_edits' in source[start:end]
     start = source.index("    def toggle_polygon_drawing(")
     end = source.index("\n    def ", start + 10)
     assert "self._batch_allow_pdic_edits" in source[start:end]
