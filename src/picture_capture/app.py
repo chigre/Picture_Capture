@@ -14134,14 +14134,17 @@ class PictureCaptureApp(tk.Tk):
             return
         try:
             column_width = float(self.settings.column_width)
+            gutter = float(self.settings.gutter)
         except (AttributeError, TypeError, ValueError):
-            column_width = 0.0
-        if not 0 < column_width <= self.image.width:
-            self.status_var.set("请先设置有效的单栏宽度。")
+            column_width, gutter = 0.0, -1.0
+        # Fit one column with a gutter-sized margin on each side.
+        fit_width = column_width + 2 * gutter
+        if not (0 < column_width <= self.image.width and gutter >= 0 and fit_width > 0):
+            self.status_var.set("请先设置有效的单栏宽度和栏间距。")
             return
         self.update_idletasks()
         available = max(1, self.canvas.winfo_width())
-        self.view_scale = min(3.0, max(0.08, available / column_width))
+        self.view_scale = min(3.0, max(0.08, available / fit_width))
         self._update_view_zoom_label()
         self.redraw()
         self._set_idle_cursor_status()
