@@ -75,7 +75,7 @@ def test_tt_buttons_never_receive_unsupported_anchor_widget_parameter():
 def test_index_width_and_treeview_columns_fit_available_space():
     app, tools = sources()
     assert 'self.page_range_controls_row = range_row' in app
-    assert 'min(300, max(minimum, width - 320))' in tools
+    assert 'min(max(minimum, 1), width - 160)' in tools
     assert 'font.nametofont("TkHeadingFont")' in app
     assert 'orient="horizontal", command=self.page_list.xview' in app
     assert 'body_font.measure(name) for name in page_names' in app
@@ -138,7 +138,7 @@ def test_page_headers_and_preferred_sidebar_width():
     assert 'self.page_list.heading("section", text="域"' in app
     assert 'self.page_list.heading("lined", text="线"' in app
     assert 'self.page_list.heading("illustrations", text="图"' in app
-    assert 'min(300, max(minimum, panes.winfo_width() - 320))' in tools
+    assert 'min(max(minimum, 1), panes.winfo_width() - 160)' in tools
 
 
 def test_zoom_toolbar_hover_expands_at_canvas_lower_left():
@@ -195,7 +195,7 @@ def test_rail_styles_are_compact_in_both_themes():
 
 def test_compact_index_has_optional_headers_and_horizontal_scroll():
     app, tools = sources()
-    assert 'displaycolumns=("page",), show="headings"' in tools
+    assert 'displaycolumns=("page", "illustrations"), show="headings"' in tools
     assert 'mini_hscroll = ttk.Scrollbar(mini_host, orient="horizontal"' in tools
     assert 'mini.configure(yscrollcommand=mini_scroll.set, xscrollcommand=mini_hscroll.set)' in tools
     assert 'menu.add_checkbutton(label=app.page_index_labels[key]' in tools
@@ -214,3 +214,16 @@ def test_canvas_right_click_navigation_and_sidebar_presets():
     assert 'def set_sidebar_mode(app: Any, mode: str)' in tools
     assert 'app.fit_page_height()' in tools
     assert 'app.after(120, app.fit_page_width)' in tools
+
+
+def test_requested_workspace_updates():
+    app, tools = sources()
+    assert 'choices.winfo_reqwidth() + 24' in tools
+    assert 'value=(key == "illustrations")' in tools
+    assert 'width=80 if column == "page" else 26' in tools
+    assert 'x{app.winfo_height()}+0+{app.winfo_y()}' in tools
+    assert '("普通画线", app.run_normal_draw_action)' in tools
+    assert '("OCR画线", app.run_ocr_draw_action)' in tools
+    assert '("词条校对", app.open_review)' in tools
+    assert '("◧", self.fit_single_column_width, "单栏占满宽度")' in app
+    assert 'def fit_single_column_width(self) -> None:' in app
