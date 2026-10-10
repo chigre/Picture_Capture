@@ -7747,13 +7747,13 @@ class PictureCaptureApp(tk.Tk):
         range_row = ttk.Frame(nav_area)
         self.page_range_controls_row = range_row
         range_row.pack(fill="x", pady=(0, 3))
-        for label, mode in (("当前页", "current"), ("当前页至末页", "to_end"),
-                            ("当前页至指定页", "to_specified")):
+        for label, mode in (("当前页", "current"), ("当前至末页", "to_end"),
+                            ("当前至指定页", "to_specified")):
             ttk.Radiobutton(range_row, text=label, variable=self.page_range_var,
                             value=mode).pack(side="left", padx=(0, 3))
         spec_row = ttk.Frame(nav_area)
         spec_row.pack(fill="x", pady=(0, 4))
-        ttk.Radiobutton(spec_row, text="指定范围：", variable=self.page_range_var,
+        ttk.Radiobutton(spec_row, text="指定:", variable=self.page_range_var,
                         value="specified").pack(side="left")
         page_range_entry = ttk.Entry(spec_row, textvariable=self.page_range_spec_var, width=12)
         page_range_entry.pack(side="left", fill="x", expand=True, padx=(3, 4))
@@ -7762,28 +7762,6 @@ class PictureCaptureApp(tk.Tk):
                                  command=self.jump_to_page_spec, style="PC.PageNav.TButton")
         jump_button.pack(side="left")
         self._attach_tooltip(jump_button, "跳转到指定页面的第一个有效页面")
-
-        size_row = ttk.Frame(nav_area)
-        self.page_size_row = size_row
-        size_row.pack(fill="x", pady=(0, 4))
-        for symbol, command, tip in (
-            ("−", lambda: self.zoom(0.87), "缩小显示"),
-            ("+", lambda: self.zoom(1.15), "放大显示"),
-            ("⇔", self.fit_page_width, "占满宽度"),
-            ("⇕", self.fit_page_height, "占满高度"),
-        ):
-            if symbol == "+":
-                view_zoom_entry = ttk.Entry(
-                    size_row, textvariable=self.view_zoom_var, width=6, justify="center",
-                    style="PC.Compact.TEntry",
-                )
-                view_zoom_entry.pack(side="left", padx=2)
-                view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)
-                view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)
-            button = ttk.Button(size_row, text=symbol, width=3, command=command,
-                                style="PC.Tool.TButton")
-            button.pack(side="left", padx=(0, 3))
-            self._attach_tooltip(button, tip)
 
         nav_row = ttk.Frame(nav_area)
         nav_row.pack(fill="x")
@@ -7810,15 +7788,15 @@ class PictureCaptureApp(tk.Tk):
             style="PC.Treeview",
         )
         self._page_list_heading_labels = {
-            "bookmark": "●", "page": "页面", "section": "区块",
-            "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
+            "bookmark": "●", "page": "页面", "section": "域",
+            "lined": "线", "fill_status": "填充状态", "illustrations": "图",
         }
         self.page_list.heading("bookmark", text="●", anchor="center")
         self.page_list.heading("page", text="页面", anchor="center")
-        self.page_list.heading("section", text="区块", anchor="center")
-        self.page_list.heading("lined", text="画线", anchor="center")
+        self.page_list.heading("section", text="域", anchor="center")
+        self.page_list.heading("lined", text="线", anchor="center")
         self.page_list.heading("fill_status", text="填充状态", anchor="center")
-        self.page_list.heading("illustrations", text="插图", anchor="center")
+        self.page_list.heading("illustrations", text="图", anchor="center")
         self.page_list.heading("bookmark", command=lambda: self._sort_page_list("bookmark"))
         self.page_list.heading("page", command=lambda: self._sort_page_list("page"))
         self.page_list.heading("section", command=lambda: self._sort_page_list("section"))
@@ -7859,6 +7837,30 @@ class PictureCaptureApp(tk.Tk):
         hbar = ttk.Scrollbar(viewer, orient="horizontal", command=self.canvas.xview)
         vbar = ttk.Scrollbar(viewer, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
+        # Fixed overlay: a child widget positioned in viewport coordinates,
+        # independent of canvas scrolling, panning, and redraw operations.
+        size_row = ttk.Frame(self.canvas, padding=(5, 4), style="PC.Sidebar.TFrame")
+        self.page_size_row = size_row
+        size_row.place(x=8, y=8, anchor="nw")
+        for symbol, command, tip in (
+            ("−", lambda: self.zoom(0.87), "缩小显示"),
+            ("+", lambda: self.zoom(1.15), "放大显示"),
+            ("⇔", self.fit_page_width, "占满宽度"),
+            ("⇕", self.fit_page_height, "占满高度"),
+        ):
+            if symbol == "+":
+                view_zoom_entry = ttk.Entry(
+                    size_row, textvariable=self.view_zoom_var, width=6, justify="center",
+                    style="PC.Compact.TEntry",
+                )
+                view_zoom_entry.pack(side="left", padx=2)
+                view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)
+                view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)
+            button = ttk.Button(size_row, text=symbol, width=3, command=command,
+                                style="PC.Tool.TButton")
+            button.pack(side="left", padx=(0, 3))
+            self._attach_tooltip(button, tip)
+
         self.canvas.grid(row=0, column=0, sticky="nsew")
         vbar.grid(row=0, column=1, sticky="ns"); hbar.grid(row=1, column=0, sticky="ew")
         viewer.rowconfigure(0, weight=1); viewer.columnconfigure(0, weight=1)
