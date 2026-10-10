@@ -534,6 +534,9 @@ def show_sidebar_modes(app: Any) -> None:
 
 def set_sidebar_mode(app: Any, mode: str) -> str:
     """Apply layout after Tk finishes resizing its Panedwindow."""
+    if mode not in {"最简", "正常", "最大"}:
+        return "break"
+    app.workspace_mode = mode
     app.workspace_sidebar_mode_menu.place_forget()
     if mode == "最简":
         if app.sidebar_canvas.winfo_manager() == "pack":
