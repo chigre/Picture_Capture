@@ -24,3 +24,12 @@ def test_workspace_palette_is_nonmodal_and_preserves_quick_builder():
     assert "app._build_quick_settings(content)" in source
     assert 'command=lambda: toggle_workspace_tools(app)' in source
     assert "grab_set(" not in source
+
+
+def test_tool_group_navigation_and_window_dismissal():
+    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert 'state="readonly"' in source
+    assert 'jump.bind("<<ComboboxSelected>>", jump_to_section)' in source
+    assert "app._set_section_expanded(section, True)" in source
+    assert 'palette.bind("<Escape>"' in source
+    assert 'window.geometry(f"{width}x{height}+{x}+{y}")' in source
