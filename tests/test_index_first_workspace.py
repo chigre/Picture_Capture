@@ -28,7 +28,7 @@ def test_fixed_width_icon_cells_and_compact_nav_toggle():
     assert 'entry.columnconfigure(0, minsize=38)' in tools
     assert 'icon = tk.Canvas(entry, width=30, height=27' in tools
     assert 'text_button = ttk.Button(entry, text=label, width=5' in tools
-    assert 'rail, 0, "☰", "侧栏", lambda: show_sidebar_modes(app)' in tools
+    assert 'rail, 0, "☰", "模式", lambda: show_sidebar_modes(app)' in tools
     assert 'app.workspace_rail_labels.append(text_button)' in tools
     assert 'button.grid_remove()' in tools
     assert 'button.grid()' in tools
@@ -227,3 +227,13 @@ def test_requested_workspace_updates():
     assert '("词条校对", app.open_review)' in tools
     assert '("◧", self.fit_single_column_width, "单栏占满宽度")' in app
     assert 'def fit_single_column_width(self) -> None:' in app
+
+
+def test_compact_mode_does_not_reuse_full_sidebar_sash_width():
+    _, tools = sources()
+    assert 'rail, 0, "☰", "模式", lambda: show_sidebar_modes(app)' in tools
+    assert 'if tip:' in tools
+    assert 'compact_width = app.workspace_tools_rail.winfo_reqwidth() + 10' in tools
+    assert 'app.main_paned.sashpos(0, compact_width)' in tools
+    assert 'required = int(compact_width + app.image.width * app.view_scale + 32)' in tools
+    assert 'app.after_idle(lambda: app.main_paned.sashpos(0, compact_width))' in tools
