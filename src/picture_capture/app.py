@@ -2561,7 +2561,7 @@ class ReviewWindow(tk.Toplevel):
         self.active_crop_photo = None
         self._active_crop_fixed_size: tuple[int, int] | None = None
         self._review_display_crops: list[Image.Image] = []
-        self._review_row_pictures: list[ttk.Label] = []
+        self._review_row_pictures: list[ttk.Label | None] = []
 
         self.canvas = tk.Canvas(
             editor_area,
@@ -5631,11 +5631,16 @@ class ReviewWindow(tk.Toplevel):
             # Crop and LANCZOS resize are completed by a worker before this
             # UI-only materialization step. ImageTk creation stays on Tk.
             crop = preloaded_crops[index]
-            photo = ImageTk.PhotoImage(themed_display_image(crop, self.parent.appearance_mode))
-            self.thumbnails.append(photo)
             self.editor_crop_widths.append(crop.width)
-            picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
-            picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
+            # Do not create an inline image for the active word; its separate
+            # bordered preview is the only crop for that word.
+            picture = None
+            photo = None
+            if index != 0:
+                photo = ImageTk.PhotoImage(themed_display_image(crop, self.parent.appearance_mode))
+                picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
+                picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
+            self.thumbnails.append(photo)
             self._review_row_pictures.append(picture)
             var = tk.StringVar(value=entry.word)
             # Review zoom changes only the cropped line image.  Text-entry font
@@ -5775,7 +5780,7 @@ class ReviewWindow(tk.Toplevel):
             simplified_editor.bind("<<Cut>>", lambda _e, i=index: self._claim_simplified_clipboard_edit(i))
             simplified_editor.bind("<KeyRelease>", lambda e, i=index: self.on_simplified_key(e, i))
             simplified_editor.bind("<Return>", lambda _e, i=index: self.focus_index(i + 1))
-            for widget in (picture, delete_button, editor_frame, editor, simplified_editor, simplified_search_button):
+            for widget in (delete_button, editor_frame, editor, simplified_editor, simplified_search_button):
                 widget.bind("<MouseWheel>", self.scroll_rows)
                 widget.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
                 widget.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))
@@ -6069,13 +6074,29 @@ class ReviewWindow(tk.Toplevel):
 
     def set_active(self, index: int) -> None:
         self.active_index = index
-        # The pinned bordered preview already shows this row: hide only its
-        # duplicate inline crop, leaving the editor and all other rows intact.
+        # Ensure the active crop exists only in the fixed bordered preview.
+        # When selection changes, restore the old row's image on demand and
+        # destroy the new row's inline image rather than merely hiding it.
         for row_index, picture in enumerate(self._review_row_pictures):
             if row_index == index:
-                picture.grid_remove()
-            elif not picture.winfo_manager():
-                picture.grid()
+                if picture is not None:
+                    picture.destroy()
+                    self._review_row_pictures[row_index] = None
+                    self.thumbnails[row_index] = None
+            elif picture is None and row_index < len(self._review_display_crops):
+                photo = ImageTk.PhotoImage(themed_display_image(
+                    self._review_display_crops[row_index], self.parent.appearance_mode
+                ))
+                restored = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
+                restored.grid(row=row_index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
+                for sequence, callback in (
+                    ("<MouseWheel>", self.scroll_rows),
+                    ("<Button-4>", lambda e: self.scroll_rows_linux(-1)),
+                    ("<Button-5>", lambda e: self.scroll_rows_linux(1)),
+                ):
+                    restored.bind(sequence, callback)
+                self._review_row_pictures[row_index] = restored
+                self.thumbnails[row_index] = photo
         self._update_active_crop_preview(index)
         self._update_title()
         ordered = self.parent._ordered_entries_reading_order()
