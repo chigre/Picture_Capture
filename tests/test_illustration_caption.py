@@ -28,3 +28,17 @@ def test_distant_or_oversized_text_not_included():
     box = (100, 100, 300, 300)
     assert _extend_box_to_caption(box, [(150, 345, 230, 358, 100)], 1000) == box
     assert _extend_box_to_caption(box, [(150, 307, 230, 370, 100)], 1000) == box
+
+
+def test_single_character_caption_centered_below_wide_fish():
+    # Regression: a wide fish drawing with a single Chinese title immediately
+    # below its center. The previous >=10% width test dropped this caption.
+    box = (100, 100, 580, 280)
+    components = [(329, 287, 350, 306, 180)]
+    assert _extend_box_to_caption(box, components, 1000) == (100, 100, 580, 306)
+
+
+def test_single_character_in_left_aligned_body_is_not_caption():
+    box = (100, 100, 580, 280)
+    components = [(108, 287, 128, 306, 180)]
+    assert _extend_box_to_caption(box, components, 1000) == box
