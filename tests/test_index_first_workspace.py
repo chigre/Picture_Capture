@@ -310,10 +310,9 @@ def test_compact_review_anchors_to_work_area_top():
 
 def test_inline_review_slice_is_regular_height_not_double():
     app, _ = sources()
-    assert 'regular_height = _effective_review_regular_crop_height(review_settings)' in app
-    assert 'entry_regular_crop_height=regular_height' in app
-    assert 'entry_oversized_crop_height=regular_height' in app
-    assert 'entry, geometry, image, inline_settings, next_entry,' in app
+    assert 'regular_height if ordinary_height_only else classified_entry_crop_height(' in app
+    assert 'entry, geometry, image, review_settings, next_entry,' in app
+    assert 'ordinary_height_only=True' in app
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in app
     assert 'self._update_active_crop_preview(index)' in app
 
