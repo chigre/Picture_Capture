@@ -101,6 +101,30 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
         command=lambda: show_workspace_task(app, None),
     ).grid(row=len(TASK_GROUPS) + 2, column=0, pady=4)
 
+    # Four persistent project actions live at the bottom of the icon rail.
+    # They are independent of the page-index visibility.
+    footer_row = len(TASK_GROUPS) + 4
+    rail.rowconfigure(footer_row - 1, weight=1)
+    footer = ttk.Frame(rail, style="PC.Footer.TFrame")
+    footer.grid(row=footer_row, column=0, sticky="sew", pady=(4, 2))
+    app.project_action_bar = footer
+    app.project_footer_buttons = []
+    ttk.Separator(footer, orient="horizontal").pack(fill="x", pady=(0, 5))
+    project_actions = (
+        ("项目中心", "▣", app.open_recent_project, "打开最近项目与项目管理"),
+        ("项目Profile", "◈", app.open_project_profile, "配置词典 Profile 和页面模板"),
+        ("设置中心", "⚙", app.open_settings, "打开设置中心"),
+        ("帮助中心", "?", app.show_help_dialog, "查看帮助与快捷操作"),
+    )
+    for label, symbol, command, tip in project_actions:
+        button = ttk.Button(
+            footer, text=symbol, width=3, command=command,
+            style="PC.Compact.TButton",
+        )
+        button.pack(fill="x", pady=(0, 5))
+        app.project_footer_buttons.append(button)
+        app._attach_tooltip(button, f"{label}：{tip}")
+
     app.bind("<Control-Shift-t>", lambda _e: toggle_workspace_tools(app), add="+")
     app.bind("<Control-Shift-T>", lambda _e: toggle_workspace_tools(app), add="+")
     popup.bind("<Escape>", lambda _e: hide_workspace_tools(app), add="+")
