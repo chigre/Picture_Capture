@@ -7183,7 +7183,7 @@ class PictureCaptureApp(tk.Tk):
             widget = self.__dict__.get(name)
             if widget is not None:
                 try:
-                    widget.configure(bg=palette[color_key])
+                    widget.configure(bg=(self._main_ui_colors["canvas"] if name == "canvas" else palette[color_key]))
                 except tk.TclError:
                     pass
 
@@ -7286,7 +7286,7 @@ class PictureCaptureApp(tk.Tk):
                 "success": "#69A875",
                 "success_hover": "#588F64",
                 "tree_selected": "#dce8f7",
-                "canvas": "#30343b",
+                "canvas": "#e9edf2",
                 "ruler_margin": "#f1f3f6",
             }
         self._main_ui_colors = colors
