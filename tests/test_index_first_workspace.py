@@ -272,16 +272,15 @@ def test_current_review_crop_is_fixed_width_double_height_and_framed():
     assert 'self._update_active_crop_preview(index)' in app
 
 
-def test_every_review_row_keeps_single_line_crop_and_editor():
+def test_current_review_entry_has_only_pinned_crop():
     app, _ = sources()
+    assert 'if index != 0:' in app
     assert 'photo = self._ordinary_review_photo(index)' in app
-    assert 'picture.grid(row=index * 2, column=0' in app
-    assert 'self.thumbnails.append(photo)' in app
     assert 'self._review_row_pictures.append(picture)' in app
+    assert 'if row_index == index and picture is not None:' in app
+    assert 'picture.destroy()' in app
+    assert 'elif row_index != index and picture is None:' in app
     assert 'self._update_active_crop_preview(index)' in app
-    active = app[app.index('    def set_active(self, index: int)'):app.index('    def _scroll_editor_into_view', app.index('    def set_active(self, index: int)'))]
-    assert 'picture.destroy()' not in active
-    assert 'picture.grid_remove()' not in active
 
 
 def test_review_preview_is_position_and_size_invariant_on_window_resize():
