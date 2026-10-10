@@ -14,8 +14,8 @@ TASK_GROUPS = (
     ("预处理", "◫", "图片预处理(前置)"),
     ("版面", "▤", "一、版面参数"),
     ("显示", "◉", "二、显示设置"),
-    ("OCR", "⌕", "三、共享 OCR 通道 / OCR画线"),
-    ("画线/校对", "✎", "四、画线 / OCR / 插图 / 校对"),
+    ("识别", "⌕", "三、共享 OCR 通道 / OCR画线"),
+    ("画线", "✎", "四、画线 / OCR / 插图 / 校对"),
     ("制作", "✂", "五、后期词典制作"),
 )
 
@@ -80,7 +80,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.workspace_tools_pin_var = pin_var
 
     index_button = ttk.Button(
-        rail, text="▦", width=3, style="PC.Compact.TButton",
+        rail, text="▦ 页面", width=8, style="PC.Compact.TButton",
         command=lambda: toggle_page_index(app),
     )
     index_button.grid(row=0, column=0, padx=2, pady=(0, 6), sticky="ew")
@@ -88,7 +88,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app._attach_tooltip(index_button, "页面列表（默认显示，点击收起或展开）")
     for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1):
         button = ttk.Button(
-            rail, text=symbol, width=3, style="PC.Compact.TButton",
+            rail, text=f"{symbol} {label}", width=8, style="PC.Compact.TButton",
             command=lambda target=title: show_workspace_task(app, target),
         )
         button.grid(row=index, column=0, padx=2, pady=(0, 6), sticky="ew")
@@ -97,7 +97,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         row=len(TASK_GROUPS) + 1, column=0, sticky="ew", pady=4,
     )
     ttk.Button(
-        rail, text="☰", width=3, style="PC.Compact.TButton",
+        rail, text="☰ 全部", width=8, style="PC.Compact.TButton",
         command=lambda: show_workspace_task(app, None),
     ).grid(row=len(TASK_GROUPS) + 2, column=0, pady=4)
 
@@ -111,14 +111,14 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.project_footer_buttons = []
     ttk.Separator(footer, orient="horizontal").pack(fill="x", pady=(0, 5))
     project_actions = (
-        ("项目中心", "▣", app.open_recent_project, "打开最近项目与项目管理"),
-        ("项目Profile", "◈", app.open_project_profile, "配置词典 Profile 和页面模板"),
-        ("设置中心", "⚙", app.open_settings, "打开设置中心"),
-        ("帮助中心", "?", app.show_help_dialog, "查看帮助与快捷操作"),
+        ("项目", "▣", app.open_recent_project, "打开最近项目与项目管理"),
+        ("档案", "◈", app.open_project_profile, "配置词典 Profile 和页面模板"),
+        ("设置", "⚙", app.open_settings, "打开设置中心"),
+        ("帮助", "?", app.show_help_dialog, "查看帮助与快捷操作"),
     )
     for label, symbol, command, tip in project_actions:
         button = ttk.Button(
-            footer, text=symbol, width=3, command=command,
+            footer, text=f"{symbol} {label}", width=8, command=command,
             style="PC.Compact.TButton",
         )
         button.pack(fill="x", pady=(0, 5))
@@ -222,12 +222,44 @@ def show_workspace_task(app: Any, title: str | None) -> None:
 
 
 def toggle_page_index(app: Any) -> str:
-    """Show or hide the existing page-index widget without recreating it."""
+    """Truly collapse the index area and return its width to the viewer."""
     panel = getattr(app, "page_panel", None)
     if panel is None:
         return "break"
-    if panel.winfo_manager() == "grid":
+    canvas = app.sidebar_canvas
+    scrollbar = app.sidebar_scrollbar
+    panes = app.main_paned
+    rail = app.workspace_tools_rail
+    host = rail.master
+
+    if canvas.winfo_manager() == "pack":
+        try:
+            app._workspace_index_width = panes.sashpos(0)
+        except tk.TclError:
+            pass
         panel.grid_remove()
+        canvas.pack_forget()
+        scrollbar.pack_forget()
+
+        def collapse() -> None:
+            try:
+                panes.sashpos(0, rail.winfo_reqwidth() + 10)
+            except tk.TclError:
+                pass
+
+        app.after_idle(collapse)
     else:
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
         panel.grid()
+        def expand() -> None:
+            try:
+                app.update_idletasks()
+                desired = getattr(app, "_workspace_index_width", 0)
+                if not desired:
+                    desired = rail.winfo_reqwidth() + panel.winfo_reqwidth() + 24
+                panes.sashpos(0, min(int(desired), max(200, panes.winfo_width() - 320)))
+            except tk.TclError:
+                pass
+        app.after_idle(expand)
     return "break"
