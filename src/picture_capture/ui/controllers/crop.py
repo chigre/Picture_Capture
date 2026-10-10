@@ -14,6 +14,7 @@ from typing import Any
 import tkinter as tk
 
 from ... import unlined_line_export as unlined_export
+from ...major_headword_export import OUTPUT_DIRNAME as MAJOR_DIR, export_major_headword_page_job
 from ...formats import pdic_path, read_pdic, read_ppp
 from ...ordinary_quick_settings import _apply_quick_settings_for_ordinary
 from ...processing import (
@@ -158,6 +159,44 @@ class CropController:
         if not started:
             _set_job_button_state(app, False)
 
+
+    def export_major_headword_rows_selected_scope(self) -> None:
+        """Export only sidecar-classified oversized PDIC rows."""
+        app = self.app
+        if bool(getattr(app, "_batch_active", False)):
+            _status(app, "已有批量任务正在运行；请先结束后导出大字头。")
+            return
+        snapshot = _snapshot_scope(app)
+        if snapshot is None:
+            return
+        project_root, images, indices, settings = snapshot
+        merge_by_page = load_merge_by_page(project_root)
+        workers = max(1, min(configured_single_line_workers(project_root), len(indices)))
+        output_dir = qt_root(project_root) / MAJOR_DIR
+
+        def job_builder(index, _position, _total):
+            return (str(project_root), str(images[index]), int(index), settings, merge_by_page)
+
+        def done(completed, total, stopped, results, error):
+            if error is not None:
+                return
+            marked = sum(int(row.marked) for row in results)
+            exported = sum(int(row.exported) for row in results)
+            skipped = sum(not row.layout_available for row in results)
+            state = "已停止" if stopped else "完成"
+            _status(
+                app, f"大字头单行导出{state}：{completed}/{total} 页；"
+                f"标记 {marked} 行，输出 {exported} 张；"
+                f"Layout不可用 {skipped} 页；保存到 {output_dir}",
+            )
+
+        app._start_parallel_batch_task(
+            "大字头单行导出", indices,
+            export_major_headword_page_job, job_builder,
+            on_done=done,
+            item_label=lambda index: images[index].name,
+            max_workers=workers,
+        )
 
     def export_unlined_rows_selected_scope(self) -> None:
         """Export selected-page Layout rows without current PDIC markers."""
