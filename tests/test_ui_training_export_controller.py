@@ -74,8 +74,8 @@ def test_training_export_controller_preserves_staging_manifest_zip_and_scope(mon
     monkeypatch.setattr(export_module, "training_exports_root", lambda root: root / "TrainingExports")
     monkeypatch.setattr(export_module.messagebox, "askyesno", lambda *a, **k: True)
     monkeypatch.setattr(
-        export_module.messagebox, "showinfo",
-        lambda title, message, *, parent: dialogs.append((title, message, parent)),
+        export_module, "show_training_export_complete",
+        lambda parent, count, path: dialogs.append((parent, count, path)),
     )
     monkeypatch.setattr(
         export_module, "copy_project_context",
@@ -119,8 +119,9 @@ def test_training_export_controller_preserves_staging_manifest_zip_and_scope(mon
 
     done(3, 3, False, [prepared, record, final], None)
     assert app.status_var.values[-1].startswith("训练标记包已导出：")
-    assert dialogs[-1][0] == "导出训练标记包完成"
-    assert "已导出 1 页" in dialogs[-1][1]
+    assert dialogs[-1][0] is app
+    assert dialogs[-1][1] == 1
+    assert dialogs[-1][2] == Path(final["final_zip"])
 
 
 def test_training_export_stopped_path_keeps_async_cleanup(monkeypatch, tmp_path):
