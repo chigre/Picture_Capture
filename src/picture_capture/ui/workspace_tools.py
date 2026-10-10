@@ -141,7 +141,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.workspace_tools_pin_var = pin_var
 
     rail_style = ttk.Style(app)
-    rail_style.configure("PC.Rail.TButton", padding=(5, 8), relief="flat", borderwidth=0)
+    rail_style.configure("PC.Rail.TButton", padding=(4, 3), relief="flat", borderwidth=0, font="TkDefaultFont")
     rail_style.map("PC.Rail.TButton", relief=[("active", "flat")])
     rail.columnconfigure(0, weight=1)
     app.workspace_rail_labels = []
@@ -171,25 +171,47 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         "显示/隐藏侧边栏（Ctrl+Shift+B）",
     )
     app.workspace_sidebar_toggle = sidebar_button
-    app.workspace_page_index_button = rail_action(
-        rail, 1, "▦", "页面", lambda: toggle_page_index(app),
-        "页面列表（默认显示，点击收起或展开）",
-    )
-    for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=2):
+    for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1):
         rail_action(
             rail, index, symbol, label,
             lambda target=title: show_workspace_task(app, target), label,
         )
     ttk.Separator(rail, orient="horizontal").grid(
-        row=len(TASK_GROUPS) + 2, column=0, sticky="ew", pady=4,
+        row=len(TASK_GROUPS) + 1, column=0, sticky="ew", pady=4,
     )
-    rail_action(
-        rail, len(TASK_GROUPS) + 3, "≡", "全部",
-        lambda: show_workspace_task(app, None), "显示全部工具",
+    app.workspace_page_index_button = rail_action(
+        rail, len(TASK_GROUPS) + 2, "▦", "页面", lambda: toggle_page_index(app),
+        "切换完整页面列表和简洁页面列表",
     )
+    mini_host = ttk.Frame(rail, style="PC.Sidebar.TFrame")
+    mini_host.grid(row=len(TASK_GROUPS) + 3, column=0, sticky="nsew")
+    mini_host.grid_remove()
+    mini_host.rowconfigure(0, weight=1)
+    mini_host.columnconfigure(0, weight=1)
+    mini = ttk.Treeview(mini_host, columns=("page",), displaycolumns=("page",),
+                        show="headings", selectmode="browse", height=12,
+                        style="PC.Treeview")
+    mini.heading("page", text="页面", anchor="center")
+    mini.column("page", width=108, minwidth=65, anchor="center", stretch=True)
+    mini.grid(row=0, column=0, sticky="nsew")
+    mini_scroll = ttk.Scrollbar(mini_host, orient="vertical", command=mini.yview)
+    mini_scroll.grid(row=0, column=1, sticky="ns")
+    mini.configure(yscrollcommand=mini_scroll.set)
+    app.workspace_mini_page_host = mini_host
+    app.workspace_mini_page_list = mini
+
+    def choose_mini_page(_event: tk.Event) -> None:
+        selected = mini.selection()
+        if not selected or not app.page_list.exists(selected[0]):
+            return
+        app.page_list.selection_set(selected[0])
+        app.page_list.see(selected[0])
+        app.page_list.event_generate("<<TreeviewSelect>>")
+
+    mini.bind("<<TreeviewSelect>>", choose_mini_page)
+    rail.rowconfigure(len(TASK_GROUPS) + 3, weight=1)
 
     footer_row = len(TASK_GROUPS) + 5
-    rail.rowconfigure(footer_row - 1, weight=1)
     footer = ttk.Frame(rail, style="PC.Footer.TFrame")
     footer.grid(row=footer_row, column=0, sticky="sew", pady=(4, 2))
     footer.columnconfigure(0, weight=1)
@@ -323,8 +345,28 @@ def size_page_index_to_controls(app: Any) -> None:
         pass
 
 
+def refresh_compact_page_index(app: Any) -> None:
+    """Mirror page names and order without creating another page state."""
+    mini = getattr(app, "workspace_mini_page_list", None)
+    source = getattr(app, "page_list", None)
+    if mini is None or source is None:
+        return
+    try:
+        selected = source.selection()
+        mini.delete(*mini.get_children())
+        for iid in source.get_children():
+            values = source.item(iid, "values")
+            if len(values) >= 2:
+                mini.insert("", "end", iid=iid, values=(values[1],))
+        if selected and mini.exists(selected[0]):
+            mini.selection_set(selected[0])
+            mini.see(selected[0])
+    except tk.TclError:
+        pass
+
+
 def toggle_page_index(app: Any) -> str:
-    """Truly collapse the index area and return its width to the viewer."""
+    """Toggle full page index vs compact page-only list beneath Page button."""
     panel = getattr(app, "page_panel", None)
     if panel is None:
         return "break"
@@ -332,25 +374,27 @@ def toggle_page_index(app: Any) -> str:
     scrollbar = app.sidebar_scrollbar
     panes = app.main_paned
     rail = app.workspace_tools_rail
-    host = rail.master
+    mini_host = app.workspace_mini_page_host
 
     if canvas.winfo_manager() == "pack":
         try:
             app._workspace_index_width = panes.sashpos(0)
         except tk.TclError:
             pass
+        refresh_compact_page_index(app)
         panel.grid_remove()
         canvas.pack_forget()
         scrollbar.pack_forget()
-
-        def collapse() -> None:
+        mini_host.grid()
+        def compact() -> None:
             try:
+                app.update_idletasks()
                 panes.sashpos(0, rail.winfo_reqwidth() + 10)
             except tk.TclError:
                 pass
-
-        app.after_idle(collapse)
+        app.after_idle(compact)
     else:
+        mini_host.grid_remove()
         scrollbar.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
         panel.grid()
@@ -370,6 +414,7 @@ def toggle_sidebar(app: Any) -> str:
     if app.workspace_sidebar_visible:
         app._workspace_index_was_visible = app.sidebar_canvas.winfo_manager() == "pack"
         hide_workspace_tools(app)
+        app.workspace_mini_page_host.grid_remove()
         if app.sidebar_canvas.winfo_manager() == "pack":
             try:
                 app._workspace_index_width = app.main_paned.sashpos(0)
@@ -396,6 +441,9 @@ def toggle_sidebar(app: Any) -> str:
             app.sidebar_canvas.pack(side="left", fill="both", expand=True)
             app.page_panel.grid()
         app.workspace_sidebar_visible = True
+        if not getattr(app, "_workspace_index_was_visible", True):
+            refresh_compact_page_index(app)
+            app.workspace_mini_page_host.grid()
         def expand() -> None:
             try:
                 width = app.main_paned.winfo_width()
