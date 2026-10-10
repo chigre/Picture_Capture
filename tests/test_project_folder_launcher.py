@@ -34,9 +34,9 @@ def test_project_center_card_has_folder_action_distinct_from_project_load():
               "picture_capture" / "app.py").read_text(encoding="utf-8")
     start = source.index("    def open_recent_project(self)")
     section = source[start:source.index("\n    @staticmethod", start)]
-    assert 'text="打开文件夹"' in section
-    assert "command=lambda p=root: open_folder(p)" in section
-    assert 'state="normal" if exists else "disabled"' in section
-    folder = section[section.index("        def open_folder("):section.index("        def copy_path(")]
-    assert "open_project_folder(root)" in folder
-    assert "self._load_project(" not in folder
+    assert "add_open_folder_button(actions, root, dialog, exists)" in section
+    adapter = (Path(__file__).resolve().parents[1] / "src" /
+               "picture_capture" / "project_folder_launcher.py").read_text(encoding="utf-8")
+    assert 'text="打开文件夹"' in adapter
+    assert "open_project_folder_with_error(root, dialog)" in adapter
+    assert 'state="normal" if exists else "disabled"' in adapter
