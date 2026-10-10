@@ -335,23 +335,30 @@ def apply_classification_sidecar(entries: Iterable[Entry], pdic_path: Path) -> N
         _store_entry_meta(entry, _meta_from_row(row))
 
 
-def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
+def _atomic_json(path: Path, payload: dict[str, Any]) -> bool:
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    try:
+        if path.read_bytes() == serialized:
+            return False
+    except FileNotFoundError:
+        pass
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as handle:
             temp_path = Path(handle.name)
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write(serialized.decode("utf-8"))
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_path, path)
+        return True
     except Exception:
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
         raise
 
 
-def write_classification_sidecar(entries: Iterable[Entry], pdic_path: Path) -> None:
+def write_classification_sidecar(entries: Iterable[Entry], pdic_path: Path) -> bool:
     path = classification_sidecar_path(pdic_path)
     old_rows = _read_sidecar(path)
     used: set[int] = set()
@@ -378,7 +385,7 @@ def write_classification_sidecar(entries: Iterable[Entry], pdic_path: Path) -> N
             **asdict(meta),
         }
         output.append(row)
-    _atomic_json(path, {"format": SIDECAR_FORMAT, "entries": output})
+    return _atomic_json(path, {"format": SIDECAR_FORMAT, "entries": output})
 
 
 def install_pdic_classification(formats_module: Any) -> None:
@@ -393,9 +400,10 @@ def install_pdic_classification(formats_module: Any) -> None:
         apply_classification_sidecar(entries, Path(path))
         return entries
 
-    def write_pdic(path: Path, entries: list[Entry], image_width: int, pages: tuple[str, str, str]) -> None:
-        original_write(path, entries, image_width, pages)
-        write_classification_sidecar(entries, Path(path))
+    def write_pdic(path: Path, entries: list[Entry], image_width: int, pages: tuple[str, str, str]) -> bool:
+        changed = original_write(path, entries, image_width, pages)
+        sidecar_changed = write_classification_sidecar(entries, Path(path))
+        return bool(changed or sidecar_changed)
 
     formats_module.read_pdic = read_pdic
     formats_module.write_pdic = write_pdic
