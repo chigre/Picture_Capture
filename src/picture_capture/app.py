@@ -7700,15 +7700,6 @@ class PictureCaptureApp(tk.Tk):
         self.main_paned = body
         body.pack(fill="both", expand=True)
         sidebar_host = ttk.Frame(body, style="PC.Sidebar.TFrame")
-        # Project actions are outside the scrollable/collapsible sidebar so
-        # they remain fixed and visible at the bottom of the left pane.
-        self.project_action_bar = ttk.Frame(
-            sidebar_host, padding=(6, 5, 5, 6), style="PC.Footer.TFrame"
-        )
-        self.project_action_bar.pack(side="bottom", fill="x")
-        ttk.Separator(self.project_action_bar, orient="horizontal").pack(
-            side="top", fill="x", pady=(0, 6)
-        )
         self.sidebar_canvas = tk.Canvas(
             sidebar_host,
             highlightthickness=0,
@@ -7878,32 +7869,6 @@ class PictureCaptureApp(tk.Tk):
         }
         self._apply_page_list_display_columns(save=False)
 
-        project_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
-        project_row.pack(fill="x")
-        for col in range(4):
-            project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
-        self.project_footer_buttons: list[ttk.Button] = []
-        for col, (label, command) in enumerate((
-            ("项目中心", self.open_recent_project),
-            ("项目Profile", self.open_project_profile),
-            ("设置中心", self.open_settings),
-            ("帮助中心", self.show_help_dialog),
-        )):
-            button = self._footer_action_button(
-                project_row, label, command, role="project"
-            )
-            button.grid(
-                row=0, column=col, sticky="ew",
-                padx=(0 if col == 0 else 4, 0),
-            )
-            self.project_footer_buttons.append(button)
-            footer_tooltips = {
-                "项目中心": "打开最近项目与项目管理；可从这里新建或切换词典项目。",
-                "项目Profile": "配置词典信息、阅读方向、页面模板和词头结构，并用代表页测试。",
-                "设置中心": "按常用、OCR画线、普通画线、显示/校对、切图等任务调整项目参数。",
-                "帮助中心": "查看新版推荐流程、主界面说明、快捷操作与常见排错。",
-            }
-            self._attach_tooltip(button, footer_tooltips[label])
         self.canvas = tk.Canvas(
             viewer, bg=self._main_ui_colors["canvas"], highlightthickness=0
         )
