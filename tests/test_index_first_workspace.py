@@ -26,7 +26,7 @@ def test_index_page_controls_and_extension_free_display():
 def test_fixed_width_icon_cells_and_compact_nav_toggle():
     app, tools = sources()
     assert 'entry.columnconfigure(0, minsize=38)' in tools
-    assert 'icon = ttk.Button(entry, text=symbol, width=3' in tools
+    assert 'icon = tk.Canvas(entry, width=30, height=27' in tools
     assert 'text_button = ttk.Button(entry, text=label, width=5' in tools
     assert 'rail, 0, "☰", "侧栏", lambda: toggle_sidebar(app)' in tools
     assert 'app.workspace_rail_labels.append(text_button)' in tools
@@ -77,8 +77,8 @@ def test_index_width_and_treeview_columns_fit_available_space():
     assert 'font.nametofont("TkHeadingFont")' in app
     assert 'orient="horizontal", command=self.page_list.xview' in app
     assert 'body_font.measure(name) for name in page_names' in app
-    assert '"page": min(240, max(74, page_width))' in app
-    assert 'self.page_list.column(column, width=width, stretch=False)' in app
+    assert '"page": max(52, page_width)' in app
+    assert 'self.page_list.column(column, width=width, anchor="center", stretch=False)' in app
     assert '("上页", lambda: self.change_page(-1)' in app
     assert '("下页", lambda: self.change_page(1)' in app
 
@@ -87,4 +87,16 @@ def test_page_name_column_does_not_absorb_all_spare_sidebar_width():
     app, _ = sources()
     assert 'weights = {' not in app[app.index('    def _fit_page_list_columns'):app.index('    def _hide_page_list_section_heading_hint')]
     assert 'page.stem for page in getattr(self.project, "images", ())' in app
-    assert 'header_font.measure(label) + 16' in app
+    assert 'header_font.measure(label) + 10' in app
+
+
+def test_borderless_index_and_vector_rail_icon_art():
+    app, tools = sources()
+    assert 'page_panel = ttk.Frame(sidebar, padding=' in app
+    assert '"六、页面列表"' not in app[app.index('def _build_ui'):app.index('def _build_ui') + 26000]
+    assert '_draw_rail_icon(icon, symbol)' in tools
+    assert 'canvas.create_line(' in tools
+    assert 'canvas.create_rectangle(' in tools
+    assert 'len(TASK_GROUPS) + 3, "≡", "全部"' in tools
+    for column in ('bookmark', 'page', 'section', 'lined', 'fill_status', 'illustrations'):
+        assert f'self.page_list.column("{column}",' in app
