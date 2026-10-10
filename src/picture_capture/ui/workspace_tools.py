@@ -21,7 +21,7 @@ TASK_GROUPS = (
 
 
 def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
-    """Place the icon rail beside the permanent page index."""
+    """Place the icon rail beside the initially visible page index."""
     rail = ttk.Frame(sidebar, style="PC.Sidebar.TFrame")
     rail.grid(row=0, column=0, rowspan=2, sticky="ns", padx=(0, 5))
     app.workspace_tools_toggle = rail
@@ -79,7 +79,14 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
     app.workspace_tools_heading = heading
     app.workspace_tools_pin_var = pin_var
 
-    for index, (label, symbol, title) in enumerate(TASK_GROUPS):
+    index_button = ttk.Button(
+        rail, text="▦", width=3, style="PC.Compact.TButton",
+        command=lambda: toggle_page_index(app),
+    )
+    index_button.grid(row=0, column=0, padx=2, pady=(0, 6), sticky="ew")
+    app.workspace_page_index_button = index_button
+    app._attach_tooltip(index_button, "页面列表（默认显示，点击收起或展开）")
+    for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1):
         button = ttk.Button(
             rail, text=symbol, width=3, style="PC.Compact.TButton",
             command=lambda target=title: show_workspace_task(app, target),
@@ -87,12 +94,12 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
         button.grid(row=index, column=0, padx=2, pady=(0, 6), sticky="ew")
         app._attach_tooltip(button, label)
     ttk.Separator(rail, orient="horizontal").grid(
-        row=len(TASK_GROUPS), column=0, sticky="ew", pady=4,
+        row=len(TASK_GROUPS) + 1, column=0, sticky="ew", pady=4,
     )
     ttk.Button(
         rail, text="☰", width=3, style="PC.Compact.TButton",
         command=lambda: show_workspace_task(app, None),
-    ).grid(row=len(TASK_GROUPS) + 1, column=0, pady=4)
+    ).grid(row=len(TASK_GROUPS) + 2, column=0, pady=4)
 
     app.bind("<Control-Shift-t>", lambda _e: toggle_workspace_tools(app), add="+")
     app.bind("<Control-Shift-T>", lambda _e: toggle_workspace_tools(app), add="+")
@@ -188,3 +195,15 @@ def show_workspace_task(app: Any, title: str | None) -> None:
     else:
         choose_workspace_section(app, title)
     show_workspace_tools(app)
+
+
+def toggle_page_index(app: Any) -> str:
+    """Show or hide the existing page-index widget without recreating it."""
+    panel = getattr(app, "page_panel", None)
+    if panel is None:
+        return "break"
+    if panel.winfo_manager() == "grid":
+        panel.grid_remove()
+    else:
+        panel.grid()
+    return "break"
