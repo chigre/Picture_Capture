@@ -1842,7 +1842,7 @@ def test_v2810_save_current_page_is_mode_specific():
     start = text.index("    def _save_current_page_by_mode(")
     end = text.index("    def save_current_page(", start)
     block = text[start:end]
-    assert "if self.polygon_draw_var.get():" in block
+    assert 'if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):' in block
     assert "write_ppp(target, self.polygons, self.current_page.stem)" in block
     assert "self.save_pdic(silent=True, sync_editors=sync_editors)" in block
     assert "self.polygon_var.get()" not in block

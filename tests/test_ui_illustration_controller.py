@@ -106,12 +106,15 @@ class _App:
     def _start_parallel_batch_task(
         self, title, items, worker_func, job_builder, result_consumer=None,
         on_done=None, item_label=None, max_workers=0,
+        *, allow_page_navigation=False, allow_pdic_edits=False,
     ) -> bool:
         self.calls.append(("start_parallel", title, list(items), max_workers))
         self.batch = {
             "title": title, "items": list(items), "worker": worker_func,
             "job_builder": job_builder, "done": on_done,
             "item_label": item_label, "max_workers": max_workers,
+            "allow_page_navigation": allow_page_navigation,
+            "allow_pdic_edits": allow_pdic_edits,
         }
         return True
 
@@ -222,6 +225,8 @@ def test_confirmed_action_snapshots_settings_and_starts_parallel_batch(monkeypat
     assert app.batch["items"] == [0, 1]
     assert app.batch["item_label"](1) == "page002.png"
     assert app.batch["max_workers"] == 2
+    assert app.batch["allow_page_navigation"] is True
+    assert app.batch["allow_pdic_edits"] is True
     assert app.calls[-1] == ("start_parallel", "插图识别", [0, 1], 2)
 
 

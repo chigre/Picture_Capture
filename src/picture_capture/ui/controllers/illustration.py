@@ -176,4 +176,6 @@ class IllustrationController:
             on_done=done,
             item_label=lambda index: project.images[index].name,
             max_workers=max(0, min(8, int(getattr(settings, "illustration_detect_parallel_workers", 0)))),
+            allow_page_navigation=True,
+            allow_pdic_edits=True,
         )

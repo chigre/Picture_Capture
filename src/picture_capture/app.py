@@ -6708,6 +6708,7 @@ class PictureCaptureApp(tk.Tk):
         # Read-only preprocessing batches may keep the page list navigable;
         # mutating batches leave this False.
         self._batch_allow_page_navigation = False
+        self._batch_allow_pdic_edits = False
         self._batch_page_states: dict[int, str] = {}
         self._batch_state_lock = threading.Lock()
         self._batch_skipped_count = 0
@@ -11130,16 +11131,10 @@ class PictureCaptureApp(tk.Tk):
         return pdic_path(self.current_page), ppp
 
     def _save_current_page_by_mode(self, *, sync_editors: bool = True) -> Path | None:
-        """Save only the artifact owned by the current editing mode.
-
-        Normal/headword-line mode owns ``.pdic`` (separator lines + text-box
-        contents). Illustration drawing mode owns ``.ppp``. Merely displaying
-        illustration polygons does not switch the save target; only the active
-        polygon drawing mode does.
-        """
+        """ save current page by mode."""
         if not self.project or not self.current_page or self.image is None:
             return None
-        if self.polygon_draw_var.get():
+        if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):
             target = self._ppp_write_path(self.current_page)
             write_ppp(target, self.polygons, self.current_page.stem)
             self._update_page_row(self.current_index)
@@ -11773,17 +11768,14 @@ class PictureCaptureApp(tk.Tk):
                 self._batch_page_states[index] = state
 
     def _claim_page_for_manual_edit(self, index: int | None = None) -> bool:
-        """Atomically reserve a pending batch page for foreground manual review.
-
-        A page already being processed cannot be edited. A pending page becomes
-        ``manual_locked`` before the UI mutation occurs, guaranteeing that the
-        background runner will skip it instead of overwriting the user's PDIC.
-        """
+        """ claim page for manual edit."""
         if index is None:
             index = self.current_index
         if not self._batch_active:
             return True
         if not self._batch_foreground_pages:
+            if getattr(self, "_batch_allow_pdic_edits", False) and not self.polygon_draw_var.get():
+                return True
             self.status_var.set("批量任务正在运行；该任务不支持同时编辑页面。")
             return False
         with self._batch_state_lock:
@@ -11828,13 +11820,9 @@ class PictureCaptureApp(tk.Tk):
         *, foreground_page_edit: bool = False, page_indexer=None,
         refresh_page_quality: bool = True,
         allow_page_navigation: bool = False,
+        allow_pdic_edits: bool = False,
     ) -> bool:
-        """Run a multi-page task without blocking Tk.
-
-        Pause and stop are deliberately cooperative: they are checked between
-        pages. The current page is always allowed to finish so output files are
-        written atomically by the existing processing functions.
-        """
+        """ start batch task."""
         if self._batch_active:
             messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
             return False
@@ -11859,6 +11847,7 @@ class PictureCaptureApp(tk.Tk):
         self._batch_refresh_page_quality = bool(refresh_page_quality)
         self._batch_foreground_pages = bool(foreground_page_edit)
         self._batch_allow_page_navigation = bool(allow_page_navigation)
+        self._batch_allow_pdic_edits = bool(allow_pdic_edits)
         self._batch_skipped_count = 0
         indexer = page_indexer or (lambda item: int(item))
         with self._batch_state_lock:
@@ -11941,14 +11930,9 @@ class PictureCaptureApp(tk.Tk):
     def _start_parallel_batch_task(
         self, title: str, items, worker_func, job_builder, result_consumer=None,
         on_done=None, item_label=None, max_workers: int = 0,
+        *, allow_page_navigation: bool = False, allow_pdic_edits: bool = False,
     ) -> bool:
-        """Run page-independent crop jobs in a spawn-safe process pool.
-
-        Only crop/export tasks use this path. Drawing and OCR line detection stay
-        on the established sequential batch path so their behaviour is unchanged.
-        Pause/stop are cooperative at the dispatch boundary: already-started
-        pages finish and are committed, while no new pages are submitted.
-        """
+        """ start parallel batch task."""
         if self._batch_active:
             messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
             return False
@@ -11977,10 +11961,16 @@ class PictureCaptureApp(tk.Tk):
                 args = job_builder(item, position, total)
                 raw = worker_func(*args)
                 return result_consumer(item, raw) if result_consumer is not None else raw
-            return self._start_batch_task(title, items, serial_worker, on_done, item_label)
+            return self._start_batch_task(
+                title, items, serial_worker, on_done, item_label,
+                allow_page_navigation=allow_page_navigation,
+                allow_pdic_edits=allow_pdic_edits,
+            )
 
         self._batch_active = True
         self._batch_parallel = True
+        self._batch_allow_page_navigation = bool(allow_page_navigation)
+        self._batch_allow_pdic_edits = bool(allow_pdic_edits)
         self._batch_title = title
         self._batch_on_done = on_done
         self._batch_stop_event.clear()
@@ -12206,6 +12196,7 @@ class PictureCaptureApp(tk.Tk):
         self._batch_title = ""
         self._batch_foreground_pages = False
         self._batch_allow_page_navigation = False
+        self._batch_allow_pdic_edits = False
         with self._batch_state_lock:
             self._batch_page_states = {}
         if getattr(self, "_batch_refresh_page_quality", True):
@@ -14205,6 +14196,8 @@ class PictureCaptureApp(tk.Tk):
             region.label = name
 
     def _update_polygon_label(self, region: PolygonRegion, widget: tk.Entry) -> None:
+        if self._batch_active and self._batch_allow_pdic_edits:
+            return
         try:
             name = widget.get().strip()
         except tk.TclError:
@@ -14303,6 +14296,9 @@ class PictureCaptureApp(tk.Tk):
             region.points = [(x, value if abs(y - y1) <= 2 else y) for x, y in region.points]
 
     def _delete_polygon_region(self, region: PolygonRegion) -> None:
+        if self._batch_active and self._batch_allow_pdic_edits:
+            self.status_var.set("插图识别期间暂不修改 PPP。")
+            return
         if self.current_page is None:
             return
         try:
@@ -14617,6 +14613,9 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def toggle_polygon_drawing(self) -> None:
+        if self._batch_active and self._batch_allow_pdic_edits:
+            self.status_var.set("插图识别期间可编辑 PDIC；PPP 编辑请等待识别结束。")
+            return
         if not self.guard(): return
         active = not self.polygon_draw_var.get()
         self.polygon_draw_var.set(active)
