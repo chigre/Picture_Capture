@@ -14218,6 +14218,8 @@ class PictureCaptureApp(tk.Tk):
             region.label = name
 
     def _update_polygon_label(self, region: PolygonRegion, widget: tk.Entry) -> None:
+        if self._batch_active and self._batch_allow_pdic_edits:
+            return
         try:
             name = widget.get().strip()
         except tk.TclError:
@@ -14316,6 +14318,9 @@ class PictureCaptureApp(tk.Tk):
             region.points = [(x, value if abs(y - y1) <= 2 else y) for x, y in region.points]
 
     def _delete_polygon_region(self, region: PolygonRegion) -> None:
+        if self._batch_active and self._batch_allow_pdic_edits:
+            self.status_var.set("插图识别期间暂不修改 PPP。")
+            return
         if self.current_page is None:
             return
         try:
@@ -14630,6 +14635,9 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def toggle_polygon_drawing(self) -> None:
+        if self._batch_active and self._batch_allow_pdic_edits:
+            self.status_var.set("插图识别期间可编辑 PDIC；PPP 编辑请等待识别结束。")
+            return
         if not self.guard(): return
         active = not self.polygon_draw_var.get()
         self.polygon_draw_var.set(active)
