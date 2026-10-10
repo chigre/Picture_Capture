@@ -239,7 +239,7 @@ def _extend_cross_column_caption(box, image, margin):
                 or offset > width * .15):
             break
         bottom, previous = end, end
-    return (x0, y0, x1, max(y1, bottom + margin))
+    return (x0, y0, x1, max(y1, bottom + margin) if bottom > y1 else y1)
 
 
 def _polygon_bbox(region: PolygonRegion) -> tuple[int, int, int, int] | None:
