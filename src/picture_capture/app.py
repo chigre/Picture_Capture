@@ -7734,7 +7734,8 @@ class PictureCaptureApp(tk.Tk):
         viewer = ttk.Frame(body)
         body.add(sidebar_host, weight=0)
         body.add(viewer, weight=1)
-        sidebar.columnconfigure(0, weight=1)
+        sidebar.columnconfigure(0, weight=0)
+        sidebar.columnconfigure(1, weight=1)
         sidebar.rowconfigure(1, weight=1)
 
         from .ui.workspace_tools import install_workspace_tools
@@ -7742,7 +7743,7 @@ class PictureCaptureApp(tk.Tk):
 
         page_panel = self._section_frame(sidebar, "六、页面列表", padding=6, section_key="pages")
         self.page_panel = page_panel
-        page_panel.grid(row=1, column=0, sticky="nsew", pady=(5, 0))
+        page_panel.grid(row=0, column=1, rowspan=2, sticky="nsew", pady=(5, 0))
         page_panel.columnconfigure(0, weight=1)
         page_panel.rowconfigure(2, weight=1)
 
