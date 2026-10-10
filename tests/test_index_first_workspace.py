@@ -30,7 +30,7 @@ def test_icon_rail_popover_does_not_change_main_pane():
 
 def test_minimal_task_buttons_and_pin_behavior():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
-    assert "for index, (label, symbol, title) in enumerate(TASK_GROUPS):" in source
+    assert "for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1):" in source
     assert "app._attach_tooltip(button, label)" in source
     assert "title == app.workspace_tools_active" in source
     assert "app.workspace_tools_pinned" in source
@@ -44,7 +44,7 @@ def test_page_index_is_visible_by_default_and_toggled_from_icon_rail():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
-    assert 'page_panel.grid(row=0, column=1, rowspan=2' in app
+    assert 'page_panel.grid(row=0, column=0, rowspan=2' in app
     assert 'command=lambda: toggle_page_index(app)' in source
     assert 'panel.grid_remove()' in source
     assert 'panel.grid()' in source
