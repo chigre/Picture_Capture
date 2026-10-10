@@ -6763,6 +6763,9 @@ class PictureCaptureApp(tk.Tk):
         self._collapsible_sections: dict[str, ttk.LabelFrame] = {}
         self.section_title_font = font.nametofont("TkDefaultFont").copy()
         self.section_title_font.configure(weight="bold")
+        self.compact_page_font = font.nametofont("TkDefaultFont").copy()
+        base_font_size = abs(int(font.nametofont("TkDefaultFont").cget("size")))
+        self.compact_page_font.configure(size=max(6, round(base_font_size * 0.8)))
         self._configure_main_workspace_styles()
         self._auxiliary_controller = AuxiliaryLineController(self)
         self.canvas_controller = CanvasController(self)
@@ -7334,8 +7337,8 @@ class PictureCaptureApp(tk.Tk):
         # Keep rail controls the same font and compact geometry in both themes.
         style.configure("PC.Rail.TButton", font="TkDefaultFont",
                         padding=(4, 3), relief="flat", borderwidth=0)
-        style.configure("PC.CompactPage.Treeview", rowheight=26,
-                        font="TkDefaultFont", background=base["surface"],
+        style.configure("PC.CompactPage.Treeview", rowheight=22,
+                        font=self.compact_page_font, background=base["surface"],
                         fieldbackground=base["surface"], foreground=colors["text"])
         style.configure("PC.CompactPage.Treeview.Heading",
                         font="TkHeadingFont", padding=(3, 4))
@@ -7776,8 +7779,8 @@ class PictureCaptureApp(tk.Tk):
         for symbol, command, tip in (
             ("⨇", lambda: self.jump_to_bookmark(-1), "跳转到上一书签"),
             ("⨈", lambda: self.jump_to_bookmark(1), "跳转到下一书签"),
-            ("上页", lambda: self.change_page(-1), "切换到上页"),
-            ("下页", lambda: self.change_page(1), "切换到下页"),
+            ("上页", lambda: self.change_page(-1), "切换到上页（Shift + 鼠标右键）"),
+            ("下页", lambda: self.change_page(1), "切换到下页（鼠标右键）"),
         ):
             button = ttk.Button(nav_row, text=symbol, width=4 if len(symbol) == 1 else 5,
                                 command=command, style="PC.PageNav.TButton")
@@ -7906,6 +7909,7 @@ class PictureCaptureApp(tk.Tk):
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
         bind_context_menu(self.canvas, self.canvas_right_click)
+        self.canvas.bind("<Shift-Button-3>", lambda event: self._canvas_shift_right_click(event))
         self.canvas.bind("<Motion>", self.canvas_motion)
         self.canvas.bind("<Leave>", self.canvas_leave)
         self.canvas.bind("<MouseWheel>", self.canvas_mousewheel)
@@ -14751,7 +14755,15 @@ class PictureCaptureApp(tk.Tk):
                 self.show_error("保存PPP轮廓失败", exc)
         return "break"
 
+    def _canvas_shift_right_click(self, event: tk.Event) -> str:
+        if self.project and self.current_page and self.image is not None:
+            self.change_page(-1)
+        return "break"
+
     def canvas_right_click(self, event: tk.Event) -> None:
+        if getattr(event, "state", 0) & 0x0001:
+            self._canvas_shift_right_click(event)
+            return
         if self.auxiliary_mode_var.get():
             if self.guard():
                 self._auxiliary_controller.delete_at(*self.original_xy(event))
@@ -15383,7 +15395,7 @@ class PictureCaptureApp(tk.Tk):
         self.page_list.item(iid, values=new_values)
         mini = getattr(self, "workspace_mini_page_list", None)
         if mini is not None and mini.exists(iid):
-            mini.item(iid, values=(page_stem,))
+            mini.item(iid, values=new_values)
         active_column = self._page_list_sort_column
         if active_column:
             new_index = {
