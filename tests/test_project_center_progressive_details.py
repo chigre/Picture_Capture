@@ -41,6 +41,6 @@ def test_project_detail_worker_still_reads_full_metadata():
               "picture_capture" / "app.py").read_text(encoding="utf-8")
     start = source.index("    def open_recent_project(self)")
     block = source[start:source.index("\n    @staticmethod", start)]
-    assert 'lambda: [recent_project_details(row) for row in rows]' in block
+    assert 'lambda: details_with_cache(rows)' in block
     assert 'state["details"] = details' in block
-    assert "load_project_center_preview(root, Path(preview_text))" in block
+    assert "load_project_center_previews(details)" in block
