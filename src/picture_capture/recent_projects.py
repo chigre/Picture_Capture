@@ -50,7 +50,7 @@ def save_recent_projects(rows: list[dict[str, object]], path: Path | None = None
             prefix=f".{target.name}.", suffix=".tmp", delete=False,
         ) as handle:
             temp = Path(handle.name)
-            json.dump(rows, handle, ensure_ascii=False, indent=2)
+            json.dump([{k: v for k, v in row.items() if k != "card_cache"} for row in rows], handle, ensure_ascii=False, indent=2)
             handle.flush()
             os.fsync(handle.fileno())
         for attempt in range(5):
