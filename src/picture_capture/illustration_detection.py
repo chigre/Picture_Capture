@@ -218,7 +218,7 @@ def _extend_cross_column_caption(box, image, margin):
     # larger white gap typically found below a cross-column figure.
     glyphs = sorted(
         ((a, b, c, d) for a, b, c, d, _ in absolute
-         if d - b <= max(8, round(image.height * .055))),
+         if b >= y1 - 1 and d - b <= max(8, round(image.height * .055))),
         key=lambda item: (item[1], item[0]),
     )
     lines = []
