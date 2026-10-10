@@ -190,7 +190,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     mini_host.columnconfigure(0, weight=1)
     mini = ttk.Treeview(mini_host, columns=("page",), displaycolumns=("page",),
                         show="headings", selectmode="browse", height=12,
-                        style="PC.Treeview")
+                        style="PC.CompactPage.Treeview")
     mini.heading("page", text="页面", anchor="center")
     mini.column("page", width=108, minwidth=65, anchor="center", stretch=True)
     mini.grid(row=0, column=0, sticky="nsew")
