@@ -16074,11 +16074,13 @@ class PictureCaptureApp(tk.Tk):
         if sync_editors:
             self._sync_entry_editor_texts()
         self._sort_entries_reading_order()
-        write_pdic(pdic_path(self.current_page), self.entries, self.image.width, self.pages_tuple())
+        changed = write_pdic(pdic_path(self.current_page), self.entries, self.image.width, self.pages_tuple())
+        self._last_pdic_write_changed = changed
         self._flush_pending_manual_override()
-        self._refresh_word_fill_check_from_line_count(self.current_index, len(self.entries), persist=True)
-        self._update_page_row(self.current_index)
-        if not silent: self.status_var.set(f"已保存 {pdic_path(self.current_page).name}")
+        if changed:
+            self._refresh_word_fill_check_from_line_count(self.current_index, len(self.entries), persist=True)
+            self._update_page_row(self.current_index)
+        if not silent: self.status_var.set(f"已保存 {pdic_path(self.current_page).name}" if changed else "内容无变化，无需保存")
 
     def _sync_entry_editor_texts(self) -> None:
         """Commit editor values to the exact Entry objects they were created for."""
@@ -16121,6 +16123,7 @@ class PictureCaptureApp(tk.Tk):
                     self.toggle_autosave()
                     return
             if self.project and self.current_page:
+                self._last_pdic_write_changed = False
                 review = self.review_window
                 review_saved = False
                 if review is not None:
@@ -16133,8 +16136,9 @@ class PictureCaptureApp(tk.Tk):
                         self.review_window = None
                 if not review_saved:
                     self.save_pdic(silent=True)
-                write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
-                self.status_var.set("已自动保存")
+                polygon_changed = write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
+                if self._last_pdic_write_changed or polygon_changed:
+                    self.status_var.set("已自动保存")
             self.toggle_autosave()
 
     def open_settings(self, initial_tab: str | None = None) -> None:
