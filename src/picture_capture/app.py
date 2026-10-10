@@ -1055,9 +1055,7 @@ class SettingsDialog(tk.Toplevel):
             add="+",
         )
 
-        # SettingsDialog no longer duplicates the normal Project Profile wizard.
-        # Keep the active profile ID intact for save() while exposing a direct
-        # button to the guided wizard from the common/advanced pages.
+        # Reuse the project profile without duplicating the wizard.
         self._active_profile_key = effective_project_profile_id(
             parent.settings,
             project_profile_path(parent.project.root) if parent.project else None,
@@ -1552,13 +1550,7 @@ class SettingsDialog(tk.Toplevel):
                 _var.trace_add("write", lambda *_args: self._schedule_autosave())
             except Exception:
                 pass
-        # Each scrollable settings page already updates its scrollregion from
-        # the content <Configure> event.  Do not force a synchronous
-        # update_idletasks() across every hidden tab here: after restoring
-        # detailed inline help that can trigger a very large wrapping/layout
-        # cascade on Windows/Tk and make Settings Center construction appear hung.
-        # Keep Settings Center modeless: users often need to move the pointer
-        # over the main image to read coordinates while entering layout values.
+        # Scroll regions update on Configure; keep the dialog modeless.
         # Do not use transient()/grab_set(), which would keep this window in
         # front and block interaction with the main workspace.
 
