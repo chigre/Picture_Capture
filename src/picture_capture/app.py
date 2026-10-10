@@ -2539,6 +2539,15 @@ class ReviewWindow(tk.Toplevel):
         )
         self.next_page_button.pack(side="right", fill="y", padx=(4, 0))
 
+        # Fixed current-word preview: independent of window resizing.
+        self.active_crop_frame = tk.Frame(editor_area, bd=2, relief="solid",
+                                          highlightthickness=1, highlightbackground="#4F7CAC")
+        self.active_crop_frame.pack(side="top", anchor="w", padx=6, pady=(4, 6))
+        self.active_crop_label = tk.Label(self.active_crop_frame, bd=0, padx=0, pady=0)
+        self.active_crop_label.pack()
+        self.active_crop_photo = None
+        self._review_display_crops: list[Image.Image] = []
+
         self.canvas = tk.Canvas(
             editor_area,
             highlightthickness=0,
@@ -5596,6 +5605,7 @@ class ReviewWindow(tk.Toplevel):
         if len(preloaded_crops) < len(ordered):
             self._request_render_rows(focus_index=self.active_index)
             return
+        self._review_display_crops = list(preloaded_crops)
         words = self.parent._project_words if self.parent.project else set()
         for index, entry in enumerate(ordered):
             next_entry = ordered[index + 1] if index + 1 < len(ordered) else None
@@ -5999,8 +6009,44 @@ class ReviewWindow(tk.Toplevel):
         self.editors[self.active_index].icursor("end")
         self.on_key(type("_Event", (), {"char": ""})(), self.active_index)
 
+    def _update_active_crop_preview(self, index: int) -> None:
+        """Same pixel width as row crops, twice their height, no stretch."""
+        if not (0 <= index < len(self._review_display_crops)):
+            self.active_crop_photo = None
+            self.active_crop_label.configure(image="")
+            return
+        crop = self._review_display_crops[index]
+        # Extend the source region vertically instead of stretching the words.
+        ordered = self.parent._ordered_entries_reading_order()
+        if index >= len(ordered) or self.parent.image is None:
+            return
+        try:
+            entry = ordered[index]
+            geometry = self.parent._get_cached_display_geometry()
+            crop_settings = _review_crop_settings(
+                self.parent.image, self.parent.settings,
+                self.parent.canvas.winfo_width()
+            )
+            left, top, right, bottom = _review_line_box(
+                entry, geometry, self.parent.image, crop_settings
+            )
+            source_height = max(1.0, bottom - top)
+            center_y = (top + bottom) / 2
+            extended = self.parent.image.crop((
+                int(round(left)), int(round(center_y - source_height)),
+                int(round(right)), int(round(center_y + source_height))
+            )).convert("RGB")
+            preview = extended.resize((crop.width, 2 * crop.height), Image.Resampling.LANCZOS)
+            self.active_crop_photo = ImageTk.PhotoImage(
+                themed_display_image(preview, self.parent.appearance_mode)
+            )
+            self.active_crop_label.configure(image=self.active_crop_photo)
+        except (ValueError, tk.TclError, AttributeError):
+            return
+
     def set_active(self, index: int) -> None:
         self.active_index = index
+        self._update_active_crop_preview(index)
         self._update_title()
         ordered = self.parent._ordered_entries_reading_order()
         candidate = self._candidate_for_entry(ordered[index]) if 0 <= index < len(ordered) else None
