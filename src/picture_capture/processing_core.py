@@ -13,6 +13,7 @@ import unicodedata
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
+from .auxiliary_lines import read_auxiliary_lines
 from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
 from .coordinate_space import SOURCE_COORDINATE_SPACE
 from .image_utils import normalize_page_rgb
@@ -3146,9 +3147,7 @@ def split_whole_entries(
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
         integrate_illustrations=integrate_illustrations,
         profile_page_index=profile_page_index, page_sections=page_sections,
-        auxiliary_lines=__import__(
-            "picture_capture.auxiliary_lines", fromlist=["read_auxiliary_lines"]
-        ).read_auxiliary_lines(image_path),
+        auxiliary_lines=read_auxiliary_lines(image_path),
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     records: list[CropRecord] = []
@@ -3456,9 +3455,7 @@ def split_illustrations(
             entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
             integrate_illustrations=integrate_illustrations,
             profile_page_index=profile_page_index, page_sections=page_sections,
-            auxiliary_lines=__import__(
-                "picture_capture.auxiliary_lines", fromlist=["read_auxiliary_lines"]
-            ).read_auxiliary_lines(image_path),
+            auxiliary_lines=read_auxiliary_lines(image_path),
         )
     finally:
         rgb_for_plan.close()
