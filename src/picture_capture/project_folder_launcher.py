@@ -21,3 +21,13 @@ def open_project_folder(root: Path) -> None:
         subprocess.Popen(["open", str(directory)])
     else:
         subprocess.Popen(["xdg-open", str(directory)])
+
+
+def open_project_folder_with_error(root: Path, parent: object) -> None:
+    """GUI adapter: report unavailable directories without loading a project."""
+    from tkinter import messagebox
+
+    try:
+        open_project_folder(root)
+    except (OSError, RuntimeError) as exc:
+        messagebox.showerror("无法打开文件夹", str(exc), parent=parent)
