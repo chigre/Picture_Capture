@@ -116,6 +116,39 @@ def _merge_nearby_boxes(boxes: list[tuple[int, int, int, int]], gap: int) -> lis
     return boxes
 
 
+def _extend_box_to_caption(box, components, analysis_height):
+    """Extend a drawing to one or two centered lines immediately beneath it."""
+    x0, y0, x1, y1 = box
+    width, height = x1 - x0, y1 - y0
+    if width < 20 or height < 20:
+        return box
+    max_gap = max(4, min(round(height * .09), round(analysis_height * .018)))
+    max_height = max(5, min(round(height * .15), round(analysis_height * .025)))
+    limit = y1 + max_gap + max_height * 2 + 4
+    letters = sorted(
+        ((a, b, c, d) for a, b, c, d, _ in components
+         if y1 <= b < limit and 2 <= d - b <= max_height
+         and c > x0 and a < x1),
+        key=lambda item: (item[1], item[0]),
+    )
+    lines = []
+    for letter in letters:
+        if lines and letter[1] <= max(item[3] for item in lines[-1]) + 2:
+            lines[-1].append(letter)
+        else:
+            lines.append([letter])
+    bottom = previous = y1
+    for line in lines[:2]:
+        left, right = min(a for a, _, _, _ in line), max(c for _, _, c, _ in line)
+        top, end = min(b for _, b, _, _ in line), max(d for _, _, _, d in line)
+        if (top < previous or top - previous > max_gap
+                or not width * .10 <= right - left <= width * .92
+                or abs((left + right) / 2 - (x0 + x1) / 2) > width * .15):
+            break
+        bottom = previous = end
+    return (x0, y0, x1, bottom)
+
+
 def _polygon_bbox(region: PolygonRegion) -> tuple[int, int, int, int] | None:
     if len(region.points) < 3:
         return None
@@ -248,6 +281,7 @@ def detect_illustration_regions_from_image(
 
                     gap = max(5, round(0.018 * aw))
                     candidates = _merge_nearby_boxes(candidates, gap)
+                    candidates = [_extend_box_to_caption(box, comps, ah) for box in candidates]
                     for cx0, cy0, cx1, cy1 in candidates:
                         bw = cx1 - cx0
                         bh = cy1 - cy0
