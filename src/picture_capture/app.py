@@ -8414,7 +8414,11 @@ class PictureCaptureApp(tk.Tk):
         iid = str(index)
         if not self.page_list.exists(iid):
             return
-        if tuple(self.page_list.selection()) != (iid,):
+        selected = tuple(self.page_list.selection())
+        stale = tuple(value for value in selected if value != iid)
+        if stale:
+            self.page_list.selection_remove(*stale)
+        if iid not in selected:
             self.page_list.selection_set(iid)
         if self.page_list.focus() != iid:
             self.page_list.focus(iid)
