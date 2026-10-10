@@ -117,3 +117,12 @@ def clear_cached_details(root: Path) -> None:
         os.replace(temporary, path)
     except OSError:
         pass
+
+
+def details_with_cache(rows: list[dict[str, object]]) -> list[dict[str, Any]]:
+    """Load fast details, scan only misses, then update the persistent index."""
+    from .recent_projects import recent_project_details
+
+    details = [recent_project_details(row) for row in rows]
+    store_details(details)
+    return details
