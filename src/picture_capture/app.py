@@ -14630,7 +14630,7 @@ class PictureCaptureApp(tk.Tk):
                 self.polygon_draw_button.configure(
                     text="结束编辑插图", style="PC.EditActive.TButton"
                 )
-            self.status_var.set("插图多边形绘制：左键逐点添加，右键闭合并保存该多边形。")
+            self.status_var.set("插图编辑：拖动现有顶点或矩形边；Shift+单击边线添加可拖动顶点；空白处左键逐点绘制，右键闭合保存。")
         else:
             self.new_polygon.clear()
             if self.polygon_draw_button is not None:
