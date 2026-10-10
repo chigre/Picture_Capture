@@ -20,6 +20,66 @@ TASK_GROUPS = (
 )
 
 
+
+def _draw_rail_icon(canvas: tk.Canvas, kind: str) -> None:
+    """Use Tk vector geometry instead of inconsistent platform Unicode glyphs."""
+    ink = "#455265"
+    def line(*pts: int, width: int = 2) -> None:
+        canvas.create_line(*pts, fill=ink, width=width, capstyle="round", joinstyle="round")
+    def rect(x1: int, y1: int, x2: int, y2: int) -> None:
+        canvas.create_rectangle(x1, y1, x2, y2, outline=ink, width=2)
+    def circle(x1: int, y1: int, x2: int, y2: int) -> None:
+        canvas.create_oval(x1, y1, x2, y2, outline=ink, width=2)
+    if kind == "☰":  # Collapse sidebar: a panel, not a menu glyph
+        rect(5, 5, 21, 21)
+        line(11, 6, 11, 20)
+    elif kind == "▦":
+        rect(5, 4, 21, 22)
+        for y in (9, 14, 19):
+            line(9, y, 18, y, width=1)
+    elif kind == "◫":
+        rect(5, 5, 21, 21)
+        line(7, 15, 19, 9)
+    elif kind == "▤":
+        rect(5, 5, 21, 21)
+        for y in (10, 15):
+            line(8, y, 18, y)
+    elif kind == "◉":
+        circle(4, 7, 22, 19)
+        circle(11, 10, 15, 16)
+    elif kind == "⌕":
+        circle(5, 4, 17, 16)
+        line(16, 16, 22, 22)
+    elif kind == "✎":
+        line(6, 19, 19, 6, width=3)
+        line(5, 22, 11, 20)
+    elif kind == "✂":
+        circle(5, 5, 11, 11)
+        circle(5, 15, 11, 21)
+        line(10, 9, 22, 21)
+        line(10, 17, 22, 5)
+    elif kind == "≡":
+        for y in (7, 13, 19):
+            line(5, y, 21, y)
+    elif kind == "▣":
+        rect(4, 7, 22, 21)
+        line(6, 7, 10, 4, 17, 4, 21, 7)
+    elif kind == "◈":
+        line(13, 3, 22, 13, 13, 23, 4, 13, 13, 3)
+    elif kind == "⚙":
+        circle(5, 5, 21, 21)
+        circle(10, 10, 16, 16)
+        for angle in (0, 90, 180, 270):
+            import math
+            rad = math.radians(angle)
+            line(int(13 + 9*math.cos(rad)), int(13 + 9*math.sin(rad)),
+                 int(13 + 12*math.cos(rad)), int(13 + 12*math.sin(rad)))
+    else:
+        circle(4, 4, 22, 22)
+        canvas.create_text(13, 13, text="?", fill=ink, font=("TkDefaultFont", 12, "bold"))
+
+
+
 def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Frame) -> None:
     """Place the icon rail beside the initially visible page index."""
     rail = ttk.Frame(sidebar_host, style="PC.Sidebar.TFrame")
@@ -93,9 +153,11 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         entry.grid(row=row, column=0, sticky="ew", pady=(0, 2))
         entry.columnconfigure(0, minsize=38)
         entry.columnconfigure(1, weight=1)
-        icon = ttk.Button(entry, text=symbol, width=3, command=command,
-                          style="PC.Rail.TButton")
+        icon = tk.Canvas(entry, width=30, height=27, borderwidth=0,
+                         highlightthickness=0, cursor="hand2")
         icon.grid(row=0, column=0, sticky="ew")
+        _draw_rail_icon(icon, symbol)
+        icon.bind("<Button-1>", lambda _event: command())
         text_button = ttk.Button(entry, text=label, width=5, command=command,
                                  style="PC.Rail.TButton")
         text_button.grid(row=0, column=1, sticky="ew")
@@ -122,7 +184,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         row=len(TASK_GROUPS) + 2, column=0, sticky="ew", pady=4,
     )
     rail_action(
-        rail, len(TASK_GROUPS) + 3, "☰", "全部",
+        rail, len(TASK_GROUPS) + 3, "≡", "全部",
         lambda: show_workspace_task(app, None), "显示全部工具",
     )
 
