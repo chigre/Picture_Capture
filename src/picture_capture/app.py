@@ -226,10 +226,7 @@ from .layout_visualization_ui_v3 import (
 from .auxiliary_line_controller import AuxiliaryLineController
 from .auxiliary_lines import AuxiliaryLineEdits
 from .entry_classification import classified_entry_crop_height
-from .review_entry_classification_ui import (
-    initialize_review_entry_classification,
-    sync_review_entry_classification,
-)
+from .review_entry_classification_ui import sync_review_entry_classification
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
     headword_filter_rules_path, is_managed_project, migrate_legacy_project,
@@ -384,8 +381,10 @@ def _review_line_box(
     image: Image.Image,
     settings: AppSettings,
     next_entry: WordEntry | None = None,
+    *,
+    ordinary_height_only: bool = False,
 ) -> tuple[int, int, int, int]:
-    """Return a proofreading crop box using canonical Entry classification."""
+    """Return a source crop box; ordinary rows bypass oversized classification."""
     configured_regular = max(
         0, int(getattr(settings, "entry_regular_crop_height", 0) or 0)
     )
@@ -398,11 +397,13 @@ def _review_line_box(
     oversized_height = (
         configured_oversized or _effective_review_single_cjk_line_height(settings)
     )
-    height = classified_entry_crop_height(
-        entry,
-        settings,
-        regular_height=regular_height,
-        oversized_height=oversized_height,
+    height = (
+        regular_height if ordinary_height_only else classified_entry_crop_height(
+            entry,
+            settings,
+            regular_height=regular_height,
+            oversized_height=oversized_height,
+        )
     )
     if geometry.transform.kind != "identity":
         classified_settings = replace(settings)
@@ -2166,7 +2167,6 @@ class ReviewWindow(tk.Toplevel):
         )
         for _var in self.digit_map_vars:
             _var.trace_add("write", lambda *_args: self._save_digit_map())
-        initialize_review_entry_classification(self)
 
     def _configure_review_styles(self) -> None:
         """Configure dense, opt-in styles for the proofreading workspace only."""
@@ -5524,15 +5524,10 @@ class ReviewWindow(tk.Toplevel):
             review_settings, geometry = _review_crop_context(
                 image, settings, viewer_width, page_index,
             )
-            # Inline rows are always single-line crops, including classified
-            # oversized entries and the currently selected entry.  The pinned
-            # preview is generated independently from the original page.
-            regular_height = _effective_review_regular_crop_height(review_settings)
-            inline_settings = replace(
-                review_settings,
-                entry_regular_crop_height=regular_height,
-                entry_oversized_crop_height=regular_height,
-            )
+            # Every editor row uses the ordinary source height regardless
+            # of its detected large-head classification.  Passing matching
+            # regular/oversized settings is insufficient: detected_head_height
+            # can otherwise override the requested crop height.
             raw_crops: list[Image.Image] = []
             for index, entry in enumerate(ordered_snapshot):
                 next_entry = (
@@ -5540,7 +5535,8 @@ class ReviewWindow(tk.Toplevel):
                     if index + 1 < len(ordered_snapshot) else None
                 )
                 box = _review_line_box(
-                    entry, geometry, image, inline_settings, next_entry,
+                    entry, geometry, image, review_settings, next_entry,
+                    ordinary_height_only=True,
                 )
                 raw_crops.append(image.crop(box).convert("RGB"))
             effective_zoom = review_zoom
@@ -6060,7 +6056,8 @@ class ReviewWindow(tk.Toplevel):
                 self.parent.canvas.winfo_width()
             )
             left, top, right, bottom = _review_line_box(
-                entry, geometry, self.parent.image, crop_settings
+                entry, geometry, self.parent.image, crop_settings,
+                ordinary_height_only=True,
             )
             source_height = max(1.0, bottom - top)
             center_y = (top + bottom) / 2
