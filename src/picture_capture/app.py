@@ -6507,7 +6507,7 @@ class PictureCaptureApp(tk.Tk):
         # Reapply the same packaged icon to every mapped Toplevel. This makes
         # secondary-window behavior independent of default-icon inheritance.
         self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")
-        self.title(f"Picture Capture v{__version__} — OCR 词头定位")
+        self.title("Picture Capture")
         fit_window_to_work_area(self, 1440, 900, min_width=1080, min_height=680)
         self.project: ProjectState | None = None
         self._project_words: set[str] = set()
@@ -6529,6 +6529,7 @@ class PictureCaptureApp(tk.Tk):
         self.entry_editor_bindings: list[tuple[tk.Entry, WordEntry]] = []
         self.status_var = tk.StringVar(value="请选择一个词典扫描项目目录")
         self.cursor_status_var = tk.StringVar(value="坐标：—｜缩放 100%｜词条 0")
+        self.image_metadata_status_var = tk.StringVar(value="—×— px｜DPI —")
         self.hide_var = tk.BooleanVar(value=False)
         # polygon_var controls visibility of saved illustration polygons.
         # polygon_draw_var is a separate, explicit editing mode.
@@ -7676,6 +7677,10 @@ class PictureCaptureApp(tk.Tk):
             padding=(8, 4),
             style="PC.Status.TLabel",
         ).pack(side="left", fill="x", expand=True)
+        ttk.Label(
+            status_bar, textvariable=self.image_metadata_status_var,
+            anchor="e", padding=(8, 4), style="PC.Status.TLabel",
+        ).pack(side="right")
         ttk.Label(
             status_bar,
             textvariable=self.cursor_status_var,
@@ -13201,7 +13206,9 @@ class PictureCaptureApp(tk.Tk):
             and preloaded.get("project_root") == str(self.project.root)
             and isinstance(preloaded.get("image"), Image.Image)
         )
+        from .image_metadata_status import image_dpi, image_status
         if use_preloaded:
+            source_dpi = preloaded.get("source_dpi")
             self.image = preloaded["image"]
             self.page_sections = list(preloaded.get("page_sections") or [])
             self.entries = list(preloaded.get("entries") or [])
@@ -13212,6 +13219,7 @@ class PictureCaptureApp(tk.Tk):
             self.polygons = list(preloaded.get("polygons") or [])
         else:
             with Image.open(self.current_page) as opened:
+                source_dpi = image_dpi(opened.info)
                 self.image = normalize_page_rgb(opened)
             self.page_sections = read_page_sections(self.current_page)
             self.entries = read_pdic(pdic_path(self.current_page))
@@ -13219,6 +13227,7 @@ class PictureCaptureApp(tk.Tk):
             self._restore_entry_ocr_metadata()
             self._load_ocr_review_candidates()
             self.polygons = read_ppp(self._ppp_read_path(self.current_page))
+        self.image_metadata_status_var.set(image_status(self.image.width, self.image.height, source_dpi))
         self.new_polygon = []
         self._preprocess_photo = None
         self._preprocess_photo_cache_key = None
