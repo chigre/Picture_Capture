@@ -13,6 +13,7 @@ import unicodedata
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
+from .auxiliary_lines import read_auxiliary_lines
 from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
 from .coordinate_space import SOURCE_COORDINATE_SPACE
 from .image_utils import normalize_page_rgb
@@ -2765,19 +2766,7 @@ def _entry_crop_box_for_column(
     image: Image.Image, settings: AppSettings, geometry: Geometry, col: int, y0: int, y1: int,
     *, extra_left: int = 0, extra_right: int = 0,
 ) -> tuple[int, int, int, int]:
-    """Return a whole-entry crop box whose horizontal borders fall in whitespace.
-
-    Older builds stopped the right edge at the nominal printed column width and
-    used the first-page margin as the same left extension for every column. On
-    multi-column dictionaries this visibly clipped glyph overhang/illustrations
-    at the right edge and left unused gutter whitespace.  The stable geometric
-    rule is to split each inter-column gutter at its midpoint: the left half
-    belongs to the column on the right and the right half to the column on the
-    left.  The outer page margins use half of the first-column margin.
-
-    ``extra_left``/``extra_right`` are literal pixel distances and
-    are resolved to the current page's canonical full-resolution pixels here.
-    """
+    """Whole-entry crop box with gutters divided between neighboring columns."""
     col = max(0, min(len(geometry.column_starts) - 1, int(col)))
     canonical_width = geometry.transform.canonical_size(image.size)[0]
     extra_left_px = max(
@@ -3025,7 +3014,7 @@ def build_page_crop_plan(
     *, top_y: int | None = None, bottom_y: int | None = None, illustration_margin: int = 0,
     entry_left_padding: int = 0, entry_right_padding: int = 0,
     integrate_illustrations: bool = True, profile_page_index: int = 0,
-    page_sections: list[PageSection] | None = None,
+    page_sections: list[PageSection] | None = None, auxiliary_lines=None,
 ) -> PageCropPlan:
     """Plan entry and PPP crops before any pixels are written.
 
@@ -3039,6 +3028,12 @@ def build_page_crop_plan(
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
         profile_page_index=profile_page_index, page_sections=page_sections,
     )
+    if auxiliary_lines:
+        from .auxiliary_crop_partition import partition_entry_pieces
+        _source, _effective, _analysis, geometry = _page_geometry_context(
+            image, settings, profile_page_index,
+        )
+        pieces = partition_entry_pieces(pieces, auxiliary_lines, geometry)
     boxes_by_entry: dict[int,list[tuple[int,int,int,int]]] = {}
     piece_indices_by_entry: dict[int,list[int]] = {}
     for pos,piece in enumerate(pieces):
@@ -3152,6 +3147,7 @@ def split_whole_entries(
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
         integrate_illustrations=integrate_illustrations,
         profile_page_index=profile_page_index, page_sections=page_sections,
+        auxiliary_lines=read_auxiliary_lines(image_path),
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     records: list[CropRecord] = []
@@ -3459,6 +3455,7 @@ def split_illustrations(
             entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
             integrate_illustrations=integrate_illustrations,
             profile_page_index=profile_page_index, page_sections=page_sections,
+            auxiliary_lines=read_auxiliary_lines(image_path),
         )
     finally:
         rgb_for_plan.close()

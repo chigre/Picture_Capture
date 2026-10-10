@@ -223,6 +223,8 @@ from .layout_visualization_ui_v3 import (
     add_layout_visualization_controls,
     draw_layout_visualization_if_enabled,
 )
+from .auxiliary_line_controller import AuxiliaryLineController
+from .auxiliary_lines import AuxiliaryLineEdits
 from .entry_classification import classified_entry_crop_height
 from .review_entry_classification_ui import (
     initialize_review_entry_classification,
@@ -6533,6 +6535,9 @@ class PictureCaptureApp(tk.Tk):
         # polygon_draw_var is a separate, explicit editing mode.
         self.polygon_var = tk.BooleanVar(value=False)
         self.polygon_draw_var = tk.BooleanVar(value=False)
+        self.auxiliary_mode_var = tk.BooleanVar(value=False)
+        self._auxiliary_edits = AuxiliaryLineEdits()
+        self._auxiliary_drag = None
         self.crop_preview_var = tk.BooleanVar(value=False)
         self.binary_preview_var = tk.BooleanVar(value=False)
         self.display_mode_var = tk.StringVar(value="原图+标注")
@@ -6759,6 +6764,7 @@ class PictureCaptureApp(tk.Tk):
         self.section_title_font = font.nametofont("TkDefaultFont").copy()
         self.section_title_font.configure(weight="bold")
         self._configure_main_workspace_styles()
+        self._auxiliary_controller = AuxiliaryLineController(self)
         self.canvas_controller = CanvasController(self)
         self.crop_controller = CropController(self)
         self.detection_controller = DetectionController(self)
@@ -7909,6 +7915,7 @@ class PictureCaptureApp(tk.Tk):
         vbar.grid(row=0, column=1, sticky="ns"); hbar.grid(row=1, column=0, sticky="ew")
         viewer.rowconfigure(0, weight=1); viewer.columnconfigure(0, weight=1)
         self.canvas.bind("<Button-1>", self.canvas_left_click)
+        self.canvas.bind("<Control-z>", self._auxiliary_controller.undo)
         self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
@@ -9391,6 +9398,12 @@ class PictureCaptureApp(tk.Tk):
                     padx=(0 if bi == 0 else 4, 0),
                 )
         actions.columnconfigure(0, weight=1)
+        aux_row = ttk.Frame(actions)
+        aux_row.grid(row=len(rows), column=0, sticky="w", pady=3)
+        ttk.Checkbutton(aux_row, text="辅助线模式", variable=self.auxiliary_mode_var,
+                        command=self.toggle_auxiliary_mode).pack(side="left")
+        ttk.Button(aux_row, text="撤销辅助线",
+                   command=self._auxiliary_controller.undo).pack(side="left", padx=8)
 
         postproduction = self._section_frame(
             parent, "五、后期词典制作", padding=5, section_key="postproduction"
@@ -10874,14 +10887,7 @@ class PictureCaptureApp(tk.Tk):
         self._quick_autosave_job = self.after(delay, self._run_quick_autosave)
 
     def _apply_overlay_visibility_toggle(self, setting_name: str, variable: tk.BooleanVar) -> None:
-        """Apply a canvas visibility switch immediately and persist it.
-
-        These switches control widgets created by ``redraw``.  Waiting for the
-        general-purpose delayed parameter autosave made a click appear to do
-        nothing, and the OCR switches were additionally masked outside the
-        proofreading window.  Update the model first so redraw observes the
-        new value, then persist through the normal quick-settings path.
-        """
+        """ apply overlay visibility toggle."""
         setattr(self.settings, setting_name, bool(variable.get()))
         if setting_name == "show_rulers" and not bool(variable.get()):
             self._hide_ruler_hint()
@@ -13189,6 +13195,7 @@ class PictureCaptureApp(tk.Tk):
             if self._can_save_current_during_batch_navigation():
                 self._save_current_page_by_mode()
         self.current_index = index; self.current_page = self.project.images[index]
+        self._auxiliary_controller.load_page(self.current_page)
         use_preloaded = bool(
             preloaded
             and preloaded.get("index") == index
@@ -13803,6 +13810,7 @@ class PictureCaptureApp(tk.Tk):
             integrate_illustrations=integrate_illustrations,
             profile_page_index=max(0, int(self.current_index)),
             page_sections=list(self.page_sections),
+            auxiliary_lines=list(self._auxiliary_edits.lines),
         )
 
     def _draw_crop_plan_preview(self) -> None:
@@ -13924,6 +13932,7 @@ class PictureCaptureApp(tk.Tk):
             self._draw_crop_plan_preview()
             crop_geometry = self._get_cached_display_geometry()
             self._draw_page_sections(crop_geometry)
+            self._auxiliary_controller.redraw()
             self._draw_percentage_rulers(crop_geometry)
             ruler_margin = 28 if self._rulers_visible() else 0
             self.canvas.configure(
@@ -13957,6 +13966,7 @@ class PictureCaptureApp(tk.Tk):
                         smooth=True,
                     )
         self._draw_page_sections(geometry)
+        self._auxiliary_controller.redraw()
         self._draw_percentage_rulers(geometry)
         if not hidden:
             processing_readonly = self._foreground_batch_state(self.current_index) == "processing"
@@ -14584,6 +14594,9 @@ class PictureCaptureApp(tk.Tk):
             )
         )
 
+    def toggle_auxiliary_mode(self) -> None:
+        self._auxiliary_controller.toggle_mode()
+
     def toggle_polygon_drawing(self) -> None:
         if self._batch_active and self._batch_allow_pdic_edits:
             self.status_var.set("插图识别期间可编辑 PDIC；PPP 编辑请等待识别结束。")
@@ -14638,6 +14651,9 @@ class PictureCaptureApp(tk.Tk):
             section_index, side = target
             side_text = "上边界" if side == "top" else "下边界"
             self.status_var.set(f"正在调整 SECTION {section_index + 1} {side_text}")
+            return
+        if self.auxiliary_mode_var.get():
+            self._auxiliary_controller.click(x, y)
             return
         if self.polygon_draw_var.get():
             existing = self._nearest_polygon_vertex(x, y)
@@ -14701,6 +14717,9 @@ class PictureCaptureApp(tk.Tk):
             y = max(0, min(self.image.height - 1, y))
             self._drag_page_section_boundary_to(x, y)
             return "break"
+        if self.auxiliary_mode_var.get():
+            self._auxiliary_controller.drag(x, y)
+            return "break"
         if not self.polygon_draw_var.get():
             return None
         x = max(0, min(self.image.width - 1, x))
@@ -14725,6 +14744,9 @@ class PictureCaptureApp(tk.Tk):
 
     def canvas_left_release(self, _event: tk.Event) -> str | None:
         if self._preprocess_mode_active():
+            return "break"
+        if self.auxiliary_mode_var.get():
+            self._auxiliary_controller.release()
             return "break"
         if self._drag_section_boundary is not None:
             self._drag_section_boundary = None
@@ -14758,6 +14780,10 @@ class PictureCaptureApp(tk.Tk):
         return "break"
 
     def canvas_right_click(self, event: tk.Event) -> None:
+        if self.auxiliary_mode_var.get():
+            if self.guard():
+                self._auxiliary_controller.delete_at(*self.original_xy(event))
+            return
         if self._section_editing:
             self.status_var.set("SECTION 编辑中；点击【结束SECTION】保存并退出。")
             return
