@@ -1898,7 +1898,7 @@ class ReviewWindow(tk.Toplevel):
             work_right = work_x + work_w
             work_bottom = work_y + work_h
             x = min(max(x, work_x), work_right - 1)
-            y = min(max(y, work_y), work_bottom - 1)
+            y = work_y  # Align compact proofreading to the top of the usable desktop.
             width = max(1, work_right - x)
             height = max(1, work_bottom - y)
         self.geometry(f"{width}x{height}+{x}+{y}")
