@@ -125,3 +125,25 @@ def test_rail_buttons_do_not_pass_invalid_anchor_widget_option():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     assert 'anchor="w", style="PC.Rail.TButton"' not in source
     assert 'anchor="w", command=command' not in source
+
+
+def test_page_names_stay_extension_free_on_metadata_updates():
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    source = (root / "app.py").read_text(encoding="utf-8")
+    assert 'page.stem, self._page_section_count_text(index)' in source
+    assert 'new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)' in source
+    assert 'text="指定范围：" ' not in source
+    assert 'text="指定范围："' in source
+
+
+def test_flat_sidebar_navigation_and_full_sidebar_toggle():
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    source = (root / "app.py").read_text(encoding="utf-8")
+    rail = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert 'relief="flat", borderwidth=0' in rail
+    assert 'padding=(10, 9)' in rail
+    assert 'panes.forget(host)' in rail
+    assert 'panes.insert(0, host, weight=0)' in rail
+    assert 'app.bind("<Control-Shift-b>"' in rail
+    assert 'command=lambda: toggle_sidebar(self)' in source
+    assert '"显示/隐藏侧边栏（Ctrl+Shift+B）"' in source
