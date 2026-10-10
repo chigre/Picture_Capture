@@ -79,8 +79,9 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.workspace_tools_heading = heading
     app.workspace_tools_pin_var = pin_var
 
+    ttk.Style(app).configure("PC.Rail.TButton", anchor="w")
     index_button = ttk.Button(
-        rail, text="▦ 页面", width=8, anchor="w", style="PC.Compact.TButton",
+        rail, text="▦ 页面", width=8, style="PC.Rail.TButton",
         command=lambda: toggle_page_index(app),
     )
     index_button.grid(row=0, column=0, padx=2, pady=(0, 6), sticky="ew")
@@ -88,7 +89,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app._attach_tooltip(index_button, "页面列表（默认显示，点击收起或展开）")
     for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1):
         button = ttk.Button(
-            rail, text=f"{symbol} {label}", width=8, anchor="w", style="PC.Compact.TButton",
+            rail, text=f"{symbol} {label}", width=8, style="PC.Rail.TButton",
             command=lambda target=title: show_workspace_task(app, target),
         )
         button.grid(row=index, column=0, padx=2, pady=(0, 6), sticky="ew")
@@ -97,7 +98,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         row=len(TASK_GROUPS) + 1, column=0, sticky="ew", pady=4,
     )
     ttk.Button(
-        rail, text="☰ 全部", width=8, anchor="w", style="PC.Compact.TButton",
+        rail, text="☰ 全部", width=8, style="PC.Rail.TButton",
         command=lambda: show_workspace_task(app, None),
     ).grid(row=len(TASK_GROUPS) + 2, column=0, pady=4)
 
@@ -118,8 +119,8 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     )
     for label, symbol, command, tip in project_actions:
         button = ttk.Button(
-            footer, text=f"{symbol} {label}", width=8, anchor="w", command=command,
-            style="PC.Compact.TButton",
+            footer, text=f"{symbol} {label}", width=8, command=command,
+            style="PC.Rail.TButton",
         )
         button.pack(fill="x", pady=(0, 5))
         app.project_footer_buttons.append(button)
