@@ -314,11 +314,11 @@ def size_page_index_to_controls(app: Any) -> None:
         rail = app.workspace_tools_rail
         choices = app.page_range_controls_row
         app.update_idletasks()
-        needed = rail.winfo_reqwidth() + choices.winfo_reqwidth() + 38
         panes = app.main_paned
         width = panes.winfo_width()
-        if width > 600:
-            panes.sashpos(0, min(needed, width - 350))
+        if width > 1 and app.sidebar_canvas.winfo_manager() == "pack":
+            minimum = rail.winfo_reqwidth() + 8
+            panes.sashpos(0, min(300, max(minimum, width - 320)))
     except (AttributeError, tk.TclError):
         pass
 
@@ -357,10 +357,8 @@ def toggle_page_index(app: Any) -> str:
         def expand() -> None:
             try:
                 app.update_idletasks()
-                desired = getattr(app, "_workspace_index_width", 0)
-                if not desired:
-                    desired = rail.winfo_reqwidth() + panel.winfo_reqwidth() + 24
-                panes.sashpos(0, min(int(desired), max(200, panes.winfo_width() - 320)))
+                minimum = rail.winfo_reqwidth() + 8
+                panes.sashpos(0, min(300, max(minimum, panes.winfo_width() - 320)))
             except tk.TclError:
                 pass
         app.after_idle(expand)
@@ -401,12 +399,12 @@ def toggle_sidebar(app: Any) -> str:
         def expand() -> None:
             try:
                 width = app.main_paned.winfo_width()
-                desired = getattr(app, "_workspace_index_width", 0)
-                if not getattr(app, "_workspace_index_was_visible", True):
-                    desired = app.workspace_tools_rail.winfo_reqwidth() + 8
-                elif not desired:
-                    desired = app.workspace_tools_rail.winfo_reqwidth() + app.page_range_controls_row.winfo_reqwidth() + 38
-                app.main_paned.sashpos(0, min(int(desired), max(200, width - 350)))
+                minimum = app.workspace_tools_rail.winfo_reqwidth() + 8
+                if getattr(app, "_workspace_index_was_visible", True):
+                    desired = min(300, max(minimum, width - 320))
+                else:
+                    desired = minimum
+                app.main_paned.sashpos(0, int(desired))
             except tk.TclError:
                 pass
         app.after_idle(expand)
