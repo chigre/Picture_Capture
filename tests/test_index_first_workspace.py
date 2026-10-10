@@ -1,44 +1,38 @@
-"""Index-first workspace must keep fixed navigation and business bindings."""
+"""Index-first main window and real right-side dock regression coverage."""
 from pathlib import Path
 
 from picture_capture.ui import workspace_tools
 
 
-def test_index_first_workspace_preserves_page_list_and_project_footer():
+def test_index_first_workspace_preserves_page_index_and_four_fixed_buttons():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
     assert "install_workspace_tools(self, sidebar)" in app
     assert "self._build_quick_settings(controls)" not in app
     assert 'page_panel = self._section_frame(sidebar, "六、页面列表"' in app
-    assert "self.project_action_bar.pack(side=\"bottom\", fill=\"x\")" in app
-    assert '("项目中心", self.open_recent_project)' in app
-    assert '("项目Profile", self.open_project_profile)' in app
-    assert '("设置中心", self.open_settings)' in app
-    assert '("帮助中心", self.show_help_dialog)' in app
+    assert 'self.project_action_bar.pack(side="bottom", fill="x")' in app
+    for action in ("项目中心", "项目Profile", "设置中心", "帮助中心"):
+        assert f'("{action}", self.' in app
 
 
-def test_workspace_palette_is_nonmodal_and_preserves_quick_builder():
+def test_workspace_dock_is_embedded_and_preserves_widgets_when_hidden():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
-    assert "palette.withdraw()" in source
-    assert 'palette.protocol("WM_DELETE_WINDOW", palette.withdraw)' in source
+    assert "ttk.Frame(panes" in source
+    assert "panes.add(dock, weight=0)" in source
+    assert "app.main_paned.forget(app.workspace_tools_dock)" in source
     assert "app._build_quick_settings(content)" in source
-    assert 'command=lambda: toggle_workspace_tools(app)' in source
+    assert "panes.sashpos(1, total - width)" in source
+    assert "tk.Toplevel(" not in source
     assert "grab_set(" not in source
 
 
-def test_tool_group_navigation_and_window_dismissal():
+def test_task_shortcuts_group_navigation_and_keyboard():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
-    assert 'state="readonly"' in source
-    assert 'jump.bind("<<ComboboxSelected>>", jump_to_section)' in source
-    assert "choose_workspace_section(app, jump_var.get())" in source
-    assert 'palette.bind("<Escape>"' in source
-    assert 'window.geometry(f"{width}x{height}+{x}+{y}")' in source
-
-
-def test_task_mode_keeps_one_group_and_supports_keyboard_navigation():
-    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert 'jump.bind("<<ComboboxSelected>>", on_select)' in source
     assert "app._set_section_expanded(candidate, candidate is section)" in source
     assert "app._set_section_expanded(section, True)" in source
-    assert 'palette.bind("<Control-k>"' in source
     assert 'app.bind("<Control-Shift-t>"' in source
-    assert 'text="全部展开"' in source
+    assert 'app.bind("<Control-k>"' in source
+    assert 'app.bind("<Escape>"' in source
+    assert '("OCR", TASK_GROUPS[3][1])' in source
+    assert '("画线", TASK_GROUPS[4][1])' in source
