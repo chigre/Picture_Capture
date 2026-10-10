@@ -86,6 +86,7 @@ class ReviewController:
             int(entry.y),
         )
         app._draw_review_entry_highlight()
+        app._scroll_review_entry_into_view(entry)
 
     def jump_to_review_candidate(self, cand: dict) -> None:
         app = self.app
