@@ -3481,15 +3481,19 @@ def detect_illustration_regions_from_image(
                         mask_img.close()
 
                     comps = _rle_components(joined)
-                    min_h = max(18, round(0.028 * ah))
-                    min_w = max(18, round(0.055 * aw))
-                    min_bbox_area = max(500, round(effective.illustration_detect_min_area_percent / 100.0 * aw * ah))
+                    size_unit = str(effective.illustration_detect_size_unit).strip().lower()
+                    if size_unit == "px":
+                        min_w = max(0, round(effective.illustration_detect_min_width))
+                        min_h = max(0, round(effective.illustration_detect_min_height))
+                    else:  # % of the current analysis crop; also handles older/invalid units.
+                        min_w = max(0, round(effective.illustration_detect_min_width / 100.0 * aw))
+                        min_h = max(0, round(effective.illustration_detect_min_height / 100.0 * ah))
                     candidates: list[tuple[int, int, int, int]] = []
                     for cx0, cy0, cx1, cy1, area in comps:
                         bw = cx1 - cx0
                         bh = cy1 - cy0
                         bbox_area = bw * bh
-                        if bw < min_w or bh < min_h or bbox_area < min_bbox_area:
+                        if bw < min_w or bh < min_h:
                             continue
                         occupancy = area / max(1, bbox_area)
                         if occupancy < effective.illustration_detect_min_occupancy_percent / 100.0:
