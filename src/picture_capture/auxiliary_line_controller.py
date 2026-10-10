@@ -10,6 +10,14 @@ class AuxiliaryLineController:
     def __init__(self, app):
         self.app = app
 
+    def toggle_mode(self):
+        app = self.app
+        if app.auxiliary_mode_var.get() and (app.polygon_draw_var.get() or app._section_editing):
+            app.auxiliary_mode_var.set(False)
+            app.status_var.set("请先结束 PPP/SECTION 编辑，再启用辅助线模式")
+            return
+        app.redraw()
+
     def load_page(self, page):
         self.app._auxiliary_edits = AuxiliaryLineEdits(read_auxiliary_lines(page))
         self.app._auxiliary_drag = None
