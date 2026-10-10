@@ -2547,6 +2547,7 @@ class ReviewWindow(tk.Toplevel):
         self.active_crop_label.pack()
         self.active_crop_photo = None
         self._review_display_crops: list[Image.Image] = []
+        self._review_row_pictures: list[ttk.Label] = []
 
         self.canvas = tk.Canvas(
             editor_area,
@@ -5606,6 +5607,7 @@ class ReviewWindow(tk.Toplevel):
             self._request_render_rows(focus_index=self.active_index)
             return
         self._review_display_crops = list(preloaded_crops)
+        self._review_row_pictures.clear()
         words = self.parent._project_words if self.parent.project else set()
         for index, entry in enumerate(ordered):
             next_entry = ordered[index + 1] if index + 1 < len(ordered) else None
@@ -5617,6 +5619,7 @@ class ReviewWindow(tk.Toplevel):
             self.editor_crop_widths.append(crop.width)
             picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
             picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
+            self._review_row_pictures.append(picture)
             var = tk.StringVar(value=entry.word)
             # Review zoom changes only the cropped line image.  Text-entry font
             # size is a user setting and remains fixed while zooming the image.
@@ -6046,6 +6049,13 @@ class ReviewWindow(tk.Toplevel):
 
     def set_active(self, index: int) -> None:
         self.active_index = index
+        # The pinned bordered preview already shows this row: hide only its
+        # duplicate inline crop, leaving the editor and all other rows intact.
+        for row_index, picture in enumerate(self._review_row_pictures):
+            if row_index == index:
+                picture.grid_remove()
+            elif not picture.winfo_manager():
+                picture.grid()
         self._update_active_crop_preview(index)
         self._update_title()
         ordered = self.parent._ordered_entries_reading_order()
