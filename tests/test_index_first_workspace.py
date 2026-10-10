@@ -258,3 +258,13 @@ def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
     assert 'canvas.xview_moveto(' in app
     assert 'canvas.yview_moveto(' in app
     assert 'app._scroll_review_entry_into_view(entry)' in review
+
+
+def test_current_review_crop_is_fixed_width_double_height_and_framed():
+    app, _ = sources()
+    assert 'self.active_crop_frame = tk.Frame(editor_area, bd=2, relief="solid"' in app
+    assert 'self.active_crop_frame.pack(side="top", anchor="w"' in app
+    assert 'self._review_display_crops = list(preloaded_crops)' in app
+    assert 'def _update_active_crop_preview(self, index: int)' in app
+    assert 'preview = extended.resize((crop.width, 2 * crop.height), Image.Resampling.LANCZOS)' in app
+    assert 'self._update_active_crop_preview(index)' in app
