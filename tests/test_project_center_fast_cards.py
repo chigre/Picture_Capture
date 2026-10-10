@@ -56,5 +56,7 @@ def test_project_center_displays_cards_before_decoding_previews():
     preview_dispatch = section.index('f"{key}-previews",')
     assert metadata_done < metadata_rebuild < detail_dispatch
     assert preview_dispatch < metadata_done  # declared in details callback
-    worker = section[section.index("def previews_worker("):section.index("def alive()")]
-    assert "load_project_center_preview(root, Path(preview_text))" in worker
+    assert "load_project_center_previews(details)" in section
+    preview_source = (Path(__file__).resolve().parents[1] / "src" /
+                      "picture_capture" / "project_center_preview_cache.py").read_text(encoding="utf-8")
+    assert "load_project_center_preview(root, Path(preview_text))" in preview_source
