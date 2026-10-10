@@ -46,7 +46,8 @@ def write_text_if_changed(path: Path, text: str, *, encoding: str = "utf-8") -> 
     nothing changed, while changed files still use the existing atomic writer.
     """
     target = Path(path)
-    payload = text.encode(encoding)
+    # write_text_atomic uses text mode; Windows stores its LF lines as CRLF.
+    payload = text.replace("\n", os.linesep).encode(encoding)
     try:
         if target.read_bytes() == payload:
             return False
