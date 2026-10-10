@@ -124,6 +124,7 @@ from .ui.settings import lifecycle as _settings_lifecycle_ui
 from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
+from .ui.settings import illustration as _settings_illustration_ui
 from .ui.controllers import (
     CanvasController, CropController, DetectionController, ExportController,
     HeadwordController, IllustrationController, PageController, ProjectController,
@@ -1007,6 +1008,7 @@ class SettingsDialog(tk.Toplevel):
 
         common_tab = ttk.Frame(notebook)
         normal_tab = ttk.Frame(notebook)
+        illustration_tab = ttk.Frame(notebook)
         ocr_tab = ttk.Frame(notebook)
         display_tab = ttk.Frame(notebook)
         project_tab = ttk.Frame(notebook)
@@ -1018,6 +1020,7 @@ class SettingsDialog(tk.Toplevel):
             (common_tab, "常用"),
             (ocr_tab, "OCR画线"),
             (normal_tab, "普通画线"),
+            (illustration_tab, "插图"),
             (display_tab, "显示/校对"),
             (project_tab, "项目/批量"),
             (crop_tab, "切图"),
@@ -1030,6 +1033,7 @@ class SettingsDialog(tk.Toplevel):
         self._settings_tabs = {
             "common": common_tab,
             "normal": normal_tab,
+            "illustration": illustration_tab,
             "ocr": ocr_tab,
             "display": display_tab,
             "project": project_tab,
@@ -1218,6 +1222,8 @@ class SettingsDialog(tk.Toplevel):
             "高级设置（普通画线异常时再展开）",
             self.NORMAL_ADVANCED_FIELDS,
         )
+
+        _settings_illustration_ui.build_illustration_settings_tab(self, illustration_tab)
 
         ocr_page = self._scrollable_settings_page(ocr_tab)
         self._settings_intro(
