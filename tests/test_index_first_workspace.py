@@ -12,7 +12,7 @@ def test_index_and_fixed_project_actions_survive_layout_change():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     assert 'rail.pack(side="left", fill="y", before=app.sidebar_canvas' in source
     assert 'app.project_action_bar = footer' in source
-    for action in ("项目中心", "项目Profile", "设置中心", "帮助中心"):
+    for action in ("项目", "档案", "设置", "帮助"):
         assert f'("{action}",' in source
 
 
@@ -67,8 +67,8 @@ def test_four_project_icons_remain_fixed_below_tool_icons():
 def test_page_index_controls_have_four_distinct_rows_and_range_modes():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     source = (root / "app.py").read_text(encoding="utf-8")
-    assert '("当前至指定页", "to_specified")' in source
-    assert '("当前至末页", "to_end")' in source
+    assert '("当前页至指定页", "to_specified")' in source
+    assert '("当前页至末页", "to_end")' in source
     assert 'value="specified"' in source
     assert 'spec_row.pack(fill="x"' in source
     assert 'size_row.pack(fill="x"' in source
@@ -77,3 +77,20 @@ def test_page_index_controls_have_four_distinct_rows_and_range_modes():
     assert '("⇕", self.fit_page_height, "占满高度")' in source
     assert 'if mode == "to_specified":' in source
     assert 'len(indices) != 1' in source
+
+
+def test_index_collapse_releases_actual_pane_width_and_labels_are_visible():
+    src = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert 'canvas.pack_forget()' in src
+    assert 'scrollbar.pack_forget()' in src
+    assert 'panes.sashpos(0, rail.winfo_reqwidth() + 10)' in src
+    assert 'panes.sashpos(0, min(int(desired)' in src
+    assert 'text=f"{symbol} {label}"' in src
+    assert 'text="▦ 页面"' in src
+
+
+def test_visible_heading_width_adapts_to_header_text():
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    src = (root / "app.py").read_text(encoding="utf-8")
+    assert 'font.nametofont("TkHeadingFont")' in src
+    assert 'self._page_list_heading_labels.get(column, column)' in src
