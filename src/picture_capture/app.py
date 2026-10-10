@@ -14595,11 +14595,7 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def toggle_auxiliary_mode(self) -> None:
-        if self.auxiliary_mode_var.get() and (self.polygon_draw_var.get() or self._section_editing):
-            self.auxiliary_mode_var.set(False)
-            self.status_var.set("请先结束 PPP/SECTION 编辑，再启用辅助线模式")
-            return
-        self.redraw()
+        self._auxiliary_controller.toggle_mode()
 
     def toggle_polygon_drawing(self) -> None:
         if self._batch_active and self._batch_allow_pdic_edits:
