@@ -151,7 +151,7 @@ def _extend_box_to_caption(box, components, analysis_height):
         # previous minimum 10%-of-figure-width text span.
         short_caption = (width * .025 <= text_width < width * .10
                          and offset <= width * .08)
-        regular_caption = (width * .10 <= text_width <= width * .92
+        regular_caption = (width * .10 <= text_width <= width * .85
                            and offset <= width * .15)
         if (top < previous or top - previous > max_gap
                 or not (short_caption or regular_caption)):
