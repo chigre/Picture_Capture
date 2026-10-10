@@ -12673,19 +12673,7 @@ class PictureCaptureApp(tk.Tk):
             def worker():
                 return load_recent_projects()
 
-            def previews_worker(details):
-                from .project_center_preview_cache import load_project_center_preview
-
-                covers: dict[str, Image.Image] = {}
-                for detail in details:
-                    root = Path(str(detail.get("path") or ""))
-                    preview_text = str(detail.get("preview_path") or "")
-                    if not bool(detail.get("exists")) or not preview_text:
-                        continue
-                    cover = load_project_center_preview(root, Path(preview_text))
-                    if cover is not None:
-                        covers[str(root)] = cover
-                return covers
+            from .project_center_preview_cache import load_project_center_previews
 
             def alive() -> bool:
                 try:
@@ -12708,7 +12696,7 @@ class PictureCaptureApp(tk.Tk):
                 rebuild()
                 self._start_ui_worker(
                     f"{key}-previews",
-                    lambda: previews_worker(details),
+                    lambda: load_project_center_previews(details),
                     previews_done,
                 )
 
