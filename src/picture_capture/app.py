@@ -11131,13 +11131,7 @@ class PictureCaptureApp(tk.Tk):
         return pdic_path(self.current_page), ppp
 
     def _save_current_page_by_mode(self, *, sync_editors: bool = True) -> Path | None:
-        """Save only the artifact owned by the current editing mode.
-
-        Normal/headword-line mode owns ``.pdic`` (separator lines + text-box
-        contents). Illustration drawing mode owns ``.ppp``. Merely displaying
-        illustration polygons does not switch the save target; only the active
-        polygon drawing mode does.
-        """
+        """ save current page by mode."""
         if not self.project or not self.current_page or self.image is None:
             return None
         if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):
@@ -11774,12 +11768,7 @@ class PictureCaptureApp(tk.Tk):
                 self._batch_page_states[index] = state
 
     def _claim_page_for_manual_edit(self, index: int | None = None) -> bool:
-        """Atomically reserve a pending batch page for foreground manual review.
-
-        A page already being processed cannot be edited. A pending page becomes
-        ``manual_locked`` before the UI mutation occurs, guaranteeing that the
-        background runner will skip it instead of overwriting the user's PDIC.
-        """
+        """ claim page for manual edit."""
         if index is None:
             index = self.current_index
         if not self._batch_active:
@@ -11833,12 +11822,7 @@ class PictureCaptureApp(tk.Tk):
         allow_page_navigation: bool = False,
         allow_pdic_edits: bool = False,
     ) -> bool:
-        """Run a multi-page task without blocking Tk.
-
-        Pause and stop are deliberately cooperative: they are checked between
-        pages. The current page is always allowed to finish so output files are
-        written atomically by the existing processing functions.
-        """
+        """ start batch task."""
         if self._batch_active:
             messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
             return False
@@ -11948,13 +11932,7 @@ class PictureCaptureApp(tk.Tk):
         on_done=None, item_label=None, max_workers: int = 0,
         *, allow_page_navigation: bool = False, allow_pdic_edits: bool = False,
     ) -> bool:
-        """Run page-independent crop jobs in a spawn-safe process pool.
-
-        Only crop/export tasks use this path. Drawing and OCR line detection stay
-        on the established sequential batch path so their behaviour is unchanged.
-        Pause/stop are cooperative at the dispatch boundary: already-started
-        pages finish and are committed, while no new pages are submitted.
-        """
+        """ start parallel batch task."""
         if self._batch_active:
             messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
             return False
