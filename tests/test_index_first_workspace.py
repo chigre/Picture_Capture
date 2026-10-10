@@ -49,8 +49,8 @@ def test_page_index_is_visible_by_default_and_toggled_from_icon_rail():
     assert 'panel.grid_remove()' in source
     assert 'panel.grid()' in source
     assert 'enumerate(TASK_GROUPS, start=1)' in source
-    assert 'text="上页"' in app
-    assert 'text="下页"' in app
+    assert '("上页", lambda: self.change_page(-1)' in app
+    assert '("下页", lambda: self.change_page(1)' in app
     assert 'text="上一页"' not in app
     assert 'text="下一页"' not in app
 
@@ -62,3 +62,18 @@ def test_four_project_icons_remain_fixed_below_tool_icons():
     assert 'app.project_footer_buttons.append(button)' in source
     assert 'app._attach_tooltip(button, f"{label}：{tip}")' in source
     assert 'command=command' in source
+
+
+def test_page_index_controls_have_four_distinct_rows_and_range_modes():
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    source = (root / "app.py").read_text(encoding="utf-8")
+    assert '("当前至指定页", "to_specified")' in source
+    assert '("当前至末页", "to_end")' in source
+    assert 'value="specified"' in source
+    assert 'spec_row.pack(fill="x"' in source
+    assert 'size_row.pack(fill="x"' in source
+    assert 'nav_row.pack(fill="x")' in source
+    assert '("⇔", self.fit_page_width, "占满宽度")' in source
+    assert '("⇕", self.fit_page_height, "占满高度")' in source
+    assert 'if mode == "to_specified":' in source
+    assert 'len(indices) != 1' in source
