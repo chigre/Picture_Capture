@@ -6708,6 +6708,7 @@ class PictureCaptureApp(tk.Tk):
         # Read-only preprocessing batches may keep the page list navigable;
         # mutating batches leave this False.
         self._batch_allow_page_navigation = False
+        self._batch_allow_pdic_edits = False
         self._batch_page_states: dict[int, str] = {}
         self._batch_state_lock = threading.Lock()
         self._batch_skipped_count = 0
@@ -11139,7 +11140,7 @@ class PictureCaptureApp(tk.Tk):
         """
         if not self.project or not self.current_page or self.image is None:
             return None
-        if self.polygon_draw_var.get():
+        if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):
             target = self._ppp_write_path(self.current_page)
             write_ppp(target, self.polygons, self.current_page.stem)
             self._update_page_row(self.current_index)
@@ -11784,6 +11785,8 @@ class PictureCaptureApp(tk.Tk):
         if not self._batch_active:
             return True
         if not self._batch_foreground_pages:
+            if getattr(self, "_batch_allow_pdic_edits", False) and not self.polygon_draw_var.get():
+                return True
             self.status_var.set("批量任务正在运行；该任务不支持同时编辑页面。")
             return False
         with self._batch_state_lock:
@@ -11941,6 +11944,7 @@ class PictureCaptureApp(tk.Tk):
     def _start_parallel_batch_task(
         self, title: str, items, worker_func, job_builder, result_consumer=None,
         on_done=None, item_label=None, max_workers: int = 0,
+        *, allow_page_navigation: bool = False, allow_pdic_edits: bool = False,
     ) -> bool:
         """Run page-independent crop jobs in a spawn-safe process pool.
 
@@ -11977,10 +11981,15 @@ class PictureCaptureApp(tk.Tk):
                 args = job_builder(item, position, total)
                 raw = worker_func(*args)
                 return result_consumer(item, raw) if result_consumer is not None else raw
-            return self._start_batch_task(title, items, serial_worker, on_done, item_label)
+            return self._start_batch_task(
+                title, items, serial_worker, on_done, item_label,
+                allow_page_navigation=allow_page_navigation,
+            )
 
         self._batch_active = True
         self._batch_parallel = True
+        self._batch_allow_page_navigation = bool(allow_page_navigation)
+        self._batch_allow_pdic_edits = bool(allow_pdic_edits)
         self._batch_title = title
         self._batch_on_done = on_done
         self._batch_stop_event.clear()
@@ -12206,6 +12215,7 @@ class PictureCaptureApp(tk.Tk):
         self._batch_title = ""
         self._batch_foreground_pages = False
         self._batch_allow_page_navigation = False
+        self._batch_allow_pdic_edits = False
         with self._batch_state_lock:
             self._batch_page_states = {}
         if getattr(self, "_batch_refresh_page_quality", True):
