@@ -272,13 +272,13 @@ def test_current_review_crop_is_fixed_width_double_height_and_framed():
     assert 'self._update_active_crop_preview(index)' in app
 
 
-def test_active_review_row_does_not_repeat_pinned_crop():
+def test_active_review_row_keeps_ordinary_crop():
     app, _ = sources()
-    assert 'if index != 0:' in app
+    assert 'picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")' in app
+    assert 'picture.grid(row=index * 2, column=0' in app
     assert 'self._review_row_pictures.append(picture)' in app
-    assert 'if row_index == index:' in app
-    assert 'picture.destroy()' in app
-    assert 'restored = ttk.Label(self.rows, image=photo' in app
+    assert 'self._update_active_crop_preview(index)' in app
+    assert 'picture.destroy()' not in app[app.index('    def set_active(self, index: int)'):app.index('    def _scroll_editor_into_view', app.index('    def set_active(self, index: int)'))]
 
 
 def test_review_preview_is_position_and_size_invariant_on_window_resize():
@@ -298,10 +298,3 @@ def test_next_page_button_is_packed_before_expandable_editor_area():
     assert left < right < editor
 
 
-def test_active_crop_is_never_materialized_as_inline_image():
-    app, _ = sources()
-    assert 'picture = None' in app
-    assert 'if index != 0:' in app
-    assert 'self.thumbnails.append(photo)' in app
-    assert 'self._review_row_pictures[row_index] = None' in app
-    assert 'self.thumbnails[row_index] = None' in app
