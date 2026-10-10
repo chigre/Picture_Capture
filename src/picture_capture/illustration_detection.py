@@ -209,6 +209,88 @@ def _extend_box_to_caption(box, components, analysis_height):
     return (x0, y0, x1, bottom)
 
 
+def _merge_cross_column_boxes(boxes, boundaries, padding=8):
+    """Merge only boxes that face each other across the same column boundary.
+
+    In particular, neighboring figures confined to separate columns must
+    remain separate unless they reach the boundary and share most of their
+    vertical extent.
+    """
+    boxes = list(boxes)
+    for boundary in boundaries:
+        changed = True
+        while changed:
+            changed = False
+            for i, left in enumerate(boxes):
+                for j, right in enumerate(boxes):
+                    if i == j or left[0] >= right[0]:
+                        continue
+                    horizontal_gap = right[0] - left[2]
+                    vertical_intersection = min(left[3], right[3]) - max(left[1], right[1])
+                    shorter_height = min(left[3] - left[1], right[3] - right[1])
+                    near_seam = (left[0] < boundary < right[2]
+                                 and abs(left[2] - boundary) <= padding * 3
+                                 and abs(right[0] - boundary) <= padding * 3)
+                    if (near_seam and -padding * 2 <= horizontal_gap <= padding * 3
+                            and vertical_intersection >= shorter_height * .55):
+                        boxes[i] = (
+                            min(left[0], right[0]), min(left[1], right[1]),
+                            max(left[2], right[2]), max(left[3], right[3]),
+                        )
+                        boxes.pop(j)
+                        changed = True
+                        break
+                if changed:
+                    break
+    return boxes
+
+
+def _extend_cross_column_caption(box, image, margin):
+    """Match centered title glyphs under a merged page-wide drawing."""
+    x0, y0, x1, y1 = box
+    # Work in canonical page pixels so characters split at a column
+    # boundary can be matched in one connected-component pass.
+    anchor = max(y0, y1 - margin)
+    reach = min(image.height, anchor + max(40, round((y1 - y0) * .30)))
+    if reach <= anchor:
+        return box
+    crop = image.crop((x0, anchor, x1, reach)).convert("L")
+    try:
+        dark = np.asarray(crop, dtype=np.uint8) < 190
+        components = _rle_components(dark)
+    finally:
+        crop.close()
+    absolute = [(a + x0, b + anchor, c + x0, d + anchor, area)
+                for a, b, c, d, area in components]
+    width = x1 - x0
+    # Collect short components into up to two lines, tolerating the slightly
+    # larger white gap typically found below a cross-column figure.
+    glyphs = sorted(
+        ((a, b, c, d) for a, b, c, d, _ in absolute
+         if b >= y1 - 1 and d - b <= max(8, round(image.height * .055))),
+        key=lambda item: (item[1], item[0]),
+    )
+    lines = []
+    for glyph in glyphs:
+        if lines and glyph[1] <= max(part[3] for part in lines[-1]) + 3:
+            lines[-1].append(glyph)
+        else:
+            lines.append([glyph])
+    bottom, previous = y1, anchor
+    allowed_gap = max(12, min(32, round(image.height * .06)))
+    for line in lines[:2]:
+        left, top = min(g[0] for g in line), min(g[1] for g in line)
+        right, end = max(g[2] for g in line), max(g[3] for g in line)
+        span = right - left
+        offset = abs((left + right - x0 - x1) / 2)
+        if (top - previous > allowed_gap
+                or span < width * .025 or span > width * .85
+                or offset > width * .15):
+            break
+        bottom, previous = end, end
+    return (x0, y0, x1, max(y1, bottom + margin) if bottom > y1 else y1)
+
+
 def _polygon_bbox(region: PolygonRegion) -> tuple[int, int, int, int] | None:
     if len(region.points) < 3:
         return None
@@ -375,6 +457,39 @@ def detect_illustration_regions_from_image(
             finally:
                 crop.close()
 
+        # Each column was analysed independently. Reconcile touching
+        # candidates across real column seams in canonical page coordinates.
+        boundaries = [
+            int(geometry.column_starts[i])
+            for i in range(1, len(geometry.column_starts))
+        ]
+        if boundaries and results:
+            boxes = [
+                (min(p[0] for p in region.points), min(p[1] for p in region.points),
+                 max(p[0] for p in region.points), max(p[1] for p in region.points))
+                for region in results
+            ]
+            boxes = _merge_cross_column_boxes(boxes, boundaries, source_margin_right)
+            results = [
+                PolygonRegion("", [(a, b), (c, b), (c, d), (a, d)])
+                for a, b, c, d in boxes
+            ]
+            # A caption spanning the column seam is invisible to the
+            # individual per-column caption passes.
+            results = [
+                PolygonRegion(
+                    region.label,
+                    [(a, b), (c, b), (c, d), (a, d)],
+                )
+                for region in results
+                for a, b, c, d in [
+                    _extend_cross_column_caption(
+                        (region.points[0][0], region.points[0][1],
+                         region.points[2][0], region.points[2][1]),
+                        work_image, source_margin,
+                    )
+                ]
+            ]
         if geometry.transform.kind == "identity":
             return results
         return [
