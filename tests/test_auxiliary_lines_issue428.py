@@ -126,3 +126,21 @@ def test_actual_whole_entry_export_matches_same_preview_plan(tmp_path):
     assert [r.box for r in result] == [p.box for p in preview.entry_pieces]
     assert all(r.index in (0, 1) for r in result)
     assert any(p.word == "first" and p.box[3] == 220 for p in preview.entry_pieces)
+
+
+def test_managed_project_auxiliary_sidecar_uses_data_storage(tmp_path):
+    import json
+    from picture_capture.project_storage import (
+        PROJECT_FORMAT, PROJECT_FORMAT_VERSION, manifest_path,
+    )
+    manifest = manifest_path(tmp_path)
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({
+        "format": PROJECT_FORMAT,
+        "format_version": PROJECT_FORMAT_VERSION,
+    }), encoding="utf-8")
+    page = tmp_path / "001.png"
+    expected = tmp_path / "_PictureCapture" / "data" / "AuxiliaryLines" / "001.json"
+    assert auxiliary_line_path(page) == expected
+    write_auxiliary_lines(page, [AuxiliaryLine(40, 80)])
+    assert read_auxiliary_lines(page) == [AuxiliaryLine(40, 80)]
