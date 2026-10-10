@@ -12069,12 +12069,14 @@ class PictureCaptureApp(tk.Tk):
     def _poll_batch_queue(self) -> None:
         self._batch_poll_job = None
         finished = False
-        # Very fast page tasks (notably page-aware word filling) can enqueue
-        # thousands of progress events before Tk gets a turn.  Draining the
-        # entire queue in one callback would freeze the UI again, so process a
-        # bounded slice and yield back to Tk between slices.
+        # Limit both elapsed time and events per Tk callback.
+        from .batch_progress_budget import (
+            SATURATED_BATCH_POLL_DELAY_MS, batch_poll_should_yield,
+            start_batch_poll_budget,
+        )
         processed_events = 0
-        max_events_per_poll = 120
+        poll_started = start_batch_poll_budget()
+        yielded = False
         while True:
             try:
                 event = self._batch_queue.get_nowait()
@@ -12156,13 +12158,13 @@ class PictureCaptureApp(tk.Tk):
                 finished = True
                 self._finish_batch_task(completed, total, True, results, (exc, detail))
 
-            if processed_events >= max_events_per_poll and not finished:
+            if not finished and batch_poll_should_yield(processed_events, poll_started):
+                yielded = True
                 break
 
         if self._batch_active and not finished:
-            # If the queue was saturated, continue quickly while still yielding
-            # one Tk event cycle; otherwise keep the normal low-overhead cadence.
-            delay = 8 if processed_events >= max_events_per_poll else 80
+            # Let Tk service button clicks before draining the backlog.
+            delay = SATURATED_BATCH_POLL_DELAY_MS if yielded else 80
             self._batch_poll_job = self.after(delay, self._poll_batch_queue)
 
     def _finish_batch_task(self, completed: int, total: int, stopped: bool, results, error) -> None:
