@@ -17,6 +17,7 @@ from PIL import Image
 from ...appearance import themed_display_image
 from ...formats import pdic_path, read_pdic, read_ppp
 from ...image_utils import normalize_page_rgb
+from ...image_metadata_status import image_dpi
 from ...page_sections import read_page_sections
 from ...project_storage import ocr_cache_root, ppp_read_path_for_image
 
@@ -84,6 +85,7 @@ class PageController:
 
         def worker():
             with Image.open(page) as opened:
+                source_dpi = image_dpi(opened.info)
                 image = normalize_page_rgb(opened)
             entries = read_pdic(pdic_path(page))
             polygons = read_ppp(ppp_read_path_for_image(page))
@@ -109,6 +111,7 @@ class PageController:
                 "project_root": str(project_root),
                 "index": index,
                 "image": image,
+                "source_dpi": source_dpi,
                 "entries": entries,
                 "polygons": polygons,
                 "page_sections": page_sections,
