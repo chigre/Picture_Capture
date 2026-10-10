@@ -133,11 +133,22 @@ def recent_project_stub_details(row: dict[str, object]) -> dict[str, str | int |
         index = int(row.get("last_page_index")) if row.get("last_page_index") is not None else -1
     except (TypeError, ValueError, OverflowError):
         index = -1
-    return {
-        "full_name": str(row.get("name") or root.name),
-        "abbreviation": "",
-        "image_count": 0,
-        "last_edited": _display_recent_timestamp(row.get("opened_at")),
+    cached = row.get("card_cache")
+    if isinstance(cached, dict) and cached.get("version") == 1:
+        detail = {
+            key: cached[key] for key in (
+                "full_name", "abbreviation", "image_count", "last_edited",
+                "cover_path", "preview_path", "cover_source",
+            ) if key in cached
+        }
+    else:
+        detail = {}
+    result = {
+        **detail,
+        "full_name": str(detail.get("full_name") or row.get("name") or root.name),
+        "abbreviation": str(detail.get("abbreviation") or ""),
+        "image_count": int(detail.get("image_count") or 0),
+        "last_edited": str(detail.get("last_edited") or _display_recent_timestamp(row.get("opened_at"))),
         "path": str(root),
         "exists": True,  # Unknown until filesystem metadata is loaded.
         "checking": True,
@@ -145,10 +156,15 @@ def recent_project_stub_details(row: dict[str, object]) -> dict[str, str | int |
         "last_page_index": index,
         "resume_text": last_page or "—",
         "position_text": last_page or "—",
-        "cover_path": "",
-        "preview_path": "",
-        "cover_source": "none",
+        "cover_path": str(detail.get("cover_path") or ""),
+        "preview_path": str(detail.get("preview_path") or ""),
+        "cover_source": str(detail.get("cover_source") or "none"),
     }
+    count = int(result["image_count"])
+    if count and index >= 0:
+        result["position_text"] = f"第 {min(count, index + 1):,} / {count:,} 页"
+    result["checking"] = not bool(detail)
+    return result
 
 
 def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool]:
