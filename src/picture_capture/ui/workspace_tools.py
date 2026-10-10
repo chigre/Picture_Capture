@@ -207,11 +207,11 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     mini_host.rowconfigure(0, weight=1)
     mini_host.columnconfigure(0, weight=1)
     mini = ttk.Treeview(mini_host, columns=app.page_index_columns,
-                        displaycolumns=("page",), show="headings",
+                        displaycolumns=("page", "illustrations"), show="headings",
                         selectmode="browse", height=12, style="PC.CompactPage.Treeview")
     for column in app.page_index_columns:
         mini.heading(column, text=app.page_index_labels[column], anchor="center")
-        mini.column(column, width=100 if column == "page" else 42,
+        mini.column(column, width=80 if column == "page" else 26, minwidth=20,
                     anchor="center", stretch=False)
     mini.grid(row=0, column=0, sticky="nsew")
     mini_scroll = ttk.Scrollbar(mini_host, orient="vertical", command=mini.yview)
@@ -220,7 +220,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     mini_hscroll.grid(row=1, column=0, sticky="ew")
     mini.configure(yscrollcommand=mini_scroll.set, xscrollcommand=mini_hscroll.set)
     optional_columns = ("bookmark", "lined", "illustrations", "section", "fill_status")
-    mini_vars = {key: tk.BooleanVar(value=False) for key in optional_columns}
+    mini_vars = {key: tk.BooleanVar(value=(key == "illustrations")) for key in optional_columns}
     app.workspace_mini_column_vars = mini_vars
     def choose_mini_columns() -> None:
         mini.configure(displaycolumns=("page",) + tuple(
@@ -271,14 +271,21 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     footer.columnconfigure(0, weight=1)
     app.project_action_bar = footer
     app.project_footer_buttons = []
-    ttk.Separator(footer, orient="horizontal").grid(row=0, column=0, sticky="ew", pady=(0, 5))
+    quick_actions = (("普通画线", app.run_normal_draw_action),
+                     ("OCR画线", app.run_ocr_draw_action),
+                     ("词条校对", app.open_review))
+    for index, (label, command) in enumerate(quick_actions):
+        ttk.Button(footer, text=label, command=command,
+                   style="PC.Rail.TButton").grid(row=index, column=0, sticky="ew", pady=(0, 2))
+    ttk.Separator(footer, orient="horizontal").grid(
+        row=len(quick_actions), column=0, sticky="ew", pady=(2, 5))
     project_actions = (
         ("项目", "▣", app.open_recent_project, "打开最近项目与项目管理"),
         ("档案", "◈", app.open_project_profile, "配置词典 Profile 和页面模板"),
         ("设置", "⚙", app.open_settings, "打开设置中心"),
         ("帮助", "?", app.show_help_dialog, "查看帮助与快捷操作"),
     )
-    for index, (label, symbol, command, tip) in enumerate(project_actions, start=1):
+    for index, (label, symbol, command, tip) in enumerate(project_actions, start=len(quick_actions) + 1):
         button = rail_action(footer, index, symbol, label, command, f"{label}：{tip}")
         app.project_footer_buttons.append(button)
 
@@ -393,8 +400,8 @@ def size_page_index_to_controls(app: Any) -> None:
         panes = app.main_paned
         width = panes.winfo_width()
         if width > 1 and app.sidebar_canvas.winfo_manager() == "pack":
-            minimum = rail.winfo_reqwidth() + 8
-            panes.sashpos(0, min(300, max(minimum, width - 320)))
+            minimum = rail.winfo_reqwidth() + choices.winfo_reqwidth() + 24
+            panes.sashpos(0, min(max(minimum, 1), width - 160))
     except (AttributeError, tk.TclError):
         pass
 
@@ -455,8 +462,8 @@ def toggle_page_index(app: Any) -> str:
         def expand() -> None:
             try:
                 app.update_idletasks()
-                minimum = rail.winfo_reqwidth() + 8
-                panes.sashpos(0, min(300, max(minimum, panes.winfo_width() - 320)))
+                minimum = rail.winfo_reqwidth() + app.page_range_controls_row.winfo_reqwidth() + 24
+                panes.sashpos(0, min(max(minimum, 1), panes.winfo_width() - 160))
             except tk.TclError:
                 pass
         app.after_idle(expand)
@@ -537,7 +544,7 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
             required = int(app.main_paned.sashpos(0) + app.image.width * app.view_scale + 32)
             try:
                 app.state("normal")
-                app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{app.winfo_height()}")
+                app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{app.winfo_height()}+0+{app.winfo_y()}")
             except tk.TclError:
                 pass
     elif mode == "正常":
