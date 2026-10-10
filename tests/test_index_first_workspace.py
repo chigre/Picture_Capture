@@ -221,7 +221,7 @@ def test_requested_workspace_updates():
     assert 'choices.winfo_reqwidth() + 24' in tools
     assert 'value=(key == "illustrations")' in tools
     assert 'width=80 if column == "page" else 26' in tools
-    assert 'x{app.winfo_height()}+0+{app.winfo_y()}' in tools
+    assert 'app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{height}+0+{top}")' in tools
     assert '("普通画线", app.run_normal_draw_action)' in tools
     assert '("OCR画线", app.run_ocr_draw_action)' in tools
     assert '("词条校对", app.open_review)' in tools
