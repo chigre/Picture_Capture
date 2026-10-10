@@ -94,3 +94,15 @@ def test_visible_heading_width_adapts_to_header_text():
     src = (root / "app.py").read_text(encoding="utf-8")
     assert 'font.nametofont("TkHeadingFont")' in src
     assert 'self._page_list_heading_labels.get(column, column)' in src
+
+
+def test_index_uses_range_control_width_and_table_can_scroll():
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    app = (root / "app.py").read_text(encoding="utf-8")
+    src = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert 'self.page_range_controls_row = range_row' in app
+    assert 'choices.winfo_reqwidth() + 38' in src
+    assert 'app.after_idle(lambda: size_page_index_to_controls(app))' in src
+    assert 'orient="horizontal", command=self.page_list.xview' in app
+    assert 'if available <= base_total:' in app
+    assert 'widths = minimum[:]' in app
