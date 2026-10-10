@@ -58,7 +58,12 @@ def test_pinned_preview_uses_regular_source_box_while_rows_stay_normal():
     import picture_capture.app as app
 
     source = Path(app.__file__).read_text(encoding="utf-8")
-    worker = source.split("        def worker():", 1)[1].split("        def done(payload)", 1)[0]
+    render_request = source.split("    def _request_render_rows(", 1)[1].split(
+        "    def render_rows(", 1
+    )[0]
+    worker = render_request.split("        def worker():", 1)[1].split(
+        "        def done(payload)", 1
+    )[0]
     pinned = source.split("    def _update_active_crop_preview(", 1)[1].split(
         "    def _ordinary_review_photo(", 1
     )[0]
