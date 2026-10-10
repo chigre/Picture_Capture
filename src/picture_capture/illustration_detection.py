@@ -175,7 +175,7 @@ def _extend_box_to_caption(box, components, analysis_height):
     # A CJK caption character can be roughly 20% of a low-profile wide
     # drawing's height. The former 15% cap silently discarded it before
     # alignment tests, even after the single-character width fix.
-    max_height = max(6, min(round(height * .35), round(analysis_height * .07)))
+    max_height = max(6, min(round(height * .25), round(analysis_height * .07)))
     limit = y1 + max_gap + max_height * 2 + 4
     letters = sorted(
         ((a, b, c, d) for a, b, c, d, _ in components
