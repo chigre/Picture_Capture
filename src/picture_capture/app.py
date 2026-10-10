@@ -13942,31 +13942,31 @@ class PictureCaptureApp(tk.Tk):
             draw_ocr_crop_preview(self)
             draw_layout_visualization_if_enabled(self)
             return
-        hidden = self.hide_var.get()
+        hidden = bool(self.hide_var.get())
+        geometry = self._get_cached_display_geometry()
+    overlay_scale = self.view_scale / parameter_scale(self.image, self.settings)
+        self._draw_review_entry_highlight(geometry)
+        show_guides = (
+            self.quick_bool_vars.get("show_column_guides").get()
+            if hasattr(self, "quick_bool_vars") and "show_column_guides" in self.quick_bool_vars
+            else self.settings.show_column_guides
+        )
+        if show_guides:
+            for path in geometry.column_paths:
+                source_points = [geometry.canonical_to_source(x, y) for y, x in path.points]
+                coords = [coordinate * self.view_scale for point in source_points for coordinate in point]
+                if len(coords) >= 4:
+                    create_alpha_canvas_line(
+                        self,
+                        tuple(coords),
+                        fill=self.settings.guide_color,
+                        width=scaled_overlay_line_width(self.settings.guide_width, overlay_scale),
+                        opacity=self.settings.guide_opacity,
+                        smooth=True,
+                    )
+        self._draw_page_sections(geometry)
+        self._draw_percentage_rulers(geometry)
         if not hidden:
-            geometry = self._get_cached_display_geometry()
-            self._draw_review_entry_highlight(geometry)
-            overlay_scale = self.view_scale / parameter_scale(self.image, self.settings)
-            show_guides = (
-                self.quick_bool_vars.get("show_column_guides").get()
-                if hasattr(self, "quick_bool_vars") and "show_column_guides" in self.quick_bool_vars
-                else self.settings.show_column_guides
-            )
-            if show_guides:
-                for path in geometry.column_paths:
-                    source_points = [geometry.canonical_to_source(x, y) for y, x in path.points]
-                    coords = [coordinate * self.view_scale for point in source_points for coordinate in point]
-                    if len(coords) >= 4:
-                        create_alpha_canvas_line(
-                            self,
-                            tuple(coords),
-                            fill=self.settings.guide_color,
-                            width=scaled_overlay_line_width(self.settings.guide_width, overlay_scale),
-                            opacity=self.settings.guide_opacity,
-                            smooth=True,
-                        )
-            self._draw_page_sections(geometry)
-            self._draw_percentage_rulers(geometry)
             processing_readonly = self._foreground_batch_state(self.current_index) == "processing"
             for index, entry in enumerate(self._ordered_entries_reading_order()):
                 self._draw_entry_overlay(
@@ -13974,54 +13974,54 @@ class PictureCaptureApp(tk.Tk):
                     processing_readonly=processing_readonly,
                 )
 
-            # v2.0: expose every OCR left-edge candidate as a right-side checkbox.
-            # Rejected lemma rows can therefore be promoted manually without
-            # changing parser thresholds or adding a special filter rule.
-            show_candidates = (
-                self.quick_bool_vars.get("paddle_show_candidate_checkboxes").get()
-                if hasattr(self, "quick_bool_vars") and "paddle_show_candidate_checkboxes" in self.quick_bool_vars
-                else self.settings.paddle_show_candidate_checkboxes
-            )
-            if show_candidates:
-                for cand in self.ocr_review_candidates:
-                    try:
-                        col = max(0, min(len(geometry.column_starts) - 1, int(cand.get("column", 0))))
-                        cy_source = int(cand.get("source_y", 0))
-                    except (TypeError, ValueError):
-                        continue
-                    if cy_source <= 0:
-                        continue
-                    cx_source = int(cand.get("source_x", 0))
-                    _cand_u, cand_v = geometry.source_to_canonical(cx_source, cy_source)
-                    control_source = geometry.canonical_to_source(
-                        geometry.x_at(col, cand_v) + round(geometry.column_widths[col] * 0.955),
-                        cand_v,
-                    )
-                    cx = control_source[0] * self.view_scale
-                    cy = control_source[1] * self.view_scale
-                    cid = str(cand.get("candidate_id", ""))
-                    if not cid:
-                        continue
-                    var = tk.BooleanVar(value=self._candidate_is_selected(cand))
-                    self.candidate_check_vars[cid] = var
-                    conf = cand.get("confidence")
-                    try:
-                        conf_value = float(conf) if conf is not None else None
-                    except (TypeError, ValueError):
-                        conf_value = None
-                    is_original_y = str(cand.get("position_variant", "refined")) in {"original", "anchor"}
-                    bg = "#d9ecff" if is_original_y else self._confidence_bg(conf_value)
-                    outline = "#1976d2" if is_original_y else ("#d84315" if cand.get("issue_types") else "#9e9e9e")
-                    check = tk.Checkbutton(
-                        self.canvas, variable=var, bg=bg, activebackground=bg,
-                        selectcolor=bg, bd=0, highlightthickness=1,
-                        highlightbackground=outline,
-                        command=lambda c=cid, v=var: self.candidate_checkbox_changed(c, v),
-                    )
-                    self.overlay_widgets.append(check)
-                    self.canvas.create_window(cx, cy, window=check, anchor="nw")
-        if hidden and self._section_editing:
-            self._draw_page_sections(self._get_cached_display_geometry())
+        # v2.0: expose every OCR left-edge candidate as a right-side checkbox.
+        # Rejected lemma rows can therefore be promoted manually without
+        # changing parser thresholds or adding a special filter rule.
+        show_candidates = (
+            self.quick_bool_vars.get("paddle_show_candidate_checkboxes").get()
+            if hasattr(self, "quick_bool_vars") and "paddle_show_candidate_checkboxes" in self.quick_bool_vars
+            else self.settings.paddle_show_candidate_checkboxes
+        )
+        if show_candidates:
+            for cand in self.ocr_review_candidates:
+                try:
+                    col = max(0, min(len(geometry.column_starts) - 1, int(cand.get("column", 0))))
+                    cy_source = int(cand.get("source_y", 0))
+                except (TypeError, ValueError):
+                    continue
+                if cy_source <= 0:
+                    continue
+                cx_source = int(cand.get("source_x", 0))
+                _cand_u, cand_v = geometry.source_to_canonical(cx_source, cy_source)
+                control_source = geometry.canonical_to_source(
+                    geometry.x_at(col, cand_v) + round(geometry.column_widths[col] * 0.955),
+                    cand_v,
+                )
+                cx = control_source[0] * self.view_scale
+                cy = control_source[1] * self.view_scale
+                cid = str(cand.get("candidate_id", ""))
+                if not cid:
+                    continue
+                var = tk.BooleanVar(value=self._candidate_is_selected(cand))
+                self.candidate_check_vars[cid] = var
+                conf = cand.get("confidence")
+                try:
+                    conf_value = float(conf) if conf is not None else None
+                except (TypeError, ValueError):
+                    conf_value = None
+                is_original_y = str(cand.get("position_variant", "refined")) in {"original", "anchor"}
+                bg = "#d9ecff" if is_original_y else self._confidence_bg(conf_value)
+                outline = "#1976d2" if is_original_y else ("#d84315" if cand.get("issue_types") else "#9e9e9e")
+                check = tk.Checkbutton(
+                    self.canvas, variable=var, bg=bg, activebackground=bg,
+                    selectcolor=bg, bd=0, highlightthickness=1,
+                    highlightbackground=outline,
+                    command=lambda c=cid, v=var: self.candidate_checkbox_changed(c, v),
+                )
+                self.overlay_widgets.append(check)
+                self.canvas.create_window(cx, cy, window=check, anchor="nw")
+    if hidden and self._section_editing:
+        self._draw_page_sections(self._get_cached_display_geometry())
         show_shapes = bool(self.polygon_var.get() or self.polygon_draw_var.get())
         show_labels = bool(self.settings.show_illustration_labels or self.polygon_draw_var.get())
         if show_shapes or show_labels:
