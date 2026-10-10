@@ -2561,7 +2561,7 @@ class ReviewWindow(tk.Toplevel):
         self.active_crop_photo = None
         self._active_crop_fixed_size: tuple[int, int] | None = None
         self._review_display_crops: list[Image.Image] = []
-        self._review_row_pictures: list[ttk.Label] = []
+        self._review_row_pictures: list[ttk.Label | None] = []
 
         self.canvas = tk.Canvas(
             editor_area,
@@ -5636,9 +5636,13 @@ class ReviewWindow(tk.Toplevel):
             # oversized/two-line source crop used by the fixed preview.
             # Every editor row, including the active one, has its ordinary
             # single-line crop; the fixed bordered preview is additional.
-            photo = self._ordinary_review_photo(index)
-            picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
-            picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
+            # Do not create a second crop for the initially active word.
+            photo = None
+            picture = None
+            if index != 0:
+                photo = self._ordinary_review_photo(index)
+                picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
+                picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
             self.thumbnails.append(photo)
             self._review_row_pictures.append(picture)
             var = tk.StringVar(value=entry.word)
@@ -5779,7 +5783,7 @@ class ReviewWindow(tk.Toplevel):
             simplified_editor.bind("<<Cut>>", lambda _e, i=index: self._claim_simplified_clipboard_edit(i))
             simplified_editor.bind("<KeyRelease>", lambda e, i=index: self.on_simplified_key(e, i))
             simplified_editor.bind("<Return>", lambda _e, i=index: self.focus_index(i + 1))
-            for widget in (picture, delete_button, editor_frame, editor, simplified_editor, simplified_search_button):
+            for widget in (delete_button, editor_frame, editor, simplified_editor, simplified_search_button):
                 widget.bind("<MouseWheel>", self.scroll_rows)
                 widget.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
                 widget.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))
@@ -6085,7 +6089,22 @@ class ReviewWindow(tk.Toplevel):
 
     def set_active(self, index: int) -> None:
         self.active_index = index
-        # Keep all inline single-line crops visible when focus changes.
+        # Only inactive rows own inline images. The current word is shown in
+        # the bordered preview, while its editor remains in the list.
+        for row_index, picture in enumerate(self._review_row_pictures):
+            if row_index == index and picture is not None:
+                picture.destroy()
+                self._review_row_pictures[row_index] = None
+                self.thumbnails[row_index] = None
+            elif row_index != index and picture is None:
+                photo = self._ordinary_review_photo(row_index)
+                restored = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
+                restored.grid(row=row_index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
+                restored.bind("<MouseWheel>", self.scroll_rows)
+                restored.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
+                restored.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))
+                self._review_row_pictures[row_index] = restored
+                self.thumbnails[row_index] = photo
         self._update_active_crop_preview(index)
         self._update_title()
         ordered = self.parent._ordered_entries_reading_order()
