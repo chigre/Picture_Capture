@@ -164,13 +164,14 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
                                  style="PC.Rail.TButton")
         text_button.grid(row=0, column=1, sticky="ew")
         app.workspace_rail_labels.append(text_button)
-        app._attach_tooltip(icon, tip)
-        app._attach_tooltip(text_button, tip)
+        if tip:
+            app._attach_tooltip(icon, tip)
+            app._attach_tooltip(text_button, tip)
         return entry
 
     sidebar_button = rail_action(
-        rail, 0, "☰", "侧栏", lambda: show_sidebar_modes(app),
-        "悬停选择最简、正常、最大模式",
+        rail, 0, "☰", "模式", lambda: show_sidebar_modes(app),
+        "",
     )
     mode_menu = ttk.Frame(app, padding=3, relief="solid", borderwidth=1,
                           style="PC.Sidebar.TFrame")
@@ -538,16 +539,22 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
         if app.sidebar_canvas.winfo_manager() == "pack":
             toggle_page_index(app)
         def fit_compact() -> None:
-            if app.image is None:
-                return
-            app.update_idletasks()
-            app.fit_page_height()
-            required = int(app.main_paned.sashpos(0) + app.image.width * app.view_scale + 32)
             try:
-                height = app.winfo_height()
-                top = app.winfo_y()
+                # Force compact width; Panedwindow may retain the old sash
+                # position after hiding the full index.
+                app.update_idletasks()
+                compact_width = app.workspace_tools_rail.winfo_reqwidth() + 10
+                app.main_paned.sashpos(0, compact_width)
+                app.update_idletasks()
+                height, top = app.winfo_height(), app.winfo_y()
+                if app.image is not None:
+                    app.fit_page_height()
+                    required = int(compact_width + app.image.width * app.view_scale + 32)
+                else:
+                    required = app.winfo_width()
                 app.state("normal")
                 app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{height}+0+{top}")
+                app.after_idle(lambda: app.main_paned.sashpos(0, compact_width))
             except tk.TclError:
                 pass
         app.after_idle(fit_compact)
