@@ -7642,14 +7642,18 @@ class PictureCaptureApp(tk.Tk):
 
         # Batch task bar is normally hidden. It appears above the permanent
         # status bar while a multi-page operation is running.
-        self.batch_bar = ttk.Frame(self.bottom_stack, padding=(8, 5), style="PC.Batch.TFrame")
+        self.status_bar = ttk.Frame(self.bottom_stack, style="PC.Status.TFrame")
+        self.status_bar.pack(side="bottom", fill="x")
+        status_bar = self.status_bar
+        ttk.Separator(status_bar, orient="horizontal").pack(side="top", fill="x")
+        self.batch_bar = ttk.Frame(status_bar, padding=(4, 1), style="PC.Status.TFrame")
         self.batch_text_var = tk.StringVar(value="")
         self.batch_progress_var = tk.DoubleVar(value=0.0)
         ttk.Label(
             self.batch_bar, textvariable=self.batch_text_var, anchor="w", style="PC.Batch.TLabel"
         ).pack(side="left", padx=(0, 8))
         self.batch_progress = ttk.Progressbar(
-            self.batch_bar, variable=self.batch_progress_var, maximum=100.0, length=280, mode="determinate"
+            self.batch_bar, variable=self.batch_progress_var, maximum=100.0, length=160, mode="determinate"
         )
         self.batch_progress.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.batch_pause_button = ttk.Button(
@@ -7671,10 +7675,6 @@ class PictureCaptureApp(tk.Tk):
             "请求停止当前批量任务；正在处理的页面完成后安全停止。",
         )
 
-        self.status_bar = ttk.Frame(self.bottom_stack, style="PC.Status.TFrame")
-        self.status_bar.pack(side="bottom", fill="x")
-        status_bar = self.status_bar
-        ttk.Separator(status_bar, orient="horizontal").pack(side="top", fill="x")
         ttk.Label(
             status_bar,
             textvariable=self.status_var,
@@ -11805,7 +11805,7 @@ class PictureCaptureApp(tk.Tk):
         self.batch_pause_button.configure(text="暂停", state="normal")
         self.batch_stop_button.configure(text="停止", state="normal")
         if not self.batch_bar.winfo_manager():
-            self.batch_bar.pack(side="top", fill="x")
+            self.batch_bar.pack(side="right", fill="x")
         self.status_var.set(
             f"{title}开始：共 {len(items)} 页。" +
             ("可切换并校对其他页面；人工修改的待处理页会自动锁定并由后台跳过。" if foreground_page_edit
