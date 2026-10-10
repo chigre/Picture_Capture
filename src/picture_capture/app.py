@@ -7370,8 +7370,9 @@ class PictureCaptureApp(tk.Tk):
         )
         style.configure(
             "PC.Treeview.Heading",
-            padding=(6, 5),
-            relief="flat",
+            padding=(3, 4),
+            relief="solid",
+            borderwidth=1,
             font=self.section_title_font,
         )
         style.map(
@@ -8028,15 +8029,12 @@ class PictureCaptureApp(tk.Tk):
         menu = tk.Menu(self, tearoff=False)
         self._apply_current_appearance(menu)
         bookmark_var = tk.BooleanVar(value=True)
-        menu.add_checkbutton(label="书签", variable=bookmark_var, state="disabled")
+        menu.add_checkbutton(label="●", variable=bookmark_var, state="disabled")
         page_var = tk.BooleanVar(value=True)
         menu.add_checkbutton(label="页面", variable=page_var, state="disabled")
         section_var = tk.BooleanVar(value=True)
-        menu.add_checkbutton(label="Section", variable=section_var, state="disabled")
-        menu.add_checkbutton(
-            label="画线", variable=self._page_column_vars["lined"],
-            command=lambda: self._apply_page_list_display_columns(save=True),
-        )
+        menu.add_checkbutton(label="区块", variable=section_var, state="disabled")
+        menu.add_checkbutton(label="画线", state="disabled")
         menu.add_checkbutton(
             label="插图", variable=self._page_column_vars["illustrations"],
             command=lambda: self._apply_page_list_display_columns(save=True),
