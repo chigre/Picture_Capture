@@ -237,3 +237,10 @@ def test_compact_mode_does_not_reuse_full_sidebar_sash_width():
     assert 'app.main_paned.sashpos(0, compact_width)' in tools
     assert 'required = int(compact_width + app.image.width * app.view_scale + 32)' in tools
     assert 'app.after_idle(lambda: app.main_paned.sashpos(0, compact_width))' in tools
+
+
+def test_single_column_fit_includes_two_gutters():
+    app, _ = sources()
+    assert 'gutter = float(self.settings.gutter)' in app
+    assert 'fit_width = column_width + 2 * gutter' in app
+    assert 'available / fit_width' in app
