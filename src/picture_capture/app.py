@@ -1897,7 +1897,8 @@ class ReviewWindow(tk.Toplevel):
             width = max(1, screen_w - x)
             height = max(1, screen_h - y)
         self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(min(560, width), min(420, height))
+        self.minsize(min(300 if mini is not None and mini.winfo_manager() == "grid" else 560, width),
+                     min(420, height))
         self.active_index = 0
         # A stored 0 means automatic fit-to-left-pane. Positive values retain
         # the historical explicit/manual percentage mode.
