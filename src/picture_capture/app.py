@@ -1894,8 +1894,13 @@ class ReviewWindow(tk.Toplevel):
             parent.update_idletasks()
             x = max(0, parent.winfo_rootx() + parent.winfo_width())
             y = max(0, parent.winfo_rooty())
-            width = max(1, screen_w - x)
-            height = max(1, screen_h - y)
+            work_x, work_y, work_w, work_h = _screen_work_area(self)
+            work_right = work_x + work_w
+            work_bottom = work_y + work_h
+            x = min(max(x, work_x), work_right - 1)
+            y = min(max(y, work_y), work_bottom - 1)
+            width = max(1, work_right - x)
+            height = max(1, work_bottom - y)
         self.geometry(f"{width}x{height}+{x}+{y}")
         self.minsize(min(300 if mini is not None and mini.winfo_manager() == "grid" else 560, width),
                      min(420, height))
@@ -2529,15 +2534,17 @@ class ReviewWindow(tk.Toplevel):
             relief="flat", bd=0, highlightthickness=0, cursor="hand2",
         )
         self.prev_page_button.pack(side="left", fill="y", padx=(0, 4))
-        editor_area = ttk.Frame(strip, style="PCR.Surface.TFrame")
-        editor_area.pack(side="left", fill="both", expand=True)
-        self.review_editor_area = editor_area
+        # Reserve both navigation controls before the expanding editor pane;
+        # otherwise pack can squeeze the right-hand button out of narrow windows.
         self.next_page_button = tk.Button(
             strip, text="下\n一\n页", width=3, command=lambda: self.change_page(1),
             bg=review_nav_bg, activebackground=review_nav_active_bg,
             relief="flat", bd=0, highlightthickness=0, cursor="hand2",
         )
         self.next_page_button.pack(side="right", fill="y", padx=(4, 0))
+        editor_area = ttk.Frame(strip, style="PCR.Surface.TFrame")
+        editor_area.pack(side="left", fill="both", expand=True)
+        self.review_editor_area = editor_area
 
         # Fixed current-word preview: independent of window resizing.
         self.active_crop_host = ttk.Frame(editor_area, style="PCR.Surface.TFrame")
