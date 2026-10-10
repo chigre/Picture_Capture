@@ -14020,8 +14020,6 @@ class PictureCaptureApp(tk.Tk):
                 )
                 self.overlay_widgets.append(check)
                 self.canvas.create_window(cx, cy, window=check, anchor="nw")
-    if hidden and self._section_editing:
-        self._draw_page_sections(self._get_cached_display_geometry())
         show_shapes = bool(self.polygon_var.get() or self.polygon_draw_var.get())
         show_labels = bool(self.settings.show_illustration_labels or self.polygon_draw_var.get())
         if show_shapes or show_labels:
