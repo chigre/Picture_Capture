@@ -255,7 +255,7 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     assert "_is_single_cjk_review_headword" not in app_source
     # Manual type choices are no longer exposed in the proofreading UI.
     assert 'values=("自动", "普通词条", "大字头")' not in review_source
-    assert "initialize_pinned_entry_preview(window)" in review_source
+    assert "review_pinned_entry_preview" not in review_source
 
 
 def test_gui_composition_uses_static_pdic_io_and_review_classification():
@@ -274,7 +274,7 @@ def test_gui_composition_uses_static_pdic_io_and_review_classification():
     assert "install_review_entry_classification(app_module)" not in source
 
     app_source = Path(app_module.__file__).read_text(encoding="utf-8")
-    assert "initialize_review_entry_classification(self)" in app_source
+    assert "self.active_crop_host = ttk.Frame(editor_area" in app_source
     assert app_source.count("sync_review_entry_classification(self)") >= 2
     assert '"大字头切图高："' in app_source
 
