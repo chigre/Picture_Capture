@@ -33,6 +33,7 @@ from ...training_export_composed import (
     make_training_zip, write_training_manifest,
 )
 from ...text_encoding import read_text_detected
+from ...training_export_complete_dialog import show_training_export_complete
 
 
 def _training_scope_label(app: Any, indices: list[int]) -> str:
@@ -236,11 +237,7 @@ class ExportController:
             )
             if produced:
                 app.status_var.set(f"训练标记包已导出：{Path(produced).name}")
-                messagebox.showinfo(
-                    "导出训练标记包完成",
-                    f"已导出 {len(page_records)} 页。\n\n{produced}",
-                    parent=app,
-                )
+                show_training_export_complete(app, len(page_records), Path(produced))
                 return
             if stopped:
                 app.status_var.set("训练标记包已停止；正在后台清理 staging…")
