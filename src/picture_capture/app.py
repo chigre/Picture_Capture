@@ -7814,13 +7814,13 @@ class PictureCaptureApp(tk.Tk):
         jump_button.pack(side="left", padx=(0, 3))
         self._attach_tooltip(jump_button, "跳转到指定页面的第一个有效页面")
         previous_page_button = ttk.Button(
-            size_row, text="上一页", width=6,
+            size_row, text="上页", width=6,
             command=lambda: self.change_page(-1), style="PC.PageNav.TButton",
         )
         previous_page_button.pack(side="left", padx=(0, 3))
         self._attach_tooltip(previous_page_button, "保存必要的当前页状态后切换到上一页")
         next_page_button = ttk.Button(
-            size_row, text="下一页", width=6,
+            size_row, text="下页", width=6,
             command=lambda: self.change_page(1), style="PC.PageNav.TButton",
         )
         next_page_button.pack(side="left")
