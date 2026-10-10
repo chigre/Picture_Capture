@@ -102,8 +102,8 @@ def test_refresh_tracks_live_polygon_geometry(monkeypatch):
 def test_settings_schema_owns_illustration_opacity_statically():
     fields = {name for _label, name, _cast in schema.FIELDS}
     assert "illustration_fill_opacity" in fields
-    display = list(schema.DISPLAY_FIELDS)
-    assert display.index("guide_opacity") < display.index("illustration_fill_opacity")
+    assert "illustration_fill_opacity" not in schema.DISPLAY_FIELDS
+    assert "illustration_fill_opacity" in schema.ILLUSTRATION_APPEARANCE_FIELDS
     assert schema.SETTING_UNITS["illustration_fill_opacity"] == "%"
     assert schema.SETTING_SPIN["illustration_fill_opacity"] == (0.0,100.0,5.0)
     assert "PPP 区域坐标" in schema.SETTING_HELP["illustration_fill_opacity"]

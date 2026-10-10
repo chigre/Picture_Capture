@@ -274,6 +274,9 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # because classic dictionary illustrations often extend into the gutter.
     illustration_detect_padding: int = 8
     illustration_detect_right_padding: int = 16
+    illustration_detect_gray_threshold: int = 170
+    illustration_detect_min_area_percent: float = 0.22
+    illustration_detect_min_occupancy_percent: float = 3.5
     white_threshold_high: int = 999
     row_step_multiplier: float = 1.2
     whitespace_adjustment: int = 2

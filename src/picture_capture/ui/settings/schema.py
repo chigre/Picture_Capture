@@ -37,6 +37,17 @@ FIELDS = [
         ("自动保存间隔（秒）", "batch_interval", float),
         ("插图自动识别外扩（px）", "illustration_detect_padding", int),
         ("插图自动识别右侧外扩（px）", "illustration_detect_right_padding", int),
+        ("检测灰度阈值", "illustration_detect_gray_threshold", int),
+        ("候选最小面积（%）", "illustration_detect_min_area_percent", float),
+        ("候选最小墨迹占比（%）", "illustration_detect_min_occupancy_percent", float),
+        ("插图轮廓色", "illustration_outline_color", str),
+        ("插图轮廓线宽", "illustration_outline_width", int),
+        ("插图区域背景色", "illustration_fill_color", str),
+        ("插图标签边框色", "illustration_label_border_color", str),
+        ("插图标签边框宽", "illustration_label_border_width", int),
+        ("插图标签背景色", "illustration_label_fill_color", str),
+        ("插图标签字体", "illustration_label_font_family", str),
+        ("插图标签字号", "illustration_label_font_size", int),
         ("OCR 语言", "ocr_language", str),
         ("Tesseract 语言", "tesseract_language", str),
         ("书写模式", "layout_writing_mode", str),
@@ -124,7 +135,7 @@ FIELD_GROUPS = [
             "body_indent", "character_height", "row_padding", "right_ratio",
             "horizontal_tolerance", "darkness_threshold",
         ]),
-        ("词条线显示", ["marker_height", "headword_marker_opacity", "guide_width", "guide_opacity", "illustration_fill_opacity"]),
+        ("词条线显示", ["marker_height", "headword_marker_opacity", "guide_width", "guide_opacity"]),
         ("主界面词条文本框", [
             "main_entry_font_family", "main_entry_font_size", "main_entry_width_chars", "main_entry_x_ratio",
         ]),
@@ -134,7 +145,6 @@ FIELD_GROUPS = [
         ]),
         ("辅助词表", ["wordslist_path"]),
         ("列跟踪", ["column_track_radius", "column_track_block_height", "column_track_max_step"]),
-        ("插图识别", ["illustration_detect_padding", "illustration_detect_right_padding"]),
         ("OCR 基础", [
             "paddle_ocr_version",
             "paddle_preprocessing", "paddle_max_input_side", "batch_interval",
@@ -328,6 +338,17 @@ SETTING_HELP = {
         "review_single_cjk_line_height": "作用：校对窗口针对中文单字词条使用的特殊裁图行高。0 表示自动按项目典型行高约 2.5 倍计算；非 0 时单位为原图像素。\n\n调整：单字大字头被上下裁掉时增大；留白过多时减小。只影响校对裁图展示，不改变词头检测位置。",
         "review_zoom_percent": "校对切条图片默认使用自动适宽：0 表示按校对窗口左侧实际图片区宽度自动计算，使切条图片占约 99%。手动输入百分比或使用 +/- 后切换为手动缩放；点击【自动】可恢复自动适宽。",
         "wordslist_path": "作用：指定参考 wordslist.txt，用于主界面/校对界面的“是否已在词表中”、定位和新旧比较等辅助判断。程序使用成员索引，不要求把整份大词表一次渲染到 GUI。\n\n路径：项目内文件优先保存相对路径便于迁移；项目外文件使用绝对路径。它是校对参考源，不会反向修改 OCR 识别结果。",
+        "illustration_detect_gray_threshold": "自动插图检测的固定灰度墨迹阈值（0–255，默认170）。数值越大，越浅的灰色也被视为墨迹；这一路径同时会综合局部自适应墨迹，因此不是唯一检测条件。 本参数参与自动候选墨迹构成，不影响已经保存的手绘插图区域。",
+        "illustration_detect_min_area_percent": "候选连通区域外接矩形必须达到分析裁图面积的这一百分比（默认0.22%），并同时满足500个分析像素的下限。提高可过滤小污点和文字，降低可能提高小插图召回。 仅改变下一次自动插图识别；修改后可在代表页检验大小插图的召回与误检。",
+        "illustration_detect_min_occupancy_percent": "候选连通区域的墨迹像素数 / 外接矩形面积，默认3.5%。提高可过滤稀疏区域，但线描插图可能被漏掉；降低会带来更多误检。 仅改变下一次自动插图识别；线描、空心边框图像尤其需要慎重调高。",
+        "illustration_outline_color": "主画布 PPP 插图轮廓线颜色（#RRGGBB），只影响显示，不修改插图几何与裁图。 修改可让插图边界与扫描背景更容易区分；不会改变 PPP 文件或图像本身。",
+        "illustration_outline_width": "PPP 插图轮廓线宽（1–20），只改变画布显示。 数值越大轮廓越醒目，但可能遮住边界附近的文字或细线。",
+        "illustration_fill_color": "主画布 PPP 插图区域半透明填充颜色（#RRGGBB），实际透明度由插图区域不透明度决定。 建议选择与插图背景有反差但不过分遮盖原图细节的颜色。",
+        "illustration_label_border_color": "插图区域标签外框颜色（#RRGGBB），只改变显示。 适合用更明显的颜色区分 PPP 标签与背景，但不会改变标签内容。",
+        "illustration_label_border_width": "插图标签边框线宽（1–20），只改变显示。 边框加粗后在缩放预览中更清晰，过粗可能遮挡插图图像内容。",
+        "illustration_label_fill_color": "插图标签的背景色（#RRGGBB），不改变自动识别或 PPP 保存数据。 可与轮廓色分别设置；请确保与标签文字有足够对比度。",
+        "illustration_label_font_family": "主界面插图标签字体；不改变插图检测、切图或 PPP 坐标。 选用能够显示项目所用语言字符的字体，避免标签出现乱码或缺字。",
+        "illustration_label_font_size": "主界面插图标签的基础字号（5–200）；显示时仍依当前画面缩放。 字号较大适合缩小视图时阅读，但可能覆盖插图；与画布缩放配合使用。",
         "illustration_detect_padding": "作用：自动插图检测得到初始 PPP 轮廓/边界后，四周统一额外扩出的原图像素，用于避免图像主体贴边被裁掉。\n\n调整：插图边缘经常缺失可增大；过大会吞入正文。",
         "illustration_detect_right_padding": "作用：在通用插图外扩之外，右侧再额外扩展的原图像素。用于某些词典插图常向栏间或右侧空白延伸的版式。\n\n调整：只在右侧经常被截时增加；过大会把邻近文字纳入插图。",
         "dictionary_full_name": "作用：当前词典的完整名称，属于项目元数据，用于项目详情、后期词典制作和导出信息。不会改变 OCR、画线或排序算法。\n\n填写：建议使用正式书名而不是本地文件夹名；后续打包/共享项目时更容易识别来源。",
@@ -399,7 +420,7 @@ OCR_ADVANCED_FIELDS = (
     )
 
 DISPLAY_FIELDS = (
-        "marker_height", "headword_marker_opacity", "guide_width", "guide_opacity", "illustration_fill_opacity",
+        "marker_height", "headword_marker_opacity", "guide_width", "guide_opacity",
         "main_entry_font_family", "main_entry_font_size",
         "main_entry_width_chars", "main_entry_x_ratio",
         "review_entry_font_family", "review_entry_font_size",
@@ -410,7 +431,6 @@ DISPLAY_FIELDS = (
 PROJECT_RUNTIME_FIELDS = (
         "batch_interval", "tesseract_language",
         "paddle_ocr_version", "paddle_max_input_side",
-        "illustration_detect_padding", "illustration_detect_right_padding",
     )
 
 EXPERT_FIELDS = (
@@ -439,7 +459,13 @@ SETTING_UNITS = {
         "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "原图px",
         "paddle_header_search_height": "% 图高", "paddle_header_rule_margin": "原图px",
         "batch_interval": "秒", "illustration_detect_padding": "原图px",
-        "illustration_detect_right_padding": "原图px", "main_entry_font_size": "pt",
+        "illustration_detect_right_padding": "原图px",
+        "illustration_detect_gray_threshold": "0–255",
+        "illustration_detect_min_area_percent": "%",
+        "illustration_detect_min_occupancy_percent": "%",
+        "illustration_outline_width": "px",
+        "illustration_label_border_width": "px",
+        "illustration_label_font_size": "pt", "main_entry_font_size": "pt",
         "review_entry_font_size": "pt", "review_entry_vertical_padding": "px",
         "review_single_cjk_line_height": "原图px", "review_zoom_percent": "%",
     }
@@ -472,6 +498,12 @@ SETTING_SPIN = {
         "batch_interval": (0.5, 3600, 0.5),
         "illustration_detect_padding": (0, 5000, 1),
         "illustration_detect_right_padding": (0, 5000, 1),
+        "illustration_detect_gray_threshold": (0, 255, 1),
+        "illustration_detect_min_area_percent": (0.0, 100.0, 0.05),
+        "illustration_detect_min_occupancy_percent": (0.0, 100.0, 0.5),
+        "illustration_outline_width": (1, 20, 1),
+        "illustration_label_border_width": (1, 20, 1),
+        "illustration_label_font_size": (5, 200, 1),
         "main_entry_font_size": (5, 200, 1), "review_entry_font_size": (6, 200, 1),
         "review_entry_vertical_padding": (0, 30, 1),
         "review_single_cjk_line_height": (0, 500, 1), "review_zoom_percent": (0.0, 250.0, 0.5),
@@ -504,6 +536,10 @@ SETTING_CHOICES = {
     }
 
 CHECK_HELP = {
+    "show_illustration_labels": "开启后在主画布展示插图区域编号或标签，方便核对自动识别及手工标注的 PPP 区域。关闭仅隐藏标签，不隐藏多边形本身，也不删除 PPP 数据。",
+    "illustration_label_font_bold": "插图标签使用粗体显示，适合扫描背景较复杂、细体不易看清的页面。只改变显示效果。",
+    "illustration_label_font_italic": "插图标签使用斜体显示，便于与原始扫描文字作视觉区分。只改变显示效果，不影响识别和导出。",
+
     "layout_mask_illustrations": (
         "作用：开启后，【普通画线】和【显示 Layout】在 Page Understanding 之前先复用自动插图检测，"
         "把足够大的插图区域仅在分析副本上填成白色，再恢复文字行、缩进和 entry/body 角色。"
@@ -559,11 +595,31 @@ CHECK_HELP = {
         "review_entry_font_italic": "开启后校对窗口“原词条”编辑框使用斜体；关闭为正体。只影响显示；若某字体斜体导致字符更宽，可见字符数可能略变，但词条数据不变。",
     }
 
+ILLUSTRATION_DETECTION_FIELDS = (
+    "illustration_detect_gray_threshold", "illustration_detect_min_area_percent",
+    "illustration_detect_min_occupancy_percent",
+    "illustration_detect_padding", "illustration_detect_right_padding",
+)
+
+ILLUSTRATION_APPEARANCE_FIELDS = (
+    "illustration_outline_color", "illustration_outline_width",
+    "illustration_fill_color", "illustration_fill_opacity",
+    "illustration_label_border_color", "illustration_label_border_width",
+    "illustration_label_fill_color", "illustration_label_font_family",
+    "illustration_label_font_size",
+)
+
+ILLUSTRATION_CHECKS = (
+    ("Layout 分析前白化插图", "layout_mask_illustrations"),
+    ("显示插图区域标签", "show_illustration_labels"),
+    ("插图标签粗体", "illustration_label_font_bold"),
+    ("插图标签斜体", "illustration_label_font_italic"),
+)
+
 NORMAL_CHECKS = (
         ("自动精修横线 Y", "paddle_refine_separator_y"),
         ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
         ("使用自动版面参数", "ordinary_auto_layout"),
-        ("Layout前白化插图", "layout_mask_illustrations"),
         ("分栏数", "ordinary_auto_columns"),
         ("正文起始Y", "ordinary_auto_start_y"),
         ("首栏X", "ordinary_auto_manual_x"),
@@ -605,6 +661,7 @@ DISPLAY_CHECKS = (
 
 
 __all__ = [
+    "ILLUSTRATION_DETECTION_FIELDS", "ILLUSTRATION_APPEARANCE_FIELDS", "ILLUSTRATION_CHECKS",
     "FIELDS",
     "PROFILE_FIELD_GROUPS",
     "PROFILE_CHECKS",
