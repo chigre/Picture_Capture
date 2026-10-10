@@ -30,6 +30,15 @@ def test_tool_group_navigation_and_window_dismissal():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     assert 'state="readonly"' in source
     assert 'jump.bind("<<ComboboxSelected>>", jump_to_section)' in source
-    assert "app._set_section_expanded(section, True)" in source
+    assert "choose_workspace_section(app, jump_var.get())" in source
     assert 'palette.bind("<Escape>"' in source
     assert 'window.geometry(f"{width}x{height}+{x}+{y}")' in source
+
+
+def test_task_mode_keeps_one_group_and_supports_keyboard_navigation():
+    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert "app._set_section_expanded(candidate, candidate is section)" in source
+    assert "app._set_section_expanded(section, True)" in source
+    assert 'palette.bind("<Control-k>"' in source
+    assert 'app.bind("<Control-Shift-t>"' in source
+    assert 'text="全部展开"' in source
