@@ -272,15 +272,15 @@ def test_current_review_crop_is_fixed_width_double_height_and_framed():
     assert 'self._update_active_crop_preview(index)' in app
 
 
-def test_current_review_entry_has_only_pinned_crop():
+def test_current_review_entry_keeps_ordinary_row_and_pinned_crop():
     app, _ = sources()
-    assert 'if index != 0:' in app
     assert 'photo = self._ordinary_review_photo(index)' in app
     assert 'self._review_row_pictures.append(picture)' in app
-    assert 'if row_index == index and picture is not None:' in app
-    assert 'picture.destroy()' in app
-    assert 'elif row_index != index and picture is None:' in app
     assert 'self._update_active_crop_preview(index)' in app
+    active = app[app.index('    def set_active(self, index: int)'):]
+    active = active[:active.index('    def _scroll_editor_into_view')]
+    assert 'picture.destroy()' not in active
+    assert 'picture.grid_remove()' not in active
 
 
 def test_review_preview_is_position_and_size_invariant_on_window_resize():
@@ -310,10 +310,11 @@ def test_compact_review_anchors_to_work_area_top():
 
 def test_inline_review_slice_is_regular_height_not_double():
     app, _ = sources()
-    assert 'regular_px = max(1, round(' in app
-    assert '_effective_review_regular_crop_height(self.parent.settings)' in app
-    assert 'inline_crop = crop.crop((0, 0, crop.width, min(crop.height, regular_px)))' in app
-    assert 'themed_display_image(inline_crop, self.parent.appearance_mode)' in app
+    assert 'regular_height = _effective_review_regular_crop_height(review_settings)' in app
+    assert 'entry_regular_crop_height=regular_height' in app
+    assert 'entry_oversized_crop_height=regular_height' in app
+    assert 'entry, geometry, image, inline_settings, next_entry,' in app
+    assert 'themed_display_image(crop, self.parent.appearance_mode)' in app
     assert 'self._update_active_crop_preview(index)' in app
 
 
