@@ -28,7 +28,7 @@ def test_fixed_width_icon_cells_and_compact_nav_toggle():
     assert 'entry.columnconfigure(0, minsize=38)' in tools
     assert 'icon = tk.Canvas(entry, width=30, height=27' in tools
     assert 'text_button = ttk.Button(entry, text=label, width=5' in tools
-    assert 'rail, 0, "☰", "侧栏", lambda: toggle_sidebar(app)' in tools
+    assert 'rail, 0, "☰", "侧栏", lambda: show_sidebar_modes(app)' in tools
     assert 'app.workspace_rail_labels.append(text_button)' in tools
     assert 'button.grid_remove()' in tools
     assert 'button.grid()' in tools
@@ -176,14 +176,14 @@ def test_mini_page_list_below_page_button():
     assert 'for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1)' in tools
     assert 'len(TASK_GROUPS) + 2, "▦", "页面"' in tools
     assert 'mini.heading("page", text="页面"' in tools
-    assert 'show="headings", selectmode="browse", height=12' in tools
+    assert 'selectmode="browse", height=12' in tools
     assert 'style="PC.CompactPage.Treeview"' in tools
     assert 'def refresh_compact_page_index(app: Any)' in tools
     assert 'source.get_children()' in tools
-    assert 'mini.insert("", "end", iid=iid, values=(values[1],))' in tools
+    assert 'mini.insert("", "end", iid=iid, values=values)' in tools
     assert 'mini.bind("<<TreeviewSelect>>", choose_mini_page)' in tools
     assert 'app.after_idle(lambda: app.page_list.bind(' in tools
-    assert 'mini.item(iid, values=(page_stem,))' in app
+    assert 'mini.item(iid, values=new_values)' in app
 
 
 def test_rail_styles_are_compact_in_both_themes():
@@ -191,3 +191,26 @@ def test_rail_styles_are_compact_in_both_themes():
     assert 'style.configure("PC.Rail.TButton", font="TkDefaultFont"' in app
     assert 'style.configure("PC.CompactPage.Treeview", rowheight=26' in app
     assert 'padding=(4, 3), relief="flat", borderwidth=0, font="TkDefaultFont"' in tools
+
+
+def test_compact_index_has_optional_headers_and_horizontal_scroll():
+    app, tools = sources()
+    assert 'displaycolumns=("page",), show="headings"' in tools
+    assert 'mini_hscroll = ttk.Scrollbar(mini_host, orient="horizontal"' in tools
+    assert 'mini.configure(yscrollcommand=mini_scroll.set, xscrollcommand=mini_hscroll.set)' in tools
+    assert 'menu.add_checkbutton(label=app.page_index_labels[key]' in tools
+    assert 'font=self.compact_page_font' in app
+    assert 'round(base_font_size * 0.8)' in app
+
+
+def test_canvas_right_click_navigation_and_sidebar_presets():
+    app, tools = sources()
+    assert 'self.canvas.bind("<Shift-Button-3>"' in app
+    assert 'def _canvas_shift_right_click(self, event: tk.Event)' in app
+    assert 'self.change_page(-1)' in app
+    assert '切换到上页（Shift + 鼠标右键）' in app
+    assert '切换到下页（鼠标右键）' in app
+    assert 'for choice in ("最简", "正常", "最大")' in tools
+    assert 'def set_sidebar_mode(app: Any, mode: str)' in tools
+    assert 'app.fit_page_height()' in tools
+    assert 'app.after_idle(app.fit_page_width)' in tools
