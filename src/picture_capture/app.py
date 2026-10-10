@@ -6504,8 +6504,7 @@ class PictureCaptureApp(tk.Tk):
                     self._app_icon_registered = True
                 except tk.TclError:
                     pass
-        # Reapply the same packaged icon to every mapped Toplevel. This makes
-        # secondary-window behavior independent of default-icon inheritance.
+        # Reapply icon to mapped secondary windows.
         self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")
         self.title("Picture Capture")
         fit_window_to_work_area(self, 1440, 900, min_width=1080, min_height=680)
@@ -13237,7 +13236,7 @@ class PictureCaptureApp(tk.Tk):
         if reset_zoom:
             available = max(500, self.canvas.winfo_width() - 24)
             self.view_scale = min(1.0, available / self.image.width)
-        # Viewer zoom is presentation-only and never changes source-pixel settings.
+
         if self.settings.bottom_y <= 0:
             self.settings.bottom_y = int(self.image.height)
         self.cursor_canvas_xy = None
@@ -13261,8 +13260,7 @@ class PictureCaptureApp(tk.Tk):
                 )
         self.redraw()
         self._set_idle_cursor_status()
-        # A new page always starts from its top-left corner.  Keep the current
-        # zoom level, but never inherit the previous page's scroll position.
+        # Reset scroll, preserving zoom.
         self.canvas.xview_moveto(0.0)
         self.canvas.yview_moveto(0.0)
         self._set_page_list_selection(index, ensure_visible=True)
