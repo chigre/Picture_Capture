@@ -9406,6 +9406,7 @@ class PictureCaptureApp(tk.Tk):
                 "可在【设置中心 → 切图】启用【未画线行导出过滤 → 空白】只检查近空白候选；"
                 "不以 entry/body 角色决定是否导出，并复用按页合并和切图并行进程设置。"
             ),
+            "大字头单行": "导出已标记为大字头的行左侧区域；按【向右比例】截取，支持按页合并。",
             "词条切图": "按所选页面范围和【设置中心 → 切图】生成完整词条切图。",
             "插图切图": "按所选范围导出需要独立输出的 PPP 插图。",
             "项目详情": "编辑词典名称、语言、正文页码范围等项目级元数据。",
@@ -9415,6 +9416,7 @@ class PictureCaptureApp(tk.Tk):
         }
         production_rows = [
             (("单行切图", self.split_single_lines_selected_scope), ("未画线行导出", self.export_unlined_rows_selected_scope), ("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope)),
+            (("大字头单行", self.export_major_headword_rows_selected_scope),),
             (("项目详情", self.open_project_details), ("导出PicDic索引", self.export_picdic_index), ("PicDic制作", self.build_picdic)),
             (("导出训练标记包", self.export_training_package),),
         ]
@@ -16260,6 +16262,9 @@ class PictureCaptureApp(tk.Tk):
 
     def split_single_lines_selected_scope(self) -> None:
         self._crop_controller_for_call().split_single_lines_selected_scope()
+
+    def export_major_headword_rows_selected_scope(self) -> None:
+        self._crop_controller_for_call().export_major_headword_rows_selected_scope()
 
     def export_unlined_rows_selected_scope(self) -> None:
         self._crop_controller_for_call().export_unlined_rows_selected_scope()
