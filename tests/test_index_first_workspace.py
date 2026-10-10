@@ -106,3 +106,15 @@ def test_index_uses_range_control_width_and_table_can_scroll():
     assert 'orient="horizontal", command=self.page_list.xview' in app
     assert 'if available <= base_total:' in app
     assert 'widths = minimum[:]' in app
+
+
+def test_page_index_omits_filename_extension_and_rail_is_left_aligned():
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    app_source = (root / "app.py").read_text(encoding="utf-8")
+    ui_source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert 'page.stem, self._page_section_count_text(index)' in app_source
+    assert 'page.name, self._page_section_count_text(index)' not in app_source
+    assert 'text="▦ 页面", width=8, anchor="w"' in ui_source
+    assert 'text=f"{symbol} {label}", width=8, anchor="w"' in ui_source
+    assert 'text="☰ 全部", width=8, anchor="w"' in ui_source
+    assert 'width=8, anchor="w", command=command' in ui_source
