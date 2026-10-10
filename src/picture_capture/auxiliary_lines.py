@@ -11,6 +11,8 @@ import json
 import os
 import tempfile
 
+from .project_storage import is_managed_project, storage_root
+
 FORMAT = "picture-capture-auxiliary-lines-v1"
 
 
@@ -22,7 +24,9 @@ class AuxiliaryLine:
 
 def auxiliary_line_path(image_path: str | Path) -> Path:
     page = Path(image_path)
-    return page.parent / "QT" / "AuxiliaryLines" / f"{page.stem}.json"
+    root = page.parent
+    folder = storage_root(root) / "data" if is_managed_project(root) else root / "QT"
+    return folder / "AuxiliaryLines" / f"{page.stem}.json"
 
 
 def read_auxiliary_lines(image_path: str | Path) -> list[AuxiliaryLine]:
