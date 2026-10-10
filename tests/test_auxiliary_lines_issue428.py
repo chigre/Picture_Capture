@@ -95,5 +95,5 @@ def test_preview_and_real_export_use_same_crop_planner():
     core = (root / "processing_core.py").read_text(encoding="utf-8")
     assert "auxiliary_lines=list(self._auxiliary_edits.lines)" in app
     assert "pieces = partition_entry_pieces(pieces, auxiliary_lines, geometry)" in core
-    assert core.count(').read_auxiliary_lines(image_path)') >= 2
+    assert core.count('read_auxiliary_lines(image_path)') >= 2
     assert '"auxiliary-overlay"' in (root / "auxiliary_line_controller.py").read_text(encoding="utf-8")
