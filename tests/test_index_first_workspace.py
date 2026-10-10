@@ -272,13 +272,16 @@ def test_current_review_crop_is_fixed_width_double_height_and_framed():
     assert 'self._update_active_crop_preview(index)' in app
 
 
-def test_active_review_row_keeps_ordinary_crop():
+def test_active_review_row_has_no_duplicate_inline_crop():
     app, _ = sources()
-    assert 'picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")' in app
-    assert 'picture.grid(row=index * 2, column=0' in app
+    assert 'if index != 0:' in app
+    assert 'photo = self._ordinary_review_photo(index)' in app
     assert 'self._review_row_pictures.append(picture)' in app
+    assert 'if row_index == index:' in app
+    assert 'picture.destroy()' in app
+    assert 'elif picture is None:' in app
+    assert 'self._review_row_pictures[row_index] = picture' in app
     assert 'self._update_active_crop_preview(index)' in app
-    assert 'picture.destroy()' not in app[app.index('    def set_active(self, index: int)'):app.index('    def _scroll_editor_into_view', app.index('    def set_active(self, index: int)'))]
 
 
 def test_review_preview_is_position_and_size_invariant_on_window_resize():
