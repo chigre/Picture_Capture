@@ -42,3 +42,24 @@ def test_single_character_in_left_aligned_body_is_not_caption():
     box = (100, 100, 580, 280)
     components = [(108, 287, 128, 306, 180)]
     assert _extend_box_to_caption(box, components, 1000) == box
+
+
+def test_realistic_fish_caption_height_survives_filter():
+    # Geometry measured from a scanned dictionary page: wide fish body
+    # 236 x 77; centered one-character caption 13 x 14 directly below.
+    box = (461, 390, 697, 467)
+    caption = [(573, 467, 586, 481, 151)]
+    assert _extend_box_to_caption(box, caption, 1000) == (461, 390, 697, 481)
+
+
+def test_downscaled_fish_caption_height_survives_filter():
+    # The production detector resizes columns for analysis.
+    box = (330, 280, 500, 335)
+    caption = [(410, 335, 420, 345, 75)]
+    assert _extend_box_to_caption(box, caption, 720) == (330, 280, 500, 345)
+
+
+def test_full_text_line_beneath_fish_remains_excluded():
+    box = (461, 390, 697, 467)
+    body = [(465, 470, 680, 486, 500)]
+    assert _extend_box_to_caption(box, body, 1000) == box
