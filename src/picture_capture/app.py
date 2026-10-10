@@ -10887,14 +10887,7 @@ class PictureCaptureApp(tk.Tk):
         self._quick_autosave_job = self.after(delay, self._run_quick_autosave)
 
     def _apply_overlay_visibility_toggle(self, setting_name: str, variable: tk.BooleanVar) -> None:
-        """Apply a canvas visibility switch immediately and persist it.
-
-        These switches control widgets created by ``redraw``.  Waiting for the
-        general-purpose delayed parameter autosave made a click appear to do
-        nothing, and the OCR switches were additionally masked outside the
-        proofreading window.  Update the model first so redraw observes the
-        new value, then persist through the normal quick-settings path.
-        """
+        """ apply overlay visibility toggle."""
         setattr(self.settings, setting_name, bool(variable.get()))
         if setting_name == "show_rulers" and not bool(variable.get()):
             self._hide_ruler_hint()
