@@ -12466,12 +12466,7 @@ class PictureCaptureApp(tk.Tk):
                 return
             dialog.destroy()
 
-        def open_folder(root: Path) -> None:
-            from .project_folder_launcher import open_project_folder
-            try:
-                open_project_folder(root)
-            except (OSError, RuntimeError) as exc:
-                messagebox.showerror("无法打开文件夹", str(exc), parent=dialog)
+        from .project_folder_launcher import open_project_folder_with_error
 
         def copy_path(root: Path) -> None:
             dialog.clipboard_clear()
@@ -12659,7 +12654,7 @@ class PictureCaptureApp(tk.Tk):
                 open_button.pack(side="left")
                 ttk.Button(
                     actions, text="打开文件夹",
-                    command=lambda p=root: open_folder(p),
+                    command=lambda p=root: open_project_folder_with_error(p, dialog),
                     state="normal" if exists else "disabled",
                 ).pack(side="left", padx=(5, 0))
                 more_button = ttk.Button(actions, text="⋯", width=3)
