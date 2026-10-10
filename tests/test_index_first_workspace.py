@@ -33,6 +33,12 @@ def test_task_shortcuts_group_navigation_and_keyboard():
     assert "app._set_section_expanded(section, True)" in source
     assert 'app.bind("<Control-Shift-t>"' in source
     assert 'app.bind("<Control-k>"' in source
-    assert 'app.bind("<Escape>"' in source
+    assert 'dock.bind("<Escape>"' in source
     assert '("OCR", TASK_GROUPS[3][1])' in source
     assert '("画线", TASK_GROUPS[4][1])' in source
+
+
+def test_narrow_dock_preserves_access_to_wide_controls():
+    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert 'orient="horizontal", command=canvas.xview' in source
+    assert 'width=max(e.width, content.winfo_reqwidth())' in source
