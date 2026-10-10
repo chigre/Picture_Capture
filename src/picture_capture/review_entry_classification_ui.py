@@ -3,9 +3,6 @@ from __future__ import annotations
 """Static proofreading UI helpers for entry regular/oversized classification."""
 
 from typing import Any
-import tkinter as tk
-from tkinter import ttk
-
 from .entry_classification import (
     get_entry_classification,
     set_entry_scale_manual,
@@ -60,9 +57,10 @@ def _persist(window: Any) -> None:
 
 
 def sync_review_entry_classification(window: Any) -> None:
-    """Keep the fixed active-entry image current; legacy selector is optional."""
-    from .review_pinned_entry_preview import refresh_pinned_entry_preview
-    refresh_pinned_entry_preview(window)
+    """Synchronize optional classification fields, not preview widgets.
+
+    ReviewWindow owns the sole pinned preview via _update_active_crop_preview.
+    """
     entry = _entry_for_active(window)
     var = getattr(window, "entry_scale_classification_var", None)
     source_var = getattr(window, "entry_source_classification_var", None)
@@ -111,12 +109,6 @@ def set_review_entry_classification_shortcut(window: Any, label: str) -> str:
     return "break"
 
 
-def initialize_review_entry_classification(window: Any) -> None:
-    """Replace the manual ordinary/oversized selector with an image-only preview."""
-    from .review_pinned_entry_preview import initialize_pinned_entry_preview
-    initialize_pinned_entry_preview(window)
-
-
 def install_review_entry_classification(app_module: Any) -> None:
     """Compatibility no-op; Review classification wiring is static."""
     _ = app_module
@@ -124,7 +116,6 @@ def install_review_entry_classification(app_module: Any) -> None:
 
 __all__ = [
     "change_review_entry_classification",
-    "initialize_review_entry_classification",
     "install_review_entry_classification",
     "set_review_entry_classification_shortcut",
     "sync_review_entry_classification",
