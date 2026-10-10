@@ -101,7 +101,7 @@ def load_automatic_baseline(pdic_path: Path) -> dict[str, Any]:
 
 
 def build_write_pdic_capture(
-    original_write_pdic: Callable[[Path, list[Entry], int, tuple[str, str, str]], None],
+    original_write_pdic: Callable[[Path, list[Entry], int, tuple[str, str, str]], bool | None],
 ):
     """Capture a missing direct-write baseline without clobbering later edits."""
     if bool(getattr(original_write_pdic, "_picture_capture_baseline_wrapper", False)):
@@ -112,11 +112,11 @@ def build_write_pdic_capture(
         entries: list[Entry],
         image_width: int,
         pages: tuple[str, str, str],
-    ) -> None:
+    ) -> bool | None:
         snapshot = baseline_path_for_pdic(path)
         if not snapshot.exists() and looks_like_automatic_result(entries):
             save_automatic_baseline(path, entries, image_width, pages)
-        original_write_pdic(path, entries, image_width, pages)
+        return original_write_pdic(path, entries, image_width, pages)
 
     setattr(write_pdic_with_baseline, "_picture_capture_baseline_wrapper", True)
     setattr(write_pdic_with_baseline, "_original_write_pdic", original_write_pdic)
