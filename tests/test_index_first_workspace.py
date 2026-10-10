@@ -34,8 +34,11 @@ def test_task_shortcuts_group_navigation_and_keyboard():
     assert 'app.bind("<Control-Shift-t>"' in source
     assert 'app.bind("<Control-k>"' in source
     assert 'dock.bind("<Escape>"' in source
-    assert '("OCR", TASK_GROUPS[3][1])' in source
-    assert '("画线", TASK_GROUPS[4][1])' in source
+    assert 'menu_button.configure(menu=task_menu)' in source
+    assert 'for label, title in TASK_GROUPS:' in source
+    assert '("OCR", "三、共享 OCR 通道 / OCR画线")' in source
+    assert '("画线/校对", "四、画线 / OCR / 插图 / 校对")' in source
+    assert 'shortcuts.grid(row=2' not in source
 
 
 def test_narrow_dock_preserves_access_to_wide_controls():
