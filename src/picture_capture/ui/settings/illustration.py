@@ -39,7 +39,7 @@ def build_illustration_settings_tab(dialog: object, tab: ttk.Frame) -> None:
         if variable is None:
             continue
         # Reuse the same settings variable, so automatic saving is unchanged.
-        row = list(ILLUSTRATION_APPEARANCE_FIELDS).index(name)
+        row = 1 + list(ILLUSTRATION_APPEARANCE_FIELDS).index(name)
         control = group.grid_slaves(row=row, column=1)
         if not control:
             continue
