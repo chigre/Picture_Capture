@@ -7809,12 +7809,12 @@ class PictureCaptureApp(tk.Tk):
             style="PC.Treeview",
         )
         self._page_list_heading_labels = {
-            "bookmark": "书签", "page": "页面", "section": "Section",
+            "bookmark": "🔖", "page": "页面", "section": "区块",
             "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
         }
-        self.page_list.heading("bookmark", text="书签", anchor="center")
+        self.page_list.heading("bookmark", text="🔖", anchor="center")
         self.page_list.heading("page", text="页面", anchor="center")
-        self.page_list.heading("section", text="Section", anchor="center")
+        self.page_list.heading("section", text="区块", anchor="center")
         self.page_list.heading("lined", text="画线", anchor="center")
         self.page_list.heading("fill_status", text="填充状态", anchor="center")
         self.page_list.heading("illustrations", text="插图", anchor="center")
@@ -8088,7 +8088,7 @@ class PictureCaptureApp(tk.Tk):
         if not hasattr(self, "page_list"):
             return
         labels = getattr(self, "_page_list_heading_labels", {
-            "bookmark": "书签", "page": "页面", "section": "Section",
+            "bookmark": "🔖", "page": "页面", "section": "区块",
             "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
         })
         active = self._page_list_sort_column
