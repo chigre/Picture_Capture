@@ -5524,6 +5524,15 @@ class ReviewWindow(tk.Toplevel):
             review_settings, geometry = _review_crop_context(
                 image, settings, viewer_width, page_index,
             )
+            # Inline rows are always single-line crops, including classified
+            # oversized entries and the currently selected entry.  The pinned
+            # preview is generated independently from the original page.
+            regular_height = _effective_review_regular_crop_height(review_settings)
+            inline_settings = replace(
+                review_settings,
+                entry_regular_crop_height=regular_height,
+                entry_oversized_crop_height=regular_height,
+            )
             raw_crops: list[Image.Image] = []
             for index, entry in enumerate(ordered_snapshot):
                 next_entry = (
@@ -5531,7 +5540,7 @@ class ReviewWindow(tk.Toplevel):
                     if index + 1 < len(ordered_snapshot) else None
                 )
                 box = _review_line_box(
-                    entry, geometry, image, review_settings, next_entry,
+                    entry, geometry, image, inline_settings, next_entry,
                 )
                 raw_crops.append(image.crop(box).convert("RGB"))
             effective_zoom = review_zoom
@@ -6073,13 +6082,8 @@ class ReviewWindow(tk.Toplevel):
     def _ordinary_review_photo(self, index: int) -> ImageTk.PhotoImage:
         """Build the ordinary single-line crop for each review editor row."""
         crop = self._review_display_crops[index]
-        regular_px = max(1, round(
-            _effective_review_regular_crop_height(self.parent.settings)
-            * self.review_zoom
-        ))
-        inline_crop = crop.crop((0, 0, crop.width, min(crop.height, regular_px)))
         return ImageTk.PhotoImage(
-            themed_display_image(inline_crop, self.parent.appearance_mode)
+            themed_display_image(crop, self.parent.appearance_mode)
         )
 
     def set_active(self, index: int) -> None:
