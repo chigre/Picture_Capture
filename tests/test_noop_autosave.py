@@ -16,10 +16,11 @@ def test_identical_pdic_write_is_skipped(tmp_path):
 def test_changed_pdic_write_is_committed(tmp_path):
     target = tmp_path / "page.pdic"
     assert write_pdic(target, [], 1400, ("page", "@", "@"))
-    # Existing content differs byte-for-byte, so the file must be replaced.
-    assert write_pdic(target, [], 1400, ("page", "previous", "@"))
-    # Empty entry lists have identical serialized content regardless of context.
-    assert target.read_bytes() == b""
+    assert write_pdic(target, [Entry(word="test", x=10, y=20)], 1400, ("page", "@", "@"))
+    assert "test#10#20#" in target.read_text("utf-8")
+    assert not write_pdic(target, [Entry(word="test", x=10, y=20)], 1400, ("page", "@", "@"))
+    assert write_pdic(target, [Entry(word="changed", x=10, y=20)], 1400, ("page", "@", "@"))
+    assert "changed#10#20#" in target.read_text("utf-8")
 
 
 def test_identical_ppp_write_is_skipped_and_change_is_written(tmp_path):
