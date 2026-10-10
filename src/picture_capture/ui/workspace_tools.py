@@ -144,6 +144,8 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     rail_style.configure("PC.Rail.TButton", padding=(4, 3), relief="flat", borderwidth=0, font="TkDefaultFont")
     rail_style.map("PC.Rail.TButton", relief=[("active", "flat")])
     rail.columnconfigure(0, weight=1)
+    app.page_index_labels = {"bookmark":"●","page":"页面","section":"域","lined":"线","fill_status":"填充状态","illustrations":"图"}
+    app.page_index_columns = tuple(app.page_index_labels)
     app.workspace_rail_labels = []
 
     def rail_action(parent: ttk.Frame, row: int, symbol: str, label: str,
@@ -167,9 +169,26 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         return entry
 
     sidebar_button = rail_action(
-        rail, 0, "☰", "侧栏", lambda: toggle_sidebar(app),
-        "显示/隐藏侧边栏（Ctrl+Shift+B）",
+        rail, 0, "☰", "侧栏", lambda: show_sidebar_modes(app),
+        "悬停选择最简、正常、最大模式",
     )
+    mode_menu = ttk.Frame(rail, padding=3, style="PC.Sidebar.TFrame")
+    mode_menu.grid(row=0, column=1, sticky="nw")
+    mode_menu.grid_remove()
+    app.workspace_sidebar_mode_menu = mode_menu
+    for choice in ("最简", "正常", "最大"):
+        ttk.Button(mode_menu, text=choice, width=5, style="PC.Rail.TButton",
+                   command=lambda mode=choice: set_sidebar_mode(app, mode)).pack(fill="x")
+    def schedule_mode_hide(_event: tk.Event | None = None) -> None:
+        def check() -> None:
+            widget = app.winfo_containing(app.winfo_pointerx(), app.winfo_pointery())
+            if not _within(widget, sidebar_button) and not _within(widget, mode_menu):
+                mode_menu.grid_remove()
+        app.after_idle(check)
+    for widget in (sidebar_button, *sidebar_button.winfo_children(),
+                   mode_menu, *mode_menu.winfo_children()):
+        widget.bind("<Enter>", lambda _e: show_sidebar_modes(app), add="+")
+        widget.bind("<Leave>", schedule_mode_hide, add="+")
     app.workspace_sidebar_toggle = sidebar_button
     for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1):
         rail_action(
@@ -188,15 +207,39 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     mini_host.grid_remove()
     mini_host.rowconfigure(0, weight=1)
     mini_host.columnconfigure(0, weight=1)
-    mini = ttk.Treeview(mini_host, columns=("page",), displaycolumns=("page",),
-                        show="headings", selectmode="browse", height=12,
-                        style="PC.CompactPage.Treeview")
-    mini.heading("page", text="页面", anchor="center")
-    mini.column("page", width=108, minwidth=65, anchor="center", stretch=True)
+    mini = ttk.Treeview(mini_host, columns=app.page_index_columns,
+                        displaycolumns=("page",), show="headings",
+                        selectmode="browse", height=12, style="PC.CompactPage.Treeview")
+    for column in app.page_index_columns:
+        mini.heading(column, text=app.page_index_labels[column], anchor="center")
+        mini.column(column, width=100 if column == "page" else 42,
+                    anchor="center", stretch=False)
     mini.grid(row=0, column=0, sticky="nsew")
     mini_scroll = ttk.Scrollbar(mini_host, orient="vertical", command=mini.yview)
     mini_scroll.grid(row=0, column=1, sticky="ns")
-    mini.configure(yscrollcommand=mini_scroll.set)
+    mini_hscroll = ttk.Scrollbar(mini_host, orient="horizontal", command=mini.xview)
+    mini_hscroll.grid(row=1, column=0, sticky="ew")
+    mini.configure(yscrollcommand=mini_scroll.set, xscrollcommand=mini_hscroll.set)
+    optional_columns = ("bookmark", "lined", "illustrations", "section", "fill_status")
+    mini_vars = {key: tk.BooleanVar(value=False) for key in optional_columns}
+    app.workspace_mini_column_vars = mini_vars
+    def choose_mini_columns() -> None:
+        mini.configure(displaycolumns=("page",) + tuple(
+            key for key in optional_columns if mini_vars[key].get()))
+    def mini_heading_menu(event: tk.Event) -> str | None:
+        if mini.identify_region(event.x, event.y) != "heading":
+            return None
+        menu = tk.Menu(mini, tearoff=False)
+        menu.add_checkbutton(label="页面", state="disabled")
+        for key in optional_columns:
+            menu.add_checkbutton(label=app.page_index_labels[key], variable=mini_vars[key],
+                                 command=choose_mini_columns)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+        return "break"
+    mini.bind("<Button-3>", mini_heading_menu)
     app.workspace_mini_page_host = mini_host
     app.workspace_mini_page_list = mini
 
@@ -369,7 +412,7 @@ def refresh_compact_page_index(app: Any) -> None:
         for iid in source.get_children():
             values = source.item(iid, "values")
             if len(values) >= 2:
-                mini.insert("", "end", iid=iid, values=(values[1],))
+                mini.insert("", "end", iid=iid, values=values)
         if selected and mini.exists(selected[0]):
             mini.selection_set(selected[0])
             mini.see(selected[0])
@@ -468,4 +511,46 @@ def toggle_sidebar(app: Any) -> str:
             except tk.TclError:
                 pass
         app.after_idle(expand)
+    return "break"
+
+def show_sidebar_modes(app: Any) -> None:
+    app.workspace_sidebar_mode_menu.grid()
+
+
+def set_sidebar_mode(app: Any, mode: str) -> str:
+    """Apply the requested window and page index layout."""
+    app.workspace_sidebar_mode_menu.grid_remove()
+    if mode == "最简":
+        if app.sidebar_canvas.winfo_manager() == "pack":
+            toggle_page_index(app)
+        app.update_idletasks()
+        if app.image is not None:
+            app.fit_page_height()
+            app.update_idletasks()
+            required = int(app.main_paned.sashpos(0) + app.image.width * app.view_scale + 32)
+            try:
+                app.state("normal")
+                app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{app.winfo_height()}")
+            except tk.TclError:
+                pass
+    elif mode == "正常":
+        if app.sidebar_canvas.winfo_manager() != "pack":
+            toggle_page_index(app)
+        app.update_idletasks()
+        if app.image is not None:
+            required = int(app.main_paned.sashpos(0) + app.image.width * app.view_scale + 32)
+            if app.winfo_width() < required:
+                try:
+                    app.state("normal")
+                    app.geometry(f"{min(app.winfo_screenwidth(), required)}x{app.winfo_height()}")
+                except tk.TclError:
+                    pass
+    elif mode == "最大":
+        if app.sidebar_canvas.winfo_manager() != "pack":
+            toggle_page_index(app)
+        try:
+            app.state("zoomed")
+        except tk.TclError:
+            app.geometry(f"{app.winfo_screenwidth()}x{app.winfo_screenheight()}+0+0")
+        app.after_idle(app.fit_page_width)
     return "break"
