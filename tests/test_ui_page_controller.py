@@ -112,8 +112,9 @@ def test_selection_restore_avoids_empty_selection_and_duplicate_events() -> None
     start = source.index("    def _set_page_list_selection(")
     end = source.index("    def _select_page_from_lined_overlay(", start)
     block = source[start:end]
-    assert "if tuple(self.page_list.selection()) != (iid,):" in block
-    assert "selection_remove(" not in block
+    assert "stale = tuple(value for value in selected if value != iid)" in block
+    assert "self.page_list.selection_remove(*stale)" in block
+    assert "if iid not in selected:" in block
     assert "self.page_list.selection_set(iid)" in block
 
 
