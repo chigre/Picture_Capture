@@ -116,6 +116,55 @@ def _merge_nearby_boxes(boxes: list[tuple[int, int, int, int]], gap: int) -> lis
     return boxes
 
 
+def _merge_illustration_grid(boxes):
+    """Join a compact, aligned multi-panel figure without joining ordinary rows.
+
+    A group must contain at least two rows with at least two components each.
+    The row spans must substantially overlap, and spacing must remain small
+    relative to the individual illustrations.
+    """
+    if len(boxes) < 4:
+        return boxes
+    ordered = sorted(boxes, key=lambda b: ((b[1] + b[3]) / 2, b[0]))
+    rows = []
+    for box in ordered:
+        cy = (box[1] + box[3]) / 2
+        height = box[3] - box[1]
+        match = next((row for row in rows
+                      if abs(cy - row["center"]) <= min(height, row["height"]) * .35), None)
+        if match is None:
+            rows.append({"center": cy, "height": height, "boxes": [box]})
+        else:
+            match["boxes"].append(box)
+            values = match["boxes"]
+            match["center"] = sum((b[1] + b[3]) / 2 for b in values) / len(values)
+    if len(rows) != 2 or any(len(row["boxes"]) < 2 for row in rows):
+        return boxes
+    row_bounds = []
+    for row in rows:
+        members = sorted(row["boxes"])
+        widths = sorted(b[2] - b[0] for b in members)
+        typical_width = widths[len(widths) // 2]
+        if any(right[0] - left[2] > max(8, typical_width * .75)
+               for left, right in zip(members, members[1:])):
+            return boxes
+        row_bounds.append((
+            min(b[0] for b in members), min(b[1] for b in members),
+            max(b[2] for b in members), max(b[3] for b in members),
+        ))
+    row_bounds.sort(key=lambda b: b[1])
+    upper, lower = row_bounds
+    overlap = min(upper[2], lower[2]) - max(upper[0], lower[0])
+    if overlap < .65 * min(upper[2] - upper[0], lower[2] - lower[0]):
+        return boxes
+    if lower[1] - upper[3] > max(8, (upper[3] - upper[1]) * .4):
+        return boxes
+    return [(
+        min(b[0] for b in boxes), min(b[1] for b in boxes),
+        max(b[2] for b in boxes), max(b[3] for b in boxes),
+    )]
+
+
 def _extend_box_to_caption(box, components, analysis_height):
     """Extend a drawing to one or two centered lines immediately beneath it."""
     x0, y0, x1, y1 = box
@@ -292,6 +341,7 @@ def detect_illustration_regions_from_image(
 
                     gap = max(5, round(0.018 * aw))
                     candidates = _merge_nearby_boxes(candidates, gap)
+                    candidates = _merge_illustration_grid(candidates)
                     candidates = [_extend_box_to_caption(box, comps, ah) for box in candidates]
                     for cx0, cy0, cx1, cy1 in candidates:
                         bw = cx1 - cx0
