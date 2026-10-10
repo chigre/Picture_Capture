@@ -139,6 +139,9 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
 
     app.bind_all("<Button-1>", dismiss_outside, add="+")
     app.bind("<Configure>", lambda _e: position_workspace_popup(app), add="+")
+    # Size the initial index to fit all three range choices, not the
+    # historical sum of the page-table column widths.
+    app.after_idle(lambda: size_page_index_to_controls(app))
 
 
 def _within(widget: Any, ancestor: tk.Misc) -> bool:
@@ -219,6 +222,21 @@ def show_workspace_task(app: Any, title: str | None) -> None:
     else:
         choose_workspace_section(app, title)
     show_workspace_tools(app)
+
+
+def size_page_index_to_controls(app: Any) -> None:
+    """Set the initial index width based on the range-selector's requested size."""
+    try:
+        rail = app.workspace_tools_rail
+        choices = app.page_range_controls_row
+        app.update_idletasks()
+        needed = rail.winfo_reqwidth() + choices.winfo_reqwidth() + 38
+        panes = app.main_paned
+        width = panes.winfo_width()
+        if width > 600:
+            panes.sashpos(0, min(needed, width - 350))
+    except (AttributeError, tk.TclError):
+        pass
 
 
 def toggle_page_index(app: Any) -> str:
