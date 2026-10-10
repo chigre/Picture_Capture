@@ -327,3 +327,19 @@ def test_workspace_mode_is_restored_from_last_session():
     assert 'set_sidebar_mode(self, self.workspace_mode)' in app
     assert 'app.workspace_mode = mode' in tools
     assert 'app._restore_workspace_layout()' in session
+
+
+def test_pinned_preview_and_every_inline_crop_coexist():
+    app, _ = sources()
+    start = app.index('    def render_rows(self, preloaded_crops:')
+    end = app.index('    def _ordinary_review_photo(', start)
+    render = app[start:end]
+    assert 'photo = self._ordinary_review_photo(index)' in render
+    assert 'picture = ttk.Label(self.rows, image=photo' in render
+    assert 'self._review_row_pictures.append(picture)' in render
+    assert 'if index != 0:' not in render
+    active = app[app.index('    def set_active(self, index: int)'):]
+    active = active[:active.index('    def _scroll_editor_into_view')]
+    assert 'self._update_active_crop_preview(index)' in active
+    assert 'picture.destroy()' not in active
+    assert 'picture.grid_remove()' not in active
