@@ -253,7 +253,9 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     assert "entry_regular_crop_height" in review_line_box
     assert "entry_oversized_crop_height" in review_line_box
     assert "_is_single_cjk_review_headword" not in app_source
-    assert '("自动", "普通词条", "大字头")' in review_source
+    # Manual type choices are no longer exposed in the proofreading UI.
+    assert 'values=("自动", "普通词条", "大字头")' not in review_source
+    assert "initialize_pinned_entry_preview(window)" in review_source
 
 
 def test_gui_composition_uses_static_pdic_io_and_review_classification():
