@@ -14630,7 +14630,7 @@ class PictureCaptureApp(tk.Tk):
                 self.polygon_draw_button.configure(
                     text="结束编辑插图", style="PC.EditActive.TButton"
                 )
-            self.status_var.set("插图编辑：拖动现有顶点或矩形边；Shift+单击边线添加可拖动顶点；空白处左键逐点绘制，右键闭合保存。")
+            self.status_var.set("插图编辑：Shift+单击边线加顶点；拖动调整，右键闭合新图形。")
         else:
             self.new_polygon.clear()
             if self.polygon_draw_button is not None:
@@ -14676,22 +14676,15 @@ class PictureCaptureApp(tk.Tk):
                 ri, pi = existing
                 self.status_var.set(f"正在编辑PPP：拖动插图 {ri + 1} 的顶点 {pi + 1}")
                 return
-            # Shift + click a polygon edge to add a draggable vertex.
-            # Saved automatic rectangles and manually drawn PPP polygons share
-            # the same editing path and PPP format.
-            if int(getattr(event, "state", 0)) & 0x0001:
-                segment = nearest_polygon_segment(
-                    self.polygons, x, y, view_scale=self.view_scale,
-                )
-                if segment is not None:
-                    ri, insert_at, point = segment
-                    self.polygons[ri].points.insert(insert_at, point)
-                    self._drag_polygon_vertex = (ri, insert_at)
+            if event.state & 1:
+                segment = nearest_polygon_segment(self.polygons, x, y, view_scale=self.view_scale)
+                if segment:
+                    ri, index, point = segment
+                    self.polygons[ri].points.insert(index, point)
+                    self._drag_polygon_vertex = (ri, index)
                     self._drag_polygon_edge = None
                     self.redraw()
-                    self.status_var.set(
-                        f"插图 {ri + 1} 已增加顶点 {insert_at + 1}；拖动调整后松开保存"
-                    )
+                    self.status_var.set("PPP顶点已增加；拖动并松开保存")
                     return
             edge = self._nearest_polygon_edge(x, y)
             if edge is not None:
