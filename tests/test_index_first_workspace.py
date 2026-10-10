@@ -113,3 +113,13 @@ def test_canvas_background_is_theme_specific_and_reapplied_on_switch():
     assert '"canvas": "#e9edf2"' in app
     assert '"canvas": base["canvas"]' in app
     assert 'self._main_ui_colors["canvas"] if name == "canvas" else palette[color_key]' in app
+
+
+def test_batch_progress_is_inline_with_status_bar_and_hidden_when_idle():
+    app, _ = sources()
+    assert 'self.batch_bar = ttk.Frame(status_bar, padding=(4, 1)' in app
+    assert 'self.batch_bar.pack(side="right", fill="x")' in app
+    assert 'self.batch_bar.pack_forget()' in app
+    assert 'self.batch_pause_button = ttk.Button(' in app
+    assert 'self.batch_stop_button = ttk.Button(' in app
+    assert 'maximum=100.0, length=160' in app
