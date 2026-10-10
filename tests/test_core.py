@@ -5502,7 +5502,7 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'scaled_overlay_line_width(self.settings.guide_width, overlay_scale)' in app_text
     assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in app_text
     assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
-    assert 'self.settings.illustration_label_border_width, overlay_scale' in app_text
+    assert 'highlightthickness=max(0, int(self.settings.illustration_label_border_width))' in app_text
     # Sequence uses a neutral light-gray background; destructive [X] remains separate.
     assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in app_text
     assert 'bg="#e6e6e6"' in app_text
