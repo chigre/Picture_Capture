@@ -298,3 +298,9 @@ def test_next_page_button_is_packed_before_expandable_editor_area():
     assert left < right < editor
 
 
+
+
+def test_compact_review_anchors_to_work_area_top():
+    app, _ = sources()
+    assert 'y = work_y  # Align compact proofreading to the top of the usable desktop.' in app
+    assert 'height = max(1, work_bottom - y)' in app
