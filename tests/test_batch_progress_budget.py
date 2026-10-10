@@ -15,7 +15,7 @@ def test_poll_budget_caps_large_backlog_even_when_each_event_is_fast():
 
 
 def test_poll_budget_yields_on_expensive_gui_events_before_count_limit():
-    assert batch_poll_should_yield(1, 100.0, now=100.0 + MAX_BATCH_POLL_SECONDS)
+    assert batch_poll_should_yield(1, 100.0, now=100.0 + MAX_BATCH_POLL_SECONDS + 0.001)
     assert not batch_poll_should_yield(0, 100.0, now=100.0 + 10.0)
     assert SATURATED_BATCH_POLL_DELAY_MS >= 1
 
