@@ -275,6 +275,7 @@ class AppSettings(metaclass=_AppSettingsMeta):
     illustration_detect_padding: int = 8
     illustration_detect_right_padding: int = 16
     illustration_detect_gray_threshold: int = 170
+    illustration_detect_parallel_workers: int = 0  # 0=automatic; 1=sequential
     # Retained only for loading older project settings; size filtering now uses dimensions.
     illustration_detect_min_area_percent: float = 0.22
     illustration_detect_min_width: float = 5.5

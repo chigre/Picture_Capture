@@ -4482,7 +4482,9 @@ def test_v2101_illustration_detection_button_uses_selected_scope_and_auto_ppp():
     assert "self._illustration_controller_for_call().detect_illustrations_selected_scope()" in wrapper
     assert "selected_page_indices()" in controller
     assert "人工绘制的 PPP 多边形会保留" in controller
-    assert "foreground_page_edit=True" in controller
+    assert "app._start_parallel_batch_task(" in controller
+    assert "detect_illustrations_job" in controller
+    assert "write_ppp(" in controller
 
 
 def test_v2102_wordslist_path_default_and_project_relative_load(tmp_path):

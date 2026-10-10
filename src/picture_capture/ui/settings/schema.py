@@ -38,6 +38,7 @@ FIELDS = [
         ("插图自动识别外扩（px）", "illustration_detect_padding", int),
         ("插图自动识别右侧外扩（px）", "illustration_detect_right_padding", int),
         ("检测灰度阈值", "illustration_detect_gray_threshold", int),
+        ("插图识别并行进程数（0=自动）", "illustration_detect_parallel_workers", int),
         ("候选最小宽度", "illustration_detect_min_width", float),
         ("候选最小高度", "illustration_detect_min_height", float),
         ("尺寸单位（% / px）", "illustration_detect_size_unit", str),
@@ -340,6 +341,7 @@ SETTING_HELP = {
         "review_single_cjk_line_height": "作用：校对窗口针对中文单字词条使用的特殊裁图行高。0 表示自动按项目典型行高约 2.5 倍计算；非 0 时单位为原图像素。\n\n调整：单字大字头被上下裁掉时增大；留白过多时减小。只影响校对裁图展示，不改变词头检测位置。",
         "review_zoom_percent": "校对切条图片默认使用自动适宽：0 表示按校对窗口左侧实际图片区宽度自动计算，使切条图片占约 99%。手动输入百分比或使用 +/- 后切换为手动缩放；点击【自动】可恢复自动适宽。",
         "wordslist_path": "作用：指定参考 wordslist.txt，用于主界面/校对界面的“是否已在词表中”、定位和新旧比较等辅助判断。程序使用成员索引，不要求把整份大词表一次渲染到 GUI。\n\n路径：项目内文件优先保存相对路径便于迁移；项目外文件使用绝对路径。它是校对参考源，不会反向修改 OCR 识别结果。",
+        "illustration_detect_parallel_workers": "按页面并行识别插图。0=自动选择进程数；1=逐页串行；2–8=最多同时处理的页面数。高分辨率扫描页会占用较多内存，建议先用2或4。",
         "illustration_detect_gray_threshold": "自动插图检测的固定灰度墨迹阈值（0–255，默认170）。数值越大，越浅的灰色也被视为墨迹；这一路径同时会综合局部自适应墨迹，因此不是唯一检测条件。 本参数参与自动候选墨迹构成，不影响已经保存的手绘插图区域。",
         "illustration_detect_min_width": "候选区域外接矩形的最小宽度（默认5.5%分析区域宽度）。与最小高度必须同时达标；主要用于避免大字头等较窄文字误识别为插图。",
         "illustration_detect_min_height": "候选区域外接矩形的最小高度（默认2.8%分析区域高度）。与最小宽度必须同时达标；较高阈值可能漏掉细长插图。",
@@ -465,6 +467,7 @@ SETTING_UNITS = {
         "batch_interval": "秒", "illustration_detect_padding": "原图px",
         "illustration_detect_right_padding": "原图px",
         "illustration_detect_gray_threshold": "0–255",
+        "illustration_detect_parallel_workers": "进程",
         "illustration_detect_min_width": "按尺寸单位",
         "illustration_detect_min_height": "按尺寸单位",
         "illustration_detect_size_unit": "% / px",
@@ -505,6 +508,7 @@ SETTING_SPIN = {
         "illustration_detect_padding": (0, 5000, 1),
         "illustration_detect_right_padding": (0, 5000, 1),
         "illustration_detect_gray_threshold": (0, 255, 1),
+        "illustration_detect_parallel_workers": (0, 8, 1),
         "illustration_detect_min_width": (0.0, 100000.0, 0.5),
         "illustration_detect_min_height": (0.0, 100000.0, 0.5),
         "illustration_detect_min_occupancy_percent": (0.0, 100.0, 0.5),
@@ -603,7 +607,8 @@ CHECK_HELP = {
     }
 
 ILLUSTRATION_DETECTION_FIELDS = (
-    "illustration_detect_gray_threshold", "illustration_detect_min_width",
+    "illustration_detect_gray_threshold", "illustration_detect_parallel_workers",
+    "illustration_detect_min_width",
     "illustration_detect_min_height", "illustration_detect_size_unit",
     "illustration_detect_min_occupancy_percent",
     "illustration_detect_padding", "illustration_detect_right_padding",

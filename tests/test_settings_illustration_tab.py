@@ -7,7 +7,8 @@ from picture_capture.ui.settings import schema
 
 def test_illustration_tab_owns_existing_visual_and_detection_settings():
     assert schema.ILLUSTRATION_DETECTION_FIELDS == (
-        "illustration_detect_gray_threshold", "illustration_detect_min_width",
+        "illustration_detect_gray_threshold", "illustration_detect_parallel_workers",
+        "illustration_detect_min_width",
         "illustration_detect_min_height", "illustration_detect_size_unit",
         "illustration_detect_min_occupancy_percent",
         "illustration_detect_padding", "illustration_detect_right_padding",

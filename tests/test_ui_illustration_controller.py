@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @dataclass
 class _Settings:
     marker: int = 7
+    illustration_detect_parallel_workers: int = 2
 
 
 class _StatusVar:
@@ -98,6 +99,19 @@ class _App:
             "item_label": item_label,
             "foreground_page_edit": foreground_page_edit,
             "page_indexer": page_indexer,
+        }
+        return True
+
+
+    def _start_parallel_batch_task(
+        self, title, items, worker_func, job_builder, result_consumer=None,
+        on_done=None, item_label=None, max_workers=0,
+    ) -> bool:
+        self.calls.append(("start_parallel", title, list(items), max_workers))
+        self.batch = {
+            "title": title, "items": list(items), "worker": worker_func,
+            "job_builder": job_builder, "done": on_done,
+            "item_label": item_label, "max_workers": max_workers,
         }
         return True
 
@@ -196,7 +210,7 @@ def test_foreground_ppp_is_saved_before_confirmation_and_cancel_stops(monkeypatc
     assert app.batch is None
 
 
-def test_confirmed_action_snapshots_settings_and_starts_original_batch(monkeypatch) -> None:
+def test_confirmed_action_snapshots_settings_and_starts_parallel_batch(monkeypatch) -> None:
     app = _App()
     _stub_dialogs(monkeypatch, confirm=True)
     monkeypatch.setattr(illustration_module, "write_ppp", lambda *_args: None)
@@ -206,10 +220,9 @@ def test_confirmed_action_snapshots_settings_and_starts_original_batch(monkeypat
     assert app.batch is not None
     assert app.batch["title"] == "插图识别"
     assert app.batch["items"] == [0, 1]
-    assert app.batch["foreground_page_edit"] is True
     assert app.batch["item_label"](1) == "page002.png"
-    assert app.batch["page_indexer"](1) == 1
-    assert app.calls[-1] == ("start_batch", "插图识别", [0, 1], True)
+    assert app.batch["max_workers"] == 2
+    assert app.calls[-1] == ("start_parallel", "插图识别", [0, 1], 2)
 
 
 def test_worker_uses_settings_snapshot_and_detection_job(monkeypatch) -> None:
@@ -228,7 +241,7 @@ def test_worker_uses_settings_snapshot_and_detection_job(monkeypatch) -> None:
     assert app.batch is not None
     app.settings.marker = 99
 
-    result = app.batch["worker"](1, 2, 2)
+    result = app.batch["worker"](*app.batch["job_builder"](1, 2, 2))
 
     assert result == {"auto": 2}
     assert captured == [
@@ -301,6 +314,18 @@ def test_done_does_not_reload_when_current_page_is_outside_selected_range(monkey
     assert app.status_var.values[-1] == "插图识别完成：1 页，自动识别 1 个插图区域；人工 PPP 已保留"
     assert app.calls == []
     assert app.polygon_var.values == []
+
+
+
+def test_worker_count_auto_and_serial_settings(monkeypatch) -> None:
+    for count in (0, 1, 4, 8):
+        app = _App()
+        app.settings.illustration_detect_parallel_workers = count
+        _stub_dialogs(monkeypatch, confirm=True)
+        monkeypatch.setattr(illustration_module, "write_ppp", lambda *_args: None)
+        IllustrationController(app).detect_illustrations_selected_scope()
+        assert app.batch["max_workers"] == count
+        assert app.batch["worker"] is illustration_module.detect_illustrations_job
 
 
 def test_illustration_controller_has_no_reverse_dependency_on_app_module() -> None:
