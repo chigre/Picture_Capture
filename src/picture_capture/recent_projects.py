@@ -175,6 +175,19 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         last_page_index = int(row.get("last_page_index")) if row.get("last_page_index") is not None else -1
     except (TypeError, ValueError):
         last_page_index = -1
+    from .project_center_metadata_cache import cached_details
+    cached = cached_details(root)
+    if cached is not None:
+        count = int(cached.get("image_count") or 0)
+        position = (
+            f"第 {min(count, last_page_index + 1):,} / {count:,} 页"
+            if count and last_page_index >= 0 else (last_page or "—")
+        )
+        return {
+            **cached, "path": str(root), "exists": True,
+            "last_page": last_page, "last_page_index": last_page_index,
+            "resume_text": last_page or "—", "position_text": position,
+        }
     details: dict[str, str | int | bool] = {
         "full_name": str(row.get("name") or root.name),
         "abbreviation": "",
