@@ -12466,6 +12466,8 @@ class PictureCaptureApp(tk.Tk):
                 return
             dialog.destroy()
 
+        from .project_folder_launcher import add_open_folder_button
+
         def copy_path(root: Path) -> None:
             dialog.clipboard_clear()
             dialog.clipboard_append(str(root))
@@ -12650,6 +12652,7 @@ class PictureCaptureApp(tk.Tk):
                     state="normal" if exists else "disabled", width=8,
                 )
                 open_button.pack(side="left")
+                add_open_folder_button(actions, root, dialog, exists)
                 more_button = ttk.Button(actions, text="⋯", width=3)
                 more_button.configure(command=lambda b=more_button, p=root: card_menu(b, p))
                 more_button.pack(side="left", padx=(5, 0))
