@@ -87,7 +87,7 @@ def test_page_name_column_does_not_absorb_all_spare_sidebar_width():
     app, _ = sources()
     assert 'weights = {' not in app[app.index('    def _fit_page_list_columns'):app.index('    def _hide_page_list_section_heading_hint')]
     assert 'page.stem for page in getattr(self.project, "images", ())' in app
-    assert 'header_font.measure(label) + 10' in app
+    assert 'header_font.measure(label) + 6' in app
 
 
 def test_borderless_index_and_vector_rail_icon_art():
@@ -132,3 +132,17 @@ def test_page_headers_and_preferred_sidebar_width():
     assert 'self.page_list.heading("bookmark", text="🔖"' in app
     assert 'self.page_list.heading("section", text="区块"' in app
     assert 'min(300, max(minimum, panes.winfo_width() - 320))' in tools
+
+
+def test_page_columns_order_and_mandatory_visibility():
+    app, _ = sources()
+    assert '"bookmark": "●"' in app
+    assert '"section": "区块"' in app
+    assert 'columns = ["bookmark", "page", "lined"]' in app
+    assert 'columns.append("illustrations")' in app
+    assert 'columns.append("section")' in app
+    assert 'columns.append("fill_status")' in app
+    assert 'menu.add_checkbutton(label="画线", state="disabled")' in app
+    assert 'label="区块", variable=section_var, state="disabled"' in app
+    assert '"bookmark": 25' in app
+    assert 'borderwidth=1' in app
