@@ -3464,8 +3464,7 @@ def detect_illustration_regions_from_image(
                 try:
                     adaptive = _adaptive_dark_mask(small, 19, 16)
                     arr = np.asarray(small, dtype=np.uint8)
-                    gray_limit = max(0, min(255, int(effective.illustration_detect_gray_threshold)))
-                    dark = np.logical_or(adaptive, arr < gray_limit)
+                    dark = np.logical_or(adaptive, arr < int(effective.illustration_detect_gray_threshold))
                     mask_img = Image.fromarray(
                         dark.astype(np.uint8) * 255,
                         mode="L",
@@ -3484,7 +3483,7 @@ def detect_illustration_regions_from_image(
                     comps = _rle_components(joined)
                     min_h = max(18, round(0.028 * ah))
                     min_w = max(18, round(0.055 * aw))
-                    min_bbox_area = max(500, round(max(0.0, effective.illustration_detect_min_area_percent) / 100.0 * aw * ah))
+                    min_bbox_area = max(500, round(effective.illustration_detect_min_area_percent / 100.0 * aw * ah))
                     candidates: list[tuple[int, int, int, int]] = []
                     for cx0, cy0, cx1, cy1, area in comps:
                         bw = cx1 - cx0
@@ -3493,7 +3492,7 @@ def detect_illustration_regions_from_image(
                         if bw < min_w or bh < min_h or bbox_area < min_bbox_area:
                             continue
                         occupancy = area / max(1, bbox_area)
-                        if occupancy < max(0.0, effective.illustration_detect_min_occupancy_percent) / 100.0:
+                        if occupancy < effective.illustration_detect_min_occupancy_percent / 100.0:
                             continue
                         if bw / max(1, bh) > 7.0 and bh < 0.08 * ah:
                             continue
