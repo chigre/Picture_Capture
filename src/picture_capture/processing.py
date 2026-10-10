@@ -503,6 +503,17 @@ def detect_entries(
                 analysis_image,
                 page_index=profile_page_index,
             )
+            # Large ideographs may generate several spurious Layout entry
+            # rows inside one glyph; veto only image-confirmed duplicates.
+            if uses_cjk_role_model(effective) and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity":
+                from .ordinary_oversized_head_guard import suppress_oversized_head_fragment_entries
+                columns = understanding.layout.columns
+                entries = suppress_oversized_head_fragment_entries(
+                    entries, analysis_image,
+                    [int(column.left) for column in columns],
+                    [int(column.right - column.left) for column in columns],
+                    float(understanding.layout.ordinary_line_height),
+                )
             entries = _allowed_entries(
                 entries,
                 source,
