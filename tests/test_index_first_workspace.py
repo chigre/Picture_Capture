@@ -313,3 +313,15 @@ def test_inline_review_slice_is_regular_height_not_double():
     assert 'inline_crop = crop.crop((0, 0, crop.width, min(crop.height, regular_px)))' in app
     assert 'themed_display_image(inline_crop, self.parent.appearance_mode)' in app
     assert 'self._update_active_crop_preview(index)' in app
+
+
+def test_workspace_mode_is_restored_from_last_session():
+    app, tools = sources()
+    session = (ROOT / "ui" / "controllers" / "session.py").read_text(encoding="utf-8")
+    assert '"workspace_mode": getattr(app, "workspace_mode", "最大")' in session
+    assert 'stored_mode = self._last_session.get("workspace_mode", "最大")' in app
+    assert 'self._restore_workspace_mode_pending = True' in app
+    assert 'self._restore_workspace_layout()' in app
+    assert 'set_sidebar_mode(self, self.workspace_mode)' in app
+    assert 'app.workspace_mode = mode' in tools
+    assert 'app._restore_workspace_layout()' in session
