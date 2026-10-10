@@ -532,33 +532,44 @@ def show_sidebar_modes(app: Any) -> None:
 
 
 def set_sidebar_mode(app: Any, mode: str) -> str:
-    """Apply the requested window and page index layout."""
+    """Apply layout after Tk finishes resizing its Panedwindow."""
     app.workspace_sidebar_mode_menu.place_forget()
     if mode == "最简":
         if app.sidebar_canvas.winfo_manager() == "pack":
             toggle_page_index(app)
-        app.update_idletasks()
-        if app.image is not None:
-            app.fit_page_height()
+        def fit_compact() -> None:
+            if app.image is None:
+                return
             app.update_idletasks()
+            app.fit_page_height()
             required = int(app.main_paned.sashpos(0) + app.image.width * app.view_scale + 32)
             try:
+                height = app.winfo_height()
+                top = app.winfo_y()
                 app.state("normal")
-                app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{app.winfo_height()}+0+{app.winfo_y()}")
+                app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{height}+0+{top}")
             except tk.TclError:
                 pass
+        app.after_idle(fit_compact)
     elif mode == "正常":
         if app.sidebar_canvas.winfo_manager() != "pack":
             toggle_page_index(app)
-        app.update_idletasks()
-        if app.image is not None:
-            required = int(app.main_paned.sashpos(0) + app.image.width * app.view_scale + 32)
-            if app.winfo_width() < required:
-                try:
-                    app.state("normal")
-                    app.geometry(f"{min(app.winfo_screenwidth(), required)}x{app.winfo_height()}")
-                except tk.TclError:
-                    pass
+        def fit_normal() -> None:
+            try:
+                app.update_idletasks()
+                rail = app.workspace_tools_rail
+                required_sidebar = rail.winfo_reqwidth() + app.page_range_controls_row.winfo_reqwidth() + 24
+                sash = min(required_sidebar, max(1, app.main_paned.winfo_width() - 160))
+                app.main_paned.sashpos(0, sash)
+                if app.image is not None:
+                    required = int(sash + app.image.width * app.view_scale + 32)
+                    if app.winfo_width() < required:
+                        height, top = app.winfo_height(), app.winfo_y()
+                        app.state("normal")
+                        app.geometry(f"{min(app.winfo_screenwidth(), required)}x{height}+0+{top}")
+            except tk.TclError:
+                pass
+        app.after_idle(fit_normal)
     elif mode == "最大":
         if app.sidebar_canvas.winfo_manager() != "pack":
             toggle_page_index(app)
