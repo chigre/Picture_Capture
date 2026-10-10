@@ -7737,9 +7737,8 @@ class PictureCaptureApp(tk.Tk):
         sidebar.columnconfigure(0, weight=1)
         sidebar.rowconfigure(1, weight=1)
 
-        controls = ttk.Frame(sidebar, style="PC.Sidebar.TFrame")
-        controls.grid(row=0, column=0, sticky="ew")
-        self._build_quick_settings(controls)
+        from .ui.workspace_tools import install_workspace_tools
+        install_workspace_tools(self, sidebar)
 
         page_panel = self._section_frame(sidebar, "六、页面列表", padding=6, section_key="pages")
         self.page_panel = page_panel
