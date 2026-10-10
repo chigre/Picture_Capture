@@ -6387,7 +6387,7 @@ def test_main_ocr_visibility_controls_apply_immediately_and_candidate_boxes_are_
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     assert 'command=lambda n=name, v=var: self._apply_overlay_visibility_toggle(n, v)' in text
     assert '"paddle_show_candidate_checkboxes", candidate_var' in text
-    start = text.index("            show_candidates = (")
+    start = text.index("        show_candidates = (")
     end = text.index("        show_shapes =", start)
     candidate_block = text[start:end]
     assert "if show_candidates:" in candidate_block

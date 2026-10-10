@@ -62,7 +62,7 @@ def test_crop_preview_early_return_keeps_ocr_preview_overlay():
     redraw = source[start:end]
 
     crop_start = redraw.index("        if self.crop_preview_var.get():")
-    crop_end = redraw.index("        hidden = self.hide_var.get()", crop_start)
+    crop_end = redraw.index("        hidden = bool(self.hide_var.get())", crop_start)
     crop_branch = redraw[crop_start:crop_end]
 
     assert "draw_ocr_crop_preview(self)" in crop_branch

@@ -101,7 +101,7 @@ class CanvasController:
             if hasattr(app, "quick_bool_vars") and "show_rulers" in app.quick_bool_vars
             else bool(getattr(app.settings, "show_rulers", False))
         )
-        return bool(visible) and not bool(app.hide_var.get())
+        return bool(visible)
 
     def draw_percentage_rulers(self, geometry=None) -> None:
         """Draw four fixed percentage rulers on the page edges."""
