@@ -6508,7 +6508,7 @@ class PictureCaptureApp(tk.Tk):
         # Reapply icon to mapped secondary windows.
         self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")
         self.title("Picture Capture")
-        fit_window_to_work_area(self, 1440, 900, min_width=1080, min_height=680)
+        fit_window_to_work_area(self, 1440, 900, min_width=1, min_height=680)
         self.project: ProjectState | None = None
         self._project_words: set[str] = set()
         self.settings = AppSettings()
