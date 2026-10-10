@@ -345,9 +345,9 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as handle:
+        with tempfile.NamedTemporaryFile("wb", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as handle:
             temp_path = Path(handle.name)
-            handle.write(serialized.decode("utf-8"))
+            handle.write(serialized)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_path, path)
