@@ -37,6 +37,17 @@ FIELDS = [
         ("自动保存间隔（秒）", "batch_interval", float),
         ("插图自动识别外扩（px）", "illustration_detect_padding", int),
         ("插图自动识别右侧外扩（px）", "illustration_detect_right_padding", int),
+        ("检测灰度阈值", "illustration_detect_gray_threshold", int),
+        ("候选最小面积（%）", "illustration_detect_min_area_percent", float),
+        ("候选最小墨迹占比（%）", "illustration_detect_min_occupancy_percent", float),
+        ("插图轮廓色", "illustration_outline_color", str),
+        ("插图轮廓线宽", "illustration_outline_width", int),
+        ("插图区域背景色", "illustration_fill_color", str),
+        ("插图标签边框色", "illustration_label_border_color", str),
+        ("插图标签边框宽", "illustration_label_border_width", int),
+        ("插图标签背景色", "illustration_label_fill_color", str),
+        ("插图标签字体", "illustration_label_font_family", str),
+        ("插图标签字号", "illustration_label_font_size", int),
         ("OCR 语言", "ocr_language", str),
         ("Tesseract 语言", "tesseract_language", str),
         ("书写模式", "layout_writing_mode", str),
@@ -124,7 +135,7 @@ FIELD_GROUPS = [
             "body_indent", "character_height", "row_padding", "right_ratio",
             "horizontal_tolerance", "darkness_threshold",
         ]),
-        ("词条线显示", ["marker_height", "headword_marker_opacity", "guide_width", "guide_opacity", "illustration_fill_opacity"]),
+        ("词条线显示", ["marker_height", "headword_marker_opacity", "guide_width", "guide_opacity"]),
         ("主界面词条文本框", [
             "main_entry_font_family", "main_entry_font_size", "main_entry_width_chars", "main_entry_x_ratio",
         ]),
@@ -134,7 +145,6 @@ FIELD_GROUPS = [
         ]),
         ("辅助词表", ["wordslist_path"]),
         ("列跟踪", ["column_track_radius", "column_track_block_height", "column_track_max_step"]),
-        ("插图识别", ["illustration_detect_padding", "illustration_detect_right_padding"]),
         ("OCR 基础", [
             "paddle_ocr_version",
             "paddle_preprocessing", "paddle_max_input_side", "batch_interval",
@@ -399,7 +409,7 @@ OCR_ADVANCED_FIELDS = (
     )
 
 DISPLAY_FIELDS = (
-        "marker_height", "headword_marker_opacity", "guide_width", "guide_opacity", "illustration_fill_opacity",
+        "marker_height", "headword_marker_opacity", "guide_width", "guide_opacity",
         "main_entry_font_family", "main_entry_font_size",
         "main_entry_width_chars", "main_entry_x_ratio",
         "review_entry_font_family", "review_entry_font_size",
@@ -410,7 +420,6 @@ DISPLAY_FIELDS = (
 PROJECT_RUNTIME_FIELDS = (
         "batch_interval", "tesseract_language",
         "paddle_ocr_version", "paddle_max_input_side",
-        "illustration_detect_padding", "illustration_detect_right_padding",
     )
 
 EXPERT_FIELDS = (
@@ -439,7 +448,13 @@ SETTING_UNITS = {
         "paddle_separator_roi_width_ratio": "%", "paddle_separator_column_margin": "原图px",
         "paddle_header_search_height": "% 图高", "paddle_header_rule_margin": "原图px",
         "batch_interval": "秒", "illustration_detect_padding": "原图px",
-        "illustration_detect_right_padding": "原图px", "main_entry_font_size": "pt",
+        "illustration_detect_right_padding": "原图px",
+        "illustration_detect_gray_threshold": "0–255",
+        "illustration_detect_min_area_percent": "%",
+        "illustration_detect_min_occupancy_percent": "%",
+        "illustration_outline_width": "px",
+        "illustration_label_border_width": "px",
+        "illustration_label_font_size": "pt", "main_entry_font_size": "pt",
         "review_entry_font_size": "pt", "review_entry_vertical_padding": "px",
         "review_single_cjk_line_height": "原图px", "review_zoom_percent": "%",
     }
@@ -472,6 +487,12 @@ SETTING_SPIN = {
         "batch_interval": (0.5, 3600, 0.5),
         "illustration_detect_padding": (0, 5000, 1),
         "illustration_detect_right_padding": (0, 5000, 1),
+        "illustration_detect_gray_threshold": (0, 255, 1),
+        "illustration_detect_min_area_percent": (0.0, 100.0, 0.05),
+        "illustration_detect_min_occupancy_percent": (0.0, 100.0, 0.5),
+        "illustration_outline_width": (1, 20, 1),
+        "illustration_label_border_width": (1, 20, 1),
+        "illustration_label_font_size": (5, 200, 1),
         "main_entry_font_size": (5, 200, 1), "review_entry_font_size": (6, 200, 1),
         "review_entry_vertical_padding": (0, 30, 1),
         "review_single_cjk_line_height": (0, 500, 1), "review_zoom_percent": (0.0, 250.0, 0.5),
@@ -559,11 +580,31 @@ CHECK_HELP = {
         "review_entry_font_italic": "开启后校对窗口“原词条”编辑框使用斜体；关闭为正体。只影响显示；若某字体斜体导致字符更宽，可见字符数可能略变，但词条数据不变。",
     }
 
+ILLUSTRATION_DETECTION_FIELDS = (
+    "illustration_detect_gray_threshold", "illustration_detect_min_area_percent",
+    "illustration_detect_min_occupancy_percent",
+    "illustration_detect_padding", "illustration_detect_right_padding",
+)
+
+ILLUSTRATION_APPEARANCE_FIELDS = (
+    "illustration_outline_color", "illustration_outline_width",
+    "illustration_fill_color", "illustration_fill_opacity",
+    "illustration_label_border_color", "illustration_label_border_width",
+    "illustration_label_fill_color", "illustration_label_font_family",
+    "illustration_label_font_size",
+)
+
+ILLUSTRATION_CHECKS = (
+    ("Layout 分析前白化插图", "layout_mask_illustrations"),
+    ("显示插图区域标签", "show_illustration_labels"),
+    ("插图标签粗体", "illustration_label_font_bold"),
+    ("插图标签斜体", "illustration_label_font_italic"),
+)
+
 NORMAL_CHECKS = (
         ("自动精修横线 Y", "paddle_refine_separator_y"),
         ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
         ("使用自动版面参数", "ordinary_auto_layout"),
-        ("Layout前白化插图", "layout_mask_illustrations"),
         ("分栏数", "ordinary_auto_columns"),
         ("正文起始Y", "ordinary_auto_start_y"),
         ("首栏X", "ordinary_auto_manual_x"),
@@ -605,6 +646,7 @@ DISPLAY_CHECKS = (
 
 
 __all__ = [
+    "ILLUSTRATION_DETECTION_FIELDS", "ILLUSTRATION_APPEARANCE_FIELDS", "ILLUSTRATION_CHECKS",
     "FIELDS",
     "PROFILE_FIELD_GROUPS",
     "PROFILE_CHECKS",
