@@ -172,9 +172,8 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         rail, 0, "☰", "侧栏", lambda: show_sidebar_modes(app),
         "悬停选择最简、正常、最大模式",
     )
-    mode_menu = ttk.Frame(rail, padding=3, style="PC.Sidebar.TFrame")
-    mode_menu.grid(row=0, column=1, sticky="nw")
-    mode_menu.grid_remove()
+    mode_menu = ttk.Frame(app, padding=3, relief="solid", borderwidth=1,
+                          style="PC.Sidebar.TFrame")
     app.workspace_sidebar_mode_menu = mode_menu
     for choice in ("最简", "正常", "最大"):
         ttk.Button(mode_menu, text=choice, width=5, style="PC.Rail.TButton",
@@ -183,7 +182,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         def check() -> None:
             widget = app.winfo_containing(app.winfo_pointerx(), app.winfo_pointery())
             if not _within(widget, sidebar_button) and not _within(widget, mode_menu):
-                mode_menu.grid_remove()
+                mode_menu.place_forget()
         app.after_idle(check)
     for widget in (sidebar_button, *sidebar_button.winfo_children(),
                    mode_menu, *mode_menu.winfo_children()):
@@ -514,12 +513,20 @@ def toggle_sidebar(app: Any) -> str:
     return "break"
 
 def show_sidebar_modes(app: Any) -> None:
-    app.workspace_sidebar_mode_menu.grid()
+    menu = app.workspace_sidebar_mode_menu
+    rail_button = app.workspace_sidebar_toggle
+    try:
+        x = rail_button.winfo_rootx() - app.winfo_rootx() + rail_button.winfo_width() + 2
+        y = rail_button.winfo_rooty() - app.winfo_rooty()
+        menu.place(x=x, y=y)
+        menu.lift()
+    except tk.TclError:
+        pass
 
 
 def set_sidebar_mode(app: Any, mode: str) -> str:
     """Apply the requested window and page index layout."""
-    app.workspace_sidebar_mode_menu.grid_remove()
+    app.workspace_sidebar_mode_menu.place_forget()
     if mode == "最简":
         if app.sidebar_canvas.winfo_manager() == "pack":
             toggle_page_index(app)
@@ -552,5 +559,5 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
             app.state("zoomed")
         except tk.TclError:
             app.geometry(f"{app.winfo_screenwidth()}x{app.winfo_screenheight()}+0+0")
-        app.after_idle(app.fit_page_width)
+        app.after(120, app.fit_page_width)
     return "break"
