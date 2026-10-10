@@ -13089,7 +13089,7 @@ class PictureCaptureApp(tk.Tk):
                 self.page_list.insert(
                     "", "end", iid=str(index), values=(
                         "●" if page.stem in self._bookmark_stems() else "",
-                        page.name, self._page_section_count_text(index),
+                        page.stem, self._page_section_count_text(index),
                         "", self._word_fill_status_text(index), "",
                     ),
                 )
