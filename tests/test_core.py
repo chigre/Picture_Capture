@@ -3991,9 +3991,9 @@ def test_v296_batch_queue_polling_yields_between_large_progress_bursts():
     start = text.index("    def _poll_batch_queue(self) -> None:")
     end = text.index("    def _finish_batch_task(", start)
     block = text[start:end]
-    assert "max_events_per_poll = 120" in block
-    assert "processed_events >= max_events_per_poll" in block
-    assert "delay = 8 if processed_events >= max_events_per_poll else 80" in block
+    assert "batch_poll_should_yield(processed_events, poll_started)" in block
+    assert "SATURATED_BATCH_POLL_DELAY_MS if yielded else 80" in block
+    assert "start_batch_poll_budget()" in block
 
 
 def test_v296_page_aware_parser_scales_to_many_pages_without_cross_page_spill():
