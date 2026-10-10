@@ -1,7 +1,7 @@
-"""Index-first workspace with a real resizable right-side tools dock.
+"""Minimal icon rail and an overlay tool palette that never resizes the page.
 
-The existing quick-settings widgets are built once. Hiding the dock uses
-Panedwindow.forget (not destroy), preserving edits, Tk variables and callbacks.
+Quick-setting widgets are built exactly once, preserving existing commands and
+variables. A temporary popover can be pinned for image-and-parameter work.
 """
 from __future__ import annotations
 
@@ -11,65 +11,44 @@ from typing import Any
 
 
 TASK_GROUPS = (
-    ("预处理", "图片预处理(前置)"),
-    ("版面", "一、版面参数"),
-    ("显示", "二、显示设置"),
-    ("OCR", "三、共享 OCR 通道 / OCR画线"),
-    ("画线/校对", "四、画线 / OCR / 插图 / 校对"),
-    ("制作", "五、后期词典制作"),
+    ("预处理", "◫", "图片预处理(前置)"),
+    ("版面", "▤", "一、版面参数"),
+    ("显示", "◉", "二、显示设置"),
+    ("OCR", "⌕", "三、共享 OCR 通道 / OCR画线"),
+    ("画线/校对", "✎", "四、画线 / OCR / 插图 / 校对"),
+    ("制作", "✂", "五、后期词典制作"),
 )
 
 
 def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
-    """Keep index navigation in sidebar and mount editable tools in a dock."""
-    panes = app.main_paned
-    dock = ttk.Frame(panes, padding=(7, 5), style="PC.Sidebar.TFrame")
-    app.workspace_tools_window = dock  # stable compatibility reference
-    app.workspace_tools_dock = dock
+    """Place the icon rail beside the permanent page index."""
+    rail = ttk.Frame(sidebar, style="PC.Sidebar.TFrame")
+    rail.grid(row=0, column=0, rowspan=2, sticky="ns", padx=(0, 5))
+    app.workspace_tools_toggle = rail
+    app.workspace_tools_rail = rail
     app.workspace_tools_visible = False
-    app.workspace_tools_width = 470
-    # Main viewer is already pane 1. Add the dock only on demand.
-    toolbar = ttk.Frame(sidebar)
-    toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 4))
-    toolbar.columnconfigure(0, weight=1)
-    ttk.Button(
-        toolbar, text="☰  工具", command=lambda: toggle_workspace_tools(app),
-        style="PC.Compact.TButton",
-    ).grid(row=0, column=0, sticky="ew")
-    app.workspace_tools_toggle = toolbar
-    menu_button = ttk.Menubutton(toolbar, text="▾", width=3, style="PC.Compact.TButton")
-    menu_button.grid(row=0, column=1, padx=(4, 0))
-    task_menu = tk.Menu(menu_button, tearoff=False)
-    for label, title in TASK_GROUPS:
-        task_menu.add_command(
-            label=label,
-            command=lambda target=title: show_workspace_task(app, target),
-        )
-    task_menu.add_separator()
-    task_menu.add_command(label="显示全部工具", command=lambda: (
-        show_workspace_tools(app), show_all_sections(app)
-    ))
-    menu_button.configure(menu=task_menu)
-    app.workspace_tools_menu = task_menu
+    app.workspace_tools_pinned = False
+    app.workspace_tools_active = None
 
-    navigation = ttk.Frame(dock)
-    navigation.pack(fill="x", pady=(0, 6))
-    ttk.Label(navigation, text="任务：").pack(side="left")
-    jump_var = tk.StringVar(value="选择工具分组")
-    jump = ttk.Combobox(
-        navigation, textvariable=jump_var, state="readonly", width=17
-    )
-    jump.pack(side="left", fill="x", expand=True)
-    ttk.Button(
-        navigation, text="全部", command=lambda: show_all_sections(app),
-        style="PC.Compact.TButton",
-    ).pack(side="left", padx=(4, 0))
-    ttk.Button(
-        navigation, text="×", width=3, command=lambda: hide_workspace_tools(app),
-        style="PC.Compact.TButton",
-    ).pack(side="right", padx=(4, 0))
+    # Overlay is a child of the main window, not a third Panedwindow pane
+    # and not a floating OS window. Thus the image canvas never shrinks.
+    popup = ttk.Frame(app, padding=7, relief="solid", borderwidth=1,
+                      style="PC.Sidebar.TFrame")
+    app.workspace_tools_window = popup
+    app.workspace_tools_popup = popup
+    header = ttk.Frame(popup)
+    header.pack(fill="x", pady=(0, 6))
+    heading = tk.StringVar(value="工作工具")
+    ttk.Label(header, textvariable=heading).pack(side="left", fill="x", expand=True)
+    pin_var = tk.BooleanVar(value=False)
+    ttk.Checkbutton(
+        header, text="固定", variable=pin_var,
+        command=lambda: set_workspace_pin(app, bool(pin_var.get())),
+    ).pack(side="left", padx=5)
+    ttk.Button(header, text="×", width=3, command=lambda: hide_workspace_tools(app),
+               style="PC.Compact.TButton").pack(side="right")
 
-    scroller = ttk.Frame(dock)
+    scroller = ttk.Frame(popup)
     scroller.pack(fill="both", expand=True)
     canvas = tk.Canvas(scroller, highlightthickness=0, borderwidth=0)
     scrollbar = ttk.Scrollbar(scroller, orient="vertical", command=canvas.yview)
@@ -80,94 +59,106 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
     canvas.pack(side="left", fill="both", expand=True)
     content = ttk.Frame(canvas)
     item = canvas.create_window((0, 0), window=content, anchor="nw")
-    content.bind(
-        "<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all"))
-    )
+    content.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
     canvas.bind("<Configure>", lambda e: canvas.itemconfigure(
         item, width=max(e.width, content.winfo_reqwidth())
     ))
-    canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(-int(e.delta / 120), "units"))
+    canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(
+        -int(e.delta / 120) if e.delta else 0, "units"
+    ))
     canvas.bind("<Button-4>", lambda _e: canvas.yview_scroll(-3, "units"))
     canvas.bind("<Button-5>", lambda _e: canvas.yview_scroll(3, "units"))
     app._build_quick_settings(content)
-
     sections = {
         str(section._collapse_title): section
         for section in content.winfo_children()
         if getattr(section, "_collapse_title", None)
     }
-    jump.configure(values=tuple(sections))
-    app.workspace_tools_section_selector = jump
     app.workspace_tools_sections = sections
     app.workspace_tools_canvas = canvas
-    app.workspace_tools_content = content
-    app.workspace_tools_jump_var = jump_var
+    app.workspace_tools_heading = heading
+    app.workspace_tools_pin_var = pin_var
 
-    def on_select(_event: tk.Event | None = None) -> None:
-        choose_workspace_section(app, jump_var.get())
+    for index, (label, symbol, title) in enumerate(TASK_GROUPS):
+        button = ttk.Button(
+            rail, text=symbol, width=3, style="PC.Compact.TButton",
+            command=lambda target=title: show_workspace_task(app, target),
+        )
+        button.grid(row=index, column=0, padx=2, pady=(0, 6), sticky="ew")
+        app._attach_tooltip(button, label)
+    ttk.Separator(rail, orient="horizontal").grid(
+        row=len(TASK_GROUPS), column=0, sticky="ew", pady=4,
+    )
+    ttk.Button(
+        rail, text="☰", width=3, style="PC.Compact.TButton",
+        command=lambda: show_workspace_task(app, None),
+    ).grid(row=len(TASK_GROUPS) + 1, column=0, pady=4)
 
-    jump.bind("<<ComboboxSelected>>", on_select)
-    # Keep keyboard bindings on main window so they work while viewing images.
     app.bind("<Control-Shift-t>", lambda _e: toggle_workspace_tools(app), add="+")
     app.bind("<Control-Shift-T>", lambda _e: toggle_workspace_tools(app), add="+")
-    app.bind("<Control-k>", lambda _e: focus_workspace_section(app), add="+")
-    dock.bind("<Escape>", lambda _e: hide_workspace_tools(app), add="+")
-    app.bind("<Control-K>", lambda _e: focus_workspace_section(app), add="+")
+    popup.bind("<Escape>", lambda _e: hide_workspace_tools(app), add="+")
+
+    def dismiss_outside(event: tk.Event) -> None:
+        if not app.workspace_tools_visible or app.workspace_tools_pinned:
+            return
+        widget = event.widget
+        if _within(widget, popup) or _within(widget, rail):
+            return
+        hide_workspace_tools(app)
+
+    app.bind_all("<Button-1>", dismiss_outside, add="+")
+    app.bind("<Configure>", lambda _e: position_workspace_popup(app), add="+")
 
 
-def _remember_dock_width(app: Any) -> None:
+def _within(widget: Any, ancestor: tk.Misc) -> bool:
+    while widget is not None:
+        if widget is ancestor:
+            return True
+        widget = getattr(widget, "master", None)
+    return False
+
+
+def position_workspace_popup(app: Any) -> None:
+    """Position inside the root without changing main pane geometry."""
     if not getattr(app, "workspace_tools_visible", False):
         return
+    rail = app.workspace_tools_rail
+    popup = app.workspace_tools_popup
     try:
-        width = int(app.workspace_tools_dock.winfo_width())
-        if width > 100:
-            app.workspace_tools_width = width
-    except (tk.TclError, AttributeError, ValueError):
+        root_x = app.winfo_rootx()
+        root_y = app.winfo_rooty()
+        left = rail.winfo_rootx() + rail.winfo_width() - root_x + 6
+        top = max(4, rail.winfo_rooty() - root_y)
+        remaining = max(160, app.winfo_width() - left - 12)
+        width = min(720, remaining)
+        height = max(160, app.winfo_height() - top - 28)
+        popup.place(x=left, y=top, width=width, height=height)
+        popup.lift()
+    except tk.TclError:
         pass
 
 
+def set_workspace_pin(app: Any, pinned: bool) -> None:
+    app.workspace_tools_pinned = pinned
+    app.workspace_tools_pin_var.set(pinned)
+
+
 def hide_workspace_tools(app: Any) -> str:
-    if getattr(app, "workspace_tools_visible", False):
-        _remember_dock_width(app)
-        app.main_paned.forget(app.workspace_tools_dock)
-        app.workspace_tools_visible = False
+    app.workspace_tools_popup.place_forget()
+    app.workspace_tools_visible = False
     return "break"
 
 
 def show_workspace_tools(app: Any) -> None:
-    if getattr(app, "workspace_tools_visible", False):
-        return
-    dock = app.workspace_tools_dock
-    panes = app.main_paned
-    panes.add(dock, weight=0)
-    app.workspace_tools_visible = True
-
-    def restore_width() -> None:
-        if not getattr(app, "workspace_tools_visible", False):
-            return
-        try:
-            total = panes.winfo_width()
-            if total > 450:
-                width = min(max(310, int(app.workspace_tools_width)), max(310, total - 340))
-                panes.sashpos(1, total - width)
-        except tk.TclError:
-            pass
-
-    app.after_idle(restore_width)
+    if not app.workspace_tools_visible:
+        app.workspace_tools_visible = True
+        position_workspace_popup(app)
 
 
 def toggle_workspace_tools(app: Any) -> str:
-    if getattr(app, "workspace_tools_visible", False):
+    if app.workspace_tools_visible:
         return hide_workspace_tools(app)
     show_workspace_tools(app)
-    return "break"
-
-
-def focus_workspace_section(app: Any) -> str:
-    show_workspace_tools(app)
-    selector = app.workspace_tools_section_selector
-    selector.focus_set()
-    selector.event_generate("<Down>")
     return "break"
 
 
@@ -177,16 +168,23 @@ def show_all_sections(app: Any) -> None:
 
 
 def choose_workspace_section(app: Any, title: str) -> None:
-    sections = app.workspace_tools_sections
-    section = sections.get(title)
+    section = app.workspace_tools_sections.get(title)
     if section is None:
         return
-    show_workspace_tools(app)
-    for candidate in sections.values():
+    for candidate in app.workspace_tools_sections.values():
         app._set_section_expanded(candidate, candidate is section)
-    app.workspace_tools_section_selector.set(title)
+    app.workspace_tools_heading.set(title)
     app.workspace_tools_canvas.yview_moveto(0)
 
 
-def show_workspace_task(app: Any, title: str) -> None:
-    choose_workspace_section(app, title)
+def show_workspace_task(app: Any, title: str | None) -> None:
+    if app.workspace_tools_visible and title == app.workspace_tools_active:
+        hide_workspace_tools(app)
+        return
+    app.workspace_tools_active = title
+    if title is None:
+        app.workspace_tools_heading.set("全部工作工具")
+        show_all_sections(app)
+    else:
+        choose_workspace_section(app, title)
+    show_workspace_tools(app)
