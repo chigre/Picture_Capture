@@ -213,4 +213,4 @@ def test_canvas_right_click_navigation_and_sidebar_presets():
     assert 'for choice in ("最简", "正常", "最大")' in tools
     assert 'def set_sidebar_mode(app: Any, mode: str)' in tools
     assert 'app.fit_page_height()' in tools
-    assert 'app.after_idle(app.fit_page_width)' in tools
+    assert 'app.after(120, app.fit_page_width)' in tools
