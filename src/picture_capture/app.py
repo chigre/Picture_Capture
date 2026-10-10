@@ -11831,6 +11831,7 @@ class PictureCaptureApp(tk.Tk):
         *, foreground_page_edit: bool = False, page_indexer=None,
         refresh_page_quality: bool = True,
         allow_page_navigation: bool = False,
+        allow_pdic_edits: bool = False,
     ) -> bool:
         """Run a multi-page task without blocking Tk.
 
@@ -11862,6 +11863,7 @@ class PictureCaptureApp(tk.Tk):
         self._batch_refresh_page_quality = bool(refresh_page_quality)
         self._batch_foreground_pages = bool(foreground_page_edit)
         self._batch_allow_page_navigation = bool(allow_page_navigation)
+        self._batch_allow_pdic_edits = bool(allow_pdic_edits)
         self._batch_skipped_count = 0
         indexer = page_indexer or (lambda item: int(item))
         with self._batch_state_lock:
@@ -11984,6 +11986,7 @@ class PictureCaptureApp(tk.Tk):
             return self._start_batch_task(
                 title, items, serial_worker, on_done, item_label,
                 allow_page_navigation=allow_page_navigation,
+                allow_pdic_edits=allow_pdic_edits,
             )
 
         self._batch_active = True
