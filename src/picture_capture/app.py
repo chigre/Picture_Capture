@@ -7862,6 +7862,7 @@ class PictureCaptureApp(tk.Tk):
             ("−", lambda: self.zoom(0.87), "缩小显示"),
             ("+", lambda: self.zoom(1.15), "放大显示"),
             ("⇔", self.fit_page_width, "占满宽度"),
+            ("◧", self.fit_single_column_width, "单栏占满宽度"),
             ("⇕", self.fit_page_height, "占满高度"),
         ):
             if symbol == "+":
@@ -14126,6 +14127,25 @@ class PictureCaptureApp(tk.Tk):
     def fit_page_width(self) -> None:
         self._canvas_controller_for_call().fit_page_width()
 
+
+    def fit_single_column_width(self) -> None:
+        """Scale a single dictionary column to the available viewer width."""
+        if self.image is None:
+            return
+        try:
+            column_width = float(self.settings.column_width)
+        except (AttributeError, TypeError, ValueError):
+            column_width = 0.0
+        if not 0 < column_width <= self.image.width:
+            self.status_var.set("请先设置有效的单栏宽度。")
+            return
+        self.update_idletasks()
+        available = max(1, self.canvas.winfo_width())
+        self.view_scale = min(3.0, max(0.08, available / column_width))
+        self._update_view_zoom_label()
+        self.redraw()
+        self._set_idle_cursor_status()
+        self.canvas.xview_moveto(0.0)
 
     def fit_page_height(self) -> None:
         self._canvas_controller_for_call().fit_page_height()
