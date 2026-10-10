@@ -268,3 +268,12 @@ def test_current_review_crop_is_fixed_width_double_height_and_framed():
     assert 'def _update_active_crop_preview(self, index: int)' in app
     assert 'preview = extended.resize((crop.width, 2 * crop.height), Image.Resampling.LANCZOS)' in app
     assert 'self._update_active_crop_preview(index)' in app
+
+
+def test_active_review_row_does_not_repeat_pinned_crop():
+    app, _ = sources()
+    assert 'self._review_row_pictures.append(picture)' in app
+    assert 'if row_index == index:' in app
+    assert 'picture.grid_remove()' in app
+    assert 'elif not picture.winfo_manager():' in app
+    assert 'picture.grid()' in app
