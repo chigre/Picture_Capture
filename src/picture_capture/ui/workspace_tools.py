@@ -81,56 +81,68 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.workspace_tools_pin_var = pin_var
 
     rail_style = ttk.Style(app)
-    rail_style.configure(
-        "PC.Rail.TButton", anchor="w", padding=(10, 9),
-        relief="flat", borderwidth=0,
-    )
+    rail_style.configure("PC.Rail.TButton", padding=(5, 8), relief="flat", borderwidth=0)
     rail_style.map("PC.Rail.TButton", relief=[("active", "flat")])
-    index_button = ttk.Button(
-        rail, text="▦ 页面", width=8, style="PC.Rail.TButton",
-        command=lambda: toggle_page_index(app),
-    )
-    index_button.grid(row=0, column=0, padx=1, pady=(0, 2), sticky="ew")
-    app.workspace_page_index_button = index_button
-    app._attach_tooltip(index_button, "页面列表（默认显示，点击收起或展开）")
-    for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1):
-        button = ttk.Button(
-            rail, text=f"{symbol} {label}", width=8, style="PC.Rail.TButton",
-            command=lambda target=title: show_workspace_task(app, target),
-        )
-        button.grid(row=index, column=0, padx=2, pady=(0, 6), sticky="ew")
-        app._attach_tooltip(button, label)
-    ttk.Separator(rail, orient="horizontal").grid(
-        row=len(TASK_GROUPS) + 1, column=0, sticky="ew", pady=4,
-    )
-    ttk.Button(
-        rail, text="☰ 全部", width=8, style="PC.Rail.TButton",
-        command=lambda: show_workspace_task(app, None),
-    ).grid(row=len(TASK_GROUPS) + 2, column=0, sticky="ew", pady=3)
+    rail.columnconfigure(0, weight=1)
+    app.workspace_rail_labels = []
 
-    # Four persistent project actions live at the bottom of the icon rail.
-    # They are independent of the page-index visibility.
-    footer_row = len(TASK_GROUPS) + 4
+    def rail_action(parent: ttk.Frame, row: int, symbol: str, label: str,
+                    command: Any, tip: str) -> ttk.Frame:
+        """Separate fixed-width icon and text controls: Unicode glyph widths vary."""
+        entry = ttk.Frame(parent, style="PC.Sidebar.TFrame")
+        entry.grid(row=row, column=0, sticky="ew", pady=(0, 2))
+        entry.columnconfigure(0, minsize=38)
+        entry.columnconfigure(1, weight=1)
+        icon = ttk.Button(entry, text=symbol, width=3, command=command,
+                          style="PC.Rail.TButton")
+        icon.grid(row=0, column=0, sticky="ew")
+        text_button = ttk.Button(entry, text=label, width=5, command=command,
+                                 style="PC.Rail.TButton")
+        text_button.grid(row=0, column=1, sticky="ew")
+        app.workspace_rail_labels.append(text_button)
+        app._attach_tooltip(icon, tip)
+        app._attach_tooltip(text_button, tip)
+        return entry
+
+    sidebar_button = rail_action(
+        rail, 0, "☰", "侧栏", lambda: toggle_sidebar(app),
+        "显示/隐藏侧边栏（Ctrl+Shift+B）",
+    )
+    app.workspace_sidebar_toggle = sidebar_button
+    app.workspace_page_index_button = rail_action(
+        rail, 1, "▦", "页面", lambda: toggle_page_index(app),
+        "页面列表（默认显示，点击收起或展开）",
+    )
+    for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=2):
+        rail_action(
+            rail, index, symbol, label,
+            lambda target=title: show_workspace_task(app, target), label,
+        )
+    ttk.Separator(rail, orient="horizontal").grid(
+        row=len(TASK_GROUPS) + 2, column=0, sticky="ew", pady=4,
+    )
+    rail_action(
+        rail, len(TASK_GROUPS) + 3, "☰", "全部",
+        lambda: show_workspace_task(app, None), "显示全部工具",
+    )
+
+    footer_row = len(TASK_GROUPS) + 5
     rail.rowconfigure(footer_row - 1, weight=1)
     footer = ttk.Frame(rail, style="PC.Footer.TFrame")
     footer.grid(row=footer_row, column=0, sticky="sew", pady=(4, 2))
+    footer.columnconfigure(0, weight=1)
     app.project_action_bar = footer
     app.project_footer_buttons = []
-    ttk.Separator(footer, orient="horizontal").pack(fill="x", pady=(0, 5))
+    ttk.Separator(footer, orient="horizontal").grid(row=0, column=0, sticky="ew", pady=(0, 5))
     project_actions = (
         ("项目", "▣", app.open_recent_project, "打开最近项目与项目管理"),
         ("档案", "◈", app.open_project_profile, "配置词典 Profile 和页面模板"),
         ("设置", "⚙", app.open_settings, "打开设置中心"),
         ("帮助", "?", app.show_help_dialog, "查看帮助与快捷操作"),
     )
-    for label, symbol, command, tip in project_actions:
-        button = ttk.Button(
-            footer, text=f"{symbol} {label}", width=8, command=command,
-            style="PC.Rail.TButton",
-        )
-        button.pack(fill="x", pady=(0, 2))
+    for index, (label, symbol, command, tip) in enumerate(project_actions, start=1):
+        button = rail_action(footer, index, symbol, label, command, f"{label}：{tip}")
         app.project_footer_buttons.append(button)
-        app._attach_tooltip(button, f"{label}：{tip}")
 
     app.workspace_sidebar_visible = True
     app.bind("<Control-Shift-b>", lambda _e: toggle_sidebar(app), add="+")
@@ -294,15 +306,42 @@ def toggle_page_index(app: Any) -> str:
 
 
 def toggle_sidebar(app: Any) -> str:
-    """Hide the whole navigation pane while keeping a restore control."""
-    host = app.workspace_sidebar_host
-    panes = app.main_paned
+    """Toggle compact icons-only navigation; never remove its Panedwindow pane."""
     if app.workspace_sidebar_visible:
         hide_workspace_tools(app)
-        panes.forget(host)
+        if app.sidebar_canvas.winfo_manager() == "pack":
+            try:
+                app._workspace_index_width = app.main_paned.sashpos(0)
+            except tk.TclError:
+                pass
+            app.sidebar_canvas.pack_forget()
+            app.sidebar_scrollbar.pack_forget()
+        for button in app.workspace_rail_labels:
+            button.grid_remove()
         app.workspace_sidebar_visible = False
+
+        def compact() -> None:
+            try:
+                app.main_paned.sashpos(0, app.workspace_tools_rail.winfo_reqwidth() + 8)
+            except tk.TclError:
+                pass
+        app.after_idle(compact)
     else:
-        panes.insert(0, host, weight=0)
+        for button in app.workspace_rail_labels:
+            button.grid()
+        if app.sidebar_canvas.winfo_manager() != "pack":
+            app.sidebar_scrollbar.pack(side="right", fill="y")
+            app.sidebar_canvas.pack(side="left", fill="both", expand=True)
+            app.page_panel.grid()
         app.workspace_sidebar_visible = True
-        app.after_idle(lambda: size_page_index_to_controls(app))
+        def expand() -> None:
+            try:
+                width = app.main_paned.winfo_width()
+                desired = getattr(app, "_workspace_index_width", 0)
+                if not desired:
+                    desired = app.workspace_tools_rail.winfo_reqwidth() + app.page_range_controls_row.winfo_reqwidth() + 38
+                app.main_paned.sashpos(0, min(int(desired), max(200, width - 350)))
+            except tk.TclError:
+                pass
+        app.after_idle(expand)
     return "break"
