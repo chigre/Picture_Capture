@@ -73,7 +73,7 @@ def test_tt_buttons_never_receive_unsupported_anchor_widget_parameter():
 def test_index_width_and_treeview_columns_fit_available_space():
     app, tools = sources()
     assert 'self.page_range_controls_row = range_row' in app
-    assert 'choices.winfo_reqwidth() + 38' in tools
+    assert 'min(300, max(minimum, width - 320))' in tools
     assert 'font.nametofont("TkHeadingFont")' in app
     assert 'orient="horizontal", command=self.page_list.xview' in app
     assert 'body_font.measure(name) for name in page_names' in app
@@ -123,3 +123,12 @@ def test_batch_progress_is_inline_with_status_bar_and_hidden_when_idle():
     assert 'self.batch_pause_button = ttk.Button(' in app
     assert 'self.batch_stop_button = ttk.Button(' in app
     assert 'maximum=100.0, length=160' in app
+
+
+def test_page_headers_and_preferred_sidebar_width():
+    app, tools = sources()
+    assert '"bookmark": "🔖"' in app
+    assert '"section": "区块"' in app
+    assert 'self.page_list.heading("bookmark", text="🔖"' in app
+    assert 'self.page_list.heading("section", text="区块"' in app
+    assert 'min(300, max(minimum, panes.winfo_width() - 320))' in tools
