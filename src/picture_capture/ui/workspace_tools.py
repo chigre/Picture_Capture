@@ -204,11 +204,21 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         selected = mini.selection()
         if not selected or not app.page_list.exists(selected[0]):
             return
+        if app.page_list.selection() == selected:
+            return
         app.page_list.selection_set(selected[0])
         app.page_list.see(selected[0])
         app.page_list.event_generate("<<TreeviewSelect>>")
 
     mini.bind("<<TreeviewSelect>>", choose_mini_page)
+
+    def sync_mini_selection(_event: tk.Event) -> None:
+        selected = app.page_list.selection()
+        if selected and mini.exists(selected[0]) and mini.selection() != selected:
+            mini.selection_set(selected[0])
+            mini.see(selected[0])
+
+    app.page_list.bind("<<TreeviewSelect>>", sync_mini_selection, add="+")
     rail.rowconfigure(len(TASK_GROUPS) + 3, weight=1)
 
     footer_row = len(TASK_GROUPS) + 5
