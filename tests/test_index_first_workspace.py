@@ -114,7 +114,14 @@ def test_page_index_omits_filename_extension_and_rail_is_left_aligned():
     ui_source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     assert 'page.stem, self._page_section_count_text(index)' in app_source
     assert 'page.name, self._page_section_count_text(index)' not in app_source
-    assert 'text="▦ 页面", width=8, anchor="w"' in ui_source
-    assert 'text=f"{symbol} {label}", width=8, anchor="w"' in ui_source
-    assert 'text="☰ 全部", width=8, anchor="w"' in ui_source
-    assert 'width=8, anchor="w", command=command' in ui_source
+    assert 'ttk.Style(app).configure("PC.Rail.TButton", anchor="w")' in ui_source
+    assert 'text="▦ 页面", width=8, style="PC.Rail.TButton"' in ui_source
+    assert 'text=f"{symbol} {label}", width=8, style="PC.Rail.TButton"' in ui_source
+    assert 'text="☰ 全部", width=8, style="PC.Rail.TButton"' in ui_source
+    assert 'width=8, anchor="w"' not in ui_source
+
+
+def test_rail_buttons_do_not_pass_invalid_anchor_widget_option():
+    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert 'anchor="w", style="PC.Rail.TButton"' not in source
+    assert 'anchor="w", command=command' not in source
