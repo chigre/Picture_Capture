@@ -31,3 +31,14 @@ def open_project_folder_with_error(root: Path, parent: object) -> None:
         open_project_folder(root)
     except (OSError, RuntimeError) as exc:
         messagebox.showerror("无法打开文件夹", str(exc), parent=parent)
+
+
+def add_open_folder_button(actions: object, root: Path, dialog: object, exists: bool) -> None:
+    """Build the Project Center action without extending legacy GUI ownership."""
+    from tkinter import ttk
+
+    ttk.Button(
+        actions, text="打开文件夹",
+        command=lambda: open_project_folder_with_error(root, dialog),
+        state="normal" if exists else "disabled",
+    ).pack(side="left", padx=(5, 0))
