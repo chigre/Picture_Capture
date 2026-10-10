@@ -263,10 +263,11 @@ def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
 def test_current_review_crop_is_fixed_width_double_height_and_framed():
     app, _ = sources()
     assert 'self.active_crop_frame = tk.Frame(editor_area, bd=2, relief="solid"' in app
-    assert 'self.active_crop_frame.pack(side="top", anchor="w"' in app
+    assert 'self.active_crop_frame.place(x=6, y=4, anchor="nw")' in app
     assert 'self._review_display_crops = list(preloaded_crops)' in app
     assert 'def _update_active_crop_preview(self, index: int)' in app
-    assert 'preview = extended.resize((crop.width, 2 * crop.height), Image.Resampling.LANCZOS)' in app
+    assert 'self._active_crop_fixed_size = (crop.width, 2 * crop.height)' in app
+    assert 'preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)' in app
     assert 'self._update_active_crop_preview(index)' in app
 
 
@@ -277,3 +278,12 @@ def test_active_review_row_does_not_repeat_pinned_crop():
     assert 'picture.grid_remove()' in app
     assert 'elif not picture.winfo_manager():' in app
     assert 'picture.grid()' in app
+
+
+def test_review_preview_is_position_and_size_invariant_on_window_resize():
+    app, _ = sources()
+    assert 'self.active_crop_host.pack_propagate(False)' in app
+    assert 'self.active_crop_frame.place(x=6, y=4, anchor="nw")' in app
+    assert 'self._active_crop_fixed_size: tuple[int, int] | None = None' in app
+    assert 'if self._active_crop_fixed_size is None:' in app
+    assert 'self.active_crop_host.configure(height=self._active_crop_fixed_size[1] + 14)' in app
