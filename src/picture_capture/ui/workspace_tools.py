@@ -308,6 +308,7 @@ def toggle_page_index(app: Any) -> str:
 def toggle_sidebar(app: Any) -> str:
     """Toggle compact icons-only navigation; never remove its Panedwindow pane."""
     if app.workspace_sidebar_visible:
+        app._workspace_index_was_visible = app.sidebar_canvas.winfo_manager() == "pack"
         hide_workspace_tools(app)
         if app.sidebar_canvas.winfo_manager() == "pack":
             try:
@@ -329,7 +330,8 @@ def toggle_sidebar(app: Any) -> str:
     else:
         for button in app.workspace_rail_labels:
             button.grid()
-        if app.sidebar_canvas.winfo_manager() != "pack":
+        if (getattr(app, "_workspace_index_was_visible", True)
+                and app.sidebar_canvas.winfo_manager() != "pack"):
             app.sidebar_scrollbar.pack(side="right", fill="y")
             app.sidebar_canvas.pack(side="left", fill="both", expand=True)
             app.page_panel.grid()
@@ -338,7 +340,9 @@ def toggle_sidebar(app: Any) -> str:
             try:
                 width = app.main_paned.winfo_width()
                 desired = getattr(app, "_workspace_index_width", 0)
-                if not desired:
+                if not getattr(app, "_workspace_index_was_visible", True):
+                    desired = app.workspace_tools_rail.winfo_reqwidth() + 8
+                elif not desired:
                     desired = app.workspace_tools_rail.winfo_reqwidth() + app.page_range_controls_row.winfo_reqwidth() + 38
                 app.main_paned.sashpos(0, min(int(desired), max(200, width - 350)))
             except tk.TclError:
