@@ -26,7 +26,14 @@ def load_recent_projects(path: Path | None = None) -> list[dict[str, object]]:
         try:
             value = json.loads(candidate.read_text(encoding="utf-8"))
             if isinstance(value, list):
-                rows = [row for row in value if isinstance(row, dict) and row.get("path")]
+                rows = [dict(row) for row in value if isinstance(row, dict) and row.get("path")]
+                # One tiny index read; no scan-directory inventory before first paint.
+                from .project_center_metadata_cache import cached_details, read_index
+                index = read_index()
+                for row in rows:
+                    cached = cached_details(Path(str(row["path"])).expanduser(), index)
+                    if cached is not None:
+                        row["card_cache"] = {"version": 1, **cached}
                 return sorted(rows, key=lambda row: not bool(row.get("pinned", False)))
         except (OSError, ValueError, TypeError):
             continue
@@ -77,6 +84,7 @@ def touch_recent_project(
             existing = dict(row)
         else:
             remaining.append(row)
+    existing.pop("card_cache", None)  # transient view data belongs in the separate metadata index
     row: dict[str, object] = {
         **existing,
         "name": resolved.name,
@@ -102,6 +110,8 @@ def set_recent_project_pinned(
         if Path(str(row.get("path", ""))).expanduser() == resolved:
             row["pinned"] = bool(pinned)
     rows.sort(key=lambda row: not bool(row.get("pinned", False)))
+    for row in rows:
+        row.pop("card_cache", None)
     save_recent_projects(rows, path)
     return rows
 
@@ -110,6 +120,8 @@ def remove_recent_project(root: Path, path: Path | None = None) -> list[dict[str
     """Remove only the registry row. No project path is ever unlinked."""
     resolved = root.expanduser().resolve()
     rows = [row for row in load_recent_projects(path) if Path(str(row["path"])).expanduser() != resolved]
+    for row in rows:
+        row.pop("card_cache", None)
     save_recent_projects(rows, path)
     return rows
 
