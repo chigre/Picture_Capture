@@ -218,7 +218,9 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
             mini.selection_set(selected[0])
             mini.see(selected[0])
 
-    app.page_list.bind("<<TreeviewSelect>>", sync_mini_selection, add="+")
+    # The full page table is created after install_workspace_tools returns.
+    app.after_idle(lambda: app.page_list.bind(
+        "<<TreeviewSelect>>", sync_mini_selection, add="+"))
     rail.rowconfigure(len(TASK_GROUPS) + 3, weight=1)
 
     footer_row = len(TASK_GROUPS) + 5
