@@ -43,6 +43,8 @@ def test_page_index_still_collapsible_and_tools_unchanged():
     assert 'panel.grid_remove()' in tools
     assert 'panel.grid()' in tools
     assert 'canvas.pack_forget()' in tools
+    assert 'mini_host.grid()' in tools
+    assert 'mini_host.grid_remove()' in tools
     assert 'app._build_quick_settings(content)' in tools
     assert 'popup.place(x=left, y=top, width=width, height=height)' in tools
     assert 'popup.place_forget()' in tools
@@ -97,7 +99,8 @@ def test_borderless_index_and_vector_rail_icon_art():
     assert '_draw_rail_icon(icon, symbol)' in tools
     assert 'canvas.create_line(' in tools
     assert 'canvas.create_rectangle(' in tools
-    assert 'len(TASK_GROUPS) + 3, "≡", "全部"' in tools
+    assert 'len(TASK_GROUPS) + 2, "▦", "页面"' in tools
+    assert 'len(TASK_GROUPS) + 3, "≡", "全部"' not in tools
     for column in ('bookmark', 'page', 'section', 'lined', 'fill_status', 'illustrations'):
         assert f'self.page_list.column("{column}",' in app
 
@@ -166,3 +169,25 @@ def test_page_columns_order_and_mandatory_visibility():
     assert 'label="区块", variable=section_var, state="disabled"' in app
     assert '"bookmark": 25' in app
     assert 'borderwidth=1' in app
+
+
+def test_mini_page_list_below_page_button():
+    app, tools = sources()
+    assert 'for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1)' in tools
+    assert 'len(TASK_GROUPS) + 2, "▦", "页面"' in tools
+    assert 'mini.heading("page", text="页面"' in tools
+    assert 'show="headings", selectmode="browse", height=12' in tools
+    assert 'style="PC.CompactPage.Treeview"' in tools
+    assert 'def refresh_compact_page_index(app: Any)' in tools
+    assert 'source.get_children()' in tools
+    assert 'mini.insert("", "end", iid=iid, values=(values[1],))' in tools
+    assert 'mini.bind("<<TreeviewSelect>>", choose_mini_page)' in tools
+    assert 'app.after_idle(lambda: app.page_list.bind(' in tools
+    assert 'mini.item(iid, values=(page_stem,))' in app
+
+
+def test_rail_styles_are_compact_in_both_themes():
+    app, tools = sources()
+    assert 'style.configure("PC.Rail.TButton", font="TkDefaultFont"' in app
+    assert 'style.configure("PC.CompactPage.Treeview", rowheight=26' in app
+    assert 'padding=(4, 3), relief="flat", borderwidth=0, font="TkDefaultFont"' in tools
