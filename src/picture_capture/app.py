@@ -7341,7 +7341,7 @@ class PictureCaptureApp(tk.Tk):
                         font=self.compact_page_font, background=base["surface"],
                         fieldbackground=base["surface"], foreground=colors["text"])
         style.configure("PC.CompactPage.Treeview.Heading",
-                        font="TkHeadingFont", padding=(3, 4))
+                        font=self.compact_page_font, padding=(3, 3))
         style.configure("PC.Compact.TButton", padding=(7, 3))
         style.configure(
             "PC.EditActive.TButton",
