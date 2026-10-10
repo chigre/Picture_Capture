@@ -37,6 +37,20 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
         style="PC.Compact.TButton",
     ).grid(row=0, column=0, sticky="ew")
     app.workspace_tools_toggle = toolbar
+    menu_button = ttk.Menubutton(toolbar, text="▾", width=3, style="PC.Compact.TButton")
+    menu_button.grid(row=0, column=1, padx=(4, 0))
+    task_menu = tk.Menu(menu_button, tearoff=False)
+    for label, title in TASK_GROUPS:
+        task_menu.add_command(
+            label=label,
+            command=lambda target=title: show_workspace_task(app, target),
+        )
+    task_menu.add_separator()
+    task_menu.add_command(label="显示全部工具", command=lambda: (
+        show_workspace_tools(app), show_all_sections(app)
+    ))
+    menu_button.configure(menu=task_menu)
+    app.workspace_tools_menu = task_menu
 
     navigation = ttk.Frame(dock)
     navigation.pack(fill="x", pady=(0, 6))
@@ -99,20 +113,6 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
     app.bind("<Control-k>", lambda _e: focus_workspace_section(app), add="+")
     dock.bind("<Escape>", lambda _e: hide_workspace_tools(app), add="+")
     app.bind("<Control-K>", lambda _e: focus_workspace_section(app), add="+")
-    # Common tasks require a single click, not a journey through long sections.
-    shortcuts = ttk.Frame(sidebar)
-    shortcuts.grid(row=2, column=0, sticky="ew", pady=(3, 2))
-    for col, (label, target) in enumerate((
-        ("版面", TASK_GROUPS[1][1]),
-        ("OCR", TASK_GROUPS[3][1]),
-        ("画线", TASK_GROUPS[4][1]),
-    )):
-        shortcuts.columnconfigure(col, weight=1)
-        ttk.Button(
-            shortcuts, text=label, style="PC.Compact.TButton",
-            command=lambda title=target: show_workspace_task(app, title),
-        ).grid(row=0, column=col, sticky="ew", padx=(0 if col == 0 else 3, 0))
-    app.workspace_tools_shortcuts = shortcuts
 
 
 def _remember_dock_width(app: Any) -> None:
