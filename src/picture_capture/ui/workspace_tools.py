@@ -20,6 +20,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
     palette.geometry("860x690")
     palette.minsize(580, 350)
     palette.protocol("WM_DELETE_WINDOW", palette.withdraw)
+    palette.bind("<Escape>", lambda _event: palette.withdraw())
     app.workspace_tools_window = palette
 
     toolbar = ttk.Frame(sidebar)
@@ -34,8 +35,20 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
 
     outer = ttk.Frame(palette, padding=(10, 8))
     outer.pack(fill="both", expand=True)
-    canvas = tk.Canvas(outer, highlightthickness=0, borderwidth=0)
-    scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+    navigation = ttk.Frame(outer)
+    navigation.pack(side="top", fill="x", pady=(0, 6))
+    ttk.Label(navigation, text="定位功能：").pack(side="left")
+    jump_var = tk.StringVar(value="选择工具分组")
+    jump = ttk.Combobox(navigation, textvariable=jump_var, state="readonly", width=30)
+    jump.pack(side="left", fill="x", expand=True)
+    ttk.Button(
+        navigation, text="收起", command=palette.withdraw,
+        style="PC.Compact.TButton",
+    ).pack(side="right", padx=(6, 0))
+    scroller = ttk.Frame(outer)
+    scroller.pack(fill="both", expand=True)
+    canvas = tk.Canvas(scroller, highlightthickness=0, borderwidth=0)
+    scrollbar = ttk.Scrollbar(scroller, orient="vertical", command=canvas.yview)
     canvas.configure(yscrollcommand=scrollbar.set)
     scrollbar.pack(side="right", fill="y")
     canvas.pack(side="left", fill="both", expand=True)
@@ -52,6 +65,28 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame) -> None:
     canvas.bind("<Button-5>", lambda _e: canvas.yview_scroll(3, "units"))
     app._build_quick_settings(content)
 
+    sections = [
+        section for section in content.winfo_children()
+        if getattr(section, "_collapse_title", None)
+    ]
+    by_title = {
+        str(section._collapse_title): section for section in sections
+    }
+    jump.configure(values=tuple(by_title))
+
+    def jump_to_section(_event: tk.Event | None = None) -> None:
+        section = by_title.get(jump_var.get())
+        if section is None:
+            return
+        if str(section._collapse_title_var.get()).startswith("▸"):
+            app._set_section_expanded(section, True)
+        palette.update_idletasks()
+        total = max(1, content.winfo_reqheight() - canvas.winfo_height())
+        canvas.yview_moveto(max(0.0, min(1.0, section.winfo_y() / total)))
+
+    jump.bind("<<ComboboxSelected>>", jump_to_section)
+    app.workspace_tools_section_selector = jump
+
 
 def toggle_workspace_tools(app: Any) -> None:
     window = getattr(app, "workspace_tools_window", None)
@@ -61,6 +96,18 @@ def toggle_workspace_tools(app: Any) -> None:
         if window.state() != "withdrawn":
             window.withdraw()
         else:
+            # First opening is positioned beside the main canvas when space permits.
+            if not getattr(app, "_workspace_tools_positioned", False):
+                app.update_idletasks()
+                width = min(860, max(580, app.winfo_screenwidth() - 80))
+                height = min(690, max(350, app.winfo_screenheight() - 100))
+                right = app.winfo_rootx() + app.winfo_width()
+                x = right if right + width <= app.winfo_screenwidth() else max(
+                    0, app.winfo_screenwidth() - width - 30
+                )
+                y = max(0, min(app.winfo_rooty() + 35, app.winfo_screenheight() - height - 50))
+                window.geometry(f"{width}x{height}+{x}+{y}")
+                app._workspace_tools_positioned = True
             window.deiconify()
             window.lift()
             window.focus_set()
