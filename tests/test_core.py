@@ -5108,21 +5108,21 @@ def test_v2115_pdic_repair_and_restore_use_header_only_geometry():
     assert "normalize_page_rgb(opened)" not in restore
 
 
-def test_v2117_ppp_label_prefers_outside_upper_right():
+def test_v2117_ppp_label_prefers_above_left():
     x, y = PictureCaptureApp._external_polygon_label_position(
         100, 120, 300, 420, 140, 26, 1000, 1200
     )
-    assert x > 300
-    assert y == 120
+    assert x == 100
+    assert y == 88
 
 
-def test_v2117_ppp_label_avoids_right_edge_without_covering_polygon():
+def test_v2117_ppp_label_aligns_left_and_avoids_right_edge():
     x, y = PictureCaptureApp._external_polygon_label_position(
         760, 140, 980, 500, 160, 28, 1000, 1200
     )
     assert x + 160 <= 1000
     assert y + 28 < 140
-    assert abs((x + 160) - 980) < 1e-6
+    assert x == 760
 
 
 def test_v2118_crop_settings_exposes_integrate_illustrations_toggle():
@@ -5493,7 +5493,7 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
         assert token in app_text
     assert 'self.quick_bool_vars["show_illustration_labels"]' in app_text
     assert 'show_shapes = bool(self.polygon_var.get() or self.polygon_draw_var.get())' in app_text
-    assert 'show_labels = bool(self.settings.show_illustration_labels or self.polygon_draw_var.get())' in app_text
+    assert 'show_labels = bool(self.settings.show_illustration_labels)' in app_text
 
     # All user-facing main-image line widths share one image->display ratio.
     assert scaled_overlay_line_width(2, 1.0) == 2
