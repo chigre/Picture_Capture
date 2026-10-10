@@ -6,17 +6,19 @@ from picture_capture.ui import workspace_tools
 def test_index_and_fixed_project_actions_survive_layout_change():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
-    assert "install_workspace_tools(self, sidebar)" in app
-    assert 'sidebar.columnconfigure(1, weight=1)' in app
-    assert 'page_panel.grid(row=0, column=1, rowspan=2' in app
-    assert 'self.project_action_bar.pack(side="bottom", fill="x")' in app
+    assert "install_workspace_tools(self, sidebar, sidebar_host)" in app
+    assert 'sidebar.columnconfigure(0, weight=1)' in app
+    assert 'page_panel.grid(row=0, column=0, rowspan=2' in app
+    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert 'rail.pack(side="left", fill="y", before=app.sidebar_canvas' in source
+    assert 'app.project_action_bar = footer' in source
     for action in ("项目中心", "项目Profile", "设置中心", "帮助中心"):
-        assert f'("{action}", self.' in app
+        assert f'("{action}",' in source
 
 
 def test_icon_rail_popover_does_not_change_main_pane():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
-    assert 'rail.grid(row=0, column=0, rowspan=2' in source
+    assert 'rail.pack(side="left", fill="y"' in source
     assert 'popup = ttk.Frame(app,' in source
     assert 'popup.place(x=left, y=top, width=width, height=height)' in source
     assert "popup.place_forget()" in source
@@ -51,3 +53,12 @@ def test_page_index_is_visible_by_default_and_toggled_from_icon_rail():
     assert 'text="下页"' in app
     assert 'text="上一页"' not in app
     assert 'text="下一页"' not in app
+
+
+def test_four_project_icons_remain_fixed_below_tool_icons():
+    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    assert 'rail.rowconfigure(footer_row - 1, weight=1)' in source
+    assert 'footer.grid(row=footer_row, column=0, sticky="sew"' in source
+    assert 'app.project_footer_buttons.append(button)' in source
+    assert 'app._attach_tooltip(button, f"{label}：{tip}")' in source
+    assert 'command=command' in source
