@@ -15300,6 +15300,46 @@ class PictureCaptureApp(tk.Tk):
         self._review_controller_for_call().highlight_review_entry(entry)
 
 
+    def _scroll_review_entry_into_view(self, entry: WordEntry) -> None:
+        """Scroll the main image only if the proofreading row is off-screen."""
+        if self.image is None:
+            return
+        try:
+            geometry = self._get_cached_display_geometry()
+            crop_settings = _review_crop_settings(
+                self.image, self.settings, self.canvas.winfo_width()
+            )
+            left, top, right, bottom = _review_line_box(
+                entry, geometry, self.image, crop_settings
+            )
+            scale = self.view_scale
+            left, top, right, bottom = (
+                left * scale, top * scale, right * scale, bottom * scale
+            )
+            canvas = self.canvas
+            canvas.update_idletasks()
+            viewport_w = max(1, canvas.winfo_width())
+            viewport_h = max(1, canvas.winfo_height())
+            current_x = canvas.canvasx(0)
+            current_y = canvas.canvasy(0)
+            pad = 16
+            new_x = current_x
+            new_y = current_y
+            if left < current_x + pad or right > current_x + viewport_w - pad:
+                new_x = max(0.0, left - pad)
+            if top < current_y + pad or bottom > current_y + viewport_h - pad:
+                new_y = max(0.0, top - pad)
+            image_w = max(1.0, self.image.width * scale)
+            image_h = max(1.0, self.image.height * scale)
+            if new_x != current_x:
+                max_x = max(0.0, image_w - viewport_w)
+                canvas.xview_moveto(min(new_x, max_x) / image_w)
+            if new_y != current_y:
+                max_y = max(0.0, image_h - viewport_h)
+                canvas.yview_moveto(min(new_y, max_y) / image_h)
+        except (tk.TclError, ValueError, TypeError, AttributeError):
+            return
+
     def _draw_review_entry_highlight(self, geometry=None) -> None:
         self._review_entry_highlight_photo = None
         try:
