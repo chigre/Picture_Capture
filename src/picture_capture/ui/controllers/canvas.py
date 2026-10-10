@@ -255,7 +255,7 @@ class CanvasController:
         if not app.image:
             return
         app.update_idletasks()
-        available = max(120, app.canvas.winfo_width() - 24)
+        available = max(1, app.canvas.winfo_width())
         app.view_scale = min(3.0, max(0.08, available / app.image.width))
         app._update_view_zoom_label()
         app.redraw()
@@ -267,7 +267,7 @@ class CanvasController:
         if not app.image:
             return
         app.update_idletasks()
-        available = max(120, app.canvas.winfo_height() - 24)
+        available = max(1, app.canvas.winfo_height())
         app.view_scale = min(3.0, max(0.08, available / app.image.height))
         app._update_view_zoom_label()
         app.redraw()
