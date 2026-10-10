@@ -6,6 +6,7 @@ from PIL import Image, ImageFilter
 
 from .models import AppSettings, PolygonRegion
 from .illustration_candidate_size import illustration_candidate_min_dimensions
+from .illustration_cross_column import spanning_figure_boxes
 
 
 AUTO_ILLUSTRATION_LABEL_TOKEN = "|AUTO_"
@@ -469,6 +470,16 @@ def detect_illustration_regions_from_image(
                  max(p[0] for p in region.points), max(p[1] for p in region.points))
                 for region in results
             ]
+            spans = [
+                (int(start), int(start + width))
+                for start, width in zip(geometry.column_starts, geometry.column_widths)
+            ]
+            boxes, fused_indices = spanning_figure_boxes(
+                work_image, spans, boxes,
+                gray_threshold=effective.illustration_detect_gray_threshold,
+            )
+            # Preserve the old proximity fallback for drawings disconnected
+            # by a narrow scanned seam; the full-page ink pass comes first.
             boxes = _merge_cross_column_boxes(boxes, boundaries, source_margin_right)
             results = [
                 PolygonRegion("", [(a, b), (c, b), (c, d), (a, d)])
