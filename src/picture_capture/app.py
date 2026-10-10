@@ -7756,9 +7756,11 @@ class PictureCaptureApp(tk.Tk):
         ttk.Radiobutton(range_row, text="当前页", variable=self.page_range_var, value="current").pack(side="left")
         ttk.Radiobutton(range_row, text="当前至末页", variable=self.page_range_var, value="to_end").pack(side="left", padx=(4, 0))
         ttk.Radiobutton(range_row, text="指定：", variable=self.page_range_var, value="specified").pack(side="left", padx=(4, 0))
-        ttk.Entry(
+        page_range_entry = ttk.Entry(
             range_row, textvariable=self.page_range_spec_var, width=14, justify="left"
-        ).pack(side="left", fill="x", expand=True)
+        )
+        page_range_entry.pack(side="left", fill="x", expand=True)
+        page_range_entry.bind("<Return>", lambda _event: self.jump_to_page_spec())
         size_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
         self.page_size_row = size_row
         size_row.grid(row=1, column=0, sticky="ew", pady=(0, 5))
