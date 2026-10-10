@@ -244,3 +244,17 @@ def test_single_column_fit_includes_two_gutters():
     assert 'gutter = float(self.settings.gutter)' in app
     assert 'fit_width = column_width + 2 * gutter' in app
     assert 'available / fit_width' in app
+
+
+def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
+    app, _ = sources()
+    review = (ROOT / "ui" / "controllers" / "review.py").read_text(encoding="utf-8")
+    assert 'mini.winfo_manager() == "grid"' in app
+    assert 'x = max(0, parent.winfo_rootx() + parent.winfo_width())' in app
+    assert 'width = max(1, screen_w - x)' in app
+    assert 'height = max(1, screen_h - y)' in app
+    assert 'def _scroll_review_entry_into_view(self, entry: WordEntry)' in app
+    assert '_review_line_box(' in app
+    assert 'canvas.xview_moveto(' in app
+    assert 'canvas.yview_moveto(' in app
+    assert 'app._scroll_review_entry_into_view(entry)' in review
