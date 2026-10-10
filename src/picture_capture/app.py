@@ -13944,7 +13944,7 @@ class PictureCaptureApp(tk.Tk):
             return
         hidden = bool(self.hide_var.get())
         geometry = self._get_cached_display_geometry()
-    overlay_scale = self.view_scale / parameter_scale(self.image, self.settings)
+        overlay_scale = self.view_scale / parameter_scale(self.image, self.settings)
         self._draw_review_entry_highlight(geometry)
         show_guides = (
             self.quick_bool_vars.get("show_column_guides").get()
