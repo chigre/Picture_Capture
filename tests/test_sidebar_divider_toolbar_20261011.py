@@ -108,8 +108,8 @@ def test_picture_toolbar_uses_fourth_compact_button_and_click_toggle():
     assert '("图片工具栏", lambda: toggle_image_toolbar(app))' in source
     assert '("普", "O", "校", "≣")[index]' in source
     assert 'app.workspace_quick_action_buttons, ("普", "O", "校", "≣")' in source
-    assert 'row=index if extreme else 0' in source
-    assert 'column=0 if extreme else index' in source
+    assert 'row=(6 + index if extreme else 2 if compact else 0)' in source
+    assert 'column=(0 if extreme else index)' in source
     assert 'zoom_handle = ttk.Label(' not in app_source
 
     bar = FakeWidget()
