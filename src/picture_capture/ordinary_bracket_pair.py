@@ -13,6 +13,7 @@ from PIL import Image
 
 from .illustration_detection import _rle_components
 from .models import Entry
+from .visual_boundary_locator import safe_gap_above
 
 
 def _bracket_side(mask: np.ndarray, opening: bool) -> bool:
@@ -46,10 +47,14 @@ def recover_bracketed_ordinary_entries(
     body_top: int,
     body_bottom: int,
     line_height: float,
+    *,
+    transform=None,
+    source_size: tuple[int, int] | None = None,
 ) -> list[Entry]:
     """Supplement entries only from matching opening/closing print glyphs.
 
-    Coordinates are canonical and therefore require an identity page transform.
+    Detect on a canonical image, and inverse-map accepted boundaries to the
+    source image when a transform is supplied (RTL / rotated dictionaries).
     Matching pairs must begin in the first ~5.5 text pitches of the column;
     this excludes quoted bracket expressions deeper inside a definition.
     """
@@ -92,15 +97,30 @@ def recover_bracketed_ordinary_entries(
                 )
                 if not paired:
                     continue
-                proposed_y = max(y0, round(ay - .08 * pitch))
-                if any(
-                    abs(entry.x - left) <= pitch
-                    and abs(entry.y - proposed_y) <= .8 * pitch
-                    for entry in result
-                ):
+                # Find an actual white line gap, never inside the bracket ink.
+                # Earlier callers used an unconditional 0.08*pitch offset.
+                proposed_y = y0 + safe_gap_above(crop, ay - y0, pitch)
+                def same_boundary(entry):
+                    if transform is not None and source_size is not None:
+                        existing_x, existing_y = transform.source_to_canonical_point(
+                            int(entry.x), int(entry.y), source_size,
+                        )
+                    else:
+                        existing_x, existing_y = int(entry.x), int(entry.y)
+                    return (
+                        abs(existing_x - left) <= pitch
+                        and abs(existing_y - proposed_y) <= .8 * pitch
+                    )
+                if any(same_boundary(entry) for entry in result):
                     continue
+                if transform is not None and source_size is not None:
+                    source_x, source_y = transform.canonical_to_source_point(
+                        left, proposed_y, source_size,
+                    )
+                else:
+                    source_x, source_y = left, proposed_y
                 result.append(Entry(
-                    word="", x=left, y=proposed_y,
+                    word="", x=int(source_x), y=int(source_y),
                     ocr_source="ordinary_bracket_pair",
                     issue_type="ORDINARY_VISUAL_BRACKET_PAIR",
                 ))
