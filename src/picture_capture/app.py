@@ -7082,7 +7082,9 @@ class PictureCaptureApp(tk.Tk):
         self.set_appearance_mode(requested_appearance, persist=False)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.toggle_autosave()
-        self.after_idle(self._maximize_main_window)
+        # Avoid maximize -> restore-to-compact flicker during session startup.
+        if self.workspace_mode == "最大":
+            self.after_idle(self._maximize_main_window)
         self.after_idle(self._ensure_sidebar_navigation_width)
         self.after_idle(self.restore_last_session)
         attach_nonbmp_unicode_input(self)
