@@ -97,25 +97,34 @@ def detect_profile_layout_parameters(image: Image.Image, settings: Any) -> Any:
 
 
 def robust_profile_ink_height(estimates: list[Any]) -> tuple[int | None, int]:
-    """Aggregate *measured* page character heights, never 0.8%-height guesses.
+    """Median across truly measured rows, never arbitrary page-height guesses.
 
-    A six-page Profile with three verified 29px pages and three heuristic 17px
-    pages must not silently propose median 23px. Require physical measurements
-    from at least half of successful representative pages; otherwise leave the
-    existing Profile height unchanged and expose the missing evidence.
+    Require an explicit independently supported physical observation on half
+    the representative pages and consistent sample resolution. Mixed DPI or
+    substantially different font heights must trigger manual review rather
+    than persisting a fictitious compromise into the book-wide Profile.
     """
+    import re
     import statistics
 
-    trustworthy = [
-        int(row.character_height)
-        for row in estimates
-        if "+observed_character_height=" in str(getattr(row, "method", ""))
-        and int(getattr(row, "character_height", 0) or 0) > 0
-    ]
+    trusted = []
+    for row in estimates:
+        method = str(getattr(row, "method", "") or "")
+        observed = re.search(r"\\+observed_character_height=(\\d+)\\(n=(\\d+)\\)", method)
+        if not observed:
+            continue
+        value = int(getattr(row, "character_height", 0) or 0)
+        if value > 0 and value == int(observed.group(1)) and int(observed.group(2)) >= 8:
+            trusted.append(value)
+
     required = max(1, (len(estimates) + 1) // 2)
-    if len(trustworthy) < required:
-        return None, len(trustworthy)
-    return int(round(statistics.median(trustworthy))), len(trustworthy)
+    if len(trusted) < required:
+        return None, len(trusted)
+    center = float(statistics.median(trusted))
+    # Reject multi-modal sizes and mixed-resolution representative pages.
+    if max(trusted) - min(trusted) > max(4.0, center * .20):
+        return None, len(trusted)
+    return int(round(center)), len(trusted)
 
 
 def apply_profile_ink_height_suggestion(aggregate: dict, estimates: list[Any]) -> str:
