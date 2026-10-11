@@ -563,6 +563,20 @@ def detect_entries(
                 profile_page_index,
                 page_sections,
             )
+            # The final separator Y differs from the raw physical LayoutLine.y0.
+            # Check an anomalous CJK page at its *actual* emitted coordinates;
+            # the earlier indent-mode detector cannot independently veto itself.
+            from .ordinary_final_visual_consistency import correct_anomalous_final_ordinary_entries
+            entries, last_mile = correct_anomalous_final_ordinary_entries(
+                analysis_image, effective, understanding.layout, entries,
+            )
+            if last_mile["repaired_columns"]:
+                understanding.layout.reason += (
+                    f"; final_visual_repaired={last_mile['repaired_columns']}"
+                    f" final_visual_rejected={last_mile['removed_false_entries']}"
+                    f" final_visual_glyph_fragments={last_mile['removed_glyph_fragments']}"
+                    f" final_visual_heads_added={last_mile['added_verified_heads']}"
+                )
             return _core.sort_entries_reading_order(
                 entries, geometry, page_sections,
             ), geometry
