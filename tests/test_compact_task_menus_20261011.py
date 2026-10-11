@@ -16,8 +16,8 @@ def source(module):
 
 def test_draggable_140px_icon_column_and_vertical_divider():
     text = source(workspace_tools)
-    assert "app.workspace_rail_width = 140" in text
-    assert 'style="PC.Sidebar.TFrame", width=140' in text
+    assert "app.workspace_rail_width = DEFAULT_RAIL_WIDTH" in text
+    assert 'style="PC.Sidebar.TFrame", width=DEFAULT_RAIL_WIDTH' in text
     assert "rail.pack_propagate(False)" in text
     assert 'cursor="sb_h_double_arrow"' in text
     assert 'ttk.Separator(divider, orient="vertical")' in text
@@ -25,7 +25,7 @@ def test_draggable_140px_icon_column_and_vertical_divider():
     assert 'divider.bind("<B1-Motion>", update_drag)' in text
     assert "max(80, min(340, proposed))" in text
     assert 'entry.configure(width=36 if extreme else app.workspace_rail_width)' in text
-    assert "sash + app.workspace_rail_width - old_width" in text
+    assert 'drag["sash"] + proposed - drag["width"]' in text
 
 
 def test_scrollbar_is_allocated_only_for_overflow():
