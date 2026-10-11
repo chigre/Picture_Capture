@@ -13527,6 +13527,12 @@ class PictureCaptureApp(tk.Tk):
             )
             record["canvas_items"].append(item)
 
+        if not getattr(self.settings, "show_main_entry_labels", True):
+            # Keep the headword separator visible while hiding the editable
+            # text box, sequence number, OCR menu and delete button.
+            self._entry_visuals[id(entry)] = record
+            return
+
         editor_font_size = effective_main_overlay_font_size(
             self.image.width, self.view_scale, self.settings,
         )
