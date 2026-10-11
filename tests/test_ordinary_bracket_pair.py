@@ -122,3 +122,61 @@ def test_sticky_bracket_rescue_needs_repeated_intact_printed_template():
     )
     # One intact pair is insufficient to learn a reliable width/offset model.
     assert len(found) == 1
+
+
+def test_one_pixel_white_gap_does_not_merge_real_bracket_with_neighbor():
+    """Actual XDHYCD bracket case: the generic CC joins across white pixels.
+
+    Printed left and right brackets are each separated from adjacent Han
+    strokes by one genuinely white source pixel. A bracket-specific, exact
+    8-neighbor component finder must preserve them.
+    """
+    image = Image.new("L", (660, 620), 255)
+    _draw_bracket_pair(image, 44, 210, separation=150, height=55, width=22)
+    pen = ImageDraw.Draw(image)
+    # Left bracket occupies x=44..65, x=66 white, glyph at x=67.
+    pen.rectangle((67, 215, 87, 259), fill=0)
+    # Right bracket x=194..215; x=193 white; last glyph ends at x=192.
+    pen.rectangle((172, 216, 192, 257), fill=0)
+    recovered = recover_bracketed_ordinary_entries(
+        [], image, [SimpleNamespace(left=42, right=630)],
+        40, 600, 35,
+    )
+    assert len(recovered) == 1
+    assert abs(recovered[0].y - 210) <= 8
+
+
+def test_long_headword_attached_right_bracket_recovers_at_page_bottom():
+    """A bracketed four-character lemma must not assume 2-char pair width."""
+    image = Image.new("L", (670, 930), 255)
+    for y in (85, 220, 355, 490):
+        _draw_bracket_pair(image, 44, y, separation=150, height=55)
+    last_y = 849
+    _draw_bracket_pair(
+        image, 44, last_y, separation=230, height=55, width=22,
+    )
+    pen = ImageDraw.Draw(image)
+    # Connected Han stroke at the left cap of the closing bracket.
+    last_close = 44 + 230
+    pen.rectangle((last_close-21, last_y+3, last_close+5, last_y+5), fill=0)
+    pen.rectangle((last_close-32, last_y+4, last_close-21, last_y+24), fill=0)
+    recovered = recover_bracketed_ordinary_entries(
+        [], image, [SimpleNamespace(left=42, right=640)],
+        40, 930, 35,
+    )
+    assert len(recovered) == 5
+    assert any(abs(entry.y - last_y) <= 8 for entry in recovered)
+
+
+def test_unmatched_long_headword_requires_template_and_both_strokes():
+    image = Image.new("L", (650, 700), 255)
+    # No >=3 learned intact pairs: an opening glyph alone must not make
+    # a separator even if an unrelated definition glyph is further right.
+    _draw_bracket_pair(image, 44, 300, separation=220, height=55, width=22)
+    # Whiten the entire right bracket, leaving the opening untouched.
+    ImageDraw.Draw(image).rectangle((264, 297, 301, 360), fill=255)
+    result = recover_bracketed_ordinary_entries(
+        [], image, [SimpleNamespace(left=42, right=620)],
+        40, 670, 35,
+    )
+    assert result == []
