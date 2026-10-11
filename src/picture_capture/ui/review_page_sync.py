@@ -46,6 +46,8 @@ def refresh_review_after_page_change(app: Any, preloaded: dict | None = None) ->
     review = _live_review(app)
     if review is None or getattr(app, "current_page", None) is None:
         return
+    if getattr(review, "_filter_rows_active", False):
+        review._flush_focused_changes_now()
     review.active_index = 0
     review._active_crop_fixed_size = None
     review._active_crop_page_stem = None
