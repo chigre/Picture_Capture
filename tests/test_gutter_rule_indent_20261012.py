@@ -96,3 +96,16 @@ def test_short_text_marks_do_not_masquerade_as_slanted_rule():
         mask, body_top=0, body_bottom=800,
         corridor_left=320, corridor_right=370, reference=25.,
     ) is None
+
+
+def test_column_geometry_ignores_slanted_gutter_divider_as_first_text():
+    from picture_capture.dictionary_page_design import _refine_column_geometry
+
+    mask, _layout, _ops = _ruled_page()
+    starts, rights, gutters = _refine_column_geometry(
+        mask, 10, 970, [30, 430], [410, 825], 20.,
+    )
+    assert starts[1] >= 429
+    assert starts[1] < 440
+    assert rights[0] < starts[1]
+    assert len(gutters) == 2
