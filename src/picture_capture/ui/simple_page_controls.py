@@ -121,8 +121,8 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
     for index, (caption, callback, help_text) in enumerate((
         ("⨇", lambda: app.jump_to_bookmark(-1), "上一书签"),
         ("⨈", lambda: app.jump_to_bookmark(1), "下一书签"),
-        ("上", lambda: app.change_page(-1), "上一页"),
-        ("下", lambda: app.change_page(1), "下一页"),
+        ("上", lambda: app.change_page(-1), "切换到上页（Shift + 鼠标右键）"),
+        ("下", lambda: app.change_page(1), "切换到下页（鼠标右键）"),
     )):
         actions.columnconfigure(index, weight=1, uniform="simple-page-actions")
         button = action(actions, caption, callback)
