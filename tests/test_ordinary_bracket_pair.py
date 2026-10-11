@@ -105,6 +105,7 @@ def test_matched_visual_brackets_upgrade_existing_layout_entry_source():
     assert recovered.count(existing) == 1
     assert existing.ocr_source == "ordinary_bracket_pair"
     assert existing.issue_type == "ORDINARY_VISUAL_BRACKET_PAIR"
+    assert existing.entry_source == "symbol_sample"
 
 
 def test_sticky_bracket_rescue_needs_repeated_intact_printed_template():
