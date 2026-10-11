@@ -88,7 +88,7 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         if ui_syncing:
             return
         raw = profile_vars[name].get().strip()
-        if name in dict(PROFILE_PERCENT_FIELDS):
+        if name in {field for _title, field, _limit in PROFILE_PERCENT_FIELDS}:
             try:
                 val = float(raw)
             except (TypeError, ValueError):
