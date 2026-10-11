@@ -69,5 +69,5 @@ def test_pinned_preview_uses_regular_source_box_while_rows_stay_normal():
     )[0]
     assert "ordinary_height_only=True" in worker
     assert "ordinary_height_only=True" in pinned
-    assert "2 * crop.height" in pinned
+    assert "round(2.5 * crop.height)" in pinned
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in source
