@@ -514,6 +514,18 @@ def detect_entries(
                     [int(column.right - column.left) for column in columns],
                     float(understanding.layout.ordinary_line_height),
                 )
+            # A page's printed large heads may sit one row above the Y
+            # assigned by dense body-row projection. Correct only when
+            # independent source-image ink gaps support a coherent page shift.
+            if (
+                uses_cjk_role_model(effective)
+                and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity"
+            ):
+                from .ordinary_crossing_separator import adjust_page_coherent_crossing_separators
+                entries, _visual_y_shift = adjust_page_coherent_crossing_separators(
+                    entries, analysis_image,
+                    float(understanding.layout.ordinary_line_height),
+                )
             if (
                 uses_cjk_script(effective)
                 and bool(getattr(effective, "profile_cjk_allow_bracketed_headword", True))
