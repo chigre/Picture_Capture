@@ -50,7 +50,7 @@ def test_normal_compact_and_extreme_page_tooltips_are_identical():
     "prior,current,expected",
     [
         (1.0, 1.5, (150, 75)),
-        (1.5, 1.0, (100, 50)),
+        (1.5, 1.0, (67, 33)),
         (1.0, 0.5, (50, 25)),
         (1.0, 2.0, (200, 100)),
         (None, 1.5, (100, 50)),
@@ -60,6 +60,8 @@ def test_pinned_preview_follows_same_zoom_factor_as_normal_and_large_crop(
     prior, current, expected,
 ):
     assert resize_fixed_review_preview((100, 50), prior, current) == expected
+    # A 150px preview at 150% returns to its 100px baseline at 100%.
+    assert resize_fixed_review_preview((150, 75), 1.5, 1.0) == (100, 50)
 
 
 def test_pinned_preview_zoom_changes_without_resizing_on_active_word_change(monkeypatch):
