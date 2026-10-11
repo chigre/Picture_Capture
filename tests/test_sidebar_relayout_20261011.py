@@ -58,8 +58,8 @@ def test_quick_actions_are_always_short_and_horizontal_except_extreme():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     assert 'app.workspace_quick_actions_host = quick_host' in source
     assert '("普", "O", "校")[index]' in source
-    assert 'style="PC.QuickRail.TButton"' in source
-    assert 'button.configure(text=title, width=2, style="PC.QuickRail.TButton")' in source
+    assert '_create_macaron_action_button(' in source
+    assert 'button.configure(text=title, width=2)' in source
     assert 'row=6 + index if extreme else 2' in source
     assert 'column=0 if extreme else index' in source
     assert 'sticky="ew", padx=0, pady=0' in source

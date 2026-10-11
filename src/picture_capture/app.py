@@ -7301,6 +7301,8 @@ class PictureCaptureApp(tk.Tk):
         self._configure_global_appearance()
         self._configure_main_workspace_styles()
         self._apply_current_appearance(self)
+        from .ui.workspace_tools import refresh_macaron_action_buttons
+        refresh_macaron_action_buttons(self)
         palette = appearance_palette(normalized)
         for name, color_key in (("sidebar_canvas", "bg"), ("canvas", "canvas")):
             widget = self.__dict__.get(name)

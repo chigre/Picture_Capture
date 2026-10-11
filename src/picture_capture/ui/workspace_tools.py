@@ -35,6 +35,87 @@ TASK_GROUPS = (
 )
 
 
+# Approved pastel backgrounds and legible text for 普 / O / 校.
+# Colours in each tuple: (background, foreground, hover/pressed background).
+# Classic Tk.Button avoids native ttk themes ignoring coloured backgrounds.
+MACARON_ACTION_COLORS = {
+    "普": {
+        "light": ("#BFDCF2", "#254B69", "#A9CFEA"),
+        "dark": ("#355A75", "#EAF5FF", "#426984"),
+    },
+    "O": {
+        "light": ("#E3CEF6", "#583976", "#D4B8EE"),
+        "dark": ("#604A7A", "#F6EBFF", "#755A92"),
+    },
+    "校": {
+        "light": ("#C4EAD8", "#245C47", "#AEDFC8"),
+        "dark": ("#376A58", "#E9FFF3", "#477B65"),
+    },
+}
+
+
+def _macaron_action_colors(label: str, mode: str) -> tuple[str, str, str]:
+    return MACARON_ACTION_COLORS[label][
+        "dark" if str(mode).lower() == "dark" else "light"
+    ]
+
+
+def _apply_macaron_button_appearance(button: tk.Button, mode: str) -> None:
+    background, foreground, hovered = _macaron_action_colors(
+        button._pc_macaron_label, mode,
+    )
+    button.configure(
+        bg=hovered if button._pc_macaron_hovered else background,
+        fg=foreground, activebackground=hovered, activeforeground=foreground,
+    )
+
+
+def refresh_macaron_action_buttons(app: Any) -> None:
+    """Refresh both action locations on light/dark/system appearance changes."""
+    for button in getattr(app, "workspace_macaron_buttons", ()):
+        try:
+            if button.winfo_exists():
+                _apply_macaron_button_appearance(button, app.appearance_mode)
+        except (AttributeError, tk.TclError):
+            # A previous toolbar may have been destroyed during mode changes.
+            continue
+
+
+def _create_macaron_action_button(
+    app: Any, parent: tk.Misc, label: str, command: Any,
+) -> tk.Button:
+    """Build a centred pastel shortcut with reliable native-Tk colours."""
+    background, foreground, hovered = _macaron_action_colors(
+        label, app.appearance_mode,
+    )
+    button = tk.Button(
+        parent, text=label, width=2, command=command,
+        font="TkDefaultFont", anchor="center", justify="center",
+        bg=background, fg=foreground,
+        activebackground=hovered, activeforeground=foreground,
+        relief="flat", bd=0, highlightthickness=0, padx=1, pady=1,
+        cursor="hand2",
+    )
+    # The generic dark-colour conversion would overwrite our semantic palette.
+    button._pc_skip_classic_appearance = True
+    button._pc_macaron_label = label
+    button._pc_macaron_hovered = False
+
+    def set_hover(hovered: bool) -> None:
+        button._pc_macaron_hovered = hovered
+        try:
+            _apply_macaron_button_appearance(button, app.appearance_mode)
+        except tk.TclError:
+            pass
+
+    button.bind("<Enter>", lambda _event: set_hover(True), add="+")
+    button.bind("<Leave>", lambda _event: set_hover(False), add="+")
+    if not hasattr(app, "workspace_macaron_buttons"):
+        app.workspace_macaron_buttons = []
+    app.workspace_macaron_buttons.append(button)
+    return button
+
+
 
 def _stack_tool_menu_controls(root: ttk.Frame) -> None:
     """Reflow the existing quick-settings widgets into one vertical column.
@@ -576,15 +657,15 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         ("词条校对", app.open_review),
     )
     app.workspace_quick_action_buttons = []
+    app.workspace_macaron_buttons = []
     app.workspace_quick_zoom_controls = []
     quick_host = ttk.Frame(footer, style="PC.Footer.TFrame")
     quick_host.grid(row=0, column=0, sticky="ew", pady=(0, 2))
     app.workspace_quick_actions_host = quick_host
     for index, (label, command) in enumerate(quick_actions):
         quick_host.columnconfigure(index, weight=1, uniform="quickrail")
-        button = ttk.Button(
-            quick_host, text=("普", "O", "校")[index],
-            command=command, width=2, style="PC.QuickRail.TButton",
+        button = _create_macaron_action_button(
+            app, quick_host, ("普", "O", "校")[index], command,
         )
         button.grid(row=0, column=index, sticky="ew", padx=0, pady=0)
         app.workspace_quick_action_buttons.append(button)
@@ -889,10 +970,7 @@ def install_header_quick_controls(app: Any) -> None:
         ("校", app.open_review, "词条校对"),
     )
     for label, callback, tooltip in shortcuts:
-        button = ttk.Button(
-            host, text=label, width=2, command=callback,
-            style="PC.WindowQuick.TButton",
-        )
+        button = _create_macaron_action_button(app, host, label, callback)
         button.pack(side="left", padx=(1, 0))
         app._attach_tooltip(button, tooltip)
         app.workspace_header_quick_buttons.append(button)
@@ -1052,7 +1130,7 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
     for index, (button, title) in enumerate(zip(
         app.workspace_quick_action_buttons, ("普", "O", "校"),
     )):
-        button.configure(text=title, width=2, style="PC.QuickRail.TButton")
+        button.configure(text=title, width=2)
         button.grid(
             row=6 + index if extreme else 2,
             column=0 if extreme else index,
