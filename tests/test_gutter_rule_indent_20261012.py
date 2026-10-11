@@ -26,6 +26,7 @@ def _ruled_page(*, remove_rule: bool = False):
         y = 30 + n * 36
         entry = n % 2 == 0
         start = left + (2 if entry else 31)
+        ink[y:y + 20, 40:110] = True  # genuine first-column text
         ink[y:y + 20, start:start + 70] = True
         line = base.LayoutLine(
             1, y, y + 20, -13, None, 0, 0, 0,
