@@ -16,7 +16,7 @@ from .simple_page_controls import (
 
 
 # Every floating task menu occupies a compact single-column panel.
-TOOL_MENU_WIDTH = 300
+TOOL_MENU_WIDTH = 280
 
 TASK_GROUPS = (
     ("预处理", "◫", "图片预处理(前置)"),
@@ -36,7 +36,7 @@ def _stack_tool_menu_controls(root: ttk.Frame) -> None:
     variables, command callbacks, focus bindings and external widget
     references all remain intact.  The original quick-settings layout was
     designed for a broad sidebar and contains many multi-column grid rows
-    and packed horizontal toolbars; both must be stacked for a 300px menu.
+    and packed horizontal toolbars; both must be stacked for a 280px menu.
     """
     containers = (tk.Frame, tk.LabelFrame, ttk.Frame, ttk.LabelFrame)
 
@@ -168,7 +168,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.workspace_tools_rail = rail
     app.workspace_sidebar_host = sidebar_host
     app.workspace_tools_visible = False
-    app.workspace_tools_pinned = False
+    app.workspace_tools_pinned = True
     app.workspace_tools_active = None
 
     # Overlay is a child of the main window, not a third Panedwindow pane
@@ -181,7 +181,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     header.pack(fill="x", pady=(0, 6))
     heading = tk.StringVar(value="工作工具")
     ttk.Label(header, textvariable=heading).pack(side="left", fill="x", expand=True)
-    pin_var = tk.BooleanVar(value=False)
+    pin_var = tk.BooleanVar(value=True)
     ttk.Checkbutton(
         header, text="固定", variable=pin_var,
         command=lambda: set_workspace_pin(app, bool(pin_var.get())),
@@ -230,7 +230,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         if getattr(section, "_collapse_title", None)
     }
     # The old display section still owns its already-bound quick variables,
-    # but it is never shown. A purpose-built, 300px display panel presents
+    # but it is never shown. A purpose-built, 280px display panel presents
     # exactly the requested order without duplicating variable state.
     sections["二、显示设置"] = build_compact_display_menu(app, content)
     app.workspace_tools_sections = sections
@@ -244,6 +244,18 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.workspace_tools_canvas = canvas
     app.workspace_tools_heading = heading
     app.workspace_tools_pin_var = pin_var
+
+    # Give each control a direct wheel binding in addition to bind_all:
+    # ttk comboboxes/spinboxes can consume MouseWheel at their class bindtag,
+    # which otherwise prevents the event reaching the popup's scroll handler.
+    def bind_popup_wheel(widget: tk.Misc) -> None:
+        widget.bind("<MouseWheel>", scroll_menu_wheel, add="+")
+        widget.bind("<Button-4>", lambda e: scroll_menu(e, -3), add="+")
+        widget.bind("<Button-5>", lambda e: scroll_menu(e, 3), add="+")
+        for child in widget.winfo_children():
+            bind_popup_wheel(child)
+
+    bind_popup_wheel(popup)
 
     rail_style = ttk.Style(app)
     # Explicit dimensions avoid the Windows light native theme adding several
@@ -485,7 +497,7 @@ def position_workspace_popup(app: Any) -> None:
         root_y = app.winfo_rooty()
         left = rail.winfo_rootx() + rail.winfo_width() - root_x + 6
         top = max(4, rail.winfo_rooty() - root_y)
-        # Each tool opens a 300px vertical menu. Reposition instead of
+        # Each tool opens a 280px vertical menu. Reposition instead of
         # resizing the image canvas when the menu would cross the right edge.
         root_width = max(1, int(app.winfo_width()))
         width = min(TOOL_MENU_WIDTH, max(1, root_width - 12))
