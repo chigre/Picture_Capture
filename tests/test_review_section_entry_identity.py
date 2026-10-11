@@ -6,8 +6,11 @@ from PIL import Image
 from picture_capture.app import ReviewWindow
 from picture_capture.formats import read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
-from picture_capture.page_sections import PageSection
+from picture_capture.page_sections import PageSection, read_page_sections, write_page_sections
 from picture_capture.processing_core import derive_geometry, sort_entries_reading_order
+from picture_capture.project_storage import (
+    migrate_legacy_project, page_sections_path_for_image, page_sections_read_path_for_image,
+)
 from picture_capture.review_main_editor_sync import reconcile_main_editors_after_review
 
 
@@ -92,3 +95,68 @@ def test_simplified_sidecar_uses_rendered_identity_after_section_reorder():
     ReviewWindow._capture_simplified_edits(fake, "page")
     assert records["12,20"]["text"] == "simplified-A"
     assert records["125,20"]["text"] == "simplified-B"
+
+
+def test_migrated_page_sections_are_loaded_without_double_click(tmp_path):
+    """Regression: original QT/SECTION files survived migration but went unread."""
+    root = tmp_path / "dictionary"
+    root.mkdir()
+    page = root / "page.png"
+    Image.new("RGB", (220, 150), "white").save(page)
+    original = [PageSection(0, 60), PageSection(60, 150)]
+    old_sidecar = write_page_sections(page, original)
+    assert old_sidecar.is_file()
+    migrate_legacy_project(root, "test")
+    copied = root / "_PictureCapture" / "QT" / "PageSections" / "page.json"
+    assert copied.is_file()
+    canonical = page_sections_path_for_image(page)
+    assert not canonical.exists()
+    assert page_sections_read_path_for_image(page) == copied
+    loaded = read_page_sections(page)
+    assert loaded == original
+
+    # The same two-section reading order must reach the main canvas and review.
+    image = Image.new("RGB", (220, 150), "white")
+    settings = AppSettings(columns=2, manual_x=8, column_width=90,
+                           start_y=0, bottom_y=150, ordinary_auto_layout=False)
+    geometry = derive_geometry(image, settings)
+    physical = [Entry("A", 12, 20), Entry("C", 12, 85),
+                Entry("B", 125, 20), Entry("D", 125, 85)]
+    assert [e.word for e in sort_entries_reading_order(physical, geometry, loaded)] == [
+        "A", "B", "C", "D",
+    ]
+
+
+def test_edited_section_sidecar_takes_precedence_over_migrated_copy(tmp_path):
+    root = tmp_path / "dictionary"
+    root.mkdir()
+    page = root / "page.png"
+    Image.new("RGB", (220, 150), "white").save(page)
+    old_sections = [PageSection(0, 60), PageSection(60, 150)]
+    write_page_sections(page, old_sections)
+    migrate_legacy_project(root, "test")
+    migrated = page_sections_read_path_for_image(page)
+    original_bytes = migrated.read_bytes()
+
+    edited_sections = [PageSection(0, 100), PageSection(100, 150)]
+    new_sidecar = write_page_sections(page, edited_sections)
+    assert page_sections_read_path_for_image(page) == new_sidecar
+    assert read_page_sections(page) == edited_sections
+    assert migrated.read_bytes() == original_bytes
+
+
+def test_preloaded_page_section_snapshot_is_rechecked_before_sorting():
+    """The on-disk SECTION, not an old background snapshot, drives UI order."""
+    from pathlib import Path
+    import picture_capture.app as app_module
+
+    source = Path(app_module.__file__).read_text(encoding="utf-8")
+    start = source.index("    def load_page(")
+    end = source.index("    def change_page(", start)
+    block = source[start:end]
+    assert 'self.page_sections = list(preloaded.get("page_sections") or [])' in block
+    assert "latest_sections = read_page_sections(self.current_page)" in block
+    assert "if latest_sections != self.page_sections:" in block
+    assert block.index("latest_sections = read_page_sections") < block.index(
+        "self._sort_entries_reading_order()"
+    )

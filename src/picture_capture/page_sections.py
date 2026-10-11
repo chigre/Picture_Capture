@@ -8,7 +8,7 @@ from PIL import Image, ImageOps
 
 from .coordinate_space import SOURCE_COORDINATE_SPACE
 from .layout_transform import LayoutTransform
-from .project_storage import page_sections_path_for_image
+from .project_storage import page_sections_path_for_image, page_sections_read_path_for_image
 
 
 PAGE_SECTIONS_FORMAT = "picture-capture-page-sections-v2"
@@ -150,7 +150,7 @@ def _segment_v(
 
 def read_page_sections(image_path: Path) -> list[PageSection]:
     image_path = Path(image_path)
-    path = page_sections_path_for_image(image_path)
+    path = page_sections_read_path_for_image(image_path)
     if not path.exists():
         return []
     try:

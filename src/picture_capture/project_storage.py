@@ -153,12 +153,30 @@ def simplified_review_path_for_image(image_path: Path) -> Path:
 
 
 def page_sections_path_for_image(image_path: Path) -> Path:
-    """Return the per-page SECTION sidecar without changing PDIC/PPP formats."""
+    """Canonical SECTION write path, independent of migrated legacy sidecars."""
     image_path = Path(image_path)
     root = image_path.parent
     if is_managed_project(root):
         return storage_root(root) / "data" / "PageSections" / f"{image_path.stem}.json"
     return root / "QT" / "PageSections" / f"{image_path.stem}.json"
+
+
+def page_sections_read_path_for_image(image_path: Path) -> Path:
+    """Read older SECTION sidecars preserved by the managed-project migration.
+
+    migrate_legacy_project copies the legacy QT tree into _PictureCapture/QT,
+    whereas new SECTION writes go to _PictureCapture/data/PageSections.
+    Never overwrite or silently prefer the old copy if the new sidecar exists.
+    """
+    image_path = Path(image_path)
+    canonical = page_sections_path_for_image(image_path)
+    if canonical.exists() or not is_managed_project(image_path.parent):
+        return canonical
+    legacy_dir = case_insensitive_child(qt_root(image_path.parent), "PageSections")
+    if legacy_dir is None:
+        return canonical
+    legacy = legacy_dir / f"{image_path.stem}.json"
+    return legacy if legacy.is_file() else canonical
 
 def ppp_write_path_for_image(image_path: Path) -> Path:
     image_path = Path(image_path)

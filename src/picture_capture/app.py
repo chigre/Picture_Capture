@@ -13318,6 +13318,12 @@ class PictureCaptureApp(tk.Tk):
             source_dpi = preloaded.get("source_dpi")
             self.image = preloaded["image"]
             self.page_sections = list(preloaded.get("page_sections") or [])
+            # The background page decoder may have read SECTION before a
+            # sidecar edit/migration completed. Commit from the authoritative
+            # file before establishing main-canvas and review reading order.
+            latest_sections = read_page_sections(self.current_page)
+            if latest_sections != self.page_sections:
+                self.page_sections = latest_sections
             self.entries = list(preloaded.get("entries") or [])
             self._sort_entries_reading_order()
             ocr_payload = preloaded.get("ocr_payload") if isinstance(preloaded.get("ocr_payload"), dict) else {}
