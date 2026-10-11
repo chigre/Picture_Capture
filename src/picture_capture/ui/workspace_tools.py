@@ -10,6 +10,7 @@ from tkinter import ttk
 from typing import Any
 
 from .compact_display_menu import build_compact_display_menu
+from .simple_page_controls import install_simple_page_controls
 
 
 # Every floating task menu occupies a compact single-column panel.
@@ -315,27 +316,42 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     mini_host = ttk.Frame(rail, style="PC.Sidebar.TFrame")
     mini_host.grid(row=len(TASK_GROUPS) + 4, column=0, sticky="nsew")
     mini_host.grid_remove()
-    mini_host.rowconfigure(0, weight=1)
+    mini_host.rowconfigure(1, weight=1)
     mini_host.columnconfigure(0, weight=1)
+    # The page panel is not a reduced two-column substitute. It carries all
+    # page-range controls, navigation buttons and the complete list columns.
+    app.after_idle(lambda: install_simple_page_controls(app, mini_host))
     mini = ttk.Treeview(mini_host, columns=app.page_index_columns,
-                        displaycolumns=("page", "illustrations"), show="headings",
-                        selectmode="browse", height=12, style="PC.CompactPage.Treeview")
+                        displaycolumns=("bookmark", "page", "lined", "illustrations"),
+                        show="headings", selectmode="browse", height=12,
+                        style="PC.CompactPage.Treeview")
     for column in app.page_index_columns:
         mini.heading(column, text=app.page_index_labels[column], anchor="center")
         mini.column(column, width=80 if column == "page" else 26, minwidth=20,
                     anchor="center", stretch=False)
-    mini.grid(row=0, column=0, sticky="nsew")
+        mini.heading(
+            column,
+            command=lambda key=column: (
+                app._sort_page_list(key),
+                app.after_idle(lambda: refresh_compact_page_index(app)),
+            ),
+        )
+    mini.grid(row=1, column=0, sticky="nsew")
     mini_scroll = ttk.Scrollbar(mini_host, orient="vertical", command=mini.yview)
-    mini_scroll.grid(row=0, column=1, sticky="ns")
+    mini_scroll.grid(row=1, column=1, sticky="ns")
     mini_hscroll = ttk.Scrollbar(mini_host, orient="horizontal", command=mini.xview)
-    mini_hscroll.grid(row=1, column=0, sticky="ew")
+    mini_hscroll.grid(row=2, column=0, sticky="ew")
     mini.configure(yscrollcommand=mini_scroll.set, xscrollcommand=mini_hscroll.set)
     optional_columns = ("bookmark", "lined", "illustrations", "section", "fill_status")
-    mini_vars = {key: tk.BooleanVar(value=(key == "illustrations")) for key in optional_columns}
+    mini_vars = {key: tk.BooleanVar(value=(key in {"bookmark", "lined", "illustrations"}))
+                 for key in optional_columns}
     app.workspace_mini_column_vars = mini_vars
     def choose_mini_columns() -> None:
-        mini.configure(displaycolumns=("page",) + tuple(
-            key for key in optional_columns if mini_vars[key].get()))
+        # Use the same stable column order as the authoritative full list.
+        order = ("bookmark", "page", "lined", "illustrations", "section", "fill_status")
+        mini.configure(displaycolumns=tuple(
+            key for key in order if key == "page" or mini_vars[key].get()
+        ))
     def mini_heading_menu(event: tk.Event) -> str | None:
         if mini.identify_region(event.x, event.y) != "heading":
             return None
