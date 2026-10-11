@@ -213,4 +213,69 @@ def correct_anomalous_final_ordinary_entries(
         gray_image.close()
 
 
-__all__ = ["correct_anomalous_final_ordinary_entries"]
+
+def suppress_blank_layout_rows_before_proven_head(
+    image: Image.Image,
+    settings: AppSettings,
+    layout: Any,
+    entries: list[Entry],
+) -> tuple[list[Entry], int]:
+    """Reject blank Layout-only separators immediately before proven lemmas.
+
+    A false Layout role can anchor to orphaned phonetics. The candidate
+    separator falls in a fully blank row one pitch before a verified next
+    lemma. Never touch symbol/oversized entries or unproven neighboring rows.
+    """
+    cols = list(getattr(layout, "columns", ()) or ())
+    if (
+        len(cols) < 2
+        or not uses_cjk_role_model(settings)
+        or str(getattr(layout, "indent_type", "")) != "body"
+        or str(getattr(layout.transform, "kind", "identity")) != "identity"
+    ):
+        return list(entries), 0
+
+    reference = max(8.0, float(getattr(layout, "ordinary_line_height", 1.0)))
+    by_column: dict[int, list[Entry]] = {
+        i: [entry for entry in entries if _column_of(entry, cols) == i]
+        for i in range(len(cols))
+    }
+    gray_image = image.convert("L")
+    try:
+        gray = np.asarray(gray_image, dtype=np.uint8)
+        rejected: set[int] = set()
+        for index, members in by_column.items():
+            column = cols[index]
+            left = max(0, int(column.left))
+            right = min(gray.shape[1], int(column.right))
+            if right <= left + reference * 3:
+                continue
+            for entry in members:
+                if "ordinary_layout_role" not in str(entry.ocr_source or ""):
+                    continue
+                y = int(entry.y)
+                nearby_proven = any(
+                    entry is not other
+                    and .85 * reference <= int(other.y) - y <= 2.05 * reference
+                    and (
+                        "ordinary_verified_final_large_head" in str(other.ocr_source or "")
+                        or "ordinary_bracket_pair" in str(other.ocr_source or "")
+                    )
+                    for other in members
+                )
+                if not nearby_proven:
+                    continue
+                y0 = max(0, y)
+                y1 = min(gray.shape[0], y0 + max(8, round(reference)))
+                if y1 <= y0:
+                    continue
+                # Check the complete printed column, not only the margin.
+                # A legitimate deeply indented word remains protected.
+                if not np.any(gray[y0:y1, left:right] < 170):
+                    rejected.add(id(entry))
+        return [entry for entry in entries if id(entry) not in rejected], len(rejected)
+    finally:
+        gray_image.close()
+
+
+__all__ = ["correct_anomalous_final_ordinary_entries", "suppress_blank_layout_rows_before_proven_head"]
