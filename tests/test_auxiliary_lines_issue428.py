@@ -192,6 +192,10 @@ def test_auxiliary_line_add_delete_chip_does_not_create_pdic_entries(monkeypatch
     saves = []
     monkeypatch.setattr(mod, "write_auxiliary_lines",
                         lambda _page, lines: saves.append(list(lines)))
+    # This test's minimal geometry intentionally omits real ColumnPath data.
+    # The controller's lane-mapping dependency is covered by production tests.
+    monkeypatch.setattr(mod, "column_index_for_click",
+                        lambda _x, _geometry, _y: 0)
     ctrl = AuxiliaryLineController(app)
     ctrl.add(15, 130)
     assert app._auxiliary_edits.lines == [AuxiliaryLine(10, 130)]
