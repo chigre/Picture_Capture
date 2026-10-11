@@ -125,7 +125,16 @@ def apply_character_height_fallback(
 ) -> Any:
     """Apply the established fallback correction without mutating raw estimates."""
     method = str(getattr(estimate, "method", "") or "")
-    if "fallback=character_height" not in method:
+    # Reliability fusion can serialize several fallbacks in a single segment,
+    # e.g. "fallback=gutter,character_height". A substring check for
+    # "fallback=character_height" silently skipped the observed-height repair.
+    fallback_fields = {
+        field.strip()
+        for segment in method.split("+")
+        if segment.startswith("fallback=")
+        for field in segment.partition("=")[2].split(",")
+    }
+    if "character_height" not in fallback_fields:
         return estimate
 
     observed, stats = observed_character_height(
