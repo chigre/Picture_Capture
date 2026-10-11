@@ -136,3 +136,23 @@ python scripts/validate_real_scan_rois.py --assets "C:\path\to\extracted\assets"
 4. 新增 `test_layout_column_indent_recovery_20261012.py` 以导出诊断还原 C2，及 `test_physical_line_height_contract_20261012.py` 对 18px 正常字高、30px 真实字形墨迹高的 producer/consumer 不一致做回归。CI 以该PR最新提交上的 GitHub Checks 为准。
 
 **验证限定：** 已通过真实扫描文件及其随附的真实诊断发现上述失效，但还没有在 GitHub 源码/模型安装完整的同一执行环境对新代码进行完整34页重画并实测新的每列 P/R/F1；也没有拿到用户新版本的实时 Layout 叠加结果。因此不得宣布 XDHYCD 全页、或西汉右栏实际已经修好，必须以两本书新生成的 L 叠加图 + 按列 PDIC 匹配再确认。
+
+
+## 2026-10-12 附：**真实根因：栏中斜竖线污染 first_x**（非仅仅是行高）
+
+进一步使用用户提交的完整扫描 `XDHYCD_0001.png`（1388×2156）与 `0001.tif` 西汉（2536×3765）逐点测得：
+
+| 词典 | 原图竖线 X | 真实第二栏 X | 旧 Layout 的 C2 最大体缩进中心 | 来源图+已保存真词头附近实测首次墨迹 X |
+|---|---|---|---|---|
+| XDHYCD | 随 Y 倾斜约690–697 | 711 | **-21.35**，相当于 X≈690 | 未排竖线中位 X≈691.5；排竖线后 X≈720 |
+| 新时代西汉 | 随 Y 倾斜约1273–1277 | 1310 | **-36.03**，相当于 X≈1274 | 未排竖线中位 X≈1274；排竖线后 X≈1324 |
+
+**这就是第二栏 Indent 失效的直接证据。** 主 Layout 下游的 `layout_column_drift.remeasure_layout_indents_from_ink()` 原本为了照顾行首越栏，往右栏左侧退1.75×字高采样，恰好把栏间竖线纳入。竖线存在几乎所有文字行的扫描带中，于是绝大多数词条/正文 `first_x` 被误取成负值，模式聚类把它们合并为最大 body。以前的 `dictionary_page_design._persistent_rule_mask()` 只看**相同 X** 的跨页持久性；真实竖线倾斜，会让每个固定 X 只在部分页面行中出现，遗漏了竖线。
+
+**已在本PR修正根因**：
+- `layout_gutter_rule.gutter_divider_right_edge()`：仅在两个已确定物理栏之间的纸张空白沟道内，通过多段 Y 窗口追踪高墨迹密度、缓慢漂移的竖线轨迹。必须≥55%窗口有密度≥50%的竖线候选，同时要求≥50%窗口 X 收敛在一个小范围；没有纵线的词典走原路径。
+- **两处使用同一规则**：`dictionary_page_design._refine_column_geometry()` 对竖线候选进行 gutter 墨迹排除，避免错移第二栏起点；`layout_column_drift.remeasure_layout_indents_from_ink()` 在测量 `first_x` 时把左侧起点移到竖线外，保留跨栏小位移的文本行。源图数据完全不修改。
+- `layout.reason` 记录 `slanted_gutter_rule_guard=C2:X...` 供 L（显示Layout）诊断。
+- 新增合成倾斜竖线、无竖线、短文字假线、真实 C2 词头多于正文的方向角色、以及列位置对齐回归测试。
+
+**重要区分**：上述 `≈691.5/720` 和 `≈1274/1324` 来自完整原图中已知人工标记附近的像素窗口对照，支持明确的根因诊断，但不是在全环境中重跑新的完整画线程序。正式修复是否达到目标，需要 PR 新代码生成的 Layout C2 内缩两簇分离图和全页 PDIC 回归指标进行最终确认。
