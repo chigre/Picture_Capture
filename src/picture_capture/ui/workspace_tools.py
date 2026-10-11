@@ -5,9 +5,13 @@ variables. A temporary popover can be pinned for image-and-parameter work.
 """
 from __future__ import annotations
 
+import ctypes
+import sys
 import tkinter as tk
 from tkinter import font as tkfont, ttk
 from typing import Any
+
+from ..ui_compat import screen_work_area
 
 from .compact_display_menu import build_compact_display_menu
 from .compact_task_menus import (
@@ -1180,6 +1184,50 @@ def _apply_preset_page_index(app: Any, mode: str) -> None:
     _set_simple_page_visible(app, compact)
 
 
+def _window_decoration_height(app: Any) -> int:
+    """Find native window chrome so taskbar-exclusive work height is respected.
+
+    Tk geometry requests a client size, but the OS work area measures the
+    decorated outer window. Use Windows' real frame/client rectangles rather
+    than assuming a constant titlebar size at different DPI scaling.
+    """
+    if sys.platform == "win32":
+        try:
+            frame = str(app.tk.call("wm", "frame", app._w))
+            hwnd = ctypes.c_void_p(int(frame, 0))
+
+            class RECT(ctypes.Structure):
+                _fields_ = (
+                    ("left", ctypes.c_long), ("top", ctypes.c_long),
+                    ("right", ctypes.c_long), ("bottom", ctypes.c_long),
+                )
+
+            outer, client = RECT(), RECT()
+            user32 = ctypes.windll.user32
+            if (user32.GetWindowRect(hwnd, ctypes.byref(outer)) and
+                    user32.GetClientRect(hwnd, ctypes.byref(client))):
+                outer_height = int(outer.bottom - outer.top)
+                client_height = int(client.bottom - client.top)
+                if 0 < client_height <= outer_height:
+                    return outer_height - client_height
+        except (AttributeError, OSError, TypeError, ValueError, tk.TclError):
+            pass
+    try:
+        # Tk fallback: client origin differs from outer position by the titlebar.
+        top = max(0, int(app.winfo_rooty()) - int(app.winfo_y()))
+        return top + (6 if top else 0)
+    except (AttributeError, tk.TclError):
+        return 0
+
+
+def _preset_work_geometry(app: Any) -> tuple[int, int, int, int]:
+    """Desktop work area (taskbar excluded), corrected for window decorations."""
+    x, y, width, height = screen_work_area(app)
+    return int(x), int(y), max(1, int(width)), max(
+        1, int(height) - _window_decoration_height(app),
+    )
+
+
 def set_sidebar_mode(app: Any, mode: str) -> str:
     """Apply independent window presets without mixing page-index states.
 
@@ -1198,20 +1246,26 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
     if mode in {"极简", "紧凑"}:
         def fit_compact() -> None:
             try:
+                app.state("normal")
                 app.update_idletasks()
+                work_x, work_y, work_w, height = _preset_work_geometry(app)
                 compact_width = preferred_sidebar_width(
                     app, extreme=(mode == "极简"), compact=(mode == "紧凑"),
                 )
+                # Set the new usable height *before* fitting the page image,
+                # otherwise fit_page_height sees the preceding window size.
+                initial_width = min(work_w, max(required_header_width(app), app.winfo_width()))
+                app.geometry(f"{initial_width}x{height}+{work_x}+{work_y}")
+                app.update_idletasks()
                 app.main_paned.sashpos(0, compact_width)
                 app.update_idletasks()
-                height = app.winfo_height()
                 if app.image is not None:
                     app.fit_page_height()
                     required = int(compact_width + app.image.width * app.view_scale + 32)
                 else:
                     required = app.winfo_width()
-                app.state("normal")
-                app.geometry(f"{min(app.winfo_screenwidth(), max(required_header_width(app), required))}x{height}+0+0")
+                width = min(work_w, max(required_header_width(app), required))
+                app.geometry(f"{width}x{height}+{work_x}+{work_y}")
                 app.after_idle(lambda: app.main_paned.sashpos(0, compact_width))
             except tk.TclError:
                 pass
@@ -1221,15 +1275,17 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
             try:
                 app.state("normal")
                 app.update_idletasks()
+                work_x, work_y, work_w, height = _preset_work_geometry(app)
                 required_sidebar = preferred_sidebar_width(app)
                 sash = min(required_sidebar, max(1, app.main_paned.winfo_width() - 160))
                 app.main_paned.sashpos(0, sash)
-                width, height = app.winfo_width(), app.winfo_height()
+                width = app.winfo_width()
                 if app.image is not None:
                     required = int(sash + app.image.width * app.view_scale + 32)
                     required = max(required_header_width(app), required)
-                    width = max(width, min(app.winfo_screenwidth(), required))
-                app.geometry(f"{width}x{height}+0+0")
+                    width = max(width, required)
+                width = min(work_w, max(required_header_width(app), width))
+                app.geometry(f"{width}x{height}+{work_x}+{work_y}")
             except tk.TclError:
                 pass
         app.after_idle(fit_normal)
@@ -1239,6 +1295,7 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
             app.geometry("+0+0")
             app.state("zoomed")
         except tk.TclError:
-            app.geometry(f"{app.winfo_screenwidth()}x{app.winfo_screenheight()}+0+0")
+            work_x, work_y, work_w, height = _preset_work_geometry(app)
+            app.geometry(f"{work_w}x{height}+{work_x}+{work_y}")
         app.after(120, app.fit_page_width)
     return "break"

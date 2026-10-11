@@ -73,8 +73,10 @@ def test_window_preset_geometry_always_anchors_to_top_left():
     compact = source.split('if mode in {"极简", "紧凑"}:', 1)[1].split('elif mode == "正常":', 1)[0]
     normal = source.split('elif mode == "正常":', 1)[1].split('elif mode == "最大":', 1)[0]
     maximized = source.split('elif mode == "最大":', 1)[1]
-    assert 'x{height}+0+0")' in compact
-    assert 'x{height}+0+0")' in normal
+    assert '_preset_work_geometry(app)' in compact
+    assert '_preset_work_geometry(app)' in normal
+    assert 'x{height}+{work_x}+{work_y}")' in compact
+    assert 'x{height}+{work_x}+{work_y}")' in normal
     assert 'app.geometry("+0+0")' in maximized
     assert 'app.state("zoomed")' in maximized
     assert 'app.winfo_y()' not in compact
@@ -89,3 +91,77 @@ def test_compact_three_headers_fill_real_viewport():
     assert 'viewport = int(mini.winfo_width())' in source
     assert 'max(1, viewport - 2), app.compact_page_font.measure' in source
     assert 'widths["page"] = max(widths["page"], remaining)' in source
+
+
+def test_preset_work_area_excludes_taskbar_and_window_frame(monkeypatch):
+    from types import SimpleNamespace
+    from picture_capture.ui import workspace_tools as tools
+
+    app = SimpleNamespace()
+    monkeypatch.setattr(tools, "screen_work_area", lambda _app: (0, 0, 1920, 1040))
+    monkeypatch.setattr(tools, "_window_decoration_height", lambda _app: 38)
+    assert tools._preset_work_geometry(app) == (0, 0, 1920, 1002)
+    monkeypatch.setattr(tools, "screen_work_area", lambda _app: (100, 40, 1280, 960))
+    assert tools._preset_work_geometry(app) == (100, 40, 1280, 922)
+
+
+def test_all_three_window_presets_fill_usable_height_after_mode_switch(monkeypatch):
+    """Window size must follow the OS work area instead of old winfo_height."""
+    import re
+    from types import SimpleNamespace
+    from picture_capture.ui import workspace_tools as tools
+
+    class Window:
+        def __init__(self):
+            self.workspace_rail_width = 120
+            self.workspace_mode = "正常"
+            self.image = SimpleNamespace(width=1200)
+            self.view_scale = 1.0
+            self.width = 800
+            self.height = 680
+            self.geometry_calls = []
+            self.sashes = []
+            self.main_paned = SimpleNamespace(
+                sashpos=lambda _index, value: self.sashes.append(value),
+                winfo_width=lambda: self.width,
+            )
+
+        def state(self, mode):
+            assert mode == "normal"
+
+        def update_idletasks(self):
+            pass
+
+        def winfo_width(self):
+            return self.width
+
+        def geometry(self, geometry):
+            match = re.fullmatch(r"([0-9]+)x([0-9]+)[+]([0-9]+)[+]([0-9]+)", geometry)
+            assert match, geometry
+            self.width, self.height = map(int, match.groups()[:2])
+            self.geometry_calls.append(tuple(map(int, match.groups())))
+
+        def after_idle(self, callback):
+            callback()
+
+        def fit_page_height(self):
+            self.view_scale = 0.6
+
+    monkeypatch.setattr(tools, "_preset_work_geometry", lambda _app: (0, 0, 1920, 1000))
+    monkeypatch.setattr(tools, "_refresh_window_mode_buttons", lambda _app: None)
+    monkeypatch.setattr(tools, "_apply_preset_page_index", lambda _app, _mode: None)
+    monkeypatch.setattr(tools, "_apply_preset_rail_controls", lambda _app, _mode: None)
+    monkeypatch.setattr(
+        tools, "preferred_sidebar_width",
+        lambda _app, extreme=False, compact=False: 42 if extreme else (126 if compact else 386),
+    )
+    monkeypatch.setattr(tools, "required_header_width", lambda _app: 408)
+
+    window = Window()
+    for mode in ("极简", "紧凑", "正常"):
+        assert tools.set_sidebar_mode(window, mode) == "break"
+        assert window.workspace_mode == mode
+        assert window.height == 1000
+        assert window.geometry_calls[-1][2:] == (0, 0)
+        assert window.geometry_calls[-1][0] <= 1920
+    assert any(call[1] == 1000 for call in window.geometry_calls)
