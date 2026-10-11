@@ -5712,6 +5712,9 @@ class ReviewWindow(tk.Toplevel):
                 pass
         self._review_crop_height_jobs = {}
         self._review_crop_single_flags = []
+        self._review_crop_render_generation = getattr(
+            self, "_review_crop_render_generation", 0
+        ) + 1
         for child in self.rows.winfo_children():
             child.destroy()
         self.vars.clear(); self.row_entries.clear(); self.editors.clear(); self.editor_frames.clear(); self.simplified_vars.clear(); self.simplified_editors.clear(); self.simplified_search_buttons.clear(); self.simplified_actual_values.clear(); self.simplified_manual_flags.clear(); self.simplified_auto_refresh_flags.clear(); self.editor_crop_widths.clear(); self.thumbnails.clear()
@@ -6220,6 +6223,7 @@ class ReviewWindow(tk.Toplevel):
         viewer_width = max(1, int(self.parent.canvas.winfo_width()))
         page_index = int(self.parent.current_index)
         zoom = max(0.01, float(self.review_zoom))
+        generation = getattr(self, "_review_crop_render_generation", 0)
         snapshot = replace(entry)
 
         def worker():
@@ -6239,6 +6243,10 @@ class ReviewWindow(tk.Toplevel):
         def done(crop):
             try:
                 if (not self.winfo_exists() or self.parent.current_page != page
+                        or getattr(self, "_review_crop_render_generation", 0) != generation
+                        or self.parent.current_index != page_index
+                        or self.parent.settings != settings
+                        or self.review_zoom != zoom
                         or index >= len(self._review_row_pictures)
                         or index >= len(self._bound_row_entries())
                         or self._bound_row_entries()[index] is not entry

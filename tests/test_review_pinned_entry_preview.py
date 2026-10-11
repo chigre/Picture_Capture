@@ -170,3 +170,126 @@ def test_pinned_crop_uses_exact_ordinary_top_and_bottom_only_extension():
     for invalid in ("", "0.7", "11", "nan", "inf"):
         with pytest.raises(ValueError):
             parse_review_crop_multiplier(invalid)
+
+
+
+def test_live_single_character_crop_updates_only_its_row(monkeypatch):
+    """Entering a single character uses the configured height immediately."""
+    import picture_capture.app as app
+    from pathlib import Path
+
+    settings = AppSettings(
+        character_height=30, row_padding=2,
+        entry_regular_crop_height=36, entry_oversized_crop_height=96,
+    )
+    entry = Entry(word="八階", x=12, y=70, ocr_oversized_cjk=True)
+    image = Image.new("RGB", (180, 400), "white")
+    geometry = SimpleNamespace(transform=SimpleNamespace(kind="identity"), top=0)
+    monkeypatch.setattr(app, "_review_crop_context",
+                        lambda *_args: (settings, geometry))
+    monkeypatch.setattr(app, "line_box", lambda *_args: (10, 70, 110, 100))
+    class Value:
+        value = "八"
+        def get(self):
+            return self.value
+
+    var = Value()
+    callbacks = []
+    picture = SimpleNamespace(configure=lambda **kwargs: callbacks.append(kwargs))
+    preview_calls = []
+    parent = SimpleNamespace(
+        image=image, current_page=Path("sample.png"), current_index=0,
+        settings=settings, canvas=SimpleNamespace(winfo_width=lambda: 300),
+        _start_ui_worker=lambda _key, worker, done: done(worker()),
+    )
+    current_photo = object()
+    review = SimpleNamespace(
+        parent=parent, vars=[var], row_entries=[entry],
+        _bound_row_entries=lambda: [entry],
+        _review_crop_height_jobs={}, _review_crop_single_flags=[False],
+        _review_crop_render_generation=1, _review_display_crops=[image.crop((10, 70, 110, 106))],
+        _review_row_pictures=[picture], thumbnails=[current_photo],
+        editor_crop_widths=[100], _review_render_worker_key="review",
+        review_zoom=1.0, active_index=0, _active_crop_fixed_size=(100, 80),
+        winfo_exists=lambda: True,
+        _ordinary_review_photo=lambda _index: current_photo,
+        _update_active_crop_preview=lambda idx: preview_calls.append(idx),
+    )
+    app.ReviewWindow._refresh_review_row_crop(review, 0)
+    assert review._review_display_crops[0].height == 96
+    assert review._review_crop_single_flags == [True]
+    assert review._active_crop_fixed_size is None
+    assert len(callbacks) == 1 and preview_calls == [0]
+
+    # Changing it back to multiple characters restores ordinary height even
+    # though the Entry still has the obsolete oversized classification.
+    var.value = "八階"
+    app.ReviewWindow._refresh_review_row_crop(review, 0)
+    assert review._review_display_crops[0].height == 36
+    assert review._review_crop_single_flags == [False]
+    assert preview_calls == [0, 0]
+
+
+def test_delayed_crop_from_old_render_must_not_replace_new_rows(monkeypatch):
+    import picture_capture.app as app
+    from pathlib import Path
+
+    settings = AppSettings(
+        character_height=30, row_padding=2,
+        entry_regular_crop_height=36, entry_oversized_crop_height=96,
+    )
+    entry = Entry(word="山", x=10, y=50)
+    image = Image.new("RGB", (150, 300), "white")
+    geometry = SimpleNamespace(transform=SimpleNamespace(kind="identity"), top=0)
+    monkeypatch.setattr(app, "_review_crop_context",
+                        lambda *_args: (settings, geometry))
+    monkeypatch.setattr(app, "line_box", lambda *_args: (10, 50, 100, 86))
+    waiting = []
+    parent = SimpleNamespace(
+        image=image, current_page=Path("sample.png"), current_index=0,
+        settings=settings, canvas=SimpleNamespace(winfo_width=lambda: 300),
+        _start_ui_worker=lambda _key, worker, done: waiting.append((worker, done)),
+    )
+    review = SimpleNamespace(
+        parent=parent, vars=[SimpleNamespace(get=lambda: "山")],
+        _bound_row_entries=lambda: [entry], _review_crop_height_jobs={},
+        _review_crop_render_generation=1, _review_display_crops=[image.crop((10, 50, 100, 86))],
+        _review_row_pictures=[SimpleNamespace(configure=lambda **_: None)],
+        thumbnails=[None], editor_crop_widths=[90], _review_render_worker_key="review",
+        review_zoom=1.0, active_index=0, _active_crop_fixed_size=None,
+        winfo_exists=lambda: True, _ordinary_review_photo=lambda _idx: None,
+        _update_active_crop_preview=lambda _idx: None,
+        _review_crop_single_flags=[False],
+    )
+    app.ReviewWindow._refresh_review_row_crop(review, 0)
+    before = review._review_display_crops[0]
+    review._review_crop_render_generation = 2
+    worker, done = waiting[0]
+    done(worker())
+    assert review._review_display_crops[0] is before
+    assert review._review_crop_single_flags == [False]
+
+
+def test_typing_single_character_schedules_a_debounced_height_switch():
+    import picture_capture.app as app
+
+    class Value:
+        value = "海"
+        def get(self):
+            return self.value
+
+    queued = {}
+    cancelled = []
+    review = SimpleNamespace(
+        vars=[Value()], _review_crop_single_flags=[False],
+        _review_crop_height_jobs={},
+        after=lambda millis, callback: queued.setdefault("pending", callback) or "job",
+        after_cancel=lambda job: cancelled.append(job),
+    )
+    app.ReviewWindow._schedule_review_crop_height_update(review, 0)
+    assert "pending" in queued
+    assert review._review_crop_height_jobs
+    review.vars[0].value = "海洋"
+    app.ReviewWindow._schedule_review_crop_height_update(review, 0)
+    assert cancelled
+    assert not review._review_crop_height_jobs
