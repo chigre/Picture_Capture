@@ -888,7 +888,7 @@ def install_compact_zoom_controls(app: Any) -> None:
                 style="PC.Workspace80.TButton",
             )
         app._attach_tooltip(widget, tooltip)
-        widget.grid_remove()
+        # New controls are not managed yet; the active preset will grid them.
         app.workspace_quick_zoom_controls.append(widget)
     _apply_preset_rail_controls(app, getattr(app, "workspace_mode", "正常"))
 
@@ -926,7 +926,8 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         )
     for index, widget in enumerate(app.workspace_quick_zoom_controls):
         if not inline:
-            widget.grid_remove()
+            if widget.winfo_manager() == "grid":
+                widget.grid_remove()
             continue
         row = index if extreme else index // 3
         column = 0 if extreme else index % 3
