@@ -570,6 +570,14 @@ def detect_entries(
             entries, last_mile = correct_anomalous_final_ordinary_entries(
                 analysis_image, effective, understanding.layout, entries,
             )
+            from .ordinary_final_visual_consistency import suppress_blank_layout_rows_before_proven_head
+            entries, removed_blank = suppress_blank_layout_rows_before_proven_head(
+                analysis_image, effective, understanding.layout, entries,
+            )
+            if removed_blank:
+                understanding.layout.reason += (
+                    f"; final_blank_before_proven={removed_blank}"
+                )
             if last_mile["repaired_columns"]:
                 understanding.layout.reason += (
                     f"; final_visual_repaired={last_mile['repaired_columns']}"
