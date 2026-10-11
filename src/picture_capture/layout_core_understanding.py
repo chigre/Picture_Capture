@@ -334,6 +334,13 @@ def understand_layout_core(
     _apply_explicit_indent_semantics(layout, page_settings)
     normalize_layout_roles(layout)
     _resolve_directional_body_lanes(layout)
+    # Keep the visible Layout and downstream ordinary drawings consistent:
+    # repair a near-empty indent family only when independently printed glyphs
+    # or a separate geometric Page Design pass proves real entry starts.
+    from .layout_column_indent_recovery import restore_proven_column_indents
+    restored_indents = restore_proven_column_indents(
+        image, page_settings, layout, page_index=int(page_index),
+    )
 
     physical = _physical_reliable(layout)
     cjk = uses_cjk_role_model(page_settings)
@@ -375,6 +382,8 @@ def understand_layout_core(
         f" indent_semantics={layout.indent_type}"
         f" ordinary_symbol_promoted={int(symbol_promoted)}"
         f" ordinary_large_head_promoted={int(large_promoted)}"
+        f" recovered_indent_columns={int(restored_indents['rescued_columns'])}"
+        f" recovered_indent_rows={int(restored_indents['rescued_rows'])}"
     )
 
     _LAYOUT_CACHE[key] = result
