@@ -250,6 +250,8 @@ def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
     app, _ = sources()
     review = (ROOT / "ui" / "controllers" / "review.py").read_text(encoding="utf-8")
     assert 'mini.winfo_manager() == "grid"' in app
+    assert 'getattr(parent, "workspace_mode", "") in {"极简", "简单"}' in app
+    assert 'if compact_workspace:' in app
     assert 'x = max(0, parent.winfo_rootx() + parent.winfo_width())' in app
     assert 'work_x, work_y, work_w, work_h = _screen_work_area(self)' in app
     assert 'width = max(1, work_right - x)' in app
