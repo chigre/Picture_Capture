@@ -58,6 +58,8 @@ def anchor_resolved_layout_to_profile(
     profile_settings: Any,
     resolved_settings: Any,
     applied: dict[str, int],
+    *,
+    estimate: Any = None,
 ) -> tuple[Any, dict[str, int]]:
     """Return one page's resolved settings anchored to Project/Profile values.
 
@@ -92,7 +94,22 @@ def anchor_resolved_layout_to_profile(
         if baseline is None:
             continue
         observed = int(anchored[field])
-        value = _anchored_scalar(field, baseline, observed)
+        # A strict full-resolution, multi-row ink measurement can reveal that
+        # an old Profile's character height was severely underestimated.
+        # Do not immediately clamp that measured 29-30px text back to a stale
+        # 17px baseline: it recreates undersegmented rows and missing Indents.
+        # This exception only applies to the diagnostic-backed correction
+        # path, never to an unverified one-page OCR box estimate.
+        measured_by_ink = (
+            field == "character_height"
+            and estimate is not None
+            and "+observed_character_height=" in str(getattr(estimate, "method", ""))
+            and int(getattr(estimate, "character_height", 0) or 0) == observed
+            and observed > baseline * 1.25
+        )
+        value = observed if measured_by_ink else _anchored_scalar(
+            field, baseline, observed,
+        )
         setattr(current, field, value)
         anchored[field] = value
 
@@ -123,6 +140,7 @@ def install_profile_layout_anchor() -> None:
             settings,
             resolved,
             applied,
+            estimate=estimate,
         )
         return resolved, estimate, applied
 
