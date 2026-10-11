@@ -131,7 +131,10 @@ def test_legacy_profile_alias_uses_same_selection_as_wizard():
     choices = ordered_headword_profiles()
     for label, key in choices:
         assert ocr.profile_label_for_current(key, choices) == label
-    assert ocr.profile_label_for_current("not-a-real-preset", choices) == choices[0][0]
+    # The Profile preset resolver maps unknown historic IDs to its custom preset.
+    assert ocr.profile_label_for_current("not-a-real-preset", choices) == next(
+        label for label, key in choices if key == "custom"
+    )
     source = Path(ocr.__file__).read_text(encoding="utf-8")
     assert 'if name == "cjk_visual":' in source
     assert "serialize_visual_marker_samples(samples)" in source
