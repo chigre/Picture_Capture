@@ -172,8 +172,8 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     rail.pack_propagate(False)
     # The divider also acts as a draggable grip, so 140px is a default rather
     # than an unchangeable restriction on the icon/command column.
-    divider = tk.Frame(sidebar_host, width=6, cursor="sb_h_double_arrow",
-                       bd=0, highlightthickness=0)
+    divider = ttk.Frame(sidebar_host, width=6, cursor="sb_h_double_arrow",
+                        style="PC.Sidebar.TFrame")
     divider.pack(side="left", fill="y", before=app.sidebar_canvas)
     stroke = ttk.Separator(divider, orient="vertical")
     stroke.place(relx=0.5, rely=0, relheight=1.0)
