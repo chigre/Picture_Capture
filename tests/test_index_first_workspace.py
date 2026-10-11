@@ -76,7 +76,7 @@ def test_tt_buttons_never_receive_unsupported_anchor_widget_parameter():
 def test_index_width_and_treeview_columns_fit_available_space():
     app, tools = sources()
     assert 'self.page_range_controls_row = range_row' in app
-    assert 'min(max(minimum, 1), width - 160)' in tools
+    assert 'min(preferred_sidebar_width(app), width - 160)' in tools
     assert 'font.nametofont("TkHeadingFont")' in app
     assert 'orient="horizontal", command=self.page_list.xview' in app
     assert 'body_font.measure(name) for name in page_names' in app
@@ -175,7 +175,7 @@ def test_mini_page_list_below_page_button():
     app, tools = sources()
     assert 'for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1)' in tools
     assert 'len(TASK_GROUPS) + 2, "▦", "页面"' in tools
-    assert 'mini.heading("page", text="页面"' in tools
+    assert 'mini.heading(column, text=app.page_index_labels[column]' in tools
     assert 'selectmode="browse", height=12' in tools
     assert 'style="PC.CompactPage.Treeview"' in tools
     assert 'def refresh_compact_page_index(app: Any)' in tools
@@ -266,7 +266,7 @@ def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
 
 def test_current_review_crop_is_fixed_width_double_height_and_framed():
     app, _ = sources()
-    assert 'self.active_crop_frame = tk.Frame(editor_area, bd=2, relief="solid"' in app
+    assert 'self.active_crop_frame = tk.Frame(self.active_crop_host, bd=2, relief="solid"' in app
     assert 'self.active_crop_frame.place(x=6, y=4, anchor="nw")' in app
     assert 'self._review_display_crops = list(preloaded_crops)' in app
     assert 'def _update_active_crop_preview(self, index: int)' in app
@@ -352,7 +352,7 @@ def test_each_tool_menu_is_280px_and_vertically_scrollable():
     _, tools = sources()
     assert "TOOL_MENU_WIDTH = 280" in tools
     assert "width = min(TOOL_MENU_WIDTH, max(1, root_width - 12))" in tools
-    assert "item, width=max(1, e.width)" in tools
+    assert "canvas.itemconfigure(item, width=max(1, event.width))" in tools
     assert "horizontal = ttk.Scrollbar(scroller" not in tools
     assert "app._build_quick_settings(content)" in tools
     assert "_stack_tool_menu_controls(content)" in tools
