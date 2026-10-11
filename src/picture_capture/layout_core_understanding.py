@@ -334,6 +334,10 @@ def understand_layout_core(
     _apply_explicit_indent_semantics(layout, page_settings)
     normalize_layout_roles(layout)
     _resolve_directional_body_lanes(layout)
+    from .layout_role_visual_consistency import suppress_contradictory_cjk_body_lane_entries
+    visual_role_check = suppress_contradictory_cjk_body_lane_entries(
+        image, page_settings, layout,
+    )
     # Keep the visible Layout and downstream ordinary drawings consistent:
     # repair a near-empty indent family only when independently printed glyphs
     # or a separate geometric Page Design pass proves real entry starts.
@@ -384,6 +388,8 @@ def understand_layout_core(
         f" ordinary_large_head_promoted={int(large_promoted)}"
         f" recovered_indent_columns={int(restored_indents['rescued_columns'])}"
         f" recovered_indent_rows={int(restored_indents['rescued_rows'])}"
+        f" visual_body_lane_repaired={int(visual_role_check['repaired_columns'])}"
+        f" visual_body_lane_demoted={int(visual_role_check['demoted_rows'])}"
     )
 
     _LAYOUT_CACHE[key] = result
