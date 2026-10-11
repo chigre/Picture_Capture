@@ -35,14 +35,16 @@ def test_fixed_width_icon_cells_and_compact_nav_toggle():
     assert 'int(app.workspace_rail_width) + RAIL_DIVIDER_WIDTH' in tools
     assert 'panes.forget(host)' not in tools
     assert 'sidebar_toggle.place(' not in app
-    assert 'app.bind("<Control-Shift-b>"' in tools
+    assert 'app.bind("<Control-Shift-b>"' not in tools
+    assert 'def toggle_page_index(' not in tools
+    assert 'def toggle_sidebar(' not in tools
 
 
-def test_page_index_still_collapsible_and_tools_unchanged():
+def test_page_index_visibility_is_mode_only_and_tools_unchanged():
     app, tools = sources()
-    assert 'panel.grid_remove()' in tools
-    assert 'panel.grid()' in tools
-    assert 'canvas.pack_forget()' in tools
+    assert 'app.page_panel.grid_remove()' in tools
+    assert 'app.page_panel.grid()' in tools
+    assert 'app.sidebar_canvas.pack_forget()' in tools
     assert 'simple_slot = ttk.Frame(' in tools
     assert '_set_simple_page_visible(app, compact)' in tools
     assert 'app._build_quick_settings(content)' in tools
@@ -103,7 +105,8 @@ def test_borderless_index_and_vector_rail_icon_art():
     assert '_draw_rail_icon(icon, symbol)' in tools
     assert 'canvas.create_line(' in tools
     assert 'canvas.create_rectangle(' in tools
-    assert 'len(TASK_GROUPS) + 1, "▦", "页面"' in tools
+    assert 'workspace_page_index_button' not in tools
+    assert 'def toggle_page_index(' not in tools
     assert 'len(TASK_GROUPS) + 3, "≡", "全部"' not in tools
     for column in ('bookmark', 'page', 'section', 'lined', 'fill_status', 'illustrations'):
         assert f'self.page_list.column("{column}",' in app
@@ -176,10 +179,11 @@ def test_page_columns_order_and_mandatory_visibility():
     assert 'borderwidth=1' in app
 
 
-def test_mini_page_list_below_page_button():
+def test_mini_page_list_below_task_icons():
     app, tools = sources()
     assert 'for index, (label, symbol, title) in enumerate(TASK_GROUPS)' in tools
-    assert 'len(TASK_GROUPS) + 1, "▦", "页面"' in tools
+    assert 'workspace_page_index_button' not in tools
+    assert 'row=len(TASK_GROUPS) + 2, column=0, sticky="nsew"' in tools
     assert 'mini.heading(column, text=app.page_index_labels[column]' in tools
     assert 'selectmode="browse", height=12' in tools
     assert 'style="PC.CompactPage.Treeview"' in tools

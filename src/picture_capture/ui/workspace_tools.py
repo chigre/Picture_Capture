@@ -435,14 +435,10 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     ttk.Separator(rail, orient="horizontal").grid(
         row=len(TASK_GROUPS), column=0, sticky="ew", pady=4,
     )
-    app.workspace_page_index_button = rail_action(
-        rail, len(TASK_GROUPS) + 1, "▦", "页面", lambda: toggle_page_index(app),
-        "切换页面列表；极简模式下使用下方“上／下”按钮翻页",
-    )
-    # Ultra-compact page controls live directly under the Page icon and do
-    # not depend on the full/mini page index being visible.
+    # Only the selected window preset owns page-list visibility.
+    # 极简 keeps up/down navigation without a manual page-list toggle.
     extreme_nav = ttk.Frame(rail, style="PC.Sidebar.TFrame")
-    extreme_nav.grid(row=len(TASK_GROUPS) + 2, column=0, sticky="ew", pady=(2, 3))
+    extreme_nav.grid(row=len(TASK_GROUPS) + 1, column=0, sticky="ew", pady=(2, 3))
     extreme_nav.grid_remove()
     extreme_nav.columnconfigure(0, weight=1)
     for nav_row, (caption, delta) in enumerate((("上", -1), ("下", 1))):
@@ -452,12 +448,12 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         ).grid(row=nav_row, column=0, sticky="ew", pady=(0, 2))
     app.workspace_extreme_page_navigation = extreme_nav
 
-    # 紧凑: the page-range controls and list sit DIRECTLY UNDER the 页面
-    # icon, in the SAME 140px icon column. Normal/max keep their separate
-    # full-width page index beside that column. Never reparent live Treeviews.
+    # 紧凑 shows a miniature page list beneath the task icons.
+    # 正常/最大 display the full-width list beside the rail; 极简 hides both.
+    # Never reparent live Treeviews.
     simple_slot = ttk.Frame(rail, style="PC.Sidebar.TFrame")
     simple_slot.grid(
-        row=len(TASK_GROUPS) + 3, column=0, sticky="nsew", padx=0, pady=0,
+        row=len(TASK_GROUPS) + 2, column=0, sticky="nsew", padx=0, pady=0,
     )
     simple_slot.grid_remove()
     app.workspace_mini_page_slot = simple_slot
@@ -548,9 +544,9 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.after_idle(lambda: app.page_list.bind(
         "<<TreeviewSelect>>", sync_mini_selection, add="+"))
     # Empty spacer keeps the quick-action/footer area anchored to the bottom.
-    rail.rowconfigure(len(TASK_GROUPS) + 3, weight=1)
+    rail.rowconfigure(len(TASK_GROUPS) + 2, weight=1)
 
-    footer_row = len(TASK_GROUPS) + 4
+    footer_row = len(TASK_GROUPS) + 3
     footer = ttk.Frame(rail, style="PC.Footer.TFrame")
     footer.grid(row=footer_row, column=0, sticky="sew", pady=(4, 2))
     footer.columnconfigure(0, weight=1)
@@ -576,9 +572,6 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     # Install these controls after idle; they share the existing zoom variable.
     app.after_idle(lambda: install_compact_zoom_controls(app))
 
-    app.workspace_sidebar_visible = True
-    app.bind("<Control-Shift-b>", lambda _e: toggle_sidebar(app), add="+")
-    app.bind("<Control-Shift-B>", lambda _e: toggle_sidebar(app), add="+")
     app.bind("<Control-Shift-t>", lambda _e: toggle_workspace_tools(app), add="+")
     app.bind("<Control-Shift-T>", lambda _e: toggle_workspace_tools(app), add="+")
     popup.bind("<Escape>", lambda _e: hide_workspace_tools(app), add="+")
@@ -784,69 +777,6 @@ def refresh_compact_page_index(app: Any) -> None:
     except tk.TclError:
         pass
 
-
-def toggle_page_index(app: Any) -> str:
-    """Toggle the independent page-list column, never the icon rail width."""
-    if getattr(app, "page_panel", None) is None:
-        return "break"
-    if getattr(app, "workspace_mode", None) == "极简":
-        return "break"
-    if getattr(app, "workspace_mode", None) == "紧凑":
-        slot = app.workspace_mini_page_slot
-        visible = slot.winfo_manager() != "grid"
-        if visible:
-            refresh_compact_page_index(app)
-        _set_simple_page_visible(app, visible)
-        return "break"
-
-    if app.sidebar_canvas.winfo_manager() == "pack":
-        # In normal/max the page icon simply hides the page list. It must not
-        # swap in the miniature list below the launcher.
-        app.page_panel.grid_remove()
-        app.sidebar_canvas.pack_forget()
-        app.sidebar_scrollbar.pack_forget()
-    else:
-        app.sidebar_canvas.pack(side="left", fill="both", expand=True)
-        app.page_panel.grid()
-    # The genuine Treeview scrollbar is owned by page_list, not this canvas.
-    return "break"
-
-def toggle_sidebar(app: Any) -> str:
-    """Temporarily hide page list/text controls while preserving mode state."""
-    if app.workspace_sidebar_visible:
-        hide_workspace_tools(app)
-        app.workspace_sidebar_visible = False
-        _set_simple_page_visible(app, False)
-        if app.sidebar_canvas.winfo_manager() == "pack":
-            app.sidebar_canvas.pack_forget()
-            app.sidebar_scrollbar.pack_forget()
-        for label in app.workspace_rail_labels:
-            label.grid_remove()
-        def shrink() -> None:
-            try:
-                app.main_paned.sashpos(
-                    0, int(app.workspace_rail_width) + RAIL_DIVIDER_WIDTH,
-                )
-            except tk.TclError:
-                pass
-        app.after_idle(shrink)
-    else:
-        app.workspace_sidebar_visible = True
-        _apply_preset_rail_controls(app, getattr(app, "workspace_mode", "正常"))
-        _apply_preset_page_index(app, getattr(app, "workspace_mode", "正常"))
-        def expand() -> None:
-            try:
-                mode = getattr(app, "workspace_mode", "正常")
-                target = preferred_sidebar_width(
-                    app, extreme=mode == "极简", compact=mode == "紧凑",
-                )
-                app.main_paned.sashpos(0, min(
-                    target, max(1, app.main_paned.winfo_width() - 160),
-                ))
-            except tk.TclError:
-                pass
-        app.after_idle(expand)
-    return "break"
 
 def required_header_width(app: Any) -> int:
     """Minimum single-row width with four left labels and four mode presets."""
@@ -1056,7 +986,7 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
     for entry in app.workspace_rail_rows:
         entry.configure(width=36 if extreme else app.workspace_rail_width)
     for label in app.workspace_rail_labels:
-        if extreme or not app.workspace_sidebar_visible:
+        if extreme:
             label.grid_remove()
         else:
             label.grid()
@@ -1092,7 +1022,7 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         )
 
 def _set_simple_page_visible(app: Any, visible: bool) -> None:
-    """Toggle the compact page index immediately beneath the 页面 icon."""
+    """Apply only the active mode's miniature page-list visibility."""
     slot = app.workspace_mini_page_slot
     if visible and slot.winfo_manager() != "grid":
         slot.grid()
@@ -1146,8 +1076,6 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
         return "break"
     app.workspace_mode = mode
     _refresh_window_mode_buttons(app)
-    if not app.workspace_sidebar_visible:
-        toggle_sidebar(app)
     _apply_preset_page_index(app, mode)
     _apply_preset_rail_controls(app, mode)
 
