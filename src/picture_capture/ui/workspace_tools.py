@@ -186,11 +186,23 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
 
     def update_drag(event: tk.Event) -> None:
         proposed = drag["width"] + int(event.x_root) - drag["origin"]
+        old_width = app.workspace_rail_width
         app.workspace_rail_width = max(80, min(340, proposed))
         if getattr(app, "workspace_mode", "") != "极简":
             rail.configure(width=app.workspace_rail_width)
             for row in getattr(app, "workspace_rail_rows", ()):
                 row.configure(width=app.workspace_rail_width)
+            # Let the icon column grow by moving the existing pane boundary,
+            # rather than stealing the full page list's remaining width.
+            if app.sidebar_canvas.winfo_manager() == "pack":
+                try:
+                    sash = app.main_paned.sashpos(0)
+                    limit = app.main_paned.winfo_width() - 160
+                    app.main_paned.sashpos(
+                        0, min(limit, sash + app.workspace_rail_width - old_width),
+                    )
+                except (AttributeError, tk.TclError):
+                    pass
         position_workspace_popup(app)
 
     divider.bind("<ButtonPress-1>", start_drag)
