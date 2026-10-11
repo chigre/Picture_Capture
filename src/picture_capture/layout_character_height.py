@@ -134,7 +134,15 @@ def apply_character_height_fallback(
         if segment.startswith("fallback=")
         for field in segment.partition("=")[2].split(",")
     }
-    if "character_height" not in fallback_fields:
+    # A projection-only page has no independent Paddle character-height
+    # measurement, even though its method carries no "fallback=..." token.
+    # Otherwise the old 0.8%-of-page-height guess could still enter per-page
+    # auto layout unchanged when Paddle is unavailable.
+    projection_only = (
+        method.startswith("reliable_fusion+projection_only")
+        or method == "projection_fallback"
+    )
+    if "character_height" not in fallback_fields and not projection_only:
         return estimate
 
     observed, stats = observed_character_height(
