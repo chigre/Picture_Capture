@@ -25,10 +25,10 @@ def test_index_page_controls_and_extension_free_display():
 
 def test_fixed_width_icon_cells_and_compact_nav_toggle():
     app, tools = sources()
-    assert 'entry.columnconfigure(0, minsize=38)' in tools
+    assert 'entry.columnconfigure(0, minsize=36)' in tools
     assert 'icon = tk.Canvas(entry, width=30, height=27' in tools
     assert 'text_button = ttk.Button(entry, text=label, width=9' in tools
-    assert 'rail, 0, "☰", "窗口模式", lambda: show_sidebar_modes(app)' in tools
+    assert 'rail, 0, "☰", "窗口模式", lambda: toggle_sidebar_modes(app)' in tools
     assert 'app.workspace_rail_labels.append(text_button)' in tools
     assert 'button.grid_remove()' in tools
     assert 'button.grid()' in tools
@@ -189,13 +189,14 @@ def test_mini_page_list_below_page_button():
 def test_rail_styles_are_compact_in_both_themes():
     app, tools = sources()
     assert 'style.configure("PC.Rail.TButton", font="TkDefaultFont"' in app
-    assert 'style.configure("PC.CompactPage.Treeview", rowheight=26' in app
-    assert 'padding=(4, 3), relief="flat", borderwidth=0, font="TkDefaultFont"' in tools
+    assert 'style.configure("PC.CompactPage.Treeview", rowheight=22' in app
+    assert 'padding=(0, 0), relief="flat"' in tools
+    assert 'style.configure("PC.QuickRail.TButton", font="TkDefaultFont"' in app
 
 
 def test_compact_index_has_optional_headers_and_horizontal_scroll():
     app, tools = sources()
-    assert 'displaycolumns=("page", "illustrations"), show="headings"' in tools
+    assert 'displaycolumns=("bookmark", "page", "lined", "illustrations")' in tools
     assert 'mini_hscroll = ttk.Scrollbar(mini_host, orient="horizontal"' in tools
     assert 'mini.configure(yscrollcommand=mini_scroll.set, xscrollcommand=mini_hscroll.set)' in tools
     assert 'menu.add_checkbutton(label=app.page_index_labels[key]' in tools
@@ -219,7 +220,7 @@ def test_canvas_right_click_navigation_and_sidebar_presets():
 def test_requested_workspace_updates():
     app, tools = sources()
     assert 'choices.winfo_reqwidth() + 24' in tools
-    assert 'value=(key == "illustrations")' in tools
+    assert 'value=(key in {"bookmark", "lined", "illustrations"})' in tools
     assert 'width=80 if column == "page" else 26' in tools
     assert 'app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{height}+0+{top}")' in tools
     assert '("普通画线", app.run_normal_draw_action)' in tools
@@ -231,7 +232,7 @@ def test_requested_workspace_updates():
 
 def test_compact_mode_does_not_reuse_full_sidebar_sash_width():
     _, tools = sources()
-    assert 'rail, 0, "☰", "窗口模式", lambda: show_sidebar_modes(app)' in tools
+    assert 'rail, 0, "☰", "窗口模式", lambda: toggle_sidebar_modes(app)' in tools
     assert 'if tip:' in tools
     assert 'compact_width = app.workspace_tools_rail.winfo_reqwidth() + 10' in tools
     assert 'app.main_paned.sashpos(0, compact_width)' in tools
@@ -445,6 +446,8 @@ def test_extreme_preset_hides_text_buttons_and_restores_them():
         def __init__(self):
             self.visible = True
             self.values = {}
+            self.position = None
+            self.columns = []
 
         def grid(self):
             self.visible = True
@@ -452,29 +455,44 @@ def test_extreme_preset_hides_text_buttons_and_restores_them():
         def grid_remove(self):
             self.visible = False
 
+        def grid_configure(self, **values):
+            self.position = values
+
         def configure(self, **values):
             self.values.update(values)
 
+        def columnconfigure(self, column, **options):
+            self.columns.append((column, options))
+
     labels = [Widget() for _ in range(9)]
+    rows = [Widget() for _ in range(9)]
     nav = Widget()
     quick = [Widget() for _ in range(3)]
+    host = Widget()
     app = SimpleNamespace(
         workspace_rail_labels=labels,
+        workspace_rail_rows=rows,
         workspace_extreme_page_navigation=nav,
         workspace_quick_action_buttons=quick,
+        workspace_quick_actions_host=host,
         workspace_sidebar_visible=True,
     )
     workspace_tools._apply_preset_rail_controls(app, "极简")
     assert nav.visible
     assert not any(label.visible for label in labels)
+    assert all(row.values["width"] == 36 for row in rows)
     assert [w.values["text"] for w in quick] == ["普", "O", "校"]
-    assert all(w.values["width"] == 3 for w in quick)
+    assert [w.position["row"] for w in quick] == [0, 1, 2]
+    assert [w.position["column"] for w in quick] == [0, 0, 0]
+    assert all(w.values["width"] == 2 for w in quick)
 
     workspace_tools._apply_preset_rail_controls(app, "简单")
     assert not nav.visible
     assert all(label.visible for label in labels)
-    assert [w.values["text"] for w in quick] == ["普通画线", "OCR画线", "词条校对"]
-
+    assert all(row.values["width"] == 155 for row in rows)
+    assert [w.values["text"] for w in quick] == ["普", "O", "校"]
+    assert [w.position["row"] for w in quick] == [0, 0, 0]
+    assert [w.position["column"] for w in quick] == [0, 1, 2]
 
 def test_extreme_simple_normal_modes_have_independent_page_list_visibility(monkeypatch):
     from types import SimpleNamespace
