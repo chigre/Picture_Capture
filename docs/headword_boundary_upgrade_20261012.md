@@ -177,3 +177,38 @@ python scripts/validate_real_scan_rois.py --assets "C:\path\to\extracted\assets"
 **影响链**：`17px字高 → 行投影分裂/接受阈值偏低 → 实际29–32px字形难以被恢复为正确物理行 → C1/C2 line indents显著偏少 → 真词头进入不了角色分类 → 后续再好的Bracket/Indent复核都无从定位`。还需区分`row_padding=1`与真实行间节距：实际43px行首间距由文字墨迹行高约30px加行间空白构成，不可把17px字高误当43px行距。
 
 **新增回归**：多字段fallback解析的正负用例、原Profile17px与严格复测30px的越界锚定保护、非证据支持异常字高仍被锚定。暂不声称**已经**在新PR版完整运行34页的Layout；实际叠加图下一步应该看到含`observed_character_height=...`的method、使用≈29–30px，而不是17px，并有更多逐行Indent。依旧保持Draft。
+
+
+## 2026-10-12：Profile 初始化 17px 根因已追到最早的多页创建流程
+
+此前仅处理了**已经创建 Profile 后**的逐页检测：多字段 `fallback=gutter,character_height` 未触发真实字高复测，以及后续 Profile 锚定回夹。但是，新项目的 Profile 多页向导有一条**完全不同**的测量路径：
+
+```
+profile_setup.ProjectProfileWizard.analyze_representative_pages
+→ profile_layout_bootstrap.detect_profile_layout_parameters
+→ layout_detection._projection_layout_estimate
+→ character_height = round(image_height * 0.008)
+→ layout_detection_legacy.aggregate_layout_estimates (robust median)
+→ ProjectProfileWizard.apply_analysis_suggestion
+→ Profile.character_height（固化为旧值）
+```
+
+Profile bootstrap 为了快速和避免循环依赖，明确**绕开**正常 Paddle/可靠性融合/前述 `apply_character_height_fallback()` 复测。其原先所谓字高只是按原图像素高度的0.8%取整：
+
+| 实际 XDHYCD 源图 | 旧 Profile 推断 `round(H*.008)` | 源图 Otsu 阈值真实墨迹高（按项目代码统计） |
+|---|---:|---:|
+| `XDHYCD_0001.png` 1388×2156 | 17px | 29px，72个稳健行样本，P10–P90=28–31 |
+| `XDHYCD_0002.png` 1385×2158 | 17px | 29px，46个稳健行样本，P10–P90=27–30 |
+| `XDHYCD_0003.png` 1392×2152 | 17px | 29px，70个稳健行样本，P10–P90=28–31 |
+
+多张图高度几乎相同，**会一致地算错**为17，中位数聚合不可能消除该系统性误差；`row_padding=1` 则是回退算法的固定赋值，并非43px的物理行间节距测量。
+
+### 本次针对源头的修正
+
+- `profile_layout_bootstrap.py` 在取得 OCR-free 投影栏与正文范围后，直接复用已有的 `observed_character_height`，对全分辨率真实墨迹行高进行多行稳健测量（≥8有效行、离散度、分位数筛查）；**不用引入 PaddleOCR**。
+- 借助method诊断准确区分 `+observed_character_height=29(n=...)` 与 `+unverified_character_height`。
+- `robust_profile_ink_height` 多页聚合**仅使用独立验证成功的真实字高**，要求至少半数代表页有可靠测量。出现3页29px/3页17px启发值时，Profile建议29而不是23；完全缺测则不自动覆盖原Profile字高，界面显示测量比例及警告。
+- 其余多页栏数、栏起点、宽、沟宽度等稳定中位数聚合不变，已有Profile以往行为兼容。
+- 测试：原图大小1388×2156、实际印刷29px文字带的合成页，验证Profile得到29而非17；未验证不冒充测量；3可靠29px+3原始启发17px时中位值=29；未过半时不自动更新。
+
+**证据限定**：已在用户上传的真实三页上复现上述像素值（独立运行与已有 `observed_character_height` 对应的同一阈值／稳健统计）。新分支的代码回归以PR最新CI为准；尚未在实际GUI中从头创建一次XDHYCD Profile并人工查看自动建议。若旧Profile已保存17px，须在新版本的多页向导重新执行“分析代表页→采用建议”才会更新持久值，已有项目不会在打开时被自动改写。
