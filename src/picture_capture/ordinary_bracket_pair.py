@@ -59,15 +59,18 @@ def recover_bracketed_ordinary_entries(
     this excludes quoted bracket expressions deeper inside a definition.
     """
     pitch = float(line_height)
-    if not 18 <= pitch <= 120:
+    if not 12 <= pitch <= 120:
         return list(entries)
     gray = image.convert("L")
     try:
         result = list(entries)
         for col in columns:
             left, right = int(col.left), int(col.right)
-            x0 = max(0, left + round(pitch * .50))
-            x1 = min(gray.width, right, left + round(pitch * 13.2))
+            # Brackets in real 三民 / XDHYCD pages start at (or even a few
+            # pixels before) the registered column boundary. The old +0.5h
+            # crop omitted entire opening glyphs and whole runs of entries.
+            x0 = max(0, left - round(pitch * .25))
+            x1 = min(gray.width, right, left + round(pitch * 21.0))
             y0 = max(0, int(body_top))
             y1 = min(gray.height, int(body_bottom))
             if x1 - x0 < pitch * 8 or y1 <= y0:
@@ -77,22 +80,22 @@ def recover_bracketed_ordinary_entries(
             openings, closings = [], []
             for a, b, c, d, area in _rle_components(ink):
                 w, h = c - a, d - b
-                if not (.35 * pitch <= w <= .95 * pitch
-                        and 1.10 * pitch <= h <= 2.20 * pitch
+                if not (.32 * pitch <= w <= 1.25 * pitch
+                        and .72 * pitch <= h <= 2.50 * pitch
                         and area >= .11 * pitch * pitch):
                     continue
                 component = ink[b:d, a:c]
                 location = (a + x0, b + y0, c + x0, d + y0)
-                if (location[0] - left <= 5.5 * pitch
+                if (location[0] - left <= 2.0 * pitch
                         and _bracket_side(component, True)):
                     openings.append(location)
                 if _bracket_side(component, False):
                     closings.append(location)
             for ax, ay, _ac, ad in openings:
                 paired = any(
-                    1.8 * pitch <= bx - ax <= 7.0 * pitch
-                    and abs(by - ay) <= .4 * pitch
-                    and abs((bd - by) - (ad - ay)) <= .5 * pitch
+                    .8 * pitch <= bx - ax <= 18.0 * pitch
+                    and abs(by - ay) <= .5 * pitch
+                    and abs((bd - by) - (ad - ay)) <= .7 * pitch
                     for bx, by, _bc, bd in closings
                 )
                 if not paired:
