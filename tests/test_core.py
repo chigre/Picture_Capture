@@ -6025,13 +6025,14 @@ def test_v21119_review_ui_exposes_text_left_padding_and_live_ocr_similarity():
     assert 'editor.pack_configure(padx=(padding, 0))' in review
 
 
-def test_review_oversized_classification_crop_expands_but_regular_does_not():
+def test_review_single_character_text_uses_configured_height_regardless_of_classification():
     from picture_capture.app import _review_line_box
 
     image = Image.new("RGB", (1000, 1400), "white")
     settings = AppSettings(
         columns=1, column_width=600,
         character_height=40, row_padding=4, ocr_language="chi_tra",
+        review_single_cjk_line_height=96, review_regular_crop_height=44,
     )
     geometry = Geometry([100], [600], 50, 1300, [ColumnPath([(50, 100), (1300, 100)])])
 
@@ -6052,7 +6053,11 @@ def test_review_oversized_classification_crop_expands_but_regular_does_not():
     assert oversized_box[3] > regular_box[3]
     assert oversized_box[0] == regular_box[0]
     assert oversized_box[2] == regular_box[2]
-    assert oversized_box[3] - oversized_box[1] == 100 + 2 * settings.row_padding
+    assert oversized_box[3] - oversized_box[1] == 96
+    assert regular_box[3] - regular_box[1] == 44
+    assert _review_line_box(
+        oversized, geometry, image, settings, editor_text="字典",
+    )[3] - oversized_box[1] == 44
 
 
 def test_review_regular_crop_uses_half_spacing_top_and_full_spacing_height():
@@ -6095,13 +6100,14 @@ def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wir
     assert "detect_entries_job" in detect_block
 
 
-def test_review_oversized_classification_crop_no_longer_caps_at_next_marker():
+def test_review_single_character_crop_height_not_cut_off_by_next_marker():
     from picture_capture.app import _review_line_box
 
     image = Image.new("RGB", (1000, 1400), "white")
     settings = AppSettings(
         columns=1, column_width=600,
         character_height=40, row_padding=4, ocr_language="chi_sim",
+        review_single_cjk_line_height=112,
     )
     geometry = Geometry([100], [600], 50, 1300, [ColumnPath([(50, 100), (1300, 100)])])
 
@@ -6114,10 +6120,10 @@ def test_review_oversized_classification_crop_no_longer_caps_at_next_marker():
     next_entry = Entry("下一", 110, 160)
     box = _review_line_box(current, geometry, image, settings, next_entry)
 
-    # Structural oversized crop height wins even when the next hand-drawn marker
-    # is closer; inconsistent marker Y must not clip the display head.
+    # The explicit one-character height wins even if the next marker is close;
+    # OCR's observed 100px visual run is no longer used for proofreading.
     assert box[3] > next_entry.y
-    assert box[3] - box[1] == 100 + 2 * settings.row_padding
+    assert box[3] - box[1] == 112
 
 
 def test_v21121_review_ocr_compare_setting_persists(tmp_path):

@@ -327,11 +327,13 @@ def test_compact_review_anchors_to_work_area_top():
     assert 'height = max(1, work_bottom - y)' in app
 
 
-def test_inline_review_slice_is_regular_height_not_double():
+def test_inline_review_slice_uses_text_based_height_without_classification():
     app, _ = sources()
-    assert 'regular_height if ordinary_height_only else classified_entry_crop_height(' in app
+    assert '_focused_review_is_single_character(displayed_text)' in app
+    assert 'classified_entry_crop_height(' not in app
     assert 'entry, geometry, image, review_settings, next_entry,' in app
-    assert 'ordinary_height_only=True' in app
+    assert 'editor_text=editor_texts[index]' in app
+    assert 'ordinary_height_only=True' not in app
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in app
     assert 'self._update_active_crop_preview(index)' in app
 
@@ -596,7 +598,7 @@ def test_review_pinned_crop_2_5x_and_compact_font_captions():
     assert "extended_review_crop_box(" in pinned
     assert "round(multiplier * crop.height)" in pinned
     assert "center_y - half_height" not in pinned
-    assert 'ordinary_height_only=True' in pinned
+    assert 'editor_text=self.vars[index].get()' in pinned
 
     start = app.index("        font_row = ttk.Frame(review_info, style=")
     end = app.index("        digit_box = self._review_collapsible_section(", start)
