@@ -278,6 +278,52 @@ def test_body_like_latin_continuation_is_not_rescued_when_not_bold():
     assert candidate["accepted"] is False
 
 
+def test_real_portuguese_ocr_glued_pos_recovers_weak_ink_word():
+    """Page 4 abananarv.t. was a verified marker missed by old continuation rules."""
+    settings = AppSettings(
+        ocr_language="por", character_height=36, paddle_boldness_ratio=1.0,
+    )
+    diagnostics, candidate = _latin_diagnostics(0.8382)
+    candidate["text"] = "abananarv.t. ①把…做成香蕉样子"
+    candidate["normalized_headword"] = "abananar"
+    candidate["pos_cue"] = ""
+    candidate["features"]["structural_cue"] = False
+    entries = []
+
+    count = ph._rescue_false_continuation_rows(
+        entries, diagnostics, source_top=10, source_column_x=20,
+        settings=settings, engine_name="paddle", profile=None,
+    )
+    assert count == 1
+    assert entries[0].word == "abananar"
+    assert candidate["features"]["glued_pos_structural_rescue"] is True
+    assert candidate["features"]["glued_pos_tag"] == "v.t."
+
+
+def test_real_spanish_continuation_remains_rejected_without_adjacent_pos():
+    from picture_capture.latin_glued_pos_headwords import glued_lemma_and_pos
+
+    for example in ("momento de~. 他在吐露内心真情时",
+                    "una ~ en el coche.", "su bufete a su primer ayudante.",
+                    "se abismó en la desesperación."):
+        assert glued_lemma_and_pos(example) is None
+
+
+def test_glued_tag_parser_handles_real_user_archive_cases():
+    from picture_capture.latin_glued_pos_headwords import glued_lemma_and_pos
+
+    examples = {
+        "abaluartarv.t. ①筑堡垒防卫": ("abaluartar", "v.t."),
+        "abanillom. 1.一种轮状": ("abanillo", "m."),
+        "Abigaíln. pr. 亚比该": ("Abigaíl", "n. pr."),
+        "aals. m.【植】阿尔树": ("aal", "s. m."),
+        "abichar²v.i.【巴西】": ("abichar²", "v.i."),
+    }
+    for raw, (lemma, pos) in examples.items():
+        assert glued_lemma_and_pos(raw) == (lemma, pos)
+    assert glued_lemma_and_pos("ababadar v.t. 释义") is None
+
+
 def test_phase6b_import_keeps_core_supervised_symbols_unmutated():
     import picture_capture.evidence_fusion as fusion
 
