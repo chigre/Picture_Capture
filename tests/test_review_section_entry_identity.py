@@ -160,3 +160,37 @@ def test_preloaded_page_section_snapshot_is_rechecked_before_sorting():
     assert block.index("latest_sections = read_page_sections") < block.index(
         "self._sort_entries_reading_order()"
     )
+
+
+def test_disabling_migrated_sections_does_not_resurrect_old_reading_order(tmp_path):
+    root = tmp_path / "dictionary"
+    root.mkdir()
+    page = root / "page.png"
+    Image.new("RGB", (220, 150), "white").save(page)
+    original = [PageSection(0, 60), PageSection(60, 150)]
+    write_page_sections(page, original)
+    migrate_legacy_project(root, "test")
+    historical_path = page_sections_read_path_for_image(page)
+    historical_bytes = historical_path.read_bytes()
+
+    disabled = write_page_sections(page, [])
+    assert disabled.is_file()  # Explicit managed-project Section=0 marker.
+    assert page_sections_read_path_for_image(page) == disabled
+    assert read_page_sections(page) == []
+    assert historical_path.read_bytes() == historical_bytes
+
+    # Re-enable and disable again: the old data may never override Section=0.
+    write_page_sections(page, [PageSection(0, 150)])
+    assert read_page_sections(page) == [PageSection(0, 150)]
+    write_page_sections(page, [])
+    assert read_page_sections(page) == []
+
+
+def test_section_zero_still_removes_sidecar_when_no_migrated_copy(tmp_path):
+    page = tmp_path / "page.png"
+    Image.new("RGB", (220, 150), "white").save(page)
+    sidecar = write_page_sections(page, [PageSection(0, 150)])
+    assert sidecar.is_file()
+    assert write_page_sections(page, []) == sidecar
+    assert not sidecar.exists()
+    assert read_page_sections(page) == []

@@ -161,22 +161,28 @@ def page_sections_path_for_image(image_path: Path) -> Path:
     return root / "QT" / "PageSections" / f"{image_path.stem}.json"
 
 
-def page_sections_read_path_for_image(image_path: Path) -> Path:
-    """Read older SECTION sidecars preserved by the managed-project migration.
+def migrated_page_sections_path_for_image(image_path: Path) -> Path | None:
+    """Existing historical SECTION copy inside a managed project's QT tree."""
+    image_path = Path(image_path)
+    if not is_managed_project(image_path.parent):
+        return None
+    legacy_dir = case_insensitive_child(qt_root(image_path.parent), "PageSections")
+    if legacy_dir is None:
+        return None
+    legacy = legacy_dir / f"{image_path.stem}.json"
+    return legacy if legacy.is_file() else None
 
-    migrate_legacy_project copies the legacy QT tree into _PictureCapture/QT,
-    whereas new SECTION writes go to _PictureCapture/data/PageSections.
-    Never overwrite or silently prefer the old copy if the new sidecar exists.
+
+def page_sections_read_path_for_image(image_path: Path) -> Path:
+    """Prefer canonical SECTION data; fall back to migrated historical QT data.
+
+    Migration preserves the old QT tree; writes must never silently destroy it.
     """
     image_path = Path(image_path)
     canonical = page_sections_path_for_image(image_path)
-    if canonical.exists() or not is_managed_project(image_path.parent):
+    if canonical.exists():
         return canonical
-    legacy_dir = case_insensitive_child(qt_root(image_path.parent), "PageSections")
-    if legacy_dir is None:
-        return canonical
-    legacy = legacy_dir / f"{image_path.stem}.json"
-    return legacy if legacy.is_file() else canonical
+    return migrated_page_sections_path_for_image(image_path) or canonical
 
 def ppp_write_path_for_image(image_path: Path) -> Path:
     image_path = Path(image_path)
