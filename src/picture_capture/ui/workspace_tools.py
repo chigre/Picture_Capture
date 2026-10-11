@@ -405,14 +405,14 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         ).grid(row=nav_row, column=0, sticky="ew", pady=(0, 2))
     app.workspace_extreme_page_navigation = extreme_nav
 
-    # 紧凑 mode has a genuine second column, sibling to the icon rail. The
-    # old mini list was *inside* the 140px rail, which forced the splitter to
-    # jump and squeezed page controls under the launcher buttons.
-    simple_slot = ttk.Frame(
-        sidebar_host, style="PC.Sidebar.TFrame",
-        width=DEFAULT_PAGE_LIST_WIDTH,
+    # 紧凑: the page-range controls and list sit DIRECTLY UNDER the 页面
+    # icon, in the SAME 140px icon column. Normal/max keep their separate
+    # full-width page index beside that column. Never reparent live Treeviews.
+    simple_slot = ttk.Frame(rail, style="PC.Sidebar.TFrame")
+    simple_slot.grid(
+        row=len(TASK_GROUPS) + 4, column=0, sticky="nsew", padx=0, pady=0,
     )
-    simple_slot.pack_propagate(False)
+    simple_slot.grid_remove()
     app.workspace_mini_page_slot = simple_slot
     mini_host = ttk.Frame(simple_slot, style="PC.Sidebar.TFrame")
     mini_host.pack(fill="both", expand=True)
@@ -954,23 +954,22 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         )
 
 def _set_simple_page_visible(app: Any, visible: bool) -> None:
-    """Show/hide the standalone 300px simple page column without reparenting."""
+    """Toggle the compact page index immediately beneath the 页面 icon."""
     slot = app.workspace_mini_page_slot
-    if visible and slot.winfo_manager() != "pack":
-        # The page list belongs on the far LEFT of the icon column.
-        # The rail is always packed, so it is a safe -before anchor.
-        slot.pack(side="left", fill="both", before=app.workspace_tools_rail)
-    elif not visible and slot.winfo_manager() == "pack":
-        slot.pack_forget()
+    if visible and slot.winfo_manager() != "grid":
+        slot.grid()
+    elif not visible and slot.winfo_manager() == "grid":
+        slot.grid_remove()
 
 
-def preferred_sidebar_width(app: Any, *, extreme: bool = False) -> int:
-    """140px launcher + 6px grip + 300px page list in normal/compact mode."""
-    return (
-        36 + RAIL_DIVIDER_WIDTH if extreme else
-        int(app.workspace_rail_width) + RAIL_DIVIDER_WIDTH
-        + int(app.workspace_page_list_width)
-    )
+def preferred_sidebar_width(
+    app: Any, *, extreme: bool = False, compact: bool = False,
+) -> int:
+    """Extreme 36px; compact 140px with list below; normal adds 300px list."""
+    rail_width = 36 if extreme else int(app.workspace_rail_width)
+    if extreme or compact:
+        return rail_width + RAIL_DIVIDER_WIDTH
+    return rail_width + RAIL_DIVIDER_WIDTH + int(app.workspace_page_list_width)
 
 
 def toggle_image_toolbar(app: Any) -> None:
@@ -1031,7 +1030,9 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
         def fit_compact() -> None:
             try:
                 app.update_idletasks()
-                compact_width = preferred_sidebar_width(app, extreme=(mode == "极简"))
+                compact_width = preferred_sidebar_width(
+                    app, extreme=(mode == "极简"), compact=(mode == "紧凑"),
+                )
                 app.main_paned.sashpos(0, compact_width)
                 app.update_idletasks()
                 height, top = app.winfo_height(), app.winfo_y()
