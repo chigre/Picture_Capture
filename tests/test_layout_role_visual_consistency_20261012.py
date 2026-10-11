@@ -60,6 +60,7 @@ def test_suppresses_repeated_real_body_starts_inside_entry_cluster():
     )
     assert stats == {
         "checked_columns": 1, "repaired_columns": 1, "demoted_rows": 8,
+        "repaired_indices": [0],
     }
     assert all(line.role == "body" for line in lines[:8])
     assert all(line.role == "entry" for line in lines[8:23])
