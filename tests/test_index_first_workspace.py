@@ -27,7 +27,9 @@ def test_fixed_width_icon_cells_and_compact_nav_toggle():
     app, tools = sources()
     assert 'entry.columnconfigure(0, minsize=36)' in tools
     assert 'icon = tk.Canvas(entry, width=30, height=27' in tools
-    assert 'text_button = ttk.Button(entry, text=label, width=9' in tools
+    assert 'text_button = tk.Button(' in tools
+    assert 'font="TkDefaultFont", anchor="center", justify="center"' in tools
+    assert 'relief="flat", bd=0, highlightthickness=0, padx=0, pady=0' in tools
     assert 'rail, 0, "☰", "工具菜单"' not in tools
     assert 'app.workspace_rail_labels.append(text_button)' in tools
     assert 'label.grid_remove()' in tools
@@ -205,7 +207,7 @@ def test_rail_styles_are_compact_in_both_themes():
 
 def test_compact_index_has_optional_headers_and_horizontal_scroll():
     app, tools = sources()
-    assert 'displaycolumns=("bookmark", "page", "lined", "illustrations")' in tools
+    assert 'displaycolumns=("page", "lined", "illustrations")' in tools
     assert 'mini_hscroll = ttk.Scrollbar(mini_host, orient="horizontal"' in tools
     assert 'mini.configure(yscrollcommand=mini_scroll.set, xscrollcommand=mini_hscroll.set)' in tools
     assert 'menu.add_checkbutton(label=app.page_index_labels[key]' in tools

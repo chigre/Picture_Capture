@@ -34,7 +34,7 @@ def test_simple_mode_clones_complete_range_and_navigation_controls():
     controls = Path(simple_page_controls.__file__).read_text(encoding="utf-8")
     assert 'install_simple_page_controls(app, mini_host)' in tools
     assert 'install_simple_page_tree_actions(app, mini)' in tools
-    assert 'displaycolumns=("bookmark", "page", "lined", "illustrations")' in tools
+    assert 'displaycolumns=("page", "lined", "illustrations")' in tools
     for label in ('"当前"', '"至末页"', '"至指定"',
                   '"跳"', '"⨇"', '"⨈"', '"上"', '"下"'):
         assert label in controls
@@ -64,3 +64,15 @@ def test_quick_actions_are_always_short_and_horizontal_except_extreme():
     assert 'column=0 if extreme else index' in source
     assert 'sticky="ew", padx=0, pady=0' in source
     assert 'button.configure(text=compact if extreme else ordinary' not in source
+
+
+def test_light_rail_button_height_and_dark_captions_are_consistently_centered():
+    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    app = (ROOT / "app.py").read_text(encoding="utf-8")
+    assert 'style="PC.Sidebar.TFrame", width=DEFAULT_RAIL_WIDTH, height=33' in source
+    assert 'entry.grid_propagate(False)' in source
+    assert 'text_button = tk.Button(' in source
+    assert 'anchor="center", justify="center"' in source
+    assert 'relief="flat", bd=0, highlightthickness=0' in source
+    assert 'style.configure(button_style, anchor="center", justify="center")' in app
+    assert 'anchor="center", justify="center"' in app

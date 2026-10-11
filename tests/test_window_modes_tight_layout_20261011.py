@@ -31,14 +31,19 @@ def test_compact_page_columns_fit_a_120px_rail():
     columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")
     labels = dict(zip(columns, ("●", "页面", "域", "线", "填充状态", "图")))
     rows = [("●", "long_dictionary_filename_1001", "2", "●", "已填充", "●")]
-    shown = ("bookmark", "page", "lined", "illustrations")
+    shown = ("page", "lined", "illustrations")
     sizes = compact_page_column_widths(
-        labels, rows, columns, shown, 120, lambda value: len(value) * 7,
+        labels, rows, columns, shown, 100, lambda value: len(value) * 7,
     )
-    assert 36 <= sizes["page"] <= 100
-    assert sizes["bookmark"] <= 22 and sizes["lined"] <= 22
-    assert sizes["illustrations"] <= 22
-    assert sum(sizes[column] for column in shown) <= 102
+    assert sizes["page"] >= len("页面") * 7 + 16
+    assert sizes["lined"] >= len("线") * 7 + 16
+    assert sizes["illustrations"] >= len("图") * 7 + 16
+    assert sum(sizes[column] for column in shown) == 100
+    wider = compact_page_column_widths(
+        labels, rows, columns, shown, 220, lambda value: len(value) * 7,
+    )
+    assert wider["page"] == sizes["page"] + 120
+    assert sum(wider[column] for column in shown) == 220
 
 
 def test_page_range_radio_buttons_share_one_row_with_small_entry():

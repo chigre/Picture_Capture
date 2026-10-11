@@ -79,3 +79,13 @@ def test_window_preset_geometry_always_anchors_to_top_left():
     assert 'app.state("zoomed")' in maximized
     assert 'app.winfo_y()' not in compact
     assert 'app.winfo_y()' not in normal
+
+
+def test_compact_three_headers_fill_real_viewport():
+    source = MODULE.read_text(encoding="utf-8")
+    assert 'displaycolumns=("page", "lined", "illustrations")' in source
+    assert 'value=(key in {"lined", "illustrations"})' in source
+    assert 'mini.bind("<Configure>", lambda _event: size_compact_page_columns(app)' in source
+    assert 'viewport = int(mini.winfo_width())' in source
+    assert 'max(1, viewport - 2), app.compact_page_font.measure' in source
+    assert 'widths["page"] = max(widths["page"], remaining)' in source

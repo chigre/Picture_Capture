@@ -367,8 +367,17 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         icon.grid(row=0, column=0, sticky="ns")
         _draw_rail_icon(icon, symbol)
         icon.bind("<Button-1>", lambda _event: command())
-        text_button = ttk.Button(entry, text=label, width=9, command=command,
-                                 style="PC.Rail.TButton")
+        # Classic flat controls fill the same 33px row in both OS themes,
+        # without the varying insets of rounded native ttk buttons.
+        colors = app._main_ui_colors
+        text_button = tk.Button(
+            entry, text=label, width=9, command=command,
+            font="TkDefaultFont", anchor="center", justify="center",
+            bg=colors["button"], fg=colors["text"],
+            activebackground=colors["button_hover"], activeforeground=colors["text"],
+            relief="flat", bd=0, highlightthickness=0, padx=0, pady=0,
+            cursor="hand2",
+        )
         text_button.grid(row=0, column=1, sticky="nsew", padx=(1, 0), pady=0)
         app.workspace_rail_labels.append(text_button)
         if tip:
@@ -473,7 +482,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
 
     app.after_idle(finish_compact_page_controls)
     mini = ttk.Treeview(mini_host, columns=app.page_index_columns,
-                        displaycolumns=("bookmark", "page", "lined", "illustrations"),
+                        displaycolumns=("page", "lined", "illustrations"),
                         show="headings", selectmode="browse", height=12,
                         style="PC.CompactPage.Treeview")
     for column in app.page_index_columns:
@@ -493,8 +502,10 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     mini_hscroll = ttk.Scrollbar(mini_host, orient="horizontal", command=mini.xview)
     mini_hscroll.grid(row=2, column=0, sticky="ew")
     mini.configure(yscrollcommand=mini_scroll.set, xscrollcommand=mini_hscroll.set)
+    # Use the Treeview viewport, not the full rail including its scrollbar.
+    mini.bind("<Configure>", lambda _event: size_compact_page_columns(app), add="+")
     optional_columns = ("bookmark", "lined", "illustrations", "section", "fill_status")
-    mini_vars = {key: tk.BooleanVar(value=(key in {"bookmark", "lined", "illustrations"}))
+    mini_vars = {key: tk.BooleanVar(value=(key in {"lined", "illustrations"}))
                  for key in optional_columns}
     app.workspace_mini_column_vars = mini_vars
     def choose_mini_columns() -> None:
@@ -718,26 +729,33 @@ def compact_page_column_widths(
     labels: dict[str, str], rows: list[tuple[str, ...]], columns: tuple[str, ...],
     shown: tuple[str, ...], rail_width: int, measure: Any,
 ) -> dict[str, int]:
-    """Measure each column with bounded widths; prioritize visible page names."""
-    minima = {"bookmark": 16, "page": 36, "section": 18, "lined": 18,
-              "fill_status": 32, "illustrations": 18}
-    maxima = {"bookmark": 22, "page": 100, "section": 32, "lined": 22,
-              "fill_status": 64, "illustrations": 22}
+    """Fill the live Treeview width; reserve enough space for each heading.
+
+    The page-name column consumes the remainder, without the old 100px cap.
+    Extra user-selected columns can trigger horizontal scrolling if necessary.
+    """
+    minima = {"bookmark": 21, "page": 44, "section": 25, "lined": 25,
+              "fill_status": 55, "illustrations": 25}
+    maxima = {"bookmark": 36, "section": 44, "lined": 42,
+              "fill_status": 100, "illustrations": 42}
     widths: dict[str, int] = {}
     for index, key in enumerate(columns):
-        samples = [labels.get(key, key)]
-        samples.extend(str(row[index]) for row in rows if index < len(row))
-        needed = max(measure(text) for text in samples) + 4
-        widths[key] = min(maxima.get(key, 80), max(minima.get(key, 18), needed))
+        header = max(minima.get(key, 25), int(measure(labels.get(key, key))) + 16)
+        samples = (str(row[index]) for row in rows if index < len(row))
+        body = max((int(measure(value)) for value in samples), default=0) + 10
+        widths[key] = header if key == "page" else max(header, min(maxima.get(key, 80), body))
     if "page" in shown:
-        used = sum(widths[key] for key in shown if key != "page")
-        widths["page"] = min(widths["page"],
-                             max(36, min(100, int(rail_width) - 18 - used)))
+        remaining = int(rail_width) - sum(widths[key] for key in shown if key != "page")
+        widths["page"] = max(widths["page"], remaining)
+    elif shown:
+        first = shown[0]
+        widths[first] = max(widths[first], int(rail_width) -
+                            sum(widths[col] for col in shown if col != first))
     return widths
 
 
 def size_compact_page_columns(app: Any) -> None:
-    """Size only the miniature Treeview, keeping the full list untouched."""
+    """Fit columns to the real viewport after every compact-list resize."""
     mini = getattr(app, "workspace_mini_page_list", None)
     if mini is None:
         return
@@ -746,13 +764,16 @@ def size_compact_page_columns(app: Any) -> None:
         display = tuple(mini.tk.splitlist(mini.cget("displaycolumns")))
         shown = columns if display == ("#all",) else display
         rows = [tuple(mini.item(iid, "values")) for iid in mini.get_children()]
+        viewport = int(mini.winfo_width())
+        if viewport <= 1:
+            viewport = max(1, int(app.workspace_rail_width) - 18)
         widths = compact_page_column_widths(
             app.page_index_labels, rows, columns, shown,
-            int(app.workspace_rail_width), app.compact_page_font.measure,
+            max(1, viewport - 2), app.compact_page_font.measure,
         )
         for key, width in widths.items():
-            mini.column(key, width=width, minwidth=14, stretch=False,
-                        anchor="center")
+            mini.column(key, width=width, minwidth=min(14, width),
+                        stretch=False, anchor="center")
     except (AttributeError, tk.TclError, ValueError):
         pass
 
@@ -988,7 +1009,7 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         else:
             label.grid()
 
-    # Only the PAGE RANGE/LIST in 紧凑 uses an 80% font.
+    # Compact range controls use 80%, while the page list itself uses 90%.
     _apply_compact_sidebar_font(app, mode == "紧凑")
     host = app.workspace_quick_actions_host
     for column in range(3):

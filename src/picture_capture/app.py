@@ -7090,6 +7090,7 @@ class PictureCaptureApp(tk.Tk):
         style.configure("TLabelframe.Label", background=palette["surface"], foreground=palette["text"])
         style.configure(
             "TButton", background=palette["button"], foreground=palette["text"],
+            anchor="center", justify="center",
             bordercolor=palette["border"], lightcolor=palette["button"], darkcolor=palette["button"],
         )
         style.map(
@@ -7455,9 +7456,19 @@ class PictureCaptureApp(tk.Tk):
 
         # Keep rail controls the same font and compact geometry in both themes.
         style.configure("PC.Rail.TButton", font="TkDefaultFont",
-                        padding=(0, 0), relief="flat", borderwidth=0)
+                        padding=(0, 0), relief="flat", borderwidth=0,
+                        anchor="center", justify="center")
         style.configure("PC.QuickRail.TButton", font="TkDefaultFont",
-                        padding=(0, 0), relief="flat", borderwidth=0)
+                        padding=(0, 0), relief="flat", borderwidth=0,
+                        anchor="center", justify="center")
+        # Different ttk themes inherit different caption alignment defaults.
+        for button_style in (
+            "PC.Compact.TButton", "PC.Tool.TButton", "PC.Footer.TButton",
+            "PC.PageNav.TButton", "PC.SimplePage.TButton",
+            "PC.WindowMode.TButton", "PC.WindowProject.TButton",
+            "PC.WindowQuick.TButton", "PC.Workspace80.TButton",
+        ):
+            style.configure(button_style, anchor="center", justify="center")
         style.configure("PC.CompactPage.Treeview", rowheight=22,
                         font=self.compact_page_font, background=base["surface"],
                         fieldbackground=base["surface"], foreground=colors["text"])
@@ -7554,6 +7565,8 @@ class PictureCaptureApp(tk.Tk):
             activeforeground=foreground,
             relief="flat",
             bd=0,
+            anchor="center",
+            justify="center",
             highlightthickness=1,
             highlightbackground=border,
             highlightcolor=border,
@@ -7585,6 +7598,8 @@ class PictureCaptureApp(tk.Tk):
             activeforeground=foreground,
             relief="flat",
             bd=0,
+            anchor="center",
+            justify="center",
             highlightthickness=1,
             highlightbackground=border,
             highlightcolor=border,
