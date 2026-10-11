@@ -142,20 +142,22 @@ def test_page_headers_and_preferred_sidebar_width():
     assert 'min(preferred_sidebar_width(app), width - 160)' in tools
 
 
-def test_image_toolbar_launcher_is_with_run_buttons_not_canvas_corner():
+def test_inline_zoom_is_visible_in_normal_and_compact_without_old_launcher():
     app, tools = sources()
     assert 'self.page_size_row = size_row' in app
     assert 'self.page_zoom_tools = zoom_tools' in app
-    assert 'zoom_tools.pack(side="left")' in app
     assert 'zoom_handle = ttk.Label(size_row, text="≣"' not in app
-    assert 'size_row.place(relx=0, rely=1' not in app
-    assert '("图片工具栏", lambda: toggle_image_toolbar(app))' in tools
     assert '("普", "O", "校")[index]' in tools
-    assert 'def toggle_image_toolbar(app: Any) -> None:' in tools
-    assert 'toolbar.place_forget()' in tools
-    assert 'toolbar.place(relx=0, rely=1, x=8, y=-8, anchor="sw")' in tools
+    assert 'toggle_image_toolbar(app)' not in tools
+    assert '("➖", lambda: app.zoom(0.87)' in tools
+    assert '("➕", lambda: app.zoom(1.15)' in tools
+    assert '("⇔", app.fit_page_width' in tools
+    assert '("⇳", app.fit_page_height' in tools
+    assert '("◧", app.fit_single_column_width' in tools
+    assert 'style.configure("PC.WorkspaceZoom.TEntry", font=small' in tools
     assert 'view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)' in app
-    assert 'view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)' in app
+
+
 
 def test_page_columns_order_and_mandatory_visibility():
     app, _ = sources()
