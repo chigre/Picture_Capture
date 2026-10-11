@@ -195,11 +195,24 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     canvas.bind("<Configure>", lambda e: canvas.itemconfigure(
         item, width=max(1, e.width)
     ))
-    canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(
-        -int(e.delta / 120) if e.delta else 0, "units"
-    ))
-    canvas.bind("<Button-4>", lambda _e: canvas.yview_scroll(-3, "units"))
-    canvas.bind("<Button-5>", lambda _e: canvas.yview_scroll(3, "units"))
+    # Mouse-wheel events go to the hovered child in Tk; binding the canvas
+    # alone cannot scroll when the pointer is over an entry or a button.
+    def scroll_menu(event: tk.Event, steps: int) -> str | None:
+        if not app.workspace_tools_visible or not _within(event.widget, popup):
+            return None
+        canvas.yview_scroll(steps, "units")
+        return "break"
+
+    def scroll_menu_wheel(event: tk.Event) -> str | None:
+        delta = int(getattr(event, "delta", 0) or 0)
+        if not delta:
+            return None
+        steps = -max(1, abs(delta) // 120) if delta > 0 else max(1, abs(delta) // 120)
+        return scroll_menu(event, steps * 3)
+
+    app.bind_all("<MouseWheel>", scroll_menu_wheel, add="+")
+    app.bind_all("<Button-4>", lambda event: scroll_menu(event, -3), add="+")
+    app.bind_all("<Button-5>", lambda event: scroll_menu(event, 3), add="+")
     app._build_quick_settings(content)
     _stack_tool_menu_controls(content)
     sections = {
@@ -450,7 +463,10 @@ def choose_workspace_section(app: Any, title: str) -> None:
         return
     for candidate in app.workspace_tools_sections.values():
         app._set_section_expanded(candidate, candidate is section)
-    app.workspace_tools_heading.set(title)
+    app.workspace_tools_heading.set(
+        next((label for label, _icon, section_title in TASK_GROUPS
+              if section_title == title), title)
+    )
     app.workspace_tools_canvas.yview_moveto(0)
 
 
