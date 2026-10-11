@@ -297,8 +297,25 @@ def _ordinary_entries_from_layout_roles(
         if image is not None
         else {}
     )
+    from .layout_indent_authority import (
+        stable_indent_grammar, stable_indent_row_ids,
+    )
+    page_settings = getattr(understanding, "page_settings", None)
+    cjk = page_settings is not None and uses_cjk_role_model(page_settings)
     result: list[Entry] = []
     for column in list(getattr(layout, "columns", []) or []):
+        grammar = (
+            stable_indent_grammar(
+                column,
+                str(getattr(layout, "indent_type", "") or ""),
+                float(getattr(layout, "ordinary_line_height", 0) or 0),
+            )
+            if cjk else None
+        )
+        trusted_rows = (
+            stable_indent_row_ids(column, grammar)
+            if grammar is not None else set()
+        )
         for line in list(getattr(column, "lines", []) or []):
             if str(getattr(line, "role", "") or "") != "entry":
                 continue
@@ -317,7 +334,11 @@ def _ordinary_entries_from_layout_roles(
                 y=int(source_y),
                 confidence=None,
                 ocr_source="page_understanding:ordinary_layout_role",
-                issue_type="PAGE_UNDERSTANDING_ORDINARY_LAYOUT_ROLE",
+                issue_type=(
+                    "PAGE_UNDERSTANDING_ORDINARY_LAYOUT_ROLE_STABLE_INDENT"
+                    if id(line) in trusted_rows
+                    else "PAGE_UNDERSTANDING_ORDINARY_LAYOUT_ROLE"
+                ),
             )
             meta = copy_layout_line_classification(line, entry)
             if meta.entry_scale == "oversized":
