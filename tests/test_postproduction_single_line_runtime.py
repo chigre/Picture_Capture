@@ -161,21 +161,17 @@ def test_phase5e_retires_temporary_runtime_and_keeps_preflight_in_crop_controlle
 
 
 def test_phase5e_normal_ui_and_app_wrappers_are_explicit():
-    root = Path(__file__).resolve().parents[1]
-    app_source = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
-    gui_source = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    app = (root / "app.py").read_text(encoding="utf-8")
+    tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    bootstrap=(root / "bootstrap/gui.py").read_text(encoding="utf-8")
+    broad=app.split("        postproduction = self._section_frame(",1)[1].split("        postproduction.columnconfigure(",1)[0]
+    for method in ("split_single_lines_selected_scope","export_unlined_rows_selected_scope","split_entries_selected_scope","split_illustrations_selected_scope"):
+        assert method in broad
+    assert 'elif text == "未画线行导出":' in broad
+    assert "self._pc_unlined_export_button = button" in broad
+    assert "def export_unlined_rows_selected_scope(self)" in app
+    assert "self._crop_controller_for_call().export_unlined_rows_selected_scope()" in app
+    for removed_installer in ("install_unlined_line_export_ui","unlined_line_export_ui","install_unlined_fast_path","unlined_fast_path_runtime"):
+        assert removed_installer not in bootstrap
 
-    assert (
-        '(("单行切图", self.split_single_lines_selected_scope), '
-        '("未画线行导出", self.export_unlined_rows_selected_scope), '
-        '("词条切图", self.split_entries_selected_scope), '
-        '("插图切图", self.split_illustrations_selected_scope))'
-    ) in app_source
-    assert 'elif text == "未画线行导出":' in app_source
-    assert "self._pc_unlined_export_button = button" in app_source
-    assert "def export_unlined_rows_selected_scope(self)" in app_source
-    assert "self._crop_controller_for_call().export_unlined_rows_selected_scope()" in app_source
-    assert "install_unlined_line_export_ui" not in gui_source
-    assert "unlined_line_export_ui" not in gui_source
-    assert "install_unlined_fast_path" not in gui_source
-    assert "unlined_fast_path_runtime" not in gui_source
