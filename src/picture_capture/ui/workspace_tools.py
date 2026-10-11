@@ -242,6 +242,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app._set_section_expanded(first, True, persist=False)
     first.pack(fill="x")
     app.workspace_tools_canvas = canvas
+    app.workspace_tools_header = header
     app.workspace_tools_heading = heading
     app.workspace_tools_pin_var = pin_var
 
@@ -502,7 +503,14 @@ def position_workspace_popup(app: Any) -> None:
         root_width = max(1, int(app.winfo_width()))
         width = min(TOOL_MENU_WIDTH, max(1, root_width - 12))
         left = max(4, min(left, root_width - width - 6))
-        height = max(1, app.winfo_height() - top - 28)
+        available_height = max(1, app.winfo_height() - top - 28)
+        section = app.workspace_tools_sections.get(app.workspace_tools_active)
+        requested = (
+            section.winfo_reqheight() if section is not None
+            else app.workspace_tools_content.winfo_reqheight()
+        )
+        header_height = app.workspace_tools_header.winfo_reqheight()
+        height = min(available_height, max(115, requested + header_height + 28))
         popup.place(x=left, y=top, width=width, height=height)
         popup.lift()
     except tk.TclError:
@@ -573,6 +581,7 @@ def show_workspace_task(app: Any, title: str | None) -> None:
     app.workspace_tools_active = target
     choose_workspace_section(app, target)
     show_workspace_tools(app)
+    position_workspace_popup(app)
 
 
 def size_page_index_to_controls(app: Any) -> None:
