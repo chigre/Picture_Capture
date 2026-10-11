@@ -42,3 +42,29 @@ Profile 多页：`profile_setup.analyze_representative_pages` → `profile_layou
 * Profile start_y / bottom_y、gutter和宽度的鲁棒性以及逐页自动列数的UI契约仍须专项审查；不同分辨率代表页不能盲目中位数聚合。
 
 受版权保护的原始扫描未提交至仓库。新分支保留Draft，不自动合并main。
+
+
+## 续审：分隔线检测与证据传递（2026-10-12）
+
+### 已定位并提交的额外问题
+
+1. **Profile 中央分隔线自动判断存在逻辑断路。** `detect_profile_layout_parameters()` 强制 `layout_columns_policy="detect"`，而旧 `_projection_layout_estimate()` 仅在 `fixed` 分支写入 `separator_centers`，造成Profile检测到分栏后 `separator_x` 仍必定是 `None`。现为detect分支补入保守的竖线检测，并将未证实有竖线的Profile建议改为 `auto`（而不是断言 `absent`）。这只是修复证据丢失，不代表已经可靠处理各种倾斜分隔线。
+2. **组合式Layout漏传字高证据。** `layout_composition.infer_composed_physical_page_layout()` 原先调用 `anchor_resolved_layout_to_profile(...)` 未传 `estimate`，上游 `observed_character_height` 即使恢复了真实29–30px，也会再次被Profile 17px附近的夹紧规则拉回。已改为 `estimate=estimate`，使经证实的墨迹高度在显著偏离旧Profile时可保留；不可信单页OCR框仍受正常锚定。
+3. **逐页仅投影成功时不会触发字高补救。** `reliable_fusion+projection_only+paddle_error=...` 没有 `fallback=character_height` 标志，却仍使用页高0.8%估计。已允许这一来源进行全分辨率、足量物理行证据的高度测量，无合格证据时不随意修正。
+4. 新增 `tests/test_layout_parameter_chain_20261012.py` 对上述三条路径设回归门槛；源代码已提交，但**测试状态以最新GitHub Actions结果为准，不能把创建测试等同测试通过**。
+
+### 仍开放的参数可靠性边界（不应认定已完成）
+
+| 参数或链路 | 剩余风险 | 建议验收准则 |
+|---|---|---|
+| Profile栏数 | 横投影的空隙可能把分隔线误当新栏；多页众数也可能选错 | 真样本栏数逐页一致、与人工栏模板一致；证据不足不自动应用 |
+| Profile起始Y | 前38%最大留白策略会误选标题下/正文内空行 | 真正文首行附近定位；按页眉/无页眉/首页/普通页分组评估 |
+| Profile页底Y | 97%页高启发式并非末行位置 | 用各栏最后实际墨迹行及显式页尾排除约束独立核对 |
+| Profile栏宽及栏间空 | 最后栏宽强制中位数、栏距5.5%兜底，斜线及不齐栏受影响 | 每栏左右边界和真实留白均验证，记录每个值的来源 |
+| Profile代表页融合 | 数值直接取绝对px中位数，无图像分辨率相容门槛 | 同源分辨率检查；不一致时分组或拒绝自动聚合 |
+| 逐页栏数与行间空 | 选了自动，`layout_profile_anchor` 仍固定恢复Profile原值 | 澄清“Auto=测量生效”还是“Auto仅诊断”；UI与实际输出必须一致 |
+| 逐页字高 | Paddle+投影共同成功但没有标记height fallback时，实测字高纠偏并非总会触发 | 带独立墨迹行证据的逐页比较/来源门控 |
+| 行高/行距/行间空语义 | `row_padding` 的旧计算为半个额外节距，但`row_height=character_height+row_padding` | 显式区分glyph-ink-height、top-to-top line pitch和full interline gap，先做兼容迁移 |
+| 右栏Indent与词头线 | 行过滤、栏定位、竖线排除及语义家族恢复相互影响 | 按列统计物理行召回、entry/body两类INDENT和最终PDIC TP/FP/FN |
+
+**真实图像端到端重新验证仍未完成**：需用原5套34页训练包在此分支重新跑Profile建议、逐页测量、Layout叠加、普通画线与PDIC对照。不要以合成单测或仅凭之前的人工观察宣布全部参数正确。PR继续保留Draft，绝不因本次续审直接合并主分支。
