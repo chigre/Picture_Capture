@@ -241,6 +241,25 @@ def _refine_column_geometry(
     if rules.size:
         body[:, rules] = False
 
+    # A page-wide X histogram does not recognize tilted dividers because each
+    # X position sees the line only over part of its length. Suppress the
+    # persistent *moving* stroke inside the inter-column gutter as well, so
+    # it cannot redefine the next column's text start.
+    if len(starts) >= 2:
+        from .layout_gutter_rule import gutter_divider_right_edge
+        for index in range(1, len(starts)):
+            corridor_left = max(0, int(rights[index - 1]) + 1)
+            semantic_left = int(starts[index])
+            guarded = gutter_divider_right_edge(
+                page_ink,
+                body_top=top, body_bottom=bottom,
+                corridor_left=corridor_left,
+                corridor_right=semantic_left - max(2, round(reference * .12)),
+                reference=reference,
+            )
+            if guarded is not None:
+                body[:, corridor_left:min(semantic_left, guarded)] = False
+
     refined = list(starts)
     for index in range(len(starts)):
         if index == 0:
