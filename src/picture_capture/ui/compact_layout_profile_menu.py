@@ -225,16 +225,16 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         caption(frame, title, 13)
         ttk.Entry(
             frame, textvariable=app.quick_vars[name],
-            width=5 if name != "columns" else 4,
+            width=6 if name != "columns" else 4,
             justify="center",
         ).pack(side="left", padx=0, pady=0)
         if name != "columns":
             ttk.Label(frame, text="%", width=2).pack(side="left", padx=0, pady=0)
             ttk.Entry(
                 frame, textvariable=app.quick_pixel_vars[name],
-                width=6, justify="center",
+                width=5, justify="center",
             ).pack(side="left", padx=0, pady=0)
-            ttk.Label(frame, text="px", width=3).pack(side="left", padx=0, pady=0)
+            ttk.Label(frame, text="px", width=2).pack(side="left", padx=0, pady=0)
 
     _divider(panel)
 
