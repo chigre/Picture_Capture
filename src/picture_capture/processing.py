@@ -517,15 +517,24 @@ def detect_entries(
             if (
                 uses_cjk_role_model(effective)
                 and bool(getattr(effective, "profile_cjk_allow_bracketed_headword", True))
-                and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity"
             ):
                 from .ordinary_bracket_pair import recover_bracketed_ordinary_entries
                 layout = understanding.layout
-                entries = recover_bracketed_ordinary_entries(
-                    entries, analysis_image, layout.columns,
-                    int(layout.body_top), int(layout.body_bottom),
-                    float(layout.ordinary_line_height),
+                rotated = str(getattr(layout.transform, "kind", "identity")) != "identity"
+                bracket_image = (
+                    layout.transform.canonical_image_for_analysis(analysis_image)
+                    if rotated else analysis_image
                 )
+                try:
+                    entries = recover_bracketed_ordinary_entries(
+                        entries, bracket_image, layout.columns,
+                        int(layout.body_top), int(layout.body_bottom),
+                        float(layout.ordinary_line_height),
+                        transform=layout.transform, source_size=layout.source_size,
+                    )
+                finally:
+                    if rotated:
+                        bracket_image.close()
             entries = _allowed_entries(
                 entries,
                 source,
