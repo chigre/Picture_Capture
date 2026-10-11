@@ -2286,9 +2286,13 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     assert 'ttk.Label(value_frame, text="%")' in quick
     assert 'ttk.Label(value_frame, text="px")' in quick
     assert '"若所选页面数量≥2，参数为稳健中位数"' in quick
-    detect_start = text.index("    def detect_layout_current(self) -> None:")
-    detect_end = text.index("\n    def detect_layout_consistency_selected", detect_start)
-    detect = text[detect_start:detect_end]
+    detect = (
+        Path(__file__).resolve().parents[1] / "src" /
+        "picture_capture" / "layout_detection_actions.py"
+    ).read_text(encoding="utf-8")
+    detect = detect.split("def detect_layout_current(self) -> None:", 1)[1].split(
+        "def detect_layout_consistency_selected", 1
+    )[0]
     assert 'numeric_summary="mean"' not in detect
     assert "多页数值参数将取稳健中位数" in detect
     assert '"start_y": "% 图高"' in schema
@@ -3952,9 +3956,10 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     assert "shutil.rmtree(staging, ignore_errors=True)" not in done
     assert 'app._start_ui_worker(' in done
 
-    layout_start = app_text.index("    def detect_layout_consistency_selected(", app_start)
-    layout_end = app_text.index("\n    @staticmethod\n    def _normalize_suffix", layout_start)
-    layout = app_text[layout_start:layout_end]
+    layout_text = (
+        root / "src" / "picture_capture" / "layout_detection_actions.py"
+    ).read_text(encoding="utf-8")
+    layout = layout_text.split("def detect_layout_consistency_selected(", 1)[1]
     done_start = layout.index("        def done(")
     layout_done = layout[done_start:]
     assert "def finalize_report():" in layout_done

@@ -284,7 +284,9 @@ def test_current_review_crop_is_fixed_width_double_height_and_framed():
     assert 'self.active_crop_frame.place(x=6, y=4, anchor="nw")' in app
     assert 'self._review_display_crops = list(preloaded_crops)' in app
     assert 'def _update_active_crop_preview(self, index: int)' in app
-    assert 'self._active_crop_fixed_size = (crop.width, round(2.5 * crop.height))' in app
+    assert 'crop.width, max(1, round(multiplier * crop.height))' in app
+    assert 'extended_review_crop_box(' in app
+    assert 'center_y - half_height' not in app
     assert 'preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)' in app
     assert 'self._update_active_crop_preview(index)' in app
 
@@ -591,8 +593,9 @@ def test_review_pinned_crop_2_5x_and_compact_font_captions():
     start = app.index("    def _update_active_crop_preview(self, index: int)")
     end = app.index("    def _ordinary_review_photo(", start)
     pinned = app[start:end]
-    assert "half_height = source_height * 1.25" in pinned
-    assert "round(2.5 * crop.height)" in pinned
+    assert "extended_review_crop_box(" in pinned
+    assert "round(multiplier * crop.height)" in pinned
+    assert "center_y - half_height" not in pinned
     assert 'ordinary_height_only=True' in pinned
 
     start = app.index("        font_row = ttk.Frame(review_info, style=")

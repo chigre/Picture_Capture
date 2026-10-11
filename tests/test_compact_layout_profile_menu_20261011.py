@@ -148,8 +148,10 @@ def test_layout_autodetect_button_reuses_seven_field_range_detector():
     assert parent < checkbox < button < rows
     assert 'app._attach_tooltip(\n        detect_button,' in source
     assert 'def detect_layout_current(self) -> None:' in app_source
-    detector = app_source.split('    def detect_layout_current(self) -> None:', 1)[1].split(
-        '    def detect_layout_consistency_selected(self)', 1
+    assert 'return _run_detect_layout_current(self)' in app_source
+    detector = (BASE / "layout_detection_actions.py").read_text(encoding="utf-8")
+    detector = detector.split('def detect_layout_current(self) -> None:', 1)[1].split(
+        'def detect_layout_consistency_selected(self)', 1
     )[0]
     assert 'indices = self.selected_page_indices()' in detector
     assert 'return detect_layout_parameters(opened, settings)' in detector
