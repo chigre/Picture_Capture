@@ -23,7 +23,7 @@ def test_draggable_140px_icon_column_and_vertical_divider():
     assert 'ttk.Separator(divider, orient="vertical")' in text
     assert 'divider.bind("<ButtonPress-1>", start_drag)' in text
     assert 'divider.bind("<B1-Motion>", update_drag)' in text
-    assert "max(80, min(340, proposed))" in text
+    assert "proposed = max(80, min(340, drag[\"width\"] + delta))" in text
     assert 'entry.configure(width=36 if extreme else app.workspace_rail_width)' in text
     assert 'drag["sash"] + proposed - drag["width"]' in text
 
