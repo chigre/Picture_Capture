@@ -33,6 +33,11 @@ def test_physical_projection_keeps_real_30px_rows_with_18px_nominal_height(monke
         character_height=18, start_y=20, ordinary_auto_layout=False,
     )
     blank = Image.new("L", (580, 280), 255)
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(blank)
+    for x in (35, 310):
+        for y in (55, 110, 170):
+            draw.rectangle((x, y, x + 165, y + 25), fill=0)
     output = design.infer_dictionary_page_layout(blank, settings, ops=ops)
     assert len(output.columns) == 2
     assert all(len(column.lines) == 3 for column in output.columns)
