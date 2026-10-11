@@ -63,15 +63,17 @@ def test_auxiliary_partitions_keep_original_entry_identity_and_number():
         EntryCropPiecePlan(1, 1, "beta", (10, 180, 210, 250), "(1)"),
     ]
     partitions = partition_entry_pieces(pieces, [AuxiliaryLine(10, 100)], _Geometry())
-    assert len(partitions) == 4
+    # The region beneath the auxiliary boundary now belongs to beta (the
+    # following headword) rather than becoming alpha's continuation slice.
+    assert len(partitions) == 3
     assert partitions[0] is pieces[0]
-    assert [p.box for p in partitions[1:3]] == [
-        (10, 40, 210, 100), (10, 100, 210, 180),
+    assert [p.box for p in partitions[1:]] == [
+        (10, 40, 210, 100), (10, 100, 210, 250),
     ]
-    assert [p.entry_ref_index for p in partitions] == [None, 0, 0, 1]
-    assert [p.word for p in partitions] == ["_上页末词条_", "alpha", "alpha", "beta"]
-    assert [p.output_index for p in partitions] == [0, 0, 0, 1]
-    assert [p.suffix for p in partitions[1:]] == ["(1)", "(2)", "(1)"]
+    assert [p.entry_ref_index for p in partitions] == [None, 0, 1]
+    assert [p.word for p in partitions] == ["_上页末词条_", "alpha", "beta"]
+    assert [p.output_index for p in partitions] == [0, 0, 1]
+    assert [p.suffix for p in partitions[1:]] == ["(1)", "(1)"]
 
 
 def test_auxiliary_partition_on_rotated_page_splits_x_axis():
@@ -202,3 +204,62 @@ def test_auxiliary_line_add_delete_chip_does_not_create_pdic_entries(monkeypatch
     assert len(app.entries) == 1
     assert saves[-1] == []
     assert ctrl.delete_at_chip(400, 400) is False
+
+
+
+def test_auxiliary_cut_between_real_headwords_reassigns_lower_interval():
+    pieces = [
+        EntryCropPiecePlan(0, 0, "upper", (10, 100, 210, 300), "(1)"),
+        EntryCropPiecePlan(1, 1, "lower", (10, 296, 210, 460), "(1)"),
+    ]
+    output = partition_entry_pieces(pieces, [AuxiliaryLine(10, 200)], _Geometry())
+    assert len(output) == 2
+    assert [(p.word, p.box) for p in output] == [
+        ("upper", (10, 100, 210, 200)),
+        ("lower", (10, 200, 210, 460)),
+    ]
+    assert [p.entry_ref_index for p in output] == [0, 1]
+    assert pieces[0].box == (10, 100, 210, 300)  # No in-place mutation.
+    assert pieces[1].box == (10, 296, 210, 460)
+
+
+def test_auxiliary_without_following_marker_still_only_splits_existing_entry():
+    pieces = [
+        EntryCropPiecePlan(0, 0, "last", (10, 100, 210, 400), "(1)"),
+    ]
+    output = partition_entry_pieces(pieces, [AuxiliaryLine(10, 200)], _Geometry())
+    assert [(p.word, p.box) for p in output] == [
+        ("last", (10, 100, 210, 200)),
+        ("last", (10, 200, 210, 400)),
+    ]
+    assert all(p.entry_ref_index == 0 for p in output)
+
+
+def test_auxiliary_in_other_column_does_not_shift_adjacent_entry_boundary():
+    class TwoColumns(_Geometry):
+        column_starts = [10, 300]
+        column_widths = [200, 200]
+
+    pieces = [
+        EntryCropPiecePlan(0, 0, "left", (10, 100, 210, 300), "(1)"),
+        EntryCropPiecePlan(1, 1, "right", (300, 290, 500, 460), "(1)"),
+    ]
+    result = partition_entry_pieces(
+        pieces, [AuxiliaryLine(10, 200)], TwoColumns(),
+    )
+    assert len(result) == 3
+    assert result[2].word == "right"
+    assert result[2].box == (300, 290, 500, 460)
+
+
+def test_shared_boundary_rotation_uses_canonical_reading_direction():
+    pieces = [
+        EntryCropPiecePlan(0, 0, "upper", (130, 10, 240, 210), "(1)"),
+        EntryCropPiecePlan(1, 1, "lower", (30, 10, 134, 210), "(1)"),
+    ]
+    output = partition_entry_pieces(
+        pieces, [AuxiliaryLine(180, 10)], _Rotated(),
+    )
+    assert len(output) == 2
+    assert output[0].box == (180, 10, 240, 210)
+    assert output[1].box == (30, 10, 180, 210)
