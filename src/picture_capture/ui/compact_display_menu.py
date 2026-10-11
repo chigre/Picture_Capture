@@ -103,7 +103,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     # General display.
     row = line()
     check(row, "自动保存", app.autosave_var, app.toggle_autosave)
-    label(row, "间隔(秒)")
+    label(row, "间隔时间(秒)")
     field(row, "batch_interval", 4)
 
     row = line()
