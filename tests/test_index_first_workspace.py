@@ -210,7 +210,8 @@ def test_compact_index_has_optional_headers_and_horizontal_scroll():
     assert 'mini.configure(yscrollcommand=mini_scroll.set, xscrollcommand=mini_hscroll.set)' in tools
     assert 'menu.add_checkbutton(label=app.page_index_labels[key]' in tools
     assert 'font=self.compact_page_font' in app
-    assert 'self.compact_page_font = font.nametofont("TkDefaultFont")' in app
+    assert 'self.compact_page_font = default_page_font.copy()' in app
+    assert "round(base_size * 0.9)" in app
 
 
 def test_canvas_right_click_navigation_and_sidebar_presets():

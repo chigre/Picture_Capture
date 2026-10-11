@@ -748,7 +748,7 @@ def size_compact_page_columns(app: Any) -> None:
         rows = [tuple(mini.item(iid, "values")) for iid in mini.get_children()]
         widths = compact_page_column_widths(
             app.page_index_labels, rows, columns, shown,
-            int(app.workspace_rail_width), tkfont.nametofont("TkDefaultFont").measure,
+            int(app.workspace_rail_width), app.compact_page_font.measure,
         )
         for key, width in widths.items():
             mini.column(key, width=width, minwidth=14, stretch=False,
@@ -906,7 +906,7 @@ def _style_compact_sidebar(app: Any) -> None:
 
 
 def _apply_compact_sidebar_font(app: Any, compact: bool) -> None:
-    """Keep page-range controls small, but page-list rows/headers normal.
+    """Keep page-range controls at 80% and miniature page list at 90%.
 
     Left launcher labels, project buttons, zoom controls and 普/O/校 retain
     their normal font at every window preset.
@@ -924,7 +924,7 @@ def _apply_compact_sidebar_font(app: Any, compact: bool) -> None:
 
     def visit(widget: tk.Misc) -> None:
         if isinstance(widget, ttk.Treeview):
-            # All presets use the default-font miniature list style.
+            # The compact page-list style uses the separately sized 90% font.
             widget.configure(style="PC.CompactPage.Treeview")
         elif isinstance(widget, tk.Radiobutton):
             widget.configure(font=_compact_font(app) if compact else "TkDefaultFont")
@@ -1085,14 +1085,14 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
                 )
                 app.main_paned.sashpos(0, compact_width)
                 app.update_idletasks()
-                height, top = app.winfo_height(), app.winfo_y()
+                height = app.winfo_height()
                 if app.image is not None:
                     app.fit_page_height()
                     required = int(compact_width + app.image.width * app.view_scale + 32)
                 else:
                     required = app.winfo_width()
                 app.state("normal")
-                app.geometry(f"{min(app.winfo_screenwidth(), max(required_header_width(app), required))}x{height}+0+{top}")
+                app.geometry(f"{min(app.winfo_screenwidth(), max(required_header_width(app), required))}x{height}+0+0")
                 app.after_idle(lambda: app.main_paned.sashpos(0, compact_width))
             except tk.TclError:
                 pass
@@ -1100,23 +1100,24 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
     elif mode == "正常":
         def fit_normal() -> None:
             try:
+                app.state("normal")
                 app.update_idletasks()
-                rail = app.workspace_tools_rail
                 required_sidebar = preferred_sidebar_width(app)
                 sash = min(required_sidebar, max(1, app.main_paned.winfo_width() - 160))
                 app.main_paned.sashpos(0, sash)
+                width, height = app.winfo_width(), app.winfo_height()
                 if app.image is not None:
                     required = int(sash + app.image.width * app.view_scale + 32)
                     required = max(required_header_width(app), required)
-                    if app.winfo_width() < required:
-                        height, top = app.winfo_height(), app.winfo_y()
-                        app.state("normal")
-                        app.geometry(f"{min(app.winfo_screenwidth(), required)}x{height}+0+{top}")
+                    width = max(width, min(app.winfo_screenwidth(), required))
+                app.geometry(f"{width}x{height}+0+0")
             except tk.TclError:
                 pass
         app.after_idle(fit_normal)
     elif mode == "最大":
         try:
+            app.state("normal")
+            app.geometry("+0+0")
             app.state("zoomed")
         except tk.TclError:
             app.geometry(f"{app.winfo_screenwidth()}x{app.winfo_screenheight()}+0+0")
