@@ -13,31 +13,28 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
     """Expose all full-page controls above the simple-mode mirrored treeview."""
     controls = ttk.Frame(host, style="PC.Sidebar.TFrame", padding=(0, 3, 0, 3))
     controls.grid(row=0, column=0, columnspan=2, sticky="ew")
-    controls.columnconfigure(0, weight=1)
-    controls.columnconfigure(1, weight=1)
-
-    # Wrap three range selections into two compact lines instead of
-    # letting one long horizontal range bar widen the entire icon rail.
-    for row, column, caption, value in (
-        (0, 0, "当前", "current"),
-        (0, 1, "至末页", "to_end"),
-        (1, 0, "至指定", "to_specified"),
+    # 80%-scale single line: 当前 / 至末页 / 至指定.
+    for column, caption, value in (
+        (0, "当前", "current"),
+        (1, "至末页", "to_end"),
+        (2, "至指定", "to_specified"),
     ):
         ttk.Radiobutton(
             controls, text=caption, variable=app.page_range_var,
-            value=value,
-        ).grid(row=row, column=column, sticky="w", padx=0, pady=0)
+            value=value, style="PC.Workspace80.TRadiobutton",
+        ).grid(row=0, column=column, sticky="w", padx=0, pady=0)
 
     spec = ttk.Frame(controls, style="PC.Sidebar.TFrame")
-    spec.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(3, 3))
+    spec.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(1, 2))
     spec.columnconfigure(1, weight=1)
     # Preserve the explicit "specified" radio selection without the
     # redundant visible "指定:" text.
     ttk.Radiobutton(
         spec, text="", variable=app.page_range_var,
-        value="specified",
+        value="specified", style="PC.Workspace80.TRadiobutton",
     ).grid(row=0, column=0, sticky="w", padx=0, pady=0)
-    field = ttk.Entry(spec, textvariable=app.page_range_spec_var, width=7)
+    field = ttk.Entry(spec, textvariable=app.page_range_spec_var, width=7,
+                      style="PC.Workspace80.TEntry")
     field.grid(row=0, column=1, sticky="ew", padx=0, pady=0)
     field.bind("<Return>", lambda _event: app.jump_to_page_spec())
     jump = ttk.Button(
@@ -50,7 +47,7 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
     )
 
     actions = ttk.Frame(controls, style="PC.Sidebar.TFrame")
-    actions.grid(row=3, column=0, columnspan=2, sticky="ew")
+    actions.grid(row=2, column=0, columnspan=3, sticky="ew")
     for index, (caption, callback, help_text) in enumerate((
         ("⨇", lambda: app.jump_to_bookmark(-1), "上一书签"),
         ("⨈", lambda: app.jump_to_bookmark(1), "下一书签"),

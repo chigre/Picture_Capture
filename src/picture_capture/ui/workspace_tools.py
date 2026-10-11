@@ -334,6 +334,10 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
                          borderwidth=0, font="TkDefaultFont")
     rail_style.map("PC.Rail.TButton", relief=[("active", "flat")])
     rail_style.map("PC.QuickRail.TButton", relief=[("active", "flat")])
+    rail_style.configure("PC.WindowMode.TButton", font="TkDefaultFont",
+                         padding=(2, 0))
+    rail_style.map("PC.WindowMode.TButton",
+                   relief=[("selected", "sunken"), ("!selected", "raised")])
     rail.columnconfigure(0, weight=1)
     app.page_index_labels = {"bookmark":"●","page":"页面","section":"域","lined":"线","fill_status":"填充状态","illustrations":"图"}
     app.page_index_columns = tuple(app.page_index_labels)
@@ -364,22 +368,23 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
             app._attach_tooltip(text_button, tip)
         return entry
 
-    sidebar_button = rail_action(
-        rail, 0, "☰", "窗口模式", lambda: toggle_sidebar_modes(app),
-        "",
-    )
-    mode_menu = ttk.Frame(app, padding=3, relief="solid", borderwidth=1,
-                          style="PC.Sidebar.TFrame")
-    app.workspace_sidebar_mode_menu = mode_menu
-    for choice in ("极简", "紧凑", "正常", "最大"):
-        ttk.Button(mode_menu, text=choice, width=7, style="PC.Rail.TButton",
-                   command=lambda mode=choice: set_sidebar_mode(app, mode)).pack(fill="x")
-    # Do not dismiss this menu on <Leave>. Hover transitions between the
-    # icon and the floating palette may cross a real gap on Windows.
-    # Opening is deliberate (click), and closing requires a selection,
-    # Escape, a second click, or a click outside.
-    mode_menu.bind("<Escape>", lambda _e: mode_menu.place_forget(), add="+")
-    app.workspace_sidebar_toggle = sidebar_button
+    # Tk keeps the native minimize/maximize/close title-bar controls.
+    # Place adjacent workspace presets in a narrow upper-right client strip.
+    mode_bar = ttk.Frame(app, style="PC.Sidebar.TFrame", padding=(0, 1, 7, 1))
+    mode_bar.pack(side="top", fill="x", before=app.main_paned)
+    mode_group = ttk.Frame(mode_bar, style="PC.Sidebar.TFrame")
+    mode_group.pack(side="right")
+    app.workspace_title_mode_buttons = {}
+    for caption in ("极简", "紧凑", "正常"):
+        button = ttk.Button(
+            mode_group, text=caption, width=4, style="PC.WindowMode.TButton",
+            command=lambda mode=caption: set_sidebar_mode(app, mode),
+        )
+        button.pack(side="left", padx=(1, 0))
+        app.workspace_title_mode_buttons[caption] = button
+    _refresh_window_mode_buttons(app)
+    rail_action(rail, 0, "☰", "工具菜单", lambda: toggle_workspace_tools(app),
+                "显示或隐藏当前工具菜单")
     for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1):
         rail_action(
             rail, index, symbol, label,
@@ -435,7 +440,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
                         style="PC.CompactPage.Treeview")
     for column in app.page_index_columns:
         mini.heading(column, text=app.page_index_labels[column], anchor="center")
-        mini.column(column, width=80 if column == "page" else 26, minwidth=20,
+        mini.column(column, width=24, minwidth=14,
                     anchor="center", stretch=False)
         mini.heading(
             column,
@@ -460,6 +465,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         mini.configure(displaycolumns=tuple(
             key for key in order if key == "page" or mini_vars[key].get()
         ))
+        size_compact_page_columns(app)
     def mini_heading_menu(event: tk.Event) -> str | None:
         if mini.identify_region(event.x, event.y) != "heading":
             return None
@@ -557,12 +563,6 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         hide_workspace_tools(app)
 
     app.bind_all("<Button-1>", dismiss_outside, add="+")
-    def dismiss_mode_on_outside_click(event: tk.Event) -> None:
-        if mode_menu.winfo_manager() != "place":
-            return
-        if not _within(event.widget, mode_menu) and not _within(event.widget, sidebar_button):
-            mode_menu.place_forget()
-    app.bind_all("<Button-1>", dismiss_mode_on_outside_click, add="+")
     app.bind("<Configure>", lambda _e: position_workspace_popup(app), add="+")
     # Initialize a consistent 140px rail + 6px grip + 300px page list.
     app.after_idle(lambda: size_page_index_to_controls(app))
@@ -692,6 +692,49 @@ def size_page_index_to_controls(app: Any) -> None:
         pass
 
 
+def compact_page_column_widths(
+    labels: dict[str, str], rows: list[tuple[str, ...]], columns: tuple[str, ...],
+    shown: tuple[str, ...], rail_width: int, measure: Any,
+) -> dict[str, int]:
+    """Measure each column with bounded widths; prioritize visible page names."""
+    minima = {"bookmark": 16, "page": 36, "section": 18, "lined": 18,
+              "fill_status": 32, "illustrations": 18}
+    maxima = {"bookmark": 22, "page": 100, "section": 32, "lined": 22,
+              "fill_status": 64, "illustrations": 22}
+    widths: dict[str, int] = {}
+    for index, key in enumerate(columns):
+        samples = [labels.get(key, key)]
+        samples.extend(str(row[index]) for row in rows if index < len(row))
+        needed = max(measure(text) for text in samples) + 4
+        widths[key] = min(maxima.get(key, 80), max(minima.get(key, 18), needed))
+    if "page" in shown:
+        used = sum(widths[key] for key in shown if key != "page")
+        widths["page"] = min(widths["page"],
+                             max(36, min(100, int(rail_width) - 18 - used)))
+    return widths
+
+
+def size_compact_page_columns(app: Any) -> None:
+    """Size only the miniature Treeview, keeping the full list untouched."""
+    mini = getattr(app, "workspace_mini_page_list", None)
+    if mini is None:
+        return
+    try:
+        columns = tuple(app.page_index_columns)
+        display = tuple(mini.tk.splitlist(mini.cget("displaycolumns")))
+        shown = columns if display == ("#all",) else display
+        rows = [tuple(mini.item(iid, "values")) for iid in mini.get_children()]
+        widths = compact_page_column_widths(
+            app.page_index_labels, rows, columns, shown,
+            int(app.workspace_rail_width), _compact_font(app).measure,
+        )
+        for key, width in widths.items():
+            mini.column(key, width=width, minwidth=14, stretch=False,
+                        anchor="center")
+    except (AttributeError, tk.TclError, ValueError):
+        pass
+
+
 def refresh_compact_page_index(app: Any) -> None:
     """Mirror page names and order without creating another page state."""
     mini = getattr(app, "workspace_mini_page_list", None)
@@ -708,6 +751,7 @@ def refresh_compact_page_index(app: Any) -> None:
         if selected and mini.exists(selected[0]):
             mini.selection_set(selected[0])
             mini.see(selected[0])
+        size_compact_page_columns(app)
     except tk.TclError:
         pass
 
@@ -775,28 +819,11 @@ def toggle_sidebar(app: Any) -> str:
         app.after_idle(expand)
     return "break"
 
-def show_sidebar_modes(app: Any) -> None:
-    """Open an intentionally persistent mode selector beside its trigger."""
-    menu = app.workspace_sidebar_mode_menu
-    rail_button = app.workspace_sidebar_toggle
-    try:
-        menu.update_idletasks()
-        x = rail_button.winfo_rootx() - app.winfo_rootx() + rail_button.winfo_width() + 2
-        y = rail_button.winfo_rooty() - app.winfo_rooty()
-        x = min(x, max(0, app.winfo_width() - menu.winfo_reqwidth() - 4))
-        y = min(y, max(0, app.winfo_height() - menu.winfo_reqheight() - 4))
-        menu.place(x=max(0, x), y=max(0, y))
-        menu.lift()
-    except tk.TclError:
-        pass
-
-
-def toggle_sidebar_modes(app: Any) -> None:
-    menu = app.workspace_sidebar_mode_menu
-    if menu.winfo_manager() == "place":
-        menu.place_forget()
-    else:
-        show_sidebar_modes(app)
+def _refresh_window_mode_buttons(app: Any) -> None:
+    """Reflect selected layout preset while leaving native OS buttons alone."""
+    active = getattr(app, "workspace_mode", "正常")
+    for mode, button in getattr(app, "workspace_title_mode_buttons", {}).items():
+        button.state(["selected"] if mode == active else ["!selected"])
 
 
 def _compact_font(app: Any) -> tkfont.Font:
@@ -820,6 +847,10 @@ def _style_compact_sidebar(app: Any) -> None:
     for suffix in ("TButton", "TLabel", "TRadiobutton", "TCheckbutton",
                    "TEntry", "TCombobox"):
         style.configure(f"PC.Workspace80.{suffix}", font=small, padding=0)
+    # Theme support for indicatorsize varies; compact text and paddings
+    # are applied on all platforms, with a smaller circle where supported.
+    style.configure("PC.Workspace80.TRadiobutton",
+                    font=small, padding=0, indicatorsize=10)
     # Only the zoom-percentage field uses a smaller font (in every mode).
     # Other zoom buttons and launcher labels retain the normal font.
     style.configure("PC.WorkspaceZoom.TEntry", font=small, padding=0)
@@ -849,6 +880,8 @@ def _apply_compact_sidebar_font(app: Any, compact: bool) -> None:
             widget.configure(style=(
                 "PC.Workspace80.Treeview" if compact else "PC.CompactPage.Treeview"
             ))
+        elif isinstance(widget, tk.Radiobutton):
+            widget.configure(font=_compact_font(app) if compact else "TkDefaultFont")
         else:
             for kind, (small, standard) in styles.items():
                 if isinstance(widget, kind):
@@ -993,7 +1026,7 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
     if mode not in {"极简", "紧凑", "正常", "最大"}:
         return "break"
     app.workspace_mode = mode
-    app.workspace_sidebar_mode_menu.place_forget()
+    _refresh_window_mode_buttons(app)
     if not app.workspace_sidebar_visible:
         toggle_sidebar(app)
     _apply_preset_page_index(app, mode)
