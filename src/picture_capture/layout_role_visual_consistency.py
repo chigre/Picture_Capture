@@ -97,10 +97,25 @@ def suppress_contradictory_cjk_body_lane_entries(
     try:
         gray = np.asarray(canonical.convert("L"), dtype=np.uint8)
         top = int(getattr(layout, "body_top", 0))
+        from .layout_indent_authority import (
+            stable_indent_grammar, stable_indent_row_ids,
+        )
         for column_index, column, entries, threshold in candidates:
             stats["checked_columns"] += 1
+            grammar = stable_indent_grammar(
+                column, str(layout.indent_type), reference,
+            )
+            # An independently repeated entry lane and the actual printed
+            # row's first-X are stronger than a short gray crop following
+            # the row start (which may already belong to a body continuation).
+            trusted = (
+                stable_indent_row_ids(column, grammar)
+                if grammar is not None else set()
+            )
             contradictions = []
             for line in entries:
+                if id(line) in trusted:
+                    continue
                 first = _visible_first_x(gray, column, top, line, reference)
                 if first is not None and first > threshold:
                     contradictions.append(line)
