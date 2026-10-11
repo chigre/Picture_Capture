@@ -119,15 +119,24 @@ def robust_profile_ink_height(estimates: list[Any]) -> tuple[int | None, int]:
 
 
 def apply_profile_ink_height_suggestion(aggregate: dict, estimates: list[Any]) -> str:
-    """Update a Profile proposal from verified multi-page ink measurements only."""
+    """Use measured glyph height; never apply fabricated projection row padding.
+
+    The OCR-free projection estimates currently set row_padding=1 regardless
+    of the printed leading. Keep the user's existing Project row padding until
+    a separately validated line-spacing estimator is implemented.
+    """
+    aggregate.pop("row_padding", None)
     height, count = robust_profile_ink_height(estimates)
     if height is not None:
         aggregate["character_height"] = height
-        return f"；字高按真实墨迹测量{count}/{len(estimates)}页"
+        return (
+            f"；字高按真实墨迹测量{count}/{len(estimates)}页"
+            "；行间空未可靠测量，保持原值"
+        )
     aggregate.pop("character_height", None)
     return (
         f"；⚠字高仅{count}/{len(estimates)}页有可靠测量，"
-        "未自动修改字高，请核对代表页"
+        "未自动修改字高，请核对代表页；行间空保持原值"
     )
 
 
