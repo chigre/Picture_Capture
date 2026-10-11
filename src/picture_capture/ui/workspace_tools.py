@@ -494,14 +494,12 @@ def choose_workspace_section(app: Any, title: str) -> None:
 
 
 def show_workspace_task(app: Any, title: str | None) -> None:
-    if app.workspace_tools_visible and title == app.workspace_tools_active:
+    target = title or app.workspace_tools_active or TASK_GROUPS[0][2]
+    if app.workspace_tools_visible and target == app.workspace_tools_active:
         hide_workspace_tools(app)
         return
-    app.workspace_tools_active = title
-    if title is None:
-        # Keyboard toggle reopens the last task, never an all-panels view.
-        title = app.workspace_tools_active or TASK_GROUPS[0][2]
-    choose_workspace_section(app, title)
+    app.workspace_tools_active = target
+    choose_workspace_section(app, target)
     show_workspace_tools(app)
 
 
