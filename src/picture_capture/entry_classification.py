@@ -87,7 +87,13 @@ def infer_entry_classification(entry: Entry) -> EntryClassification:
     if "ordinary_large_head_evidence" in source_text or "OVERSIZED_DISPLAY_HEAD" in issue:
         source = "large_head"
         scale = "oversized"
-    elif "ordinary_symbol_evidence" in source_text or "VISUAL_BRACKET_SAMPLE" in issue or "VISUAL_ENTRY_MARKER_SAMPLE" in issue:
+    elif (
+        "ordinary_symbol_evidence" in source_text
+        or "ordinary_bracket_pair" in source_text
+        or "VISUAL_BRACKET_SAMPLE" in issue
+        or "ORDINARY_VISUAL_BRACKET_PAIR" in issue
+        or "VISUAL_ENTRY_MARKER_SAMPLE" in issue
+    ):
         source = "symbol_sample"
         scale = "regular"
     elif "ordinary_layout_role" in source_text or "ORDINARY_LAYOUT_ROLE" in issue:
