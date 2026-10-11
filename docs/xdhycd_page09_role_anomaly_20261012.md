@@ -119,3 +119,62 @@ Linux before finalizing this revision.
 new automatic draw from its latest commit and comparison with the
 38 prior user-verified markers. Do not report shadow replay as real
 performance.
+
+## Latest 06:59 capture: two residual omissions and two extra markers
+
+The 2026-10-12 06:59 (+08:00) export
+`xdhycd_training_20261012_065918_956713.zip` contains only page
+`XDHYCD_0009.png`. Its preserved automatic snapshot has **38** markers
+and its saved PDIC also has **38**; the export's correction diff is
+36 unchanged, 2 added, 2 deleted. The saved result is not a complete
+independent multi-reader truth set, but these four edits are explicit.
+
+New saved boundaries absent from auto:
+- Left column y=1492: an intact bracketed two-character fish headword
+  (printed left bracket x=3..17, right bracket x=83..97, actual print
+  y=1495..1520).
+- Left column y=2125: the four-character bracketed `鞍马劳顿`;
+  printed left bracket x=1..15, printed y=2128..2154; its closing
+  bracket is joined to the final glyph near x≈142.
+
+Removed erroneous automatic markers:
+- Right column y=908: ordinary Layout-role marker in completely blank
+  ink space before a separately proven oversized glyph at y=950.
+- Right column y=2037: same pattern, preceding the proven y=2081 head.
+
+### Concrete root cause and narrowly scoped changes
+
+The original `illustration_detection._rle_components` deliberately
+connects previous-row run intervals up to one **extra blank column** beyond
+true 8-neighborhood adjacency. This is suitable for near-touching drawing
+fragments but not narrow print-bracket components. On the real scan it
+incorrectly fused otherwise separate 15px brackets into 31px and 48px
+components near y=1495, causing both directional-shape checks to fail.
+New `ordinary_bracket_pair._strict_bracket_components` uses actual
+8-neighbor adjacency *only for bracket printing* and does not change
+illustration behavior globally.
+
+The second omitted head is a variable-length bracket word with a closing
+bracket physically fused to the previous Han ideograph; a repeated
+two-character offset cannot locate it. A conservative longer-span
+right-bracket-shape search now runs only after at least three independent
+intact same-column pairs establish a reliable printed template.
+
+The two extra markers have **no ink anywhere across the next 31px of
+their entire column**; each is one line pitch before an independently
+proven large printed glyph. The last-mile output filter now rejects
+only this conjunction: unproven Layout-only entry, full-column
+blank next-row interval, and a separate verified bracket/large-head
+entry 0.85–2.05 line heights below. Bracket-confirmed and
+large-glyph-confirmed markers are never removed.
+
+### Acceptance limits
+
+The pixel/component evidence was reproduced on the original scan and
+specific synthetic pytest regressions were added for blank-separated
+bracket glyphs, variable-length attached closing glyphs, near-bottom
+headwords, and two misleading blank rows. CI alone does not establish
+a corrected complete output. To confirm on a user installation, redraw
+`XDHYCD_0009.png` at the latest PR HEAD and export an untouched
+automatic baseline; compare it with the saved 38-line reference, then
+run the other nine pages for unintended changes.
