@@ -10,7 +10,8 @@ from tkinter import ttk
 from typing import Any
 
 from ..dictionary_profile import (
-    profile_symbol_inventory_defaults, profile_tail_structure_defaults,
+    dictionary_profile_preset, profile_symbol_inventory_defaults,
+    profile_tail_structure_defaults,
 )
 from ..profile_semantics import (
     apply_headword_profile, ordered_headword_profiles,
@@ -89,6 +90,26 @@ def parse_profile_numeric(settings: Any, name: str, raw: str) -> float | int:
     return value
 
 
+def profile_label_for_current(
+    profile_id: str, choices: list[tuple[str, str]],
+) -> str:
+    """Use the same legacy-preset equivalence as the Profile wizard."""
+    for caption, key in choices:
+        if key == profile_id:
+            return caption
+    try:
+        wanted = dictionary_profile_preset(profile_id).display_name
+    except (KeyError, ValueError):
+        wanted = ""
+    for caption, key in choices:
+        try:
+            if dictionary_profile_preset(key).display_name == wanted and wanted:
+                return caption
+        except (KeyError, ValueError):
+            continue
+    return choices[0][0] if choices else ""
+
+
 def build_headword_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     panel = ttk.Frame(parent, padding=(4, 4, 4, 8))
     bool_vars: dict[str, tk.BooleanVar] = {}
@@ -116,8 +137,9 @@ def build_headword_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     def refresh() -> None:
         settings = app.settings
-        preset_var.set(labels.get(settings.dictionary_profile_id,
-                              next(iter(keys), "")))
+        preset_var.set(profile_label_for_current(
+            settings.dictionary_profile_id, profile_choices,
+        ))
         for key, var in bool_vars.items():
             var.set(bool(getattr(settings, key)))
         for key, var in text_vars.items():
@@ -245,6 +267,9 @@ def build_headword_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         ):
             setattr(settings, field, bool(tails[short]))
         settings.profile_tail_structure_version = 1
+        settings.paddle_allow_strong_edge_visual_rescue = bool(
+            tails["allow_visual_rescue"]
+        )
         symbols = profile_symbol_inventory_defaults(name)
         settings.profile_symbol_inventory_enabled = bool(symbols["enabled"])
         settings.profile_entry_marker_symbols = " ".join(symbols["entry_markers"])
@@ -253,6 +278,18 @@ def build_headword_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         settings.profile_symbol_lane_required = bool(symbols["lane_required"])
         settings.profile_symbol_lane_tolerance_percent = int(symbols["lane_tolerance_percent"])
         settings.profile_symbol_inventory_version = 1
+        if name == "cjk_visual":
+            entry, bracket, samples = _normalize_cjk_visual_symbol_roles(
+                settings.profile_entry_marker_symbols,
+                settings.profile_bracket_open_symbols,
+                parse_visual_marker_samples(settings.profile_symbol_templates_json),
+            )
+            settings.profile_entry_marker_symbols = entry
+            settings.profile_bracket_open_symbols = bracket
+            settings.profile_symbol_templates_json = serialize_visual_marker_samples(samples)
+            settings.profile_symbol_template_version = 1
+            if not entry:
+                settings.profile_allow_marker_prefix = False
         persist()
         refresh()
 
