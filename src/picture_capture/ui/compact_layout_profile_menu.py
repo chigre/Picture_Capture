@@ -227,16 +227,16 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             checkbox.pack(side="left", padx=0, pady=0)
             auto_buttons.append(checkbox)
 
-        # Fixed label width keeps percent/px columns vertically aligned.
-        # Width 13 + narrow numeric fields fit the 280px floating panel.
-        caption(frame, title, 13)
+        # Reserve space for the scrollbar on small windows: label, percent,
+        # pixels and unit suffixes still fit one line in a 280px palette.
+        caption(frame, title, 12)
         ttk.Entry(
             frame, textvariable=app.quick_vars[name],
             width=6 if name != "columns" else 4,
             justify="center",
         ).pack(side="left", padx=0, pady=0)
         if name != "columns":
-            ttk.Label(frame, text="%", width=2).pack(side="left", padx=0, pady=0)
+            ttk.Label(frame, text="%", width=1).pack(side="left", padx=0, pady=0)
             ttk.Entry(
                 frame, textvariable=app.quick_pixel_vars[name],
                 width=5, justify="center",
