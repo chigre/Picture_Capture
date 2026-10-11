@@ -206,6 +206,26 @@ def _sticky_pairs_from_printed_template(
             closing_w, closing_h, opening=False, pitch=pitch,
         ):
             results.append((int(ax), int(ay)))
+            continue
+
+        # Longer printed bracketed heads put the closing bracket further
+        # right than the repeated two-character template. A closing bracket
+        # attached to a Han stroke need not be a separate component. Look
+        # for its full directional ink shape near the same printed baseline.
+        # This runs only after >=3 trustworthy intact local pairs.
+        width = max(8, round(closing_w))
+        height = max(16, round(closing_h))
+        by = round(ay + typical_y_delta - y_offset)
+        search_from = round(ax + offset + max(4.0, pitch * .25) - x_offset)
+        search_to = min(
+            ink.shape[1] - width,
+            round(ax + min(10.0 * pitch, .55 * ink.shape[1]) - x_offset),
+        )
+        if 0 <= by and by + height <= ink.shape[0]:
+            for bx in range(max(0, search_from), search_to + 1):
+                if _bracket_side(ink[by:by + height, bx:bx + width], False):
+                    results.append((int(ax), int(ay)))
+                    break
 
     for closing in closings:
         if id(closing) in paired_closes:
