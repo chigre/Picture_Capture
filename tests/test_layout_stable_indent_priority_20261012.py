@@ -176,9 +176,9 @@ def test_unproved_layout_cautions_still_can_be_filtered():
     image = Image.new("RGB", layout.source_size, "white")
     draw = ImageDraw.Draw(image)
     fake = []
-    for i in range(9):
+    for i in range(14):
         marker = Entry(
-            "", 35, 110 + i * 190,
+            "", 35, 110 + i * 110,
             ocr_source="page_understanding:ordinary_layout_role",
             issue_type="PAGE_UNDERSTANDING_ORDINARY_LAYOUT_ROLE",
         )
