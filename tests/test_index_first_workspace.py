@@ -28,7 +28,7 @@ def test_fixed_width_icon_cells_and_compact_nav_toggle():
     assert 'entry.columnconfigure(0, minsize=36)' in tools
     assert 'icon = tk.Canvas(entry, width=30, height=27' in tools
     assert 'text_button = ttk.Button(entry, text=label, width=9' in tools
-    assert 'rail, 0, "☰", "工具菜单", lambda: toggle_workspace_tools(app)' in tools
+    assert 'rail, 0, "☰", "工具菜单"' not in tools
     assert 'app.workspace_rail_labels.append(text_button)' in tools
     assert 'label.grid_remove()' in tools
     assert 'label.grid()' in tools
@@ -55,15 +55,15 @@ def test_page_index_still_collapsible_and_tools_unchanged():
 def test_project_commands_move_into_shared_top_row():
     _, tools = sources()
     for label, method in (
-        ("项目中心", "open_recent_project"),
-        ("项目档案", "open_project_profile"),
-        ("设置中心", "open_settings"),
-        ("帮助中心", "show_help_dialog"),
+        ("项目", "open_recent_project"),
+        ("Profile", "open_project_profile"),
+        ("设置", "open_settings"),
+        ("帮助", "show_help_dialog"),
     ):
         assert f'("{label}",' in tools
         assert f'app.{method}' in tools
     assert 'app.project_footer_buttons.append(button)' in tools
-    assert 'project_group.pack(side="right", padx=(0, 7))' in tools
+    assert 'project_group.pack(side="right", padx=(0, 3))' in tools
     assert 'app.project_action_bar = project_group' in tools
     assert 'rail_action(footer, index, symbol, label' not in tools
 
@@ -103,7 +103,7 @@ def test_borderless_index_and_vector_rail_icon_art():
     assert '_draw_rail_icon(icon, symbol)' in tools
     assert 'canvas.create_line(' in tools
     assert 'canvas.create_rectangle(' in tools
-    assert 'len(TASK_GROUPS) + 2, "▦", "页面"' in tools
+    assert 'len(TASK_GROUPS) + 1, "▦", "页面"' in tools
     assert 'len(TASK_GROUPS) + 3, "≡", "全部"' not in tools
     for column in ('bookmark', 'page', 'section', 'lined', 'fill_status', 'illustrations'):
         assert f'self.page_list.column("{column}",' in app
@@ -178,8 +178,8 @@ def test_page_columns_order_and_mandatory_visibility():
 
 def test_mini_page_list_below_page_button():
     app, tools = sources()
-    assert 'for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1)' in tools
-    assert 'len(TASK_GROUPS) + 2, "▦", "页面"' in tools
+    assert 'for index, (label, symbol, title) in enumerate(TASK_GROUPS)' in tools
+    assert 'len(TASK_GROUPS) + 1, "▦", "页面"' in tools
     assert 'mini.heading(column, text=app.page_index_labels[column]' in tools
     assert 'selectmode="browse", height=12' in tools
     assert 'style="PC.CompactPage.Treeview"' in tools
@@ -237,7 +237,7 @@ def test_requested_workspace_updates():
 
 def test_compact_mode_does_not_reuse_full_sidebar_sash_width():
     _, tools = sources()
-    assert 'rail, 0, "☰", "工具菜单", lambda: toggle_workspace_tools(app)' in tools
+    assert 'rail, 0, "☰", "工具菜单"' not in tools
     assert 'if tip:' in tools
     assert 'compact_width = preferred_sidebar_width(' in tools
     assert 'compact=(mode == "紧凑")' in tools
@@ -436,8 +436,8 @@ def test_extreme_mode_icons_and_abbreviated_run_actions():
     assert '("极简", "紧凑", "正常", "最大")' in tools
     assert 'if mode in {"最简", "简单"}:' in tools
     assert '"极简" if' not in tools  # Mode checks use concrete preset values.
-    for value in ("工具菜单", "版面参数", "显示参数", "OCR参数", "画线…", "后期制作",
-                  "项目中心", "项目档案", "设置中心", "帮助中心"):
+    for value in ("版面参数", "显示参数", "OCR参数", "画线…", "后期制作",
+                  "项目", "Profile", "设置", "帮助"):
         assert f'"{value}"' in tools
     assert '("上", -1), ("下", 1)' in tools
     assert 'app.workspace_extreme_page_navigation = extreme_nav' in tools

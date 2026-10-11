@@ -11,7 +11,11 @@ def test_mode_buttons_at_upper_right_keep_os_caption():
     assert 'mode_bar.pack(side="top", fill="x", before=app.main_paned)' in text
     assert 'mode_group.pack(side="right")' in text
     assert 'for caption in ("极简", "紧凑", "正常", "最大")' in text
-    assert 'project_group.pack(side="right", padx=(0, 7))' in text
+    assert 'project_group.pack(side="right", padx=(0, 3))' in text
+    assert 'app.after_idle(lambda: install_header_quick_controls(app))' in text
+    assert 'app.workspace_header_quick_host = ttk.Frame(mode_bar' in text
+    assert 'rail, 0, "☰", "工具菜单"' not in text
+    assert 'app._attach_tooltip(text_button, tip)' not in text
     assert 'app.project_action_bar = project_group' in text
     assert 'app.workspace_header_project_buttons.append((button, label, symbol))' in text
     assert 'app.project_footer_buttons.append(button)' in text
@@ -57,17 +61,58 @@ def test_project_shortcuts_adapt_to_narrow_width_without_rebuilding_buttons():
         def configure(self, **kwargs):
             self.calls.append(kwargs)
 
+    class Frame:
+        def __init__(self):
+            self.events = []
+
+        def pack(self, **kwargs):
+            self.events.append(("pack", kwargs))
+
+        def pack_forget(self):
+            self.events.append(("hide", {}))
+
     buttons = [Button() for _ in range(4)]
-    labels = ("项目中心", "项目档案", "设置中心", "帮助中心")
+    labels = ("项目", "Profile", "设置", "帮助")
     symbols = ("▣", "◈", "⚙", "?")
-    app = SimpleNamespace(workspace_header_project_buttons=list(
-        zip(buttons, labels, symbols)
-    ))
+    mode_separator, quick_host, project_separator, project = [Frame() for _ in range(4)]
+    app = SimpleNamespace(
+        workspace_header_project_buttons=list(zip(buttons, labels, symbols)),
+        workspace_header_mode_separator=mode_separator,
+        workspace_header_quick_host=quick_host,
+        workspace_header_project_separator=project_separator,
+        project_action_bar=project,
+    )
     _refresh_header_project_labels(app, 320)
     assert [button.calls[-1]["text"] for button in buttons] == list(symbols)
     assert all(button.calls[-1]["width"] == 2 for button in buttons)
+    assert not any(action == "pack" for action, _ in quick_host.events)
+    assert not any(action == "pack" for action, _ in project.events)
     _refresh_header_project_labels(app, 320)
     assert all(len(button.calls) == 1 for button in buttons)
+    _refresh_header_project_labels(app, 720)
+    assert quick_host.events[-1][0] == "pack"
+    assert project.events[-1][0] == "pack"
+    assert [button.calls[-1]["text"] for button in buttons] == list(symbols)
     _refresh_header_project_labels(app, 1200)
     assert [button.calls[-1]["text"] for button in buttons] == list(labels)
     assert all(button.calls[-1]["width"] == 7 for button in buttons)
+    assert quick_host.events[-1][0] == "pack"
+
+
+def test_header_actions_share_view_zoom_var_and_preserve_bottom_toolbar():
+    text = (SRC / "workspace_tools.py").read_text(encoding="utf-8")
+    section = text.split("def install_header_quick_controls(", 1)[1].split(
+        "def _refresh_window_mode_buttons(", 1
+    )[0]
+    assert 'textvariable=app.view_zoom_var, width=5' in section
+    assert 'widget.bind("<Return>", app.apply_view_zoom_text)' in section
+    assert 'widget.bind("<FocusOut>", app.apply_view_zoom_text)' in section
+    for callback in ('app.zoom(0.87)', 'app.zoom(1.15)',
+                     'app.fit_page_width', 'app.fit_page_height',
+                     'app.fit_single_column_width', 'app.run_normal_draw_action',
+                     'app.run_ocr_draw_action', 'app.open_review'):
+        assert callback in section
+    assert 'app.workspace_quick_actions_host = quick_host' in text
+    assert 'app.after_idle(lambda: install_compact_zoom_controls(app))' in text
+    assert 'app.workspace_quick_action_buttons.append(button)' in text
+    assert 'app.workspace_quick_zoom_controls.append(widget)' in text

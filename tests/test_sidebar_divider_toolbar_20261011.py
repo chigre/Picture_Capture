@@ -56,8 +56,8 @@ def test_icon_rail_and_page_list_use_120_plus_260_width():
 def test_compact_page_list_is_directly_below_page_icon_in_same_rail():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     assert 'simple_slot = ttk.Frame(rail, style="PC.Sidebar.TFrame")' in source
-    assert 'row=len(TASK_GROUPS) + 4, column=0, sticky="nsew"' in source
-    assert 'rail, len(TASK_GROUPS) + 2, "▦", "页面"' in source
+    assert 'row=len(TASK_GROUPS) + 3, column=0, sticky="nsew"' in source
+    assert 'rail, len(TASK_GROUPS) + 1, "▦", "页面"' in source
     assert 'mini_host = ttk.Frame(simple_slot, style="PC.Sidebar.TFrame")' in source
     assert "simple_slot.pack(side=" not in source
     assert "drag[\"sash\"] + proposed - drag[\"width\"]" in source
@@ -150,7 +150,7 @@ def test_compact_layout_has_page_list_under_page_icon_and_no_outer_scroll():
     app_source = (Path(__file__).resolve().parents[1] / "src" /
                   "picture_capture" / "app.py").read_text(encoding="utf-8")
     assert 'simple_slot = ttk.Frame(rail, style="PC.Sidebar.TFrame")' in source
-    assert 'row=len(TASK_GROUPS) + 4, column=0, sticky="nsew"' in source
+    assert 'row=len(TASK_GROUPS) + 3, column=0, sticky="nsew"' in source
     assert 'slot.grid()' in source and 'slot.grid_remove()' in source
     assert 'self.sidebar_scrollbar.pack(side="right", fill="y")' not in app_source
     assert 'app.sidebar_scrollbar.pack(side="right", fill="y")' not in source
