@@ -21,9 +21,11 @@ def row_padding_is_measured(estimate: Any) -> bool:
         return False
     if method == "projection_fallback":
         return False
-    # All accepted Paddle-based paths use actual source text boxes. It does
-    # not mean the value is *correct*, only that it was not fabricated.
-    return "paddle" in method
+    # All accepted Paddle-based paths use actual source text boxes. Bare
+    # "reliable_fusion" is a historical test/adapter method name representing
+    # real text boxes; preserve that compatibility but never accept explicitly
+    # projection-only provenance.
+    return "paddle" in method or method == "reliable_fusion"
 
 
 def verified_multi_page_row_padding(estimates: list[Any]) -> tuple[int | None, int]:
