@@ -608,6 +608,11 @@ def choose_workspace_section(app: Any, title: str) -> None:
     section = app.workspace_tools_sections.get(title)
     if section is None:
         return
+    # Project Profile may have been edited in its wizard since the last menu
+    # opening; re-read canonical settings instead of showing stale copies.
+    refresh = getattr(section, "refresh_from_settings", None)
+    if callable(refresh):
+        refresh()
     # pack_forget removes the other panels completely; unlike collapsing,
     # this leaves no titles, borders or empty placeholders in the popup.
     for child in app.workspace_tools_content.winfo_children():
