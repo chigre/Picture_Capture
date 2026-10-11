@@ -69,8 +69,26 @@ def detect_profile_layout_parameters(image: Image.Image, settings: Any) -> Any:
         finally:
             canonical.close()
 
+        # Projection geometry is deliberately OCR-free, but its historical
+        # character_height = 0.008 * page_height is NOT a measurement of text.
+        # On the real XDHYCD scans this was 17px while the printed row ink was
+        # consistently 29px on all representative pages. Measure physical ink
+        # at source resolution before making a multi-page Profile proposal.
+        from .layout_character_height import observed_character_height
+        observed, stats = observed_character_height(
+            canonical, current, estimate, layout_detection,
+        )
+        base_method = f"profile_bootstrap+{getattr(estimate, 'method', 'projection')}"
+        if observed is not None:
+            estimate = replace(estimate, character_height=int(observed))
+            estimate.method = (
+                f"{base_method}+observed_character_height={int(observed)}"
+                f"(n={int(stats.get('samples', 0))})"
+            )
+        else:
+            # Callers must not present a page-ratio guess as measured height.
+            estimate.method = f"{base_method}+unverified_character_height"
         estimate.canonical_transform = transform.kind
-        estimate.method = f"profile_bootstrap+{getattr(estimate, 'method', 'projection')}"
 
         _PROFILE_BOOTSTRAP_CACHE[key] = estimate
         _PROFILE_BOOTSTRAP_CACHE.move_to_end(key)
