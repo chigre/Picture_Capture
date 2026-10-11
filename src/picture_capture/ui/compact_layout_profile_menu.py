@@ -276,6 +276,8 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     def refresh() -> None:
         nonlocal ui_syncing
         ui_syncing = True
+        previous_quick_sync = bool(getattr(app, "_quick_syncing", False))
+        app._quick_syncing = True
         try:
             for _title, name in PROFILE_TEXT_FIELDS:
                 profile_vars[name].set(str(getattr(app.settings, name, "")))
@@ -299,6 +301,7 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
                     app.quick_bool_vars[auto_name].set(bool(getattr(app.settings, auto_name)))
             master.set(bool(app.settings.ordinary_auto_layout))
         finally:
+            app._quick_syncing = previous_quick_sync
             ui_syncing = False
         refresh_enabled()
 
