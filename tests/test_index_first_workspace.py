@@ -343,3 +343,79 @@ def test_pinned_preview_and_every_inline_crop_coexist():
     assert 'self._update_active_crop_preview(index)' in active
     assert 'picture.destroy()' not in active
     assert 'picture.grid_remove()' not in active
+
+
+def test_each_tool_menu_is_260px_and_vertically_scrollable():
+    _, tools = sources()
+    assert "TOOL_MENU_WIDTH = 260" in tools
+    assert "width = min(TOOL_MENU_WIDTH, max(1, root_width - 12))" in tools
+    assert "item, width=max(1, e.width)" in tools
+    assert "horizontal = ttk.Scrollbar(scroller" not in tools
+    assert "app._build_quick_settings(content)" in tools
+    assert "_stack_tool_menu_controls(content)" in tools
+    assert 'app.bind_all("<MouseWheel>", scroll_menu_wheel, add="+")' in tools
+    assert "popup.place(x=left, y=top, width=width, height=height)" in tools
+
+
+def test_tool_menu_reflow_preserves_controls_and_verticalizes_grid_pack(monkeypatch):
+    # Geometry-only test: no display server or actual Tk window is required.
+    class Control:
+        def __init__(self, mode="", row=0, col=0, children=(), title=None):
+            self.mode = mode
+            self.info = {"row": row, "column": col, "columnspan": 1}
+            self.children = tuple(children)
+            self.rows = []
+            self.columns = []
+            if title is not None:
+                self._collapse_title = title
+
+        def winfo_children(self):
+            return self.children
+
+        def winfo_manager(self):
+            return self.mode
+
+        def grid_info(self):
+            return self.info
+
+        def grid_forget(self):
+            self.mode = ""
+
+        def grid(self, **kwargs):
+            self.mode = "grid"
+            self.rows.append(kwargs)
+
+        def columnconfigure(self, column, **kwargs):
+            self.columns.append((column, kwargs))
+
+        def pack_info(self):
+            return {"side": "left"} if self.mode == "pack" else {}
+
+        def pack_forget(self):
+            self.mode = ""
+
+        def pack(self, **kwargs):
+            self.mode = "pack"
+            self.rows.append(kwargs)
+
+    # Only override class identity checks inside the helper. The objects keep
+    # their original identity, callback-bearing references and state.
+    for namespace in (workspace_tools.tk, workspace_tools.ttk):
+        monkeypatch.setattr(namespace, "Frame", Control)
+        monkeypatch.setattr(namespace, "LabelFrame", Control)
+
+    first = Control("grid", row=0, col=0)
+    second = Control("grid", row=0, col=2)
+    left = Control("pack")
+    right = Control("pack")
+    toolbar = Control("grid", row=1, col=0, children=(left, right))
+    section = Control(children=(toolbar, second, first), title="预处理")
+    root = Control(children=(section,))
+    workspace_tools._stack_tool_menu_controls(root)
+
+    assert [first.rows[-1]["row"], second.rows[-1]["row"], toolbar.rows[-1]["row"]] == [0, 1, 2]
+    assert all(widget.rows[-1]["column"] == 0 for widget in (first, second, toolbar))
+    assert all(widget.rows[-1]["sticky"] == "ew" for widget in (first, second, toolbar))
+    assert left.rows[-1]["side"] == right.rows[-1]["side"] == "top"
+    assert left.rows[-1]["fill"] == right.rows[-1]["fill"] == "x"
+    assert section.children == (toolbar, second, first)
