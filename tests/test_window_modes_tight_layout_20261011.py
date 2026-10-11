@@ -11,13 +11,17 @@ def test_mode_buttons_at_upper_right_keep_os_caption():
     assert 'mode_bar.pack(side="top", fill="x", before=app.main_paned)' in text
     assert 'mode_group.pack(side="right")' in text
     assert 'for caption in ("极简", "紧凑", "正常", "最大")' in text
-    assert 'project_group.pack(side="right", padx=(0, 3))' in text
+    assert 'project_group.pack(side="left", padx=(4, 0))' in text
+    assert 'app.workspace_header_mode_group = mode_group' in text
+    assert 'app.after_idle(lambda: enforce_header_min_width(app))' in text
+    assert 'for label, command, tip in project_actions:' in text
+    assert 'for label, symbol, command, tip in project_actions:' not in text
     assert 'app.after_idle(lambda: install_header_quick_controls(app))' in text
     assert 'app.workspace_header_quick_host = ttk.Frame(mode_bar' in text
     assert 'rail, 0, "☰", "工具菜单"' not in text
     assert 'app._attach_tooltip(text_button, tip)' not in text
     assert 'app.project_action_bar = project_group' in text
-    assert 'app.workspace_header_project_buttons.append((button, label, symbol))' in text
+    assert 'app.workspace_header_project_buttons.append(button)' in text
     assert 'app.project_footer_buttons.append(button)' in text
     assert 'button.state(["selected"] if mode == active else ["!selected"])' in text
     assert 'overrideredirect(' not in text
@@ -49,21 +53,17 @@ def test_page_range_radio_buttons_share_one_row_with_small_entry():
     assert 'indicatorsize=10' in workspace
 
 
-def test_project_shortcuts_adapt_to_narrow_width_without_rebuilding_buttons():
+def test_project_shortcuts_never_hide_or_switch_to_icons():
     from types import SimpleNamespace
 
-    from picture_capture.ui.workspace_tools import _refresh_header_project_labels
-
-    class Button:
-        def __init__(self):
-            self.calls = []
-
-        def configure(self, **kwargs):
-            self.calls.append(kwargs)
+    from picture_capture.ui.workspace_tools import (
+        _refresh_header_toolbar, required_header_width, enforce_header_min_width,
+    )
 
     class Frame:
-        def __init__(self):
+        def __init__(self, reqwidth=1):
             self.events = []
+            self.reqwidth = reqwidth
 
         def pack(self, **kwargs):
             self.events.append(("pack", kwargs))
@@ -71,32 +71,60 @@ def test_project_shortcuts_adapt_to_narrow_width_without_rebuilding_buttons():
         def pack_forget(self):
             self.events.append(("hide", {}))
 
-    buttons = [Button() for _ in range(4)]
-    labels = ("项目", "Profile", "设置", "帮助")
-    symbols = ("▣", "◈", "⚙", "?")
-    mode_separator, quick_host, project_separator, project = [Frame() for _ in range(4)]
+        def winfo_reqwidth(self):
+            return self.reqwidth
+
+    project, mode = Frame(220), Frame(160)
+    sep1, quick, sep2 = Frame(), Frame(270), Frame()
     app = SimpleNamespace(
-        workspace_header_project_buttons=list(zip(buttons, labels, symbols)),
-        workspace_header_mode_separator=mode_separator,
-        workspace_header_quick_host=quick_host,
-        workspace_header_project_separator=project_separator,
         project_action_bar=project,
+        workspace_header_mode_group=mode,
+        workspace_header_mode_separator=sep1,
+        workspace_header_quick_host=quick,
+        workspace_header_project_separator=sep2,
+        workspace_header_project_buttons=["项目", "Profile", "设置", "帮助"],
     )
-    _refresh_header_project_labels(app, 320)
-    assert [button.calls[-1]["text"] for button in buttons] == list(symbols)
-    assert all(button.calls[-1]["width"] == 2 for button in buttons)
-    assert not any(action == "pack" for action, _ in quick_host.events)
-    assert not any(action == "pack" for action, _ in project.events)
-    _refresh_header_project_labels(app, 320)
-    assert all(len(button.calls) == 1 for button in buttons)
-    _refresh_header_project_labels(app, 720)
-    assert quick_host.events[-1][0] == "pack"
-    assert project.events[-1][0] == "pack"
-    assert [button.calls[-1]["text"] for button in buttons] == list(symbols)
-    _refresh_header_project_labels(app, 1200)
-    assert [button.calls[-1]["text"] for button in buttons] == list(labels)
-    assert all(button.calls[-1]["width"] == 7 for button in buttons)
-    assert quick_host.events[-1][0] == "pack"
+    assert required_header_width(app) == 408
+    for width in (240, 320, 500, 650):
+        _refresh_header_toolbar(app, width)
+        assert project.events == []
+        assert not any(event == "pack" for event, _ in quick.events)
+    _refresh_header_toolbar(app, 800)
+    assert project.events == []
+    assert quick.events[-1][0] == "pack"
+    _refresh_header_toolbar(app, 240)
+    assert project.events == []
+    assert quick.events[-1][0] == "hide"
+
+    class Window:
+        def __init__(self):
+            self.minimum = (1, 2)
+
+        def minsize(self, *args):
+            if args:
+                self.minimum = tuple(args)
+            return self.minimum
+
+    window = Window()
+    window.project_action_bar = project
+    window.workspace_header_mode_group = mode
+    enforce_header_min_width(window)
+    assert window.minimum == (408, 2)
+
+
+def test_project_buttons_always_use_text_and_left_packing():
+    source = (SRC / "workspace_tools.py").read_text(encoding="utf-8")
+    assert '("项目", app.open_recent_project,' in source
+    assert '("Profile", app.open_project_profile,' in source
+    assert '("设置", app.open_settings,' in source
+    assert '("帮助", app.show_help_dialog,' in source
+    assert 'project_group.pack(side="left", padx=(4, 0))' in source
+    responsive = source.split("def _refresh_header_toolbar(", 1)[1].split(
+        "def install_header_quick_controls(", 1
+    )[0]
+    assert 'project_group.pack_forget()' not in responsive
+    assert 'button.configure(text=' not in responsive
+    assert 'app.workspace_header_project_buttons.append(button)' in source
 
 
 def test_header_actions_share_view_zoom_var_and_preserve_bottom_toolbar():

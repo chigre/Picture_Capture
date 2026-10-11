@@ -63,7 +63,7 @@ def test_project_commands_move_into_shared_top_row():
         assert f'("{label}",' in tools
         assert f'app.{method}' in tools
     assert 'app.project_footer_buttons.append(button)' in tools
-    assert 'project_group.pack(side="right", padx=(0, 3))' in tools
+    assert 'project_group.pack(side="left", padx=(4, 0))' in tools
     assert 'app.project_action_bar = project_group' in tools
     assert 'rail_action(footer, index, symbol, label' not in tools
 
@@ -227,7 +227,8 @@ def test_requested_workspace_updates():
     assert 'DEFAULT_PAGE_LIST_WIDTH = 260' in tools
     assert 'value=(key in {"bookmark", "lined", "illustrations"})' in tools
     assert 'size_compact_page_columns(app)' in tools
-    assert 'app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{height}+0+{top}")' in tools
+    assert 'max(required_header_width(app), required)' in tools
+    assert 'enforce_header_min_width(app)' in tools
     assert '("普通画线", app.run_normal_draw_action)' in tools
     assert '("OCR画线", app.run_ocr_draw_action)' in tools
     assert '("词条校对", app.open_review)' in tools
