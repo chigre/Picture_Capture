@@ -37,8 +37,10 @@ def test_simple_mode_clones_complete_range_and_navigation_controls():
     assert 'install_simple_page_tree_actions(app, mini)' in tools
     assert 'displaycolumns=("bookmark", "page", "lined", "illustrations")' in tools
     for label in ('"当前"', '"至末页"', '"至指定页"',
-                  '"指定"', '"跳"', '"⨇"', '"⨈"', '"上"', '"下"'):
+                  '"跳"', '"⨇"', '"⨈"', '"上"', '"下"'):
         assert label in controls
+    assert 'text="", variable=app.page_range_var' in controls
+    assert 'value="specified"' in controls
     assert 'variable=app.page_range_var' in controls
     assert 'textvariable=app.page_range_spec_var' in controls
     assert 'command=app.jump_to_page_spec' in controls
