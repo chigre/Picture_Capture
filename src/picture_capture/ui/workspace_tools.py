@@ -14,6 +14,7 @@ from typing import Any
 from ..ui_compat import screen_work_area
 
 from .compact_display_menu import build_compact_display_menu
+from .compact_headword_profile_menu import build_headword_profile_menu
 from .compact_task_menus import (
     build_preprocess_menu, build_layout_menu, build_ocr_menu,
     build_drawing_menu,
@@ -34,6 +35,7 @@ TASK_GROUPS = (
     ("版面参数", "▤", "一、版面参数"),
     ("显示参数", "◉", "二、显示设置"),
     ("OCR参数", "⌕", "三、共享 OCR 通道 / OCR画线"),
+    ("OCR画线设置", "▣", "三之一、OCR画线设置"),
     ("画线…", "✎", "四、画线 / OCR / 插图 / 校对"),
     ("后期制作", "✂", "五、后期词典制作"),
 )
@@ -386,6 +388,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     sections["一、版面参数"] = build_layout_menu(app, content)
     sections["二、显示设置"] = build_compact_display_menu(app, content)
     sections["三、共享 OCR 通道 / OCR画线"] = build_ocr_menu(app, content)
+    sections["三之一、OCR画线设置"] = build_headword_profile_menu(app, content)
     sections["四、画线 / OCR / 插图 / 校对"] = build_drawing_menu(app, content)
     app.workspace_tools_sections = sections
     app.workspace_tools_scrollbar_refresh = refresh_scrollbar

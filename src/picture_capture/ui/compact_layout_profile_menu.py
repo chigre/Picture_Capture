@@ -9,6 +9,8 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any
 
+from .compact_ordinary_evidence_menu import build_ordinary_visual_evidence
+
 from picture_capture.profile_indent_ui import (
     INDENT_TYPE_CHOICES, apply_indent_type_label, indent_type_label,
 )
@@ -271,6 +273,8 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         widget.bind("<FocusOut>", lambda _e, n=name: save_field(n))
         profile_buttons[name] = widget
     choice("profile_first_page_variant", "A/B起始页", ("A", "B"))
+    _divider(panel)
+    ordinary_visual_panel = build_ordinary_visual_evidence(app, panel)
 
     # Sync the compact menu after Project Profile edits or project changes.
     def refresh() -> None:
@@ -304,6 +308,7 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             app._quick_syncing = previous_quick_sync
             ui_syncing = False
         refresh_enabled()
+        ordinary_visual_panel.refresh_from_settings()
 
     panel.refresh_from_settings = refresh  # type: ignore[attr-defined]
     refresh()
