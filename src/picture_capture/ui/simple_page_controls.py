@@ -19,41 +19,50 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
     # Wrap three range selections into two compact lines instead of
     # letting one long horizontal range bar widen the entire icon rail.
     for row, column, caption, value in (
-        (0, 0, "当前页", "current"),
-        (0, 1, "当前至末页", "to_end"),
-        (1, 0, "当前至指定页", "to_specified"),
-        (1, 1, "指定", "specified"),
+        (0, 0, "当前", "current"),
+        (0, 1, "至末页", "to_end"),
+        (1, 0, "至指定页", "to_specified"),
     ):
         ttk.Radiobutton(
             controls, text=caption, variable=app.page_range_var,
             value=value,
-        ).grid(row=row, column=column, sticky="w", pady=1)
+        ).grid(row=row, column=column, sticky="w", padx=0, pady=0)
 
     spec = ttk.Frame(controls, style="PC.Sidebar.TFrame")
     spec.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(3, 3))
-    spec.columnconfigure(0, weight=1)
-    field = ttk.Entry(spec, textvariable=app.page_range_spec_var, width=9)
-    field.grid(row=0, column=0, sticky="ew", padx=(0, 2))
+    spec.columnconfigure(1, weight=1)
+    # Preserve the explicit "specified" radio selection without the
+    # redundant visible "指定:" text.
+    ttk.Radiobutton(
+        spec, text="", variable=app.page_range_var,
+        value="specified",
+    ).grid(row=0, column=0, sticky="w", padx=0, pady=0)
+    field = ttk.Entry(spec, textvariable=app.page_range_spec_var, width=7)
+    field.grid(row=0, column=1, sticky="ew", padx=0, pady=0)
     field.bind("<Return>", lambda _event: app.jump_to_page_spec())
-    ttk.Button(
-        spec, text="跳转", command=app.jump_to_page_spec,
-        style="PC.PageNav.TButton",
-    ).grid(row=0, column=1, sticky="ew")
+    jump = ttk.Button(
+        spec, text="跳", width=2, command=app.jump_to_page_spec,
+        style="PC.SimplePage.TButton",
+    )
+    jump.grid(row=0, column=2, sticky="ew", padx=0, pady=0)
+    app._attach_tooltip(
+        jump, "跳转到指定页面的第一个有效页面；ENTER为快捷键",
+    )
 
     actions = ttk.Frame(controls, style="PC.Sidebar.TFrame")
     actions.grid(row=3, column=0, columnspan=2, sticky="ew")
     for index, (caption, callback, help_text) in enumerate((
-        ("前签", lambda: app.jump_to_bookmark(-1), "上一书签"),
-        ("后签", lambda: app.jump_to_bookmark(1), "下一书签"),
-        ("上页", lambda: app.change_page(-1), "上一页"),
-        ("下页", lambda: app.change_page(1), "下一页"),
+        ("⨇", lambda: app.jump_to_bookmark(-1), "上一书签"),
+        ("⨈", lambda: app.jump_to_bookmark(1), "下一书签"),
+        ("上", lambda: app.change_page(-1), "上一页"),
+        ("下", lambda: app.change_page(1), "下一页"),
     )):
         actions.columnconfigure(index, weight=1, uniform="simple-page-actions")
         button = ttk.Button(
-            actions, text=caption, command=callback,
-            style="PC.PageNav.TButton",
+            actions, text=caption, command=callback, width=2,
+            style="PC.SimplePage.TButton",
         )
-        button.grid(row=0, column=index, sticky="ew", padx=(0 if index == 0 else 1, 0))
+        button.grid(row=0, column=index, sticky="ew", padx=0, pady=0)
         app._attach_tooltip(button, help_text)
     return controls
 
