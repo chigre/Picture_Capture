@@ -420,7 +420,15 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     mini_host.columnconfigure(0, weight=1)
     # The page panel is not a reduced two-column substitute. It carries all
     # page-range controls, navigation buttons and the complete list columns.
-    app.after_idle(lambda: install_simple_page_controls(app, mini_host))
+    def finish_compact_page_controls() -> None:
+        install_simple_page_controls(app, mini_host)
+        # The controls are created after the window has initialized its page
+        # variables; apply the selected preset's font after they exist.
+        _apply_compact_sidebar_font(
+            app, getattr(app, "workspace_mode", "") == "紧凑",
+        )
+
+    app.after_idle(finish_compact_page_controls)
     mini = ttk.Treeview(mini_host, columns=app.page_index_columns,
                         displaycolumns=("bookmark", "page", "lined", "illustrations"),
                         show="headings", selectmode="browse", height=12,
