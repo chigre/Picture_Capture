@@ -566,6 +566,9 @@ def toggle_page_index(app: Any) -> str:
     panel = getattr(app, "page_panel", None)
     if panel is None:
         return "break"
+    if getattr(app, "workspace_mode", None) == "极简":
+        # The Page icon never silently expands a list in icon-only mode.
+        return "break"
     canvas = app.sidebar_canvas
     scrollbar = app.sidebar_scrollbar
     panes = app.main_paned
@@ -666,19 +669,73 @@ def show_sidebar_modes(app: Any) -> None:
         pass
 
 
+def _apply_preset_rail_controls(app: Any, mode: str) -> None:
+    """Switch compact rail visibility without destroying icons or commands."""
+    extreme = mode == "极简"
+    if extreme:
+        app.workspace_extreme_page_navigation.grid()
+    else:
+        app.workspace_extreme_page_navigation.grid_remove()
+    for label in app.workspace_rail_labels:
+        if extreme or not app.workspace_sidebar_visible:
+            label.grid_remove()
+        else:
+            label.grid()
+    for button, ordinary, compact in zip(
+        app.workspace_quick_action_buttons,
+        ("普通画线", "OCR画线", "词条校对"),
+        ("普", "O", "校"),
+    ):
+        button.configure(text=compact if extreme else ordinary, width=3 if extreme else 0)
+
+
+def _apply_preset_page_index(app: Any, mode: str) -> None:
+    """Three distinct page-list states: full, compact, or entirely hidden."""
+    full = mode in {"正常", "最大"}
+    compact = mode == "简单"
+    if full:
+        app.workspace_mini_page_host.grid_remove()
+        if app.sidebar_canvas.winfo_manager() != "pack":
+            app.sidebar_scrollbar.pack(side="right", fill="y")
+            app.sidebar_canvas.pack(side="left", fill="both", expand=True)
+        app.page_panel.grid()
+        return
+
+    if app.sidebar_canvas.winfo_manager() == "pack":
+        try:
+            app._workspace_index_width = app.main_paned.sashpos(0)
+        except tk.TclError:
+            pass
+        app.sidebar_canvas.pack_forget()
+        app.sidebar_scrollbar.pack_forget()
+    app.page_panel.grid_remove()
+    if compact:
+        refresh_compact_page_index(app)
+        app.workspace_mini_page_host.grid()
+    else:
+        app.workspace_mini_page_host.grid_remove()
+
+
 def set_sidebar_mode(app: Any, mode: str) -> str:
-    """Apply layout after Tk finishes resizing its Panedwindow."""
-    if mode not in {"最简", "正常", "最大"}:
+    """Apply independent window presets without mixing page-index states.
+
+    极简 inherits 简单's height-fitted window but retains only rail icons,
+    compact run-action labels and its own previous/next navigation buttons.
+    """
+    if mode == "最简":  # Session compatibility, not a selectable UI label.
+        mode = "简单"
+    if mode not in {"极简", "简单", "正常", "最大"}:
         return "break"
     app.workspace_mode = mode
     app.workspace_sidebar_mode_menu.place_forget()
-    if mode == "最简":
-        if app.sidebar_canvas.winfo_manager() == "pack":
-            toggle_page_index(app)
+    if not app.workspace_sidebar_visible:
+        toggle_sidebar(app)
+    _apply_preset_page_index(app, mode)
+    _apply_preset_rail_controls(app, mode)
+
+    if mode in {"极简", "简单"}:
         def fit_compact() -> None:
             try:
-                # Force compact width; Panedwindow may retain the old sash
-                # position after hiding the full index.
                 app.update_idletasks()
                 compact_width = app.workspace_tools_rail.winfo_reqwidth() + 10
                 app.main_paned.sashpos(0, compact_width)
@@ -696,8 +753,6 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
                 pass
         app.after_idle(fit_compact)
     elif mode == "正常":
-        if app.sidebar_canvas.winfo_manager() != "pack":
-            toggle_page_index(app)
         def fit_normal() -> None:
             try:
                 app.update_idletasks()
@@ -715,8 +770,6 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
                 pass
         app.after_idle(fit_normal)
     elif mode == "最大":
-        if app.sidebar_canvas.winfo_manager() != "pack":
-            toggle_page_index(app)
         try:
             app.state("zoomed")
         except tk.TclError:
