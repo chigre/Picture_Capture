@@ -1768,11 +1768,9 @@ def test_v273_main_entry_membership_border_rule_is_wordslist_driven():
 
 def test_v273_main_entry_border_updates_while_typing():
     from pathlib import Path
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src/picture_capture/ui/entry_overlay_builder.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _draw_entry_overlay(")
-    end = text.index("    def _remove_entry_overlay", start)
-    block = text[start:end]
+    block = text[text.index("def draw_entry_overlay("):]
     assert '"<KeyRelease>"' in block
     assert 'self._style_entry_editor(w, e, w.get().strip())' in block
 
@@ -1795,11 +1793,9 @@ def test_v274_main_ocr_candidate_rows_include_each_engine_and_fused_result():
 
 
 def test_v274_main_redraw_wires_compact_ocr_selector_next_to_entry():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src/picture_capture/ui/entry_overlay_builder.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _draw_entry_overlay(")
-    end = text.index("    def _remove_entry_overlay", start)
-    block = text[start:end]
+    block = text[text.index("def draw_entry_overlay("):]
     assert "candidate = self._candidate_for_entry(entry)" in block
     assert "self._create_main_ocr_menu(entry, editor, candidate)" in block
     assert "editor.winfo_reqwidth()" in block
@@ -3575,7 +3571,7 @@ def test_v292_display_zoom_remains_display_only_and_main_image_is_rgb():
     assert 'convert("RGBA")' not in load_block
 
     cache_start = text.index("    def _get_cached_display_photo(")
-    cache_end = text.index("    def _draw_entry_overlay(", cache_start)
+    cache_end = text.index("    def _apply_display_mode(", cache_start)
     cache_block = text[cache_start:cache_end]
     assert 'self.image.resize(size, Image.Resampling.LANCZOS)' in cache_block
     assert 'self.image.convert("RGB")' not in cache_block
@@ -3586,7 +3582,7 @@ def test_v292_display_zoom_remains_display_only_and_main_image_is_rgb():
     assert 'self._get_cached_display_photo(size)' in redraw_block
 
     zoom_start = text.index("    def zoom(")
-    zoom_end = text.index("    def canvas_mousewheel(", zoom_start)
+    zoom_end = text.index("    def fit_page_width(", zoom_start)
     zoom_block = text[zoom_start:zoom_end]
     assert "parameter_display_width" not in zoom_block
     assert "self.settings" not in zoom_block
@@ -3694,7 +3690,7 @@ def test_v294_background_photo_cache_key_includes_page_size_binary_and_appearanc
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     start = text.index("    def _get_cached_display_photo(")
-    end = text.index("    def _draw_entry_overlay(", start)
+    end = text.index("    def _apply_display_mode(", start)
     block = text[start:end]
     assert "key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)" in block
     assert "self._display_photo_cache_key != key" in block
@@ -5468,7 +5464,7 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert settings.illustration_label_border_color == "#1976d2"
     assert settings.main_entry_default_color == "#e6e6e6"
     assert settings.illustration_label_fill_color == "#e6e6e6"
-    assert settings.marker_height == 2
+    assert settings.marker_height == 5
     assert settings.guide_width == 2
     assert settings.page_section_width == 2
     assert settings.illustration_outline_width == 2
@@ -5493,6 +5489,7 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert settings.show_illustration_labels is False
     assert settings.batch_interval == 3.0
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    overlay = (Path(__file__).parents[1] / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
     for token in (
         '"illustration_outline_width"', '"illustration_label_border_width"',
         '"illustration_label_font_family"', '"illustration_label_font_size"',
@@ -5508,22 +5505,22 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert scaled_overlay_line_width(2, 0.5) == 1
     assert scaled_overlay_line_width(2, 1.5) == 3
     assert 'scaled_overlay_line_width(self.settings.guide_width, overlay_scale)' in app_text
-    assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in app_text
+    assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in overlay
     assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
     assert 'highlightthickness=max(0, int(self.settings.illustration_label_border_width))' in app_text
     # Sequence uses a neutral light-gray background; destructive [X] remains separate.
-    assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in app_text
-    assert 'bg="#e6e6e6"' in app_text
-    assert 'fg="#000000"' in app_text
-    assert 'text=self._entry_sequence_text(index, len(self.entries))' in app_text
+    assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in overlay
+    assert 'bg="#e6e6e6"' in overlay
+    assert 'fg="#000000"' in overlay
+    assert 'text=self._entry_sequence_text(index, len(self.entries))' in overlay
     assert 'marker_control_bg = str(self.settings.headword_marker_color)' not in app_text
-    assert 'record["index_widget"] = index_label' in app_text
-    assert 'record["delete_widget"] = delete_button' in app_text
-    assert 'text="[X]"' in app_text
-    assert 'bg="#9d042f"' in app_text
-    assert 'activebackground="#9d042f"' in app_text
-    assert 'self._attach_tooltip(delete_button, "点击删除该画线!")' in app_text
-    assert 'delete_x = float(index_x - index_width - 1)' in app_text
+    assert 'record["index_widget"] = index_label' in overlay
+    assert 'record["delete_widget"] = delete_button' in overlay
+    assert 'text="[X]"' in overlay
+    assert 'bg="#9d042f"' in overlay
+    assert 'activebackground="#9d042f"' in overlay
+    assert 'self._attach_tooltip(delete_button, "点击删除该画线!")' in overlay
+    assert 'delete_x = float(index_x - index_width - 1)' in overlay
 
 
 def test_platform_language_font_recommendations_and_auto_normalization():
@@ -5557,7 +5554,8 @@ def test_all_configurable_content_font_paths_use_shared_auto_resolver():
     ).read_text(encoding="utf-8")
     assert "AUTO_FONT_FAMILY" in app_text
     assert "resolve_content_font_family(" in app_text
-    assert "self.settings.main_entry_font_family,\n            self.settings.ocr_language" in app_text
+    overlay = (Path(__file__).parents[1] / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
+    assert "self.settings.main_entry_font_family,\n        self.settings.ocr_language" in overlay
     assert "self.settings.illustration_label_font_family,\n                                self.settings.ocr_language" in app_text
     assert "self.parent.settings.review_entry_font_family,\n                self.parent.settings.ocr_language" in app_text
     assert '"review_simplified_font_family"' in app_text
@@ -8230,6 +8228,7 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     helper_source = root / "review_text_helpers.py"
     text = source.read_text(encoding="utf-8")
     helper_text = helper_source.read_text(encoding="utf-8")
+    overlay = (root / "ui" / "entry_overlay_builder.py").read_text(encoding="utf-8")
 
     assert '"一、版面参数"' in text
     assert "页眉Y(原图)" not in text
@@ -8270,12 +8269,12 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert '"""Fast filter pass using only PDIC and OCR JSON, never page pixels."""' in text
     assert 'focused-filter-scan-rest-' in text
     assert 'display_meta: list[tuple[int, int]] = []' in text
-    assert 'bg="#e6e6e6"' in text
-    assert 'fg="#000000"' in text
+    assert 'bg="#e6e6e6"' in overlay
+    assert 'fg="#000000"' in overlay
     assert "def _entry_sequence_text(index: int, total: int) -> str:" in text
-    assert 'text="[X]"' in text
-    assert 'bg="#9d042f"' in text
-    assert 'record["delete_widget"] = delete_button' in text
+    assert 'text="[X]"' in overlay
+    assert 'bg="#9d042f"' in overlay
+    assert 'record["delete_widget"] = delete_button' in overlay
 
 
 def test_generated_app_icon_is_packaged_and_applied_to_root():

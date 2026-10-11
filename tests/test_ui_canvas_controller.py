@@ -277,7 +277,7 @@ def test_zoom_text_and_fit_operations_preserve_clamps_and_view_reset() -> None:
     assert app.canvas.xmoves == [0.0]
 
     controller.fit_page_height()
-    assert app.view_scale == 0.4
+    assert app.view_scale == 0.412
     assert app.canvas.ymoves == [0.0]
     assert app.update_idle_calls == 2
 

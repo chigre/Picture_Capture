@@ -101,10 +101,7 @@ def test_ocr_headword_area_is_exclusive_display_mode():
 def test_headword_label_toggle_has_independent_persisted_setting():
     settings = AppSettings()
     assert settings.show_main_entry_labels is True
-    app = (ROOT / "app.py").read_text(encoding="utf-8")
-    start = app.index("    def _draw_entry_overlay(")
-    end = app.index("\n    def ", start + 10)
-    draw = app[start:end]
+    draw = (ROOT / "ui/entry_overlay_builder.py").read_text(encoding="utf-8")
     assert '"show_headword_markers"' in draw
     assert 'if not getattr(self.settings, "show_main_entry_labels", True):' in draw
     assert draw.index('"show_headword_markers"') < draw.index(

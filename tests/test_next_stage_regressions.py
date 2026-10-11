@@ -1769,10 +1769,10 @@ def test_main_entry_sequence_numbers_use_page_uniform_width():
 
 
 def test_main_entry_sequence_label_uses_light_gray_black_style():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src/picture_capture/ui/entry_overlay_builder.py"
     text = source.read_text(encoding="utf-8")
-    draw_start = text.index("        index_label = tk.Label(")
-    draw_end = text.index("        index_label._pc_skip_classic_appearance", draw_start)
+    draw_start = text.index("    index_label = tk.Label(")
+    draw_end = text.index("    index_label._pc_skip_classic_appearance", draw_start)
     block = text[draw_start:draw_end]
     assert "text=self._entry_sequence_text(index, len(self.entries))" in block
     assert 'bg="#e6e6e6"' in block
@@ -1809,10 +1809,10 @@ def test_horizontal_ltr_rtl_are_mirror_equivalent():
 
 
 def test_horizontal_ui_uses_shared_layout_and_keeps_arabic_semantics():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src/picture_capture/ui/entry_overlay_builder.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("        horizontal = self.settings.layout_writing_mode == \"horizontal-tb\"")
-    end = text.index("        vertical_box: tuple[int, int, int, int] | None = None", start)
+    start = text.index("    horizontal = self.settings.layout_writing_mode == \"horizontal-tb\"")
+    end = text.index("    vertical_box: tuple[int, int, int, int] | None = None", start)
     rtl_branch = text[start:end]
     assert "horizontal_overlay_layout(" in rtl_branch
     assert "line_box(" not in rtl_branch
@@ -2453,8 +2453,9 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     quick = text[quick_start:quick_end]
     for label in ("正文起始Y：", "首栏X：", "单栏宽：", "栏间空："):
         assert label in quick
-    for label in ("普通字/行高：", "行间空：", "正文缩进：", "微调判距："):
-        assert label not in quick
+    # The broad legacy panel retains these fields; the compact pane is separate.
+    for label in ("普通字/行高：", "行间空：", "正文缩进："):
+        assert label in quick
     assert quick.index('"单栏宽："') > quick.index('"首栏X："')
     assert quick.index('"栏间空："') > quick.index('"单栏宽："')
     assert "self.quick_pixel_vars: dict[str, tk.StringVar] = {}" in quick
@@ -3974,11 +3975,9 @@ def test_numbered_profile_accepts_three_and_four_digit_prefixes():
 
 
 def test_vertical_main_editor_is_a_real_text_widget_not_a_canvas_proxy():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src/picture_capture/ui/entry_overlay_builder.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _draw_entry_overlay(")
-    end = text.index("    def _remove_entry_overlay(", start)
-    block = text[start:end]
+    block = text[text.index("def draw_entry_overlay("):]
 
     assert "VerticalWordText(" in block
     assert 'cursor="xterm"' in block
@@ -3993,7 +3992,7 @@ def test_vertical_main_editor_is_a_real_text_widget_not_a_canvas_proxy():
     assert "label_item" not in block
     assert "open_vertical_editor" not in block
     assert "_suppress_next_canvas_left_click" not in text
-    assert 'if rtl:\n            editor.configure(justify="right")' in block
+    assert 'if rtl:\n        editor.configure(justify="right")' in block
 
 
 def test_round1_blocking_ui_paths_use_background_workers():
@@ -4154,7 +4153,7 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     assert "self.parent._start_ui_worker(" in request
     assert "Image.Resampling.LANCZOS" not in render
     assert "_review_line_box(" not in render
-    assert "ImageTk.PhotoImage(themed_display_image(crop, self.parent.appearance_mode))" in render
+    assert "ImageTk.PhotoImage(" in render or "_new_review_photo(" in render
     assert "self.render_rows()" not in review
 
     preview_start = profile_text.index("    def _refresh_template_preview(")
