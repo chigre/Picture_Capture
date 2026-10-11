@@ -81,6 +81,8 @@ def stable_indent_row_ids(column: Any, grammar: StableIndentGrammar) -> set[int]
     for line in list(getattr(column, "lines", ()) or ()):
         if str(getattr(line, "role", "")) != "entry":
             continue
+        if not hasattr(line, "first_x"):
+            continue
         x = normal.get(id(line))
         if x is None:
             continue
@@ -112,6 +114,8 @@ def reconcile_stable_indent_rows(
         )
         direction = 1 if grammar.entry_center < grammar.body_center else -1
         for line in list(getattr(column, "lines", ()) or ()):
+            if not hasattr(line, "first_x"):
+                continue
             x = normal.get(id(line))
             if x is None:
                 continue
