@@ -473,6 +473,8 @@ def test_extreme_preset_hides_text_buttons_and_restores_them():
     app = SimpleNamespace(
         workspace_rail_labels=labels,
         workspace_rail_rows=rows,
+        workspace_rail_width=140,
+        workspace_tools_rail=Widget(),
         workspace_extreme_page_navigation=nav,
         workspace_quick_action_buttons=quick,
         workspace_quick_actions_host=host,
@@ -490,7 +492,7 @@ def test_extreme_preset_hides_text_buttons_and_restores_them():
     workspace_tools._apply_preset_rail_controls(app, "简单")
     assert not nav.visible
     assert all(label.visible for label in labels)
-    assert all(row.values["width"] == 155 for row in rows)
+    assert all(row.values["width"] == 140 for row in rows)
     assert [w.values["text"] for w in quick] == ["普", "O", "校"]
     assert [w.position["row"] for w in quick] == [0, 0, 0]
     assert [w.position["column"] for w in quick] == [0, 1, 2]
