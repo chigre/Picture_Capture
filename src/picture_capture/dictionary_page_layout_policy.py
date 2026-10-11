@@ -263,6 +263,15 @@ def infer_dictionary_page_layout(
     strips, raw_runs = column_strips(reference, bottom)
 
     indent_type = base._indent_type(page_settings)
+    # Keep policy-aware PageDesign in sync with physical projection's accepted
+    # 0.26–1.90× row band. The raw base PageDesign path already uses this
+    # contract; previously the policy wrapper silently retained 0.45–1.55×,
+    # losing the same XDHYCD rows in the actual per-page automatic path.
+    physical_projection = (
+        getattr(resolved_ops.line_runs, "__name__", "") == "projection_line_runs"
+    )
+    min_height_ratio = 0.26 if physical_projection else 0.45
+    max_height_ratio = 1.90 if physical_projection else 1.55
     columns: list[base.ColumnDesign] = []
     for index, (left, right, gutter_after, strip, runs) in enumerate(
         zip(starts, rights, gutters, strips, raw_runs)
@@ -272,7 +281,10 @@ def infer_dictionary_page_layout(
         for y0, y1 in runs:
             line = resolved_ops.line_feature(index, strip, y0, y1, reference, previous_end)
             previous_end = max(previous_end, y1)
-            if line is not None and reference * 0.45 <= line.height <= reference * 1.55:
+            if (
+                line is not None
+                and reference * min_height_ratio <= line.height <= reference * max_height_ratio
+            ):
                 column.lines.append(line)
         column.indent_modes = resolved_ops.indent_modes(column.lines, reference)
         resolved_ops.assign_indent_semantics(column, indent_type, reference)
