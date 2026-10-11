@@ -149,3 +149,34 @@ def test_header_actions_share_view_zoom_var_and_preserve_bottom_toolbar():
     assert 'app.after_idle(lambda: install_compact_zoom_controls(app))' in text
     assert 'app.workspace_quick_action_buttons.append(button)' in text
     assert 'app.workspace_quick_zoom_controls.append(widget)' in text
+
+
+def test_theme_toggle_is_immediately_left_of_extreme_mode_and_uses_existing_appearance_state():
+    from types import SimpleNamespace
+    from picture_capture.ui.workspace_tools import toggle_workspace_appearance
+
+    source = (SRC / "workspace_tools.py").read_text(encoding="utf-8")
+    theme = source.index('theme_toggle = ttk.Button(')
+    modes = source.index('for caption in ("极简", "紧凑", "正常", "最大"):')
+    assert theme < modes
+    assert 'text="◑", width=3, style="PC.WindowMode.TButton"' in source
+    assert 'theme_toggle.pack(side="left", padx=(0, 5))' in source
+    assert 'app._attach_tooltip(theme_toggle, "切换浅色/深色模式")' in source
+    assert 'command=lambda: toggle_workspace_appearance(app)' in source
+    assert 'app.workspace_theme_toggle_button = theme_toggle' in source
+
+    selected = []
+    app = SimpleNamespace(appearance_mode="light")
+    def select(mode):
+        selected.append(mode)
+        app.appearance_mode = mode
+    app.set_appearance_mode = select
+
+    assert toggle_workspace_appearance(app) == "dark"
+    assert toggle_workspace_appearance(app) == "light"
+    assert selected == ["dark", "light"]
+
+    # A system-selected resolved dark appearance must toggle to light, too.
+    app.appearance_mode = "dark"
+    assert toggle_workspace_appearance(app) == "light"
+    assert selected[-1] == "light"

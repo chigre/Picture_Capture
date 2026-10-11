@@ -393,6 +393,15 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     mode_group = ttk.Frame(mode_bar, style="PC.Sidebar.TFrame")
     mode_group.pack(side="right")
     app.workspace_header_mode_group = mode_group
+    # The theme switch is immediately to the left of 极简, not a window
+    # preset; changing it uses the app's persisted appearance preference.
+    theme_toggle = ttk.Button(
+        mode_group, text="◑", width=3, style="PC.WindowMode.TButton",
+        command=lambda: toggle_workspace_appearance(app),
+    )
+    theme_toggle.pack(side="left", padx=(0, 5))
+    app._attach_tooltip(theme_toggle, "切换浅色/深色模式")
+    app.workspace_theme_toggle_button = theme_toggle
     app.workspace_title_mode_buttons = {}
     for caption in ("极简", "紧凑", "正常", "最大"):
         button = ttk.Button(
@@ -887,6 +896,17 @@ def install_header_quick_controls(app: Any) -> None:
         button.pack(side="left", padx=(1, 0))
         app._attach_tooltip(button, tooltip)
         app.workspace_header_quick_buttons.append(button)
+
+
+def toggle_workspace_appearance(app: Any) -> str:
+    """Toggle the resolved light/dark theme through the canonical app setter.
+
+    System-following preferences are replaced by the explicitly chosen theme,
+    avoiding a separate toolbar state that can drift from the settings UI.
+    """
+    mode = "light" if getattr(app, "appearance_mode", "light") == "dark" else "dark"
+    app.set_appearance_mode(mode)
+    return mode
 
 
 def _refresh_window_mode_buttons(app: Any) -> None:
