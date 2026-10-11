@@ -40,10 +40,6 @@ LIGHT_PALETTE = {
     "review_membership_select_fg": "#111827",
 }
 
-APPEARANCE_MODE_LABELS = {"light": "浅色", "dark": "深色", "system": "跟随系统"}
-APPEARANCE_MODE_VALUES = {label: value for value, label in APPEARANCE_MODE_LABELS.items()}
-
-
 DARK_PALETTE = {
     "bg": "#181c21",
     "surface": "#20252b",
