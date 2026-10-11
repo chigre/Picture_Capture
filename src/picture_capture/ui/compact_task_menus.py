@@ -153,45 +153,124 @@ def build_layout_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     return build_layout_profile_menu(app, parent)
 
 
+
+OCR_REFRESH_OPTIONS = {
+    "使用有效缓存": "reuse",
+    "重新OCR": "force",
+}
+OCR_PREPROCESS_OPTIONS = {
+    "原图": "original",
+    "灰度": "grayscale",
+    "自动对比度": "auto_contrast",
+    "二值化": "binary",
+}
+
+
+def _link_code_selection(
+    code_var: tk.Variable, display_var: tk.Variable, options: dict[str, str],
+) -> None:
+    """Keep localized combobox text and canonical backend codes synchronized.
+
+    Display strings are only presentation; the OCR runner still reads the
+    original reuse/force and preprocessing identifiers.
+    """
+    to_label = {code: label for label, code in options.items()}
+
+    def from_display(*_args: object) -> None:
+        code = options.get(str(display_var.get()))
+        if code is not None and str(code_var.get()) != code:
+            code_var.set(code)
+
+    def from_code(*_args: object) -> None:
+        label = to_label.get(str(code_var.get()))
+        if label is not None and str(display_var.get()) != label:
+            display_var.set(label)
+
+    display_var.trace_add("write", from_display)
+    code_var.trace_add("write", from_code)
+    from_code()
+
+
+def _coded_select(
+    row: ttk.Frame, code_var: tk.Variable, options: dict[str, str],
+    *, width: int = 15,
+) -> ttk.Combobox:
+    display_var = tk.StringVar()
+    _link_code_selection(code_var, display_var, options)
+    return _select(row, display_var, tuple(options), width=width)
+
+
 def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
+    """Compact OCR runtime settings; all choices reuse the existing backend."""
     panel = _panel(parent)
-    _label(_row(panel), "识别策略:")
-    _row_cache = _row(panel)
-    ttk.Radiobutton(_row_cache, text="使用有效缓存（推荐）",
-                    variable=app.ocr_refresh_var, value="reuse").pack(anchor="w")
-    _row_force = _row(panel)
-    ttk.Radiobutton(_row_force, text="重新OCR（模型/图像改变时）",
-                    variable=app.ocr_refresh_var, value="force").pack(anchor="w")
-    for caption, name, width in (
-        ("OCR语言:", "ocr_language", 12),
-        ("识别带宽%:", "paddle_band_width_ratio", 6),
-        ("左缘容差:", "paddle_left_tolerance", 5),
-    ):
-        row = _row(panel)
-        _label(row, caption, width=12)
-        _entry(row, app.quick_vars[name], width)
+
+    row = _row(panel)
+    _label(row, "识别策略")
+    _coded_select(row, app.ocr_refresh_var, OCR_REFRESH_OPTIONS, width=15)
 
     _label(_row(panel), "OCR引擎:")
-    for caption, name in (
+    row = _row(panel)
+    for caption, field in (
         ("PaddleOCR", "paddle_use_paddleocr"),
         ("Tesseract", "paddle_compare_tesseract"),
-        ("Google Lens", "paddle_enable_lens"),
     ):
-        _check(_row(panel), caption, app.quick_bool_vars[name],
+        _check(row, caption, app.quick_bool_vars[field],
                app._quick_parameter_changed)
+
     row = _row(panel)
-    _label(row, "Lens模式:", width=12)
+    _check(row, "Google Lens", app.quick_bool_vars["paddle_enable_lens"],
+           app._quick_parameter_changed)
     from picture_capture.ocr_action_guard import LENS_MODE_VALUES
-    _select(row, app.lens_mode_var, tuple(LENS_MODE_VALUES), width=18,
+    _select(row, app.lens_mode_var, tuple(LENS_MODE_VALUES), width=13,
             command=app._quick_parameter_changed)
+
     row = _row(panel)
-    _label(row, "Y安全空间px:", width=12)
-    _entry(row, app.quick_vars["paddle_separator_safety_px"], 4)
+    _label(row, "OCR语言")
+    _entry(row, app.quick_vars["ocr_language"], 17,
+           app._quick_parameter_changed)
+
+    row = _row(panel)
+    _label(row, "识别带宽%")
+    _entry(row, app.quick_vars["paddle_band_width_ratio"], 5,
+           app._quick_parameter_changed)
+    _label(row, "左缘容差")
+    _entry(row, app.quick_vars["paddle_left_tolerance"], 4,
+           app._quick_parameter_changed)
+
+    row = _row(panel)
+    _label(row, "横线与文字安全距离px")
+    _entry(row, app.quick_vars["paddle_separator_safety_px"], 5,
+           app._quick_parameter_changed)
+
+    # The legacy quick panel never exposed this property. Register one canonical
+    # string code in quick_vars so the normal autosave, Settings Center, project
+    # loading and sync_quick_settings paths all agree.
+    preprocessing_var = app.quick_vars.get("paddle_preprocessing")
+    if preprocessing_var is None:
+        preprocessing_var = tk.StringVar(
+            value=str(getattr(app.settings, "paddle_preprocessing", "original")),
+        )
+        app.quick_vars["paddle_preprocessing"] = preprocessing_var
+        app.quick_field_casts["paddle_preprocessing"] = str
+        preprocessing_var.trace_add(
+            "write", lambda *_args: app._quick_parameter_changed(),
+        )
+    row = _row(panel)
+    _label(row, "OCR图像预处理")
+    _coded_select(row, preprocessing_var, OCR_PREPROCESS_OPTIONS, width=14)
+
     _separator(panel)
     _button(_row(panel), "环境中心", app.check_ocr_engines)
-    _button(_row(panel), "OCR画线设置...", lambda: app.open_settings(initial_tab="ocr"))
-    return panel
 
+    def open_ocr_line_settings() -> None:
+        # An independent, already-built menu sits directly below OCR参数.
+        from .workspace_tools import choose_workspace_section
+        title = "三之一、OCR画线设置"
+        app.workspace_tools_active = title
+        choose_workspace_section(app, title)
+
+    _button(_row(panel), "OCR画线设置...", open_ocr_line_settings)
+    return panel
 
 ACTION_GROUPS = (
     (("普通画线", "run_normal_draw_action"),

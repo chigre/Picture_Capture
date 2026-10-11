@@ -80,14 +80,31 @@ def test_layout_percent_and_pixel_fields_use_shared_traces():
 def test_ocr_and_drawing_panels_keep_existing_handlers_in_requested_order():
     text = source(compact_task_menus)
     ocr = text.split("def build_ocr_menu(", 1)[1].split("ACTION_GROUPS =", 1)[0]
-    assert '"使用有效缓存（推荐）"' in ocr
-    assert '"重新OCR（模型/图像改变时）"' in ocr
+    assert '"使用有效缓存": "reuse"' in text
+    assert '"重新OCR": "force"' in text
+    assert '_coded_select(row, app.ocr_refresh_var, OCR_REFRESH_OPTIONS' in ocr
+    assert '"原图": "original"' in text
+    assert '"灰度": "grayscale"' in text
+    assert '"自动对比度": "auto_contrast"' in text
+    assert '"二值化": "binary"' in text
+    assert '"paddle_preprocessing"' in ocr
+    assert '_coded_select(row, preprocessing_var, OCR_PREPROCESS_OPTIONS' in ocr
     for name in ("ocr_language", "paddle_band_width_ratio", "paddle_left_tolerance",
                  "paddle_use_paddleocr", "paddle_compare_tesseract",
                  "paddle_enable_lens", "paddle_separator_safety_px"):
         assert f'"{name}"' in ocr
     assert 'app.check_ocr_engines' in ocr
-    assert 'initial_tab="ocr"' in ocr
+    assert 'choose_workspace_section(app, title)' in ocr
+    assert 'title = "三之一、OCR画线设置"' in ocr
+    expected = [
+        '"识别策略"', '"OCR引擎:"', '"PaddleOCR"', '"Tesseract"',
+        '"Google Lens"', '"OCR语言"', '"识别带宽%"', '"左缘容差"',
+        '"横线与文字安全距离px"', '"OCR图像预处理"',
+        '"环境中心"', '"OCR画线设置..."',
+    ]
+    assert [ocr.index(item) for item in expected] == sorted(
+        ocr.index(item) for item in expected
+    )
     actions = text.split("ACTION_GROUPS =", 1)[1]
     method_order = (
         "run_normal_draw_action", "ocr_ordinary_lines_text_selected_scope",
@@ -125,3 +142,40 @@ def test_postproduction_menu_is_renamed_but_export_callback_unchanged():
     assert '("画线行导出", self.split_single_lines_selected_scope)' in app
     assert 'if text == "画线行导出":' in app
     assert '("未画线行导出", self.export_unlined_rows_selected_scope)' in app
+
+
+def test_ocr_visible_labels_do_not_change_runtime_codes():
+    import tkinter as tk
+    from picture_capture.ui.compact_task_menus import (
+        OCR_REFRESH_OPTIONS, OCR_PREPROCESS_OPTIONS, _link_code_selection,
+    )
+
+    root = tk.Tcl()
+    for options, initial, changed_label, changed_code in (
+        (OCR_REFRESH_OPTIONS, "reuse", "重新OCR", "reuse"),
+        (OCR_PREPROCESS_OPTIONS, "original", "自动对比度", "binary"),
+    ):
+        runtime = tk.StringVar(master=root, value=initial)
+        visible = tk.StringVar(master=root, value="")
+        _link_code_selection(runtime, visible, options)
+        assert visible.get() == next(
+            label for label, code in options.items() if code == initial
+        )
+        visible.set(changed_label)
+        assert runtime.get() == options[changed_label]
+        runtime.set(changed_code)
+        assert visible.get() == next(
+            label for label, code in options.items() if code == changed_code
+        )
+
+
+def test_ocr_preprocessing_uses_existing_quick_autosave_pipeline():
+    ocr = source(compact_task_menus)
+    app = (ROOT / "app.py").read_text(encoding="utf-8")
+    assert 'app.quick_vars["paddle_preprocessing"] = preprocessing_var' in ocr
+    assert 'app.quick_field_casts["paddle_preprocessing"] = str' in ocr
+    assert 'preprocessing_var.trace_add(' in ocr
+    assert 'app._quick_parameter_changed()' in ocr
+    assert "for name, var in self.quick_vars.items():" in app
+    assert 'self.quick_field_casts[name](var.get())' in app
+    assert 'self.settings.paddle_lens_mode = LENS_MODE_VALUES.get(' in app
