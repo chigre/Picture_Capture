@@ -6866,9 +6866,8 @@ class PictureCaptureApp(tk.Tk):
         self._collapsible_sections: dict[str, ttk.LabelFrame] = {}
         self.section_title_font = font.nametofont("TkDefaultFont").copy()
         self.section_title_font.configure(weight="bold")
-        self.compact_page_font = font.nametofont("TkDefaultFont").copy()
-        base_font_size = abs(int(font.nametofont("TkDefaultFont").cget("size")))
-        self.compact_page_font.configure(size=max(6, round(base_font_size * 0.8)))
+        # The narrow page index keeps its compact geometry, not a smaller font.
+        self.compact_page_font = font.nametofont("TkDefaultFont")
         self._configure_main_workspace_styles()
         self._auxiliary_controller = AuxiliaryLineController(self)
         self.canvas_controller = CanvasController(self)

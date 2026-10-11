@@ -27,16 +27,21 @@ def test_compact_index_precedes_rail_at_same_independent_width():
     assert 'def toggle_page_index(' not in source
 
 
-def test_compact_font_uses_eighty_percent_only_within_sidebar():
+def test_compact_page_list_uses_normal_font_while_range_controls_remain_small():
     source = MODULE.read_text(encoding="utf-8")
-    assert 'round(original * 0.8)' in source
-    assert 'style.configure("PC.Workspace80.Treeview", font=small, rowheight=19)' in source
-    assert 'style.configure("PC.Workspace80.Treeview.Heading", font=small' in source
+    app = (MODULE.parents[1] / "app.py").read_text(encoding="utf-8")
+    assert 'round(original * 0.8)' in source  # Range radios, entry and zoom.
+    assert 'style.configure("PC.Workspace80.Treeview"' not in source
+    assert 'style.configure("PC.Workspace80.Treeview.Heading"' not in source
+    assert 'widget.configure(style="PC.CompactPage.Treeview")' in source
+    assert 'int(app.workspace_rail_width), tkfont.nametofont("TkDefaultFont").measure' in source
+    assert 'self.compact_page_font = font.nametofont("TkDefaultFont")' in app
+    assert 'font=self.compact_page_font' in app
+    assert 'base_font_size * 0.8' not in app
     assert 'widget.configure(font=_compact_font(app) if compact else "TkDefaultFont")' in source
     assert '_apply_compact_sidebar_font(app, mode == "紧凑")' in source
     assert 'app.after_idle(finish_compact_page_controls)' in source
     assert 'getattr(app, "workspace_mode", "") == "紧凑"' in source
-    assert 'style=app.workspace_compact_font' not in source
 
 
 def test_extreme_and_compact_zoom_actions_are_single_shared_value():

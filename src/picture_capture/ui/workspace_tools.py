@@ -748,7 +748,7 @@ def size_compact_page_columns(app: Any) -> None:
         rows = [tuple(mini.item(iid, "values")) for iid in mini.get_children()]
         widths = compact_page_column_widths(
             app.page_index_labels, rows, columns, shown,
-            int(app.workspace_rail_width), _compact_font(app).measure,
+            int(app.workspace_rail_width), tkfont.nametofont("TkDefaultFont").measure,
         )
         for key, width in widths.items():
             mini.column(key, width=width, minwidth=14, stretch=False,
@@ -903,12 +903,10 @@ def _style_compact_sidebar(app: Any) -> None:
     # Only the zoom-percentage field uses a smaller font (in every mode).
     # Other zoom buttons and launcher labels retain the normal font.
     style.configure("PC.WorkspaceZoom.TEntry", font=small, padding=0)
-    style.configure("PC.Workspace80.Treeview", font=small, rowheight=19)
-    style.configure("PC.Workspace80.Treeview.Heading", font=small, padding=(1, 1))
 
 
 def _apply_compact_sidebar_font(app: Any, compact: bool) -> None:
-    """Scale only page-range widgets, navigation and page-list rows/headers.
+    """Keep page-range controls small, but page-list rows/headers normal.
 
     Left launcher labels, project buttons, zoom controls and 普/O/校 retain
     their normal font at every window preset.
@@ -926,9 +924,8 @@ def _apply_compact_sidebar_font(app: Any, compact: bool) -> None:
 
     def visit(widget: tk.Misc) -> None:
         if isinstance(widget, ttk.Treeview):
-            widget.configure(style=(
-                "PC.Workspace80.Treeview" if compact else "PC.CompactPage.Treeview"
-            ))
+            # All presets use the default-font miniature list style.
+            widget.configure(style="PC.CompactPage.Treeview")
         elif isinstance(widget, tk.Radiobutton):
             widget.configure(font=_compact_font(app) if compact else "TkDefaultFont")
         else:
