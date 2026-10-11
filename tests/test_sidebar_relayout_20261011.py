@@ -22,9 +22,9 @@ def test_window_mode_menu_is_click_to_open_not_hover_to_dismiss():
 def test_light_and_dark_use_same_compact_button_geometry():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     app = (ROOT / "app.py").read_text(encoding="utf-8")
-    assert 'style="PC.Sidebar.TFrame", width=155, height=33' in source
+    assert 'style="PC.Sidebar.TFrame", width=140, height=33' in source
     assert 'entry.grid_propagate(False)' in source
-    assert 'entry.configure(width=36 if extreme else 155)' in source
+    assert 'entry.configure(width=36 if extreme else app.workspace_rail_width)' in source
     assert 'padding=(0, 0), relief="flat"' in app
     assert 'style.configure("PC.QuickRail.TButton", font="TkDefaultFont"' in app
     assert 'padding=(0, 0), relief="flat"' in source
