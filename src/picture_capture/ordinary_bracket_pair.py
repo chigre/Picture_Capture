@@ -11,9 +11,84 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
-from .illustration_detection import _rle_components
 from .models import Entry
 from .visual_boundary_locator import safe_gap_above
+
+
+
+def _strict_bracket_components(mask: np.ndarray) -> list[tuple[int, int, int, int, int]]:
+    """True 8-connected RLE components, without bridging a blank pixel.
+
+    The illustration component finder intentionally joins near-adjacent row
+    runs (up to two pixels apart). For tiny printed 【】 glyphs that merges an
+    otherwise intact 15px bracket into the nearby Han character. Keep its
+    illustration behavior unchanged; bracket recognition needs literal
+    8-connectivity (overlap or one-pixel diagonal adjacency) instead.
+    """
+    ink = np.asarray(mask, dtype=bool)
+    if ink.ndim != 2 or not ink.size:
+        return []
+    height = ink.shape[0]
+    parent: list[int] = []
+    rank: list[int] = []
+    boxes: list[list[int]] = []
+
+    def root(k: int) -> int:
+        while parent[k] != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+
+    def join(a: int, b: int) -> None:
+        a, b = root(a), root(b)
+        if a == b:
+            return
+        if rank[a] < rank[b]:
+            a, b = b, a
+        parent[b] = a
+        if rank[a] == rank[b]:
+            rank[a] += 1
+
+    previous: list[tuple[int, int, int]] = []
+    for y in range(height):
+        changes = np.diff(
+            np.r_[False, ink[y], False].astype(np.int8)
+        )
+        starts = np.flatnonzero(changes == 1)
+        ends = np.flatnonzero(changes == -1)
+        current: list[tuple[int, int, int]] = []
+        start_previous = 0
+        for start, end in zip(starts.tolist(), ends.tolist()):
+            idx = len(parent)
+            parent.append(idx)
+            rank.append(0)
+            boxes.append([start, y, end, y + 1, end - start])
+            # Half-open [start,end) runs are 8-connected when previous.end
+            # >= start and previous.start <= end. Adding +/-1 here bridges
+            # one entire empty pixel and merges bracket and word strokes.
+            while (
+                start_previous < len(previous)
+                and previous[start_previous][1] < start
+            ):
+                start_previous += 1
+            scan = start_previous
+            while scan < len(previous) and previous[scan][0] <= end:
+                old_start, old_end, old_idx = previous[scan]
+                if old_end >= start:
+                    join(idx, old_idx)
+                scan += 1
+            current.append((start, end, idx))
+        previous = current
+
+    merged: dict[int, list[int]] = {}
+    for idx, (x0, y0, x1, y1, area) in enumerate(boxes):
+        target = merged.setdefault(root(idx), [x0, y0, x1, y1, 0])
+        target[0] = min(target[0], x0)
+        target[1] = min(target[1], y0)
+        target[2] = max(target[2], x1)
+        target[3] = max(target[3], y1)
+        target[4] += area
+    return [tuple(row) for row in merged.values()]
 
 
 def _bracket_side(mask: np.ndarray, opening: bool) -> bool:
@@ -187,7 +262,7 @@ def recover_bracketed_ordinary_entries(
             crop = np.asarray(gray.crop((x0, y0, x1, y1)), dtype=np.uint8)
             ink = crop < 170
             openings, closings = [], []
-            for a, b, c, d, area in _rle_components(ink):
+            for a, b, c, d, area in _strict_bracket_components(ink):
                 w, h = c - a, d - b
                 if not (.32 * pitch <= w <= 1.25 * pitch
                         and .72 * pitch <= h <= 2.50 * pitch
