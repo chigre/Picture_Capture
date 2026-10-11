@@ -178,3 +178,43 @@ a corrected complete output. To confirm on a user installation, redraw
 `XDHYCD_0009.png` at the latest PR HEAD and export an untouched
 automatic baseline; compare it with the saved 38-line reference, then
 run the other nine pages for unintended changes.
+
+## Stable physical indentation is now authoritative (2026-10-12)
+
+A further user screenshot showed that `Layout` already displays a
+clear, repeated two-lane physical grammar on page 0009, but later
+`ordinary_final_visual_consistency` could still remove an actual entry
+because it sampled the pixels *after a refined separator Y* instead of
+testing the entry's **original physical row**. Several previous patches
+over-relied on bracket glyphs instead of treating printed indentation
+as the main independent word-start evidence.
+
+The change in `layout_indent_authority.py` requires both an entry mode
+and a body mode to have enough repeated support (not merely a lone
+outlying X position), and their centers to be well separated. It
+reclassifies *each physical row* according to its slant-corrected
+first ink position; a contaminated mode does not drag all its rows into
+the same role. The row-level proof is attached to generated ordinary
+entries as `ORDINARY_LAYOUT_ROLE_STABLE_INDENT` evidence.
+
+Two downstream negative checks must respect this positive proof:
+`layout_role_visual_consistency` skips its short raw-row crop veto on
+trusted physical entry rows, and `ordinary_final_visual_consistency`
+does not interpret post-separator body indentation as proof that a
+trusted entry was spurious.
+
+**Exceptions remain permitted:** a multirow oversized glyph can be
+deduplicated by independently verified ink; an entirely blank separator
+before a separately confirmed word may be removed. Layouts without
+well-repeated separated indent lanes remain on the existing fallback;
+CJK and non-CJK directions do not share unverified heuristics.
+
+Synthetic regressions cover mixed role clusters, CJK body-indent and
+headword-indent polarity, an unsupported weak lane, preservation of
+verified physical-head markers across final-stage Y checks, and
+continued rejection of unproven false Layout markers.
+
+**Real-world acceptance still pending:** a full unchanged auto-draw of
+page 0009 plus the other nine source pages against verified markers,
+with no per-dictionary page-coordinate rule. CI proves the code
+contracts, not clinical/user visual correctness.
