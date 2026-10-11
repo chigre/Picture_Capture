@@ -13,15 +13,15 @@ from .compact_display_menu import build_compact_display_menu
 
 
 # Every floating task menu occupies a compact single-column panel.
-TOOL_MENU_WIDTH = 260
+TOOL_MENU_WIDTH = 300
 
 TASK_GROUPS = (
     ("预处理", "◫", "图片预处理(前置)"),
-    ("版面", "▤", "一、版面参数"),
-    ("显示", "◉", "二、显示设置"),
-    ("识别", "⌕", "三、共享 OCR 通道 / OCR画线"),
-    ("画线", "✎", "四、画线 / OCR / 插图 / 校对"),
-    ("制作", "✂", "五、后期词典制作"),
+    ("版面参数", "▤", "一、版面参数"),
+    ("显示参数", "◉", "二、显示设置"),
+    ("OCR参数", "⌕", "三、共享 OCR 通道 / OCR画线"),
+    ("画线…", "✎", "四、画线 / OCR / 插图 / 校对"),
+    ("后期制作", "✂", "五、后期词典制作"),
 )
 
 
@@ -262,7 +262,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         icon.grid(row=0, column=0, sticky="ew")
         _draw_rail_icon(icon, symbol)
         icon.bind("<Button-1>", lambda _event: command())
-        text_button = ttk.Button(entry, text=label, width=5, command=command,
+        text_button = ttk.Button(entry, text=label, width=9, command=command,
                                  style="PC.Rail.TButton")
         text_button.grid(row=0, column=1, sticky="ew")
         app.workspace_rail_labels.append(text_button)
@@ -272,14 +272,14 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         return entry
 
     sidebar_button = rail_action(
-        rail, 0, "☰", "模式", lambda: show_sidebar_modes(app),
+        rail, 0, "☰", "窗口模式", lambda: show_sidebar_modes(app),
         "",
     )
     mode_menu = ttk.Frame(app, padding=3, relief="solid", borderwidth=1,
                           style="PC.Sidebar.TFrame")
     app.workspace_sidebar_mode_menu = mode_menu
-    for choice in ("最简", "正常", "最大"):
-        ttk.Button(mode_menu, text=choice, width=5, style="PC.Rail.TButton",
+    for choice in ("极简", "简单", "正常", "最大"):
+        ttk.Button(mode_menu, text=choice, width=7, style="PC.Rail.TButton",
                    command=lambda mode=choice: set_sidebar_mode(app, mode)).pack(fill="x")
     def schedule_mode_hide(_event: tk.Event | None = None) -> None:
         def check() -> None:
@@ -304,8 +304,21 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         rail, len(TASK_GROUPS) + 2, "▦", "页面", lambda: toggle_page_index(app),
         "切换完整页面列表和简洁页面列表",
     )
+    # Ultra-compact page controls live directly under the Page icon and do
+    # not depend on the full/mini page index being visible.
+    extreme_nav = ttk.Frame(rail, style="PC.Sidebar.TFrame")
+    extreme_nav.grid(row=len(TASK_GROUPS) + 3, column=0, sticky="ew", pady=(2, 3))
+    extreme_nav.grid_remove()
+    extreme_nav.columnconfigure(0, weight=1)
+    for nav_row, (caption, delta) in enumerate((("上", -1), ("下", 1))):
+        ttk.Button(
+            extreme_nav, text=caption, width=3, style="PC.Rail.TButton",
+            command=lambda direction=delta: app.change_page(direction),
+        ).grid(row=nav_row, column=0, sticky="ew", pady=(0, 2))
+    app.workspace_extreme_page_navigation = extreme_nav
+
     mini_host = ttk.Frame(rail, style="PC.Sidebar.TFrame")
-    mini_host.grid(row=len(TASK_GROUPS) + 3, column=0, sticky="nsew")
+    mini_host.grid(row=len(TASK_GROUPS) + 4, column=0, sticky="nsew")
     mini_host.grid_remove()
     mini_host.rowconfigure(0, weight=1)
     mini_host.columnconfigure(0, weight=1)
@@ -366,7 +379,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     # The full page table is created after install_workspace_tools returns.
     app.after_idle(lambda: app.page_list.bind(
         "<<TreeviewSelect>>", sync_mini_selection, add="+"))
-    rail.rowconfigure(len(TASK_GROUPS) + 3, weight=1)
+    rail.rowconfigure(len(TASK_GROUPS) + 4, weight=1)
 
     footer_row = len(TASK_GROUPS) + 5
     footer = ttk.Frame(rail, style="PC.Footer.TFrame")
@@ -377,16 +390,18 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     quick_actions = (("普通画线", app.run_normal_draw_action),
                      ("OCR画线", app.run_ocr_draw_action),
                      ("词条校对", app.open_review))
+    app.workspace_quick_action_buttons = []
     for index, (label, command) in enumerate(quick_actions):
-        ttk.Button(footer, text=label, command=command,
-                   style="PC.Rail.TButton").grid(row=index, column=0, sticky="ew", pady=(0, 2))
+        button = ttk.Button(footer, text=label, command=command, style="PC.Rail.TButton")
+        button.grid(row=index, column=0, sticky="ew", pady=(0, 2))
+        app.workspace_quick_action_buttons.append(button)
     ttk.Separator(footer, orient="horizontal").grid(
         row=len(quick_actions), column=0, sticky="ew", pady=(2, 5))
     project_actions = (
-        ("项目", "▣", app.open_recent_project, "打开最近项目与项目管理"),
-        ("档案", "◈", app.open_project_profile, "配置词典 Profile 和页面模板"),
-        ("设置", "⚙", app.open_settings, "打开设置中心"),
-        ("帮助", "?", app.show_help_dialog, "查看帮助与快捷操作"),
+        ("项目中心", "▣", app.open_recent_project, "打开最近项目与项目管理"),
+        ("项目档案", "◈", app.open_project_profile, "配置词典 Profile 和页面模板"),
+        ("设置中心", "⚙", app.open_settings, "打开设置中心"),
+        ("帮助中心", "?", app.show_help_dialog, "查看帮助与快捷操作"),
     )
     for index, (label, symbol, command, tip) in enumerate(project_actions, start=len(quick_actions) + 1):
         button = rail_action(footer, index, symbol, label, command, f"{label}：{tip}")
