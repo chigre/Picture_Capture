@@ -205,6 +205,7 @@ def restore_proven_column_indents(
             )
             if line is not None:
                 detected.append(line)
+        detected = list({id(line): line for line in detected}.values())
         if len(detected) < 3:
             continue
 
