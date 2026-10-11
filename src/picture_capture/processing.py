@@ -547,6 +547,14 @@ def detect_entries(
                 finally:
                     if rotated:
                         bracket_image.close()
+            # Keep proven lemma-indentation evidence from a second physical
+            # analyzer when the primary normalization lost an entire column.
+            if not uses_cjk_role_model(effective):
+                from .ordinary_independent_indent_rescue import recover_depleted_indent_columns
+                entries = recover_depleted_indent_columns(
+                    analysis_image, effective, understanding, entries,
+                    page_index=profile_page_index,
+                )
             entries = _allowed_entries(
                 entries,
                 source,
