@@ -105,7 +105,7 @@ def test_compact_to_normal_restores_separate_full_page_column(monkeypatch):
     assert canvas.manager == "" and slot.manager == ""
 
 
-def test_compact_font_is_limited_to_page_list_and_zoom_percent_field():
+def test_compact_font_is_limited_to_page_range_and_zoom_percent_field():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     start = source.index("def _apply_compact_sidebar_font(app: Any, compact: bool)")
     end = source.index("def install_compact_zoom_controls(", start)
@@ -114,7 +114,13 @@ def test_compact_font_is_limited_to_page_list_and_zoom_percent_field():
     assert "visit(slot)" in scope
     assert "app.workspace_rail_labels" not in scope
     assert "app.workspace_quick_action_buttons" not in scope
-    assert '"PC.Workspace80.Treeview" if compact' in scope
+    assert 'widget.configure(style="PC.CompactPage.Treeview")' in scope
+    assert '"PC.Workspace80.Treeview"' not in scope
+    app_source = (Path(__file__).resolve().parents[1] / "src" /
+                  "picture_capture" / "app.py").read_text(encoding="utf-8")
+    assert 'self.compact_page_font.configure(size=compact_size)' in app_source
+    assert 'round(base_size * 0.9)' in app_source
+    assert 'int(app.workspace_rail_width), app.compact_page_font.measure' in source
     assert '"PC.Workspace80.TButton", "PC.SimplePage.TButton"' in scope
 
     zoom_start = source.index("def install_compact_zoom_controls(")
