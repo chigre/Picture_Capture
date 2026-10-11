@@ -7304,8 +7304,10 @@ class PictureCaptureApp(tk.Tk):
         from .ui.workspace_tools import (
             refresh_compact_header_buttons, refresh_macaron_action_buttons,
         )
+        from .ui.simple_page_controls import refresh_compact_range_appearance
         refresh_macaron_action_buttons(self)
         refresh_compact_header_buttons(self)
+        refresh_compact_range_appearance(self)
         palette = appearance_palette(normalized)
         for name, color_key in (("sidebar_canvas", "bg"), ("canvas", "canvas")):
             widget = self.__dict__.get(name)

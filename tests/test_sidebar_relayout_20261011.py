@@ -38,11 +38,10 @@ def test_simple_mode_clones_complete_range_and_navigation_controls():
     for label in ('"当前"', '"至末页"', '"至指定"',
                   '"跳"', '"⨇"', '"⨈"', '"上"', '"下"'):
         assert label in controls
-    assert 'text="", variable=app.page_range_var' in controls
-    assert 'value="specified"' in controls
-    assert 'variable=app.page_range_var' in controls
+    assert 'radio(spec, "", "specified")' in controls
+    assert 'variable=app.page_range_var, value=value' in controls
     assert 'textvariable=app.page_range_spec_var' in controls
-    assert 'command=app.jump_to_page_spec' in controls
+    assert 'action(spec, "跳", app.jump_to_page_spec)' in controls
     assert 'app.jump_to_bookmark(-1)' in controls
     assert 'app.jump_to_bookmark(1)' in controls
     assert 'app.change_page(-1)' in controls
@@ -50,7 +49,7 @@ def test_simple_mode_clones_complete_range_and_navigation_controls():
     assert 'app._bookmark_stems()' in controls
     assert 'app._set_page_section_count(index, updated)' in controls
     assert '"跳转到指定页面的第一个有效页面；ENTER为快捷键"' in controls
-    assert 'style="PC.SimplePage.TButton"' in controls
+    assert 'action(actions, caption, callback)' in controls
     assert 'padx=0, pady=0' in controls
 
 

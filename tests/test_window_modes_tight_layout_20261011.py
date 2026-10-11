@@ -54,8 +54,11 @@ def test_page_range_radio_buttons_share_one_row_with_small_entry():
                   '(2, "至指定", "to_specified")'):
         assert radio in controls
     assert '.grid(row=0, column=column, sticky="w", padx=0, pady=0)' in controls
-    assert 'value="specified", style="PC.Workspace80.TRadiobutton"' in controls
-    assert 'style="PC.Workspace80.TEntry"' in controls
+    assert 'radio(spec, "", "specified")' in controls
+    assert 'field = tk.Entry(' in controls
+    assert 'jump = action(spec, "跳", app.jump_to_page_spec)' in controls
+    assert 'highlightthickness=0, padx=0, pady=0' in controls
+    assert 'app.workspace_compact_range_widgets = []' in controls
     assert 'indicatorsize=10' in workspace
 
 
@@ -218,3 +221,49 @@ def test_theme_toggle_is_immediately_left_of_extreme_mode_and_uses_existing_appe
     app.appearance_mode = "dark"
     assert toggle_workspace_appearance(app) == "light"
     assert selected[-1] == "light"
+
+
+def test_light_and_dark_range_controls_use_identical_geometry(monkeypatch):
+    from types import SimpleNamespace
+    from picture_capture.ui import simple_page_controls as page
+
+    class Widget:
+        def __init__(self, role):
+            self.role = role
+            self.options = {}
+        def winfo_exists(self):
+            return True
+        def configure(self, **kwargs):
+            self.options.update(kwargs)
+
+    radios = [Widget("radio"), Widget("radio")]
+    field = Widget("entry")
+    button = Widget("button")
+    app = SimpleNamespace(
+        workspace_compact_range_widgets=[
+            ("radio", radios[0]), ("radio", radios[1]),
+            ("entry", field), ("button", button),
+        ],
+        _main_ui_colors=dict(
+            sidebar="#f0f0f0", button="#f4f5f7", text="#000000",
+            button_hover="#e7eaee",
+        ),
+    )
+    page.refresh_compact_range_appearance(app)
+    assert radios[0].options["selectcolor"] == "#f0f0f0"
+    assert field.options["bg"] == "#f4f5f7"
+    assert button.options["activebackground"] == "#e7eaee"
+    app._main_ui_colors = dict(
+        sidebar="#272b32", button="#353940", text="#f1f1f1",
+        button_hover="#434952",
+    )
+    page.refresh_compact_range_appearance(app)
+    assert radios[0].options["bg"] == "#272b32"
+    assert radios[1].options["fg"] == "#f1f1f1"
+    assert field.options["insertbackground"] == "#f1f1f1"
+    assert button.options["bg"] == "#353940"
+    assert "refresh_compact_range_appearance(self)" in (
+        __import__("inspect").getsource(
+            __import__("picture_capture.app", fromlist=["PictureCaptureApp"]).PictureCaptureApp
+        )
+    )

@@ -5,42 +5,112 @@ This compact view reuses the exact same Tk variables and navigation commands.
 """
 from __future__ import annotations
 
+import tkinter as tk
 from tkinter import ttk
 from typing import Any
 
 
+def refresh_compact_range_appearance(app: Any) -> None:
+    """Keep the same compact control chrome in light and dark appearances."""
+    colors = getattr(app, "_main_ui_colors", {})
+    if not colors:
+        return
+    for role, widget in getattr(app, "workspace_compact_range_widgets", ()):
+        try:
+            if not widget.winfo_exists():
+                continue
+            if role == "radio":
+                widget.configure(
+                    bg=colors["sidebar"], fg=colors["text"],
+                    activebackground=colors["sidebar"],
+                    activeforeground=colors["text"],
+                    selectcolor=colors["sidebar"],
+                )
+            elif role == "entry":
+                widget.configure(
+                    bg=colors["button"], fg=colors["text"],
+                    insertbackground=colors["text"],
+                )
+            else:
+                widget.configure(
+                    bg=colors["button"], fg=colors["text"],
+                    activebackground=colors["button_hover"],
+                    activeforeground=colors["text"],
+                )
+        except (AttributeError, tk.TclError):
+            continue
+
+
 def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
-    """Expose all full-page controls above the simple-mode mirrored treeview."""
-    controls = ttk.Frame(host, style="PC.Sidebar.TFrame", padding=(0, 3, 0, 3))
+    """Place compact page controls consistently under both Windows themes.
+
+    Native Vista ttk radiobuttons and pushbuttons add wide invisible margins
+    even with padding=0. Classic Tk controls have explicit geometry instead,
+    while retaining the original Tk variables, commands and keyboard bindings.
+    """
+    colors = app._main_ui_colors
+    controls = ttk.Frame(host, style="PC.Sidebar.TFrame", padding=(0, 1, 0, 1))
     controls.grid(row=0, column=0, columnspan=2, sticky="ew")
-    # 80%-scale single line: 当前 / 至末页 / 至指定.
+    app.workspace_compact_range_widgets = []
+
+    def remember(role: str, widget: tk.Misc) -> tk.Misc:
+        widget._pc_skip_classic_appearance = True
+        app.workspace_compact_range_widgets.append((role, widget))
+        return widget
+
+    def radio(parent: tk.Misc, caption: str, value: str) -> tk.Radiobutton:
+        result = tk.Radiobutton(
+            parent, text=caption, variable=app.page_range_var, value=value,
+            font="TkDefaultFont", anchor="w", indicatoron=True,
+            bg=colors["sidebar"], fg=colors["text"],
+            selectcolor=colors["sidebar"], activebackground=colors["sidebar"],
+            activeforeground=colors["text"], bd=0, relief="flat",
+            highlightthickness=0, padx=0, pady=0,
+            cursor="hand2",
+        )
+        remember("radio", result)
+        return result
+
+    def action(parent: tk.Misc, caption: str, callback: Any) -> tk.Button:
+        result = tk.Button(
+            parent, text=caption, width=2, command=callback,
+            font="TkDefaultFont", anchor="center", justify="center",
+            bg=colors["button"], fg=colors["text"],
+            activebackground=colors["button_hover"],
+            activeforeground=colors["text"],
+            bd=0, relief="flat", highlightthickness=0,
+            padx=0, pady=0, cursor="hand2",
+        )
+        remember("button", result)
+        return result
+
+    # 80% font (applied by the sidebar) with equal native-indicator geometry.
     for column, caption, value in (
         (0, "当前", "current"),
         (1, "至末页", "to_end"),
         (2, "至指定", "to_specified"),
     ):
-        ttk.Radiobutton(
-            controls, text=caption, variable=app.page_range_var,
-            value=value, style="PC.Workspace80.TRadiobutton",
-        ).grid(row=0, column=column, sticky="w", padx=0, pady=0)
+        radio(controls, caption, value).grid(
+            row=0, column=column, sticky="w", padx=0, pady=0,
+        )
 
     spec = ttk.Frame(controls, style="PC.Sidebar.TFrame")
-    spec.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(1, 2))
+    spec.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(0, 1))
     spec.columnconfigure(1, weight=1)
-    # Preserve the explicit "specified" radio selection without the
-    # redundant visible "指定:" text.
-    ttk.Radiobutton(
-        spec, text="", variable=app.page_range_var,
-        value="specified", style="PC.Workspace80.TRadiobutton",
-    ).grid(row=0, column=0, sticky="w", padx=0, pady=0)
-    field = ttk.Entry(spec, textvariable=app.page_range_spec_var, width=7,
-                      style="PC.Workspace80.TEntry")
+    # The unlabeled selector and the text field share the same page variable.
+    radio(spec, "", "specified").grid(
+        row=0, column=0, sticky="w", padx=0, pady=0,
+    )
+    field = tk.Entry(
+        spec, textvariable=app.page_range_spec_var, width=7,
+        font="TkDefaultFont", bg=colors["button"], fg=colors["text"],
+        insertbackground=colors["text"], bd=1, relief="solid",
+        highlightthickness=0, justify="left",
+    )
+    remember("entry", field)
     field.grid(row=0, column=1, sticky="ew", padx=0, pady=0)
     field.bind("<Return>", lambda _event: app.jump_to_page_spec())
-    jump = ttk.Button(
-        spec, text="跳", width=2, command=app.jump_to_page_spec,
-        style="PC.SimplePage.TButton",
-    )
+    jump = action(spec, "跳", app.jump_to_page_spec)
     jump.grid(row=0, column=2, sticky="ew", padx=0, pady=0)
     app._attach_tooltip(
         jump, "跳转到指定页面的第一个有效页面；ENTER为快捷键",
@@ -55,10 +125,7 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
         ("下", lambda: app.change_page(1), "下一页"),
     )):
         actions.columnconfigure(index, weight=1, uniform="simple-page-actions")
-        button = ttk.Button(
-            actions, text=caption, command=callback, width=2,
-            style="PC.SimplePage.TButton",
-        )
+        button = action(actions, caption, callback)
         button.grid(row=0, column=index, sticky="ew", padx=0, pady=0)
         app._attach_tooltip(button, help_text)
     return controls

@@ -1122,7 +1122,7 @@ def _apply_compact_sidebar_font(app: Any, compact: bool) -> None:
         if isinstance(widget, ttk.Treeview):
             # The compact page-list style uses the separately sized 90% font.
             widget.configure(style="PC.CompactPage.Treeview")
-        elif isinstance(widget, tk.Radiobutton):
+        elif isinstance(widget, (tk.Radiobutton, tk.Entry, tk.Button)):
             widget.configure(font=_compact_font(app) if compact else "TkDefaultFont")
         else:
             for kind, (small, standard) in styles.items():
