@@ -184,8 +184,21 @@ def restore_proven_column_indents(
             entry_y, entry_x, body_x = alternate[index]
         elif index in bracket_by_column and len(bracket_by_column[index]) >= 3:
             entry_y = sorted(set(bracket_by_column[index]))
-            entry_x = 0.0
-            body_x = float(col.body_mode.center) if col.body_mode else None
+            # Prefer the *measured* outer/inner physical lanes. Brackets prove
+            # the entry identity; observed X-mode separation proves the indent.
+            measured = sorted(
+                (mode for mode in col.indent_modes if mode.support >= 2),
+                key=lambda mode: float(mode.center),
+            )
+            if len(measured) >= 2 and (
+                measured[-1].center - measured[0].center
+                >= max(6.0, layout.ordinary_line_height * .30)
+            ):
+                entry_x = float(measured[0].center)
+                body_x = float(measured[-1].center)
+            else:
+                entry_x = 0.0
+                body_x = float(col.body_mode.center) if col.body_mode else None
         entry_y = sorted({
             int(y) for y in entry_y
             if int(layout.body_top) <= int(y) < int(layout.body_bottom)
