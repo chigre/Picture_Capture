@@ -121,6 +121,20 @@ def robust_profile_ink_height(estimates: list[Any]) -> tuple[int | None, int]:
         return None, len(trustworthy)
     return int(round(statistics.median(trustworthy))), len(trustworthy)
 
+
+def apply_profile_ink_height_suggestion(aggregate: dict, estimates: list[Any]) -> str:
+    """Update a Profile proposal from verified multi-page ink measurements only."""
+    height, count = robust_profile_ink_height(estimates)
+    if height is not None:
+        aggregate["character_height"] = height
+        return f"；字高按真实墨迹测量{count}/{len(estimates)}页"
+    aggregate.pop("character_height", None)
+    return (
+        f"；⚠字高仅{count}/{len(estimates)}页有可靠测量，"
+        "未自动修改字高，请核对代表页"
+    )
+
+
 def install_profile_layout_bootstrap() -> None:
     """Compatibility no-op; Profile detector ownership is now static."""
     return None
