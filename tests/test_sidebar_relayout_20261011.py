@@ -12,7 +12,7 @@ def test_window_mode_buttons_on_upper_right_preserve_native_caption():
     assert 'mode_bar.pack(side="top", fill="x", before=app.main_paned)' in source
     assert 'mode_group.pack(side="right")' in source
     assert 'for caption in ("极简", "紧凑", "正常", "最大")' in source
-    assert 'command=lambda mode=caption: set_sidebar_mode(app, mode)' in source
+    assert 'lambda mode=caption: set_sidebar_mode(app, mode)' in source
     assert '_refresh_window_mode_buttons(app)' in source
     assert 'app.workspace_sidebar_mode_menu' not in source
     assert 'overrideredirect(' not in source

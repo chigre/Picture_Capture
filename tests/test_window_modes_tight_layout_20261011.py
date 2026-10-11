@@ -53,7 +53,8 @@ def test_page_range_radio_buttons_share_one_row_with_small_entry():
     for radio in ('(0, "当前", "current")', '(1, "至末页", "to_end")',
                   '(2, "至指定", "to_specified")'):
         assert radio in controls
-    assert '.grid(row=0, column=column, sticky="w", padx=0, pady=0)' in controls
+    assert 'radio(controls, caption, value).grid(' in controls
+    assert 'row=0, column=column, sticky="w", padx=0, pady=0' in controls
     assert 'radio(spec, "", "specified")' in controls
     assert 'field = tk.Entry(' in controls
     assert 'jump = action(spec, "跳", app.jump_to_page_spec)' in controls
@@ -203,7 +204,7 @@ def test_theme_toggle_is_immediately_left_of_extreme_mode_and_uses_existing_appe
     assert 'app, mode_group, "◑", lambda: toggle_workspace_appearance(app)' in source
     assert 'theme_toggle.pack(side="left", padx=(0, 2))' in source
     assert 'app._attach_tooltip(theme_toggle, "切换浅色/深色模式")' in source
-    assert 'command=lambda: toggle_workspace_appearance(app)' in source
+    assert 'lambda: toggle_workspace_appearance(app)' in source
     assert 'app.workspace_theme_toggle_button = theme_toggle' in source
 
     selected = []
@@ -267,3 +268,54 @@ def test_light_and_dark_range_controls_use_identical_geometry(monkeypatch):
             __import__("picture_capture.app", fromlist=["PictureCaptureApp"]).PictureCaptureApp
         )
     )
+
+
+def test_header_buttons_are_compact_in_both_themes_and_preserve_preprocess_lock():
+    from picture_capture.ui import workspace_tools
+    from types import SimpleNamespace
+    from pathlib import Path
+
+    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    app_src = (SRC.parent / "app.py").read_text(encoding="utf-8")
+    assert 'button = tk.Button(' in source
+    assert 'font="TkDefaultFont", anchor="center", justify="center"' in source
+    assert 'bd=0, relief="flat", highlightthickness=0, padx=3, pady=1' in source
+    assert 'button._pc_skip_classic_appearance = True' in source
+    assert 'refresh_compact_header_buttons(self)' in app_src
+    assert 'if isinstance(widget, ttk.Widget):' in app_src
+    assert 'old_state = widget.cget("state")' in app_src
+
+    class Button:
+        def __init__(self):
+            self.options = {}
+        def configure(self, **options):
+            self.options.update(options)
+        def winfo_exists(self):
+            return True
+
+    mode_buttons = {caption: Button() for caption in ("极简", "紧凑", "正常", "最大")}
+    project_buttons = [Button() for _ in range(4)]
+    toggle = Button()
+    app = SimpleNamespace(
+        appearance_mode="light", workspace_mode="紧凑",
+        workspace_title_mode_buttons=mode_buttons,
+        workspace_header_project_buttons=project_buttons,
+        workspace_theme_toggle_button=toggle,
+        _main_ui_colors={
+            "button": "#f4f5f7", "button_hover": "#e7eaee",
+            "tree_selected": "#dce8f7", "text": "#000000",
+        },
+    )
+    workspace_tools.refresh_compact_header_buttons(app)
+    assert mode_buttons["紧凑"].options["bg"] == "#dce8f7"
+    assert mode_buttons["正常"].options["bg"] == "#f4f5f7"
+    app.appearance_mode = "dark"
+    app.workspace_mode = "极简"
+    app._main_ui_colors = {
+        "button": "#353940", "button_hover": "#434952",
+        "tree_selected": "#355A75", "text": "#f1f1f1",
+    }
+    workspace_tools.refresh_compact_header_buttons(app)
+    assert mode_buttons["极简"].options["bg"] == "#355A75"
+    assert project_buttons[0].options["bg"] == "#353940"
+    assert toggle.options["fg"] == "#f1f1f1"
