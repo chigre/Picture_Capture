@@ -13670,6 +13670,20 @@ class PictureCaptureApp(tk.Tk):
                         coords=[v*scale for pt in region.points for v in pt]
                         if len(coords)>=6:
                             self.canvas.create_polygon(*coords,fill="",outline="#ef6c00",width=3,tags=("crop-plan",))
+        # A stop line ends the preceding real entry; the following region
+        # remains visible in preview only and is NEVER exported as a WW image.
+        for x0, y0, x1, y1 in plan.auxiliary_gaps:
+            color = "#d97706"
+            self.canvas.create_rectangle(
+                x0 * scale, y0 * scale, x1 * scale, y1 * scale,
+                outline=color, width=2, dash=(4, 3),
+                tags=("crop-plan", "auxiliary-gap"),
+            )
+            draw_crop_preview_label(
+                self.canvas, ((x0 + x1) / 2) * scale, (y0 + 3) * scale,
+                text="【辅助不切】", outline=color, anchor="n",
+                justify="center", font=preview_font,
+            )
         # PPP decisions: green/orange travel with headword; magenta/red are
         # standalone and will be whitened before ordinary headword cropping.
         standalone_count=linked_count=partial_count=0
@@ -13698,7 +13712,7 @@ class PictureCaptureApp(tk.Tk):
             )
         mode = "综合插图" if plan.integrate_illustrations else "仅词条矩形"
         self.status_var.set(
-            f"切图预览｜{mode}｜词条切图片段 {len(plan.entry_pieces)}｜随词条PPP {linked_count}｜部分相交 {partial_count}｜独立PPP {standalone_count}"
+            f"切图预览｜{mode}｜词条切图片段 {len(plan.entry_pieces)}｜辅助不切 {len(plan.auxiliary_gaps)}｜随词条PPP {linked_count}｜部分相交 {partial_count}｜独立PPP {standalone_count}"
         )
 
     def _rulers_visible(self) -> bool:
