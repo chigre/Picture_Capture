@@ -32,7 +32,7 @@ def test_fixed_width_icon_cells_and_compact_nav_toggle():
     assert 'app.workspace_rail_labels.append(text_button)' in tools
     assert 'label.grid_remove()' in tools
     assert 'label.grid()' in tools
-    assert 'int(app.workspace_rail_width) + RAIL_DIVIDER_WIDTH' in tools
+    assert 'return rail_width + RAIL_DIVIDER_WIDTH' in tools
     assert 'panes.forget(host)' not in tools
     assert 'sidebar_toggle.place(' not in app
     assert 'app.bind("<Control-Shift-b>"' not in tools

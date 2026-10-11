@@ -34,32 +34,37 @@ def test_color_strip_is_vertically_inset_by_quarter_height():
     assert "relheight=1 - 2 * SWATCH_VERTICAL_PADDING_FRACTION" in source
 
 
-def test_each_compact_display_option_is_in_one_explicit_row():
+def test_display_properties_are_aligned_and_overflow_into_detail_rows():
     source = DISPLAY.read_text(encoding="utf-8")
     assert "def number_line(" not in source
+    assert "def primary_check(" in source
+    assert "def detail_line()" in source
+    assert "DISPLAY_CAPTION_WIDTH = 126" in source
     for caption, parts in (
         ("显示区块", ('swatch(row, "page_section_color")',
-                    'value(row, "宽:", "page_section_width", 2)')),
+                      'value(row, "宽:", "page_section_width", 2)')),
         ("栏左垂线", ('swatch(row, "guide_color")',
-                     'value(row, "宽:", "guide_width", 2)',
-                     'value(row, "透%:", "guide_opacity", 3)')),
+                     'value(row, "宽:", "guide_width", 3)',
+                     'value(detail_line(), "透明度%:", "guide_opacity", 5)')),
         ("词头横线", ('swatch(row, "headword_marker_color")',
-                     'value(row, "宽:", "marker_height", 2)',
-                     'value(row, "透%:", "headword_marker_opacity", 3)')),
+                     'value(row, "宽:", "marker_height", 3)',
+                     'value(detail_line(), "透明度%:", "headword_marker_opacity", 5)')),
         ("插图形状:线", ('swatch(row, "illustration_outline_color")',
-                      'value(row, "宽:", "illustration_outline_width", 2)',
+                      'value(row, "宽:", "illustration_outline_width", 3)',
                       'swatch(row, "illustration_fill_color")',
-                      'value(row, "透%:", "illustration_fill_opacity", 3)')),
+                      'value(detail_line(), "透明度%:", "illustration_fill_opacity", 5)')),
         ("插图标签:线", ('swatch(row, "illustration_label_border_color")',
-                      'value(row, "宽:", "illustration_label_border_width", 2)',
+                      'value(row, "宽:", "illustration_label_border_width", 3)',
                       'swatch(row, "illustration_label_fill_color")')),
         ("词头标签", ('swatch(row, "main_entry_default_color")',
                     'check(row, "缩放", qb["main_entry_follow_zoom"])')),
         ("显示Layout", ('label(row, "去噪强度")',)),
     ):
-        block = source.split('"' + caption + '"', 1)[1].split("    row = line()", 1)[0]
+        start = source.index('"' + caption + '"')
+        stop = source.find('    divider()', start)
+        region = source[start:stop if stop != -1 else None]
         for part in parts:
-            assert part in block, (caption, part)
+            assert part in region, (caption, part)
 
 
 def test_display_font_rows_match_two_line_order():
@@ -68,10 +73,10 @@ def test_display_font_rows_match_two_line_order():
     assert 'font_style(line(), "illustration_label_font_size"' in source
     assert 'family_line("main_entry_font_family")' in source
     assert 'font_style(line(), "main_entry_font_size"' in source
-    assert 'label(row, "切图预览标签:")' in source
+    assert 'label(row, "切图预览标签:", width=12)' in source
     assert 'check(row, "缩放", qb["crop_preview_follow_zoom"])' in source
     assert 'family_line("crop_preview_font_family")' in source
-    assert 'label(row, "字号")' not in source
+    assert 'label(row, "字号:", width=10)' in source
 
 
 

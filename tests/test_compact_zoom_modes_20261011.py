@@ -23,7 +23,8 @@ def test_compact_index_precedes_rail_at_same_independent_width():
     assert 'app.workspace_rail_width = DEFAULT_RAIL_WIDTH' in source
     assert 'app.workspace_page_list_width = DEFAULT_PAGE_LIST_WIDTH' in source
     assert 'compact = mode == "紧凑"' in source
-    assert "int(app.workspace_rail_width) + RAIL_DIVIDER_WIDTH" in source
+    assert "return rail_width + RAIL_DIVIDER_WIDTH" in source
+    assert 'def toggle_page_index(' not in source
 
 
 def test_compact_font_uses_eighty_percent_only_within_sidebar():
