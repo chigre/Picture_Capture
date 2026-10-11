@@ -145,3 +145,29 @@ def test_unverifiable_profile_height_is_explicitly_marked_not_measured(monkeypat
     finally:
         blank.close()
         clear_profile_layout_bootstrap_cache()
+
+
+def test_multi_page_profile_height_does_not_average_real_ink_and_page_ratio_guesses() -> None:
+    from picture_capture.profile_layout_bootstrap import robust_profile_ink_height
+
+    real = [
+        SimpleNamespace(character_height=29, method="profile_bootstrap+projection_fallback+observed_character_height=29(n=60)")
+        for _ in range(3)
+    ]
+    guesses = [
+        SimpleNamespace(character_height=17, method="profile_bootstrap+projection_fallback+unverified_character_height")
+        for _ in range(3)
+    ]
+    assert robust_profile_ink_height(real + guesses) == (29, 3)
+    assert robust_profile_ink_height(real[:1] + guesses) == (None, 1)
+    assert robust_profile_ink_height(guesses) == (None, 0)
+    assert robust_profile_ink_height(real) == (29, 3)
+
+
+def test_profile_setup_does_not_auto_apply_unverified_height() -> None:
+    from pathlib import Path
+    import picture_capture.profile_setup as wizard
+    content = Path(wizard.__file__).read_text(encoding="utf-8")
+    assert "observed_height, observed_pages = robust_profile_ink_height(estimates)" in content
+    assert 'aggregate.pop("character_height", None)' in content
+    assert "aggregate[\"character_height\"] = observed_height" in content
