@@ -728,6 +728,15 @@ def infer_dictionary_page_layout(
     strips, raw_runs = column_strips(reference)
 
     indent_type = _indent_type(settings)
+    # The Physical Layout projector intentionally retains real row bands up
+    # to 1.90× the height prior. Rejecting them downstream at 1.55× silently
+    # drops most rows in dense small-print CJK scans (XDHYCD C2 had 17 rows
+    # out of ~100). Keep the producer/consumer height contract consistent.
+    physical_projection = (
+        getattr(resolved_ops.line_runs, "__name__", "") == "projection_line_runs"
+    )
+    min_height_ratio = 0.26 if physical_projection else 0.45
+    max_height_ratio = 1.90 if physical_projection else 1.55
     columns: list[ColumnDesign] = []
     for index, (left, right, gutter, strip, runs) in enumerate(
         zip(starts, rights, gutters, strips, raw_runs)
@@ -737,7 +746,10 @@ def infer_dictionary_page_layout(
         for y0, y1 in runs:
             line = resolved_ops.line_feature(index, strip, y0, y1, reference, previous_end)
             previous_end = max(previous_end, y1)
-            if line is not None and reference * 0.45 <= line.height <= reference * 1.55:
+            if (
+                line is not None
+                and reference * min_height_ratio <= line.height <= reference * max_height_ratio
+            ):
                 column.lines.append(line)
         column.indent_modes = resolved_ops.indent_modes(column.lines, reference)
         resolved_ops.assign_indent_semantics(column, indent_type, reference)
