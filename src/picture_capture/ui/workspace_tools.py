@@ -161,7 +161,7 @@ def _draw_rail_icon(canvas: tk.Canvas, kind: str) -> None:
 def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Frame) -> None:
     """Place the icon rail beside the initially visible page index."""
     rail = ttk.Frame(sidebar_host, style="PC.Sidebar.TFrame")
-    rail.pack(side="left", fill="y", before=app.sidebar_canvas, padx=(3, 5))
+    rail.pack(side="left", fill="y", before=app.sidebar_canvas, padx=(2, 3))
     app.workspace_tools_toggle = rail
     app.workspace_tools_rail = rail
     app.workspace_sidebar_host = sidebar_host
@@ -244,8 +244,14 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.workspace_tools_pin_var = pin_var
 
     rail_style = ttk.Style(app)
-    rail_style.configure("PC.Rail.TButton", padding=(4, 3), relief="flat", borderwidth=0, font="TkDefaultFont")
+    # Explicit dimensions avoid the Windows light native theme adding several
+    # pixels of extra row height compared with the dark variant.
+    rail_style.configure("PC.Rail.TButton", padding=(0, 0), relief="flat",
+                         borderwidth=0, font="TkDefaultFont")
+    rail_style.configure("PC.QuickRail.TButton", padding=(0, 0), relief="flat",
+                         borderwidth=0, font="TkDefaultFont")
     rail_style.map("PC.Rail.TButton", relief=[("active", "flat")])
+    rail_style.map("PC.QuickRail.TButton", relief=[("active", "flat")])
     rail.columnconfigure(0, weight=1)
     app.page_index_labels = {"bookmark":"●","page":"页面","section":"域","lined":"线","fill_status":"填充状态","illustrations":"图"}
     app.page_index_columns = tuple(app.page_index_labels)
@@ -254,18 +260,20 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     def rail_action(parent: ttk.Frame, row: int, symbol: str, label: str,
                     command: Any, tip: str) -> ttk.Frame:
         """Separate fixed-width icon and text controls: Unicode glyph widths vary."""
-        entry = ttk.Frame(parent, style="PC.Sidebar.TFrame")
-        entry.grid(row=row, column=0, sticky="ew", pady=(0, 2))
-        entry.columnconfigure(0, minsize=38)
+        entry = ttk.Frame(parent, style="PC.Sidebar.TFrame", height=33)
+        entry.grid(row=row, column=0, sticky="ew", pady=(0, 1))
+        entry.grid_propagate(False)
+        entry.columnconfigure(0, minsize=36)
         entry.columnconfigure(1, weight=1)
+        entry.rowconfigure(0, weight=1)
         icon = tk.Canvas(entry, width=30, height=27, borderwidth=0,
                          highlightthickness=0, cursor="hand2")
-        icon.grid(row=0, column=0, sticky="ew")
+        icon.grid(row=0, column=0, sticky="ns")
         _draw_rail_icon(icon, symbol)
         icon.bind("<Button-1>", lambda _event: command())
         text_button = ttk.Button(entry, text=label, width=9, command=command,
                                  style="PC.Rail.TButton")
-        text_button.grid(row=0, column=1, sticky="ew")
+        text_button.grid(row=0, column=1, sticky="nsew", padx=(1, 0), pady=0)
         app.workspace_rail_labels.append(text_button)
         if tip:
             app._attach_tooltip(icon, tip)
@@ -402,19 +410,26 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
                      ("OCR画线", app.run_ocr_draw_action),
                      ("词条校对", app.open_review))
     app.workspace_quick_action_buttons = []
+    quick_host = ttk.Frame(footer, style="PC.Footer.TFrame")
+    quick_host.grid(row=0, column=0, sticky="ew", pady=(0, 2))
+    app.workspace_quick_actions_host = quick_host
     for index, (label, command) in enumerate(quick_actions):
-        button = ttk.Button(footer, text=label, command=command, style="PC.Rail.TButton")
-        button.grid(row=index, column=0, sticky="ew", pady=(0, 2))
+        quick_host.columnconfigure(index, weight=1, uniform="quickrail")
+        button = ttk.Button(
+            quick_host, text=("普", "O", "校")[index],
+            command=command, width=2, style="PC.QuickRail.TButton",
+        )
+        button.grid(row=0, column=index, sticky="ew", padx=0, pady=0)
         app.workspace_quick_action_buttons.append(button)
     ttk.Separator(footer, orient="horizontal").grid(
-        row=len(quick_actions), column=0, sticky="ew", pady=(2, 5))
+        row=1, column=0, sticky="ew", pady=(2, 4))
     project_actions = (
         ("项目中心", "▣", app.open_recent_project, "打开最近项目与项目管理"),
         ("项目档案", "◈", app.open_project_profile, "配置词典 Profile 和页面模板"),
         ("设置中心", "⚙", app.open_settings, "打开设置中心"),
         ("帮助中心", "?", app.show_help_dialog, "查看帮助与快捷操作"),
     )
-    for index, (label, symbol, command, tip) in enumerate(project_actions, start=len(quick_actions) + 1):
+    for index, (label, symbol, command, tip) in enumerate(project_actions, start=2):
         button = rail_action(footer, index, symbol, label, command, f"{label}：{tip}")
         app.project_footer_buttons.append(button)
 
@@ -715,12 +730,16 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
             label.grid_remove()
         else:
             label.grid()
-    for button, ordinary, compact in zip(
-        app.workspace_quick_action_buttons,
-        ("普通画线", "OCR画线", "词条校对"),
-        ("普", "O", "校"),
-    ):
-        button.configure(text=compact if extreme else ordinary, width=3 if extreme else 0)
+    # Keep the abbreviations in ALL modes. Only the direction changes.
+    for index, (button, title) in enumerate(zip(
+        app.workspace_quick_action_buttons, ("普", "O", "校"),
+    )):
+        button.configure(text=title, width=2)
+        button.grid_configure(
+            row=index if extreme else 0,
+            column=0 if extreme else index,
+            sticky="ew", padx=0, pady=0,
+        )
 
 
 def _apply_preset_page_index(app: Any, mode: str) -> None:
