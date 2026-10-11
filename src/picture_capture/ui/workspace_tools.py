@@ -720,25 +720,22 @@ def toggle_page_index(app: Any) -> str:
         return "break"
     if getattr(app, "workspace_mode", None) == "紧凑":
         slot = app.workspace_mini_page_slot
-        visible = slot.winfo_manager() != "pack"
+        visible = slot.winfo_manager() != "grid"
         if visible:
             refresh_compact_page_index(app)
         _set_simple_page_visible(app, visible)
         return "break"
 
     if app.sidebar_canvas.winfo_manager() == "pack":
-        refresh_compact_page_index(app)
+        # In normal/max the page icon simply hides the page list. It must not
+        # swap in the miniature list below the launcher.
         app.page_panel.grid_remove()
         app.sidebar_canvas.pack_forget()
         app.sidebar_scrollbar.pack_forget()
-        _set_simple_page_visible(app, True)
     else:
-        _set_simple_page_visible(app, False)
-        app.sidebar_scrollbar.pack(side="right", fill="y")
         app.sidebar_canvas.pack(side="left", fill="both", expand=True)
         app.page_panel.grid()
-    # Only normal/max has a second column (260px); compact's list is under 页面.
-    # Keep the current sash location unchanged.
+    # The genuine Treeview scrollbar is owned by page_list, not this canvas.
     return "break"
 
 def toggle_sidebar(app: Any) -> str:
@@ -766,8 +763,9 @@ def toggle_sidebar(app: Any) -> str:
         _apply_preset_page_index(app, getattr(app, "workspace_mode", "正常"))
         def expand() -> None:
             try:
+                mode = getattr(app, "workspace_mode", "正常")
                 target = preferred_sidebar_width(
-                    app, extreme=getattr(app, "workspace_mode", "") == "极简",
+                    app, extreme=mode == "极简", compact=mode == "紧凑",
                 )
                 app.main_paned.sashpos(0, min(
                     target, max(1, app.main_paned.winfo_width() - 160),
@@ -967,7 +965,6 @@ def _apply_preset_page_index(app: Any, mode: str) -> None:
     if full:
         _set_simple_page_visible(app, False)
         if app.sidebar_canvas.winfo_manager() != "pack":
-            app.sidebar_scrollbar.pack(side="right", fill="y")
             app.sidebar_canvas.pack(side="left", fill="both", expand=True)
         app.page_panel.grid()
         return
