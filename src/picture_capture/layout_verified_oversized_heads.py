@@ -110,6 +110,7 @@ def recover_verified_oversized_heads(
                             anchor_x=max(0, glyph_x - int(column.left)),
                             anchor_width=glyph_width, anchor_height=glyph_height,
                             gap_before=0, patch=np.zeros((0, 0), dtype=bool),
+                            role="entry",
                         )
                         column.lines.append(head)
                         stats["promoted_heads"] += 1
