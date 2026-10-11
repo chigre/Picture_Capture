@@ -23,7 +23,7 @@ DISPLAY_MODES = (
 
 
 def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
-    """Create the single 260px display menu, in the requested reading order."""
+    """Create the single 300px display menu, in the requested reading order."""
     panel = ttk.Frame(parent, padding=(5, 4, 5, 7))
     qv = app.quick_vars
     qb = app.quick_bool_vars
@@ -99,7 +99,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         check(row, "斜", qb[italic_name])
         if follow is not None:
             # Separate narrow row: size + two style checks + zoom does not
-            # reliably fit within 260px on Windows with Chinese system fonts.
+            # reliably fit within 300px on Windows with Chinese system fonts.
             follow_row = line()
             check(follow_row, "跟随缩放", qb[follow])
 
