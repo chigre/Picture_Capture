@@ -273,6 +273,16 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         widget.bind("<FocusOut>", lambda _e, n=name: save_field(n))
         profile_buttons[name] = widget
     choice("profile_first_page_variant", "A/B起始页", ("A", "B"))
+
+    # Reuse the live quick-setting variable also shown in 显示参数. The main
+    # application's float parser, 1–100% validation and auto-save stay shared.
+    ratio_row = row()
+    caption(ratio_row, "向右比例%", 15)
+    ttk.Entry(
+        ratio_row, textvariable=app.quick_vars["right_ratio"],
+        width=8, justify="center",
+    ).pack(side="left", padx=0, pady=0)
+
     _divider(panel)
     ordinary_visual_panel = build_ordinary_visual_evidence(app, panel)
 

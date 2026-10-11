@@ -2105,8 +2105,10 @@ class ReviewWindow(tk.Toplevel):
         self.focused_panel_expanded = tk.BooleanVar(value=False)
         self.digit_map_expanded = tk.BooleanVar(value=False)
         self.accent_panel_expanded = tk.BooleanVar(value=False)
+        # Open only the reference word list by default; every other right-side
+        # helper stays available behind its collapsible title on demand.
         self.review_right_section_expanded = {
-            key: tk.BooleanVar(value=(key not in {"digit", "accent"}))
+            key: tk.BooleanVar(value=(key == "reference"))
             for key in ("display", "digit", "accent", "ocr", "network", "reference")
         }
         self._review_right_sections: dict[str, dict[str, object]] = {}
@@ -2586,7 +2588,7 @@ class ReviewWindow(tk.Toplevel):
             widget.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
             widget.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))
 
-        # Right: every logical block is collapsible; all start expanded.
+        # Right: only the reference list starts open; all helpers start folded.
         review_info = self._review_collapsible_section(
             right, "display", "显示设置", padding=6, fill="x", pady=(0, 6)
         )

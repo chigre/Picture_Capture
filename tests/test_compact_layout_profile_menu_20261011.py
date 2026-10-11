@@ -103,3 +103,32 @@ def test_header_footer_side_and_ab_controls_use_profile_setup_semantics():
     assert 'app.settings.profile_page_pair_mode = (' in source
     assert '"alternate" if selected in {"outer", "inner"} else "same"' in source
     assert "if not 0 <= val <= limit:" in source
+
+
+def test_right_ratio_returns_above_ordinary_visual_evidence_and_reuses_live_float():
+    source = Path(compact_layout_profile_menu.__file__).read_text(encoding="utf-8")
+    start = source.index('choice("profile_first_page_variant", "A/B起始页", ("A", "B"))')
+    ratio = source.index('caption(ratio_row, "向右比例%", 15)')
+    shared = source.index('textvariable=app.quick_vars["right_ratio"]')
+    ordinary = source.index("ordinary_visual_panel = build_ordinary_visual_evidence(app, panel)")
+    assert start < ratio < shared < ordinary
+    assert 'width=8, justify="center"' in source
+    assert 'tk.StringVar(value=str(app.settings.right_ratio))' not in source
+    app = (BASE / "app.py").read_text(encoding="utf-8")
+    assert 'self.quick_field_casts["right_ratio"] = float' in app
+    assert 'if name == "right_ratio" and not 1 <= float(value) <= 100:' in app
+
+
+def test_review_right_panel_opens_only_reference_list_by_default():
+    source = (BASE / "app.py").read_text(encoding="utf-8")
+    start = source.index("self.review_right_section_expanded = {")
+    end = source.index("self._review_right_sections:", start)
+    initial = source[start:end]
+    assert 'value=(key == "reference")' in initial
+    assert '("display", "digit", "accent", "ocr", "network", "reference")' in initial
+    assert 'value=(key not in {"digit", "accent"})' not in initial
+    assert 'right, "reference", "参考词表",' in source
+    assert 'fill="both", expand=True, pady=(0, 0)' in source
+    assert 'def _toggle_review_right_section(self, key: str)' in source
+    assert 'body.pack_forget()' in source
+    assert 'body.pack(fill="both", expand=True)' in source
