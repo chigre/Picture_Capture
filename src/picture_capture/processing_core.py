@@ -80,9 +80,13 @@ def ordinary_page_layout_settings(
         detector_settings.layout_columns_policy = "detect"
     estimate = detect_layout_parameters(image, detector_settings)
 
+    from .layout_parameter_evidence import row_padding_is_measured
+
     applied: dict[str, int] = {}
     for field_name, switch_name in ORDINARY_AUTO_LAYOUT_FIELDS:
         if not bool(getattr(current, switch_name, True)):
+            continue
+        if field_name == "row_padding" and not row_padding_is_measured(estimate):
             continue
         value = int(getattr(estimate, field_name))
         setattr(current, field_name, value)
