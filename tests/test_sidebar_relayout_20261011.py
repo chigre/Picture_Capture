@@ -36,8 +36,8 @@ def test_simple_mode_clones_complete_range_and_navigation_controls():
     assert 'install_simple_page_controls(app, mini_host)' in tools
     assert 'install_simple_page_tree_actions(app, mini)' in tools
     assert 'displaycolumns=("bookmark", "page", "lined", "illustrations")' in tools
-    for label in ('"当前页"', '"当前至末页"', '"当前至指定页"',
-                  '"指定"', '"跳转"', '"前签"', '"后签"', '"上页"', '"下页"'):
+    for label in ('"当前"', '"至末页"', '"至指定页"',
+                  '"指定"', '"跳"', '"⨇"', '"⨈"', '"上"', '"下"'):
         assert label in controls
     assert 'variable=app.page_range_var' in controls
     assert 'textvariable=app.page_range_spec_var' in controls
@@ -48,6 +48,9 @@ def test_simple_mode_clones_complete_range_and_navigation_controls():
     assert 'app.change_page(1)' in controls
     assert 'app._bookmark_stems()' in controls
     assert 'app._set_page_section_count(index, updated)' in controls
+    assert '"跳转到指定页面的第一个有效页面；ENTER为快捷键"' in controls
+    assert 'style="PC.SimplePage.TButton"' in controls
+    assert 'padx=0, pady=0' in controls
 
 
 def test_quick_actions_are_always_short_and_horizontal_except_extreme():
