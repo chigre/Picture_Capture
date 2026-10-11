@@ -11,7 +11,7 @@ def test_mode_buttons_at_upper_right_keep_os_caption():
     assert 'mode_bar.pack(side="top", fill="x", before=app.main_paned)' in text
     assert 'mode_group.pack(side="right")' in text
     assert 'for caption in ("极简", "紧凑", "正常", "最大")' in text
-    assert 'project_group.pack(side="left", padx=(4, 0))' in text
+    assert 'project_group.pack(side="left", padx=(2, 0))' in text
     assert 'app.workspace_header_mode_group = mode_group' in text
     assert 'app.after_idle(lambda: enforce_header_min_width(app))' in text
     assert 'for label, command, tip in project_actions:' in text
@@ -23,7 +23,8 @@ def test_mode_buttons_at_upper_right_keep_os_caption():
     assert 'app.project_action_bar = project_group' in text
     assert 'app.workspace_header_project_buttons.append(button)' in text
     assert 'app.project_footer_buttons.append(button)' in text
-    assert 'button.state(["selected"] if mode == active else ["!selected"])' in text
+    assert 'button.configure(' in text
+    assert 'bg=colors.get("tree_selected") if mode == active' in text
     assert 'overrideredirect(' not in text
 
 
@@ -91,20 +92,20 @@ def test_project_shortcuts_use_measured_space_and_keep_all_labels():
         workspace_header_shortcut_buttons=shortcuts,
         workspace_header_project_buttons=["项目", "Profile", "设置", "帮助"],
     )
-    assert required_header_width(app) == 391
+    assert required_header_width(app) == 384
     # No magic 650px threshold or exaggerated quick-menu minimum.
-    # Fixed labels: 391; mode divider: 11; actions: 93; zoom extras: 191.
-    _refresh_header_toolbar(app, 494)
+    # Fixed labels: 384, actions: 93, zoom extras: 191; no divider.
+    _refresh_header_toolbar(app, 476)
     assert app._workspace_header_quick_density == "none"
     assert project.events == []
-    _refresh_header_toolbar(app, 495)
+    _refresh_header_toolbar(app, 477)
     assert app._workspace_header_quick_density == "actions"
     assert quick.events[-1][0] == "pack"
     assert zoom.events[-1][0] == "hide"
     assert project.events == []
-    _refresh_header_toolbar(app, 685)
+    _refresh_header_toolbar(app, 667)
     assert app._workspace_header_quick_density == "actions"
-    _refresh_header_toolbar(app, 686)
+    _refresh_header_toolbar(app, 668)
     assert app._workspace_header_quick_density == "full"
     assert zoom.events[-1][0] == "pack"
     assert quick.events[-1][0] == "pack"
@@ -127,7 +128,7 @@ def test_project_shortcuts_use_measured_space_and_keep_all_labels():
     window.project_action_bar = project
     window.workspace_header_mode_group = mode
     enforce_header_min_width(window)
-    assert window.minimum == (391, 2)
+    assert window.minimum == (384, 2)
 
 
 def test_early_header_configure_is_rechecked_after_quick_controls_exist():
@@ -156,8 +157,9 @@ def test_project_buttons_always_use_text_and_left_packing():
     assert '("Profile", app.open_project_profile,' in source
     assert '("设置", app.open_settings,' in source
     assert '("帮助", app.show_help_dialog,' in source
-    assert 'project_group.pack(side="left", padx=(4, 0))' in source
-    assert 'project_group, text=label, width=0, command=command' in source
+    assert 'project_group.pack(side="left", padx=(2, 0))' in source
+    assert '_compact_header_button(app, project_group, label, command)' in source
+    assert 'workspace_header_mode_separator' not in source
     assert 'workspace_header_project_separator' not in source
     assert 'project_separator.pack(' not in source
     responsive = source.split("def _refresh_header_toolbar(", 1)[1].split(
@@ -192,11 +194,11 @@ def test_theme_toggle_is_immediately_left_of_extreme_mode_and_uses_existing_appe
     from picture_capture.ui.workspace_tools import toggle_workspace_appearance
 
     source = (SRC / "workspace_tools.py").read_text(encoding="utf-8")
-    theme = source.index('theme_toggle = ttk.Button(')
+    theme = source.index('theme_toggle = _compact_header_button(')
     modes = source.index('for caption in ("极简", "紧凑", "正常", "最大"):')
     assert theme < modes
-    assert 'text="◑", width=3, style="PC.WindowMode.TButton"' in source
-    assert 'theme_toggle.pack(side="left", padx=(0, 5))' in source
+    assert 'app, mode_group, "◑", lambda: toggle_workspace_appearance(app)' in source
+    assert 'theme_toggle.pack(side="left", padx=(0, 2))' in source
     assert 'app._attach_tooltip(theme_toggle, "切换浅色/深色模式")' in source
     assert 'command=lambda: toggle_workspace_appearance(app)' in source
     assert 'app.workspace_theme_toggle_button = theme_toggle' in source

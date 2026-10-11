@@ -67,7 +67,7 @@ def test_project_commands_move_into_shared_top_row():
         assert f'("{label}",' in tools
         assert f'app.{method}' in tools
     assert 'app.project_footer_buttons.append(button)' in tools
-    assert 'project_group.pack(side="left", padx=(4, 0))' in tools
+    assert 'project_group.pack(side="left", padx=(2, 0))' in tools
     assert 'app.project_action_bar = project_group' in tools
     assert 'rail_action(footer, index, symbol, label' not in tools
 

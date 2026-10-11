@@ -80,7 +80,7 @@ def test_light_rail_button_height_and_dark_captions_are_consistently_centered():
 
 def test_theme_toggle_keeps_four_window_preset_commands_unchanged():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
-    assert 'theme_toggle.pack(side="left", padx=(0, 5))' in source
+    assert 'theme_toggle.pack(side="left", padx=(0, 2))' in source
     assert 'for caption in ("极简", "紧凑", "正常", "最大"):' in source
     assert 'app.workspace_title_mode_buttons[caption] = button' in source
     assert 'app.set_appearance_mode(mode)' in source

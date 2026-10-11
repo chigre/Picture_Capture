@@ -7301,8 +7301,11 @@ class PictureCaptureApp(tk.Tk):
         self._configure_global_appearance()
         self._configure_main_workspace_styles()
         self._apply_current_appearance(self)
-        from .ui.workspace_tools import refresh_macaron_action_buttons
+        from .ui.workspace_tools import (
+            refresh_compact_header_buttons, refresh_macaron_action_buttons,
+        )
         refresh_macaron_action_buttons(self)
+        refresh_compact_header_buttons(self)
         palette = appearance_palette(normalized)
         for name, color_key in (("sidebar_canvas", "bg"), ("canvas", "canvas")):
             widget = self.__dict__.get(name)
@@ -9770,9 +9773,14 @@ class PictureCaptureApp(tk.Tk):
                             pass
             for widget in getattr(self, "project_footer_buttons", ()):
                 try:
-                    was_disabled = "disabled" in widget.state()
-                    widget.state(["disabled"])
-                    self._preprocess_locked_widgets.append((widget, was_disabled))
+                    if isinstance(widget, ttk.Widget):
+                        was_disabled = "disabled" in widget.state()
+                        widget.state(["disabled"])
+                        self._preprocess_locked_widgets.append((widget, was_disabled))
+                    else:
+                        old_state = widget.cget("state")
+                        widget.configure(state="disabled")
+                        self._preprocess_locked_widgets.append((widget, old_state))
                 except tk.TclError:
                     pass
             return

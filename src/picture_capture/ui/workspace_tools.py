@@ -471,7 +471,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
 
     # Tk keeps the native minimize/maximize/close title-bar controls.
     # Place adjacent workspace presets in a narrow upper-right client strip.
-    mode_bar = ttk.Frame(app, style="PC.Sidebar.TFrame", padding=(0, 1, 7, 1))
+    mode_bar = ttk.Frame(app, style="PC.Sidebar.TFrame", padding=(0, 1, 2, 1))
     mode_bar.pack(side="top", fill="x", before=app.main_paned)
     app.workspace_header_mode_bar = mode_bar
     # Keep the four project actions permanently anchored on the left.
@@ -481,27 +481,26 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.workspace_header_mode_group = mode_group
     # The theme switch is immediately to the left of 极简, not a window
     # preset; changing it uses the app's persisted appearance preference.
-    theme_toggle = ttk.Button(
-        mode_group, text="◑", width=3, style="PC.WindowMode.TButton",
-        command=lambda: toggle_workspace_appearance(app),
+    theme_toggle = _compact_header_button(
+        app, mode_group, "◑", lambda: toggle_workspace_appearance(app),
     )
-    theme_toggle.pack(side="left", padx=(0, 5))
+    theme_toggle.pack(side="left", padx=(0, 2))
     app._attach_tooltip(theme_toggle, "切换浅色/深色模式")
     app.workspace_theme_toggle_button = theme_toggle
     app.workspace_title_mode_buttons = {}
     for caption in ("极简", "紧凑", "正常", "最大"):
-        button = ttk.Button(
-            mode_group, text=caption, width=4, style="PC.WindowMode.TButton",
-            command=lambda mode=caption: set_sidebar_mode(app, mode),
+        button = _compact_header_button(
+            app, mode_group, caption,
+            lambda mode=caption: set_sidebar_mode(app, mode),
         )
         button.pack(side="left", padx=(1, 0))
         app.workspace_title_mode_buttons[caption] = button
     _refresh_window_mode_buttons(app)
 
-    app.workspace_header_mode_separator = ttk.Separator(mode_bar, orient="vertical")
+    # No artificial divider between 帮助 and the next toolbar action.
     app.workspace_header_quick_host = ttk.Frame(mode_bar, style="PC.Sidebar.TFrame")
     project_group = ttk.Frame(mode_bar, style="PC.Sidebar.TFrame")
-    project_group.pack(side="left", padx=(4, 0))
+    project_group.pack(side="left", padx=(2, 0))
     app.project_action_bar = project_group  # Compatibility owner.
     app.project_footer_buttons = []  # Also used by preprocess lock handling.
     app.workspace_header_project_buttons = []
@@ -512,10 +511,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         ("帮助", app.show_help_dialog, "查看帮助与快捷操作"),
     )
     for label, command, tip in project_actions:
-        button = ttk.Button(
-            project_group, text=label, width=0, command=command,
-            style="PC.WindowProject.TButton",
-        )
+        button = _compact_header_button(app, project_group, label, command)
         button.pack(side="left", padx=(1, 0))
         app._attach_tooltip(button, f"{label}：{tip}")
         app.project_footer_buttons.append(button)
@@ -897,8 +893,8 @@ def required_header_width(app: Any) -> int:
     """Actual permanent header width: project labels, presets and native padding."""
     project = app.project_action_bar
     modes = app.workspace_header_mode_group
-    # project_group uses left padx=4, mode_bar has right padding=7.
-    return max(1, int(project.winfo_reqwidth()) + int(modes.winfo_reqwidth()) + 11)
+    # Only the two genuine frame gutters remain; no fake width reservation.
+    return max(1, int(project.winfo_reqwidth()) + int(modes.winfo_reqwidth()) + 4)
 
 
 def enforce_header_min_width(app: Any) -> None:
@@ -921,16 +917,14 @@ def _refresh_header_toolbar(app: Any, width: int) -> None:
     shortcuts = getattr(app, "workspace_header_shortcut_buttons", ())
     if not shortcuts:
         return  # The first <Configure> runs before the deferred quick controls.
-    mode_separator = app.workspace_header_mode_separator
     quick_host = app.workspace_header_quick_host
     zoom_group = app.workspace_header_zoom_group
     zoom_separator = app.workspace_header_zoom_separator
 
     # Count real requested widget widths and their pack padding (not guesses).
-    divider_width = int(mode_separator.winfo_reqwidth()) + 10
     actions_width = sum(int(button.winfo_reqwidth()) + 1 for button in shortcuts)
     zoom_width = int(zoom_group.winfo_reqwidth()) + int(zoom_separator.winfo_reqwidth()) + 10
-    available = int(width) - required_header_width(app) - divider_width
+    available = int(width) - required_header_width(app)
     density = (
         "full" if available >= actions_width + zoom_width
         else "actions" if available >= actions_width
@@ -940,7 +934,6 @@ def _refresh_header_toolbar(app: Any, width: int) -> None:
         return
     app._workspace_header_quick_density = density
     app._workspace_header_quick_visible = density != "none"
-    mode_separator.pack_forget()
     quick_host.pack_forget()
     zoom_group.pack_forget()
     zoom_separator.pack_forget()
@@ -950,7 +943,6 @@ def _refresh_header_toolbar(app: Any, width: int) -> None:
             side="left", fill="y", padx=5, pady=3, before=shortcuts[0],
         )
     if density != "none":
-        mode_separator.pack(side="right", fill="y", padx=5, pady=3)
         quick_host.pack(side="right")
 
 
@@ -1009,6 +1001,48 @@ def install_header_quick_controls(app: Any) -> None:
     ))
 
 
+def _compact_header_button(
+    app: Any, parent: tk.Misc, label: str, command: Any,
+) -> tk.Button:
+    """Theme-independent tight header control (no Vista button margins)."""
+    colors = app._main_ui_colors
+    button = tk.Button(
+        parent, text=label, width=0, command=command,
+        font="TkDefaultFont", anchor="center", justify="center",
+        bg=colors["button"], fg=colors["text"],
+        activebackground=colors["button_hover"],
+        activeforeground=colors["text"],
+        bd=0, relief="flat", highlightthickness=0, padx=3, pady=1,
+        cursor="hand2",
+    )
+    # These semantic colours are refreshed with the theme, rather than
+    # being transformed a second time by the generic classic-Tk pass.
+    button._pc_skip_classic_appearance = True
+    return button
+
+
+def refresh_compact_header_buttons(app: Any) -> None:
+    """Update both theme colours and selected mode after a theme switch."""
+    colors = getattr(app, "_main_ui_colors", None)
+    if not colors:
+        return
+    controls = list(getattr(app, "workspace_header_project_buttons", ()))
+    toggle = getattr(app, "workspace_theme_toggle_button", None)
+    if toggle is not None:
+        controls.append(toggle)
+    for button in controls:
+        try:
+            if button.winfo_exists():
+                button.configure(
+                    bg=colors["button"], fg=colors["text"],
+                    activebackground=colors["button_hover"],
+                    activeforeground=colors["text"],
+                )
+        except (AttributeError, tk.TclError):
+            continue
+    _refresh_window_mode_buttons(app)
+
+
 def toggle_workspace_appearance(app: Any) -> str:
     """Toggle the resolved light/dark theme through the canonical app setter.
 
@@ -1021,10 +1055,20 @@ def toggle_workspace_appearance(app: Any) -> str:
 
 
 def _refresh_window_mode_buttons(app: Any) -> None:
-    """Reflect selected layout preset while leaving native OS buttons alone."""
+    """Apply compact, centred selected-state colours without themed margins."""
     active = getattr(app, "workspace_mode", "正常")
+    colors = getattr(app, "_main_ui_colors", {})
     for mode, button in getattr(app, "workspace_title_mode_buttons", {}).items():
-        button.state(["selected"] if mode == active else ["!selected"])
+        try:
+            button.configure(
+                bg=colors.get("tree_selected") if mode == active
+                else colors.get("button"),
+                fg=colors.get("text"),
+                activebackground=colors.get("button_hover"),
+                activeforeground=colors.get("text"),
+            )
+        except (AttributeError, tk.TclError):
+            continue
 
 
 def _compact_font(app: Any) -> tkfont.Font:
