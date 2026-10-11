@@ -234,7 +234,8 @@ def test_compact_mode_does_not_reuse_full_sidebar_sash_width():
     _, tools = sources()
     assert 'rail, 0, "☰", "窗口模式", lambda: toggle_sidebar_modes(app)' in tools
     assert 'if tip:' in tools
-    assert 'compact_width = preferred_sidebar_width(app, extreme=(mode == "极简"))' in tools
+    assert 'compact_width = preferred_sidebar_width(' in tools
+    assert 'compact=(mode == "紧凑")' in tools
     assert 'app.main_paned.sashpos(0, compact_width)' in tools
     assert 'required = int(compact_width + app.image.width * app.view_scale + 32)' in tools
     assert 'app.after_idle(lambda: app.main_paned.sashpos(0, compact_width))' in tools
@@ -564,7 +565,7 @@ def test_extreme_simple_normal_modes_have_independent_page_list_visibility(monke
     workspace_tools._apply_preset_page_index(app, "极简")
     assert canvas.manager == "" and mini.manager == "" and full_panel.manager == ""
     workspace_tools._apply_preset_page_index(app, "紧凑")
-    assert mini.manager == "pack" and canvas.manager == ""
+    assert mini.manager == "grid" and canvas.manager == ""
     assert len(refreshes) == 1
     workspace_tools._apply_preset_page_index(app, "正常")
     assert mini.manager == "" and canvas.manager == "pack" and full_panel.manager == "grid"
