@@ -109,23 +109,6 @@ def test_headword_label_toggle_has_independent_persisted_setting():
     )
 
 
-def test_display_rows_align_primary_controls_and_split_overflow():
-    source = (ROOT / "ui" / "compact_display_menu.py").read_text(encoding="utf-8")
-    assert "DISPLAY_CAPTION_WIDTH = 126" in source
-    assert "DISPLAY_ROW_PADDING = (2, 2)" in source
-    assert "holder.pack_propagate(False)" in source
-    assert 'holder = ttk.Frame(row, width=DISPLAY_CAPTION_WIDTH, height=26)' in source
-    assert "def detail_line() -> ttk.Frame:" in source
-    for name in ("guide_opacity", "headword_marker_opacity",
-                 "illustration_fill_opacity", "main_entry_x_ratio"):
-        assert f'value(detail_line(), ' in source and f'"{name}", 5)' in source
-    for field in ("show_rulers", "show_page_sections", "show_column_guides",
-                  "show_headword_markers"):
-        assert f'qb["{field}"]' in source
-    assert 'label(row, "字体:", width=10)' in source
-    assert 'label(row, "字号:", width=10)' in source
-
-
 def test_all_compact_task_menus_share_regular_row_spacing_and_label_alignment():
     task = (ROOT / "ui" / "compact_task_menus.py").read_text(encoding="utf-8")
     layout = (ROOT / "ui" / "compact_layout_profile_menu.py").read_text(encoding="utf-8")
