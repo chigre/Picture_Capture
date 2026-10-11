@@ -302,7 +302,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     )
     app.workspace_page_index_button = rail_action(
         rail, len(TASK_GROUPS) + 2, "▦", "页面", lambda: toggle_page_index(app),
-        "切换完整页面列表和简洁页面列表",
+        "切换页面列表；极简模式下使用下方“上／下”按钮翻页",
     )
     # Ultra-compact page controls live directly under the Page icon and do
     # not depend on the full/mini page index being visible.
