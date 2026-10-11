@@ -21,6 +21,9 @@ from .simple_page_controls import (
 
 # Every floating task menu occupies a compact single-column panel.
 TOOL_MENU_WIDTH = 280
+DEFAULT_RAIL_WIDTH = 140
+DEFAULT_PAGE_LIST_WIDTH = 300
+RAIL_DIVIDER_WIDTH = 6
 
 TASK_GROUPS = (
     ("预处理", "◫", "图片预处理(前置)"),
@@ -166,43 +169,49 @@ def _draw_rail_icon(canvas: tk.Canvas, kind: str) -> None:
 
 def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Frame) -> None:
     """Place the icon rail beside the initially visible page index."""
-    app.workspace_rail_width = 140
-    rail = ttk.Frame(sidebar_host, style="PC.Sidebar.TFrame", width=140)
+    app.workspace_rail_width = DEFAULT_RAIL_WIDTH
+    app.workspace_page_list_width = DEFAULT_PAGE_LIST_WIDTH
+    rail = ttk.Frame(sidebar_host, style="PC.Sidebar.TFrame", width=DEFAULT_RAIL_WIDTH)
     rail.pack(side="left", fill="y", before=app.sidebar_canvas, padx=0)
     rail.pack_propagate(False)
     # The divider also acts as a draggable grip, so 140px is a default rather
     # than an unchangeable restriction on the icon/command column.
-    divider = ttk.Frame(sidebar_host, width=6, cursor="sb_h_double_arrow",
+    divider = ttk.Frame(sidebar_host, width=RAIL_DIVIDER_WIDTH, cursor="sb_h_double_arrow",
                         style="PC.Sidebar.TFrame")
     divider.pack(side="left", fill="y", before=app.sidebar_canvas)
     stroke = ttk.Separator(divider, orient="vertical")
     stroke.place(relx=0.5, rely=0, relheight=1.0)
     app.workspace_rail_separator = divider
-    drag = {"origin": 0, "width": 140}
+    # Record the original pointer and sash once. Using a cumulative sash delta
+    # while ttk.Panedwindow relayouts during <B1-Motion> causes the observed
+    # sudden jump when the grip is dragged to the left in 简单 mode.
+    drag = {"origin": 0, "width": DEFAULT_RAIL_WIDTH, "sash": 0}
 
     def start_drag(event: tk.Event) -> None:
         drag["origin"] = int(event.x_root)
         drag["width"] = int(app.workspace_rail_width)
+        try:
+            drag["sash"] = int(app.main_paned.sashpos(0))
+        except tk.TclError:
+            drag["sash"] = 0
 
     def update_drag(event: tk.Event) -> None:
-        proposed = drag["width"] + int(event.x_root) - drag["origin"]
-        old_width = app.workspace_rail_width
-        app.workspace_rail_width = max(80, min(340, proposed))
+        delta = int(event.x_root) - drag["origin"]
+        proposed = max(80, min(340, drag["width"] + delta))
+        app.workspace_rail_width = proposed
         if getattr(app, "workspace_mode", "") != "极简":
-            rail.configure(width=app.workspace_rail_width)
-            for row in getattr(app, "workspace_rail_rows", ()):
-                row.configure(width=app.workspace_rail_width)
-            # Let the icon column grow by moving the existing pane boundary,
-            # rather than stealing the full page list's remaining width.
-            if app.sidebar_canvas.winfo_manager() == "pack":
-                try:
-                    sash = app.main_paned.sashpos(0)
-                    limit = app.main_paned.winfo_width() - 160
-                    app.main_paned.sashpos(
-                        0, min(limit, sash + app.workspace_rail_width - old_width),
-                    )
-                except (AttributeError, tk.TclError):
-                    pass
+            rail.configure(width=proposed)
+            for entry in getattr(app, "workspace_rail_rows", ()):
+                entry.configure(width=proposed)
+            # One absolute sash position per pointer movement, identical in
+            # 简单 and 正常. Never resize the main OS window during a drag.
+            try:
+                limit = max(1, app.main_paned.winfo_width() - 160)
+                app.main_paned.sashpos(
+                    0, max(1, min(limit, drag["sash"] + proposed - drag["width"])),
+                )
+            except (AttributeError, tk.TclError):
+                pass
         position_workspace_popup(app)
 
     divider.bind("<ButtonPress-1>", start_drag)
@@ -396,9 +405,17 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         ).grid(row=nav_row, column=0, sticky="ew", pady=(0, 2))
     app.workspace_extreme_page_navigation = extreme_nav
 
-    mini_host = ttk.Frame(rail, style="PC.Sidebar.TFrame")
-    mini_host.grid(row=len(TASK_GROUPS) + 4, column=0, sticky="nsew")
-    mini_host.grid_remove()
+    # 简单 mode has a genuine second column, sibling to the icon rail. The
+    # old mini list was *inside* the 140px rail, which forced the splitter to
+    # jump and squeezed page controls under the launcher buttons.
+    simple_slot = ttk.Frame(
+        sidebar_host, style="PC.Sidebar.TFrame",
+        width=DEFAULT_PAGE_LIST_WIDTH,
+    )
+    simple_slot.pack_propagate(False)
+    app.workspace_mini_page_slot = simple_slot
+    mini_host = ttk.Frame(simple_slot, style="PC.Sidebar.TFrame")
+    mini_host.pack(fill="both", expand=True)
     mini_host.rowconfigure(1, weight=1)
     mini_host.columnconfigure(0, weight=1)
     # The page panel is not a reduced two-column substitute. It carries all
@@ -474,7 +491,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     # The full page table is created after install_workspace_tools returns.
     app.after_idle(lambda: app.page_list.bind(
         "<<TreeviewSelect>>", sync_mini_selection, add="+"))
-    rail.rowconfigure(len(TASK_GROUPS) + 4, weight=1)
+    rail.rowconfigure(len(TASK_GROUPS) + 4, weight=0)
 
     footer_row = len(TASK_GROUPS) + 5
     footer = ttk.Frame(rail, style="PC.Footer.TFrame")
@@ -482,9 +499,12 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     footer.columnconfigure(0, weight=1)
     app.project_action_bar = footer
     app.project_footer_buttons = []
-    quick_actions = (("普通画线", app.run_normal_draw_action),
-                     ("OCR画线", app.run_ocr_draw_action),
-                     ("词条校对", app.open_review))
+    quick_actions = (
+        ("普通画线", app.run_normal_draw_action),
+        ("OCR画线", app.run_ocr_draw_action),
+        ("词条校对", app.open_review),
+        ("图片工具栏", lambda: toggle_image_toolbar(app)),
+    )
     app.workspace_quick_action_buttons = []
     quick_host = ttk.Frame(footer, style="PC.Footer.TFrame")
     quick_host.grid(row=0, column=0, sticky="ew", pady=(0, 2))
@@ -492,11 +512,13 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     for index, (label, command) in enumerate(quick_actions):
         quick_host.columnconfigure(index, weight=1, uniform="quickrail")
         button = ttk.Button(
-            quick_host, text=("普", "O", "校")[index],
+            quick_host, text=("普", "O", "校", "≣")[index],
             command=command, width=2, style="PC.QuickRail.TButton",
         )
         button.grid(row=0, column=index, sticky="ew", padx=0, pady=0)
         app.workspace_quick_action_buttons.append(button)
+        if index == 3:
+            app._attach_tooltip(button, "图片工具栏：缩放、适合宽度、单栏宽度、适合高度")
     ttk.Separator(footer, orient="horizontal").grid(
         row=1, column=0, sticky="ew", pady=(2, 4))
     project_actions = (
@@ -838,14 +860,14 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
     # Drop unused grid columns in 极简; otherwise even empty weighted
     # columns retain the width of a three-column horizontal toolbar.
     quick_host = app.workspace_quick_actions_host
-    for index in range(3):
+    for index in range(len(app.workspace_quick_action_buttons)):
         quick_host.columnconfigure(
             index, weight=1 if (not extreme or index == 0) else 0,
             minsize=0, uniform="" if extreme else "quickrail",
         )
     # Keep the abbreviations in ALL modes. Only the direction changes.
     for index, (button, title) in enumerate(zip(
-        app.workspace_quick_action_buttons, ("普", "O", "校"),
+        app.workspace_quick_action_buttons, ("普", "O", "校", "≣"),
     )):
         button.configure(text=title, width=2)
         button.grid_configure(
@@ -855,12 +877,42 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         )
 
 
+def _set_simple_page_visible(app: Any, visible: bool) -> None:
+    """Show/hide the standalone 300px simple page column without reparenting."""
+    slot = app.workspace_mini_page_slot
+    if visible and slot.winfo_manager() != "pack":
+        slot.pack(side="left", fill="both", before=app.sidebar_canvas)
+    elif not visible and slot.winfo_manager() == "pack":
+        slot.pack_forget()
+
+
+def preferred_sidebar_width(app: Any, *, extreme: bool = False) -> int:
+    """140px launcher + 6px grip + 300px page list in normal/simple mode."""
+    return (
+        36 + RAIL_DIVIDER_WIDTH if extreme else
+        int(app.workspace_rail_width) + RAIL_DIVIDER_WIDTH
+        + int(app.workspace_page_list_width)
+    )
+
+
+def toggle_image_toolbar(app: Any) -> None:
+    """Open or close the existing image zoom toolbar from the rail button."""
+    toolbar = getattr(app, "page_size_row", None)
+    if toolbar is None:
+        return
+    if toolbar.winfo_manager() == "place":
+        toolbar.place_forget()
+    else:
+        toolbar.place(relx=0, rely=1, x=8, y=-8, anchor="sw")
+        toolbar.lift()
+
+
 def _apply_preset_page_index(app: Any, mode: str) -> None:
     """Three distinct page-list states: full, compact, or entirely hidden."""
     full = mode in {"正常", "最大"}
     compact = mode == "简单"
     if full:
-        app.workspace_mini_page_host.grid_remove()
+        _set_simple_page_visible(app, False)
         if app.sidebar_canvas.winfo_manager() != "pack":
             app.sidebar_scrollbar.pack(side="right", fill="y")
             app.sidebar_canvas.pack(side="left", fill="both", expand=True)
@@ -877,9 +929,7 @@ def _apply_preset_page_index(app: Any, mode: str) -> None:
     app.page_panel.grid_remove()
     if compact:
         refresh_compact_page_index(app)
-        app.workspace_mini_page_host.grid()
-    else:
-        app.workspace_mini_page_host.grid_remove()
+    _set_simple_page_visible(app, compact)
 
 
 def set_sidebar_mode(app: Any, mode: str) -> str:
@@ -903,7 +953,7 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
         def fit_compact() -> None:
             try:
                 app.update_idletasks()
-                compact_width = app.workspace_tools_rail.winfo_reqwidth() + 10
+                compact_width = preferred_sidebar_width(app, extreme=(mode == "极简"))
                 app.main_paned.sashpos(0, compact_width)
                 app.update_idletasks()
                 height, top = app.winfo_height(), app.winfo_y()
@@ -923,7 +973,7 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
             try:
                 app.update_idletasks()
                 rail = app.workspace_tools_rail
-                required_sidebar = rail.winfo_reqwidth() + app.page_range_controls_row.winfo_reqwidth() + 24
+                required_sidebar = preferred_sidebar_width(app)
                 sash = min(required_sidebar, max(1, app.main_paned.winfo_width() - 160))
                 app.main_paned.sashpos(0, sash)
                 if app.image is not None:
