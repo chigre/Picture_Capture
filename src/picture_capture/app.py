@@ -9122,6 +9122,15 @@ class PictureCaptureApp(tk.Tk):
         add_field(normal, 0, 4, "首栏X：", "manual_x", float)
         add_field(normal, 1, 0, "单栏宽：", "column_width", float)
         add_field(normal, 1, 2, "栏间空：", "gutter", float)
+        # Shared, live percent/pixel fields for the compact Layout panel.
+        # Legacy widgets stay hidden but remain the canonical Tk state owners.
+        for field_row, caption, name in (
+            (3, "典型单行字高：", "character_height"),
+            (4, "典型行间空白：", "row_padding"),
+            (5, "正文缩进：", "body_indent"),
+            (6, "微调判据：", "horizontal_tolerance"),
+        ):
+            add_field(normal, field_row, 0, caption, name, float)
 
         row = ttk.Frame(normal); row.grid(row=2, column=0, columnspan=8, sticky="ew", pady=(4, 0))
         detect_layout_button = ttk.Button(
@@ -9496,7 +9505,7 @@ class PictureCaptureApp(tk.Tk):
         )
         postproduction.pack(fill="x", pady=(4, 0))
         production_tooltips = {
-            "单行切图": (
+            "画线行导出": (
                 "将【选定范围】内各页按校对界面相同的单行裁切逻辑批量输出到 QT/PSW；"
                 "可在【设置中心 → 切图】选择是否按页合并，并复用切图并行进程数。"
             ),
@@ -9513,7 +9522,7 @@ class PictureCaptureApp(tk.Tk):
             "导出训练标记包": "导出已人工确认的 PDIC/PPP、OCR候选和坐标上下文，供模型或规则验证。",
         }
         production_rows = [
-            (("单行切图", self.split_single_lines_selected_scope), ("未画线行导出", self.export_unlined_rows_selected_scope), ("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope)),
+            (("画线行导出", self.split_single_lines_selected_scope), ("未画线行导出", self.export_unlined_rows_selected_scope), ("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope)),
             (("项目详情", self.open_project_details), ("导出PicDic索引", self.export_picdic_index), ("PicDic制作", self.build_picdic)),
             (("导出训练标记包", self.export_training_package),),
         ]
@@ -9524,7 +9533,7 @@ class PictureCaptureApp(tk.Tk):
                 row.columnconfigure(bi, weight=1, uniform=f"postproduction-row-{ri}")
             for bi, (text, command) in enumerate(specs):
                 button = self._sidebar_action_button(row, text, command)
-                if text == "单行切图":
+                if text == "画线行导出":
                     self._pc_single_line_crop_button = button
                 elif text == "未画线行导出":
                     self._pc_unlined_export_button = button
@@ -9711,11 +9720,22 @@ class PictureCaptureApp(tk.Tk):
         if locked:
             if self._preprocess_locked_widgets:
                 return
+            compact_titles = {
+                "normal": "一、版面参数",
+                "aux": "二、显示设置",
+                "ocr": "三、共享 OCR 通道 / OCR画线",
+                "actions": "四、画线 / OCR / 插图 / 校对",
+                "postproduction": "五、后期词典制作",
+            }
+            compact_sections = getattr(self, "workspace_tools_sections", {})
             for key in section_keys:
                 section = self._collapsible_sections.get(key)
-                if section is None:
-                    continue
-                stack = list(section.winfo_children())
+                extra = compact_sections.get(compact_titles.get(key, ""))
+                widgets = (section, extra) if extra is not section else (section,)
+                stack = [
+                    widget for holder in widgets if holder is not None
+                    for widget in holder.winfo_children()
+                ]
                 while stack:
                     widget = stack.pop()
                     try:
