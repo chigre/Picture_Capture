@@ -6,7 +6,7 @@ variables. A temporary popover can be pinned for image-and-parameter work.
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import font as tkfont, ttk
 from typing import Any
 
 from .compact_display_menu import build_compact_display_menu
@@ -371,7 +371,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     mode_menu = ttk.Frame(app, padding=3, relief="solid", borderwidth=1,
                           style="PC.Sidebar.TFrame")
     app.workspace_sidebar_mode_menu = mode_menu
-    for choice in ("极简", "简单", "正常", "最大"):
+    for choice in ("极简", "紧凑", "正常", "最大"):
         ttk.Button(mode_menu, text=choice, width=7, style="PC.Rail.TButton",
                    command=lambda mode=choice: set_sidebar_mode(app, mode)).pack(fill="x")
     # Do not dismiss this menu on <Leave>. Hover transitions between the
@@ -405,7 +405,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         ).grid(row=nav_row, column=0, sticky="ew", pady=(0, 2))
     app.workspace_extreme_page_navigation = extreme_nav
 
-    # 简单 mode has a genuine second column, sibling to the icon rail. The
+    # 紧凑 mode has a genuine second column, sibling to the icon rail. The
     # old mini list was *inside* the 140px rail, which forced the splitter to
     # jump and squeezed page controls under the launcher buttons.
     simple_slot = ttk.Frame(
@@ -507,6 +507,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         ("图片工具栏", lambda: toggle_image_toolbar(app)),
     )
     app.workspace_quick_action_buttons = []
+    app.workspace_quick_zoom_controls = []
     quick_host = ttk.Frame(footer, style="PC.Footer.TFrame")
     quick_host.grid(row=0, column=0, sticky="ew", pady=(0, 2))
     app.workspace_quick_actions_host = quick_host
@@ -520,6 +521,9 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         app.workspace_quick_action_buttons.append(button)
         if index == 3:
             app._attach_tooltip(button, "图片工具栏：缩放、适合宽度、单栏宽度、适合高度")
+    # view_zoom_var is initialized later in the main window constructor.
+    # Install these controls after idle; they share the existing zoom variable.
+    app.after_idle(lambda: install_compact_zoom_controls(app))
     ttk.Separator(footer, orient="horizontal").grid(
         row=1, column=0, sticky="ew", pady=(2, 4))
     project_actions = (
@@ -709,7 +713,7 @@ def toggle_page_index(app: Any) -> str:
         return "break"
     if getattr(app, "workspace_mode", None) == "极简":
         return "break"
-    if getattr(app, "workspace_mode", None) == "简单":
+    if getattr(app, "workspace_mode", None) == "紧凑":
         slot = app.workspace_mini_page_slot
         visible = slot.winfo_manager() != "pack"
         if visible:
@@ -831,15 +835,15 @@ def _set_simple_page_visible(app: Any, visible: bool) -> None:
     """Show/hide the standalone 300px simple page column without reparenting."""
     slot = app.workspace_mini_page_slot
     if visible and slot.winfo_manager() != "pack":
-        # The full canvas is already unpacked when entering 简单 mode, so
-        # pack -before=canvas would fail with a TclError on Windows.
-        slot.pack(side="left", fill="both", expand=True)
+        # The page list belongs on the far LEFT of the icon column.
+        # The rail is always packed, so it is a safe -before anchor.
+        slot.pack(side="left", fill="both", before=app.workspace_tools_rail)
     elif not visible and slot.winfo_manager() == "pack":
         slot.pack_forget()
 
 
 def preferred_sidebar_width(app: Any, *, extreme: bool = False) -> int:
-    """140px launcher + 6px grip + 300px page list in normal/simple mode."""
+    """140px launcher + 6px grip + 300px page list in normal/compact mode."""
     return (
         36 + RAIL_DIVIDER_WIDTH if extreme else
         int(app.workspace_rail_width) + RAIL_DIVIDER_WIDTH
@@ -862,7 +866,7 @@ def toggle_image_toolbar(app: Any) -> None:
 def _apply_preset_page_index(app: Any, mode: str) -> None:
     """Three distinct page-list states: full, compact, or entirely hidden."""
     full = mode in {"正常", "最大"}
-    compact = mode == "简单"
+    compact = mode == "紧凑"
     if full:
         _set_simple_page_visible(app, False)
         if app.sidebar_canvas.winfo_manager() != "pack":
@@ -887,12 +891,12 @@ def _apply_preset_page_index(app: Any, mode: str) -> None:
 def set_sidebar_mode(app: Any, mode: str) -> str:
     """Apply independent window presets without mixing page-index states.
 
-    极简 inherits 简单's height-fitted window but retains only rail icons,
+    极简 inherits 紧凑's height-fitted window but retains only rail icons,
     compact run-action labels and its own previous/next navigation buttons.
     """
-    if mode == "最简":  # Session compatibility, not a selectable UI label.
-        mode = "简单"
-    if mode not in {"极简", "简单", "正常", "最大"}:
+    if mode in {"最简", "简单"}:  # Both legacy saved names map to 紧凑.
+        mode = "紧凑"
+    if mode not in {"极简", "紧凑", "正常", "最大"}:
         return "break"
     app.workspace_mode = mode
     app.workspace_sidebar_mode_menu.place_forget()
@@ -901,7 +905,7 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
     _apply_preset_page_index(app, mode)
     _apply_preset_rail_controls(app, mode)
 
-    if mode in {"极简", "简单"}:
+    if mode in {"极简", "紧凑"}:
         def fit_compact() -> None:
             try:
                 app.update_idletasks()
