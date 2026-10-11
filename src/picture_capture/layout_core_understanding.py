@@ -362,6 +362,11 @@ def understand_layout_core(
         result,
         page_settings,
     )
+    # Keep a separate immutable record of why each final Layout role became an
+    # entry. Future confidence gates must be validated against real scans
+    # before changing this canonical ordinary-mode output.
+    from .boundary_evidence import proposed_layout_boundaries, serialize_proposals
+    result.boundary_proposals = serialize_proposals(proposed_layout_boundaries(result))
     layout.reason += (
         f"; page_understanding={role_model}:layout_core"
         f" physical_reliable={int(physical)}"
