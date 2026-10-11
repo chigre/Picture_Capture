@@ -28,7 +28,7 @@ from .ordinary_cjk_large_heads import recover_cjk_oversized_heads
 from .ordinary_indent_topology import finalize_indented_topology
 from .ordinary_postprocess import stabilize_ordinary_visual_entries
 from .ordinary_visual import recover_ordinary_visual_entries
-from .page_understanding import PageUnderstanding, uses_cjk_role_model
+from .page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk_script
 from .page_understanding_fusion import apply_page_understanding
 from .profile_indent_ui import indent_type_label
 from .separator_y_refinement import refined_layout_entry_y_by_line
@@ -515,7 +515,7 @@ def detect_entries(
                     float(understanding.layout.ordinary_line_height),
                 )
             if (
-                uses_cjk_role_model(effective)
+                uses_cjk_script(effective)
                 and bool(getattr(effective, "profile_cjk_allow_bracketed_headword", True))
             ):
                 from .ordinary_bracket_pair import recover_bracketed_ordinary_entries
