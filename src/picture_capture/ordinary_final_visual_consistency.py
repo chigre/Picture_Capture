@@ -146,14 +146,6 @@ def correct_anomalous_final_ordinary_entries(
             left = int(columns[index].left)
             contradictions = []
             for item in ordinary:
-                # A marker tied to an actual physical row in a repeated
-                # entry-indent lane is a proven Layout word start. The
-                # post-separator pixel window may already show its definition,
-                # so it is NOT independent negative evidence.
-                if "ORDINARY_LAYOUT_ROLE_STABLE_INDENT" in str(
-                    getattr(item, "issue_type", "") or ""
-                ):
-                    continue
                 first = _first_ink_after_separator(gray, int(item.y), left, ref)
                 if first is not None and first > threshold:
                     contradictions.append(item)
