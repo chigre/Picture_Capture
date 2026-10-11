@@ -22,7 +22,7 @@ def test_window_mode_menu_is_click_to_open_not_hover_to_dismiss():
 def test_light_and_dark_use_same_compact_button_geometry():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     app = (ROOT / "app.py").read_text(encoding="utf-8")
-    assert 'style="PC.Sidebar.TFrame", width=140, height=33' in source
+    assert 'style="PC.Sidebar.TFrame", width=DEFAULT_RAIL_WIDTH, height=33' in source
     assert 'entry.grid_propagate(False)' in source
     assert 'entry.configure(width=36 if extreme else app.workspace_rail_width)' in source
     assert 'padding=(0, 0), relief="flat"' in app
@@ -36,7 +36,7 @@ def test_simple_mode_clones_complete_range_and_navigation_controls():
     assert 'install_simple_page_controls(app, mini_host)' in tools
     assert 'install_simple_page_tree_actions(app, mini)' in tools
     assert 'displaycolumns=("bookmark", "page", "lined", "illustrations")' in tools
-    for label in ('"当前"', '"至末页"', '"至指定页"',
+    for label in ('"当前"', '"至末页"', '"至指定"',
                   '"跳"', '"⨇"', '"⨈"', '"上"', '"下"'):
         assert label in controls
     assert 'text="", variable=app.page_range_var' in controls
@@ -58,7 +58,7 @@ def test_simple_mode_clones_complete_range_and_navigation_controls():
 def test_quick_actions_are_always_short_and_horizontal_except_extreme():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     assert 'app.workspace_quick_actions_host = quick_host' in source
-    assert '("普", "O", "校", "≣")[index]' in source
+    assert '("普", "O", "校")[index]' in source
     assert 'style="PC.QuickRail.TButton"' in source
     assert 'button.configure(text=title, width=2)' in source
     assert 'row=(6 + index if extreme else 2 if compact else 0)' in source
