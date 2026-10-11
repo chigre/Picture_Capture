@@ -4745,9 +4745,14 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
     text = (root / "app.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     compact=(root / "ui/simple_page_controls.py").read_text(encoding="utf-8")
-    assert '("当前", "current")' in compact
-    assert '("至末页", "to_end")' in compact
-    assert '("至指定", "to_specified")' in compact
+    # Each compact radio is installed with an explicit grid column.
+    for column, caption, value in (
+        (0, "当前", "current"),
+        (1, "至末页", "to_end"),
+        (2, "至指定", "to_specified"),
+    ):
+        assert f'({column}, "{caption}", "{value}")' in compact
+    assert 'variable=app.page_range_var, value=value' in compact
     assert 'text="跳"' not in text or 'text="跳"' in text
     for symbol in ('"⨇"', '"⨈"','"上"','"下"'):
         assert symbol in compact
@@ -5606,8 +5611,12 @@ def test_v21115_review_window_exposes_persisted_font_controls():
     body=text.split("class ReviewWindow",1)[1].split("class PictureCaptureApp",1)[0]
     for name in ("review_font_family_var","review_font_size_var","review_entry_font_family = family","review_entry_font_size = size","self.parent.save_settings()"):
         assert name in body
-    assert 'text="粗体"' in body or '"粗体"' in body
-    assert 'text="斜体"' in body or '"斜体"' in body
+    # The compact review toolbar uses the abbreviated labels 粗 / 斜,
+    # while keeping the same persistent settings bindings.
+    assert 'text="粗", variable=self.review_font_bold_var' in body
+    assert 'text="斜", variable=self.review_font_italic_var' in body
+    assert 'settings.review_entry_font_bold = bold' in body
+    assert 'settings.review_entry_font_italic = italic' in body
 
 def test_v21115_review_font_apply_does_not_change_review_zoom():
     from pathlib import Path

@@ -2272,9 +2272,14 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     quick = text[quick_start:quick_end]
     for label in ("正文起始Y：", "首栏X：", "单栏宽：", "栏间空："):
         assert label in quick
-    # The broad legacy panel retains these fields; the compact pane is separate.
-    for label in ("普通字/行高：", "行间空：", "正文缩进："):
-        assert label in quick
+    # More precise layout labels replaced the old ambiguous height/gap text.
+    # They still map to the same pixel-backed settings variables.
+    for label, variable in (
+        ("典型单行字高：", "character_height"),
+        ("典型行间空白：", "row_padding"),
+        ("正文缩进：", "body_indent"),
+    ):
+        assert f'"{label}", "{variable}"' in quick
     assert quick.index('"单栏宽："') > quick.index('"首栏X："')
     assert quick.index('"栏间空："') > quick.index('"单栏宽："')
     assert "self.quick_pixel_vars: dict[str, tk.StringVar] = {}" in quick
@@ -3972,7 +3977,16 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     assert "self.parent._start_ui_worker(" in request
     assert "Image.Resampling.LANCZOS" not in render
     assert "_review_line_box(" not in render
-    assert "self._photo_for_crop(" in render or "ImageTk.PhotoImage(" in render or "_new_review_photo(" in render
+    # The UI-only renderer delegates PhotoImage materialization to a method,
+    # keeping all PIL decoding and resizing in the background request worker.
+    assert "self._ordinary_review_photo(index)" in render
+    photo_start = review.index("    def _ordinary_review_photo(")
+    photo_end = review.index("\n    def set_active(", photo_start)
+    photo = review[photo_start:photo_end]
+    assert "ImageTk.PhotoImage(" in photo
+    assert "self._review_display_crops[index]" in photo
+    assert "themed_display_image(crop, self.parent.appearance_mode)" in photo
+    assert "Image.Resampling.LANCZOS" not in photo
     assert "self.render_rows()" not in review
 
     preview_start = profile_text.index("    def _refresh_template_preview(")
