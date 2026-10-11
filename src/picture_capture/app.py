@@ -5511,12 +5511,13 @@ class ReviewWindow(tk.Toplevel):
         review_zoom = max(0.01, float(self.review_zoom))
         auto_image_area_width = self._review_image_area_width()
         viewer_width = max(1, int(self.parent.canvas.winfo_width()))
-        ordered_snapshot = [
-            replace(entry) for entry in self.parent._ordered_entries_reading_order()
-        ]
+        source_entries = self.parent._ordered_entries_reading_order()
+        ordered_snapshot = [replace(entry) for entry in source_entries]
+        # Bind crop snapshots to Entry identity, not just coordinates/text;
+        # otherwise two equal-valued entries may swap rows during the worker.
         signature = tuple(
-            (int(entry.x), int(entry.y), str(entry.word))
-            for entry in ordered_snapshot
+            (id(source), int(entry.x), int(entry.y), str(entry.word))
+            for source, entry in zip(source_entries, ordered_snapshot)
         )
         page_stem = page.stem
 
@@ -5572,7 +5573,7 @@ class ReviewWindow(tk.Toplevel):
             if not self.parent.current_page or self.parent.current_page.stem != result_stem:
                 return
             current_signature = tuple(
-                (int(entry.x), int(entry.y), str(entry.word))
+                (id(entry), int(entry.x), int(entry.y), str(entry.word))
                 for entry in self.parent._ordered_entries_reading_order()
             )
             if current_signature != result_signature:
@@ -5958,12 +5959,12 @@ class ReviewWindow(tk.Toplevel):
         """
         if not self.editor_frames or not self.vars:
             return
-        ordered = self.parent._ordered_entries_reading_order()
-        indices = [index] if index is not None else list(range(min(len(self.vars), len(ordered))))
+        row_entries = self._bound_row_entries()
+        indices = [index] if index is not None else list(range(min(len(self.vars), len(row_entries))))
         for i in indices:
-            if i is None or not (0 <= i < len(self.editor_frames)) or i >= len(ordered):
+            if i is None or not (0 <= i < len(self.editor_frames)) or i >= len(row_entries):
                 continue
-            candidate = self._candidate_for_entry(ordered[i])
+            candidate = self._candidate_for_entry(row_entries[i])
             ocr_word = self._ocr_compare_word(candidate)
             editor_word = self.vars[i].get()
             mismatch = bool(ocr_word) and _review_similarity_key(editor_word) != _review_similarity_key(ocr_word)
@@ -6047,11 +6048,11 @@ class ReviewWindow(tk.Toplevel):
             return
         crop = self._review_display_crops[index]
         # Extend the source region vertically instead of stretching the words.
-        ordered = self.parent._ordered_entries_reading_order()
-        if index >= len(ordered) or self.parent.image is None:
+        row_entries = self._bound_row_entries()
+        if index >= len(row_entries) or self.parent.image is None:
             return
         try:
-            entry = ordered[index]
+            entry = row_entries[index]
             geometry = self.parent._get_cached_display_geometry()
             crop_settings = _review_crop_settings(
                 self.parent.image, self.parent.settings,
@@ -6090,11 +6091,11 @@ class ReviewWindow(tk.Toplevel):
         self.active_index = index
         self._update_active_crop_preview(index)
         self._update_title()
-        ordered = self.parent._ordered_entries_reading_order()
-        candidate = self._candidate_for_entry(ordered[index]) if 0 <= index < len(ordered) else None
+        row_entries = self._bound_row_entries()
+        candidate = self._candidate_for_entry(row_entries[index]) if 0 <= index < len(row_entries) else None
         self._show_ocr_options(candidate)
-        if 0 <= index < len(ordered):
-            self.parent.highlight_review_entry(ordered[index])
+        if 0 <= index < len(row_entries):
+            self.parent.highlight_review_entry(row_entries[index])
         if 0 <= index < len(self.vars):
             self.locate_reference_word(self.vars[index].get(), index)
             self._refresh_cc_simplified_comparison(index)
