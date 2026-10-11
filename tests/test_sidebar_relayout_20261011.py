@@ -61,7 +61,7 @@ def test_quick_actions_are_always_short_and_horizontal_except_extreme():
     assert '("普", "O", "校", "≣")[index]' in source
     assert 'style="PC.QuickRail.TButton"' in source
     assert 'button.configure(text=title, width=2)' in source
-    assert 'row=index if extreme else 0' in source
-    assert 'column=0 if extreme else index' in source
+    assert 'row=(6 + index if extreme else 2 if compact else 0)' in source
+    assert 'column=(0 if extreme else index)' in source
     assert 'sticky="ew", padx=0, pady=0' in source
     assert 'button.configure(text=compact if extreme else ordinary' not in source
