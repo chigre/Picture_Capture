@@ -167,7 +167,19 @@ def test_multi_page_profile_height_does_not_average_real_ink_and_page_ratio_gues
 def test_profile_setup_does_not_auto_apply_unverified_height() -> None:
     from pathlib import Path
     import picture_capture.profile_setup as wizard
-    content = Path(wizard.__file__).read_text(encoding="utf-8")
-    assert "observed_height, observed_pages = robust_profile_ink_height(estimates)" in content
-    assert 'aggregate.pop("character_height", None)' in content
-    assert "aggregate[\"character_height\"] = observed_height" in content
+    from picture_capture.profile_layout_bootstrap import apply_profile_ink_height_suggestion
+
+    source = Path(wizard.__file__).read_text(encoding="utf-8")
+    assert "height_note = apply_profile_ink_height_suggestion(aggregate, estimates)" in source
+
+    aggregate = {"character_height": 17}
+    notice = apply_profile_ink_height_suggestion(aggregate, [])
+    assert "character_height" not in aggregate
+    assert "未自动修改字高" in notice
+
+    verified = [
+        SimpleNamespace(character_height=29, method="profile_bootstrap+observed_character_height=29(n=70)")
+    ]
+    notice = apply_profile_ink_height_suggestion(aggregate, verified)
+    assert aggregate["character_height"] == 29
+    assert "真实墨迹" in notice
