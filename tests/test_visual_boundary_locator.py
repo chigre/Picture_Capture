@@ -71,3 +71,17 @@ def test_bracket_boundary_is_stable_when_existing_entry_is_source_space():
         15, 300, 40, transform=transform, source_size=source_size,
     )
     assert len(entries) == 1
+
+
+def test_cjk_bracket_scan_keeps_script_identity_in_vertical_writing():
+    from picture_capture.models import AppSettings
+    from picture_capture.page_understanding import (
+        uses_cjk_role_model, uses_cjk_script,
+    )
+
+    settings = AppSettings(
+        dictionary_profile_id="cjk_bracketed",
+        layout_writing_mode="vertical-rl",
+    )
+    assert uses_cjk_script(settings) is True
+    assert uses_cjk_role_model(settings) is False
