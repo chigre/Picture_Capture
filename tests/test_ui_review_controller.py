@@ -64,6 +64,7 @@ class _App:
         self._review_entry_highlight_target = None
         self._review_entry_highlight_photo = object()
         self.draw_highlight_calls = 0
+        self.scroll_highlight_targets = []
         self.geometry = _Geometry()
         self.cache_path: Path | None = None
 
@@ -76,6 +77,9 @@ class _App:
 
     def _draw_review_entry_highlight(self) -> None:
         self.draw_highlight_calls += 1
+
+    def _scroll_review_entry_into_view(self, entry) -> None:
+        self.scroll_highlight_targets.append((entry.x, entry.y))
 
     def _get_cached_display_geometry(self):
         return self.geometry
@@ -132,6 +136,7 @@ def test_review_highlight_state_and_cleanup_remain_on_main_canvas() -> None:
     controller.highlight_review_entry(entry)
     assert app._review_entry_highlight_target == (3, 123, 456)
     assert app.draw_highlight_calls == 1
+    assert app.scroll_highlight_targets == [(123, 456)]
 
     controller.clear_review_entry_highlight()
     assert app._review_entry_highlight_target is None

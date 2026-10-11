@@ -15335,7 +15335,8 @@ class PictureCaptureApp(tk.Tk):
         bookmark = "●" if page_stem in self._bookmark_stems() else ""
         new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)
         self.page_list.item(iid, values=new_values)
-        mini = getattr(self, "workspace_mini_page_list", None)
+        # Avoid Tk's __getattr__ when the shell is not initialized.
+        mini = self.__dict__.get("workspace_mini_page_list")
         if mini is not None and mini.exists(iid):
             mini.item(iid, values=new_values)
         active_column = self._page_list_sort_column

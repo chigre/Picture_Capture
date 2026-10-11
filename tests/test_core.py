@@ -4391,6 +4391,10 @@ def test_v2914_lined_metadata_update_does_not_resort_fill_status_sort():
     app.page_list = FakeTree()
     app._page_list_sort_column = "fill_status"
     app._page_metadata = lambda _index: "✓"
+    app._page_section_count_text = lambda _index: ""
+    app._page_illustration_count_text = lambda _index: ""
+    app._bookmark_stems = lambda: set()
+    app.workspace_mini_page_list = None
     app._word_fill_status_text = lambda _index: "少 2"
     resorts = []
     app._schedule_page_list_resort = lambda: resorts.append("resort")
@@ -4422,6 +4426,10 @@ def test_v2914_fill_status_change_resorts_fill_status_sort():
     app.page_list = FakeTree()
     app._page_list_sort_column = "fill_status"
     app._page_metadata = lambda _index: "✓"
+    app._page_section_count_text = lambda _index: ""
+    app._page_illustration_count_text = lambda _index: ""
+    app._bookmark_stems = lambda: set()
+    app.workspace_mini_page_list = None
     app._word_fill_status_text = lambda _index: "一致"
     resorts = []
     app._schedule_page_list_resort = lambda: resorts.append("resort")

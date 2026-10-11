@@ -272,7 +272,8 @@ def test_zoom_text_and_fit_operations_preserve_clamps_and_view_reset() -> None:
     assert app.view_zoom_var.get() == "8%"
 
     controller.fit_page_width()
-    assert app.view_scale == 1.0
+    # A 1024px viewport displays a 1000px image at 102.4%.
+    assert app.view_scale == 1.024
     assert app.canvas.xmoves == [0.0]
 
     controller.fit_page_height()
