@@ -7439,7 +7439,9 @@ class PictureCaptureApp(tk.Tk):
 
         # Keep rail controls the same font and compact geometry in both themes.
         style.configure("PC.Rail.TButton", font="TkDefaultFont",
-                        padding=(4, 3), relief="flat", borderwidth=0)
+                        padding=(0, 0), relief="flat", borderwidth=0)
+        style.configure("PC.QuickRail.TButton", font="TkDefaultFont",
+                        padding=(0, 0), relief="flat", borderwidth=0)
         style.configure("PC.CompactPage.Treeview", rowheight=22,
                         font=self.compact_page_font, background=base["surface"],
                         fieldbackground=base["surface"], foreground=colors["text"])
