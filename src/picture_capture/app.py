@@ -1910,10 +1910,7 @@ class ReviewWindow(tk.Toplevel):
             parent.update_idletasks()
             x = max(0, parent.winfo_rootx() + parent.winfo_width())
             y = max(0, parent.winfo_rooty())
-            # The OS work area measures the OUTER window, while Tk geometry
-            # requests CLIENT height. Reuse the main window's proven
-            # decoration-aware work geometry so the review title bar never
-            # pushes its bottom beneath the taskbar in compact presets.
+            # Tk client height must exclude window decorations.
             from .ui.workspace_tools import _preset_work_geometry
             work_x, work_y, work_w, safe_client_height = _preset_work_geometry(parent)
             work_right = work_x + work_w
@@ -2588,9 +2585,7 @@ class ReviewWindow(tk.Toplevel):
         self.active_crop_label.pack()
         self.active_crop_photo = None
         self._active_crop_fixed_size: tuple[int, int] | None = None
-        # Zoom at which the fixed preview dimensions were established. When
-        # review zoom changes, scale this fixed canvas instead of leaving it
-        # stranded at the previous pixel size.
+        # Keep fixed-preview zoom in sync with inline crops.
         self._active_crop_fixed_zoom: float | None = None
         self._review_display_crops: list[Image.Image] = []
         self._review_row_pictures: list[ttk.Label] = []
