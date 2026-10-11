@@ -50,7 +50,7 @@ def test_icon_rail_and_page_list_use_120_plus_260_width():
     app.workspace_rail_width = 140
     assert workspace_tools.preferred_sidebar_width(app) == 406
     assert workspace_tools.preferred_sidebar_width(app, extreme=True) == 42
-    assert workspace_tools.preferred_sidebar_width(app, compact=True) == 126
+    assert workspace_tools.preferred_sidebar_width(app, compact=True) == 146
 
 
 def test_compact_page_list_is_directly_below_page_icon_in_same_rail():
@@ -91,6 +91,7 @@ def test_compact_to_normal_restores_separate_full_page_column(monkeypatch):
         sidebar_canvas=canvas, sidebar_scrollbar=scrollbar,
         page_panel=page, workspace_mini_page_slot=slot,
         workspace_tools_rail=FakeWidget("pack"),
+        main_paned=SimpleNamespace(sashpos=lambda *_args: 175),
     )
     workspace_tools._apply_preset_page_index(app, "紧凑")
     assert canvas.manager == "" and slot.manager == "grid"

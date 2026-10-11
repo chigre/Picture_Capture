@@ -54,8 +54,8 @@ def test_extreme_and_compact_zoom_actions_are_single_shared_value():
     assert 'widget.configure(font=_compact_font(app) if compact else "TkDefaultFont")' in source
     assert 'widget.bind("<Return>", app.apply_view_zoom_text)' in source
     assert 'widget.bind("<FocusOut>", app.apply_view_zoom_text)' in source
-    assert "row = index if extreme else index // 3" in source
-    assert "column = 0 if extreme else index % 3" in source
+    assert "row=index if extreme else index // 3" in source
+    assert "column=0 if extreme else index % 3" in source
     assert 'row=6 + index if extreme else 2' in source
     assert 'row=index if extreme else index // 3' in source
     assert 'canvas_zoom.place_forget()' in source
