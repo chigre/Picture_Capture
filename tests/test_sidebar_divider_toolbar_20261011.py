@@ -52,7 +52,7 @@ def test_icon_rail_and_both_page_lists_have_same_initial_446px_footprint():
     assert workspace_tools.preferred_sidebar_width(app, extreme=True) == 42
 
 
-def test_simple_page_list_is_a_separate_packed_column_not_a_child_of_rail():
+def test_compact_page_list_is_left_of_rail_not_a_child_of_it():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     assert 'simple_slot = ttk.Frame(' in source
     assert 'sidebar_host, style="PC.Sidebar.TFrame"' in source
@@ -68,10 +68,11 @@ def test_simple_page_list_is_a_separate_packed_column_not_a_child_of_rail():
 
 def test_simple_slot_can_pack_after_full_canvas_has_been_unmapped():
     slot = FakeWidget()
-    app = SimpleNamespace(workspace_mini_page_slot=slot)
+    app = SimpleNamespace(workspace_mini_page_slot=slot, workspace_tools_rail=FakeWidget("pack"))
     workspace_tools._set_simple_page_visible(app, True)
     assert slot.manager == "pack"
-    assert slot.calls == [("pack", {"side": "left", "fill": "both", "expand": True})]
+    assert slot.calls == [("pack", {"side": "left", "fill": "both",
+                                    "before": app.workspace_tools_rail})]
     workspace_tools._set_simple_page_visible(app, True)
     assert len(slot.calls) == 1
     workspace_tools._set_simple_page_visible(app, False)
@@ -88,8 +89,9 @@ def test_simple_to_normal_mode_reuses_exact_same_page_column(monkeypatch):
     app = SimpleNamespace(
         sidebar_canvas=canvas, sidebar_scrollbar=scrollbar,
         page_panel=page, workspace_mini_page_slot=slot,
+        workspace_tools_rail=FakeWidget("pack"),
     )
-    workspace_tools._apply_preset_page_index(app, "简单")
+    workspace_tools._apply_preset_page_index(app, "紧凑")
     assert canvas.manager == "" and slot.manager == "pack"
     assert page.manager == ""
     workspace_tools._apply_preset_page_index(app, "正常")
