@@ -27,6 +27,7 @@ from PIL import Image, ImageTk
 from . import __version__
 from . import project_parameter_templates as _project_templates
 from .appearance import (
+    APPEARANCE_MODE_LABELS, APPEARANCE_MODE_VALUES,
     appearance_palette,
     apply_classic_widget_appearance,
     apply_native_titlebar_appearance,
@@ -272,8 +273,6 @@ DETECTION_LABELS = {
 DETECTION_VALUES = {label: value for value, label in DETECTION_LABELS.items()}
 OCR_ENGINE_LABELS = {"tesseract": "Tesseract", "paddleocr": "PaddleOCR"}
 OCR_ENGINE_VALUES = {label: value for value, label in OCR_ENGINE_LABELS.items()}
-APPEARANCE_MODE_LABELS = {"light": "浅色", "dark": "深色", "system": "跟随系统"}
-APPEARANCE_MODE_VALUES = {label: value for value, label in APPEARANCE_MODE_LABELS.items()}
 
 # ISO 639-1 codes for project metadata. Common dictionary languages are kept at
 # the front of the readonly selectors; the rest remain alphabetized.

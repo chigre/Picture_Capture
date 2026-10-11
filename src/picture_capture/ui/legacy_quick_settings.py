@@ -8,19 +8,19 @@ through normal class-body function import, without runtime monkey-patching.
 """
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, font
+
+from ..appearance import APPEARANCE_MODE_VALUES
+from ..layout_percent_helpers import LAYOUT_PERCENT_AXES
+from ..ocr_action_guard import LENS_MODE_LABELS, LENS_MODE_VALUES
+from ..ui_compat import AUTO_FONT_FAMILY, normalize_content_font_setting
+from ..layout_visualization_ui_v3 import add_layout_visualization_controls
+from ..ocr_crop_preview_ui import add_ocr_crop_preview_control
+from ..illustration_fill_opacity import add_quick_illustration_fill_opacity_control
+from ..overlay_opacity import add_quick_opacity_control
+
 
 def build_quick_settings(self, parent: ttk.Frame) -> None:
-    # Import the app's existing public GUI constants and helpers only when
-    # constructing the panel, after app.py is fully initialized. This avoids
-    # circular imports while preserving the legacy panel contract.
-    from ..app import (
-        APPEARANCE_MODE_VALUES, AUTO_FONT_FAMILY, LAYOUT_PERCENT_AXES,
-        LENS_MODE_LABELS, LENS_MODE_VALUES,
-        add_crop_preview_font_controls, add_layout_visualization_controls,
-        add_ocr_crop_preview_control, add_quick_illustration_fill_opacity_control,
-        add_quick_opacity_control, normalize_content_font_setting,
-    )
     self.quick_vars: dict[str, tk.Variable] = {}
     self.quick_pixel_vars: dict[str, tk.StringVar] = {}
     self._quick_geometry_edit_source: dict[str, str] = {}
@@ -488,7 +488,7 @@ def build_quick_settings(self, parent: ttk.Frame) -> None:
         var = tk.BooleanVar(value=bool(getattr(self.settings, name))); self.quick_bool_vars[name] = var
         ttk.Checkbutton(label_font_row, text=label, variable=var).pack(side="left", padx=(7, 0))
 
-    from .crop_preview_display_settings import add_crop_preview_font_controls
+    from ..crop_preview_display_settings import add_crop_preview_font_controls
     add_crop_preview_font_controls(self, aux, content_font_values, normalize_content_font_setting)
 
     ocr_display_row = ttk.Frame(aux); ocr_display_row.grid(row=6, column=0, columnspan=4, sticky="ew")
