@@ -101,7 +101,7 @@ def test_restores_tall_head_tops_and_discards_internal_duplicate_candidates():
     assert stats["removed_glyph_fragments"] >= 4
     assert stats["added_verified_heads"] >= 4
     for x in (40, 460):
-        for y in (1120, 1330, 1430):
+        for y in (1250, 1450, 1600):
             assert any(e.x == x and abs(e.y-y) <= 7 for e in result)
 
 
