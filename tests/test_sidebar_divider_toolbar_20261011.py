@@ -120,7 +120,7 @@ def test_compact_font_is_limited_to_page_range_and_zoom_percent_field():
                   "picture_capture" / "app.py").read_text(encoding="utf-8")
     assert 'self.compact_page_font.configure(size=compact_size)' in app_source
     assert 'round(base_size * 0.9)' in app_source
-    assert 'int(app.workspace_rail_width), app.compact_page_font.measure' in source
+    assert 'max(1, viewport - 2), app.compact_page_font.measure' in source
     assert '"PC.Workspace80.TButton", "PC.SimplePage.TButton"' in scope
 
     zoom_start = source.index("def install_compact_zoom_controls(")

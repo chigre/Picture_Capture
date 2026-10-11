@@ -232,7 +232,7 @@ def test_canvas_right_click_navigation_and_sidebar_presets():
 def test_requested_workspace_updates():
     app, tools = sources()
     assert 'DEFAULT_PAGE_LIST_WIDTH = 260' in tools
-    assert 'value=(key in {"bookmark", "lined", "illustrations"})' in tools
+    assert 'value=(key in {"lined", "illustrations"})' in tools
     assert 'size_compact_page_columns(app)' in tools
     assert 'max(required_header_width(app), required)' in tools
     assert 'enforce_header_min_width(app)' in tools

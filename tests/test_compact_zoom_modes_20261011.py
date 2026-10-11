@@ -34,7 +34,7 @@ def test_compact_page_list_uses_ninety_percent_font_while_range_controls_remain_
     assert 'style.configure("PC.Workspace80.Treeview"' not in source
     assert 'style.configure("PC.Workspace80.Treeview.Heading"' not in source
     assert 'widget.configure(style="PC.CompactPage.Treeview")' in source
-    assert 'int(app.workspace_rail_width), app.compact_page_font.measure' in source
+    assert 'max(1, viewport - 2), app.compact_page_font.measure' in source
     assert 'self.compact_page_font = default_page_font.copy()' in app
     assert "round(base_size * 0.9)" in app
     assert 'font=self.compact_page_font' in app
