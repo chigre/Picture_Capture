@@ -164,3 +164,20 @@ def test_cjk_never_uses_latin_independent_fallback():
     assert recover_depleted_indent_columns(
         Image.new("L", (1400, 2000), 255), settings, understanding, previous,
     ) == previous
+
+
+def test_real_export_logical_section_numbers_cannot_cross_physical_columns():
+    """Nôm training-v3 pages label two physical X columns as logical column=0."""
+    import importlib.util
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "scripts" / "audit_ordinary_training_v3.py"
+    spec = importlib.util.spec_from_file_location("ordinary_v3_audit", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    # Same Y and logical column but different actual page-column X: no match.
+    left = [{"column": 0, "source_x": 60, "source_y": 120}]
+    right = [{"column": 0, "source_x": 569, "source_y": 120}]
+    assert module.ordered_alignment(left, right, 12, [60, 569])[0] == 0
+    assert module.ordered_alignment(left, left, 12, [60, 569])[0] == 1
