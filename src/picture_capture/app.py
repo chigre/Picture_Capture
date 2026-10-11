@@ -2697,14 +2697,13 @@ class ReviewWindow(tk.Toplevel):
             state="normal", width=15, style="PCR.Compact.TCombobox",
         )
         self.review_font_combo.pack(side="left")
-        ttk.Label(font_row, text="字号：").pack(side="left", padx=(7, 2))
         self.review_font_size_spin = ttk.Spinbox(
             font_row, from_=6, to=96, increment=1, width=4,
             textvariable=self.review_font_size_var, style="PCR.Compact.TSpinbox",
         )
         self.review_font_size_spin.pack(side="left")
-        ttk.Checkbutton(font_row, text="粗体", variable=self.review_font_bold_var).pack(side="left", padx=(7, 0))
-        ttk.Checkbutton(font_row, text="斜体", variable=self.review_font_italic_var).pack(side="left", padx=(5, 0))
+        ttk.Checkbutton(font_row, text="粗", variable=self.review_font_bold_var).pack(side="left", padx=(7, 0))
+        ttk.Checkbutton(font_row, text="斜", variable=self.review_font_italic_var).pack(side="left", padx=(5, 0))
 
         simplified_font_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         simplified_font_row.pack(fill="x", pady=(4, 0))
@@ -2715,17 +2714,16 @@ class ReviewWindow(tk.Toplevel):
             style="PCR.Compact.TCombobox",
         )
         self.review_simplified_font_combo.pack(side="left")
-        ttk.Label(simplified_font_row, text="字号：").pack(side="left", padx=(7, 2))
         self.review_simplified_font_size_spin = ttk.Spinbox(
             simplified_font_row, from_=6, to=96, increment=1, width=4,
             textvariable=self.review_simplified_font_size_var, style="PCR.Compact.TSpinbox",
         )
         self.review_simplified_font_size_spin.pack(side="left")
         ttk.Checkbutton(
-            simplified_font_row, text="粗体", variable=self.review_simplified_font_bold_var
+            simplified_font_row, text="粗", variable=self.review_simplified_font_bold_var
         ).pack(side="left", padx=(7, 0))
         ttk.Checkbutton(
-            simplified_font_row, text="斜体", variable=self.review_simplified_font_italic_var
+            simplified_font_row, text="斜", variable=self.review_simplified_font_italic_var
         ).pack(side="left", padx=(5, 0))
 
         digit_box = self._review_collapsible_section(
@@ -6038,7 +6036,7 @@ class ReviewWindow(tk.Toplevel):
         self.on_key(type("_Event", (), {"char": ""})(), self.active_index)
 
     def _update_active_crop_preview(self, index: int) -> None:
-        """Same pixel width as row crops, twice their height, no stretch."""
+        """Fixed source-resolution crop at 2.5 times an ordinary row's height."""
         if not (0 <= index < len(self._review_display_crops)):
             self.active_crop_photo = None
             self.active_crop_label.configure(image="")
@@ -6061,12 +6059,13 @@ class ReviewWindow(tk.Toplevel):
             )
             source_height = max(1.0, bottom - top)
             center_y = (top + bottom) / 2
+            half_height = source_height * 1.25
             extended = self.parent.image.crop((
-                int(round(left)), int(round(center_y - source_height)),
-                int(round(right)), int(round(center_y + source_height))
+                int(round(left)), int(round(center_y - half_height)),
+                int(round(right)), int(round(center_y + half_height)),
             )).convert("RGB")
             if self._active_crop_fixed_size is None:
-                self._active_crop_fixed_size = (crop.width, 2 * crop.height)
+                self._active_crop_fixed_size = (crop.width, round(2.5 * crop.height))
             preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)
             self.active_crop_photo = ImageTk.PhotoImage(
                 themed_display_image(preview, self.parent.appearance_mode)
@@ -6830,7 +6829,10 @@ class PictureCaptureApp(tk.Tk):
         self._session_path = self._default_session_state_path()
         self._last_session = self._read_session_state()
         stored_mode = self._last_session.get("workspace_mode", "最大")
-        self.workspace_mode = stored_mode if stored_mode in {"最简", "正常", "最大"} else "最大"
+        self.workspace_mode = (
+            "简单" if stored_mode == "最简" else stored_mode
+            if stored_mode in {"极简", "简单", "正常", "最大"} else "最大"
+        )
         self._restore_workspace_mode_pending = True
         requested_appearance = normalize_appearance_preference(
             self._last_session.get("appearance_mode")
