@@ -117,3 +117,22 @@ python scripts/validate_real_scan_rois.py --assets "C:\path\to\extracted\assets"
 **验证状态**：真实完整图像已用于像素/标记回放，代码测试与跨平台CI可验证；由于图片 ZIP 在隔离容器、完整项目源码/运行依赖在 GitHub Actions，**尚未在相同环境直接运行本分支 `detect_entries(..., method="left_edge")` 对所有34页重新输出预测**。上述“→”数字是反事实，不是新分支实测 P/R/F1。本PR保持 Draft，不可在正式全页逐本回归和人工漏标复检前合并。
 
 复验脚本：`scripts/audit_ordinary_training_v3.py`（保存旧自动线对照，使用实际X归栏）以及 `scripts/run_training_archive_full_benchmark.py`（在同时拥有源码+原图ZIP的环境里实际重跑全部普通/OCR/融合检测）。
+
+
+## 2026-10-12：第二栏 Indent 消失的统一 Layout Core 修复
+
+用户重新提供了 XDHYCD 的实际 Layout 叠加截图，指出新时代西汉也存在“C2 第二栏没有 Indent”的同一症状。根因不是词头采样，也不是仅仅画线导出逻辑：
+
+- **西汉**：已存诊断表明物理 Layout C2 把55个行首集中为一个正文缩进簇（仅1个游离entry）；同页独立 Page Design C2 的确有26个外侧词头、27个内侧正文，位置差约30px，说明真实印刷上确实存在两个家族但被主模型丢掉。
+- **XDHYCD**：物理 detector 的 `projection_line_runs()` 允许0.26–1.90倍行高；消费端 `infer_dictionary_page_layout()` 却只接受0.45–1.55倍。真实 PNG 中第二栏成段墨迹高度常达29–32px，而页设置字符高18px（1.61–1.78倍），造成真实行在缩进聚类前被丢弃；原存诊断 C2 仅保留17左右的 physical lines。且某些页面外侧词头比内缩正文行**更多**，不能用最大支持簇直接推断 body。
+
+**已推送实现**：
+
+1. `dictionary_page_design.py` 严格保持传统非物理投影路径的1.55倍阈值；仅当 line_runs 明确为物理投影生成器时，消费者采用同一0.26–1.90倍契约。禁止无意识将所有大字行都当普通词条。
+2. `layout_column_indent_recovery.py` 在 shared `understand_layout_core()` 的最终角色判断后，检查 *只有少量 entry / 字形行严重合并* 的列，使用两种独立可观测证据恢复真正的 Layout entry/body：
+   - 拉丁词典：单独 Page Design 分析需要有≥5个外侧词头、≥5正文、相距≥0.3字高，并且候选真实 Y 映射到主 Layout 行；其他列不变。
+   - CJK：采用源图成对完整 `【…】` 字形（至少3组）产生候选，恢复对应物理行及 Indent 簇，无人工采样也能使用。不凭“空列”强制增加词头。
+3. 与之前仅在 `processing.py` 末尾补 Entry 的 fallback 不同，本次真正修改 `PageUnderstanding.layout.columns[].lines / indent_modes / entry_modes / body_mode`，普通画线结果与 L（显示Layout）调试图走相同修改后的几何角色数据，layout.reason 也加入 recovered_indent_columns/rows 计数。
+4. 新增 `test_layout_column_indent_recovery_20261012.py` 以导出诊断还原 C2，及 `test_physical_line_height_contract_20261012.py` 对 18px 正常字高、30px 真实字形墨迹高的 producer/consumer 不一致做回归。CI 以该PR最新提交上的 GitHub Checks 为准。
+
+**验证限定：** 已通过真实扫描文件及其随附的真实诊断发现上述失效，但还没有在 GitHub 源码/模型安装完整的同一执行环境对新代码进行完整34页重画并实测新的每列 P/R/F1；也没有拿到用户新版本的实时 Layout 叠加结果。因此不得宣布 XDHYCD 全页、或西汉右栏实际已经修好，必须以两本书新生成的 L 叠加图 + 按列 PDIC 匹配再确认。
