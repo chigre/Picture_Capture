@@ -71,6 +71,10 @@ from .review_text_helpers import (
     _review_text_similarity,
 )
 
+from .review_crop_extension import (
+    extended_review_crop_box, parse_review_crop_multiplier,
+)
+
 from .layout_percent_helpers import (
     LAYOUT_PERCENT_AXES,
     _column_percent_to_pixels,
@@ -140,6 +144,10 @@ from .ui.dialogs.old_new_comparison import OldNewComparisonWindow
 from .ui.dialogs.ocr_conflict import OCRConflictReviewDialog
 from .ui.dialogs.crop_settings import CropSettingsDialog
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
+from .layout_detection_actions import (
+    detect_layout_current as _run_detect_layout_current,
+    detect_layout_consistency_selected as _run_detect_layout_consistency_selected,
+)
 from .layout_transform import LayoutTransform
 from .coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
 from .crop.settings import (
@@ -225,11 +233,7 @@ from .layout_visualization_ui_v3 import (
 )
 from .auxiliary_line_controller import AuxiliaryLineController
 from .auxiliary_lines import AuxiliaryLineEdits
-from .entry_classification import classified_entry_crop_height
-from .review_entry_classification_ui import (
-    initialize_review_entry_classification,
-    sync_review_entry_classification,
-)
+from .review_entry_classification_ui import sync_review_entry_classification
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
     headword_filter_rules_path, is_managed_project, migrate_legacy_project,
@@ -384,8 +388,16 @@ def _review_line_box(
     image: Image.Image,
     settings: AppSettings,
     next_entry: WordEntry | None = None,
+    *,
+    ordinary_height_only: bool = False,
+    editor_text: str | None = None,
 ) -> tuple[int, int, int, int]:
-    """Return a proofreading crop box using canonical Entry classification."""
+    """Review crop height is based only on the actual edited headword text.
+
+    A single character uses the explicitly configured large-head crop height;
+    multiple characters use the ordinary height. Deprecated classification,
+    OCR visual-run height and manual scale flags do not influence review crops.
+    """
     configured_regular = max(
         0, int(getattr(settings, "entry_regular_crop_height", 0) or 0)
     )
@@ -398,11 +410,11 @@ def _review_line_box(
     oversized_height = (
         configured_oversized or _effective_review_single_cjk_line_height(settings)
     )
-    height = classified_entry_crop_height(
-        entry,
-        settings,
-        regular_height=regular_height,
-        oversized_height=oversized_height,
+    displayed_text = entry.word if editor_text is None else editor_text
+    height = (
+        regular_height if ordinary_height_only
+        else oversized_height if _focused_review_is_single_character(displayed_text)
+        else regular_height
     )
     if geometry.transform.kind != "identity":
         classified_settings = replace(settings)
@@ -1888,8 +1900,27 @@ class ReviewWindow(tk.Toplevel):
         width, height = _review_window_dimensions(screen_w, screen_h)
         x = max(0, (screen_w - width) // 2)
         y = max(0, (screen_h - height) // 2)
+        # Only the compact index preset places proofreading beside the image.
+        mini = getattr(parent, "workspace_mini_page_host", None)
+        compact_workspace = (
+            getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}
+            or (mini is not None and mini.winfo_manager() == "grid")
+        )
+        if compact_workspace:
+            parent.update_idletasks()
+            x = max(0, parent.winfo_rootx() + parent.winfo_width())
+            y = max(0, parent.winfo_rooty())
+            # Tk client height must exclude window decorations.
+            from .ui.workspace_tools import _preset_work_geometry
+            work_x, work_y, work_w, safe_client_height = _preset_work_geometry(parent)
+            work_right = work_x + work_w
+            x = min(max(x, work_x), work_right - 1)
+            y = work_y  # Align compact proofreading to the usable desktop top.
+            width = max(1, work_right - x)
+            height = max(1, safe_client_height)
         self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(min(560, width), min(420, height))
+        self.minsize(min(300 if compact_workspace else 560, width),
+                     min(420, height))
         self.active_index = 0
         # A stored 0 means automatic fit-to-left-pane. Positive values retain
         # the historical explicit/manual percentage mode.
@@ -1961,6 +1992,9 @@ class ReviewWindow(tk.Toplevel):
         self.review_single_cjk_line_height_px_var = tk.StringVar(
             value=str(_effective_review_single_cjk_line_height(parent.settings))
         )
+        self.review_extended_crop_multiplier_var = tk.StringVar(
+            value=f"{float(getattr(parent.settings, 'review_extended_crop_height_multiplier', 2.5)):g}"
+        )
         self.review_main_ocr_choices_var = tk.BooleanVar(
             value=bool(getattr(parent.settings, "review_main_show_ocr_choices", False))
         )
@@ -2002,6 +2036,7 @@ class ReviewWindow(tk.Toplevel):
         self._review_row_padding_apply_job: str | None = None
         self._review_regular_crop_height_apply_job: str | None = None
         self._review_single_cjk_height_apply_job: str | None = None
+        self._review_extended_crop_multiplier_job: str | None = None
         self._syncing_review_height_vars = False
         self._review_height_edit_source: dict[str, str] = {}
         self.word_highlight_index: int | None = None
@@ -2086,8 +2121,10 @@ class ReviewWindow(tk.Toplevel):
         self.focused_panel_expanded = tk.BooleanVar(value=False)
         self.digit_map_expanded = tk.BooleanVar(value=False)
         self.accent_panel_expanded = tk.BooleanVar(value=False)
+        # Open only the reference word list by default; every other right-side
+        # helper stays available behind its collapsible title on demand.
         self.review_right_section_expanded = {
-            key: tk.BooleanVar(value=(key not in {"digit", "accent"}))
+            key: tk.BooleanVar(value=(key == "reference"))
             for key in ("display", "digit", "accent", "ocr", "network", "reference")
         }
         self._review_right_sections: dict[str, dict[str, object]] = {}
@@ -2150,9 +2187,11 @@ class ReviewWindow(tk.Toplevel):
         self.review_single_cjk_line_height_px_var.trace_add(
             "write", lambda *_args: self._schedule_review_single_cjk_height_apply("pixel")
         )
+        self.review_extended_crop_multiplier_var.trace_add(
+            "write", lambda *_args: self._schedule_review_extended_crop_multiplier_apply()
+        )
         for _var in self.digit_map_vars:
             _var.trace_add("write", lambda *_args: self._save_digit_map())
-        initialize_review_entry_classification(self)
 
     def _configure_review_styles(self) -> None:
         """Configure dense, opt-in styles for the proofreading workspace only."""
@@ -2520,15 +2559,36 @@ class ReviewWindow(tk.Toplevel):
             relief="flat", bd=0, highlightthickness=0, cursor="hand2",
         )
         self.prev_page_button.pack(side="left", fill="y", padx=(0, 4))
-        editor_area = ttk.Frame(strip, style="PCR.Surface.TFrame")
-        editor_area.pack(side="left", fill="both", expand=True)
-        self.review_editor_area = editor_area
+        # Reserve both navigation controls before the expanding editor pane;
+        # otherwise pack can squeeze the right-hand button out of narrow windows.
         self.next_page_button = tk.Button(
             strip, text="下\n一\n页", width=3, command=lambda: self.change_page(1),
             bg=review_nav_bg, activebackground=review_nav_active_bg,
             relief="flat", bd=0, highlightthickness=0, cursor="hand2",
         )
         self.next_page_button.pack(side="right", fill="y", padx=(4, 0))
+        editor_area = ttk.Frame(strip, style="PCR.Surface.TFrame")
+        editor_area.pack(side="left", fill="both", expand=True)
+        self.review_editor_area = editor_area
+
+        # Fixed current-word preview: independent of window resizing.
+        self.active_crop_host = ttk.Frame(editor_area, style="PCR.Surface.TFrame")
+        self.active_crop_host.pack(side="top", fill="x")
+        self.active_crop_host.pack_propagate(False)
+        self.active_crop_host.configure(height=1)
+        self.active_crop_frame = tk.Frame(self.active_crop_host, bd=2, relief="solid",
+                                          highlightthickness=1, highlightbackground="#4F7CAC")
+        # Absolute coordinates inside a fixed-height slot, never pack-centered
+        # or stretched by horizontal window resize.
+        self.active_crop_frame.place(x=6, y=4, anchor="nw")
+        self.active_crop_label = tk.Label(self.active_crop_frame, bd=0, padx=0, pady=0)
+        self.active_crop_label.pack()
+        self.active_crop_photo = None
+        self._active_crop_fixed_size: tuple[int, int] | None = None
+        # Keep fixed-preview zoom in sync with inline crops.
+        self._active_crop_fixed_zoom: float | None = None
+        self._review_display_crops: list[Image.Image] = []
+        self._review_row_pictures: list[ttk.Label] = []
 
         self.canvas = tk.Canvas(
             editor_area,
@@ -2549,9 +2609,27 @@ class ReviewWindow(tk.Toplevel):
             widget.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
             widget.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))
 
-        # Right: every logical block is collapsible; all start expanded.
+        # Right: only the reference list starts open; all helpers start folded.
         review_info = self._review_collapsible_section(
             right, "display", "显示设置", padding=6, fill="x", pady=(0, 6)
+        )
+        extended_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
+        extended_row.pack(fill="x", pady=(0, 3))
+        ttk.Label(extended_row, text="切片更大高度范围倍数:").pack(side="left")
+        extended_spin = ttk.Spinbox(
+            extended_row, from_=1.0, to=10.0, increment=0.1, width=6,
+            textvariable=self.review_extended_crop_multiplier_var,
+            style="PCR.Compact.TSpinbox",
+        )
+        extended_spin.pack(side="left", padx=(5, 0))
+        extended_spin.bind(
+            "<Return>", lambda _event: self._apply_review_extended_crop_multiplier_setting()
+        )
+        extended_spin.bind(
+            "<FocusOut>",
+            lambda _event: self._apply_review_extended_crop_multiplier_setting(
+                revert_invalid=True
+            ),
         )
 
         def add_review_height_control(
@@ -2664,14 +2742,13 @@ class ReviewWindow(tk.Toplevel):
             state="normal", width=15, style="PCR.Compact.TCombobox",
         )
         self.review_font_combo.pack(side="left")
-        ttk.Label(font_row, text="字号：").pack(side="left", padx=(7, 2))
         self.review_font_size_spin = ttk.Spinbox(
             font_row, from_=6, to=96, increment=1, width=4,
             textvariable=self.review_font_size_var, style="PCR.Compact.TSpinbox",
         )
         self.review_font_size_spin.pack(side="left")
-        ttk.Checkbutton(font_row, text="粗体", variable=self.review_font_bold_var).pack(side="left", padx=(7, 0))
-        ttk.Checkbutton(font_row, text="斜体", variable=self.review_font_italic_var).pack(side="left", padx=(5, 0))
+        ttk.Checkbutton(font_row, text="粗", variable=self.review_font_bold_var).pack(side="left", padx=(7, 0))
+        ttk.Checkbutton(font_row, text="斜", variable=self.review_font_italic_var).pack(side="left", padx=(5, 0))
 
         simplified_font_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
         simplified_font_row.pack(fill="x", pady=(4, 0))
@@ -2682,17 +2759,16 @@ class ReviewWindow(tk.Toplevel):
             style="PCR.Compact.TCombobox",
         )
         self.review_simplified_font_combo.pack(side="left")
-        ttk.Label(simplified_font_row, text="字号：").pack(side="left", padx=(7, 2))
         self.review_simplified_font_size_spin = ttk.Spinbox(
             simplified_font_row, from_=6, to=96, increment=1, width=4,
             textvariable=self.review_simplified_font_size_var, style="PCR.Compact.TSpinbox",
         )
         self.review_simplified_font_size_spin.pack(side="left")
         ttk.Checkbutton(
-            simplified_font_row, text="粗体", variable=self.review_simplified_font_bold_var
+            simplified_font_row, text="粗", variable=self.review_simplified_font_bold_var
         ).pack(side="left", padx=(7, 0))
         ttk.Checkbutton(
-            simplified_font_row, text="斜体", variable=self.review_simplified_font_italic_var
+            simplified_font_row, text="斜", variable=self.review_simplified_font_italic_var
         ).pack(side="left", padx=(5, 0))
 
         digit_box = self._review_collapsible_section(
@@ -5184,6 +5260,50 @@ class ReviewWindow(tk.Toplevel):
         active = self.active_index
         self._request_render_rows(focus_index=active)
 
+    def _schedule_review_extended_crop_multiplier_apply(self) -> None:
+        """Debounce changes without regenerating all inline proofreading crops."""
+        job = self._review_extended_crop_multiplier_job
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except tk.TclError:
+                pass
+        self._review_extended_crop_multiplier_job = self.after(
+            240, self._apply_review_extended_crop_multiplier_setting
+        )
+
+    def _apply_review_extended_crop_multiplier_setting(
+        self, *, revert_invalid: bool = False,
+    ) -> None:
+        job = self._review_extended_crop_multiplier_job
+        self._review_extended_crop_multiplier_job = None
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except tk.TclError:
+                pass
+        previous = float(
+            getattr(self.parent.settings, "review_extended_crop_height_multiplier", 2.5)
+        )
+        try:
+            multiplier = parse_review_crop_multiplier(
+                self.review_extended_crop_multiplier_var.get()
+            )
+        except (TypeError, ValueError):
+            # Do not interrupt intermediate values while the user is typing.
+            if revert_invalid:
+                self.review_extended_crop_multiplier_var.set(f"{previous:g}")
+            return
+        rendered = f"{multiplier:g}"
+        if self.review_extended_crop_multiplier_var.get() != rendered:
+            self.review_extended_crop_multiplier_var.set(rendered)
+        if multiplier == previous:
+            return
+        self.parent.settings.review_extended_crop_height_multiplier = multiplier
+        self._active_crop_fixed_size = None
+        self.parent.save_settings()
+        self._update_active_crop_preview(self.active_index)
+
     def _apply_review_main_ocr_display_options(self) -> None:
         self.parent.settings.review_main_show_ocr_choices = bool(self.review_main_ocr_choices_var.get())
         self.parent.settings.review_main_show_ocr_background = bool(self.review_main_ocr_background_var.get())
@@ -5476,12 +5596,20 @@ class ReviewWindow(tk.Toplevel):
         review_zoom = max(0.01, float(self.review_zoom))
         auto_image_area_width = self._review_image_area_width()
         viewer_width = max(1, int(self.parent.canvas.winfo_width()))
-        ordered_snapshot = [
-            replace(entry) for entry in self.parent._ordered_entries_reading_order()
-        ]
+        source_entries = self.parent._ordered_entries_reading_order()
+        # Existing text widgets can contain unsaved edits. Snapshot only values
+        # bound to the same Entry objects, never another row with the same index.
+        visible_text = {
+            id(entry): var.get()
+            for entry, var in zip(self._bound_row_entries(), self.vars)
+        }
+        editor_texts = tuple(visible_text.get(id(entry), entry.word) for entry in source_entries)
+        ordered_snapshot = [replace(entry) for entry in source_entries]
+        # Bind crop snapshots to Entry identity, not just coordinates/text;
+        # otherwise two equal-valued entries may swap rows during the worker.
         signature = tuple(
-            (int(entry.x), int(entry.y), str(entry.word))
-            for entry in ordered_snapshot
+            (id(source), int(entry.x), int(entry.y), str(entry.word))
+            for source, entry in zip(source_entries, ordered_snapshot)
         )
         page_stem = page.stem
 
@@ -5491,6 +5619,8 @@ class ReviewWindow(tk.Toplevel):
             review_settings, geometry = _review_crop_context(
                 image, settings, viewer_width, page_index,
             )
+            # Every editor row uses the visible text length, not obsolete
+            # regular/oversized classification or OCR-detected glyph height.
             raw_crops: list[Image.Image] = []
             for index, entry in enumerate(ordered_snapshot):
                 next_entry = (
@@ -5499,6 +5629,7 @@ class ReviewWindow(tk.Toplevel):
                 )
                 box = _review_line_box(
                     entry, geometry, image, review_settings, next_entry,
+                    editor_text=editor_texts[index],
                 )
                 raw_crops.append(image.crop(box).convert("RGB"))
             effective_zoom = review_zoom
@@ -5532,7 +5663,7 @@ class ReviewWindow(tk.Toplevel):
             if not self.parent.current_page or self.parent.current_page.stem != result_stem:
                 return
             current_signature = tuple(
-                (int(entry.x), int(entry.y), str(entry.word))
+                (id(entry), int(entry.x), int(entry.y), str(entry.word))
                 for entry in self.parent._ordered_entries_reading_order()
             )
             if current_signature != result_signature:
@@ -5576,9 +5707,23 @@ class ReviewWindow(tk.Toplevel):
         current_stem = self.parent.current_page.stem if self.parent.current_page else ""
         if self._rendered_page_stem and self._rendered_page_stem == current_stem:
             self._capture_simplified_edits(self._rendered_page_stem)
+        # Pending height-switch jobs belong to the outgoing rendered rows.
+        for job in getattr(self, "_review_crop_height_jobs", {}).values():
+            try:
+                self.after_cancel(job)
+            except tk.TclError:
+                pass
+        self._review_crop_height_jobs = {}
+        self._review_crop_single_flags = []
+        self._review_crop_render_generation = getattr(
+            self, "_review_crop_render_generation", 0
+        ) + 1
         for child in self.rows.winfo_children():
             child.destroy()
         self.vars.clear(); self.row_entries.clear(); self.editors.clear(); self.editor_frames.clear(); self.simplified_vars.clear(); self.simplified_editors.clear(); self.simplified_search_buttons.clear(); self.simplified_actual_values.clear(); self.simplified_manual_flags.clear(); self.simplified_auto_refresh_flags.clear(); self.editor_crop_widths.clear(); self.thumbnails.clear()
+        if getattr(self, "_active_crop_page_stem", None) != current_stem:
+            self._active_crop_fixed_size = None
+            self._active_crop_page_stem = current_stem
         self._rendered_page_stem = current_stem
         simplified_records = self._simplified_page_records(current_stem) if current_stem else {}
         if not self.parent.image:
@@ -5587,17 +5732,22 @@ class ReviewWindow(tk.Toplevel):
         if len(preloaded_crops) < len(ordered):
             self._request_render_rows(focus_index=self.active_index)
             return
+        self._review_display_crops = list(preloaded_crops)
+        self._review_row_pictures.clear()
         words = self.parent._project_words if self.parent.project else set()
         for index, entry in enumerate(ordered):
             next_entry = ordered[index + 1] if index + 1 < len(ordered) else None
             # Crop and LANCZOS resize are completed by a worker before this
             # UI-only materialization step. ImageTk creation stays on Tk.
             crop = preloaded_crops[index]
-            photo = ImageTk.PhotoImage(themed_display_image(crop, self.parent.appearance_mode))
-            self.thumbnails.append(photo)
             self.editor_crop_widths.append(crop.width)
+            # Each inline slice already has its text-dependent crop height:
+            # one-character headwords use 大字头切图高, others use ordinary.
+            photo = self._ordinary_review_photo(index)
             picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
             picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
+            self.thumbnails.append(photo)
+            self._review_row_pictures.append(picture)
             var = tk.StringVar(value=entry.word)
             # Review zoom changes only the cropped line image.  Text-entry font
             # size is a user setting and remains fixed while zooming the image.
@@ -5741,6 +5891,8 @@ class ReviewWindow(tk.Toplevel):
                 widget.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
                 widget.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))
             self.vars.append(var); self.row_entries.append(entry); self.editors.append(editor); self.editor_frames.append(editor_frame)
+            self._review_crop_single_flags.append(_focused_review_is_single_character(var.get()))
+            var.trace_add("write", lambda *_args, i=index: self._schedule_review_crop_height_update(i))
             self.simplified_vars.append(simplified_var); self.simplified_editors.append(simplified_editor)
             self.simplified_search_buttons.append(simplified_search_button)
             self.simplified_actual_values.append(simplified_actual)
@@ -5909,12 +6061,12 @@ class ReviewWindow(tk.Toplevel):
         """
         if not self.editor_frames or not self.vars:
             return
-        ordered = self.parent._ordered_entries_reading_order()
-        indices = [index] if index is not None else list(range(min(len(self.vars), len(ordered))))
+        row_entries = self._bound_row_entries()
+        indices = [index] if index is not None else list(range(min(len(self.vars), len(row_entries))))
         for i in indices:
-            if i is None or not (0 <= i < len(self.editor_frames)) or i >= len(ordered):
+            if i is None or not (0 <= i < len(self.editor_frames)) or i >= len(row_entries):
                 continue
-            candidate = self._candidate_for_entry(ordered[i])
+            candidate = self._candidate_for_entry(row_entries[i])
             ocr_word = self._ocr_compare_word(candidate)
             editor_word = self.vars[i].get()
             mismatch = bool(ocr_word) and _review_similarity_key(editor_word) != _review_similarity_key(ocr_word)
@@ -5990,14 +6142,163 @@ class ReviewWindow(tk.Toplevel):
         self.editors[self.active_index].icursor("end")
         self.on_key(type("_Event", (), {"char": ""})(), self.active_index)
 
+    def _update_active_crop_preview(self, index: int) -> None:
+        """Expand the active preview downward from its ordinary crop's top Y."""
+        if not (0 <= index < len(self._review_display_crops)):
+            self.active_crop_photo = None
+            self.active_crop_label.configure(image="")
+            return
+        crop = self._review_display_crops[index]
+        row_entries = self._bound_row_entries()
+        if index >= len(row_entries) or self.parent.image is None:
+            return
+        try:
+            entry = row_entries[index]
+            # Match the source box calculation used by the inline-crop worker:
+            # effective page Profile settings and page-specific geometry.
+            crop_settings, geometry = _review_crop_context(
+                self.parent.image, self.parent.settings,
+                self.parent.canvas.winfo_width(), self.parent.current_index,
+            )
+            ordinary_box = _review_line_box(
+                entry, geometry, self.parent.image, crop_settings,
+                editor_text=self.vars[index].get(),
+            )
+            multiplier = parse_review_crop_multiplier(
+                getattr(self.parent.settings, "review_extended_crop_height_multiplier", 2.5)
+            )
+            extended_box = extended_review_crop_box(
+                ordinary_box, self.parent.image.height, multiplier,
+            )
+            extended = self.parent.image.crop(extended_box).convert("RGB")
+            # At the bottom of the page, pad below rather than stretching
+            # the clipped text to the expected larger preview height.
+            source_height = max(1, ordinary_box[3] - ordinary_box[1])
+            expected_height = max(1, round(source_height * multiplier))
+            if extended.height < expected_height:
+                padded = Image.new("RGB", (extended.width, expected_height), "white")
+                padded.paste(extended, (0, 0))
+                extended = padded
+            current_zoom = max(0.01, float(self.review_zoom))
+            if self._active_crop_fixed_size is None:
+                self._active_crop_fixed_size = (
+                    crop.width, max(1, round(multiplier * crop.height)),
+                )
+                self._active_crop_fixed_zoom = current_zoom
+            else:
+                from .review_crop_extension import resize_fixed_review_preview
+                self._active_crop_fixed_size = resize_fixed_review_preview(
+                    self._active_crop_fixed_size,
+                    getattr(self, "_active_crop_fixed_zoom", None),
+                    current_zoom,
+                )
+                self._active_crop_fixed_zoom = current_zoom
+            preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)
+            self.active_crop_photo = ImageTk.PhotoImage(
+                themed_display_image(preview, self.parent.appearance_mode)
+            )
+            self.active_crop_label.configure(image=self.active_crop_photo)
+            self.active_crop_host.configure(height=self._active_crop_fixed_size[1] + 14)
+        except (ValueError, tk.TclError, AttributeError):
+            return
+
+    def _schedule_review_crop_height_update(self, index: int) -> None:
+        """Debounce editor text-length transitions without rebuilding/focusing rows."""
+        flags = getattr(self, "_review_crop_single_flags", [])
+        if not (0 <= index < len(flags) and index < len(self.vars)):
+            return
+        jobs = getattr(self, "_review_crop_height_jobs", {})
+        prior = jobs.pop(index, None)
+        if prior is not None:
+            try:
+                self.after_cancel(prior)
+            except tk.TclError:
+                pass
+        if _focused_review_is_single_character(self.vars[index].get()) == flags[index]:
+            return
+        jobs[index] = self.after(120, lambda i=index: self._refresh_review_row_crop(i))
+        self._review_crop_height_jobs = jobs
+
+    def _refresh_review_row_crop(self, index: int) -> None:
+        """Re-crop only the changed editor row, with all PIL work off Tk."""
+        getattr(self, "_review_crop_height_jobs", {}).pop(index, None)
+        rows = self._bound_row_entries()
+        if not (0 <= index < len(rows) and index < len(self.vars)
+                and index < len(self._review_display_crops)):
+            return
+        image, page = self.parent.image, self.parent.current_page
+        if image is None or page is None:
+            return
+        entry = rows[index]
+        text = self.vars[index].get()
+        single = _focused_review_is_single_character(text)
+        settings = replace(self.parent.settings)
+        viewer_width = max(1, int(self.parent.canvas.winfo_width()))
+        page_index = int(self.parent.current_index)
+        zoom = max(0.01, float(self.review_zoom))
+        generation = getattr(self, "_review_crop_render_generation", 0)
+        snapshot = replace(entry)
+
+        def worker():
+            crop_settings, geometry = _review_crop_context(
+                image, settings, viewer_width, page_index,
+            )
+            box = _review_line_box(
+                snapshot, geometry, image, crop_settings, editor_text=text,
+            )
+            crop = image.crop(box).convert("RGB")
+            return crop.resize(
+                (max(1, round(crop.width * zoom)),
+                 max(1, round(crop.height * zoom))),
+                Image.Resampling.LANCZOS,
+            )
+
+        def done(crop):
+            try:
+                if (not self.winfo_exists() or self.parent.current_page != page
+                        or getattr(self, "_review_crop_render_generation", 0) != generation
+                        or self.parent.current_index != page_index
+                        or self.parent.settings != settings
+                        or self.review_zoom != zoom
+                        or index >= len(self._review_row_pictures)
+                        or index >= len(self._bound_row_entries())
+                        or self._bound_row_entries()[index] is not entry
+                        or _focused_review_is_single_character(
+                            self.vars[index].get()) != single):
+                    return
+                self._review_display_crops[index] = crop
+                photo = self._ordinary_review_photo(index)
+                self._review_row_pictures[index].configure(image=photo)
+                self.thumbnails[index] = photo
+                self.editor_crop_widths[index] = crop.width
+                self._review_crop_single_flags[index] = single
+                if index == self.active_index:
+                    self._active_crop_fixed_size = None
+                    self._update_active_crop_preview(index)
+            except (AttributeError, IndexError, tk.TclError):
+                return
+
+        self.parent._start_ui_worker(
+            f"{self._review_render_worker_key}-height-{index}",
+            worker, done,
+        )
+
+    def _ordinary_review_photo(self, index: int) -> ImageTk.PhotoImage:
+        """Build the ordinary single-line crop for each review editor row."""
+        crop = self._review_display_crops[index]
+        return ImageTk.PhotoImage(
+            themed_display_image(crop, self.parent.appearance_mode)
+        )
+
     def set_active(self, index: int) -> None:
         self.active_index = index
+        self._update_active_crop_preview(index)
         self._update_title()
-        ordered = self.parent._ordered_entries_reading_order()
-        candidate = self._candidate_for_entry(ordered[index]) if 0 <= index < len(ordered) else None
+        row_entries = self._bound_row_entries()
+        candidate = self._candidate_for_entry(row_entries[index]) if 0 <= index < len(row_entries) else None
         self._show_ocr_options(candidate)
-        if 0 <= index < len(ordered):
-            self.parent.highlight_review_entry(ordered[index])
+        if 0 <= index < len(row_entries):
+            self.parent.highlight_review_entry(row_entries[index])
         if 0 <= index < len(self.vars):
             self.locate_reference_word(self.vars[index].get(), index)
             self._refresh_cc_simplified_comparison(index)
@@ -6456,23 +6757,9 @@ class ReviewWindow(tk.Toplevel):
         # newer proofreading text during navigation.
         self.save(redraw_main=False)
         preloaded = self._take_prefetched_page(target)
-        if self.parent.change_page(
+        self.parent.change_page(
             delta, preloaded=preloaded, current_already_saved=True, async_allowed=False
-        ):
-            self._sync_review_height_vars()
-            crops = None
-            if (
-                not self.review_zoom_auto
-                and preloaded is not None
-                and preloaded.get("review_key") == self._review_prefetch_key()
-            ):
-                crops = list(preloaded.get("review_crops") or [])
-            if crops is None:
-                self._request_render_rows(focus_index=0, reset_scroll=True)
-            else:
-                self.render_rows(preloaded_crops=crops)
-                self._reset_rows_scroll_top()
-            self._update_title()
+        )
 
 
 
@@ -6508,7 +6795,7 @@ class PictureCaptureApp(tk.Tk):
         # Reapply icon to mapped secondary windows.
         self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")
         self.title("Picture Capture")
-        fit_window_to_work_area(self, 1440, 900, min_width=1080, min_height=680)
+        fit_window_to_work_area(self, 1440, 900, min_width=1, min_height=680)
         self.project: ProjectState | None = None
         self._project_words: set[str] = set()
         self.settings = AppSettings()
@@ -6735,6 +7022,12 @@ class PictureCaptureApp(tk.Tk):
         self.session_controller = SessionController(self)
         self._session_path = self._default_session_state_path()
         self._last_session = self._read_session_state()
+        stored_mode = self._last_session.get("workspace_mode", "最大")
+        self.workspace_mode = (
+            "紧凑" if stored_mode in {"最简", "简单"} else stored_mode
+            if stored_mode in {"极简", "紧凑", "正常", "最大"} else "最大"
+        )
+        self._restore_workspace_mode_pending = True
         requested_appearance = normalize_appearance_preference(
             self._last_session.get("appearance_mode")
         )
@@ -6763,6 +7056,12 @@ class PictureCaptureApp(tk.Tk):
         self._collapsible_sections: dict[str, ttk.LabelFrame] = {}
         self.section_title_font = font.nametofont("TkDefaultFont").copy()
         self.section_title_font.configure(weight="bold")
+        # Keep miniature page rows at 90%, with separate 80% range controls.
+        default_page_font = font.nametofont("TkDefaultFont")
+        self.compact_page_font = default_page_font.copy()
+        base_size = int(default_page_font.cget("size"))
+        compact_size = max(7, round(base_size * 0.9)) if base_size > 0 else min(-7, round(base_size * 0.9))
+        self.compact_page_font.configure(size=compact_size)
         self._configure_main_workspace_styles()
         self._auxiliary_controller = AuxiliaryLineController(self)
         self.canvas_controller = CanvasController(self)
@@ -6783,7 +7082,9 @@ class PictureCaptureApp(tk.Tk):
         self.set_appearance_mode(requested_appearance, persist=False)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.toggle_autosave()
-        self.after_idle(self._maximize_main_window)
+        # Avoid maximize -> restore-to-compact flicker during session startup.
+        if self.workspace_mode == "最大":
+            self.after_idle(self._maximize_main_window)
         self.after_idle(self._ensure_sidebar_navigation_width)
         self.after_idle(self.restore_last_session)
         attach_nonbmp_unicode_input(self)
@@ -6825,16 +7126,19 @@ class PictureCaptureApp(tk.Tk):
                 pass
 
     def _ensure_sidebar_navigation_width(self) -> None:
-        """Keep the left pane wide enough to show the complete page-nav row."""
+        """Keep the sidebar at its mode-specific size, not the old 520px."""
         paned = self.__dict__.get("main_paned")
-        row = self.__dict__.get("page_size_row")
-        if paned is None or row is None:
+        if paned is None or not hasattr(self, "workspace_rail_width"):
             return
         try:
+            from .ui.workspace_tools import preferred_sidebar_width
             self.update_idletasks()
-            required = max(520, int(row.winfo_reqwidth()) + 28)
-            available = max(0, int(self.winfo_width()) - 420)
-            paned.sashpos(0, min(required, available) if available else required)
+            target = preferred_sidebar_width(
+                self, extreme=self.workspace_mode == "极简",
+                compact=self.workspace_mode == "紧凑",
+            )
+            available = max(1, self.winfo_width() - 160)
+            paned.sashpos(0, min(target, available))
         except (tk.TclError, ValueError):
             return
 
@@ -6977,6 +7281,7 @@ class PictureCaptureApp(tk.Tk):
         style.configure("TLabelframe.Label", background=palette["surface"], foreground=palette["text"])
         style.configure(
             "TButton", background=palette["button"], foreground=palette["text"],
+            anchor="center", justify="center",
             bordercolor=palette["border"], lightcolor=palette["button"], darkcolor=palette["button"],
         )
         style.map(
@@ -7064,27 +7369,34 @@ class PictureCaptureApp(tk.Tk):
 
     def _apply_current_appearance(self, root: tk.Misc) -> None:
         try:
+            if not root.winfo_exists():
+                return
             apply_classic_widget_appearance(root, self.appearance_mode)
-        except tk.TclError:
-            pass
-        if isinstance(root, (tk.Tk, tk.Toplevel)):
+            if not isinstance(root, (tk.Tk, tk.Toplevel)):
+                return
             apply_native_titlebar_appearance(root, self.appearance_mode)
-            # Theme switches can happen while secondary windows are already
-            # mapped. Refresh every descendant Toplevel as well; the <Map> hook
-            # below handles windows created after the switch.
+            # A transient Toplevel can disappear between the existence check
+            # and the first child traversal (e.g. a tooltip during startup).
             stack = list(root.winfo_children())
-            while stack:
-                widget = stack.pop()
-                if isinstance(widget, tk.Toplevel):
-                    apply_native_titlebar_appearance(widget, self.appearance_mode)
-                try:
-                    stack.extend(widget.winfo_children())
-                except tk.TclError:
-                    pass
+        except tk.TclError:
+            return
+        while stack:
+            widget = stack.pop()
+            if isinstance(widget, tk.Toplevel):
+                apply_native_titlebar_appearance(widget, self.appearance_mode)
+            try:
+                stack.extend(widget.winfo_children())
+            except tk.TclError:
+                pass
 
     def _appearance_toplevel_mapped(self, event: tk.Event) -> None:
         widget = getattr(event, "widget", None)
         if widget is None:
+            return
+        try:
+            if not widget.winfo_exists():
+                return
+        except tk.TclError:
             return
         # Applying a native title-bar appearance may itself trigger another
         # <Map> event on Windows.  Keep only one pending idle callback per
@@ -7103,7 +7415,9 @@ class PictureCaptureApp(tk.Tk):
                     pass
 
         try:
-            self.after_idle(apply_mapped_appearance)
+            # The callback belongs to the mapped window: destroying a tooltip
+            # automatically removes its pending Tcl callback.
+            widget.after_idle(apply_mapped_appearance)
         except tk.TclError:
             widget._pc_appearance_map_pending = False
 
@@ -7178,12 +7492,19 @@ class PictureCaptureApp(tk.Tk):
         self._configure_global_appearance()
         self._configure_main_workspace_styles()
         self._apply_current_appearance(self)
+        from .ui.workspace_tools import (
+            refresh_compact_header_buttons, refresh_macaron_action_buttons,
+        )
+        from .ui.simple_page_controls import refresh_compact_range_appearance
+        refresh_macaron_action_buttons(self)
+        refresh_compact_header_buttons(self)
+        refresh_compact_range_appearance(self)
         palette = appearance_palette(normalized)
         for name, color_key in (("sidebar_canvas", "bg"), ("canvas", "canvas")):
             widget = self.__dict__.get(name)
             if widget is not None:
                 try:
-                    widget.configure(bg=palette[color_key])
+                    widget.configure(bg=(self._main_ui_colors["canvas"] if name == "canvas" else palette[color_key]))
                 except tk.TclError:
                     pass
 
@@ -7286,7 +7607,7 @@ class PictureCaptureApp(tk.Tk):
                 "success": "#69A875",
                 "success_hover": "#588F64",
                 "tree_selected": "#dce8f7",
-                "canvas": "#30343b",
+                "canvas": "#e9edf2",
                 "ruler_margin": "#f1f3f6",
             }
         self._main_ui_colors = colors
@@ -7331,6 +7652,26 @@ class PictureCaptureApp(tk.Tk):
             foreground=colors["text"],
         )
 
+        # Keep rail controls the same font and compact geometry in both themes.
+        style.configure("PC.Rail.TButton", font="TkDefaultFont",
+                        padding=(0, 0), relief="flat", borderwidth=0,
+                        anchor="center", justify="center")
+        style.configure("PC.QuickRail.TButton", font="TkDefaultFont",
+                        padding=(0, 0), relief="flat", borderwidth=0,
+                        anchor="center", justify="center")
+        # Different ttk themes inherit different caption alignment defaults.
+        for button_style in (
+            "PC.Compact.TButton", "PC.Tool.TButton", "PC.Footer.TButton",
+            "PC.PageNav.TButton", "PC.SimplePage.TButton",
+            "PC.WindowMode.TButton", "PC.WindowProject.TButton",
+            "PC.WindowQuick.TButton", "PC.Workspace80.TButton",
+        ):
+            style.configure(button_style, anchor="center", justify="center")
+        style.configure("PC.CompactPage.Treeview", rowheight=22,
+                        font=self.compact_page_font, background=base["surface"],
+                        fieldbackground=base["surface"], foreground=colors["text"])
+        style.configure("PC.CompactPage.Treeview.Heading",
+                        font=self.compact_page_font, padding=(3, 3))
         style.configure("PC.Compact.TButton", padding=(7, 3))
         style.configure(
             "PC.EditActive.TButton",
@@ -7343,7 +7684,8 @@ class PictureCaptureApp(tk.Tk):
             background=[("active", "#f3c451"), ("pressed", "#eab843")],
         )
         style.configure("PC.Tool.TButton", padding=(4, 2))
-        style.configure("PC.PageNav.TButton", padding=(2, 2))
+        style.configure("PC.PageNav.TButton", padding=(0, 0))
+        style.configure("PC.SimplePage.TButton", padding=(0, 0))
         style.configure("PC.Footer.TButton", padding=(7, 3))
         style.configure(
             "PC.Footer.TCheckbutton",
@@ -7370,8 +7712,9 @@ class PictureCaptureApp(tk.Tk):
         )
         style.configure(
             "PC.Treeview.Heading",
-            padding=(6, 5),
-            relief="flat",
+            padding=(3, 4),
+            relief="solid",
+            borderwidth=1,
             font=self.section_title_font,
         )
         style.map(
@@ -7420,6 +7763,8 @@ class PictureCaptureApp(tk.Tk):
             activeforeground=foreground,
             relief="flat",
             bd=0,
+            anchor="center",
+            justify="center",
             highlightthickness=1,
             highlightbackground=border,
             highlightcolor=border,
@@ -7451,6 +7796,8 @@ class PictureCaptureApp(tk.Tk):
             activeforeground=foreground,
             relief="flat",
             bd=0,
+            anchor="center",
+            justify="center",
             highlightthickness=1,
             highlightbackground=border,
             highlightcolor=border,
@@ -7579,6 +7926,15 @@ class PictureCaptureApp(tk.Tk):
     def restore_last_session(self) -> None:
         self.session_controller.restore_last_session()
 
+    def _restore_workspace_layout(self) -> None:
+        """Apply the saved preset once the initial project image is ready."""
+        if not getattr(self, "_restore_workspace_mode_pending", False):
+            return
+        self._restore_workspace_mode_pending = False
+        from .ui.workspace_tools import set_sidebar_mode
+        set_sidebar_mode(self, self.workspace_mode)
+
+
     def on_close(self) -> None:
         if getattr(self, "_batch_active", False):
             if not messagebox.askyesno(
@@ -7642,14 +7998,18 @@ class PictureCaptureApp(tk.Tk):
 
         # Batch task bar is normally hidden. It appears above the permanent
         # status bar while a multi-page operation is running.
-        self.batch_bar = ttk.Frame(self.bottom_stack, padding=(8, 5), style="PC.Batch.TFrame")
+        self.status_bar = ttk.Frame(self.bottom_stack, style="PC.Status.TFrame")
+        self.status_bar.pack(side="bottom", fill="x")
+        status_bar = self.status_bar
+        ttk.Separator(status_bar, orient="horizontal").pack(side="top", fill="x")
+        self.batch_bar = ttk.Frame(status_bar, padding=(4, 1), style="PC.Status.TFrame")
         self.batch_text_var = tk.StringVar(value="")
         self.batch_progress_var = tk.DoubleVar(value=0.0)
         ttk.Label(
             self.batch_bar, textvariable=self.batch_text_var, anchor="w", style="PC.Batch.TLabel"
         ).pack(side="left", padx=(0, 8))
         self.batch_progress = ttk.Progressbar(
-            self.batch_bar, variable=self.batch_progress_var, maximum=100.0, length=280, mode="determinate"
+            self.batch_bar, variable=self.batch_progress_var, maximum=100.0, length=160, mode="determinate"
         )
         self.batch_progress.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.batch_pause_button = ttk.Button(
@@ -7671,10 +8031,6 @@ class PictureCaptureApp(tk.Tk):
             "请求停止当前批量任务；正在处理的页面完成后安全停止。",
         )
 
-        self.status_bar = ttk.Frame(self.bottom_stack, style="PC.Status.TFrame")
-        self.status_bar.pack(side="bottom", fill="x")
-        status_bar = self.status_bar
-        ttk.Separator(status_bar, orient="horizontal").pack(side="top", fill="x")
         ttk.Label(
             status_bar,
             textvariable=self.status_var,
@@ -7700,26 +8056,18 @@ class PictureCaptureApp(tk.Tk):
         self.main_paned = body
         body.pack(fill="both", expand=True)
         sidebar_host = ttk.Frame(body, style="PC.Sidebar.TFrame")
-        # Project actions are outside the scrollable/collapsible sidebar so
-        # they remain fixed and visible at the bottom of the left pane.
-        self.project_action_bar = ttk.Frame(
-            sidebar_host, padding=(6, 5, 5, 6), style="PC.Footer.TFrame"
-        )
-        self.project_action_bar.pack(side="bottom", fill="x")
-        ttk.Separator(self.project_action_bar, orient="horizontal").pack(
-            side="top", fill="x", pady=(0, 6)
-        )
         self.sidebar_canvas = tk.Canvas(
             sidebar_host,
             highlightthickness=0,
             borderwidth=0,
             bg=self._main_ui_colors["sidebar"],
         )
+        # This outer scrollbar duplicated the functional page-list scrollbar
+        # and appeared inert beside the normal-mode list. Keep a reference for
+        # compatibility but do not display it. The Treeview owns scrolling.
         self.sidebar_scrollbar = ttk.Scrollbar(
             sidebar_host, orient="vertical", command=self.sidebar_canvas.yview
         )
-        self.sidebar_canvas.configure(yscrollcommand=self.sidebar_scrollbar.set)
-        self.sidebar_scrollbar.pack(side="right", fill="y")
         self.sidebar_canvas.pack(side="left", fill="both", expand=True)
         sidebar = ttk.Frame(
             self.sidebar_canvas, padding=(7, 7, 6, 5), style="PC.Sidebar.TFrame"
@@ -7737,13 +8085,12 @@ class PictureCaptureApp(tk.Tk):
         sidebar.columnconfigure(0, weight=1)
         sidebar.rowconfigure(1, weight=1)
 
-        controls = ttk.Frame(sidebar, style="PC.Sidebar.TFrame")
-        controls.grid(row=0, column=0, sticky="ew")
-        self._build_quick_settings(controls)
+        from .ui.workspace_tools import install_workspace_tools
+        install_workspace_tools(self, sidebar, sidebar_host)
 
-        page_panel = self._section_frame(sidebar, "六、页面列表", padding=6, section_key="pages")
+        page_panel = ttk.Frame(sidebar, padding=(2, 2, 2, 0), style="PC.Sidebar.TFrame")
         self.page_panel = page_panel
-        page_panel.grid(row=1, column=0, sticky="nsew", pady=(5, 0))
+        page_panel.grid(row=0, column=0, rowspan=2, sticky="nsew", pady=(5, 0))
         page_panel.columnconfigure(0, weight=1)
         page_panel.rowconfigure(2, weight=1)
 
@@ -7751,81 +8098,39 @@ class PictureCaptureApp(tk.Tk):
         self.page_range_spec_var = tk.StringVar()
         self.view_zoom_var = tk.StringVar(value="100%")
 
-        range_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
-        range_row.grid(row=0, column=0, sticky="ew", pady=(0, 3))
-        ttk.Radiobutton(range_row,text="当前页",variable=self.page_range_var,value="current").pack(side="left")
-        ttk.Radiobutton(range_row,text="当前至末页",variable=self.page_range_var,value="to_end").pack(side="left",padx=(4,0))
-        ttk.Radiobutton(range_row,text="指定：",variable=self.page_range_var,value="specified").pack(side="left",padx=(4,0))
-        page_range_entry = ttk.Entry(range_row, textvariable=self.page_range_spec_var, width=14)
-        page_range_entry.pack(side="left",fill="x",expand=True)
+        nav_area = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
+        nav_area.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+        range_row = ttk.Frame(nav_area)
+        self.page_range_controls_row = range_row
+        range_row.pack(fill="x", pady=(0, 3))
+        for label, mode in (("当前", "current"), ("至末页", "to_end"),
+                            ("至指定", "to_specified")):
+            ttk.Radiobutton(range_row, text=label, variable=self.page_range_var,
+                            value=mode).pack(side="left", padx=(0, 3))
+        spec_row = ttk.Frame(nav_area)
+        spec_row.pack(fill="x", pady=(0, 4))
+        ttk.Radiobutton(spec_row, text="", variable=self.page_range_var,
+                        value="specified").pack(side="left")
+        page_range_entry = ttk.Entry(spec_row, textvariable=self.page_range_spec_var, width=12)
+        page_range_entry.pack(side="left", fill="x", expand=True, padx=(3, 4))
         page_range_entry.bind("<Return>", lambda _event: self.jump_to_page_spec())
-        size_row = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
-        self.page_size_row = size_row
-        size_row.grid(row=1, column=0, sticky="ew", pady=(0, 5))
+        jump_button = ttk.Button(spec_row, text="跳", width=2,
+                                 command=self.jump_to_page_spec, style="PC.PageNav.TButton")
+        jump_button.pack(side="left")
+        self._attach_tooltip(jump_button, "跳转到指定页面的第一个有效页面；ENTER为快捷键")
 
-        zoom_out_button = ttk.Button(
-            size_row, text="−", width=3, command=lambda: self.zoom(0.87), style="PC.Tool.TButton"
-        )
-        zoom_out_button.pack(side="left")
-        self._attach_tooltip(zoom_out_button, "缩小显示")
-        view_zoom_entry = ttk.Entry(
-            size_row, textvariable=self.view_zoom_var, width=6, justify="center",
-            style="PC.Compact.TEntry",
-        )
-        view_zoom_entry.pack(side="left", padx=2)
-        view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)
-        view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)
-        zoom_in_button = ttk.Button(
-            size_row, text="+", width=3, command=lambda: self.zoom(1.15), style="PC.Tool.TButton"
-        )
-        zoom_in_button.pack(side="left")
-        self._attach_tooltip(zoom_in_button, "放大显示")
-        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
-
-        fit_width_button = ttk.Button(
-            size_row, text="⇔", width=3, command=self.fit_page_width, style="PC.Tool.TButton"
-        )
-        fit_width_button.pack(side="left", padx=(0, 2))
-        self._attach_tooltip(fit_width_button, "适合宽度显示")
-        fit_height_button = ttk.Button(
-            size_row, text="⇕", width=3, command=self.fit_page_height, style="PC.Tool.TButton"
-        )
-        fit_height_button.pack(side="left")
-        self._attach_tooltip(fit_height_button, "适合高度显示")
-        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
-
-        previous_bookmark_button = ttk.Button(
-            size_row, text="⨇", width=3, command=lambda: self.jump_to_bookmark(-1),
-            style="PC.Tool.TButton",
-        )
-        previous_bookmark_button.pack(side="left", padx=(0, 2))
-        self._attach_tooltip(previous_bookmark_button, "跳转到上一书签")
-        next_bookmark_button = ttk.Button(
-            size_row, text="⨈", width=3, command=lambda: self.jump_to_bookmark(1),
-            style="PC.Tool.TButton",
-        )
-        next_bookmark_button.pack(side="left")
-        self._attach_tooltip(next_bookmark_button, "跳转到下一书签")
-        ttk.Separator(size_row, orient="vertical").pack(side="left", fill="y", padx=4, pady=3)
-
-        jump_button = ttk.Button(
-            size_row, text="跳转", width=6,
-            command=self.jump_to_page_spec, style="PC.PageNav.TButton",
-        )
-        jump_button.pack(side="left", padx=(0, 3))
-        self._attach_tooltip(jump_button, "跳转到指定页面的第一个有效页面")
-        previous_page_button = ttk.Button(
-            size_row, text="上一页", width=6,
-            command=lambda: self.change_page(-1), style="PC.PageNav.TButton",
-        )
-        previous_page_button.pack(side="left", padx=(0, 3))
-        self._attach_tooltip(previous_page_button, "保存必要的当前页状态后切换到上一页")
-        next_page_button = ttk.Button(
-            size_row, text="下一页", width=6,
-            command=lambda: self.change_page(1), style="PC.PageNav.TButton",
-        )
-        next_page_button.pack(side="left")
-        self._attach_tooltip(next_page_button, "保存必要的当前页状态后切换到下一页")
+        nav_row = ttk.Frame(nav_area)
+        nav_row.pack(fill="x")
+        for symbol, command, tip in (
+            ("⨇", lambda: self.jump_to_bookmark(-1), "跳转到上一书签"),
+            ("⨈", lambda: self.jump_to_bookmark(1), "跳转到下一书签"),
+            ("上页", lambda: self.change_page(-1), "切换到上页（Shift + 鼠标右键）"),
+            ("下页", lambda: self.change_page(1), "切换到下页（鼠标右键）"),
+        ):
+            button = ttk.Button(nav_row, text=symbol, width=4 if len(symbol) == 1 else 5,
+                                command=command, style="PC.PageNav.TButton")
+            button.pack(side="left", padx=(0, 4))
+            self._attach_tooltip(button, tip)
         list_frame = ttk.Frame(page_panel)
         list_frame.grid(row=2, column=0, sticky="nsew")
         list_frame.columnconfigure(0, weight=1); list_frame.rowconfigure(0, weight=1)
@@ -7839,30 +8144,33 @@ class PictureCaptureApp(tk.Tk):
             style="PC.Treeview",
         )
         self._page_list_heading_labels = {
-            "bookmark": "书签", "page": "页面", "section": "Section",
-            "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
+            "bookmark": "●", "page": "页面", "section": "域",
+            "lined": "线", "fill_status": "填充状态", "illustrations": "图",
         }
-        self.page_list.heading("bookmark", text="书签", anchor="w")
-        self.page_list.heading("page", text="页面", anchor="w")
-        self.page_list.heading("section", text="Section", anchor="w")
-        self.page_list.heading("lined", text="画线", anchor="w")
-        self.page_list.heading("fill_status", text="填充状态", anchor="w")
-        self.page_list.heading("illustrations", text="插图", anchor="w")
+        self.page_list.heading("bookmark", text="●", anchor="center")
+        self.page_list.heading("page", text="页面", anchor="center")
+        self.page_list.heading("section", text="域", anchor="center")
+        self.page_list.heading("lined", text="线", anchor="center")
+        self.page_list.heading("fill_status", text="填充状态", anchor="center")
+        self.page_list.heading("illustrations", text="图", anchor="center")
         self.page_list.heading("bookmark", command=lambda: self._sort_page_list("bookmark"))
         self.page_list.heading("page", command=lambda: self._sort_page_list("page"))
         self.page_list.heading("section", command=lambda: self._sort_page_list("section"))
         self.page_list.heading("lined", command=lambda: self._sort_page_list("lined"))
         self.page_list.heading("fill_status", command=lambda: self._sort_page_list("fill_status"))
         self.page_list.heading("illustrations", command=lambda: self._sort_page_list("illustrations"))
-        self.page_list.column("bookmark", width=44, anchor="w", stretch=False)
-        self.page_list.column("page", width=180, anchor="w", stretch=False)
+        self.page_list.column("bookmark", width=44, anchor="center", stretch=False)
+        self.page_list.column("page", width=180, anchor="center", stretch=False)
         self.page_list.column("section", width=64, anchor="center", stretch=False)
-        self.page_list.column("lined", width=68, anchor="w", stretch=False)
-        self.page_list.column("fill_status", width=110, anchor="w", stretch=False)
-        self.page_list.column("illustrations", width=58, anchor="w", stretch=False)
+        self.page_list.column("lined", width=68, anchor="center", stretch=False)
+        self.page_list.column("fill_status", width=110, anchor="center", stretch=False)
+        self.page_list.column("illustrations", width=58, anchor="center", stretch=False)
         self.page_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self._page_list_scroll)
-        self.page_list.configure(yscrollcommand=self._page_list_yscroll)
+        page_hscroll = ttk.Scrollbar(list_frame, orient="horizontal", command=self.page_list.xview)
+        self.page_list.configure(yscrollcommand=self._page_list_yscroll,
+                                 xscrollcommand=page_hscroll.set)
         self.page_list.grid(row=0, column=0, sticky="nsew")
+        page_hscroll.grid(row=1, column=0, sticky="ew")
         self.page_scroll.grid(row=0, column=1, sticky="ns")
         self.page_list.bind("<<TreeviewSelect>>", self.on_page_select)
         self.page_list.bind("<Button-1>", self._page_list_bookmark_click, add="+")
@@ -7879,47 +8187,55 @@ class PictureCaptureApp(tk.Tk):
         }
         self._apply_page_list_display_columns(save=False)
 
-        project_row = ttk.Frame(self.project_action_bar, style="PC.Footer.TFrame")
-        project_row.pack(fill="x")
-        for col in range(4):
-            project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")
-        self.project_footer_buttons: list[ttk.Button] = []
-        for col, (label, command) in enumerate((
-            ("项目中心", self.open_recent_project),
-            ("项目Profile", self.open_project_profile),
-            ("设置中心", self.open_settings),
-            ("帮助中心", self.show_help_dialog),
-        )):
-            button = self._footer_action_button(
-                project_row, label, command, role="project"
-            )
-            button.grid(
-                row=0, column=col, sticky="ew",
-                padx=(0 if col == 0 else 4, 0),
-            )
-            self.project_footer_buttons.append(button)
-            footer_tooltips = {
-                "项目中心": "打开最近项目与项目管理；可从这里新建或切换词典项目。",
-                "项目Profile": "配置词典信息、阅读方向、页面模板和词头结构，并用代表页测试。",
-                "设置中心": "按常用、OCR画线、普通画线、显示/校对、切图等任务调整项目参数。",
-                "帮助中心": "查看新版推荐流程、主界面说明、快捷操作与常见排错。",
-            }
-            self._attach_tooltip(button, footer_tooltips[label])
         self.canvas = tk.Canvas(
             viewer, bg=self._main_ui_colors["canvas"], highlightthickness=0
         )
         hbar = ttk.Scrollbar(viewer, orient="horizontal", command=self.canvas.xview)
         vbar = ttk.Scrollbar(viewer, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
+        # The ≣ launcher now lives beside 普/O/校 in the workspace rail.
+        # Keep the actual zoom tools on the image canvas as an on-demand
+        # overlay, rather than showing a second permanent/hover-only icon.
+        size_row = ttk.Frame(self.canvas, padding=(3, 2), style="PC.Sidebar.TFrame")
+        self.page_size_row = size_row
+        zoom_tools = ttk.Frame(size_row, style="PC.Sidebar.TFrame")
+        self.page_zoom_tools = zoom_tools
+        zoom_tools.pack(side="left")
+        for symbol, command, tip in (
+            ("−", lambda: self.zoom(0.87), "缩小显示"),
+            ("+", lambda: self.zoom(1.15), "放大显示"),
+            ("⇔", self.fit_page_width, "占满宽度"),
+            ("◧", self.fit_single_column_width, "单栏占满宽度"),
+            ("⇕", self.fit_page_height, "占满高度"),
+        ):
+            if symbol == "+":
+                view_zoom_entry = ttk.Entry(
+                    zoom_tools, textvariable=self.view_zoom_var, width=6,
+                    justify="center", style="PC.Compact.TEntry",
+                )
+                view_zoom_entry.pack(side="left", padx=2)
+                view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)
+                view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)
+            button = ttk.Button(
+                zoom_tools, text=symbol, width=3, command=command,
+                style="PC.Tool.TButton",
+            )
+            button.pack(side="left", padx=(0, 3))
+            self._attach_tooltip(button, tip)
+
         self.canvas.grid(row=0, column=0, sticky="nsew")
         vbar.grid(row=0, column=1, sticky="ns"); hbar.grid(row=1, column=0, sticky="ew")
         viewer.rowconfigure(0, weight=1); viewer.columnconfigure(0, weight=1)
         self.canvas.bind("<Button-1>", self.canvas_left_click)
+        # Explicit modifier binding keeps the new auxiliary gesture discoverable;
+        # section and PPP editing retain their existing Shift-click behavior.
+        self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)
         self.canvas.bind("<Control-z>", self._auxiliary_controller.undo)
         self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
         bind_context_menu(self.canvas, self.canvas_right_click)
+        self.canvas.bind("<Shift-Button-3>", lambda event: self._canvas_shift_right_click(event))
         self.canvas.bind("<Motion>", self.canvas_motion)
         self.canvas.bind("<Leave>", self.canvas_leave)
         self.canvas.bind("<MouseWheel>", self.canvas_mousewheel)
@@ -7981,17 +8297,17 @@ class PictureCaptureApp(tk.Tk):
         """Apply optional Treeview columns while keeping 页面 permanently visible."""
         if not hasattr(self, "page_list"):
             return
-        columns = ["bookmark", "page", "section"]
-        if getattr(self, "_page_column_vars", {}).get("lined") is None or self._page_column_vars["lined"].get():
-            columns.append("lined")
+        columns = ["bookmark", "page", "lined"]
+
         if getattr(self, "_page_column_vars", {}).get("illustrations") is None or self._page_column_vars["illustrations"].get():
             columns.append("illustrations")
+        columns.append("section")
         if getattr(self, "_page_column_vars", {}).get("fill_status") is None or self._page_column_vars["fill_status"].get():
             columns.append("fill_status")
         self.page_list.configure(displaycolumns=tuple(columns))
         self.after_idle(self._fit_page_list_columns)
         if hasattr(self, "settings"):
-            self.settings.page_list_show_lined = "lined" in columns
+            self.settings.page_list_show_lined = True
             self.settings.page_list_show_fill_status = "fill_status" in columns
             self.settings.page_list_show_illustrations = "illustrations" in columns
             if save and self.project is not None:
@@ -8020,42 +8336,25 @@ class PictureCaptureApp(tk.Tk):
         except (tk.TclError, ValueError):
             return
 
+        header_font = font.nametofont("TkHeadingFont")
+        body_font = font.nametofont("TkDefaultFont")
+        # Size to content instead of giving "page" a disproportionate share
+        # of the entire sidebar width. Keep long filenames scrollable.
+        page_names = (
+            page.stem for page in getattr(self.project, "images", ())
+        ) if self.project else ()
+        page_width = max(
+            (body_font.measure(name) for name in page_names), default=0
+        ) + 10
         base = {
-            "bookmark": 44, "page": 120, "section": 62,
-            "lined": 58, "illustrations": 58, "fill_status": 88,
+            "bookmark": 25, "page": max(52, page_width),
+            "section": 36, "lined": 36,
+            "illustrations": 36, "fill_status": 68,
         }
-        weights = {
-            "bookmark": 0.4, "page": 4.0, "section": 0.8,
-            "lined": 0.8, "illustrations": 0.8, "fill_status": 1.4,
-        }
-        minimum = [base.get(column, 60) for column in visible]
-        base_total = sum(minimum)
-        widths: list[int]
-        if available <= base_total:
-            # Extremely narrow panes still fill exactly; preserve relative widths.
-            scale = available / max(1, base_total)
-            widths = [max(24, int(round(value * scale))) for value in minimum]
-        else:
-            extra = available - base_total
-            total_weight = sum(weights.get(column, 1.0) for column in visible) or 1.0
-            widths = [
-                minimum[index] + int(round(extra * weights.get(column, 1.0) / total_weight))
-                for index, column in enumerate(visible)
-            ]
-        # Correct rounding so the visible headings span the full Treeview width.
-        widths[-1] += available - sum(widths)
-        if widths[-1] < 24:
-            deficit = 24 - widths[-1]
-            widths[-1] = 24
-            for index in range(len(widths) - 2, -1, -1):
-                spare = max(0, widths[index] - 24)
-                take = min(spare, deficit)
-                widths[index] -= take
-                deficit -= take
-                if deficit <= 0:
-                    break
-        for column, width in zip(visible, widths):
-            self.page_list.column(column, width=max(24, int(width)), stretch=False)
+        for column in visible:
+            label = self._page_list_heading_labels.get(column, column)
+            width = max(base.get(column, 60), header_font.measure(label) + 6)
+            self.page_list.column(column, width=width, anchor="center", stretch=False)
 
     def _hide_page_list_section_heading_hint(self, _event=None) -> None:
         popup = getattr(self, "_page_list_section_heading_hint", None)
@@ -8098,15 +8397,12 @@ class PictureCaptureApp(tk.Tk):
         menu = tk.Menu(self, tearoff=False)
         self._apply_current_appearance(menu)
         bookmark_var = tk.BooleanVar(value=True)
-        menu.add_checkbutton(label="书签", variable=bookmark_var, state="disabled")
+        menu.add_checkbutton(label="●", variable=bookmark_var, state="disabled")
         page_var = tk.BooleanVar(value=True)
         menu.add_checkbutton(label="页面", variable=page_var, state="disabled")
         section_var = tk.BooleanVar(value=True)
-        menu.add_checkbutton(label="Section", variable=section_var, state="disabled")
-        menu.add_checkbutton(
-            label="画线", variable=self._page_column_vars["lined"],
-            command=lambda: self._apply_page_list_display_columns(save=True),
-        )
+        menu.add_checkbutton(label="区块", variable=section_var, state="disabled")
+        menu.add_checkbutton(label="画线", state="disabled")
         menu.add_checkbutton(
             label="插图", variable=self._page_column_vars["illustrations"],
             command=lambda: self._apply_page_list_display_columns(save=True),
@@ -8158,7 +8454,7 @@ class PictureCaptureApp(tk.Tk):
         if not hasattr(self, "page_list"):
             return
         labels = getattr(self, "_page_list_heading_labels", {
-            "bookmark": "书签", "page": "页面", "section": "Section",
+            "bookmark": "🔖", "page": "页面", "section": "区块",
             "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
         })
         active = self._page_list_sort_column
@@ -8300,6 +8596,41 @@ class PictureCaptureApp(tk.Tk):
         self._pending_section_editor_index = index if count > 0 else None
         self._request_page_load(index, force=True)
 
+    def _edit_page_section_index(self, index: int) -> None:
+        """Shared SECTION entry path for the 域 double-click and 区 shortcut."""
+        if self._preprocess_mode_active():
+            self.status_var.set("预处理模式中：SECTION 编辑已锁定。")
+            return
+        if not self.project or not (0 <= index < len(self.project.images)):
+            self.status_var.set("请先打开词典页面，再编辑 Section 区域")
+            return
+        if index == self.current_index and self._section_editing:
+            self._finish_section_editing()
+            return
+        page = self.project.images[index]
+        current_count = len(read_page_sections(page))
+        count = simpledialog.askinteger(
+            "Section",
+            f"{page.name}\nSection 数量（0 = 关闭；1–10 = 启用）：\n\n"
+            "确认后：拖动虚线定位Section，双击左键确认并退出编辑。",
+            parent=self, initialvalue=current_count, minvalue=0, maxvalue=10,
+        )
+        if count is None:
+            return
+        if count > 0 and index == self.current_index:
+            # SECTION drag, polygon edit and auxiliary-line edit are separate
+            # pointer modes. Do not leave an old edit mode intercepting drags.
+            if self.polygon_draw_var.get():
+                self.toggle_polygon_drawing()
+            if self.auxiliary_mode_var.get():
+                self.auxiliary_mode_var.set(False)
+                self.toggle_auxiliary_mode()
+        self._set_page_section_count(index, count)
+
+    def toggle_current_page_section_editing(self) -> None:
+        """Toggle the same current-page editor as double-clicking 域."""
+        self._edit_page_section_index(self.current_index)
+
     def _page_list_section_double_click(self, event: tk.Event) -> str | None:
         """Edit the page-level Section count directly from the page list."""
         if self._preprocess_mode_active():
@@ -8314,24 +8645,9 @@ class PictureCaptureApp(tk.Tk):
             return "break"
         try:
             index = int(iid)
-            page = self.project.images[index]
-        except (TypeError, ValueError, IndexError):
+        except (TypeError, ValueError):
             return "break"
-
-        if index == self.current_index and self._section_editing:
-            self._finish_section_editing()
-            return "break"
-
-        current_count = len(read_page_sections(page))
-        count = simpledialog.askinteger(
-            "Section",
-            f"{page.name}\nSection 数量（0 = 关闭；1–10 = 启用）：\n\n"
-            "确认后：拖动虚线定位Section，双击左键确认并退出编辑。",
-            parent=self, initialvalue=current_count, minvalue=0, maxvalue=10,
-        )
-        if count is None:
-            return "break"
-        self._set_page_section_count(index, count)
+        self._edit_page_section_index(index)
         return "break"
 
     def _bookmark_stems(self) -> set[str]:
@@ -9036,6 +9352,15 @@ class PictureCaptureApp(tk.Tk):
         add_field(normal, 0, 4, "首栏X：", "manual_x", float)
         add_field(normal, 1, 0, "单栏宽：", "column_width", float)
         add_field(normal, 1, 2, "栏间空：", "gutter", float)
+        # Shared, live percent/pixel fields for the compact Layout panel.
+        # Legacy widgets stay hidden but remain the canonical Tk state owners.
+        for field_row, caption, name in (
+            (3, "典型单行字高：", "character_height"),
+            (4, "典型行间空白：", "row_padding"),
+            (5, "正文缩进：", "body_indent"),
+            (6, "微调判据：", "horizontal_tolerance"),
+        ):
+            add_field(normal, field_row, 0, caption, name, float)
 
         row = ttk.Frame(normal); row.grid(row=2, column=0, columnspan=8, sticky="ew", pady=(4, 0))
         detect_layout_button = ttk.Button(
@@ -9176,7 +9501,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Label(entry_row, text="词条文本框：宽度(字符)").pack(side="left")
         for name, width in (("main_entry_width_chars", 5), ("main_entry_x_ratio", 5)):
             shown = getattr(self.settings, name) * 100 if name == "main_entry_x_ratio" else getattr(self.settings, name)
-            var = tk.StringVar(value=str(round(shown) if name == "main_entry_x_ratio" else shown)); self.quick_vars[name] = var; self.quick_field_casts[name] = int if name.endswith("chars") else float
+            var = tk.StringVar(value=str(round(shown) if name == "main_entry_x_ratio" else shown)); self.quick_vars[name] = var; self.quick_field_casts[name] = int  # Both width and displayed offset% are integers.
             if name == "main_entry_x_ratio": ttk.Label(entry_row, text="偏移%").pack(side="left", padx=(8, 2))
             ttk.Entry(
                 entry_row, textvariable=var, width=width, justify="left"
@@ -9261,7 +9586,7 @@ class PictureCaptureApp(tk.Tk):
         save_row = ttk.Frame(aux); save_row.grid(row=8, column=0, columnspan=4, sticky="ew")
         ttk.Checkbutton(save_row, text="自动保存", variable=self.autosave_var, command=self.toggle_autosave).pack(side="left")
         ttk.Label(save_row, text="间隔时间(秒)").pack(side="left", padx=(8, 2))
-        interval_var = tk.StringVar(value=str(self.settings.batch_interval)); self.quick_vars["batch_interval"] = interval_var; self.quick_field_casts["batch_interval"] = float
+        interval_var = tk.StringVar(value=str(round(float(self.settings.batch_interval)))); self.quick_vars["batch_interval"] = interval_var; self.quick_field_casts["batch_interval"] = int
         ttk.Entry(
             save_row, textvariable=interval_var, width=6, justify="left"
         ).pack(side="left")
@@ -9410,7 +9735,7 @@ class PictureCaptureApp(tk.Tk):
         )
         postproduction.pack(fill="x", pady=(4, 0))
         production_tooltips = {
-            "单行切图": (
+            "画线行导出": (
                 "将【选定范围】内各页按校对界面相同的单行裁切逻辑批量输出到 QT/PSW；"
                 "可在【设置中心 → 切图】选择是否按页合并，并复用切图并行进程数。"
             ),
@@ -9427,7 +9752,7 @@ class PictureCaptureApp(tk.Tk):
             "导出训练标记包": "导出已人工确认的 PDIC/PPP、OCR候选和坐标上下文，供模型或规则验证。",
         }
         production_rows = [
-            (("单行切图", self.split_single_lines_selected_scope), ("未画线行导出", self.export_unlined_rows_selected_scope), ("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope)),
+            (("画线行导出", self.split_single_lines_selected_scope), ("未画线行导出", self.export_unlined_rows_selected_scope), ("词条切图", self.split_entries_selected_scope), ("插图切图", self.split_illustrations_selected_scope)),
             (("项目详情", self.open_project_details), ("导出PicDic索引", self.export_picdic_index), ("PicDic制作", self.build_picdic)),
             (("导出训练标记包", self.export_training_package),),
         ]
@@ -9438,7 +9763,7 @@ class PictureCaptureApp(tk.Tk):
                 row.columnconfigure(bi, weight=1, uniform=f"postproduction-row-{ri}")
             for bi, (text, command) in enumerate(specs):
                 button = self._sidebar_action_button(row, text, command)
-                if text == "单行切图":
+                if text == "画线行导出":
                     self._pc_single_line_crop_button = button
                 elif text == "未画线行导出":
                     self._pc_unlined_export_button = button
@@ -9625,11 +9950,22 @@ class PictureCaptureApp(tk.Tk):
         if locked:
             if self._preprocess_locked_widgets:
                 return
+            compact_titles = {
+                "normal": "一、版面参数",
+                "aux": "二、显示设置",
+                "ocr": "三、共享 OCR 通道 / OCR画线",
+                "actions": "四、画线 / OCR / 插图 / 校对",
+                "postproduction": "五、后期词典制作",
+            }
+            compact_sections = getattr(self, "workspace_tools_sections", {})
             for key in section_keys:
                 section = self._collapsible_sections.get(key)
-                if section is None:
-                    continue
-                stack = list(section.winfo_children())
+                extra = compact_sections.get(compact_titles.get(key, ""))
+                widgets = (section, extra) if extra is not section else (section,)
+                stack = [
+                    widget for holder in widgets if holder is not None
+                    for widget in holder.winfo_children()
+                ]
                 while stack:
                     widget = stack.pop()
                     try:
@@ -9653,9 +9989,14 @@ class PictureCaptureApp(tk.Tk):
                             pass
             for widget in getattr(self, "project_footer_buttons", ()):
                 try:
-                    was_disabled = "disabled" in widget.state()
-                    widget.state(["disabled"])
-                    self._preprocess_locked_widgets.append((widget, was_disabled))
+                    if isinstance(widget, ttk.Widget):
+                        was_disabled = "disabled" in widget.state()
+                        widget.state(["disabled"])
+                        self._preprocess_locked_widgets.append((widget, was_disabled))
+                    else:
+                        old_state = widget.cget("state")
+                        widget.configure(state="disabled")
+                        self._preprocess_locked_widgets.append((widget, old_state))
                 except tk.TclError:
                     pass
             return
@@ -10964,6 +11305,11 @@ class PictureCaptureApp(tk.Tk):
                             pixel_var.set(str(int(round(source_value))))
                     if name == "main_entry_x_ratio":
                         value = round(float(value) * 100)
+                    elif name in {
+                        "batch_interval", "guide_opacity", "headword_marker_opacity",
+                        "illustration_fill_opacity",
+                    }:
+                        value = round(float(value))
                     if name in {
                         "main_entry_font_family",
                         "illustration_label_font_family",
@@ -11285,246 +11631,12 @@ class PictureCaptureApp(tk.Tk):
 
 
     def detect_layout_current(self) -> None:
-        if not self.guard() or not self.apply_quick_settings(show_status=False): return
-        try:
-            indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc); return
-        names = [self.project.images[i].name for i in indices]
-        if not messagebox.askyesno(
-            "选择检测页面范围",
-            f"将按页面列表上方当前选择的范围检测 {len(indices)} 页。\n"
-            f"范围：{names[0]}" + (f" ～ {names[-1]}" if len(names) > 1 else "") +
-            "\n\n多页数值参数将取稳健中位数；分栏数按多数页面的栏数确定。"
-            "检测结果会填充分栏/起始Y/首栏X/栏宽/栏间空/行高/行间空；"
-            "页底不再作为手工参数写入。是否继续？",
-            parent=self,
-        ):
-            return
-        settings = replace(self.settings)
-        pages = list(self.project.images)
-
-        def worker(index: int, _position: int, _total: int):
-            with Image.open(pages[index]) as opened:
-                return detect_layout_parameters(opened, settings)
-
-        def done(_completed, _total, stopped, results, error) -> None:
-            if error or not results:
-                return
-            from .layout_detection import aggregate_layout_estimates
-            values, consistency = aggregate_layout_estimates(
-                results,
-                columns_policy=self.settings.layout_columns_policy,
-                fixed_columns=self.settings.columns,
-            )
-            old_character_height = max(1, int(self.settings.character_height))
-            body_indent_was_auto = int(self.settings.body_indent) == old_character_height
-            horizontal_tolerance_was_auto = (
-                int(self.settings.horizontal_tolerance)
-                == max(1, round(old_character_height / 2.0))
-            )
-            for name, value in values.items():
-                if name == "bottom_y":
-                    continue
-                setattr(self.settings, name, value)
-            if "character_height" in values:
-                new_character_height = max(1, int(self.settings.character_height))
-                if body_indent_was_auto:
-                    self.settings.body_indent = new_character_height
-                if horizontal_tolerance_was_auto:
-                    self.settings.horizontal_tolerance = max(
-                        1, round(new_character_height / 2.0)
-                    )
-            self.sync_quick_settings(); self.save_settings(); self.redraw()
-            suffix = "（任务提前停止，按已完成页面计算）" if stopped else ""
-            summary = "稳健中位数" if len(results) >= 2 else "单页检测值"
-            self.status_var.set(f"版面参数检测完成：{consistency}；数值参数使用{summary}{suffix}")
-
-        self._start_batch_task("检测版面参数", indices, worker, done, item_label=lambda i: pages[i].name)
+        """Run the existing selected-page layout detection workflow."""
+        return _run_detect_layout_current(self)
 
     def detect_layout_consistency_selected(self) -> None:
-        if not self.guard() or not self.apply_quick_settings(show_status=False): return
-        try:
-            indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc); return
-        if len(indices) < 2:
-            messagebox.showwarning(
-                "检测版面一致性",
-                "版面一致性检测至少需要选择 2 页；当前页面范围不足 2 页，未执行检测。",
-                parent=self,
-            )
-            return
-        if not messagebox.askyesno(
-            "检测版面一致性",
-            f"将快速扫描当前所选 {len(indices)} 页，输出原图 X/Y 中的页眉边界与正文左缘。\n\n"
-            "此任务使用灰度投影而非 PaddleVL/OCR，以便高效处理数千页。是否继续？",
-            parent=self,
-        ):
-            return
-        project = self.project
-        pages = list(project.images); settings = replace(self.settings)
-        range_name = pages[indices[0]].stem if len(indices) == 1 else f"{pages[indices[0]].stem}-{pages[indices[-1]].stem}"
-        range_name = re.sub(r'[^0-9A-Za-z_.-]+', "_", range_name)
-
-        def worker(index: int, _position: int, _total: int):
-            with Image.open(pages[index]) as opened:
-                image_size = opened.size
-                estimate = detect_layout_consistency(opened, settings)
-            transform_kind = str(getattr(settings, "layout_transform", "identity") or "identity")
-            transform = LayoutTransform(transform_kind)
-            canonical_width, canonical_height = transform.canonical_size(image_size)
-            header_segment = None
-            if estimate.header_rule_y is not None:
-                header_segment = transform.canonical_marker_to_source(
-                    (0, int(estimate.header_rule_y)),
-                    (max(0, canonical_width - 1), int(estimate.header_rule_y)),
-                    image_size,
-                )
-            left_segment = None
-            if estimate.body_left_x is not None:
-                left_segment = transform.canonical_marker_to_source(
-                    (int(estimate.body_left_x), 0),
-                    (int(estimate.body_left_x), max(0, canonical_height - 1)),
-                    image_size,
-                )
-            header_y = (
-                int(header_segment[0][1])
-                if header_segment and int(header_segment[0][1]) == int(header_segment[1][1])
-                else None
-            )
-            left_x = (
-                int(left_segment[0][0])
-                if left_segment and int(left_segment[0][0]) == int(left_segment[1][0])
-                else None
-            )
-            return (
-                pages[index].name, header_segment, left_segment,
-                header_y, left_x, estimate.is_blank, transform_kind,
-            )
-
-        def done(_completed, _total, stopped, results, error) -> None:
-            if error or not results:
-                return
-            rows = list(results)
-            stopped_early = bool(stopped)
-            export_dir = exports_root(project.root)
-            self.status_var.set("版面扫描完成；正在后台生成 CSV 与统计报告…")
-
-            def finalize_report():
-                base = f"layout_consistency_{range_name}_{datetime.now():%Y%m%d_%H%M%S_%f}"
-                target = export_dir / f"{base}.csv"
-                report = export_dir / f"{base}_report.txt"
-                target.parent.mkdir(parents=True, exist_ok=True)
-                temp_csv = target.with_name(f".{target.name}.tmp")
-                temp_report = report.with_name(f".{report.name}.tmp")
-
-                def segment_text(segment) -> str:
-                    if not segment:
-                        return ""
-                    (x0, y0), (x1, y1) = segment
-                    return f"{x0},{y0}->{x1},{y1}"
-
-                try:
-                    with temp_csv.open("w", encoding="utf-8-sig", newline="") as handle:
-                        writer = csv.writer(handle)
-                        writer.writerow((
-                            "page",
-                            "header_rule_source_segment_xyxy",
-                            "body_left_source_segment_xyxy",
-                            "header_rule_source_y",
-                            "body_left_source_x",
-                            "coordinate_space",
-                            "layout_transform_internal",
-                            "status",
-                        ))
-                        writer.writerows((
-                            row[0], segment_text(row[1]), segment_text(row[2]),
-                            row[3], row[4], SOURCE_COORDINATE_SPACE, row[6],
-                            "blank_skipped" if row[5] else "analyzed",
-                        ) for row in rows)
-
-                    analyzed = [row for row in rows if not row[5]]
-                    blanks = [row[0] for row in rows if row[5]]
-                    header_values = [row[3] for row in analyzed if row[3] is not None]
-                    left_values = [row[4] for row in analyzed if row[4] is not None]
-
-                    def summary(values) -> str:
-                        return (
-                            "无可比较的同轴值" if not values
-                            else f"均值 {statistics.fmean(values):.1f}，范围 {min(values)}–{max(values)}，标准差 {statistics.pstdev(values):.1f}"
-                        )
-
-                    def outliers(column: int) -> list[str]:
-                        pairs = [(row[0], row[column]) for row in analyzed if row[column] is not None]
-                        if len(pairs) < 3:
-                            return []
-                        values = [value for _name, value in pairs]
-                        mean = statistics.fmean(values)
-                        deviation = statistics.pstdev(values)
-                        tolerance = max(3.0, deviation * 2.5)
-                        return [name for name, value in pairs if abs(value - mean) > tolerance]
-
-                    abnormal = sorted(set(outliers(3) + outliers(4)))
-                    header_summary = summary(header_values)
-                    left_summary = summary(left_values)
-                    report_text = (
-                        f"页面范围：{range_name}\n总页数：{len(rows)}\n有效分析：{len(analyzed)}\n"
-                        f"空白页跳过：{len(blanks)}（{', '.join(blanks) or '无'}）\n"
-                        f"页眉横线 Y（原图px）：{header_summary}\n"
-                        f"正文左缘 X（原图px）：{left_summary}\n"
-                        f"异常页面：{', '.join(abnormal) or '无'}\n"
-                    )
-                    temp_report.write_text(report_text, encoding="utf-8-sig")
-                    temp_csv.replace(target)
-                    try:
-                        temp_report.replace(report)
-                    except Exception:
-                        target.unlink(missing_ok=True)
-                        raise
-                    return {
-                        "target": target, "report": report,
-                        "analyzed": len(analyzed), "blanks": len(blanks),
-                        "header_summary": header_summary, "left_summary": left_summary,
-                        "abnormal": abnormal, "total": len(rows),
-                    }
-                except Exception:
-                    temp_csv.unlink(missing_ok=True)
-                    temp_report.unlink(missing_ok=True)
-                    target.unlink(missing_ok=True)
-                    report.unlink(missing_ok=True)
-                    raise
-
-            def finalized(payload) -> None:
-                if self.project is not project:
-                    return
-                abnormal_text = ", ".join(payload["abnormal"]) or "无"
-                messagebox.showinfo(
-                    "版面一致性统计",
-                    f"完成 {payload['total']} 页，有效 {payload['analyzed']} 页，跳过空白页 {payload['blanks']} 页"
-                    f"{'（提前停止）' if stopped_early else ''}\n"
-                    f"页眉横线 Y（原图px）：{payload['header_summary']}\n"
-                    f"正文左缘 X（原图px）：{payload['left_summary']}\n"
-                    f"异常页面：{abnormal_text}\n\n"
-                    "CSV 只保存原图 X/Y 边界线段与可直接比较的 source X/Y 数值。\n"
-                    f"结果：{payload['target']}\n报告：{payload['report']}",
-                    parent=self,
-                )
-                self.status_var.set(f"版面一致性检测完成：{payload['target'].name}")
-
-            def finalize_failed(exc, detail) -> None:
-                if detail:
-                    print(detail)
-                if self.project is project:
-                    self.show_error("生成版面一致性报告失败", exc)
-
-            self._start_ui_worker(
-                "layout-consistency-finalize",
-                finalize_report, finalized, finalize_failed,
-                wait_on_close=True,
-            )
-
-        self._start_batch_task("检测版面一致性", indices, worker, done, item_label=lambda i: pages[i].name)
+        """Run the existing selected-page layout consistency report."""
+        return _run_detect_layout_consistency_selected(self)
 
     @staticmethod
     def _normalize_suffix(value: str) -> str:
@@ -11601,6 +11713,12 @@ class PictureCaptureApp(tk.Tk):
         mode = self.page_range_var.get() if hasattr(self, "page_range_var") else "current"
         if mode == "current": return [self.current_index] if self.current_index >= 0 else []
         if mode == "to_end": return list(range(max(0, self.current_index), len(self.project.images)))
+        if mode == "to_specified":
+            indices = self._parse_page_spec(self.page_range_spec_var.get())
+            if len(indices) != 1:
+                raise ValueError("当前至指定页需要输入一个结束页码")
+            end = indices[0]
+            return list(range(min(self.current_index, end), max(self.current_index, end) + 1))
         return self._parse_page_spec(self.page_range_spec_var.get())
 
 
@@ -11869,7 +11987,7 @@ class PictureCaptureApp(tk.Tk):
         self.batch_pause_button.configure(text="暂停", state="normal")
         self.batch_stop_button.configure(text="停止", state="normal")
         if not self.batch_bar.winfo_manager():
-            self.batch_bar.pack(side="top", fill="x")
+            self.batch_bar.pack(side="right", fill="x")
         self.status_var.set(
             f"{title}开始：共 {len(items)} 页。" +
             ("可切换并校对其他页面；人工修改的待处理页会自动锁定并由后台跳过。" if foreground_page_edit
@@ -13130,7 +13248,7 @@ class PictureCaptureApp(tk.Tk):
                 self.page_list.insert(
                     "", "end", iid=str(index), values=(
                         "●" if page.stem in self._bookmark_stems() else "",
-                        page.name, self._page_section_count_text(index),
+                        page.stem, self._page_section_count_text(index),
                         "", self._word_fill_status_text(index), "",
                     ),
                 )
@@ -13185,6 +13303,8 @@ class PictureCaptureApp(tk.Tk):
     ) -> None:
         if not self.project or not (0 <= index < len(self.project.images)):
             return
+        from .ui.review_page_sync import save_review_before_page_change, refresh_review_after_page_change
+        review_saved = save_review_before_page_change(self, index, already_saved=skip_current_save)
         self._pending_page_index = None
         self._invalidate_ui_worker("page-load")
         self._flush_deferred_page_save()
@@ -13193,7 +13313,7 @@ class PictureCaptureApp(tk.Tk):
             and not skip_current_save and not self._preprocess_mode_active()
         ):
             if self._can_save_current_during_batch_navigation():
-                self._save_current_page_by_mode()
+                self._save_current_page_by_mode(sync_editors=not review_saved)
         self.current_index = index; self.current_page = self.project.images[index]
         self._auxiliary_controller.load_page(self.current_page)
         use_preloaded = bool(
@@ -13207,6 +13327,12 @@ class PictureCaptureApp(tk.Tk):
             source_dpi = preloaded.get("source_dpi")
             self.image = preloaded["image"]
             self.page_sections = list(preloaded.get("page_sections") or [])
+            # The background page decoder may have read SECTION before a
+            # sidecar edit/migration completed. Commit from the authoritative
+            # file before establishing main-canvas and review reading order.
+            latest_sections = read_page_sections(self.current_page)
+            if latest_sections != self.page_sections:
+                self.page_sections = latest_sections
             self.entries = list(preloaded.get("entries") or [])
             self._sort_entries_reading_order()
             ocr_payload = preloaded.get("ocr_payload") if isinstance(preloaded.get("ocr_payload"), dict) else {}
@@ -13285,6 +13411,8 @@ class PictureCaptureApp(tk.Tk):
             )
         except (OSError, ValueError, TypeError):
             pass
+        self._restore_workspace_layout()
+        refresh_review_after_page_change(self, preloaded if use_preloaded else None)
         self._save_session_state()
 
     def change_page(
@@ -13402,298 +13530,9 @@ class PictureCaptureApp(tk.Tk):
         """Return the persisted visibility of a main-canvas OCR aid."""
         return bool(getattr(self.settings, setting_name, False))
 
-    def _draw_entry_overlay(
-        self, entry: WordEntry, index: int, geometry, size: tuple[int, int],
-        overlay_scale: float, *, processing_readonly: bool | None = None,
-    ) -> None:
-        """Draw one editable headword row without rebuilding the whole canvas."""
-        if self.image is None or self.hide_var.get():
-            return
-        if processing_readonly is None:
-            processing_readonly = self._foreground_batch_state(self.current_index) == "processing"
-        entry_u, entry_v = geometry.source_to_canonical(entry.x, entry.y)
-        col = column_index(entry.x, geometry, entry.y)
-        canonical_x = geometry.x_at(col, entry_v)
-        width = geometry.column_widths[col] * self.view_scale
-        record = {"widgets": [], "canvas_items": [], "index_widget": None}
-        marker_start, marker_end = geometry.transform.canonical_marker_to_source(
-            (canonical_x, entry_v),
-            (canonical_x + round(geometry.column_widths[col] * 0.95), entry_v),
-            geometry.source_size,
-        )
-
-        marker_line_width = scaled_overlay_line_width(self.settings.marker_height, overlay_scale)
-        show_markers = (
-            self.quick_bool_vars.get("show_headword_markers").get()
-            if hasattr(self, "quick_bool_vars") and "show_headword_markers" in self.quick_bool_vars
-            else self.settings.show_headword_markers
-        )
-        if show_markers:
-            item = create_alpha_canvas_line(
-                self,
-                (
-                    marker_start[0] * self.view_scale,
-                    marker_start[1] * self.view_scale,
-                    marker_end[0] * self.view_scale,
-                    marker_end[1] * self.view_scale,
-                ),
-                fill=self.settings.headword_marker_color,
-                width=marker_line_width,
-                opacity=self.settings.headword_marker_opacity,
-            )
-            record["canvas_items"].append(item)
-
-        editor_font_size = effective_main_overlay_font_size(
-            self.image.width, self.view_scale, self.settings,
-        )
-        horizontal = self.settings.layout_writing_mode == "horizontal-tb"
-        vertical = not horizontal
-        rtl = horizontal and self.settings.layout_text_direction == "rtl"
-        main_family = resolve_content_font_family(
-            self.canvas,
-            self.settings.main_entry_font_family,
-            self.settings.ocr_language,
-        )
-        editor_font = _entry_font_spec(
-            main_family, editor_font_size,
-            self.settings.main_entry_font_bold, self.settings.main_entry_font_italic,
-        )
-        if horizontal:
-            editor = tk.Entry(
-                self.canvas,
-                width=max(4, int(self.settings.main_entry_width_chars)),
-                font=editor_font,
-                relief="flat",
-            )
-        else:
-            # Use a real child widget, not a Canvas rectangle/text proxy.  The
-            # narrow Text widget wraps by character, so CJK/kana display
-            # top-to-bottom while remaining directly clickable and editable.
-            editor = VerticalWordText(
-                self.canvas,
-                width=2,
-                height=max(4, int(self.settings.main_entry_width_chars)),
-                font=editor_font,
-                wrap="char",
-                relief="flat",
-                borderwidth=0,
-                padx=2,
-                pady=1,
-                spacing1=0,
-                spacing2=0,
-                spacing3=0,
-                undo=False,
-                cursor="xterm",
-                exportselection=False,
-            )
-        editor.insert(0, entry.word)
-        self._style_entry_editor(editor, entry)
-        if processing_readonly:
-            if isinstance(editor, VerticalWordText):
-                editor.configure(state="disabled", foreground="#555555")
-            else:
-                editor.configure(state="disabled", disabledforeground="#555555")
-        editor.bind("<FocusOut>", lambda _e, e=entry, w=editor: self.update_entry(e, w))
-        editor.bind("<KeyPress>", self._entry_keypress_batch_guard)
-        editor.bind("<<Paste>>", lambda _e: None if self._claim_page_for_manual_edit() else "break")
-        editor.bind("<<Cut>>", lambda _e: None if self._claim_page_for_manual_edit() else "break")
-        editor.bind(
-            "<KeyRelease>",
-            lambda _e, e=entry, w=editor: self._style_entry_editor(w, e, w.get().strip()),
-        )
-        editor.bind("<Return>", lambda e: self.focus_next(e.widget))
-        editor.bind("<Tab>", lambda e: self.focus_next(e.widget))
-        editor.bind("<Shift-Tab>", lambda e: self.focus_previous(e.widget))
-        editor.bind("<Down>", lambda e: self.focus_next(e.widget))
-        editor.bind("<Up>", lambda e: self.focus_previous(e.widget))
-        editor.bind("<Delete>", lambda _e, e=entry: self.delete_entry(e))
-        editor.bind("<KeyPress-grave>", lambda _e, e=entry: self.delete_entry(e))
-        self.overlay_widgets.append(editor)
-        record["widgets"].append(editor)
-        self.entry_editor_bindings.append((editor, entry))
-        editor_req_width = max(1, editor.winfo_reqwidth())
-        editor_req_height = max(1, editor.winfo_reqheight())
-        editor_anchor = "nw"
-        horizontal_index: tuple[float, float] | None = None
-        horizontal_index_anchor = "nw"
-        if horizontal:
-            (editor_x, editor_y), editor_anchor, horizontal_index, horizontal_index_anchor = (
-                horizontal_overlay_layout(
-                    geometry.transform, canonical_x, entry_v, geometry.column_widths[col],
-                    float(self.settings.main_entry_x_ratio), geometry.source_size,
-                    self.view_scale, rtl=rtl,
-                )
-            )
-        else:
-            # Match horizontal semantics: apply main_entry_x_ratio within the
-            # 当前栏 first, then transform that point to source space.
-            editor_x, editor_y = transformed_entry_anchor(
-                geometry.transform, canonical_x, entry_v, geometry.column_widths[col],
-                float(self.settings.main_entry_x_ratio), geometry.source_size, self.view_scale,
-            )
-        
-        if rtl:
-            editor.configure(justify="right")
-        
-        vertical_box: tuple[int, int, int, int] | None = None
-        vertical_index: tuple[float, float] | None = None
-        vertical_index_anchor_name = "nw"
-        if vertical:
-            # Touch the visible marker stroke with no empty gap.  editor_x is
-            # the marker centreline, so offset by exactly half the painted line
-            # width to place the widget border against the marker edge.
-            marker_gap = vertical_marker_contact_gap(marker_line_width)
-            (
-                vertical_box,
-                vertical_window,
-                vertical_window_anchor,
-                vertical_index,
-                vertical_index_anchor_name,
-            ) = vertical_overlay_layout(
-                editor_x, editor_y, editor_req_width, editor_req_height,
-                self.settings.layout_writing_mode, gap=marker_gap,
-            )
-            # The Text widget is permanently present.  Unlike the old Canvas
-            # proxy, it receives mouse/key events exactly like a horizontal
-            # Entry, so no click routing or temporary popup is involved.
-            item = self.canvas.create_window(
-                *vertical_window,
-                window=editor,
-                anchor=vertical_window_anchor,
-                width=vertical_box[2] - vertical_box[0],
-                height=vertical_box[3] - vertical_box[1],
-            )
-            record["canvas_items"].append(item)
-        else:
-            item = self.canvas.create_window(
-                editor_x, editor_y,
-                window=editor,
-                anchor=editor_anchor,
-            )
-            record["canvas_items"].append(item)
-
-        candidate = self._candidate_for_entry(entry)
-        ocr_menu = (
-            self._create_main_ocr_menu(entry, editor, candidate)
-            if self._main_ocr_review_option_enabled("review_main_show_ocr_choices")
-            else None
-        )
-
-        if ocr_menu is not None:
-            if processing_readonly:
-                ocr_menu.configure(state="disabled")
-
-            self.overlay_widgets.append(ocr_menu)
-            record["widgets"].append(ocr_menu)
-
-            menu_req_width = max(1, ocr_menu.winfo_reqwidth())
-
-            if vertical and vertical_box:
-                ocr_x, ocr_y, ocr_anchor = vertical_ocr_menu_layout(
-                    vertical_box, menu_req_width,
-                    self.settings.layout_writing_mode, size[0],
-                )
-            else:
-                ocr_x, ocr_y, ocr_anchor = horizontal_ocr_menu_layout(
-                    editor_x, editor_y, editor_req_width, rtl=rtl,
-                )
-                if not rtl and ocr_x + menu_req_width > size[0] - 2:
-                    ocr_x = max(0, size[0] - menu_req_width - 2)
-                elif rtl and ocr_x - menu_req_width < 2:
-                    ocr_x = menu_req_width + 2
-
-            item = self.canvas.create_window(
-                ocr_x,
-                ocr_y,
-                window=ocr_menu,
-                anchor=ocr_anchor,
-            )
-            record["canvas_items"].append(item)
-
-        # The sequence number belongs to the entry editor rather than to the
-        # column edge. Use a real Label so its background can exactly follow the
-        # editor background (including optional OCR-confidence colouring).
-        index_x, index_y, index_anchor = entry_index_label_layout(
-            editor_x,
-            editor_y,
-            editor_req_width,
-            editor_req_height,
-            horizontal=horizontal,
-            rtl=rtl,
-            vertical_box=vertical_box,
-        )
-        index_label = tk.Label(
-            self.canvas,
-            text=self._entry_sequence_text(index, len(self.entries)),
-            bg="#e6e6e6",
-            fg="#000000",
-            bd=0,
-            padx=2,
-            pady=0,
-            font=_entry_font_spec(
-                main_family, max(8, round(editor_font_size * 0.65)), False, False,
-            ),
-        )
-        # Sequence numbers intentionally use a neutral light-gray control style;
-        # the delete control remains red to preserve its destructive meaning.
-        index_label._pc_skip_classic_appearance = True
-        self.overlay_widgets.append(index_label)
-        record["widgets"].append(index_label)
-        record["index_widget"] = index_label
-        index_window = self.canvas.create_window(
-            index_x, index_y, window=index_label, anchor=index_anchor,
-        )
-        record["canvas_items"].append(index_window)
-
-        index_width = max(1, index_label.winfo_reqwidth())
-        index_height = max(1, index_label.winfo_reqheight())
-        if horizontal:
-            delete_x = float(index_x - index_width - 1) if index_anchor == "ne" else float(index_x - 1)
-            delete_y = float(index_y)
-            delete_anchor = "ne"
-        else:
-            delete_x = float(index_x - index_width / 2.0 - 1)
-            delete_y = float(index_y - index_height / 2.0)
-            delete_anchor = "e"
-        delete_button = tk.Button(
-            self.canvas,
-            text="[X]",
-            width=3,
-            takefocus=False,
-            relief="flat",
-            bd=0,
-            highlightthickness=0,
-            padx=1,
-            pady=0,
-            cursor="hand2",
-            fg="#ffffff",
-            bg="#9d042f",
-            activeforeground="#ffffff",
-            activebackground="#9d042f",
-            command=lambda e=entry: self.delete_entry(e),
-        )
-        delete_button._pc_skip_classic_appearance = True
-        if processing_readonly:
-            delete_button.configure(state="disabled")
-        self._attach_tooltip(delete_button, "点击删除该画线!")
-        self.overlay_widgets.append(delete_button)
-        record["widgets"].append(delete_button)
-        record["delete_widget"] = delete_button
-        delete_window = self.canvas.create_window(
-            delete_x, delete_y, window=delete_button, anchor=delete_anchor,
-        )
-        record["canvas_items"].append(delete_window)
-
-        if self.crop_preview_var.get():
-            left, top, right, bottom = line_box(entry, geometry, self.image, self.settings)
-            item = self.canvas.create_rectangle(
-                left * self.view_scale, top * self.view_scale,
-                right * self.view_scale, bottom * self.view_scale,
-                outline="#00acc1", width=1, dash=(5, 3),
-            )
-            record["canvas_items"].append(item)
-
-        self._entry_visuals[id(entry)] = record
+    # One entry's canvas/editor widgets are owned by the dedicated UI module.
+    # Importing as a class attribute preserves method binding and call sites.
+    from .ui.entry_overlay_builder import draw_entry_overlay as _draw_entry_overlay
 
     def _remove_entry_overlay(self, entry: WordEntry) -> None:
         """Remove only the widgets/canvas items belonging to one headword row."""
@@ -13855,6 +13694,20 @@ class PictureCaptureApp(tk.Tk):
                         coords=[v*scale for pt in region.points for v in pt]
                         if len(coords)>=6:
                             self.canvas.create_polygon(*coords,fill="",outline="#ef6c00",width=3,tags=("crop-plan",))
+        # A stop line ends the preceding real entry; the following region
+        # remains visible in preview only and is NEVER exported as a WW image.
+        for x0, y0, x1, y1 in plan.auxiliary_gaps:
+            color = "#d97706"
+            self.canvas.create_rectangle(
+                x0 * scale, y0 * scale, x1 * scale, y1 * scale,
+                outline=color, width=2, dash=(4, 3),
+                tags=("crop-plan", "auxiliary-gap"),
+            )
+            draw_crop_preview_label(
+                self.canvas, ((x0 + x1) / 2) * scale, (y0 + 3) * scale,
+                text="【辅助不切】", outline=color, anchor="n",
+                justify="center", font=preview_font,
+            )
         # PPP decisions: green/orange travel with headword; magenta/red are
         # standalone and will be whitened before ordinary headword cropping.
         standalone_count=linked_count=partial_count=0
@@ -13883,7 +13736,7 @@ class PictureCaptureApp(tk.Tk):
             )
         mode = "综合插图" if plan.integrate_illustrations else "仅词条矩形"
         self.status_var.set(
-            f"切图预览｜{mode}｜词条切图片段 {len(plan.entry_pieces)}｜随词条PPP {linked_count}｜部分相交 {partial_count}｜独立PPP {standalone_count}"
+            f"切图预览｜{mode}｜词条切图片段 {len(plan.entry_pieces)}｜辅助不切 {len(plan.auxiliary_gaps)}｜随词条PPP {linked_count}｜部分相交 {partial_count}｜独立PPP {standalone_count}"
         )
 
     def _rulers_visible(self) -> bool:
@@ -14150,6 +14003,28 @@ class PictureCaptureApp(tk.Tk):
     def fit_page_width(self) -> None:
         self._canvas_controller_for_call().fit_page_width()
 
+
+    def fit_single_column_width(self) -> None:
+        """Scale a single dictionary column to the available viewer width."""
+        if self.image is None:
+            return
+        try:
+            column_width = float(self.settings.column_width)
+            gutter = float(self.settings.gutter)
+        except (AttributeError, TypeError, ValueError):
+            column_width, gutter = 0.0, -1.0
+        # Fit one column with a gutter-sized margin on each side.
+        fit_width = column_width + 2 * gutter
+        if not (0 < column_width <= self.image.width and gutter >= 0 and fit_width > 0):
+            self.status_var.set("请先设置有效的单栏宽度和栏间距。")
+            return
+        self.update_idletasks()
+        available = max(1, self.canvas.winfo_width())
+        self.view_scale = min(3.0, max(0.08, available / fit_width))
+        self._update_view_zoom_label()
+        self.redraw()
+        self._set_idle_cursor_status()
+        self.canvas.xview_moveto(0.0)
 
     def fit_page_height(self) -> None:
         self._canvas_controller_for_call().fit_page_height()
@@ -14451,6 +14326,10 @@ class PictureCaptureApp(tk.Tk):
                 self.after_idle(self._restore_cursor_guides_after_section_edit)
             except tk.TclError:
                 pass
+        # Unlike a Tk variable, _section_editing is a plain bool: update the
+        # button from this canonical edit-state transition, including double-click exit.
+        from .ui.workspace_mode_shortcuts import refresh_workspace_mode_shortcut_buttons
+        refresh_workspace_mode_shortcut_buttons(self)
 
     def _restore_cursor_guides_after_section_edit(self) -> None:
         if self._section_editing or self.image is None:
@@ -14642,6 +14521,15 @@ class PictureCaptureApp(tk.Tk):
         x, y = self.original_xy(event)
         if not (0 <= x < self.image.width and 0 <= y < self.image.height):
             return
+        # The line's [X] is a direct hit target, even outside auxiliary mode.
+        if not self._section_editing and self._auxiliary_controller.delete_at_chip(x, y):
+            return "break"
+        # Shift+left adds an auxiliary line without requiring the mode toggle.
+        # Preserve PPP Shift+click (add vertex) and SECTION Shift+drag.
+        if (getattr(event, "state", 0) & 0x0001
+                and not self._section_editing and not self.polygon_draw_var.get()):
+            self._auxiliary_controller.add(x, y)
+            return "break"
         if self._section_editing:
             target = self._nearest_section_boundary(x, y)
             if target is None:
@@ -14779,7 +14667,15 @@ class PictureCaptureApp(tk.Tk):
                 self.show_error("保存PPP轮廓失败", exc)
         return "break"
 
+    def _canvas_shift_right_click(self, event: tk.Event) -> str:
+        if self.project and self.current_page and self.image is not None:
+            self.change_page(-1)
+        return "break"
+
     def canvas_right_click(self, event: tk.Event) -> None:
+        if getattr(event, "state", 0) & 0x0001:
+            self._canvas_shift_right_click(event)
+            return
         if self.auxiliary_mode_var.get():
             if self.guard():
                 self._auxiliary_controller.delete_at(*self.original_xy(event))
@@ -15285,6 +15181,46 @@ class PictureCaptureApp(tk.Tk):
         self._review_controller_for_call().highlight_review_entry(entry)
 
 
+    def _scroll_review_entry_into_view(self, entry: WordEntry) -> None:
+        """Scroll the main image only if the proofreading row is off-screen."""
+        if self.image is None:
+            return
+        try:
+            geometry = self._get_cached_display_geometry()
+            crop_settings = _review_crop_settings(
+                self.image, self.settings, self.canvas.winfo_width()
+            )
+            left, top, right, bottom = _review_line_box(
+                entry, geometry, self.image, crop_settings
+            )
+            scale = self.view_scale
+            left, top, right, bottom = (
+                left * scale, top * scale, right * scale, bottom * scale
+            )
+            canvas = self.canvas
+            canvas.update_idletasks()
+            viewport_w = max(1, canvas.winfo_width())
+            viewport_h = max(1, canvas.winfo_height())
+            current_x = canvas.canvasx(0)
+            current_y = canvas.canvasy(0)
+            pad = 16
+            new_x = current_x
+            new_y = current_y
+            if left < current_x + pad or right > current_x + viewport_w - pad:
+                new_x = max(0.0, left - pad)
+            if top < current_y + pad or bottom > current_y + viewport_h - pad:
+                new_y = max(0.0, top - pad)
+            image_w = max(1.0, self.image.width * scale)
+            image_h = max(1.0, self.image.height * scale)
+            if new_x != current_x:
+                max_x = max(0.0, image_w - viewport_w)
+                canvas.xview_moveto(min(new_x, max_x) / image_w)
+            if new_y != current_y:
+                max_y = max(0.0, image_h - viewport_h)
+                canvas.yview_moveto(min(new_y, max_y) / image_h)
+        except (tk.TclError, ValueError, TypeError, AttributeError):
+            return
+
     def _draw_review_entry_highlight(self, geometry=None) -> None:
         self._review_entry_highlight_photo = None
         try:
@@ -15407,8 +15343,12 @@ class PictureCaptureApp(tk.Tk):
         page = self.project.images[index]
         page_stem = str(getattr(page, "stem", Path(str(page.name)).stem))
         bookmark = "●" if page_stem in self._bookmark_stems() else ""
-        new_values = (bookmark, page.name, section, lined, fill_status, illustrations)
+        new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)
         self.page_list.item(iid, values=new_values)
+        # Avoid Tk's __getattr__ when the shell is not initialized.
+        mini = self.__dict__.get("workspace_mini_page_list")
+        if mini is not None and mini.exists(iid):
+            mini.item(iid, values=new_values)
         active_column = self._page_list_sort_column
         if active_column:
             new_index = {

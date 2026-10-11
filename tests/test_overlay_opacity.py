@@ -131,8 +131,8 @@ def test_alpha_photo_lifetime_helpers_match_previous_cleanup_semantics():
 
 def test_native_opacity_fields_roundtrip_and_old_projects_default_to_40(tmp_path: Path):
     settings = AppSettings()
-    assert settings.guide_opacity == 40.0
-    assert settings.headword_marker_opacity == 40.0
+    assert settings.guide_opacity == 60.0
+    assert settings.headword_marker_opacity == 60.0
     settings.guide_opacity = 42.5
     settings.headword_marker_opacity = 65
     path = tmp_path / "settings.json"

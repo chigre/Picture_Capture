@@ -6,11 +6,12 @@ from picture_capture.illustration_fill_opacity import (
 )
 
 
-def test_shared_display_opacity_defaults_are_40_percent():
+def test_display_opacity_defaults_separate_legacy_fallback_and_current_settings():
+    # The renderer's 40% fallback is separate from 60% guide/headword defaults.
     assert DEFAULT_DISPLAY_OPACITY == 40.0
-    assert AppSettings().guide_opacity == 40.0
-    assert AppSettings().headword_marker_opacity == 40.0
-    assert AppSettings().illustration_fill_opacity == 40.0
+    assert AppSettings().guide_opacity == 60.0
+    assert AppSettings().headword_marker_opacity == 60.0
+    assert AppSettings().illustration_fill_opacity == 60.0
 
 
 def test_illustration_polygon_uses_true_40_percent_alpha():

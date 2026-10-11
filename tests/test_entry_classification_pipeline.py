@@ -241,21 +241,22 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     app_source = Path(app_module.__file__).read_text(encoding="utf-8")
     review_source = Path(review.__file__).read_text(encoding="utf-8")
 
-    # Marker OCR and proofreading use the same canonical regular/oversized
-    # classification without a runtime replacement of _review_line_box.
+    # Marker OCR still uses structural classification, while proofreading
+    # uses the actual editor text length and deliberately ignores classification.
     assert "entry_ocr_crop_box(" in marker_ocr_source
     assert "resolve_entry_ocr_row_metrics(" in marker_ocr_source
     assert 'meta.entry_scale == "oversized"' in marker_ocr_source
     review_start = app_source.index("def _review_line_box(")
     review_end = app_source.index("\ndef _apply_focused_review_page_updates", review_start)
     review_line_box = app_source[review_start:review_end]
-    assert "classified_entry_crop_height(" in review_line_box
+    assert "classified_entry_crop_height(" not in review_line_box
+    assert "_focused_review_is_single_character(displayed_text)" in review_line_box
     assert "entry_regular_crop_height" in review_line_box
     assert "entry_oversized_crop_height" in review_line_box
     assert "_is_single_cjk_review_headword" not in app_source
     # Manual type choices are no longer exposed in the proofreading UI.
     assert 'values=("自动", "普通词条", "大字头")' not in review_source
-    assert "initialize_pinned_entry_preview(window)" in review_source
+    assert "review_pinned_entry_preview" not in review_source
 
 
 def test_gui_composition_uses_static_pdic_io_and_review_classification():
@@ -274,7 +275,7 @@ def test_gui_composition_uses_static_pdic_io_and_review_classification():
     assert "install_review_entry_classification(app_module)" not in source
 
     app_source = Path(app_module.__file__).read_text(encoding="utf-8")
-    assert "initialize_review_entry_classification(self)" in app_source
+    assert "self.active_crop_host = ttk.Frame(editor_area" in app_source
     assert app_source.count("sync_review_entry_classification(self)") >= 2
     assert '"大字头切图高："' in app_source
 

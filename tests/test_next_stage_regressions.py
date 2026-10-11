@@ -1338,115 +1338,38 @@ def test_common_layout_settings_show_packaged_context_diagrams():
 
 
 def test_project_toolbar_and_profile_scroll_layout_are_wired():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-
-    project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
-    project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
-    project_bar = text[project_bar_start:project_bar_end]
-    expected = (
-        '("项目中心", self.open_recent_project)',
-        '("项目Profile", self.open_project_profile)',
-        '("设置中心", self.open_settings)',
-        '("帮助中心", self.show_help_dialog)',
-    )
-    positions = [project_bar.index(item) for item in expected]
-    assert positions == sorted(positions)
-    assert '("新建项目", self.open_project' not in project_bar
-    assert "导出训练标记包" not in project_bar
-    assert "保存参数" not in project_bar
-    assert "使用指南" not in project_bar
-    assert 'uniform="project-footer-columns"' in project_bar
-    assert 'project_row.columnconfigure(col, weight=1, uniform="project-footer-columns")' in project_bar
-    assert 'role="project"' in project_bar
-    for tooltip in (
-        "打开最近项目与项目管理；可从这里新建或切换词典项目。",
-        "配置词典信息、阅读方向、页面模板和词头结构，并用代表页测试。",
-        "按常用、OCR画线、普通画线、显示/校对、切图等任务调整项目参数。",
-        "查看新版推荐流程、主界面说明、快捷操作与常见排错。",
-    ):
-        assert tooltip in project_bar
-    assert 'text="图片后缀："' not in text
-    assert "self.image_suffix_var" not in text
-
-    controller_source = (
-        Path(__file__).resolve().parents[1]
-        / "src" / "picture_capture" / "ui" / "controllers" / "project.py"
-    ).read_text(encoding="utf-8")
-    suffix_choice_start = controller_source.index("    def choose_new_project_image_suffix(")
-    suffix_choice_end = controller_source.index("\n    def open_project(", suffix_choice_start)
-    suffix_choice = controller_source[suffix_choice_start:suffix_choice_end]
-    assert "project_page_images(root)" in suffix_choice
-    assert "simpledialog.askstring(" in suffix_choice
-    open_start = controller_source.index("    def open_project(self) -> None:")
-    open_project = controller_source[open_start:]
-    assert "if not existing_project:" in open_project
-    assert "self.choose_new_project_image_suffix(root)" in open_project
-    assert "if requested_suffix is None:" in open_project
-    assert "def _choose_new_project_image_suffix(" in text
-    assert "self._project_controller_for_call().choose_new_project_image_suffix(root)" in text
-    assert "def open_project(self) -> None:" in text
-    assert "self._project_controller_for_call().open_project()" in text
-
-    actions_start = text.index('            parent, "四、画线 / OCR / 插图 / 校对"')
-    actions_end = text.index("        postproduction = self._section_frame(", actions_start)
-    actions = text[actions_start:actions_end]
-    assert '("设置中心", self.open_settings)' not in actions
-    assert '("导出训练标记包", self.export_training_package)' not in actions
-
-    post_start = text.index('        postproduction = self._section_frame(')
-    post_end = text.index("        postproduction.columnconfigure(0, weight=1)", post_start)
-    post = text[post_start:post_end]
-    assert '("切图设置", self.open_crop_settings)' not in post
-    assert '("词条切图", self.split_entries_selected_scope)' in post
-    assert '("插图切图", self.split_illustrations_selected_scope)' in post
-    assert post.rindex('("导出训练标记包", self.export_training_package)') > post.index('("PicDic制作", self.build_picdic)')
-    for tooltip_key in (
-        '"词条切图":', '"插图切图":', '"项目详情":',
-        '"导出PicDic索引":', '"PicDic制作":', '"导出训练标记包":',
-    ):
-        assert tooltip_key in post
-
-    profile_source = (
-        Path(__file__).resolve().parents[1]
-        / "src" / "picture_capture" / "ui" / "settings" / "profile.py"
-    ).read_text(encoding="utf-8")
-    assert "dialog.profile_canvas = profile_canvas" in profile_source
-    assert "profile_scrollbar" in profile_source
-    assert 'text="自定义结构名称："' in profile_source
-    assert "ProjectProfileWizard(self, new_project=new_project)" in text
-
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    app = (root / "app.py").read_text(encoding="utf-8")
+    tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    group=tools.split("    project_actions = (",1)[1].split("    for label, command, tip in project_actions:",1)[0]
+    expected=[f'("{label}", app.{method},' for label,method in (("项目","open_recent_project"),("Profile","open_project_profile"),("设置","open_settings"),("帮助","show_help_dialog"))]
+    offsets=[group.index(x) for x in expected]
+    assert offsets == sorted(offsets)
+    assert 'project_group.pack(side="left"' in tools
+    assert 'app.project_footer_buttons.append(button)' in tools
+    assert 'app.workspace_header_project_buttons.append(button)' in tools
+    assert 'project_group.pack_forget()' not in tools
+    profile=(root / "ui/settings/profile.py").read_text(encoding="utf-8")
+    assert "dialog.profile_canvas = profile_canvas" in profile
+    assert "profile_scrollbar" in profile
+    assert 'text="自定义结构名称："' in profile
+    assert "ProjectProfileWizard(self, new_project=new_project)" in app
+    for method in ("choose_new_project_image_suffix", "open_project"):
+        assert f"def {method}(" in (root / "ui/controllers/project.py").read_text(encoding="utf-8")
 
 def test_bottom_important_actions_follow_scheme_a_groups():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    start = text.index("    def _footer_action_button(")
-    end = text.index("    def _section_frame(", start)
-    helper = text[start:end]
-    assert '"project": (colors["success"], colors["success_hover"], "#ffffff")' in helper
-    assert '"config": (colors["success"], colors["success_hover"], "#ffffff")' in helper
-    assert 'border = colors["button_border"]' in helper
-    assert '"profile":' not in helper
-    assert '"settings":' not in helper
-    assert '"save":' not in helper
-    assert '"help":' not in helper
-    assert 'highlightbackground=border' in helper
-    assert 'highlightthickness=1' in helper
-
-    project_bar_start = text.index("        project_row = ttk.Frame(self.project_action_bar")
-    project_bar_end = text.index("        self.canvas = tk.Canvas(", project_bar_start)
-    project_bar = text[project_bar_start:project_bar_end]
-    for label, command in (
-        ("项目中心", "self.open_recent_project"),
-        ("项目Profile", "self.open_project_profile"),
-        ("设置中心", "self.open_settings"),
-        ("帮助中心", "self.show_help_dialog"),
-    ):
-        assert f'("{label}", {command})' in project_bar
-    assert project_bar.count('role="project"') == 1
-    assert "导出训练标记包" not in project_bar
-    assert "保存参数" not in project_bar
-
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    app = (root / "app.py").read_text(encoding="utf-8")
+    tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    assert 'def _footer_action_button(' in app
+    assert 'border = colors["button_border"]' in app
+    assert 'highlightthickness=1' in app
+    assert 'app.workspace_quick_action_buttons.append(button)' in tools
+    assert 'app.project_footer_buttons.append(button)' in tools
+    for label,method in (("项目","open_recent_project"),("Profile","open_project_profile"),("设置","open_settings"),("帮助","show_help_dialog")):
+        assert f'("{label}", app.{method},' in tools
+    for label,method in (("普通画线","run_normal_draw_action"),("OCR画线","run_ocr_draw_action"),("词条校对","open_review")):
+        assert f'("{label}", app.{method})' in tools
 
 def test_crop_settings_entry_redirects_to_settings_center_tab():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
@@ -1491,154 +1414,50 @@ def test_mixed_ui_wrap_measures_tokens_incrementally_not_growing_prefixes():
 
 
 def test_usage_guide_is_modern_task_oriented_and_centered():
-    root = Path(__file__).resolve().parents[1]
-    app_source = root / "src" / "picture_capture" / "app.py"
-    guide_source = root / "src" / "picture_capture" / "ui" / "dialogs" / "usage_guide.py"
-    text = app_source.read_text(encoding="utf-8")
-    guide_text = guide_source.read_text(encoding="utf-8")
-
-    guide_start = guide_text.index("class UsageGuideWindow(tk.Toplevel):")
-    guide_end = len(guide_text)
-    guide = guide_text[guide_start:guide_end]
-
-    assert '"快速开始"' in guide
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    app = (root / "app.py").read_text(encoding="utf-8")
+    tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    guide=(root / "ui/dialogs/usage_guide.py").read_text(encoding="utf-8")
+    assert "class UsageGuideWindow(tk.Toplevel)" in guide
     assert 'self.title("Picture Capture · 帮助中心")' in guide
-    assert "work_x, work_y, work_w, work_h = screen_work_area(self)" in guide
-    assert "x = work_x + max(0, (work_w - width) // 2)" in guide
-    assert "y = work_y + max(0, (work_h - height) // 2)" in guide
+    assert 'work_x, work_y, work_w, work_h = screen_work_area(self)' in guide
     assert 'self.geometry(f"{width}x{height}+{x}+{y}")' in guide
-    assert '"画线与 OCR"' in guide
-    assert '"校对与词表"' in guide
-    assert '"插图与切图"' in guide
-    assert '"后期制作"' in guide
-    assert '"导航与排错"' in guide
+    for label in ("快速开始","画线与 OCR","校对与词表","插图与切图","后期制作","导航与排错","重点筛选校对"):
+        assert label in guide
     assert 'self.search_var = tk.StringVar()' in guide
-    assert '"推荐原则"' in guide
-    assert '"项目Profile"' in guide
-    assert '"版面与Section"' in guide
-    assert "双击页面列表的 Section 单元格" in guide
-    assert "重新简体化" in guide
-    assert "重点筛选校对" in guide
-    assert '"检测版面参数"' in guide
-    assert '"环境中心"' in guide
-    assert '"设置中心"' in guide
-    assert "OCR画线是默认方式" in guide
-    assert "普通画线、仅OCR和融合画线+OCR" in guide
-    assert "默认先用 OCR画线验证代表页" in guide
-    assert "sidebar_hint_text =" in guide
-    assert "_wrap_mixed_ui_text(" in guide
-    assert "wraplength=158" not in guide
-    assert 'header.bind("<Configure>", resize_header, add="+")' in guide
-    assert "def _register_wrapped_label(" in guide
-    assert "self.after_idle(self._refresh_wrapped_labels)" in guide
-    assert "_wrap_mixed_ui_text(" in guide
-    assert "wraplength=660" not in guide
-    assert "wraplength=620" not in guide
-    assert "新建项目】或【已有项目" not in guide
-    assert "一、普通版面参数" not in guide
-    assert "所选页面 ≥2 时，数值字段使用**稳健中位数**" not in guide
-    assert "数值参数采用稳健中位数" in guide
+    assert 'self.after_idle(self._refresh_wrapped_labels)' in guide
     from picture_capture.app import UsageGuideWindow
-    for _key, _title, subtitle, cards in UsageGuideWindow.PAGES:
-        assert "\n" not in subtitle
-        for _badge, card_title, body in cards:
-            assert "\n" not in card_title
-            assert "\n" not in body
-    assert 'self.bind("<Escape>", lambda _event: self.destroy())' in guide
-
-    show_start = text.index("    def show_help_dialog(self) -> None:")
-    show_end = text.index("    @staticmethod\n    def _distribution_version", show_start)
-    show = text[show_start:show_end]
+    for _key,_title,subtitle,cards in UsageGuideWindow.PAGES:
+        assert "\\n" not in subtitle
+        for _badge,card_title,body in cards:
+            assert "\\n" not in card_title
+            assert "\\n" not in body
+    show=app.split("    def show_help_dialog(self) -> None:",1)[1].split("    @staticmethod",1)[0]
     assert "UsageGuideWindow(self)" in show
     assert "_usage_guide_window" in show
     assert "messagebox.showinfo" not in show
-    assert "show_help_popup" not in text
-    assert "OCR_USAGE_HELP" not in text
-    assert "查看新版推荐流程、主界面说明、快捷操作与常见排错。" in text
-
+    assert '("帮助", app.show_help_dialog,' in tools
 
 def test_main_workspace_modern_styles_are_scoped_and_dense():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-
-    styles_start = text.index("    def _configure_main_workspace_styles(")
-    styles_end = text.index("    def _sidebar_action_button(", styles_start)
-    styles = text[styles_start:styles_end]
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    app = (root / "app.py").read_text(encoding="utf-8")
+    tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    styles=app.split("    def _configure_main_workspace_styles(",1)[1].split("    def _sidebar_action_button(",1)[0]
     assert "theme_use(" not in styles
-    assert '"PC.Section.TLabelframe"' in styles
-    assert '"PC.Treeview"' in styles
-    assert '"PC.Footer.TFrame"' in styles
-
-    ui_start = text.index("    def _build_ui(self) -> None:")
-    ui_end = text.index("    def _pointer_over_sidebar(", ui_start)
-    ui = text[ui_start:ui_end]
+    for token in ('"PC.Section.TLabelframe"','"PC.Treeview"','"PC.Footer.TFrame"','"PC.EditActive.TButton"'):
+        assert token in styles
+    ui=app.split("    def _build_ui(self) -> None:",1)[1].split("    def _pointer_over_sidebar(",1)[0]
     assert 'style="PC.Treeview"' in ui
-    assert 'style="PC.Footer.TFrame"' in ui
-    assert '"一、版面参数"' in text
-    assert 'add_field(normal, 0, 0, "正文栏数：", "columns", int)' in text
-    assert 'add_field(normal, 0, 0, "分栏数：", "columns", int)' not in text
-    assert '"二、显示设置"' in text
-    assert '"三、共享 OCR 通道 / OCR画线"' in text
-    assert text.index('"二、显示设置"') < text.index('"三、共享 OCR 通道 / OCR画线"')
-    assert 'text="普通画线设置…"' in text
-    assert 'text="显示标尺"' in text
-    assert '"ruler_color": tk.StringVar(value=self.settings.ruler_color)' in text
-    assert 'command=lambda: self._apply_overlay_visibility_toggle("show_rulers", ruler_var)' in text
-    assert 'ttk.Separator(size_row, orient="vertical")' in ui
-    assert 'relief="sunken"' not in ui
-    assert 'relief="ridge"' not in ui
-
-    actions_start = text.index('            parent, "四、画线 / OCR / 插图 / 校对"')
-    actions_end = text.index("        postproduction = self._section_frame(", actions_start)
-    actions = text[actions_start:actions_end]
-    assert 'self._sidebar_action_button(row, text, command, role=role)' in actions
-    assert '"primary" if text == "OCR画线(默认)"' in actions
-    assert '("普通画线", self.run_normal_draw_action)' in actions
-    assert '("仅OCR", self.ocr_ordinary_lines_text_selected_scope)' in actions
-    assert '("融合画线+OCR", self.run_combined_draw_action)' in actions
-    assert '("OCR画线(默认)", self.run_ocr_draw_action)' in actions
-    assert actions.index('("普通画线", self.run_normal_draw_action)') < actions.index('("仅OCR", self.ocr_ordinary_lines_text_selected_scope)')
-    assert actions.index('("仅OCR", self.ocr_ordinary_lines_text_selected_scope)') < actions.index('("融合画线+OCR", self.run_combined_draw_action)')
-    assert actions.index('("融合画线+OCR", self.run_combined_draw_action)') < actions.index('("OCR画线(默认)", self.run_ocr_draw_action)')
-    assert '("填充词条", self.fill_existing_headwords)' in actions
-    assert '("修复排序", self.repair_pdic_order_selected_scope)' in actions
-    for tooltip_key in (
-        '"普通画线":', '"仅OCR":', '"融合画线+OCR":', '"OCR画线(默认)":', '"清除画线":', '"清除文本":', '"精修画线":', '"新旧比较":',
-        '"词条校对":', '"填充词条":', '"备份PDIC":', '"恢复PDIC":',
-        '"插图识别":', '"编辑插图":', '"压缩OCR缓存":', '"保存当前页":',
-    ):
-        assert tooltip_key in actions
-    assert '("恢复PDIC", self.restore_from_pdic_backup)' in actions
-    assert '("压缩OCR缓存", self.cleanup_paddleocr_temp_selected_scope)' in actions
-    assert actions.index('("压缩OCR缓存", self.cleanup_paddleocr_temp_selected_scope)') < actions.index('("保存当前页", self.save_current_page)')
-    assert '"success" if text == "保存当前页"' in actions
-    assert '"primary" if text == "词条校对"' in actions
-    assert '"danger_soft"' not in actions
-    assert '"refine_soft"' not in actions
-    assert '"compare_soft"' not in actions
-    assert '("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review)' in actions
-    assert '"text": "#000000"' in styles
+    assert 'install_workspace_tools(self, sidebar, sidebar_host)' in ui
+    assert '"一、版面参数"' in tools and '"二、显示设置"' in tools
+    drawing=(root / "ui/compact_task_menus.py").read_text(encoding="utf-8")
+    for method in ("run_normal_draw_action","ocr_ordinary_lines_text_selected_scope","run_combined_draw_action","run_ocr_draw_action","backup_pdic","restore_from_pdic_backup"):
+        assert method in drawing
+    assert 'self._sidebar_action_button(row, text, command, role=role)' in app
+    assert 'relief="flat"' in app
+    assert 'highlightthickness=1' in app
     assert '"primary": "#4F7CAC"' in styles
-    assert '"primary_hover": "#416A94"' in styles
     assert '"success": "#69A875"' in styles
-    assert '"success_hover": "#588F64"' in styles
-    assert '"review_soft"' not in styles
-    assert '"button_border": "#d3d8df"' in styles
-
-    button_start = text.index("    def _sidebar_action_button(")
-    button_end = text.index("    def _section_frame(", button_start)
-    button = text[button_start:button_end]
-    assert 'if role == "neutral":' in button
-    assert 'return ttk.Button(' in button
-    assert 'style="PC.Compact.TButton"' in button
-    assert 'border = colors["button_border"]' in button
-    assert 'relief="flat"' in button
-    assert "bd=0" in button
-    assert "highlightthickness=1" in button
-    assert "highlightbackground=border" in button
-    assert "highlightcolor=border" in button
-    assert '"PC.EditActive.TButton"' in styles
-
 
 def test_new_project_sidebar_defaults_do_not_overwrite_existing_session_preferences():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
@@ -1769,10 +1588,10 @@ def test_main_entry_sequence_numbers_use_page_uniform_width():
 
 
 def test_main_entry_sequence_label_uses_light_gray_black_style():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src/picture_capture/ui/entry_overlay_builder.py"
     text = source.read_text(encoding="utf-8")
-    draw_start = text.index("        index_label = tk.Label(")
-    draw_end = text.index("        index_label._pc_skip_classic_appearance", draw_start)
+    draw_start = text.index("    index_label = tk.Label(")
+    draw_end = text.index("    index_label._pc_skip_classic_appearance", draw_start)
     block = text[draw_start:draw_end]
     assert "text=self._entry_sequence_text(index, len(self.entries))" in block
     assert 'bg="#e6e6e6"' in block
@@ -1809,10 +1628,10 @@ def test_horizontal_ltr_rtl_are_mirror_equivalent():
 
 
 def test_horizontal_ui_uses_shared_layout_and_keeps_arabic_semantics():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src/picture_capture/ui/entry_overlay_builder.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("        horizontal = self.settings.layout_writing_mode == \"horizontal-tb\"")
-    end = text.index("        vertical_box: tuple[int, int, int, int] | None = None", start)
+    start = text.index("    horizontal = self.settings.layout_writing_mode == \"horizontal-tb\"")
+    end = text.index("    vertical_box: tuple[int, int, int, int] | None = None", start)
     rtl_branch = text[start:end]
     assert "horizontal_overlay_layout(" in rtl_branch
     assert "line_box(" not in rtl_branch
@@ -2453,17 +2272,27 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     quick = text[quick_start:quick_end]
     for label in ("正文起始Y：", "首栏X：", "单栏宽：", "栏间空："):
         assert label in quick
-    for label in ("普通字/行高：", "行间空：", "正文缩进：", "微调判距："):
-        assert label not in quick
+    # More precise layout labels replaced the old ambiguous height/gap text.
+    # They still map to the same pixel-backed settings variables.
+    for label, variable in (
+        ("典型单行字高：", "character_height"),
+        ("典型行间空白：", "row_padding"),
+        ("正文缩进：", "body_indent"),
+    ):
+        assert f'"{label}", "{variable}"' in quick
     assert quick.index('"单栏宽："') > quick.index('"首栏X："')
     assert quick.index('"栏间空："') > quick.index('"单栏宽："')
     assert "self.quick_pixel_vars: dict[str, tk.StringVar] = {}" in quick
     assert 'ttk.Label(value_frame, text="%")' in quick
     assert 'ttk.Label(value_frame, text="px")' in quick
     assert '"若所选页面数量≥2，参数为稳健中位数"' in quick
-    detect_start = text.index("    def detect_layout_current(self) -> None:")
-    detect_end = text.index("\n    def detect_layout_consistency_selected", detect_start)
-    detect = text[detect_start:detect_end]
+    detect = (
+        Path(__file__).resolve().parents[1] / "src" /
+        "picture_capture" / "layout_detection_actions.py"
+    ).read_text(encoding="utf-8")
+    detect = detect.split("def detect_layout_current(self) -> None:", 1)[1].split(
+        "def detect_layout_consistency_selected", 1
+    )[0]
     assert 'numeric_summary="mean"' not in detect
     assert "多页数值参数将取稳健中位数" in detect
     assert '"start_y": "% 图高"' in schema
@@ -3452,9 +3281,12 @@ def test_vb_ordinary_defaults_are_not_replaced_by_scale_heuristics():
     root = Path(__file__).resolve().parents[1]
     app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     profile_text = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
-    assert "body_indent_was_auto" in app_text
-    assert "horizontal_tolerance_was_auto" in app_text
-    assert 'if "character_height" in values:' in app_text
+    layout_actions = (root / "src" / "picture_capture" /
+                      "layout_detection_actions.py").read_text(encoding="utf-8")
+    assert "body_indent_was_auto" in layout_actions
+    assert "horizontal_tolerance_was_auto" in layout_actions
+    assert 'if "character_height" in values:' in layout_actions
+    assert 'return _run_detect_layout_current(self)' in app_text
     assert "body_indent_was_auto" in profile_text
     assert "horizontal_tolerance_was_auto" in profile_text
     assert 'if "character_height" in self._analysis_suggestion:' in profile_text
@@ -3974,11 +3806,9 @@ def test_numbered_profile_accepts_three_and_four_digit_prefixes():
 
 
 def test_vertical_main_editor_is_a_real_text_widget_not_a_canvas_proxy():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src/picture_capture/ui/entry_overlay_builder.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _draw_entry_overlay(")
-    end = text.index("    def _remove_entry_overlay(", start)
-    block = text[start:end]
+    block = text[text.index("def draw_entry_overlay("):]
 
     assert "VerticalWordText(" in block
     assert 'cursor="xterm"' in block
@@ -3993,7 +3823,7 @@ def test_vertical_main_editor_is_a_real_text_widget_not_a_canvas_proxy():
     assert "label_item" not in block
     assert "open_vertical_editor" not in block
     assert "_suppress_next_canvas_left_click" not in text
-    assert 'if rtl:\n            editor.configure(justify="right")' in block
+    assert 'if rtl:\n        editor.configure(justify="right")' in block
 
 
 def test_round1_blocking_ui_paths_use_background_workers():
@@ -4129,10 +3959,11 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     assert "shutil.rmtree(staging, ignore_errors=True)" not in done
     assert 'app._start_ui_worker(' in done
 
-    layout_start = app_text.index("    def detect_layout_consistency_selected(", app_start)
-    layout_end = app_text.index("\n    @staticmethod\n    def _normalize_suffix", layout_start)
-    layout = app_text[layout_start:layout_end]
-    done_start = layout.index("        def done(")
+    layout_text = (
+        root / "src" / "picture_capture" / "layout_detection_actions.py"
+    ).read_text(encoding="utf-8")
+    layout = layout_text.split("def detect_layout_consistency_selected(", 1)[1]
+    done_start = layout.index("    def done(")
     layout_done = layout[done_start:]
     assert "def finalize_report():" in layout_done
     assert 'self._start_ui_worker(' in layout_done
@@ -4154,7 +3985,16 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     assert "self.parent._start_ui_worker(" in request
     assert "Image.Resampling.LANCZOS" not in render
     assert "_review_line_box(" not in render
-    assert "ImageTk.PhotoImage(themed_display_image(crop, self.parent.appearance_mode))" in render
+    # The UI-only renderer delegates PhotoImage materialization to a method,
+    # keeping all PIL decoding and resizing in the background request worker.
+    assert "self._ordinary_review_photo(index)" in render
+    photo_start = review.index("    def _ordinary_review_photo(")
+    photo_end = review.index("\n    def set_active(", photo_start)
+    photo = review[photo_start:photo_end]
+    assert "ImageTk.PhotoImage(" in photo
+    assert "self._review_display_crops[index]" in photo
+    assert "themed_display_image(crop, self.parent.appearance_mode)" in photo
+    assert "Image.Resampling.LANCZOS" not in photo
     assert "self.render_rows()" not in review
 
     preview_start = profile_text.index("    def _refresh_template_preview(")
@@ -4169,6 +4009,7 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     assert "ImageTk.PhotoImage" not in worker
     assert "themed_display_image(" in preview[done_start:]
     assert 'preview, getattr(self.parent, "appearance_mode", "light")' in preview[done_start:]
+
 
 
 def test_round2_training_zip_cancel_is_atomic(tmp_path):

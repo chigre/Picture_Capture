@@ -228,10 +228,10 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # VB.NET NumericUpDown10: separator analysis width = column_width / value * 0.98.
     ordinary_right_divisor: float = 1.0
     horizontal_tolerance: int = 13
-    marker_height: int = 2
+    marker_height: int = 5
     guide_width: int = 2
-    guide_opacity: float = 40.0
-    headword_marker_opacity: float = 40.0
+    guide_opacity: float = 60.0
+    headword_marker_opacity: float = 60.0
     # Main overlay colours: headword markers stay red; other structural lines use blue.
     guide_color: str = "#1976d2"
     page_section_color: str = "#1976d2"
@@ -243,7 +243,7 @@ class AppSettings(metaclass=_AppSettingsMeta):
     illustration_outline_color: str = "#1976d2"
     illustration_outline_width: int = 2
     illustration_fill_color: str = "#ffe66d"
-    illustration_fill_opacity: float = 40.0
+    illustration_fill_opacity: float = 60.0
     illustration_label_border_color: str = "#1976d2"
     illustration_label_border_width: int = 2
     illustration_label_fill_color: str = "#e6e6e6"
@@ -335,13 +335,14 @@ class AppSettings(metaclass=_AppSettingsMeta):
     preprocess_export_align_y: str = "top"
     # Overlay editor presentation at 100% page scale. The page zoom multiplies
     # the base font, so text boxes zoom together with the scanned page.
+    show_main_entry_labels: bool = True
     main_entry_font_family: str = "自动（系统推荐）"
     main_entry_font_size: int = 16
     main_entry_font_bold: bool = False
     main_entry_font_italic: bool = False
     # Independent presentation for inline word / image-name labels in crop preview.
     crop_preview_font_family: str = "自动（系统推荐）"
-    crop_preview_font_size: int = 12
+    crop_preview_font_size: int = 16
     crop_preview_font_bold: bool = False
     crop_preview_font_italic: bool = False
     crop_preview_follow_zoom: bool = True
@@ -382,6 +383,9 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # Review crop height for ordinary (non-single-CJK) entries. 0 keeps the
     # automatic value: character_height + row_padding.
     review_regular_crop_height: int = 0
+    # Height multiplier for the fixed active-word preview. It extends down
+    # from the exact same top Y as the ordinary proofreading row crop.
+    review_extended_crop_height_multiplier: float = 2.5
     # While the proofreading window is open, keep the main canvas visually
     # quiet by default. These switches let users restore either OCR aid.
     review_main_show_ocr_choices: bool = False

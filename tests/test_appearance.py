@@ -1,4 +1,6 @@
 from pathlib import Path
+from types import SimpleNamespace
+import tkinter as tk
 
 from PIL import Image
 
@@ -168,7 +170,8 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert '"*TCombobox*Listbox.selectBackground"' in app_source
     assert 'apply_native_titlebar_appearance(root, self.appearance_mode)' in app_source
     assert 'if isinstance(widget, tk.Toplevel)' in app_source
-    assert 'button._pc_skip_classic_appearance = True' in app_source
+    overlay = (ROOT / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
+    assert 'delete_button._pc_skip_classic_appearance = True' in overlay
     assert 'activebackground=colors["accent_soft"]' in guide_source
     assert 'highlightthickness=0, takefocus=False' in guide_source
     assert 'self.parent_app._apply_current_appearance(self)' in guide_source
@@ -185,3 +188,81 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert "themed_display_image(" in profile_source
     assert 'preview, getattr(self.parent, "appearance_mode", "light")' in profile_source
     assert 'display, getattr(self.parent, "appearance_mode", "light")' in profile_source
+
+
+def test_destroyed_toplevel_is_ignored_by_delayed_appearance_callback(monkeypatch) -> None:
+    """Map callbacks queued for tooltips must not access deleted Tcl windows."""
+    from picture_capture import app as app_module
+
+    class VanishingWindow(tk.Toplevel):
+        # No interpreter required: simulate Tk's disappearing window path.
+        def __init__(self, alive: bool = True) -> None:
+            self.alive = alive
+            self.callback = None
+            self._pc_appearance_map_pending = False
+
+        def winfo_exists(self) -> int:
+            return int(self.alive)
+
+        def winfo_children(self):
+            if not self.alive:
+                raise tk.TclError("bad window path name .!button.!toplevel")
+            return []
+
+        def after_idle(self, callback):
+            self.callback = callback
+            return "idle-job"
+
+    themed = []
+    monkeypatch.setattr(app_module, "apply_classic_widget_appearance",
+                        lambda widget, mode: themed.append(("classic", widget)))
+    monkeypatch.setattr(app_module, "apply_native_titlebar_appearance",
+                        lambda widget, mode: themed.append(("native", widget)))
+    root = SimpleNamespace(appearance_mode="dark")
+    window = VanishingWindow()
+    # The callback must belong to the Toplevel itself (not the main window).
+    caller = SimpleNamespace(
+        _apply_current_appearance=lambda widget:
+        app_module.PictureCaptureApp._apply_current_appearance(root, widget),
+    )
+    app_module.PictureCaptureApp._appearance_toplevel_mapped(
+        caller, SimpleNamespace(widget=window),
+    )
+    assert callable(window.callback)
+    assert window._pc_appearance_map_pending is True
+    window.alive = False
+    window.callback()
+    assert window._pc_appearance_map_pending is False
+    assert themed == []
+    # No new callback should be installed for a window already destroyed.
+    window.callback = None
+    app_module.PictureCaptureApp._appearance_toplevel_mapped(
+        caller, SimpleNamespace(widget=window),
+    )
+    assert window.callback is None
+
+
+def test_toplevel_destroyed_between_theme_and_child_walk_is_safe(monkeypatch) -> None:
+    """winfo_children can raise even after a successful winfo_exists check."""
+    from picture_capture import app as app_module
+
+    class DisappearingDuringTheme(tk.Toplevel):
+        def __init__(self) -> None:
+            self.alive = True
+
+        def winfo_exists(self) -> int:
+            return int(self.alive)
+
+        def winfo_children(self):
+            raise tk.TclError("bad window path name .!frame.!button.!toplevel")
+
+    window = DisappearingDuringTheme()
+    calls = []
+    monkeypatch.setattr(app_module, "apply_classic_widget_appearance",
+                        lambda widget, mode: calls.append("classic"))
+    monkeypatch.setattr(app_module, "apply_native_titlebar_appearance",
+                        lambda widget, mode: calls.append("native"))
+    app_module.PictureCaptureApp._apply_current_appearance(
+        SimpleNamespace(appearance_mode="light"), window,
+    )
+    assert calls == ["classic", "native"]

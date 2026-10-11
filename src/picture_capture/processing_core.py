@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -189,6 +189,8 @@ class PageCropPlan:
     entry_pieces: list[EntryCropPiecePlan]
     illustrations: list[IllustrationCropPlan]
     integrate_illustrations: bool = True
+    # Preview-only regions after auxiliary stop lines; never included in WW export.
+    auxiliary_gaps: list[tuple[int, int, int, int]] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -3028,12 +3030,15 @@ def build_page_crop_plan(
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
         profile_page_index=profile_page_index, page_sections=page_sections,
     )
+    auxiliary_gaps: list[tuple[int, int, int, int]] = []
     if auxiliary_lines:
         from .auxiliary_crop_partition import partition_entry_pieces
         _source, _effective, _analysis, geometry = _page_geometry_context(
             image, settings, profile_page_index,
         )
-        pieces = partition_entry_pieces(pieces, auxiliary_lines, geometry)
+        pieces = partition_entry_pieces(
+            pieces, auxiliary_lines, geometry, auxiliary_gaps=auxiliary_gaps,
+        )
     boxes_by_entry: dict[int,list[tuple[int,int,int,int]]] = {}
     piece_indices_by_entry: dict[int,list[int]] = {}
     for pos,piece in enumerate(pieces):
@@ -3085,7 +3090,9 @@ def build_page_crop_plan(
             piece.source_mode="linked_original"
         if pos in partial_merge:
             piece.merge_polygon_indices=tuple(partial_merge[pos])
-    return PageCropPlan(pieces,illustrations,bool(integrate_illustrations))
+    return PageCropPlan(
+        pieces, illustrations, bool(integrate_illustrations), auxiliary_gaps,
+    )
 
 
 def _stage_page_crop_plan(

@@ -57,6 +57,7 @@ class SessionController:
                 ),
                 "view_zoom_percent": round(app.view_scale * 100),
                 "appearance_mode": app.appearance_preference,
+                "workspace_mode": getattr(app, "workspace_mode", "最大"),
                 "section_expanded": dict(app.section_expanded),
             }
             tmp = app._session_path.with_suffix(".tmp")
@@ -76,10 +77,12 @@ class SessionController:
         state = app._last_session or {}
         root_text = str(state.get("last_project") or "").strip()
         if not root_text:
+            app._restore_workspace_layout()
             return
         root = Path(root_text).expanduser()
         if not root.is_dir():
             app.status_var.set(f"上次项目不可用：{root}")
+            app._restore_workspace_layout()
             return
         if state.get("page_range") in {"current", "to_end", "specified"}:
             app.page_range_var.set(str(state.get("page_range")))

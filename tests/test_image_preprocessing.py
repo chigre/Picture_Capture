@@ -1431,57 +1431,23 @@ def test_promote_processed_pages_requires_only_selected_exports_and_never_overwr
         raise AssertionError("existing page backup must never be overwritten")
 
 
-def test_main_workspace_exposes_and_locks_preprocess_mode() -> None:
-    root = Path(__file__).resolve().parents[1]
-    source = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
-    page_controller = (
-        root / "src" / "picture_capture" / "ui" / "controllers" / "page.py"
-    ).read_text(encoding="utf-8")
-
-    assert '"图片预处理(前置)"' in source
-    assert 'text="进入预处理模式"' in source
-    assert 'text="自动纠偏"' in source
-    assert 'text="安全边界："' in source
-    assert '"自动几何（推荐）"' in source
-    assert '"UVDoc展平（Paddle高级）"' in source
-    assert 'text="统一最终页面"' in source
-    assert 'text="页边空(px)：" ' .strip() in source
-    assert '"本批最大裁剪尺寸"' in source
-    assert '"自定义尺寸"' in source
-    assert '"左对齐", "居中", "右对齐"' in source
-    assert "preprocess_export_margin_top_var" in source
-    assert "preprocess_export_margin_bottom_var" in source
-    assert "preprocess_export_margin_left_var" in source
-    assert "preprocess_export_margin_right_var" in source
-    assert '"顶端对齐", "居中", "底部对齐"' in source
-    assert "export_diagnostic_json(" in source
-    assert "export_summary_csv(" in source
-    assert "allow_page_navigation: bool = False" in source
-    assert source.count("allow_page_navigation=True") >= 4
-    assert page_controller.count(
-        'and not getattr(app, "_batch_allow_page_navigation", False)'
-    ) >= 2
-    assert 'text="手动四角"' in source
-    assert 'text="重置四角"' in source
-    assert 'text="px"' in source
-    assert '"分析当前页"' not in source
-    assert '"分析所选范围"' in source
-    assert '("诊断信息", self.show_preprocess_diagnostics)' in source
-    assert 'text="导出检查小图"' in source
-    assert 'text="导出预处理图片"' in source
-    assert 'text="所选设为工作图片"' in source
-    assert 'textvariable=self.preprocess_status_var' not in source
-    assert 'section_keys = ("normal", "aux", "ocr", "actions", "postproduction")' in source
-    assert '("review_window", "词条校对")' in source
-    assert '("_settings_dialog", "设置中心")' in source
-    assert '("_project_profile_wizard", "项目Profile")' in source
-    assert "self.project_footer_buttons.append(button)" in source
-    assert 'if self._preprocess_mode_active():\n            self.status_var.set("预处理模式中：SECTION 编辑已锁定。")' in source
-    assert "if self._preprocess_mode_active():" in source
-    assert "self._redraw_preprocess_preview(size)" in source
-    assert "普通编辑已锁定" in source
-
-
+def test_main_workspace_exposes_and_locks_preprocess_mode():
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    app = (root / "app.py").read_text(encoding="utf-8")
+    tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    menu=(root / "ui/compact_task_menus.py").read_text(encoding="utf-8")
+    page_controller=(root / "ui/controllers/page.py").read_text(encoding="utf-8")
+    for value in ("进入预处理模式","自动纠偏","安全边界px:","自动几何（推荐）","UVDoc展平（Paddle高级）","统一页面大小","本批最大裁剪尺寸","自定义尺寸","页边空px:","诊断信息","手动四角","重置四角","导出检查小图","导出预处理图片","所选设为工作图片"):
+        assert value in menu
+    for name in ("preprocess_export_margin_top_var","preprocess_export_margin_bottom_var","preprocess_export_margin_left_var","preprocess_export_margin_right_var"):
+        assert name in menu
+    assert '("左对齐", "居中", "右对齐")' in menu
+    assert '("顶端对齐", "居中", "底部对齐")' in menu
+    assert 'app.project_footer_buttons.append(button)' in tools
+    assert 'and not getattr(app, "_batch_allow_page_navigation", False)' in page_controller
+    for snippet in ("def _preprocess_mode_active(","export_diagnostic_json(","export_summary_csv(","allow_page_navigation: bool = False","_redraw_preprocess_preview(size)"):
+        assert snippet in app
+    assert "普通编辑已锁定" in app
 
 def test_global_deskew_prefers_reliable_physical_header_rule(
     monkeypatch,

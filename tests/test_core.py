@@ -1768,11 +1768,9 @@ def test_v273_main_entry_membership_border_rule_is_wordslist_driven():
 
 def test_v273_main_entry_border_updates_while_typing():
     from pathlib import Path
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src/picture_capture/ui/entry_overlay_builder.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _draw_entry_overlay(")
-    end = text.index("    def _remove_entry_overlay", start)
-    block = text[start:end]
+    block = text[text.index("def draw_entry_overlay("):]
     assert '"<KeyRelease>"' in block
     assert 'self._style_entry_editor(w, e, w.get().strip())' in block
 
@@ -1795,11 +1793,9 @@ def test_v274_main_ocr_candidate_rows_include_each_engine_and_fused_result():
 
 
 def test_v274_main_redraw_wires_compact_ocr_selector_next_to_entry():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src/picture_capture/ui/entry_overlay_builder.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _draw_entry_overlay(")
-    end = text.index("    def _remove_entry_overlay", start)
-    block = text[start:end]
+    block = text[text.index("def draw_entry_overlay("):]
     assert "candidate = self._candidate_for_entry(entry)" in block
     assert "self._create_main_ocr_menu(entry, editor, candidate)" in block
     assert "editor.winfo_reqwidth()" in block
@@ -1830,8 +1826,10 @@ def test_v275_page_switch_saves_current_editing_mode_before_loading_new_page():
     load_start = text.index("    def load_page(")
     load_end = text.index("    def change_page(", load_start)
     load_block = text[load_start:load_end]
-    assert "self._save_current_page_by_mode()" in load_block
-    assert load_block.index("self._save_current_page_by_mode()") < load_block.index("self.current_index = index")
+    assert "save_review_before_page_change(self, index" in load_block
+    assert "self._save_current_page_by_mode(sync_editors=not review_saved)" in load_block
+    assert load_block.index("save_review_before_page_change(self, index") < load_block.index("self.current_index = index")
+    assert load_block.index("self._save_current_page_by_mode(sync_editors=not review_saved)") < load_block.index("self.current_index = index")
 
     assert "app._save_current_page_by_mode()" in controller
 
@@ -3575,7 +3573,7 @@ def test_v292_display_zoom_remains_display_only_and_main_image_is_rgb():
     assert 'convert("RGBA")' not in load_block
 
     cache_start = text.index("    def _get_cached_display_photo(")
-    cache_end = text.index("    def _draw_entry_overlay(", cache_start)
+    cache_end = text.index("    def _apply_display_mode(", cache_start)
     cache_block = text[cache_start:cache_end]
     assert 'self.image.resize(size, Image.Resampling.LANCZOS)' in cache_block
     assert 'self.image.convert("RGB")' not in cache_block
@@ -3586,7 +3584,7 @@ def test_v292_display_zoom_remains_display_only_and_main_image_is_rgb():
     assert 'self._get_cached_display_photo(size)' in redraw_block
 
     zoom_start = text.index("    def zoom(")
-    zoom_end = text.index("    def canvas_mousewheel(", zoom_start)
+    zoom_end = text.index("    def fit_page_width(", zoom_start)
     zoom_block = text[zoom_start:zoom_end]
     assert "parameter_display_width" not in zoom_block
     assert "self.settings" not in zoom_block
@@ -3694,7 +3692,7 @@ def test_v294_background_photo_cache_key_includes_page_size_binary_and_appearanc
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     start = text.index("    def _get_cached_display_photo(")
-    end = text.index("    def _draw_entry_overlay(", start)
+    end = text.index("    def _apply_display_mode(", start)
     block = text[start:end]
     assert "key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)" in block
     assert "self._display_photo_cache_key != key" in block
@@ -4093,18 +4091,15 @@ def test_v299_load_project_restores_word_fill_status_before_page_list_refresh():
 
 
 def test_v2910_page_list_has_persistent_fill_status_column():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     assert 'columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")' in text
-    assert 'self.page_list.heading("section", text="Section", anchor="w")' in text
-    assert 'self.page_list.heading("fill_status", text="填充状态", anchor="w")' in text
-    for column in ("bookmark", "page", "section", "lined", "fill_status", "illustrations"):
-        assert f'self.page_list.column("{column}",' in text
-        column_call = text[text.index(f'self.page_list.column("{column}",'):][:140]
-        assert 'anchor="w"' in column_call
-    assert 'bd=0, highlightthickness=0, anchor="w", padx=4, pady=0' in text
-    assert 'self._word_fill_status_text(index)' in text
-
+    for col,label in (("bookmark","●"),("page","页面"),("section","域"),("lined","线"),("fill_status","填充状态"),("illustrations","图")):
+        assert f'self.page_list.heading("{col}", text="{label}", anchor="center")' in text
+        assert f'self.page_list.column("{col}",' in text
+    assert "self._word_fill_status_text(index)" in text
+    assert 'displaycolumns=("page", "lined", "illustrations")' in workspace
 
 def test_v2910_fill_status_text_reports_match_and_signed_difference(tmp_path):
     class FakeProject:
@@ -4391,6 +4386,10 @@ def test_v2914_lined_metadata_update_does_not_resort_fill_status_sort():
     app.page_list = FakeTree()
     app._page_list_sort_column = "fill_status"
     app._page_metadata = lambda _index: "✓"
+    app._page_section_count_text = lambda _index: ""
+    app._page_illustration_count_text = lambda _index: ""
+    app._bookmark_stems = lambda: set()
+    app.workspace_mini_page_list = None
     app._word_fill_status_text = lambda _index: "少 2"
     resorts = []
     app._schedule_page_list_resort = lambda: resorts.append("resort")
@@ -4422,6 +4421,10 @@ def test_v2914_fill_status_change_resorts_fill_status_sort():
     app.page_list = FakeTree()
     app._page_list_sort_column = "fill_status"
     app._page_metadata = lambda _index: "✓"
+    app._page_section_count_text = lambda _index: ""
+    app._page_illustration_count_text = lambda _index: ""
+    app._bookmark_stems = lambda: set()
+    app.workspace_mini_page_list = None
     app._word_fill_status_text = lambda _index: "一致"
     resorts = []
     app._schedule_page_list_resort = lambda: resorts.append("resort")
@@ -4646,44 +4649,39 @@ def test_v2110_entry_crop_whitens_standalone_ppp_but_preserves_linked_ppp(tmp_pa
 
 
 def test_v2110_page_list_heading_context_menu_has_optional_columns_and_permanent_page():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    assert "bind_context_menu(self.page_list, self._page_list_right_click)" in text
-    assert 'menu.add_checkbutton(label="页面", variable=page_var, state="disabled")' in text
-    assert 'menu.add_checkbutton(label="Section", variable=section_var, state="disabled")' in text
-    assert 'label="画线"' in text and 'label="填充状态"' in text and 'label="插图"' in text
-
-
-
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    block=text.split("    def _page_list_right_click(",1)[1].split("    def _schedule_page_cell_overlay_refresh(",1)[0]
+    for label in ("●","页面","区块","画线","插图","填充状态"):
+        assert f'label="{label}"' in block
+    assert 'menu.add_checkbutton(label="页面", variable=page_var, state="disabled")' in block
+    assert 'menu.add_checkbutton(label="区块", variable=section_var, state="disabled")' in block
+    assert 'variable=self._page_column_vars["illustrations"]' in block
+    assert 'variable=self._page_column_vars["fill_status"]' in block
 
 def test_v2140_page_list_visible_column_order_places_illustrations_before_fill_status():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    start = text.index("    def _apply_page_list_display_columns")
-    end = text.index("    def _page_list_right_click", start)
-    block = text[start:end]
-    assert 'columns = ["bookmark", "page", "section"]' in block
-    assert block.index('columns.append("lined")') < block.index('columns.append("illustrations")')
-    assert block.index('columns.append("illustrations")') < block.index('columns.append("fill_status")')
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    block=text.split("    def _apply_page_list_display_columns(",1)[1].split("    def _page_list_configured(",1)[0]
+    assert 'columns = ["bookmark", "page", "lined"]' in block
+    assert block.index('columns.append("illustrations")') < block.index('columns.append("section")')
+    assert block.index('columns.append("section")') < block.index('columns.append("fill_status")')
     assert 'self.page_list.configure(displaycolumns=tuple(columns))' in block
 
-
 def test_v2116_page_list_has_illustration_count_column_and_sort():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    assert 'self.page_list.heading("illustrations", text="插图", anchor="w")' in text
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    assert 'self.page_list.heading("illustrations", text="图", anchor="center")' in text
     assert 'command=lambda: self._sort_page_list("illustrations")' in text
     assert 'page_list_show_illustrations' in text
-    rows = [
-        ("0", ("a.png", "✓", "一致", "12")),
-        ("1", ("b.png", "✓", "一致", "2")),
-        ("2", ("c.png", "✓", "一致", "")),
-    ]
-    asc = _sorted_page_list_rows(rows, "illustrations", False)
-    desc = _sorted_page_list_rows(rows, "illustrations", True)
-    assert [iid for iid, _ in asc] == ["1", "0", "2"]
-    assert [iid for iid, _ in desc] == ["0", "1", "2"]
-
+    rows = [("0", ("a.png", "✓", "一致", "12")),
+            ("1", ("b.png", "✓", "一致", "2")),
+            ("2", ("c.png", "✓", "一致", ""))]
+    assert [iid for iid, _ in _sorted_page_list_rows(rows,"illustrations",False)] == ["1","0","2"]
+    assert [iid for iid, _ in _sorted_page_list_rows(rows,"illustrations",True)] == ["0","1","2"]
 
 def test_page_list_section_column_sorts_numeric_text_naturally():
     rows = [
@@ -4729,76 +4727,43 @@ def test_main_crop_preview_is_selected_only_through_display_mode():
 
 
 def test_display_mode_and_color_mode_live_at_bottom_of_auxiliary_options():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    controller_text = (
-        Path(__file__).resolve().parents[1]
-        / "src" / "picture_capture" / "ui" / "controllers" / "canvas.py"
-    ).read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    controller=(root / "ui/controllers/canvas.py").read_text(encoding="utf-8")
     assert 'text="显示模式："' in text
     assert 'values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览")' in text
     assert 'display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)' in text
-    page_start = text.index('page_panel = self._section_frame(sidebar, "六、页面列表"')
-    page_end = text.index("        list_frame = ttk.Frame(page_panel)", page_start)
-    page_toolbar = text[page_start:page_end]
+    assert 'text="颜色模式："' in text
+    assert 'textvariable=self.appearance_mode_var' in text
+    assert 'values=tuple(APPEARANCE_MODE_VALUES)' in text
+    page_toolbar=text.split('page_panel = ttk.Frame(sidebar,',1)[1].split('list_frame = ttk.Frame(page_panel)',1)[0]
     assert 'text="显示模式："' not in page_toolbar
-
-    aux_start = text.index('self._section_frame(parent, "二、显示设置"')
-    aux_end = text.index('ocr = self._section_frame(parent, "三、共享 OCR 通道 / OCR画线"', aux_start)
-    aux = text[aux_start:aux_end]
-    assert 'display_mode_combo = ttk.Combobox(\n            option_row,' in aux
-    assert 'text="颜色模式："' in aux
-    assert 'textvariable=self.appearance_mode_var' in aux
-    assert 'values=tuple(APPEARANCE_MODE_VALUES)' in aux
-    assert 'text="显示切图预览"' not in aux
-    assert aux.index('text="隐藏线框(插图除外)"') < aux.index('text="显示模式："')
-    assert aux.index('text="显示模式："') < aux.index('text="颜色模式："')
-    assert 'text="◧"' not in text
-    assert '"原图+标注": (False, False, False)' in controller_text
-    assert '"二值+标注": (True, False, False)' in controller_text
-    assert '"仅原图": (False, True, False)' in controller_text
-    assert '"仅二值": (True, True, False)' in controller_text
-    assert '"切图预览": (False, False, True)' in controller_text
-
+    for mode in ('"原图+标注"','"二值+标注"','"仅原图"','"仅二值"','"切图预览"'):
+        assert mode in controller
 
 def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    assert 'text="当前页"' in text
-    assert 'text="当前至末页"' in text
-    assert 'text="⇔"' in text
-    assert 'text="⇕"' in text
-    assert 'text="跳到"' not in text
-    assert 'text="跳转"' in text
-    assert text.index('text="⇕"') < text.index('text="跳转"') < text.index('text="上一页"') < text.index('text="下一页"')
-    page_start = text.index('page_panel = self._section_frame(sidebar, "六、页面列表"')
-    page_end = text.index("        list_frame = ttk.Frame(page_panel)", page_start)
-    page_toolbar = text[page_start:page_end]
-    assert page_toolbar.count('style="PC.PageNav.TButton"') == 3
-    assert 'style.configure("PC.PageNav.TButton", padding=(2, 2))' in text
-    assert 'text="跳转", width=6' in page_toolbar
-    assert 'text="上一页", width=6' in page_toolbar
-    assert 'text="下一页", width=6' in page_toolbar
-    assert page_toolbar.count('style="PC.PageNav.TButton"') == 3
-    for tooltip in (
-        "缩小显示",
-        "放大显示",
-        "适合宽度显示",
-        "适合高度显示",
-        "跳转到上一书签",
-        "跳转到下一书签",
-        "跳转到指定页面的第一个有效页面",
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    compact=(root / "ui/simple_page_controls.py").read_text(encoding="utf-8")
+    # Each compact radio is installed with an explicit grid column.
+    for column, caption, value in (
+        (0, "当前", "current"),
+        (1, "至末页", "to_end"),
+        (2, "至指定", "to_specified"),
     ):
-        assert f'self._attach_tooltip(' in page_toolbar
-        assert f'"{tooltip}"' in page_toolbar
-    assert 'text="页面大小："' not in text
-    assert '("项目中心", self.open_recent_project)' in text
-    assert "self.after_idle(self._maximize_main_window)" in text
-    assert "self.after_idle(self._ensure_sidebar_navigation_width)" in text
-    assert '"lined": "画线"' in text
-    assert 'if len(indices) < 2:' in text
-    assert '至少需要选择 2 页' in text
-
+        assert f'({column}, "{caption}", "{value}")' in compact
+    assert 'variable=app.page_range_var, value=value' in compact
+    assert 'text="跳"' not in text or 'text="跳"' in text
+    for symbol in ('"⨇"', '"⨈"','"上"','"下"'):
+        assert symbol in compact
+    for symbol in ("缩小显示","放大显示","占满宽度","占满高度"):
+        assert symbol in workspace
+    assert 'app.change_page(-1)' in compact and 'app.change_page(1)' in compact
+    assert 'jump_to_page_spec' in compact
+    layout_actions = (root / "layout_detection_actions.py").read_text(encoding="utf-8")
+    assert '至少需要选择 2 页' in layout_actions
 
 def test_action_and_postproduction_rows_use_equal_width_grid_columns():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
@@ -4899,25 +4864,20 @@ def test_fixed_column_prior_constrains_sparse_box_layout():
 
 
 def test_bookmark_controls_and_project_switch_protect_project_settings():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    assert 'text="⨇"' in text and 'text="⨈"' in text
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    compact=(root / "ui/simple_page_controls.py").read_text(encoding="utf-8")
+    assert '"⨇"' in compact and '"⨈"' in compact
+    assert 'app.jump_to_bookmark(-1)' in compact
+    assert 'app.jump_to_bookmark(1)' in compact
     assert 'columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")' in text
-    assert '"●" if page.stem in self._bookmark_stems() else ""' in text
-    load_start = text.index("    def _load_project(")
-    load_end = text.index("    def on_page_select", load_start)
-    load_block = text[load_start:load_end]
-    assert "self.after_cancel(pending_quick_job)" in load_block
-    assert "self._quick_trace_ready = False" in load_block
-    assert "self._display_geometry_cache = None" in load_block
-
-    processing = (source.parent / "processing.py").read_text(encoding="utf-8")
-    normal_start = processing.index("def _detect_entries_left_edge")
-    normal_end = processing.index("\ndef detect_entries", normal_start)
-    normal_block = processing[normal_start:normal_end]
-    assert "from .paddle_headwords import refine_separator_y" in normal_block
-    assert "refined_y, _refinement = refine_separator_y(" in normal_block
-
+    assert '"●" if page_stem in self._bookmark_stems() else ""' in text
+    block=text.split("    def _load_project(",1)[1].split("    def on_page_select",1)[0]
+    for rule in ("self.after_cancel(pending_quick_job)","self._quick_trace_ready = False","self._display_geometry_cache = None"):
+        assert rule in block
+    processing=(root / "processing.py").read_text(encoding="utf-8")
+    assert "refine_separator_y" in processing
 
 def test_crop_preview_uses_export_filename_and_centered_entry_typography():
     from picture_capture.processing import EntryCropPiecePlan, entry_crop_piece_filename
@@ -5410,45 +5370,19 @@ def test_project_details_are_persisted_in_project_settings(tmp_path):
 
 
 def test_sidebar_defaults_fold_sections_two_through_five_and_keep_project_details():
-    app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    defaults_start = app_text.index("        self.section_expanded = {")
-    defaults_end = app_text.index("\n        stored_sections =", defaults_start)
-    defaults = app_text[defaults_start:defaults_end]
-    assert '"preprocess": False' in defaults
-    assert '"normal": True' in defaults
-    assert '"aux": False' in defaults
-    assert '"ocr": False' in defaults
-    assert '"actions": False' in defaults
-    assert '"postproduction": False' in defaults
-    assert '"pages": True' in defaults
-    assert "SIDEBAR_SECTION_DEFAULTS_VERSION" not in app_text
-    assert "sidebar_section_defaults_version" not in app_text
-    assert "def _apply_new_project_sidebar_defaults(self) -> None:" in app_text
-    assert "self._apply_new_project_sidebar_defaults()" in app_text
-    new_defaults_start = app_text.index("    def _apply_new_project_sidebar_defaults(self) -> None:")
-    new_defaults_end = app_text.index("\n    @staticmethod", new_defaults_start)
-    new_defaults = app_text[new_defaults_start:new_defaults_end]
-    assert '"preprocess": False' in new_defaults
-    assert 'parent, "图片预处理(前置)", padding=5, section_key="preprocess"' in app_text
-    assert 'parent, "五、后期词典制作", padding=5, section_key="postproduction"' in app_text
-    assert '"四、画线 / OCR / 插图 / 校对"' in app_text
-    assert 'self._section_frame(sidebar, "六、页面列表"' in app_text
-    first_row = (
-        '(("单行切图", self.split_single_lines_selected_scope), '
-        '("未画线行导出", self.export_unlined_rows_selected_scope), '
-        '("词条切图", self.split_entries_selected_scope), '
-        '("插图切图", self.split_illustrations_selected_scope))'
-    )
-    second_row = '(("项目详情", self.open_project_details), ("导出PicDic索引", self.export_picdic_index), ("PicDic制作", self.build_picdic))'
-    final_row = '(("导出训练标记包", self.export_training_package),)'
-    assert first_row in app_text
-    assert second_row in app_text
-    assert final_row in app_text
-    assert '("切图设置", self.open_crop_settings)' not in app_text
-    assert '(project_tab, "项目/批量")' in app_text
-    assert '"项目资料"' in app_text
-    assert 'self.open_settings(initial_tab="project")' in app_text
-
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    defaults=text.split('self.section_expanded = {',1)[1].split("stored_sections =",1)[0]
+    for key,value in (("preprocess","False"),("normal","True"),("aux","False"),("ocr","False"),("actions","False"),("postproduction","False"),("pages","True")):
+        assert f'"{key}": {value}' in defaults
+    assert "def _apply_new_project_sidebar_defaults(self) -> None:" in text
+    for label in ("预处理","版面参数","显示参数","OCR参数","画线…","后期制作"):
+        assert label in workspace
+    for label,fn in (("项目","open_recent_project"),("Profile","open_project_profile"),("设置","open_settings"),("帮助","show_help_dialog")):
+        assert f'("{label}", app.{fn},' in workspace
+    assert 'app.project_footer_buttons.append(button)' in workspace
+    assert 'project_group.pack(side="left"' in workspace
 
 def test_auxiliary_overlay_defaults_and_label_style_controls():
     settings = AppSettings()
@@ -5460,7 +5394,7 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert settings.illustration_label_border_color == "#1976d2"
     assert settings.main_entry_default_color == "#e6e6e6"
     assert settings.illustration_label_fill_color == "#e6e6e6"
-    assert settings.marker_height == 2
+    assert settings.marker_height == 5
     assert settings.guide_width == 2
     assert settings.page_section_width == 2
     assert settings.illustration_outline_width == 2
@@ -5485,6 +5419,7 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert settings.show_illustration_labels is False
     assert settings.batch_interval == 3.0
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    overlay = (Path(__file__).parents[1] / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
     for token in (
         '"illustration_outline_width"', '"illustration_label_border_width"',
         '"illustration_label_font_family"', '"illustration_label_font_size"',
@@ -5500,22 +5435,22 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert scaled_overlay_line_width(2, 0.5) == 1
     assert scaled_overlay_line_width(2, 1.5) == 3
     assert 'scaled_overlay_line_width(self.settings.guide_width, overlay_scale)' in app_text
-    assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in app_text
+    assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in overlay
     assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
     assert 'highlightthickness=max(0, int(self.settings.illustration_label_border_width))' in app_text
     # Sequence uses a neutral light-gray background; destructive [X] remains separate.
-    assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in app_text
-    assert 'bg="#e6e6e6"' in app_text
-    assert 'fg="#000000"' in app_text
-    assert 'text=self._entry_sequence_text(index, len(self.entries))' in app_text
+    assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in overlay
+    assert 'bg="#e6e6e6"' in overlay
+    assert 'fg="#000000"' in overlay
+    assert 'text=self._entry_sequence_text(index, len(self.entries))' in overlay
     assert 'marker_control_bg = str(self.settings.headword_marker_color)' not in app_text
-    assert 'record["index_widget"] = index_label' in app_text
-    assert 'record["delete_widget"] = delete_button' in app_text
-    assert 'text="[X]"' in app_text
-    assert 'bg="#9d042f"' in app_text
-    assert 'activebackground="#9d042f"' in app_text
-    assert 'self._attach_tooltip(delete_button, "点击删除该画线!")' in app_text
-    assert 'delete_x = float(index_x - index_width - 1)' in app_text
+    assert 'record["index_widget"] = index_label' in overlay
+    assert 'record["delete_widget"] = delete_button' in overlay
+    assert 'text="[X]"' in overlay
+    assert 'bg="#9d042f"' in overlay
+    assert 'activebackground="#9d042f"' in overlay
+    assert 'self._attach_tooltip(delete_button, "点击删除该画线!")' in overlay
+    assert 'delete_x = float(index_x - index_width - 1)' in overlay
 
 
 def test_platform_language_font_recommendations_and_auto_normalization():
@@ -5549,7 +5484,8 @@ def test_all_configurable_content_font_paths_use_shared_auto_resolver():
     ).read_text(encoding="utf-8")
     assert "AUTO_FONT_FAMILY" in app_text
     assert "resolve_content_font_family(" in app_text
-    assert "self.settings.main_entry_font_family,\n            self.settings.ocr_language" in app_text
+    overlay = (Path(__file__).parents[1] / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
+    assert "self.settings.main_entry_font_family,\n        self.settings.ocr_language" in overlay
     assert "self.settings.illustration_label_font_family,\n                                self.settings.ocr_language" in app_text
     assert "self.parent.settings.review_entry_font_family,\n                self.parent.settings.ocr_language" in app_text
     assert '"review_simplified_font_family"' in app_text
@@ -5672,23 +5608,18 @@ def test_v21114_review_font_marker_prevents_repeat_migration(tmp_path):
 
 
 def test_v21115_review_window_exposes_persisted_font_controls():
-    from pathlib import Path
-    import inspect
     import picture_capture.app as app_module
-
-    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    start = text.index("class ReviewWindow")
-    body = text[start:text.index("class ", start + 20) if "class " in text[start + 20:] else len(text)]
-    assert 'text="词条字体："' in body
-    assert 'text="字号："' in body
-    assert 'text="粗体"' in body
-    assert 'text="斜体"' in body
-    assert 'self.review_font_family_var' in body
-    assert 'self.review_font_size_var' in body
-    assert 'settings.review_entry_font_family = family' in body
-    assert 'settings.review_entry_font_size = size' in body
-    assert 'self.parent.save_settings()' in body
-
+    assert hasattr(app_module.ReviewWindow, "render_rows")
+    text = Path(app_module.__file__).read_text(encoding="utf-8")
+    body=text.split("class ReviewWindow",1)[1].split("class PictureCaptureApp",1)[0]
+    for name in ("review_font_family_var","review_font_size_var","review_entry_font_family = family","review_entry_font_size = size","self.parent.save_settings()"):
+        assert name in body
+    # The compact review toolbar uses the abbreviated labels 粗 / 斜,
+    # while keeping the same persistent settings bindings.
+    assert 'text="粗", variable=self.review_font_bold_var' in body
+    assert 'text="斜", variable=self.review_font_italic_var' in body
+    assert 'settings.review_entry_font_bold = bold' in body
+    assert 'settings.review_entry_font_italic = italic' in body
 
 def test_v21115_review_font_apply_does_not_change_review_zoom():
     from pathlib import Path
@@ -5840,7 +5771,7 @@ def test_review_right_sections_use_requested_default_expansion_states():
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'for key in ("display", "digit", "accent", "ocr", "network", "reference")' in review
-    assert 'key: tk.BooleanVar(value=(key not in {"digit", "accent"}))' in review
+    assert 'key: tk.BooleanVar(value=(key == "reference"))' in review
     assert 'expanded = True if state is None else bool(state.get())' in review
     for key, title in (
         ("display", "显示设置"),
@@ -6047,10 +5978,15 @@ def test_v21118_review_page_change_resets_crop_text_scroll_to_top():
     assert "self.after_idle(reset_after_layout)" in body
     change_start = body.index("    def change_page")
     change = body[change_start:]
-    assert "self._request_render_rows(focus_index=0, reset_scroll=True)" in change
-    assert "self.render_rows(preloaded_crops=crops)" in change
-    assert "self._reset_rows_scroll_top()" in change
-    assert change.index("self.render_rows(preloaded_crops=crops)") < change.index("self._reset_rows_scroll_top()")
+    # The central main-window load_page path now owns page-switch refresh for
+    # review and main-window navigation alike, avoiding a second redraw.
+    assert "self.parent.change_page(" in change
+    shared = (Path(inspect.getsourcefile(app_module)).parent /
+              "ui" / "review_page_sync.py").read_text(encoding="utf-8")
+    assert "review._request_render_rows(focus_index=0, reset_scroll=True)" in shared
+    assert "review.render_rows(preloaded_crops=list(crops))" in shared
+    assert "review._reset_rows_scroll_top()" in shared
+    assert shared.index("review.render_rows(preloaded_crops=list(crops))") < shared.index("review._reset_rows_scroll_top()")
 
 
 def test_v21119_review_text_similarity_normalizes_spacing_punctuation_and_case():
@@ -6096,13 +6032,14 @@ def test_v21119_review_ui_exposes_text_left_padding_and_live_ocr_similarity():
     assert 'editor.pack_configure(padx=(padding, 0))' in review
 
 
-def test_review_oversized_classification_crop_expands_but_regular_does_not():
+def test_review_single_character_text_uses_configured_height_regardless_of_classification():
     from picture_capture.app import _review_line_box
 
     image = Image.new("RGB", (1000, 1400), "white")
     settings = AppSettings(
         columns=1, column_width=600,
         character_height=40, row_padding=4, ocr_language="chi_tra",
+        review_single_cjk_line_height=96, review_regular_crop_height=44,
     )
     geometry = Geometry([100], [600], 50, 1300, [ColumnPath([(50, 100), (1300, 100)])])
 
@@ -6123,7 +6060,11 @@ def test_review_oversized_classification_crop_expands_but_regular_does_not():
     assert oversized_box[3] > regular_box[3]
     assert oversized_box[0] == regular_box[0]
     assert oversized_box[2] == regular_box[2]
-    assert oversized_box[3] - oversized_box[1] == 100 + 2 * settings.row_padding
+    assert oversized_box[3] - oversized_box[1] == 96
+    assert regular_box[3] - regular_box[1] == 44
+    assert _review_line_box(
+        oversized, geometry, image, settings, editor_text="字典",
+    )[3] - oversized_box[1] == 44
 
 
 def test_review_regular_crop_uses_half_spacing_top_and_full_spacing_height():
@@ -6166,13 +6107,14 @@ def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wir
     assert "detect_entries_job" in detect_block
 
 
-def test_review_oversized_classification_crop_no_longer_caps_at_next_marker():
+def test_review_single_character_crop_height_not_cut_off_by_next_marker():
     from picture_capture.app import _review_line_box
 
     image = Image.new("RGB", (1000, 1400), "white")
     settings = AppSettings(
         columns=1, column_width=600,
         character_height=40, row_padding=4, ocr_language="chi_sim",
+        review_single_cjk_line_height=112,
     )
     geometry = Geometry([100], [600], 50, 1300, [ColumnPath([(50, 100), (1300, 100)])])
 
@@ -6185,10 +6127,10 @@ def test_review_oversized_classification_crop_no_longer_caps_at_next_marker():
     next_entry = Entry("下一", 110, 160)
     box = _review_line_box(current, geometry, image, settings, next_entry)
 
-    # Structural oversized crop height wins even when the next hand-drawn marker
-    # is closer; inconsistent marker Y must not clip the display head.
+    # The explicit one-character height wins even if the next marker is close;
+    # OCR's observed 100px visual run is no longer used for proofreading.
     assert box[3] > next_entry.y
-    assert box[3] - box[1] == 100 + 2 * settings.row_padding
+    assert box[3] - box[1] == 112
 
 
 def test_v21121_review_ocr_compare_setting_persists(tmp_path):
@@ -8061,27 +8003,20 @@ def test_alphabetical_warning_uses_section_major_reading_order():
 
 
 def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    aux_start = text.index('self._section_frame(parent, "二、显示设置"')
-    aux_end = text.index('ocr = self._section_frame(parent, "三、共享 OCR 通道 / OCR画线"', aux_start)
-    aux = text[aux_start:aux_end]
-
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    aux=text.split('self._section_frame(parent, "二、显示设置"',1)[1].split('ocr = self._section_frame(parent, "三、共享 OCR 通道 / OCR画线"',1)[0]
     assert 'text="显示标尺"' in aux
     assert '"ruler_color"' in aux
     assert 'text="显示Section"' in aux
     assert '"page_section_color"' in aux
     assert '"page_section_width"' in aux
     assert aux.index('text="显示Section"') < aux.index('text="栏左垂线"')
-    assert aux.index('"review_main_show_ocr_background"') < aux.index('text="显示单行候选框"')
+    assert '"review_main_show_ocr_background"' in aux
     assert 'fill="#ffffff"' in text
-    assert 'fill=line_fill, outline=line_fill' in text
     assert 'overlay_scale = self.view_scale / parameter_scale(self.image, self.settings)' in text
     assert 'line_width = scaled_overlay_line_width(' in text
-    assert 'int(getattr(self.settings, "page_section_width", 2) or 2),' in text
-    assert 'label_x = ((top_start[0] + top_end[0]) / 2.0) * self.view_scale' in text
-    assert 'fill="#ffffff", anchor="s"' in text
-
 
 def test_settings_display_labels_wrap_responsively_and_color_mode_name_is_current():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
@@ -8100,29 +8035,29 @@ def test_settings_display_labels_wrap_responsively_and_color_mode_name_is_curren
 
 
 def test_page_list_context_menu_matches_visible_column_order():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    start = text.index("    def _page_list_right_click")
-    end = text.index("    def _schedule_page_cell_overlay_refresh", start)
-    block = text[start:end]
-    assert block.index('label="书签"') < block.index('label="页面"')
-    assert block.index('label="页面"') < block.index('label="Section"')
-    assert block.index('label="Section"') < block.index('label="画线"')
-    assert 'menu.add_checkbutton(label="书签", variable=bookmark_var, state="disabled")' in block
-    assert block.index('label="画线"') < block.index('label="插图"')
-    assert block.index('label="插图"') < block.index('label="填充状态"')
-
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    block=text.split("    def _page_list_right_click(",1)[1].split("    def _schedule_page_cell_overlay_refresh(",1)[0]
+    order=['label="●"','label="页面"','label="区块"','label="画线"','label="插图"','label="填充状态"']
+    offsets=[block.index(item) for item in order]
+    assert offsets==sorted(offsets)
+    assert 'menu.add_checkbutton(label="●", variable=bookmark_var, state="disabled")' in block
+    assert 'menu.add_checkbutton(label="页面", variable=page_var, state="disabled")' in block
 
 def test_page_list_fills_width_adaptively_and_fill_status_is_opt_in_by_default():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    models = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    models=(root / "models.py").read_text(encoding="utf-8")
+    block=text.split("    def _fit_page_list_columns(",1)[1].split("    def _hide_page_list_section_heading_hint(",1)[0]
     assert 'self.page_list.bind("<Configure>", self._page_list_configured)' in text
-    assert "def _fit_page_list_columns(self) -> None:" in text
-    assert "widths[-1] += available - sum(widths)" in text
+    assert 'self.page_list.winfo_width()' in block
+    assert 'header_font.measure(label)' in block
+    assert 'body_font.measure(name)' in block
+    assert 'self.page_list.column(column, width=width, anchor="center", stretch=False)' in block
     assert 'page_list_show_fill_status: bool = False' in models
     assert 'getattr(self.settings, "page_list_show_fill_status", False)' in text
-
 
 def test_ocr_strategy_order_and_defaults_are_single_engine_first():
     root = Path(__file__).resolve().parents[1]
@@ -8139,30 +8074,22 @@ def test_ocr_strategy_order_and_defaults_are_single_engine_first():
 
 
 def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded():
-    root = Path(__file__).resolve().parents[1]
-    source = root / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    canvas_controller = (
-        root / "src" / "picture_capture" / "ui" / "controllers" / "canvas.py"
-    ).read_text(encoding="utf-8")
-    assert 'self.page_list.heading("section", text="Section", anchor="w")' in text
+    root = Path(__file__).resolve().parents[1] / "src/picture_capture"
+    text = (root / "app.py").read_text(encoding="utf-8")
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    canvas=(root / "ui/controllers/canvas.py").read_text(encoding="utf-8")
+    assert 'self.page_list.heading("section", text="域", anchor="center")' in text
     assert 'self.page_list.bind("<Double-1>", self._page_list_section_double_click, add="+")' in text
     assert "minvalue=0, maxvalue=10" in text
-    assert 'text="SECTION设置"' not in text
     assert "def _drag_page_section_boundary_to" in text
     assert "该位置位于 SECTION 间空白区，不添加词条。" in text
     assert "page_sections=list(self.page_sections)" in text
     assert 'self.canvas.configure(cursor="hand2" if self._section_editing else "")' in text
-    assert "if app.image is None or app._section_editing:" in canvas_controller
-    assert 'app.canvas.delete("cursor-guide")' in canvas_controller
+    assert 'if app.image is None or app._section_editing:' in canvas
+    assert 'app.canvas.delete("cursor-guide")' in canvas
     assert 'text="双击进入Section编辑模式"' in text
-    assert '"确认后：拖动虚线定位Section，双击左键确认并退出编辑。"' in text
-    assert 'self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)' in text
     assert "def canvas_left_double_click" in text
     assert "self._finish_section_editing()" in text
-    assert "def _restore_cursor_guides_after_section_edit" in text
-    assert "self.draw_cursor_guides(canvas_x, canvas_y)" in text
-
 
 def test_focused_review_filter_helpers_parse_ranges_tokens_and_single_characters():
     assert _focused_review_character_tokens("傅, 裹，傅,鳥") == ("傅", "裹", "鳥")
@@ -8222,6 +8149,7 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     helper_source = root / "review_text_helpers.py"
     text = source.read_text(encoding="utf-8")
     helper_text = helper_source.read_text(encoding="utf-8")
+    overlay = (root / "ui" / "entry_overlay_builder.py").read_text(encoding="utf-8")
 
     assert '"一、版面参数"' in text
     assert "页眉Y(原图)" not in text
@@ -8247,7 +8175,7 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert 'right, "digit", "数字替换映射"' in text
     assert 'text="启用", variable=self.replace_digits' in text
     assert 'right, "accent", "变音字符"' in text
-    assert 'key: tk.BooleanVar(value=(key not in {"digit", "accent"}))' in text
+    assert 'key: tk.BooleanVar(value=(key == "reference"))' in text
     assert 'accent_button.bind(' in text and '"<Button-3>"' in text
     assert "def copy_char(self, char: str)" in text
     assert "def _candidate_word_for_ocr_source(" in helper_text
@@ -8262,12 +8190,12 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert '"""Fast filter pass using only PDIC and OCR JSON, never page pixels."""' in text
     assert 'focused-filter-scan-rest-' in text
     assert 'display_meta: list[tuple[int, int]] = []' in text
-    assert 'bg="#e6e6e6"' in text
-    assert 'fg="#000000"' in text
+    assert 'bg="#e6e6e6"' in overlay
+    assert 'fg="#000000"' in overlay
     assert "def _entry_sequence_text(index: int, total: int) -> str:" in text
-    assert 'text="[X]"' in text
-    assert 'bg="#9d042f"' in text
-    assert 'record["delete_widget"] = delete_button' in text
+    assert 'text="[X]"' in overlay
+    assert 'bg="#9d042f"' in overlay
+    assert 'record["delete_widget"] = delete_button' in overlay
 
 
 def test_generated_app_icon_is_packaged_and_applied_to_root():

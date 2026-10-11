@@ -134,9 +134,9 @@ def add_quick_illustration_fill_opacity_control(app: Any, row: tk.Misc) -> None:
     if name in getattr(app, "quick_vars", {}):
         return
     current = normalize_opacity(getattr(app.settings, name, DEFAULT_DISPLAY_OPACITY))
-    variable = tk.StringVar(value=f"{current:.0f}" if abs(current - round(current)) < 1e-9 else f"{current:g}")
+    variable = tk.StringVar(value=str(round(current)))
     app.quick_vars[name] = variable
-    app.quick_field_casts[name] = float
+    app.quick_field_casts[name] = int
     ttk.Label(row, text="区域不透明度：").pack(side="left", padx=(5, 0))
     spin = ttk.Spinbox(row, textvariable=variable, from_=0, to=100, increment=5, width=5)
     spin.pack(side="left", padx=(2, 1))

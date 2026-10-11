@@ -12,7 +12,7 @@ def test_inline_entry_crop_label():
 
 def test_crop_preview_font_settings_roundtrip(tmp_path):
     settings = AppSettings()
-    assert settings.crop_preview_font_size == 12
+    assert settings.crop_preview_font_size == 16
     settings.crop_preview_font_family = "Arial"
     settings.crop_preview_font_size = 18
     settings.crop_preview_font_bold = True

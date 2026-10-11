@@ -181,10 +181,10 @@ def add_quick_opacity_control(app: Any, row: tk.Misc, *, name: str) -> None:
     if name in getattr(app, "quick_vars", {}):
         return
     current = normalize_opacity(getattr(app.settings, name, DEFAULT_DISPLAY_OPACITY))
-    rendered = f"{current:.0f}" if abs(current - round(current)) < 1e-9 else f"{current:g}"
+    rendered = str(round(current))
     variable = tk.StringVar(value=rendered)
     app.quick_vars[name] = variable
-    app.quick_field_casts[name] = float
+    app.quick_field_casts[name] = int
     ttk.Label(row, text="不透明度：").pack(side="left")
     spin = ttk.Spinbox(
         row,

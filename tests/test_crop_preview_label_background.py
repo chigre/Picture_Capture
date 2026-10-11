@@ -46,5 +46,7 @@ def test_main_crop_plan_applies_badges_to_entries_and_ppp():
     start = source.index("    def _draw_crop_plan_preview(")
     end = source.index("    def _rulers_visible(", start)
     code = source[start:end]
-    assert code.count("draw_crop_preview_label(") == 2
+    # Entry, preview-only auxiliary gap, and PPP each use a backed badge.
+    assert code.count("draw_crop_preview_label(") == 3
+    assert 'text="【辅助不切】"' in code
     assert "self.canvas.create_text(" not in code
