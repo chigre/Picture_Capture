@@ -7459,7 +7459,8 @@ class PictureCaptureApp(tk.Tk):
             background=[("active", "#f3c451"), ("pressed", "#eab843")],
         )
         style.configure("PC.Tool.TButton", padding=(4, 2))
-        style.configure("PC.PageNav.TButton", padding=(2, 2))
+        style.configure("PC.PageNav.TButton", padding=(0, 0))
+        style.configure("PC.SimplePage.TButton", padding=(0, 0))
         style.configure("PC.Footer.TButton", padding=(7, 3))
         style.configure(
             "PC.Footer.TCheckbutton",
@@ -7872,21 +7873,21 @@ class PictureCaptureApp(tk.Tk):
         range_row = ttk.Frame(nav_area)
         self.page_range_controls_row = range_row
         range_row.pack(fill="x", pady=(0, 3))
-        for label, mode in (("当前页", "current"), ("当前至末页", "to_end"),
-                            ("当前至指定页", "to_specified")):
+        for label, mode in (("当前", "current"), ("至末页", "to_end"),
+                            ("至指定页", "to_specified")):
             ttk.Radiobutton(range_row, text=label, variable=self.page_range_var,
                             value=mode).pack(side="left", padx=(0, 3))
         spec_row = ttk.Frame(nav_area)
         spec_row.pack(fill="x", pady=(0, 4))
-        ttk.Radiobutton(spec_row, text="指定:", variable=self.page_range_var,
+        ttk.Radiobutton(spec_row, text="", variable=self.page_range_var,
                         value="specified").pack(side="left")
         page_range_entry = ttk.Entry(spec_row, textvariable=self.page_range_spec_var, width=12)
         page_range_entry.pack(side="left", fill="x", expand=True, padx=(3, 4))
         page_range_entry.bind("<Return>", lambda _event: self.jump_to_page_spec())
-        jump_button = ttk.Button(spec_row, text="跳转", width=5,
+        jump_button = ttk.Button(spec_row, text="跳", width=2,
                                  command=self.jump_to_page_spec, style="PC.PageNav.TButton")
         jump_button.pack(side="left")
-        self._attach_tooltip(jump_button, "跳转到指定页面的第一个有效页面")
+        self._attach_tooltip(jump_button, "跳转到指定页面的第一个有效页面；ENTER为快捷键")
 
         nav_row = ttk.Frame(nav_area)
         nav_row.pack(fill="x")
