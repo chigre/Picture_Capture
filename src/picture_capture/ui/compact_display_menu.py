@@ -25,26 +25,36 @@ DISPLAY_MODES = (
 # *both* sides; the visible coloured strip therefore occupies the middle 50%.
 SWATCH_HEIGHT = 24
 SWATCH_VERTICAL_PADDING_FRACTION = 0.25
+# Keep checkbox captions in a stable first column; move overflow below.
+DISPLAY_CAPTION_WIDTH = 126
+DISPLAY_ROW_PADDING = (2, 2)
 
 
 def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     """Build the requested single-line groups inside a 280px tool palette."""
-    panel = ttk.Frame(parent, padding=(2, 2, 2, 4))
+    panel = ttk.Frame(parent, padding=(4, 3, 4, 6))
     qv, qb, qc = app.quick_vars, app.quick_bool_vars, app.quick_color_vars
 
     style = ttk.Style(panel)
-    style.configure("PC.Display.TCheckbutton", padding=(0, 0))
+    style.configure("PC.Display.TCheckbutton", padding=(0, 1))
     style.configure("PC.Display.TCombobox", padding=(0, 0))
     style.configure("PC.Display.TEntry", padding=(0, 0))
 
     def line() -> ttk.Frame:
         row = ttk.Frame(panel)
-        row.pack(fill="x", pady=0)
+        row.pack(fill="x", pady=DISPLAY_ROW_PADDING)
         return row
 
-    def label(row: tk.Misc, caption: str) -> ttk.Label:
-        item = ttk.Label(row, text=caption)
-        item.pack(side="left", padx=0, pady=0)
+    def detail_line() -> ttk.Frame:
+        """Align secondary attributes beneath the primary property column."""
+        row = line()
+        ttk.Frame(row, width=DISPLAY_CAPTION_WIDTH).pack(side="left")
+        return row
+
+    def label(row: tk.Misc, caption: str, width: int | None = None) -> ttk.Label:
+        options = {"width": width} if width is not None else {}
+        item = ttk.Label(row, text=caption, **options)
+        item.pack(side="left", padx=(0, 3), pady=0)
         return item
 
     def check(row: tk.Misc, caption: str, variable: tk.Variable,
@@ -53,24 +63,32 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             row, text=caption, variable=variable, command=action,
             style="PC.Display.TCheckbutton",
         )
-        item.pack(side="left", padx=0, pady=0)
+        item.pack(side="left", padx=(0, 4), pady=0)
         return item
+
+    def primary_check(row: ttk.Frame, caption: str, variable: tk.Variable,
+                      action: Callable[..., Any] | None = None) -> ttk.Checkbutton:
+        """Reserve the same width before every swatch/width input group."""
+        holder = ttk.Frame(row, width=DISPLAY_CAPTION_WIDTH, height=26)
+        holder.pack(side="left")
+        holder.pack_propagate(False)
+        return check(holder, caption, variable, action)
 
     def entry(row: tk.Misc, name: str, chars: int = 3) -> ttk.Entry:
         item = ttk.Entry(
             row, textvariable=qv[name], width=chars, justify="center",
             style="PC.Display.TEntry",
         )
-        item.pack(side="left", padx=0, pady=0)
+        item.pack(side="left", padx=(0, 4), pady=0)
         return item
 
     def value(row: tk.Misc, caption: str, name: str, chars: int = 3) -> None:
-        label(row, caption)
+        label(row, caption, width=10 if not row.winfo_children() else None)
         entry(row, name, chars)
 
     def swatch(row: tk.Misc, key: str) -> tk.Button:
         holder = ttk.Frame(row, width=20, height=SWATCH_HEIGHT)
-        holder.pack(side="left", padx=(1, 1), pady=0)
+        holder.pack(side="left", padx=(1, 4), pady=0)
         holder.pack_propagate(False)
         button = tk.Button(holder, bd=0, borderwidth=0, highlightthickness=0,
                            padx=0, pady=0, cursor="hand2")
@@ -103,17 +121,20 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         return combo
 
     def family_line(name: str) -> None:
-        family(line(), name)
+        row = line()
+        label(row, "字体:", width=10)
+        family(row, name)
 
     def font_style(row: ttk.Frame, size: str, bold: str, italic: str) -> None:
-        entry(row, size, 3)
+        label(row, "字号:", width=10)
+        entry(row, size, 4)
         check(row, "粗", qb[bold])
         check(row, "斜", qb[italic])
 
     def dropdown(caption: str, variable: tk.Variable, choices: tuple[str, ...],
                  callback: Callable[..., Any] | None = None) -> None:
         row = line()
-        label(row, caption)
+        label(row, caption, width=10)
         item = ttk.Combobox(
             row, textvariable=variable, values=choices,
             state="readonly", style="PC.Display.TCombobox",
@@ -124,54 +145,56 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     # Group 1: all main-canvas visibility controls, ONE line per feature.
     row = line()
-    check(row, "自动保存", app.autosave_var, app.toggle_autosave)
+    primary_check(row, "自动保存", app.autosave_var, app.toggle_autosave)
     value(row, "间隔时间(秒)", "batch_interval", 3)
 
     check(line(), "隐藏线框（插图除外）", app.hide_var, app._toggle_hide_overlays)
 
     row = line()
-    check(row, "显示标尺", qb["show_rulers"],
+    primary_check(row, "显示标尺", qb["show_rulers"],
           lambda: app._apply_overlay_visibility_toggle("show_rulers", qb["show_rulers"]))
     swatch(row, "ruler_color")
 
     row = line()
-    check(row, "显示区块", qb["show_page_sections"],
+    primary_check(row, "显示区块", qb["show_page_sections"],
           lambda: app._apply_overlay_visibility_toggle("show_page_sections", qb["show_page_sections"]))
     swatch(row, "page_section_color")
     value(row, "宽:", "page_section_width", 2)
 
     row = line()
-    check(row, "栏左垂线", qb["show_column_guides"], app._quick_parameter_changed)
+    primary_check(row, "栏左垂线", qb["show_column_guides"], app._quick_parameter_changed)
     swatch(row, "guide_color")
-    value(row, "宽:", "guide_width", 2)
-    value(row, "透%:", "guide_opacity", 3)
+    value(row, "宽:", "guide_width", 3)
+    value(detail_line(), "透明度%:", "guide_opacity", 5)
 
     row = line()
-    check(row, "词头横线", qb["show_headword_markers"], app._quick_parameter_changed)
+    primary_check(row, "词头横线", qb["show_headword_markers"], app._quick_parameter_changed)
     swatch(row, "headword_marker_color")
-    value(row, "宽:", "marker_height", 2)
-    value(row, "透%:", "headword_marker_opacity", 3)
+    value(row, "宽:", "marker_height", 3)
+    value(detail_line(), "透明度%:", "headword_marker_opacity", 5)
 
     divider()
 
     # Group 2: illustration shape and label. Each visual property remains
     # on its specified line, not a generic verticalized grid.
     row = line()
-    check(row, "插图形状:线", app.polygon_var, app.redraw)
+    primary_check(row, "插图形状:线", app.polygon_var, app.redraw)
     swatch(row, "illustration_outline_color")
-    value(row, "宽:", "illustration_outline_width", 2)
-    label(row, "底")
+    value(row, "宽:", "illustration_outline_width", 3)
+    row = detail_line()
+    label(row, "底色")
     swatch(row, "illustration_fill_color")
-    value(row, "透%:", "illustration_fill_opacity", 3)
+    value(detail_line(), "透明度%:", "illustration_fill_opacity", 5)
 
     row = line()
-    check(row, "插图标签:线", qb["show_illustration_labels"],
+    primary_check(row, "插图标签:线", qb["show_illustration_labels"],
           lambda: app._apply_overlay_visibility_toggle(
               "show_illustration_labels", qb["show_illustration_labels"],
           ))
     swatch(row, "illustration_label_border_color")
-    value(row, "宽:", "illustration_label_border_width", 2)
-    label(row, "底")
+    value(row, "宽:", "illustration_label_border_width", 3)
+    row = detail_line()
+    label(row, "底色")
     swatch(row, "illustration_label_fill_color")
 
     family_line("illustration_label_font_family")
@@ -188,15 +211,15 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         visible.trace_add("write", lambda *_: app._quick_parameter_changed())
 
     row = line()
-    check(row, "词头标签", visible,
+    primary_check(row, "词头标签", visible,
           lambda: app._apply_overlay_visibility_toggle("show_main_entry_labels", visible))
-    label(row, "底")
+    label(row, "底色")
     swatch(row, "main_entry_default_color")
     check(row, "缩放", qb["main_entry_follow_zoom"])
 
     row = line()
-    value(row, "宽度(字符)", "main_entry_width_chars", 3)
-    value(row, "偏移%", "main_entry_x_ratio", 3)
+    value(row, "宽度(字符)", "main_entry_width_chars", 4)
+    value(detail_line(), "偏移%:", "main_entry_x_ratio", 5)
     family_line("main_entry_font_family")
     font_style(line(), "main_entry_font_size",
                "main_entry_font_bold", "main_entry_font_italic")
@@ -231,7 +254,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         _invalidate_layout_snapshot(app)
         app.redraw()
 
-    check(row, "显示Layout", layout_var, toggle_layout)
+    primary_check(row, "显示Layout", layout_var, toggle_layout)
     label(row, "去噪强度")
 
     def apply_denoise(_event: Any = None) -> None:
@@ -251,15 +274,16 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     denoise.bind("<<ComboboxSelected>>", apply_denoise)
 
     row = line()
-    label(row, "切图预览标签:")
-    font_style(row, "crop_preview_font_size",
-               "crop_preview_font_bold", "crop_preview_font_italic")
+    label(row, "切图预览标签:", width=12)
     check(row, "缩放", qb["crop_preview_follow_zoom"])
+    font_style(line(), "crop_preview_font_size",
+               "crop_preview_font_bold", "crop_preview_font_italic")
     family_line("crop_preview_font_family")
     return panel
 
 
 __all__ = [
     "DISPLAY_MODES", "SWATCH_HEIGHT", "SWATCH_VERTICAL_PADDING_FRACTION",
+    "DISPLAY_CAPTION_WIDTH", "DISPLAY_ROW_PADDING",
     "build_compact_display_menu",
 ]

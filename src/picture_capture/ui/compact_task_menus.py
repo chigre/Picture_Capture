@@ -13,32 +13,34 @@ from .compact_layout_profile_menu import LAYOUT_ROWS, build_layout_profile_menu
 
 def _row(panel: ttk.Frame) -> ttk.Frame:
     frame = ttk.Frame(panel)
-    frame.pack(fill="x", pady=(1, 1))
+    frame.pack(fill="x", padx=(2, 2), pady=(2, 2))
     return frame
 
 
-def _label(row: ttk.Frame, text: str) -> None:
-    ttk.Label(row, text=text).pack(side="left", padx=0, pady=0)
+def _label(row: ttk.Frame, text: str, width: int | None = None) -> None:
+    options = {"width": width} if width is not None else {}
+    ttk.Label(row, text=text, **options).pack(side="left", padx=(0, 3), pady=0)
 
 
 def _button(row: ttk.Frame, text: str, command: Callable[[], Any],
             *, expand: bool = True) -> ttk.Button:
     button = ttk.Button(row, text=text, command=command, style="PC.Compact.TButton")
-    button.pack(side="left", fill="x" if expand else "none", expand=expand, padx=0, pady=0)
+    button.pack(side="left", fill="x" if expand else "none", expand=expand,
+                padx=(0, 3), pady=0)
     return button
 
 
 def _check(row: ttk.Frame, text: str, variable: tk.Variable,
            command: Callable[[], Any] | None = None) -> ttk.Checkbutton:
     widget = ttk.Checkbutton(row, text=text, variable=variable, command=command)
-    widget.pack(side="left", padx=0, pady=0)
+    widget.pack(side="left", padx=(0, 4), pady=0)
     return widget
 
 
 def _entry(row: ttk.Frame, variable: tk.Variable, width: int = 5,
            change: Callable[..., Any] | None = None) -> ttk.Entry:
     widget = ttk.Entry(row, textvariable=variable, width=width, justify="center")
-    widget.pack(side="left", padx=0, pady=0)
+    widget.pack(side="left", padx=(0, 4), pady=0)
     if change is not None:
         widget.bind("<Return>", change)
         widget.bind("<FocusOut>", change)
@@ -50,7 +52,7 @@ def _select(row: ttk.Frame, variable: tk.Variable, values: tuple[str, ...],
             ) -> ttk.Combobox:
     widget = ttk.Combobox(row, textvariable=variable, values=values,
                           state="readonly", width=width)
-    widget.pack(side="left", fill="x", expand=True, padx=0, pady=0)
+    widget.pack(side="left", fill="x", expand=True, padx=(2, 0), pady=0)
     if command is not None:
         widget.bind("<<ComboboxSelected>>", command)
     return widget
@@ -80,7 +82,7 @@ def build_preprocess_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     _entry(row, app.preprocess_safety_var, 4, app._preprocess_settings_changed)
 
     row = _row(panel)
-    _label(row, "几何纠正模式")
+    _label(row, "几何纠正模式", width=12)
     _select(row, app.preprocess_geometry_var, (
         "自动几何（推荐）", "轻量：旋转+裁边",
         "自动透视", "UVDoc展平（Paddle高级）",
@@ -112,25 +114,27 @@ def build_preprocess_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     _entry(row, app.preprocess_export_canvas_height_var, 6,
            app._preprocess_export_settings_changed)
     _label(_row(panel), "页边空px:")
-    row = _row(panel)
-    for caption, variable in (
-        ("上", app.preprocess_export_margin_top_var),
-        ("下", app.preprocess_export_margin_bottom_var),
-        ("左", app.preprocess_export_margin_left_var),
-        ("右", app.preprocess_export_margin_right_var),
-    ):
-        _label(row, caption)
-        _entry(row, variable, 3, app._preprocess_export_settings_changed)
+    margins = (
+        (("上", app.preprocess_export_margin_top_var),
+         ("下", app.preprocess_export_margin_bottom_var)),
+        (("左", app.preprocess_export_margin_left_var),
+         ("右", app.preprocess_export_margin_right_var)),
+    )
+    for pair in margins:
+        row = _row(panel)
+        for caption, variable in pair:
+            _label(row, caption, width=4)
+            _entry(row, variable, 4, app._preprocess_export_settings_changed)
     _separator(panel)
 
     _label(_row(panel), "内容框排版:")
     row = _row(panel)
-    _label(row, "水平X:")
+    _label(row, "水平X:", width=12)
     _select(row, app.preprocess_export_align_x_var,
             ("左对齐", "居中", "右对齐"),
             width=10, command=app._preprocess_export_settings_changed)
     row = _row(panel)
-    _label(row, "垂直Y:")
+    _label(row, "垂直Y:", width=12)
     _select(row, app.preprocess_export_align_y_var,
             ("顶端对齐", "居中", "底部对齐"),
             width=10, command=app._preprocess_export_settings_changed)
@@ -164,7 +168,7 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         ("左缘容差:", "paddle_left_tolerance", 5),
     ):
         row = _row(panel)
-        _label(row, caption)
+        _label(row, caption, width=12)
         _entry(row, app.quick_vars[name], width)
 
     _label(_row(panel), "OCR引擎:")
@@ -176,12 +180,12 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         _check(_row(panel), caption, app.quick_bool_vars[name],
                app._quick_parameter_changed)
     row = _row(panel)
-    _label(row, "Lens模式:")
+    _label(row, "Lens模式:", width=12)
     from picture_capture.ocr_action_guard import LENS_MODE_VALUES
     _select(row, app.lens_mode_var, tuple(LENS_MODE_VALUES), width=18,
             command=app._quick_parameter_changed)
     row = _row(panel)
-    _label(row, "Y安全空间px:")
+    _label(row, "Y安全空间px:", width=12)
     _entry(row, app.quick_vars["paddle_separator_safety_px"], 4)
     _separator(panel)
     _button(_row(panel), "环境中心", app.check_ocr_engines)

@@ -58,7 +58,7 @@ def _divider(panel: ttk.Frame) -> None:
 
 
 def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
-    panel = ttk.Frame(parent, padding=(3, 3, 3, 5))
+    panel = ttk.Frame(parent, padding=(4, 3, 4, 6))
     profile_vars: dict[str, tk.StringVar] = {}
     profile_buttons: dict[str, ttk.Widget] = {}
     auto_buttons: list[ttk.Checkbutton] = []
@@ -66,7 +66,7 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     def row() -> ttk.Frame:
         result = ttk.Frame(panel)
-        result.pack(fill="x", pady=(1, 1))
+        result.pack(fill="x", pady=(2, 2))
         return result
 
     def caption(frame: ttk.Frame, value: str, width: int = 15) -> ttk.Label:
