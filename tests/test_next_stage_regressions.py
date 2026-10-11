@@ -3281,9 +3281,12 @@ def test_vb_ordinary_defaults_are_not_replaced_by_scale_heuristics():
     root = Path(__file__).resolve().parents[1]
     app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     profile_text = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
-    assert "body_indent_was_auto" in app_text
-    assert "horizontal_tolerance_was_auto" in app_text
-    assert 'if "character_height" in values:' in app_text
+    layout_actions = (root / "src" / "picture_capture" /
+                      "layout_detection_actions.py").read_text(encoding="utf-8")
+    assert "body_indent_was_auto" in layout_actions
+    assert "horizontal_tolerance_was_auto" in layout_actions
+    assert 'if "character_height" in values:' in layout_actions
+    assert 'return _run_detect_layout_current(self)' in app_text
     assert "body_indent_was_auto" in profile_text
     assert "horizontal_tolerance_was_auto" in profile_text
     assert 'if "character_height" in self._analysis_suggestion:' in profile_text
@@ -3960,7 +3963,7 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
         root / "src" / "picture_capture" / "layout_detection_actions.py"
     ).read_text(encoding="utf-8")
     layout = layout_text.split("def detect_layout_consistency_selected(", 1)[1]
-    done_start = layout.index("        def done(")
+    done_start = layout.index("    def done(")
     layout_done = layout[done_start:]
     assert "def finalize_report():" in layout_done
     assert 'self._start_ui_worker(' in layout_done

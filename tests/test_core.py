@@ -4760,7 +4760,8 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
         assert symbol in workspace
     assert 'app.change_page(-1)' in compact and 'app.change_page(1)' in compact
     assert 'jump_to_page_spec' in compact
-    assert '至少需要选择 2 页' in text
+    layout_actions = (root / "layout_detection_actions.py").read_text(encoding="utf-8")
+    assert '至少需要选择 2 页' in layout_actions
 
 def test_action_and_postproduction_rows_use_equal_width_grid_columns():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
