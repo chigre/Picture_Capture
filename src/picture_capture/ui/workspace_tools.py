@@ -485,6 +485,14 @@ def choose_workspace_section(app: Any, title: str) -> None:
             child.pack_forget()
     if getattr(section, "_collapse_title", None):
         app._set_section_expanded(section, True, persist=False)
+        # The popup header already identifies this tool. Do not show an
+        # additional accordion title or collapse arrow inside its panel.
+        title_var = getattr(section, "_collapse_title_var", None)
+        if title_var is not None:
+            title_var.set("")
+        title_label = getattr(section, "_collapse_label", None)
+        if title_label is not None:
+            title_label.unbind("<Button-1>")
     section.pack(side="top", fill="x")
     app.workspace_tools_heading.set(
         next((label for label, _icon, section_title in TASK_GROUPS
