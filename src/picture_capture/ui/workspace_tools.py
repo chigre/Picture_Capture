@@ -21,8 +21,8 @@ from .simple_page_controls import (
 
 # Every floating task menu occupies a compact single-column panel.
 TOOL_MENU_WIDTH = 280
-DEFAULT_RAIL_WIDTH = 140
-DEFAULT_PAGE_LIST_WIDTH = 300
+DEFAULT_RAIL_WIDTH = 120
+DEFAULT_PAGE_LIST_WIDTH = 260
 RAIL_DIVIDER_WIDTH = 6
 
 TASK_GROUPS = (
@@ -168,13 +168,13 @@ def _draw_rail_icon(canvas: tk.Canvas, kind: str) -> None:
 
 
 def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Frame) -> None:
-    """Place the icon rail beside the initially visible page index."""
+    """Place a 120px icon rail beside the 260px normal-mode page index."""
     app.workspace_rail_width = DEFAULT_RAIL_WIDTH
     app.workspace_page_list_width = DEFAULT_PAGE_LIST_WIDTH
     rail = ttk.Frame(sidebar_host, style="PC.Sidebar.TFrame", width=DEFAULT_RAIL_WIDTH)
     rail.pack(side="left", fill="y", before=app.sidebar_canvas, padx=0)
     rail.pack_propagate(False)
-    # The divider also acts as a draggable grip, so 140px is a default rather
+    # The divider also acts as a draggable grip, so 120px is a default rather
     # than an unchangeable restriction on the icon/command column.
     divider = ttk.Frame(sidebar_host, width=RAIL_DIVIDER_WIDTH, cursor="sb_h_double_arrow",
                         style="PC.Sidebar.TFrame")
@@ -343,7 +343,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     def rail_action(parent: ttk.Frame, row: int, symbol: str, label: str,
                     command: Any, tip: str) -> ttk.Frame:
         """Separate fixed-width icon and text controls: Unicode glyph widths vary."""
-        entry = ttk.Frame(parent, style="PC.Sidebar.TFrame", width=140, height=33)
+        entry = ttk.Frame(parent, style="PC.Sidebar.TFrame", width=DEFAULT_RAIL_WIDTH, height=33)
         entry.grid(row=row, column=0, sticky="ew", pady=(0, 1))
         entry.grid_propagate(False)
         app.workspace_rail_rows.append(entry)
@@ -512,7 +512,6 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         ("普通画线", app.run_normal_draw_action),
         ("OCR画线", app.run_ocr_draw_action),
         ("词条校对", app.open_review),
-        ("图片工具栏", lambda: toggle_image_toolbar(app)),
     )
     app.workspace_quick_action_buttons = []
     app.workspace_quick_zoom_controls = []
@@ -522,13 +521,11 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     for index, (label, command) in enumerate(quick_actions):
         quick_host.columnconfigure(index, weight=1, uniform="quickrail")
         button = ttk.Button(
-            quick_host, text=("普", "O", "校", "≣")[index],
+            quick_host, text=("普", "O", "校")[index],
             command=command, width=2, style="PC.QuickRail.TButton",
         )
         button.grid(row=0, column=index, sticky="ew", padx=0, pady=0)
         app.workspace_quick_action_buttons.append(button)
-        if index == 3:
-            app._attach_tooltip(button, "图片工具栏：缩放、适合宽度、单栏宽度、适合高度")
     # view_zoom_var is initialized later in the main window constructor.
     # Install these controls after idle; they share the existing zoom variable.
     app.after_idle(lambda: install_compact_zoom_controls(app))
@@ -740,7 +737,7 @@ def toggle_page_index(app: Any) -> str:
         app.sidebar_scrollbar.pack(side="right", fill="y")
         app.sidebar_canvas.pack(side="left", fill="both", expand=True)
         app.page_panel.grid()
-    # The two list implementations occupy the same 300px column.
+    # Only normal/max has a second column (260px); compact's list is under 页面.
     # Keep the current sash location unchanged.
     return "break"
 
@@ -899,9 +896,8 @@ def install_compact_zoom_controls(app: Any) -> None:
 
 
 def _apply_preset_rail_controls(app: Any, mode: str) -> None:
-    """Compact and extreme presets inline zoom; normal/max retain ≣ launcher."""
+    """Embed zoom operations in all modes; stack only in 极简."""
     extreme = mode == "极简"
-    compact = mode == "紧凑"
     if extreme:
         app.workspace_extreme_page_navigation.grid()
     else:
@@ -915,38 +911,33 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         else:
             label.grid()
 
-    _apply_compact_sidebar_font(app, compact)
-    quick_host = app.workspace_quick_actions_host
-    inline = extreme or compact
-    if inline:
-        # Never show two zoom toolbars concurrently after changing presets.
-        canvas_zoom = getattr(app, "page_size_row", None)
-        if canvas_zoom is not None and canvas_zoom.winfo_manager() == "place":
-            canvas_zoom.place_forget()
-    for index in range(4):
-        quick_host.columnconfigure(
-            index, weight=(1 if not extreme and (not inline or index < 3)
-                           else int(index == 0)),
-            minsize=0, uniform="quickrail" if not extreme else "",
+    # Only the PAGE RANGE/LIST in 紧凑 uses an 80% font.
+    _apply_compact_sidebar_font(app, mode == "紧凑")
+    host = app.workspace_quick_actions_host
+    for column in range(3):
+        host.columnconfigure(
+            column, weight=1 if not extreme or column == 0 else 0,
+            minsize=0, uniform="" if extreme else "quickrail",
         )
-    for index, widget in enumerate(app.workspace_quick_zoom_controls):
-        if not inline:
-            if widget.winfo_manager() == "grid":
-                widget.grid_remove()
-            continue
-        row = index if extreme else index // 3
-        column = 0 if extreme else index % 3
-        widget.grid(row=row, column=column, sticky="ew", padx=0, pady=0)
+
+    # Never expose the old pop-up toolbar or the ≣ toggle in these presets.
+    canvas_zoom = getattr(app, "page_size_row", None)
+    if canvas_zoom is not None and canvas_zoom.winfo_manager() == "place":
+        canvas_zoom.place_forget()
+
+    for index, control in enumerate(app.workspace_quick_zoom_controls):
+        control.grid(
+            row=index if extreme else index // 3,
+            column=0 if extreme else index % 3,
+            sticky="ew", padx=0, pady=0,
+        )
     for index, (button, title) in enumerate(zip(
-        app.workspace_quick_action_buttons, ("普", "O", "校", "≣"),
+        app.workspace_quick_action_buttons, ("普", "O", "校"),
     )):
-        button.configure(text=title, width=2)
-        if inline and index == 3:
-            button.grid_remove()
-            continue
+        button.configure(text=title, width=2, style="PC.QuickRail.TButton")
         button.grid(
-            row=(6 + index if extreme else 2 if compact else 0),
-            column=(0 if extreme else index),
+            row=6 + index if extreme else 2,
+            column=0 if extreme else index,
             sticky="ew", padx=0, pady=0,
         )
 
@@ -962,23 +953,11 @@ def _set_simple_page_visible(app: Any, visible: bool) -> None:
 def preferred_sidebar_width(
     app: Any, *, extreme: bool = False, compact: bool = False,
 ) -> int:
-    """Extreme 36px; compact 140px with list below; normal adds 300px list."""
+    """Extreme 36px; compact 120px with list below; normal adds 260px list."""
     rail_width = 36 if extreme else int(app.workspace_rail_width)
     if extreme or compact:
         return rail_width + RAIL_DIVIDER_WIDTH
     return rail_width + RAIL_DIVIDER_WIDTH + int(app.workspace_page_list_width)
-
-
-def toggle_image_toolbar(app: Any) -> None:
-    """Open or close the existing image zoom toolbar from the rail button."""
-    toolbar = getattr(app, "page_size_row", None)
-    if toolbar is None:
-        return
-    if toolbar.winfo_manager() == "place":
-        toolbar.place_forget()
-    else:
-        toolbar.place(relx=0, rely=1, x=8, y=-8, anchor="sw")
-        toolbar.lift()
 
 
 def _apply_preset_page_index(app: Any, mode: str) -> None:
