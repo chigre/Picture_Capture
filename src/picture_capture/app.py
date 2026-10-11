@@ -8595,6 +8595,41 @@ class PictureCaptureApp(tk.Tk):
         self._pending_section_editor_index = index if count > 0 else None
         self._request_page_load(index, force=True)
 
+    def _edit_page_section_index(self, index: int) -> None:
+        """Shared SECTION entry path for the 域 double-click and 区 shortcut."""
+        if self._preprocess_mode_active():
+            self.status_var.set("预处理模式中：SECTION 编辑已锁定。")
+            return
+        if not self.project or not (0 <= index < len(self.project.images)):
+            self.status_var.set("请先打开词典页面，再编辑 Section 区域")
+            return
+        if index == self.current_index and self._section_editing:
+            self._finish_section_editing()
+            return
+        page = self.project.images[index]
+        current_count = len(read_page_sections(page))
+        count = simpledialog.askinteger(
+            "Section",
+            f"{page.name}\nSection 数量（0 = 关闭；1–10 = 启用）：\n\n"
+            "确认后：拖动虚线定位Section，双击左键确认并退出编辑。",
+            parent=self, initialvalue=current_count, minvalue=0, maxvalue=10,
+        )
+        if count is None:
+            return
+        if count > 0 and index == self.current_index:
+            # SECTION drag, polygon edit and auxiliary-line edit are separate
+            # pointer modes. Do not leave an old edit mode intercepting drags.
+            if self.polygon_draw_var.get():
+                self.toggle_polygon_drawing()
+            if self.auxiliary_mode_var.get():
+                self.auxiliary_mode_var.set(False)
+                self.toggle_auxiliary_mode()
+        self._set_page_section_count(index, count)
+
+    def toggle_current_page_section_editing(self) -> None:
+        """Toggle the same current-page editor as double-clicking 域."""
+        self._edit_page_section_index(self.current_index)
+
     def _page_list_section_double_click(self, event: tk.Event) -> str | None:
         """Edit the page-level Section count directly from the page list."""
         if self._preprocess_mode_active():
@@ -8609,24 +8644,9 @@ class PictureCaptureApp(tk.Tk):
             return "break"
         try:
             index = int(iid)
-            page = self.project.images[index]
-        except (TypeError, ValueError, IndexError):
+        except (TypeError, ValueError):
             return "break"
-
-        if index == self.current_index and self._section_editing:
-            self._finish_section_editing()
-            return "break"
-
-        current_count = len(read_page_sections(page))
-        count = simpledialog.askinteger(
-            "Section",
-            f"{page.name}\nSection 数量（0 = 关闭；1–10 = 启用）：\n\n"
-            "确认后：拖动虚线定位Section，双击左键确认并退出编辑。",
-            parent=self, initialvalue=current_count, minvalue=0, maxvalue=10,
-        )
-        if count is None:
-            return "break"
-        self._set_page_section_count(index, count)
+        self._edit_page_section_index(index)
         return "break"
 
     def _bookmark_stems(self) -> set[str]:
@@ -14302,6 +14322,10 @@ class PictureCaptureApp(tk.Tk):
                 self.after_idle(self._restore_cursor_guides_after_section_edit)
             except tk.TclError:
                 pass
+        # Unlike a Tk variable, _section_editing is a plain bool: update the
+        # button from this canonical edit-state transition, including double-click exit.
+        from .ui.workspace_mode_shortcuts import refresh_workspace_mode_shortcut_buttons
+        refresh_workspace_mode_shortcut_buttons(self)
 
     def _restore_cursor_guides_after_section_edit(self) -> None:
         if self._section_editing or self.image is None:
