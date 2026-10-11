@@ -672,16 +672,13 @@ def show_workspace_task(app: Any, title: str | None) -> None:
 
 
 def size_page_index_to_controls(app: Any) -> None:
-    """Set the initial index width based on the range-selector's requested size."""
+    """Use a consistent 140px icon rail plus 300px page list initially."""
     try:
-        rail = app.workspace_tools_rail
-        choices = app.page_range_controls_row
         app.update_idletasks()
         panes = app.main_paned
         width = panes.winfo_width()
         if width > 1 and app.sidebar_canvas.winfo_manager() == "pack":
-            minimum = rail.winfo_reqwidth() + choices.winfo_reqwidth() + 24
-            panes.sashpos(0, min(max(minimum, 1), width - 160))
+            panes.sashpos(0, min(preferred_sidebar_width(app), width - 160))
     except (AttributeError, tk.TclError):
         pass
 
@@ -707,112 +704,65 @@ def refresh_compact_page_index(app: Any) -> None:
 
 
 def toggle_page_index(app: Any) -> str:
-    """Toggle full page index vs compact page-only list beneath Page button."""
-    panel = getattr(app, "page_panel", None)
-    if panel is None:
+    """Toggle the independent page-list column, never the icon rail width."""
+    if getattr(app, "page_panel", None) is None:
         return "break"
-    mode = getattr(app, "workspace_mode", None)
-    if mode == "极简":
-        # In icon-only mode, the dedicated 上/下 controls own navigation.
+    if getattr(app, "workspace_mode", None) == "极简":
         return "break"
-    if mode == "简单":
-        # The complete simple-mode page panel folds in place, never swaps to
-        # the full secondary sidebar or drops its range/navigation controls.
-        mini_host = app.workspace_mini_page_host
-        if mini_host.winfo_manager() == "grid":
-            mini_host.grid_remove()
-        else:
+    if getattr(app, "workspace_mode", None) == "简单":
+        slot = app.workspace_mini_page_slot
+        visible = slot.winfo_manager() != "pack"
+        if visible:
             refresh_compact_page_index(app)
-            mini_host.grid()
+        _set_simple_page_visible(app, visible)
         return "break"
-    canvas = app.sidebar_canvas
-    scrollbar = app.sidebar_scrollbar
-    panes = app.main_paned
-    rail = app.workspace_tools_rail
-    mini_host = app.workspace_mini_page_host
 
-    if canvas.winfo_manager() == "pack":
-        try:
-            app._workspace_index_width = panes.sashpos(0)
-        except tk.TclError:
-            pass
+    if app.sidebar_canvas.winfo_manager() == "pack":
         refresh_compact_page_index(app)
-        panel.grid_remove()
-        canvas.pack_forget()
-        scrollbar.pack_forget()
-        mini_host.grid()
-        def compact() -> None:
-            try:
-                app.update_idletasks()
-                panes.sashpos(0, rail.winfo_reqwidth() + 10)
-            except tk.TclError:
-                pass
-        app.after_idle(compact)
+        app.page_panel.grid_remove()
+        app.sidebar_canvas.pack_forget()
+        app.sidebar_scrollbar.pack_forget()
+        _set_simple_page_visible(app, True)
     else:
-        mini_host.grid_remove()
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-        panel.grid()
-        def expand() -> None:
-            try:
-                app.update_idletasks()
-                minimum = rail.winfo_reqwidth() + app.page_range_controls_row.winfo_reqwidth() + 24
-                panes.sashpos(0, min(max(minimum, 1), panes.winfo_width() - 160))
-            except tk.TclError:
-                pass
-        app.after_idle(expand)
+        _set_simple_page_visible(app, False)
+        app.sidebar_scrollbar.pack(side="right", fill="y")
+        app.sidebar_canvas.pack(side="left", fill="both", expand=True)
+        app.page_panel.grid()
+    # The two list implementations occupy the same 300px column.
+    # Keep the current sash location unchanged.
     return "break"
 
-
 def toggle_sidebar(app: Any) -> str:
-    """Toggle compact icons-only navigation; never remove its Panedwindow pane."""
+    """Temporarily hide page list/text controls while preserving mode state."""
     if app.workspace_sidebar_visible:
-        app._workspace_index_was_visible = app.sidebar_canvas.winfo_manager() == "pack"
         hide_workspace_tools(app)
-        app.workspace_mini_page_host.grid_remove()
+        app.workspace_sidebar_visible = False
+        _set_simple_page_visible(app, False)
         if app.sidebar_canvas.winfo_manager() == "pack":
-            try:
-                app._workspace_index_width = app.main_paned.sashpos(0)
-            except tk.TclError:
-                pass
             app.sidebar_canvas.pack_forget()
             app.sidebar_scrollbar.pack_forget()
-        for button in app.workspace_rail_labels:
-            button.grid_remove()
-        app.workspace_sidebar_visible = False
-
-        def compact() -> None:
+        for label in app.workspace_rail_labels:
+            label.grid_remove()
+        def shrink() -> None:
             try:
-                app.main_paned.sashpos(0, app.workspace_tools_rail.winfo_reqwidth() + 8)
+                app.main_paned.sashpos(
+                    0, int(app.workspace_rail_width) + RAIL_DIVIDER_WIDTH,
+                )
             except tk.TclError:
                 pass
-        app.after_idle(compact)
+        app.after_idle(shrink)
     else:
-        for button in app.workspace_rail_labels:
-            button.grid()
-        if (getattr(app, "_workspace_index_was_visible", True)
-                and app.sidebar_canvas.winfo_manager() != "pack"):
-            app.sidebar_scrollbar.pack(side="right", fill="y")
-            app.sidebar_canvas.pack(side="left", fill="both", expand=True)
-            app.page_panel.grid()
         app.workspace_sidebar_visible = True
-        if not getattr(app, "_workspace_index_was_visible", True):
-            if getattr(app, "workspace_mode", None) != "极简":
-                refresh_compact_page_index(app)
-                app.workspace_mini_page_host.grid()
-        # Ctrl+Shift+B must not resurrect labels or a page list in 极简.
-        if getattr(app, "workspace_mode", None) == "极简":
-            _apply_preset_page_index(app, "极简")
         _apply_preset_rail_controls(app, getattr(app, "workspace_mode", "正常"))
+        _apply_preset_page_index(app, getattr(app, "workspace_mode", "正常"))
         def expand() -> None:
             try:
-                width = app.main_paned.winfo_width()
-                minimum = app.workspace_tools_rail.winfo_reqwidth() + 8
-                if getattr(app, "_workspace_index_was_visible", True):
-                    desired = min(300, max(minimum, width - 320))
-                else:
-                    desired = minimum
-                app.main_paned.sashpos(0, int(desired))
+                target = preferred_sidebar_width(
+                    app, extreme=getattr(app, "workspace_mode", "") == "极简",
+                )
+                app.main_paned.sashpos(0, min(
+                    target, max(1, app.main_paned.winfo_width() - 160),
+                ))
             except tk.TclError:
                 pass
         app.after_idle(expand)
