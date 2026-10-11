@@ -27,8 +27,8 @@ def test_fixed_width_icon_cells_and_compact_nav_toggle():
     app, tools = sources()
     assert 'entry.columnconfigure(0, minsize=38)' in tools
     assert 'icon = tk.Canvas(entry, width=30, height=27' in tools
-    assert 'text_button = ttk.Button(entry, text=label, width=5' in tools
-    assert 'rail, 0, "☰", "模式", lambda: show_sidebar_modes(app)' in tools
+    assert 'text_button = ttk.Button(entry, text=label, width=9' in tools
+    assert 'rail, 0, "☰", "窗口模式", lambda: show_sidebar_modes(app)' in tools
     assert 'app.workspace_rail_labels.append(text_button)' in tools
     assert 'button.grid_remove()' in tools
     assert 'button.grid()' in tools
@@ -55,10 +55,10 @@ def test_page_index_still_collapsible_and_tools_unchanged():
 def test_footer_commands_remain_on_icon_rail():
     _, tools = sources()
     for label, method in (
-        ("项目", "open_recent_project"),
-        ("档案", "open_project_profile"),
-        ("设置", "open_settings"),
-        ("帮助", "show_help_dialog"),
+        ("项目中心", "open_recent_project"),
+        ("项目档案", "open_project_profile"),
+        ("设置中心", "open_settings"),
+        ("帮助中心", "show_help_dialog"),
     ):
         assert f'("{label}",' in tools
         assert f'app.{method}' in tools
@@ -210,7 +210,7 @@ def test_canvas_right_click_navigation_and_sidebar_presets():
     assert 'self.change_page(-1)' in app
     assert '切换到上页（Shift + 鼠标右键）' in app
     assert '切换到下页（鼠标右键）' in app
-    assert 'for choice in ("最简", "正常", "最大")' in tools
+    assert 'for choice in ("极简", "简单", "正常", "最大")' in tools
     assert 'def set_sidebar_mode(app: Any, mode: str)' in tools
     assert 'app.fit_page_height()' in tools
     assert 'app.after(120, app.fit_page_width)' in tools
@@ -231,7 +231,7 @@ def test_requested_workspace_updates():
 
 def test_compact_mode_does_not_reuse_full_sidebar_sash_width():
     _, tools = sources()
-    assert 'rail, 0, "☰", "模式", lambda: show_sidebar_modes(app)' in tools
+    assert 'rail, 0, "☰", "窗口模式", lambda: show_sidebar_modes(app)' in tools
     assert 'if tip:' in tools
     assert 'compact_width = app.workspace_tools_rail.winfo_reqwidth() + 10' in tools
     assert 'app.main_paned.sashpos(0, compact_width)' in tools
@@ -267,7 +267,7 @@ def test_current_review_crop_is_fixed_width_double_height_and_framed():
     assert 'self.active_crop_frame.place(x=6, y=4, anchor="nw")' in app
     assert 'self._review_display_crops = list(preloaded_crops)' in app
     assert 'def _update_active_crop_preview(self, index: int)' in app
-    assert 'self._active_crop_fixed_size = (crop.width, 2 * crop.height)' in app
+    assert 'self._active_crop_fixed_size = (crop.width, round(2.5 * crop.height))' in app
     assert 'preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)' in app
     assert 'self._update_active_crop_preview(index)' in app
 
@@ -345,9 +345,9 @@ def test_pinned_preview_and_every_inline_crop_coexist():
     assert 'picture.grid_remove()' not in active
 
 
-def test_each_tool_menu_is_260px_and_vertically_scrollable():
+def test_each_tool_menu_is_300px_and_vertically_scrollable():
     _, tools = sources()
-    assert "TOOL_MENU_WIDTH = 260" in tools
+    assert "TOOL_MENU_WIDTH = 300" in tools
     assert "width = min(TOOL_MENU_WIDTH, max(1, root_width - 12))" in tools
     assert "item, width=max(1, e.width)" in tools
     assert "horizontal = ttk.Scrollbar(scroller" not in tools
