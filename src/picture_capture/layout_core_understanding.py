@@ -374,8 +374,12 @@ def understand_layout_core(
         page_settings,
     )
     from .layout_verified_oversized_heads import recover_verified_oversized_heads
-    verified_heads = recover_verified_oversized_heads(
-        image, layout, visual_role_check["repaired_indices"],
+    verified_heads = (
+        recover_verified_oversized_heads(
+            image, layout, visual_role_check["repaired_indices"],
+        )
+        if bool(getattr(page_settings, "profile_cjk_allow_single_headword", True))
+        else {"verified_glyphs": 0, "promoted_heads": 0, "demoted_fragments": 0}
     )
     # Keep a separate immutable record of why each final Layout role became an
     # entry. Future confidence gates must be validated against real scans
