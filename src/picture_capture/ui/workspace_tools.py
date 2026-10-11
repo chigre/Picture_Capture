@@ -831,7 +831,9 @@ def _set_simple_page_visible(app: Any, visible: bool) -> None:
     """Show/hide the standalone 300px simple page column without reparenting."""
     slot = app.workspace_mini_page_slot
     if visible and slot.winfo_manager() != "pack":
-        slot.pack(side="left", fill="both", before=app.sidebar_canvas)
+        # The full canvas is already unpacked when entering 简单 mode, so
+        # pack -before=canvas would fail with a TclError on Windows.
+        slot.pack(side="left", fill="both", expand=True)
     elif not visible and slot.winfo_manager() == "pack":
         slot.pack_forget()
 
