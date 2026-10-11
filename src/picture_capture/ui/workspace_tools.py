@@ -10,6 +10,9 @@ from tkinter import ttk
 from typing import Any
 
 
+# Every floating task menu occupies a compact single-column panel.
+TOOL_MENU_WIDTH = 260
+
 TASK_GROUPS = (
     ("预处理", "◫", "图片预处理(前置)"),
     ("版面", "▤", "一、版面参数"),
@@ -19,6 +22,74 @@ TASK_GROUPS = (
     ("制作", "✂", "五、后期词典制作"),
 )
 
+
+
+def _stack_tool_menu_controls(root: ttk.Frame) -> None:
+    """Reflow the existing quick-settings widgets into one vertical column.
+
+    This changes geometry managers *without recreating controls*, so Tk
+    variables, command callbacks, focus bindings and external widget
+    references all remain intact.  The original quick-settings layout was
+    designed for a broad sidebar and contains many multi-column grid rows
+    and packed horizontal toolbars; both must be stacked for a 260px menu.
+    """
+    containers = (tk.Frame, tk.LabelFrame, ttk.Frame, ttk.LabelFrame)
+
+    def stack(container: tk.Misc) -> None:
+        if not isinstance(container, containers):
+            return
+        children = tuple(container.winfo_children())
+        gridded = [child for child in children if child.winfo_manager() == "grid"]
+        if gridded:
+            ordered = sorted(
+                gridded,
+                key=lambda child: (
+                    int(child.grid_info()["row"]),
+                    int(child.grid_info()["column"]),
+                ),
+            )
+            columns = max(
+                int(child.grid_info()["column"]) +
+                int(child.grid_info().get("columnspan", 1))
+                for child in ordered
+            )
+            # Reset weights from the legacy wide/multi-column grid.
+            for col in range(columns):
+                container.columnconfigure(col, weight=0, minsize=0)
+            container.columnconfigure(0, weight=1)
+            for child in ordered:
+                child.grid_forget()
+            for row, child in enumerate(ordered):
+                child.grid(
+                    row=row, column=0, sticky="ew",
+                    padx=0, pady=(0, 3),
+                )
+        else:
+            packed = [child for child in children if child.winfo_manager() == "pack"]
+            if len(packed) > 1 and any(
+                child.pack_info().get("side") in ("left", "right")
+                for child in packed
+            ):
+                for child in packed:
+                    child.pack_forget()
+                for child in packed:
+                    # Keep small colour swatches and unit labels intrinsic,
+                    # while buttons, selectors and other inputs use the width.
+                    intrinsic = isinstance(child, (tk.Label, ttk.Label)) or (
+                        isinstance(child, tk.Button) and
+                        str(child.cget("text")) == ""
+                    )
+                    child.pack(
+                        side="top", anchor="w",
+                        fill="none" if intrinsic else "x",
+                        padx=0, pady=(0, 2),
+                    )
+        for child in children:
+            stack(child)
+
+    for section in root.winfo_children():
+        if getattr(section, "_collapse_title", None):
+            stack(section)
 
 
 def _draw_rail_icon(canvas: tk.Canvas, kind: str) -> None:
@@ -113,16 +184,16 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     scroller.pack(fill="both", expand=True)
     canvas = tk.Canvas(scroller, highlightthickness=0, borderwidth=0)
     scrollbar = ttk.Scrollbar(scroller, orient="vertical", command=canvas.yview)
-    horizontal = ttk.Scrollbar(scroller, orient="horizontal", command=canvas.xview)
-    canvas.configure(yscrollcommand=scrollbar.set, xscrollcommand=horizontal.set)
+    canvas.configure(yscrollcommand=scrollbar.set)
     scrollbar.pack(side="right", fill="y")
-    horizontal.pack(side="bottom", fill="x")
     canvas.pack(side="left", fill="both", expand=True)
     content = ttk.Frame(canvas)
     item = canvas.create_window((0, 0), window=content, anchor="nw")
     content.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+    # Keep the embedded frame at the viewport width: never let the original
+    # wide-layout requested size force horizontal scrolling or clipping.
     canvas.bind("<Configure>", lambda e: canvas.itemconfigure(
-        item, width=max(e.width, content.winfo_reqwidth())
+        item, width=max(1, e.width)
     ))
     canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(
         -int(e.delta / 120) if e.delta else 0, "units"
@@ -130,6 +201,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     canvas.bind("<Button-4>", lambda _e: canvas.yview_scroll(-3, "units"))
     canvas.bind("<Button-5>", lambda _e: canvas.yview_scroll(3, "units"))
     app._build_quick_settings(content)
+    _stack_tool_menu_controls(content)
     sections = {
         str(section._collapse_title): section
         for section in content.winfo_children()
@@ -331,9 +403,12 @@ def position_workspace_popup(app: Any) -> None:
         root_y = app.winfo_rooty()
         left = rail.winfo_rootx() + rail.winfo_width() - root_x + 6
         top = max(4, rail.winfo_rooty() - root_y)
-        remaining = max(160, app.winfo_width() - left - 12)
-        width = min(720, remaining)
-        height = max(160, app.winfo_height() - top - 28)
+        # Each tool opens a 260px vertical menu. Reposition instead of
+        # resizing the image canvas when the menu would cross the right edge.
+        root_width = max(1, int(app.winfo_width()))
+        width = min(TOOL_MENU_WIDTH, max(1, root_width - 12))
+        left = max(4, min(left, root_width - width - 6))
+        height = max(1, app.winfo_height() - top - 28)
         popup.place(x=left, y=top, width=width, height=height)
         popup.lift()
     except tk.TclError:
