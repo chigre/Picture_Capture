@@ -9,6 +9,8 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any
 
+from .compact_display_menu import build_compact_display_menu
+
 
 # Every floating task menu occupies a compact single-column panel.
 TOOL_MENU_WIDTH = 260
@@ -224,7 +226,18 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         for section in content.winfo_children()
         if getattr(section, "_collapse_title", None)
     }
+    # The old display section still owns its already-bound quick variables,
+    # but it is never shown. A purpose-built, 260px display panel presents
+    # exactly the requested order without duplicating variable state.
+    sections["二、显示设置"] = build_compact_display_menu(app, content)
     app.workspace_tools_sections = sections
+    app.workspace_tools_content = content
+    # No accordion: start with only one real task panel attached.
+    for child in content.winfo_children():
+        child.pack_forget()
+    first = sections[TASK_GROUPS[0][2]]
+    app._set_section_expanded(first, True, persist=False)
+    first.pack(fill="x")
     app.workspace_tools_canvas = canvas
     app.workspace_tools_heading = heading
     app.workspace_tools_pin_var = pin_var
@@ -457,16 +470,22 @@ def toggle_workspace_tools(app: Any) -> str:
 
 
 def show_all_sections(app: Any) -> None:
-    for section in app.workspace_tools_sections.values():
-        app._set_section_expanded(section, True)
+    """Compatibility entry point: never reveal multiple tool groups at once."""
+    choose_workspace_section(app, TASK_GROUPS[0][2])
 
 
 def choose_workspace_section(app: Any, title: str) -> None:
     section = app.workspace_tools_sections.get(title)
     if section is None:
         return
-    for candidate in app.workspace_tools_sections.values():
-        app._set_section_expanded(candidate, candidate is section)
+    # pack_forget removes the other panels completely; unlike collapsing,
+    # this leaves no titles, borders or empty placeholders in the popup.
+    for child in app.workspace_tools_content.winfo_children():
+        if child.winfo_manager() == "pack":
+            child.pack_forget()
+    if getattr(section, "_collapse_title", None):
+        app._set_section_expanded(section, True, persist=False)
+    section.pack(side="top", fill="x")
     app.workspace_tools_heading.set(
         next((label for label, _icon, section_title in TASK_GROUPS
               if section_title == title), title)
@@ -480,10 +499,9 @@ def show_workspace_task(app: Any, title: str | None) -> None:
         return
     app.workspace_tools_active = title
     if title is None:
-        app.workspace_tools_heading.set("全部工作工具")
-        show_all_sections(app)
-    else:
-        choose_workspace_section(app, title)
+        # Keyboard toggle reopens the last task, never an all-panels view.
+        title = app.workspace_tools_active or TASK_GROUPS[0][2]
+    choose_workspace_section(app, title)
     show_workspace_tools(app)
 
 
