@@ -9,6 +9,8 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any, Callable
 
+from .compact_layout_profile_menu import build_layout_profile_menu
+
 def _row(panel: ttk.Frame) -> ttk.Frame:
     frame = ttk.Frame(panel)
     frame.pack(fill="x", pady=(1, 1))
@@ -156,33 +158,8 @@ LAYOUT_ROWS = (
 
 
 def build_layout_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
-    panel = _panel(parent)
-    for caption, name in LAYOUT_ROWS:
-        row = _row(panel)
-        _label(row, caption)
-        if name == "columns":
-            _entry(row, app.quick_vars[name], 4)
-            continue
-        # Source-image px and displayed percent use existing shared conversion
-        # traces (_quick_percent_parameter_changed/_quick_pixel_parameter_changed).
-        percent = app.quick_vars[name]
-        pixels = app.quick_pixel_vars[name]
-        _entry(row, percent, 6)
-        _label(row, "%")
-        _entry(row, pixels, 7)
-        _label(row, "px")
-
-    auto_var = app.quick_bool_vars.get("ordinary_auto_layout")
-    if auto_var is None:
-        auto_var = tk.BooleanVar(value=bool(app.settings.ordinary_auto_layout))
-        app.quick_bool_vars["ordinary_auto_layout"] = auto_var
-    _check(_row(panel), "使用自动版面参数", auto_var, app._quick_parameter_changed)
-    _separator(panel)
-    _button(_row(panel), "检测版面参数", app.detect_layout_current)
-    _button(_row(panel), "检测版面一致性",
-            app.detect_layout_consistency_selected)
-    _button(_row(panel), "普通画线设置...", lambda: app.open_settings(initial_tab="normal"))
-    return panel
+    """Present the shared Project Profile and auto-layout settings compactly."""
+    return build_layout_profile_menu(app, parent)
 
 
 def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
