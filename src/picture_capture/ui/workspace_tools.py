@@ -426,7 +426,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     rail_style.map("PC.WindowMode.TButton",
                    relief=[("selected", "sunken"), ("!selected", "raised")])
     rail_style.configure("PC.WindowProject.TButton", font="TkDefaultFont",
-                         padding=(2, 0))
+                         padding=(1, 0))
     rail_style.configure("PC.WindowQuick.TButton", font="TkDefaultFont",
                          padding=(1, 0))
     rail_style.configure("PC.WindowZoom.TEntry", font="TkDefaultFont",
@@ -473,6 +473,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     # Place adjacent workspace presets in a narrow upper-right client strip.
     mode_bar = ttk.Frame(app, style="PC.Sidebar.TFrame", padding=(0, 1, 7, 1))
     mode_bar.pack(side="top", fill="x", before=app.main_paned)
+    app.workspace_header_mode_bar = mode_bar
     # Keep the four project actions permanently anchored on the left.
     # Optional zoom/drawing shortcuts and window presets occupy the right.
     mode_group = ttk.Frame(mode_bar, style="PC.Sidebar.TFrame")
@@ -499,7 +500,6 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
 
     app.workspace_header_mode_separator = ttk.Separator(mode_bar, orient="vertical")
     app.workspace_header_quick_host = ttk.Frame(mode_bar, style="PC.Sidebar.TFrame")
-    app.workspace_header_project_separator = ttk.Separator(mode_bar, orient="vertical")
     project_group = ttk.Frame(mode_bar, style="PC.Sidebar.TFrame")
     project_group.pack(side="left", padx=(4, 0))
     app.project_action_bar = project_group  # Compatibility owner.
@@ -513,7 +513,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     )
     for label, command, tip in project_actions:
         button = ttk.Button(
-            project_group, text=label, width=7, command=command,
+            project_group, text=label, width=0, command=command,
             style="PC.WindowProject.TButton",
         )
         button.pack(side="left", padx=(1, 0))
@@ -894,14 +894,15 @@ def refresh_compact_page_index(app: Any) -> None:
 
 
 def required_header_width(app: Any) -> int:
-    """Minimum single-row width with four left labels and four mode presets."""
+    """Actual permanent header width: project labels, presets and native padding."""
     project = app.project_action_bar
     modes = app.workspace_header_mode_group
-    return max(240, int(project.winfo_reqwidth()) + int(modes.winfo_reqwidth()) + 28)
+    # project_group uses left padx=4, mode_bar has right padding=7.
+    return max(1, int(project.winfo_reqwidth()) + int(modes.winfo_reqwidth()) + 11)
 
 
 def enforce_header_min_width(app: Any) -> None:
-    """Prevent very narrow extreme-mode windows clipping the fixed text row."""
+    """Keep all permanent project text and window controls visible."""
     try:
         minimum = required_header_width(app)
         _, minimum_height = app.minsize()
@@ -911,25 +912,46 @@ def enforce_header_min_width(app: Any) -> None:
 
 
 def _refresh_header_toolbar(app: Any, width: int) -> None:
-    """Only hide optional duplicate zoom buttons, never project labels.
+    """Fill actually available space, never applying an arbitrary 650px cutoff.
 
-    The four project buttons remain packed on the left in every window mode.
-    Footer zoom/drawing controls stay accessible in narrower windows.
+    With room for the whole toolbar, show zoom and 普/O/校. With less room,
+    show 普/O/校 alone rather than hiding them and leaving a large blank gap.
+    The four permanent left-hand text buttons and window presets never hide.
     """
+    shortcuts = getattr(app, "workspace_header_shortcut_buttons", ())
+    if not shortcuts:
+        return  # The first <Configure> runs before the deferred quick controls.
     mode_separator = app.workspace_header_mode_separator
     quick_host = app.workspace_header_quick_host
-    project_separator = app.workspace_header_project_separator
-    quick_width = max(250, int(quick_host.winfo_reqwidth()))
-    show_quick = int(width) >= max(650, required_header_width(app) + quick_width + 18)
-    if getattr(app, "_workspace_header_quick_visible", None) == show_quick:
+    zoom_group = app.workspace_header_zoom_group
+    zoom_separator = app.workspace_header_zoom_separator
+
+    # Count real requested widget widths and their pack padding (not guesses).
+    divider_width = int(mode_separator.winfo_reqwidth()) + 10
+    actions_width = sum(int(button.winfo_reqwidth()) + 1 for button in shortcuts)
+    zoom_width = int(zoom_group.winfo_reqwidth()) + int(zoom_separator.winfo_reqwidth()) + 10
+    available = int(width) - required_header_width(app) - divider_width
+    density = (
+        "full" if available >= actions_width + zoom_width
+        else "actions" if available >= actions_width
+        else "none"
+    )
+    if getattr(app, "_workspace_header_quick_density", None) == density:
         return
-    app._workspace_header_quick_visible = show_quick
-    for widget in (mode_separator, quick_host, project_separator):
-        widget.pack_forget()
-    if show_quick:
+    app._workspace_header_quick_density = density
+    app._workspace_header_quick_visible = density != "none"
+    mode_separator.pack_forget()
+    quick_host.pack_forget()
+    zoom_group.pack_forget()
+    zoom_separator.pack_forget()
+    if density == "full":
+        zoom_group.pack(side="left", before=shortcuts[0])
+        zoom_separator.pack(
+            side="left", fill="y", padx=5, pady=3, before=shortcuts[0],
+        )
+    if density != "none":
         mode_separator.pack(side="right", fill="y", padx=5, pady=3)
         quick_host.pack(side="right")
-        project_separator.pack(side="left", fill="y", padx=5, pady=3)
 
 
 def install_header_quick_controls(app: Any) -> None:
@@ -939,6 +961,7 @@ def install_header_quick_controls(app: Any) -> None:
     host = app.workspace_header_quick_host
     zoom_group = ttk.Frame(host, style="PC.Sidebar.TFrame")
     zoom_group.pack(side="left")
+    app.workspace_header_zoom_group = zoom_group
     actions = (
         ("➖", lambda: app.zoom(0.87), "缩小显示"),
         ("%", None, "当前缩放百分比；回车应用"),
@@ -965,9 +988,10 @@ def install_header_quick_controls(app: Any) -> None:
         widget.pack(side="left", padx=(1, 0))
         app._attach_tooltip(widget, tooltip)
         app.workspace_header_quick_buttons.append(widget)
-    ttk.Separator(host, orient="vertical").pack(
-        side="left", fill="y", padx=5, pady=3,
-    )
+    zoom_separator = ttk.Separator(host, orient="vertical")
+    zoom_separator.pack(side="left", fill="y", padx=5, pady=3)
+    app.workspace_header_zoom_separator = zoom_separator
+    app.workspace_header_shortcut_buttons = []
     shortcuts = (
         ("普", app.run_normal_draw_action, "普通画线"),
         ("O", app.run_ocr_draw_action, "OCR画线"),
@@ -978,6 +1002,11 @@ def install_header_quick_controls(app: Any) -> None:
         button.pack(side="left", padx=(1, 0))
         app._attach_tooltip(button, tooltip)
         app.workspace_header_quick_buttons.append(button)
+        app.workspace_header_shortcut_buttons.append(button)
+    # Buttons arrive after the first header <Configure>; measure and retry.
+    app.after_idle(lambda: _refresh_header_toolbar(
+        app, app.workspace_header_mode_bar.winfo_width(),
+    ))
 
 
 def toggle_workspace_appearance(app: Any) -> str:

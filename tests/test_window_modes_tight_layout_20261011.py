@@ -58,9 +58,8 @@ def test_page_range_radio_buttons_share_one_row_with_small_entry():
     assert 'indicatorsize=10' in workspace
 
 
-def test_project_shortcuts_never_hide_or_switch_to_icons():
+def test_project_shortcuts_use_measured_space_and_keep_all_labels():
     from types import SimpleNamespace
-
     from picture_capture.ui.workspace_tools import (
         _refresh_header_toolbar, required_header_width, enforce_header_min_width,
     )
@@ -80,26 +79,40 @@ def test_project_shortcuts_never_hide_or_switch_to_icons():
             return self.reqwidth
 
     project, mode = Frame(220), Frame(160)
-    sep1, quick, sep2 = Frame(), Frame(270), Frame()
+    mode_sep, quick, zoom, zoom_sep = Frame(1), Frame(270), Frame(180), Frame(1)
+    shortcuts = [Frame(30) for _ in ("普", "O", "校")]
     app = SimpleNamespace(
         project_action_bar=project,
         workspace_header_mode_group=mode,
-        workspace_header_mode_separator=sep1,
+        workspace_header_mode_separator=mode_sep,
         workspace_header_quick_host=quick,
-        workspace_header_project_separator=sep2,
+        workspace_header_zoom_group=zoom,
+        workspace_header_zoom_separator=zoom_sep,
+        workspace_header_shortcut_buttons=shortcuts,
         workspace_header_project_buttons=["项目", "Profile", "设置", "帮助"],
     )
-    assert required_header_width(app) == 408
-    for width in (240, 320, 500, 650):
-        _refresh_header_toolbar(app, width)
-        assert project.events == []
-        assert not any(event == "pack" for event, _ in quick.events)
-    _refresh_header_toolbar(app, 800)
+    assert required_header_width(app) == 391
+    # No magic 650px threshold or exaggerated quick-menu minimum.
+    # Fixed labels: 391; mode divider: 11; actions: 93; zoom extras: 191.
+    _refresh_header_toolbar(app, 494)
+    assert app._workspace_header_quick_density == "none"
     assert project.events == []
+    _refresh_header_toolbar(app, 495)
+    assert app._workspace_header_quick_density == "actions"
     assert quick.events[-1][0] == "pack"
-    _refresh_header_toolbar(app, 240)
+    assert zoom.events[-1][0] == "hide"
     assert project.events == []
+    _refresh_header_toolbar(app, 685)
+    assert app._workspace_header_quick_density == "actions"
+    _refresh_header_toolbar(app, 686)
+    assert app._workspace_header_quick_density == "full"
+    assert zoom.events[-1][0] == "pack"
+    assert quick.events[-1][0] == "pack"
+    assert project.events == []
+    _refresh_header_toolbar(app, 390)
+    assert app._workspace_header_quick_density == "none"
     assert quick.events[-1][0] == "hide"
+    assert project.events == []
 
     class Window:
         def __init__(self):
@@ -114,7 +127,27 @@ def test_project_shortcuts_never_hide_or_switch_to_icons():
     window.project_action_bar = project
     window.workspace_header_mode_group = mode
     enforce_header_min_width(window)
-    assert window.minimum == (408, 2)
+    assert window.minimum == (391, 2)
+
+
+def test_early_header_configure_is_rechecked_after_quick_controls_exist():
+    from types import SimpleNamespace
+    from picture_capture.ui.workspace_tools import _refresh_header_toolbar
+
+    # The mode bar first receives <Configure> while the deferred toolbar is
+    # empty. It should wait instead of caching a false visibility decision.
+    project = SimpleNamespace(winfo_reqwidth=lambda: 190)
+    mode = SimpleNamespace(winfo_reqwidth=lambda: 165)
+    app = SimpleNamespace(project_action_bar=project, workspace_header_mode_group=mode)
+    _refresh_header_toolbar(app, 900)
+    assert not hasattr(app, "_workspace_header_quick_density")
+
+    source = (SRC / "workspace_tools.py").read_text(encoding="utf-8")
+    assert 'app.workspace_header_shortcut_buttons.append(button)' in source
+    assert 'app.after_idle(lambda: _refresh_header_toolbar(' in source
+    assert 'app.workspace_header_mode_bar.winfo_width()' in source
+    assert 'max(650,' not in source
+    assert 'max(250,' not in source
 
 
 def test_project_buttons_always_use_text_and_left_packing():
@@ -124,6 +157,9 @@ def test_project_buttons_always_use_text_and_left_packing():
     assert '("设置", app.open_settings,' in source
     assert '("帮助", app.show_help_dialog,' in source
     assert 'project_group.pack(side="left", padx=(4, 0))' in source
+    assert 'project_group, text=label, width=0, command=command' in source
+    assert 'workspace_header_project_separator' not in source
+    assert 'project_separator.pack(' not in source
     responsive = source.split("def _refresh_header_toolbar(", 1)[1].split(
         "def install_header_quick_controls(", 1
     )[0]
