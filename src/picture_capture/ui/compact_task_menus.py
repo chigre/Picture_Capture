@@ -9,11 +9,6 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any, Callable
 
-from picture_capture.layout_percent_helpers import (
-    _format_layout_percent, _layout_pixels_to_percent,
-)
-
-
 def _row(panel: ttk.Frame) -> ttk.Frame:
     frame = ttk.Frame(panel)
     frame.pack(fill="x", pady=(1, 1))
