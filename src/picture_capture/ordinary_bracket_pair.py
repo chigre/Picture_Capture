@@ -40,6 +40,115 @@ def _bracket_side(mask: np.ndarray, opening: bool) -> bool:
     )
 
 
+
+def _visible_bracket_band(
+    ink: np.ndarray,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    *,
+    opening: bool,
+    pitch: float,
+) -> bool:
+    """Validate bracket strokes within a *narrow* band even if CCs merge.
+
+    An attached Han stroke can merge a bracket into a wide connected component,
+    but it does not normally erase its dense vertical side and top/bottom caps.
+    Limit searches to the position learned from independent intact pairs.
+    """
+    w = int(round(width))
+    h = int(round(height))
+    if w < 8 or h < 16:
+        return False
+    xcenter = int(round(x))
+    ycenter = int(round(y))
+    radius_x = max(3, min(8, int(round(pitch * .21))))
+    radius_y = max(1, min(3, int(round(pitch * .07))))
+    for dy in sorted(range(-radius_y, radius_y + 1), key=lambda v: abs(v)):
+        yy = ycenter + dy
+        if yy < 0 or yy + h > ink.shape[0]:
+            continue
+        for dx in sorted(range(-radius_x, radius_x + 1), key=lambda v: abs(v)):
+            xx = xcenter + dx
+            if xx < 0 or xx + w > ink.shape[1]:
+                continue
+            if _bracket_side(ink[yy:yy + h, xx:xx + w], opening):
+                return True
+    return False
+
+
+def _sticky_pairs_from_printed_template(
+    ink: np.ndarray,
+    openings: list[tuple[int, int, int, int]],
+    closings: list[tuple[int, int, int, int]],
+    pairs: list[tuple[tuple[int, int, int, int], tuple[int, int, int, int]]],
+    *,
+    x_offset: int,
+    y_offset: int,
+    column_left: int,
+    pitch: float,
+) -> list[tuple[int, int]]:
+    """Recover only matched rows supported by a reliable local bracket grid.
+
+    XDHYCD has numerous pairs with a stable 2-character closing bracket offset.
+    Do not assume that layout for other dictionaries or long bracket words.
+    A one-sided connected component anchors Y; the other side must still show
+    a full directional bracket stroke pattern at the measured location.
+    """
+    if len(pairs) < 3:
+        return []
+    distances = np.asarray([int(c[0] - o[0]) for o, c in pairs], dtype=float)
+    offset = float(np.median(distances))
+    supported = distances[
+        np.abs(distances - offset) <= max(5.0, pitch * .30)
+    ]
+    if supported.size < 3 or supported.size < int(np.ceil(len(pairs) * .65)):
+        return []
+    offset = float(np.median(supported))
+    supporting_pairs = [
+        (o, c) for o, c in pairs
+        if abs(float(c[0] - o[0]) - offset) <= max(5.0, pitch * .30)
+    ]
+    opening_w = float(np.median([o[2] - o[0] for o, _ in supporting_pairs]))
+    closing_w = float(np.median([c[2] - c[0] for _, c in supporting_pairs]))
+    opening_h = float(np.median([o[3] - o[1] for o, _ in supporting_pairs]))
+    closing_h = float(np.median([c[3] - c[1] for _, c in supporting_pairs]))
+    typical_open_x = float(np.median([o[0] for o, _ in supporting_pairs]))
+    typical_y_delta = float(np.median([c[1] - o[1] for o, c in supporting_pairs]))
+    paired_opens = {id(o) for o, _ in pairs}
+    paired_closes = {id(c) for _, c in pairs}
+    results: list[tuple[int, int]] = []
+
+    for opening in openings:
+        if id(opening) in paired_opens:
+            continue
+        ax, ay, _x1, _y1 = opening
+        if abs(float(ax) - typical_open_x) > max(7.0, pitch * .40):
+            continue
+        if _visible_bracket_band(
+            ink, ax + offset - x_offset, ay + typical_y_delta - y_offset,
+            closing_w, closing_h, opening=False, pitch=pitch,
+        ):
+            results.append((int(ax), int(ay)))
+
+    for closing in closings:
+        if id(closing) in paired_closes:
+            continue
+        bx, by, _x1, _y1 = closing
+        predicted_ax = float(bx) - offset
+        if abs(predicted_ax - typical_open_x) > max(7.0, pitch * .40):
+            continue
+        if predicted_ax - column_left > 5.5 * pitch:
+            continue
+        if _visible_bracket_band(
+            ink, predicted_ax - x_offset, by - typical_y_delta - y_offset,
+            opening_w, opening_h, opening=True, pitch=pitch,
+        ):
+            results.append((int(round(predicted_ax)), int(round(by - typical_y_delta))))
+    return results
+
+
 def recover_bracketed_ordinary_entries(
     entries: list[Entry],
     image: Image.Image,
@@ -91,30 +200,48 @@ def recover_bracketed_ordinary_entries(
                     openings.append(location)
                 if _bracket_side(component, False):
                     closings.append(location)
-            for ax, ay, _ac, ad in openings:
-                paired = any(
-                    .8 * pitch <= bx - ax <= 18.0 * pitch
-                    and abs(by - ay) <= .5 * pitch
-                    and abs((bd - by) - (ad - ay)) <= .7 * pitch
-                    for bx, by, _bc, bd in closings
-                )
-                if not paired:
+            paired = [
+                (o, c) for o in openings for c in closings
+                if .8 * pitch <= c[0] - o[0] <= 18.0 * pitch
+                and abs(c[1] - o[1]) <= .5 * pitch
+                and abs((c[3] - c[1]) - (o[3] - o[1])) <= .7 * pitch
+            ]
+            proven_rows = [(int(o[0]), int(o[1])) for o, _c in paired]
+            proven_rows.extend(_sticky_pairs_from_printed_template(
+                ink, openings, closings, paired,
+                x_offset=x0, y_offset=y0, column_left=left, pitch=pitch,
+            ))
+            visited: list[int] = []
+            for ax, ay in sorted(proven_rows, key=lambda pair: pair[1]):
+                if any(abs(ay - prior) <= max(5, pitch * .32) for prior in visited):
                     continue
-                # Find an actual white line gap, never inside the bracket ink.
-                # Earlier callers used an unconditional 0.08*pitch offset.
+                visited.append(ay)
+                # Find a true preceding gap instead of splitting bracket ink.
                 proposed_y = y0 + safe_gap_above(crop, ay - y0, pitch)
-                def same_boundary(entry):
+
+                def at_same_boundary(entry):
                     if transform is not None and source_size is not None:
-                        existing_x, existing_y = transform.source_to_canonical_point(
+                        ex, ey = transform.source_to_canonical_point(
                             int(entry.x), int(entry.y), source_size,
                         )
                     else:
-                        existing_x, existing_y = int(entry.x), int(entry.y)
+                        ex, ey = int(entry.x), int(entry.y)
                     return (
-                        abs(existing_x - left) <= pitch
-                        and abs(existing_y - proposed_y) <= .8 * pitch
+                        abs(ex - left) <= pitch
+                        and abs(ey - proposed_y) <= max(6.0, pitch * .35)
                     )
-                if any(same_boundary(entry) for entry in result):
+
+                existing = next((entry for entry in result if at_same_boundary(entry)), None)
+                if existing is not None:
+                    # An already-existing Layout candidate can be a *confirmed*
+                    # bracket head. Preserve the visual proof so final-stage
+                    # indent/body vetoes never delete it as an unproven role.
+                    if (
+                        "ordinary_layout_role" in str(existing.ocr_source or "")
+                        and not bool(existing.ocr_oversized_cjk)
+                    ):
+                        existing.ocr_source = "ordinary_bracket_pair"
+                        existing.issue_type = "ORDINARY_VISUAL_BRACKET_PAIR"
                     continue
                 if transform is not None and source_size is not None:
                     source_x, source_y = transform.canonical_to_source_point(
