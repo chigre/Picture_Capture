@@ -850,6 +850,8 @@ def _apply_compact_sidebar_font(app: Any, compact: bool) -> None:
                         f"PC.Workspace80.{suffix}" if compact else
                         "PC.SimplePage.TButton" if isinstance(widget, ttk.Button) else suffix
                     ))
+                    if isinstance(widget, (ttk.Entry, ttk.Combobox, ttk.Label)):
+                        widget.configure(font=_compact_font(app) if compact else "TkDefaultFont")
                     break
         for child in widget.winfo_children():
             visit(child)
@@ -876,6 +878,7 @@ def install_compact_zoom_controls(app: Any) -> None:
             widget = ttk.Entry(
                 host, textvariable=app.view_zoom_var, width=4,
                 justify="center", style="PC.WorkspaceZoom.TEntry",
+                font=_compact_font(app),
             )
             widget.bind("<Return>", app.apply_view_zoom_text)
             widget.bind("<FocusOut>", app.apply_view_zoom_text)
@@ -910,6 +913,11 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
     _apply_compact_sidebar_font(app, compact)
     quick_host = app.workspace_quick_actions_host
     inline = extreme or compact
+    if inline:
+        # Never show two zoom toolbars concurrently after changing presets.
+        canvas_zoom = getattr(app, "page_size_row", None)
+        if canvas_zoom is not None and canvas_zoom.winfo_manager() == "place":
+            canvas_zoom.place_forget()
     for index in range(4):
         quick_host.columnconfigure(
             index, weight=(1 if not extreme and (not inline or index < 3)
