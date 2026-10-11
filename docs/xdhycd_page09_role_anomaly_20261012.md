@@ -75,3 +75,47 @@ on the other nine pages, no loss of true bracket-pair markers, and
 substantial improvement to page 0009 on both columns. No claim of perfect
 recovery is made; the five still-missed markers in the shadow evaluation
 need separate evidence before any additional rescue rule.
+
+## Real rerun failure discovered at 06:28 (2026-10-12 +08:00)
+
+The user confirmed that `xdhycd_training_20261012_062832_512411.zip`
+was made after restarting the latest PR branch. Its new
+`captured_at_automatic_draw` list has the exact same 60 ordered
+coordinates **and source labels** as the earlier 06:00 capture.
+This falsifies any claim that the first PR repair succeeded in
+production. The new export's `ground_truth_lines` are the same 60
+*unmodified auto lines*, so they must not be treated as human labels.
+Use the earlier 38 user-verified markers for comparisons.
+
+### Confirmed implementation error
+
+`layout_role_visual_consistency` compared ink at `LayoutLine.y0`
+against indent modes derived from that same raw line. The check was
+not an independent validator; it did not fire on page 0009. The
+earlier shadow evaluation examined the pixels **following the
+rendered marker Y**, a different physical sampling interval.
+The 93% figure is a *retrospective shadow replay*, not an observed
+performance of the originally submitted patch.
+
+### Revised execution boundary
+
+`ordinary_final_visual_consistency.correct_anomalous_final_ordinary_entries`
+runs inside `processing.detect_entries` after role materialization,
+Y refinement, oversized suppression, bracket supplement, and template
+filtering but before the final reading-order return. It evaluates the
+actual coordinates to be emitted, not the original mode assignment.
+It requires repeated contradictory rows, separate printed indent
+families, and identity horizontal CJK/body-indentation settings.
+Only affected columns are eligible for independent physically verified
+large-glyph restoration; ordinary untouched columns remain unchanged.
+It records affected columns, removed false marker counts, removed
+glyph-internal markers, and inserted glyph tops in the layout reason.
+
+Dedicated **final-candidate** synthetic tests were added, not just
+intermediate Layout object tests. CI must pass on Windows, macOS and
+Linux before finalizing this revision.
+
+**Pending user acceptance**: this final-stage patch still requires a
+new automatic draw from its latest commit and comparison with the
+38 prior user-verified markers. Do not report shadow replay as real
+performance.
