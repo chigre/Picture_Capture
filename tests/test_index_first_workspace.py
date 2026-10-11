@@ -428,7 +428,7 @@ def test_tool_menu_reflow_preserves_controls_and_verticalizes_grid_pack(monkeypa
 def test_extreme_mode_icons_and_abbreviated_run_actions():
     _, tools = sources()
     assert '("极简", "紧凑", "正常", "最大")' in tools
-    assert '"最简":  # Session compatibility' in tools
+    assert 'if mode in {"最简", "简单"}:' in tools
     assert '"极简" if' not in tools  # Mode checks use concrete preset values.
     for value in ("窗口模式", "版面参数", "显示参数", "OCR参数", "画线…", "后期制作",
                   "项目中心", "项目档案", "设置中心", "帮助中心"):
