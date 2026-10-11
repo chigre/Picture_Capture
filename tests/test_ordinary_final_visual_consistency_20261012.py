@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary_final_visual_consistency import (
     correct_anomalous_final_ordinary_entries,
+    suppress_blank_layout_rows_before_proven_head,
 )
 
 
@@ -120,3 +121,67 @@ def test_non_cjk_or_wrong_indent_does_not_intervene():
         image, settings, layout, old,
     )
     assert len(result) == len(old) and not stats["repaired_columns"]
+
+
+def test_empty_role_marker_immediately_before_proven_head_is_rejected():
+    """Reproduce two stray XDHYCD pinyin-continuation boundaries.
+
+    Reject only a *blank* Layout-role marker when the following accepted
+    entry is independently verified as a large printed head.
+    """
+    image, settings, layout, _entries = _page(false_per_column=0)
+    draw = ImageDraw.Draw(image)
+    existing = [
+        Entry("", 40, 1060, ocr_source="ordinary_verified_final_large_head"),
+        Entry("", 460, 960, ocr_source="ordinary_bracket_pair"),
+    ]
+    blank = [
+        Entry("", 40, 1018, ocr_source="page_understanding:ordinary_layout_role"),
+        Entry("", 460, 918, ocr_source="page_understanding:ordinary_layout_role"),
+    ]
+    # The test fixture has regular ink at y=100+50*i. Keep the no-ink
+    # spans by placing extra independent test glyphs far below them.
+    image = Image.new("L", (900, 1050), 255)
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((40, 960, 95, 987), fill=0)
+    draw.rectangle((460, 960, 510, 987), fill=0)
+    examples = [
+        Entry("", 40, 918, ocr_source="page_understanding:ordinary_layout_role"),
+        Entry("", 40, 960, ocr_source="ordinary_verified_final_large_head"),
+        Entry("", 460, 918, ocr_source="page_understanding:ordinary_layout_role"),
+        Entry("", 460, 960, ocr_source="ordinary_bracket_pair"),
+    ]
+    filtered, count = suppress_blank_layout_rows_before_proven_head(
+        image, settings, layout, examples,
+    )
+    assert count == 2
+    assert len(filtered) == 2
+    assert {e.ocr_source for e in filtered} == {
+        "ordinary_verified_final_large_head", "ordinary_bracket_pair",
+    }
+
+
+def test_blank_marker_is_not_rejected_without_a_proven_next_head():
+    image, settings, layout, _entries = _page(false_per_column=0)
+    markers = [
+        Entry("", 40, 1180, ocr_source="page_understanding:ordinary_layout_role"),
+        Entry("", 40, 1222, ocr_source="page_understanding:ordinary_layout_role"),
+    ]
+    filtered, count = suppress_blank_layout_rows_before_proven_head(
+        image, settings, layout, markers,
+    )
+    assert count == 0 and len(filtered) == 2
+
+
+def test_visible_deep_indented_text_is_never_rejected_as_empty():
+    image, settings, layout, _entries = _page(false_per_column=0)
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((40+185, 1180, 40+220, 1200), fill=0)
+    markers = [
+        Entry("", 40, 1180, ocr_source="page_understanding:ordinary_layout_role"),
+        Entry("", 40, 1222, ocr_source="ordinary_verified_final_large_head"),
+    ]
+    filtered, count = suppress_blank_layout_rows_before_proven_head(
+        image, settings, layout, markers,
+    )
+    assert count == 0 and len(filtered) == 2
