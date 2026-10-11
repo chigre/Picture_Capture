@@ -24,7 +24,7 @@ def _settings():
 
 
 def _page(*, false_per_column=9, with_heads=False):
-    image = Image.new("RGB", (900, 1550), "white")
+    image = Image.new("RGB", (900, 1750), "white")
     draw = ImageDraw.Draw(image)
     cols = []
     entries = []
@@ -49,13 +49,13 @@ def _page(*, false_per_column=9, with_heads=False):
                 ocr_source="page_understanding:ordinary_layout_role",
             ))
         # Never suppress visual pair evidence, even at a body-indented X.
-        draw.rectangle((left+45, 1245, left+92, 1273), fill="black")
+        draw.rectangle((left+45, 1200, left+92, 1228), fill="black")
         entries.append(Entry(
-            word="", x=left, y=1245,
+            word="", x=left, y=1200,
             ocr_source="ordinary_bracket_pair",
         ))
         if with_heads:
-            for y in (1120, 1330, 1430):
+            for y in (1250, 1450, 1600):
                 draw.rectangle((left+1, y, left+70, y+71), fill="black")
                 entries.append(Entry(
                     word="", x=left, y=y+38,
