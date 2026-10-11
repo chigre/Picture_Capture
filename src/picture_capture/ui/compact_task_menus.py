@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any, Callable
 
-from .compact_layout_profile_menu import build_layout_profile_menu
+from .compact_layout_profile_menu import LAYOUT_ROWS, build_layout_profile_menu
 
 def _row(panel: ttk.Frame) -> ttk.Frame:
     frame = ttk.Frame(panel)
@@ -142,19 +142,6 @@ def build_preprocess_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     _button(_row(panel), "所选设为工作图片",
             app.promote_preprocessed_working_images)
     return panel
-
-
-LAYOUT_ROWS = (
-    ("正文栏数:", "columns"),
-    ("正文起始Y:", "start_y"),
-    ("首栏X:", "manual_x"),
-    ("单栏宽:", "column_width"),
-    ("栏间空:", "gutter"),
-    ("典型单行字高:", "character_height"),
-    ("典型行间空白:", "row_padding"),
-    ("正文缩进:", "body_indent"),
-    ("微调判据:", "horizontal_tolerance"),
-)
 
 
 def build_layout_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
