@@ -30,15 +30,15 @@ def test_projection_only_is_never_a_measured_row_gap():
         "profile_bootstrap+projection_fallback+observed_character_height=30(n=80)", 1,
     ))
     assert row_padding_is_measured(estimate(
-        "reliable_fusion+paddle+projection_fallback", 7,
+        "reliable_fusion+paddle+observed_row_padding=7(n=24)+projection_fallback", 7,
     ))
 
 
 def test_multi_page_median_excludes_unobserved_placeholders():
     guesses = [estimate("reliable_fusion+projection_only", 1)] * 4
     real = [
-        estimate("reliable_fusion+paddle+projection_fallback", 9),
-        estimate("reliable_fusion+paddle+projection_fallback", 10),
+        estimate("reliable_fusion+paddle+observed_row_padding=7(n=24)+projection_fallback", 9),
+        estimate("reliable_fusion+paddle+observed_row_padding=7(n=24)+projection_fallback", 10),
     ]
     assert verified_multi_page_row_padding(guesses + real) == (None, 2)
     assert verified_multi_page_row_padding(real + guesses[:1]) == (10, 2)
@@ -68,7 +68,7 @@ def test_per_page_unmeasured_gap_keeps_existing_profile(monkeypatch):
         monkeypatch.setattr(
             layout_detection, "detect_layout_parameters",
             lambda *_a, **_kw: estimate(
-                "reliable_fusion+paddle+projection_fallback", 6,
+                "reliable_fusion+paddle+observed_row_padding=7(n=24)+projection_fallback", 6,
             ),
         )
         resolved, _estimate, applied = _RAW_RESOLVE_PAGE_LAYOUT_POLICY(img, settings)
