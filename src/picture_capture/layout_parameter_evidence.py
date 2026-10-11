@@ -24,3 +24,18 @@ def row_padding_is_measured(estimate: Any) -> bool:
     # All accepted Paddle-based paths use actual source text boxes. It does
     # not mean the value is *correct*, only that it was not fabricated.
     return "paddle" in method
+
+
+def verified_multi_page_row_padding(estimates: list[Any]) -> tuple[int | None, int]:
+    """Median over genuinely measured text-box spacing, with coverage gate."""
+    import statistics
+
+    measured = [
+        max(1, int(item.row_padding))
+        for item in estimates
+        if row_padding_is_measured(item)
+    ]
+    required = max(1, (len(estimates) + 1) // 2)
+    if len(measured) < required:
+        return None, len(measured)
+    return round(statistics.median(measured)), len(measured)
