@@ -373,6 +373,10 @@ def understand_layout_core(
         result,
         page_settings,
     )
+    from .layout_verified_oversized_heads import recover_verified_oversized_heads
+    verified_heads = recover_verified_oversized_heads(
+        image, layout, visual_role_check["repaired_indices"],
+    )
     # Keep a separate immutable record of why each final Layout role became an
     # entry. Future confidence gates must be validated against real scans
     # before changing this canonical ordinary-mode output.
@@ -390,6 +394,9 @@ def understand_layout_core(
         f" recovered_indent_rows={int(restored_indents['rescued_rows'])}"
         f" visual_body_lane_repaired={int(visual_role_check['repaired_columns'])}"
         f" visual_body_lane_demoted={int(visual_role_check['demoted_rows'])}"
+        f" verified_oversized_glyphs={int(verified_heads['verified_glyphs'])}"
+        f" verified_oversized_promoted={int(verified_heads['promoted_heads'])}"
+        f" verified_oversized_demoted={int(verified_heads['demoted_fragments'])}"
     )
 
     _LAYOUT_CACHE[key] = result
