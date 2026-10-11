@@ -20,6 +20,10 @@ def test_pinned_by_default_and_wheel_over_form_controls():
     assert "def bind_popup_wheel(widget: tk.Misc)" in source
     assert 'widget.bind("<MouseWheel>", scroll_menu_wheel, add="+")' in source
     assert "bind_popup_wheel(popup)" in source
+    assert "app.workspace_tools_header = header" in source
+    assert "section.winfo_reqheight()" in source
+    assert "height = min(available_height, max(115, requested + header_height + 28))" in source
+    assert "position_workspace_popup(app)" in source
 
 
 def test_color_strip_is_vertically_inset_by_quarter_height():
