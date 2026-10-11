@@ -30,3 +30,28 @@ def extended_review_crop_box(
     ordinary_height = max(1, bottom - top)
     expanded_bottom = top + max(1, round(ordinary_height * factor))
     return left, top, right, min(int(image_height), expanded_bottom)
+
+
+def resize_fixed_review_preview(
+    size: tuple[int, int],
+    previous_zoom: float | None,
+    current_zoom: float,
+) -> tuple[int, int]:
+    """Scale pinned-preview dimensions when the shared review zoom changes.
+
+    The top preview remains a fixed-sized frame while navigating headwords,
+    but it must respond to the same percentage/auto zoom as ordinary and
+    oversized inline crops. Scaling the prior frame (not the newly selected
+    row height) preserves its fixed dimensions across word changes.
+    """
+    width, height = (max(1, int(n)) for n in size)
+    current = float(current_zoom)
+    if not isfinite(current) or current <= 0:
+        raise ValueError("Review zoom must be finite and positive")
+    if previous_zoom is None:
+        return width, height
+    previous = float(previous_zoom)
+    if not isfinite(previous) or previous <= 0:
+        raise ValueError("Previous review zoom must be finite and positive")
+    ratio = current / previous
+    return max(1, round(width * ratio)), max(1, round(height * ratio))
