@@ -110,7 +110,7 @@ def robust_profile_ink_height(estimates: list[Any]) -> tuple[int | None, int]:
     trusted = []
     for row in estimates:
         method = str(getattr(row, "method", "") or "")
-        observed = re.search(r"\\+observed_character_height=(\\d+)\\(n=(\\d+)\\)", method)
+        observed = re.search(r"\+observed_character_height=(\d+)\(n=(\d+)\)", method)
         if not observed:
             continue
         value = int(getattr(row, "character_height", 0) or 0)
