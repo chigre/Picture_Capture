@@ -10,7 +10,9 @@ from tkinter import ttk
 from typing import Any
 
 from .compact_display_menu import build_compact_display_menu
-from .simple_page_controls import install_simple_page_controls
+from .simple_page_controls import (
+    install_simple_page_controls, install_simple_page_tree_actions,
+)
 
 
 # Every floating task menu occupies a compact single-column panel.
@@ -376,6 +378,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
             menu.grab_release()
         return "break"
     mini.bind("<Button-3>", mini_heading_menu)
+    install_simple_page_tree_actions(app, mini)
     app.workspace_mini_page_host = mini_host
     app.workspace_mini_page_list = mini
 
