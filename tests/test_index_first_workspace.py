@@ -419,3 +419,135 @@ def test_tool_menu_reflow_preserves_controls_and_verticalizes_grid_pack(monkeypa
     assert left.rows[-1]["side"] == right.rows[-1]["side"] == "top"
     assert left.rows[-1]["fill"] == right.rows[-1]["fill"] == "x"
     assert section.children == (toolbar, second, first)
+
+
+
+def test_extreme_mode_icons_and_abbreviated_run_actions():
+    _, tools = sources()
+    assert '("极简", "简单", "正常", "最大")' in tools
+    assert '"最简":  # Session compatibility' in tools
+    assert '"极简" if' not in tools  # Mode checks use concrete preset values.
+    for value in ("窗口模式", "版面参数", "显示参数", "OCR参数", "画线…", "后期制作",
+                  "项目中心", "项目档案", "设置中心", "帮助中心"):
+        assert f'"{value}"' in tools
+    assert '("上", -1), ("下", 1)' in tools
+    assert 'app.workspace_extreme_page_navigation = extreme_nav' in tools
+    assert 'command=lambda direction=delta: app.change_page(direction)' in tools
+    assert '("普", "O", "校")' in tools
+
+
+def test_extreme_preset_hides_text_buttons_and_restores_them():
+    from types import SimpleNamespace
+
+    class Widget:
+        def __init__(self):
+            self.visible = True
+            self.values = {}
+
+        def grid(self):
+            self.visible = True
+
+        def grid_remove(self):
+            self.visible = False
+
+        def configure(self, **values):
+            self.values.update(values)
+
+    labels = [Widget() for _ in range(9)]
+    nav = Widget()
+    quick = [Widget() for _ in range(3)]
+    app = SimpleNamespace(
+        workspace_rail_labels=labels,
+        workspace_extreme_page_navigation=nav,
+        workspace_quick_action_buttons=quick,
+        workspace_sidebar_visible=True,
+    )
+    workspace_tools._apply_preset_rail_controls(app, "极简")
+    assert nav.visible
+    assert not any(label.visible for label in labels)
+    assert [w.values["text"] for w in quick] == ["普", "O", "校"]
+    assert all(w.values["width"] == 3 for w in quick)
+
+    workspace_tools._apply_preset_rail_controls(app, "简单")
+    assert not nav.visible
+    assert all(label.visible for label in labels)
+    assert [w.values["text"] for w in quick] == ["普通画线", "OCR画线", "词条校对"]
+
+
+def test_extreme_simple_normal_modes_have_independent_page_list_visibility(monkeypatch):
+    from types import SimpleNamespace
+
+    class Panel:
+        def __init__(self, manager):
+            self.manager = manager
+            self.calls = []
+
+        def winfo_manager(self):
+            return self.manager
+
+        def pack_forget(self):
+            self.manager = ""
+            self.calls.append("pack_forget")
+
+        def pack(self, **_kwargs):
+            self.manager = "pack"
+            self.calls.append("pack")
+
+        def grid_remove(self):
+            self.manager = ""
+            self.calls.append("grid_remove")
+
+        def grid(self):
+            self.manager = "grid"
+            self.calls.append("grid")
+
+    class Panes:
+        def sashpos(self, *_args):
+            return 175
+
+    canvas = Panel("pack")
+    scroller = Panel("pack")
+    mini = Panel("")
+    full_panel = Panel("grid")
+    app = SimpleNamespace(
+        sidebar_canvas=canvas,
+        sidebar_scrollbar=scroller,
+        workspace_mini_page_host=mini,
+        page_panel=full_panel,
+        main_paned=Panes(),
+    )
+    refreshes = []
+    monkeypatch.setattr(workspace_tools, "refresh_compact_page_index",
+                        lambda _app: refreshes.append(True))
+    workspace_tools._apply_preset_page_index(app, "极简")
+    assert canvas.manager == "" and mini.manager == "" and full_panel.manager == ""
+    workspace_tools._apply_preset_page_index(app, "简单")
+    assert mini.manager == "grid" and canvas.manager == ""
+    assert len(refreshes) == 1
+    workspace_tools._apply_preset_page_index(app, "正常")
+    assert mini.manager == "" and canvas.manager == "pack" and full_panel.manager == "grid"
+
+
+def test_review_pinned_crop_2_5x_and_compact_font_captions():
+    app, _ = sources()
+    start = app.index("    def _update_active_crop_preview(self, index: int)")
+    end = app.index("    def _ordinary_review_photo(", start)
+    pinned = app[start:end]
+    assert "half_height = source_height * 1.25" in pinned
+    assert "round(2.5 * crop.height)" in pinned
+    assert 'ordinary_height_only=True' in pinned
+
+    start = app.index("        font_row = ttk.Frame(review_info, style=")
+    end = app.index("        digit_box = self._review_collapsible_section(", start)
+    review_font_controls = app[start:end]
+    assert 'text="字号："' not in review_font_controls
+    assert 'text="粗体"' not in review_font_controls
+    assert 'text="斜体"' not in review_font_controls
+    assert 'text="粗"' in review_font_controls
+    assert 'text="斜"' in review_font_controls
+
+
+def test_saved_legacy_simple_mode_migrates_to_new_name():
+    app, _ = sources()
+    assert '"简单" if stored_mode == "最简" else stored_mode' in app
+    assert 'stored_mode in {"极简", "简单", "正常", "最大"}' in app
