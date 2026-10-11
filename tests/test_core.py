@@ -1826,8 +1826,10 @@ def test_v275_page_switch_saves_current_editing_mode_before_loading_new_page():
     load_start = text.index("    def load_page(")
     load_end = text.index("    def change_page(", load_start)
     load_block = text[load_start:load_end]
-    assert "self._save_current_page_by_mode()" in load_block
-    assert load_block.index("self._save_current_page_by_mode()") < load_block.index("self.current_index = index")
+    assert "save_review_before_page_change(self, index" in load_block
+    assert "self._save_current_page_by_mode(sync_editors=not review_saved)" in load_block
+    assert load_block.index("save_review_before_page_change(self, index") < load_block.index("self.current_index = index")
+    assert load_block.index("self._save_current_page_by_mode(sync_editors=not review_saved)") < load_block.index("self.current_index = index")
 
     assert "app._save_current_page_by_mode()" in controller
 
@@ -5976,10 +5978,15 @@ def test_v21118_review_page_change_resets_crop_text_scroll_to_top():
     assert "self.after_idle(reset_after_layout)" in body
     change_start = body.index("    def change_page")
     change = body[change_start:]
-    assert "self._request_render_rows(focus_index=0, reset_scroll=True)" in change
-    assert "self.render_rows(preloaded_crops=crops)" in change
-    assert "self._reset_rows_scroll_top()" in change
-    assert change.index("self.render_rows(preloaded_crops=crops)") < change.index("self._reset_rows_scroll_top()")
+    # The central main-window load_page path now owns page-switch refresh for
+    # review and main-window navigation alike, avoiding a second redraw.
+    assert "self.parent.change_page(" in change
+    shared = (Path(inspect.getsourcefile(app_module)).parent /
+              "ui" / "review_page_sync.py").read_text(encoding="utf-8")
+    assert "review._request_render_rows(focus_index=0, reset_scroll=True)" in shared
+    assert "review.render_rows(preloaded_crops=list(crops))" in shared
+    assert "review._reset_rows_scroll_top()" in shared
+    assert shared.index("review.render_rows(preloaded_crops=list(crops))") < shared.index("review._reset_rows_scroll_top()")
 
 
 def test_v21119_review_text_similarity_normalizes_spacing_punctuation_and_case():
