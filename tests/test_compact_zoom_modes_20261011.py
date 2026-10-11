@@ -10,7 +10,7 @@ APP = MODULE.parents[1] / "app.py"
 def test_modes_and_saved_session_migrate_to_compact():
     tools = MODULE.read_text(encoding="utf-8")
     app = APP.read_text(encoding="utf-8")
-    assert 'for caption in ("极简", "紧凑", "正常")' in tools
+    assert 'for caption in ("极简", "紧凑", "正常", "最大")' in tools
     assert 'if mode in {"最简", "简单"}:' in tools
     assert 'mode = "紧凑"' in tools
     assert '"紧凑" if stored_mode in {"最简", "简单"} else stored_mode' in app

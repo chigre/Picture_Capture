@@ -340,6 +340,8 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
                          padding=(2, 0))
     rail_style.map("PC.WindowMode.TButton",
                    relief=[("selected", "sunken"), ("!selected", "raised")])
+    rail_style.configure("PC.WindowProject.TButton", font="TkDefaultFont",
+                         padding=(2, 0))
     rail.columnconfigure(0, weight=1)
     app.page_index_labels = {"bookmark":"●","page":"页面","section":"域","lined":"线","fill_status":"填充状态","illustrations":"图"}
     app.page_index_columns = tuple(app.page_index_labels)
@@ -374,10 +376,12 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     # Place adjacent workspace presets in a narrow upper-right client strip.
     mode_bar = ttk.Frame(app, style="PC.Sidebar.TFrame", padding=(0, 1, 7, 1))
     mode_bar.pack(side="top", fill="x", before=app.main_paned)
+    # Right-aligned in one title-adjacent row: project shortcuts first,
+    # window presets last. Native OS caption buttons remain untouched.
     mode_group = ttk.Frame(mode_bar, style="PC.Sidebar.TFrame")
     mode_group.pack(side="right")
     app.workspace_title_mode_buttons = {}
-    for caption in ("极简", "紧凑", "正常"):
+    for caption in ("极简", "紧凑", "正常", "最大"):
         button = ttk.Button(
             mode_group, text=caption, width=4, style="PC.WindowMode.TButton",
             command=lambda mode=caption: set_sidebar_mode(app, mode),
@@ -385,6 +389,35 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         button.pack(side="left", padx=(1, 0))
         app.workspace_title_mode_buttons[caption] = button
     _refresh_window_mode_buttons(app)
+
+    project_group = ttk.Frame(mode_bar, style="PC.Sidebar.TFrame")
+    project_group.pack(side="right", padx=(0, 7))
+    app.project_action_bar = project_group  # Compatibility owner.
+    app.project_footer_buttons = []  # Also used by preprocess lock handling.
+    app.workspace_header_project_buttons = []
+    project_actions = (
+        ("项目中心", "▣", app.open_recent_project, "打开最近项目与项目管理"),
+        ("项目档案", "◈", app.open_project_profile, "配置词典 Profile 和页面模板"),
+        ("设置中心", "⚙", app.open_settings, "打开设置中心"),
+        ("帮助中心", "?", app.show_help_dialog, "查看帮助与快捷操作"),
+    )
+    for label, symbol, command, tip in project_actions:
+        button = ttk.Button(
+            project_group, text=label, width=7, command=command,
+            style="PC.WindowProject.TButton",
+        )
+        button.pack(side="left", padx=(1, 0))
+        app._attach_tooltip(button, f"{label}：{tip}")
+        app.project_footer_buttons.append(button)
+        app.workspace_header_project_buttons.append((button, label, symbol))
+    # At narrow compact-window widths use the four familiar symbols, keeping
+    # every command directly clickable without pushing the image off screen.
+    mode_bar.bind(
+        "<Configure>",
+        lambda event: _refresh_header_project_labels(app, event.width),
+        add="+",
+    )
+    _refresh_header_project_labels(app, app.winfo_width())
     rail_action(rail, 0, "☰", "工具菜单", lambda: toggle_workspace_tools(app),
                 "显示或隐藏当前工具菜单")
     for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1):
@@ -514,8 +547,6 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     footer = ttk.Frame(rail, style="PC.Footer.TFrame")
     footer.grid(row=footer_row, column=0, sticky="sew", pady=(4, 2))
     footer.columnconfigure(0, weight=1)
-    app.project_action_bar = footer
-    app.project_footer_buttons = []
     quick_actions = (
         ("普通画线", app.run_normal_draw_action),
         ("OCR画线", app.run_ocr_draw_action),
@@ -537,17 +568,6 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     # view_zoom_var is initialized later in the main window constructor.
     # Install these controls after idle; they share the existing zoom variable.
     app.after_idle(lambda: install_compact_zoom_controls(app))
-    ttk.Separator(footer, orient="horizontal").grid(
-        row=1, column=0, sticky="ew", pady=(2, 4))
-    project_actions = (
-        ("项目中心", "▣", app.open_recent_project, "打开最近项目与项目管理"),
-        ("项目档案", "◈", app.open_project_profile, "配置词典 Profile 和页面模板"),
-        ("设置中心", "⚙", app.open_settings, "打开设置中心"),
-        ("帮助中心", "?", app.show_help_dialog, "查看帮助与快捷操作"),
-    )
-    for index, (label, symbol, command, tip) in enumerate(project_actions, start=2):
-        button = rail_action(footer, index, symbol, label, command, f"{label}：{tip}")
-        app.project_footer_buttons.append(button)
 
     app.workspace_sidebar_visible = True
     app.bind("<Control-Shift-b>", lambda _e: toggle_sidebar(app), add="+")
@@ -820,6 +840,21 @@ def toggle_sidebar(app: Any) -> str:
                 pass
         app.after_idle(expand)
     return "break"
+
+def _refresh_header_project_labels(app: Any, width: int) -> None:
+    """Keep all four project commands visible in narrow window presets.
+
+    Full text is restored in normal/maximized windows. The same ttk.Button
+    instances retain their command, enabled state and original tooltips.
+    """
+    compact = int(width) < 570
+    if getattr(app, "_workspace_header_short_labels", None) == compact:
+        return
+    app._workspace_header_short_labels = compact
+    for button, label, symbol in getattr(app, "workspace_header_project_buttons", ()):
+        button.configure(text=symbol if compact else label,
+                         width=2 if compact else 7)
+
 
 def _refresh_window_mode_buttons(app: Any) -> None:
     """Reflect selected layout preset while leaving native OS buttons alone."""

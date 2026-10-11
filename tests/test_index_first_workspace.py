@@ -52,7 +52,7 @@ def test_page_index_still_collapsible_and_tools_unchanged():
     assert 'grab_set(' not in tools
 
 
-def test_footer_commands_remain_on_icon_rail():
+def test_project_commands_move_into_shared_top_row():
     _, tools = sources()
     for label, method in (
         ("项目中心", "open_recent_project"),
@@ -63,6 +63,9 @@ def test_footer_commands_remain_on_icon_rail():
         assert f'("{label}",' in tools
         assert f'app.{method}' in tools
     assert 'app.project_footer_buttons.append(button)' in tools
+    assert 'project_group.pack(side="right", padx=(0, 7))' in tools
+    assert 'app.project_action_bar = project_group' in tools
+    assert 'rail_action(footer, index, symbol, label' not in tools
 
 
 def test_tt_buttons_never_receive_unsupported_anchor_widget_parameter():
@@ -213,7 +216,7 @@ def test_canvas_right_click_navigation_and_sidebar_presets():
     assert 'self.change_page(-1)' in app
     assert '切换到上页（Shift + 鼠标右键）' in app
     assert '切换到下页（鼠标右键）' in app
-    assert 'for caption in ("极简", "紧凑", "正常")' in tools
+    assert 'for caption in ("极简", "紧凑", "正常", "最大")' in tools
     assert 'def set_sidebar_mode(app: Any, mode: str)' in tools
     assert 'app.fit_page_height()' in tools
     assert 'app.after(120, app.fit_page_width)' in tools
@@ -430,7 +433,7 @@ def test_tool_menu_reflow_preserves_controls_and_verticalizes_grid_pack(monkeypa
 
 def test_extreme_mode_icons_and_abbreviated_run_actions():
     _, tools = sources()
-    assert '("极简", "紧凑", "正常")' in tools
+    assert '("极简", "紧凑", "正常", "最大")' in tools
     assert 'if mode in {"最简", "简单"}:' in tools
     assert '"极简" if' not in tools  # Mode checks use concrete preset values.
     for value in ("工具菜单", "版面参数", "显示参数", "OCR参数", "画线…", "后期制作",

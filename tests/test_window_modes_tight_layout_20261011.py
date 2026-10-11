@@ -10,7 +10,11 @@ def test_mode_buttons_at_upper_right_keep_os_caption():
     text = (SRC / "workspace_tools.py").read_text(encoding="utf-8")
     assert 'mode_bar.pack(side="top", fill="x", before=app.main_paned)' in text
     assert 'mode_group.pack(side="right")' in text
-    assert 'for caption in ("极简", "紧凑", "正常")' in text
+    assert 'for caption in ("极简", "紧凑", "正常", "最大")' in text
+    assert 'project_group.pack(side="right", padx=(0, 7))' in text
+    assert 'app.project_action_bar = project_group' in text
+    assert 'app.workspace_header_project_buttons.append((button, label, symbol))' in text
+    assert 'app.project_footer_buttons.append(button)' in text
     assert 'button.state(["selected"] if mode == active else ["!selected"])' in text
     assert 'overrideredirect(' not in text
 
@@ -39,3 +43,31 @@ def test_page_range_radio_buttons_share_one_row_with_small_entry():
     assert 'value="specified", style="PC.Workspace80.TRadiobutton"' in controls
     assert 'style="PC.Workspace80.TEntry"' in controls
     assert 'indicatorsize=10' in workspace
+
+
+def test_project_shortcuts_adapt_to_narrow_width_without_rebuilding_buttons():
+    from types import SimpleNamespace
+
+    from picture_capture.ui.workspace_tools import _refresh_header_project_labels
+
+    class Button:
+        def __init__(self):
+            self.calls = []
+
+        def configure(self, **kwargs):
+            self.calls.append(kwargs)
+
+    buttons = [Button() for _ in range(4)]
+    labels = ("项目中心", "项目档案", "设置中心", "帮助中心")
+    symbols = ("▣", "◈", "⚙", "?")
+    app = SimpleNamespace(workspace_header_project_buttons=list(
+        zip(buttons, labels, symbols)
+    ))
+    _refresh_header_project_labels(app, 320)
+    assert [button.calls[-1]["text"] for button in buttons] == list(symbols)
+    assert all(button.calls[-1]["width"] == 2 for button in buttons)
+    _refresh_header_project_labels(app, 320)
+    assert all(len(button.calls) == 1 for button in buttons)
+    _refresh_header_project_labels(app, 1200)
+    assert [button.calls[-1]["text"] for button in buttons] == list(labels)
+    assert all(button.calls[-1]["width"] == 7 for button in buttons)
