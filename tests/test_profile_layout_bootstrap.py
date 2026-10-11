@@ -93,3 +93,55 @@ def test_gui_bootstrap_no_longer_installs_profile_detector() -> None:
 
     assert "install_profile_layout_bootstrap" not in gui
     assert "detect_profile_layout_parameters as detect_layout_parameters" in profile
+
+
+def test_profile_bootstrap_uses_printed_ink_height_not_page_height_guess(monkeypatch) -> None:
+    from PIL import ImageDraw
+    from picture_capture.layout_detection import LayoutEstimate
+
+    clear_profile_layout_bootstrap_cache()
+
+    def fake_projection(image, settings):
+        return LayoutEstimate(
+            columns=2, start_y=38, column_width=660,
+            gutter=32, manual_x=4, bottom_y=2090,
+            character_height=17, row_padding=1,
+            source_boxes=4, method="projection_fallback",
+            column_starts=(4, 711), column_rights=(667, 1374),
+        )
+
+    monkeypatch.setattr(layout_detection, "_projection_layout_estimate", fake_projection)
+    # Exact original XDHYCD_0001 dimensions and approximate printed geometry;
+    # actual ink rows are 29 pixels, spaced 43 pixels apart.
+    image = Image.new("RGB", (1388, 2156), "white")
+    draw = ImageDraw.Draw(image)
+    for top in range(83, 2040, 43):
+        draw.rectangle((26, top, 187, top + 28), fill="black")
+        draw.rectangle((743, top, 904, top + 28), fill="black")
+
+    try:
+        estimate = detect_profile_layout_parameters(image, AppSettings())
+    finally:
+        image.close()
+        clear_profile_layout_bootstrap_cache()
+
+    assert estimate.character_height == 29
+    assert estimate.row_padding == 1
+    assert "profile_bootstrap+projection_fallback+observed_character_height=29(" in estimate.method
+    assert estimate.column_starts == (4, 711)
+
+
+def test_unverifiable_profile_height_is_explicitly_marked_not_measured(monkeypatch) -> None:
+    clear_profile_layout_bootstrap_cache()
+    monkeypatch.setattr(
+        layout_detection, "_projection_layout_estimate",
+        lambda image, settings: _estimate(),
+    )
+    blank = Image.new("RGB", (1800, 1300), "white")
+    try:
+        result = detect_profile_layout_parameters(blank, AppSettings())
+        assert result.character_height == 32
+        assert result.method.endswith("+unverified_character_height")
+    finally:
+        blank.close()
+        clear_profile_layout_bootstrap_cache()
