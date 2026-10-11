@@ -47,7 +47,9 @@ NOT a re-execution of the full contemporary Layout detection pipeline.
 - Repeated ink/role contradiction veto: removes 22 FP, 0 TP.
   Result 23 TP / 15 FP / 15 FN, F1 **60.5%**.
 - Additional physical large-head component evidence, with deduplication
-  and top recovery: 32 TP / 0 FP / 6 FN, F1 **91.4%**.
+  and top recovery across the full body height: **33 TP / 0 FP / 5 FN,
+  F1 93.0%**. A preliminary crop truncated the right-column bottom
+  head; the complete body range confirms it is another valid glyph.
 - The other nine exported pages did not trigger the repeated-contradiction
   veto and retained their baseline lines in the shadow evaluation.
 
@@ -71,5 +73,5 @@ scans using the *exact current commit*, with the user's Profile and all
 current auto-layout switches. The next acceptance criterion is no decrease
 on the other nine pages, no loss of true bracket-pair markers, and
 substantial improvement to page 0009 on both columns. No claim of perfect
-recovery is made; the six still-missed markers in the shadow evaluation
+recovery is made; the five still-missed markers in the shadow evaluation
 need separate evidence before any additional rescue rule.
