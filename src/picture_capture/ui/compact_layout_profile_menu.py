@@ -134,7 +134,14 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             )
         if app.project is not None:
             app.save_settings()
-        if name == "layout_reading_label":
+        if name in {
+            "layout_reading_label", "profile_indent_label",
+            "profile_header_mode", "profile_header_percent",
+            "profile_footer_mode", "profile_footer_percent",
+            "profile_side_content_mode", "profile_side_percent",
+            "profile_side_percent_a", "profile_side_percent_b",
+            "profile_first_page_variant",
+        }:
             app.sync_quick_settings()
             app.redraw()
         refresh_enabled()
