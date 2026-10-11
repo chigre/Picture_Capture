@@ -598,8 +598,19 @@ def toggle_page_index(app: Any) -> str:
     panel = getattr(app, "page_panel", None)
     if panel is None:
         return "break"
-    if getattr(app, "workspace_mode", None) == "极简":
-        # The Page icon never silently expands a list in icon-only mode.
+    mode = getattr(app, "workspace_mode", None)
+    if mode == "极简":
+        # In icon-only mode, the dedicated 上/下 controls own navigation.
+        return "break"
+    if mode == "简单":
+        # The complete simple-mode page panel folds in place, never swaps to
+        # the full secondary sidebar or drops its range/navigation controls.
+        mini_host = app.workspace_mini_page_host
+        if mini_host.winfo_manager() == "grid":
+            mini_host.grid_remove()
+        else:
+            refresh_compact_page_index(app)
+            mini_host.grid()
         return "break"
     canvas = app.sidebar_canvas
     scrollbar = app.sidebar_scrollbar
@@ -730,6 +741,14 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
             label.grid_remove()
         else:
             label.grid()
+    # Drop unused grid columns in 极简; otherwise even empty weighted
+    # columns retain the width of a three-column horizontal toolbar.
+    quick_host = app.workspace_quick_actions_host
+    for index in range(3):
+        quick_host.columnconfigure(
+            index, weight=1 if (not extreme or index == 0) else 0,
+            minsize=0, uniform="" if extreme else "quickrail",
+        )
     # Keep the abbreviations in ALL modes. Only the direction changes.
     for index, (button, title) in enumerate(zip(
         app.workspace_quick_action_buttons, ("普", "O", "校"),
