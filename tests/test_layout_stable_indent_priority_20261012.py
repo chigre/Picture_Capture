@@ -191,3 +191,29 @@ def test_unproved_layout_cautions_still_can_be_filtered():
     )
     assert all(any(item is surviving for surviving in after) for item in baseline)
     assert stats["removed_false_entries"] >= 6
+
+
+def test_raw_row_pixel_veto_respects_printed_stable_indent_evidence():
+    layout = _layout(include_mixed=False)
+    _resolve_directional_body_lanes(layout)
+    reconcile_stable_indent_rows(layout, cjk=True)
+    image = Image.new("RGB", layout.source_size, "white")
+    draw = ImageDraw.Draw(image)
+    # Deliberately disagree with earlier physical first-X measurements:
+    # these simulated analysis pixels show only the following inset ink.
+    # The confirmed physical entry lane must not be erased by a short crop.
+    for column in layout.columns:
+        for line in column.lines:
+            if line.role == "entry":
+                y = layout.body_top + line.y0
+                draw.rectangle(
+                    (column.left + 44, y, column.left + 90, y + 23),
+                    fill="black",
+                )
+    stats = suppress_contradictory_cjk_body_lane_entries(
+        image, AppSettings(ocr_language="chi_sim"), layout,
+    )
+    assert stats["repaired_columns"] == 0
+    assert stats["demoted_rows"] == 0
+    assert sum(line.role == "entry" for column in layout.columns
+               for line in column.lines) == 48
