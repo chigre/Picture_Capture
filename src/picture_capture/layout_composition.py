@@ -49,6 +49,7 @@ def infer_composed_physical_page_layout(
         )
         anchored, selected = anchor_resolved_layout_to_profile(
             profile_settings, resolved, applied,
+            estimate=estimate,
         )
         return anchored, estimate, selected
 
