@@ -33,6 +33,8 @@ def test_compact_font_uses_eighty_percent_only_within_sidebar():
     assert 'style.configure("PC.Workspace80.Treeview.Heading", font=small' in source
     assert 'widget.configure(font=_compact_font(app) if compact else "TkDefaultFont")' in source
     assert '_apply_compact_sidebar_font(app, compact)' in source
+    assert 'app.after_idle(finish_compact_page_controls)' in source
+    assert 'getattr(app, "workspace_mode", "") == "紧凑"' in source
     assert 'style=app.workspace_compact_font' not in source
 
 
