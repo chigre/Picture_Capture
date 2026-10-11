@@ -272,7 +272,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         return entry
 
     sidebar_button = rail_action(
-        rail, 0, "☰", "窗口模式", lambda: show_sidebar_modes(app),
+        rail, 0, "☰", "窗口模式", lambda: toggle_sidebar_modes(app),
         "",
     )
     mode_menu = ttk.Frame(app, padding=3, relief="solid", borderwidth=1,
@@ -281,16 +281,11 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     for choice in ("极简", "简单", "正常", "最大"):
         ttk.Button(mode_menu, text=choice, width=7, style="PC.Rail.TButton",
                    command=lambda mode=choice: set_sidebar_mode(app, mode)).pack(fill="x")
-    def schedule_mode_hide(_event: tk.Event | None = None) -> None:
-        def check() -> None:
-            widget = app.winfo_containing(app.winfo_pointerx(), app.winfo_pointery())
-            if not _within(widget, sidebar_button) and not _within(widget, mode_menu):
-                mode_menu.place_forget()
-        app.after_idle(check)
-    for widget in (sidebar_button, *sidebar_button.winfo_children(),
-                   mode_menu, *mode_menu.winfo_children()):
-        widget.bind("<Enter>", lambda _e: show_sidebar_modes(app), add="+")
-        widget.bind("<Leave>", schedule_mode_hide, add="+")
+    # Do not dismiss this menu on <Leave>. Hover transitions between the
+    # icon and the floating palette may cross a real gap on Windows.
+    # Opening is deliberate (click), and closing requires a selection,
+    # Escape, a second click, or a click outside.
+    mode_menu.bind("<Escape>", lambda _e: mode_menu.place_forget(), add="+")
     app.workspace_sidebar_toggle = sidebar_button
     for index, (label, symbol, title) in enumerate(TASK_GROUPS, start=1):
         rail_action(
@@ -423,6 +418,12 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         hide_workspace_tools(app)
 
     app.bind_all("<Button-1>", dismiss_outside, add="+")
+    def dismiss_mode_on_outside_click(event: tk.Event) -> None:
+        if mode_menu.winfo_manager() != "place":
+            return
+        if not _within(event.widget, mode_menu) and not _within(event.widget, sidebar_button):
+            mode_menu.place_forget()
+    app.bind_all("<Button-1>", dismiss_mode_on_outside_click, add="+")
     app.bind("<Configure>", lambda _e: position_workspace_popup(app), add="+")
     # Size the initial index to fit all three range choices, not the
     # historical sum of the page-table column widths.
@@ -663,15 +664,27 @@ def toggle_sidebar(app: Any) -> str:
     return "break"
 
 def show_sidebar_modes(app: Any) -> None:
+    """Open an intentionally persistent mode selector beside its trigger."""
     menu = app.workspace_sidebar_mode_menu
     rail_button = app.workspace_sidebar_toggle
     try:
+        menu.update_idletasks()
         x = rail_button.winfo_rootx() - app.winfo_rootx() + rail_button.winfo_width() + 2
         y = rail_button.winfo_rooty() - app.winfo_rooty()
-        menu.place(x=x, y=y)
+        x = min(x, max(0, app.winfo_width() - menu.winfo_reqwidth() - 4))
+        y = min(y, max(0, app.winfo_height() - menu.winfo_reqheight() - 4))
+        menu.place(x=max(0, x), y=max(0, y))
         menu.lift()
     except tk.TclError:
         pass
+
+
+def toggle_sidebar_modes(app: Any) -> None:
+    menu = app.workspace_sidebar_mode_menu
+    if menu.winfo_manager() == "place":
+        menu.place_forget()
+    else:
+        show_sidebar_modes(app)
 
 
 def _apply_preset_rail_controls(app: Any, mode: str) -> None:
