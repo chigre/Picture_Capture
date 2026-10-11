@@ -25,7 +25,7 @@ def test_review_has_exactly_one_pinned_preview_owner():
     assert not (Path(app.__file__).parent / "review_pinned_entry_preview.py").exists()
 
 
-def test_all_inline_crops_ignore_detected_large_head_height(monkeypatch):
+def test_review_crop_uses_editor_text_not_obsolete_classification(monkeypatch):
     import picture_capture.app as app
 
     settings = AppSettings(
@@ -46,15 +46,18 @@ def test_all_inline_crops_ignore_detected_large_head_height(monkeypatch):
     image = Image.new("RGB", (180, 400), "white")
     monkeypatch.setattr(app, "line_box", lambda *_args: (10, 70, 110, 100))
 
-    ordinary = app._review_line_box(
-        entry, geometry, image, settings, ordinary_height_only=True,
+    multi = app._review_line_box(entry, geometry, image, settings)
+    single = app._review_line_box(entry, geometry, image, settings, editor_text="八")
+    multi_from_editor = app._review_line_box(
+        Entry(word="八", x=12, y=70, ocr_oversized_cjk=True),
+        geometry, image, settings, editor_text="八階",
     )
-    classified = app._review_line_box(entry, geometry, image, settings)
-    assert ordinary[3] - ordinary[1] == 36
-    assert classified[3] - classified[1] > 36
+    assert multi[3] - multi[1] == 36
+    assert single[3] - single[1] == 96
+    assert multi_from_editor[3] - multi_from_editor[1] == 36
 
 
-def test_pinned_preview_uses_regular_source_box_while_rows_stay_normal():
+def test_pinned_and_inline_review_crops_follow_editor_character_count():
     import picture_capture.app as app
 
     source = Path(app.__file__).read_text(encoding="utf-8")
@@ -67,8 +70,12 @@ def test_pinned_preview_uses_regular_source_box_while_rows_stay_normal():
     pinned = source.split("    def _update_active_crop_preview(", 1)[1].split(
         "    def _ordinary_review_photo(", 1
     )[0]
-    assert "ordinary_height_only=True" in worker
-    assert "ordinary_height_only=True" in pinned
+    assert "ordinary_height_only=True" not in worker
+    assert "ordinary_height_only=True" not in pinned
+    assert "editor_text=editor_texts[index]" in worker
+    assert "editor_text=self.vars[index].get()" in pinned
+    assert "var.trace_add(\"write\"" in source
+    assert "self._refresh_review_row_crop(i)" in source
     assert 'extended_review_crop_box(' in pinned
     assert 'ordinary_box = _review_line_box(' in pinned
     assert 'round(multiplier * crop.height)' in pinned

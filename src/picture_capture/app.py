@@ -233,7 +233,6 @@ from .layout_visualization_ui_v3 import (
 )
 from .auxiliary_line_controller import AuxiliaryLineController
 from .auxiliary_lines import AuxiliaryLineEdits
-from .entry_classification import classified_entry_crop_height
 from .review_entry_classification_ui import sync_review_entry_classification
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
@@ -391,8 +390,14 @@ def _review_line_box(
     next_entry: WordEntry | None = None,
     *,
     ordinary_height_only: bool = False,
+    editor_text: str | None = None,
 ) -> tuple[int, int, int, int]:
-    """Return a source crop box; ordinary rows bypass oversized classification."""
+    """Review crop height is based only on the actual edited headword text.
+
+    A single character uses the explicitly configured large-head crop height;
+    multiple characters use the ordinary height. Deprecated classification,
+    OCR visual-run height and manual scale flags do not influence review crops.
+    """
     configured_regular = max(
         0, int(getattr(settings, "entry_regular_crop_height", 0) or 0)
     )
@@ -405,13 +410,11 @@ def _review_line_box(
     oversized_height = (
         configured_oversized or _effective_review_single_cjk_line_height(settings)
     )
+    displayed_text = entry.word if editor_text is None else editor_text
     height = (
-        regular_height if ordinary_height_only else classified_entry_crop_height(
-            entry,
-            settings,
-            regular_height=regular_height,
-            oversized_height=oversized_height,
-        )
+        regular_height if ordinary_height_only
+        else oversized_height if _focused_review_is_single_character(displayed_text)
+        else regular_height
     )
     if geometry.transform.kind != "identity":
         classified_settings = replace(settings)
@@ -5591,6 +5594,13 @@ class ReviewWindow(tk.Toplevel):
         auto_image_area_width = self._review_image_area_width()
         viewer_width = max(1, int(self.parent.canvas.winfo_width()))
         source_entries = self.parent._ordered_entries_reading_order()
+        # Existing text widgets can contain unsaved edits. Snapshot only values
+        # bound to the same Entry objects, never another row with the same index.
+        visible_text = {
+            id(entry): var.get()
+            for entry, var in zip(self._bound_row_entries(), self.vars)
+        }
+        editor_texts = tuple(visible_text.get(id(entry), entry.word) for entry in source_entries)
         ordered_snapshot = [replace(entry) for entry in source_entries]
         # Bind crop snapshots to Entry identity, not just coordinates/text;
         # otherwise two equal-valued entries may swap rows during the worker.
@@ -5606,10 +5616,8 @@ class ReviewWindow(tk.Toplevel):
             review_settings, geometry = _review_crop_context(
                 image, settings, viewer_width, page_index,
             )
-            # Every editor row uses the ordinary source height regardless
-            # of its detected large-head classification.  Passing matching
-            # regular/oversized settings is insufficient: detected_head_height
-            # can otherwise override the requested crop height.
+            # Every editor row uses the visible text length, not obsolete
+            # regular/oversized classification or OCR-detected glyph height.
             raw_crops: list[Image.Image] = []
             for index, entry in enumerate(ordered_snapshot):
                 next_entry = (
@@ -5618,7 +5626,7 @@ class ReviewWindow(tk.Toplevel):
                 )
                 box = _review_line_box(
                     entry, geometry, image, review_settings, next_entry,
-                    ordinary_height_only=True,
+                    editor_text=editor_texts[index],
                 )
                 raw_crops.append(image.crop(box).convert("RGB"))
             effective_zoom = review_zoom
@@ -5696,6 +5704,14 @@ class ReviewWindow(tk.Toplevel):
         current_stem = self.parent.current_page.stem if self.parent.current_page else ""
         if self._rendered_page_stem and self._rendered_page_stem == current_stem:
             self._capture_simplified_edits(self._rendered_page_stem)
+        # Pending height-switch jobs belong to the outgoing rendered rows.
+        for job in getattr(self, "_review_crop_height_jobs", {}).values():
+            try:
+                self.after_cancel(job)
+            except tk.TclError:
+                pass
+        self._review_crop_height_jobs = {}
+        self._review_crop_single_flags = []
         for child in self.rows.winfo_children():
             child.destroy()
         self.vars.clear(); self.row_entries.clear(); self.editors.clear(); self.editor_frames.clear(); self.simplified_vars.clear(); self.simplified_editors.clear(); self.simplified_search_buttons.clear(); self.simplified_actual_values.clear(); self.simplified_manual_flags.clear(); self.simplified_auto_refresh_flags.clear(); self.editor_crop_widths.clear(); self.thumbnails.clear()
@@ -5719,9 +5735,8 @@ class ReviewWindow(tk.Toplevel):
             # UI-only materialization step. ImageTk creation stays on Tk.
             crop = preloaded_crops[index]
             self.editor_crop_widths.append(crop.width)
-            # The inline editor uses one normal-height slice, never the
-            # oversized/two-line source crop used by the fixed preview.
-            # All rows (including active) have one ordinary-height crop and editor.
+            # Each inline slice already has its text-dependent crop height:
+            # one-character headwords use 大字头切图高, others use ordinary.
             photo = self._ordinary_review_photo(index)
             picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
             picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
@@ -5870,6 +5885,8 @@ class ReviewWindow(tk.Toplevel):
                 widget.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
                 widget.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))
             self.vars.append(var); self.row_entries.append(entry); self.editors.append(editor); self.editor_frames.append(editor_frame)
+            self._review_crop_single_flags.append(_focused_review_is_single_character(var.get()))
+            var.trace_add("write", lambda *_args, i=index: self._schedule_review_crop_height_update(i))
             self.simplified_vars.append(simplified_var); self.simplified_editors.append(simplified_editor)
             self.simplified_search_buttons.append(simplified_search_button)
             self.simplified_actual_values.append(simplified_actual)
@@ -6139,7 +6156,7 @@ class ReviewWindow(tk.Toplevel):
             )
             ordinary_box = _review_line_box(
                 entry, geometry, self.parent.image, crop_settings,
-                ordinary_height_only=True,
+                editor_text=self.vars[index].get(),
             )
             multiplier = parse_review_crop_multiplier(
                 getattr(self.parent.settings, "review_extended_crop_height_multiplier", 2.5)
@@ -6168,6 +6185,82 @@ class ReviewWindow(tk.Toplevel):
             self.active_crop_host.configure(height=self._active_crop_fixed_size[1] + 14)
         except (ValueError, tk.TclError, AttributeError):
             return
+
+    def _schedule_review_crop_height_update(self, index: int) -> None:
+        """Debounce editor text-length transitions without rebuilding/focusing rows."""
+        flags = getattr(self, "_review_crop_single_flags", [])
+        if not (0 <= index < len(flags) and index < len(self.vars)):
+            return
+        jobs = getattr(self, "_review_crop_height_jobs", {})
+        prior = jobs.pop(index, None)
+        if prior is not None:
+            try:
+                self.after_cancel(prior)
+            except tk.TclError:
+                pass
+        if _focused_review_is_single_character(self.vars[index].get()) == flags[index]:
+            return
+        jobs[index] = self.after(120, lambda i=index: self._refresh_review_row_crop(i))
+        self._review_crop_height_jobs = jobs
+
+    def _refresh_review_row_crop(self, index: int) -> None:
+        """Re-crop only the changed editor row, with all PIL work off Tk."""
+        getattr(self, "_review_crop_height_jobs", {}).pop(index, None)
+        rows = self._bound_row_entries()
+        if not (0 <= index < len(rows) and index < len(self.vars)
+                and index < len(self._review_display_crops)):
+            return
+        image, page = self.parent.image, self.parent.current_page
+        if image is None or page is None:
+            return
+        entry = rows[index]
+        text = self.vars[index].get()
+        single = _focused_review_is_single_character(text)
+        settings = replace(self.parent.settings)
+        viewer_width = max(1, int(self.parent.canvas.winfo_width()))
+        page_index = int(self.parent.current_index)
+        zoom = max(0.01, float(self.review_zoom))
+        snapshot = replace(entry)
+
+        def worker():
+            crop_settings, geometry = _review_crop_context(
+                image, settings, viewer_width, page_index,
+            )
+            box = _review_line_box(
+                snapshot, geometry, image, crop_settings, editor_text=text,
+            )
+            crop = image.crop(box).convert("RGB")
+            return crop.resize(
+                (max(1, round(crop.width * zoom)),
+                 max(1, round(crop.height * zoom))),
+                Image.Resampling.LANCZOS,
+            )
+
+        def done(crop):
+            try:
+                if (not self.winfo_exists() or self.parent.current_page != page
+                        or index >= len(self._review_row_pictures)
+                        or index >= len(self._bound_row_entries())
+                        or self._bound_row_entries()[index] is not entry
+                        or _focused_review_is_single_character(
+                            self.vars[index].get()) != single):
+                    return
+                self._review_display_crops[index] = crop
+                photo = self._ordinary_review_photo(index)
+                self._review_row_pictures[index].configure(image=photo)
+                self.thumbnails[index] = photo
+                self.editor_crop_widths[index] = crop.width
+                self._review_crop_single_flags[index] = single
+                if index == self.active_index:
+                    self._active_crop_fixed_size = None
+                    self._update_active_crop_preview(index)
+            except (AttributeError, IndexError, tk.TclError):
+                return
+
+        self.parent._start_ui_worker(
+            f"{self._review_render_worker_key}-height-{index}",
+            worker, done,
+        )
 
     def _ordinary_review_photo(self, index: int) -> ImageTk.PhotoImage:
         """Build the ordinary single-line crop for each review editor row."""

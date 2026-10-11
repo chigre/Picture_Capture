@@ -241,15 +241,16 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     app_source = Path(app_module.__file__).read_text(encoding="utf-8")
     review_source = Path(review.__file__).read_text(encoding="utf-8")
 
-    # Marker OCR and proofreading use the same canonical regular/oversized
-    # classification without a runtime replacement of _review_line_box.
+    # Marker OCR still uses structural classification, while proofreading
+    # uses the actual editor text length and deliberately ignores classification.
     assert "entry_ocr_crop_box(" in marker_ocr_source
     assert "resolve_entry_ocr_row_metrics(" in marker_ocr_source
     assert 'meta.entry_scale == "oversized"' in marker_ocr_source
     review_start = app_source.index("def _review_line_box(")
     review_end = app_source.index("\ndef _apply_focused_review_page_updates", review_start)
     review_line_box = app_source[review_start:review_end]
-    assert "classified_entry_crop_height(" in review_line_box
+    assert "classified_entry_crop_height(" not in review_line_box
+    assert "_focused_review_is_single_character(displayed_text)" in review_line_box
     assert "entry_regular_crop_height" in review_line_box
     assert "entry_oversized_crop_height" in review_line_box
     assert "_is_single_cjk_review_headword" not in app_source
