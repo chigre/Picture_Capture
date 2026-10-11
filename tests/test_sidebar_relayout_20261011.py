@@ -7,16 +7,15 @@ from picture_capture.ui import simple_page_controls
 ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 
 
-def test_window_mode_menu_is_click_to_open_not_hover_to_dismiss():
+def test_window_mode_buttons_on_upper_right_preserve_native_caption():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
-    assert 'lambda: toggle_sidebar_modes(app)' in source
-    assert 'def toggle_sidebar_modes(app: Any)' in source
-    assert 'def dismiss_mode_on_outside_click(event: tk.Event)' in source
-    assert 'not _within(event.widget, mode_menu)' in source
-    assert 'mode_menu.place_forget()' in source
-    assert 'schedule_mode_hide' not in source
-    assert 'mode_menu, *mode_menu.winfo_children()' not in source
-    assert 'widget.bind("<Leave>", schedule_mode_hide' not in source
+    assert 'mode_bar.pack(side="top", fill="x", before=app.main_paned)' in source
+    assert 'mode_group.pack(side="right")' in source
+    assert 'for caption in ("极简", "紧凑", "正常")' in source
+    assert 'command=lambda mode=caption: set_sidebar_mode(app, mode)' in source
+    assert '_refresh_window_mode_buttons(app)' in source
+    assert 'app.workspace_sidebar_mode_menu' not in source
+    assert 'overrideredirect(' not in source
 
 
 def test_light_and_dark_use_same_compact_button_geometry():
@@ -60,8 +59,8 @@ def test_quick_actions_are_always_short_and_horizontal_except_extreme():
     assert 'app.workspace_quick_actions_host = quick_host' in source
     assert '("普", "O", "校")[index]' in source
     assert 'style="PC.QuickRail.TButton"' in source
-    assert 'button.configure(text=title, width=2)' in source
-    assert 'row=(6 + index if extreme else 2 if compact else 0)' in source
-    assert 'column=(0 if extreme else index)' in source
+    assert 'button.configure(text=title, width=2, style="PC.QuickRail.TButton")' in source
+    assert 'row=6 + index if extreme else 2' in source
+    assert 'column=0 if extreme else index' in source
     assert 'sticky="ew", padx=0, pady=0' in source
     assert 'button.configure(text=compact if extreme else ordinary' not in source

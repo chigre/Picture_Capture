@@ -28,7 +28,7 @@ def test_fixed_width_icon_cells_and_compact_nav_toggle():
     assert 'entry.columnconfigure(0, minsize=36)' in tools
     assert 'icon = tk.Canvas(entry, width=30, height=27' in tools
     assert 'text_button = ttk.Button(entry, text=label, width=9' in tools
-    assert 'rail, 0, "☰", "窗口模式", lambda: toggle_sidebar_modes(app)' in tools
+    assert 'rail, 0, "☰", "工具菜单", lambda: toggle_workspace_tools(app)' in tools
     assert 'app.workspace_rail_labels.append(text_button)' in tools
     assert 'label.grid_remove()' in tools
     assert 'label.grid()' in tools
@@ -213,7 +213,7 @@ def test_canvas_right_click_navigation_and_sidebar_presets():
     assert 'self.change_page(-1)' in app
     assert '切换到上页（Shift + 鼠标右键）' in app
     assert '切换到下页（鼠标右键）' in app
-    assert 'for choice in ("极简", "紧凑", "正常", "最大")' in tools
+    assert 'for caption in ("极简", "紧凑", "正常")' in tools
     assert 'def set_sidebar_mode(app: Any, mode: str)' in tools
     assert 'app.fit_page_height()' in tools
     assert 'app.after(120, app.fit_page_width)' in tools
@@ -223,7 +223,7 @@ def test_requested_workspace_updates():
     app, tools = sources()
     assert 'DEFAULT_PAGE_LIST_WIDTH = 260' in tools
     assert 'value=(key in {"bookmark", "lined", "illustrations"})' in tools
-    assert 'width=80 if column == "page" else 26' in tools
+    assert 'size_compact_page_columns(app)' in tools
     assert 'app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{height}+0+{top}")' in tools
     assert '("普通画线", app.run_normal_draw_action)' in tools
     assert '("OCR画线", app.run_ocr_draw_action)' in tools
@@ -234,7 +234,7 @@ def test_requested_workspace_updates():
 
 def test_compact_mode_does_not_reuse_full_sidebar_sash_width():
     _, tools = sources()
-    assert 'rail, 0, "☰", "窗口模式", lambda: toggle_sidebar_modes(app)' in tools
+    assert 'rail, 0, "☰", "工具菜单", lambda: toggle_workspace_tools(app)' in tools
     assert 'if tip:' in tools
     assert 'compact_width = preferred_sidebar_width(' in tools
     assert 'compact=(mode == "紧凑")' in tools
@@ -430,10 +430,10 @@ def test_tool_menu_reflow_preserves_controls_and_verticalizes_grid_pack(monkeypa
 
 def test_extreme_mode_icons_and_abbreviated_run_actions():
     _, tools = sources()
-    assert '("极简", "紧凑", "正常", "最大")' in tools
+    assert '("极简", "紧凑", "正常")' in tools
     assert 'if mode in {"最简", "简单"}:' in tools
     assert '"极简" if' not in tools  # Mode checks use concrete preset values.
-    for value in ("窗口模式", "版面参数", "显示参数", "OCR参数", "画线…", "后期制作",
+    for value in ("工具菜单", "版面参数", "显示参数", "OCR参数", "画线…", "后期制作",
                   "项目中心", "项目档案", "设置中心", "帮助中心"):
         assert f'"{value}"' in tools
     assert '("上", -1), ("下", 1)' in tools
@@ -499,7 +499,7 @@ def test_extreme_zoom_is_vertical_and_compact_is_three_rows(monkeypatch):
     assert [w.position["row"] for w in zoom] == [0, 1, 2, 3, 4, 5]
     assert [w.position["column"] for w in zoom] == [0] * 6
     assert [w.position["row"] for w in quick[:3]] == [6, 7, 8]
-    assert not quick[3].visible
+    assert len(quick) == 3
 
     workspace_tools._apply_preset_rail_controls(app, "紧凑")
     assert not nav.visible
@@ -509,7 +509,7 @@ def test_extreme_zoom_is_vertical_and_compact_is_three_rows(monkeypatch):
     assert [w.position["column"] for w in zoom] == [0, 1, 2, 0, 1, 2]
     assert [w.position["row"] for w in quick[:3]] == [2, 2, 2]
     assert [w.position["column"] for w in quick[:3]] == [0, 1, 2]
-    assert not quick[3].visible
+    assert len(quick) == 3
 
     workspace_tools._apply_preset_rail_controls(app, "正常")
     assert all(w.visible for w in zoom)

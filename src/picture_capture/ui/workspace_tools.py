@@ -212,6 +212,8 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
                 )
             except (AttributeError, tk.TclError):
                 pass
+        if getattr(app, "workspace_mode", "") == "紧凑":
+            size_compact_page_columns(app)
         position_workspace_popup(app)
 
     divider.bind("<ButtonPress-1>", start_drag)

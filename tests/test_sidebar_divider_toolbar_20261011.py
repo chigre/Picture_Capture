@@ -57,7 +57,7 @@ def test_compact_page_list_is_directly_below_page_icon_in_same_rail():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     assert 'simple_slot = ttk.Frame(rail, style="PC.Sidebar.TFrame")' in source
     assert 'row=len(TASK_GROUPS) + 4, column=0, sticky="nsew"' in source
-    assert 'row=len(TASK_GROUPS) + 2, "▦", "页面"' in source
+    assert 'rail, len(TASK_GROUPS) + 2, "▦", "页面"' in source
     assert 'mini_host = ttk.Frame(simple_slot, style="PC.Sidebar.TFrame")' in source
     assert "simple_slot.pack(side=" not in source
     assert "drag[\"sash\"] + proposed - drag[\"width\"]" in source
