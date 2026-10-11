@@ -42,7 +42,7 @@ def page_crop_plan_dict(plan: PageCropPlan) -> dict:
         "box_format": "source_xyxy",
         "integrate_illustrations": bool(plan.integrate_illustrations),
         # Gaps are displayed in preview but do not create image records.
-        "auxiliary_gaps": [list(box) for box in plan.auxiliary_gaps],
+        "auxiliary_gaps": [list(box) for box in getattr(plan, "auxiliary_gaps", ())],
         "entry_pieces": [
             {
                 "output_index": p.output_index,
