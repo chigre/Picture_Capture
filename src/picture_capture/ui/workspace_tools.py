@@ -22,6 +22,13 @@ from .compact_task_menus import (
 from .simple_page_controls import (
     install_simple_page_controls, install_simple_page_tree_actions,
 )
+from .workspace_mode_shortcuts import (
+    create_workspace_mode_shortcut_button, install_workspace_mode_shortcut_traces,
+    refresh_workspace_mode_shortcut_buttons,
+    toggle_workspace_illustration_editor, toggle_workspace_section_editor,
+    toggle_workspace_auxiliary_editor, toggle_workspace_layout,
+    toggle_workspace_display_preview,
+)
 
 
 # Every floating task menu occupies a compact single-column panel.
@@ -482,6 +489,18 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     mode_group = ttk.Frame(mode_bar, style="PC.Sidebar.TFrame")
     mode_group.pack(side="right")
     app.workspace_header_mode_group = mode_group
+    # These fixed header controls stay visible in narrow-window presets.
+    # Put L/A/S immediately before ◑; all share the existing display variables.
+    app.workspace_mode_shortcut_buttons = {}
+    for caption, callback in (
+        ("L", lambda: toggle_workspace_layout(app)),
+        ("A", lambda: toggle_workspace_display_preview(app, "切图预览")),
+        ("S", lambda: toggle_workspace_display_preview(app, "OCR词头区域预览")),
+    ):
+        button = create_workspace_mode_shortcut_button(
+            app, mode_group, caption, callback,
+        )
+        button.pack(side="left", padx=(0, 1))
     # The theme switch is immediately to the left of 极简, not a window
     # preset; changing it uses the app's persisted appearance preference.
     theme_toggle = _compact_header_button(
@@ -672,6 +691,19 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         )
         button.grid(row=0, column=index, sticky="ew", padx=0, pady=0)
         app.workspace_quick_action_buttons.append(button)
+    # In the footer the edit-mode shortcuts remain directly below 普/O/校,
+    # even when insufficient space hides optional *header* quick actions.
+    app.workspace_edit_shortcut_buttons = []
+    for caption, callback in (
+        ("图", lambda: toggle_workspace_illustration_editor(app)),
+        ("区", lambda: toggle_workspace_section_editor(app)),
+        ("辅", lambda: toggle_workspace_auxiliary_editor(app)),
+    ):
+        button = create_workspace_mode_shortcut_button(
+            app, quick_host, caption, callback,
+        )
+        app.workspace_edit_shortcut_buttons.append(button)
+    install_workspace_mode_shortcut_traces(app)
     # view_zoom_var is initialized later in the main window constructor.
     # Install these controls after idle; they share the existing zoom variable.
     app.after_idle(lambda: install_compact_zoom_controls(app))
@@ -1044,6 +1076,7 @@ def refresh_compact_header_buttons(app: Any) -> None:
         except (AttributeError, tk.TclError):
             continue
     _refresh_window_mode_buttons(app)
+    refresh_workspace_mode_shortcut_buttons(app)
 
 
 def toggle_workspace_appearance(app: Any) -> str:
@@ -1213,6 +1246,12 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         button.configure(text=title, width=2)
         button.grid(
             row=6 + index if extreme else 2,
+            column=0 if extreme else index,
+            sticky="ew", padx=0, pady=0,
+        )
+    for index, button in enumerate(getattr(app, "workspace_edit_shortcut_buttons", ())):
+        button.grid(
+            row=9 + index if extreme else 3,
             column=0 if extreme else index,
             sticky="ew", padx=0, pady=0,
         )
