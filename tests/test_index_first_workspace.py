@@ -14,8 +14,8 @@ def test_index_page_controls_and_extension_free_display():
     app, tools = sources()
     assert "install_workspace_tools(self, sidebar, sidebar_host)" in app
     assert 'page_panel.grid(row=0, column=0, rowspan=2' in app
-    assert '("当前至指定页", "to_specified")' in app
-    assert '("当前至末页", "to_end")' in app
+    assert '("至指定页", "to_specified")' in app
+    assert '("至末页", "to_end")' in app
     assert 'text="指定:"' in app
     assert 'page.stem, self._page_section_count_text(index)' in app
     assert 'new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)' in app
@@ -349,7 +349,7 @@ def test_pinned_preview_and_every_inline_crop_coexist():
     assert 'picture.grid_remove()' not in active
 
 
-def test_each_tool_menu_is_300px_and_vertically_scrollable():
+def test_each_tool_menu_is_280px_and_vertically_scrollable():
     _, tools = sources()
     assert "TOOL_MENU_WIDTH = 280" in tools
     assert "width = min(TOOL_MENU_WIDTH, max(1, root_width - 12))" in tools
