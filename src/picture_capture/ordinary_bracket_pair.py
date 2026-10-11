@@ -86,7 +86,7 @@ def recover_bracketed_ordinary_entries(
                     continue
                 component = ink[b:d, a:c]
                 location = (a + x0, b + y0, c + x0, d + y0)
-                if (location[0] - left <= 2.0 * pitch
+                if (location[0] - left <= 5.5 * pitch
                         and _bracket_side(component, True)):
                     openings.append(location)
                 if _bracket_side(component, False):
