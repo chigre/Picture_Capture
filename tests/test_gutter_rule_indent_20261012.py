@@ -73,7 +73,12 @@ def test_right_column_indents_survive_gutter_rule():
     assert min(measured) >= 0  # nothing at divider X≈417 becomes X=-13
     assert all(abs(measured[i] - (2 if i % 2 == 0 else 31)) <= 1
                for i in range(25))
-    assert len(layout.columns[1].entry_modes) >= 1
+    assert len(layout.columns[1].indent_modes) >= 2
+    # The print sample deliberately has MORE true heads than body starts.
+    # Final semantics must select the rightmost *body* family by direction,
+    # not the most populous physical indent family.
+    from picture_capture.layout_core_understanding import _resolve_directional_body_lanes
+    _resolve_directional_body_lanes(layout)
     assert sum(m.support for m in layout.columns[1].entry_modes) >= 12
 
 
@@ -85,7 +90,7 @@ def test_unruled_page_keeps_original_overhang_analysis():
     )
     assert counts[1] == 25
     assert positions == {}
-    assert len(layout.columns[1].entry_modes) >= 1
+    assert len(layout.columns[1].indent_modes) >= 2
 
 
 def test_short_text_marks_do_not_masquerade_as_slanted_rule():
