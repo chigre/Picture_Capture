@@ -139,3 +139,16 @@ def test_all_compact_task_menus_share_regular_row_spacing_and_label_alignment():
     assert 'app._preprocess_export_settings_changed' in task
     assert 'app._quick_parameter_changed' in task
     assert "ACTION_GROUPS" in task
+
+
+def test_legacy_postproduction_menu_reflow_has_matching_spacing():
+    text = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    reflow = text.split("def _stack_tool_menu_controls(", 1)[1].split(
+        "def _draw_rail_icon(", 1
+    )[0]
+    assert 'padx=(3, 3), pady=(2, 2)' in reflow
+    assert 'container.columnconfigure(0, weight=1)' in reflow
+    assert 'child.grid(' in reflow and 'child.pack(' in reflow
+    # Postproduction stays the one legacy panel and keeps its original actions.
+    assert 'sections["五、后期词典制作"]' not in text
+    assert 'app._build_quick_settings(content)' in text

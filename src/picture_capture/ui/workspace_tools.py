@@ -74,7 +74,7 @@ def _stack_tool_menu_controls(root: ttk.Frame) -> None:
             for row, child in enumerate(ordered):
                 child.grid(
                     row=row, column=0, sticky="ew",
-                    padx=0, pady=(0, 3),
+                    padx=(3, 3), pady=(2, 2),
                 )
         else:
             packed = [child for child in children if child.winfo_manager() == "pack"]
@@ -94,7 +94,7 @@ def _stack_tool_menu_controls(root: ttk.Frame) -> None:
                     child.pack(
                         side="top", anchor="w",
                         fill="none" if intrinsic else "x",
-                        padx=0, pady=(0, 2),
+                        padx=(3, 3), pady=(2, 2),
                     )
         for child in children:
             if isinstance(child, (tk.Label, ttk.Label)):

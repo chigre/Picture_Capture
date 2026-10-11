@@ -1,4 +1,4 @@
-"""Compact display palette with explicit, one-line control groups.
+"""Compact display palette with aligned, readable property and detail rows.
 
 The underlying app quick-variable state and existing callbacks remain the
 single source of truth; this file only creates one compact presentation.
@@ -31,7 +31,7 @@ DISPLAY_ROW_PADDING = (2, 2)
 
 
 def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
-    """Build the requested single-line groups inside a 280px tool palette."""
+    """Build aligned property groups within the 280px scrollable tool palette."""
     panel = ttk.Frame(parent, padding=(4, 3, 4, 6))
     qv, qb, qc = app.quick_vars, app.quick_bool_vars, app.quick_color_vars
 
@@ -143,7 +143,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         if callback is not None:
             item.bind("<<ComboboxSelected>>", callback)
 
-    # Group 1: all main-canvas visibility controls, ONE line per feature.
+    # Group 1: main-canvas visibility with aligned colors and subordinate values.
     row = line()
     primary_check(row, "自动保存", app.autosave_var, app.toggle_autosave)
     value(row, "间隔时间(秒)", "batch_interval", 3)
@@ -175,8 +175,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     divider()
 
-    # Group 2: illustration shape and label. Each visual property remains
-    # on its specified line, not a generic verticalized grid.
+    # Group 2: illustration outlines and backgrounds in separate aligned rows.
     row = line()
     primary_check(row, "插图形状:线", app.polygon_var, app.redraw)
     swatch(row, "illustration_outline_color")
