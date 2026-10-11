@@ -53,11 +53,63 @@ def _analysis_left_for_column(
     return max(candidate, previous_right + 1)
 
 
+
+
+def _gutter_divider_right_edge(
+    ink: np.ndarray,
+    *,
+    body_top: int,
+    body_bottom: int,
+    corridor_left: int,
+    corridor_right: int,
+    reference: float,
+) -> int | None:
+    """Find a *slanted* printed divider in the inter-column gutter.
+
+    Whole-page X-column persistence misses diagonal rules (e.g., a rule that
+    drifts 7px from page top to bottom). Here we locate an almost-continuous
+    single-pixel stroke in successive vertical tiles and require its X position
+    to form one coherent track. Only a *gutter*, never legitimate word ink, is
+    eligible. Return the right edge of that stroke plus a tiny safety margin.
+    """
+    if ink.ndim != 2 or ink.size == 0:
+        return None
+    height, width = ink.shape
+    left = max(0, min(width, int(corridor_left)))
+    right = max(left, min(width, int(corridor_right)))
+    top = max(0, min(height, int(body_top)))
+    bottom = max(top, min(height, int(body_bottom)))
+    ref = max(6.0, float(reference))
+    if right - left < max(8, round(ref * .45)) or bottom - top < ref * 8:
+        return None
+
+    tile = max(44, round(ref * 3.0))
+    peaks: list[int] = []
+    eligible = 0
+    for y in range(top, bottom, tile):
+        band = ink[y:min(bottom, y + tile), left:right]
+        if band.shape[0] < tile * .42:
+            continue
+        eligible += 1
+        density = np.asarray(band, dtype=np.uint8).mean(axis=0)
+        peak = int(np.argmax(density))
+        if float(density[peak]) >= .50:
+            peaks.append(left + peak)
+    if eligible < 4 or len(peaks) < max(4, round(eligible * .55)):
+        return None
+    values = np.asarray(peaks, dtype=float)
+    center = float(np.median(values))
+    inliers = values[np.abs(values - center) <= max(4.0, ref * .18)]
+    if len(inliers) < max(4, round(eligible * .50)):
+        return None
+    return int(max(inliers)) + max(2, round(ref * .10))
+
 def remeasure_layout_indents_from_ink(
     layout: Any,
     page_ink: np.ndarray,
     *,
     ops: base.LayoutPrimitiveOps | None = None,
+    divider_positions: dict[int, int] | None = None,
 ) -> dict[int, int]:
     """Re-measure recovered rows without clipping ink left of ``column.left``.
 
@@ -88,6 +140,24 @@ def remeasure_layout_indents_from_ink(
         semantic_right = int(getattr(column, "right", semantic_left + 1) or semantic_left + 1)
         column_width = max(1, semantic_right - semantic_left)
         analysis_left = _analysis_left_for_column(columns, position, reference)
+        # The widening needed for tilted text also reaches back into the
+        # *printed divider* of a ruled dictionary. An ink stroke stretching
+        # most of the page may otherwise become "first_x" on every row,
+        # collapsing real entry/body indents to the same negative X lane.
+        if position > 0 and analysis_left < semantic_left:
+            previous_right = int(columns[position - 1].right)
+            rule_right = _gutter_divider_right_edge(
+                page_ink,
+                body_top=body_top,
+                body_bottom=int(getattr(layout, "body_bottom", height)),
+                corridor_left=max(analysis_left, previous_right + 1),
+                corridor_right=semantic_left - max(2, round(reference * .12)),
+                reference=reference,
+            )
+            if rule_right is not None and rule_right > analysis_left:
+                analysis_left = min(semantic_left, rule_right)
+                if divider_positions is not None:
+                    divider_positions[column_index] = analysis_left
         analysis_right = min(
             width,
             semantic_left + base._leading_width(column_width, reference),
@@ -136,6 +206,7 @@ def finalize_layout_column_drift(
     """Apply post-policy indent remeasurement, reusing an existing page mask when supplied."""
     explicit_ops = ops is not None
     ops = base.current_layout_ops() if ops is None else ops
+    divider_positions: dict[int, int] = {}
     if page_ink is None:
         from .layout_detection import analysis_ink_mask
 
@@ -149,7 +220,7 @@ def finalize_layout_column_drift(
                 np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8),
                 effective,
             )
-            counts = remeasure_layout_indents_from_ink(layout, page_ink, **({"ops": ops} if explicit_ops else {}))
+            counts = remeasure_layout_indents_from_ink(layout, page_ink, divider_positions=divider_positions, **({"ops": ops} if explicit_ops else {}))
         finally:
             try:
                 canonical.close()
@@ -160,13 +231,18 @@ def finalize_layout_column_drift(
             except Exception:
                 pass
     else:
-        counts = remeasure_layout_indents_from_ink(layout, page_ink, **({"ops": ops} if explicit_ops else {}))
+        counts = remeasure_layout_indents_from_ink(layout, page_ink, divider_positions=divider_positions, **({"ops": ops} if explicit_ops else {}))
 
     if counts:
         detail = ",".join(
             f"C{index + 1}:{count}" for index, count in sorted(counts.items())
         )
         layout.reason += f"; unclipped_first_x={detail}"
+    if divider_positions:
+        detail = ",".join(
+            f"C{index + 1}:X{right}" for index, right in sorted(divider_positions.items())
+        )
+        layout.reason += f"; slanted_gutter_rule_guard={detail}"
     return layout
 
 
