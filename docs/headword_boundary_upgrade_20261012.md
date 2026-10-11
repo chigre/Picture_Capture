@@ -156,3 +156,24 @@ python scripts/validate_real_scan_rois.py --assets "C:\path\to\extracted\assets"
 - 新增合成倾斜竖线、无竖线、短文字假线、真实 C2 词头多于正文的方向角色、以及列位置对齐回归测试。
 
 **重要区分**：上述 `≈691.5/720` 和 `≈1274/1324` 来自完整原图中已知人工标记附近的像素窗口对照，支持明确的根因诊断，但不是在全环境中重跑新的完整画线程序。正式修复是否达到目标，需要 PR 新代码生成的 Layout C2 内缩两簇分离图和全页 PDIC 回归指标进行最终确认。
+
+
+## 2026-10-12 XDHYCD：大量 INDENT 消失的第三个根因（自动字高回退被跳过）
+
+用户提供的新版 L 叠加图直接显示 `character_height=17`、`row_padding=1`、`line indents=35`（C1=10、C2=25），但视觉上仍有大量实际文字行没有 Indent。这说明不仅是 indent 分类失败，**物理行尚未全部恢复**。
+
+**真实原始扫描的独立像素测量**（来源：`xdhycd_training_20261012_035134_756550.zip` 中全部三页；在两栏正文领先278px区段，以灰度 <170、每行≥2个暗像素、允许1px墨迹断裂，筛选符合 17px旧估计0.65–2.10倍的墨迹行高）：
+
+| 原始页 | 文字墨迹行高中位数 | 行首-行首节距中位数 |
+|---|---:|---:|
+| XDHYCD_0001 | 30px | C1=42px / C2=43px |
+| XDHYCD_0002 | 29px | C1=42px / C2=43px |
+| XDHYCD_0003 | 30px | C1=43px / C2=43px |
+
+**故障A**：`layout_character_height.apply_character_height_fallback()` 之前用子串 `"fallback=character_height" in method` 判断是否运行真实文字墨迹字高复测。然而实际诊断 method 为 `reliable_fusion+paddle+projection_fallback+separator_anchor+fallback=gutter,character_height`，其中不存在那个连续子串，复测被意外完全跳过。修复为提取 `fallback=` 参数中逗号分隔的所有字段，再检查其中是否有 `character_height`。原有8行最小样本量、MAD/10–90%离散度门控保留不变。
+
+**故障B**：即使复测得到约30px，`layout_profile_anchor.anchor_resolved_layout_to_profile()` 仍对任意单页字高施加Profile基线±max(2px,6%)上限。17px旧基线会将30px真值压回19px，仍然导致按错误比例切行。因此仅在 `estimate.method` 含明确 `observed_character_height=`、estimate字高与被自动选中的值一致且比旧Profile高>25%时，允许该严格图像观测越过Profile夹紧；其他单页检测结果继续夹紧，未选中自动字高时不受影响。
+
+**影响链**：`17px字高 → 行投影分裂/接受阈值偏低 → 实际29–32px字形难以被恢复为正确物理行 → C1/C2 line indents显著偏少 → 真词头进入不了角色分类 → 后续再好的Bracket/Indent复核都无从定位`。还需区分`row_padding=1`与真实行间节距：实际43px行首间距由文字墨迹行高约30px加行间空白构成，不可把17px字高误当43px行距。
+
+**新增回归**：多字段fallback解析的正负用例、原Profile17px与严格复测30px的越界锚定保护、非证据支持异常字高仍被锚定。暂不声称**已经**在新PR版完整运行34页的Layout；实际叠加图下一步应该看到含`observed_character_height=...`的method、使用≈29–30px，而不是17px，并有更多逐行Indent。依旧保持Draft。
