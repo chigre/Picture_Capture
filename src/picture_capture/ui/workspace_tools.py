@@ -820,9 +820,9 @@ def _style_compact_sidebar(app: Any) -> None:
     for suffix in ("TButton", "TLabel", "TRadiobutton", "TCheckbutton",
                    "TEntry", "TCombobox"):
         style.configure(f"PC.Workspace80.{suffix}", font=small, padding=0)
-    # Zoom controls are outside the page-list subtree and retain the regular
-    # font in 紧凑; the XX% field is narrow but not globally scaled down.
-    style.configure("PC.WorkspaceZoom.TEntry", font="TkDefaultFont", padding=0)
+    # Only the zoom-percentage field uses a smaller font (in every mode).
+    # Other zoom buttons and launcher labels retain the normal font.
+    style.configure("PC.WorkspaceZoom.TEntry", font=small, padding=0)
     style.configure("PC.Workspace80.Treeview", font=small, rowheight=19)
     style.configure("PC.Workspace80.Treeview.Heading", font=small, padding=(1, 1))
 
