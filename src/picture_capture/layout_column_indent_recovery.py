@@ -34,7 +34,7 @@ def _weak_columns(layout: Any, *, cjk: bool = False) -> list[int]:
         undersegmented = bool(cjk and 12 <= len(lines) < expected * .40)
         if (
             len(lines) >= 12
-            and (entry_count <= max(2, round(len(lines) * .035))
+            and (entry_count <= max(3, round(len(lines) * .08))
                  or undersegmented)
         ):
             result.append(i)
