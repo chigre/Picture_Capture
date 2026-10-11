@@ -70,25 +70,22 @@ def stable_indent_grammar(
 def stable_indent_row_ids(column: Any, grammar: StableIndentGrammar) -> set[int]:
     """Return only printed rows independently supported by the entry lane.
 
-    Mode membership and slant-normalized first printed ink must AGREE. A false
-    entry assigned by a contaminated mode is intentionally not protected.
+    A repeated lane family must be established, then the individual row's
+    slant-normalized first-ink start must independently agree with that lane.
     """
     normal = normalized_physical_indents(
         list(getattr(column, "lines", ()) or ())
     )
     role_direction = 1 if grammar.entry_center < grammar.body_center else -1
     protected: set[int] = set()
-    for mode in list(getattr(column, "entry_modes", ()) or ()):
-        if id(mode) not in grammar.entry_mode_ids:
+    for line in list(getattr(column, "lines", ()) or ()):
+        if str(getattr(line, "role", "")) != "entry":
             continue
-        for line in list(getattr(mode, "lines", ()) or ()):
-            if str(getattr(line, "role", "")) != "entry":
-                continue
-            x = normal.get(id(line))
-            if x is None:
-                continue
-            if role_direction * (grammar.boundary - x) >= grammar.minimum_margin:
-                protected.add(id(line))
+        x = normal.get(id(line))
+        if x is None:
+            continue
+        if role_direction * (grammar.boundary - x) >= grammar.minimum_margin:
+            protected.add(id(line))
     return protected
 
 
