@@ -6757,23 +6757,9 @@ class ReviewWindow(tk.Toplevel):
         # newer proofreading text during navigation.
         self.save(redraw_main=False)
         preloaded = self._take_prefetched_page(target)
-        if self.parent.change_page(
+        self.parent.change_page(
             delta, preloaded=preloaded, current_already_saved=True, async_allowed=False
-        ):
-            self._sync_review_height_vars()
-            crops = None
-            if (
-                not self.review_zoom_auto
-                and preloaded is not None
-                and preloaded.get("review_key") == self._review_prefetch_key()
-            ):
-                crops = list(preloaded.get("review_crops") or [])
-            if crops is None:
-                self._request_render_rows(focus_index=0, reset_scroll=True)
-            else:
-                self.render_rows(preloaded_crops=crops)
-                self._reset_rows_scroll_top()
-            self._update_title()
+        )
 
 
 
@@ -13315,6 +13301,8 @@ class PictureCaptureApp(tk.Tk):
     ) -> None:
         if not self.project or not (0 <= index < len(self.project.images)):
             return
+        from .ui.review_page_sync import save_review_before_page_change, refresh_review_after_page_change
+        review_saved = save_review_before_page_change(self, index, already_saved=skip_current_save)
         self._pending_page_index = None
         self._invalidate_ui_worker("page-load")
         self._flush_deferred_page_save()
@@ -13323,7 +13311,7 @@ class PictureCaptureApp(tk.Tk):
             and not skip_current_save and not self._preprocess_mode_active()
         ):
             if self._can_save_current_during_batch_navigation():
-                self._save_current_page_by_mode()
+                self._save_current_page_by_mode(sync_editors=not review_saved)
         self.current_index = index; self.current_page = self.project.images[index]
         self._auxiliary_controller.load_page(self.current_page)
         use_preloaded = bool(
@@ -13422,6 +13410,7 @@ class PictureCaptureApp(tk.Tk):
         except (OSError, ValueError, TypeError):
             pass
         self._restore_workspace_layout()
+        refresh_review_after_page_change(self, preloaded if use_preloaded else None)
         self._save_session_state()
 
     def change_page(
