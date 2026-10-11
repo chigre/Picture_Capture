@@ -33,7 +33,6 @@ def save_review_before_page_change(app: Any, index: int, *, already_saved: bool 
     page = getattr(app, "current_page", None)
     if (
         review is None or already_saved or page is None
-        or index == getattr(app, "current_index", -1)
         or getattr(review, "_filter_rows_active", False)
         or getattr(review, "_rendered_page_stem", None) != page.stem
     ):
