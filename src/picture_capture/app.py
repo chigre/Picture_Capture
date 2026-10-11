@@ -7172,27 +7172,34 @@ class PictureCaptureApp(tk.Tk):
 
     def _apply_current_appearance(self, root: tk.Misc) -> None:
         try:
+            if not root.winfo_exists():
+                return
             apply_classic_widget_appearance(root, self.appearance_mode)
-        except tk.TclError:
-            pass
-        if isinstance(root, (tk.Tk, tk.Toplevel)):
+            if not isinstance(root, (tk.Tk, tk.Toplevel)):
+                return
             apply_native_titlebar_appearance(root, self.appearance_mode)
-            # Theme switches can happen while secondary windows are already
-            # mapped. Refresh every descendant Toplevel as well; the <Map> hook
-            # below handles windows created after the switch.
+            # A transient Toplevel can disappear between the existence check
+            # and the first child traversal (e.g. a tooltip during startup).
             stack = list(root.winfo_children())
-            while stack:
-                widget = stack.pop()
-                if isinstance(widget, tk.Toplevel):
-                    apply_native_titlebar_appearance(widget, self.appearance_mode)
-                try:
-                    stack.extend(widget.winfo_children())
-                except tk.TclError:
-                    pass
+        except tk.TclError:
+            return
+        while stack:
+            widget = stack.pop()
+            if isinstance(widget, tk.Toplevel):
+                apply_native_titlebar_appearance(widget, self.appearance_mode)
+            try:
+                stack.extend(widget.winfo_children())
+            except tk.TclError:
+                pass
 
     def _appearance_toplevel_mapped(self, event: tk.Event) -> None:
         widget = getattr(event, "widget", None)
         if widget is None:
+            return
+        try:
+            if not widget.winfo_exists():
+                return
+        except tk.TclError:
             return
         # Applying a native title-bar appearance may itself trigger another
         # <Map> event on Windows.  Keep only one pending idle callback per
@@ -7211,7 +7218,9 @@ class PictureCaptureApp(tk.Tk):
                     pass
 
         try:
-            self.after_idle(apply_mapped_appearance)
+            # The callback belongs to the mapped window: destroying a tooltip
+            # automatically removes its pending Tcl callback.
+            widget.after_idle(apply_mapped_appearance)
         except tk.TclError:
             widget._pc_appearance_map_pending = False
 
