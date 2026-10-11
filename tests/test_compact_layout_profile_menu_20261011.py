@@ -71,6 +71,9 @@ def test_all_seven_backend_auto_checkboxes_and_two_read_only_placeholders():
     assert 'command=app._quick_parameter_changed' in source
     assert 'state = "normal" if bool(master.get()) else "disabled"' in source
     assert 'text="使用自动版面参数", variable=master' in source
+    assert 'auto_row = row()' in source
+    assert 'auto_row, text="自动检测", command=app.detect_layout_current' in source
+    assert 'detect_button.pack(side="left", padx=(5, 0), pady=(0, 2))' in source
 
 
 def test_per_field_percent_and_px_rows_reuse_quick_settings():
@@ -132,3 +135,32 @@ def test_review_right_panel_opens_only_reference_list_by_default():
     assert 'def _toggle_review_right_section(self, key: str)' in source
     assert 'body.pack_forget()' in source
     assert 'body.pack(fill="both", expand=True)' in source
+
+
+def test_layout_autodetect_button_reuses_seven_field_range_detector():
+    source = Path(compact_layout_profile_menu.__file__).read_text(encoding="utf-8")
+    app_source = (BASE / "app.py").read_text(encoding="utf-8")
+    process = (BASE / "processing_core.py").read_text(encoding="utf-8")
+    parent = source.index('auto_row = row()')
+    checkbox = source.index('text="使用自动版面参数"', parent)
+    button = source.index('text="自动检测", command=app.detect_layout_current', parent)
+    rows = source.index('for title, name, auto_name in LAYOUT_ROWS:', parent)
+    assert parent < checkbox < button < rows
+    assert 'app._attach_tooltip(\n        detect_button,' in source
+    assert 'def detect_layout_current(self) -> None:' in app_source
+    detector = app_source.split('    def detect_layout_current(self) -> None:', 1)[1].split(
+        '    def detect_layout_consistency_selected(self)', 1
+    )[0]
+    assert 'indices = self.selected_page_indices()' in detector
+    assert 'return detect_layout_parameters(opened, settings)' in detector
+    assert 'aggregate_layout_estimates(' in detector
+    assert 'self.sync_quick_settings(); self.save_settings(); self.redraw()' in detector
+    assert 'if name == "bottom_y":' in detector
+    assert 'if body_indent_was_auto:' in detector
+    assert 'if horizontal_tolerance_was_auto:' in detector
+    assert process.count('"ordinary_auto_') >= 7
+    from picture_capture.processing_core import ORDINARY_AUTO_LAYOUT_FIELDS
+    assert tuple(name for name, _switch in ORDINARY_AUTO_LAYOUT_FIELDS) == (
+        "columns", "start_y", "manual_x", "column_width", "gutter",
+        "character_height", "row_padding",
+    )

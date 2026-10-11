@@ -203,10 +203,26 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             first.configure(state="readonly" if app.settings.profile_page_pair_mode == "alternate"
                             else "disabled")
 
+    auto_row = row()
     ttk.Checkbutton(
-        row(), text="使用自动版面参数", variable=master,
+        auto_row, text="使用自动版面参数", variable=master,
         command=lambda: (app._quick_parameter_changed(), refresh_enabled()),
-    ).pack(anchor="w", padx=0, pady=(0, 2))
+    ).pack(side="left", padx=0, pady=(0, 2))
+    # Existing manual detector: it works on the selected page range and writes
+    # the seven supported layout fields back to the shared settings/quick vars.
+    # This action is independent of the per-page automatic drawing switches.
+    detect_button = ttk.Button(
+        auto_row, text="自动检测", command=app.detect_layout_current,
+        style="PC.Compact.TButton",
+    )
+    detect_button.pack(side="left", padx=(5, 0), pady=(0, 2))
+    app._attach_tooltip(
+        detect_button,
+        "按页面列表所选范围检测并填充：正文栏数、正文起始Y、首栏X、单栏宽、"
+        "栏间空、典型单行字高、典型行间空白。多页取稳健中位数；"
+        "正文缩进/微调判据仅在原先随字高自动计算时联动更新，"
+        "不写入页底Y或修改Profile的页眉/页尾模板。",
+    )
 
     for title, name, auto_name in LAYOUT_ROWS:
         frame = row()
