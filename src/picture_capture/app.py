@@ -7963,16 +7963,14 @@ class PictureCaptureApp(tk.Tk):
         hbar = ttk.Scrollbar(viewer, orient="horizontal", command=self.canvas.xview)
         vbar = ttk.Scrollbar(viewer, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
-        # Compact zoom overlay is fixed to the lower-left of the canvas viewport.
-        # It expands rightwards on hover without affecting the canvas layout.
-        size_row = ttk.Frame(self.canvas, padding=(5, 4), style="PC.Sidebar.TFrame")
+        # The ≣ launcher now lives beside 普/O/校 in the workspace rail.
+        # Keep the actual zoom tools on the image canvas as an on-demand
+        # overlay, rather than showing a second permanent/hover-only icon.
+        size_row = ttk.Frame(self.canvas, padding=(3, 2), style="PC.Sidebar.TFrame")
         self.page_size_row = size_row
-        size_row.place(relx=0, rely=1, x=8, y=-8, anchor="sw")
-        zoom_handle = ttk.Label(size_row, text="≣", cursor="hand2",
-                                style="PC.SectionBody.TLabel", padding=(5, 2))
-        zoom_handle.pack(side="left")
         zoom_tools = ttk.Frame(size_row, style="PC.Sidebar.TFrame")
         self.page_zoom_tools = zoom_tools
+        zoom_tools.pack(side="left")
         for symbol, command, tip in (
             ("−", lambda: self.zoom(0.87), "缩小显示"),
             ("+", lambda: self.zoom(1.15), "放大显示"),
@@ -7982,39 +7980,18 @@ class PictureCaptureApp(tk.Tk):
         ):
             if symbol == "+":
                 view_zoom_entry = ttk.Entry(
-                    zoom_tools, textvariable=self.view_zoom_var, width=6, justify="center",
-                    style="PC.Compact.TEntry",
+                    zoom_tools, textvariable=self.view_zoom_var, width=6,
+                    justify="center", style="PC.Compact.TEntry",
                 )
                 view_zoom_entry.pack(side="left", padx=2)
                 view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)
                 view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)
-            button = ttk.Button(zoom_tools, text=symbol, width=3, command=command,
-                                style="PC.Tool.TButton")
+            button = ttk.Button(
+                zoom_tools, text=symbol, width=3, command=command,
+                style="PC.Tool.TButton",
+            )
             button.pack(side="left", padx=(0, 3))
             self._attach_tooltip(button, tip)
-
-        def expand_zoom_tools(_event: tk.Event | None = None) -> None:
-            if not zoom_tools.winfo_manager():
-                zoom_tools.pack(side="left", padx=(4, 0))
-
-        def collapse_zoom_tools(_event: tk.Event | None = None) -> None:
-            # Entering a child causes Leave on its parent in Tk; inspect the
-            # actual pointer after event dispatch to prevent flicker.
-            try:
-                x = size_row.winfo_pointerx() - size_row.winfo_rootx()
-                y = size_row.winfo_pointery() - size_row.winfo_rooty()
-                if 0 <= x < size_row.winfo_width() and 0 <= y < size_row.winfo_height():
-                    return
-                zoom_tools.pack_forget()
-            except tk.TclError:
-                return
-
-        def schedule_zoom_collapse(_event: tk.Event | None = None) -> None:
-            size_row.after_idle(collapse_zoom_tools)
-
-        for widget in (size_row, zoom_handle, zoom_tools, *zoom_tools.winfo_children()):
-            widget.bind("<Enter>", expand_zoom_tools, add="+")
-            widget.bind("<Leave>", schedule_zoom_collapse, add="+")
 
         self.canvas.grid(row=0, column=0, sticky="nsew")
         vbar.grid(row=0, column=1, sticky="ns"); hbar.grid(row=1, column=0, sticky="ew")
