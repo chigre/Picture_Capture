@@ -53,6 +53,12 @@ def detect_layout_current(self) -> None:
             columns_policy=self.settings.layout_columns_policy,
             fixed_columns=self.settings.columns,
         )
+        from .layout_parameter_evidence import verified_multi_page_row_padding
+        measured_padding, padding_pages = verified_multi_page_row_padding(list(results))
+        if measured_padding is None:
+            values.pop("row_padding", None)
+        else:
+            values["row_padding"] = measured_padding
         old_character_height = max(1, int(self.settings.character_height))
         body_indent_was_auto = int(self.settings.body_indent) == old_character_height
         horizontal_tolerance_was_auto = (
@@ -74,7 +80,14 @@ def detect_layout_current(self) -> None:
         self.sync_quick_settings(); self.save_settings(); self.redraw()
         suffix = "（任务提前停止，按已完成页面计算）" if stopped else ""
         summary = "稳健中位数" if len(results) >= 2 else "单页检测值"
-        self.status_var.set(f"版面参数检测完成：{consistency}；数值参数使用{summary}{suffix}")
+        padding_note = (
+            f"；行间空有可靠文本框{padding_pages}/{len(results)}页"
+            if measured_padding is not None
+            else f"；行间空仅{padding_pages}/{len(results)}页有实测，保留原设置"
+        )
+        self.status_var.set(
+            f"版面参数检测完成：{consistency}；数值参数使用{summary}{padding_note}{suffix}"
+        )
 
     self._start_batch_task("检测版面参数", indices, worker, done, item_label=lambda i: pages[i].name)
 
