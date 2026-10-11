@@ -211,7 +211,7 @@ def test_canvas_right_click_navigation_and_sidebar_presets():
     assert 'self.change_page(-1)' in app
     assert '切换到上页（Shift + 鼠标右键）' in app
     assert '切换到下页（鼠标右键）' in app
-    assert 'for choice in ("极简", "简单", "正常", "最大")' in tools
+    assert 'for choice in ("极简", "紧凑", "正常", "最大")' in tools
     assert 'def set_sidebar_mode(app: Any, mode: str)' in tools
     assert 'app.fit_page_height()' in tools
     assert 'app.after(120, app.fit_page_width)' in tools
@@ -251,7 +251,7 @@ def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
     app, _ = sources()
     review = (ROOT / "ui" / "controllers" / "review.py").read_text(encoding="utf-8")
     assert 'mini.winfo_manager() == "grid"' in app
-    assert 'getattr(parent, "workspace_mode", "") in {"极简", "简单"}' in app
+    assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in app
     assert 'if compact_workspace:' in app
     assert 'x = max(0, parent.winfo_rootx() + parent.winfo_width())' in app
     assert 'work_x, work_y, work_w, work_h = _screen_work_area(self)' in app
@@ -427,7 +427,7 @@ def test_tool_menu_reflow_preserves_controls_and_verticalizes_grid_pack(monkeypa
 
 def test_extreme_mode_icons_and_abbreviated_run_actions():
     _, tools = sources()
-    assert '("极简", "简单", "正常", "最大")' in tools
+    assert '("极简", "紧凑", "正常", "最大")' in tools
     assert '"最简":  # Session compatibility' in tools
     assert '"极简" if' not in tools  # Mode checks use concrete preset values.
     for value in ("窗口模式", "版面参数", "显示参数", "OCR参数", "画线…", "后期制作",
@@ -439,7 +439,7 @@ def test_extreme_mode_icons_and_abbreviated_run_actions():
     assert '("普", "O", "校", "≣")' in tools
 
 
-def test_extreme_preset_hides_text_buttons_and_restores_them():
+def test_extreme_zoom_is_vertical_and_compact_is_three_rows(monkeypatch):
     from types import SimpleNamespace
 
     class Widget:
@@ -449,8 +449,9 @@ def test_extreme_preset_hides_text_buttons_and_restores_them():
             self.position = None
             self.columns = []
 
-        def grid(self):
+        def grid(self, **values):
             self.visible = True
+            self.position = values
 
         def grid_remove(self):
             self.visible = False
@@ -464,11 +465,17 @@ def test_extreme_preset_hides_text_buttons_and_restores_them():
         def columnconfigure(self, column, **options):
             self.columns.append((column, options))
 
+        def winfo_manager(self):
+            return "" if not self.visible else "grid"
+
     labels = [Widget() for _ in range(9)]
     rows = [Widget() for _ in range(9)]
     nav = Widget()
     quick = [Widget() for _ in range(4)]
+    zoom = [Widget() for _ in range(6)]
     host = Widget()
+    monkeypatch.setattr(workspace_tools, "_apply_compact_sidebar_font",
+                        lambda _app, _compact: None)
     app = SimpleNamespace(
         workspace_rail_labels=labels,
         workspace_rail_rows=rows,
@@ -476,25 +483,37 @@ def test_extreme_preset_hides_text_buttons_and_restores_them():
         workspace_tools_rail=Widget(),
         workspace_extreme_page_navigation=nav,
         workspace_quick_action_buttons=quick,
+        workspace_quick_zoom_controls=zoom,
         workspace_quick_actions_host=host,
         workspace_sidebar_visible=True,
+        page_size_row=None,
     )
     workspace_tools._apply_preset_rail_controls(app, "极简")
     assert nav.visible
     assert not any(label.visible for label in labels)
     assert all(row.values["width"] == 36 for row in rows)
     assert [w.values["text"] for w in quick] == ["普", "O", "校", "≣"]
-    assert [w.position["row"] for w in quick] == [0, 1, 2, 3]
-    assert [w.position["column"] for w in quick] == [0, 0, 0, 0]
-    assert all(w.values["width"] == 2 for w in quick)
+    assert [w.position["row"] for w in zoom] == [0, 1, 2, 3, 4, 5]
+    assert [w.position["column"] for w in zoom] == [0] * 6
+    assert [w.position["row"] for w in quick[:3]] == [6, 7, 8]
+    assert not quick[3].visible
 
-    workspace_tools._apply_preset_rail_controls(app, "简单")
+    workspace_tools._apply_preset_rail_controls(app, "紧凑")
     assert not nav.visible
     assert all(label.visible for label in labels)
     assert all(row.values["width"] == 140 for row in rows)
-    assert [w.values["text"] for w in quick] == ["普", "O", "校", "≣"]
-    assert [w.position["row"] for w in quick] == [0, 0, 0, 0]
+    assert [w.position["row"] for w in zoom] == [0, 0, 0, 1, 1, 1]
+    assert [w.position["column"] for w in zoom] == [0, 1, 2, 0, 1, 2]
+    assert [w.position["row"] for w in quick[:3]] == [2, 2, 2]
+    assert [w.position["column"] for w in quick[:3]] == [0, 1, 2]
+    assert not quick[3].visible
+
+    workspace_tools._apply_preset_rail_controls(app, "正常")
+    assert not any(w.visible for w in zoom)
+    assert all(w.visible for w in quick)
+    assert [w.position["row"] for w in quick] == [0] * 4
     assert [w.position["column"] for w in quick] == [0, 1, 2, 3]
+
 
 def test_extreme_simple_normal_modes_have_independent_page_list_visibility(monkeypatch):
     from types import SimpleNamespace
@@ -535,6 +554,7 @@ def test_extreme_simple_normal_modes_have_independent_page_list_visibility(monke
         sidebar_canvas=canvas,
         sidebar_scrollbar=scroller,
         workspace_mini_page_slot=mini,
+        workspace_tools_rail=Panel("pack"),
         page_panel=full_panel,
         main_paned=Panes(),
     )
@@ -543,7 +563,7 @@ def test_extreme_simple_normal_modes_have_independent_page_list_visibility(monke
                         lambda _app: refreshes.append(True))
     workspace_tools._apply_preset_page_index(app, "极简")
     assert canvas.manager == "" and mini.manager == "" and full_panel.manager == ""
-    workspace_tools._apply_preset_page_index(app, "简单")
+    workspace_tools._apply_preset_page_index(app, "紧凑")
     assert mini.manager == "pack" and canvas.manager == ""
     assert len(refreshes) == 1
     workspace_tools._apply_preset_page_index(app, "正常")
@@ -571,5 +591,5 @@ def test_review_pinned_crop_2_5x_and_compact_font_captions():
 
 def test_saved_legacy_simple_mode_migrates_to_new_name():
     app, _ = sources()
-    assert '"简单" if stored_mode == "最简" else stored_mode' in app
-    assert 'stored_mode in {"极简", "简单", "正常", "最大"}' in app
+    assert '"紧凑" if stored_mode in {"最简", "简单"} else stored_mode' in app
+    assert 'stored_mode in {"极简", "紧凑", "正常", "最大"}' in app
