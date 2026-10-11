@@ -334,12 +334,6 @@ def understand_layout_core(
     _apply_explicit_indent_semantics(layout, page_settings)
     normalize_layout_roles(layout)
     _resolve_directional_body_lanes(layout)
-    from .layout_indent_authority import reconcile_stable_indent_rows
-    indent_authority = reconcile_stable_indent_rows(
-        layout, cjk=uses_cjk_role_model(page_settings),
-    )
-    from .layout_physical_indent import _suppress_display_head_duplicate_entries
-    _suppress_display_head_duplicate_entries(layout)
     from .layout_role_visual_consistency import suppress_contradictory_cjk_body_lane_entries
     visual_role_check = suppress_contradictory_cjk_body_lane_entries(
         image, page_settings, layout,
@@ -398,9 +392,6 @@ def understand_layout_core(
         f" semantic_reliable=0"
         f" generic_body_indent={int(generic_body)}"
         f" indent_semantics={layout.indent_type}"
-        f" stable_indent_columns={indent_authority['trusted_columns']}"
-        f" stable_indent_promoted={indent_authority['entry_promoted']}"
-        f" stable_indent_body_demoted={indent_authority['body_demoted']}"
         f" ordinary_symbol_promoted={int(symbol_promoted)}"
         f" ordinary_large_head_promoted={int(large_promoted)}"
         f" recovered_indent_columns={int(restored_indents['rescued_columns'])}"
