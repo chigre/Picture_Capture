@@ -641,8 +641,13 @@ def toggle_sidebar(app: Any) -> str:
             app.page_panel.grid()
         app.workspace_sidebar_visible = True
         if not getattr(app, "_workspace_index_was_visible", True):
-            refresh_compact_page_index(app)
-            app.workspace_mini_page_host.grid()
+            if getattr(app, "workspace_mode", None) != "极简":
+                refresh_compact_page_index(app)
+                app.workspace_mini_page_host.grid()
+        # Ctrl+Shift+B must not resurrect labels or a page list in 极简.
+        if getattr(app, "workspace_mode", None) == "极简":
+            _apply_preset_page_index(app, "极简")
+        _apply_preset_rail_controls(app, getattr(app, "workspace_mode", "正常"))
         def expand() -> None:
             try:
                 width = app.main_paned.winfo_width()
