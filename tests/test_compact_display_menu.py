@@ -116,7 +116,10 @@ def test_all_compact_task_menus_share_regular_row_spacing_and_label_alignment():
     assert 'result.pack(fill="x", pady=(2, 2))' in layout
     assert 'panel = ttk.Frame(parent, padding=(4, 3, 4, 6))' in layout
     assert 'def _label(row: ttk.Frame, text: str, width: int | None = None)' in task
-    assert '_label(row, caption, width=12)' in task
+    assert '_label(row, "OCR语言")' in task
+    assert '_label(row, "识别带宽%")' in task
+    assert '_label(row, "左缘容差")' in task
+    assert '_label(row, "横线与文字安全距离px")' in task
     assert '_label(row, "几何纠正模式", width=12)' in task
     assert 'for pair in margins:' in task
     assert 'app._preprocess_export_settings_changed' in task
