@@ -1798,10 +1798,8 @@ def _fuse_detection_entries(
     ordinary_rows.sort(key=lambda row: (row[1], row[3], row[2]))
     ocr_rows.sort(key=lambda row: (row[1], row[3], row[2]))
 
-    # Build all admissible cross-detector edges first, then greedily take
-    # the globally smallest ΔY edges.  This is order-independent and prevents
-    # an earlier ordinary row from stealing an OCR observation that is much
-    # closer to the following row.
+    # Max-cardinality monotone pairing avoids stealing the only possible
+    # OCR partner from a neighboring real headword on dense dictionary pages.
     pair_edges: list[tuple[int, int, int]] = []
     for ordinary_index, (_ordinary, ordinary_col, _ordinary_u, ordinary_v) in enumerate(ordinary_rows):
         for ocr_index, (ocr, ocr_col, _ocr_u, ocr_v) in enumerate(ocr_rows):
@@ -1813,15 +1811,13 @@ def _fuse_detection_entries(
             delta = abs(int(ocr_v) - int(ordinary_v))
             if delta <= tolerance:
                 pair_edges.append((delta, ordinary_index, ocr_index))
-    pair_edges.sort(key=lambda item: (item[0], item[1], item[2]))
+    from .ordered_marker_matching import match_ordered_markers
 
-    ordinary_to_ocr: dict[int, int] = {}
-    used_ocr: set[int] = set()
-    for _delta, ordinary_index, ocr_index in pair_edges:
-        if ordinary_index in ordinary_to_ocr or ocr_index in used_ocr:
-            continue
-        ordinary_to_ocr[ordinary_index] = ocr_index
-        used_ocr.add(ocr_index)
+    matched_ocr = match_ordered_markers(
+        len(ordinary_rows), len(ocr_rows), pair_edges,
+    )
+    ordinary_to_ocr = dict(matched_ocr)
+    used_ocr = {ocr_index for _, ocr_index in matched_ocr}
 
     # Rejected OCR review candidates are also observations and must be paired
     # one-to-one. Without global assignment, one rejected row could enrich or
@@ -1836,14 +1832,22 @@ def _fuse_detection_entries(
             delta = abs(int(latent_v) - int(ordinary_v))
             if delta <= base_tolerance:
                 latent_edges.append((delta, ordinary_index, latent_index))
-    latent_edges.sort(key=lambda item: (item[0], item[1], item[2]))
-    ordinary_to_latent: dict[int, int] = {}
-    used_latent: set[int] = set()
-    for _delta, ordinary_index, latent_index in latent_edges:
-        if ordinary_index in ordinary_to_latent or latent_index in used_latent:
-            continue
-        ordinary_to_latent[ordinary_index] = latent_index
-        used_latent.add(latent_index)
+    # Rejected OCR rows are collected in cache insertion order: sort them by
+    # column and canonical reading V before matching, then remap indices.
+    latent_order = sorted(range(len(latent_rows)), key=lambda i: (
+        latent_rows[i][1], latent_rows[i][2], i,
+    ))
+    latent_rank = {old: position for position, old in enumerate(latent_order)}
+    latent_pairs = match_ordered_markers(
+        len(ordinary_rows), len(latent_rows),
+        [(delta, ordinary_index, latent_rank[latent_index])
+         for delta, ordinary_index, latent_index in latent_edges],
+    )
+    ordinary_to_latent = {
+        ordinary_index: latent_order[rank]
+        for ordinary_index, rank in latent_pairs
+    }
+    used_latent = set(ordinary_to_latent.values())
 
     # Oversized single-Han heads are taller than one ordinary text row. The
     # ordinary VB detector can therefore fire twice inside the same physical
