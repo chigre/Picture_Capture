@@ -58,4 +58,78 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
     return controls
 
 
-__all__ = ["install_simple_page_controls"]
+def install_simple_page_tree_actions(app: Any, tree: ttk.Treeview) -> None:
+    """Mirror original bookmark and section editing in the simple page view."""
+    from tkinter import simpledialog
+
+    from picture_capture.project_storage import settings_path
+
+    def selected_column(event: Any) -> str | None:
+        name = str(tree.identify_column(event.x) or "")
+        try:
+            index = int(name.lstrip("#")) - 1
+        except ValueError:
+            return None
+        raw = tuple(tree.tk.splitlist(tree.cget("displaycolumns")))
+        if raw == ("#all",):
+            raw = tuple(tree.tk.splitlist(tree.cget("columns")))
+        return raw[index] if 0 <= index < len(raw) else None
+
+    def on_bookmark(event: Any) -> str | None:
+        if tree.identify_region(event.x, event.y) != "cell":
+            return None
+        if selected_column(event) != "bookmark":
+            return None
+        if app._preprocess_mode_active():
+            app.status_var.set("预处理模式中：不修改页面书签。")
+            return "break"
+        iid = tree.identify_row(event.y)
+        if not iid or app.project is None:
+            return "break"
+        try:
+            index = int(iid)
+            stem = app.project.images[index].stem
+        except (ValueError, IndexError):
+            return "break"
+        bookmarked = app._bookmark_stems()
+        if stem in bookmarked:
+            bookmarked.remove(stem)
+        else:
+            bookmarked.add(stem)
+        app.settings.page_bookmarks = sorted(bookmarked)
+        app.project.settings.page_bookmarks = list(app.settings.page_bookmarks)
+        app.settings.to_json(settings_path(app.project.root))
+        app._update_page_row(index)
+        return "break"
+
+    def on_section_double_click(event: Any) -> str | None:
+        if tree.identify_region(event.x, event.y) != "cell":
+            return None
+        if selected_column(event) != "section":
+            return None
+        if app._preprocess_mode_active():
+            app.status_var.set("预处理模式中：SECTION 编辑已锁定。")
+            return "break"
+        iid = tree.identify_row(event.y)
+        if not iid or app.project is None:
+            return "break"
+        try:
+            index = int(iid)
+            original = int(str(tree.set(iid, "section") or "0"))
+        except (ValueError, IndexError):
+            return "break"
+        updated = simpledialog.askinteger(
+            "Section", "Section 数量（0 = 关闭；1–10 = 启用）：",
+            parent=app, initialvalue=original, minvalue=0, maxvalue=10,
+        )
+        if updated is not None:
+            app._set_page_section_count(index, updated)
+            if tree.exists(iid):
+                tree.set(iid, "section", str(updated))
+        return "break"
+
+    tree.bind("<Button-1>", on_bookmark, add="+")
+    tree.bind("<Double-1>", on_section_double_click, add="+")
+
+
+__all__ = ["install_simple_page_controls", "install_simple_page_tree_actions"]
