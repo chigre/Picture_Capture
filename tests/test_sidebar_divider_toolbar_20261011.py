@@ -41,16 +41,16 @@ class FakeWidget:
         self.calls.append(("lift", {}))
 
 
-def test_icon_rail_and_both_page_lists_have_same_initial_446px_footprint():
-    app = SimpleNamespace(workspace_rail_width=140, workspace_page_list_width=300)
+def test_icon_rail_and_page_list_use_120_plus_260_width():
+    app = SimpleNamespace(workspace_rail_width=120, workspace_page_list_width=260)
     assert workspace_tools.RAIL_DIVIDER_WIDTH == 6
-    assert workspace_tools.DEFAULT_RAIL_WIDTH == 140
-    assert workspace_tools.DEFAULT_PAGE_LIST_WIDTH == 300
-    assert workspace_tools.preferred_sidebar_width(app) == 446
-    app.workspace_rail_width = 160
-    assert workspace_tools.preferred_sidebar_width(app) == 466
+    assert workspace_tools.DEFAULT_RAIL_WIDTH == 120
+    assert workspace_tools.DEFAULT_PAGE_LIST_WIDTH == 260
+    assert workspace_tools.preferred_sidebar_width(app) == 386
+    app.workspace_rail_width = 140
+    assert workspace_tools.preferred_sidebar_width(app) == 406
     assert workspace_tools.preferred_sidebar_width(app, extreme=True) == 42
-    assert workspace_tools.preferred_sidebar_width(app, compact=True) == 166
+    assert workspace_tools.preferred_sidebar_width(app, compact=True) == 126
 
 
 def test_compact_page_list_is_directly_below_page_icon_in_same_rail():
@@ -102,7 +102,7 @@ def test_compact_to_normal_restores_separate_full_page_column(monkeypatch):
     assert canvas.manager == "" and slot.manager == ""
 
 
-def test_compact_font_is_limited_to_page_controls_not_rail_or_zoom():
+def test_compact_font_is_limited_to_page_list_and_zoom_percent_field():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     start = source.index("def _apply_compact_sidebar_font(app: Any, compact: bool)")
     end = source.index("def install_compact_zoom_controls(", start)
@@ -122,27 +122,35 @@ def test_compact_font_is_limited_to_page_controls_not_rail_or_zoom():
     assert "font=_compact_font(app)" not in zoom
     style_start = source.index("def _style_compact_sidebar(")
     style_end = source.index("def _apply_compact_sidebar_font(", style_start)
-    assert 'style.configure("PC.WorkspaceZoom.TEntry", font="TkDefaultFont"' in source[style_start:style_end]
+    assert 'style.configure("PC.WorkspaceZoom.TEntry", font=small' in source[style_start:style_end]
 
 
-def test_picture_toolbar_uses_fourth_compact_button_and_click_toggle():
+def test_zoom_toolbar_is_inline_in_every_mode_without_old_launcher():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     app_source = (Path(__file__).resolve().parents[1] / "src" /
                   "picture_capture" / "app.py").read_text(encoding="utf-8")
-    assert '("图片工具栏", lambda: toggle_image_toolbar(app))' in source
-    assert '("普", "O", "校", "≣")[index]' in source
-    assert 'app.workspace_quick_action_buttons, ("普", "O", "校", "≣")' in source
-    assert 'row=(6 + index if extreme else 2 if compact else 0)' in source
-    assert 'column=(0 if extreme else index)' in source
+    assert '("普", "O", "校")[index]' in source
+    assert 'app.workspace_quick_action_buttons, ("普", "O", "校")' in source
+    assert '"≣")[index]' not in source
+    assert 'toggle_image_toolbar(app)' not in source
+    assert 'row=index if extreme else index // 3' in source
+    assert 'row=6 + index if extreme else 2' in source
+    assert 'column=0 if extreme else index' in source
     assert 'zoom_handle = ttk.Label(' not in app_source
+    assert '("➖", lambda: app.zoom(0.87)' in source
+    assert '("➕", lambda: app.zoom(1.15)' in source
+    assert '("⇔", app.fit_page_width' in source
+    assert '("⇳", app.fit_page_height' in source
+    assert '("◧", app.fit_single_column_width' in source
 
-    bar = FakeWidget()
-    app = SimpleNamespace(page_size_row=bar)
-    workspace_tools.toggle_image_toolbar(app)
-    assert bar.manager == "place"
-    assert bar.calls[0] == (
-        "place", {"relx": 0, "rely": 1, "x": 8, "y": -8, "anchor": "sw"},
-    )
-    workspace_tools.toggle_image_toolbar(app)
-    assert bar.manager == ""
-    assert bar.calls[-1][0] == "place_forget"
+
+def test_compact_layout_has_page_list_under_page_icon_and_no_outer_scroll():
+    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    app_source = (Path(__file__).resolve().parents[1] / "src" /
+                  "picture_capture" / "app.py").read_text(encoding="utf-8")
+    assert 'simple_slot = ttk.Frame(rail, style="PC.Sidebar.TFrame")' in source
+    assert 'row=len(TASK_GROUPS) + 4, column=0, sticky="nsew"' in source
+    assert 'slot.grid()' in source and 'slot.grid_remove()' in source
+    assert 'self.sidebar_scrollbar.pack(side="right", fill="y")' not in app_source
+    assert 'app.sidebar_scrollbar.pack(side="right", fill="y")' not in source
+    assert 'self.page_scroll.grid(row=0, column=1, sticky="ns")' in app_source
