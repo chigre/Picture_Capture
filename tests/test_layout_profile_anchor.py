@@ -107,3 +107,48 @@ def test_unselected_stable_fields_are_not_modified() -> None:
     # The anchor only acts on fields that the user explicitly enabled for auto.
     assert anchored.column_width == 1182
     assert applied == {"manual_x": 59}
+
+
+def test_strong_real_ink_height_is_not_reclamped_to_stale_xdhycd_profile() -> None:
+    from types import SimpleNamespace
+
+    profile = _profile()
+    profile.character_height = 17
+    resolved = replace(profile, character_height=30)
+    estimate = SimpleNamespace(
+        character_height=30,
+        method=("reliable_fusion+paddle+projection_fallback+separator_anchor"
+                "+fallback=gutter,character_height+observed_character_height=30(n=75)"),
+    )
+    corrected, applied = anchor_resolved_layout_to_profile(
+        profile, resolved, {"character_height": 30},
+        estimate=estimate,
+    )
+    assert corrected.character_height == 30
+    assert applied["character_height"] == 30
+    assert profile.character_height == 17
+
+    # An unsupported OCR single-page height outlier must still be clamped.
+    old, fields = anchor_resolved_layout_to_profile(
+        profile, resolved, {"character_height": 30},
+        estimate=SimpleNamespace(character_height=30, method="paddle"),
+    )
+    assert old.character_height <= 19
+    assert fields["character_height"] == old.character_height
+
+
+def test_ink_override_only_acts_when_height_switch_is_selected() -> None:
+    from types import SimpleNamespace
+
+    profile = _profile()
+    profile.character_height = 17
+    resolved = replace(profile, character_height=17)
+    updated, fields = anchor_resolved_layout_to_profile(
+        profile, resolved, {"manual_x": 37},
+        estimate=SimpleNamespace(
+            character_height=30,
+            method="fallback=character_height+observed_character_height=30(n=80)",
+        ),
+    )
+    assert updated.character_height == 17
+    assert fields == {"manual_x": 37}
