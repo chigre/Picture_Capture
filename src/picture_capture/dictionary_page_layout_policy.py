@@ -31,6 +31,7 @@ from . import dictionary_page_design_refined as refined
 from .layout_detection import analysis_ink_mask, LayoutEstimate
 from .layout_column_drift import finalize_layout_column_drift
 from .models import AppSettings
+from .layout_parameter_evidence import row_padding_is_measured
 from .page_x_registration import register_page_manual_x
 
 
@@ -107,6 +108,10 @@ def resolve_page_layout_policy(
     # keeping the original Project manual_x as its origin.
     for field, switch in AUTO_LAYOUT_FIELDS:
         if field == "manual_x" or not bool(getattr(current, switch, False)):
+            continue
+        if field == "row_padding" and not row_padding_is_measured(estimate):
+            # OCR-free projection writes a constant 1px row-padding guess;
+            # an auto checkbox cannot turn a placeholder into observed leading.
             continue
         value = int(getattr(estimate, field))
         setattr(current, field, value)
