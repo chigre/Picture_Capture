@@ -21,7 +21,7 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
     for row, column, caption, value in (
         (0, 0, "当前", "current"),
         (0, 1, "至末页", "to_end"),
-        (1, 0, "至指定页", "to_specified"),
+        (1, 0, "至指定", "to_specified"),
     ):
         ttk.Radiobutton(
             controls, text=caption, variable=app.page_range_var,
