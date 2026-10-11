@@ -20,16 +20,33 @@ import zipfile
 
 def ordered_alignment(
     predictions: list[dict], truth: list[dict], tolerance: int,
+    column_starts: list[int] | None = None,
 ) -> tuple[int, list[dict], list[dict]]:
     """One-to-one same-column order-preserving alignment, maximal TP first."""
-    a = sorted(predictions, key=lambda q: (q["column"], q["source_y"]))
-    b = sorted(truth, key=lambda q: (q["column"], q["source_y"]))
+    # Some training exports use a logical section number in the `column`
+    # field even when entries span both physical columns (Nôm pages 1 and 3).
+    # Normalize from source X and the actual recorded per-page column paths.
+    def normalize(items: list[dict]) -> list[dict]:
+        rows = []
+        for item in items:
+            value = dict(item)
+            if column_starts:
+                value["physical_column"] = min(
+                    range(len(column_starts)),
+                    key=lambda i: abs(int(value["source_x"]) - column_starts[i]),
+                )
+            else:
+                value["physical_column"] = int(value["column"])
+            rows.append(value)
+        return sorted(rows, key=lambda q: (q["physical_column"], q["source_y"]))
+
+    a, b = normalize(predictions), normalize(truth)
     n, m = len(a), len(b)
     dp = [[(0, 0, ()) for _ in range(m + 1)] for _ in range(n + 1)]
     for i in range(1, n + 1):
         for j in range(1, m + 1):
             best = max(dp[i - 1][j], dp[i][j - 1], key=lambda x: x[:2])
-            if a[i - 1]["column"] == b[j - 1]["column"]:
+            if a[i - 1]["physical_column"] == b[j - 1]["physical_column"]:
                 distance = abs(a[i - 1]["source_y"] - b[j - 1]["source_y"])
                 if distance <= tolerance:
                     prev = dp[i - 1][j - 1]
@@ -63,13 +80,23 @@ def audit_archive(path: Path) -> dict:
                 raise ValueError(f"Non-historic baseline provenance: {path}/{name}")
             truth = annotation["ground_truth_lines"]
             predicted = snapshot["entries"]
-            matched, fp, fn = ordered_alignment(predicted, truth, tolerance)
+            source_paths = annotation.get("layout", {}).get("source_column_paths_xy", [])
+            column_starts = [int(points[0][0]) for points in source_paths if points]
+            matched, fp, fn = ordered_alignment(
+                predicted, truth, tolerance, column_starts,
+            )
             pages.append({
                 "page": record["page"],
                 "TP": matched, "FP": len(fp), "FN": len(fn),
                 "predicted": len(predicted), "reference": len(truth),
-                "auto_by_column": dict(Counter(str(item["column"]) for item in predicted)),
-                "reference_by_column": dict(Counter(str(item["column"]) for item in truth)),
+                "auto_by_column": dict(Counter(str(min(
+                    range(len(column_starts)),
+                    key=lambda i: abs(int(item["source_x"]) - column_starts[i]),
+                )) for item in predicted)) if column_starts else {},
+                "reference_by_column": dict(Counter(str(min(
+                    range(len(column_starts)),
+                    key=lambda i: abs(int(item["source_x"]) - column_starts[i]),
+                )) for item in truth)) if column_starts else {},
                 "false_positive": fp, "false_negative": fn,
                 "diagnostic_layout": annotation.get("page_understanding_diagnostics", {}).get("layout", {}),
                 "independent_page_design": annotation.get("page_design_diagnostics", {}),
