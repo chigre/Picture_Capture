@@ -66,6 +66,8 @@ class PageUnderstanding:
         default_factory=lambda: SymbolEvidenceResult(markers=[])
     )
     arbitration_stats: dict[str, int] = field(default_factory=dict)
+    # Immutable source-space observations serialized for diagnostic consumers.
+    boundary_proposals: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def line_height(self) -> float:
@@ -443,5 +445,6 @@ def page_understanding_diagnostics(
         },
         "auto_layout_fields": dict(understanding.applied_layout_fields),
         "arbitration_stats": dict(understanding.arbitration_stats),
+        "boundary_proposals": list(understanding.boundary_proposals),
         "layout": layout_diagnostics(understanding.layout),
     }
