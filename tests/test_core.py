@@ -5768,7 +5768,7 @@ def test_review_right_sections_use_requested_default_expansion_states():
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'for key in ("display", "digit", "accent", "ocr", "network", "reference")' in review
-    assert 'key: tk.BooleanVar(value=(key not in {"digit", "accent"}))' in review
+    assert 'key: tk.BooleanVar(value=(key == "reference"))' in review
     assert 'expanded = True if state is None else bool(state.get())' in review
     for key, title in (
         ("display", "显示设置"),
@@ -8161,7 +8161,7 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert 'right, "digit", "数字替换映射"' in text
     assert 'text="启用", variable=self.replace_digits' in text
     assert 'right, "accent", "变音字符"' in text
-    assert 'key: tk.BooleanVar(value=(key not in {"digit", "accent"}))' in text
+    assert 'key: tk.BooleanVar(value=(key == "reference"))' in text
     assert 'accent_button.bind(' in text and '"<Button-3>"' in text
     assert "def copy_char(self, char: str)" in text
     assert "def _candidate_word_for_ocr_source(" in helper_text

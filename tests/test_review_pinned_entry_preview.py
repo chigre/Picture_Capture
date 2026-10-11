@@ -69,7 +69,11 @@ def test_pinned_preview_uses_regular_source_box_while_rows_stay_normal():
     )[0]
     assert "ordinary_height_only=True" in worker
     assert "ordinary_height_only=True" in pinned
-    assert "round(2.5 * crop.height)" in pinned
+    assert 'extended_review_crop_box(' in pinned
+    assert 'ordinary_box = _review_line_box(' in pinned
+    assert 'round(multiplier * crop.height)' in pinned
+    assert 'center_y - half_height' not in pinned
+    assert '_review_crop_context(' in pinned
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in source
 
 
@@ -120,3 +124,42 @@ def test_preview_ocr_and_async_crops_share_stable_review_entry_identity():
         assert "self.parent._ordered_entries_reading_order()" not in segment
     assert "(id(source), int(entry.x), int(entry.y), str(entry.word))" in source
     assert "(id(entry), int(entry.x), int(entry.y), str(entry.word))" in source
+
+
+def test_review_extended_multiplier_first_row_is_persisted_and_updates_pinned_only():
+    from pathlib import Path
+    from picture_capture import app as module
+    from picture_capture.models import AppSettings
+
+    assert AppSettings().review_extended_crop_height_multiplier == 2.5
+    source = Path(module.__file__).read_text(encoding="utf-8")
+    ui = source.split(
+        'review_info = self._review_collapsible_section(', 1
+    )[1].split('def add_review_height_control(', 1)[0]
+    assert 'text="切片更大高度范围倍数:"' in ui
+    assert "review_extended_crop_multiplier_var" in ui
+    assert ui.index('text="切片更大高度范围倍数:"') < ui.index('def add_review_height_control') if 'def add_review_height_control' in ui else True
+    apply = source.split('    def _apply_review_extended_crop_multiplier_setting(', 1)[1].split(
+        '    def _apply_review_main_ocr_display_options(', 1
+    )[0]
+    assert "self.parent.settings.review_extended_crop_height_multiplier = multiplier" in apply
+    assert "self._active_crop_fixed_size = None" in apply
+    assert "self._update_active_crop_preview(self.active_index)" in apply
+    assert "self._request_render_rows(" not in apply
+
+
+def test_pinned_crop_uses_exact_ordinary_top_and_bottom_only_extension():
+    from picture_capture.review_crop_extension import (
+        extended_review_crop_box, parse_review_crop_multiplier,
+    )
+    import pytest
+
+    ordinary = (8, 35, 70, 55)
+    assert extended_review_crop_box(ordinary, 250, 2.5) == (8, 35, 70, 85)
+    assert extended_review_crop_box(ordinary, 70, 2.5) == (8, 35, 70, 70)
+    assert extended_review_crop_box(ordinary, 250, 1.0) == ordinary
+    assert parse_review_crop_multiplier("2.5") == 2.5
+    assert parse_review_crop_multiplier("3.25") == 3.25
+    for invalid in ("", "0.7", "11", "nan", "inf"):
+        with pytest.raises(ValueError):
+            parse_review_crop_multiplier(invalid)

@@ -71,6 +71,10 @@ from .review_text_helpers import (
     _review_text_similarity,
 )
 
+from .review_crop_extension import (
+    extended_review_crop_box, parse_review_crop_multiplier,
+)
+
 from .layout_percent_helpers import (
     LAYOUT_PERCENT_AXES,
     _column_percent_to_pixels,
@@ -1980,6 +1984,9 @@ class ReviewWindow(tk.Toplevel):
         self.review_single_cjk_line_height_px_var = tk.StringVar(
             value=str(_effective_review_single_cjk_line_height(parent.settings))
         )
+        self.review_extended_crop_multiplier_var = tk.StringVar(
+            value=f"{float(getattr(parent.settings, 'review_extended_crop_height_multiplier', 2.5)):g}"
+        )
         self.review_main_ocr_choices_var = tk.BooleanVar(
             value=bool(getattr(parent.settings, "review_main_show_ocr_choices", False))
         )
@@ -2021,6 +2028,7 @@ class ReviewWindow(tk.Toplevel):
         self._review_row_padding_apply_job: str | None = None
         self._review_regular_crop_height_apply_job: str | None = None
         self._review_single_cjk_height_apply_job: str | None = None
+        self._review_extended_crop_multiplier_job: str | None = None
         self._syncing_review_height_vars = False
         self._review_height_edit_source: dict[str, str] = {}
         self.word_highlight_index: int | None = None
@@ -2170,6 +2178,9 @@ class ReviewWindow(tk.Toplevel):
         )
         self.review_single_cjk_line_height_px_var.trace_add(
             "write", lambda *_args: self._schedule_review_single_cjk_height_apply("pixel")
+        )
+        self.review_extended_crop_multiplier_var.trace_add(
+            "write", lambda *_args: self._schedule_review_extended_crop_multiplier_apply()
         )
         for _var in self.digit_map_vars:
             _var.trace_add("write", lambda *_args: self._save_digit_map())
@@ -2591,6 +2602,24 @@ class ReviewWindow(tk.Toplevel):
         # Right: only the reference list starts open; all helpers start folded.
         review_info = self._review_collapsible_section(
             right, "display", "显示设置", padding=6, fill="x", pady=(0, 6)
+        )
+        extended_row = ttk.Frame(review_info, style="PCR.Surface.TFrame")
+        extended_row.pack(fill="x", pady=(0, 3))
+        ttk.Label(extended_row, text="切片更大高度范围倍数:").pack(side="left")
+        extended_spin = ttk.Spinbox(
+            extended_row, from_=1.0, to=10.0, increment=0.1, width=6,
+            textvariable=self.review_extended_crop_multiplier_var,
+            style="PCR.Compact.TSpinbox",
+        )
+        extended_spin.pack(side="left", padx=(5, 0))
+        extended_spin.bind(
+            "<Return>", lambda _event: self._apply_review_extended_crop_multiplier_setting()
+        )
+        extended_spin.bind(
+            "<FocusOut>",
+            lambda _event: self._apply_review_extended_crop_multiplier_setting(
+                revert_invalid=True
+            ),
         )
 
         def add_review_height_control(
@@ -5221,6 +5250,50 @@ class ReviewWindow(tk.Toplevel):
         active = self.active_index
         self._request_render_rows(focus_index=active)
 
+    def _schedule_review_extended_crop_multiplier_apply(self) -> None:
+        """Debounce changes without regenerating all inline proofreading crops."""
+        job = self._review_extended_crop_multiplier_job
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except tk.TclError:
+                pass
+        self._review_extended_crop_multiplier_job = self.after(
+            240, self._apply_review_extended_crop_multiplier_setting
+        )
+
+    def _apply_review_extended_crop_multiplier_setting(
+        self, *, revert_invalid: bool = False,
+    ) -> None:
+        job = self._review_extended_crop_multiplier_job
+        self._review_extended_crop_multiplier_job = None
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except tk.TclError:
+                pass
+        previous = float(
+            getattr(self.parent.settings, "review_extended_crop_height_multiplier", 2.5)
+        )
+        try:
+            multiplier = parse_review_crop_multiplier(
+                self.review_extended_crop_multiplier_var.get()
+            )
+        except (TypeError, ValueError):
+            # Do not interrupt intermediate values while the user is typing.
+            if revert_invalid:
+                self.review_extended_crop_multiplier_var.set(f"{previous:g}")
+            return
+        rendered = f"{multiplier:g}"
+        if self.review_extended_crop_multiplier_var.get() != rendered:
+            self.review_extended_crop_multiplier_var.set(rendered)
+        if multiplier == previous:
+            return
+        self.parent.settings.review_extended_crop_height_multiplier = multiplier
+        self._active_crop_fixed_size = None
+        self.parent.save_settings()
+        self._update_active_crop_preview(self.active_index)
+
     def _apply_review_main_ocr_display_options(self) -> None:
         self.parent.settings.review_main_show_ocr_choices = bool(self.review_main_ocr_choices_var.get())
         self.parent.settings.review_main_show_ocr_background = bool(self.review_main_ocr_background_var.get())
@@ -6043,36 +6116,46 @@ class ReviewWindow(tk.Toplevel):
         self.on_key(type("_Event", (), {"char": ""})(), self.active_index)
 
     def _update_active_crop_preview(self, index: int) -> None:
-        """Fixed source-resolution crop at 2.5 times an ordinary row's height."""
+        """Expand the active preview downward from its ordinary crop's top Y."""
         if not (0 <= index < len(self._review_display_crops)):
             self.active_crop_photo = None
             self.active_crop_label.configure(image="")
             return
         crop = self._review_display_crops[index]
-        # Extend the source region vertically instead of stretching the words.
         row_entries = self._bound_row_entries()
         if index >= len(row_entries) or self.parent.image is None:
             return
         try:
             entry = row_entries[index]
-            geometry = self.parent._get_cached_display_geometry()
-            crop_settings = _review_crop_settings(
+            # Match the source box calculation used by the inline-crop worker:
+            # effective page Profile settings and page-specific geometry.
+            crop_settings, geometry = _review_crop_context(
                 self.parent.image, self.parent.settings,
-                self.parent.canvas.winfo_width()
+                self.parent.canvas.winfo_width(), self.parent.current_index,
             )
-            left, top, right, bottom = _review_line_box(
+            ordinary_box = _review_line_box(
                 entry, geometry, self.parent.image, crop_settings,
                 ordinary_height_only=True,
             )
-            source_height = max(1.0, bottom - top)
-            center_y = (top + bottom) / 2
-            half_height = source_height * 1.25
-            extended = self.parent.image.crop((
-                int(round(left)), int(round(center_y - half_height)),
-                int(round(right)), int(round(center_y + half_height)),
-            )).convert("RGB")
+            multiplier = parse_review_crop_multiplier(
+                getattr(self.parent.settings, "review_extended_crop_height_multiplier", 2.5)
+            )
+            extended_box = extended_review_crop_box(
+                ordinary_box, self.parent.image.height, multiplier,
+            )
+            extended = self.parent.image.crop(extended_box).convert("RGB")
+            # At the bottom of the page, pad below rather than stretching
+            # the clipped text to the expected larger preview height.
+            source_height = max(1, ordinary_box[3] - ordinary_box[1])
+            expected_height = max(1, round(source_height * multiplier))
+            if extended.height < expected_height:
+                padded = Image.new("RGB", (extended.width, expected_height), "white")
+                padded.paste(extended, (0, 0))
+                extended = padded
             if self._active_crop_fixed_size is None:
-                self._active_crop_fixed_size = (crop.width, round(2.5 * crop.height))
+                self._active_crop_fixed_size = (
+                    crop.width, max(1, round(multiplier * crop.height)),
+                )
             preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)
             self.active_crop_photo = ImageTk.PhotoImage(
                 themed_display_image(preview, self.parent.appearance_mode)

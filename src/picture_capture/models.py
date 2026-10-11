@@ -383,6 +383,9 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # Review crop height for ordinary (non-single-CJK) entries. 0 keeps the
     # automatic value: character_height + row_padding.
     review_regular_crop_height: int = 0
+    # Height multiplier for the fixed active-word preview. It extends down
+    # from the exact same top Y as the ordinary proofreading row crop.
+    review_extended_crop_height_multiplier: float = 2.5
     # While the proofreading window is open, keep the main canvas visually
     # quiet by default. These switches let users restore either OCR aid.
     review_main_show_ocr_choices: bool = False
