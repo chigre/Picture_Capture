@@ -1892,7 +1892,7 @@ class ReviewWindow(tk.Toplevel):
         # Only the compact index preset places proofreading beside the image.
         mini = getattr(parent, "workspace_mini_page_host", None)
         compact_workspace = (
-            getattr(parent, "workspace_mode", "") in {"极简", "简单"}
+            getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}
             or (mini is not None and mini.winfo_manager() == "grid")
         )
         if compact_workspace:
@@ -6834,8 +6834,8 @@ class PictureCaptureApp(tk.Tk):
         self._last_session = self._read_session_state()
         stored_mode = self._last_session.get("workspace_mode", "最大")
         self.workspace_mode = (
-            "简单" if stored_mode == "最简" else stored_mode
-            if stored_mode in {"极简", "简单", "正常", "最大"} else "最大"
+            "紧凑" if stored_mode in {"最简", "简单"} else stored_mode
+            if stored_mode in {"极简", "紧凑", "正常", "最大"} else "最大"
         )
         self._restore_workspace_mode_pending = True
         requested_appearance = normalize_appearance_preference(
