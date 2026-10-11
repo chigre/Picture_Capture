@@ -268,9 +268,9 @@ def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
     assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in app
     assert 'if compact_workspace:' in app
     assert 'x = max(0, parent.winfo_rootx() + parent.winfo_width())' in app
-    assert 'work_x, work_y, work_w, work_h = _screen_work_area(self)' in app
+    assert 'work_x, work_y, work_w, safe_client_height = _preset_work_geometry(parent)' in app
     assert 'width = max(1, work_right - x)' in app
-    assert 'height = max(1, work_bottom - y)' in app
+    assert 'height = max(1, safe_client_height)' in app
     assert 'def _scroll_review_entry_into_view(self, entry: WordEntry)' in app
     assert '_review_line_box(' in app
     assert 'canvas.xview_moveto(' in app
@@ -323,8 +323,8 @@ def test_next_page_button_is_packed_before_expandable_editor_area():
 
 def test_compact_review_anchors_to_work_area_top():
     app, _ = sources()
-    assert 'y = work_y  # Align compact proofreading to the top of the usable desktop.' in app
-    assert 'height = max(1, work_bottom - y)' in app
+    assert 'y = work_y  # Align compact proofreading to the usable desktop top.' in app
+    assert 'height = max(1, safe_client_height)' in app
 
 
 def test_inline_review_slice_uses_text_based_height_without_classification():
