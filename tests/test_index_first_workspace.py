@@ -69,7 +69,8 @@ def test_tt_buttons_never_receive_unsupported_anchor_widget_parameter():
     _, tools = sources()
     assert 'anchor="w", command=' not in tools
     assert 'anchor="w", style=' not in tools
-    assert 'relief="flat", borderwidth=0' in tools
+    assert 'relief="flat"' in tools
+    assert 'borderwidth=0, font="TkDefaultFont"' in tools
 
 
 def test_index_width_and_treeview_columns_fit_available_space():
