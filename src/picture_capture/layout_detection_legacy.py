@@ -555,9 +555,11 @@ def infer_layout_from_boxes(
     start_y_source = body_top
     bottom_y_source = body_bottom
     character_height_source = max(1, round(float(np.median([box[3] - box[1] for box in filtered]))))
-    ordered_tops = sorted({box[1] for box in filtered})
-    top_steps = [b - a for a, b in zip(ordered_tops, ordered_tops[1:]) if b - a > character_height_source * 0.5]
-    row_padding_source = max(1, round((float(np.median(top_steps)) - character_height_source) / 2)) if top_steps else 1
+    from .layout_textbox_leading import estimate_row_padding_from_boxes
+    measured_padding, pitch_pairs = estimate_row_padding_from_boxes(
+        groups, character_height_source,
+    )
+    row_padding_source = measured_padding if measured_padding is not None else 1
     scale = max(0.01, float(display_scale))
     return LayoutEstimate(
         columns=len(starts),
@@ -569,7 +571,10 @@ def infer_layout_from_boxes(
         character_height=max(1, round(character_height_source * scale)),
         row_padding=max(1, round(row_padding_source * scale)),
         source_boxes=len(filtered),
-        method="paddle",
+        method=(
+            f"paddle+observed_row_padding={row_padding_source}(n={pitch_pairs})"
+            if measured_padding is not None else "paddle+unverified_row_padding"
+        ),
         separator_x=(round(float(np.median(separators)) * scale) if separators else None),
         canonical_width=int(width),
         column_starts=tuple(max(0, round(start * scale)) for start in starts),
