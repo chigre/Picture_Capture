@@ -102,6 +102,29 @@ def test_compact_to_normal_restores_separate_full_page_column(monkeypatch):
     assert canvas.manager == "" and slot.manager == ""
 
 
+def test_compact_font_is_limited_to_page_controls_not_rail_or_zoom():
+    source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    start = source.index("def _apply_compact_sidebar_font(app: Any, compact: bool)")
+    end = source.index("def install_compact_zoom_controls(", start)
+    scope = source[start:end]
+    assert "slot = app.workspace_mini_page_slot" in scope
+    assert "visit(slot)" in scope
+    assert "app.workspace_rail_labels" not in scope
+    assert "app.workspace_quick_action_buttons" not in scope
+    assert '"PC.Workspace80.Treeview" if compact' in scope
+    assert '"PC.Workspace80.TButton", "PC.SimplePage.TButton"' in scope
+
+    zoom_start = source.index("def install_compact_zoom_controls(")
+    zoom_end = source.index("def _apply_preset_rail_controls(", zoom_start)
+    zoom = source[zoom_start:zoom_end]
+    assert 'style="PC.WorkspaceZoom.TEntry"' in zoom
+    assert 'style="PC.QuickRail.TButton"' in zoom
+    assert "font=_compact_font(app)" not in zoom
+    style_start = source.index("def _style_compact_sidebar(")
+    style_end = source.index("def _apply_compact_sidebar_font(", style_start)
+    assert 'style.configure("PC.WorkspaceZoom.TEntry", font="TkDefaultFont"' in source[style_start:style_end]
+
+
 def test_picture_toolbar_uses_fourth_compact_button_and_click_toggle():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     app_source = (Path(__file__).resolve().parents[1] / "src" /
