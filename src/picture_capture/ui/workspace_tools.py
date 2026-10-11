@@ -33,7 +33,7 @@ def _stack_tool_menu_controls(root: ttk.Frame) -> None:
     variables, command callbacks, focus bindings and external widget
     references all remain intact.  The original quick-settings layout was
     designed for a broad sidebar and contains many multi-column grid rows
-    and packed horizontal toolbars; both must be stacked for a 260px menu.
+    and packed horizontal toolbars; both must be stacked for a 300px menu.
     """
     containers = (tk.Frame, tk.LabelFrame, ttk.Frame, ttk.LabelFrame)
 
@@ -227,7 +227,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         if getattr(section, "_collapse_title", None)
     }
     # The old display section still owns its already-bound quick variables,
-    # but it is never shown. A purpose-built, 260px display panel presents
+    # but it is never shown. A purpose-built, 300px display panel presents
     # exactly the requested order without duplicating variable state.
     sections["二、显示设置"] = build_compact_display_menu(app, content)
     app.workspace_tools_sections = sections
@@ -448,7 +448,7 @@ def position_workspace_popup(app: Any) -> None:
         root_y = app.winfo_rooty()
         left = rail.winfo_rootx() + rail.winfo_width() - root_x + 6
         top = max(4, rail.winfo_rooty() - root_y)
-        # Each tool opens a 260px vertical menu. Reposition instead of
+        # Each tool opens a 300px vertical menu. Reposition instead of
         # resizing the image canvas when the menu would cross the right edge.
         root_width = max(1, int(app.winfo_width()))
         width = min(TOOL_MENU_WIDTH, max(1, root_width - 12))
