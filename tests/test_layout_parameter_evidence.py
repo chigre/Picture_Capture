@@ -83,7 +83,7 @@ def test_profile_bootstrap_suggestion_never_claims_measured_row_padding():
 
     proposed = {"character_height": 17, "row_padding": 1}
     notice = apply_profile_ink_height_suggestion(proposed, [
-        estimate("profile_bootstrap+projection_fallback+observed_character_height=29(n=60)", 1)
+        estimate("profile_bootstrap+projection_fallback+observed_character_height=30(n=60)", 1)
     ])
     assert proposed["character_height"] == 30  # trustworthy estimate's value
     assert "row_padding" not in proposed
