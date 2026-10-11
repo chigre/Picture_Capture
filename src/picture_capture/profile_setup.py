@@ -3157,12 +3157,15 @@ class ProjectProfileWizard(tk.Toplevel):
         aggregate, consistency = aggregate_layout_estimates(estimates, columns_policy="detect")
         height_note = apply_profile_ink_height_suggestion(aggregate, estimates)
         separators = sum(1 for estimate in estimates if getattr(estimate, "separator_x", None) is not None)
-        separator = "present" if separators > len(estimates) / 2 else "absent"
+        # A missing positive divider track is not proof of *no* printed
+        # separator. Keep auto-detection enabled instead of explicitly
+        # declaring "absent" and disabling downstream line handling.
+        separator = "present" if separators > len(estimates) / 2 else "auto"
         self._analysis_suggestion = {
             **{name: int(value) for name, value in aggregate.items()},
             "separator": separator,
         }
-        sep_text = "有中央分隔线" if separator == "present" else "无明确中央分隔线"
+        sep_text = "有中央分隔线" if separator == "present" else "分隔线未确认（保持自动判断）"
         error_text = (f"；{len(errors)} 页未参与" if errors else "") + height_note
         self.analysis_suggestion_var.set(
             f"自动建议：{aggregate['columns']}栏 · {sep_text} · {consistency}{error_text}"
