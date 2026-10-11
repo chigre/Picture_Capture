@@ -14,7 +14,7 @@ def test_index_page_controls_and_extension_free_display():
     app, tools = sources()
     assert "install_workspace_tools(self, sidebar, sidebar_host)" in app
     assert 'page_panel.grid(row=0, column=0, rowspan=2' in app
-    assert '("至指定页", "to_specified")' in app
+    assert '("至指定", "to_specified")' in app
     assert '("至末页", "to_end")' in app
     assert 'text="指定:"' not in app
     assert 'page.stem, self._page_section_count_text(index)' in app
@@ -150,7 +150,7 @@ def test_image_toolbar_launcher_is_with_run_buttons_not_canvas_corner():
     assert 'zoom_handle = ttk.Label(size_row, text="≣"' not in app
     assert 'size_row.place(relx=0, rely=1' not in app
     assert '("图片工具栏", lambda: toggle_image_toolbar(app))' in tools
-    assert '("普", "O", "校", "≣")[index]' in tools
+    assert '("普", "O", "校")[index]' in tools
     assert 'def toggle_image_toolbar(app: Any) -> None:' in tools
     assert 'toolbar.place_forget()' in tools
     assert 'toolbar.place(relx=0, rely=1, x=8, y=-8, anchor="sw")' in tools
@@ -219,7 +219,7 @@ def test_canvas_right_click_navigation_and_sidebar_presets():
 
 def test_requested_workspace_updates():
     app, tools = sources()
-    assert 'DEFAULT_PAGE_LIST_WIDTH = 300' in tools
+    assert 'DEFAULT_PAGE_LIST_WIDTH = 260' in tools
     assert 'value=(key in {"bookmark", "lined", "illustrations"})' in tools
     assert 'width=80 if column == "page" else 26' in tools
     assert 'app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{height}+0+{top}")' in tools
@@ -437,7 +437,7 @@ def test_extreme_mode_icons_and_abbreviated_run_actions():
     assert '("上", -1), ("下", 1)' in tools
     assert 'app.workspace_extreme_page_navigation = extreme_nav' in tools
     assert 'command=lambda direction=delta: app.change_page(direction)' in tools
-    assert '("普", "O", "校", "≣")' in tools
+    assert '("普", "O", "校")' in tools
 
 
 def test_extreme_zoom_is_vertical_and_compact_is_three_rows(monkeypatch):
@@ -472,7 +472,7 @@ def test_extreme_zoom_is_vertical_and_compact_is_three_rows(monkeypatch):
     labels = [Widget() for _ in range(9)]
     rows = [Widget() for _ in range(9)]
     nav = Widget()
-    quick = [Widget() for _ in range(4)]
+    quick = [Widget() for _ in range(3)]
     zoom = [Widget() for _ in range(6)]
     host = Widget()
     monkeypatch.setattr(workspace_tools, "_apply_compact_sidebar_font",
@@ -480,7 +480,7 @@ def test_extreme_zoom_is_vertical_and_compact_is_three_rows(monkeypatch):
     app = SimpleNamespace(
         workspace_rail_labels=labels,
         workspace_rail_rows=rows,
-        workspace_rail_width=140,
+        workspace_rail_width=120,
         workspace_tools_rail=Widget(),
         workspace_extreme_page_navigation=nav,
         workspace_quick_action_buttons=quick,
@@ -493,7 +493,7 @@ def test_extreme_zoom_is_vertical_and_compact_is_three_rows(monkeypatch):
     assert nav.visible
     assert not any(label.visible for label in labels)
     assert all(row.values["width"] == 36 for row in rows)
-    assert [w.values["text"] for w in quick] == ["普", "O", "校", "≣"]
+    assert [w.values["text"] for w in quick] == ["普", "O", "校"]
     assert [w.position["row"] for w in zoom] == [0, 1, 2, 3, 4, 5]
     assert [w.position["column"] for w in zoom] == [0] * 6
     assert [w.position["row"] for w in quick[:3]] == [6, 7, 8]
@@ -502,7 +502,7 @@ def test_extreme_zoom_is_vertical_and_compact_is_three_rows(monkeypatch):
     workspace_tools._apply_preset_rail_controls(app, "紧凑")
     assert not nav.visible
     assert all(label.visible for label in labels)
-    assert all(row.values["width"] == 140 for row in rows)
+    assert all(row.values["width"] == 120 for row in rows)
     assert [w.position["row"] for w in zoom] == [0, 0, 0, 1, 1, 1]
     assert [w.position["column"] for w in zoom] == [0, 1, 2, 0, 1, 2]
     assert [w.position["row"] for w in quick[:3]] == [2, 2, 2]
@@ -510,10 +510,12 @@ def test_extreme_zoom_is_vertical_and_compact_is_three_rows(monkeypatch):
     assert not quick[3].visible
 
     workspace_tools._apply_preset_rail_controls(app, "正常")
-    assert not any(w.visible for w in zoom)
+    assert all(w.visible for w in zoom)
     assert all(w.visible for w in quick)
-    assert [w.position["row"] for w in quick] == [0] * 4
-    assert [w.position["column"] for w in quick] == [0, 1, 2, 3]
+    assert [w.position["row"] for w in zoom] == [0, 0, 0, 1, 1, 1]
+    assert [w.position["column"] for w in zoom] == [0, 1, 2, 0, 1, 2]
+    assert [w.position["row"] for w in quick] == [2, 2, 2]
+    assert [w.position["column"] for w in quick] == [0, 1, 2]
 
 
 def test_extreme_simple_normal_modes_have_independent_page_list_visibility(monkeypatch):
