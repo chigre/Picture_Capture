@@ -20,6 +20,8 @@ class CanvasController:
         app = self.app
         if app.crop_preview_var.get():
             return "切图预览"
+        if bool(getattr(app, "ocr_crop_preview_var", None) and app.ocr_crop_preview_var.get()):
+            return "OCR词头区域预览"
         binary = bool(app.binary_preview_var.get())
         hidden = bool(app.hide_var.get())
         if hidden:
@@ -44,6 +46,7 @@ class CanvasController:
             "仅原图": (False, True, False),
             "仅二值": (True, True, False),
             "切图预览": (False, False, True),
+            "OCR词头区域预览": (False, False, False),
         }
         mode = str(app.display_mode_var.get() or "原图+标注")
         binary, hidden, crop_preview = states.get(mode, states["原图+标注"])
@@ -53,6 +56,9 @@ class CanvasController:
             app.binary_preview_var.set(binary)
             app.hide_var.set(hidden)
             app.crop_preview_var.set(crop_preview)
+            ocr_crop_var = getattr(app, "ocr_crop_preview_var", None)
+            if ocr_crop_var is not None:
+                ocr_crop_var.set(mode == "OCR词头区域预览")
         finally:
             app._display_mode_syncing = False
         if previous_binary != binary:
@@ -75,12 +81,16 @@ class CanvasController:
         app = self.app
         if app.hide_var.get() and app.crop_preview_var.get():
             app.crop_preview_var.set(False)
+        if getattr(app, "ocr_crop_preview_var", None) is not None:
+            app.ocr_crop_preview_var.set(False)
         self.sync_display_mode_from_flags()
         app.redraw()
 
     def toggle_crop_preview(self) -> None:
         app = self.app
         if app.crop_preview_var.get():
+            if getattr(app, "ocr_crop_preview_var", None) is not None:
+                app.ocr_crop_preview_var.set(False)
             if app.binary_preview_var.get():
                 app.binary_preview_var.set(False)
                 app.photo = None
