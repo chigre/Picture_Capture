@@ -50,14 +50,16 @@ def test_icon_rail_and_both_page_lists_have_same_initial_446px_footprint():
     app.workspace_rail_width = 160
     assert workspace_tools.preferred_sidebar_width(app) == 466
     assert workspace_tools.preferred_sidebar_width(app, extreme=True) == 42
+    assert workspace_tools.preferred_sidebar_width(app, compact=True) == 166
 
 
-def test_compact_page_list_is_left_of_rail_not_a_child_of_it():
+def test_compact_page_list_is_directly_below_page_icon_in_same_rail():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
-    assert 'simple_slot = ttk.Frame(' in source
-    assert 'sidebar_host, style="PC.Sidebar.TFrame"' in source
+    assert 'simple_slot = ttk.Frame(rail, style="PC.Sidebar.TFrame")' in source
+    assert 'row=len(TASK_GROUPS) + 4, column=0, sticky="nsew"' in source
+    assert 'row=len(TASK_GROUPS) + 2, "▦", "页面"' in source
     assert 'mini_host = ttk.Frame(simple_slot, style="PC.Sidebar.TFrame")' in source
-    assert "mini_host = ttk.Frame(rail" not in source
+    assert "simple_slot.pack(side=" not in source
     assert "drag[\"sash\"] + proposed - drag[\"width\"]" in source
     assert 'drag["origin"] = int(event.x_root)' in source
     assert "old_width = app.workspace_rail_width" not in source
@@ -66,21 +68,20 @@ def test_compact_page_list_is_left_of_rail_not_a_child_of_it():
     )[1].split('    divider.bind(', 1)[0]
 
 
-def test_simple_slot_can_pack_after_full_canvas_has_been_unmapped():
+def test_compact_slot_only_uses_grid_below_page_icon():
     slot = FakeWidget()
-    app = SimpleNamespace(workspace_mini_page_slot=slot, workspace_tools_rail=FakeWidget("pack"))
+    app = SimpleNamespace(workspace_mini_page_slot=slot)
     workspace_tools._set_simple_page_visible(app, True)
-    assert slot.manager == "pack"
-    assert slot.calls == [("pack", {"side": "left", "fill": "both",
-                                    "before": app.workspace_tools_rail})]
+    assert slot.manager == "grid"
+    assert slot.calls == [("grid", {})]
     workspace_tools._set_simple_page_visible(app, True)
     assert len(slot.calls) == 1
     workspace_tools._set_simple_page_visible(app, False)
     assert slot.manager == ""
-    assert slot.calls[-1][0] == "pack_forget"
+    assert slot.calls[-1][0] == "grid_remove"
 
 
-def test_simple_to_normal_mode_reuses_exact_same_page_column(monkeypatch):
+def test_compact_to_normal_restores_separate_full_page_column(monkeypatch):
     monkeypatch.setattr(workspace_tools, "refresh_compact_page_index", lambda app: None)
     canvas = FakeWidget("pack")
     scrollbar = FakeWidget("pack")
@@ -92,7 +93,7 @@ def test_simple_to_normal_mode_reuses_exact_same_page_column(monkeypatch):
         workspace_tools_rail=FakeWidget("pack"),
     )
     workspace_tools._apply_preset_page_index(app, "紧凑")
-    assert canvas.manager == "" and slot.manager == "pack"
+    assert canvas.manager == "" and slot.manager == "grid"
     assert page.manager == ""
     workspace_tools._apply_preset_page_index(app, "正常")
     assert canvas.manager == "pack" and slot.manager == ""
