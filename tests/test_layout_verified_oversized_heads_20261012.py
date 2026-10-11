@@ -40,7 +40,7 @@ def _fixture(number=3):
         ordinary_line_height=29.0,
         columns=[SimpleNamespace(left=40, right=390, lines=rows)],
     )
-    return image, layout, rows
+    # Retain the original row identities: production sorts column.lines after\n    # inserting a newly proved glyph-top row.\n    return image, layout, list(rows)
 
 
 def test_detects_tall_glyphs_and_keeps_only_their_top_entry_rows():
