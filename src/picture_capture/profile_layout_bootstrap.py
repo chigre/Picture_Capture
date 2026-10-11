@@ -99,6 +99,28 @@ def detect_profile_layout_parameters(image: Image.Image, settings: Any) -> Any:
         analysis.close()
 
 
+
+def robust_profile_ink_height(estimates: list[Any]) -> tuple[int | None, int]:
+    """Aggregate *measured* page character heights, never 0.8%-height guesses.
+
+    A six-page Profile with three verified 29px pages and three heuristic 17px
+    pages must not silently propose median 23px. Require physical measurements
+    from at least half of successful representative pages; otherwise leave the
+    existing Profile height unchanged and expose the missing evidence.
+    """
+    import statistics
+
+    trustworthy = [
+        int(row.character_height)
+        for row in estimates
+        if "+observed_character_height=" in str(getattr(row, "method", ""))
+        and int(getattr(row, "character_height", 0) or 0) > 0
+    ]
+    required = max(1, (len(estimates) + 1) // 2)
+    if len(trustworthy) < required:
+        return None, len(trustworthy)
+    return int(round(statistics.median(trustworthy))), len(trustworthy)
+
 def install_profile_layout_bootstrap() -> None:
     """Compatibility no-op; Profile detector ownership is now static."""
     return None
