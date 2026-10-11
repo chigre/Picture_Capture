@@ -74,14 +74,11 @@ class PageUnderstanding:
         return max(1.0, float(self.layout.ordinary_line_height))
 
 
-def uses_cjk_role_model(settings: AppSettings) -> bool:
-    """Return whether the validated CJK entry-role model is appropriate."""
+def uses_cjk_script(settings: AppSettings) -> bool:
+    """Recognize CJK page language independently of physical reading direction."""
     profile_id = str(getattr(settings, "dictionary_profile_id", "") or "").lower()
     ocr_language = str(getattr(settings, "ocr_language", "") or "").lower()
     paddle_language = str(getattr(settings, "paddle_language", "") or "").lower()
-    writing = str(getattr(settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb")
-    if writing.startswith("vertical"):
-        return False
     return bool(
         "cjk" in profile_id
         or any(token in ocr_language for token in (
@@ -89,6 +86,12 @@ def uses_cjk_role_model(settings: AppSettings) -> bool:
         ))
         or paddle_language in {"ch", "chi_sim", "chi_tra", "chinese_cht", "japan"}
     )
+
+
+def uses_cjk_role_model(settings: AppSettings) -> bool:
+    """CJK indentation grammar is currently validated on horizontal pages."""
+    writing = str(getattr(settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb")
+    return not writing.startswith("vertical") and uses_cjk_script(settings)
 
 
 def _physical_reliable(layout: base.DictionaryPageLayout) -> bool:
