@@ -8226,6 +8226,9 @@ class PictureCaptureApp(tk.Tk):
         vbar.grid(row=0, column=1, sticky="ns"); hbar.grid(row=1, column=0, sticky="ew")
         viewer.rowconfigure(0, weight=1); viewer.columnconfigure(0, weight=1)
         self.canvas.bind("<Button-1>", self.canvas_left_click)
+        # Explicit modifier binding keeps the new auxiliary gesture discoverable;
+        # section and PPP editing retain their existing Shift-click behavior.
+        self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)
         self.canvas.bind("<Control-z>", self._auxiliary_controller.undo)
         self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
@@ -14476,6 +14479,15 @@ class PictureCaptureApp(tk.Tk):
         x, y = self.original_xy(event)
         if not (0 <= x < self.image.width and 0 <= y < self.image.height):
             return
+        # The line's [X] is a direct hit target, even outside auxiliary mode.
+        if not self._section_editing and self._auxiliary_controller.delete_at_chip(x, y):
+            return "break"
+        # Shift+left adds an auxiliary line without requiring the mode toggle.
+        # Preserve PPP Shift+click (add vertex) and SECTION Shift+drag.
+        if (getattr(event, "state", 0) & 0x0001
+                and not self._section_editing and not self.polygon_draw_var.get()):
+            self._auxiliary_controller.add(x, y)
+            return "break"
         if self._section_editing:
             target = self._nearest_section_boundary(x, y)
             if target is None:

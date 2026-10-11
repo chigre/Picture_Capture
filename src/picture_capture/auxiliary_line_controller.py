@@ -60,18 +60,36 @@ class AuxiliaryLineController:
         app.redraw()
         app.status_var.set(f"辅助线{verb}；独立存储，不计入 PDIC 词条")
 
-    def click(self, x, y):
+    def add(self, x, y):
+        """Shift-click always inserts, even if a nearby line could be dragged."""
         app = self.app
-        idx = self._nearest(x, y)
-        if idx is not None:
-            app._auxiliary_drag = (idx, None)
-            return
         marker = self._source_line(x, y)
         if marker is None:
             app.status_var.set("辅助线不能放在 SECTION 间空白区域")
             return
         app._auxiliary_edits.add(marker)
         self._persist("已添加")
+
+    def click(self, x, y):
+        app = self.app
+        idx = self._nearest(x, y)
+        if idx is not None:
+            app._auxiliary_drag = (idx, None)
+            return
+        self.add(x, y)
+
+    def delete_at_chip(self, x, y):
+        """Click the visible [X] chip without modifying the PDIC marker rows."""
+        scale = max(0.01, float(self.app.view_scale))
+        px, py = x * scale, y * scale
+        for left, top, right, bottom, index in getattr(
+            self.app, "_auxiliary_delete_hitboxes", ()
+        ):
+            if left <= px <= right and top <= py <= bottom:
+                if self.app._auxiliary_edits.delete(index):
+                    self._persist("已删除")
+                return True
+        return False
 
     def drag(self, x, y):
         app = self.app
@@ -113,6 +131,7 @@ class AuxiliaryLineController:
         if app.image is None:
             return
         lines = app._auxiliary_edits.lines
+        app._auxiliary_delete_hitboxes = []
         if not lines:
             return
         geometry = app._get_cached_display_geometry()
@@ -140,3 +159,23 @@ class AuxiliaryLineController:
                     fill="#ffffff", outline="#d97706",
                     tags=("auxiliary-overlay",),
                 )
+            # Visible and clickable on both normal and crop-preview canvases.
+            # Keep the delete target within the scanned page at narrow zooms.
+            max_x = max(0.0, app.image.width * scale)
+            max_y = max(0.0, app.image.height * scale)
+            line_right = max(float(left[0]), float(right[0])) * scale
+            line_center_y = (float(left[1]) + float(right[1])) * 0.5 * scale
+            center_x = min(max_x - 13, max(13.0, line_right + 12.0))
+            center_y = min(max_y - 11, max(11.0, line_center_y))
+            box = (center_x - 13, center_y - 10,
+                   center_x + 13, center_y + 10)
+            app._auxiliary_delete_hitboxes.append((*box, i))
+            app.canvas.create_rectangle(
+                *box, fill="#fff7ed", outline="#c2410c", width=1,
+                tags=("auxiliary-overlay", "auxiliary-delete"),
+            )
+            app.canvas.create_text(
+                center_x, center_y, text="[X]", fill="#9a3412",
+                anchor="center", font=("TkDefaultFont", 9, "bold"),
+                tags=("auxiliary-overlay", "auxiliary-delete"),
+            )

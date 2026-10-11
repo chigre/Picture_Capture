@@ -144,3 +144,61 @@ def test_managed_project_auxiliary_sidecar_uses_data_storage(tmp_path):
     assert auxiliary_line_path(page) == expected
     write_auxiliary_lines(page, [AuxiliaryLine(40, 80)])
     assert read_auxiliary_lines(page) == [AuxiliaryLine(40, 80)]
+
+
+def test_shift_click_routing_and_direct_delete_chip_are_wired():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    source = (root / "app.py").read_text(encoding="utf-8")
+    controller = (root / "auxiliary_line_controller.py").read_text(encoding="utf-8")
+    assert 'self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)' in source
+    assert 'self._auxiliary_controller.delete_at_chip(x, y)' in source
+    assert 'self._auxiliary_controller.add(x, y)' in source
+    assert 'not self._section_editing and not self.polygon_draw_var.get()' in source
+    assert 'text="[X]"' in controller
+    assert 'app._auxiliary_delete_hitboxes.append((*box, i))' in controller
+
+
+def test_auxiliary_line_add_delete_chip_does_not_create_pdic_entries(monkeypatch):
+    from picture_capture.auxiliary_line_controller import AuxiliaryLineController
+    from picture_capture import auxiliary_line_controller as mod
+
+    class Canvas:
+        def create_line(self, *_args, **_kw):
+            return None
+        def create_rectangle(self, *_args, **_kw):
+            return None
+        def create_text(self, *_args, **_kw):
+            return None
+
+    labels = []
+    app = SimpleNamespace(
+        image=SimpleNamespace(width=500, height=600),
+        view_scale=1.0,
+        _auxiliary_edits=AuxiliaryLineEdits(),
+        _auxiliary_drag=None,
+        page_sections=[],
+        canvas=Canvas(),
+        entries=[SimpleNamespace(word="词条", x=10, y=40)],
+        auxiliary_mode_var=SimpleNamespace(get=lambda: False),
+        status_var=SimpleNamespace(set=lambda value: labels.append(value)),
+        _get_cached_display_geometry=lambda: _Geometry(),
+        current_page=Path("page.png"),
+        redraw=lambda: None,
+    )
+    saves = []
+    monkeypatch.setattr(mod, "write_auxiliary_lines",
+                        lambda _page, lines: saves.append(list(lines)))
+    ctrl = AuxiliaryLineController(app)
+    ctrl.add(15, 130)
+    assert app._auxiliary_edits.lines == [AuxiliaryLine(10, 130)]
+    ctrl.redraw()
+    assert len(app._auxiliary_delete_hitboxes) == 1
+    x0, y0, x1, y1, index = app._auxiliary_delete_hitboxes[0]
+    assert index == 0
+    assert ctrl.delete_at_chip((x0+x1)/2, (y0+y1)/2) is True
+    assert app._auxiliary_edits.lines == []
+    assert len(app.entries) == 1
+    assert saves[-1] == []
+    assert ctrl.delete_at_chip(400, 400) is False
