@@ -796,9 +796,104 @@ def toggle_sidebar_modes(app: Any) -> None:
         show_sidebar_modes(app)
 
 
+def _compact_font(app: Any) -> tkfont.Font:
+    """80% of the user's actual Tk default font, without global scaling."""
+    existing = getattr(app, "workspace_compact_font", None)
+    if existing is not None:
+        return existing
+    source = tkfont.nametofont("TkDefaultFont")
+    original = int(source.cget("size"))
+    size = max(7, round(original * 0.8)) if original > 0 else min(-7, round(original * 0.8))
+    compact = source.copy()
+    compact.configure(size=size)
+    app.workspace_compact_font = compact
+    return compact
+
+
+def _style_compact_sidebar(app: Any) -> None:
+    """Scope the 80% font to the compact sidebar, never to the page image."""
+    small = _compact_font(app)
+    style = ttk.Style(app)
+    for suffix in ("TButton", "TLabel", "TRadiobutton", "TCheckbutton",
+                   "TEntry", "TCombobox"):
+        style.configure(f"PC.Workspace80.{suffix}", font=small, padding=0)
+    style.configure("PC.WorkspaceZoom.TEntry", font=small, padding=0)
+    style.configure("PC.Workspace80.Treeview", font=small, rowheight=19)
+    style.configure("PC.Workspace80.Treeview.Heading", font=small, padding=(1, 1))
+
+
+def _apply_compact_sidebar_font(app: Any, compact: bool) -> None:
+    _style_compact_sidebar(app)
+    rail_buttons = [*app.workspace_rail_labels, *app.workspace_quick_action_buttons]
+    for button in rail_buttons:
+        quick = button in app.workspace_quick_action_buttons
+        button.configure(style=(
+            "PC.Workspace80.TButton" if compact
+            else "PC.QuickRail.TButton" if quick else "PC.Rail.TButton"
+        ))
+
+    slot = app.workspace_mini_page_slot
+    style_by_type = {
+        ttk.Label: "TLabel", ttk.Radiobutton: "TRadiobutton",
+        ttk.Checkbutton: "TCheckbutton", ttk.Entry: "TEntry",
+        ttk.Combobox: "TCombobox", ttk.Button: "TButton",
+    }
+
+    def visit(widget: tk.Misc) -> None:
+        if isinstance(widget, ttk.Treeview):
+            widget.configure(style="PC.Workspace80.Treeview" if compact
+                             else "PC.CompactPage.Treeview")
+        else:
+            for klass, suffix in style_by_type.items():
+                if isinstance(widget, klass):
+                    widget.configure(style=(
+                        f"PC.Workspace80.{suffix}" if compact else
+                        "PC.SimplePage.TButton" if isinstance(widget, ttk.Button) else suffix
+                    ))
+                    break
+        for child in widget.winfo_children():
+            visit(child)
+
+    visit(slot)
+
+
+def install_compact_zoom_controls(app: Any) -> None:
+    """Six real zoom controls driven by the existing image-view callbacks."""
+    if getattr(app, "workspace_quick_zoom_controls", None):
+        return
+    host = app.workspace_quick_actions_host
+    _style_compact_sidebar(app)
+    actions = (
+        ("➖", lambda: app.zoom(0.87), "缩小显示"),
+        ("%", None, "当前缩放百分比；回车应用"),
+        ("➕", lambda: app.zoom(1.15), "放大显示"),
+        ("⇔", app.fit_page_width, "占满宽度"),
+        ("⇳", app.fit_page_height, "占满高度"),
+        ("◧", app.fit_single_column_width, "单栏占满宽度"),
+    )
+    for label, callback, tooltip in actions:
+        if callback is None:
+            widget = ttk.Entry(
+                host, textvariable=app.view_zoom_var, width=4,
+                justify="center", style="PC.WorkspaceZoom.TEntry",
+            )
+            widget.bind("<Return>", app.apply_view_zoom_text)
+            widget.bind("<FocusOut>", app.apply_view_zoom_text)
+        else:
+            widget = ttk.Button(
+                host, text=label, width=2, command=callback,
+                style="PC.Workspace80.TButton",
+            )
+        app._attach_tooltip(widget, tooltip)
+        widget.grid_remove()
+        app.workspace_quick_zoom_controls.append(widget)
+    _apply_preset_rail_controls(app, getattr(app, "workspace_mode", "正常"))
+
+
 def _apply_preset_rail_controls(app: Any, mode: str) -> None:
-    """Switch compact rail visibility without destroying icons or commands."""
+    """Compact and extreme presets inline zoom; normal/max retain ≣ launcher."""
     extreme = mode == "极简"
+    compact = mode == "紧凑"
     if extreme:
         app.workspace_extreme_page_navigation.grid()
     else:
@@ -811,25 +906,35 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
             label.grid_remove()
         else:
             label.grid()
-    # Drop unused grid columns in 极简; otherwise even empty weighted
-    # columns retain the width of a three-column horizontal toolbar.
+
+    _apply_compact_sidebar_font(app, compact)
     quick_host = app.workspace_quick_actions_host
-    for index in range(len(app.workspace_quick_action_buttons)):
+    inline = extreme or compact
+    for index in range(4):
         quick_host.columnconfigure(
-            index, weight=1 if (not extreme or index == 0) else 0,
-            minsize=0, uniform="" if extreme else "quickrail",
+            index, weight=(1 if not extreme and (not inline or index < 3)
+                           else int(index == 0)),
+            minsize=0, uniform="quickrail" if not extreme else "",
         )
-    # Keep the abbreviations in ALL modes. Only the direction changes.
+    for index, widget in enumerate(app.workspace_quick_zoom_controls):
+        if not inline:
+            widget.grid_remove()
+            continue
+        row = index if extreme else index // 3
+        column = 0 if extreme else index % 3
+        widget.grid(row=row, column=column, sticky="ew", padx=0, pady=0)
     for index, (button, title) in enumerate(zip(
         app.workspace_quick_action_buttons, ("普", "O", "校", "≣"),
     )):
         button.configure(text=title, width=2)
-        button.grid_configure(
-            row=index if extreme else 0,
-            column=0 if extreme else index,
+        if inline and index == 3:
+            button.grid_remove()
+            continue
+        button.grid(
+            row=(6 + index if extreme else 2 if compact else 0),
+            column=(0 if extreme else index),
             sticky="ew", padx=0, pady=0,
         )
-
 
 def _set_simple_page_visible(app: Any, visible: bool) -> None:
     """Show/hide the standalone 300px simple page column without reparenting."""
