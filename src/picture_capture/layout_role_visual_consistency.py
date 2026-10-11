@@ -54,7 +54,7 @@ def suppress_contradictory_cjk_body_lane_entries(
     independently start on the inset body side of the lane separator.
     This gate prevents one unusual valid lemma from changing a normal page.
     """
-    stats = {"checked_columns": 0, "repaired_columns": 0, "demoted_rows": 0}
+    stats = {"checked_columns": 0, "repaired_columns": 0, "demoted_rows": 0, "repaired_indices": []}
     if (
         not uses_cjk_role_model(settings)
         or str(getattr(layout, "indent_type", "")) != "body"
@@ -109,6 +109,7 @@ def suppress_contradictory_cjk_body_lane_entries(
             for line in contradictions:
                 line.role = "body"
             stats["repaired_columns"] += 1
+            stats["repaired_indices"].append(int(getattr(column, "index", list(layout.columns).index(column))))
             stats["demoted_rows"] += len(contradictions)
     finally:
         canonical.close()
