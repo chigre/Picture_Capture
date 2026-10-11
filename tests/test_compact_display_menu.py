@@ -56,6 +56,9 @@ def test_display_controls_are_in_requested_order_and_share_existing_variables():
     assert "app.quick_color_vars" in source
     assert "app.choose_overlay_color(key, button)" in source
     assert 'value(row, "间隔时间(秒)", "batch_interval", 3)' in source
+    assert 'width=chars + 2' in source
+    assert 'value(row, "宽", "guide_width", 2)' in source
+    assert 'value(row, "宽:", "guide_width", 2)' not in source
     assert 'value(row, "向右比例%", "right_ratio", 4)' in source
     assert 'SWATCH_VERTICAL_PADDING_FRACTION = 0.25' in source
     assert "relheight=1 - 2 * SWATCH_VERTICAL_PADDING_FRACTION" in source
@@ -135,3 +138,19 @@ def test_legacy_postproduction_menu_reflow_has_matching_spacing():
     # Postproduction stays the one legacy panel and keeps its original actions.
     assert 'sections["五、后期词典制作"]' not in text
     assert 'app._build_quick_settings(content)' in text
+
+
+def test_display_integer_field_casts_and_loaded_value_formatting():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    opacity = (ROOT / "overlay_opacity.py").read_text(encoding="utf-8")
+    fill = (ROOT / "illustration_fill_opacity.py").read_text(encoding="utf-8")
+    assert 'self.quick_field_casts["batch_interval"] = int' in app_source
+    assert 'self.quick_field_casts["right_ratio"] = float' in app_source
+    assert 'self.quick_field_casts[name] = int  # Both width and displayed offset%' in app_source
+    assert '"batch_interval", "guide_opacity", "headword_marker_opacity",' in app_source
+    assert 'value = round(float(value) * 100)' in app_source
+    assert 'value = float(value) / 100.0' in app_source
+    assert 'app.quick_field_casts[name] = int' in opacity
+    assert 'app.quick_field_casts[name] = int' in fill
+    assert 'rendered = str(round(current))' in opacity
+    assert 'tk.StringVar(value=str(round(current)))' in fill

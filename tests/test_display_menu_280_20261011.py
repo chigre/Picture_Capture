@@ -34,11 +34,11 @@ def test_color_strip_is_vertically_inset_by_quarter_height():
     assert "relheight=1 - 2 * SWATCH_VERTICAL_PADDING_FRACTION" in source
 
 
-def test_display_numeric_entries_gain_one_character_without_reflow():
+def test_display_numeric_entries_gain_two_characters_without_reflow():
     source = DISPLAY.read_text(encoding="utf-8")
     # The original one-row composition and all declared sizes remain intact;
-    # only the shared Entry renderer gets one extra visible character.
-    assert 'row, textvariable=qv[name], width=chars + 1, justify="center",' in source
+    # only the shared Entry renderer gains two characters from original.
+    assert 'row, textvariable=qv[name], width=chars + 2, justify="center",' in source
     assert 'def primary_check(' not in source
     assert 'def detail_line(' not in source
     assert 'row.pack(fill="x", pady=0)' in source
@@ -49,19 +49,19 @@ def test_each_compact_display_option_is_in_one_explicit_row():
     assert "def number_line(" not in source
     for caption, parts in (
         ("显示区块", ('swatch(row, "page_section_color")',
-                    'value(row, "宽:", "page_section_width", 2)')),
+                    'value(row, "宽", "page_section_width", 2)')),
         ("栏左垂线", ('swatch(row, "guide_color")',
-                     'value(row, "宽:", "guide_width", 2)',
+                     'value(row, "宽", "guide_width", 2)',
                      'value(row, "透%:", "guide_opacity", 3)')),
         ("词头横线", ('swatch(row, "headword_marker_color")',
-                     'value(row, "宽:", "marker_height", 2)',
+                     'value(row, "宽", "marker_height", 2)',
                      'value(row, "透%:", "headword_marker_opacity", 3)')),
         ("插图形状:线", ('swatch(row, "illustration_outline_color")',
-                      'value(row, "宽:", "illustration_outline_width", 2)',
+                      'value(row, "宽", "illustration_outline_width", 2)',
                       'swatch(row, "illustration_fill_color")',
                       'value(row, "透%:", "illustration_fill_opacity", 3)')),
         ("插图标签:线", ('swatch(row, "illustration_label_border_color")',
-                      'value(row, "宽:", "illustration_label_border_width", 2)',
+                      'value(row, "宽", "illustration_label_border_width", 2)',
                       'swatch(row, "illustration_label_fill_color")')),
         ("词头标签", ('swatch(row, "main_entry_default_color")',
                     'check(row, "缩放", qb["main_entry_follow_zoom"])')),
@@ -104,3 +104,76 @@ def test_requested_numeric_defaults_apply_only_to_new_projects():
     assert settings.main_entry_x_ratio == 0.66
     assert settings.right_ratio == 100
     assert settings.crop_preview_font_size == 16
+
+
+def test_display_integers_and_only_right_ratio_allows_decimals():
+    from types import SimpleNamespace
+    from picture_capture.app import PictureCaptureApp
+    from picture_capture.models import AppSettings
+
+    class Value:
+        def __init__(self, value):
+            self.value = value
+
+        def get(self):
+            return self.value
+
+        def set(self, value):
+            self.value = value
+
+    settings = AppSettings()
+    errors = []
+    app = SimpleNamespace(
+        settings=settings,
+        _batch_active=False,
+        quick_vars={},
+        quick_field_casts={},
+        _quick_geometry_edit_source={},
+        quick_bool_vars={},
+        quick_color_vars={},
+        image=None,
+        lens_mode_var=Value("关闭"),
+        hide_var=Value(False),
+        polygon_var=Value(False),
+        autosave_var=Value(False),
+        status_var=Value(""),
+        sync_quick_settings=lambda: None,
+        redraw=lambda: None,
+        show_error=lambda *_args: errors.append(_args),
+    )
+    integer_fields = (
+        "batch_interval", "page_section_width", "guide_width", "guide_opacity",
+        "marker_height", "headword_marker_opacity", "illustration_outline_width",
+        "illustration_fill_opacity", "illustration_label_border_width",
+        "illustration_label_font_size", "main_entry_width_chars",
+        "main_entry_font_size", "crop_preview_font_size", "main_entry_x_ratio",
+    )
+    for name in integer_fields:
+        app.quick_vars = {name: Value("7.5")}
+        app.quick_field_casts = {name: int}
+        before = getattr(settings, name)
+        assert not PictureCaptureApp.apply_quick_settings(app, show_status=False)
+        assert getattr(settings, name) == before
+    for name, input_value in (
+        ("batch_interval", "5"),
+        ("guide_opacity", "45"),
+        ("illustration_fill_opacity", "25"),
+        ("main_entry_x_ratio", "37"),
+    ):
+        app.quick_vars = {name: Value(input_value)}
+        app.quick_field_casts = {name: int}
+        assert PictureCaptureApp.apply_quick_settings(app, show_status=False)
+        expected = int(input_value) / 100 if name == "main_entry_x_ratio" else int(input_value)
+        assert getattr(settings, name) == expected
+    app.quick_vars = {"right_ratio": Value("95.5")}
+    app.quick_field_casts = {"right_ratio": float}
+    assert PictureCaptureApp.apply_quick_settings(app, show_status=False)
+    assert settings.right_ratio == 95.5
+
+
+def test_layout_numeric_field_widths_and_percent_gap():
+    source = (BASE / "ui" / "compact_layout_profile_menu.py").read_text(encoding="utf-8")
+    assert 'width=7 if name != "columns" else 5' in source
+    assert 'width=6, justify="center"' in source
+    assert 'text="% ", width=2' in source
+    assert source.count('width=8)') >= 2

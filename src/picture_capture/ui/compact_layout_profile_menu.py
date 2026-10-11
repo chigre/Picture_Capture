@@ -232,14 +232,14 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         caption(frame, title, 12)
         ttk.Entry(
             frame, textvariable=app.quick_vars[name],
-            width=6 if name != "columns" else 4,
+            width=7 if name != "columns" else 5,
             justify="center",
         ).pack(side="left", padx=0, pady=0)
         if name != "columns":
-            ttk.Label(frame, text="%", width=1).pack(side="left", padx=0, pady=0)
+            ttk.Label(frame, text="% ", width=2).pack(side="left", padx=0, pady=0)
             ttk.Entry(
                 frame, textvariable=app.quick_pixel_vars[name],
-                width=5, justify="center",
+                width=6, justify="center",
             ).pack(side="left", padx=0, pady=0)
             ttk.Label(frame, text="px", width=2).pack(side="left", padx=0, pady=0)
 
@@ -254,7 +254,7 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             caption(percent_row, "排除高度%", 15)
             percent_var = tk.StringVar()
             profile_vars[percent_name] = percent_var
-            widget = ttk.Entry(percent_row, textvariable=percent_var, width=7)
+            widget = ttk.Entry(percent_row, textvariable=percent_var, width=8)
             widget.pack(side="left", padx=0, pady=0)
             widget.bind("<Return>", lambda _e, n=percent_name: save_field(n))
             widget.bind("<FocusOut>", lambda _e, n=percent_name: save_field(n))
@@ -265,7 +265,7 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         caption(frame, title, 15)
         variable = tk.StringVar()
         profile_vars[name] = variable
-        widget = ttk.Entry(frame, textvariable=variable, width=7)
+        widget = ttk.Entry(frame, textvariable=variable, width=8)
         widget.pack(side="left", padx=0, pady=0)
         widget.bind("<Return>", lambda _e, n=name: save_field(n))
         widget.bind("<FocusOut>", lambda _e, n=name: save_field(n))

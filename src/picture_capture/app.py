@@ -9252,7 +9252,7 @@ class PictureCaptureApp(tk.Tk):
         ttk.Label(entry_row, text="词条文本框：宽度(字符)").pack(side="left")
         for name, width in (("main_entry_width_chars", 5), ("main_entry_x_ratio", 5)):
             shown = getattr(self.settings, name) * 100 if name == "main_entry_x_ratio" else getattr(self.settings, name)
-            var = tk.StringVar(value=str(round(shown) if name == "main_entry_x_ratio" else shown)); self.quick_vars[name] = var; self.quick_field_casts[name] = int if name.endswith("chars") else float
+            var = tk.StringVar(value=str(round(shown) if name == "main_entry_x_ratio" else shown)); self.quick_vars[name] = var; self.quick_field_casts[name] = int  # Both width and displayed offset% are integers.
             if name == "main_entry_x_ratio": ttk.Label(entry_row, text="偏移%").pack(side="left", padx=(8, 2))
             ttk.Entry(
                 entry_row, textvariable=var, width=width, justify="left"
@@ -9337,7 +9337,7 @@ class PictureCaptureApp(tk.Tk):
         save_row = ttk.Frame(aux); save_row.grid(row=8, column=0, columnspan=4, sticky="ew")
         ttk.Checkbutton(save_row, text="自动保存", variable=self.autosave_var, command=self.toggle_autosave).pack(side="left")
         ttk.Label(save_row, text="间隔时间(秒)").pack(side="left", padx=(8, 2))
-        interval_var = tk.StringVar(value=str(self.settings.batch_interval)); self.quick_vars["batch_interval"] = interval_var; self.quick_field_casts["batch_interval"] = float
+        interval_var = tk.StringVar(value=str(round(float(self.settings.batch_interval)))); self.quick_vars["batch_interval"] = interval_var; self.quick_field_casts["batch_interval"] = int
         ttk.Entry(
             save_row, textvariable=interval_var, width=6, justify="left"
         ).pack(side="left")
@@ -11051,6 +11051,11 @@ class PictureCaptureApp(tk.Tk):
                             pixel_var.set(str(int(round(source_value))))
                     if name == "main_entry_x_ratio":
                         value = round(float(value) * 100)
+                    elif name in {
+                        "batch_interval", "guide_opacity", "headword_marker_opacity",
+                        "illustration_fill_opacity",
+                    }:
+                        value = round(float(value))
                     if name in {
                         "main_entry_font_family",
                         "illustration_label_font_family",

@@ -58,7 +58,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     def entry(row: tk.Misc, name: str, chars: int = 3) -> ttk.Entry:
         item = ttk.Entry(
-            row, textvariable=qv[name], width=chars + 1, justify="center",
+            row, textvariable=qv[name], width=chars + 2, justify="center",
             style="PC.Display.TEntry",
         )
         item.pack(side="left", padx=0, pady=0)
@@ -138,18 +138,18 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     check(row, "显示区块", qb["show_page_sections"],
           lambda: app._apply_overlay_visibility_toggle("show_page_sections", qb["show_page_sections"]))
     swatch(row, "page_section_color")
-    value(row, "宽:", "page_section_width", 2)
+    value(row, "宽", "page_section_width", 2)
 
     row = line()
     check(row, "栏左垂线", qb["show_column_guides"], app._quick_parameter_changed)
     swatch(row, "guide_color")
-    value(row, "宽:", "guide_width", 2)
+    value(row, "宽", "guide_width", 2)
     value(row, "透%:", "guide_opacity", 3)
 
     row = line()
     check(row, "词头横线", qb["show_headword_markers"], app._quick_parameter_changed)
     swatch(row, "headword_marker_color")
-    value(row, "宽:", "marker_height", 2)
+    value(row, "宽", "marker_height", 2)
     value(row, "透%:", "headword_marker_opacity", 3)
 
     divider()
@@ -159,7 +159,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     row = line()
     check(row, "插图形状:线", app.polygon_var, app.redraw)
     swatch(row, "illustration_outline_color")
-    value(row, "宽:", "illustration_outline_width", 2)
+    value(row, "宽", "illustration_outline_width", 2)
     label(row, "底")
     swatch(row, "illustration_fill_color")
     value(row, "透%:", "illustration_fill_opacity", 3)
@@ -170,7 +170,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
               "show_illustration_labels", qb["show_illustration_labels"],
           ))
     swatch(row, "illustration_label_border_color")
-    value(row, "宽:", "illustration_label_border_width", 2)
+    value(row, "宽", "illustration_label_border_width", 2)
     label(row, "底")
     swatch(row, "illustration_label_fill_color")
 
