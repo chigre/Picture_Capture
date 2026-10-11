@@ -6931,16 +6931,19 @@ class PictureCaptureApp(tk.Tk):
                 pass
 
     def _ensure_sidebar_navigation_width(self) -> None:
-        """Keep the left pane wide enough to show the complete page-nav row."""
+        """Keep the sidebar at its mode-specific size, not the old 520px."""
         paned = self.__dict__.get("main_paned")
-        row = self.__dict__.get("page_size_row")
-        if paned is None or row is None:
+        if paned is None or not hasattr(self, "workspace_rail_width"):
             return
         try:
+            from .ui.workspace_tools import preferred_sidebar_width
             self.update_idletasks()
-            required = max(520, int(row.winfo_reqwidth()) + 28)
-            available = max(0, int(self.winfo_width()) - 420)
-            paned.sashpos(0, min(required, available) if available else required)
+            target = preferred_sidebar_width(
+                self, extreme=self.workspace_mode == "极简",
+                compact=self.workspace_mode == "紧凑",
+            )
+            available = max(1, self.winfo_width() - 160)
+            paned.sashpos(0, min(target, available))
         except (tk.TclError, ValueError):
             return
 
@@ -7833,11 +7836,12 @@ class PictureCaptureApp(tk.Tk):
             borderwidth=0,
             bg=self._main_ui_colors["sidebar"],
         )
+        # This outer scrollbar duplicated the functional page-list scrollbar
+        # and appeared inert beside the normal-mode list. Keep a reference for
+        # compatibility but do not display it. The Treeview owns scrolling.
         self.sidebar_scrollbar = ttk.Scrollbar(
             sidebar_host, orient="vertical", command=self.sidebar_canvas.yview
         )
-        self.sidebar_canvas.configure(yscrollcommand=self.sidebar_scrollbar.set)
-        self.sidebar_scrollbar.pack(side="right", fill="y")
         self.sidebar_canvas.pack(side="left", fill="both", expand=True)
         sidebar = ttk.Frame(
             self.sidebar_canvas, padding=(7, 7, 6, 5), style="PC.Sidebar.TFrame"
@@ -7874,7 +7878,7 @@ class PictureCaptureApp(tk.Tk):
         self.page_range_controls_row = range_row
         range_row.pack(fill="x", pady=(0, 3))
         for label, mode in (("当前", "current"), ("至末页", "to_end"),
-                            ("至指定页", "to_specified")):
+                            ("至指定", "to_specified")):
             ttk.Radiobutton(range_row, text=label, variable=self.page_range_var,
                             value=mode).pack(side="left", padx=(0, 3))
         spec_row = ttk.Frame(nav_area)
