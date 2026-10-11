@@ -63,7 +63,7 @@ def suppress_contradictory_cjk_body_lane_entries(
 
     reference = max(8.0, float(getattr(layout, "ordinary_line_height", 1.0)))
     candidates: list[tuple[Any, list[Any], float]] = []
-    for column in list(getattr(layout, "columns", ()) or ()):
+    for column_index, column in enumerate(list(getattr(layout, "columns", ()) or ())):
         lines = list(getattr(column, "lines", ()) or ())
         entries = [
             line for line in lines
@@ -88,7 +88,7 @@ def suppress_contradictory_cjk_body_lane_entries(
         if body_center - entry_center < reference * .75:
             continue
         threshold = entry_center + (body_center - entry_center) * .55
-        candidates.append((column, entries, threshold))
+        candidates.append((column_index, column, entries, threshold))
     if not candidates:
         return stats
 
@@ -97,7 +97,7 @@ def suppress_contradictory_cjk_body_lane_entries(
     try:
         gray = np.asarray(canonical.convert("L"), dtype=np.uint8)
         top = int(getattr(layout, "body_top", 0))
-        for column, entries, threshold in candidates:
+        for column_index, column, entries, threshold in candidates:
             stats["checked_columns"] += 1
             contradictions = []
             for line in entries:
@@ -109,7 +109,7 @@ def suppress_contradictory_cjk_body_lane_entries(
             for line in contradictions:
                 line.role = "body"
             stats["repaired_columns"] += 1
-            stats["repaired_indices"].append(int(getattr(column, "index", list(layout.columns).index(column))))
+            stats["repaired_indices"].append(column_index)
             stats["demoted_rows"] += len(contradictions)
     finally:
         canonical.close()
