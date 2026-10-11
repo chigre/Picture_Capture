@@ -256,13 +256,15 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.page_index_labels = {"bookmark":"●","page":"页面","section":"域","lined":"线","fill_status":"填充状态","illustrations":"图"}
     app.page_index_columns = tuple(app.page_index_labels)
     app.workspace_rail_labels = []
+    app.workspace_rail_rows = []
 
     def rail_action(parent: ttk.Frame, row: int, symbol: str, label: str,
                     command: Any, tip: str) -> ttk.Frame:
         """Separate fixed-width icon and text controls: Unicode glyph widths vary."""
-        entry = ttk.Frame(parent, style="PC.Sidebar.TFrame", height=33)
+        entry = ttk.Frame(parent, style="PC.Sidebar.TFrame", width=155, height=33)
         entry.grid(row=row, column=0, sticky="ew", pady=(0, 1))
         entry.grid_propagate(False)
+        app.workspace_rail_rows.append(entry)
         entry.columnconfigure(0, minsize=36)
         entry.columnconfigure(1, weight=1)
         entry.rowconfigure(0, weight=1)
@@ -736,6 +738,8 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         app.workspace_extreme_page_navigation.grid()
     else:
         app.workspace_extreme_page_navigation.grid_remove()
+    for entry in app.workspace_rail_rows:
+        entry.configure(width=36 if extreme else 155)
     for label in app.workspace_rail_labels:
         if extreme or not app.workspace_sidebar_visible:
             label.grid_remove()
