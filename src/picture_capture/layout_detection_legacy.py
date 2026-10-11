@@ -759,6 +759,19 @@ def _projection_layout_estimate(source: Image.Image, settings: AppSettings) -> L
         widths[-1] = int(round(float(np.median(stable))))
 
     separator_centers: list[int] = []
+    if settings.layout_columns_policy != "fixed" and len(starts) > 1:
+        # Profile bootstrap always uses "detect". Previously separator_centers
+        # was only filled in the fixed-column branch below, so a ruled page
+        # could never produce separator_x during initial Profile analysis.
+        # Reuse the existing conservative pixel-evidence detector; unknown
+        # separator evidence is not equivalent to a declared absent rule.
+        for left, right in zip(starts, starts[1:]):
+            divider = _detect_persistent_vertical_rule(
+                ink, left, right, body_top, body_bottom,
+                settings.layout_column_separator_mode,
+            )
+            if divider is not None:
+                separator_centers.append(divider.center)
     if settings.layout_columns_policy == "fixed":
         count = max(1, min(12, int(settings.columns)))
         span = max(10.0, (page_right - page_left) / count)
