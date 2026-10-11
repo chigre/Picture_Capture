@@ -491,7 +491,8 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     # The full page table is created after install_workspace_tools returns.
     app.after_idle(lambda: app.page_list.bind(
         "<<TreeviewSelect>>", sync_mini_selection, add="+"))
-    rail.rowconfigure(len(TASK_GROUPS) + 4, weight=0)
+    # Empty spacer keeps the quick-action/footer area anchored to the bottom.
+    rail.rowconfigure(len(TASK_GROUPS) + 4, weight=1)
 
     footer_row = len(TASK_GROUPS) + 5
     footer = ttk.Frame(rail, style="PC.Footer.TFrame")
@@ -554,8 +555,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
             mode_menu.place_forget()
     app.bind_all("<Button-1>", dismiss_mode_on_outside_click, add="+")
     app.bind("<Configure>", lambda _e: position_workspace_popup(app), add="+")
-    # Size the initial index to fit all three range choices, not the
-    # historical sum of the page-table column widths.
+    # Initialize a consistent 140px rail + 6px grip + 300px page list.
     app.after_idle(lambda: size_page_index_to_controls(app))
 
 
