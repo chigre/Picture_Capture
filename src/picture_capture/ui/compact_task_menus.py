@@ -218,7 +218,7 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
                app._quick_parameter_changed)
     row = _row(panel)
     _label(row, "Lens模式:")
-    from picture_capture.app import LENS_MODE_VALUES
+    from picture_capture.ocr_action_guard import LENS_MODE_VALUES
     _select(row, app.lens_mode_var, tuple(LENS_MODE_VALUES), width=18,
             command=app._quick_parameter_changed)
     row = _row(panel)
