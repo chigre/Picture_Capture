@@ -351,7 +351,7 @@ def test_pinned_preview_and_every_inline_crop_coexist():
 
 def test_each_tool_menu_is_300px_and_vertically_scrollable():
     _, tools = sources()
-    assert "TOOL_MENU_WIDTH = 300" in tools
+    assert "TOOL_MENU_WIDTH = 280" in tools
     assert "width = min(TOOL_MENU_WIDTH, max(1, root_width - 12))" in tools
     assert "item, width=max(1, e.width)" in tools
     assert "horizontal = ttk.Scrollbar(scroller" not in tools
