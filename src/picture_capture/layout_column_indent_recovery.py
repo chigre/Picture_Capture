@@ -20,12 +20,23 @@ from .models import Entry
 from .page_understanding import uses_cjk_role_model
 
 
-def _weak_columns(layout: Any) -> list[int]:
+def _weak_columns(layout: Any, *, cjk: bool = False) -> list[int]:
     result = []
     for i, column in enumerate(layout.columns):
         lines = column.lines
         entry_count = sum(line.role == "entry" for line in lines)
-        if len(lines) >= 12 and entry_count <= max(2, round(len(lines) * .035)):
+        # Bracketed CJK pages may merge dozens of tight printed rows into
+        # oversized ink projection bands: a few accepted labels don't mean
+        # the missing rows are absent from the source scan.
+        pitch = max(8.0, float(getattr(layout, "ordinary_line_pitch", 0) or
+                               layout.ordinary_line_height))
+        expected = max(1.0, (layout.body_bottom - layout.body_top) / pitch)
+        undersegmented = bool(cjk and 12 <= len(lines) < expected * .40)
+        if (
+            len(lines) >= 12
+            and (entry_count <= max(2, round(len(lines) * .035))
+                 or undersegmented)
+        ):
             result.append(i)
     return result
 
@@ -131,10 +142,10 @@ def restore_proven_column_indents(
     stats = {"rescued_columns": 0, "rescued_rows": 0, "cjk_bracket_rows": 0}
     if layout.indent_type != "body" or len(layout.columns) < 2:
         return stats
-    weak = _weak_columns(layout)
+    cjk = uses_cjk_role_model(settings)
+    weak = _weak_columns(layout, cjk=cjk)
     if not weak:
         return stats
-    cjk = uses_cjk_role_model(settings)
     alternate = {} if cjk else _independently_proven_columns(
         image, settings, layout, weak, page_index,
     )
@@ -175,10 +186,17 @@ def restore_proven_column_indents(
             entry_y = sorted(set(bracket_by_column[index]))
             entry_x = 0.0
             body_x = float(col.body_mode.center) if col.body_mode else None
+        entry_y = sorted({
+            int(y) for y in entry_y
+            if int(layout.body_top) <= int(y) < int(layout.body_bottom)
+        })
         if len(entry_y) < 3:
             continue
 
-        detected = []
+        # Retain previously accepted entries instead of replacing them by
+        # an independent alternative; this is an augmentation, not erasure.
+        old_entries = [row for row in col.lines if row.role == "entry"]
+        detected = list(old_entries)
         for y in entry_y:
             line = _promote_at_y(
                 layout, index, y,
