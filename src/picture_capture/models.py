@@ -335,6 +335,7 @@ class AppSettings(metaclass=_AppSettingsMeta):
     preprocess_export_align_y: str = "top"
     # Overlay editor presentation at 100% page scale. The page zoom multiplies
     # the base font, so text boxes zoom together with the scanned page.
+    show_main_entry_labels: bool = True
     main_entry_font_family: str = "自动（系统推荐）"
     main_entry_font_size: int = 16
     main_entry_font_bold: bool = False
