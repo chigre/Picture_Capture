@@ -72,3 +72,25 @@ def test_display_font_rows_match_two_line_order():
     assert 'check(row, "缩放", qb["crop_preview_follow_zoom"])' in source
     assert 'family_line("crop_preview_font_family")' in source
     assert 'label(row, "字号")' not in source
+
+
+
+def test_requested_numeric_defaults_apply_only_to_new_projects():
+    from picture_capture.models import AppSettings
+
+    settings = AppSettings()
+    assert settings.batch_interval == 3.0
+    assert settings.page_section_width == 2
+    assert settings.guide_width == 2
+    assert settings.guide_opacity == 60.0
+    assert settings.marker_height == 5
+    assert settings.headword_marker_opacity == 60.0
+    assert settings.illustration_outline_width == 2
+    assert settings.illustration_fill_opacity == 60.0
+    assert settings.illustration_label_border_width == 2
+    assert settings.illustration_label_font_size == 16
+    assert settings.main_entry_font_size == 16
+    assert settings.main_entry_width_chars == 18
+    assert settings.main_entry_x_ratio == 0.66
+    assert settings.right_ratio == 100
+    assert settings.crop_preview_font_size == 16
