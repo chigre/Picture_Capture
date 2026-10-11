@@ -55,7 +55,7 @@ def _stack_tool_menu_controls(root: ttk.Frame) -> None:
             )
             # Reset weights from the legacy wide/multi-column grid.
             for col in range(columns):
-                container.columnconfigure(col, weight=0, minsize=0)
+                container.columnconfigure(col, weight=0, minsize=0, uniform="")
             container.columnconfigure(0, weight=1)
             for child in ordered:
                 child.grid_forget()
@@ -85,6 +85,10 @@ def _stack_tool_menu_controls(root: ttk.Frame) -> None:
                         padx=0, pady=(0, 2),
                     )
         for child in children:
+            if isinstance(child, (tk.Label, ttk.Label)):
+                # A long description should wrap rather than set a wide
+                # requested size in the narrow task palette.
+                child.configure(wraplength=204)
             stack(child)
 
     for section in root.winfo_children():
