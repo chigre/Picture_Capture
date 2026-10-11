@@ -819,47 +819,45 @@ def _compact_font(app: Any) -> tkfont.Font:
 
 
 def _style_compact_sidebar(app: Any) -> None:
-    """Scope the 80% font to the compact sidebar, never to the page image."""
+    """Create 80% styles used ONLY by the page-list subtree."""
     small = _compact_font(app)
     style = ttk.Style(app)
     for suffix in ("TButton", "TLabel", "TRadiobutton", "TCheckbutton",
                    "TEntry", "TCombobox"):
         style.configure(f"PC.Workspace80.{suffix}", font=small, padding=0)
-    style.configure("PC.WorkspaceZoom.TEntry", font=small, padding=0)
+    # Zoom controls are outside the page-list subtree and retain the regular
+    # font in 紧凑; the XX% field is narrow but not globally scaled down.
+    style.configure("PC.WorkspaceZoom.TEntry", font="TkDefaultFont", padding=0)
     style.configure("PC.Workspace80.Treeview", font=small, rowheight=19)
     style.configure("PC.Workspace80.Treeview.Heading", font=small, padding=(1, 1))
 
 
 def _apply_compact_sidebar_font(app: Any, compact: bool) -> None:
-    _style_compact_sidebar(app)
-    rail_buttons = [*app.workspace_rail_labels, *app.workspace_quick_action_buttons]
-    for button in rail_buttons:
-        quick = button in app.workspace_quick_action_buttons
-        button.configure(style=(
-            "PC.Workspace80.TButton" if compact
-            else "PC.QuickRail.TButton" if quick else "PC.Rail.TButton"
-        ))
+    """Scale only page-range widgets, navigation and page-list rows/headers.
 
+    Left launcher labels, project buttons, zoom controls and 普/O/校 retain
+    their normal font at every window preset.
+    """
+    _style_compact_sidebar(app)
     slot = app.workspace_mini_page_slot
-    style_by_type = {
-        ttk.Label: "TLabel", ttk.Radiobutton: "TRadiobutton",
-        ttk.Checkbutton: "TCheckbutton", ttk.Entry: "TEntry",
-        ttk.Combobox: "TCombobox", ttk.Button: "TButton",
+    styles = {
+        ttk.Label: ("PC.Workspace80.TLabel", "TLabel"),
+        ttk.Radiobutton: ("PC.Workspace80.TRadiobutton", "TRadiobutton"),
+        ttk.Checkbutton: ("PC.Workspace80.TCheckbutton", "TCheckbutton"),
+        ttk.Entry: ("PC.Workspace80.TEntry", "TEntry"),
+        ttk.Combobox: ("PC.Workspace80.TCombobox", "TCombobox"),
+        ttk.Button: ("PC.Workspace80.TButton", "PC.SimplePage.TButton"),
     }
 
     def visit(widget: tk.Misc) -> None:
         if isinstance(widget, ttk.Treeview):
-            widget.configure(style="PC.Workspace80.Treeview" if compact
-                             else "PC.CompactPage.Treeview")
+            widget.configure(style=(
+                "PC.Workspace80.Treeview" if compact else "PC.CompactPage.Treeview"
+            ))
         else:
-            for klass, suffix in style_by_type.items():
-                if isinstance(widget, klass):
-                    widget.configure(style=(
-                        f"PC.Workspace80.{suffix}" if compact else
-                        "PC.SimplePage.TButton" if isinstance(widget, ttk.Button) else suffix
-                    ))
-                    if isinstance(widget, (ttk.Entry, ttk.Combobox, ttk.Label)):
-                        widget.configure(font=_compact_font(app) if compact else "TkDefaultFont")
+            for kind, (small, standard) in styles.items():
+                if isinstance(widget, kind):
+                    widget.configure(style=small if compact else standard)
                     break
         for child in widget.winfo_children():
             visit(child)
@@ -886,14 +884,13 @@ def install_compact_zoom_controls(app: Any) -> None:
             widget = ttk.Entry(
                 host, textvariable=app.view_zoom_var, width=4,
                 justify="center", style="PC.WorkspaceZoom.TEntry",
-                font=_compact_font(app),
             )
             widget.bind("<Return>", app.apply_view_zoom_text)
             widget.bind("<FocusOut>", app.apply_view_zoom_text)
         else:
             widget = ttk.Button(
                 host, text=label, width=2, command=callback,
-                style="PC.Workspace80.TButton",
+                style="PC.QuickRail.TButton",
             )
         app._attach_tooltip(widget, tooltip)
         # New controls are not managed yet; the active preset will grid them.
