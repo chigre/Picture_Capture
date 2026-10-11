@@ -22,7 +22,10 @@ from .dictionary_profile import (
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from .image_utils import normalize_page_rgb
 from .layout_detection import aggregate_layout_estimates
-from .profile_layout_bootstrap import detect_profile_layout_parameters as detect_layout_parameters
+from .profile_layout_bootstrap import (
+    detect_profile_layout_parameters as detect_layout_parameters,
+    robust_profile_ink_height,
+)
 from .models import AppSettings
 from .processing import derive_geometry, detect_entries
 from .profile_semantics import (
@@ -3154,6 +3157,18 @@ class ProjectProfileWizard(tk.Toplevel):
             self.apply_analysis_button.configure(state="disabled")
             return
         aggregate, consistency = aggregate_layout_estimates(estimates, columns_policy="detect")
+        observed_height, observed_pages = robust_profile_ink_height(estimates)
+        if observed_height is not None:
+            aggregate["character_height"] = observed_height
+            height_note = f"；字高按真实墨迹测量{observed_pages}/{len(estimates)}页"
+        else:
+            # Do not auto-overwrite the project's real typographic scale with
+            # h×0.008 guesses when page measurements do not support it.
+            aggregate.pop("character_height", None)
+            height_note = (
+                f"；⚠字高仅{observed_pages}/{len(estimates)}页有可靠测量，"
+                "未自动修改字高，请核对代表页"
+            )
         separators = sum(1 for estimate in estimates if getattr(estimate, "separator_x", None) is not None)
         separator = "present" if separators > len(estimates) / 2 else "absent"
         self._analysis_suggestion = {
@@ -3161,7 +3176,7 @@ class ProjectProfileWizard(tk.Toplevel):
             "separator": separator,
         }
         sep_text = "有中央分隔线" if separator == "present" else "无明确中央分隔线"
-        error_text = f"；{len(errors)} 页未参与" if errors else ""
+        error_text = (f"；{len(errors)} 页未参与" if errors else "") + height_note
         self.analysis_suggestion_var.set(
             f"自动建议：{aggregate['columns']}栏 · {sep_text} · {consistency}{error_text}"
         )
