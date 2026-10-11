@@ -35,7 +35,7 @@ def test_tool_icon_opens_only_its_own_panel_not_six_collapsible_titles():
     assert "show_all_sections(app)" not in source.split(
         "def show_workspace_task(", 1
     )[1].split("def size_page_index_to_controls(", 1)[0]
-    assert "TOOL_MENU_WIDTH = 260" in source
+    assert "TOOL_MENU_WIDTH = 300" in source
 
 
 def test_display_controls_are_in_requested_order_and_share_existing_variables():
