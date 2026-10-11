@@ -35,18 +35,18 @@ def test_tool_icon_opens_only_its_own_panel_not_six_collapsible_titles():
     assert "show_all_sections(app)" not in source.split(
         "def show_workspace_task(", 1
     )[1].split("def size_page_index_to_controls(", 1)[0]
-    assert "TOOL_MENU_WIDTH = 300" in source
+    assert "TOOL_MENU_WIDTH = 280" in source
 
 
 def test_display_controls_are_in_requested_order_and_share_existing_variables():
     source = (ROOT / "ui" / "compact_display_menu.py").read_text(encoding="utf-8")
     captions = (
-        "自动保存", "隐藏线框(插图除外)", "显示标尺", "显示区块",
-        "栏左垂线", "词头横线", "插图形状:轮廓",
-        "插图标签:外框", "词头标签", "显示OCR内容选择器",
+        "自动保存", "隐藏线框（插图除外）", "显示标尺", "显示区块",
+        "栏左垂线", "词头横线", "插图形状:线",
+        "插图标签:线", "词头标签", "显示OCR内容选择器",
         "显示OCR对比底色结果", "显示单行画线候选框",
-        "颜色模式", "显示模式", "显示Layout",
-        "去噪强度", "切图预览标签字体",
+        "颜色模式", "显示模式", "向右比例%", "显示Layout",
+        "去噪强度", "切图预览标签:",
     )
     starts = [source.index('"' + caption + '"') for caption in captions]
     assert starts == sorted(starts)
@@ -55,7 +55,10 @@ def test_display_controls_are_in_requested_order_and_share_existing_variables():
     assert "app.quick_bool_vars" in source
     assert "app.quick_color_vars" in source
     assert "app.choose_overlay_color(key, button)" in source
-    assert 'field(row, "batch_interval", 4)' in source
+    assert 'value(row, "间隔时间(秒)", "batch_interval", 3)' in source
+    assert 'value(row, "向右比例%", "right_ratio", 4)' in source
+    assert 'SWATCH_VERTICAL_PADDING_FRACTION = 0.25' in source
+    assert "relheight=1 - 2 * SWATCH_VERTICAL_PADDING_FRACTION" in source
     assert "ocr_crop_preview_checkbox" not in source
 
 
