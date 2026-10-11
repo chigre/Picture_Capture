@@ -16,7 +16,7 @@ def test_index_page_controls_and_extension_free_display():
     assert 'page_panel.grid(row=0, column=0, rowspan=2' in app
     assert '("至指定页", "to_specified")' in app
     assert '("至末页", "to_end")' in app
-    assert 'text="指定:"' in app
+    assert 'text="指定:"' not in app
     assert 'page.stem, self._page_section_count_text(index)' in app
     assert 'new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)' in app
     assert 'if mode == "to_specified":' in app
@@ -30,9 +30,9 @@ def test_fixed_width_icon_cells_and_compact_nav_toggle():
     assert 'text_button = ttk.Button(entry, text=label, width=9' in tools
     assert 'rail, 0, "☰", "窗口模式", lambda: toggle_sidebar_modes(app)' in tools
     assert 'app.workspace_rail_labels.append(text_button)' in tools
-    assert 'button.grid_remove()' in tools
-    assert 'button.grid()' in tools
-    assert 'app.main_paned.sashpos(0, app.workspace_tools_rail.winfo_reqwidth() + 8)' in tools
+    assert 'label.grid_remove()' in tools
+    assert 'label.grid()' in tools
+    assert 'int(app.workspace_rail_width) + RAIL_DIVIDER_WIDTH' in tools
     assert 'panes.forget(host)' not in tools
     assert 'sidebar_toggle.place(' not in app
     assert 'app.bind("<Control-Shift-b>"' in tools
@@ -43,8 +43,8 @@ def test_page_index_still_collapsible_and_tools_unchanged():
     assert 'panel.grid_remove()' in tools
     assert 'panel.grid()' in tools
     assert 'canvas.pack_forget()' in tools
-    assert 'mini_host.grid()' in tools
-    assert 'mini_host.grid_remove()' in tools
+    assert 'simple_slot = ttk.Frame(' in tools
+    assert '_set_simple_page_visible(app, compact)' in tools
     assert 'app._build_quick_settings(content)' in tools
     assert 'popup.place(x=left, y=top, width=width, height=height)' in tools
     assert 'popup.place_forget()' in tools
@@ -139,24 +139,23 @@ def test_page_headers_and_preferred_sidebar_width():
     assert 'self.page_list.heading("section", text="域"' in app
     assert 'self.page_list.heading("lined", text="线"' in app
     assert 'self.page_list.heading("illustrations", text="图"' in app
-    assert 'min(max(minimum, 1), panes.winfo_width() - 160)' in tools
+    assert 'min(preferred_sidebar_width(app), width - 160)' in tools
 
 
-def test_zoom_toolbar_hover_expands_at_canvas_lower_left():
-    app, _ = sources()
-    assert 'size_row = ttk.Frame(self.canvas, padding=(5, 4)' in app
-    assert 'size_row.place(relx=0, rely=1, x=8, y=-8, anchor="sw")' in app
-    assert 'zoom_handle = ttk.Label(size_row, text="≣"' in app
+def test_image_toolbar_launcher_is_with_run_buttons_not_canvas_corner():
+    app, tools = sources()
+    assert 'self.page_size_row = size_row' in app
     assert 'self.page_zoom_tools = zoom_tools' in app
-    assert 'zoom_tools.pack(side="left", padx=(4, 0))' in app
-    assert 'zoom_tools.pack_forget()' in app
-    assert 'size_row.after_idle(collapse_zoom_tools)' in app
-    assert 'widget.bind("<Enter>", expand_zoom_tools, add="+")' in app
-    assert 'widget.bind("<Leave>", schedule_zoom_collapse, add="+")' in app
+    assert 'zoom_tools.pack(side="left")' in app
+    assert 'zoom_handle = ttk.Label(size_row, text="≣"' not in app
+    assert 'size_row.place(relx=0, rely=1' not in app
+    assert '("图片工具栏", lambda: toggle_image_toolbar(app))' in tools
+    assert '("普", "O", "校", "≣")[index]' in tools
+    assert 'def toggle_image_toolbar(app: Any) -> None:' in tools
+    assert 'toolbar.place_forget()' in tools
+    assert 'toolbar.place(relx=0, rely=1, x=8, y=-8, anchor="sw")' in tools
     assert 'view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)' in app
     assert 'view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)' in app
-    assert 'size_row = ttk.Frame(nav_area)' not in app
-
 
 def test_page_columns_order_and_mandatory_visibility():
     app, _ = sources()
@@ -220,7 +219,7 @@ def test_canvas_right_click_navigation_and_sidebar_presets():
 
 def test_requested_workspace_updates():
     app, tools = sources()
-    assert 'choices.winfo_reqwidth() + 24' in tools
+    assert 'DEFAULT_PAGE_LIST_WIDTH = 300' in tools
     assert 'value=(key in {"bookmark", "lined", "illustrations"})' in tools
     assert 'width=80 if column == "page" else 26' in tools
     assert 'app.geometry(f"{min(app.winfo_screenwidth(), max(240, required))}x{height}+0+{top}")' in tools
@@ -235,7 +234,7 @@ def test_compact_mode_does_not_reuse_full_sidebar_sash_width():
     _, tools = sources()
     assert 'rail, 0, "☰", "窗口模式", lambda: toggle_sidebar_modes(app)' in tools
     assert 'if tip:' in tools
-    assert 'compact_width = app.workspace_tools_rail.winfo_reqwidth() + 10' in tools
+    assert 'compact_width = preferred_sidebar_width(app, extreme=(mode == "极简"))' in tools
     assert 'app.main_paned.sashpos(0, compact_width)' in tools
     assert 'required = int(compact_width + app.image.width * app.view_scale + 32)' in tools
     assert 'app.after_idle(lambda: app.main_paned.sashpos(0, compact_width))' in tools
@@ -437,7 +436,7 @@ def test_extreme_mode_icons_and_abbreviated_run_actions():
     assert '("上", -1), ("下", 1)' in tools
     assert 'app.workspace_extreme_page_navigation = extreme_nav' in tools
     assert 'command=lambda direction=delta: app.change_page(direction)' in tools
-    assert '("普", "O", "校")' in tools
+    assert '("普", "O", "校", "≣")' in tools
 
 
 def test_extreme_preset_hides_text_buttons_and_restores_them():
@@ -468,7 +467,7 @@ def test_extreme_preset_hides_text_buttons_and_restores_them():
     labels = [Widget() for _ in range(9)]
     rows = [Widget() for _ in range(9)]
     nav = Widget()
-    quick = [Widget() for _ in range(3)]
+    quick = [Widget() for _ in range(4)]
     host = Widget()
     app = SimpleNamespace(
         workspace_rail_labels=labels,
@@ -484,18 +483,18 @@ def test_extreme_preset_hides_text_buttons_and_restores_them():
     assert nav.visible
     assert not any(label.visible for label in labels)
     assert all(row.values["width"] == 36 for row in rows)
-    assert [w.values["text"] for w in quick] == ["普", "O", "校"]
-    assert [w.position["row"] for w in quick] == [0, 1, 2]
-    assert [w.position["column"] for w in quick] == [0, 0, 0]
+    assert [w.values["text"] for w in quick] == ["普", "O", "校", "≣"]
+    assert [w.position["row"] for w in quick] == [0, 1, 2, 3]
+    assert [w.position["column"] for w in quick] == [0, 0, 0, 0]
     assert all(w.values["width"] == 2 for w in quick)
 
     workspace_tools._apply_preset_rail_controls(app, "简单")
     assert not nav.visible
     assert all(label.visible for label in labels)
     assert all(row.values["width"] == 140 for row in rows)
-    assert [w.values["text"] for w in quick] == ["普", "O", "校"]
-    assert [w.position["row"] for w in quick] == [0, 0, 0]
-    assert [w.position["column"] for w in quick] == [0, 1, 2]
+    assert [w.values["text"] for w in quick] == ["普", "O", "校", "≣"]
+    assert [w.position["row"] for w in quick] == [0, 0, 0, 0]
+    assert [w.position["column"] for w in quick] == [0, 1, 2, 3]
 
 def test_extreme_simple_normal_modes_have_independent_page_list_visibility(monkeypatch):
     from types import SimpleNamespace
@@ -535,7 +534,7 @@ def test_extreme_simple_normal_modes_have_independent_page_list_visibility(monke
     app = SimpleNamespace(
         sidebar_canvas=canvas,
         sidebar_scrollbar=scroller,
-        workspace_mini_page_host=mini,
+        workspace_mini_page_slot=mini,
         page_panel=full_panel,
         main_paned=Panes(),
     )
@@ -545,7 +544,7 @@ def test_extreme_simple_normal_modes_have_independent_page_list_visibility(monke
     workspace_tools._apply_preset_page_index(app, "极简")
     assert canvas.manager == "" and mini.manager == "" and full_panel.manager == ""
     workspace_tools._apply_preset_page_index(app, "简单")
-    assert mini.manager == "grid" and canvas.manager == ""
+    assert mini.manager == "pack" and canvas.manager == ""
     assert len(refreshes) == 1
     workspace_tools._apply_preset_page_index(app, "正常")
     assert mini.manager == "" and canvas.manager == "pack" and full_panel.manager == "grid"
