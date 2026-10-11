@@ -10,6 +10,10 @@ from tkinter import ttk
 from typing import Any
 
 from .compact_display_menu import build_compact_display_menu
+from .compact_task_menus import (
+    build_preprocess_menu, build_layout_menu, build_ocr_menu,
+    build_drawing_menu,
+)
 from .simple_page_controls import (
     install_simple_page_controls, install_simple_page_tree_actions,
 )
@@ -162,8 +166,35 @@ def _draw_rail_icon(canvas: tk.Canvas, kind: str) -> None:
 
 def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Frame) -> None:
     """Place the icon rail beside the initially visible page index."""
-    rail = ttk.Frame(sidebar_host, style="PC.Sidebar.TFrame")
-    rail.pack(side="left", fill="y", before=app.sidebar_canvas, padx=(2, 3))
+    app.workspace_rail_width = 140
+    rail = ttk.Frame(sidebar_host, style="PC.Sidebar.TFrame", width=140)
+    rail.pack(side="left", fill="y", before=app.sidebar_canvas, padx=0)
+    rail.pack_propagate(False)
+    # The divider also acts as a draggable grip, so 140px is a default rather
+    # than an unchangeable restriction on the icon/command column.
+    divider = tk.Frame(sidebar_host, width=6, cursor="sb_h_double_arrow",
+                       bd=0, highlightthickness=0)
+    divider.pack(side="left", fill="y", before=app.sidebar_canvas)
+    stroke = ttk.Separator(divider, orient="vertical")
+    stroke.place(relx=0.5, rely=0, relheight=1.0)
+    app.workspace_rail_separator = divider
+    drag = {"origin": 0, "width": 140}
+
+    def start_drag(event: tk.Event) -> None:
+        drag["origin"] = int(event.x_root)
+        drag["width"] = int(app.workspace_rail_width)
+
+    def update_drag(event: tk.Event) -> None:
+        proposed = drag["width"] + int(event.x_root) - drag["origin"]
+        app.workspace_rail_width = max(80, min(340, proposed))
+        if getattr(app, "workspace_mode", "") != "极简":
+            rail.configure(width=app.workspace_rail_width)
+            for row in getattr(app, "workspace_rail_rows", ()):
+                row.configure(width=app.workspace_rail_width)
+        position_workspace_popup(app)
+
+    divider.bind("<ButtonPress-1>", start_drag)
+    divider.bind("<B1-Motion>", update_drag)
     app.workspace_tools_toggle = rail
     app.workspace_tools_rail = rail
     app.workspace_sidebar_host = sidebar_host
@@ -194,16 +225,27 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     canvas = tk.Canvas(scroller, highlightthickness=0, borderwidth=0)
     scrollbar = ttk.Scrollbar(scroller, orient="vertical", command=canvas.yview)
     canvas.configure(yscrollcommand=scrollbar.set)
-    scrollbar.pack(side="right", fill="y")
     canvas.pack(side="left", fill="both", expand=True)
     content = ttk.Frame(canvas)
     item = canvas.create_window((0, 0), window=content, anchor="nw")
-    content.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+    def refresh_scrollbar(_event: tk.Event | None = None) -> None:
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        needs_scroll = content.winfo_reqheight() > max(1, canvas.winfo_height())
+        if needs_scroll and scrollbar.winfo_manager() != "pack":
+            scrollbar.pack(side="right", fill="y")
+        elif not needs_scroll and scrollbar.winfo_manager() == "pack":
+            scrollbar.pack_forget()
+            canvas.yview_moveto(0)
+
+    content.bind("<Configure>", refresh_scrollbar)
     # Keep the embedded frame at the viewport width: never let the original
     # wide-layout requested size force horizontal scrolling or clipping.
-    canvas.bind("<Configure>", lambda e: canvas.itemconfigure(
-        item, width=max(1, e.width)
-    ))
+    def resized_canvas(event: tk.Event) -> None:
+        canvas.itemconfigure(item, width=max(1, event.width))
+        refresh_scrollbar()
+
+    canvas.bind("<Configure>", resized_canvas)
     # Mouse-wheel events go to the hovered child in Tk; binding the canvas
     # alone cannot scroll when the pointer is over an entry or a button.
     def scroll_menu(event: tk.Event, steps: int) -> str | None:
@@ -232,14 +274,18 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     # The old display section still owns its already-bound quick variables,
     # but it is never shown. A purpose-built, 280px display panel presents
     # exactly the requested order without duplicating variable state.
+    sections["图片预处理(前置)"] = build_preprocess_menu(app, content)
+    sections["一、版面参数"] = build_layout_menu(app, content)
     sections["二、显示设置"] = build_compact_display_menu(app, content)
+    sections["三、共享 OCR 通道 / OCR画线"] = build_ocr_menu(app, content)
+    sections["四、画线 / OCR / 插图 / 校对"] = build_drawing_menu(app, content)
     app.workspace_tools_sections = sections
+    app.workspace_tools_scrollbar_refresh = refresh_scrollbar
     app.workspace_tools_content = content
     # No accordion: start with only one real task panel attached.
     for child in content.winfo_children():
         child.pack_forget()
     first = sections[TASK_GROUPS[0][2]]
-    app._set_section_expanded(first, True, persist=False)
     first.pack(fill="x")
     app.workspace_tools_canvas = canvas
     app.workspace_tools_header = header
@@ -276,7 +322,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     def rail_action(parent: ttk.Frame, row: int, symbol: str, label: str,
                     command: Any, tip: str) -> ttk.Frame:
         """Separate fixed-width icon and text controls: Unicode glyph widths vary."""
-        entry = ttk.Frame(parent, style="PC.Sidebar.TFrame", width=155, height=33)
+        entry = ttk.Frame(parent, style="PC.Sidebar.TFrame", width=140, height=33)
         entry.grid(row=row, column=0, sticky="ew", pady=(0, 1))
         entry.grid_propagate(False)
         app.workspace_rail_rows.append(entry)
@@ -571,6 +617,8 @@ def choose_workspace_section(app: Any, title: str) -> None:
               if section_title == title), title)
     )
     app.workspace_tools_canvas.yview_moveto(0)
+    app.workspace_tools_content.update_idletasks()
+    app.workspace_tools_scrollbar_refresh()
 
 
 def show_workspace_task(app: Any, title: str | None) -> None:
@@ -762,8 +810,9 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         app.workspace_extreme_page_navigation.grid()
     else:
         app.workspace_extreme_page_navigation.grid_remove()
+    app.workspace_tools_rail.configure(width=36 if extreme else app.workspace_rail_width)
     for entry in app.workspace_rail_rows:
-        entry.configure(width=36 if extreme else 155)
+        entry.configure(width=36 if extreme else app.workspace_rail_width)
     for label in app.workspace_rail_labels:
         if extreme or not app.workspace_sidebar_visible:
             label.grid_remove()
