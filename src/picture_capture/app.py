@@ -1910,13 +1910,17 @@ class ReviewWindow(tk.Toplevel):
             parent.update_idletasks()
             x = max(0, parent.winfo_rootx() + parent.winfo_width())
             y = max(0, parent.winfo_rooty())
-            work_x, work_y, work_w, work_h = _screen_work_area(self)
+            # The OS work area measures the OUTER window, while Tk geometry
+            # requests CLIENT height. Reuse the main window's proven
+            # decoration-aware work geometry so the review title bar never
+            # pushes its bottom beneath the taskbar in compact presets.
+            from .ui.workspace_tools import _preset_work_geometry
+            work_x, work_y, work_w, safe_client_height = _preset_work_geometry(parent)
             work_right = work_x + work_w
-            work_bottom = work_y + work_h
             x = min(max(x, work_x), work_right - 1)
-            y = work_y  # Align compact proofreading to the top of the usable desktop.
+            y = work_y  # Align compact proofreading to the usable desktop top.
             width = max(1, work_right - x)
-            height = max(1, work_bottom - y)
+            height = max(1, safe_client_height)
         self.geometry(f"{width}x{height}+{x}+{y}")
         self.minsize(min(300 if compact_workspace else 560, width),
                      min(420, height))
@@ -2584,6 +2588,10 @@ class ReviewWindow(tk.Toplevel):
         self.active_crop_label.pack()
         self.active_crop_photo = None
         self._active_crop_fixed_size: tuple[int, int] | None = None
+        # Zoom at which the fixed preview dimensions were established. When
+        # review zoom changes, scale this fixed canvas instead of leaving it
+        # stranded at the previous pixel size.
+        self._active_crop_fixed_zoom: float | None = None
         self._review_display_crops: list[Image.Image] = []
         self._review_row_pictures: list[ttk.Label] = []
 
@@ -6176,10 +6184,20 @@ class ReviewWindow(tk.Toplevel):
                 padded = Image.new("RGB", (extended.width, expected_height), "white")
                 padded.paste(extended, (0, 0))
                 extended = padded
+            current_zoom = max(0.01, float(self.review_zoom))
             if self._active_crop_fixed_size is None:
                 self._active_crop_fixed_size = (
                     crop.width, max(1, round(multiplier * crop.height)),
                 )
+                self._active_crop_fixed_zoom = current_zoom
+            else:
+                from .review_crop_extension import resize_fixed_review_preview
+                self._active_crop_fixed_size = resize_fixed_review_preview(
+                    self._active_crop_fixed_size,
+                    getattr(self, "_active_crop_fixed_zoom", None),
+                    current_zoom,
+                )
+                self._active_crop_fixed_zoom = current_zoom
             preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)
             self.active_crop_photo = ImageTk.PhotoImage(
                 themed_display_image(preview, self.parent.appearance_mode)
