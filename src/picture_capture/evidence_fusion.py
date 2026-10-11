@@ -18,6 +18,7 @@ from PIL import Image
 from . import paddle_headwords_core as _core
 from .dictionary_profile import DictionaryProfile
 from .models import AppSettings, Entry
+from .latin_glued_pos_headwords import glued_lemma_and_pos
 from .page_sections import PageSection
 from .paddle_headwords_core import HeadwordFilterRule, OCRRecord
 from .separator_y_refinement import refine_separator_y as _shared_separator_y_refiner
@@ -378,12 +379,21 @@ def _rescue_false_continuation_rows(
             continue
         if confidence < 0.84 or height_ratio < 0.78:
             continue
-        if boldness < max(0.90, anchor_boldness * 0.88):
+        text = str(row.get("text", "") or "")
+        glued = glued_lemma_and_pos(text)
+        # A glued grammar tag is stronger independent lexical evidence than
+        # OCR's generic continuation verdict. Requiring an adjacent leading
+        # tag, real image boundary and moderate ink contrast avoids rescuing
+        # moment/o, una and other ordinary Spanish example continuations.
+        glued_rescue = bool(
+            glued is not None and confidence >= 0.90 and boldness >= 0.60
+        )
+        if boldness < max(0.90, anchor_boldness * 0.88) and not glued_rescue:
             continue
 
-        text = str(row.get("text", "") or "")
         grammar_visible = bool(
-            features.get("structural_cue")
+            glued_rescue
+            or features.get("structural_cue")
             or features.get("front_structure_cue")
             or features.get("tail_structure_satisfied")
             or str(row.get("pos_cue", "") or "").strip()
@@ -401,6 +411,10 @@ def _rescue_false_continuation_rows(
             boundary_strength = 0.0
         if boundary_strength < 0.35:
             continue
+        if glued_rescue:
+            word = glued[0]
+            features["glued_pos_structural_rescue"] = True
+            features["glued_pos_tag"] = glued[1]
 
         if not _append_promoted_entry(
             entries,
