@@ -21,11 +21,13 @@ def row_padding_is_measured(estimate: Any) -> bool:
         return False
     if method == "projection_fallback":
         return False
-    # All accepted Paddle-based paths use actual source text boxes. Bare
-    # "reliable_fusion" is a historical test/adapter method name representing
-    # real text boxes; preserve that compatibility but never accept explicitly
-    # projection-only provenance.
-    return "paddle" in method or method == "reliable_fusion"
+    # Merely executing Paddle is insufficient: interleaved columns or sparse
+    # pages can leave this field unmeasured. Require explicit per-column pitch
+    # provenance from the fixed text-box estimator. The bare method below is
+    # retained only for older test/adaptor contracts.
+    if "+unverified_row_padding" in method:
+        return False
+    return "+observed_row_padding=" in method or method == "reliable_fusion"
 
 
 def verified_multi_page_row_padding(estimates: list[Any]) -> tuple[int | None, int]:
