@@ -563,10 +563,16 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     extreme_nav.grid_remove()
     extreme_nav.columnconfigure(0, weight=1)
     for nav_row, (caption, delta) in enumerate((("上", -1), ("下", 1))):
-        ttk.Button(
+        button = ttk.Button(
             extreme_nav, text=caption, width=3, style="PC.Rail.TButton",
             command=lambda direction=delta: app.change_page(direction),
-        ).grid(row=nav_row, column=0, sticky="ew", pady=(0, 2))
+        )
+        button.grid(row=nav_row, column=0, sticky="ew", pady=(0, 2))
+        app._attach_tooltip(
+            button,
+            "切换到上页（Shift + 鼠标右键）" if delta < 0
+            else "切换到下页（鼠标右键）",
+        )
     app.workspace_extreme_page_navigation = extreme_nav
 
     # 紧凑 shows a miniature page list beneath the task icons.
