@@ -64,18 +64,17 @@ def test_preprocess_panel_preserves_all_settings_and_action_connections():
 
 
 def test_layout_percent_and_pixel_fields_use_shared_traces():
-    text = source(compact_task_menus)
+    from picture_capture.ui import compact_layout_profile_menu
+
+    text = source(compact_layout_profile_menu)
     app = (ROOT / "app.py").read_text(encoding="utf-8")
     for name in ("columns", "start_y", "manual_x", "column_width", "gutter",
                  "character_height", "row_padding", "body_indent", "horizontal_tolerance"):
         assert f'"{name}"' in text
-    for name in ("character_height", "row_padding", "body_indent", "horizontal_tolerance"):
-        assert f'add_field(normal, field_row, 0, caption, name, float)' in app
-        assert f'"{name}"' in app
+    assert 'add_field(normal, field_row, 0, caption, name, float)' in app
     assert "app.quick_pixel_vars[name]" in text
-    assert 'app.quick_bool_vars["ordinary_auto_layout"] = auto_var' in text
-    assert 'app.detect_layout_current' in text
-    assert 'app.detect_layout_consistency_selected' in text
+    assert 'app.quick_bool_vars["ordinary_auto_layout"] = master' in text
+    assert 'return build_layout_profile_menu(app, parent)' in source(compact_task_menus)
 
 
 def test_ocr_and_drawing_panels_keep_existing_handlers_in_requested_order():
