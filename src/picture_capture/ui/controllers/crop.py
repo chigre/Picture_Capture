@@ -490,7 +490,7 @@ class CropController:
                 entry_right,
                 integrate_illustrations,
                 index,
-                bool(config.get("entry_transparent_background", False)),
+                *((True,) if config.get("entry_transparent_background", False) else ()),
             )
 
         def consume_result(_index: int, records):
