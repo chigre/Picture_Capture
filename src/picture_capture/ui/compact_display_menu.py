@@ -275,6 +275,15 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     ).pack(side="left", padx=0, pady=0)
 
     row = line()
+    def compare_unified_layout() -> None:
+        from picture_capture.large_head_visualization_ui import compare_large_head_debug_json
+        compare_large_head_debug_json(app)
+
+    ttk.Button(
+        row, text="对比旧诊断 JSON", command=compare_unified_layout,
+    ).pack(side="left", padx=0, pady=0)
+
+    row = line()
     label(row, "切图预览标签:")
     font_style(row, "crop_preview_font_size",
                "crop_preview_font_bold", "crop_preview_font_italic")
