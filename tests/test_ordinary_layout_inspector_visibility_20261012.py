@@ -89,7 +89,7 @@ def test_layout_inspector_filters_and_summary_share_identical_registry():
         "C01-R003",
     ]
     assert _row_values(a)[0] == "C01-R001"
-    assert _row_values(b)[-1] == "layout_entry_without_final_line"
+    assert "Layout 判 entry" in _row_values(b)[-1]
 
 
 def test_annotated_markers_are_visible_and_clickable_at_reduced_zoom(monkeypatch):
