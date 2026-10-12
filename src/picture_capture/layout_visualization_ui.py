@@ -99,8 +99,12 @@ def _summary_lines(snapshot: LayoutVisualizationSnapshot) -> list[str]:
     return lines
 
 
-def draw_layout_visualization(app: Any) -> None:
-    """Draw the inferred/effective layout directly over the current page."""
+def draw_layout_visualization(app: Any, *, minimal_text: bool = False) -> None:
+    """Draw page geometry; minimal_text keeps long diagnostics off the scan.
+
+    The full legacy overlay remains available for explicit Detailed mode and
+    for existing callers that do not request minimal_text.
+    """
     canvas = getattr(app, "canvas", None)
     if canvas is None:
         return
@@ -158,11 +162,12 @@ def draw_layout_visualization(app: Any) -> None:
                 p1[0] * scale, p1[1] * scale,
                 fill=boundary_color, width=2, dash=(8, 4), tags=(_LAYOUT_TAG,),
             )
-            canvas.create_text(
-                p0[0] * scale + 4, p0[1] * scale - 3,
-                anchor="sw", text=f"{label}={y}", fill=boundary_color,
-                tags=(_LAYOUT_TAG,),
-            )
+            if not minimal_text:
+                canvas.create_text(
+                    p0[0] * scale + 4, p0[1] * scale - 3,
+                    anchor="sw", text=f"{label}={y}", fill=boundary_color,
+                    tags=(_LAYOUT_TAG,),
+                )
 
     # Column left paths and right edges make the inferred geometry tangible even
     # when follow-column-deformation produces non-vertical tracks.
@@ -188,14 +193,15 @@ def draw_layout_visualization(app: Any) -> None:
         label_y = int(geometry.top)
         label_x = int(geometry.x_at(index, label_y))
         sx, sy = geometry.canonical_to_source(label_x, label_y)
-        canvas.create_text(
-            sx * scale + 4,
-            sy * scale + 5,
-            anchor="nw",
-            text=f"C{index + 1}  x={label_x}  w={width}",
-            fill=line_color,
-            tags=(_LAYOUT_TAG,),
-        )
+        if not minimal_text:
+            canvas.create_text(
+                sx * scale + 4,
+                sy * scale + 5,
+                anchor="nw",
+                text=f"C{index + 1}  x={label_x}  w={width}",
+                fill=line_color,
+                tags=(_LAYOUT_TAG,),
+            )
 
     # Gutter centre lines show whether the inferred pitch agrees with the scan.
     for index in range(max(0, len(geometry.column_paths) - 1)):
@@ -215,24 +221,25 @@ def draw_layout_visualization(app: Any) -> None:
             fill=gutter_color, width=1, dash=(2, 4), tags=(_LAYOUT_TAG,),
         )
 
-    summary = "\n".join(_summary_lines(snapshot))
-    text_id = canvas.create_text(
-        12, 12,
-        anchor="nw",
-        text=summary,
-        fill="#111111",
-        font=("TkDefaultFont", 9),
-        tags=(_LAYOUT_TAG,),
-    )
-    bbox = canvas.bbox(text_id)
-    if bbox is not None:
-        pad = 5
-        rect_id = canvas.create_rectangle(
-            bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad,
-            fill="#ffffff", outline=line_color, width=1, stipple="gray25",
+    if not minimal_text:
+        summary = "\n".join(_summary_lines(snapshot))
+        text_id = canvas.create_text(
+            12, 12,
+            anchor="nw",
+            text=summary,
+            fill="#111111",
+            font=("TkDefaultFont", 9),
             tags=(_LAYOUT_TAG,),
         )
-        canvas.tag_lower(rect_id, text_id)
+        bbox = canvas.bbox(text_id)
+        if bbox is not None:
+            pad = 5
+            rect_id = canvas.create_rectangle(
+                bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad,
+                fill="#ffffff", outline=line_color, width=1, stipple="gray25",
+                tags=(_LAYOUT_TAG,),
+            )
+            canvas.tag_lower(rect_id, text_id)
 
 
 def _find_display_section(parent: Any) -> Any | None:
