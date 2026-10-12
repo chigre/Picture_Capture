@@ -339,45 +339,19 @@ def draw_layout_visualization_clean(app: Any) -> None:
 
 
 def draw_layout_visualization_detailed(app: Any) -> None:
-    """Draw readable Layout overlay with indents, line roles and summary."""
+    """Detailed geometry/indent overlay, never a text report on the scan.
+
+    All the former detailed text (method, confidence, raw/used fields, physical
+    lanes and unified review counts) is now shown in the copyable separate
+    Layout details panel via _format_summary. No image-label interception.
+    """
     canvas = getattr(app, "canvas", None)
     if canvas is None:
         return
-
+    draw_layout_visualization(app, minimal_text=True)
     try:
         snapshot = _snapshot_for_app(app)
     except Exception:
-        draw_layout_visualization_readable(app)
         return
-
-    summary_text = _format_summary(app, snapshot)
-    summary_x, summary_y, summary_width = _summary_box(app, snapshot)
-    original_create_text: Callable[..., Any] = canvas.create_text
-
-    def create_text_repositioned(*args: Any, **kwargs: Any) -> Any:
-        text = str(kwargs.get("text", "") or "")
-        if text.startswith("Layout "):
-            args = (summary_x, summary_y) + tuple(args[2:]) if len(args) >= 2 else args
-            if len(args) < 2:
-                kwargs["x"] = summary_x
-                kwargs["y"] = summary_y
-            kwargs["anchor"] = "n"
-            kwargs["justify"] = "left"
-            kwargs["width"] = summary_width
-            kwargs["text"] = summary_text
-            kwargs["tags"] = _append_tag(kwargs.get("tags", ()), _SUMMARY_TAG)
-        return original_create_text(*args, **kwargs)
-
-    canvas.create_text = create_text_repositioned
-    try:
-        draw_layout_visualization_readable(app)
-    finally:
-        canvas.create_text = original_create_text
-
     _draw_indent_blocks(app, snapshot)
     _draw_role_strips(app, snapshot)
-
-    try:
-        canvas.tag_raise(_SUMMARY_TAG)
-    except Exception:
-        pass
