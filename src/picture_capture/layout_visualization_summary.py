@@ -19,7 +19,7 @@ from .layout_indent_visibility import (
 from .layout_lane_summary_extension import append_physical_lane_summary
 from .layout_role_provenance import add_entry_source_summary
 from .layout_visualization_readability import draw_layout_visualization_readable
-from .layout_visualization_ui import _snapshot_for_app
+from .layout_visualization_ui import _snapshot_for_app, draw_layout_visualization
 from .processing import ORDINARY_AUTO_LAYOUT_FIELDS
 
 
@@ -317,6 +317,25 @@ def _draw_role_strips(app: Any, snapshot: Any) -> None:
         canvas.tag_raise(_ROLE_TAG)
     except Exception:
         pass
+
+
+def draw_layout_visualization_clean(app: Any) -> None:
+    """Compact geometry + physical roles, with no large on-image text box.
+
+    Detailed reasoning is in the candidate inspector / unified JSON. Normal
+    drawing and persisted settings remain untouched.
+    """
+    canvas = getattr(app, "canvas", None)
+    if canvas is None:
+        return
+    draw_layout_visualization(app, minimal_text=True)
+    try:
+        snapshot = _snapshot_for_app(app)
+    except Exception:
+        return
+    # The pale-yellow indent ranges, long method text, per-column coordinate
+    # labels and multi-page auto-field dump only appear in explicit Detailed.
+    _draw_role_strips(app, snapshot)
 
 
 def draw_layout_visualization_detailed(app: Any) -> None:
