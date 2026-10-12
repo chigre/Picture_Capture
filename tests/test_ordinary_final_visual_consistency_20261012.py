@@ -12,6 +12,7 @@ from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary_final_visual_consistency import (
     correct_anomalous_final_ordinary_entries,
     suppress_blank_layout_rows_before_proven_head,
+    suppress_proven_bracket_body_continuations,
 )
 
 
@@ -185,3 +186,71 @@ def test_visible_deep_indented_text_is_never_rejected_as_empty():
         image, settings, layout, markers,
     )
     assert count == 0 and len(filtered) == 2
+
+
+def test_adjacent_proven_bracket_body_continuations_are_not_new_entries():
+    """An intact bracket word may be followed one pitch later by inset body."""
+    image, settings, layout, _baseline = _page(false_per_column=0)
+    image = Image.new("L", (900, 1000), 255)
+    paint = ImageDraw.Draw(image)
+    entries = []
+    for left in (40, 460):
+        for head_y in (180, 640):
+            # Printed bracket/entry in the outer lane.
+            paint.rectangle((left+4, head_y, left+80, head_y+25), fill=0)
+            # A continuation 41/43 px later starts in the measured body lane.
+            body_y = head_y + (41 if head_y == 180 else 43)
+            paint.rectangle((left+45, body_y+1, left+140, body_y+25), fill=0)
+            entries.extend([
+                Entry("", left, head_y, ocr_source="ordinary_bracket_pair"),
+                Entry("", left, body_y,
+                      ocr_source="page_understanding:ordinary_layout_role"),
+            ])
+    result, removed = suppress_proven_bracket_body_continuations(
+        image, settings, layout, entries,
+    )
+    assert len(result) == 4
+    assert len(removed) == 4
+    assert {row["first_ink_offset"] for row in removed} == {45.0}
+    assert all(item.ocr_source == "ordinary_bracket_pair" for item in result)
+
+
+def test_bracket_continuation_guard_never_vetoes_next_proven_lemma():
+    image, settings, layout, _entries = _page(false_per_column=0)
+    image = Image.new("L", (900, 600), 255)
+    paint = ImageDraw.Draw(image)
+    # A genuine tightly spaced next word begins in the outer entry lane.
+    paint.rectangle((44, 241, 130, 267), fill=0)
+    # A second independently bracket-confirmed entry is never demoted.
+    paint.rectangle((505, 241, 585, 267), fill=0)
+    entries = [
+        Entry("", 40, 200, ocr_source="ordinary_bracket_pair"),
+        Entry("", 40, 240, ocr_source="page_understanding:ordinary_layout_role"),
+        Entry("", 460, 200, ocr_source="ordinary_bracket_pair"),
+        Entry("", 460, 240, ocr_source="ordinary_bracket_pair"),
+    ]
+    actual, removed = suppress_proven_bracket_body_continuations(
+        image, settings, layout, entries,
+    )
+    assert len(actual) == 4 and not removed
+
+
+def test_bracket_continuation_guard_respects_oversized_and_weak_layouts():
+    image, settings, layout, _entries = _page(false_per_column=0)
+    image = Image.new("L", (900, 600), 255)
+    ImageDraw.Draw(image).rectangle((85, 241, 154, 266), fill=0)
+    existing = [
+        Entry("", 40, 200, ocr_source="ordinary_bracket_pair"),
+        Entry("", 40, 240, ocr_source="page_understanding:ordinary_layout_role",
+              ocr_oversized_cjk=True),
+    ]
+    unchanged, events = suppress_proven_bracket_body_continuations(
+        image, settings, layout, existing,
+    )
+    assert len(unchanged) == 2 and events == []
+    existing[1].ocr_oversized_cjk = False
+    layout.columns[0].body_mode.support = 1
+    unchanged, events = suppress_proven_bracket_body_continuations(
+        image, settings, layout, existing,
+    )
+    assert len(unchanged) == 2 and events == []
