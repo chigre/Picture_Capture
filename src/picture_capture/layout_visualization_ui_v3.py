@@ -18,6 +18,7 @@ _DENOISE_LABEL_TO_VALUE = {
     "强": "strong",
 }
 _DENOISE_VALUE_TO_LABEL = {value: label for label, value in _DENOISE_LABEL_TO_VALUE.items()}
+LAYOUT_DISPLAY_MODES = ("简洁", "候选", "详细")
 
 
 def _hide_var(app: Any) -> Any | None:
@@ -81,6 +82,8 @@ def _add_layout_toggle(app: Any, section: Any) -> None:
 
     var = tk.BooleanVar(value=False)
     app._layout_visualization_var = var
+    # UI-only display preference. Do not persist diagnostic density in AppSettings.
+    app._layout_display_density_var = tk.StringVar(value="简洁")
     row = _next_grid_row(section)
 
     def toggle() -> None:
@@ -158,6 +161,15 @@ def _add_denoise_control(app: Any, section: Any) -> None:
 def add_layout_visualization_controls(app: Any, section: Any) -> None:
     """Compose opt-in diagnostic displays and shared-analysis controls."""
     _add_layout_toggle(app, section)
+    row = _next_grid_row(section)
+    ttk.Label(section, text="Layout显示密度").grid(row=row, column=0, sticky="w")
+    density = ttk.Combobox(
+        section, textvariable=app._layout_display_density_var,
+        values=LAYOUT_DISPLAY_MODES, state="readonly", width=9,
+    )
+    density.grid(row=row, column=1, columnspan=2, sticky="w")
+    density.bind("<<ComboboxSelected>>", lambda _event: app.redraw())
+    app._layout_display_density_widget = density
     from .ordinary_layout_inspector import add_unified_layout_inspector_controls
     add_unified_layout_inspector_controls(app, section)
     from .large_head_visualization_ui import add_large_head_debug_controls
@@ -184,7 +196,13 @@ def draw_layout_visualization_if_enabled(app: Any) -> None:
             previous = None
     try:
         if layout_enabled:
-            draw_layout_visualization_detailed(app)
+            mode_var = getattr(app, "_layout_display_density_var", None)
+            mode = str(mode_var.get()) if mode_var is not None else "详细"
+            if mode == "详细":
+                draw_layout_visualization_detailed(app)
+            else:
+                from .layout_visualization_summary import draw_layout_visualization_clean
+                draw_layout_visualization_clean(app)
         if large_enabled:
             from .large_head_visualization_ui import draw_large_head_debug_overlay
             draw_large_head_debug_overlay(app)
