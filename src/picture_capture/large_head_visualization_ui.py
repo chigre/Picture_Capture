@@ -211,6 +211,62 @@ def export_large_head_debug_json(app: Any) -> None:
 
 
 
+def compare_large_head_debug_json(app: Any) -> None:
+    """Compare a selected older export to current unified Layout evidence."""
+    from tkinter import filedialog, messagebox
+    from .ordinary_unified_diff import compare_ordinary_diagnostics
+
+    if getattr(app, "image", None) is None:
+        return
+    prior_filename = filedialog.askopenfilename(
+        title="选择之前导出的Layout/大字头诊断 JSON",
+        filetypes=[("JSON", "*.json")],
+        parent=getattr(app, "root", None),
+    )
+    if not prior_filename:
+        return
+    try:
+        previous = json.loads(Path(prior_filename).read_text(encoding="utf-8"))
+        current = {
+            "page_index": max(0, int(getattr(app, "current_index", 0))),
+            "image_size": list(app.image.size),
+            **get_large_head_debug_snapshot(app),
+        }
+        result = compare_ordinary_diagnostics(previous, current)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        messagebox.showerror(
+            "诊断对比失败", str(exc),
+            parent=getattr(app, "root", None),
+        )
+        return
+    metrics = result["counts"]
+    details = (
+        f"旧自动线: {metrics['before_lines']}    新自动线: {metrics['after_lines']}\n"
+        f"匹配: {metrics['matched']}    新增: {metrics['added']}    "
+        f"消失: {metrics['removed']}    坐标偏移: {metrics['shifted']}\n"
+        f"物理行角色变化: {metrics['layout_role_changes']}\n"
+        f"大字检测通过: {metrics['before_accepted_large_heads']} → "
+        f"{metrics['after_accepted_large_heads']}\n"
+        f"待复核: {metrics['before_review']} → {metrics['after_review']}\n\n"
+        "新增线 (最多10条): "
+        + ", ".join(
+            f"({line['x']},{line['y']})"
+            for line in result["added_lines"][:10]
+        )
+        + "\n消失线 (最多10条): "
+        + ", ".join(
+            f"({line['x']},{line['y']})"
+            for line in result["removed_lines"][:10]
+        )
+        + "\n\n注意：差异不代表新增/删除正确与否。"
+        + "新旧必须属于同一原图尺寸及同一页面。"
+    )
+    messagebox.showinfo(
+        "普通画线诊断对比（只读）",
+        details, parent=getattr(app, "root", None),
+    )
+
+
 def add_large_head_debug_controls(app: Any, section: Any) -> None:
     """Add an opt-in overlay and explicit JSON export; never auto-write files."""
     if getattr(app, "_large_head_debug_toggle_widget", None) is not None:
@@ -251,6 +307,14 @@ def add_large_head_debug_controls(app: Any, section: Any) -> None:
     )
     button.grid(row=row+1, column=0, columnspan=4, sticky="w", pady=(2, 0))
     app._large_head_debug_export_widget = button
+    compare_button = ttk.Button(
+        section, text="对比旧诊断 JSON",
+        command=lambda: compare_large_head_debug_json(app),
+    )
+    compare_button.grid(
+        row=row+2, column=0, columnspan=4, sticky="w", pady=(2, 0),
+    )
+    app._large_head_debug_compare_widget = compare_button
 
 
 __all__ = [
@@ -258,4 +322,5 @@ __all__ = [
     "draw_large_head_debug_overlay",
     "get_large_head_debug_snapshot",
     "export_large_head_debug_json",
+    "compare_large_head_debug_json",
 ]
