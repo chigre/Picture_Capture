@@ -63,3 +63,14 @@ def test_front_lane_rescue_does_not_require_existing_layout_roles():
         ink, (12, 25, 88, 426), 30,
     )
     assert [box[1] for box in recovered] == [25, 108, 191, 356]
+
+
+def test_recovered_parent_diagnostics_keep_exact_child_count():
+    """Every recoverable giant group must export its true child count."""
+    observed = []
+    boxes = _candidate_boxes(_strip_image(), 30, observed)
+    parents = [row for row in observed if row["reason"] == "split_parent"]
+    assert len(parents) == 1
+    assert parents[0]["recovered_count"] == len(boxes) == 4
+    children = [row for row in observed if row.get("parent") == parents[0]["box"]]
+    assert len(children) == parents[0]["recovered_count"]
