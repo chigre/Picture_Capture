@@ -45,6 +45,14 @@ def test_2606_h018_large_square_head_passes_but_h019_off_front_does_not():
         (1422-1386, 1480-230, 1592-1386, 1631-230),
         67.0,
     )
+    # The JSON does not store anchor_x. A displaced phonetic/definition
+    # anchor must not eclipse the measured true first ink of this 2x glyph.
+    row1.anchor_x = 110
+    assert strict_candidate_starts_at_row_front(
+        column,
+        (1422-1386, 1480-230, 1592-1386, 1631-230),
+        67.0,
+    )
 
     # H019: x1706..1811 on same physical line, but *not* a second headword.
     assert not strict_candidate_starts_at_row_front(
