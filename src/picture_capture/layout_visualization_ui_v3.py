@@ -76,6 +76,15 @@ def _invalidate_layout_snapshot(app: Any) -> None:
         pass
 
 
+def on_layout_density_change(app: Any) -> None:
+    """Redraw the scan and show verbose text only in a separate window."""
+    app.redraw()
+    mode = getattr(app, "_layout_display_density_var", None)
+    if mode is not None and str(mode.get()) == "详细":
+        from .layout_details_window import show_layout_details_window
+        show_layout_details_window(app)
+
+
 def _add_layout_toggle(app: Any, section: Any) -> None:
     if getattr(app, "_layout_visualization_toggle_widget", None) is not None:
         return
@@ -168,8 +177,10 @@ def add_layout_visualization_controls(app: Any, section: Any) -> None:
         values=LAYOUT_DISPLAY_MODES, state="readonly", width=9,
     )
     density.grid(row=row, column=1, columnspan=2, sticky="w")
-    density.bind("<<ComboboxSelected>>", lambda _event: app.redraw())
+    density.bind("<<ComboboxSelected>>", lambda _event: on_layout_density_change(app))
     app._layout_display_density_widget = density
+    from .layout_details_window import add_layout_details_button
+    add_layout_details_button(app, section)
     from .ordinary_layout_inspector import add_unified_layout_inspector_controls
     add_unified_layout_inspector_controls(app, section)
     from .large_head_visualization_ui import add_large_head_debug_controls
@@ -197,12 +208,14 @@ def draw_layout_visualization_if_enabled(app: Any) -> None:
     try:
         if layout_enabled:
             mode_var = getattr(app, "_layout_display_density_var", None)
-            mode = str(mode_var.get()) if mode_var is not None else "详细"
+            mode = str(mode_var.get()) if mode_var is not None else "简洁"
             if mode == "详细":
                 draw_layout_visualization_detailed(app)
             else:
                 from .layout_visualization_summary import draw_layout_visualization_clean
                 draw_layout_visualization_clean(app)
+            from .layout_details_window import refresh_layout_details_if_open
+            refresh_layout_details_if_open(app)
         if large_enabled:
             from .large_head_visualization_ui import draw_large_head_debug_overlay
             draw_large_head_debug_overlay(app)
