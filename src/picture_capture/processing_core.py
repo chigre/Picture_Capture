@@ -2388,8 +2388,16 @@ def _ordinary_marker_local_crop(
     settings: AppSettings,
     *,
     row_metrics=None,
+    source_image: Image.Image | None = None,
 ) -> tuple[Image.Image, bool]:
-    """Return the canonical classification-aware crop for one marker."""
+    """Crop one marker in the physical direction of the printed text.
+
+    Geometry and the entry's classification are measured in canonical
+    coordinates, but a horizontal OCR engine must receive actual source
+    glyphs, not a mirror/rotation imposed for Layout analysis. Invert the
+    *crop box* into source coordinates; do not inverse-transform recognized
+    text, change a marker, or silently reverse CJK strings.
+    """
     from .entry_classification import get_entry_classification
     from .entry_ocr_crop import entry_ocr_crop_box
 
@@ -2401,6 +2409,15 @@ def _ordinary_marker_local_crop(
         row_metrics=row_metrics,
     )
     meta = get_entry_classification(entry)
+    horizontal = str(getattr(settings, "layout_writing_mode", "")) == "horizontal-tb"
+    if horizontal and source_image is not None:
+        source_box = geometry.transform.canonical_box_to_source(
+            box, geometry.source_size,
+        )
+        return (
+            normalize_page_rgb(source_image.crop(source_box)),
+            meta.entry_scale == "oversized",
+        )
     return normalize_page_rgb(canonical.crop(box)), meta.entry_scale == "oversized"
 
 
@@ -2557,6 +2574,7 @@ def ocr_existing_entry_words_from_markers(
             geometry,
             effective,
             row_metrics=row_metrics,
+            source_image=_source,
         )
         stats["large" if is_large else "regular"] += 1
 
