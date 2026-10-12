@@ -266,6 +266,7 @@ def _split_stacked_heads(
 def _candidate_boxes(
     ink: np.ndarray,
     line_height: float,
+    diagnostic_boxes: list[dict[str, Any]] | None = None,
 ) -> list[tuple[int, int, int, int]]:
     result: list[tuple[int, int, int, int]] = []
     for grouped in _group_fragments(_large_fragments(ink, line_height), line_height):
@@ -274,13 +275,21 @@ def _candidate_boxes(
         # the original single-head geometry/density checks.
         group_height = grouped[3] - grouped[1]
         if group_height > line_height * 7.20:
+            if diagnostic_boxes is not None:
+                diagnostic_boxes.append({"box": grouped, "reason": "group_too_tall"})
             continue
         pieces = _split_stacked_heads(ink, grouped, line_height)
         for box in pieces:
             trimmed = _trim_box_to_ink(ink, box)
             if trimmed is None:
                 continue
-            if not _valid_single_head_box(ink, trimmed, line_height):
+            valid = _valid_single_head_box(ink, trimmed, line_height)
+            if diagnostic_boxes is not None:
+                diagnostic_boxes.append({
+                    "box": trimmed,
+                    "reason": "geometry_pass" if valid else "size_or_density",
+                })
+            if not valid:
                 continue
             result.append(trimmed)
     return result
@@ -327,8 +336,15 @@ def detect_ordinary_large_head_entries(
     image: Image.Image,
     understanding: Any,
     settings: AppSettings,
+    *,
+    diagnostics: list[dict[str, Any]] | None = None,
 ) -> list[Entry]:
-    """Detect only row-leading oversized CJK heads with a page-observed scale."""
+    """Detect row-leading oversized CJK heads; optional read-only candidate trace.
+
+    The default call path and emitted Entry list are unchanged. Diagnostics
+    records geometry/row-front/strong-evidence decisions before any Layout
+    role mutation; it is only populated when explicitly requested by the UI.
+    """
     from .layout_column_drift import _analysis_left_for_column
 
     if not _uses_cjk_large_heads(settings):
@@ -363,7 +379,46 @@ def detect_ordinary_large_head_entries(
             ink = gray <= _otsu(gray)
             local_shift = int(analysis_left - semantic_left)
 
-            for raw_box in _candidate_boxes(ink, line_height):
+            observed_boxes: list[dict[str, Any]] | None = (
+                [] if diagnostics is not None else None
+            )
+            candidates = _candidate_boxes(ink, line_height, observed_boxes)
+            if diagnostics is not None and observed_boxes is not None:
+                for observed in observed_boxes:
+                    x0, y0, x1, y1 = observed["box"]
+                    canonical_box = (
+                        analysis_left + int(x0), top + int(y0),
+                        analysis_left + int(x1), top + int(y1),
+                    )
+                    status = str(observed["reason"])
+                    if status == "geometry_pass":
+                        semantic_box = (
+                            int(x0 + local_shift), int(y0),
+                            int(x1 + local_shift), int(y1),
+                        )
+                        if not strict_candidate_starts_at_row_front(
+                            column, semantic_box, line_height,
+                        ):
+                            status = "rejected_row_front"
+                        elif float(y1-y0) / max(1.0, line_height) < 1.65:
+                            status = "rejected_weak"
+                        else:
+                            status = "accepted"
+                    diagnostics.append({
+                        "column": int(position),
+                        "canonical_box": canonical_box,
+                        "source_box": tuple(map(int,
+                            layout.transform.canonical_box_to_source(
+                                canonical_box, layout.source_size,
+                            ),
+                        )),
+                        "reference_height": round(float(line_height), 2),
+                        "height_ratio": round((y1-y0) / max(1.0, line_height), 3),
+                        "status": status,
+                        "detector_output": False,
+                    })
+
+            for raw_box in candidates:
                 x0, y0, x1, y1 = raw_box
                 # Candidate X is local to the widened analysis band. Convert it
                 # back to semantic-column-local coordinates before comparing it
@@ -421,6 +476,27 @@ def detect_ordinary_large_head_entries(
         ):
             continue
         deduped.append(entry)
+    if diagnostics is not None:
+        # Provenance of what the detector actually returned after its own
+        # de-duplication. A weak size observation can be returned here yet
+        # subsequently rejected by strong_ordinary_large_head in role fusion.
+        for row in diagnostics:
+            if row["status"] not in {"accepted", "rejected_weak"}:
+                continue
+            box = row["source_box"]
+            for entry in deduped:
+                if (
+                    abs(int(entry.x) - int(layout.transform.canonical_to_source_point(
+                        layout.columns[int(row["column"])].left,
+                        row["canonical_box"][1], layout.source_size,
+                    )[0])) <= tolerance
+                    and abs(int(entry.y) - int(layout.transform.canonical_to_source_point(
+                        layout.columns[int(row["column"])].left,
+                        row["canonical_box"][1], layout.source_size,
+                    )[1])) <= tolerance
+                ):
+                    row["detector_output"] = True
+                    break
     return deduped
 
 
