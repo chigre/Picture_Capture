@@ -227,3 +227,30 @@ def test_real_compact_display_panel_contains_same_session_toggle():
     assert "app._large_head_visualization_var" in source
     assert "app.quick_bool_vars[\"show_large_head_diagnostics\"]" not in helper
     assert "export_large_head_debug_json(app)" in source
+
+
+def test_applying_settings_ignores_unknown_ui_only_debug_toggle():
+    """Exercise the exact crash path: apply_quick_settings must not fail."""
+    from picture_capture.app import PictureCaptureApp
+
+    errors = []
+    settings = AppSettings()
+    app = SimpleNamespace(
+        settings=settings, _batch_active=False,
+        quick_vars={}, quick_field_casts={},
+        _quick_geometry_edit_source={},
+        quick_bool_vars={
+            "show_large_head_diagnostics": _Flag(True),
+            "show_column_guides": _Flag(False),
+        },
+        quick_color_vars={}, image=None,
+        lens_mode_var=_Flag("关闭"),
+        hide_var=_Flag(False), polygon_var=_Flag(False),
+        autosave_var=_Flag(False), status_var=_Flag(""),
+        sync_quick_settings=lambda: None, redraw=lambda: None,
+        show_error=lambda *args: errors.append(args),
+    )
+    assert PictureCaptureApp.apply_quick_settings(app, show_status=False)
+    assert not errors
+    assert not hasattr(settings, "show_large_head_diagnostics")
+    assert settings.show_column_guides is False
