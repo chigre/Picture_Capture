@@ -261,7 +261,11 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         width=9, style="PC.Display.TCombobox",
     )
     density.pack(side="left", padx=(4, 0), pady=0)
-    density.bind("<<ComboboxSelected>>", lambda _event: app.redraw())
+    from picture_capture.layout_visualization_ui_v3 import on_layout_density_change
+    density.bind(
+        "<<ComboboxSelected>>",
+        lambda _event: on_layout_density_change(app),
+    )
 
     # Keep this diagnostic switch in the *actual* 280px display palette.
     # The original quick-settings container is hidden in compact mode.
@@ -275,6 +279,14 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         app.redraw()
 
     check(row, "显示大字头检测", large_var, toggle_large_heads)
+
+    # Long Layout parameters are in a copyable dialog, never on the scan.
+    row = line()
+    from picture_capture.layout_details_window import show_layout_details_window
+    ttk.Button(
+        row, text="Layout详细诊断（复制）",
+        command=lambda: show_layout_details_window(app),
+    ).pack(side="left", padx=0, pady=0)
 
     # Accessible inspector: do not rely on tiny painted canvas markers to
     # discover a full candidate registry.
