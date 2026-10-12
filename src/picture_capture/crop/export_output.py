@@ -54,7 +54,11 @@ def _pad_png(path: Path, target_width: int, *, transparent: bool) -> bool:
         mode = "RGBA" if transparent else "RGB"
         fill = (0, 0, 0, 0) if transparent else "white"
         canvas = Image.new(mode, (target_width, source.height), fill)
-        original = source.convert(mode)
+        original = (
+            prepare_crop_background(source, transparent=False)
+            if mode == "RGB" and source.mode in {"RGBA", "LA", "P"}
+            else source.convert(mode)
+        )
         canvas.paste(original, (0, 0))
         original.close()
     # Atomic replacement: a stopped operation never leaves a truncated PNG.
