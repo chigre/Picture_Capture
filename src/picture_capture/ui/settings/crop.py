@@ -434,11 +434,15 @@ def crop_settings_payload(dialog) -> dict:
         MIN_UNLINED_BLANK_INK_PERCENT,
         min(MAX_UNLINED_BLANK_INK_PERCENT, blank_ink_percent),
     )
-    width_mode = str(dialog.crop_vars["entry_width_mode"].get())
+    width_mode = (
+        str(dialog.crop_vars["entry_width_mode"].get())
+        if "entry_width_mode" in dialog.crop_vars else "auto"
+    )
     if width_mode not in {"off", "auto", "fixed"}:
         raise ValueError("词条宽度模式无效")
     fixed_width = crop_nonnegative_int(
-        dialog.crop_vars["entry_fixed_width"].get(), "手动词条宽度"
+        dialog.crop_vars["entry_fixed_width"].get()
+        if "entry_fixed_width" in dialog.crop_vars else "1350", "手动词条宽度"
     )
     if width_mode == "fixed" and fixed_width < 1:
         raise ValueError("手动词条宽度必须大于0")
@@ -455,9 +459,9 @@ def crop_settings_payload(dialog) -> dict:
         "polygon_margin": margin,
         "entry_width_mode": width_mode,
         "entry_fixed_width": fixed_width,
-        "illustration_pad_to_entry_width": bool(dialog.crop_vars["illustration_pad_to_entry_width"].get()),
-        "entry_transparent_background": bool(dialog.crop_vars["entry_transparent_background"].get()),
-        "illustration_transparent_background": bool(dialog.crop_vars["illustration_transparent_background"].get()),
+        "illustration_pad_to_entry_width": bool(dialog.crop_vars["illustration_pad_to_entry_width"].get()) if "illustration_pad_to_entry_width" in dialog.crop_vars else True,
+        "entry_transparent_background": bool(dialog.crop_vars["entry_transparent_background"].get()) if "entry_transparent_background" in dialog.crop_vars else False,
+        "illustration_transparent_background": bool(dialog.crop_vars["illustration_transparent_background"].get()) if "illustration_transparent_background" in dialog.crop_vars else False,
         "parallel_workers": workers,
         SINGLE_LINE_MERGE_KEY: bool(
             dialog.crop_vars[SINGLE_LINE_MERGE_KEY].get()
