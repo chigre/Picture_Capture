@@ -570,6 +570,14 @@ def detect_entries(
             entries, last_mile = correct_anomalous_final_ordinary_entries(
                 analysis_image, effective, understanding.layout, entries,
             )
+            from .ordinary_final_visual_consistency import suppress_proven_bracket_body_continuations
+            entries, bracket_body_removed = suppress_proven_bracket_body_continuations(
+                analysis_image, effective, understanding.layout, entries,
+            )
+            if bracket_body_removed:
+                understanding.layout.reason += (
+                    f"; bracket_body_continuations_removed={len(bracket_body_removed)}"
+                )
             from .ordinary_final_visual_consistency import suppress_blank_layout_rows_before_proven_head
             entries, removed_blank = suppress_blank_layout_rows_before_proven_head(
                 analysis_image, effective, understanding.layout, entries,
