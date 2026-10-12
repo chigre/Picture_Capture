@@ -263,6 +263,18 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     check(row, "显示大字头检测", large_var, toggle_large_heads)
 
+    # Accessible inspector: do not rely on tiny painted canvas markers to
+    # discover a full candidate registry.
+    row = line()
+
+    def open_layout_inspector() -> None:
+        from picture_capture.ordinary_layout_inspector import show_unified_layout_inspector
+        show_unified_layout_inspector(app)
+
+    ttk.Button(
+        row, text="查看Layout候选/异常", command=open_layout_inspector,
+    ).pack(side="left", padx=0, pady=0)
+
     # Both overlay modes export the *same* candidate evidence registry.
     # Keep the action available even when the large-head overlay is off.
     row = line()
