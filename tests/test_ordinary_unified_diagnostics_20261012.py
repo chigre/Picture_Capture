@@ -294,14 +294,14 @@ def test_real_diagnostic_builder_and_layout_row_export_share_schema(monkeypatch)
                         lambda image, settings: image.copy())
     monkeypatch.setattr(diag, "effective_page_settings",
                         lambda settings, size, index: settings)
-    monkeypatch.setattr(processing, "detect_entries", fake_detect)
+    # The processing module is a CoreAssignmentMirrorModule. Direct setattr\n    # mirrors into processing_core and contaminates subsequent signature tests.\n    # Patch the module dict, restoring it without invoking mirrored setattr.\n    monkeypatch.setitem(processing.__dict__, "detect_entries", fake_detect)
     monkeypatch.setattr(
         "picture_capture.ordinary_large_head_evidence._uses_cjk_large_heads",
         lambda settings: True,
     )
     image = Image.new("RGB", (460, 500), "white")
     report = diag.build_large_head_diagnostics(
-        image, AppSettings(ocr_language="chi_sim"), page_index=8,
+        image, AppSettings(detection_method="left_edge", ocr_language="chi_sim"), page_index=8,
     )
     assert report["schema"] == SCHEMA
     assert report["unified_report"]["summary"]["physical_rows"] == 2
