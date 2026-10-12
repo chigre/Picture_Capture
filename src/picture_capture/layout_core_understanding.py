@@ -279,26 +279,100 @@ def _suppress_large_evidence_duplicate_entries(
     return removed
 
 
+def _debug_layout_role_snapshot(layout: Any) -> dict[int, dict[str, Any]]:
+    """Role and provenance of each physical row; diagnostics only."""
+    from .entry_classification import get_layout_line_classification
+
+    snapshot: dict[int, dict[str, Any]] = {}
+    for index, column in enumerate(list(getattr(layout, "columns", ()) or ())):
+        for line in list(getattr(column, "lines", ()) or ()):
+            snapshot[id(line)] = {
+                "column": index,
+                "canonical_y": int(layout.body_top) + int(line.y0),
+                "role": str(getattr(line, "role", "") or ""),
+                "source": str(get_layout_line_classification(line).entry_source),
+            }
+    return snapshot
+
+
+def _debug_role_changes(
+    previous: dict[int, dict[str, Any]],
+    current: dict[int, dict[str, Any]],
+    stage: str,
+) -> list[dict[str, Any]]:
+    changes = []
+    for row_id, after in current.items():
+        before = previous.get(row_id)
+        if before is None:
+            changes.append({"stage": stage, "before": None, "after": after})
+        elif (
+            before["role"] != after["role"]
+            or before["source"] != after["source"]
+        ):
+            changes.append({
+                "stage": stage,
+                "before": before,
+                "after": after,
+            })
+    return changes
+
+
 def _apply_universal_ordinary_evidence(
     image: Image.Image,
     understanding: PageUnderstanding,
     settings: AppSettings,
     *,
     large_head_diagnostics: list[dict[str, Any]] | None = None,
+    large_head_debug_context: dict[str, Any] | None = None,
 ) -> tuple[int, int]:
     """OR-promote sampled-symbol and oversized-head evidence onto Layout rows."""
     symbol_entries = detect_ordinary_symbol_entries(image, understanding, settings)
     large_entries = detect_ordinary_large_head_entries(
         image, understanding, settings, diagnostics=large_head_diagnostics,
     )
+    prior = (
+        _debug_layout_role_snapshot(understanding.layout)
+        if large_head_debug_context is not None else None
+    )
     symbol_promoted = promote_evidence_to_layout_roles(understanding, symbol_entries)
+    after_symbol = (
+        _debug_layout_role_snapshot(understanding.layout)
+        if prior is not None else None
+    )
     large_promoted = promote_evidence_to_layout_roles(understanding, large_entries)
+    after_large = (
+        _debug_layout_role_snapshot(understanding.layout)
+        if prior is not None else None
+    )
     # First retain the historical display-head safeguard, then consume the
     # current large-head evidence itself.  The latter closes the gap where the
     # newer detector sees a 2-3-row display glyph but layout.display_heads does
     # not cover its full vertical extent.
     _suppress_display_head_duplicate_entries(understanding.layout)
     _suppress_large_evidence_duplicate_entries(understanding.layout, large_entries)
+    if large_head_debug_context is not None:
+        final = _debug_layout_role_snapshot(understanding.layout)
+        large_head_debug_context["role_transitions"] = (
+            _debug_role_changes(prior or {}, after_symbol or {}, "symbol_evidence")
+            + _debug_role_changes(after_symbol or {}, after_large or {}, "large_head_fusion")
+            + _debug_role_changes(after_large or {}, final, "large_head_dedup")
+        )
+        large_head_debug_context["promotion_counts"] = {
+            "symbol_promoted": int(symbol_promoted),
+            "large_head_promoted": int(large_promoted),
+        }
+        large_head_debug_context["role_counts"] = {
+            stage: {
+                role: sum(row["role"] == role for row in snapshot.values())
+                for role in ("entry", "body", "unknown")
+            }
+            for stage, snapshot in (
+                ("before_symbol", prior or {}),
+                ("after_symbol", after_symbol or {}),
+                ("after_large", after_large or {}),
+                ("after_dedup", final),
+            )
+        }
     return symbol_promoted, large_promoted
 
 
@@ -319,6 +393,7 @@ def understand_layout_core(
     *,
     page_index: int = 0,
     large_head_diagnostics: list[dict[str, Any]] | None = None,
+    large_head_debug_context: dict[str, Any] | None = None,
 ) -> PageUnderstanding:
     """Return Layout roles, optionally tracing the *production* detector stage.
 
@@ -330,7 +405,7 @@ def understand_layout_core(
         _settings_fingerprint(settings),
         int(page_index),
     )
-    if large_head_diagnostics is None:
+    if large_head_diagnostics is None and large_head_debug_context is None:
         cached = _LAYOUT_CACHE.get(key)
         if cached is not None:
             _LAYOUT_CACHE.move_to_end(key)
@@ -383,6 +458,7 @@ def understand_layout_core(
         result,
         page_settings,
         large_head_diagnostics=large_head_diagnostics,
+        large_head_debug_context=large_head_debug_context,
     )
     from .layout_verified_oversized_heads import recover_verified_oversized_heads
     verified_heads = (
@@ -414,7 +490,7 @@ def understand_layout_core(
         f" verified_oversized_demoted={int(verified_heads['demoted_fragments'])}"
     )
 
-    if large_head_diagnostics is not None:
+    if large_head_diagnostics is not None or large_head_debug_context is not None:
         return result
     _LAYOUT_CACHE[key] = result
     _LAYOUT_CACHE.move_to_end(key)
