@@ -72,7 +72,38 @@ def _diagnostic_settings(effective: AppSettings) -> dict[str, Any]:
 
 
 def _diagnostic_layout(layout: Any) -> dict[str, Any]:
+    """Serialize physical row evidence from the SAME traced Layout run."""
+    from .entry_classification import get_layout_line_classification
+    from .layout_physical_indent import normalized_physical_indents
+
+    rows: list[dict[str, Any]] = []
+    for col_index, column in enumerate(list(getattr(layout, "columns", ()) or ())):
+        actual_lines = sorted(
+            list(getattr(column, "lines", ()) or ()),
+            key=lambda item: (int(item.y0), int(item.y1)),
+        )
+        corrected = normalized_physical_indents(actual_lines)
+        for row_index, line in enumerate(actual_lines):
+            cy0 = int(layout.body_top) + int(line.y0)
+            cy1 = int(layout.body_top) + int(line.y1)
+            sx, sy = layout.transform.canonical_to_source_point(
+                int(column.left), cy0, layout.source_size,
+            )
+            meta = get_layout_line_classification(line)
+            rows.append({
+                "id": f"C{col_index+1:02d}-R{row_index+1:03d}",
+                "column": col_index,
+                "canonical_y0": cy0, "canonical_y1": cy1,
+                "source_x": int(sx), "source_y": int(sy),
+                "role": str(getattr(line, "role", "unknown") or "unknown"),
+                "entry_source": str(meta.entry_source),
+                "first_x": float(getattr(line, "first_x", 0) or 0),
+                "corrected_first_x": round(float(
+                    corrected.get(id(line), getattr(line, "first_x", 0) or 0)
+                ), 3),
+            })
     return {
+        "physical_rows": rows,
         "body_top": int(layout.body_top),
         "body_bottom": int(layout.body_bottom),
         "ordinary_line_height": float(layout.ordinary_line_height),
