@@ -188,7 +188,7 @@ def export_large_head_debug_json(app: Any) -> None:
         messagebox.showerror("大字头诊断", str(exc), parent=getattr(app, "root", None))
         return
     filename = filedialog.asksaveasfilename(
-        title="导出大字头检测诊断（不修改 PDIC）",
+        title="导出统一Layout与普通画线诊断（不修改 PDIC）",
         defaultextension=".json",
         filetypes=[("JSON", "*.json")],
         parent=getattr(app, "root", None),
@@ -196,7 +196,7 @@ def export_large_head_debug_json(app: Any) -> None:
     if not filename:
         return
     document = {
-        "schema": "picture-capture-large-head-diagnostics-v1",
+        "schema": snapshot.get("schema", "picture-capture-ordinary-evidence-v2"),
         "page_index": max(0, int(getattr(app, "current_index", 0))),
         "image_size": list(app.image.size),
         **snapshot,
@@ -246,7 +246,7 @@ def add_large_head_debug_controls(app: Any, section: Any) -> None:
         pass
 
     button = ttk.Button(
-        section, text="导出大字诊断 JSON",
+        section, text="导出统一Layout诊断 JSON",
         command=lambda: export_large_head_debug_json(app),
     )
     button.grid(row=row+1, column=0, columnspan=4, sticky="w", pady=(2, 0))
