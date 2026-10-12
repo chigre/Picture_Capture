@@ -129,7 +129,10 @@ def draw_unified_candidate_overlay(
 
     scale = float(getattr(app, "view_scale", 1.0) or 1.0)
     density_var = getattr(app, "_layout_display_density_var", None)
-    density = str(density_var.get()) if density_var is not None else "详细"
+    density = str(density_var.get()) if density_var is not None else "候选"
+    # Screen-space rectangles prevent dense candidate labels from colliding.
+    # If two rows are very close at low zoom, alternate their label lanes.
+    occupied: dict[int, list[tuple[float, float, float, float]]] = {}
     for row in registry:
         x, y = (int(v) for v in row["source_anchor"])
         # Keep tiny click-targets outside printed text; the existing Layout
@@ -181,6 +184,54 @@ def draw_unified_candidate_overlay(
         canvas.tag_bind(symbol, "<Button-1>", show)
         if flagged:
             canvas.tag_bind(symbol_label, "<Button-1>", show)
+
+        # Match the inspector's ID exactly (e.g. C02-R008). A small opaque
+        # label sits immediately to the RIGHT of each marker; its text and
+        # background are both clickable, rather than just the tiny square.
+        identifier = str(row.get("id", "") or "")
+        if identifier:
+            col_index = int(row.get("column", -1))
+            left0 = pos_x + radius + 4.0
+            height = 17.0
+            # TkFixedFont 8 is approximately 7px per ASCII character on
+            # Windows/macOS; extra padding prevents clipping with fallback.
+            width = max(38.0, len(identifier) * 7.3 + 10.0)
+            top = pos_y - height / 2.0
+            prior = occupied.setdefault(col_index, [])
+            label_left = left0
+            for lane in range(5):
+                attempt_left = left0 + lane * (width + 7.0)
+                attempt = (
+                    attempt_left, attempt_left + width,
+                    top, top + height,
+                )
+                if not any(
+                    attempt[0] < other[1] + 3 and
+                    attempt[1] > other[0] - 3 and
+                    attempt[2] < other[3] + 2 and
+                    attempt[3] > other[2] - 2
+                    for other in prior
+                ):
+                    label_left = attempt_left
+                    break
+            # Keep the box attached to the corresponding glyph marker even
+            # when the second label lane is needed; no Y reassignment.
+            badge = canvas.create_rectangle(
+                label_left, top, label_left + width, top + height,
+                fill="#fff1df" if flagged else "#edf7f0",
+                outline=color, width=1,
+                tags=(_TAG,),
+            )
+            text_id = canvas.create_text(
+                label_left + 5.0, pos_y,
+                text=identifier, anchor="w",
+                fill="#713f12" if flagged else "#14532d",
+                font=("TkFixedFont", 8),
+                tags=(_TAG,),
+            )
+            canvas.tag_bind(badge, "<Button-1>", show)
+            canvas.tag_bind(text_id, "<Button-1>", show)
+            prior.append((label_left, label_left + width, top, top + height))
 
     # Headline counters belong in the inspector, never over the page header.
     # Preserve the historical text only in explicit Detailed mode.
