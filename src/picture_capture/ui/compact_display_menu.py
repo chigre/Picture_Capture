@@ -250,6 +250,19 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     denoise.pack(side="left", padx=0, pady=0)
     denoise.bind("<<ComboboxSelected>>", apply_denoise)
 
+    # Compact is the default: no long method text or yellow indentation
+    # blocks on top of the scanned dictionary.
+    row = line()
+    label(row, "Layout叠加")
+    from picture_capture.layout_visualization_ui_v3 import LAYOUT_DISPLAY_MODES
+    density = ttk.Combobox(
+        row, textvariable=app._layout_display_density_var,
+        values=LAYOUT_DISPLAY_MODES, state="readonly",
+        width=9, style="PC.Display.TCombobox",
+    )
+    density.pack(side="left", padx=(4, 0), pady=0)
+    density.bind("<<ComboboxSelected>>", lambda _event: app.redraw())
+
     # Keep this diagnostic switch in the *actual* 280px display palette.
     # The original quick-settings container is hidden in compact mode.
     # Never add this session-only state to quick_bool_vars or AppSettings.
