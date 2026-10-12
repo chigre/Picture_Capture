@@ -29,7 +29,7 @@ def _fixture():
     image = Image.new("RGB", (460, 700), "white")
     pen = ImageDraw.Draw(image)
     for y in (100, 250, 400):
-        pen.rectangle((25, y, 92, y+75), fill="black")
+        pen.rectangle((25, y, 86, y+75), fill="black")
 
     lines = [
         SimpleNamespace(
