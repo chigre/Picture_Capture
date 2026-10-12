@@ -51,6 +51,44 @@ def _row_for_marker(
     return options[0][2]
 
 
+def _row_for_large_head_glyph(
+    rows: list[dict[str, Any]],
+    glyph: dict[str, Any],
+    tolerance: float,
+) -> dict[str, Any] | None:
+    """Associate printed glyphs by column and ROW Y, not left glyph X.
+
+    A verified oversized glyph can start 30-60 px inside a column while
+    its final separator is intentionally anchored on the column boundary.
+    Comparing its glyph-left X to the separator X falsely reports a missing
+    line. The Layout physical-row ID and the canonical row-top are both
+    recorded by the same inference, so that is the correct diagnostic key.
+
+    This remains a spatial association, never evidence that the glyph caused
+    the final line. Reject unmatched or different-column rows explicitly.
+    """
+    box = glyph.get("canonical_box") or ()
+    if len(box) < 2:
+        return None
+    column = int(glyph.get("column", -1))
+    top = int(box[1])
+    matches = [
+        row for row in rows
+        if int(row.get("column", -1)) == column
+        and abs(int(row.get("canonical_y0", -1000000)) - top)
+        <= tolerance
+    ]
+    if not matches:
+        return None
+    return min(
+        matches,
+        key=lambda row: (
+            abs(int(row["canonical_y0"]) - top),
+            str(row["id"]),
+        ),
+    )
+
+
 def _candidate_from_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
@@ -229,15 +267,24 @@ def compose_ordinary_evidence_report(
         x0, y0, x1, y1 = map(int, glyph.get("source_box", (0, 0, 0, 0)))
         if not (x1 > x0 and y1 > y0):
             continue
-        anchor = {"x": x0, "y": y0, "source": "large_head_candidate"}
-        target = locate(anchor)
+        # Match a large printed glyph to the SAME Layout physical row using
+        # its canonical column/Y, not its left-most pixel X. A final line at
+        # column-left and a glyph 30-40px to its right are the same row.
+        physical = _row_for_large_head_glyph(rows, glyph, match_tolerance)
+        if physical is not None:
+            target = indexed[str(physical["id"])]
+            association = "same_column_canonical_row_start_proximity"
+        else:
+            anchor = {"x": x0, "y": y0, "source": "large_head_candidate"}
+            target = locate(anchor)
+            association = "nearest_printed_row_or_source_anchor"
         matched = {
             "index": idx + 1,
             "status": str(glyph.get("status", "unknown")),
             "source_box": [x0, y0, x1, y1],
             "height_ratio": float(glyph.get("height_ratio", 0) or 0),
             "detector_output": bool(glyph.get("detector_output", False)),
-            "association": "nearest_printed_row_or_source_anchor",
+            "association": association,
         }
         target["detector_matches"].append(matched)
         if matched["status"] == "accepted" and matched["detector_output"]:
