@@ -89,12 +89,16 @@ def _diagnostic_layout(layout: Any) -> dict[str, Any]:
             sx, sy = layout.transform.canonical_to_source_point(
                 int(column.left), cy0, layout.source_size,
             )
+            sx1, sy1 = layout.transform.canonical_to_source_point(
+                int(column.left), cy1, layout.source_size,
+            )
             meta = get_layout_line_classification(line)
             rows.append({
                 "id": f"C{col_index+1:02d}-R{row_index+1:03d}",
                 "column": col_index,
                 "canonical_y0": cy0, "canonical_y1": cy1,
                 "source_x": int(sx), "source_y": int(sy),
+                "source_x1": int(sx1), "source_y1": int(sy1),
                 "role": str(getattr(line, "role", "unknown") or "unknown"),
                 "entry_source": str(meta.entry_source),
                 "first_x": float(getattr(line, "first_x", 0) or 0),
