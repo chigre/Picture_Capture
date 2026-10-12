@@ -74,7 +74,11 @@ def _details(item: dict[str, Any], index: int) -> str:
         f"普通正文行高: {reference:.1f} px\n"
         f"高度比: {float(item['height_ratio']):.2f}\n"
         f"判定: {_REASONS.get(item['status'], item['status'])}\n"
-        f"检测器实际输出: {'是' if item.get('detector_output') else '否'}\n"
+        + (f"原组合框拆出: {int(item['recovered_count'])} 个字形\n"
+           if "recovered_count" in item else "")
+        + (f"原组合框坐标: {item['parent_source_box']}\n"
+           if "parent_source_box" in item else "")
+        + f"检测器实际输出: {'是' if item.get('detector_output') else '否'}\n"
         f"最近物理行角色: {item.get('layout_role','unknown')}\n"
         f"最近行证据: {item.get('layout_source','unknown')}\n"
         f"附近最终自动线: {len(item.get('nearby_final_lines', []))} 条\n"
