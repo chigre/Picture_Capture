@@ -90,6 +90,17 @@ def compare_ordinary_diagnostics(
 ) -> dict[str, Any]:
     if tolerance_px < 0:
         raise ValueError("tolerance_px must be nonnegative")
+    earlier_page = before.get("page_index")
+    later_page = after.get("page_index")
+    if (
+        earlier_page is not None and later_page is not None
+        and int(earlier_page) != int(later_page)
+    ):
+        raise ValueError("两份诊断不是同一个 page_index，禁止比较")
+    hash_before = str(before.get("image_sha256") or "")
+    hash_after = str(after.get("image_sha256") or "")
+    if hash_before and hash_after and hash_before != hash_after:
+        raise ValueError("源图内容SHA256不一致，禁止比较不同扫描页面")
     size_before = tuple(before.get("image_size", ()) or ())
     size_after = tuple(after.get("image_size", ()) or ())
     if size_before and size_after and size_before != size_after:
@@ -112,6 +123,8 @@ def compare_ordinary_diagnostics(
         "same_image_size": not size_before or not size_after
                            or size_before == size_after,
         "image_size": list(size_after or size_before),
+        "image_sha256_checked": bool(hash_before and hash_after),
+        "same_page_index_checked": earlier_page is not None and later_page is not None,
         "tolerance_px": tolerance_px,
         "matched_lines": matched,
         "removed_lines": removed,
