@@ -84,3 +84,26 @@ def test_same_image_without_lines_is_safe():
     assert result["counts"]["matched"] == 0
     assert result["counts"]["added"] == 0
     assert result["counts"]["removed"] == 0
+
+
+def test_same_pixel_dimensions_different_page_or_sha256_are_rejected():
+    earlier = _page([100])
+    later = _page([100])
+    earlier["page_index"] = 8
+    later["page_index"] = 9
+    try:
+        compare_ordinary_diagnostics(earlier, later)
+    except ValueError as exc:
+        assert "page_index" in str(exc)
+    else:
+        raise AssertionError("should not compare different dictionary pages")
+
+    later["page_index"] = 8
+    earlier["image_sha256"] = "a" * 64
+    later["image_sha256"] = "b" * 64
+    try:
+        compare_ordinary_diagnostics(earlier, later)
+    except ValueError as exc:
+        assert "SHA256" in str(exc)
+    else:
+        raise AssertionError("should not compare unrelated same-sized scans")
