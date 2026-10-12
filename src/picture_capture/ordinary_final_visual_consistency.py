@@ -214,6 +214,93 @@ def correct_anomalous_final_ordinary_entries(
 
 
 
+def suppress_proven_bracket_body_continuations(
+    image: Image.Image,
+    settings: AppSettings,
+    layout: Any,
+    entries: list[Entry],
+) -> tuple[list[Entry], list[dict[str, int | float]]]:
+    """Reject only physically inset continuations after proven 【】 entries.
+
+    A Layout false positive can appear one printed row after a bracket-proven
+    entry, particularly when an enhanced display-head pass changes neighboring
+    role assignments. The old bulk veto required >=6 errors and missed these
+    isolated cases. This rule does NOT change the original Layout/indent
+    classifier and does NOT reject another bracket- or oversized-proven entry.
+    """
+    columns = list(getattr(layout, "columns", ()) or ())
+    if (
+        len(columns) < 2
+        or not uses_cjk_role_model(settings)
+        or str(getattr(layout, "indent_type", "")) != "body"
+        or str(getattr(layout.transform, "kind", "identity")) != "identity"
+    ):
+        return list(entries), []
+
+    reference = max(8.0, float(getattr(layout, "ordinary_line_height", 1.0)))
+    eligible: dict[int, float] = {}
+    for index, column in enumerate(columns):
+        body = getattr(column, "body_mode", None)
+        modes = list(getattr(column, "entry_modes", ()) or ())
+        if body is None or not modes or len(getattr(column, "lines", ()) or ()) < 16:
+            continue
+        supported = [
+            mode for mode in modes
+            if int(getattr(mode, "support", 0) or 0) >= 4
+        ]
+        if not supported or int(getattr(body, "support", 0) or 0) < 4:
+            continue
+        outer = min(float(mode.center) for mode in supported)
+        inner = float(body.center)
+        if inner - outer < max(16.0, .70 * reference):
+            continue
+        eligible[index] = outer + (inner - outer) * .57
+    if not eligible:
+        return list(entries), []
+
+    by_column: dict[int, list[Entry]] = {
+        i: sorted(
+            (item for item in entries if _column_of(item, columns) == i),
+            key=lambda item: int(item.y),
+        ) for i in eligible
+    }
+    gray_image = image.convert("L")
+    try:
+        gray = np.asarray(gray_image, dtype=np.uint8)
+        rejected: set[int] = set()
+        events: list[dict[str, int | float]] = []
+        for index, members in by_column.items():
+            left = int(columns[index].left)
+            for position, item in enumerate(members):
+                if (
+                    "ordinary_layout_role" not in str(item.ocr_source or "")
+                    or bool(getattr(item, "ocr_oversized_cjk", False))
+                    or position == 0
+                ):
+                    continue
+                previous = members[position - 1]
+                if "ordinary_bracket_pair" not in str(previous.ocr_source or ""):
+                    continue
+                gap = int(item.y) - int(previous.y)
+                if not .90 * reference <= gap <= 1.70 * reference:
+                    continue
+                first_x = _first_ink_after_separator(
+                    gray, int(item.y), left, reference,
+                )
+                if first_x is None or first_x <= eligible[index]:
+                    continue
+                rejected.add(id(item))
+                events.append({
+                    "column": index,
+                    "y": int(item.y),
+                    "prior_bracket_y": int(previous.y),
+                    "first_ink_offset": round(float(first_x), 2),
+                })
+        return [item for item in entries if id(item) not in rejected], events
+    finally:
+        gray_image.close()
+
+
 def suppress_blank_layout_rows_before_proven_head(
     image: Image.Image,
     settings: AppSettings,
@@ -278,4 +365,8 @@ def suppress_blank_layout_rows_before_proven_head(
         gray_image.close()
 
 
-__all__ = ["correct_anomalous_final_ordinary_entries", "suppress_blank_layout_rows_before_proven_head"]
+__all__ = [
+    "correct_anomalous_final_ordinary_entries",
+    "suppress_proven_bracket_body_continuations",
+    "suppress_blank_layout_rows_before_proven_head",
+]
