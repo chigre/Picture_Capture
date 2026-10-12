@@ -153,8 +153,17 @@ def test_markers_open_same_candidate_id_in_inspector(monkeypatch):
     canvas = _Canvas()
     app = SimpleNamespace(canvas=canvas, image=object(), view_scale=.5)
     draw_unified_candidate_overlay(app, layout_enabled=True)
-    canvas.bound[0][2](None)
-    assert opened == ["C01-R020"]
+    assert canvas.bound[0][2](None) == "break"
+    assert canvas.bound[-1][2](None) == "break"
+    # Both the green/orange square AND its background-ID text carry the same
+    # exact candidate ID used as the Treeview row key.
+    assert opened == ["C01-R020", "C01-R020"]
+    badges = [x for x in canvas.texts
+              if x[1].get("text") == "C01-R020"]
+    assert len(badges) == 1
+    marker = canvas.rectangles[0][0]
+    background = canvas.rectangles[1][0]
+    assert background[0] > marker[2]
 
 
 def test_double_click_focus_scrolls_image_and_highlights_correct_source_position():
