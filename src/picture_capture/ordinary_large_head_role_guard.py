@@ -73,11 +73,20 @@ def strict_candidate_starts_at_row_front(
         left_limit = target - reference * 0.35
         right_limit = target + reference * 0.85
 
-    if not (left_limit <= float(x0) <= right_limit):
-        return False
-
     height = max(0.0, float(y1) - float(box[1]))
     width = max(1.0, float(x1) - float(x0))
+    # Some multi-line large glyphs have an anchor_x on adjacent phonetic/
+    # definition ink, well to the right of their real first black pixel.
+    # Only a strong, nearly square glyph physically aligned with first_x may
+    # fall back from the anchor. Smaller/tall definition objects may not.
+    first_ink_large_square = (
+        height / reference >= 2.0
+        and 0.80 <= width / max(1.0, height) <= 1.20
+        and abs(float(x0) - first_x) <= reference * 0.35
+    )
+    if not (left_limit <= float(x0) <= right_limit) and not first_ink_large_square:
+        return False
+
     role = str(getattr(nearest, "role", "body") or "body").lower()
 
     # Existing entry rows do not create overdraw, so they may retain the base
