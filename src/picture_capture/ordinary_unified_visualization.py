@@ -233,20 +233,7 @@ def draw_unified_candidate_overlay(
             canvas.tag_bind(text_id, "<Button-1>", show)
             prior.append((label_left, label_left + width, top, top + height))
 
-    # Headline counters belong in the inspector, never over the page header.
-    # Preserve the historical text only in explicit Detailed mode.
-    if density == "详细":
-        label = (
-            f"统一Layout候选 {summary.get('candidates_total',0)}  "
-            f"最终线 {summary.get('final_lines',0)}  "
-            f"待复核 {summary.get('review_items',0)}"
-            "  （绿=词头 橙!=待复核，点标记打开诊断表）"
-        )
-        canvas.create_text(
-            12, 42, anchor="nw", text=label,
-            fill="#334155", font=("TkDefaultFont", 9),
-            tags=(_TAG,),
-        )
-
+    # Counters and verbose candidate statistics belong ONLY in the
+    # independent inspector and copyable Layout panel, never over the scan.
 
 __all__ = ["draw_unified_candidate_overlay", "format_candidate_detail"]
