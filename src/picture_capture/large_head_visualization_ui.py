@@ -20,6 +20,7 @@ _COLORS = {
     "rejected_row_front": "#d32f2f",
     "size_or_density": "#c77d00",
     "group_too_tall": "#d32f2f",
+    "split_parent": "#64748b",
 }
 _REASONS = {
     "accepted": "通过形态、行首及强大字阈值",
@@ -27,6 +28,7 @@ _REASONS = {
     "rejected_row_front": "未通过行首/物理行匹配",
     "size_or_density": "未通过大字高度、宽度、宽高比或墨迹密度条件",
     "group_too_tall": "碎片组合过高，不能安全拆出独立大字",
+    "split_parent": "原组合过大；已从栏首单字区域拆分独立候选",
 }
 
 
