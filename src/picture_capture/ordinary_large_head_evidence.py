@@ -489,7 +489,7 @@ def detect_ordinary_large_head_entries(
                             status = "rejected_weak"
                         else:
                             status = "accepted"
-                    diagnostics.append({
+                    record: dict[str, Any] = {
                         "column": int(position),
                         "canonical_box": canonical_box,
                         "source_box": tuple(map(int,
@@ -501,7 +501,21 @@ def detect_ordinary_large_head_entries(
                         "height_ratio": round((y1-y0) / max(1.0, line_height), 3),
                         "status": status,
                         "detector_output": False,
-                    })
+                    }
+                    if "recovered_count" in observed:
+                        record["recovered_count"] = int(observed["recovered_count"])
+                    if "parent" in observed:
+                        px0, py0, px1, py1 = observed["parent"]
+                        parent_canonical = (
+                            analysis_left + int(px0), top + int(py0),
+                            analysis_left + int(px1), top + int(py1),
+                        )
+                        record["parent_source_box"] = tuple(map(int,
+                            layout.transform.canonical_box_to_source(
+                                parent_canonical, layout.source_size,
+                            ),
+                        ))
+                    diagnostics.append(record)
 
             for raw_box in candidates:
                 x0, y0, x1, y1 = raw_box
