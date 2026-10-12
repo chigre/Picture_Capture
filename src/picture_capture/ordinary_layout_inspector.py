@@ -37,6 +37,7 @@ def _row_values(row: dict[str, Any]) -> tuple[str, ...]:
     physical = row.get("physical_row") or {}
     issues = row.get("issues") or []
     evidence = row.get("evidence") or []
+    from .ordinary_unified_visualization import _ISSUES
     return (
         str(row.get("id", "")),
         str(int(row.get("column", -1)) + 1),
@@ -44,7 +45,7 @@ def _row_values(row: dict[str, Any]) -> tuple[str, ...]:
         str(physical.get("role", "—")),
         "是" if row.get("final_entries") else "否",
         " · ".join(str(item.get("type", "")) for item in evidence) or "—",
-        ", ".join(issues) if issues else "—",
+        "；".join(_ISSUES.get(issue, issue) for issue in issues) if issues else "—",
     )
 
 
