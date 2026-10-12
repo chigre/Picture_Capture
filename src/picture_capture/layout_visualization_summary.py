@@ -147,6 +147,30 @@ def _format_summary(app: Any, snapshot: Any) -> str:
                 f"  {field}: used={used}   raw={raw}   {state}   switch={switch}"
             )
 
+    # This is the same read-only candidate registry used by the clickable
+    # Layout markers, large-head overlay and explicit JSON export.
+    try:
+        from .large_head_visualization_ui import get_large_head_debug_snapshot
+        unified = get_large_head_debug_snapshot(app).get("unified_report", {})
+        review = unified.get("review_queue", [])
+        counts = unified.get("summary", {})
+        if unified:
+            lines.append(
+                "unified evidence: "
+                f"physical_rows={counts.get('physical_rows', 0)}   "
+                f"candidates={counts.get('candidates_total', 0)}   "
+                f"final_lines={counts.get('final_lines', 0)}   "
+                f"review={counts.get('review_items', 0)}"
+            )
+            lines.append("shadow=READ ONLY  （橙色!点开查看问题与各阶段证据）")
+            if review:
+                preview = ", ".join(
+                    f"{row['candidate_id']}:{'/'.join(row['codes'])}"
+                    for row in review[:3]
+                )
+                lines.append("review queue: " + preview)
+    except Exception as exc:
+        lines.append(f"unified evidence unavailable: {type(exc).__name__}")
     return _finalize_summary_text("\n".join(lines), app)
 
 
