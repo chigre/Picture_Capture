@@ -196,8 +196,8 @@ def test_compact_only_conflicts_are_painted_and_candidate_mode_is_clickable(monk
         _layout_display_density_var=_Flag("简洁"),
     )
     draw_unified_candidate_overlay(app, layout_enabled=True)
-    assert len(canvas.rectangles) == 3
-    assert canvas.text and len(canvas.text) == 3  # only three exclamation marks
+    assert len(canvas.rectangles) == 6  # marker + matching-ID badge
+    assert canvas.text and len(canvas.text) == 6  # three ! + three ID labels
     assert not any(
         "统一Layout候选" in str(kwargs.get("text", ""))
         for _, kwargs in canvas.text
@@ -208,8 +208,10 @@ def test_compact_only_conflicts_are_painted_and_candidate_mode_is_clickable(monk
     canvas.bindings.clear()
     app._layout_display_density_var.set("候选")
     draw_unified_candidate_overlay(app, layout_enabled=True)
-    assert len(canvas.rectangles) == 100
-    assert len(canvas.bindings) >= 100
+    assert len(canvas.rectangles) == 200  # square + ID background
+    assert len(canvas.bindings) >= 200
+    assert sum(str(kwargs.get("text", "")).startswith("C01-R")
+               for _coords, kwargs in canvas.text) == 100
     assert not any(
         "统一Layout候选" in str(kwargs.get("text", ""))
         for _, kwargs in canvas.text
