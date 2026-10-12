@@ -165,11 +165,17 @@ def test_layout_ui_counts_are_exactly_the_exported_unified_json(monkeypatch):
     canvas = _Canvas()
     app = SimpleNamespace(image=object(), canvas=canvas, view_scale=1)
     vis.draw_unified_candidate_overlay(app, layout_enabled=True)
-    text = " ".join(item[2]["text"] for item in canvas.created
-                    if item[0] == "text" and "text" in item[2])
-    assert f"统一Layout候选 {report['summary']['candidates_total']}" in text
-    assert f"最终线 {report['summary']['final_lines']}" in text
-    assert f"待复核 {report['summary']['review_items']}" in text
+    text_labels = [
+        item[2]["text"] for item in canvas.created
+        if item[0] == "text" and "text" in item[2]
+    ]
+    # Verbose counters belong to the inspector/JSON, never on the scan.
+    assert not any("统一Layout候选" in text for text in text_labels)
+    displayed_ids = [text for text in text_labels if text.startswith(("C", "U"))]
+    assert displayed_ids
+    assert all(identifier in {item["id"] for item in report["registry"]}
+               for identifier in displayed_ids)
+    assert report["summary"]["candidates_total"] == len(report["registry"])
     assert any(row[1] == "<Button-1>" for row in canvas.bound)
     before = json.dumps(report, ensure_ascii=False, sort_keys=True)
     vis.draw_unified_candidate_overlay(app, layout_enabled=False)
