@@ -90,7 +90,18 @@ def strict_candidate_starts_at_row_front(
         # Reject horizontal multi-character merges. A single CJK display glyph
         # may be broad, but a box much wider than its height is usually body text
         # or underline-connected fragments rather than one oversized head.
-        if width > reference * 2.25:
+        # Typical wide body runs must still fail. But a *very tall*, nearly
+        # square printed CJK head may be wider than 2.25 normal row-heights:
+        # page 2606 has a real 170x151px head with a 67px body reference.
+        # The historical absolute width bound rejected it despite clean
+        # row-front alignment and a 2.25x height signal.
+        normal_width = reference * 2.25
+        square_display_head = (
+            ratio >= 2.0
+            and 0.80 <= width / height <= 1.20
+            and width <= reference * 2.80
+        )
+        if width > normal_width and not square_display_head:
             return False
         if height / width < 0.60:
             return False
