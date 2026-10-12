@@ -84,7 +84,7 @@ class IllustrationController:
                 str(page), str(app._ppp_read_path(page)), str(out_dir), settings,
                 top_y, bottom_y, margin, str(pdic_path(page)), entry_left, entry_right, integrate_illustrations,
                 index,
-                bool(config.get("illustration_transparent_background", False)),
+                *((True,) if config.get("illustration_transparent_background", False) else ()),
             )
 
         def consume_result(_index: int, result):
