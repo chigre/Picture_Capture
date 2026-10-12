@@ -170,40 +170,8 @@ def draw_large_head_debug_overlay(app: Any) -> None:
     )
 
 
-def add_large_head_debug_controls(app: Any, section: Any) -> None:
-    """Add an opt-in overlay and explicit JSON export; never auto-write files."""
-    if getattr(app, "_large_head_debug_toggle_widget", None) is not None:
-        return
-    from tkinter import ttk
-    import tkinter as tk
-    from .layout_visualization_ui_v3 import _next_grid_row
-
-    var = tk.BooleanVar(value=False)
-    app._large_head_visualization_var = var
-    if hasattr(app, "quick_bool_vars"):
-        app.quick_bool_vars["show_large_head_diagnostics"] = var
-    row = _next_grid_row(section)
-
-    def toggle() -> None:
-        app._large_head_debug_snapshot_key = None
-        app._large_head_debug_snapshot = None
-        app.redraw()
-
-    checkbox = ttk.Checkbutton(
-        section, text="显示大字头检测", variable=var, command=toggle,
-    )
-    checkbox.grid(row=row, column=0, columnspan=4, sticky="w", pady=(3, 0))
-    app._large_head_debug_toggle_widget = checkbox
-    try:
-        app._attach_tooltip(
-            checkbox,
-            "只读检测诊断：标注大字候选框、失败原因、物理行角色和附近最终自动线。"
-            "不改变检测阈值、画线或词条数据。",
-        )
-    except Exception:
-        pass
-
-    def export_json() -> None:
+def export_large_head_debug_json(app: Any) -> None:
+    """User-triggered export shared by compact and quick display panels."""
         from tkinter import filedialog, messagebox
 
         if getattr(app, "image", None) is None:
@@ -235,7 +203,46 @@ def add_large_head_debug_controls(app: Any, section: Any) -> None:
         except OSError as exc:
             messagebox.showerror("导出失败", str(exc), parent=getattr(app, "root", None))
 
-    button = ttk.Button(section, text="导出大字诊断 JSON", command=export_json)
+
+
+def add_large_head_debug_controls(app: Any, section: Any) -> None:
+    """Add an opt-in overlay and explicit JSON export; never auto-write files."""
+    if getattr(app, "_large_head_debug_toggle_widget", None) is not None:
+        return
+    from tkinter import ttk
+    import tkinter as tk
+    from .layout_visualization_ui_v3 import _next_grid_row
+
+    var = tk.BooleanVar(value=False)
+    app._large_head_visualization_var = var
+    # Session-only display switch: never register in quick_bool_vars.
+    # apply_quick_settings persists each quick_bool_vars key into AppSettings,
+    # whose slotted schema deliberately has no debug-overlay setting.
+    row = _next_grid_row(section)
+
+    def toggle() -> None:
+        app._large_head_debug_snapshot_key = None
+        app._large_head_debug_snapshot = None
+        app.redraw()
+
+    checkbox = ttk.Checkbutton(
+        section, text="显示大字头检测", variable=var, command=toggle,
+    )
+    checkbox.grid(row=row, column=0, columnspan=4, sticky="w", pady=(3, 0))
+    app._large_head_debug_toggle_widget = checkbox
+    try:
+        app._attach_tooltip(
+            checkbox,
+            "只读检测诊断：标注大字候选框、失败原因、物理行角色和附近最终自动线。"
+            "不改变检测阈值、画线或词条数据。",
+        )
+    except Exception:
+        pass
+
+    button = ttk.Button(
+        section, text="导出大字诊断 JSON",
+        command=lambda: export_large_head_debug_json(app),
+    )
     button.grid(row=row+1, column=0, columnspan=4, sticky="w", pady=(2, 0))
     app._large_head_debug_export_widget = button
 
@@ -244,4 +251,5 @@ __all__ = [
     "add_large_head_debug_controls",
     "draw_large_head_debug_overlay",
     "get_large_head_debug_snapshot",
+    "export_large_head_debug_json",
 ]
