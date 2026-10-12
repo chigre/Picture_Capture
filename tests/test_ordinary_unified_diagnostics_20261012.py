@@ -294,7 +294,10 @@ def test_real_diagnostic_builder_and_layout_row_export_share_schema(monkeypatch)
                         lambda image, settings: image.copy())
     monkeypatch.setattr(diag, "effective_page_settings",
                         lambda settings, size, index: settings)
-    # The processing module is a CoreAssignmentMirrorModule. Direct setattr\n    # mirrors into processing_core and contaminates subsequent signature tests.\n    # Patch the module dict, restoring it without invoking mirrored setattr.\n    monkeypatch.setitem(processing.__dict__, "detect_entries", fake_detect)
+    # The processing module is a CoreAssignmentMirrorModule. Direct setattr
+    # mirrors into processing_core and contaminates subsequent signature tests.
+    # Patch the module dict, restoring it without invoking mirrored setattr.
+    monkeypatch.setitem(processing.__dict__, "detect_entries", fake_detect)
     monkeypatch.setattr(
         "picture_capture.ordinary_large_head_evidence._uses_cjk_large_heads",
         lambda settings: True,
