@@ -156,8 +156,10 @@ def _add_denoise_control(app: Any, section: Any) -> None:
 
 
 def add_layout_visualization_controls(app: Any, section: Any) -> None:
-    """Add the current Layout toggle and denoise control to the display section."""
+    """Compose opt-in diagnostic displays and shared-analysis controls."""
     _add_layout_toggle(app, section)
+    from .large_head_visualization_ui import add_large_head_debug_controls
+    add_large_head_debug_controls(app, section)
     _add_denoise_control(app, section)
 
 
@@ -165,7 +167,9 @@ def draw_layout_visualization_if_enabled(app: Any) -> None:
     """Draw the diagnostic Layout overlay with the historical hide semantics."""
     layout_var = getattr(app, "_layout_visualization_var", None)
     layout_enabled = bool(layout_var.get()) if layout_var is not None else False
-    if not layout_enabled:
+    large_var = getattr(app, "_large_head_visualization_var", None)
+    large_enabled = bool(large_var.get()) if large_var is not None else False
+    if not layout_enabled and not large_enabled:
         return
 
     hide = _hide_var(app)
@@ -177,7 +181,11 @@ def draw_layout_visualization_if_enabled(app: Any) -> None:
         except Exception:
             previous = None
     try:
-        draw_layout_visualization_detailed(app)
+        if layout_enabled:
+            draw_layout_visualization_detailed(app)
+        if large_enabled:
+            from .large_head_visualization_ui import draw_large_head_debug_overlay
+            draw_large_head_debug_overlay(app)
     finally:
         if hide is not None and previous is not None:
             try:
